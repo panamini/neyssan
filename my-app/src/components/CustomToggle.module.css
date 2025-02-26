@@ -1,0 +1,36 @@
+.toggleGroup {
+  @apply inline-flex items-center w-full gap-1; /* Added w-full */
+  @apply md:w-auto; /* Reset width for larger screens */
+  @apply justify-start; /* For mobile layout */
+}
+.toggleGroup {
+  @apply inline-flex items-center w-full gap-1; /* Added w-full */
+  @apply md:w-auto; /* Reset width for larger screens */
+}
+
+.toggleButton {
+  @apply p-2 rounded;
+  @apply transition-colors duration-200;
+  @apply text-gray-700;
+  @apply dark:bg-dark-element dark:text-dark-text;
+  @apply focus:outline-none hover:bg-gray-100;
+  @apply dark:hover:bg-jet-200;
+}
+
+.active {
+  @apply text-white bg-gray-600;
+  @apply dark:bg-jet-300 dark:text-dark-text-hover;
+}
+
+.inactive {
+  /* Hover styles are now handled directly in .toggleButton */
+}
+
+.modelToggle {
+  @apply p-2 rounded;
+  @apply transition-colors duration-200;
+  @apply text-gray-700;
+  @apply dark:bg-dark-element dark:text-dark-text;
+  @apply focus:outline-none hover:bg-gray-100;
+  @apply dark:hover:bg-jet-200;
+}

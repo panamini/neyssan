@@ -1,0 +1,144 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #ffffff; /* Light mode background */
+  --foreground: #000000; /* Light mode text */
+  --hover-outline: #FF7F50; /* Coral color for hover/focus outlines */
+  --job-field-bg: #BFBFBF; /* Light grey for job fields in light mode */
+}
+
+:root.dark {
+  --background: #272727; /* Dark mode background (dim-200) */
+  --foreground: #eeeeee; /* Dark mode text (anti-flash-white) */
+  --input-bg-dark: #010101; /* Interactive elements (carbon-100) */
+  --job-field-bg: #010101; /* Override to darkest color in dark mode */
+  --text-muted: #919191; /* Secondary text (battleship-500) */
+  --text-hover: #f8f8f8; /* Hover state text (anti-flash-white-800) */
+}
+
+/* Custom Scrollbar Styles */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--background);
+}
+
+::-webkit-scrollbar-thumb {
+  background: #919191; /* battleship-500 */
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #626262; /* dim-500 */
+}
+
+/* Dark Mode Scrollbar */
+.dark ::-webkit-scrollbar-thumb {
+  background: #626262; /* dim-500 */
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #919191; /* battleship-500 */
+}
+
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+.proposal-h1 {
+  font-size: 2em;
+  font-weight: bold;
+  margin-bottom: 0.5em;
+}
+
+.proposal-h2 {
+  font-size: 1.5em;
+  font-weight: bold;
+  margin-bottom: 0.3em;
+}
+
+.proposal-p {
+  margin-bottom: 1em;
+  line-height: 1.6;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* Radix Switch Styles (from Shadcn UI) */
+.SwitchRoot {
+  --switch-thumb-transform: translateX(2px);
+  --switch-track-background: var(--secondary);
+  --switch-track-border: var(--secondary);
+  --switch-background: var(--input);
+  appearance: none;
+	-webkit-appearance: none;
+  border: 1px solid var(--switch-track-border);
+  background-color: var(--switch-track-background);
+  border-radius: 9999px;
+  box-sizing: border-box;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  width: 48px;
+  height: 24px;
+}
+.SwitchRoot:focus {
+  outline: none;
+}
+.SwitchRoot:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.SwitchRoot[data-state='checked'] {
+  --switch-background: var(--primary);
+  --switch-track-background: var(--primary);
+  --switch-track-border: var(--primary);
+}
+.SwitchRoot[data-state='checked'] .SwitchThumb {
+  --switch-thumb-transform: translateX(24px);
+}
+
+.SwitchThumb {
+  display: block;
+  background-color: white;
+  border-radius: 9999px;
+  box-shadow: 0 2px 2px var(--shadow-color);
+  transition: transform 100ms;
+  transform: var(--switch-thumb-transform);
+  width: 20px;
+  height: 20px;
+}
+.SwitchThumb:disabled {
+  background-color: #999;
+}
+.SwitchThumb:focus {
+  outline: none;
+}
+
+  /* Dark mode adjustments for select elements */
+  .dark select {
+  background-color: var(--background); /* Use website background color */
+  color: var(--foreground);
+}
+
+.dark select:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(209, 213, 219, 0.5); /* Light gray focus ring */
+    border-color: rgba(209, 213, 219, 0.5); /* Light gray border color on focus */
+  }

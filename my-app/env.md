@@ -1,0 +1,16 @@
+# .env.production
+PLASMO_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_Y2FzdWFsLWdvcmlsbGEtNjguY2xlcmsuYWNjb3VudHMuZGV2JA
+CLERK_FRONTEND_API=https://casual-gorilla-68.clerk.accounts.dev
+PLASMO_PUBLIC_CLERK_SYNC_HOST=https://my-app.com
+
+# Convex Configuration for production
+NEXT_PUBLIC_CONVEX_URL=https://giddy-basilisk-88.convex.cloud
+CONVEX_DEPLOYMENT=prod:giddy-basilisk-88
+EXTENSION_ORIGIN=chrome-extension://nhfjocafgfkcmennccoomihpnhdecabl
+CLERK_JWT_ISSUER_DOMAIN=https://casual-gorilla-68.clerk.accounts.dev
+OPENAI_API_KEY=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
+
+MISTRAL_API_KEY=KvmzGFNnY0UjleuXu1HD8sRaajsyA1SX
+
+ 
+VITE_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_Y2FzdWFsLWdvcmlsbGEtNjguY2xlcmsuYWNjb3VudHMuZGV2JA

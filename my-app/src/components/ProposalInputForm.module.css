@@ -1,0 +1,27 @@
+.container {
+  @apply p-6 border-0 rounded-lg shadow-none bg-background;
+}
+
+.inputElement {
+  @apply w-full px-4 py-1 rounded-md text-foreground focus:outline-none;
+}
+
+.jobField {
+  background-color: var(--job-field-bg);
+  @apply text-dark-text;
+}
+
+.jobField textarea,
+.jobField input {
+  background-color: rgba(191, 191, 191, 0); /* Light mode with 0 transparency */
+  @apply text-dark-text placeholder-dark-text-muted;
+}
+
+@dark .jobField textarea,
+@dark .jobField input {
+    background-color: rgba(1, 1, 1, 0); /* Dark mode with 0 transparency */
+}
+
+.errorMessage {
+  @apply mt-1 text-sm text-red-500;
+}
