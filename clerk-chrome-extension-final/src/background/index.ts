@@ -1,7 +1,8 @@
-import { ConvexClient } from "convex/browser";
+import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../convex/_generated/api";
 
-const convex = new ConvexClient("https://giddy-basilisk-88.convex.cloud");
+ // Use dev deployment (neat-starfish-33) for extension background calls.
+const convex = new ConvexHttpClient("https://neat-starfish-33.convex.cloud");
 let currentToken: string | null = null;
 
 async function getClerkToken(): Promise<string | null> {
@@ -37,19 +38,43 @@ const parseJwt = (token: string): { exp?: number } | null => {
 
 async function refreshToken(): Promise<string | null> {
   return new Promise((resolve) => {
-    chrome.runtime.sendMessage({ action: "refreshToken" }, (response) => {
-      if (chrome.runtime.lastError) {
-        console.error("Refresh failed:", chrome.runtime.lastError.message);
-        resolve(null); // Gracefully handle failure
-      } else {
-        console.log("Refreshed token:", response?.token);
-        resolve(response?.token || null);
+    try {
+      if (!chrome || !chrome.runtime || !chrome.runtime.sendMessage) {
+        // runtime not available in this environment
+        console.warn("refreshToken: chrome.runtime.sendMessage not available");
+        resolve(null);
+        return;
       }
-    });
+
+      let responded = false;
+      // Send a message and wait for response; fallback to null after timeout
+      chrome.runtime.sendMessage({ action: "refreshToken" }, (response) => {
+        responded = true;
+        if (chrome.runtime.lastError) {
+          // Do not throw — just log a warning and resolve null
+          console.warn("Refresh failed:", chrome.runtime.lastError?.message ?? chrome.runtime.lastError);
+          resolve(null);
+        } else {
+          console.log("Refreshed token:", response?.token);
+          resolve(response?.token || null);
+        }
+      });
+
+      // Timeout fallback in case there is no listener / no response
+      setTimeout(() => {
+        if (!responded) {
+          console.warn("refreshToken: no response from runtime, resolving null");
+          resolve(null);
+        }
+      }, 1200);
+    } catch (e) {
+      console.warn("refreshToken error:", e);
+      resolve(null);
+    }
   });
 }
 
-convex.setAuth(async () => {
+(async () => {
   if (!currentToken) {
     currentToken = await getClerkToken();
     if (!currentToken) {
@@ -58,8 +83,9 @@ convex.setAuth(async () => {
     }
     console.log("Initial token for Convex:", currentToken);
   }
-  return currentToken;
-});
+  // ConvexHttpClient.setAuth expects a string; pass empty string when no token available.
+  convex.setAuth(currentToken ?? "");
+})();
 
 setInterval(async () => {
   const token = await getClerkToken();
@@ -68,7 +94,7 @@ setInterval(async () => {
   } else {
     currentToken = token;
   }
-  convex.setAuth(() => Promise.resolve(currentToken));
+  convex.setAuth(currentToken ?? "");
   console.log("Periodic token refresh:", currentToken);
 }, 5 * 60 * 1000);
 
@@ -119,10 +145,11 @@ async function generateProposalHandler(
       currentToken = await refreshToken();
       if (!currentToken) throw new Error("No auth token available after refresh");
     }
-    convex.setAuth(() => Promise.resolve(currentToken));
+    convex.setAuth(currentToken ?? "");
     console.log("Token before action:", currentToken);
-    console.log("Calling action:", api.generateProposalMutation.default._name);
-    const result = await convex.action(api.generateProposalMutation.default, {
+    // Call the generateProposal function via Convex HTTP client (action)
+    console.log("Calling function generateProposal via action");
+    const result = await convex.action(api.functions.generateProposal, {
       jobTitle: message.jobData!.title,
       jobDescription: message.jobData!.description || "No description provided",
       proposalType: message.jobData?.proposalType || "technical",
@@ -150,7 +177,7 @@ async function saveProposalHandler(
       currentToken = await refreshToken();
       if (!currentToken) throw new Error("No auth token available after refresh");
     }
-    convex.setAuth(() => Promise.resolve(currentToken));
+    convex.setAuth(currentToken ?? "");
     console.log("Token before mutation:", currentToken);
     console.log("Calling mutation:", api.saveJobAndProposal.default._name);
     await convex.mutation(api.saveJobAndProposal.default, {

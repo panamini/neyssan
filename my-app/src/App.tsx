@@ -1,11 +1,9 @@
 "use client";
 
 import React from "react";
-import {
-  Authenticated,
-  Unauthenticated,
-} from "convex/react";
-import { SignInButton, SignUpButton, UserButton } from "@clerk/clerk-react";
+import { Authenticated, Unauthenticated, useConvex } from "convex/react";
+import { api } from "../convex/_generated/api";
+import { SignInButton, SignUpButton, UserButton, useAuth } from "@clerk/clerk-react";
 import { Flex } from "@radix-ui/themes";
 
 import Header from "./components/header/Header";
@@ -20,6 +18,28 @@ export default function App() {
   );
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  const convex = useConvex();
+  const { isSignedIn, isLoaded: clerkLoaded } = useAuth();
+
+  React.useEffect(() => {
+    // Only attempt to create/update a profile once Clerk has loaded and the user is signed in.
+    // This avoids "Not authenticated" errors when the client attempts mutations before
+    // Clerk's session is available.
+    if (!clerkLoaded || !isSignedIn) return;
+
+    async function ensureUser() {
+      try {
+        // Use a runtime-any cast to avoid TypeScript issues when generated api types are stale.
+        await convex.mutation((api as any).functions?.createUserFromClient as any);
+        console.log('createUserFromClient OK');
+      } catch (err) {
+        console.error('createUserFromClient failed', err);
+      }
+    }
+
+    ensureUser();
+  }, [convex, isSignedIn, clerkLoaded]);
 
   const handleProposalSubmit = (
     _values: FormValues,
@@ -41,7 +61,7 @@ export default function App() {
       <Header />
       <div className="flex flex-row flex-grow">
         {/* Left Column */}
-        <div className="flex flex-col items-center w-16 p-4">
+          <div className="flex flex-col items-center w-16 p-4">
           <Authenticated>
             <UserButton />
           </Authenticated>

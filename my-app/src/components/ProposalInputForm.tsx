@@ -17,7 +17,7 @@ interface ProposalInputFormProps {
 }
 
 const ProposalInputForm: React.FC<ProposalInputFormProps> = ({ onSubmit }) => {
-  const generateProposalAction = useAction(api.generateProposalMutation.default);
+  const generateProposalAction = useAction(api.functions.generateProposal);
   const [isGenerating, setIsGenerating] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
 

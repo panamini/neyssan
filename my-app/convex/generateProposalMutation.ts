@@ -8,6 +8,7 @@ import { GPT4Adapter } from "./langchain/models/gpt4_adapter";
 import { HumanMessage } from "@langchain/core/messages";
 import { ChatMistralAI } from "@langchain/mistralai";
 import { Mistral } from "@mistralai/mistralai";
+import { parseProposalContent } from "./langchain/types";
 
 const modelChoice = v.union(
   v.literal("chatgpt"),
@@ -38,8 +39,6 @@ export default action({
       agentId?: string;
     }
   ): Promise<{ proposalId: string; proposalContent: string }> => {
-    console.log("Environment variables:", process.env);
-    console.log("Environment variable keys:", Object.keys(process.env));
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       throw new ConvexError("User not authenticated");
@@ -66,6 +65,29 @@ export default action({
     let proposalContent: string;
 
     let proposalId: string;
+
+    // Development stub: when DEV_STUB env var is set, return a placeholder proposal
+    // This allows frontend testing without LLM API keys.
+    if (process.env.DEV_STUB === "true") {
+      proposalContent = `DEV STUB PROPOSAL for "${args.jobTitle}"\n\nJob description:\n${args.jobDescription}\n\n---\nThis is a development placeholder proposal generated because DEV_STUB=true. Replace with a real LLM response in production.`;
+      proposalId = await ctx.runMutation(internal.proposals.storeProposal, {
+        userId: userProfile._id,
+        title: args.jobTitle,
+        content: proposalContent,
+        status: "pending",
+        version: 1,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        sections: [{ type: "text", content: proposalContent }],
+        metrics: {},
+        metadata: {
+          platform: "web",
+          jobId: "DEV_STUB",
+          tags: [`model:dev_stub`],
+        },
+      });
+      return { proposalId, proposalContent };
+    }
 
     try {
       if (modelType === "chatgpt") {
@@ -153,22 +175,73 @@ export default action({
         throw new ConvexError("Invalid model type selected");
       }
 
-      proposalId = await ctx.runMutation(internal.proposals.storeProposal, {
-        userId: userProfile._id,
-        title: args.jobTitle,
-        content: proposalContent,
-        status: "pending",
-        version: 1,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        sections: [{ type: "text", content: proposalContent }],
-        metrics: {},
-        metadata: {
-          platform: "web",
-          jobId: "N/A",
-          tags: [`model:${modelType}`],
-        },
-      });
+      // Attempt a tolerant post-processing step: try to parse plain-text LLM output
+      // into the structured Proposal schema. If parsing succeeds, use structured
+      // content/sections; otherwise, fall back to raw content.
+      try {
+        const parsed = await parseProposalContent(proposalContent);
+        if (parsed && parsed.content) {
+          // Use parsed content and sections when available
+          proposalContent = parsed.content;
+
+          // Normalize sections to the expected literal union type for Convex.
+          const sectionsForDb: { type: "text" | "code" | "image"; content: string }[] =
+            (parsed.sections ?? []).map((s: any) => ({
+              // default to "text" for tolerant parsing results
+              type: ("text" as const),
+              content: String(s.content ?? ""),
+            }));
+
+          // Normalize metrics to the small metrics shape used by the DB.
+          // We map `duration` -> `score` and `success` -> `confidence` (heuristic).
+          const metricsForDb: { score?: number; confidence?: number } = {};
+          if (parsed.metrics) {
+            if (typeof (parsed.metrics as any).duration === "number") {
+              metricsForDb.score = (parsed.metrics as any).duration;
+            }
+            if (typeof (parsed.metrics as any).success === "boolean") {
+              metricsForDb.confidence = (parsed.metrics as any).success ? 1 : 0;
+            }
+          }
+
+          proposalId = await ctx.runMutation(internal.proposals.storeProposal, {
+            userId: userProfile._id,
+            title: parsed.title ?? args.jobTitle,
+            content: proposalContent,
+            status: "pending",
+            version: 1,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            sections: sectionsForDb.length > 0 ? sectionsForDb : [{ type: "text", content: proposalContent }],
+            metrics: metricsForDb,
+            metadata: {
+              platform: "web",
+              jobId: "N/A",
+              tags: [`model:${modelType}`, "parsed"],
+            },
+          });
+        } else {
+          throw new Error("Parsed proposal missing content");
+        }
+      } catch (parseErr) {
+        console.warn("Tolerant parse failed, using raw content:", parseErr);
+        proposalId = await ctx.runMutation(internal.proposals.storeProposal, {
+          userId: userProfile._id,
+          title: args.jobTitle,
+          content: proposalContent,
+          status: "pending",
+          version: 1,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          sections: [{ type: "text", content: proposalContent }],
+          metrics: {},
+          metadata: {
+            platform: "web",
+            jobId: "N/A",
+            tags: [`model:${modelType}`],
+          },
+        });
+      }
 
       return { proposalId, proposalContent };
     } catch (error: any) {

@@ -43,6 +43,7 @@ export const healthCheck = mutation({
 });
 
 export { default as generateProposal } from "./generateProposalMutation";
+export { default as createUserFromClient } from "./createUserFromClient";
 
 export const ping = mutation({
   args: {
