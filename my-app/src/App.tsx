@@ -7,7 +7,8 @@ import { SignInButton, SignUpButton, UserButton, useAuth } from "@clerk/clerk-re
 import { Flex } from "@radix-ui/themes";
 
 import Header from "./components/header/Header";
-import ProfileForm from "./components/ProfileForm";
+ // For testing, swap between the local and incoming test copies in ./src/temp
+ import ProfileForm from "./components/ProfileForm";
 import ProposalInputForm from "./components/ProposalInputForm";
 import ProposalDisplay from "./components/ProposalDisplay";
 import ProposalsList from "./components/ProposalsList";

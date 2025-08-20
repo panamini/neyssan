@@ -6,34 +6,32 @@ import { z } from "zod";
 import clsx from "clsx";
 import { api } from "../../convex/_generated/api";
 import { useMutation, useConvex } from "convex/react";
-import styles from "./ProposalInputForm.module.css";
-import ProfileView from "./ProfileView";
-import { SkillAdder, ExperienceAdder, EducationAdder } from "./ProfileEditors";
+import styles from "../components/ProposalInputForm.module.css";
+import ProfileView from "../components/ProfileView";
+import { SkillAdder, ExperienceAdder, EducationAdder } from "../components/ProfileEditors";
 
-const _schema = z.object({
+const schema = z.object({
+  linkedInUrl: z.string().url().optional(),
   resumeText: z.string().min(20).optional(),
 });
 
-type FormValues = z.infer<typeof _schema>;
+type FormValues = z.infer<typeof schema>;
 
-export default function ProfileForm() {
+export default function ProfileFormLocal() {
   const form = useForm<FormValues>({
-    defaultValues: { resumeText: "" },
+    defaultValues: { linkedInUrl: "", resumeText: "" },
   });
 
-  const profilesPublic = useMutation(api.profilesPublic.default);
+  const ingestProfile = useMutation((api as any).ingestProfile?.default) as any;
+  const profilesPublic = useMutation(api.profilesPublic.default) as any;
 
   const [status, setStatus] = React.useState<string | null>(null);
-  console.log("ProfileForm rendered - status:", status);
-
   const convex = useConvex();
   const [currentProfile, setCurrentProfile] = React.useState<any>(null);
 
-  // UI state for profile panel
   const [expanded, setExpanded] = React.useState(false);
   const [editingSummary, setEditingSummary] = React.useState(false);
   const [summaryDraft, setSummaryDraft] = React.useState<string>("");
-  // Inline name editing
   const [editingName, setEditingName] = React.useState(false);
   const [nameDraft, setNameDraft] = React.useState<string>("");
 
@@ -48,6 +46,10 @@ export default function ProfileForm() {
     }
   }
 
+  React.useEffect(() => {
+    void fetchMyProfile();
+  }, []);
+
   const saveSummary = async () => {
     try {
       setStatus("Saving summary...");
@@ -56,7 +58,6 @@ export default function ProfileForm() {
           summary: summaryDraft,
         },
       });
-      // Refresh profile after save
       await fetchMyProfile();
       setEditingSummary(false);
       setStatus("Summary saved");
@@ -70,22 +71,22 @@ export default function ProfileForm() {
   async function onSubmit(values: FormValues) {
     setStatus(null);
     try {
-      // Prefer calling the typed public mutation; fall back to http ingest if needed.
       if (values.resumeText && values.resumeText.length > 20) {
         await profilesPublic({
           profile: {
-            summary: values.resumeText.substring(0, 2000), // lightweight summary for now
+            summary: values.resumeText.substring(0, 2000),
             rawText: values.resumeText.substring(0, 2000),
             metadata: { source: "manual_paste", importedAt: Date.now() },
           },
         });
+      } else if (values.linkedInUrl) {
+        if (!ingestProfile) throw new Error("Ingest endpoint not available");
+        await ingestProfile({ url: values.linkedInUrl });
       } else {
-        throw new Error("Please paste your resume text (min 20 chars).");
+        throw new Error("Provide a LinkedIn URL or paste your resume text (min 20 chars).");
       }
       setStatus("Profile ingested successfully");
-      // Refresh profile display immediately and expand details so user sees latest info
       await fetchMyProfile();
-      setExpanded(true);
       form.reset();
     } catch (err: any) {
       console.error("Profile ingest failed", err);
@@ -96,15 +97,21 @@ export default function ProfileForm() {
   return (
     <div className="w-full max-w-4xl p-3 mb-4 border-2 border-yellow-400" data-testid="profile-ingestion-card">
       <div className="p-4 rounded-md bg-gray-50 dark:bg-gray-900">
-        <h3 className="mb-2 text-lg font-medium">Profile ingestion</h3>
+        <h3 className="mb-2 text-lg font-medium">Profile ingestion (local)</h3>
         <form
           onSubmit={(e) => {
             void form.handleSubmit(onSubmit)(e);
           }}
           className="grid gap-3"
         >
+          <input
+            type="url"
+            placeholder="LinkedIn profile URL (optional)"
+            {...form.register("linkedInUrl")}
+            className={clsx(styles.inputElement)}
+          />
           <textarea
-            placeholder="Paste your resume / CV text (optional, min 20 chars)"
+            placeholder="Or paste your resume / CV text (optional, min 20 chars)"
             rows={4}
             {...form.register("resumeText")}
             className={clsx(styles.inputElement)}
@@ -114,7 +121,7 @@ export default function ProfileForm() {
               type="submit"
               className="px-3 py-1 rounded-md bg-foreground text-background"
             >
-              Ingest profile
+              Ingest profile (local)
             </button>
             {status && <span className="text-sm">{status}</span>}
           </div>
@@ -124,7 +131,6 @@ export default function ProfileForm() {
           <button
             type="button"
             onClick={() => {
-              // Toggle expanded state and fetch profile when opening
               setExpanded((prev) => {
                 const next = !prev;
                 if (next) {
@@ -144,19 +150,18 @@ export default function ProfileForm() {
             <div id="profile-details" className="mt-3" role="region" aria-label="User profile details">
               {currentProfile ? (
                 <div className="space-y-4">
-                  {/* Header */}
                   <div className="flex items-center justify-between">
                     <div>
-                    {editingName ? (
-                      <div className="flex items-center gap-2">
-                        <input
-                          aria-label="Edit name"
-                          value={nameDraft}
-                          onChange={(e) => setNameDraft(e.target.value)}
-                          className="px-2 py-1 text-sm border rounded"
-                        />
-                        <button
-                        onClick={() => { void (async () => {
+                      {editingName ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            aria-label="Edit name"
+                            value={nameDraft}
+                            onChange={(e) => setNameDraft(e.target.value)}
+                            className="px-2 py-1 text-sm border rounded"
+                          />
+                          <button
+                            onClick={() => { void (async () => {
                               try {
                                 setStatus("Saving name...");
                                 await profilesPublic({ profile: { name: nameDraft } });
@@ -169,41 +174,40 @@ export default function ProfileForm() {
                                 setStatus(`Failed: ${err?.message ?? String(err)}`);
                               }
                             })(); }}
-                          className="px-2 py-1 text-sm text-white bg-blue-600 rounded"
-                        >
-                          Save
-                        </button>
-                        <button
-                          onClick={() => {
-                            setEditingName(false);
-                            setNameDraft((currentProfile && currentProfile.name) || "");
-                          }}
-                          className="px-2 py-1 text-sm bg-gray-200 rounded"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    ) : (
-                      <div>
-                        <div className="text-lg font-semibold">{currentProfile.name ?? "No name"}</div>
-                        <div className="mt-1">
+                            className="px-2 py-1 text-sm text-white bg-blue-600 rounded"
+                          >
+                            Save
+                          </button>
                           <button
                             onClick={() => {
+                              setEditingName(false);
                               setNameDraft((currentProfile && currentProfile.name) || "");
-                              setEditingName(true);
                             }}
                             className="px-2 py-1 text-sm bg-gray-200 rounded"
                           >
-                            Edit
+                            Cancel
                           </button>
                         </div>
-                      </div>
-                    )}
-                    {currentProfile.email && <div className="mt-1 text-sm text-gray-600">{currentProfile.email}</div>}
-                  </div>
+                      ) : (
+                        <div>
+                          <div className="text-lg font-semibold">{currentProfile.name ?? "No name"}</div>
+                          <div className="mt-1">
+                            <button
+                              onClick={() => {
+                                setNameDraft((currentProfile && currentProfile.name) || "");
+                                setEditingName(true);
+                              }}
+                              className="px-2 py-1 text-sm bg-gray-200 rounded"
+                            >
+                              Edit
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      {currentProfile.email && <div className="mt-1 text-sm text-gray-600">{currentProfile.email}</div>}
+                    </div>
 
                     <div className="flex items-center gap-2">
-                      {/* Edit summary button */}
                       {!editingSummary ? (
                         <button
                           onClick={() => setEditingSummary(true)}
@@ -225,7 +229,6 @@ export default function ProfileForm() {
                     </div>
                   </div>
 
-                  {/* Summary editable */}
                   <div>
                     <h4 className="mb-1 text-sm font-medium">Summary</h4>
                     {editingSummary ? (
@@ -266,7 +269,6 @@ export default function ProfileForm() {
                     )}
                   </div>
 
-                  {/* LinkedIn (separate field) */}
                   <div>
                     <h4 className="mb-1 text-sm font-medium">LinkedIn</h4>
                     {currentProfile.linkedIn ? (
@@ -281,7 +283,6 @@ export default function ProfileForm() {
                         </a>
                         <button
                           onClick={() => { void (async () => {
-                            // prompt for new URL
                             const next = window.prompt("Edit LinkedIn URL", currentProfile.linkedIn || "");
                             if (next !== null) {
                               try {
@@ -328,7 +329,6 @@ export default function ProfileForm() {
                     )}
                   </div>
 
-                  {/* Skills editor */}
                   <div>
                     <h4 className="mb-1 text-sm font-medium">Skills</h4>
                     <div className="flex flex-wrap items-center gap-2">
@@ -373,7 +373,6 @@ export default function ProfileForm() {
                     </div>
                   </div>
 
-                  {/* Experience editor */}
                   <div>
                     <h4 className="mb-1 text-sm font-medium">Experience</h4>
                     <div className="space-y-2">
@@ -388,7 +387,6 @@ export default function ProfileForm() {
                             <div className="flex gap-2">
                               <button
                                 onClick={() => { void (async () => {
-                                  // simple delete
                                   try {
                                     const next = (currentProfile.experience || []).filter((_: unknown, i: number) => i !== idx);
                                     setStatus("Saving experience...");
@@ -425,7 +423,6 @@ export default function ProfileForm() {
                     </div>
                   </div>
 
-                  {/* Education editor */}
                   <div>
                     <h4 className="mb-1 text-sm font-medium">Education</h4>
                     <div className="space-y-2">
@@ -457,7 +454,6 @@ export default function ProfileForm() {
                     </div>
                   </div>
 
-                  {/* Formatted ProfileView (hide summary because we render it above) */}
                   <ProfileView profile={currentProfile} hideSummary />
                 </div>
               ) : (
