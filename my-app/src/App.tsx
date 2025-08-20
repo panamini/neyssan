@@ -8,6 +8,7 @@ import { Flex } from "@radix-ui/themes";
 
 import Header from "./components/header/Header";
 import ProfileForm from "./components/ProfileForm";
+import ProfileEditor from "./components/ProfileEditor";
 import ProposalInputForm from "./components/ProposalInputForm";
 import ProposalDisplay from "./components/ProposalDisplay";
 import ProposalsList from "./components/ProposalsList";
@@ -97,6 +98,7 @@ export default function App() {
                 </div>
 
                 <div className="py-4">
+                  <ProfileEditor />
                   <ProfileForm />
                   <ProposalInputForm onSubmit={handleProposalSubmit} />
                 </div>
