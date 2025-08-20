@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import clsx from "clsx";
 import { api } from "../../convex/_generated/api";
-import { useMutation } from "convex/react";
+import { useMutation, useConvex } from "convex/react";
 import styles from "./ProposalInputForm.module.css";
 
 const schema = z.object({
@@ -24,6 +24,20 @@ export default function ProfileForm() {
   const profilesPublic = useMutation(api.profilesPublic.default) as any;
 
   const [status, setStatus] = React.useState<string | null>(null);
+  console.log("ProfileForm rendered - status:", status);
+
+  const convex = useConvex();
+  const [currentProfile, setCurrentProfile] = React.useState<any | null>(null);
+
+  async function fetchMyProfile() {
+    try {
+      const profile = await convex.query(api.users.getUser as any);
+      setCurrentProfile(profile ?? null);
+    } catch (err) {
+      console.error("Failed to fetch profile:", err);
+      setCurrentProfile({ error: String(err) });
+    }
+  }
 
   async function onSubmit(values: FormValues) {
     setStatus(null);
@@ -36,8 +50,15 @@ export default function ProfileForm() {
           },
         });
       } else if (values.linkedInUrl) {
-        // Call the HTTP ingest endpoint which can accept URLs for scraping/parsing
-        await ingestProfile({ url: values.linkedInUrl });
+        // LinkedIn URL provided — call the public mutation as a simple ingest fallback.
+        // The HTTP /profiles/ingest endpoint isn't exposed as a Convex public mutation
+        // to the browser, so use profilesPublic to record the URL (server-side scraping
+        // can be wired to handle it in a later change).
+        await profilesPublic({
+          profile: {
+            summary: `LinkedIn: ${values.linkedInUrl}`,
+          },
+        });
       } else {
         throw new Error("Provide a LinkedIn URL or paste your resume text (min 20 chars).");
       }
@@ -50,7 +71,7 @@ export default function ProfileForm() {
   }
 
   return (
-    <div className="w-full max-w-4xl mb-4">
+    <div className="w-full max-w-4xl p-3 mb-4 border-2 border-yellow-400" data-testid="profile-ingestion-card">
       <div className="p-4 rounded-md bg-gray-50 dark:bg-gray-900">
         <h3 className="mb-2 text-lg font-medium">Profile ingestion</h3>
         <form
@@ -81,6 +102,22 @@ export default function ProfileForm() {
             {status && <span className="text-sm">{status}</span>}
           </div>
         </form>
+
+        <div className="pt-3 mt-4 border-t">
+          <button
+            type="button"
+            onClick={() => { void fetchMyProfile(); }}
+            className="px-3 py-1 text-white bg-blue-600 rounded-md"
+          >
+            View my profile
+          </button>
+
+          {currentProfile && (
+            <div className="p-3 mt-3 overflow-auto bg-white rounded-md dark:bg-gray-800 max-h-60">
+              <pre className="text-xs">{JSON.stringify(currentProfile, null, 2)}</pre>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
