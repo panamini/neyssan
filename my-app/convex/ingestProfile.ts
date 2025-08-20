@@ -1,37 +1,10 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { v } from "convex/values";
 
 const http = httpRouter();
 
 // Validator mirroring profiles.patchProfile
-const _payloadValidator = v.object({
-  summary: v.optional(v.string()),
-  skills: v.optional(v.array(v.string())),
-  experience: v.optional(
-    v.array(
-      v.object({
-        company: v.string(),
-        title: v.string(),
-        startDate: v.optional(v.number()),
-        endDate: v.optional(v.number()),
-        description: v.optional(v.string()),
-      })
-    )
-  ),
-  education: v.optional(
-    v.array(
-      v.object({
-        school: v.string(),
-        degree: v.optional(v.string()),
-        fieldOfStudy: v.optional(v.string()),
-        startDate: v.optional(v.number()),
-        endDate: v.optional(v.number()),
-      })
-    )
-  ),
-});
 
 http.route({
   path: "/profiles/ingest",

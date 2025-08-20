@@ -43,18 +43,12 @@ function formatDate(ts?: number) {
   }
 }
 
-<<<<<<< HEAD
 export default function ProfileView({ profile, hideSummary = false }: { profile: Profile; hideSummary?: boolean }) {
-=======
-export default function ProfileView({ profile }: { profile: Profile }) {
->>>>>>> 234fc75 (feat(profile): add ProfileView component, add linkedIn/rawText schema and patching)
   const [showRaw, setShowRaw] = React.useState(false);
 
   if (!profile) return null;
 
-  const summaryHtml = profile.summary
-    ? DOMPurify.sanitize(profile.summary)
-    : "";
+  const summaryHtml = profile.summary ? DOMPurify.sanitize(profile.summary) : "";
 
   return (
     <div className="w-full">
@@ -91,7 +85,6 @@ export default function ProfileView({ profile }: { profile: Profile }) {
       {!showRaw ? (
         <div className="space-y-4">
           {/* Summary */}
-<<<<<<< HEAD
           {!hideSummary && (
             <section>
               <h3 className="mb-1 text-sm font-medium">Summary</h3>
@@ -106,20 +99,6 @@ export default function ProfileView({ profile }: { profile: Profile }) {
               )}
             </section>
           )}
-=======
-          <section>
-            <h3 className="mb-1 text-sm font-medium">Summary</h3>
-            {profile.summary ? (
-              <div
-                className="text-sm prose max-w-none"
-                // sanitized HTML
-                dangerouslySetInnerHTML={{ __html: summaryHtml }}
-              />
-            ) : (
-              <div className="text-sm text-gray-500">No summary provided.</div>
-            )}
-          </section>
->>>>>>> 234fc75 (feat(profile): add ProfileView component, add linkedIn/rawText schema and patching)
 
           {/* Skills */}
           <section>
@@ -184,15 +163,11 @@ export default function ProfileView({ profile }: { profile: Profile }) {
           {profile.preferences && (
             <section>
               <h3 className="mb-1 text-sm font-medium">Preferences</h3>
-<<<<<<< HEAD
               <div className="text-sm">
                 <div>Tone: {profile.preferences.tonePreference}</div>
                 <div>Writing style: {profile.preferences.writingStyle}</div>
                 <div>Auto-send: {profile.preferences.autoSend ? "On" : "Off"}</div>
               </div>
-=======
-              <pre className="p-2 text-xs rounded bg-gray-50">{JSON.stringify(profile.preferences, null, 2)}</pre>
->>>>>>> 234fc75 (feat(profile): add ProfileView component, add linkedIn/rawText schema and patching)
             </section>
           )}
         </div>

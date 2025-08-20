@@ -8,10 +8,7 @@ import { api } from "../../convex/_generated/api";
 import { useMutation, useConvex } from "convex/react";
 import styles from "./ProposalInputForm.module.css";
 import ProfileView from "./ProfileView";
-<<<<<<< HEAD
 import { SkillAdder, ExperienceAdder, EducationAdder } from "./ProfileEditors";
-=======
->>>>>>> 234fc75 (feat(profile): add ProfileView component, add linkedIn/rawText schema and patching)
 
 const _schema = z.object({
   resumeText: z.string().min(20).optional(),
@@ -24,11 +21,7 @@ export default function ProfileForm() {
     defaultValues: { resumeText: "" },
   });
 
-<<<<<<< HEAD
   const profilesPublic = useMutation(api.profilesPublic.default);
-=======
-  const profilesPublic = useMutation(api.profilesPublic.default) as any;
->>>>>>> 234fc75 (feat(profile): add ProfileView component, add linkedIn/rawText schema and patching)
 
   const [status, setStatus] = React.useState<string | null>(null);
   console.log("ProfileForm rendered - status:", status);
@@ -147,7 +140,6 @@ export default function ProfileForm() {
             {expanded ? "Close profile" : "View profile"}
           </button>
 
-<<<<<<< HEAD
           {expanded && (
             <div id="profile-details" className="mt-3" role="region" aria-label="User profile details">
               {currentProfile ? (
@@ -164,7 +156,7 @@ export default function ProfileForm() {
                           className="px-2 py-1 text-sm border rounded"
                         />
                         <button
-                        onClick={() => { void (async () => {
+                          onClick={() => { void (async () => {
                               try {
                                 setStatus("Saving name...");
                                 await profilesPublic({ profile: { name: nameDraft } });
@@ -471,11 +463,6 @@ export default function ProfileForm() {
               ) : (
                 <div className="text-sm text-gray-500">Loading profile…</div>
               )}
-=======
-          {currentProfile && (
-            <div className="mt-3">
-              <ProfileView profile={currentProfile} />
->>>>>>> 234fc75 (feat(profile): add ProfileView component, add linkedIn/rawText schema and patching)
             </div>
           )}
         </div>

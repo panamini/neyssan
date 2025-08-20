@@ -2,21 +2,11 @@ import { action, internalMutation, internalQuery, query } from "./_generated/ser
 import { v } from "convex/values";
 // import { createTimestamps, updateTimestamps } from "./types";
 import { internal } from "./_generated/api";
-import { Doc } from "./_generated/dataModel";
 
 // Define the return types for the internal mutations and queries
-type StartSyncResult = SyncRecord;
-type GetForSyncResult = Doc<"proposals">[];
 
 const PG_BATCH_SIZE = 1000;
 
-/**
- * Interface for sync operation state
- */
-interface SyncState {
-  lastSyncId: string;
-  status: "in_progress" | "completed" | "failed";
-}
 
 /**
  * Interface for sync record
