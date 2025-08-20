@@ -7,7 +7,7 @@ const http = httpRouter();
 http.route({
   path: "/test/generate",
   method: "POST",
-  handler: httpAction(async ({ runAction }, request) => {
+  handler: httpAction(async (ctx, request) => {
     try {
       const body = await request.json();
       const jobTitle = body.jobTitle ?? "Test Job";
@@ -18,7 +18,7 @@ http.route({
       const modelType = body.modelType ?? "mistral-small-latest";
 
       // Call the existing action to generate a proposal (use any-cast to avoid generated-api mismatch)
-      const result = await runAction((internal as any).functions?.generateProposal as any, {
+      const result = await ctx.runAction((internal as any).functions?.generateProposal, {
         jobTitle,
         jobDescription,
         proposalType,
@@ -42,36 +42,36 @@ http.route({
 http.route({
   path: "/profiles/ingest",
   method: "POST",
-  handler: httpAction(async ({ runMutation, auth }, request) => {
+  handler: httpAction(async (ctx, request) => {
     try {
       const body = await request.json();
       // Basic payload acceptance; detailed validation is performed in internal mutation
-      const profile = body as any;
+      const profile = body;
 
-      const identity = await auth.getUserIdentity();
+      const identity = await ctx.auth.getUserIdentity();
       if (!identity) {
         return new Response(JSON.stringify({ error: "Not authenticated" }), { status: 401 });
       }
 
       // Ensure user exists
-      await runMutation(internal.users.createOrUpdateUser, {
+      await ctx.runMutation(internal.users.createOrUpdateUser, {
         clerkId: identity.subject,
         email: identity.email ?? "unknown@example.com",
         name: identity.name,
       });
 
       // Call internal mutation to patch profile (internal.profiles.patchProfile)
-      if ((internal as any).profiles && (internal as any).profiles.patchProfile) {
-        await runMutation((internal as any).profiles.patchProfile, {
-          profile,
-        });
+        if ((internal as any).profiles && (internal as any).profiles.patchProfile) {
+          await ctx.runMutation((internal as any).profiles.patchProfile, {
+            profile,
+          });
         return new Response(JSON.stringify({ status: "ok" }), { status: 200 });
       } else {
         // As a fallback, attempt to call public mutation if available
-        if ((internal as any).profiles && (internal as any).profilesPublic) {
-          await runMutation((internal as any).profilesPublic, {
-            profile,
-          });
+          if ((internal as any).profiles && (internal as any).profilesPublic) {
+            await ctx.runMutation((internal as any).profilesPublic, {
+              profile,
+            });
           return new Response(JSON.stringify({ status: "ok", fallback: true }), { status: 200 });
         }
         return new Response(JSON.stringify({ status: "accepted", message: "patchProfile not available" }), { status: 202 });

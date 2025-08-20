@@ -97,7 +97,7 @@ function validateCustomInstructions(instructions: string): string {
 // Pure function to calculate tone adjustments
 function calculateToneAdjustment(settings: ToneSettings): ToneAdjustment {
   const baseTone = BASE_TONE_INSTRUCTIONS[settings.type];
-  const levelDescription = ToneMap[settings.type][settings.level as keyof typeof ToneMap[typeof settings.type]];
+  const levelDescription = ToneMap[settings.type][settings.level];
 
   const adjustment: ToneAdjustment = {
     instruction: `${baseTone.base} with a ${levelDescription} style.`,

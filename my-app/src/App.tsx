@@ -7,6 +7,7 @@ import { SignInButton, SignUpButton, UserButton, useAuth } from "@clerk/clerk-re
 import { Flex } from "@radix-ui/themes";
 
 import Header from "./components/header/Header";
+import ProfileForm from "./components/ProfileForm";
 import ProposalInputForm from "./components/ProposalInputForm";
 import ProposalDisplay from "./components/ProposalDisplay";
 import ProposalsList from "./components/ProposalsList";
@@ -27,19 +28,21 @@ export default function App() {
     // Only attempt to create/update a profile once Clerk has loaded and the user is signed in.
     // This avoids "Not authenticated" errors when the client attempts mutations before
     // Clerk's session is available.
+    console.log("App.useEffect fired - clerkLoaded:", clerkLoaded, "isSignedIn:", isSignedIn);
     if (!clerkLoaded || !isSignedIn) return;
 
     async function ensureUser() {
       try {
+        console.log("ensureUser: calling createUserFromClient mutation");
         // Use a runtime-any cast to avoid TypeScript issues when generated api types are stale.
-        await convex.mutation((api as any).functions?.createUserFromClient as any);
-        console.log('createUserFromClient OK');
+        await convex.mutation((api as any).functions?.createUserFromClient);
+        console.log("createUserFromClient OK");
       } catch (err) {
-        console.error('createUserFromClient failed', err);
+        console.error("createUserFromClient failed", err);
       }
     }
 
-    ensureUser();
+    void ensureUser();
   }, [convex, isSignedIn, clerkLoaded]);
 
   const handleProposalSubmit = (
@@ -94,6 +97,7 @@ export default function App() {
                 </div>
 
                 <div className="py-4">
+                  <ProfileForm />
                   <ProposalInputForm onSubmit={handleProposalSubmit} />
                 </div>
 
