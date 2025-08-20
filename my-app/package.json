@@ -25,6 +25,7 @@
     "axios": "^1.7.9",
     "clsx": "^2.1.1",
     "convex": "^1.19.2",
+    "dompurify": "^3.2.6",
     "jose": "^6.0.6",
     "jsonwebtoken": "^9.0.2",
     "lru-cache": "^11.0.2",

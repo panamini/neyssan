@@ -9,7 +9,7 @@ import { ArrowUp, Square, Wrench, Palette, Laugh, Smile, SmilePlus } from "lucid
 import CustomToggle from "./CustomToggle";
 
 import { api } from "../../convex/_generated/api";
-import { useAction } from "convex/react";
+import { useAction, useMutation } from "convex/react";
 import { formSchema, FormValues } from "./ProposalInputForm.schemas";
 
 interface ProposalInputFormProps {
@@ -18,6 +18,7 @@ interface ProposalInputFormProps {
 
 const ProposalInputForm: React.FC<ProposalInputFormProps> = ({ onSubmit }) => {
   const generateProposalAction = useAction(api.functions.generateProposal);
+  const saveJobAndProposalMutation = useMutation(api.saveJobAndProposal.default);
   const [isGenerating, setIsGenerating] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
 
@@ -37,13 +38,33 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({ onSubmit }) => {
     try {
       setIsGenerating(true);
       setErrorMessage(null);
+
       const result = await generateProposalAction(values);
       if (result) {
+        // Attempt to save the generated proposal to the backend as a draft.
+        try {
+          await saveJobAndProposalMutation({
+            jobData: {
+              platform: "web",
+              title: values.jobTitle,
+              description: values.jobDescription,
+              url: window.location.href,
+            },
+            proposalText: result.proposalContent,
+          });
+          console.log("Saved proposal as draft");
+        } catch (saveErr) {
+          console.warn("Failed to save proposal draft:", saveErr);
+          // don't block showing the proposal if save fails
+        }
+
         onSubmit(values, result.proposalContent);
+      } else {
+        setErrorMessage("No proposal returned from the server.");
       }
     } catch (error: any) {
       console.error("Error generating proposal:", error);
-      setErrorMessage("Failed to generate proposal. Please try again.");
+      setErrorMessage(error?.message ?? "Failed to generate proposal. Please try again.");
     } finally {
       setIsGenerating(false);
     }

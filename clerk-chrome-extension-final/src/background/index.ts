@@ -110,12 +110,31 @@ interface JobData {
 }
 
 interface Message {
-  action: "generateProposal" | "saveProposal" | "test";
+  action: "generateProposal" | "saveProposal" | "ingestProfile" | "test";
   jobData?: JobData;
   proposalText?: string;
+  // profile payload for ingestProfile action
+  profile?: {
+    summary?: string;
+    skills?: string[];
+    experience?: Array<{
+      company?: string;
+      title?: string;
+      startDate?: number;
+      endDate?: number;
+      description?: string;
+    }>;
+    education?: Array<{
+      school?: string;
+      degree?: string;
+      fieldOfStudy?: string;
+      startDate?: number;
+      endDate?: number;
+    }>;
+  };
 }
 
-chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) => {
+  chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) => {
   console.log("Message received:", message);
   switch (message.action) {
     case "generateProposal":
@@ -123,6 +142,10 @@ chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) =>
       return true;
     case "saveProposal":
       saveProposalHandler(message, sendResponse);
+      return true;
+    case "ingestProfile":
+      // message.profile expected
+      ingestProfileHandler(message.profile, sendResponse);
       return true;
     case "test":
       console.log("Handling test message");
@@ -189,6 +212,72 @@ async function saveProposalHandler(
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     console.error("Save proposal error:", errorMessage, error);
+    sendResponse({ success: false, error: errorMessage });
+  }
+}
+
+/**
+ * Ingest profile handler
+ * Receives a profile payload from the content script and forwards it to the
+ * Convex HTTP ingestion endpoint using the stored auth token.
+ */
+async function ingestProfileHandler(
+  profile: any,
+  sendResponse: (response: { success: boolean; error?: string; detail?: any }) => void
+) {
+  try {
+    currentToken = await getClerkToken();
+    if (!currentToken) {
+      console.log("No valid token, attempting refresh");
+      currentToken = await refreshToken();
+      if (!currentToken) throw new Error("No auth token available after refresh");
+    }
+    // Primary: call public mutation profilesPublic if available (preferred; avoids HTTP route issues)
+    try {
+      convex.setAuth(currentToken ?? "");
+      if ((api as any).profilesPublic && (api as any).profilesPublic.default) {
+        console.log("Calling public mutation: profilesPublic");
+        await convex.mutation((api as any).profilesPublic.default, { profile });
+        console.log("Public mutation profilesPublic succeeded");
+        sendResponse({ success: true, detail: { method: "profilesPublic" } });
+        return;
+      }
+    } catch (mutationErr) {
+      console.warn("Public mutation profilesPublic failed:", mutationErr);
+      // continue to HTTP fallback below
+    }
+
+    // Fallback: attempt HTTP ingest route
+    try {
+      // Convex HTTP routes are exposed under /api/http/<path>
+      const ingestUrl = "https://neat-starfish-33.convex.cloud/api/http/profiles/ingest";
+      const resp = await fetch(ingestUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${currentToken}`,
+        },
+        body: JSON.stringify(profile),
+      });
+
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => String(resp.status));
+        console.error("HTTP ingest failed:", resp.status, text);
+        sendResponse({ success: false, error: `HTTP ingest failed: ${resp.status}`, detail: text });
+        return;
+      }
+      const data = await resp.json().catch(() => ({}));
+      console.log("Profile ingest response (HTTP):", data);
+      sendResponse({ success: true, detail: { method: "http", data } });
+      return;
+    } catch (httpErr) {
+      console.error("HTTP ingest error:", httpErr);
+      sendResponse({ success: false, error: String(httpErr) });
+      return;
+    }
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : "Unknown error";
+    console.error("Ingest profile error:", errorMessage, err);
     sendResponse({ success: false, error: errorMessage });
   }
 }

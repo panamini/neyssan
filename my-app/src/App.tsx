@@ -9,6 +9,7 @@ import { Flex } from "@radix-ui/themes";
 import Header from "./components/header/Header";
 import ProposalInputForm from "./components/ProposalInputForm";
 import ProposalDisplay from "./components/ProposalDisplay";
+import ProposalsList from "./components/ProposalsList";
 import DarkModeToggle from "./components/dark-mode-toggle/DarkModeToggle";
 import type { FormValues } from "./components/ProposalInputForm.schemas";
 
@@ -88,11 +89,16 @@ export default function App() {
             </Unauthenticated>
             <Authenticated>
               <div className="relative w-full max-w-4xl px-4 mx-auto">
-                <div className="h-[calc(100vh-12rem)] overflow-auto">
+                <div className="h-[calc(60vh)] overflow-auto">
                   <ProposalDisplay proposalContent={proposalContent} loading={loading} error={error} />
                 </div>
-                <div className="sticky bottom-0 left-0 right-0 py-4 bg-background/95 dark:bg-background/90 backdrop-blur-md">
+
+                <div className="py-4">
                   <ProposalInputForm onSubmit={handleProposalSubmit} />
+                </div>
+
+                <div className="mt-6">
+                  <ProposalsList />
                 </div>
               </div>
             </Authenticated>
