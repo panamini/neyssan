@@ -20,7 +20,7 @@ import { Webhook } from "svix";
     http.route({
       path: "/clerk-users-webhook",
       method: "POST",
-      handler: httpAction(async ({ runMutation }, request) => {
+      handler: httpAction(async (ctx, request) => {
         const webhookSecret = process.env["CLERK_WEBHOOK_SECRET"];
         if (!webhookSecret) {
           throw new Error("CLERK_WEBHOOK_SECRET is not set");
@@ -59,7 +59,7 @@ import { Webhook } from "svix";
             name = `${data.first_name} ${data.last_name}`.trim() || undefined;
           }
 
-          await runMutation(internal.users.createOrUpdateUser, {
+          await ctx.runMutation(internal.users.createOrUpdateUser, {
             clerkId: data.id,
             email: data.email_addresses[0].email_address,
             ...(name && { name }),
@@ -76,7 +76,7 @@ import { Webhook } from "svix";
             name = `${data.first_name} ${data.last_name}`.trim() || undefined;
           }
 
-          await runMutation(internal.users.createOrUpdateUser, {
+          await ctx.runMutation(internal.users.createOrUpdateUser, {
             clerkId: data.id,
             email: data.email_addresses[0].email_address,
             ...(name && { name }),
@@ -85,7 +85,7 @@ import { Webhook } from "svix";
         } // Closing brace for user.updated
 
         case "user.deleted": { // Add braces for user.deleted
-          await runMutation(internal.users.deleteUser, {
+          await ctx.runMutation(internal.users.deleteUser, {
             clerkId: data.id,
           });
           break;

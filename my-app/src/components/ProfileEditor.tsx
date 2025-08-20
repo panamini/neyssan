@@ -2,6 +2,7 @@
 
 import React from "react";
 import { useMutation, useConvex } from "convex/react";
+import { api } from "../../convex/_generated/api";
 import ProfileView from "./ProfileView";
 import { SkillAdder, ExperienceAdder, EducationAdder } from "./ProfileEditors";
 import clsx from "clsx";
@@ -25,9 +26,9 @@ type Preferences = {
 
 export default function ProfileEditor() {
   const convex = useConvex();
-  const profilesPublic = useMutation((window as any).api?.profilesPublic?.default ?? (void 0)) as any;
+  const profilesPublic = useMutation(api.profilesPublic.default) as any;
 
-  const [profile, setProfile] = React.useState<any | null>(null);
+  const [profile, setProfile] = React.useState<any>(null);
   const [ingestText, setIngestText] = React.useState("");
   const [status, setStatus] = React.useState<string | null>(null);
 
@@ -133,8 +134,8 @@ export default function ProfileEditor() {
               placeholder="Paste your resume or profile text here..."
               className="w-full p-2 text-sm border rounded"
             />
-            <div className="flex items-center gap-2 mt-2">
-              <button onClick={ingestResume} className="px-3 py-1 text-white bg-blue-600 rounded">
+              <div className="flex items-center gap-2 mt-2">
+              <button onClick={() => { void ingestResume(); }} className="px-3 py-1 text-white bg-blue-600 rounded">
                 Ingest profile
               </button>
               <div className="text-sm text-gray-500">Pastes summary + rawText to profile</div>
@@ -358,9 +359,9 @@ export default function ProfileEditor() {
                 />
               </div>
 
-              <div className="flex justify-end gap-2 mt-4">
+                <div className="flex justify-end gap-2 mt-4">
                 <button onClick={() => setShowSettings(false)} className="px-3 py-1 bg-gray-200 rounded">Cancel</button>
-                <button onClick={savePreferences} className="px-3 py-1 text-white bg-blue-600 rounded">Save</button>
+                <button onClick={() => { void savePreferences(); }} className="px-3 py-1 text-white bg-blue-600 rounded">Save</button>
               </div>
             </div>
           </div>

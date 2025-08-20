@@ -57,13 +57,13 @@ export default function ProposalsList() {
             )}
           </div>
           <div className="flex gap-2 mt-2">
-            <button onClick={() => navigator.clipboard.writeText(p.content)} className="px-2 py-1 text-white bg-blue-600 rounded">
+            <button onClick={() => { void navigator.clipboard.writeText(p.content); }} className="px-2 py-1 text-white bg-blue-600 rounded">
               Copy
             </button>
 
             {/* Regenerate */}
             <button
-              onClick={async () => {
+              onClick={() => { void (async () => {
                 if (isRegenerating) return;
                 setIsRegenerating(p._id);
                 try {
@@ -97,7 +97,7 @@ export default function ProposalsList() {
                 } finally {
                   setIsRegenerating(null);
                 }
-              }}
+              })(); }}
               className="px-2 py-1 text-white bg-green-600 rounded"
             >
               {isRegenerating === p._id ? "Regenerating..." : "Regenerate"}
@@ -107,7 +107,7 @@ export default function ProposalsList() {
             {editingId === p._id ? (
               <>
                 <button
-                  onClick={async () => {
+                  onClick={() => { void (async () => {
                     if (isUpdating) return;
                     setIsUpdating(p._id);
                     try {
@@ -124,7 +124,7 @@ export default function ProposalsList() {
                     } finally {
                       setIsUpdating(null);
                     }
-                  }}
+                  })(); }}
                   className="px-2 py-1 text-white bg-indigo-600 rounded"
                 >
                   {isUpdating === p._id ? "Saving..." : "Save"}
@@ -152,7 +152,7 @@ export default function ProposalsList() {
             )}
 
             <button
-              onClick={async () => {
+              onClick={() => { void (async () => {
                 if (!confirm("Delete this proposal?")) return;
                 try {
                   await deleteProposal({ id: p._id });
@@ -162,7 +162,7 @@ export default function ProposalsList() {
                   console.error("Failed to delete proposal:", err);
                   alert("Failed to delete proposal");
                 }
-              }}
+              })(); }}
               className="px-2 py-1 text-white bg-red-600 rounded"
             >
               Delete

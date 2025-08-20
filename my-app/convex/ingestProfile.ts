@@ -6,7 +6,7 @@ import { v } from "convex/values";
 const http = httpRouter();
 
 // Validator mirroring profiles.patchProfile
-const payloadValidator = v.object({
+const _payloadValidator = v.object({
   summary: v.optional(v.string()),
   skills: v.optional(v.array(v.string())),
   experience: v.optional(
@@ -36,22 +36,22 @@ const payloadValidator = v.object({
 http.route({
   path: "/profiles/ingest",
   method: "POST",
-  handler: httpAction(async ({ runMutation, auth }, request) => {
+  handler: httpAction(async (ctx, request) => {
     try {
       const body = await request.json();
-      // payloadValidator (convex v validators) don't expose a .parse method here;
+      // _payloadValidator (convex v validators) don't expose a .parse method here;
       // accept the body and rely on the internal mutation to enforce schemas.
       // Optionally add lightweight runtime checks here if needed.
       const validated = body;
 
       // Ensure request is authenticated
-      const identity = await auth.getUserIdentity();
+      const identity = await ctx.auth.getUserIdentity();
       if (!identity) {
         return new Response(JSON.stringify({ error: "Not authenticated" }), { status: 401 });
       }
 
       // Ensure userProfile exists (create/update)
-      await runMutation(internal.users.createOrUpdateUser, {
+      await ctx.runMutation(internal.users.createOrUpdateUser, {
         clerkId: identity.subject,
         email: identity.email ?? "unknown@example.com",
         name: identity.name,
@@ -62,7 +62,7 @@ http.route({
         return new Response(JSON.stringify({ status: "accepted", message: "patchProfile mutation not available" }), { status: 202 });
       }
 
-      await runMutation((internal as any).profiles.patchProfile, {
+      await ctx.runMutation((internal as any).profiles.patchProfile, {
         profile: validated,
       });
 

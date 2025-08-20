@@ -42,7 +42,7 @@ export default function App() {
       }
     }
 
-    ensureUser();
+    void ensureUser();
   }, [convex, isSignedIn, clerkLoaded]);
 
   const handleProposalSubmit = (

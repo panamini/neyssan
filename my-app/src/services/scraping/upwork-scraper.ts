@@ -9,7 +9,7 @@ export class UpworkScraper extends AbstractScraper {
   constructor() {
     super(
       "upwork",
-      /^https?:\/\/(?:www\.)?upwork\.com\/(?:jobs|projects)\/[^\/]+(?:\/|$)/
+      /^https?:\/\/(?:www\.)?upwork\.com\/(?:jobs|projects)\/[^/]+(?:\/|$)/
     );
   }
 

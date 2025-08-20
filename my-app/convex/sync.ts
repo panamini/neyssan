@@ -5,9 +5,7 @@ import { internal } from "./_generated/api";
 import { Doc } from "./_generated/dataModel";
 
 // Define the return types for the internal mutations and queries
-// @ts-ignore
 type StartSyncResult = SyncRecord;
-// @ts-ignore
 type GetForSyncResult = Doc<"proposals">[];
 
 const PG_BATCH_SIZE = 1000;
@@ -15,7 +13,6 @@ const PG_BATCH_SIZE = 1000;
 /**
  * Interface for sync operation state
  */
-// @ts-ignore
 interface SyncState {
   lastSyncId: string;
   status: "in_progress" | "completed" | "failed";

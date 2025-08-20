@@ -17,12 +17,12 @@ export function SkillAdder({ onAdd }: SkillAdderProps) {
         placeholder="Add skill"
       />
       <button
-        onClick={() => {
-          const v = value.trim();
-          if (!v) return;
-          onAdd(v);
-          setValue("");
-        }}
+          onClick={() => {
+            const v = value.trim();
+            if (!v) return;
+            void onAdd(v);
+            setValue("");
+          }}
         className="px-2 py-1 text-sm bg-gray-200 rounded"
       >
         Add
@@ -68,7 +68,7 @@ export function ExperienceAdder({ onAdd }: ExperienceAdderProps) {
               endDate: endDate ? new Date(endDate).getTime() : undefined,
               description: description.trim() || undefined,
             };
-            onAdd(entry);
+            void onAdd(entry);
             setCompany("");
             setTitle("");
             setStartDate("");
@@ -121,7 +121,7 @@ export function EducationAdder({ onAdd }: EducationAdderProps) {
               startDate: startDate ? new Date(startDate).getTime() : undefined,
               endDate: endDate ? new Date(endDate).getTime() : undefined,
             };
-            onAdd(entry);
+            void onAdd(entry);
             setSchool("");
             setDegree("");
             setFieldOfStudy("");
