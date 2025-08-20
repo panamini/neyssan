@@ -77,7 +77,10 @@ export default mutation({
       version: (existing.version || 1) + 1,
     };
  
+<<<<<<< HEAD
     if (args.profile.name !== undefined) updates.name = args.profile.name;
+=======
+>>>>>>> 234fc75 (feat(profile): add ProfileView component, add linkedIn/rawText schema and patching)
     if (args.profile.summary !== undefined) updates.summary = args.profile.summary;
     if (args.profile.rawText !== undefined) updates.rawText = args.profile.rawText;
     if (args.profile.linkedIn !== undefined) updates.linkedIn = args.profile.linkedIn;
