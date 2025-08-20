@@ -12,6 +12,7 @@ import { internal } from "./_generated/api";
 export default mutation({
   args: {
     profile: v.object({
+      name: v.optional(v.string()),
       summary: v.optional(v.string()),
       // preserve original pasted text (raw resume) if provided
       rawText: v.optional(v.string()),
@@ -76,6 +77,7 @@ export default mutation({
       version: (existing.version || 1) + 1,
     };
  
+    if (args.profile.name !== undefined) updates.name = args.profile.name;
     if (args.profile.summary !== undefined) updates.summary = args.profile.summary;
     if (args.profile.rawText !== undefined) updates.rawText = args.profile.rawText;
     if (args.profile.linkedIn !== undefined) updates.linkedIn = args.profile.linkedIn;

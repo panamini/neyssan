@@ -8,9 +8,9 @@ import { api } from "../../convex/_generated/api";
 import { useMutation, useConvex } from "convex/react";
 import styles from "./ProposalInputForm.module.css";
 import ProfileView from "./ProfileView";
+import { SkillAdder, ExperienceAdder, EducationAdder } from "./ProfileEditors";
 
 const schema = z.object({
-  linkedInUrl: z.string().url().optional(),
   resumeText: z.string().min(20).optional(),
 });
 
@@ -18,7 +18,7 @@ type FormValues = z.infer<typeof schema>;
 
 export default function ProfileForm() {
   const form = useForm<FormValues>({
-    defaultValues: { linkedInUrl: "", resumeText: "" },
+    defaultValues: { resumeText: "" },
   });
 
   const profilesPublic = useMutation(api.profilesPublic.default) as any;
@@ -33,6 +33,9 @@ export default function ProfileForm() {
   const [expanded, setExpanded] = React.useState(false);
   const [editingSummary, setEditingSummary] = React.useState(false);
   const [summaryDraft, setSummaryDraft] = React.useState<string>("");
+  // Inline name editing
+  const [editingName, setEditingName] = React.useState(false);
+  const [nameDraft, setNameDraft] = React.useState<string>("");
 
   async function fetchMyProfile() {
     try {
@@ -72,22 +75,17 @@ export default function ProfileForm() {
         await profilesPublic({
           profile: {
             summary: values.resumeText.substring(0, 2000), // lightweight summary for now
-          },
-        });
-      } else if (values.linkedInUrl) {
-        // LinkedIn URL provided — call the public mutation as a simple ingest fallback.
-        // The HTTP /profiles/ingest endpoint isn't exposed as a Convex public mutation
-        // to the browser, so use profilesPublic to record the URL (server-side scraping
-        // can be wired to handle it in a later change).
-        await profilesPublic({
-          profile: {
-            summary: `LinkedIn: ${values.linkedInUrl}`,
+            rawText: values.resumeText.substring(0, 2000),
+            metadata: { source: "manual_paste", importedAt: Date.now() },
           },
         });
       } else {
-        throw new Error("Provide a LinkedIn URL or paste your resume text (min 20 chars).");
+        throw new Error("Please paste your resume text (min 20 chars).");
       }
       setStatus("Profile ingested successfully");
+      // Refresh profile display immediately and expand details so user sees latest info
+      await fetchMyProfile();
+      setExpanded(true);
       form.reset();
     } catch (err: any) {
       console.error("Profile ingest failed", err);
@@ -105,14 +103,8 @@ export default function ProfileForm() {
           }}
           className="grid gap-3"
         >
-          <input
-            type="url"
-            placeholder="LinkedIn profile URL (optional)"
-            {...form.register("linkedInUrl")}
-            className={clsx(styles.inputElement)}
-          />
           <textarea
-            placeholder="Or paste your resume / CV text (optional, min 20 chars)"
+            placeholder="Paste your resume / CV text (optional, min 20 chars)"
             rows={4}
             {...form.register("resumeText")}
             className={clsx(styles.inputElement)}
@@ -155,9 +147,60 @@ export default function ProfileForm() {
                   {/* Header */}
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="text-lg font-semibold">{currentProfile.name ?? "No name"}</div>
-                      {currentProfile.email && <div className="text-sm text-gray-600">{currentProfile.email}</div>}
-                    </div>
+                    {editingName ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          aria-label="Edit name"
+                          value={nameDraft}
+                          onChange={(e) => setNameDraft(e.target.value)}
+                          className="px-2 py-1 text-sm border rounded"
+                        />
+                        <button
+                          onClick={async () => {
+                            try {
+                              setStatus("Saving name...");
+                              await profilesPublic({ profile: { name: nameDraft } });
+                              await fetchMyProfile();
+                              setEditingName(false);
+                              setStatus("Name saved");
+                              setTimeout(() => setStatus(null), 2000);
+                            } catch (err: any) {
+                              console.error("Failed to save name", err);
+                              setStatus(`Failed: ${err?.message ?? String(err)}`);
+                            }
+                          }}
+                          className="px-2 py-1 text-sm text-white bg-blue-600 rounded"
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditingName(false);
+                            setNameDraft((currentProfile && currentProfile.name) || "");
+                          }}
+                          className="px-2 py-1 text-sm bg-gray-200 rounded"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <div>
+                        <div className="text-lg font-semibold">{currentProfile.name ?? "No name"}</div>
+                        <div className="mt-1">
+                          <button
+                            onClick={() => {
+                              setNameDraft((currentProfile && currentProfile.name) || "");
+                              setEditingName(true);
+                            }}
+                            className="px-2 py-1 text-sm bg-gray-200 rounded"
+                          >
+                            Edit
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {currentProfile.email && <div className="mt-1 text-sm text-gray-600">{currentProfile.email}</div>}
+                  </div>
 
                     <div className="flex items-center gap-2">
                       {/* Edit summary button */}
@@ -283,6 +326,154 @@ export default function ProfileForm() {
                         <div className="text-sm text-gray-500">No LinkedIn provided.</div>
                       </div>
                     )}
+                  </div>
+
+                  {/* Skills editor */}
+                  <div>
+                    <h4 className="mb-1 text-sm font-medium">Skills</h4>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {(currentProfile.skills || []).map((s: string, i: number) => (
+                        <span key={i} className="flex items-center gap-2 px-2 py-1 text-xs bg-gray-100 rounded-full dark:bg-gray-700">
+                          <span>{s}</span>
+                          <button
+                            aria-label={`Remove skill ${s}`}
+                            onClick={async () => {
+                              try {
+                                const next = (currentProfile.skills || []).filter((x: string) => x !== s);
+                                setStatus("Saving skills...");
+                                await profilesPublic({ profile: { skills: next } });
+                                await fetchMyProfile();
+                                setStatus(null);
+                              } catch (err: any) {
+                                console.error("Failed to remove skill", err);
+                                setStatus(`Failed: ${err?.message ?? String(err)}`);
+                              }
+                            }}
+                            className="text-xs px-1 py-0.5 bg-red-200 rounded"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+
+                      <SkillAdder
+                        onAdd={async (val: string) => {
+                          try {
+                            const next = [...(currentProfile.skills || []), val];
+                            setStatus("Saving skills...");
+                            await profilesPublic({ profile: { skills: next } });
+                            await fetchMyProfile();
+                            setStatus(null);
+                          } catch (err: any) {
+                            console.error("Failed to add skill", err);
+                            setStatus(`Failed: ${err?.message ?? String(err)}`);
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Experience editor */}
+                  <div>
+                    <h4 className="mb-1 text-sm font-medium">Experience</h4>
+                    <div className="space-y-2">
+                      {(currentProfile.experience || []).map((exp: any, idx: number) => (
+                        <div key={idx} className="p-2 border rounded">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <div className="font-semibold">{exp.title} — {exp.company}</div>
+                              <div className="text-xs text-gray-500">{exp.startDate ? new Date(exp.startDate).toLocaleDateString() : ""} {exp.endDate ? `— ${new Date(exp.endDate).toLocaleDateString()}` : ""}</div>
+                              {exp.description && <div className="mt-1 text-sm">{exp.description}</div>}
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={async () => {
+                                  // simple delete
+                                  try {
+                                    const next = (currentProfile.experience || []).filter((_: any, i: number) => i !== idx);
+                                    setStatus("Saving experience...");
+                                    await profilesPublic({ profile: { experience: next } });
+                                    await fetchMyProfile();
+                                    setStatus(null);
+                                  } catch (err: any) {
+                                    console.error("Failed to delete experience", err);
+                                    setStatus(`Failed: ${err?.message ?? String(err)}`);
+                                  }
+                                }}
+                                className="px-2 py-1 text-xs bg-red-200 rounded"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      <ExperienceAdder
+                        onAdd={async (entry: any) => {
+                          try {
+                            const next = [...(currentProfile.experience || []), entry];
+                            setStatus("Saving experience...");
+                            await profilesPublic({ profile: { experience: next } });
+                            await fetchMyProfile();
+                            setStatus(null);
+                          } catch (err: any) {
+                            console.error("Failed to add experience", err);
+                            setStatus(`Failed: ${err?.message ?? String(err)}`);
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Education editor */}
+                  <div>
+                    <h4 className="mb-1 text-sm font-medium">Education</h4>
+                    <div className="space-y-2">
+                      {(currentProfile.education || []).map((ed: any, idx: number) => (
+                        <div key={idx} className="p-2 border rounded">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <div className="font-semibold">{ed.school} {ed.degree ? `— ${ed.degree}` : ""}</div>
+                              {ed.fieldOfStudy && <div className="text-xs text-gray-500">{ed.fieldOfStudy}</div>}
+                              <div className="text-xs text-gray-500">{ed.startDate ? new Date(ed.startDate).toLocaleDateString() : ""} {ed.endDate ? `— ${new Date(ed.endDate).toLocaleDateString()}` : ""}</div>
+                            </div>
+                            <div>
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const next = (currentProfile.education || []).filter((_: any, i: number) => i !== idx);
+                                    setStatus("Saving education...");
+                                    await profilesPublic({ profile: { education: next } });
+                                    await fetchMyProfile();
+                                    setStatus(null);
+                                  } catch (err: any) {
+                                    console.error("Failed to delete education", err);
+                                    setStatus(`Failed: ${err?.message ?? String(err)}`);
+                                  }
+                                }}
+                                className="px-2 py-1 text-xs bg-red-200 rounded"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      <EducationAdder
+                        onAdd={async (entry: any) => {
+                          try {
+                            const next = [...(currentProfile.education || []), entry];
+                            setStatus("Saving education...");
+                            await profilesPublic({ profile: { education: next } });
+                            await fetchMyProfile();
+                            setStatus(null);
+                          } catch (err: any) {
+                            console.error("Failed to add education", err);
+                            setStatus(`Failed: ${err?.message ?? String(err)}`);
+                          }
+                        }}
+                      />
+                    </div>
                   </div>
 
                   {/* Formatted ProfileView (hide summary because we render it above) */}

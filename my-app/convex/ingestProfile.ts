@@ -42,7 +42,7 @@ http.route({
       // payloadValidator (convex v validators) don't expose a .parse method here;
       // accept the body and rely on the internal mutation to enforce schemas.
       // Optionally add lightweight runtime checks here if needed.
-      const validated = body as any;
+      const validated = body;
 
       // Ensure request is authenticated
       const identity = await auth.getUserIdentity();

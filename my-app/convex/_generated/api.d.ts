@@ -47,6 +47,7 @@ import type * as migration from "../migration.js";
 import type * as model_metrics from "../model/metrics.js";
 import type * as model_monitoring from "../model/monitoring.js";
 import type * as monitoring from "../monitoring.js";
+import type * as populateDisplayName from "../populateDisplayName.js";
 import type * as profiles from "../profiles.js";
 import type * as profilesPublic from "../profilesPublic.js";
 import type * as proposals from "../proposals.js";
@@ -120,6 +121,7 @@ declare const fullApi: ApiFromModules<{
   "model/metrics": typeof model_metrics;
   "model/monitoring": typeof model_monitoring;
   monitoring: typeof monitoring;
+  populateDisplayName: typeof populateDisplayName;
   profiles: typeof profiles;
   profilesPublic: typeof profilesPublic;
   proposals: typeof proposals;

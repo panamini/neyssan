@@ -35,7 +35,7 @@ export default function App() {
       try {
         console.log("ensureUser: calling createUserFromClient mutation");
         // Use a runtime-any cast to avoid TypeScript issues when generated api types are stale.
-        await convex.mutation((api as any).functions?.createUserFromClient as any);
+        await convex.mutation((api as any).functions?.createUserFromClient);
         console.log("createUserFromClient OK");
       } catch (err) {
         console.error("createUserFromClient failed", err);
