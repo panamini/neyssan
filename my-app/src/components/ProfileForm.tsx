@@ -29,15 +29,40 @@ export default function ProfileForm() {
   const convex = useConvex();
   const [currentProfile, setCurrentProfile] = React.useState<any | null>(null);
 
+  // UI state for profile panel
+  const [expanded, setExpanded] = React.useState(false);
+  const [editingSummary, setEditingSummary] = React.useState(false);
+  const [summaryDraft, setSummaryDraft] = React.useState<string>("");
+
   async function fetchMyProfile() {
     try {
       const profile = await convex.query(api.users.getUser as any);
       setCurrentProfile(profile ?? null);
+      setSummaryDraft((profile && profile.summary) || "");
     } catch (err) {
       console.error("Failed to fetch profile:", err);
       setCurrentProfile({ error: String(err) });
     }
   }
+
+  const saveSummary = async () => {
+    try {
+      setStatus("Saving summary...");
+      await profilesPublic({
+        profile: {
+          summary: summaryDraft,
+        },
+      });
+      // Refresh profile after save
+      await fetchMyProfile();
+      setEditingSummary(false);
+      setStatus("Summary saved");
+      setTimeout(() => setStatus(null), 2000);
+    } catch (err: any) {
+      console.error("Failed to save summary:", err);
+      setStatus(`Failed to save: ${err?.message ?? String(err)}`);
+    }
+  };
 
   async function onSubmit(values: FormValues) {
     setStatus(null);

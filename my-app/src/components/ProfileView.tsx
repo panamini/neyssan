@@ -43,7 +43,7 @@ function formatDate(ts?: number) {
   }
 }
 
-export default function ProfileView({ profile }: { profile: Profile }) {
+export default function ProfileView({ profile, hideSummary = false }: { profile: Profile; hideSummary?: boolean }) {
   const [showRaw, setShowRaw] = React.useState(false);
 
   if (!profile) return null;
@@ -87,18 +87,20 @@ export default function ProfileView({ profile }: { profile: Profile }) {
       {!showRaw ? (
         <div className="space-y-4">
           {/* Summary */}
-          <section>
-            <h3 className="mb-1 text-sm font-medium">Summary</h3>
-            {profile.summary ? (
-              <div
-                className="text-sm prose max-w-none"
-                // sanitized HTML
-                dangerouslySetInnerHTML={{ __html: summaryHtml }}
-              />
-            ) : (
-              <div className="text-sm text-gray-500">No summary provided.</div>
-            )}
-          </section>
+          {!hideSummary && (
+            <section>
+              <h3 className="mb-1 text-sm font-medium">Summary</h3>
+              {profile.summary ? (
+                <div
+                  className="text-sm prose max-w-none"
+                  // sanitized HTML
+                  dangerouslySetInnerHTML={{ __html: summaryHtml }}
+                />
+              ) : (
+                <div className="text-sm text-gray-500">No summary provided.</div>
+              )}
+            </section>
+          )}
 
           {/* Skills */}
           <section>
