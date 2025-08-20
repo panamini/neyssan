@@ -18,7 +18,7 @@ http.route({
       const modelType = body.modelType ?? "mistral-small-latest";
 
       // Call the existing action to generate a proposal (use any-cast to avoid generated-api mismatch)
-      const result = await runAction((internal as any).functions?.generateProposal as any, {
+      const result = await runAction((internal as any).functions?.generateProposal, {
         jobTitle,
         jobDescription,
         proposalType,
@@ -46,7 +46,7 @@ http.route({
     try {
       const body = await request.json();
       // Basic payload acceptance; detailed validation is performed in internal mutation
-      const profile = body as any;
+      const profile = body;
 
       const identity = await auth.getUserIdentity();
       if (!identity) {

@@ -2,13 +2,10 @@ import { action, internalMutation, internalQuery, query } from "./_generated/ser
 import { v } from "convex/values";
 // import { createTimestamps, updateTimestamps } from "./types";
 import { internal } from "./_generated/api";
-import { Doc } from "./_generated/dataModel";
 
 // Define the return types for the internal mutations and queries
-// @ts-ignore
-type StartSyncResult = SyncRecord;
-// @ts-ignore
-type GetForSyncResult = Doc<"proposals">[];
+type _StartSyncResult = SyncRecord;
+type _GetForSyncResult = any;
 
 const PG_BATCH_SIZE = 1000;
 

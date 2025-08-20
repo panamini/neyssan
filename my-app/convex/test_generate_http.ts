@@ -19,7 +19,7 @@ http.route({
 
       // Call the existing action to generate a proposal
       // Use an any-cast to avoid generated-api typing mismatches in dev.
-      const result = await runAction((internal as any).functions?.generateProposal as any, {
+      const result = await runAction((internal as any).functions?.generateProposal, {
         jobTitle,
         jobDescription,
         proposalType,

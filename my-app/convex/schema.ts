@@ -74,6 +74,16 @@ export default defineSchema({
         })
       )
     ),
+
+    // Additional optional fields added to support profile ingestion
+    linkedIn: v.optional(v.string()),
+    rawText: v.optional(v.string()),
+    metadata: v.optional(
+      v.object({
+        source: v.optional(v.string()),
+        importedAt: v.optional(v.number()),
+      })
+    ),
   }).index("by_clerk_id", ["clerkId"]),
 
   rateLimits: defineTable({

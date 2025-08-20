@@ -5,33 +5,6 @@ import { v } from "convex/values";
 
 const http = httpRouter();
 
-// Validator mirroring profiles.patchProfile
-const payloadValidator = v.object({
-  summary: v.optional(v.string()),
-  skills: v.optional(v.array(v.string())),
-  experience: v.optional(
-    v.array(
-      v.object({
-        company: v.string(),
-        title: v.string(),
-        startDate: v.optional(v.number()),
-        endDate: v.optional(v.number()),
-        description: v.optional(v.string()),
-      })
-    )
-  ),
-  education: v.optional(
-    v.array(
-      v.object({
-        school: v.string(),
-        degree: v.optional(v.string()),
-        fieldOfStudy: v.optional(v.string()),
-        startDate: v.optional(v.number()),
-        endDate: v.optional(v.number()),
-      })
-    )
-  ),
-});
 
 http.route({
   path: "/profiles/ingest",
@@ -42,7 +15,7 @@ http.route({
       // payloadValidator (convex v validators) don't expose a .parse method here;
       // accept the body and rely on the internal mutation to enforce schemas.
       // Optionally add lightweight runtime checks here if needed.
-      const validated = body as any;
+      const validated = body;
 
       // Ensure request is authenticated
       const identity = await auth.getUserIdentity();
