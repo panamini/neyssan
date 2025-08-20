@@ -7,6 +7,7 @@ import clsx from "clsx";
 import { api } from "../../convex/_generated/api";
 import { useMutation, useConvex } from "convex/react";
 import styles from "./ProposalInputForm.module.css";
+import ProfileView from "./ProfileView";
 
 const schema = z.object({
   linkedInUrl: z.string().url().optional(),
@@ -20,7 +21,6 @@ export default function ProfileForm() {
     defaultValues: { linkedInUrl: "", resumeText: "" },
   });
 
-  const ingestProfile = useMutation(api.ingestProfile.default) as any;
   const profilesPublic = useMutation(api.profilesPublic.default) as any;
 
   const [status, setStatus] = React.useState<string | null>(null);
@@ -113,8 +113,8 @@ export default function ProfileForm() {
           </button>
 
           {currentProfile && (
-            <div className="p-3 mt-3 overflow-auto bg-white rounded-md dark:bg-gray-800 max-h-60">
-              <pre className="text-xs">{JSON.stringify(currentProfile, null, 2)}</pre>
+            <div className="mt-3">
+              <ProfileView profile={currentProfile} />
             </div>
           )}
         </div>

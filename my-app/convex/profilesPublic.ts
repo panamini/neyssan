@@ -13,6 +13,10 @@ export default mutation({
   args: {
     profile: v.object({
       summary: v.optional(v.string()),
+      // preserve original pasted text (raw resume) if provided
+      rawText: v.optional(v.string()),
+      // preserve LinkedIn/original URL separately
+      linkedIn: v.optional(v.string()),
       skills: v.optional(v.array(v.string())),
       experience: v.optional(
         v.array(
@@ -35,6 +39,12 @@ export default mutation({
             endDate: v.optional(v.number()),
           })
         )
+      ),
+      metadata: v.optional(
+        v.object({
+          source: v.optional(v.string()),
+          importedAt: v.optional(v.number()),
+        })
       ),
     }),
   },
@@ -60,17 +70,20 @@ export default mutation({
     if (!existing) {
       throw new Error("User profile not found after createOrUpdateUser");
     }
-
+ 
     const updates: any = {
       updatedAt: Date.now(),
       version: (existing.version || 1) + 1,
     };
-
+ 
     if (args.profile.summary !== undefined) updates.summary = args.profile.summary;
+    if (args.profile.rawText !== undefined) updates.rawText = args.profile.rawText;
+    if (args.profile.linkedIn !== undefined) updates.linkedIn = args.profile.linkedIn;
     if (args.profile.skills !== undefined) updates.skills = args.profile.skills;
     if (args.profile.experience !== undefined) updates.experience = args.profile.experience;
     if (args.profile.education !== undefined) updates.education = args.profile.education;
-
+    if (args.profile.metadata !== undefined) updates.metadata = args.profile.metadata;
+ 
     return ctx.db.patch(existing._id, updates);
   },
 });
