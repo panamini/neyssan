@@ -131,15 +131,166 @@ export default function ProfileForm() {
         <div className="pt-3 mt-4 border-t">
           <button
             type="button"
-            onClick={() => { void fetchMyProfile(); }}
+            onClick={() => {
+              // Toggle expanded state and fetch profile when opening
+              setExpanded((prev) => {
+                const next = !prev;
+                if (next) {
+                  void fetchMyProfile();
+                }
+                return next;
+              });
+            }}
+            aria-expanded={expanded}
+            aria-controls="profile-details"
             className="px-3 py-1 text-white bg-blue-600 rounded-md"
           >
-            View my profile
+            {expanded ? "Close profile" : "View profile"}
           </button>
 
-          {currentProfile && (
-            <div className="mt-3">
-              <ProfileView profile={currentProfile} />
+          {expanded && (
+            <div id="profile-details" className="mt-3" role="region" aria-label="User profile details">
+              {currentProfile ? (
+                <div className="space-y-4">
+                  {/* Header */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-lg font-semibold">{currentProfile.name ?? "No name"}</div>
+                      {currentProfile.email && <div className="text-sm text-gray-600">{currentProfile.email}</div>}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {/* Edit summary button */}
+                      {!editingSummary ? (
+                        <button
+                          onClick={() => setEditingSummary(true)}
+                          className="px-2 py-1 text-sm bg-gray-200 rounded"
+                        >
+                          Edit summary
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setEditingSummary(false);
+                            setSummaryDraft((currentProfile && currentProfile.summary) || "");
+                          }}
+                          className="px-2 py-1 text-sm bg-gray-200 rounded"
+                        >
+                          Cancel
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Summary editable */}
+                  <div>
+                    <h4 className="mb-1 text-sm font-medium">Summary</h4>
+                    {editingSummary ? (
+                      <div className="space-y-2">
+                        <textarea
+                          value={summaryDraft}
+                          onChange={(e) => setSummaryDraft(e.target.value)}
+                          rows={4}
+                          className={clsx(styles.inputElement, "w-full")}
+                        />
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => { void saveSummary(); }}
+                            className="px-3 py-1 text-white bg-blue-600 rounded"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={() => {
+                              setEditingSummary(false);
+                              setSummaryDraft((currentProfile && currentProfile.summary) || "");
+                            }}
+                            className="px-3 py-1 bg-gray-200 rounded"
+                          >
+                            Cancel
+                          </button>
+                          {status && <span className="text-sm">{status}</span>}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-sm">
+                        {currentProfile.summary ? (
+                          <div dangerouslySetInnerHTML={{ __html: (currentProfile.summary) }} />
+                        ) : (
+                          <div className="text-sm text-gray-500">No summary provided.</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* LinkedIn (separate field) */}
+                  <div>
+                    <h4 className="mb-1 text-sm font-medium">LinkedIn</h4>
+                    {currentProfile.linkedIn ? (
+                      <div className="flex items-center gap-3">
+                        <a
+                          href={currentProfile.linkedIn}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          className="text-sm text-blue-600 hover:underline"
+                        >
+                          Open LinkedIn
+                        </a>
+                        <button
+                          onClick={async () => {
+                            // prompt for new URL
+                            const next = window.prompt("Edit LinkedIn URL", currentProfile.linkedIn || "");
+                            if (next !== null) {
+                              try {
+                                setStatus("Saving LinkedIn...");
+                                await profilesPublic({ profile: { linkedIn: next } });
+                                await fetchMyProfile();
+                                setStatus("LinkedIn saved");
+                                setTimeout(() => setStatus(null), 2000);
+                              } catch (err: any) {
+                                console.error("Failed to save LinkedIn", err);
+                                setStatus(`Failed: ${err?.message ?? String(err)}`);
+                              }
+                            }
+                          }}
+                          className="px-2 py-1 text-sm bg-gray-200 rounded"
+                        >
+                          Edit
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={async () => {
+                            const url = window.prompt("Enter LinkedIn URL", "");
+                            if (url) {
+                              try {
+                                setStatus("Saving LinkedIn...");
+                                await profilesPublic({ profile: { linkedIn: url } });
+                                await fetchMyProfile();
+                                setStatus("LinkedIn saved");
+                                setTimeout(() => setStatus(null), 2000);
+                              } catch (err: any) {
+                                console.error("Failed to save LinkedIn", err);
+                                setStatus(`Failed: ${err?.message ?? String(err)}`);
+                              }
+                            }
+                          }}
+                          className="px-3 py-1 text-sm bg-gray-200 rounded"
+                        >
+                          Add LinkedIn
+                        </button>
+                        <div className="text-sm text-gray-500">No LinkedIn provided.</div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Formatted ProfileView (hide summary because we render it above) */}
+                  <ProfileView profile={currentProfile} hideSummary />
+                </div>
+              ) : (
+                <div className="text-sm text-gray-500">Loading profile…</div>
+              )}
             </div>
           )}
         </div>
