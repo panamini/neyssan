@@ -13,6 +13,25 @@ interface JobData {
   url: string;
 }
 
+type ProfilePayload = {
+  summary?: string;
+  skills?: string[];
+  experience?: {
+    company: string;
+    title: string;
+    startDate?: number;
+    endDate?: number;
+    description?: string;
+  }[];
+  education?: {
+    school: string;
+    degree?: string;
+    fieldOfStudy?: string;
+    startDate?: number;
+    endDate?: number;
+  }[];
+};
+
 function Toast({ message, onClose }: { message: string | null; onClose: () => void }) {
   useEffect(() => {
     if (!message) return;
@@ -49,6 +68,7 @@ export function ProposalPreview() {
   const [isLoading, setIsLoading] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
 
   useEffect(() => {
     const platform = detectPlatform(window.location.href);
@@ -121,6 +141,35 @@ export function ProposalPreview() {
     }
   };
 
+  // NEW: Save profile flow
+  const handleSaveProfile = async () => {
+    if (!token) {
+      showToast("Please authenticate via the extension popup before saving profile.");
+      return;
+    }
+    setIsSavingProfile(true);
+    try {
+      const profile = extractProfileFromPage();
+      if (!profile || (Object.keys(profile).length === 0)) {
+        showToast("No profile data detected on this page.");
+        setIsSavingProfile(false);
+        return;
+      }
+      chrome.runtime.sendMessage({ action: "ingestProfile", profile }, (response) => {
+        setIsSavingProfile(false);
+        if (response && response.success) {
+          showToast("Profile saved successfully!");
+        } else {
+          const err = response?.error || 'Unknown error';
+          showToast(`Failed to save profile: ${err}`);
+        }
+      });
+    } catch (err: any) {
+      setIsSavingProfile(false);
+      showToast(`Profile save failed: ${err?.message || String(err)}`);
+    }
+  };
+
   return (
     <>
       <div id="proposal-preview-root" style={{ position: "fixed", bottom: "20px", right: "20px", width: "420px", padding: "18px", background: "white", border: "1px solid #e5e7eb", borderRadius: "10px", boxShadow: "0 8px 30px rgba(2,6,23,0.2)", zIndex: 99999, fontFamily: "inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto" }}>
@@ -159,6 +208,23 @@ export function ProposalPreview() {
             }}
           >
             {isLoading ? <Spinner /> : "Generate"}
+          </button>
+
+          <button
+            onClick={handleSaveProfile}
+            disabled={!token || isSavingProfile}
+            style={{
+              padding: "8px 12px",
+              background: token ? (isSavingProfile ? "#9ca3af" : "#9333ea") : "#e5e7eb",
+              color: "white",
+              border: "none",
+              borderRadius: 8,
+              cursor: token ? "pointer" : "not-allowed",
+              marginLeft: 8
+            }}
+            title="Save detected profile information from this page to your Neyssan profile"
+          >
+            {isSavingProfile ? <Spinner small /> : "Save profile"}
           </button>
         </div>
 
@@ -243,6 +309,122 @@ function detectPlatform(url: string): string | null {
   if (url.includes("linkedin.com")) return "linkedin";
   if (url.includes("fiverr.com")) return "fiverr";
   return null;
+}
+
+/**
+ * Heuristic extraction of profile fields from the page.
+ * This is intentionally tolerant and attempts several selectors per platform.
+ */
+function extractProfileFromPage(): ProfilePayload {
+  const url = window.location.href;
+  const platform = detectPlatform(url);
+
+  // Helpers
+  const textFromSelectors = (selectors: string[]) => {
+    for (const sel of selectors) {
+      const el = document.querySelector(sel) as HTMLElement | null;
+      if (el) {
+        const txt = el.innerText?.trim();
+        if (txt) return txt;
+      }
+    }
+    return undefined;
+  };
+
+  const listFromSelectors = (selectors: string[]) => {
+    for (const sel of selectors) {
+      const nodes = Array.from(document.querySelectorAll(sel));
+      if (nodes.length) {
+        const values = nodes.map((n) => (n.textContent || "").trim()).filter(Boolean);
+        if (values.length) return values;
+      }
+    }
+    return undefined;
+  };
+
+  const experienceFromLinkedIn = (): ProfilePayload["experience"] | undefined => {
+    try {
+      const sections = Array.from(document.querySelectorAll('.pv-position-entity, .experience-section .pv-entity'));
+      if (!sections.length) return undefined;
+      return sections.map((s) => {
+        const company = (s.querySelector('.pv-entity__secondary-title, .pv-entity__school-name')?.textContent || "").trim();
+        const title = (s.querySelector('.pv-entity__summary-info h3, .pv-entity__summary-info .t-14')?.textContent || "").trim();
+        const dateRange = (s.querySelector('.pv-entity__date-range span:nth-child(2)')?.textContent || "").trim();
+        // naive parse for start/end year
+        let startDate: number | undefined;
+        let endDate: number | undefined;
+        if (dateRange) {
+          const years = dateRange.match(/\d{4}/g);
+          if (years && years.length >= 1) startDate = Number(years[0]);
+          if (years && years.length >= 2) endDate = Number(years[1]);
+        }
+        const description = (s.querySelector('.pv-entity__description')?.textContent || "").trim();
+        return { company, title, startDate, endDate, description };
+      }).filter(Boolean);
+    } catch (e) {
+      return undefined;
+    }
+  };
+
+  const educationFromLinkedIn = (): ProfilePayload["education"] | undefined => {
+    try {
+      const sections = Array.from(document.querySelectorAll('.education__list .education__list-item, .pv-education-entity'));
+      if (!sections.length) return undefined;
+      return sections.map((s) => {
+        const school = (s.querySelector('.pv-entity__school-name')?.textContent || "").trim();
+        const degree = (s.querySelector('.pv-entity__degree-name .pv-entity__comma-item')?.textContent || "").trim();
+        const fieldOfStudy = (s.querySelector('.pv-entity__fos .pv-entity__comma-item')?.textContent || "").trim();
+        return { school, degree, fieldOfStudy };
+      }).filter(Boolean);
+    } catch (e) {
+      return undefined;
+    }
+  };
+
+  // Default heuristics across platforms
+  let summary = textFromSelectors([
+    'meta[name="description"]',
+    '.summary, .about, .profile-about__summary, .profile-about',
+    '.job-description, .description, .job-desc'
+  ]);
+
+  // If meta description found, get content
+  if (!summary) {
+    const meta = document.querySelector('meta[name="description"]') as HTMLMetaElement | null;
+    if (meta && meta.content) summary = meta.content.trim();
+  }
+
+  const skills = listFromSelectors([
+    '.skills-list .skill, .skill, .pip-skills-section__skill, [data-test="skill"]',
+    '.job-criteria__item, .pill, .job-tags__tag'
+  ]);
+
+  let experience = undefined;
+  let education = undefined;
+  if (platform === 'linkedin') {
+    summary = summary || textFromSelectors(['.pv-about__summary-text', '.profile-about__summary-text']);
+    experience = experienceFromLinkedIn();
+    education = educationFromLinkedIn();
+  }
+
+  // Fallback: attempt to extract bullet-lists that look like skills
+  if (!skills) {
+    const list = Array.from(document.querySelectorAll('ul li')).slice(0, 30).map((n) => n.textContent?.trim() || '').filter(Boolean);
+    if (list.length) {
+      // heuristically pick those with short length as skills
+      const shortItems = list.filter((t) => t.split(' ').length <= 4);
+      if (shortItems.length >= 3) {
+        return { summary, skills: shortItems.slice(0, 12) };
+      }
+    }
+  }
+
+  return {
+    summary,
+    skills,
+    experience,
+    education
+  };
 }
 
 function scrapeJobData(platform: string): JobData {

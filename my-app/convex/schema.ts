@@ -49,6 +49,31 @@ export default defineSchema({
       tonePreference: v.string(),
       autoSend: v.boolean(),
     }),
+    // New optional profile fields for ingestion
+    summary: v.optional(v.string()),
+    skills: v.optional(v.array(v.string())),
+    experience: v.optional(
+      v.array(
+        v.object({
+          company: v.string(),
+          title: v.string(),
+          startDate: v.optional(v.number()),
+          endDate: v.optional(v.number()),
+          description: v.optional(v.string()),
+        })
+      )
+    ),
+    education: v.optional(
+      v.array(
+        v.object({
+          school: v.string(),
+          degree: v.optional(v.string()),
+          fieldOfStudy: v.optional(v.string()),
+          startDate: v.optional(v.number()),
+          endDate: v.optional(v.number()),
+        })
+      )
+    ),
   }).index("by_clerk_id", ["clerkId"]),
 
   rateLimits: defineTable({
