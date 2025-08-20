@@ -51,6 +51,8 @@ export default defineSchema({
     }),
     // New optional profile fields for ingestion
     summary: v.optional(v.string()),
+    rawText: v.optional(v.string()), // original pasted resume/CV text
+    linkedIn: v.optional(v.string()), // original LinkedIn profile URL
     skills: v.optional(v.array(v.string())),
     experience: v.optional(
       v.array(
@@ -73,6 +75,12 @@ export default defineSchema({
           endDate: v.optional(v.number()),
         })
       )
+    ),
+    metadata: v.optional(
+      v.object({
+        source: v.optional(v.string()),
+        importedAt: v.optional(v.number()),
+      })
     ),
   }).index("by_clerk_id", ["clerkId"]),
 
