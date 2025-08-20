@@ -46,7 +46,7 @@ export default mutation({
               displayName = String(u.name).trim();
             }
           }
-        } catch (_err) {
+        } catch {
           // ignore and fallback to email
         }
 

@@ -39,7 +39,7 @@ export default function ProfileEditor() {
     writingStyle: "professional",
   });
 
-  async function fetchMyProfile() {
+  const fetchMyProfile = React.useCallback(async () => {
     try {
       const result = await convex.query((window as any).api?.users?.getUser);
       setProfile(result ?? null);
@@ -50,12 +50,12 @@ export default function ProfileEditor() {
     } catch (err) {
       console.error("Failed to load profile", err);
     }
-  }
+  }, [convex]);
 
   React.useEffect(() => {
     // load on mount
     void fetchMyProfile();
-  }, []);
+  }, [fetchMyProfile]);
 
   async function ingestResume() {
     if (!ingestText || ingestText.length < 20) {

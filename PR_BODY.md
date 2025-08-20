@@ -1,5 +1,16 @@
 # feat/extension-e2e-fix — Extension E2E integration & UX polish
 
+Status update
+-------------
+Completed requested cleanup: fixed TypeScript/ESLint issues, stabilized hooks, started local dev server and verified smoke tests. Changes were pushed to branch `feat/profile-ingest-mvp` (commit ab9d400 + follow-ups). The branch is ready for PR review.
+
+PR details to open:
+- Title: chore: fix TypeScript & ESLint errors for profile-ingest MVP
+- Body: See PR_BODY.md for summary (includes changes, test plan, notes)
+- Compare URL: https://github.com/panamini/neyssan/compare/main...feat/profile-ingest-mvp
+- Command to open PR (if you have gh): gh pr create --title "chore: fix TypeScript & ESLint errors for profile-ingest MVP" --body-file PR_BODY.md --base main --head feat/profile-ingest-mvp
+
+
 Summary
 -------
 This PR wires the Chrome extension → backend → LLM → storage end-to-end and polishes the extension UI. It also removes sensitive debug logging from the backend action and includes a small convenience mutation for dev user creation.

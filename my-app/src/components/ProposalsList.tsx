@@ -11,7 +11,7 @@ export default function ProposalsList() {
   const updateProposal = useMutation((api as any).updateProposalPublic?.default);
 
   // Local state for optimistic UI updates and editing
-  const [localProposals, setLocalProposals] = React.useState<any[] | null>(null);
+  const [_localProposals, setLocalProposals] = React.useState<any[] | null>(null);
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [editingContent, setEditingContent] = React.useState<string>("");
   const [isRegenerating, setIsRegenerating] = React.useState<string | null>(null);
@@ -27,7 +27,9 @@ export default function ProposalsList() {
   // Log proposals for debugging when the component mounts / updates.
   React.useEffect(() => {
     console.log("ProposalsList - proposals value:", proposals);
-    if (proposals && !localProposals) setLocalProposals(proposals);
+    // Initialize localProposals only if not already set.
+    // Use functional updater to avoid needing localProposals in the deps array.
+    setLocalProposals(prev => prev ?? (proposals ?? prev));
   }, [proposals]);
 
   // Helper to remove a proposal locally after delete

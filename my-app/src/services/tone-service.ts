@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { ToneSettings, ToneMapType } from '../types';
 
-// Validation schemas for tone control
-const ToneInstructionSchema = z.object({
+ // Validation schemas for tone control
+const _ToneInstructionSchema = z.object({
     base: z.string(),
     modifiers: z.array(z.string()),
     examples: z.array(z.string())
@@ -33,7 +33,7 @@ export const ToneMap: ToneMapType = {
 };
 
 // Base tone instructions
-const BASE_TONE_INSTRUCTIONS: Record<ToneSettings['type'], z.infer<typeof ToneInstructionSchema>> = {
+const BASE_TONE_INSTRUCTIONS: Record<ToneSettings['type'], z.infer<typeof _ToneInstructionSchema>> = {
     formal: {
         base: 'Use professional business language',
         modifiers: [
@@ -144,7 +144,7 @@ export function createToneService() {
       suggestions: string[];
     } {
       // @ts-expect-error TS6133: 'adjustment' is declared but its value is never read. It IS used.
-      const adjustment = calculateToneAdjustment(settings);
+      const _adjustment = calculateToneAdjustment(settings);
       const consistency = calculateToneConsistency();
       const suggestions = generateToneSuggestions();
       

@@ -5,6 +5,16 @@ Author: Cline (audit, roadmap & implementation)
 
 ---
 
+Status update
+-------------
+Completed requested cleanup: fixed TypeScript/ESLint issues, stabilized hooks, started local dev server and verified smoke tests. Changes were pushed to branch `feat/profile-ingest-mvp` (commit ab9d400 + follow-ups). The branch is ready for PR review.
+
+PR details to open (lint fixes):
+- Title: chore: fix TypeScript & ESLint errors for profile-ingest MVP
+- Compare URL: https://github.com/panamini/neyssan/compare/main...feat/profile-ingest-mvp
+- Command (if gh installed): gh pr create --title "chore: fix TypeScript & ESLint errors for profile-ingest MVP" --body-file PR_BODY.md --base main --head feat/profile-ingest-mvp
+
+
 ## Project Context (short)
 Neyssan is a job-proposal generator that helps users log in, ingest their profile (LinkedIn/CV), and generate tailored job proposals for postings (LinkedIn, Indeed, Upwork, etc.) using LLMs. A Chrome extension captures job postings, the backend calls an LLM (OpenAI / Mistral) to produce a proposal personalized to the user's profile, and proposals are saved and displayed in the web app.
 
