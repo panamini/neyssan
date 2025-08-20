@@ -147,60 +147,60 @@ export default function ProfileForm() {
                   {/* Header */}
                   <div className="flex items-center justify-between">
                     <div>
-                    {editingName ? (
-                      <div className="flex items-center gap-2">
-                        <input
-                          aria-label="Edit name"
-                          value={nameDraft}
-                          onChange={(e) => setNameDraft(e.target.value)}
-                          className="px-2 py-1 text-sm border rounded"
-                        />
-                        <button
-                          onClick={() => { void (async () => {
-                              try {
-                                setStatus("Saving name...");
-                                await profilesPublic({ profile: { name: nameDraft } });
-                                await fetchMyProfile();
-                                setEditingName(false);
-                                setStatus("Name saved");
-                                setTimeout(() => setStatus(null), 2000);
-                              } catch (err: any) {
-                                console.error("Failed to save name", err);
-                                setStatus(`Failed: ${err?.message ?? String(err)}`);
-                              }
-                            })(); }}
-                          className="px-2 py-1 text-sm text-white bg-blue-600 rounded"
-                        >
-                          Save
-                        </button>
-                        <button
-                          onClick={() => {
-                            setEditingName(false);
-                            setNameDraft((currentProfile && currentProfile.name) || "");
-                          }}
-                          className="px-2 py-1 text-sm bg-gray-200 rounded"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    ) : (
-                      <div>
-                        <div className="text-lg font-semibold">{currentProfile.name ?? "No name"}</div>
-                        <div className="mt-1">
+                      {editingName ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            aria-label="Edit name"
+                            value={nameDraft}
+                            onChange={(e) => setNameDraft(e.target.value)}
+                            className="px-2 py-1 text-sm border rounded"
+                          />
+                          <button
+                            onClick={() => { void (async () => {
+                                try {
+                                  setStatus("Saving name...");
+                                  await profilesPublic({ profile: { name: nameDraft } });
+                                  await fetchMyProfile();
+                                  setEditingName(false);
+                                  setStatus("Name saved");
+                                  setTimeout(() => setStatus(null), 2000);
+                                } catch (err: any) {
+                                  console.error("Failed to save name", err);
+                                  setStatus(`Failed: ${err?.message ?? String(err)}`);
+                                }
+                              })(); }}
+                            className="px-2 py-1 text-sm text-white bg-blue-600 rounded"
+                          >
+                            Save
+                          </button>
                           <button
                             onClick={() => {
+                              setEditingName(false);
                               setNameDraft((currentProfile && currentProfile.name) || "");
-                              setEditingName(true);
                             }}
                             className="px-2 py-1 text-sm bg-gray-200 rounded"
                           >
-                            Edit
+                            Cancel
                           </button>
                         </div>
-                      </div>
-                    )}
-                    {currentProfile.email && <div className="mt-1 text-sm text-gray-600">{currentProfile.email}</div>}
-                  </div>
+                      ) : (
+                        <div>
+                          <div className="text-lg font-semibold">{currentProfile.name ?? "No name"}</div>
+                          <div className="mt-1">
+                            <button
+                              onClick={() => {
+                                setNameDraft((currentProfile && currentProfile.name) || "");
+                                setEditingName(true);
+                              }}
+                              className="px-2 py-1 text-sm bg-gray-200 rounded"
+                            >
+                              Edit
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      {currentProfile.email && <div className="mt-1 text-sm text-gray-600">{currentProfile.email}</div>}
+                    </div>
 
                     <div className="flex items-center gap-2">
                       {/* Edit summary button */}
@@ -280,7 +280,7 @@ export default function ProfileForm() {
                           Open LinkedIn
                         </a>
                         <button
-                          onClick={() => { void (async () => {
+                          onClick={async () => {
                             // prompt for new URL
                             const next = window.prompt("Edit LinkedIn URL", currentProfile.linkedIn || "");
                             if (next !== null) {
@@ -295,7 +295,7 @@ export default function ProfileForm() {
                                 setStatus(`Failed: ${err?.message ?? String(err)}`);
                               }
                             }
-                          })(); }}
+                          }}
                           className="px-2 py-1 text-sm bg-gray-200 rounded"
                         >
                           Edit
@@ -304,7 +304,7 @@ export default function ProfileForm() {
                     ) : (
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => { void (async () => {
+                          onClick={async () => {
                             const url = window.prompt("Enter LinkedIn URL", "");
                             if (url) {
                               try {
@@ -318,7 +318,7 @@ export default function ProfileForm() {
                                 setStatus(`Failed: ${err?.message ?? String(err)}`);
                               }
                             }
-                          })(); }}
+                          }}
                           className="px-3 py-1 text-sm bg-gray-200 rounded"
                         >
                           Add LinkedIn
