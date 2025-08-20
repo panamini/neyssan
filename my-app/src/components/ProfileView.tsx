@@ -165,7 +165,11 @@ export default function ProfileView({ profile, hideSummary = false }: { profile:
           {profile.preferences && (
             <section>
               <h3 className="mb-1 text-sm font-medium">Preferences</h3>
-              <pre className="p-2 text-xs rounded bg-gray-50">{JSON.stringify(profile.preferences, null, 2)}</pre>
+              <div className="text-sm">
+                <div>Tone: {profile.preferences.tonePreference}</div>
+                <div>Writing style: {profile.preferences.writingStyle}</div>
+                <div>Auto-send: {profile.preferences.autoSend ? "On" : "Off"}</div>
+              </div>
             </section>
           )}
         </div>
