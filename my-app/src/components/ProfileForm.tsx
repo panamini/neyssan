@@ -5,12 +5,20 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import clsx from "clsx";
 import { api } from "../../convex/_generated/api";
+<<<<<<< HEAD
 import { useMutation, useConvex } from "convex/react";
 import styles from "./ProposalInputForm.module.css";
 import ProfileView from "./ProfileView";
 import { SkillAdder, ExperienceAdder, EducationAdder } from "./ProfileEditors";
 
 const schema = z.object({
+=======
+import { useMutation } from "convex/react";
+import styles from "./ProposalInputForm.module.css";
+
+const schema = z.object({
+  linkedInUrl: z.string().url().optional(),
+>>>>>>> 650a65a (feat(profile): add ProfileForm UI and integrate into App)
   resumeText: z.string().min(20).optional(),
 });
 
@@ -18,6 +26,7 @@ type FormValues = z.infer<typeof schema>;
 
 export default function ProfileForm() {
   const form = useForm<FormValues>({
+<<<<<<< HEAD
     defaultValues: { resumeText: "" },
   });
 
@@ -66,6 +75,15 @@ export default function ProfileForm() {
       setStatus(`Failed to save: ${err?.message ?? String(err)}`);
     }
   };
+=======
+    defaultValues: { linkedInUrl: "", resumeText: "" },
+  });
+
+  const ingestProfile = useMutation(api.ingestProfile.default) as any;
+  const profilesPublic = useMutation(api.profilesPublic.default) as any;
+
+  const [status, setStatus] = React.useState<string | null>(null);
+>>>>>>> 650a65a (feat(profile): add ProfileForm UI and integrate into App)
 
   async function onSubmit(values: FormValues) {
     setStatus(null);
@@ -75,6 +93,7 @@ export default function ProfileForm() {
         await profilesPublic({
           profile: {
             summary: values.resumeText.substring(0, 2000), // lightweight summary for now
+<<<<<<< HEAD
             rawText: values.resumeText.substring(0, 2000),
             metadata: { source: "manual_paste", importedAt: Date.now() },
           },
@@ -86,6 +105,17 @@ export default function ProfileForm() {
       // Refresh profile display immediately and expand details so user sees latest info
       await fetchMyProfile();
       setExpanded(true);
+=======
+          },
+        });
+      } else if (values.linkedInUrl) {
+        // Call the HTTP ingest endpoint which can accept URLs for scraping/parsing
+        await ingestProfile({ url: values.linkedInUrl });
+      } else {
+        throw new Error("Provide a LinkedIn URL or paste your resume text (min 20 chars).");
+      }
+      setStatus("Profile ingested successfully");
+>>>>>>> 650a65a (feat(profile): add ProfileForm UI and integrate into App)
       form.reset();
     } catch (err: any) {
       console.error("Profile ingest failed", err);
@@ -94,7 +124,11 @@ export default function ProfileForm() {
   }
 
   return (
+<<<<<<< HEAD
     <div className="w-full max-w-4xl p-3 mb-4 border-2 border-yellow-400" data-testid="profile-ingestion-card">
+=======
+    <div className="w-full max-w-4xl mb-4">
+>>>>>>> 650a65a (feat(profile): add ProfileForm UI and integrate into App)
       <div className="p-4 rounded-md bg-gray-50 dark:bg-gray-900">
         <h3 className="mb-2 text-lg font-medium">Profile ingestion</h3>
         <form
@@ -103,8 +137,19 @@ export default function ProfileForm() {
           }}
           className="grid gap-3"
         >
+<<<<<<< HEAD
           <textarea
             placeholder="Paste your resume / CV text (optional, min 20 chars)"
+=======
+          <input
+            type="url"
+            placeholder="LinkedIn profile URL (optional)"
+            {...form.register("linkedInUrl")}
+            className={clsx(styles.inputElement)}
+          />
+          <textarea
+            placeholder="Or paste your resume / CV text (optional, min 20 chars)"
+>>>>>>> 650a65a (feat(profile): add ProfileForm UI and integrate into App)
             rows={4}
             {...form.register("resumeText")}
             className={clsx(styles.inputElement)}
@@ -119,6 +164,7 @@ export default function ProfileForm() {
             {status && <span className="text-sm">{status}</span>}
           </div>
         </form>
+<<<<<<< HEAD
 
         <div className="pt-3 mt-4 border-t">
           <button
@@ -466,6 +512,8 @@ export default function ProfileForm() {
             </div>
           )}
         </div>
+=======
+>>>>>>> 650a65a (feat(profile): add ProfileForm UI and integrate into App)
       </div>
     </div>
   );
