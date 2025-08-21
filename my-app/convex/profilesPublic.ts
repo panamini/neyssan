@@ -10,9 +10,14 @@ import { internal } from "./_generated/api";
  * (i.e., convex.mutation(api.profiles.ingestFromExtension, { profile }))
  */
 export default mutation({
-  args: {
+    args: {
     profile: v.object({
+      name: v.optional(v.string()),
       summary: v.optional(v.string()),
+      // preserve original pasted text (raw resume) if provided
+      rawText: v.optional(v.string()),
+      // preserve LinkedIn/original URL separately
+      linkedIn: v.optional(v.string()),
       skills: v.optional(v.array(v.string())),
       experience: v.optional(
         v.array(
@@ -36,6 +41,12 @@ export default mutation({
           })
         )
       ),
+      metadata: v.optional(
+        v.object({
+          source: v.optional(v.string()),
+          importedAt: v.optional(v.number()),
+        })
+      ),
     }),
   },
   handler: async (ctx, args) => {
@@ -44,11 +55,10 @@ export default mutation({
       throw new Error("Not authenticated");
     }
 
-    // Ensure user profile exists
+    // Ensure user profile exists (do not pass identity.name here; we patch name explicitly below when provided by the client)
     await ctx.runMutation(internal.users.createOrUpdateUser, {
       clerkId: identity.subject,
       email: identity.email ?? "unknown@example.com",
-      name: identity.name,
     });
 
     // Find existing profile
@@ -66,10 +76,14 @@ export default mutation({
       version: (existing.version || 1) + 1,
     };
 
+    if (args.profile.name !== undefined) updates.name = args.profile.name;
     if (args.profile.summary !== undefined) updates.summary = args.profile.summary;
+    if (args.profile.rawText !== undefined) updates.rawText = args.profile.rawText;
+    if (args.profile.linkedIn !== undefined) updates.linkedIn = args.profile.linkedIn;
     if (args.profile.skills !== undefined) updates.skills = args.profile.skills;
     if (args.profile.experience !== undefined) updates.experience = args.profile.experience;
     if (args.profile.education !== undefined) updates.education = args.profile.education;
+    if (args.profile.metadata !== undefined) updates.metadata = args.profile.metadata;
 
     return ctx.db.patch(existing._id, updates);
   },
