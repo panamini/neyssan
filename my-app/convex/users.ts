@@ -38,7 +38,10 @@ export const createOrUpdateUser = internalMutation({
         email,
         updatedAt: Date.now(),
       };
-      if (name !== undefined) {
+      // Only set the name if the existing profile does not already have one.
+      // This prevents sign-in hooks (which send identity.name) from overwriting
+      // a display name that the user has edited and saved.
+      if (name !== undefined && !existingUser.name) {
         updateData.name = name;
       }
       return await ctx.db.patch(existingUser._id, updateData);
