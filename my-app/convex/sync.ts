@@ -4,8 +4,6 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 
 // Define the return types for the internal mutations and queries
-type _StartSyncResult = SyncRecord;
-type _GetForSyncResult = any;
 
 const PG_BATCH_SIZE = 1000;
 
