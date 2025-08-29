@@ -98,6 +98,34 @@ export default function ProfileReviewModal({ visible, parsedProfile, onClose, on
     if (stagedEdits) return false;
     return true;
   }
+  
+  // Determine whether the current draft (form) differs from the canonicalProfile.
+  // If canonicalProfile is null, any non-empty draft is considered dirty.
+  function isDirty() {
+    if (!canonicalProfile) return !isFormEmpty();
+  
+    const canon = {
+      name: canonicalProfile.name ?? "",
+      email: canonicalProfile.email ?? "",
+      summary: canonicalProfile.summary ?? "",
+      skillsText: (canonicalProfile.skills || []).join(", "),
+      experienceText: JSON.stringify(canonicalProfile.experience || [], null, 2),
+      educationText: JSON.stringify(canonicalProfile.education || canonicalProfile.metadata?.education || [], null, 2),
+      achievementsText: Array.isArray(canonicalProfile.achievements) ? canonicalProfile.achievements.join("\n") : String(canonicalProfile.achievements ?? ""),
+    };
+  
+    const draft = {
+      name: String(form.name ?? ""),
+      email: String(form.email ?? ""),
+      summary: String(form.summary ?? ""),
+      skillsText: String(form.skillsText ?? ""),
+      experienceText: String(form.experienceText ?? "[]"),
+      educationText: String(form.educationText ?? "[]"),
+      achievementsText: String(form.achievementsText ?? ""),
+    };
+  
+    return Object.keys(canon).some((k) => (canon as any)[k] !== (draft as any)[k]);
+  }
 
   // Initialize canonical + draft states when a parsedProfile prop arrives.
   // Do not overwrite user's existing draft edits if they already exist.
@@ -275,7 +303,7 @@ export default function ProfileReviewModal({ visible, parsedProfile, onClose, on
         version: profileVersion ?? 1,
         profile: profileObj,
       });
-
+ 
       if (!res || !res.profileId) throw new Error("Failed to save profile");
       
       const convexId = (res as any).convexId ?? res.profileId;
@@ -283,6 +311,21 @@ export default function ProfileReviewModal({ visible, parsedProfile, onClose, on
       if (res.updatedAt) {
         setProfileVersion(typeof res.updatedAt === 'number' ? Math.floor(res.updatedAt / 1000) : profileVersion);
       }
+
+      // Update canonicalProfile to reflect the authoritative saved state.
+      setCanonicalProfile({
+        id: convexId,
+        name: profileObj.name ?? "",
+        email: profileObj.email ?? "",
+        summary: profileObj.summary ?? undefined,
+        skills: profileObj.skills ?? undefined,
+        experience: profileObj.experience ?? undefined,
+        education: profileObj.education ?? undefined,
+        achievements: profileObj.achievements ?? undefined,
+        rawText: profileObj.raw_text ?? undefined,
+        version: profileVersion ?? undefined,
+      });
+
       setMessage({ type: 'success', text: "Profile saved" });
       if (notifyParent && onSaved) onSaved(res);
       return res.profileId;
@@ -310,19 +353,26 @@ export default function ProfileReviewModal({ visible, parsedProfile, onClose, on
 
   const handleCvParsed = (parsed: NormalizedProfile) => {
     setStatus('idle');
-    updateForm({
-      name: parsed.name ?? "",
-      email: parsed.email ?? "",
+
+    // Build non-destructive suggestions from parsed CV instead of overwriting draft form
+    const cvSuggestions: RefinedContent = {
       summary: parsed.summary ?? parsed.rawText ?? "",
-      skillsText: (parsed.skills || []).join(", "),
-      experienceText: JSON.stringify(parsed.experience || [], null, 2),
-      educationText: JSON.stringify(parsed.education || [], null, 2),
-      achievementsText: Array.isArray(parsed.achievements) ? parsed.achievements.join("\n") : String(parsed.achievements ?? ""),
-    });
+      skills: (parsed.skills || []).join(", "),
+      experience: parsed.experience ? JSON.stringify(parsed.experience, null, 2) : undefined,
+      education: parsed.education ? JSON.stringify(parsed.education, null, 2) : undefined,
+      achievements: Array.isArray(parsed.achievements) ? parsed.achievements.join("\n") : String(parsed.achievements ?? ""),
+      identity: [parsed.name ?? "", parsed.email ?? ""].filter(Boolean).join(" / ") || undefined,
+    };
+
+    // Populate suggestions and stagedEdits so the user can review and accept per-field.
+    setSuggestions(cvSuggestions);
+    setStagedEdits(cvSuggestions);
+
+    // Keep metadata/raw text and IDs updated but do not overwrite the user's current draft form.
     setRawTextLocal(parsed.rawText ?? "");
     setSavedProfileId(parsed.id ?? null);
     setProfileVersion(parsed.version ?? null);
-    setMessage({ type: 'success', text: "CV loaded" });
+    setMessage({ type: 'success', text: "CV parsed — suggestions available" });
   };
 
   // Apply a suggestion into the editable draft form (non-destructive).
@@ -502,7 +552,7 @@ export default function ProfileReviewModal({ visible, parsedProfile, onClose, on
             <button onClick={handleRefineClick} disabled={status !== 'idle' || isFormEmpty()} className="px-4 py-2 text-white transition transform bg-purple-600 rounded-md hover:bg-purple-700 disabled:opacity-50 hover:scale-105">
               Raffiner AI
             </button>
-            <button onClick={() => handleSave()} disabled={status !== 'idle' || isFormEmpty()} className="px-4 py-2 text-white transition transform bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 hover:scale-105">
+            <button onClick={() => handleSave()} disabled={status !== 'idle' || !isDirty()} className="px-4 py-2 text-white transition transform bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 hover:scale-105">
               Enregistrer
             </button>
           </div>
