@@ -1,42 +1,4 @@
-import { httpRouter } from "convex/server";
-import { httpAction } from "./_generated/server";
-import { internal } from "./_generated/api";
+// Disabled test HTTP route to avoid duplicate registration with my-app/convex/http.ts
+// Original test endpoint moved into http.ts. Keep this file as a no-op to prevent conflicts.
 
-const http = httpRouter();
-
-http.route({
-  path: "/test/generate",
-  method: "POST",
-  handler: httpAction(async ({ runAction }, request) => {
-    try {
-      const body = await request.json();
-      const jobTitle = body.jobTitle ?? "Test Job";
-      const jobDescription = body.jobDescription ?? "This is a test job description.";
-      const proposalType = body.proposalType ?? "technical";
-      const formalityLevel = body.formalityLevel ?? "formal";
-      const creativity = body.creativity ?? "standard";
-      const modelType = body.modelType ?? "mistral-small-latest";
-
-      // Call the existing action to generate a proposal
-      // Use an any-cast to avoid generated-api typing mismatches in dev.
-      const result = await runAction((internal as any).functions?.generateProposal, {
-        jobTitle,
-        jobDescription,
-        proposalType,
-        formalityLevel,
-        creativity,
-        modelType,
-      });
-
-      return new Response(JSON.stringify(result), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    } catch (err: any) {
-      console.error("Test generate endpoint error:", err);
-      return new Response(JSON.stringify({ error: String(err) }), { status: 500 });
-    }
-  }),
-});
-
-export default http;
+export default null;

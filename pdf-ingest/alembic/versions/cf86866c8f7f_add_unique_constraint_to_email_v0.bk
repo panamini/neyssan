@@ -1,0 +1,44 @@
+"""add_unique_constraint_to_email_column
+
+Revision ID: cf86866c8f7f
+Revises: d41cf677615d
+Create Date: 2025-08-27 16:08:00.561394
+
+"""
+from typing import Sequence, Union
+
+from alembic import op
+import sqlalchemy as sa
+
+
+# revision identifiers, used by Alembic.
+revision: str = 'cf86866c8f7f'
+down_revision: Union[str, Sequence[str], None] = 'd41cf677615d'
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
+
+def upgrade() -> None:
+    """Upgrade schema."""
+    # Check if the constraint already exists to make the migration idempotent
+    conn = op.get_bind()
+    result = conn.execute(
+        "SELECT 1 FROM pg_constraint WHERE conname = 'uq_profiles_email' AND conrelid = 'profiles'::regclass"
+    ).scalar()
+    
+    if not result:
+        # Add unique constraint to email column
+        op.create_unique_constraint('uq_profiles_email', 'profiles', ['email'])
+
+
+def downgrade() -> None:
+    """Downgrade schema."""
+    # Check if the constraint exists before dropping
+    conn = op.get_bind()
+    result = conn.execute(
+        "SELECT 1 FROM pg_constraint WHERE conname = 'uq_profiles_email' AND conrelid = 'profiles'::regclass"
+    ).scalar()
+    
+    if result:
+        # Drop the unique constraint
+        op.drop_constraint('uq_profiles_email', 'profiles', type_='unique')

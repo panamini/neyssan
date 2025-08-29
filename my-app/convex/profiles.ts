@@ -54,7 +54,10 @@ export const upsert = internalMutation({
 export const patchProfile = internalMutation({
   args: {
     profile: v.object({
+      name: v.optional(v.string()),
       summary: v.optional(v.string()),
+      rawText: v.optional(v.string()),
+      linkedIn: v.optional(v.string()),
       skills: v.optional(v.array(v.string())),
       experience: v.optional(
         v.array(
@@ -77,6 +80,12 @@ export const patchProfile = internalMutation({
             endDate: v.optional(v.number()),
           })
         )
+      ),
+      metadata: v.optional(
+        v.object({
+          source: v.optional(v.string()),
+          importedAt: v.optional(v.number()),
+        })
       ),
     }),
   },

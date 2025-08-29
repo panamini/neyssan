@@ -21,10 +21,11 @@ Notes:
 - For production use: move parsing to worker (Celery/RQ), persist files to S3, persist results to Postgres, secure endpoints and add auth.
 """
 
-from fastapi import FastAPI, File, UploadFile, BackgroundTasks, HTTPException
+from fastapi import FastAPI, File, UploadFile, BackgroundTasks, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
+
 import uuid
 import io
 import re
@@ -32,6 +33,7 @@ import asyncio
 import time
 import base64
 from pdfminer.high_level import extract_text as pdfminer_extract_text
+
 
 # OCR not enabled in this scaffold. Use a cloud OCR or install pdf2image/pytesseract if needed.
 OCR_AVAILABLE = False
@@ -43,20 +45,80 @@ from db import get_session, init_db
 from models import Profile, LLMHistory
 from sqlalchemy.future import select
 from uuid import UUID
+
+def parse_profile_uuid_safe(profile_id: Any) -> Optional[UUID]:
+    """
+    Parse a profile_id value into a UUID when possible.
+
+    Returns:
+      - UUID instance when profile_id is a valid UUID or a placeholder-<uuid> with a valid UUID suffix
+      - None when profile_id is a placeholder with an invalid UUID suffix or otherwise not a valid UUID
+
+    This helper is defensive and never raises; callers should treat None as "do not perform DB writes that require a UUID".
+    """
+    try:
+        if isinstance(profile_id, str) and profile_id.startswith("placeholder-"):
+            uuid_part = profile_id[len("placeholder-") :]
+            try:
+                return UUID(uuid_part)
+            except Exception:
+                return None
+        return UUID(str(profile_id))
+    except Exception:
+        return None
 import logging
 # Router for assembling full raw text
 from routers.full_raw_text import router as full_raw_text_router
+# Import the new router for the confirm-save endpoint
+from routers.confirm_save import router as confirm_save_router
 from sqlalchemy.exc import SQLAlchemyError
 import os
+import json
 import worker
+from convex_persist import call_convex_action, ConvexPersistError
 
 # Configure module-level logger
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("pdf-ingest")
 
+# Optional debug file handler: set PDF_INGEST_DEBUG_LOG to a writable path in the runtime (e.g., /tmp/pdf_ingest_debug.log).
+debug_log_path = os.getenv("PDF_INGEST_DEBUG_LOG")
+if debug_log_path:
+    try:
+        # Ensure logger will emit debug records when debug file handler is enabled.
+        try:
+            logger.setLevel(logging.DEBUG)
+        except Exception:
+            pass
+
+        fh = logging.FileHandler(debug_log_path)
+        fh.setLevel(logging.DEBUG)
+        formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
+        fh.setFormatter(formatter)
+        # Avoid adding duplicate handlers for the same path
+        if not any(isinstance(h, logging.FileHandler) and getattr(h, "baseFilename", None) == debug_log_path for h in logger.handlers):
+            logger.addHandler(fh)
+        logger.debug("Debug file handler attached to pdf-ingest logger: %s", debug_log_path)
+    except Exception:
+        logger.exception("Failed to attach debug FileHandler to pdf-ingest logger")
+
+# Defensive route wrapper to ensure no exception escapes a request handler.
+def safe_route(func):
+    async def wrapper(*args, **kwargs):
+        try:
+            return await func(*args, **kwargs)
+        except Exception as e:
+            # Log full traceback and return a stable error payload (HTTP 200 to avoid 5xx bubbling).
+            logger.exception("Unhandled exception in route %s: %s", getattr(func, "__name__", "unknown"), e, exc_info=True)
+            return JSONResponse(status_code=200, content={"status": "error", "error": "Internal server error"})
+    return wrapper
+
 app = FastAPI(title="PDF Ingest MVP", version="0.1")
 # Include the full-raw-text router (read-only helper to assemble canonical raw text)
 app.include_router(full_raw_text_router)
+
+# This is where you should put it
+app.include_router(confirm_save_router, prefix="/api/v1")
 
 # Initialize DB on startup (dev-time create_all)
 @app.on_event("startup")
@@ -69,9 +131,10 @@ async def on_startup():
 
 # Development CORS: allow browser-based test page and local frontend to call the API.
 # In production restrict origins appropriately.
+
+# 1️⃣ Add CORS middleware FIRST
 app.add_middleware(
     CORSMiddleware,
-    # Development CORS: allow local frontend hosts (add ports used by Vite / React)
     allow_origins=[
         "http://localhost:5173",
         "http://127.0.0.1:5173",
@@ -83,7 +146,84 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=600,
 )
+
+# 2️⃣ Logging middleware after CORS
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    logger.info(f"Request: {request.method} {request.url} Origin: {request.headers.get('origin')}")
+    response = await call_next(request)
+    return response
+
+# Global exception handler to avoid leaking internal 500s to clients and to
+# ensure confirm-save (and other endpoints) do not return HTTP 500 on internal errors.
+# This handler logs the full exception (including tracebacks) and returns a stable
+# JSON payload with status "error". We keep the HTTP status 200 to match the
+# client's expectation that confirm-save will not return 5xx for transient/internal errors.
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    # Log full traceback and contextual request info
+    logger.exception("Unhandled exception during request %s %s: %s", request.method, request.url, exc, exc_info=True)
+
+    # Best-effort: attempt to rollback a DB session if one was attached to request.state
+    try:
+        sess = None
+        if hasattr(request, "state") and getattr(request.state, "db", None):
+            sess = request.state.db
+        # If we found an async session attempt rollback
+        if sess is not None:
+            try:
+                await sess.rollback()
+            except Exception:
+                logger.exception("Failed to rollback session during global exception handling")
+    except Exception:
+        logger.exception("Error while attempting best-effort rollback in global exception handler")
+
+    return JSONResponse(status_code=200, content={"status": "error", "error": "Internal server error"})
+
+# 3️⃣ Custom CORS header middleware (Deepseek suggestion)
+@app.middleware("http")
+async def add_cors_headers(request: Request, call_next):
+    try:
+        response = await call_next(request)
+    except Exception as e:
+        # Ensure CORS headers even on exceptions
+        response = JSONResponse(content={"error": str(e)}, status_code=500)
+    
+    origin = request.headers.get("origin")
+    allowed_origins = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
+    if origin and origin in allowed_origins:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    
+    return response
+
+# 4️⃣ Debug CORS endpoint
+@app.get("/api/v1/debug/cors")
+async def debug_cors(request: Request):
+    return {
+        "headers": dict(request.headers),
+        "origin": request.headers.get("origin"),
+        "allowed_origins": [
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://localhost:5174",
+            "http://127.0.0.1:5174",
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+        ]
+    }
 
 # In-memory job store; replace with persistent store in production.
 JOBS: Dict[str, Dict[str, Any]] = {}
@@ -114,8 +254,8 @@ class NormalizedProfile(BaseModel):
     experience: Optional[List[ExperienceItem]] = None
     education: Optional[List[EducationItem]] = None
     achievements: Optional[List[str]] = None
-    rawText: Optional[str] = None
-    confidence: float = Field(..., ge=0.0, le=1.0)
+    raw_text: Optional[str] = Field(None, alias="rawText")
+    confidence: float = Field(1.0, ge=0.0, le=1.0)
     metadata: Optional[Dict[str, Any]] = None
 
 # -------------------------
@@ -270,6 +410,7 @@ def extract_experiences(text: str) -> List[Dict[str, Any]]:
     - Prefer parsing under an explicit Experience/Work section if present.
     - Stop collecting description when encountering another top-level section like EDUCATION or ACHIEVEMENTS.
     - Avoid capturing bullet-only achievement lists as experience descriptions.
+    - Better title/company heuristics and filter out education-like blocks.
     """
     if not text:
         return []
@@ -281,11 +422,14 @@ def extract_experiences(text: str) -> List[Dict[str, Any]]:
     )
 
     # Section delimiters that indicate we've left experience block
-    # Be more permissive: match headings even when followed by bullets or punctuation on same line
     section_heading_re = re.compile(
-        r"^(education|skills|achievements|certifications|hobbies|languages|projects|publications|references|profile|summary)\b[:\s\-\u2022•]*",
+        r"^(education|formation|skills|achievements|certifications|hobbies|languages|projects|publications|references|profile|summary)\b[:\s\-\u2022•]*",
         re.I,
     )
+
+    # Heuristics for institution/degree to detect education-like lines
+    institution_re = re.compile(r"\b(University|College|Institute|School|Academy|École|Université|INSEAD|NEOMA|ESSEC|HEC)\b", re.I)
+    degree_re = re.compile(r"\b(Bachelor|Master|B\.Sc|M\.Sc|PhD|Licence|Master|Diploma|Certificate|Certificat|Formation)\b", re.I)
 
     sec = re.search(r"(experience|work experience|employment|professional experience)[:\s]*\n([\s\S]{0,5000})", text, re.I)
     pool_text = sec.group(2) if sec else text
@@ -301,19 +445,67 @@ def extract_experiences(text: str) -> List[Dict[str, Any]]:
 
         if date_re.search(line):
             # Title and company heuristics: previous lines may contain title/company in various orders.
-            title = pool_lines[i - 1] if i - 1 >= 0 else ""
-            company = pool_lines[i - 2] if i - 2 >= 0 else ""
-            # If previous line looks like a bullet/achievement, try to backtrack a bit less
-            if re.match(r"^[\u2022•\-•\*]\s+", title):
-                title = ""
-            if re.match(r"^[\u2022•\-•\*]\s+", company):
-                company = ""
+            title_candidate = pool_lines[i - 1] if i - 1 >= 0 else ""
+            company_candidate = pool_lines[i - 2] if i - 2 >= 0 else ""
 
-            # If the detected title/company look like education entries (degree/program/institution),
-            # skip treating this block as an experience entry so education extractor can handle it.
-            if re.search(r"\b(Bachelor|Master|B\.Sc|M\.Sc|PhD|BA|BS|MA|MS|Certificate|Program|Diploma|Training|University|College|Institute|School|CPOP|SOCP)\b", (title or "") + " " + (company or ""), re.I):
+            # Try common patterns on the same line (e.g., "Title — Company" or "Company / Title")
+            same_line = line
+
+            # If the same line contains a separator (dash, em-dash, slash) try to extract title/company
+            if re.search(r"[—–\-\/]", same_line) and not date_re.search(same_line):
+                parts = re.split(r"\s*[—–\-/]\s*", same_line)
+                if len(parts) >= 2:
+                    left, right = parts[0].strip(), parts[1].strip()
+                    # Heuristic: if one side looks academic, prefer it as company/institution
+                    if institution_re.search(left) or degree_re.search(left):
+                        company_candidate = left
+                        title_candidate = right
+                    elif institution_re.search(right) or degree_re.search(right):
+                        company_candidate = right
+                        title_candidate = left
+                    else:
+                        # prefer shorter/compact segment as title
+                        if len(left.split()) <= len(right.split()):
+                            title_candidate = left
+                            company_candidate = right
+                        else:
+                            title_candidate = right
+                            company_candidate = left
+
+            # If we still don't have a plausible title, scan nearby lines (up to 3 lines above)
+            if not title_candidate:
+                for k in range(1, 4):
+                    idx = i - k
+                    if idx >= 0:
+                        cand = pool_lines[idx].strip()
+                        if not cand:
+                            continue
+                        # skip date-like, education-like, and short bullet-only lines
+                        if date_re.search(cand):
+                            continue
+                        if institution_re.search(cand) or degree_re.search(cand):
+                            continue
+                        if re.match(r"^[\u2022•\-\*\•]\s+$", cand):
+                            continue
+                        # accept this as a title candidate
+                        title_candidate = cand
+                        break
+
+            # Backtrack if title looks like a degree/institution (then swap)
+            if degree_re.search(title_candidate) or institution_re.search(title_candidate):
+                # treat as education-like; skip this detected experience as it may be misclassified
                 i += 1
                 continue
+
+            # Clean bullets
+            if re.match(r"^[\u2022•\-•\*]\s+", title_candidate):
+                title_candidate = ""
+            if re.match(r"^[\u2022•\-•\*]\s+", company_candidate):
+                company_candidate = ""
+
+            # If title looks empty but company_candidate contains a comma or '-' maybe format reversed
+            title = title_candidate or None
+            company = company_candidate or None
 
             # Collect description lines until next date or section heading
             desc_parts: List[str] = []
@@ -322,9 +514,8 @@ def extract_experiences(text: str) -> List[Dict[str, Any]]:
                 nxt = pool_lines[j]
                 if date_re.search(nxt) or section_heading_re.match(nxt):
                     break
-                # Skip lines that look like short achievement bullets (to avoid mixing achievements into experience description)
+                # Skip short bullets as achievements
                 if re.match(r"^[\u2022•\-•\*]\s+", nxt) and len(nxt.split()) < 6:
-                    # treat short bullets as achievements, not full description
                     j += 1
                     continue
                 desc_parts.append(nxt)
@@ -333,10 +524,17 @@ def extract_experiences(text: str) -> List[Dict[str, Any]]:
             m = date_re.search(line)
             start = m.group(1) if m else None
             end = m.group(3) if m else None
+
+            # Defensive: if company_candidate looks like an academic institution, treat this block as education and skip
+            combined_prev = " ".join([company or "", title or ""])
+            if institution_re.search(combined_prev) or degree_re.search(combined_prev):
+                i = j
+                continue
+
             exp.append(
                 {
-                    "title": title or None,
-                    "company": company or None,
+                    "title": title,
+                    "company": company,
                     "startDate": start,
                     "endDate": end,
                     "description": " ".join(desc_parts) if desc_parts else None,
@@ -346,7 +544,16 @@ def extract_experiences(text: str) -> List[Dict[str, Any]]:
         else:
             i += 1
 
-    return exp[:20]
+    # Post-filter: remove any entries that look like education (safety)
+    filtered = []
+    for e in exp:
+        combined = " ".join(filter(None, [str(e.get("title") or ""), str(e.get("company") or ""), str(e.get("description") or "")]))
+        if institution_re.search(combined) and not date_re.search(combined):
+            # move to education by skipping here (normalize_from_text will handle)
+            continue
+        filtered.append(e)
+
+    return filtered[:20]
 
 # -------------------------
 # Text extraction helpers
@@ -376,7 +583,7 @@ def extract_education(text: str) -> List[Dict[str, Any]]:
 
     # Find a dedicated education section if available
     sec_match = re.search(
-        r"(education|academic background|training|certifications|qualifications)[:\s]*(\n|$)([\s\S]{0,2500})",
+        r"(education|formation|formation académique|academic background|training|certifications|qualifications)[:\s]*(\n|$)([\s\S]{0,2500})",
         text,
         re.I,
     )
@@ -534,9 +741,41 @@ def extract_achievements_from_text(text: str) -> List[str]:
 
 
 def normalize_from_text(text: str, filename: Optional[str] = None) -> NormalizedProfile:
+    # Simple section splitter: maps likely headings to their following block.
+    def extract_sections(txt: str) -> Dict[str, str]:
+        sections: Dict[str, str] = {}
+        # Split on common headings (lines that are all caps or lines followed by blank line)
+        lines = txt.splitlines()
+        current = None
+        buffer: List[str] = []
+        heading_re = re.compile(r"^[A-Z][A-Z0-9\s\-\u2014]{2,}$")  # ALL CAPS or similar
+        known_headings = re.compile(r"^(summary|profile|profil|experience|employment|education|formation|skills|achievements|hobbies|languages|certifications|projects)\b[:\s]*$", re.I)
+        for ln in lines:
+            if known_headings.match(ln.strip()) or heading_re.match(ln.strip()) and len(ln.strip()) < 80:
+                # flush previous
+                if current and buffer:
+                    sections[current.lower()] = "\n".join(buffer).strip()
+                current = ln.strip().lower().rstrip(":")
+                buffer = []
+            else:
+                if current:
+                    buffer.append(ln)
+        if current and buffer:
+            sections[current.lower()] = "\n".join(buffer).strip()
+        return sections
+
+    sections = extract_sections(text)
+
     email = extract_email(text)
     name = extract_name(text, email)
     summary = extract_summary(text)
+    # If no summary found, map PROFILE (or profil) section to summary
+    if not summary:
+        for key in ("profile", "profil"):
+            if key in sections and sections[key].strip():
+                summary = sections[key].strip()
+                break
+
     skills = extract_skills(text)
     experience = extract_experiences(text)
     education = extract_education(text)
@@ -576,7 +815,7 @@ def normalize_from_text(text: str, filename: Optional[str] = None) -> Normalized
         skills=skills or None,
         experience=[ExperienceItem(**e) for e in cleaned_experience] if cleaned_experience else None,
         education=[EducationItem(**e) for e in education] if education else None,
-        rawText=text or None,
+        raw_text=text or None,
         confidence=confidence,
         metadata={"filename": filename or None, "source": "server_parse", "parsedAt": int(time.time() * 1000), "achievements": achievements}
     )
@@ -625,6 +864,11 @@ async def parse_now(file: UploadFile = File(...)):
             text = ocr_pdf_bytes(content)
         except Exception:
             pass
+    if not text or len(text.strip()) < 250:
+        raise HTTPException(
+            status_code=422,
+            detail="Failed to extract text from PDF. The document may be image-based or empty.",
+        )
     profile = normalize_from_text(text, filename=getattr(file, "filename", None))
     return JSONResponse(content=profile.dict())
 
@@ -650,13 +894,6 @@ async def get_job(job_id: str):
         raise HTTPException(status_code=404, detail="Job not found")
     return JOBS[job_id]
 
-
-# RQ job status endpoint (wrapper around RQ Job.fetch)
-from rq.job import Job as RQJob
-
-
-@app.get("/api/v1/rq-job/{job_id}")
-async def get_rq_job(job_id: str):
     """
     Return a simple status + result for an RQ job id enqueued by this service.
     Useful for frontend polling.
@@ -702,6 +939,9 @@ async def get_llm_history_by_job(job_id: str, session: AsyncSession = Depends(ge
                     "full_response": row.full_response,
                     "patch": row.full_response.get("patch") if row.full_response else None,
                     "merged": bool(row.merged),
+                    "convex_write_status": getattr(row, "convex_write_status", None),
+                    "convex_error": getattr(row, "convex_error", None),
+                    "convex_written_at": getattr(row, "convex_written_at", None),
                 }
         except Exception:
             # ignore and try UUID fallback
@@ -723,6 +963,9 @@ async def get_llm_history_by_job(job_id: str, session: AsyncSession = Depends(ge
                     "full_response": row2.full_response,
                     "patch": row2.full_response.get("patch") if row2.full_response else None,
                     "merged": bool(row2.merged),
+                    "convex_write_status": getattr(row2, "convex_write_status", None),
+                    "convex_error": getattr(row2, "convex_error", None),
+                    "convex_written_at": getattr(row2, "convex_written_at", None),
                 }
         except Exception:
             pass
@@ -741,34 +984,167 @@ async def get_profile_llm_history(profile_id: str, session: AsyncSession = Depen
     Return LLM history rows for a given profile id.
     """
     try:
+        # Handle placeholder UUIDs like "placeholder-3834EA9E-460E-41A0-94AC-AF480015CC0D"
+        if isinstance(profile_id, str) and profile_id.startswith('placeholder-'):
+            # Extract the UUID part after the prefix
+            uuid_part = profile_id.replace('placeholder-', '')
+            try:
+                parsed_uuid = UUID(uuid_part)
+            except ValueError:
+                logger.warning("Invalid UUID format in placeholder: %s", profile_id)
+                parsed_uuid = None
+        else:
+            parsed_uuid = UUID(str(profile_id))
+    except Exception:
+        logger.info("Invalid profile_id format: %s", profile_id)
+        raise HTTPException(status_code=400, detail="Invalid profile_id (must be UUID)")
+    
+    try:
+        q = await session.execute(select(LLMHistory).where(LLMHistory.profile_id == parsed_uuid).order_by(LLMHistory.run_time.desc()))
+        rows = q.scalars().all()
+    except Exception:
+        logger.exception("Database error while fetching llm history for profile %s", profile_id)
+        raise HTTPException(status_code=500, detail="Database error")
+    
+    result = []
+    for r in rows:
+        result.append({
+            "id": str(r.id),
+            "profile_id": str(r.profile_id),
+            "job_id": r.job_id,
+            "run_time": r.run_time.isoformat() if r.run_time else None,
+            "provider": r.provider,
+            "model": r.model,
+            "full_response": r.full_response,
+            "patch": r.full_response.get("patch") if r.full_response else None,
+            "merged": bool(r.merged),
+            "convex_write_status": getattr(r, "convex_write_status", None),
+            "convex_error": getattr(r, "convex_error", None),
+            "convex_written_at": getattr(r, "convex_written_at", None),
+        })
+    return result
+
+
+@app.post("/api/v1/convex-persist-retry")
+async def convex_persist_retry(payload: Dict[str, Any] = None, session: AsyncSession = Depends(get_session)):
+    """
+    Retry sending a saved candidate to Convex by placeholderId (LLMHistory.id).
+    Body: { "placeholderId": "<uuid>" }
+    Behavior:
+      - Lookup LLMHistory by id; require it has a profile_id
+      - Load canonical Profile from DB and rebuild the convex payload (server-authoritative)
+      - Call convex action via call_convex_action (runs in thread to avoid blocking event loop)
+      - Update LLMHistory.convex_write_status / convex_error / convex_written_at accordingly
+    """
+    if payload is None:
+        raise HTTPException(status_code=400, detail="Missing JSON body")
+    placeholder_id = payload.get("placeholderId") or payload.get("id") or payload.get("placeholderId")
+    if not placeholder_id:
+        raise HTTPException(status_code=400, detail="placeholderId is required")
+    try:
+        parsed = UUID(str(placeholder_id))
+    except Exception:
+        raise HTTPException(status_code=400, detail="placeholderId must be a valid UUID")
+
+    try:
+        # Find LLMHistory row
+        q = await session.execute(select(LLMHistory).where(LLMHistory.id == parsed))
+        row = q.scalars().first()
+        if not row:
+            raise HTTPException(status_code=404, detail="LLMHistory entry not found")
+
+        if not row.profile_id:
+            raise HTTPException(status_code=400, detail="LLMHistory entry missing profile_id")
+
+        # Load canonical profile
+        profile = await session.get(Profile, row.profile_id)
+        if not profile:
+            raise HTTPException(status_code=404, detail="Profile not found for LLMHistory entry")
+
+        # Build payload (same contract as worker). Reuse existing idempotency key if present; otherwise generate one and persist.
+        import uuid as _uuid
+
+        # ensure idempotency_key present and persisted on LLMHistory
+        if getattr(row, "convex_idempotency_key", None):
+            idempotency_key = row.convex_idempotency_key
+        else:
+            idempotency_key = str(_uuid.uuid4())
+            try:
+                row.convex_idempotency_key = idempotency_key
+                row.convex_write_status = "pending"
+                row.convex_attempts = (row.convex_attempts or 0) + 1
+                row.convex_last_attempt_at = int(time.time() * 1000)
+                session.add(row)
+                await session.commit()
+            except Exception:
+                try:
+                    await session.rollback()
+                except Exception:
+                    logger.exception("Failed to rollback after persisting idempotency_key")
+                logger.exception("Failed to persist idempotency_key on LLMHistory %s", str(row.id))
+
+        # Sanitize profile payload: omit email when null/empty to avoid Convex validation errors.
+        profile_obj = {
+            "name": profile.name,
+            "summary": profile.summary if profile.summary is not None else "",
+            "skills": profile.skills or [],
+            "experience": profile.experience or [],
+            "education": getattr(profile, "education", []) or [],
+            "achievements": getattr(profile, "achievements", []) or [],
+        }
         try:
-            parsed_uuid = UUID(profile_id)
+            if profile.email is not None and str(profile.email).strip() != "":
+                profile_obj["email"] = str(profile.email)
         except Exception:
-            raise HTTPException(status_code=400, detail="Invalid profile_id (must be UUID)")
+            # defensive: skip including email if any unexpected error occurs
+            pass
+
+        convex_payload = {
+            "profileId": str(profile.id),
+            "idempotencyKey": idempotency_key,
+            "source": "llm_refine_retry",
+            "version": 1,
+            "profile": profile_obj,
+        }
+        action_path = os.getenv("CONVEX_ACTION_PATH", "/api/actions/persistProfile")
+
+        # Run the blocking HTTP call in a thread
         try:
-            q = await session.execute(select(LLMHistory).where(LLMHistory.profile_id == parsed_uuid).order_by(LLMHistory.run_time.desc()))
-            rows = q.scalars().all()
-        except Exception:
-            logger.exception("Database error while fetching llm history for profile %s", profile_id)
-            raise HTTPException(status_code=500, detail="Database error")
-        result = []
-        for r in rows:
-            result.append({
-                "id": str(r.id),
-                "profile_id": str(r.profile_id),
-                "job_id": r.job_id,
-                "run_time": r.run_time.isoformat() if r.run_time else None,
-                "provider": r.provider,
-                "model": r.model,
-                "full_response": r.full_response,
-                "patch": r.full_response.get("patch") if r.full_response else None,
-                "merged": bool(r.merged),
-            })
-        return result
+            resp = await call_convex_action(action_path, convex_payload)
+            # success -> persist status on LLMHistory
+            try:
+                row.convex_write_status = "success"
+                row.convex_error = None
+                row.convex_written_at = int(time.time() * 1000)
+                row.convex_idempotency_key = idempotency_key
+                session.add(row)
+                await session.commit()
+            except Exception:
+                try:
+                    await session.rollback()
+                except Exception:
+                    logger.exception("Failed to rollback after commit failure while updating convex status")
+                logger.exception("Failed to persist convex success status to LLMHistory")
+            return {"status": "ok", "resp": resp}
+        except ConvexPersistError as cpe:
+            try:
+                row.convex_write_status = "failed"
+                row.convex_error = str(cpe)
+                row.convex_written_at = None
+                row.convex_last_attempt_at = int(time.time() * 1000)
+                session.add(row)
+                await session.commit()
+            except Exception:
+                try:
+                    await session.rollback()
+                except Exception:
+                    logger.exception("Failed to rollback after commit failure while updating convex failure status")
+                logger.exception("Failed to persist convex failure status to LLMHistory")
+            raise HTTPException(status_code=500, detail=f"Convex call failed: {cpe}")
     except HTTPException:
         raise
     except Exception:
-        logger.exception("Unexpected error while fetching llm history for profile %s", profile_id)
+        logger.exception("Unexpected error in convex-persist-retry for %s", placeholder_id)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -862,116 +1238,45 @@ async def api_llm_refine(payload: Dict[str, Any] = None, session: AsyncSession =
     if not profile_id:
         raise HTTPException(status_code=400, detail="profileId is required or provide a full profile payload under 'profile'")
 
+    # If client provided rawText alongside profileId, persist it first so the worker refines the canonical text.
+    raw_text_from_payload = raw_text
+    if raw_text_from_payload and profile_id:
+        try:
+            # Use a defensive parser that never raises; if parsed_uuid is None we skip DB writes.
+            parsed_uuid = parse_profile_uuid_safe(profile_id)
+            # Only attempt to update if we have a valid UUID
+            if parsed_uuid:
+                existing_profile = await session.get(Profile, parsed_uuid)
+                if existing_profile:
+                    existing_profile.raw_text = raw_text_from_payload
+                    session.add(existing_profile)
+                    try:
+                        await session.commit()
+                        await session.refresh(existing_profile)
+                    except Exception:
+                        # Ensure we rollback on any commit failure and continue (non-fatal)
+                        try:
+                            await session.rollback()
+                        except Exception:
+                            logger.exception("Failed to rollback after commit failure while persisting rawText for profile %s", profile_id)
+                        logger.exception("Failed to persist rawText before enqueue for profile %s", profile_id)
+        except Exception:
+            logger.exception("Failed to persist rawText before enqueue for profile %s", profile_id)
+            # Non-fatal: continue to enqueue with whatever was in DB
+
     try:
-        job = worker.enqueue_llm_cleanup(str(profile_id))
+        res = worker.enqueue_llm_cleanup(str(profile_id))
+        if isinstance(res, dict):
+            job = res.get("job")
+            placeholder_id = res.get("placeholder_id")
+        else:
+            job = res
+            placeholder_id = None
         job_id = job.get_id() if hasattr(job, "get_id") else str(getattr(job, "id", ""))
-        return {"jobId": job_id, "profileId": str(profile_id)}
+        return {"jobId": job_id, "profileId": str(profile_id), "placeholderId": placeholder_id}
     except Exception as e:
         logger.exception("Failed to enqueue llm_refine for %s: %s", profile_id, e)
         raise HTTPException(status_code=500, detail="Failed to enqueue job")
-
-
-@app.post("/api/v1/confirm-save")
-async def confirm_save(profile: NormalizedProfile, session: AsyncSession = Depends(get_session)):
-    """
-    Persist a normalized profile to Postgres. Upsert by email if provided; otherwise insert a new profile.
-    Returns the profile id and timestamps. If saved profile confidence is below LLM_THRESHOLD
-    an LLM refinement job will be enqueued and the job id returned in `llm_job_id`.
-    """
-    # Defensive: ensure the `achievements` column exists (helps tests when schema was created earlier).
-    # Run a safe ALTER TABLE IF NOT EXISTS prior to any ORM query that selects the column.
-    try:
-        from sqlalchemy import text
-
-        await session.execute(text("ALTER TABLE IF EXISTS profiles ADD COLUMN IF NOT EXISTS achievements JSONB"))
-        await session.commit()
-    except Exception:
-        # If DDL fails, continue — subsequent ORM queries may still work if column exists.
-        pass
-
-    # Try to find existing by email
-    existing = None
-    if profile.email:
-        # Use a raw SQL lookup to avoid ORM column mismatches with the DB schema.
-        from sqlalchemy import text
-
-        row = await session.execute(
-            text("SELECT id FROM profiles WHERE email = :email LIMIT 1"),
-            {"email": profile.email},
-        )
-        first = row.first()
-        if first:
-            profile_id = first[0]
-            existing = await session.get(Profile, profile_id)
-        else:
-            existing = None
-
-    if existing:
-        # Update fields
-        existing.name = profile.name
-        existing.summary = profile.summary
-        existing.skills = profile.skills
-        existing.experience = [e.dict() for e in profile.experience] if profile.experience else None
-        existing.raw_text = profile.rawText
-        existing.confidence = float(profile.confidence)
-        existing.meta = profile.metadata
-        session.add(existing)
-        await session.commit()
-        await session.refresh(existing)
-        profile_id = existing.id
-        created_at = existing.created_at
-        updated_at = existing.updated_at
-    else:
-        new = Profile(
-            name=profile.name,
-            email=profile.email,
-            summary=profile.summary,
-            skills=profile.skills,
-            experience=[e.dict() for e in profile.experience] if profile.experience else None,
-            raw_text=profile.rawText,
-            confidence=float(profile.confidence),
-            meta=profile.metadata,
-        )
-        session.add(new)
-        await session.commit()
-        await session.refresh(new)
-        profile_id = new.id
-        created_at = new.created_at
-        updated_at = new.updated_at
-
-    # Optionally enqueue LLM refinement if confidence is below threshold
-    llm_job_id = None
-    try:
-        llm_threshold = float(os.getenv("LLM_THRESHOLD", "0.6"))
-    except Exception:
-        llm_threshold = 0.6
-
-    try:
-        current_conf = float(profile.confidence)
-    except Exception:
-        current_conf = 1.0
-
-    if current_conf < llm_threshold:
-        try:
-            job = worker.enqueue_llm_cleanup(str(profile_id))
-            llm_job_id = job.get_id() if hasattr(job, "get_id") else str(job.id)
-        except Exception:
-            # Non-fatal: log and continue
-            import logging
-
-            logging.exception("Failed to enqueue LLM refine job for profile %s", profile_id)
-
-    result = {
-        "id": str(profile_id),
-        "created_at": created_at.isoformat() if created_at else None,
-        "updated_at": updated_at.isoformat() if updated_at else None,
-        "status": "saved",
-    }
-    if llm_job_id:
-        result["llm_job_id"] = llm_job_id
-
-    return result
-
 
 @app.get("/api/v1/profiles/{profile_id}")
 async def get_profile_by_id(profile_id: str, session: AsyncSession = Depends(get_session)):

@@ -1,572 +1,519 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import { useState, useEffect, useReducer, useMemo, useCallback } from "react";
+import LoadingSpinner from "./LoadingSpinner";
+import JsonEditor from "./JsonEditor";
+import CVLoader from "./CVLoader";
+import { useAuth } from "@clerk/clerk-react";
+import { useMutation } from "convex/react";
+import { api } from "../../convex/_generated/api";
 
-type ExperienceItem = {
-  company?: string;
-  title?: string;
-  startDate?: string;
-  endDate?: string;
-  description?: string;
+// --- Type Definitions ---
+type ExperienceItem = { company?: string; title?: string; startDate?: string; endDate?: string; description?: string; };
+type EducationItem = { institution?: string; degree?: string; fieldOfStudy?: string; startDate?: string; endDate?: string; description?: string; };
+type NormalizedProfile = { id?: string; name?: string | null; email?: string | null; summary?: string | null; skills?: string[] | null; experience?: ExperienceItem[] | null; education?: EducationItem[] | null; achievements?: string[] | null; rawText?: string | null; confidence?: number; metadata?: Record<string, unknown> | null; version?: number; };
+type PatchOp = { path: string; op: "replace" | string; value: any; };
+type LLMHistoryRow = { id: string; profile_id: string; run_time?: string; provider?: string; model?: string; job_id?: string; full_response?: any; patch?: { ops: PatchOp[] } | null; merged?: boolean; confidence?: number; };
+type Props = { visible: boolean; parsedProfile: NormalizedProfile | null; onClose: () => void; onSaved?: (result: any) => void; };
+
+// --- Constants and Helpers ---
+const API_BASE_URL = import.meta.env?.VITE_PDF_INGEST_URL ?? "";
+
+function buildApiUrl(base: string, ...parts: string[]): string {
+  const joinedParts = parts.map(part => part.startsWith('/') ? part.substring(1) : part).join('/');
+  return base.endsWith('/') ? `${base}${joinedParts}` : `${base}/${joinedParts}`;
+}
+
+// Unified state with useReducer
+type AppState = {
+  form: Partial<NormalizedProfile> & { skillsText?: string; experienceText?: string; educationText?: string; achievementsText?: string; };
+  rawTextLocal: string;
+  savedProfileId: string | null;
+  profileVersion: number | null;
+  refinedData: NormalizedProfile | null;
+  refineConfidence: number | null;
+  patchOps: PatchOp[] | null;
+  acceptedPaths: Record<string, boolean>;
+  status: 'idle' | 'loading_cv' | 'refining' | 'saving' | 'error';
+  message: { type: 'success' | 'error'; text: string } | null;
+  errors: Record<string, string | null>;
 };
 
-type NormalizedProfile = {
-  id?: string;
-  name?: string | null;
-  email?: string | null;
-  summary?: string | null;
-  skills?: string[] | null;
-  experience?: ExperienceItem[] | null;
-  education?: any[] | null;
-  achievements?: string[] | null;
-  rawText?: string | null;
-  confidence?: number;
-  metadata?: Record<string, unknown> | null;
-  version?: number;
+type Action =
+  | { type: 'UPDATE_FORM'; payload: Partial<AppState['form']> }
+  | { type: 'SET_RAW_TEXT'; payload: string }
+  | { type: 'SET_SAVED_ID'; payload: string | null }
+  | { type: 'SET_VERSION'; payload: number | null }
+  | { type: 'SET_REFINED'; payload: { data: NormalizedProfile | null; confidence: number | null; patchOps: PatchOp[] | null; acceptedPaths: Record<string, boolean> } }
+  | { type: 'SET_STATUS'; payload: AppState['status'] }
+  | { type: 'SET_MESSAGE'; payload: AppState['message'] }
+  | { type: 'RESET_REFINED' }
+  | { type: 'SET_ERROR'; payload: { field: string; error: string | null } };
+
+const initialState: AppState = {
+  form: {},
+  rawTextLocal: '',
+  savedProfileId: null,
+  profileVersion: null,
+  refinedData: null,
+  refineConfidence: null,
+  patchOps: null,
+  acceptedPaths: {},
+  status: 'idle',
+  message: null,
+  errors: {},
 };
 
-type PatchOp = {
-  path: string;
-  op: "replace" | string;
-  value: any;
-};
-
-type LLMHistoryRow = {
-  id: string;
-  profile_id: string;
-  run_time?: string;
-  provider?: string;
-  model?: string;
-  job_id?: string;
-  full_response?: any;
-  patch?: { ops: PatchOp[] } | null;
-  merged?: boolean;
-};
-
-type Props = {
-  visible: boolean;
-  parsedProfile: NormalizedProfile | null;
-  onClose: () => void;
-  onSaved?: (result: any) => void;
-};
+function reducer(state: AppState, action: Action): AppState {
+  switch (action.type) {
+    case 'UPDATE_FORM': return { ...state, form: { ...state.form, ...action.payload } };
+    case 'SET_RAW_TEXT': return { ...state, rawTextLocal: action.payload };
+    case 'SET_SAVED_ID': return { ...state, savedProfileId: action.payload };
+    case 'SET_VERSION': return { ...state, profileVersion: action.payload };
+    case 'SET_REFINED': return { ...state, refinedData: action.payload.data, refineConfidence: action.payload.confidence, patchOps: action.payload.patchOps, acceptedPaths: action.payload.acceptedPaths };
+    case 'SET_STATUS': return { ...state, status: action.payload };
+    case 'SET_MESSAGE': return { ...state, message: action.payload };
+    case 'RESET_REFINED': return { ...state, refinedData: null, refineConfidence: null, patchOps: null, acceptedPaths: {} };
+    case 'SET_ERROR': return { ...state, errors: { ...state.errors, [action.payload.field]: action.payload.error } };
+    default: return state;
+  }
+}
 
 export default function ProfileReviewModal({ visible, parsedProfile, onClose, onSaved }: Props) {
-  const [name, setName] = useState<string>("");
-  const [email, setEmail] = useState<string>("");
-  const [summary, setSummary] = useState<string>("");
-  const [skillsText, setSkillsText] = useState<string>("");
-  const [experienceText, setExperienceText] = useState<string>("");
-  const [educationText, setEducationText] = useState<string>("[]");
-  const [achievementsText, setAchievementsText] = useState<string>("");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
-
-  // LLM refine states
-  const [refining, setRefining] = useState<boolean>(false);
+  const [state, dispatch] = useReducer(reducer, initialState);
   const [refineJobId, setRefineJobId] = useState<string | null>(null);
-  const [refineStatus, setRefineStatus] = useState<string | null>(null);
-  const [refineError, setRefineError] = useState<string | null>(null);
+  const [placeholderId, setPlaceholderId] = useState<string | null>(null);
+  const [showCacheModal, setShowCacheModal] = useState(false);
 
-  // Track saved profile id and current profile version
-  const [savedProfileId, setSavedProfileId] = useState<string | null>(null);
-  const [profileVersion, setProfileVersion] = useState<number | null>(null);
-  // Local copy of raw extracted text so UI doesn't disappear when parsedProfile prop isn't immediately updated
-  const [rawTextLocal, setRawTextLocal] = useState<string>("");
+  // Clerk auth guard for modal-level effects
+  const { isSignedIn, isLoaded: clerkLoaded } = useAuth();
 
-  // Patch UI
-  const [patchOps, setPatchOps] = useState<PatchOp[] | null>(null);
-  const [acceptedPaths, setAcceptedPaths] = useState<Record<string, boolean>>({});
+  // Convex mutation - reference the generated module key directly (keeps compatibility with generated api)
+  // Use a narrow any cast only for the module access so the rest of the code keeps type-safety.
+  const saveProfileMutation = useMutation((api as any)["mutations/upsertProfile"]?.upsertProfile);
+  // Use Convex mutation to start an LLM refinement job instead of calling an external HTTP endpoint.
+  // Exported from convex/llm.ts as a public mutation `startRefine` (typed) and `startRefineByString` (accepts external string IDs).
+  // We call the compatibility wrapper `startRefineByString` because savedProfileId/upsertProfile returns an external profileId string.
+  const startRefineMutation = useMutation(api.llm.startRefineByString);
 
+  // Debounced / stable form update (declare before handlers that use it)
+  const updateForm = useCallback((updates: Partial<AppState['form']>) => {
+    dispatch({ type: 'UPDATE_FORM', payload: updates });
+  }, []);
+
+  // Stable callbacks for JsonEditor to avoid creating new function refs each render
+  const handleExperienceChange = useCallback((val: string) => {
+    updateForm({ experienceText: val });
+  }, [updateForm]);
+
+  const handleEducationChange = useCallback((val: string) => {
+    updateForm({ educationText: val });
+  }, [updateForm]);
+
+  const handleExperienceError = useCallback((err: string | null) => {
+    dispatch({ type: 'SET_ERROR', payload: { field: 'experienceText', error: err } });
+  }, []);
+
+  const handleEducationError = useCallback((err: string | null) => {
+    dispatch({ type: 'SET_ERROR', payload: { field: 'educationText', error: err } });
+  }, []);
+
+  // Memoized form validity
+  const isFormValid = useMemo(() => {
+    const noErrors = Object.values(state.errors).every(err => err === null);
+    try {
+      JSON.parse(state.form.experienceText ?? '[]');
+      JSON.parse(state.form.educationText ?? '[]');
+      return noErrors;
+    } catch {
+      return false;
+    }
+  }, [state.errors, state.form.experienceText, state.form.educationText]);
+
+  // Populate from prop
   useEffect(() => {
     if (parsedProfile) {
-      setName((parsedProfile as any).name ?? "");
-      setEmail((parsedProfile as any).email ?? "");
-      setSummary((parsedProfile as any).summary ?? "");
-      setSkillsText(((parsedProfile as any).skills || []).join(", "));
-      try {
-        setExperienceText(JSON.stringify((parsedProfile as any).experience || [], null, 2));
-      } catch {
-        setExperienceText("[]");
-      }
-      try {
-        setEducationText(JSON.stringify(((parsedProfile as any).education || (parsedProfile as any).metadata?.education) || [], null, 2));
-      } catch {
-        setEducationText("[]");
-      }
-      const ach = (parsedProfile as any).achievements ?? (parsedProfile as any).metadata?.achievements ?? [];
-      setAchievementsText(Array.isArray(ach) ? ach.join("\n") : String(ach));
-      setError(null);
-      setSuccessMsg(null);
-      setSavedProfileId((parsedProfile as any)?.id ?? null);
-      setProfileVersion((parsedProfile as any)?.version ?? null);
+      dispatch({ type: 'UPDATE_FORM', payload: {
+        name: parsedProfile.name ?? "",
+        email: parsedProfile.email ?? "",
+        summary: parsedProfile.summary ?? "",
+        skillsText: (parsedProfile.skills || []).join(", "),
+        experienceText: JSON.stringify(parsedProfile.experience || [], null, 2),
+        educationText: JSON.stringify(parsedProfile.education || parsedProfile.metadata?.education || [], null, 2),
+        achievementsText: Array.isArray(parsedProfile.achievements) ? parsedProfile.achievements.join("\n") : String(parsedProfile.achievements ?? ""),
+      } });
+      dispatch({ type: 'SET_RAW_TEXT', payload: parsedProfile.rawText ?? "" });
+      dispatch({ type: 'SET_SAVED_ID', payload: parsedProfile.id ?? null });
+      dispatch({ type: 'SET_VERSION', payload: parsedProfile.version ?? null });
+      dispatch({ type: 'SET_MESSAGE', payload: null });
     }
   }, [parsedProfile]);
 
-  if (!visible) return null;
-
-  async function handleSave(notifyParent: boolean = true): Promise<string | undefined> {
-    setSaving(true);
-    setError(null);
-    setSuccessMsg(null);
-
-    // Build payload
-    let skills: string[] = skillsText
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-
-    let experience: ExperienceItem[] = [];
-    try {
-      const parsed = JSON.parse(experienceText || "[]");
-      if (Array.isArray(parsed)) {
-        experience = parsed;
-      } else {
-        throw new Error("Experience JSON must be an array");
-      }
-    } catch (e: any) {
-      setError("Invalid experience JSON: " + (e?.message || String(e)));
-      setSaving(false);
-      return undefined;
-    }
-
-    // parse education & achievements from the modal fields
-    let education: any[] | undefined = undefined;
-    try {
-      const parsedEdu = JSON.parse(educationText || "[]");
-      if (Array.isArray(parsedEdu)) education = parsedEdu;
-    } catch (e) {
-      setError("Invalid education JSON: " + (e as any).message || String(e));
-      setSaving(false);
-      return undefined;
-    }
-
-    const achievements = achievementsText
-      .split("\n")
-      .map((s) => s.trim())
-      .filter(Boolean);
-
-    const payload: NormalizedProfile = {
-      name: name || undefined,
-      email: email || undefined,
-      summary: summary || undefined,
-      skills: skills.length ? skills : undefined,
-      experience: experience.length ? experience : undefined,
-      education: education && education.length ? education : undefined,
-      achievements: achievements.length ? achievements : undefined,
-      rawText: parsedProfile?.rawText ?? undefined,
-      confidence: parsedProfile?.confidence ?? 0,
-      metadata: {
-        ...(parsedProfile?.metadata || {}),
-        reviewedAt: Date.now(),
-        reviewedBy: "frontend_review",
-      },
-    };
-
-    const base = (import.meta as any).env?.VITE_PDF_INGEST_URL ?? "";
-    const url = base ? (base.endsWith("/") ? `${base}api/v1/confirm-save` : `${base}/api/v1/confirm-save`) : "/api/v1/confirm-save";
-
-    try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      const json = await res.json().catch(() => null);
-      if (!res.ok) {
-        const msg = (json && (json.detail || json.error || json.message)) || res.statusText || `HTTP ${res.status}`;
-        setError(String(msg));
-        return undefined;
-      } else {
-        setSuccessMsg("Saved successfully");
-        // Inform parent but do not instruct it to close the modal by default.
-        if (notifyParent && onSaved) onSaved({ ...(json || {}), __closeAfterSave: false });
-        if (json && json.id) {
-          setSavedProfileId(json.id);
-          // fetch profile to get version
-          await fetchProfileVersion(json.id);
-          setSaving(false);
-          return json.id;
-        }
-        setSaving(false);
-        return undefined;
-      }
-    } catch (e: any) {
-      setError(e?.message || String(e));
-      return undefined;
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function fetchProfileVersion(profileId: string) {
-    try {
-      const base = (import.meta as any).env?.VITE_PDF_INGEST_URL ?? "";
-      const url = base ? (base.endsWith("/") ? `${base}api/v1/profiles/${profileId}` : `${base}/api/v1/profiles/${profileId}`) : `/api/v1/profiles/${profileId}`;
-      const res = await fetch(url);
-      if (!res.ok) return;
-      const j = await res.json().catch(() => null);
-      setProfileVersion(j?.version ?? null);
-    } catch {
-      // ignore
-    }
-  }
-
-  /**
-   * Ensure we have a saved profile id before issuing a refine job.
-   * If there is no savedProfileId, attempt to save the current modal data.
-   * Returns the profileId on success or null on failure.
-   */
-  async function ensureSavedForRefine(): Promise<string | null> {
-    const existing = savedProfileId ?? (parsedProfile as any)?.id ?? null;
-    if (existing) return existing;
-    // Try to save
+  // Load latest refined
+  useEffect(() => {
+    if (!visible) return;
+    if (!parsedProfile?.id) return;
+    const profileId = parsedProfile.id;
+    async function load() {
+      dispatch({ type: 'SET_STATUS', payload: 'refining' });
       try {
-      const id = await handleSave(false); // auto-save without notifying parent to avoid UI race
-      if (!id) {
-        setRefining(false);
-        setRefineStatus(null);
-        setRefineError("Save required before refine.");
-        return null;
-      }
-      return id;
-    } catch (e: any) {
-      setRefining(false);
-      setRefineError(e?.message || String(e));
-      return null;
-    }
-  }
-
-  async function fetchLLMHistoryForJob(profileId: string, jobId: string) {
-    try {
-      // Prefer job-specific endpoint if available
-      const base = (import.meta as any).env?.VITE_PDF_INGEST_URL ?? "";
-      const jobUrl = base ? (base.endsWith("/") ? `${base}api/v1/llm-history/${jobId}` : `${base}/api/v1/llm-history/${jobId}`) : `/api/v1/llm-history/${jobId}`;
-      const byJob = await fetch(jobUrl);
-      if (byJob.ok) {
-        const row = await byJob.json().catch(() => null);
-        if (row) {
-          const patch = row.full_response?.patch ?? row.patch ?? (row.full_response && row.full_response.parsed && row.full_response.parsed.patch) ?? null;
-          if (patch && patch.ops) {
-            setPatchOps(patch.ops);
-            const map: Record<string, boolean> = {};
-            patch.ops.forEach((op: PatchOp) => (map[op.path] = true));
-            setAcceptedPaths(map);
-          }
-          return;
-        }
-      }
-
-      // Fallback: fetch profile history and find matching job id
-      const getUrl = base ? (base.endsWith("/") ? `${base}api/v1/profiles/${profileId}/llm-history` : `${base}/api/v1/profiles/${profileId}/llm-history`) : `/api/v1/profiles/${profileId}/llm-history`;
-      const res = await fetch(getUrl);
-      if (!res.ok) return;
-      const rows: LLMHistoryRow[] = await res.json().catch(() => []);
-      const match = rows.find((r) => String(r.job_id) === String(jobId));
-      if (match) {
-        const patch = match.full_response?.patch ?? match.patch ?? (match.full_response && match.full_response.parsed && match.full_response.parsed.patch) ?? null;
-        if (patch && patch.ops) {
-          setPatchOps(patch.ops);
-          const map: Record<string, boolean> = {};
-          patch.ops.forEach((op: PatchOp) => (map[op.path] = true));
-          setAcceptedPaths(map);
-        }
-      }
-    } catch (e) {
-      // ignore
-    }
-  }
-
-  async function applySelectedPatch() {
-    if (!savedProfileId) {
-      setError("No saved profile id available. Save first.");
-      return;
-    }
-    if (!patchOps || patchOps.length === 0) {
-      setError("No patch available to apply.");
-      return;
-    }
-    // Build selected ops array
-    const selected = patchOps.filter((op) => acceptedPaths[op.path]);
-    if (selected.length === 0) {
-      setError("No fields selected.");
-      return;
-    }
-    const payload = {
-      patch: { ops: selected },
-      client_version: profileVersion ?? null,
-      job_id: refineJobId ?? null,
-    };
-
-    try {
-      const base = (import.meta as any).env?.VITE_PDF_INGEST_URL ?? "";
-      const url = base ? (base.endsWith("/") ? `${base}api/v1/profiles/${savedProfileId}/merge` : `${base}/api/v1/profiles/${savedProfileId}/merge`) : `/api/v1/profiles/${savedProfileId}/merge`;
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const j = await res.json().catch(() => null);
-      if (!res.ok) {
-        setError((j && (j.detail || j.error || j.message)) || res.statusText || `HTTP ${res.status}`);
-        return;
-      }
-      setSuccessMsg("Selected changes merged");
-      // Try to fetch the merged profile and update modal fields so the UI reflects the merge immediately.
-      let mergedProfile: any = null;
-      try {
-        const base = (import.meta as any).env?.VITE_PDF_INGEST_URL ?? "";
-        const url = base ? (base.endsWith("/") ? `${base}api/v1/profiles/${savedProfileId}` : `${base}/api/v1/profiles/${savedProfileId}`) : `/api/v1/profiles/${savedProfileId}`;
-        const resp = await fetch(url);
-        if (resp.ok) {
-          mergedProfile = await resp.json().catch(() => null);
-          if (mergedProfile) {
-            setName(mergedProfile.name ?? "");
-            setEmail(mergedProfile.email ?? "");
-            setSummary(mergedProfile.summary ?? "");
-            setSkillsText(((mergedProfile.skills || []) as string[]).join(", "));
-            try {
-              setExperienceText(JSON.stringify(mergedProfile.experience || [], null, 2));
-            } catch {
-              // ignore
-            }
-            try {
-              setEducationText(JSON.stringify(mergedProfile.education || [], null, 2));
-            } catch {
-              // ignore
-            }
-            setAchievementsText((mergedProfile.achievements || []).join("\n"));
-            setProfileVersion(mergedProfile.version ?? profileVersion);
-            setSavedProfileId(mergedProfile.id ?? savedProfileId);
-          }
+        const url = buildApiUrl(API_BASE_URL, 'api/v1/profiles', profileId, 'llm-history');
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const rows: LLMHistoryRow[] = await res.json();
+        const found = rows.find(r => r.full_response && Object.keys(r.full_response).length > 0) ?? rows[0];
+        if (found?.full_response) {
+          const parsed = found.full_response.parsed ?? found.full_response;
+          dispatch({ type: 'SET_REFINED', payload: { data: parsed, confidence: found.confidence ?? parsed?.confidence ?? null, patchOps: null, acceptedPaths: {} } });
         }
       } catch (err) {
-        // ignore fetch errors - we still refreshed version below
+        dispatch({ type: 'SET_MESSAGE', payload: { type: 'error', text: (err as Error).message } });
+      } finally {
+        dispatch({ type: 'SET_STATUS', payload: 'idle' });
+      }
+    }
+    load();
+  }, [parsedProfile, visible]);
+
+  // Polling with exponential backoff
+  useEffect(() => {
+    if (state.status !== 'refining' || (!refineJobId && !placeholderId)) return;
+
+    const controller = new AbortController();
+    const poll = async () => {
+      const profileId = state.savedProfileId;
+      if (!profileId) return;
+
+      let delay = 1000; // start at 1s
+      const maxAttempts = placeholderId ? 30 : 60;
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        if (controller.signal.aborted) return;
+        try {
+          let isFinished = false;
+          if (placeholderId) {
+            const url = buildApiUrl(API_BASE_URL, 'api/v1/llm-history', placeholderId);
+            const res = await fetch(url, { signal: controller.signal });
+            if (res.ok) {
+              const row = await res.json();
+              if (row && (row.full_response || row.patch)) {
+                const patch = row.full_response?.patch ?? row.patch ?? row.full_response?.parsed?.patch;
+                const map = patch?.ops ? patch.ops.reduce((acc: Record<string, boolean>, op: any) => {
+                  acc[op.path] = true;
+                  return acc;
+                }, {} as Record<string, boolean>) : {};
+                const parsed = row.full_response?.parsed;
+                dispatch({ type: 'SET_REFINED', payload: { data: parsed, confidence: row.confidence ?? parsed?.confidence, patchOps: patch?.ops ?? null, acceptedPaths: map } });
+                isFinished = true;
+              }
+            }
+          } else if (refineJobId) {
+            const url = buildApiUrl(API_BASE_URL, 'api/v1/rq-job', refineJobId);
+            const res = await fetch(url, { signal: controller.signal });
+            if (res.ok) {
+              const { status } = await res.json();
+              if (status === "finished") {
+                await fetchLLMHistoryForJob(refineJobId);
+                isFinished = true;
+              } else if (status === "failed") {
+                throw new Error("Refinement failed on server");
+              }
+            }
+          }
+          if (isFinished) {
+            dispatch({ type: 'SET_MESSAGE', payload: { type: 'success', text: "AI refinement completed" } });
+            return;
+          }
+        } catch (err) {
+          if ((err as Error).name === 'AbortError') return;
+          console.error(`Poll attempt ${attempt}:`, err);
+        }
+        await new Promise(r => setTimeout(r, delay));
+        delay = Math.min(delay * 2, 8000); // backoff up to 8s
+      }
+      dispatch({ type: 'SET_MESSAGE', payload: { type: 'error', text: "Refinement timed out" } });
+    };
+    poll();
+    return () => controller.abort();
+  }, [state.status, refineJobId, placeholderId, state.savedProfileId]);
+
+  const handleSave = async (notifyParent = true) => {
+    // Ensure user auth loaded and signed in before attempting Convex mutation
+    if (!clerkLoaded || !isSignedIn) {
+      dispatch({ type: 'SET_MESSAGE', payload: { type: 'error', text: "You must be signed in to save profiles." } });
+      return null;
+    }
+
+    dispatch({ type: 'SET_STATUS', payload: 'saving' });
+    dispatch({ type: 'SET_MESSAGE', payload: null });
+
+    // Validate and coerce JSON fields
+    let skills: string[] = state.form.skillsText?.split(",").map(s => s.trim()).filter(Boolean) ?? [];
+    let experience: ExperienceItem[] = [];
+    try {
+      experience = JSON.parse(state.form.experienceText || "[]");
+      if (!Array.isArray(experience)) throw new Error("Experience must be array");
+    } catch (e) {
+      dispatch({ type: 'SET_MESSAGE', payload: { type: 'error', text: "Invalid experience JSON" } });
+      dispatch({ type: 'SET_STATUS', payload: 'idle' });
+      return null;
+    }
+    let education: EducationItem[] = [];
+    try {
+      education = JSON.parse(state.form.educationText || "[]");
+      if (!Array.isArray(education)) throw new Error("Education must be array");
+    } catch (e) {
+      dispatch({ type: 'SET_MESSAGE', payload: { type: 'error', text: "Invalid education JSON" } });
+      dispatch({ type: 'SET_STATUS', payload: 'idle' });
+      return null;
+    }
+    let achievements = state.form.achievementsText?.split("\n").map(s => s.trim()).filter(Boolean) ?? [];
+
+    const profileObj = {
+      name: state.form.name || null,
+      email: state.form.email || null,
+      summary: state.form.summary || null,
+      skills: skills.length ? skills : null,
+      experience: experience.length ? experience : null,
+      education: education.length ? education : null,
+      achievements: achievements.length ? achievements : null,
+      raw_text: state.rawTextLocal ?? null,
+      confidence: state.form.confidence ?? 0,
+      metadata: { ...state.form.metadata, reviewedAt: Date.now(), reviewedBy: "frontend_review" },
+    };
+
+    try {
+      // Determine a profileId: reuse existing savedProfileId or create a UUID
+      const profileId = state.savedProfileId ?? (typeof crypto !== "undefined" && (crypto as any).randomUUID ? (crypto as any).randomUUID() : `p-${Date.now()}`);
+      const idempotencyKey = (typeof crypto !== "undefined" && (crypto as any).randomUUID) ? (crypto as any).randomUUID() : `k-${Date.now()}`;
+
+      // Call Convex mutation upsertProfile (idempotent upsert) instead of external HTTP endpoint
+      const res = await saveProfileMutation({
+        profileId,
+        idempotencyKey,
+        source: "frontend_confirm_save",
+        version: state.profileVersion ?? 1,
+        profile: profileObj,
+      });
+
+      if (!res || !res.profileId) {
+        throw new Error("Failed to save profile");
       }
 
-      // Refresh profile version (fallback)
-      await fetchProfileVersion(savedProfileId);
-      // Notify parent but do not close modal by default.
-      if (onSaved) onSaved({ ...(j || {}), profile: mergedProfile, __closeAfterSave: false });
-    } catch (e: any) {
-      setError(e?.message || String(e));
+      // Update local state with canonical id and optionally version/metadata
+      dispatch({ type: 'SET_SAVED_ID', payload: res.profileId });
+      if (res.updatedAt) {
+        dispatch({ type: 'SET_VERSION', payload: typeof res.updatedAt === 'number' ? Math.floor(res.updatedAt / 1000) : state.profileVersion });
+      }
+      dispatch({ type: 'SET_MESSAGE', payload: { type: 'success', text: "Profile saved" } });
+      if (notifyParent && onSaved) onSaved(res);
+      return res.profileId;
+    } catch (e) {
+      dispatch({ type: 'SET_MESSAGE', payload: { type: 'error', text: (e as Error).message || "Save failed" } });
+      return null;
+    } finally {
+      dispatch({ type: 'SET_STATUS', payload: 'idle' });
     }
-  }
+  };
+
+  // fetchProfileVersion removed - unused in current component
+
+  const ensureSavedForRefine = async () => {
+    if (state.savedProfileId) return state.savedProfileId;
+    return await handleSave(false);
+  };
+
+  const fetchLLMHistoryForJob = async (jobId: string) => {
+    try {
+      const url = buildApiUrl(API_BASE_URL, 'api/v1/llm-history', jobId);
+      const res = await fetch(url);
+      if (res.ok) {
+        const row = await res.json();
+        if (row.full_response || row.patch) {
+          const patch = row.full_response?.patch ?? row.patch ?? row.full_response?.parsed?.patch;
+          const map = patch?.ops ? patch.ops.reduce((acc: Record<string, boolean>, op: PatchOp) => ({ ...acc, [op.path]: true }), {} as Record<string, boolean>) : {};
+          const parsed = row.full_response?.parsed ?? row.full_response;
+          dispatch({ type: 'SET_REFINED', payload: { data: parsed, confidence: row.confidence ?? parsed?.confidence, patchOps: patch?.ops ?? null, acceptedPaths: map } });
+        }
+      }
+    } catch (err) {
+      dispatch({ type: 'SET_MESSAGE', payload: { type: 'error', text: "Failed to fetch refinement history" } });
+    }
+  };
+
+  const handleRefineClick = async () => {
+    dispatch({ type: 'SET_STATUS', payload: 'refining' });
+    dispatch({ type: 'RESET_REFINED' });
+    dispatch({ type: 'SET_MESSAGE', payload: null });
+
+    try {
+      const maybeProfileId = await ensureSavedForRefine();
+      if (!maybeProfileId) throw new Error("Save required");
+      const profileId = maybeProfileId;
+      let rawTextToSend = state.rawTextLocal;
+      try {
+        // Try to fetch canonical full raw text from the ingestion API if available.
+        // This is non-critical — fall back to local raw text if it fails.
+        const fullUrl = buildApiUrl(API_BASE_URL, 'api/v1/profiles', profileId, 'full-raw-text');
+        const fullRes = await fetch(fullUrl);
+        if (fullRes.ok) {
+          const fj = await fullRes.json();
+          rawTextToSend = fj.fullRawText ?? rawTextToSend;
+        }
+      } catch {}
+      
+      // Use Convex public mutation to enqueue the job and schedule the worker action.
+      // This replaces the previous direct POST to /api/v1/llm-refine which caused connection errors.
+      const res = await startRefineMutation({
+        profileId,
+        rawText: rawTextToSend,
+      });
+
+      if (!res) throw new Error("Failed to start refinement");
+      // Mutation returns { jobId, placeholderId } per server implementation
+      setRefineJobId(res.jobId ?? null);
+      setPlaceholderId(res.placeholderId ?? null);
+    } catch (e) {
+      dispatch({ type: 'SET_MESSAGE', payload: { type: 'error', text: (e as Error).message } });
+      dispatch({ type: 'SET_STATUS', payload: 'idle' });
+    }
+  };
+
+  const handleCvParsed = (parsed: NormalizedProfile) => {
+    dispatch({ type: 'SET_STATUS', payload: 'idle' });
+    dispatch({ type: 'UPDATE_FORM', payload: {
+      name: parsed.name ?? "",
+      email: parsed.email ?? "",
+      summary: parsed.summary ?? parsed.rawText ?? "",
+      skillsText: (parsed.skills || []).join(", "),
+      experienceText: JSON.stringify(parsed.experience || [], null, 2),
+      educationText: JSON.stringify(parsed.education || [], null, 2),
+      achievementsText: Array.isArray(parsed.achievements) ? parsed.achievements.join("\n") : String(parsed.achievements ?? ""),
+    } });
+    dispatch({ type: 'SET_RAW_TEXT', payload: parsed.rawText ?? "" });
+    dispatch({ type: 'SET_SAVED_ID', payload: parsed.id ?? null });
+    dispatch({ type: 'SET_VERSION', payload: parsed.version ?? null });
+    dispatch({ type: 'RESET_REFINED' });
+    dispatch({ type: 'SET_MESSAGE', payload: { type: 'success', text: "CV loaded" } });
+  };
+
+  // Auto-dismiss message after 3s
+  useEffect(() => {
+    if (state.message) {
+      const timer = setTimeout(() => dispatch({ type: 'SET_MESSAGE', payload: null }), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [state.message]);
+
+  if (!visible) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
-      <div className="w-full max-w-4xl bg-white dark:bg-gray-900 rounded shadow-lg p-4 overflow-auto max-h-[90vh]">
-        <div className="flex items-start justify-between">
-          <h3 className="text-lg font-semibold">Review parsed profile</h3>
-          <div className="flex gap-2">
-            <button
-              onClick={() => {
-                onClose();
-              }}
-              className="px-3 py-1 text-sm bg-gray-200 rounded"
-            >
-              Close
+      <div className="w-full max-w-4xl bg-white dark:bg-gray-900 rounded-lg shadow-lg p-6 overflow-hidden max-h-[90vh] flex flex-col relative">
+        {/* Global Spinner Overlay */}
+        {state.status !== 'idle' && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/50 dark:bg-gray-900/50">
+            <LoadingSpinner />
+            <span className="ml-2 text-purple-600 dark:text-purple-400">{state.status}...</span>
+          </div>
+        )}
+
+        {/* Header */}
+        <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-gray-700">
+          <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+            {state.savedProfileId ? 'Revoir le profil' : 'Nouveau profil'}
+            {state.profileVersion !== null && <span className="ml-2 text-sm text-gray-500 dark:text-gray-400">v{state.profileVersion}</span>}
+          </h2>
+          <button onClick={onClose} className="text-gray-400 transition hover:text-gray-600 dark:hover:text-gray-400" aria-label="Fermer">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+
+        {/* Main Content */}
+        <div className="flex-1 mt-4 space-y-6 overflow-y-auto">
+          <div className="flex flex-col gap-6 md:flex-row">
+            {/* Manual Review */}
+            <div className="flex-1">
+              <h3 className="mb-2 text-xl font-medium text-gray-800 dark:text-gray-200">Revue manuelle</h3>
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="name" className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Nom</label>
+                  <input id="name" type="text" value={String(state.form.name ?? '')} onChange={e => updateForm({ name: e.target.value })} className="w-full p-2 text-gray-900 border border-gray-300 rounded-md dark:border-gray-700 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 focus:ring-2 focus:ring-purple-500" />
+                </div>
+                <div>
+                  <label htmlFor="email" className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
+                  <input id="email" type="email" value={String(state.form.email ?? '')} onChange={e => updateForm({ email: e.target.value })} className="w-full p-2 text-gray-900 border border-gray-300 rounded-md dark:border-gray-700 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 focus:ring-2 focus:ring-purple-500" />
+                </div>
+                <div>
+                  <label htmlFor="summary" className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Résumé</label>
+                  <textarea id="summary" value={String(state.form.summary ?? '')} onChange={e => updateForm({ summary: e.target.value })} rows={4} className="w-full p-2 text-gray-900 border border-gray-300 rounded-md dark:border-gray-700 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 focus:ring-2 focus:ring-purple-500" />
+                </div>
+                <div>
+                  <label htmlFor="skillsText" className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Compétences (séparées par virgule)</label>
+                  <input id="skillsText" type="text" value={String(state.form.skillsText ?? '')} onChange={e => updateForm({ skillsText: e.target.value })} className="w-full p-2 text-gray-900 border border-gray-300 rounded-md dark:border-gray-700 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 focus:ring-2 focus:ring-purple-500" />
+                </div>
+                <JsonEditor
+                  id="experience-json"
+                  label="Expérience (JSON)"
+                  value={String(state.form.experienceText ?? '[]')}
+                  onChange={handleExperienceChange}
+                  onError={handleExperienceError}
+                />
+                <JsonEditor
+                  id="education-json"
+                  label="Éducation (JSON)"
+                  value={String(state.form.educationText ?? '[]')}
+                  onChange={handleEducationChange}
+                  onError={handleEducationError}
+                />
+                <div>
+                  <label htmlFor="achievementsText" className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Réalisations (une par ligne)</label>
+                  <textarea id="achievementsText" value={String(state.form.achievementsText ?? '')} onChange={e => updateForm({ achievementsText: e.target.value })} rows={4} className="w-full p-2 text-gray-900 border border-gray-300 rounded-md dark:border-gray-700 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 focus:ring-2 focus:ring-purple-500" />
+                </div>
+              </div>
+            </div>
+
+            {/* AI Refine */}
+            <div className="flex-1">
+              <h3 className="mb-2 text-xl font-medium text-gray-800 dark:text-gray-200">Raffinement AI</h3>
+              {state.refinedData && (
+                <div className="p-4 mt-4 border rounded-md bg-gray-50 dark:bg-gray-800">
+                  {/* Refined data display, JSON view toggle */}
+                </div>
+              )}
+              {state.refineConfidence !== null && <p className="text-green-600">Confiance: {(state.refineConfidence * 100).toFixed(1)}%</p>}
+            </div>
+          </div>
+        </div>
+
+        {/* Footer Action Bar */}
+        <div className="flex items-center justify-between pt-4 mt-6 border-t border-gray-200 dark:border-gray-700">
+          <CVLoader onFileParsed={handleCvParsed} onError={text => dispatch({ type: 'SET_MESSAGE', payload: { type: 'error', text: text ?? '' } })} onSuccess={text => dispatch({ type: 'SET_MESSAGE', payload: { type: 'success', text: text ?? '' } })} label="Charger CV" />
+          <div className="flex gap-4">
+            <button onClick={handleRefineClick} disabled={state.status !== 'idle' || !isFormValid} className="px-4 py-2 text-white transition transform bg-purple-600 rounded-md hover:bg-purple-700 disabled:opacity-50 hover:scale-105">
+              Raffiner AI
+            </button>
+            <button onClick={() => handleSave()} disabled={state.status !== 'idle' || !isFormValid} className="px-4 py-2 text-white transition transform bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 hover:scale-105">
+              Enregistrer
             </button>
           </div>
         </div>
 
-        <div className="mt-3 space-y-3 text-sm">
-          <div>
-            <label className="block text-xs font-medium">Name</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} className="w-full px-2 py-1 border rounded" />
+        {/* Toast Notification */}
+        {state.message && (
+          <div className={`fixed bottom-4 right-4 p-4 rounded-md shadow-md text-white ${state.message.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
+            {state.message.text}
           </div>
+        )}
 
-          <div>
-            <label className="block text-xs font-medium">Email</label>
-            <input value={email} onChange={(e) => setEmail(e.target.value)} className="w-full px-2 py-1 border rounded" />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium">Summary</label>
-            <textarea value={summary} onChange={(e) => setSummary(e.target.value)} rows={4} className="w-full px-2 py-1 border rounded" />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium">Skills (comma separated)</label>
-            <input value={skillsText} onChange={(e) => setSkillsText(e.target.value)} className="w-full px-2 py-1 border rounded" />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium">Experience (JSON array)</label>
-            <textarea value={experienceText} onChange={(e) => setExperienceText(e.target.value)} rows={6} className="w-full px-2 py-1 font-mono text-xs border rounded" />
-            <div className="mt-1 text-xs text-gray-500">Example: [&#123;"company":"Acme","title":"Engineer","startDate":"2020","endDate":"2022","description":"..."&#125;]</div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium">Raw extracted text (read-only)</label>
-            <textarea value={parsedProfile?.rawText ?? ""} readOnly rows={6} className="w-full px-2 py-1 text-xs border rounded bg-gray-50" />
-          </div>
-
-          {error && <div className="text-sm text-red-600">{error}</div>}
-          {successMsg && <div className="text-sm text-green-600">{successMsg}</div>}
-        </div>
-
-        <div className="flex items-center justify-between gap-2 mt-4">
-          <div className="flex items-center gap-2 mr-auto text-sm">
-            <button
-            onClick={async () => {
-                // Ensure profile is saved (auto-save) before enqueueing a refine job.
-                setRefineError(null);
-                setRefining(true);
-                setRefineStatus("queued");
-                try {
-                  const profileId = await ensureSavedForRefine();
-                  if (!profileId) {
-                    // ensureSavedForRefine already set appropriate error
-                    return;
-                  }
-                  const base = (import.meta as any).env?.VITE_PDF_INGEST_URL ?? "";
-
-                  // Obtain a canonical fullRawText from the server (non-destructive).
-                  // Fall back to parsedProfile.rawText if the fetch fails.
-                  let rawTextToSend = parsedProfile?.rawText ?? "";
-                  try {
-                    const fullTextUrl = base
-                      ? (base.endsWith("/") ? `${base}api/v1/profiles/${profileId}/full-raw-text` : `${base}/api/v1/profiles/${profileId}/full-raw-text`)
-                      : `/api/v1/profiles/${profileId}/full-raw-text`;
-                    const fullResp = await fetch(fullTextUrl);
-                    if (fullResp.ok) {
-                      const fullJson = await fullResp.json().catch(() => null);
-                      if (fullJson && typeof fullJson.fullRawText === "string") {
-                        rawTextToSend = fullJson.fullRawText;
-                      }
-                    }
-                  } catch (e) {
-                    // Best-effort: if we can't fetch the canonical raw text, continue with existing parsedProfile.rawText
-                  }
-
-                  const url = base ? (base.endsWith("/") ? `${base}api/v1/llm-refine` : `${base}/api/v1/llm-refine`) : "/api/v1/llm-refine";
-                  const res = await fetch(url, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ profileId, rawText: rawTextToSend }),
-                  });
-                  if (!res.ok) {
-                    const json = await res.json().catch(() => null);
-                    const msg = (json && (json.detail || json.error || json.message)) || res.statusText || `HTTP ${res.status}`;
-                    setRefineError(String(msg));
-                    setRefining(false);
-                    setRefineStatus("failed");
-                    return;
-                  }
-                  const j = await res.json().catch(() => null);
-                  const jobId = j?.jobId ?? j?.llm_job_id ?? null;
-                  if (!jobId) {
-                    setRefineError("No jobId returned from server");
-                    setRefining(false);
-                    setRefineStatus("failed");
-                    return;
-                  }
-                  setRefineJobId(jobId);
-                  setRefineStatus("queued");
- 
-                  // Poll RQ job status and when finished fetch llm_history
-                  const pollUrlBase = base ? (base.endsWith("/") ? `${base}api/v1/rq-job/` : `${base}/api/v1/rq-job/`) : "/api/v1/rq-job/";
-                  let attempts = 0;
-                  const maxAttempts = 60; // ~1 minute
-                  while (attempts < maxAttempts) {
-                    attempts += 1;
-                    try {
-                      const st = await fetch(pollUrlBase + encodeURIComponent(jobId));
-                      if (!st.ok) {
-                        await new Promise((r) => setTimeout(r, 1000));
-                        continue;
-                      }
-                      const sj = await st.json().catch(() => null);
-                      const status = sj?.status ?? null;
-                      setRefineStatus(status);
-                      if (status === "finished" || status === "failed") {
-                        if (status === "finished") {
-                          // fetch llm_history and set patch
-                          await fetchLLMHistoryForJob(profileId, jobId);
-                          // refresh profile to get latest values & version
-                          await fetchProfileVersion(profileId);
-                          setSuccessMsg("AI refinement completed");
-                        } else {
-                          setRefineError("Refinement job failed on server");
-                        }
-                        break;
-                      }
-                      await new Promise((r) => setTimeout(r, 1000));
-                    } catch {
-                      await new Promise((r) => setTimeout(r, 1000));
-                    }
-                  }
- 
-                  setRefining(false);
-                } catch (e: any) {
-                  setRefineError(e?.message || String(e));
-                  setRefining(false);
-                  setRefineStatus("failed");
-                }
-              }}
-              disabled={refining}
-              className="px-3 py-1 text-sm text-white bg-purple-600 rounded"
-            >
-              {refining ? "Refining…" : "Refine with AI"}
-            </button>
-
-            {refineStatus && <span className="text-xs text-gray-600">Status: {refineStatus}</span>}
-            {refineJobId && <span className="text-xs text-gray-500">Job: {refineJobId}</span>}
-            {refineError && <span className="text-xs text-red-600">Error: {refineError}</span>}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button onClick={onClose} className="px-3 py-1 bg-gray-200 rounded">Cancel</button>
-            <button onClick={() => { void handleSave(); }} disabled={saving} className="px-3 py-1 text-white bg-blue-600 rounded">
-              {saving ? "Saving…" : "Save to DB"}
-            </button>
-            <button
-              onClick={applySelectedPatch}
-              disabled={!patchOps || Object.values(acceptedPaths).filter(Boolean).length === 0}
-              className="px-3 py-1 text-white bg-green-600 rounded"
-            >
-              Apply selected AI changes
-            </button>
-          </div>
-        </div>
-
-        {/* Patch review UI */}
-        {patchOps && (
-          <div className="pt-4 mt-4 border-t">
-            <h4 className="mb-2 text-sm font-medium">AI suggested changes</h4>
-            <div className="space-y-2 text-sm">
-              {patchOps.map((op, idx) => {
-                const field = op.path.replace(/^\//, "");
-                // get current/original value from parsedProfile or savedProfile fields
-                const originalVal = (parsedProfile as any)?.[field] ?? (parsedProfile as any)?.metadata?.[field] ?? null;
-                const newVal = op.value;
-                const checked = !!acceptedPaths[op.path];
-                return (
-                  <div key={idx} className="flex items-start gap-3 p-2 border rounded">
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={(e) => setAcceptedPaths({ ...acceptedPaths, [op.path]: e.target.checked })}
-                      className="mt-1"
-                    />
-                    <div className="flex-1">
-                      <div className="text-xs text-gray-600">{field}</div>
-                      <div className="grid grid-cols-2 gap-2 mt-1">
-                        <div>
-                          <div className="text-[11px] font-semibold">Current</div>
-                          <pre className="p-2 text-xs whitespace-pre-wrap rounded bg-gray-50">{JSON.stringify(originalVal, null, 2)}</pre>
-                        </div>
-                        <div>
-                          <div className="text-[11px] font-semibold">Suggested</div>
-                          <pre className="p-2 text-xs whitespace-pre-wrap rounded bg-yellow-50">{JSON.stringify(newVal, null, 2)}</pre>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+        {/* Cache Modal (Portal for better stacking) */}
+        {showCacheModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+            <div className="p-6 bg-white rounded-lg shadow-lg dark:bg-gray-800">
+              <h4 className="text-lg font-semibold">Charger du cache</h4>
+              {/* Preview cached profile */}
+              <button onClick={() => { /* load */ setShowCacheModal(false); }}>Charger</button>
+              <button onClick={() => { /* clear */ setShowCacheModal(false); }}>Effacer</button>
+              <button onClick={() => setShowCacheModal(false)}>Annuler</button>
             </div>
           </div>
         )}

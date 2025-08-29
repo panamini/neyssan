@@ -1,0 +1,188 @@
+/**
+ * Convex-backed LLM worker
+ *
+ * Usage:
+ * Install deps: `npm add convex node-fetch pino`
+ * Run `npx convex dev` to generate convex/_generated/
+ * Provide env: CONVEX_URL, CONVEX_KEY, OPENAI_API_KEY
+ */
+
+import fetch from "node-fetch";
+import { ConvexHttpClient } from "convex/browser";
+import { api } from "../convex/_generated/api";
+import pino from "pino";
+import type { Doc, Id } from "../convex/_generated/dataModel";
+
+const log = pino({ level: process.env.LOG_LEVEL ?? "info" });
+
+const CONVEX_URL = process.env.CONVEX_URL ?? "http://127.0.0.1:8787";
+const CONVEX_KEY = process.env.CONVEX_KEY;
+if (!CONVEX_KEY) {
+  log.fatal("CONVEX_KEY not set. Provide a Convex admin/service key in CONVEX_KEY.");
+  process.exit(1);
+}
+
+const convex = new ConvexHttpClient(CONVEX_URL, { auth: CONVEX_KEY });
+
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const OPENAI_MODEL = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
+
+
+async function callOpenAIChat(messages: Array<{ role: string; content: string }>) {
+  if (!OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY not configured");
+  }
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: OPENAI_MODEL,
+      messages,
+      temperature: 0.2,
+      max_tokens: 1200,
+    }),
+  });
+  const raw = await res.text();
+  if (!res.ok) throw new Error(`OpenAI HTTP ${res.status}: ${raw}`);
+  try {
+    const parsed = JSON.parse(raw);
+    const text = parsed?.choices?.[0]?.message?.content ?? null;
+    return { raw: parsed, text };
+  } catch {
+    return { raw: raw, text: raw };
+  }
+}
+
+function extractPatchFromText(text: string | null) {
+  if (!text) return null;
+  const t = text.trim();
+  if (t.startsWith("{") || t.startsWith("[")) {
+    try {
+      return JSON.parse(t);
+    } catch {}
+  }
+  const fenced = t.replace(/^```json\s*/i, "").replace(/\s*```$/i, "");
+  if (fenced !== t) {
+    try {
+      return JSON.parse(fenced);
+    } catch {}
+  }
+  return t;
+}
+
+// Define type guards to narrow the union types from the workerGateway.
+type JobDoc = Doc<"llmJobs">;
+function isJobDoc(obj: any): obj is JobDoc {
+  return obj && typeof obj === "object" && "_id" in obj && "profileId" in obj;
+}
+
+function isJobArray(jobs: any): jobs is JobDoc[] {
+  return Array.isArray(jobs) && jobs.every(isJobDoc);
+}
+
+async function workerLoop() {
+  const WORKER_ID = `llm-worker-${process.pid}-${Date.now()}`;
+  log.info({ workerId: WORKER_ID, convexUrl: CONVEX_URL }, "LLM worker starting");
+
+  const POLL_INTERVAL_MS = Number(process.env.POLL_INTERVAL_MS ?? 2000);
+  const BATCH_SIZE = Number(process.env.BATCH_SIZE ?? 5);
+
+  while (true) {
+    try {
+      const pendingJobs = await convex.action(api.workerGateway.processJobRequest, {
+        operation: { type: "listPendingJobs", batchSize: BATCH_SIZE }
+      });
+
+      if (!isJobArray(pendingJobs) || pendingJobs.length === 0) {
+        if (pendingJobs !== null) {
+          log.warn("Expected a list of jobs but received a different type. Skipping loop.");
+        }
+        await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+        continue;
+      }
+
+      for (const job of pendingJobs) {
+        try {
+          const claimed = await convex.action(api.workerGateway.processJobRequest, {
+            operation: { type: "claimJob", jobId: job._id, workerId: WORKER_ID }
+          });
+          
+          if (!isJobDoc(claimed)) {
+            if (claimed !== null) {
+              log.warn(`Job ${job._id} was claimed but an unexpected type was returned. Skipping.`);
+            }
+            continue;
+          }
+
+          log.info({ jobId: job._id, profileId: claimed.profileId }, "Job claimed");
+
+          const rawText = claimed.rawText ?? claimed.options?.rawText ?? "";
+          const messages = [
+            {
+              role: "system",
+              content:
+                "You are a helpful assistant that, given a user's resume/CV text, returns a structured JSON patch or structured summary plus a short tailored proposal snippet.",
+            },
+            { role: "user", content: `User resume / cv:\n\n${rawText}` },
+            {
+              role: "user",
+              content:
+                "Output a JSON object containing either a 'patch' field (JSON Patch or an object of updates) and a 'proposal_snippet' string. If you cannot produce JSON, return a JSON object with a 'text' field containing the best plain-text suggestion.",
+            },
+          ];
+
+          const llmResp = await callOpenAIChat(messages);
+          const llmText = llmResp.text ?? null;
+          log.info({ jobId: job._id }, "LLM completed");
+
+          const patch = extractPatchFromText(llmText);
+
+          const historyId = (await convex.action(api.workerGateway.processJobRequest, {
+            operation: {
+              type: "appendHistory",
+              profileId: claimed.profileId,
+              jobId: job._id,
+              ...(claimed.placeholderId !== undefined ? { placeholderId: claimed.placeholderId } : {}),
+              provider: "openai",
+              model: OPENAI_MODEL,
+              full_response: llmResp.raw,
+              patch: patch ?? llmText,
+              merged: false,
+              createdAt: Date.now(),
+            }
+          })) as Id<"llmHistory">;
+
+          await convex.action(api.workerGateway.processJobRequest, {
+            operation: { type: "markJobCompleted", jobId: job._id, historyId }
+          });
+
+          log.info({ jobId: job._id, historyId }, "Job marked completed");
+        } catch (jobErr) {
+          log.error({ err: jobErr, jobId: job._id }, "Error processing job, attempting to mark failed");
+          try {
+            await convex.action(api.workerGateway.processJobRequest, {
+              operation: { type: "markJobFailed", jobId: job._id, error: String(jobErr) }
+            });
+          } catch (markErr) {
+            log.error({ err: markErr }, "Failed to mark job failed");
+          }
+        }
+      }
+    } catch (err) {
+      log.error({ err }, "Worker loop encountered error; sleeping before retry");
+      await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS * 2));
+    }
+  }
+}
+
+if (require.main === module) {
+  workerLoop().catch((err) => {
+    log.fatal({ err }, "Worker crashed");
+    process.exit(1);
+  });
+}
+
+export { workerLoop };

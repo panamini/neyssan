@@ -1,0 +1,727 @@
+worker-1  | INFO:pdf-ingest.worker_entry:Connecting to Redis at redis://redis:6379
+worker-1  | INFO:pdf-ingest.worker_entry:Starting RQ worker (listening on queue: default)
+worker-1  | INFO:rq.worker:Worker rq:worker:cb0546deb48b4a9ca8cd0e2fab2d8747: started, version 1.1.0
+worker-1  | INFO:rq.worker:*** Listening on default...
+worker-1  | INFO:rq.worker:Cleaning registries for queue: default
+worker-1  | INFO:rq.worker:default: worker.llm_refine_profile('9d32a011-5e13-4023-8b5f-18935520421d', correlation_job_id='0f64c60e-f947-41d1-88bd-a604964f11d2') (d6054e0e-69c3-4f62-823f-dac30a2cd792)
+worker-1  | INFO:pdf-ingest.worker:LLM_REFINE_CALLED 9d32a011-5e13-4023-8b5f-18935520421d session_injected False correlation_job_id=True
+worker-1  | INFO:pdf-ingest.worker:WORKER_ENTER 9d32a011-5e13-4023-8b5f-18935520421d loaded_profile True
+worker-1  | INFO:pdf-ingest.worker:Invoking LLM refine: provider=mistral mock=True profile_id=9d32a011-5e13-4023-8b5f-18935520421d
+worker-1  | INFO:pdf-ingest.llm:refine_with_llm: returning mock profile (mock=True)
+worker-1  | INFO:pdf-ingest.worker:LLM_RESP_SNIPPET "{'name': 'Test User', 'email': 'test@example.com', 'summary': 'Test summary', 'skills': ['Python'], 'experience': [], 'rawText': 'raw', 'confidence': 0.9, 'metadata': {'source': 'manual', 'llm': 'mock', 'llmRefinedAt': None}}"
+worker-1  | INFO:pdf-ingest.worker:Updated existing LLMHistory (placeholder or job match) id=0f64c60e-f947-41d1-88bd-a604964f11d2 job_id=0f64c60e-f947-41d1-88bd-a604964f11d2 profile=9d32a011-5e13-4023-8b5f-18935520421d
+worker-1  | INFO:pdf-ingest.convex_persist:Calling Convex action https://neat-starfish-33.convex.site/api/actions/persistProfile (attempt 1/4)
+worker-1  | INFO:pdf-ingest.worker:Convex persist succeeded for profile 9d32a011-5e13-4023-8b5f-18935520421d idempotency=3c28dc09-ceb5-4c15-a3ac-7051697bf844 resp={'status': 'ok', 'result': {'profileId': '9d32a011-5e13-4023-8b5f-18935520421d', 'updatedAt': 1756258753560, 'written': True}}
+worker-1  | INFO:pdf-ingest.worker:WORKER_META_MERGED 9d32a011-5e13-4023-8b5f-18935520421d {'ai_flags': [], 'missing_fields': [], 'inferred_fields': {'name': {'value': 'Unknown', 'method': 'placeholder'}, 'email': {'value': '<missing-1d739a34-2e36-474e-8d82-21ba994d5528@example.invalid>', 'method': 'placeholder'}}, 'source': 'manual', 'llm': 'mock', 'llmRefinedAt': None, 'llmRefined': True, 'llmConfidence': 0.9}
+worker-1  | INFO:pdf-ingest.worker:DEBUG_META_AFTER_COMMIT_FRESH 9d32a011-5e13-4023-8b5f-18935520421d {'llm': 'mock', 'source': 'manual', 'ai_flags': [], 'llmRefined': True, 'llmRefinedAt': None, 'llmConfidence': 0.9, 'missing_fields': [], 'inferred_fields': {'name': {'value': 'Unknown', 'method': 'placeholder'}, 'email': {'value': '<missing-1d739a34-2e36-474e-8d82-21ba994d5528@example.invalid>', 'method': 'placeholder'}}}
+worker-1  | INFO:rq.worker:default: Job OK (d6054e0e-69c3-4f62-823f-dac30a2cd792)
+worker-1  | INFO:rq.worker:Result is kept for 500 seconds
+worker-1  | INFO:rq.worker:default: worker.llm_refine_profile('3c39f287-1ba6-4a08-af48-a0df84a48203', correlation_job_id='85700e73-4d63-4671-87b6-440a163136e9') (ba463930-7dd6-4c34-9fd9-d276b44f5f85)
+worker-1  | INFO:pdf-ingest.worker:LLM_REFINE_CALLED 3c39f287-1ba6-4a08-af48-a0df84a48203 session_injected False correlation_job_id=True
+worker-1  | INFO:pdf-ingest.worker:WORKER_ENTER 3c39f287-1ba6-4a08-af48-a0df84a48203 loaded_profile True
+worker-1  | INFO:pdf-ingest.worker:Invoking LLM refine: provider=mistral mock=True profile_id=3c39f287-1ba6-4a08-af48-a0df84a48203
+worker-1  | INFO:pdf-ingest.llm:refine_with_llm: returning mock profile (mock=True)
+worker-1  | INFO:pdf-ingest.worker:LLM_RESP_SNIPPET "{'name': 'Test User', 'email': 'test@example.com', 'summary': 'Test summary', 'skills': ['Python'], 'experience': [], 'rawText': 'raw', 'confidence': 0.9, 'metadata': {'source': 'manual', 'llm': 'mock', 'llmRefinedAt': None}}"
+worker-1  | INFO:pdf-ingest.worker:Updated existing LLMHistory (placeholder or job match) id=85700e73-4d63-4671-87b6-440a163136e9 job_id=85700e73-4d63-4671-87b6-440a163136e9 profile=3c39f287-1ba6-4a08-af48-a0df84a48203
+worker-1  | INFO:pdf-ingest.convex_persist:Calling Convex action https://neat-starfish-33.convex.site/api/actions/persistProfile (attempt 1/4)
+worker-1  | INFO:pdf-ingest.worker:Convex persist succeeded for profile 3c39f287-1ba6-4a08-af48-a0df84a48203 idempotency=9ecff326-e373-4cda-a1a3-07fa7763c9f9 resp={'status': 'ok', 'result': {'profileId': '3c39f287-1ba6-4a08-af48-a0df84a48203', 'updatedAt': 1756258754189, 'written': True}}
+worker-1  | INFO:pdf-ingest.worker:WORKER_META_MERGED 3c39f287-1ba6-4a08-af48-a0df84a48203 {'ai_flags': [], 'missing_fields': [], 'inferred_fields': {'name': {'value': 'Unknown', 'method': 'placeholder'}}, 'source': 'manual', 'llm': 'mock', 'llmRefinedAt': None, 'llmRefined': True, 'llmConfidence': 0.9}
+worker-1  | INFO:pdf-ingest.worker:DEBUG_META_AFTER_COMMIT_FRESH 3c39f287-1ba6-4a08-af48-a0df84a48203 {'llm': 'mock', 'source': 'manual', 'ai_flags': [], 'llmRefined': True, 'llmRefinedAt': None, 'llmConfidence': 0.9, 'missing_fields': [], 'inferred_fields': {'name': {'value': 'Unknown', 'method': 'placeholder'}}}
+worker-1  | INFO:rq.worker:default: Job OK (ba463930-7dd6-4c34-9fd9-d276b44f5f85)
+worker-1  | INFO:rq.worker:Result is kept for 500 seconds
+worker-1  | INFO:rq.worker:default: worker.llm_refine_profile('9989be72-5056-4018-994f-acee19b66c46', correlation_job_id='0d2f9106-c29c-447d-8602-ac73c25f6403') (9a3deab5-3f5a-4430-8fb6-251c48495cd5)
+worker-1  | INFO:pdf-ingest.worker:LLM_REFINE_CALLED 9989be72-5056-4018-994f-acee19b66c46 session_injected False correlation_job_id=True
+worker-1  | INFO:pdf-ingest.worker:WORKER_ENTER 9989be72-5056-4018-994f-acee19b66c46 loaded_profile True
+worker-1  | INFO:pdf-ingest.worker:Invoking LLM refine: provider=mistral mock=True profile_id=9989be72-5056-4018-994f-acee19b66c46
+worker-1  | INFO:pdf-ingest.llm:refine_with_llm: returning mock profile (mock=True)
+worker-1  | INFO:pdf-ingest.worker:LLM_RESP_SNIPPET "{'name': 'Test User', 'email': 'test@example.com', 'summary': 'Test summary', 'skills': ['Python'], 'experience': [], 'rawText': 'raw', 'confidence': 0.9, 'metadata': {'source': 'manual', 'llm': 'mock', 'llmRefinedAt': None}}"
+worker-1  | INFO:pdf-ingest.worker:Updated existing LLMHistory (placeholder or job match) id=0d2f9106-c29c-447d-8602-ac73c25f6403 job_id=0d2f9106-c29c-447d-8602-ac73c25f6403 profile=9989be72-5056-4018-994f-acee19b66c46
+worker-1  | INFO:pdf-ingest.convex_persist:Calling Convex action https://neat-starfish-33.convex.site/api/actions/persistProfile (attempt 1/4)
+worker-1  | INFO:pdf-ingest.worker:Convex persist succeeded for profile 9989be72-5056-4018-994f-acee19b66c46 idempotency=9c0f5483-89ea-4326-acb3-aa4358d27ca8 resp={'status': 'ok', 'result': {'profileId': '9989be72-5056-4018-994f-acee19b66c46', 'updatedAt': 1756258758537, 'written': True}}
+worker-1  | INFO:pdf-ingest.worker:WORKER_META_MERGED 9989be72-5056-4018-994f-acee19b66c46 {'ai_flags': [], 'missing_fields': [], 'inferred_fields': {'email': {'value': '<missing-9f25f41b-c336-4fd1-9909-283baaf425b6@example.invalid>', 'method': 'placeholder'}}, 'source': 'manual', 'llm': 'mock', 'llmRefinedAt': None, 'llmRefined': True, 'llmConfidence': 0.9}
+worker-1  | INFO:pdf-ingest.worker:DEBUG_META_AFTER_COMMIT_FRESH 9989be72-5056-4018-994f-acee19b66c46 {'llm': 'mock', 'source': 'manual', 'ai_flags': [], 'llmRefined': True, 'llmRefinedAt': None, 'llmConfidence': 0.9, 'missing_fields': [], 'inferred_fields': {'email': {'value': '<missing-9f25f41b-c336-4fd1-9909-283baaf425b6@example.invalid>', 'method': 'placeholder'}}}
+worker-1  | INFO:rq.worker:default: Job OK (9a3deab5-3f5a-4430-8fb6-251c48495cd5)
+worker-1  | INFO:rq.worker:Result is kept for 500 seconds
+worker-1  | INFO:rq.worker:default: worker.llm_refine_profile('f88192e3-d6d3-4615-9b00-7e4660bbf641', correlation_job_id='53711907-24ab-47e1-9f63-889788c6f9f6') (5a22a931-4909-432c-aa0e-c7b337743ae4)
+worker-1  | INFO:pdf-ingest.worker:LLM_REFINE_CALLED f88192e3-d6d3-4615-9b00-7e4660bbf641 session_injected False correlation_job_id=True
+worker-1  | INFO:pdf-ingest.worker:WORKER_ENTER f88192e3-d6d3-4615-9b00-7e4660bbf641 loaded_profile True
+worker-1  | INFO:pdf-ingest.worker:Invoking LLM refine: provider=mistral mock=True profile_id=f88192e3-d6d3-4615-9b00-7e4660bbf641
+worker-1  | INFO:pdf-ingest.llm:refine_with_llm: returning mock profile (mock=True)
+worker-1  | INFO:pdf-ingest.worker:LLM_RESP_SNIPPET "{'name': 'Test User', 'email': 'test@example.com', 'summary': 'Test summary', 'skills': ['Python'], 'experience': [], 'rawText': 'raw', 'confidence': 0.9, 'metadata': {'source': 'manual', 'llm': 'mock', 'llmRefinedAt': None}}"
+worker-1  | INFO:pdf-ingest.worker:Updated existing LLMHistory (placeholder or job match) id=53711907-24ab-47e1-9f63-889788c6f9f6 job_id=53711907-24ab-47e1-9f63-889788c6f9f6 profile=f88192e3-d6d3-4615-9b00-7e4660bbf641
+worker-1  | INFO:pdf-ingest.convex_persist:Calling Convex action https://neat-starfish-33.convex.site/api/actions/persistProfile (attempt 1/4)
+worker-1  | INFO:pdf-ingest.worker:Convex persist succeeded for profile f88192e3-d6d3-4615-9b00-7e4660bbf641 idempotency=8e6d5a5c-0314-41e3-a3df-d6ac0fb1d97d resp={'status': 'ok', 'result': {'profileId': 'f88192e3-d6d3-4615-9b00-7e4660bbf641', 'updatedAt': 1756258766132, 'written': True}}
+worker-1  | INFO:pdf-ingest.worker:WORKER_META_MERGED f88192e3-d6d3-4615-9b00-7e4660bbf641 {'ai_flags': [], 'missing_fields': [], 'inferred_fields': {'name': {'value': 'Unknown', 'method': 'placeholder'}, 'email': {'value': '<missing-f31b3572-b68f-42b3-99a3-bcb727c06bca@example.invalid>', 'method': 'placeholder'}}, 'source': 'manual', 'llm': 'mock', 'llmRefinedAt': None, 'llmRefined': True, 'llmConfidence': 0.9}
+worker-1  | INFO:pdf-ingest.worker:DEBUG_META_AFTER_COMMIT_FRESH f88192e3-d6d3-4615-9b00-7e4660bbf641 {'llm': 'mock', 'source': 'manual', 'ai_flags': [], 'llmRefined': True, 'llmRefinedAt': None, 'llmConfidence': 0.9, 'missing_fields': [], 'inferred_fields': {'name': {'value': 'Unknown', 'method': 'placeholder'}, 'email': {'value': '<missing-f31b3572-b68f-42b3-99a3-bcb727c06bca@example.invalid>', 'method': 'placeholder'}}}
+worker-1  | INFO:rq.worker:default: Job OK (5a22a931-4909-432c-aa0e-c7b337743ae4)
+worker-1  | INFO:rq.worker:Result is kept for 500 seconds
+worker-1  | INFO:rq.worker:default: worker.llm_refine_profile('848e0402-f1e1-46dc-aa18-e715f218b22e', correlation_job_id='ee947499-cd76-497b-ae46-50ada979ad11') (ce75ce89-2dee-4e26-9281-6166572a805c)
+worker-1  | INFO:pdf-ingest.worker:LLM_REFINE_CALLED 848e0402-f1e1-46dc-aa18-e715f218b22e session_injected False correlation_job_id=True
+worker-1  | INFO:pdf-ingest.worker:WORKER_ENTER 848e0402-f1e1-46dc-aa18-e715f218b22e loaded_profile True
+web-1     | DEBUG:pdf-ingest:Debug file handler attached to pdf-ingest logger: /tmp/pdf_ingest_debug.log
+web-1     | INFO:     Started server process [1]
+web-1     | INFO:     Waiting for application startup.
+web-1     | INFO:     Application startup complete.
+web-1     | INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+web-1     | INFO:pdf-ingest:Request: GET http://127.0.0.1:8000/api/v1/health Origin: None
+web-1     | INFO:     172.18.0.1:59320 - "GET /api/v1/health HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/parse-now Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:63294 - "POST /api/v1/parse-now HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: OPTIONS http://localhost:8000/api/v1/confirm-save Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:63294 - "OPTIONS /api/v1/confirm-save HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/confirm-save Origin: http://localhost:5174
+web-1     | INFO:pdf-ingest:confirm-save called email=email@email.com
+web-1     | INFO:pdf-ingest:confirm-save called email=email@email.com
+web-1     | INFO:pdf-ingest:confirm-save profile_payload keys: ['name', 'email', 'summary', 'skills', 'experience', 'education', 'achievements', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:     172.18.0.1:63294 - "POST /api/v1/confirm-save HTTP/1.1" 500 Internal Server Error
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/confirm-save Origin: http://localhost:5174
+web-1     | INFO:pdf-ingest:confirm-save called email=None
+web-1     | INFO:pdf-ingest:confirm-save called email=None
+web-1     | INFO:pdf-ingest:confirm-save profile_payload keys: ['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:pdf-ingest:AI suggestions added: category=Unknown, flags=[]
+web-1     | INFO:pdf-ingest:confirm-save payload missing required fields after inference=['email', 'name'] payload_keys=['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence']
+web-1     | DEBUG:pdf-ingest:confirm-save entering transaction for email=<missing-1d739a34-2e36-474e-8d82-21ba994d5528@example.invalid> payload_keys=['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:pdf-ingest:Attempting SELECT FOR UPDATE for email=<missing-1d739a34-2e36-474e-8d82-21ba994d5528@example.invalid>
+web-1     | INFO:pdf-ingest:SELECT FOR UPDATE result for email=<missing-1d739a34-2e36-474e-8d82-21ba994d5528@example.invalid> -> existing_id=None
+web-1     | INFO:pdf-ingest:Creating new profile for email=<missing-1d739a34-2e36-474e-8d82-21ba994d5528@example.invalid>
+web-1     | INFO:pdf-ingest:Flushing new profile for email=<missing-1d739a34-2e36-474e-8d82-21ba994d5528@example.invalid>
+web-1     | INFO:pdf-ingest:Flush complete for new profile temporary id=9d32a011-5e13-4023-8b5f-18935520421d
+web-1     | INFO:pdf-ingest:Refreshing profile object after commit id=9d32a011-5e13-4023-8b5f-18935520421d (obj={'_sa_instance_state': <sqlalchemy.orm.state.InstanceState object at 0xffff8c549c70>, 'name': 'Unknown', 'email': '<missing-1d739a34-2e36-474e-8d82-21ba994d5528@example.invalid>', 'summary': 'nb', 'skills': [], 'experience': None, 'raw_text': None, 'confidence': 0.15, 'meta': {'ai_flags': [], 'missing_fields': [], 'inferred_fields': {'email': {'value': '<missing-1d739a34-2e36-474e-8d82-21ba994d5528@example.invalid>', 'method': 'placeholder'}, 'name': {'value': 'Unknown', 'method': 'placeholder'}}}, 'id': UUID('9d32a011-5e13-4023-8b5f-18935520421d'), 'version': 1, 'created_at': datetime.datetime(2025, 8, 27, 1, 39, 12, 824534, tzinfo=datetime.timezone.utc), 'updated_at': datetime.datetime(2025, 8, 27, 1, 39, 12, 824534, tzinfo=datetime.timezone.utc)})
+web-1     | INFO:pdf-ingest:Refresh complete for profile id=9d32a011-5e13-4023-8b5f-18935520421d created_at=2025-08-27 01:39:12.824534+00:00 updated_at=2025-08-27 01:39:12.824534+00:00
+web-1     | INFO:pdf-ingest:Profile saved successfully: id=9d32a011-5e13-4023-8b5f-18935520421d created_at=2025-08-27 01:39:12.824534+00:00 updated_at=2025-08-27 01:39:12.824534+00:00
+web-1     | INFO:pdf-ingest:Confidence 0.15 < threshold 0.6, enqueuing LLM refine for profile 9d32a011-5e13-4023-8b5f-18935520421d
+web-1     | INFO:pdf-ingest.worker:Created placeholder LLMHistory (pre-enqueue) id=0f64c60e-f947-41d1-88bd-a604964f11d2 for profile 9d32a011-5e13-4023-8b5f-18935520421d
+web-1     | INFO:pdf-ingest.worker:Enqueued llm_refine_profile: job_id=d6054e0e-69c3-4f62-823f-dac30a2cd792 profile_id=9d32a011-5e13-4023-8b5f-18935520421d placeholder_id=0f64c60e-f947-41d1-88bd-a604964f11d2
+web-1     | INFO:pdf-ingest:Enqueued LLM refine: job_id=d6054e0e-69c3-4f62-823f-dac30a2cd792 placeholder_id=0f64c60e-f947-41d1-88bd-a604964f11d2 profile=9d32a011-5e13-4023-8b5f-18935520421d
+web-1     | INFO:pdf-ingest:confirm-save returning: {'id': '9d32a011-5e13-4023-8b5f-18935520421d', 'created_at': '2025-08-27T01:39:12.824534+00:00', 'updated_at': '2025-08-27T01:39:12.824534+00:00', 'status': 'saved', 'llm_job_id': 'd6054e0e-69c3-4f62-823f-dac30a2cd792', 'placeholderId': '0f64c60e-f947-41d1-88bd-a604964f11d2'}
+web-1     | INFO:     172.18.0.1:56940 - "POST /api/v1/confirm-save HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/0f64c60e-f947-41d1-88bd-a604964f11d2 Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:56940 - "GET /api/v1/llm-history/0f64c60e-f947-41d1-88bd-a604964f11d2 HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/confirm-save Origin: http://localhost:5174
+web-1     | INFO:pdf-ingest:confirm-save called email=bvn
+web-1     | INFO:pdf-ingest:confirm-save called email=bvn
+web-1     | INFO:pdf-ingest:confirm-save profile_payload keys: ['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:pdf-ingest:AI suggestions added: category=Unknown, flags=[]
+web-1     | INFO:pdf-ingest:confirm-save payload missing required fields after inference=['name'] payload_keys=['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence']
+web-1     | DEBUG:pdf-ingest:confirm-save entering transaction for email=bvn payload_keys=['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:pdf-ingest:Attempting SELECT FOR UPDATE for email=bvn
+web-1     | INFO:pdf-ingest:SELECT FOR UPDATE result for email=bvn -> existing_id=None
+web-1     | INFO:pdf-ingest:Creating new profile for email=bvn
+web-1     | INFO:pdf-ingest:Flushing new profile for email=bvn
+web-1     | INFO:pdf-ingest:Flush complete for new profile temporary id=3c39f287-1ba6-4a08-af48-a0df84a48203
+worker-1  | INFO:pdf-ingest.worker:Invoking LLM refine: provider=mistral mock=True profile_id=848e0402-f1e1-46dc-aa18-e715f218b22e
+worker-1  | INFO:pdf-ingest.llm:refine_with_llm: returning mock profile (mock=True)
+worker-1  | INFO:pdf-ingest.worker:LLM_RESP_SNIPPET "{'name': 'Test User', 'email': 'test@example.com', 'summary': 'Test summary', 'skills': ['Python'], 'experience': [], 'rawText': 'raw', 'confidence': 0.9, 'metadata': {'source': 'manual', 'llm': 'mock', 'llmRefinedAt': None}}"
+worker-1  | INFO:pdf-ingest.worker:Updated existing LLMHistory (placeholder or job match) id=ee947499-cd76-497b-ae46-50ada979ad11 job_id=ee947499-cd76-497b-ae46-50ada979ad11 profile=848e0402-f1e1-46dc-aa18-e715f218b22e
+worker-1  | INFO:pdf-ingest.convex_persist:Calling Convex action https://neat-starfish-33.convex.site/api/actions/persistProfile (attempt 1/4)
+worker-1  | INFO:pdf-ingest.worker:Convex persist succeeded for profile 848e0402-f1e1-46dc-aa18-e715f218b22e idempotency=1ba9a344-d339-4ef2-b181-25e6f35c26fd resp={'status': 'ok', 'result': {'profileId': '848e0402-f1e1-46dc-aa18-e715f218b22e', 'updatedAt': 1756258770124, 'written': True}}
+worker-1  | INFO:pdf-ingest.worker:WORKER_META_MERGED 848e0402-f1e1-46dc-aa18-e715f218b22e {'ai_flags': [], 'missing_fields': [], 'inferred_fields': {'email': {'value': '<missing-e1161646-b3b2-4f64-8a7b-8ac4b8e2c943@example.invalid>', 'method': 'placeholder'}}, 'source': 'manual', 'llm': 'mock', 'llmRefinedAt': None, 'llmRefined': True, 'llmConfidence': 0.9}
+worker-1  | INFO:pdf-ingest.worker:DEBUG_META_AFTER_COMMIT_FRESH 848e0402-f1e1-46dc-aa18-e715f218b22e {'llm': 'mock', 'source': 'manual', 'ai_flags': [], 'llmRefined': True, 'llmRefinedAt': None, 'llmConfidence': 0.9, 'missing_fields': [], 'inferred_fields': {'email': {'value': '<missing-e1161646-b3b2-4f64-8a7b-8ac4b8e2c943@example.invalid>', 'method': 'placeholder'}}}
+worker-1  | INFO:rq.worker:default: Job OK (ce75ce89-2dee-4e26-9281-6166572a805c)
+worker-1  | INFO:rq.worker:Result is kept for 500 seconds
+worker-1  | INFO:rq.worker:default: worker.llm_refine_profile('ff2ea7fc-62ba-4ca4-873a-97195251d613', correlation_job_id='1fc1ddad-9de3-4edc-9efc-5c07aedbd820') (ce4591b4-378d-477d-8079-62f555a63f05)
+worker-1  | INFO:pdf-ingest.worker:LLM_REFINE_CALLED ff2ea7fc-62ba-4ca4-873a-97195251d613 session_injected False correlation_job_id=True
+worker-1  | INFO:pdf-ingest.worker:WORKER_ENTER ff2ea7fc-62ba-4ca4-873a-97195251d613 loaded_profile True
+worker-1  | INFO:pdf-ingest.worker:Invoking LLM refine: provider=mistral mock=True profile_id=ff2ea7fc-62ba-4ca4-873a-97195251d613
+worker-1  | INFO:pdf-ingest.llm:refine_with_llm: returning mock profile (mock=True)
+worker-1  | INFO:pdf-ingest.worker:LLM_RESP_SNIPPET "{'name': 'Test User', 'email': 'test@example.com', 'summary': 'Test summary', 'skills': ['Python'], 'experience': [], 'rawText': 'raw', 'confidence': 0.9, 'metadata': {'source': 'manual', 'llm': 'mock', 'llmRefinedAt': None}}"
+worker-1  | INFO:pdf-ingest.worker:Updated existing LLMHistory (placeholder or job match) id=1fc1ddad-9de3-4edc-9efc-5c07aedbd820 job_id=1fc1ddad-9de3-4edc-9efc-5c07aedbd820 profile=ff2ea7fc-62ba-4ca4-873a-97195251d613
+worker-1  | INFO:pdf-ingest.convex_persist:Calling Convex action https://neat-starfish-33.convex.site/api/actions/persistProfile (attempt 1/4)
+worker-1  | INFO:pdf-ingest.worker:Convex persist succeeded for profile ff2ea7fc-62ba-4ca4-873a-97195251d613 idempotency=2774a5a6-4d54-44e6-aada-0fb1b92f2c2d resp={'status': 'ok', 'result': {'profileId': 'ff2ea7fc-62ba-4ca4-873a-97195251d613', 'updatedAt': 1756258785576, 'written': True}}
+worker-1  | INFO:pdf-ingest.worker:WORKER_META_MERGED ff2ea7fc-62ba-4ca4-873a-97195251d613 {'ai_flags': [], 'missing_fields': [], 'inferred_fields': {'email': {'value': '<missing-d0c0f026-b161-4cf7-a05f-b57b5b1c5d2e@example.invalid>', 'method': 'placeholder'}}, 'source': 'manual', 'llm': 'mock', 'llmRefinedAt': None, 'llmRefined': True, 'llmConfidence': 0.9}
+worker-1  | INFO:pdf-ingest.worker:DEBUG_META_AFTER_COMMIT_FRESH ff2ea7fc-62ba-4ca4-873a-97195251d613 {'llm': 'mock', 'source': 'manual', 'ai_flags': [], 'llmRefined': True, 'llmRefinedAt': None, 'llmConfidence': 0.9, 'missing_fields': [], 'inferred_fields': {'email': {'value': '<missing-d0c0f026-b161-4cf7-a05f-b57b5b1c5d2e@example.invalid>', 'method': 'placeholder'}}}
+worker-1  | INFO:rq.worker:default: Job OK (ce4591b4-378d-477d-8079-62f555a63f05)
+worker-1  | INFO:rq.worker:Result is kept for 500 seconds
+worker-1  | INFO:rq.worker:default: worker.llm_refine_profile('1bc1a852-f50a-40f7-ab59-0559af42c715', correlation_job_id='956cc195-4ac5-4240-bba0-83b9e52a0620') (b2cf50d0-a43e-49d5-a719-7a1cf0ed3bb9)
+worker-1  | INFO:pdf-ingest.worker:LLM_REFINE_CALLED 1bc1a852-f50a-40f7-ab59-0559af42c715 session_injected False correlation_job_id=True
+worker-1  | INFO:pdf-ingest.worker:WORKER_ENTER 1bc1a852-f50a-40f7-ab59-0559af42c715 loaded_profile True
+worker-1  | INFO:pdf-ingest.worker:Invoking LLM refine: provider=mistral mock=True profile_id=1bc1a852-f50a-40f7-ab59-0559af42c715
+worker-1  | INFO:pdf-ingest.llm:refine_with_llm: returning mock profile (mock=True)
+worker-1  | INFO:pdf-ingest.worker:LLM_RESP_SNIPPET "{'name': 'Test User', 'email': 'test@example.com', 'summary': 'Test summary', 'skills': ['Python'], 'experience': [], 'rawText': 'raw', 'confidence': 0.9, 'metadata': {'source': 'manual', 'llm': 'mock', 'llmRefinedAt': None}}"
+worker-1  | INFO:pdf-ingest.worker:Updated existing LLMHistory (placeholder or job match) id=956cc195-4ac5-4240-bba0-83b9e52a0620 job_id=956cc195-4ac5-4240-bba0-83b9e52a0620 profile=1bc1a852-f50a-40f7-ab59-0559af42c715
+worker-1  | INFO:pdf-ingest.convex_persist:Calling Convex action https://neat-starfish-33.convex.site/api/actions/persistProfile (attempt 1/4)
+worker-1  | INFO:pdf-ingest.worker:Convex persist succeeded for profile 1bc1a852-f50a-40f7-ab59-0559af42c715 idempotency=21c41839-f05d-42fd-b613-cdbdd0504a78 resp={'status': 'ok', 'result': {'profileId': '1bc1a852-f50a-40f7-ab59-0559af42c715', 'updatedAt': 1756258794725, 'written': True}}
+worker-1  | INFO:pdf-ingest.worker:WORKER_META_MERGED 1bc1a852-f50a-40f7-ab59-0559af42c715 {'ai_flags': [], 'missing_fields': [], 'inferred_fields': {'email': {'value': '<missing-7ec794d3-1f93-403f-80bb-369b7933ba7c@example.invalid>', 'method': 'placeholder'}}, 'source': 'manual', 'llm': 'mock', 'llmRefinedAt': None, 'llmRefined': True, 'llmConfidence': 0.9}
+worker-1  | INFO:pdf-ingest.worker:DEBUG_META_AFTER_COMMIT_FRESH 1bc1a852-f50a-40f7-ab59-0559af42c715 {'llm': 'mock', 'source': 'manual', 'ai_flags': [], 'llmRefined': True, 'llmRefinedAt': None, 'llmConfidence': 0.9, 'missing_fields': [], 'inferred_fields': {'email': {'value': '<missing-7ec794d3-1f93-403f-80bb-369b7933ba7c@example.invalid>', 'method': 'placeholder'}}}
+worker-1  | INFO:rq.worker:default: Job OK (b2cf50d0-a43e-49d5-a719-7a1cf0ed3bb9)
+worker-1  | INFO:rq.worker:Result is kept for 500 seconds
+worker-1  | INFO:rq.worker:default: worker.llm_refine_profile('acd4665a-3103-44cf-a002-47527282eb91', correlation_job_id='cfbc9be0-602b-4fc0-9c77-483582ec33bf') (165d20a5-6830-4b6d-b8f9-84abe050da7b)
+worker-1  | INFO:pdf-ingest.worker:LLM_REFINE_CALLED acd4665a-3103-44cf-a002-47527282eb91 session_injected False correlation_job_id=True
+worker-1  | INFO:pdf-ingest.worker:WORKER_ENTER acd4665a-3103-44cf-a002-47527282eb91 loaded_profile True
+worker-1  | INFO:pdf-ingest.worker:Invoking LLM refine: provider=mistral mock=True profile_id=acd4665a-3103-44cf-a002-47527282eb91
+worker-1  | INFO:pdf-ingest.llm:refine_with_llm: returning mock profile (mock=True)
+worker-1  | INFO:pdf-ingest.worker:LLM_RESP_SNIPPET "{'name': 'Test User', 'email': 'test@example.com', 'summary': 'Test summary', 'skills': ['Python'], 'experience': [], 'rawText': 'raw', 'confidence': 0.9, 'metadata': {'source': 'manual', 'llm': 'mock', 'llmRefinedAt': None}}"
+worker-1  | INFO:pdf-ingest.worker:Updated existing LLMHistory (placeholder or job match) id=cfbc9be0-602b-4fc0-9c77-483582ec33bf job_id=cfbc9be0-602b-4fc0-9c77-483582ec33bf profile=acd4665a-3103-44cf-a002-47527282eb91
+worker-1  | INFO:pdf-ingest.convex_persist:Calling Convex action https://neat-starfish-33.convex.site/api/actions/persistProfile (attempt 1/4)
+worker-1  | INFO:pdf-ingest.worker:Convex persist succeeded for profile acd4665a-3103-44cf-a002-47527282eb91 idempotency=5ee5ceda-d9f6-4455-b224-8362c6aa2dca resp={'status': 'ok', 'result': {'profileId': 'acd4665a-3103-44cf-a002-47527282eb91', 'updatedAt': 1756258795334, 'written': True}}
+worker-1  | INFO:pdf-ingest.worker:WORKER_META_MERGED acd4665a-3103-44cf-a002-47527282eb91 {'ai_flags': [], 'missing_fields': [], 'inferred_fields': {'name': {'value': 'Unknown', 'method': 'placeholder'}}, 'source': 'manual', 'llm': 'mock', 'llmRefinedAt': None, 'llmRefined': True, 'llmConfidence': 0.9}
+worker-1  | INFO:pdf-ingest.worker:DEBUG_META_AFTER_COMMIT_FRESH acd4665a-3103-44cf-a002-47527282eb91 {'llm': 'mock', 'source': 'manual', 'ai_flags': [], 'llmRefined': True, 'llmRefinedAt': None, 'llmConfidence': 0.9, 'missing_fields': [], 'inferred_fields': {'name': {'value': 'Unknown', 'method': 'placeholder'}}}
+worker-1  | INFO:rq.worker:default: Job OK (165d20a5-6830-4b6d-b8f9-84abe050da7b)
+worker-1  | INFO:rq.worker:Result is kept for 500 seconds
+worker-1  | INFO:rq.worker:default: worker.llm_refine_profile('02f07c70-210e-4000-a864-1300ed051aa6', correlation_job_id='2e82c1de-8e4f-49e7-a53d-00f5271fb43a') (0ab6fa00-6ee8-482a-ba59-e4d71b8bd8a5)
+worker-1  | INFO:pdf-ingest.worker:LLM_REFINE_CALLED 02f07c70-210e-4000-a864-1300ed051aa6 session_injected False correlation_job_id=True
+worker-1  | INFO:pdf-ingest.worker:WORKER_ENTER 02f07c70-210e-4000-a864-1300ed051aa6 loaded_profile True
+worker-1  | INFO:pdf-ingest.worker:Invoking LLM refine: provider=mistral mock=True profile_id=02f07c70-210e-4000-a864-1300ed051aa6
+worker-1  | INFO:pdf-ingest.llm:refine_with_llm: returning mock profile (mock=True)
+worker-1  | INFO:pdf-ingest.worker:LLM_RESP_SNIPPET "{'name': 'Test User', 'email': 'test@example.com', 'summary': 'Test summary', 'skills': ['Python'], 'experience': [], 'rawText': 'raw', 'confidence': 0.9, 'metadata': {'source': 'manual', 'llm': 'mock', 'llmRefinedAt': None}}"
+worker-1  | INFO:pdf-ingest.worker:Updated existing LLMHistory (placeholder or job match) id=2e82c1de-8e4f-49e7-a53d-00f5271fb43a job_id=2e82c1de-8e4f-49e7-a53d-00f5271fb43a profile=02f07c70-210e-4000-a864-1300ed051aa6
+worker-1  | INFO:pdf-ingest.convex_persist:Calling Convex action https://neat-starfish-33.convex.site/api/actions/persistProfile (attempt 1/4)
+worker-1  | INFO:pdf-ingest.worker:Convex persist succeeded for profile 02f07c70-210e-4000-a864-1300ed051aa6 idempotency=5bd385a2-7b78-4d0b-b411-187cdbb7de67 resp={'status': 'ok', 'result': {'profileId': '02f07c70-210e-4000-a864-1300ed051aa6', 'updatedAt': 1756258826578, 'written': True}}
+worker-1  | INFO:pdf-ingest.worker:WORKER_META_MERGED 02f07c70-210e-4000-a864-1300ed051aa6 {'ai_flags': [], 'missing_fields': [], 'inferred_fields': {'name': {'value': 'Unknown', 'method': 'placeholder'}, 'email': {'value': '<missing-f8c16650-ecfc-4790-b4c7-b92ad1cb06ca@example.invalid>', 'method': 'placeholder'}}, 'source': 'manual', 'llm': 'mock', 'llmRefinedAt': None, 'llmRefined': True, 'llmConfidence': 0.9}
+worker-1  | INFO:pdf-ingest.worker:DEBUG_META_AFTER_COMMIT_FRESH 02f07c70-210e-4000-a864-1300ed051aa6 {'llm': 'mock', 'source': 'manual', 'ai_flags': [], 'llmRefined': True, 'llmRefinedAt': None, 'llmConfidence': 0.9, 'missing_fields': [], 'inferred_fields': {'name': {'value': 'Unknown', 'method': 'placeholder'}, 'email': {'value': '<missing-f8c16650-ecfc-4790-b4c7-b92ad1cb06ca@example.invalid>', 'method': 'placeholder'}}}
+worker-1  | INFO:rq.worker:default: Job OK (0ab6fa00-6ee8-482a-ba59-e4d71b8bd8a5)
+worker-1  | INFO:rq.worker:Result is kept for 500 seconds
+worker-1  | INFO:rq.worker:default: worker.llm_refine_profile('d97be44c-d511-4131-affa-593c84d14a18', correlation_job_id='953fc7aa-161a-4fff-b97b-b052cd81579e') (57cab5c2-49e0-46ef-ad21-edd19307b3f6)
+worker-1  | INFO:pdf-ingest.worker:LLM_REFINE_CALLED d97be44c-d511-4131-affa-593c84d14a18 session_injected False correlation_job_id=True
+worker-1  | INFO:pdf-ingest.worker:WORKER_ENTER d97be44c-d511-4131-affa-593c84d14a18 loaded_profile True
+worker-1  | INFO:pdf-ingest.worker:Invoking LLM refine: provider=mistral mock=True profile_id=d97be44c-d511-4131-affa-593c84d14a18
+worker-1  | INFO:pdf-ingest.llm:refine_with_llm: returning mock profile (mock=True)
+worker-1  | INFO:pdf-ingest.worker:LLM_RESP_SNIPPET "{'name': 'Test User', 'email': 'test@example.com', 'summary': 'Test summary', 'skills': ['Python'], 'experience': [], 'rawText': 'raw', 'confidence': 0.9, 'metadata': {'source': 'manual', 'llm': 'mock', 'llmRefinedAt': None}}"
+worker-1  | INFO:pdf-ingest.worker:Updated existing LLMHistory (placeholder or job match) id=953fc7aa-161a-4fff-b97b-b052cd81579e job_id=953fc7aa-161a-4fff-b97b-b052cd81579e profile=d97be44c-d511-4131-affa-593c84d14a18
+worker-1  | INFO:pdf-ingest.convex_persist:Calling Convex action https://neat-starfish-33.convex.site/api/actions/persistProfile (attempt 1/4)
+worker-1  | INFO:pdf-ingest.worker:Convex persist succeeded for profile d97be44c-d511-4131-affa-593c84d14a18 idempotency=e7acd557-4061-45a1-816e-9975489a4075 resp={'status': 'ok', 'result': {'profileId': 'd97be44c-d511-4131-affa-593c84d14a18', 'updatedAt': 1756258831325, 'written': True}}
+worker-1  | INFO:pdf-ingest.worker:WORKER_META_MERGED d97be44c-d511-4131-affa-593c84d14a18 {'ai_flags': [], 'missing_fields': [], 'inferred_fields': {'name': {'value': 'Unknown', 'method': 'placeholder'}, 'email': {'value': '<missing-ecb19394-00b0-4c22-abff-c367e17b77a6@example.invalid>', 'method': 'placeholder'}}, 'source': 'manual', 'llm': 'mock', 'llmRefinedAt': None, 'llmRefined': True, 'llmConfidence': 0.9}
+worker-1  | INFO:pdf-ingest.worker:DEBUG_META_AFTER_COMMIT_FRESH d97be44c-d511-4131-affa-593c84d14a18 {'llm': 'mock', 'source': 'manual', 'ai_flags': [], 'llmRefined': True, 'llmRefinedAt': None, 'llmConfidence': 0.9, 'missing_fields': [], 'inferred_fields': {'name': {'value': 'Unknown', 'method': 'placeholder'}, 'email': {'value': '<missing-ecb19394-00b0-4c22-abff-c367e17b77a6@example.invalid>', 'method': 'placeholder'}}}
+worker-1  | INFO:rq.worker:default: Job OK (57cab5c2-49e0-46ef-ad21-edd19307b3f6)
+worker-1  | INFO:rq.worker:Result is kept for 500 seconds
+worker-1  | INFO:rq.worker:default: worker.llm_refine_profile('d2d7314b-b365-4b08-84de-9e6674ec3276', correlation_job_id='3ac052e1-dfa8-4003-9ea9-3b3fb99f097c') (623148b0-43f9-4219-9e28-6b5e9f81de14)
+worker-1  | INFO:pdf-ingest.worker:LLM_REFINE_CALLED d2d7314b-b365-4b08-84de-9e6674ec3276 session_injected False correlation_job_id=True
+worker-1  | INFO:pdf-ingest.worker:WORKER_ENTER d2d7314b-b365-4b08-84de-9e6674ec3276 loaded_profile True
+worker-1  | INFO:pdf-ingest.worker:Invoking LLM refine: provider=mistral mock=True profile_id=d2d7314b-b365-4b08-84de-9e6674ec3276
+worker-1  | INFO:pdf-ingest.llm:refine_with_llm: returning mock profile (mock=True)
+worker-1  | INFO:pdf-ingest.worker:LLM_RESP_SNIPPET "{'name': 'Test User', 'email': 'test@example.com', 'summary': 'Test summary', 'skills': ['Python'], 'experience': [], 'rawText': 'raw', 'confidence': 0.9, 'metadata': {'source': 'manual', 'llm': 'mock', 'llmRefinedAt': None}}"
+worker-1  | INFO:pdf-ingest.worker:Updated existing LLMHistory (placeholder or job match) id=3ac052e1-dfa8-4003-9ea9-3b3fb99f097c job_id=3ac052e1-dfa8-4003-9ea9-3b3fb99f097c profile=d2d7314b-b365-4b08-84de-9e6674ec3276
+worker-1  | INFO:pdf-ingest.convex_persist:Calling Convex action https://neat-starfish-33.convex.site/api/actions/persistProfile (attempt 1/4)
+worker-1  | INFO:pdf-ingest.worker:Convex persist succeeded for profile d2d7314b-b365-4b08-84de-9e6674ec3276 idempotency=0f795add-c31a-480c-b4d3-53f44af1f302 resp={'status': 'ok', 'result': {'profileId': 'd2d7314b-b365-4b08-84de-9e6674ec3276', 'updatedAt': 1756258837134, 'written': True}}
+worker-1  | INFO:pdf-ingest.worker:WORKER_META_MERGED d2d7314b-b365-4b08-84de-9e6674ec3276 {'ai_flags': [], 'missing_fields': [], 'inferred_fields': {'name': {'value': 'Unknown', 'method': 'placeholder'}, 'email': {'value': '<missing-3a04c5bd-812c-42a2-a7f8-0304c8d90d3e@example.invalid>', 'method': 'placeholder'}}, 'source': 'manual', 'llm': 'mock', 'llmRefinedAt': None, 'llmRefined': True, 'llmConfidence': 0.9}
+worker-1  | INFO:pdf-ingest.worker:DEBUG_META_AFTER_COMMIT_FRESH d2d7314b-b365-4b08-84de-9e6674ec3276 {'llm': 'mock', 'source': 'manual', 'ai_flags': [], 'llmRefined': True, 'llmRefinedAt': None, 'llmConfidence': 0.9, 'missing_fields': [], 'inferred_fields': {'name': {'value': 'Unknown', 'method': 'placeholder'}, 'email': {'value': '<missing-3a04c5bd-812c-42a2-a7f8-0304c8d90d3e@example.invalid>', 'method': 'placeholder'}}}
+worker-1  | INFO:rq.worker:default: Job OK (623148b0-43f9-4219-9e28-6b5e9f81de14)
+worker-1  | INFO:rq.worker:Result is kept for 500 seconds
+web-1     | INFO:pdf-ingest:Refreshing profile object after commit id=3c39f287-1ba6-4a08-af48-a0df84a48203 (obj={'_sa_instance_state': <sqlalchemy.orm.state.InstanceState object at 0xffff8c56c5f0>, 'name': 'Unknown', 'email': 'bvn', 'summary': None, 'skills': [], 'experience': None, 'raw_text': None, 'confidence': 0.4, 'meta': {'ai_flags': [], 'missing_fields': [], 'inferred_fields': {'name': {'value': 'Unknown', 'method': 'placeholder'}}}, 'id': UUID('3c39f287-1ba6-4a08-af48-a0df84a48203'), 'version': 1, 'created_at': datetime.datetime(2025, 8, 27, 1, 39, 13, 499993, tzinfo=datetime.timezone.utc), 'updated_at': datetime.datetime(2025, 8, 27, 1, 39, 13, 499993, tzinfo=datetime.timezone.utc)})
+web-1     | INFO:pdf-ingest:Refresh complete for profile id=3c39f287-1ba6-4a08-af48-a0df84a48203 created_at=2025-08-27 01:39:13.499993+00:00 updated_at=2025-08-27 01:39:13.499993+00:00
+web-1     | INFO:pdf-ingest:Profile saved successfully: id=3c39f287-1ba6-4a08-af48-a0df84a48203 created_at=2025-08-27 01:39:13.499993+00:00 updated_at=2025-08-27 01:39:13.499993+00:00
+web-1     | INFO:pdf-ingest:Confidence 0.4 < threshold 0.6, enqueuing LLM refine for profile 3c39f287-1ba6-4a08-af48-a0df84a48203
+web-1     | INFO:pdf-ingest.worker:Created placeholder LLMHistory (pre-enqueue) id=85700e73-4d63-4671-87b6-440a163136e9 for profile 3c39f287-1ba6-4a08-af48-a0df84a48203
+web-1     | INFO:pdf-ingest.worker:Enqueued llm_refine_profile: job_id=ba463930-7dd6-4c34-9fd9-d276b44f5f85 profile_id=3c39f287-1ba6-4a08-af48-a0df84a48203 placeholder_id=85700e73-4d63-4671-87b6-440a163136e9
+web-1     | INFO:pdf-ingest:Enqueued LLM refine: job_id=ba463930-7dd6-4c34-9fd9-d276b44f5f85 placeholder_id=85700e73-4d63-4671-87b6-440a163136e9 profile=3c39f287-1ba6-4a08-af48-a0df84a48203
+web-1     | INFO:pdf-ingest:confirm-save returning: {'id': '3c39f287-1ba6-4a08-af48-a0df84a48203', 'created_at': '2025-08-27T01:39:13.499993+00:00', 'updated_at': '2025-08-27T01:39:13.499993+00:00', 'status': 'saved', 'llm_job_id': 'ba463930-7dd6-4c34-9fd9-d276b44f5f85', 'placeholderId': '85700e73-4d63-4671-87b6-440a163136e9'}
+web-1     | INFO:     172.18.0.1:56940 - "POST /api/v1/confirm-save HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/85700e73-4d63-4671-87b6-440a163136e9 Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:56940 - "GET /api/v1/llm-history/85700e73-4d63-4671-87b6-440a163136e9 HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/85700e73-4d63-4671-87b6-440a163136e9 Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:56940 - "GET /api/v1/llm-history/85700e73-4d63-4671-87b6-440a163136e9 HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/confirm-save Origin: http://localhost:5174
+web-1     | INFO:pdf-ingest:confirm-save called email=None
+web-1     | INFO:pdf-ingest:confirm-save called email=None
+web-1     | INFO:pdf-ingest:confirm-save profile_payload keys: ['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:pdf-ingest:AI suggestions added: category=Unknown, flags=[]
+web-1     | INFO:pdf-ingest:confirm-save payload missing required fields after inference=['email'] payload_keys=['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence']
+web-1     | DEBUG:pdf-ingest:confirm-save entering transaction for email=<missing-9f25f41b-c336-4fd1-9909-283baaf425b6@example.invalid> payload_keys=['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:pdf-ingest:Attempting SELECT FOR UPDATE for email=<missing-9f25f41b-c336-4fd1-9909-283baaf425b6@example.invalid>
+web-1     | INFO:pdf-ingest:SELECT FOR UPDATE result for email=<missing-9f25f41b-c336-4fd1-9909-283baaf425b6@example.invalid> -> existing_id=None
+web-1     | INFO:pdf-ingest:Creating new profile for email=<missing-9f25f41b-c336-4fd1-9909-283baaf425b6@example.invalid>
+web-1     | INFO:pdf-ingest:Flushing new profile for email=<missing-9f25f41b-c336-4fd1-9909-283baaf425b6@example.invalid>
+web-1     | INFO:pdf-ingest:Flush complete for new profile temporary id=9989be72-5056-4018-994f-acee19b66c46
+web-1     | INFO:pdf-ingest:Refreshing profile object after commit id=9989be72-5056-4018-994f-acee19b66c46 (obj={'_sa_instance_state': <sqlalchemy.orm.state.InstanceState object at 0xffff8c54bd10>, 'name': 'nbv', 'email': '<missing-9f25f41b-c336-4fd1-9909-283baaf425b6@example.invalid>', 'summary': None, 'skills': [], 'experience': None, 'raw_text': None, 'confidence': 0.2, 'meta': {'ai_flags': [], 'missing_fields': [], 'inferred_fields': {'email': {'value': '<missing-9f25f41b-c336-4fd1-9909-283baaf425b6@example.invalid>', 'method': 'placeholder'}}}, 'id': UUID('9989be72-5056-4018-994f-acee19b66c46'), 'version': 1, 'created_at': datetime.datetime(2025, 8, 27, 1, 39, 18, 12088, tzinfo=datetime.timezone.utc), 'updated_at': datetime.datetime(2025, 8, 27, 1, 39, 18, 12088, tzinfo=datetime.timezone.utc)})
+web-1     | INFO:pdf-ingest:Refresh complete for profile id=9989be72-5056-4018-994f-acee19b66c46 created_at=2025-08-27 01:39:18.012088+00:00 updated_at=2025-08-27 01:39:18.012088+00:00
+web-1     | INFO:pdf-ingest:Profile saved successfully: id=9989be72-5056-4018-994f-acee19b66c46 created_at=2025-08-27 01:39:18.012088+00:00 updated_at=2025-08-27 01:39:18.012088+00:00
+web-1     | INFO:pdf-ingest:Confidence 0.2 < threshold 0.6, enqueuing LLM refine for profile 9989be72-5056-4018-994f-acee19b66c46
+web-1     | INFO:pdf-ingest.worker:Created placeholder LLMHistory (pre-enqueue) id=0d2f9106-c29c-447d-8602-ac73c25f6403 for profile 9989be72-5056-4018-994f-acee19b66c46
+web-1     | INFO:pdf-ingest.worker:Enqueued llm_refine_profile: job_id=9a3deab5-3f5a-4430-8fb6-251c48495cd5 profile_id=9989be72-5056-4018-994f-acee19b66c46 placeholder_id=0d2f9106-c29c-447d-8602-ac73c25f6403
+web-1     | INFO:pdf-ingest:Enqueued LLM refine: job_id=9a3deab5-3f5a-4430-8fb6-251c48495cd5 placeholder_id=0d2f9106-c29c-447d-8602-ac73c25f6403 profile=9989be72-5056-4018-994f-acee19b66c46
+web-1     | INFO:pdf-ingest:confirm-save returning: {'id': '9989be72-5056-4018-994f-acee19b66c46', 'created_at': '2025-08-27T01:39:18.012088+00:00', 'updated_at': '2025-08-27T01:39:18.012088+00:00', 'status': 'saved', 'llm_job_id': '9a3deab5-3f5a-4430-8fb6-251c48495cd5', 'placeholderId': '0d2f9106-c29c-447d-8602-ac73c25f6403'}
+web-1     | INFO:     172.18.0.1:56954 - "POST /api/v1/confirm-save HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/0d2f9106-c29c-447d-8602-ac73c25f6403 Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:56954 - "GET /api/v1/llm-history/0d2f9106-c29c-447d-8602-ac73c25f6403 HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/0d2f9106-c29c-447d-8602-ac73c25f6403 Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:56954 - "GET /api/v1/llm-history/0d2f9106-c29c-447d-8602-ac73c25f6403 HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/confirm-save Origin: http://localhost:5174
+web-1     | INFO:pdf-ingest:confirm-save called email=None
+web-1     | INFO:pdf-ingest:confirm-save called email=None
+web-1     | INFO:pdf-ingest:confirm-save profile_payload keys: ['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:pdf-ingest:AI suggestions added: category=Unknown, flags=[]
+web-1     | INFO:pdf-ingest:confirm-save payload missing required fields after inference=['email', 'name'] payload_keys=['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence']
+web-1     | DEBUG:pdf-ingest:confirm-save entering transaction for email=<missing-f31b3572-b68f-42b3-99a3-bcb727c06bca@example.invalid> payload_keys=['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:pdf-ingest:Attempting SELECT FOR UPDATE for email=<missing-f31b3572-b68f-42b3-99a3-bcb727c06bca@example.invalid>
+web-1     | INFO:pdf-ingest:SELECT FOR UPDATE result for email=<missing-f31b3572-b68f-42b3-99a3-bcb727c06bca@example.invalid> -> existing_id=None
+web-1     | INFO:pdf-ingest:Creating new profile for email=<missing-f31b3572-b68f-42b3-99a3-bcb727c06bca@example.invalid>
+web-1     | INFO:pdf-ingest:Flushing new profile for email=<missing-f31b3572-b68f-42b3-99a3-bcb727c06bca@example.invalid>
+web-1     | INFO:pdf-ingest:Flush complete for new profile temporary id=f88192e3-d6d3-4615-9b00-7e4660bbf641
+web-1     | INFO:pdf-ingest:Refreshing profile object after commit id=f88192e3-d6d3-4615-9b00-7e4660bbf641 (obj={'_sa_instance_state': <sqlalchemy.orm.state.InstanceState object at 0xffff8c5de5d0>, 'name': 'Unknown', 'email': '<missing-f31b3572-b68f-42b3-99a3-bcb727c06bca@example.invalid>', 'summary': 'nbbnv', 'skills': [], 'experience': None, 'raw_text': None, 'confidence': 0.15, 'meta': {'ai_flags': [], 'missing_fields': [], 'inferred_fields': {'email': {'value': '<missing-f31b3572-b68f-42b3-99a3-bcb727c06bca@example.invalid>', 'method': 'placeholder'}, 'name': {'value': 'Unknown', 'method': 'placeholder'}}}, 'id': UUID('f88192e3-d6d3-4615-9b00-7e4660bbf641'), 'version': 1, 'created_at': datetime.datetime(2025, 8, 27, 1, 39, 25, 564954, tzinfo=datetime.timezone.utc), 'updated_at': datetime.datetime(2025, 8, 27, 1, 39, 25, 564954, tzinfo=datetime.timezone.utc)})
+web-1     | INFO:pdf-ingest:Refresh complete for profile id=f88192e3-d6d3-4615-9b00-7e4660bbf641 created_at=2025-08-27 01:39:25.564954+00:00 updated_at=2025-08-27 01:39:25.564954+00:00
+web-1     | INFO:pdf-ingest:Profile saved successfully: id=f88192e3-d6d3-4615-9b00-7e4660bbf641 created_at=2025-08-27 01:39:25.564954+00:00 updated_at=2025-08-27 01:39:25.564954+00:00
+web-1     | INFO:pdf-ingest:Confidence 0.15 < threshold 0.6, enqueuing LLM refine for profile f88192e3-d6d3-4615-9b00-7e4660bbf641
+web-1     | INFO:pdf-ingest.worker:Created placeholder LLMHistory (pre-enqueue) id=53711907-24ab-47e1-9f63-889788c6f9f6 for profile f88192e3-d6d3-4615-9b00-7e4660bbf641
+web-1     | INFO:pdf-ingest.worker:Enqueued llm_refine_profile: job_id=5a22a931-4909-432c-aa0e-c7b337743ae4 profile_id=f88192e3-d6d3-4615-9b00-7e4660bbf641 placeholder_id=53711907-24ab-47e1-9f63-889788c6f9f6
+web-1     | INFO:pdf-ingest:Enqueued LLM refine: job_id=5a22a931-4909-432c-aa0e-c7b337743ae4 placeholder_id=53711907-24ab-47e1-9f63-889788c6f9f6 profile=f88192e3-d6d3-4615-9b00-7e4660bbf641
+web-1     | INFO:pdf-ingest:confirm-save returning: {'id': 'f88192e3-d6d3-4615-9b00-7e4660bbf641', 'created_at': '2025-08-27T01:39:25.564954+00:00', 'updated_at': '2025-08-27T01:39:25.564954+00:00', 'status': 'saved', 'llm_job_id': '5a22a931-4909-432c-aa0e-c7b337743ae4', 'placeholderId': '53711907-24ab-47e1-9f63-889788c6f9f6'}
+web-1     | INFO:     172.18.0.1:64300 - "POST /api/v1/confirm-save HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/53711907-24ab-47e1-9f63-889788c6f9f6 Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:64300 - "GET /api/v1/llm-history/53711907-24ab-47e1-9f63-889788c6f9f6 HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/53711907-24ab-47e1-9f63-889788c6f9f6 Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:64308 - "GET /api/v1/llm-history/53711907-24ab-47e1-9f63-889788c6f9f6 HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/confirm-save Origin: http://localhost:5174
+web-1     | INFO:pdf-ingest:confirm-save called email=None
+web-1     | INFO:pdf-ingest:confirm-save called email=None
+web-1     | INFO:pdf-ingest:confirm-save profile_payload keys: ['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:pdf-ingest:AI suggestions added: category=Unknown, flags=[]
+web-1     | INFO:pdf-ingest:confirm-save payload missing required fields after inference=['email'] payload_keys=['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence']
+web-1     | DEBUG:pdf-ingest:confirm-save entering transaction for email=<missing-e1161646-b3b2-4f64-8a7b-8ac4b8e2c943@example.invalid> payload_keys=['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:pdf-ingest:Attempting SELECT FOR UPDATE for email=<missing-e1161646-b3b2-4f64-8a7b-8ac4b8e2c943@example.invalid>
+web-1     | INFO:pdf-ingest:SELECT FOR UPDATE result for email=<missing-e1161646-b3b2-4f64-8a7b-8ac4b8e2c943@example.invalid> -> existing_id=None
+web-1     | INFO:pdf-ingest:Creating new profile for email=<missing-e1161646-b3b2-4f64-8a7b-8ac4b8e2c943@example.invalid>
+web-1     | INFO:pdf-ingest:Flushing new profile for email=<missing-e1161646-b3b2-4f64-8a7b-8ac4b8e2c943@example.invalid>
+web-1     | INFO:pdf-ingest:Flush complete for new profile temporary id=848e0402-f1e1-46dc-aa18-e715f218b22e
+web-1     | INFO:pdf-ingest:Refreshing profile object after commit id=848e0402-f1e1-46dc-aa18-e715f218b22e (obj={'_sa_instance_state': <sqlalchemy.orm.state.InstanceState object at 0xffff8c56da30>, 'name': 'nbvbnb', 'email': '<missing-e1161646-b3b2-4f64-8a7b-8ac4b8e2c943@example.invalid>', 'summary': None, 'skills': [], 'experience': None, 'raw_text': None, 'confidence': 0.2, 'meta': {'ai_flags': [], 'missing_fields': [], 'inferred_fields': {'email': {'value': '<missing-e1161646-b3b2-4f64-8a7b-8ac4b8e2c943@example.invalid>', 'method': 'placeholder'}}}, 'id': UUID('848e0402-f1e1-46dc-aa18-e715f218b22e'), 'version': 1, 'created_at': datetime.datetime(2025, 8, 27, 1, 39, 29, 562421, tzinfo=datetime.timezone.utc), 'updated_at': datetime.datetime(2025, 8, 27, 1, 39, 29, 562421, tzinfo=datetime.timezone.utc)})
+web-1     | INFO:pdf-ingest:Refresh complete for profile id=848e0402-f1e1-46dc-aa18-e715f218b22e created_at=2025-08-27 01:39:29.562421+00:00 updated_at=2025-08-27 01:39:29.562421+00:00
+web-1     | INFO:pdf-ingest:Profile saved successfully: id=848e0402-f1e1-46dc-aa18-e715f218b22e created_at=2025-08-27 01:39:29.562421+00:00 updated_at=2025-08-27 01:39:29.562421+00:00
+web-1     | INFO:pdf-ingest:Confidence 0.2 < threshold 0.6, enqueuing LLM refine for profile 848e0402-f1e1-46dc-aa18-e715f218b22e
+web-1     | INFO:pdf-ingest.worker:Created placeholder LLMHistory (pre-enqueue) id=ee947499-cd76-497b-ae46-50ada979ad11 for profile 848e0402-f1e1-46dc-aa18-e715f218b22e
+web-1     | INFO:pdf-ingest.worker:Enqueued llm_refine_profile: job_id=ce75ce89-2dee-4e26-9281-6166572a805c profile_id=848e0402-f1e1-46dc-aa18-e715f218b22e placeholder_id=ee947499-cd76-497b-ae46-50ada979ad11
+web-1     | INFO:pdf-ingest:Enqueued LLM refine: job_id=ce75ce89-2dee-4e26-9281-6166572a805c placeholder_id=ee947499-cd76-497b-ae46-50ada979ad11 profile=848e0402-f1e1-46dc-aa18-e715f218b22e
+web-1     | INFO:pdf-ingest:confirm-save returning: {'id': '848e0402-f1e1-46dc-aa18-e715f218b22e', 'created_at': '2025-08-27T01:39:29.562421+00:00', 'updated_at': '2025-08-27T01:39:29.562421+00:00', 'status': 'saved', 'llm_job_id': 'ce75ce89-2dee-4e26-9281-6166572a805c', 'placeholderId': 'ee947499-cd76-497b-ae46-50ada979ad11'}
+web-1     | INFO:     172.18.0.1:64308 - "POST /api/v1/confirm-save HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/ee947499-cd76-497b-ae46-50ada979ad11 Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:64308 - "GET /api/v1/llm-history/ee947499-cd76-497b-ae46-50ada979ad11 HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/ee947499-cd76-497b-ae46-50ada979ad11 Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:64308 - "GET /api/v1/llm-history/ee947499-cd76-497b-ae46-50ada979ad11 HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/parse-now Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:65308 - "POST /api/v1/parse-now HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/confirm-save Origin: http://localhost:5174
+web-1     | INFO:pdf-ingest:confirm-save called email=None
+web-1     | INFO:pdf-ingest:confirm-save called email=None
+web-1     | INFO:pdf-ingest:confirm-save profile_payload keys: ['name', 'email', 'summary', 'skills', 'experience', 'education', 'achievements', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:     172.18.0.1:65308 - "POST /api/v1/confirm-save HTTP/1.1" 500 Internal Server Error
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/confirm-save Origin: http://localhost:5174
+web-1     | INFO:pdf-ingest:confirm-save called email=None
+web-1     | INFO:pdf-ingest:confirm-save called email=None
+web-1     | INFO:pdf-ingest:confirm-save profile_payload keys: ['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:pdf-ingest:AI suggestions added: category=Unknown, flags=[]
+web-1     | INFO:pdf-ingest:confirm-save payload missing required fields after inference=['email'] payload_keys=['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence']
+web-1     | DEBUG:pdf-ingest:confirm-save entering transaction for email=<missing-d0c0f026-b161-4cf7-a05f-b57b5b1c5d2e@example.invalid> payload_keys=['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:pdf-ingest:Attempting SELECT FOR UPDATE for email=<missing-d0c0f026-b161-4cf7-a05f-b57b5b1c5d2e@example.invalid>
+web-1     | INFO:pdf-ingest:SELECT FOR UPDATE result for email=<missing-d0c0f026-b161-4cf7-a05f-b57b5b1c5d2e@example.invalid> -> existing_id=None
+web-1     | INFO:pdf-ingest:Creating new profile for email=<missing-d0c0f026-b161-4cf7-a05f-b57b5b1c5d2e@example.invalid>
+web-1     | INFO:pdf-ingest:Flushing new profile for email=<missing-d0c0f026-b161-4cf7-a05f-b57b5b1c5d2e@example.invalid>
+web-1     | INFO:pdf-ingest:Flush complete for new profile temporary id=ff2ea7fc-62ba-4ca4-873a-97195251d613
+web-1     | INFO:pdf-ingest:Refreshing profile object after commit id=ff2ea7fc-62ba-4ca4-873a-97195251d613 (obj={'_sa_instance_state': <sqlalchemy.orm.state.InstanceState object at 0xffff8c56ccb0>, 'name': 'nbvbnbbbbbb', 'email': '<missing-d0c0f026-b161-4cf7-a05f-b57b5b1c5d2e@example.invalid>', 'summary': None, 'skills': [], 'experience': None, 'raw_text': None, 'confidence': 0.2, 'meta': {'ai_flags': [], 'missing_fields': [], 'inferred_fields': {'email': {'value': '<missing-d0c0f026-b161-4cf7-a05f-b57b5b1c5d2e@example.invalid>', 'method': 'placeholder'}}}, 'id': UUID('ff2ea7fc-62ba-4ca4-873a-97195251d613'), 'version': 1, 'created_at': datetime.datetime(2025, 8, 27, 1, 39, 45, 39771, tzinfo=datetime.timezone.utc), 'updated_at': datetime.datetime(2025, 8, 27, 1, 39, 45, 39771, tzinfo=datetime.timezone.utc)})
+web-1     | INFO:pdf-ingest:Refresh complete for profile id=ff2ea7fc-62ba-4ca4-873a-97195251d613 created_at=2025-08-27 01:39:45.039771+00:00 updated_at=2025-08-27 01:39:45.039771+00:00
+web-1     | INFO:pdf-ingest:Profile saved successfully: id=ff2ea7fc-62ba-4ca4-873a-97195251d613 created_at=2025-08-27 01:39:45.039771+00:00 updated_at=2025-08-27 01:39:45.039771+00:00
+web-1     | INFO:pdf-ingest:Confidence 0.2 < threshold 0.6, enqueuing LLM refine for profile ff2ea7fc-62ba-4ca4-873a-97195251d613
+web-1     | INFO:pdf-ingest.worker:Created placeholder LLMHistory (pre-enqueue) id=1fc1ddad-9de3-4edc-9efc-5c07aedbd820 for profile ff2ea7fc-62ba-4ca4-873a-97195251d613
+web-1     | INFO:pdf-ingest.worker:Enqueued llm_refine_profile: job_id=ce4591b4-378d-477d-8079-62f555a63f05 profile_id=ff2ea7fc-62ba-4ca4-873a-97195251d613 placeholder_id=1fc1ddad-9de3-4edc-9efc-5c07aedbd820
+web-1     | INFO:pdf-ingest:Enqueued LLM refine: job_id=ce4591b4-378d-477d-8079-62f555a63f05 placeholder_id=1fc1ddad-9de3-4edc-9efc-5c07aedbd820 profile=ff2ea7fc-62ba-4ca4-873a-97195251d613
+web-1     | INFO:pdf-ingest:confirm-save returning: {'id': 'ff2ea7fc-62ba-4ca4-873a-97195251d613', 'created_at': '2025-08-27T01:39:45.039771+00:00', 'updated_at': '2025-08-27T01:39:45.039771+00:00', 'status': 'saved', 'llm_job_id': 'ce4591b4-378d-477d-8079-62f555a63f05', 'placeholderId': '1fc1ddad-9de3-4edc-9efc-5c07aedbd820'}
+web-1     | INFO:     172.18.0.1:59652 - "POST /api/v1/confirm-save HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/1fc1ddad-9de3-4edc-9efc-5c07aedbd820 Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:59652 - "GET /api/v1/llm-history/1fc1ddad-9de3-4edc-9efc-5c07aedbd820 HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/1fc1ddad-9de3-4edc-9efc-5c07aedbd820 Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:59652 - "GET /api/v1/llm-history/1fc1ddad-9de3-4edc-9efc-5c07aedbd820 HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/parse-now Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:59662 - "POST /api/v1/parse-now HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/confirm-save Origin: http://localhost:5174
+web-1     | INFO:pdf-ingest:confirm-save called email=None
+web-1     | INFO:pdf-ingest:confirm-save called email=None
+web-1     | INFO:pdf-ingest:confirm-save profile_payload keys: ['name', 'email', 'summary', 'skills', 'experience', 'education', 'achievements', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:     172.18.0.1:59662 - "POST /api/v1/confirm-save HTTP/1.1" 500 Internal Server Error
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/confirm-save Origin: http://localhost:5174
+web-1     | INFO:pdf-ingest:confirm-save called email=None
+web-1     | INFO:pdf-ingest:confirm-save called email=None
+web-1     | INFO:pdf-ingest:confirm-save profile_payload keys: ['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:pdf-ingest:AI suggestions added: category=Unknown, flags=[]
+web-1     | INFO:pdf-ingest:confirm-save payload missing required fields after inference=['email'] payload_keys=['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence']
+web-1     | DEBUG:pdf-ingest:confirm-save entering transaction for email=<missing-7ec794d3-1f93-403f-80bb-369b7933ba7c@example.invalid> payload_keys=['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:pdf-ingest:Attempting SELECT FOR UPDATE for email=<missing-7ec794d3-1f93-403f-80bb-369b7933ba7c@example.invalid>
+web-1     | INFO:pdf-ingest:SELECT FOR UPDATE result for email=<missing-7ec794d3-1f93-403f-80bb-369b7933ba7c@example.invalid> -> existing_id=None
+web-1     | INFO:pdf-ingest:Creating new profile for email=<missing-7ec794d3-1f93-403f-80bb-369b7933ba7c@example.invalid>
+web-1     | INFO:pdf-ingest:Flushing new profile for email=<missing-7ec794d3-1f93-403f-80bb-369b7933ba7c@example.invalid>
+web-1     | INFO:pdf-ingest:Flush complete for new profile temporary id=1bc1a852-f50a-40f7-ab59-0559af42c715
+web-1     | INFO:pdf-ingest:Refreshing profile object after commit id=1bc1a852-f50a-40f7-ab59-0559af42c715 (obj={'_sa_instance_state': <sqlalchemy.orm.state.InstanceState object at 0xffff8b119310>, 'name': 'b', 'email': '<missing-7ec794d3-1f93-403f-80bb-369b7933ba7c@example.invalid>', 'summary': None, 'skills': [], 'experience': None, 'raw_text': None, 'confidence': 0.2, 'meta': {'ai_flags': [], 'missing_fields': [], 'inferred_fields': {'email': {'value': '<missing-7ec794d3-1f93-403f-80bb-369b7933ba7c@example.invalid>', 'method': 'placeholder'}}}, 'id': UUID('1bc1a852-f50a-40f7-ab59-0559af42c715'), 'version': 1, 'created_at': datetime.datetime(2025, 8, 27, 1, 39, 54, 209843, tzinfo=datetime.timezone.utc), 'updated_at': datetime.datetime(2025, 8, 27, 1, 39, 54, 209843, tzinfo=datetime.timezone.utc)})
+web-1     | INFO:pdf-ingest:Refresh complete for profile id=1bc1a852-f50a-40f7-ab59-0559af42c715 created_at=2025-08-27 01:39:54.209843+00:00 updated_at=2025-08-27 01:39:54.209843+00:00
+web-1     | INFO:pdf-ingest:Profile saved successfully: id=1bc1a852-f50a-40f7-ab59-0559af42c715 created_at=2025-08-27 01:39:54.209843+00:00 updated_at=2025-08-27 01:39:54.209843+00:00
+web-1     | INFO:pdf-ingest:Confidence 0.2 < threshold 0.6, enqueuing LLM refine for profile 1bc1a852-f50a-40f7-ab59-0559af42c715
+web-1     | INFO:pdf-ingest.worker:Created placeholder LLMHistory (pre-enqueue) id=956cc195-4ac5-4240-bba0-83b9e52a0620 for profile 1bc1a852-f50a-40f7-ab59-0559af42c715
+web-1     | INFO:pdf-ingest.worker:Enqueued llm_refine_profile: job_id=b2cf50d0-a43e-49d5-a719-7a1cf0ed3bb9 profile_id=1bc1a852-f50a-40f7-ab59-0559af42c715 placeholder_id=956cc195-4ac5-4240-bba0-83b9e52a0620
+web-1     | INFO:pdf-ingest:Enqueued LLM refine: job_id=b2cf50d0-a43e-49d5-a719-7a1cf0ed3bb9 placeholder_id=956cc195-4ac5-4240-bba0-83b9e52a0620 profile=1bc1a852-f50a-40f7-ab59-0559af42c715
+web-1     | INFO:pdf-ingest:confirm-save returning: {'id': '1bc1a852-f50a-40f7-ab59-0559af42c715', 'created_at': '2025-08-27T01:39:54.209843+00:00', 'updated_at': '2025-08-27T01:39:54.209843+00:00', 'status': 'saved', 'llm_job_id': 'b2cf50d0-a43e-49d5-a719-7a1cf0ed3bb9', 'placeholderId': '956cc195-4ac5-4240-bba0-83b9e52a0620'}
+web-1     | INFO:     172.18.0.1:60934 - "POST /api/v1/confirm-save HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/956cc195-4ac5-4240-bba0-83b9e52a0620 Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:60934 - "GET /api/v1/llm-history/956cc195-4ac5-4240-bba0-83b9e52a0620 HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/confirm-save Origin: http://localhost:5174
+web-1     | INFO:pdf-ingest:confirm-save called email=bvnb
+web-1     | INFO:pdf-ingest:confirm-save called email=bvnb
+web-1     | INFO:pdf-ingest:confirm-save profile_payload keys: ['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:pdf-ingest:AI suggestions added: category=Unknown, flags=[]
+web-1     | INFO:pdf-ingest:confirm-save payload missing required fields after inference=['name'] payload_keys=['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence']
+web-1     | DEBUG:pdf-ingest:confirm-save entering transaction for email=bvnb payload_keys=['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:pdf-ingest:Attempting SELECT FOR UPDATE for email=bvnb
+web-1     | INFO:pdf-ingest:SELECT FOR UPDATE result for email=bvnb -> existing_id=None
+web-1     | INFO:pdf-ingest:Creating new profile for email=bvnb
+web-1     | INFO:pdf-ingest:Flushing new profile for email=bvnb
+web-1     | INFO:pdf-ingest:Flush complete for new profile temporary id=acd4665a-3103-44cf-a002-47527282eb91
+web-1     | INFO:pdf-ingest:Refreshing profile object after commit id=acd4665a-3103-44cf-a002-47527282eb91 (obj={'_sa_instance_state': <sqlalchemy.orm.state.InstanceState object at 0xffff8b14a7b0>, 'name': 'Unknown', 'email': 'bvnb', 'summary': None, 'skills': [], 'experience': None, 'raw_text': None, 'confidence': 0.4, 'meta': {'ai_flags': [], 'missing_fields': [], 'inferred_fields': {'name': {'value': 'Unknown', 'method': 'placeholder'}}}, 'id': UUID('acd4665a-3103-44cf-a002-47527282eb91'), 'version': 1, 'created_at': datetime.datetime(2025, 8, 27, 1, 39, 54, 825093, tzinfo=datetime.timezone.utc), 'updated_at': datetime.datetime(2025, 8, 27, 1, 39, 54, 825093, tzinfo=datetime.timezone.utc)})
+web-1     | INFO:pdf-ingest:Refresh complete for profile id=acd4665a-3103-44cf-a002-47527282eb91 created_at=2025-08-27 01:39:54.825093+00:00 updated_at=2025-08-27 01:39:54.825093+00:00
+web-1     | INFO:pdf-ingest:Profile saved successfully: id=acd4665a-3103-44cf-a002-47527282eb91 created_at=2025-08-27 01:39:54.825093+00:00 updated_at=2025-08-27 01:39:54.825093+00:00
+web-1     | INFO:pdf-ingest:Confidence 0.4 < threshold 0.6, enqueuing LLM refine for profile acd4665a-3103-44cf-a002-47527282eb91
+web-1     | INFO:pdf-ingest.worker:Created placeholder LLMHistory (pre-enqueue) id=cfbc9be0-602b-4fc0-9c77-483582ec33bf for profile acd4665a-3103-44cf-a002-47527282eb91
+web-1     | INFO:pdf-ingest.worker:Enqueued llm_refine_profile: job_id=165d20a5-6830-4b6d-b8f9-84abe050da7b profile_id=acd4665a-3103-44cf-a002-47527282eb91 placeholder_id=cfbc9be0-602b-4fc0-9c77-483582ec33bf
+web-1     | INFO:pdf-ingest:Enqueued LLM refine: job_id=165d20a5-6830-4b6d-b8f9-84abe050da7b placeholder_id=cfbc9be0-602b-4fc0-9c77-483582ec33bf profile=acd4665a-3103-44cf-a002-47527282eb91
+web-1     | INFO:pdf-ingest:confirm-save returning: {'id': 'acd4665a-3103-44cf-a002-47527282eb91', 'created_at': '2025-08-27T01:39:54.825093+00:00', 'updated_at': '2025-08-27T01:39:54.825093+00:00', 'status': 'saved', 'llm_job_id': '165d20a5-6830-4b6d-b8f9-84abe050da7b', 'placeholderId': 'cfbc9be0-602b-4fc0-9c77-483582ec33bf'}
+web-1     | INFO:     172.18.0.1:60934 - "POST /api/v1/confirm-save HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/cfbc9be0-602b-4fc0-9c77-483582ec33bf Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:60934 - "GET /api/v1/llm-history/cfbc9be0-602b-4fc0-9c77-483582ec33bf HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/cfbc9be0-602b-4fc0-9c77-483582ec33bf Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:60934 - "GET /api/v1/llm-history/cfbc9be0-602b-4fc0-9c77-483582ec33bf HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/confirm-save Origin: http://localhost:5174
+web-1     | INFO:pdf-ingest:confirm-save called email=None
+web-1     | INFO:pdf-ingest:confirm-save called email=None
+web-1     | INFO:pdf-ingest:confirm-save profile_payload keys: ['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:pdf-ingest:AI suggestions added: category=Unknown, flags=[]
+web-1     | INFO:pdf-ingest:confirm-save payload missing required fields after inference=['email', 'name'] payload_keys=['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence']
+web-1     | DEBUG:pdf-ingest:confirm-save entering transaction for email=<missing-f8c16650-ecfc-4790-b4c7-b92ad1cb06ca@example.invalid> payload_keys=['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:pdf-ingest:Attempting SELECT FOR UPDATE for email=<missing-f8c16650-ecfc-4790-b4c7-b92ad1cb06ca@example.invalid>
+web-1     | INFO:pdf-ingest:SELECT FOR UPDATE result for email=<missing-f8c16650-ecfc-4790-b4c7-b92ad1cb06ca@example.invalid> -> existing_id=None
+web-1     | INFO:pdf-ingest:Creating new profile for email=<missing-f8c16650-ecfc-4790-b4c7-b92ad1cb06ca@example.invalid>
+web-1     | INFO:pdf-ingest:Flushing new profile for email=<missing-f8c16650-ecfc-4790-b4c7-b92ad1cb06ca@example.invalid>
+web-1     | INFO:pdf-ingest:Flush complete for new profile temporary id=02f07c70-210e-4000-a864-1300ed051aa6
+web-1     | INFO:pdf-ingest:Refreshing profile object after commit id=02f07c70-210e-4000-a864-1300ed051aa6 (obj={'_sa_instance_state': <sqlalchemy.orm.state.InstanceState object at 0xffff8b119310>, 'name': 'Unknown', 'email': '<missing-f8c16650-ecfc-4790-b4c7-b92ad1cb06ca@example.invalid>', 'summary': 'n', 'skills': [], 'experience': None, 'raw_text': None, 'confidence': 0.15, 'meta': {'ai_flags': [], 'missing_fields': [], 'inferred_fields': {'email': {'value': '<missing-f8c16650-ecfc-4790-b4c7-b92ad1cb06ca@example.invalid>', 'method': 'placeholder'}, 'name': {'value': 'Unknown', 'method': 'placeholder'}}}, 'id': UUID('02f07c70-210e-4000-a864-1300ed051aa6'), 'version': 1, 'created_at': datetime.datetime(2025, 8, 27, 1, 40, 26, 39165, tzinfo=datetime.timezone.utc), 'updated_at': datetime.datetime(2025, 8, 27, 1, 40, 26, 39165, tzinfo=datetime.timezone.utc)})
+web-1     | INFO:pdf-ingest:Refresh complete for profile id=02f07c70-210e-4000-a864-1300ed051aa6 created_at=2025-08-27 01:40:26.039165+00:00 updated_at=2025-08-27 01:40:26.039165+00:00
+web-1     | INFO:pdf-ingest:Profile saved successfully: id=02f07c70-210e-4000-a864-1300ed051aa6 created_at=2025-08-27 01:40:26.039165+00:00 updated_at=2025-08-27 01:40:26.039165+00:00
+web-1     | INFO:pdf-ingest:Confidence 0.15 < threshold 0.6, enqueuing LLM refine for profile 02f07c70-210e-4000-a864-1300ed051aa6
+web-1     | INFO:pdf-ingest.worker:Created placeholder LLMHistory (pre-enqueue) id=2e82c1de-8e4f-49e7-a53d-00f5271fb43a for profile 02f07c70-210e-4000-a864-1300ed051aa6
+web-1     | INFO:pdf-ingest.worker:Enqueued llm_refine_profile: job_id=0ab6fa00-6ee8-482a-ba59-e4d71b8bd8a5 profile_id=02f07c70-210e-4000-a864-1300ed051aa6 placeholder_id=2e82c1de-8e4f-49e7-a53d-00f5271fb43a
+web-1     | INFO:pdf-ingest:Enqueued LLM refine: job_id=0ab6fa00-6ee8-482a-ba59-e4d71b8bd8a5 placeholder_id=2e82c1de-8e4f-49e7-a53d-00f5271fb43a profile=02f07c70-210e-4000-a864-1300ed051aa6
+web-1     | INFO:pdf-ingest:confirm-save returning: {'id': '02f07c70-210e-4000-a864-1300ed051aa6', 'created_at': '2025-08-27T01:40:26.039165+00:00', 'updated_at': '2025-08-27T01:40:26.039165+00:00', 'status': 'saved', 'llm_job_id': '0ab6fa00-6ee8-482a-ba59-e4d71b8bd8a5', 'placeholderId': '2e82c1de-8e4f-49e7-a53d-00f5271fb43a'}
+web-1     | INFO:     172.18.0.1:62384 - "POST /api/v1/confirm-save HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/2e82c1de-8e4f-49e7-a53d-00f5271fb43a Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:62384 - "GET /api/v1/llm-history/2e82c1de-8e4f-49e7-a53d-00f5271fb43a HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/2e82c1de-8e4f-49e7-a53d-00f5271fb43a Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:62386 - "GET /api/v1/llm-history/2e82c1de-8e4f-49e7-a53d-00f5271fb43a HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/confirm-save Origin: http://localhost:5174
+web-1     | INFO:pdf-ingest:confirm-save called email=None
+web-1     | INFO:pdf-ingest:confirm-save called email=None
+web-1     | INFO:pdf-ingest:confirm-save profile_payload keys: ['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:pdf-ingest:AI suggestions added: category=Unknown, flags=[]
+web-1     | INFO:pdf-ingest:confirm-save payload missing required fields after inference=['email', 'name'] payload_keys=['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence']
+web-1     | DEBUG:pdf-ingest:confirm-save entering transaction for email=<missing-ecb19394-00b0-4c22-abff-c367e17b77a6@example.invalid> payload_keys=['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:pdf-ingest:Attempting SELECT FOR UPDATE for email=<missing-ecb19394-00b0-4c22-abff-c367e17b77a6@example.invalid>
+web-1     | INFO:pdf-ingest:SELECT FOR UPDATE result for email=<missing-ecb19394-00b0-4c22-abff-c367e17b77a6@example.invalid> -> existing_id=None
+web-1     | INFO:pdf-ingest:Creating new profile for email=<missing-ecb19394-00b0-4c22-abff-c367e17b77a6@example.invalid>
+web-1     | INFO:pdf-ingest:Flushing new profile for email=<missing-ecb19394-00b0-4c22-abff-c367e17b77a6@example.invalid>
+web-1     | INFO:pdf-ingest:Flush complete for new profile temporary id=d97be44c-d511-4131-affa-593c84d14a18
+web-1     | INFO:pdf-ingest:Refreshing profile object after commit id=d97be44c-d511-4131-affa-593c84d14a18 (obj={'_sa_instance_state': <sqlalchemy.orm.state.InstanceState object at 0xffff8b148170>, 'name': 'Unknown', 'email': '<missing-ecb19394-00b0-4c22-abff-c367e17b77a6@example.invalid>', 'summary': 'n', 'skills': [], 'experience': None, 'raw_text': None, 'confidence': 0.15, 'meta': {'ai_flags': [], 'missing_fields': [], 'inferred_fields': {'email': {'value': '<missing-ecb19394-00b0-4c22-abff-c367e17b77a6@example.invalid>', 'method': 'placeholder'}, 'name': {'value': 'Unknown', 'method': 'placeholder'}}}, 'id': UUID('d97be44c-d511-4131-affa-593c84d14a18'), 'version': 1, 'created_at': datetime.datetime(2025, 8, 27, 1, 40, 30, 718549, tzinfo=datetime.timezone.utc), 'updated_at': datetime.datetime(2025, 8, 27, 1, 40, 30, 718549, tzinfo=datetime.timezone.utc)})
+web-1     | INFO:pdf-ingest:Refresh complete for profile id=d97be44c-d511-4131-affa-593c84d14a18 created_at=2025-08-27 01:40:30.718549+00:00 updated_at=2025-08-27 01:40:30.718549+00:00
+web-1     | INFO:pdf-ingest:Profile saved successfully: id=d97be44c-d511-4131-affa-593c84d14a18 created_at=2025-08-27 01:40:30.718549+00:00 updated_at=2025-08-27 01:40:30.718549+00:00
+web-1     | INFO:pdf-ingest:Confidence 0.15 < threshold 0.6, enqueuing LLM refine for profile d97be44c-d511-4131-affa-593c84d14a18
+web-1     | INFO:pdf-ingest.worker:Created placeholder LLMHistory (pre-enqueue) id=953fc7aa-161a-4fff-b97b-b052cd81579e for profile d97be44c-d511-4131-affa-593c84d14a18
+web-1     | INFO:pdf-ingest.worker:Enqueued llm_refine_profile: job_id=57cab5c2-49e0-46ef-ad21-edd19307b3f6 profile_id=d97be44c-d511-4131-affa-593c84d14a18 placeholder_id=953fc7aa-161a-4fff-b97b-b052cd81579e
+web-1     | INFO:pdf-ingest:Enqueued LLM refine: job_id=57cab5c2-49e0-46ef-ad21-edd19307b3f6 placeholder_id=953fc7aa-161a-4fff-b97b-b052cd81579e profile=d97be44c-d511-4131-affa-593c84d14a18
+web-1     | INFO:pdf-ingest:confirm-save returning: {'id': 'd97be44c-d511-4131-affa-593c84d14a18', 'created_at': '2025-08-27T01:40:30.718549+00:00', 'updated_at': '2025-08-27T01:40:30.718549+00:00', 'status': 'saved', 'llm_job_id': '57cab5c2-49e0-46ef-ad21-edd19307b3f6', 'placeholderId': '953fc7aa-161a-4fff-b97b-b052cd81579e'}
+web-1     | INFO:     172.18.0.1:62386 - "POST /api/v1/confirm-save HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/953fc7aa-161a-4fff-b97b-b052cd81579e Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:62386 - "GET /api/v1/llm-history/953fc7aa-161a-4fff-b97b-b052cd81579e HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/953fc7aa-161a-4fff-b97b-b052cd81579e Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:58882 - "GET /api/v1/llm-history/953fc7aa-161a-4fff-b97b-b052cd81579e HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/confirm-save Origin: http://localhost:5174
+web-1     | INFO:pdf-ingest:confirm-save called email=None
+web-1     | INFO:pdf-ingest:confirm-save called email=None
+web-1     | INFO:pdf-ingest:confirm-save profile_payload keys: ['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:pdf-ingest:AI suggestions added: category=Unknown, flags=[]
+web-1     | INFO:pdf-ingest:confirm-save payload missing required fields after inference=['email', 'name'] payload_keys=['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence']
+web-1     | DEBUG:pdf-ingest:confirm-save entering transaction for email=<missing-3a04c5bd-812c-42a2-a7f8-0304c8d90d3e@example.invalid> payload_keys=['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:pdf-ingest:Attempting SELECT FOR UPDATE for email=<missing-3a04c5bd-812c-42a2-a7f8-0304c8d90d3e@example.invalid>
+web-1     | INFO:pdf-ingest:SELECT FOR UPDATE result for email=<missing-3a04c5bd-812c-42a2-a7f8-0304c8d90d3e@example.invalid> -> existing_id=None
+web-1     | INFO:pdf-ingest:Creating new profile for email=<missing-3a04c5bd-812c-42a2-a7f8-0304c8d90d3e@example.invalid>
+web-1     | INFO:pdf-ingest:Flushing new profile for email=<missing-3a04c5bd-812c-42a2-a7f8-0304c8d90d3e@example.invalid>
+web-1     | INFO:pdf-ingest:Flush complete for new profile temporary id=d2d7314b-b365-4b08-84de-9e6674ec3276
+web-1     | INFO:pdf-ingest:Refreshing profile object after commit id=d2d7314b-b365-4b08-84de-9e6674ec3276 (obj={'_sa_instance_state': <sqlalchemy.orm.state.InstanceState object at 0xffff8b11aa50>, 'name': 'Unknown', 'email': '<missing-3a04c5bd-812c-42a2-a7f8-0304c8d90d3e@example.invalid>', 'summary': 'n', 'skills': [], 'experience': None, 'raw_text': None, 'confidence': 0.15, 'meta': {'ai_flags': [], 'missing_fields': [], 'inferred_fields': {'email': {'value': '<missing-3a04c5bd-812c-42a2-a7f8-0304c8d90d3e@example.invalid>', 'method': 'placeholder'}, 'name': {'value': 'Unknown', 'method': 'placeholder'}}}, 'id': UUID('d2d7314b-b365-4b08-84de-9e6674ec3276'), 'version': 1, 'created_at': datetime.datetime(2025, 8, 27, 1, 40, 36, 593084, tzinfo=datetime.timezone.utc), 'updated_at': datetime.datetime(2025, 8, 27, 1, 40, 36, 593084, tzinfo=datetime.timezone.utc)})
+web-1     | INFO:pdf-ingest:Refresh complete for profile id=d2d7314b-b365-4b08-84de-9e6674ec3276 created_at=2025-08-27 01:40:36.593084+00:00 updated_at=2025-08-27 01:40:36.593084+00:00
+web-1     | INFO:pdf-ingest:Profile saved successfully: id=d2d7314b-b365-4b08-84de-9e6674ec3276 created_at=2025-08-27 01:40:36.593084+00:00 updated_at=2025-08-27 01:40:36.593084+00:00
+web-1     | INFO:pdf-ingest:Confidence 0.15 < threshold 0.6, enqueuing LLM refine for profile d2d7314b-b365-4b08-84de-9e6674ec3276
+web-1     | INFO:pdf-ingest.worker:Created placeholder LLMHistory (pre-enqueue) id=3ac052e1-dfa8-4003-9ea9-3b3fb99f097c for profile d2d7314b-b365-4b08-84de-9e6674ec3276
+web-1     | INFO:pdf-ingest.worker:Enqueued llm_refine_profile: job_id=623148b0-43f9-4219-9e28-6b5e9f81de14 profile_id=d2d7314b-b365-4b08-84de-9e6674ec3276 placeholder_id=3ac052e1-dfa8-4003-9ea9-3b3fb99f097c
+web-1     | INFO:pdf-ingest:Enqueued LLM refine: job_id=623148b0-43f9-4219-9e28-6b5e9f81de14 placeholder_id=3ac052e1-dfa8-4003-9ea9-3b3fb99f097c profile=d2d7314b-b365-4b08-84de-9e6674ec3276
+web-1     | INFO:pdf-ingest:confirm-save returning: {'id': 'd2d7314b-b365-4b08-84de-9e6674ec3276', 'created_at': '2025-08-27T01:40:36.593084+00:00', 'updated_at': '2025-08-27T01:40:36.593084+00:00', 'status': 'saved', 'llm_job_id': '623148b0-43f9-4219-9e28-6b5e9f81de14', 'placeholderId': '3ac052e1-dfa8-4003-9ea9-3b3fb99f097c'}
+web-1     | INFO:     172.18.0.1:58894 - "POST /api/v1/confirm-save HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/3ac052e1-dfa8-4003-9ea9-3b3fb99f097c Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:58894 - "GET /api/v1/llm-history/3ac052e1-dfa8-4003-9ea9-3b3fb99f097c HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/3ac052e1-dfa8-4003-9ea9-3b3fb99f097c Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:58894 - "GET /api/v1/llm-history/3ac052e1-dfa8-4003-9ea9-3b3fb99f097c HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/confirm-save Origin: http://localhost:5174
+web-1     | INFO:pdf-ingest:confirm-save called email=None
+web-1     | INFO:pdf-ingest:confirm-save called email=None
+web-1     | INFO:pdf-ingest:confirm-save profile_payload keys: ['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:pdf-ingest:AI suggestions added: category=Unknown, flags=[]
+web-1     | INFO:pdf-ingest:confirm-save payload missing required fields after inference=['email', 'name'] payload_keys=['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence']
+web-1     | DEBUG:pdf-ingest:confirm-save entering transaction for email=<missing-f9e97b34-ecc8-41b6-9af5-4749f8c8319d@example.invalid> payload_keys=['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:pdf-ingest:Attempting SELECT FOR UPDATE for email=<missing-f9e97b34-ecc8-41b6-9af5-4749f8c8319d@example.invalid>
+web-1     | INFO:pdf-ingest:SELECT FOR UPDATE result for email=<missing-f9e97b34-ecc8-41b6-9af5-4749f8c8319d@example.invalid> -> existing_id=None
+web-1     | INFO:pdf-ingest:Creating new profile for email=<missing-f9e97b34-ecc8-41b6-9af5-4749f8c8319d@example.invalid>
+web-1     | INFO:pdf-ingest:Flushing new profile for email=<missing-f9e97b34-ecc8-41b6-9af5-4749f8c8319d@example.invalid>
+web-1     | INFO:pdf-ingest:Flush complete for new profile temporary id=7bcbfd1a-5738-4a5c-9939-4ee994d139b0
+web-1     | INFO:pdf-ingest:Refreshing profile object after commit id=7bcbfd1a-5738-4a5c-9939-4ee994d139b0 (obj={'_sa_instance_state': <sqlalchemy.orm.state.InstanceState object at 0xffff8b14bdd0>, 'name': 'Unknown', 'email': '<missing-f9e97b34-ecc8-41b6-9af5-4749f8c8319d@example.invalid>', 'summary': 'n', 'skills': [], 'experience': None, 'raw_text': None, 'confidence': 0.15, 'meta': {'ai_flags': [], 'missing_fields': [], 'inferred_fields': {'email': {'value': '<missing-f9e97b34-ecc8-41b6-9af5-4749f8c8319d@example.invalid>', 'method': 'placeholder'}, 'name': {'value': 'Unknown', 'method': 'placeholder'}}}, 'id': UUID('7bcbfd1a-5738-4a5c-9939-4ee994d139b0'), 'version': 1, 'created_at': datetime.datetime(2025, 8, 27, 1, 41, 15, 564940, tzinfo=datetime.timezone.utc), 'updated_at': datetime.datetime(2025, 8, 27, 1, 41, 15, 564940, tzinfo=datetime.timezone.utc)})
+web-1     | INFO:pdf-ingest:Refresh complete for profile id=7bcbfd1a-5738-4a5c-9939-4ee994d139b0 created_at=2025-08-27 01:41:15.564940+00:00 updated_at=2025-08-27 01:41:15.564940+00:00
+web-1     | INFO:pdf-ingest:Profile saved successfully: id=7bcbfd1a-5738-4a5c-9939-4ee994d139b0 created_at=2025-08-27 01:41:15.564940+00:00 updated_at=2025-08-27 01:41:15.564940+00:00
+web-1     | INFO:pdf-ingest:Confidence 0.15 < threshold 0.6, enqueuing LLM refine for profile 7bcbfd1a-5738-4a5c-9939-4ee994d139b0
+web-1     | INFO:pdf-ingest.worker:Created placeholder LLMHistory (pre-enqueue) id=73eab811-ee6f-466e-ac9e-2935774a65fc for profile 7bcbfd1a-5738-4a5c-9939-4ee994d139b0
+web-1     | INFO:pdf-ingest.worker:Enqueued llm_refine_profile: job_id=d5986ffa-91cc-4a99-bf56-e6cbd67121b6 profile_id=7bcbfd1a-5738-4a5c-9939-4ee994d139b0 placeholder_id=73eab811-ee6f-466e-ac9e-2935774a65fc
+web-1     | INFO:pdf-ingest:Enqueued LLM refine: job_id=d5986ffa-91cc-4a99-bf56-e6cbd67121b6 placeholder_id=73eab811-ee6f-466e-ac9e-2935774a65fc profile=7bcbfd1a-5738-4a5c-9939-4ee994d139b0
+web-1     | INFO:pdf-ingest:confirm-save returning: {'id': '7bcbfd1a-5738-4a5c-9939-4ee994d139b0', 'created_at': '2025-08-27T01:41:15.564940+00:00', 'updated_at': '2025-08-27T01:41:15.564940+00:00', 'status': 'saved', 'llm_job_id': 'd5986ffa-91cc-4a99-bf56-e6cbd67121b6', 'placeholderId': '73eab811-ee6f-466e-ac9e-2935774a65fc'}
+web-1     | INFO:     172.18.0.1:59392 - "POST /api/v1/confirm-save HTTP/1.1" 200 OK
+worker-1  | INFO:rq.worker:default: worker.llm_refine_profile('7bcbfd1a-5738-4a5c-9939-4ee994d139b0', correlation_job_id='73eab811-ee6f-466e-ac9e-2935774a65fc') (d5986ffa-91cc-4a99-bf56-e6cbd67121b6)
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/73eab811-ee6f-466e-ac9e-2935774a65fc Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:59392 - "GET /api/v1/llm-history/73eab811-ee6f-466e-ac9e-2935774a65fc HTTP/1.1" 200 OK
+worker-1  | INFO:pdf-ingest.worker:LLM_REFINE_CALLED 7bcbfd1a-5738-4a5c-9939-4ee994d139b0 session_injected False correlation_job_id=True
+worker-1  | INFO:pdf-ingest.worker:WORKER_ENTER 7bcbfd1a-5738-4a5c-9939-4ee994d139b0 loaded_profile True
+worker-1  | INFO:pdf-ingest.worker:Invoking LLM refine: provider=mistral mock=True profile_id=7bcbfd1a-5738-4a5c-9939-4ee994d139b0
+worker-1  | INFO:pdf-ingest.llm:refine_with_llm: returning mock profile (mock=True)
+worker-1  | INFO:pdf-ingest.worker:LLM_RESP_SNIPPET "{'name': 'Test User', 'email': 'test@example.com', 'summary': 'Test summary', 'skills': ['Python'], 'experience': [], 'rawText': 'raw', 'confidence': 0.9, 'metadata': {'source': 'manual', 'llm': 'mock', 'llmRefinedAt': None}}"
+worker-1  | INFO:pdf-ingest.worker:Updated existing LLMHistory (placeholder or job match) id=73eab811-ee6f-466e-ac9e-2935774a65fc job_id=73eab811-ee6f-466e-ac9e-2935774a65fc profile=7bcbfd1a-5738-4a5c-9939-4ee994d139b0
+worker-1  | INFO:pdf-ingest.convex_persist:Calling Convex action https://neat-starfish-33.convex.site/api/actions/persistProfile (attempt 1/4)
+worker-1  | INFO:pdf-ingest.worker:Convex persist succeeded for profile 7bcbfd1a-5738-4a5c-9939-4ee994d139b0 idempotency=67699ed2-655d-412b-b1c6-792c3a5b622b resp={'status': 'ok', 'result': {'profileId': '7bcbfd1a-5738-4a5c-9939-4ee994d139b0', 'updatedAt': 1756258876134, 'written': True}}
+worker-1  | INFO:pdf-ingest.worker:WORKER_META_MERGED 7bcbfd1a-5738-4a5c-9939-4ee994d139b0 {'ai_flags': [], 'missing_fields': [], 'inferred_fields': {'name': {'value': 'Unknown', 'method': 'placeholder'}, 'email': {'value': '<missing-f9e97b34-ecc8-41b6-9af5-4749f8c8319d@example.invalid>', 'method': 'placeholder'}}, 'source': 'manual', 'llm': 'mock', 'llmRefinedAt': None, 'llmRefined': True, 'llmConfidence': 0.9}
+worker-1  | INFO:pdf-ingest.worker:DEBUG_META_AFTER_COMMIT_FRESH 7bcbfd1a-5738-4a5c-9939-4ee994d139b0 {'llm': 'mock', 'source': 'manual', 'ai_flags': [], 'llmRefined': True, 'llmRefinedAt': None, 'llmConfidence': 0.9, 'missing_fields': [], 'inferred_fields': {'name': {'value': 'Unknown', 'method': 'placeholder'}, 'email': {'value': '<missing-f9e97b34-ecc8-41b6-9af5-4749f8c8319d@example.invalid>', 'method': 'placeholder'}}}
+worker-1  | INFO:rq.worker:default: Job OK (d5986ffa-91cc-4a99-bf56-e6cbd67121b6)
+worker-1  | INFO:rq.worker:Result is kept for 500 seconds
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/73eab811-ee6f-466e-ac9e-2935774a65fc Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:59408 - "GET /api/v1/llm-history/73eab811-ee6f-466e-ac9e-2935774a65fc HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/parse-now Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:59408 - "POST /api/v1/parse-now HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/confirm-save Origin: http://localhost:5174
+web-1     | INFO:pdf-ingest:confirm-save called email=email@email.com
+web-1     | INFO:pdf-ingest:confirm-save called email=email@email.com
+web-1     | INFO:pdf-ingest:confirm-save profile_payload keys: ['name', 'email', 'summary', 'skills', 'experience', 'education', 'achievements', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:     172.18.0.1:59408 - "POST /api/v1/confirm-save HTTP/1.1" 500 Internal Server Error
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/confirm-save Origin: http://localhost:5174
+web-1     | INFO:pdf-ingest:confirm-save called email=None
+web-1     | INFO:pdf-ingest:confirm-save called email=None
+web-1     | INFO:pdf-ingest:confirm-save profile_payload keys: ['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:pdf-ingest:AI suggestions added: category=Unknown, flags=[]
+web-1     | INFO:pdf-ingest:confirm-save payload missing required fields after inference=['email'] payload_keys=['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence']
+web-1     | DEBUG:pdf-ingest:confirm-save entering transaction for email=<missing-02504eb0-d4f1-4a21-b63f-4b4622cbc283@example.invalid> payload_keys=['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:pdf-ingest:Attempting SELECT FOR UPDATE for email=<missing-02504eb0-d4f1-4a21-b63f-4b4622cbc283@example.invalid>
+web-1     | INFO:pdf-ingest:SELECT FOR UPDATE result for email=<missing-02504eb0-d4f1-4a21-b63f-4b4622cbc283@example.invalid> -> existing_id=None
+web-1     | INFO:pdf-ingest:Creating new profile for email=<missing-02504eb0-d4f1-4a21-b63f-4b4622cbc283@example.invalid>
+web-1     | INFO:pdf-ingest:Flushing new profile for email=<missing-02504eb0-d4f1-4a21-b63f-4b4622cbc283@example.invalid>
+web-1     | INFO:pdf-ingest:Flush complete for new profile temporary id=09d35ff9-ee1d-4852-a368-21cb43a630e4
+web-1     | INFO:pdf-ingest:Refreshing profile object after commit id=09d35ff9-ee1d-4852-a368-21cb43a630e4 (obj={'_sa_instance_state': <sqlalchemy.orm.state.InstanceState object at 0xffff8a7027b0>, 'name': 'bfgff', 'email': '<missing-02504eb0-d4f1-4a21-b63f-4b4622cbc283@example.invalid>', 'summary': None, 'skills': [], 'experience': None, 'raw_text': None, 'confidence': 0.2, 'meta': {'ai_flags': [], 'missing_fields': [], 'inferred_fields': {'email': {'value': '<missing-02504eb0-d4f1-4a21-b63f-4b4622cbc283@example.invalid>', 'method': 'placeholder'}}}, 'id': UUID('09d35ff9-ee1d-4852-a368-21cb43a630e4'), 'version': 1, 'created_at': datetime.datetime(2025, 8, 27, 1, 41, 26, 996858, tzinfo=datetime.timezone.utc), 'updated_at': datetime.datetime(2025, 8, 27, 1, 41, 26, 996858, tzinfo=datetime.timezone.utc)})
+web-1     | INFO:pdf-ingest:Refresh complete for profile id=09d35ff9-ee1d-4852-a368-21cb43a630e4 created_at=2025-08-27 01:41:26.996858+00:00 updated_at=2025-08-27 01:41:26.996858+00:00
+web-1     | INFO:pdf-ingest:Profile saved successfully: id=09d35ff9-ee1d-4852-a368-21cb43a630e4 created_at=2025-08-27 01:41:26.996858+00:00 updated_at=2025-08-27 01:41:26.996858+00:00
+web-1     | INFO:pdf-ingest:Confidence 0.2 < threshold 0.6, enqueuing LLM refine for profile 09d35ff9-ee1d-4852-a368-21cb43a630e4
+web-1     | INFO:pdf-ingest.worker:Created placeholder LLMHistory (pre-enqueue) id=29a22dc4-8edc-4021-ad77-5627e7397cdd for profile 09d35ff9-ee1d-4852-a368-21cb43a630e4
+web-1     | INFO:pdf-ingest.worker:Enqueued llm_refine_profile: job_id=9652f3e7-c2a3-457e-acb2-dbbd84fc75de profile_id=09d35ff9-ee1d-4852-a368-21cb43a630e4 placeholder_id=29a22dc4-8edc-4021-ad77-5627e7397cdd
+web-1     | INFO:pdf-ingest:Enqueued LLM refine: job_id=9652f3e7-c2a3-457e-acb2-dbbd84fc75de placeholder_id=29a22dc4-8edc-4021-ad77-5627e7397cdd profile=09d35ff9-ee1d-4852-a368-21cb43a630e4
+web-1     | INFO:pdf-ingest:confirm-save returning: {'id': '09d35ff9-ee1d-4852-a368-21cb43a630e4', 'created_at': '2025-08-27T01:41:26.996858+00:00', 'updated_at': '2025-08-27T01:41:26.996858+00:00', 'status': 'saved', 'llm_job_id': '9652f3e7-c2a3-457e-acb2-dbbd84fc75de', 'placeholderId': '29a22dc4-8edc-4021-ad77-5627e7397cdd'}
+worker-1  | INFO:rq.worker:default: worker.llm_refine_profile('09d35ff9-ee1d-4852-a368-21cb43a630e4', correlation_job_id='29a22dc4-8edc-4021-ad77-5627e7397cdd') (9652f3e7-c2a3-457e-acb2-dbbd84fc75de)
+web-1     | INFO:     172.18.0.1:65468 - "POST /api/v1/confirm-save HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/29a22dc4-8edc-4021-ad77-5627e7397cdd Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:65468 - "GET /api/v1/llm-history/29a22dc4-8edc-4021-ad77-5627e7397cdd HTTP/1.1" 200 OK
+worker-1  | INFO:pdf-ingest.worker:LLM_REFINE_CALLED 09d35ff9-ee1d-4852-a368-21cb43a630e4 session_injected False correlation_job_id=True
+worker-1  | INFO:pdf-ingest.worker:WORKER_ENTER 09d35ff9-ee1d-4852-a368-21cb43a630e4 loaded_profile True
+worker-1  | INFO:pdf-ingest.worker:Invoking LLM refine: provider=mistral mock=True profile_id=09d35ff9-ee1d-4852-a368-21cb43a630e4
+worker-1  | INFO:pdf-ingest.llm:refine_with_llm: returning mock profile (mock=True)
+worker-1  | INFO:pdf-ingest.worker:LLM_RESP_SNIPPET "{'name': 'Test User', 'email': 'test@example.com', 'summary': 'Test summary', 'skills': ['Python'], 'experience': [], 'rawText': 'raw', 'confidence': 0.9, 'metadata': {'source': 'manual', 'llm': 'mock', 'llmRefinedAt': None}}"
+worker-1  | INFO:pdf-ingest.worker:Updated existing LLMHistory (placeholder or job match) id=29a22dc4-8edc-4021-ad77-5627e7397cdd job_id=29a22dc4-8edc-4021-ad77-5627e7397cdd profile=09d35ff9-ee1d-4852-a368-21cb43a630e4
+worker-1  | INFO:pdf-ingest.convex_persist:Calling Convex action https://neat-starfish-33.convex.site/api/actions/persistProfile (attempt 1/4)
+worker-1  | INFO:pdf-ingest.worker:Convex persist succeeded for profile 09d35ff9-ee1d-4852-a368-21cb43a630e4 idempotency=30b03cc8-29cc-4041-aa92-7fac8b8a5c3c resp={'status': 'ok', 'result': {'profileId': '09d35ff9-ee1d-4852-a368-21cb43a630e4', 'updatedAt': 1756258887575, 'written': True}}
+worker-1  | INFO:pdf-ingest.worker:WORKER_META_MERGED 09d35ff9-ee1d-4852-a368-21cb43a630e4 {'ai_flags': [], 'missing_fields': [], 'inferred_fields': {'email': {'value': '<missing-02504eb0-d4f1-4a21-b63f-4b4622cbc283@example.invalid>', 'method': 'placeholder'}}, 'source': 'manual', 'llm': 'mock', 'llmRefinedAt': None, 'llmRefined': True, 'llmConfidence': 0.9}
+worker-1  | INFO:pdf-ingest.worker:DEBUG_META_AFTER_COMMIT_FRESH 09d35ff9-ee1d-4852-a368-21cb43a630e4 {'llm': 'mock', 'source': 'manual', 'ai_flags': [], 'llmRefined': True, 'llmRefinedAt': None, 'llmConfidence': 0.9, 'missing_fields': [], 'inferred_fields': {'email': {'value': '<missing-02504eb0-d4f1-4a21-b63f-4b4622cbc283@example.invalid>', 'method': 'placeholder'}}}
+worker-1  | INFO:rq.worker:default: Job OK (9652f3e7-c2a3-457e-acb2-dbbd84fc75de)
+worker-1  | INFO:rq.worker:Result is kept for 500 seconds
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/29a22dc4-8edc-4021-ad77-5627e7397cdd Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:65468 - "GET /api/v1/llm-history/29a22dc4-8edc-4021-ad77-5627e7397cdd HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/confirm-save Origin: http://localhost:5174
+web-1     | INFO:pdf-ingest:confirm-save called email=bvnbgfgf
+web-1     | INFO:pdf-ingest:confirm-save called email=bvnbgfgf
+web-1     | INFO:pdf-ingest:confirm-save profile_payload keys: ['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:pdf-ingest:AI suggestions added: category=Unknown, flags=[]
+web-1     | INFO:pdf-ingest:confirm-save payload missing required fields after inference=['name'] payload_keys=['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence']
+web-1     | DEBUG:pdf-ingest:confirm-save entering transaction for email=bvnbgfgf payload_keys=['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:pdf-ingest:Attempting SELECT FOR UPDATE for email=bvnbgfgf
+web-1     | INFO:pdf-ingest:SELECT FOR UPDATE result for email=bvnbgfgf -> existing_id=None
+web-1     | INFO:pdf-ingest:Creating new profile for email=bvnbgfgf
+web-1     | INFO:pdf-ingest:Flushing new profile for email=bvnbgfgf
+web-1     | INFO:pdf-ingest:Flush complete for new profile temporary id=1a383c43-a84f-4e5e-9aac-88e29279eacd
+web-1     | INFO:pdf-ingest:Refreshing profile object after commit id=1a383c43-a84f-4e5e-9aac-88e29279eacd (obj={'_sa_instance_state': <sqlalchemy.orm.state.InstanceState object at 0xffff8df910d0>, 'name': 'Unknown', 'email': 'bvnbgfgf', 'summary': None, 'skills': [], 'experience': None, 'raw_text': None, 'confidence': 0.4, 'meta': {'ai_flags': [], 'missing_fields': [], 'inferred_fields': {'name': {'value': 'Unknown', 'method': 'placeholder'}}}, 'id': UUID('1a383c43-a84f-4e5e-9aac-88e29279eacd'), 'version': 1, 'created_at': datetime.datetime(2025, 8, 27, 1, 41, 28, 621461, tzinfo=datetime.timezone.utc), 'updated_at': datetime.datetime(2025, 8, 27, 1, 41, 28, 621461, tzinfo=datetime.timezone.utc)})
+web-1     | INFO:pdf-ingest:Refresh complete for profile id=1a383c43-a84f-4e5e-9aac-88e29279eacd created_at=2025-08-27 01:41:28.621461+00:00 updated_at=2025-08-27 01:41:28.621461+00:00
+web-1     | INFO:pdf-ingest:Profile saved successfully: id=1a383c43-a84f-4e5e-9aac-88e29279eacd created_at=2025-08-27 01:41:28.621461+00:00 updated_at=2025-08-27 01:41:28.621461+00:00
+web-1     | INFO:pdf-ingest:Confidence 0.4 < threshold 0.6, enqueuing LLM refine for profile 1a383c43-a84f-4e5e-9aac-88e29279eacd
+web-1     | INFO:pdf-ingest.worker:Created placeholder LLMHistory (pre-enqueue) id=a1a5c258-b9c4-4fc8-b336-746460613493 for profile 1a383c43-a84f-4e5e-9aac-88e29279eacd
+worker-1  | INFO:rq.worker:default: worker.llm_refine_profile('1a383c43-a84f-4e5e-9aac-88e29279eacd', correlation_job_id='a1a5c258-b9c4-4fc8-b336-746460613493') (82e11b69-9f2d-4cc1-a021-511567aa1d52)
+web-1     | INFO:pdf-ingest.worker:Enqueued llm_refine_profile: job_id=82e11b69-9f2d-4cc1-a021-511567aa1d52 profile_id=1a383c43-a84f-4e5e-9aac-88e29279eacd placeholder_id=a1a5c258-b9c4-4fc8-b336-746460613493
+web-1     | INFO:pdf-ingest:Enqueued LLM refine: job_id=82e11b69-9f2d-4cc1-a021-511567aa1d52 placeholder_id=a1a5c258-b9c4-4fc8-b336-746460613493 profile=1a383c43-a84f-4e5e-9aac-88e29279eacd
+web-1     | INFO:pdf-ingest:confirm-save returning: {'id': '1a383c43-a84f-4e5e-9aac-88e29279eacd', 'created_at': '2025-08-27T01:41:28.621461+00:00', 'updated_at': '2025-08-27T01:41:28.621461+00:00', 'status': 'saved', 'llm_job_id': '82e11b69-9f2d-4cc1-a021-511567aa1d52', 'placeholderId': 'a1a5c258-b9c4-4fc8-b336-746460613493'}
+web-1     | INFO:     172.18.0.1:65468 - "POST /api/v1/confirm-save HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/a1a5c258-b9c4-4fc8-b336-746460613493 Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:65468 - "GET /api/v1/llm-history/a1a5c258-b9c4-4fc8-b336-746460613493 HTTP/1.1" 200 OK
+worker-1  | INFO:pdf-ingest.worker:LLM_REFINE_CALLED 1a383c43-a84f-4e5e-9aac-88e29279eacd session_injected False correlation_job_id=True
+worker-1  | INFO:pdf-ingest.worker:WORKER_ENTER 1a383c43-a84f-4e5e-9aac-88e29279eacd loaded_profile True
+worker-1  | INFO:pdf-ingest.worker:Invoking LLM refine: provider=mistral mock=True profile_id=1a383c43-a84f-4e5e-9aac-88e29279eacd
+worker-1  | INFO:pdf-ingest.llm:refine_with_llm: returning mock profile (mock=True)
+worker-1  | INFO:pdf-ingest.worker:LLM_RESP_SNIPPET "{'name': 'Test User', 'email': 'test@example.com', 'summary': 'Test summary', 'skills': ['Python'], 'experience': [], 'rawText': 'raw', 'confidence': 0.9, 'metadata': {'source': 'manual', 'llm': 'mock', 'llmRefinedAt': None}}"
+worker-1  | INFO:pdf-ingest.worker:Updated existing LLMHistory (placeholder or job match) id=a1a5c258-b9c4-4fc8-b336-746460613493 job_id=a1a5c258-b9c4-4fc8-b336-746460613493 profile=1a383c43-a84f-4e5e-9aac-88e29279eacd
+worker-1  | INFO:pdf-ingest.convex_persist:Calling Convex action https://neat-starfish-33.convex.site/api/actions/persistProfile (attempt 1/4)
+worker-1  | INFO:pdf-ingest.worker:Convex persist succeeded for profile 1a383c43-a84f-4e5e-9aac-88e29279eacd idempotency=16cd88c3-e2af-49f4-81c1-adfed8dc02e0 resp={'status': 'ok', 'result': {'profileId': '1a383c43-a84f-4e5e-9aac-88e29279eacd', 'updatedAt': 1756258889206, 'written': True}}
+worker-1  | INFO:pdf-ingest.worker:WORKER_META_MERGED 1a383c43-a84f-4e5e-9aac-88e29279eacd {'ai_flags': [], 'missing_fields': [], 'inferred_fields': {'name': {'value': 'Unknown', 'method': 'placeholder'}}, 'source': 'manual', 'llm': 'mock', 'llmRefinedAt': None, 'llmRefined': True, 'llmConfidence': 0.9}
+worker-1  | INFO:pdf-ingest.worker:DEBUG_META_AFTER_COMMIT_FRESH 1a383c43-a84f-4e5e-9aac-88e29279eacd {'llm': 'mock', 'source': 'manual', 'ai_flags': [], 'llmRefined': True, 'llmRefinedAt': None, 'llmConfidence': 0.9, 'missing_fields': [], 'inferred_fields': {'name': {'value': 'Unknown', 'method': 'placeholder'}}}
+worker-1  | INFO:rq.worker:default: Job OK (82e11b69-9f2d-4cc1-a021-511567aa1d52)
+worker-1  | INFO:rq.worker:Result is kept for 500 seconds
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/a1a5c258-b9c4-4fc8-b336-746460613493 Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:65468 - "GET /api/v1/llm-history/a1a5c258-b9c4-4fc8-b336-746460613493 HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/confirm-save Origin: http://localhost:5174
+web-1     | INFO:pdf-ingest:confirm-save called email=None
+web-1     | INFO:pdf-ingest:confirm-save called email=None
+web-1     | INFO:pdf-ingest:confirm-save profile_payload keys: ['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:pdf-ingest:AI suggestions added: category=Unknown, flags=[]
+web-1     | INFO:pdf-ingest:confirm-save payload missing required fields after inference=['email', 'name'] payload_keys=['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence']
+web-1     | DEBUG:pdf-ingest:confirm-save entering transaction for email=<missing-7cb95a3f-67e0-45e5-8443-15866534503f@example.invalid> payload_keys=['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:pdf-ingest:Attempting SELECT FOR UPDATE for email=<missing-7cb95a3f-67e0-45e5-8443-15866534503f@example.invalid>
+web-1     | INFO:pdf-ingest:SELECT FOR UPDATE result for email=<missing-7cb95a3f-67e0-45e5-8443-15866534503f@example.invalid> -> existing_id=None
+web-1     | INFO:pdf-ingest:Creating new profile for email=<missing-7cb95a3f-67e0-45e5-8443-15866534503f@example.invalid>
+web-1     | INFO:pdf-ingest:Flushing new profile for email=<missing-7cb95a3f-67e0-45e5-8443-15866534503f@example.invalid>
+web-1     | INFO:pdf-ingest:Flush complete for new profile temporary id=ab999817-d6d6-4ee5-b7da-edc1139ca6d1
+web-1     | INFO:pdf-ingest:Refreshing profile object after commit id=ab999817-d6d6-4ee5-b7da-edc1139ca6d1 (obj={'_sa_instance_state': <sqlalchemy.orm.state.InstanceState object at 0xffff8b1e8e90>, 'name': 'Unknown', 'email': '<missing-7cb95a3f-67e0-45e5-8443-15866534503f@example.invalid>', 'summary': 'fgfn', 'skills': [], 'experience': None, 'raw_text': None, 'confidence': 0.15, 'meta': {'ai_flags': [], 'missing_fields': [], 'inferred_fields': {'email': {'value': '<missing-7cb95a3f-67e0-45e5-8443-15866534503f@example.invalid>', 'method': 'placeholder'}, 'name': {'value': 'Unknown', 'method': 'placeholder'}}}, 'id': UUID('ab999817-d6d6-4ee5-b7da-edc1139ca6d1'), 'version': 1, 'created_at': datetime.datetime(2025, 8, 27, 1, 41, 30, 52879, tzinfo=datetime.timezone.utc), 'updated_at': datetime.datetime(2025, 8, 27, 1, 41, 30, 52879, tzinfo=datetime.timezone.utc)})
+web-1     | INFO:pdf-ingest:Refresh complete for profile id=ab999817-d6d6-4ee5-b7da-edc1139ca6d1 created_at=2025-08-27 01:41:30.052879+00:00 updated_at=2025-08-27 01:41:30.052879+00:00
+web-1     | INFO:pdf-ingest:Profile saved successfully: id=ab999817-d6d6-4ee5-b7da-edc1139ca6d1 created_at=2025-08-27 01:41:30.052879+00:00 updated_at=2025-08-27 01:41:30.052879+00:00
+web-1     | INFO:pdf-ingest:Confidence 0.15 < threshold 0.6, enqueuing LLM refine for profile ab999817-d6d6-4ee5-b7da-edc1139ca6d1
+web-1     | INFO:pdf-ingest.worker:Created placeholder LLMHistory (pre-enqueue) id=2bf8e963-ac90-4b1e-8310-40ed90964181 for profile ab999817-d6d6-4ee5-b7da-edc1139ca6d1
+web-1     | INFO:pdf-ingest.worker:Enqueued llm_refine_profile: job_id=112d7c32-09ec-469c-8609-43272c127043 profile_id=ab999817-d6d6-4ee5-b7da-edc1139ca6d1 placeholder_id=2bf8e963-ac90-4b1e-8310-40ed90964181
+web-1     | INFO:pdf-ingest:Enqueued LLM refine: job_id=112d7c32-09ec-469c-8609-43272c127043 placeholder_id=2bf8e963-ac90-4b1e-8310-40ed90964181 profile=ab999817-d6d6-4ee5-b7da-edc1139ca6d1
+web-1     | INFO:pdf-ingest:confirm-save returning: {'id': 'ab999817-d6d6-4ee5-b7da-edc1139ca6d1', 'created_at': '2025-08-27T01:41:30.052879+00:00', 'updated_at': '2025-08-27T01:41:30.052879+00:00', 'status': 'saved', 'llm_job_id': '112d7c32-09ec-469c-8609-43272c127043', 'placeholderId': '2bf8e963-ac90-4b1e-8310-40ed90964181'}
+worker-1  | INFO:rq.worker:default: worker.llm_refine_profile('ab999817-d6d6-4ee5-b7da-edc1139ca6d1', correlation_job_id='2bf8e963-ac90-4b1e-8310-40ed90964181') (112d7c32-09ec-469c-8609-43272c127043)
+web-1     | INFO:     172.18.0.1:65468 - "POST /api/v1/confirm-save HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/2bf8e963-ac90-4b1e-8310-40ed90964181 Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:65468 - "GET /api/v1/llm-history/2bf8e963-ac90-4b1e-8310-40ed90964181 HTTP/1.1" 200 OK
+worker-1  | INFO:pdf-ingest.worker:LLM_REFINE_CALLED ab999817-d6d6-4ee5-b7da-edc1139ca6d1 session_injected False correlation_job_id=True
+worker-1  | INFO:pdf-ingest.worker:WORKER_ENTER ab999817-d6d6-4ee5-b7da-edc1139ca6d1 loaded_profile True
+worker-1  | INFO:pdf-ingest.worker:Invoking LLM refine: provider=mistral mock=True profile_id=ab999817-d6d6-4ee5-b7da-edc1139ca6d1
+worker-1  | INFO:pdf-ingest.llm:refine_with_llm: returning mock profile (mock=True)
+worker-1  | INFO:pdf-ingest.worker:LLM_RESP_SNIPPET "{'name': 'Test User', 'email': 'test@example.com', 'summary': 'Test summary', 'skills': ['Python'], 'experience': [], 'rawText': 'raw', 'confidence': 0.9, 'metadata': {'source': 'manual', 'llm': 'mock', 'llmRefinedAt': None}}"
+worker-1  | INFO:pdf-ingest.worker:Updated existing LLMHistory (placeholder or job match) id=2bf8e963-ac90-4b1e-8310-40ed90964181 job_id=2bf8e963-ac90-4b1e-8310-40ed90964181 profile=ab999817-d6d6-4ee5-b7da-edc1139ca6d1
+worker-1  | INFO:pdf-ingest.convex_persist:Calling Convex action https://neat-starfish-33.convex.site/api/actions/persistProfile (attempt 1/4)
+worker-1  | INFO:pdf-ingest.worker:Convex persist succeeded for profile ab999817-d6d6-4ee5-b7da-edc1139ca6d1 idempotency=82405992-dc75-444a-9250-898390857e83 resp={'status': 'ok', 'result': {'profileId': 'ab999817-d6d6-4ee5-b7da-edc1139ca6d1', 'updatedAt': 1756258890575, 'written': True}}
+worker-1  | INFO:pdf-ingest.worker:WORKER_META_MERGED ab999817-d6d6-4ee5-b7da-edc1139ca6d1 {'ai_flags': [], 'missing_fields': [], 'inferred_fields': {'name': {'value': 'Unknown', 'method': 'placeholder'}, 'email': {'value': '<missing-7cb95a3f-67e0-45e5-8443-15866534503f@example.invalid>', 'method': 'placeholder'}}, 'source': 'manual', 'llm': 'mock', 'llmRefinedAt': None, 'llmRefined': True, 'llmConfidence': 0.9}
+worker-1  | INFO:pdf-ingest.worker:DEBUG_META_AFTER_COMMIT_FRESH ab999817-d6d6-4ee5-b7da-edc1139ca6d1 {'llm': 'mock', 'source': 'manual', 'ai_flags': [], 'llmRefined': True, 'llmRefinedAt': None, 'llmConfidence': 0.9, 'missing_fields': [], 'inferred_fields': {'name': {'value': 'Unknown', 'method': 'placeholder'}, 'email': {'value': '<missing-7cb95a3f-67e0-45e5-8443-15866534503f@example.invalid>', 'method': 'placeholder'}}}
+worker-1  | INFO:rq.worker:default: Job OK (112d7c32-09ec-469c-8609-43272c127043)
+worker-1  | INFO:rq.worker:Result is kept for 500 seconds
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/2bf8e963-ac90-4b1e-8310-40ed90964181 Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:65468 - "GET /api/v1/llm-history/2bf8e963-ac90-4b1e-8310-40ed90964181 HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/parse-now Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:64710 - "POST /api/v1/parse-now HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/confirm-save Origin: http://localhost:5174
+web-1     | INFO:pdf-ingest:confirm-save called email=None
+web-1     | INFO:pdf-ingest:confirm-save called email=None
+web-1     | INFO:pdf-ingest:confirm-save profile_payload keys: ['name', 'email', 'summary', 'skills', 'experience', 'education', 'achievements', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:     172.18.0.1:64710 - "POST /api/v1/confirm-save HTTP/1.1" 500 Internal Server Error
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/confirm-save Origin: http://localhost:5174
+web-1     | INFO:pdf-ingest:confirm-save called email=None
+web-1     | INFO:pdf-ingest:confirm-save called email=None
+web-1     | INFO:pdf-ingest:confirm-save profile_payload keys: ['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:pdf-ingest:AI suggestions added: category=Unknown, flags=[]
+web-1     | INFO:pdf-ingest:confirm-save payload missing required fields after inference=['email', 'name'] payload_keys=['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence']
+web-1     | DEBUG:pdf-ingest:confirm-save entering transaction for email=<missing-588c7d05-5722-4478-80a9-d09364a85c8f@example.invalid> payload_keys=['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:pdf-ingest:Attempting SELECT FOR UPDATE for email=<missing-588c7d05-5722-4478-80a9-d09364a85c8f@example.invalid>
+web-1     | INFO:pdf-ingest:SELECT FOR UPDATE result for email=<missing-588c7d05-5722-4478-80a9-d09364a85c8f@example.invalid> -> existing_id=None
+web-1     | INFO:pdf-ingest:Creating new profile for email=<missing-588c7d05-5722-4478-80a9-d09364a85c8f@example.invalid>
+web-1     | INFO:pdf-ingest:Flushing new profile for email=<missing-588c7d05-5722-4478-80a9-d09364a85c8f@example.invalid>
+web-1     | INFO:pdf-ingest:Flush complete for new profile temporary id=b21ef140-c998-4770-8261-b665cbfc611a
+web-1     | INFO:pdf-ingest:Refreshing profile object after commit id=b21ef140-c998-4770-8261-b665cbfc611a (obj={'_sa_instance_state': <sqlalchemy.orm.state.InstanceState object at 0xffff8b1d8530>, 'name': 'Unknown', 'email': '<missing-588c7d05-5722-4478-80a9-d09364a85c8f@example.invalid>', 'summary': 'fgfnfg', 'skills': [], 'experience': None, 'raw_text': None, 'confidence': 0.15, 'meta': {'ai_flags': [], 'missing_fields': [], 'inferred_fields': {'email': {'value': '<missing-588c7d05-5722-4478-80a9-d09364a85c8f@example.invalid>', 'method': 'placeholder'}, 'name': {'value': 'Unknown', 'method': 'placeholder'}}}, 'id': UUID('b21ef140-c998-4770-8261-b665cbfc611a'), 'version': 1, 'created_at': datetime.datetime(2025, 8, 27, 1, 41, 39, 745205, tzinfo=datetime.timezone.utc), 'updated_at': datetime.datetime(2025, 8, 27, 1, 41, 39, 745205, tzinfo=datetime.timezone.utc)})
+web-1     | INFO:pdf-ingest:Refresh complete for profile id=b21ef140-c998-4770-8261-b665cbfc611a created_at=2025-08-27 01:41:39.745205+00:00 updated_at=2025-08-27 01:41:39.745205+00:00
+web-1     | INFO:pdf-ingest:Profile saved successfully: id=b21ef140-c998-4770-8261-b665cbfc611a created_at=2025-08-27 01:41:39.745205+00:00 updated_at=2025-08-27 01:41:39.745205+00:00
+web-1     | INFO:pdf-ingest:Confidence 0.15 < threshold 0.6, enqueuing LLM refine for profile b21ef140-c998-4770-8261-b665cbfc611a
+web-1     | INFO:pdf-ingest.worker:Created placeholder LLMHistory (pre-enqueue) id=2f4e264e-f863-47fb-8e03-07b6ffc228c2 for profile b21ef140-c998-4770-8261-b665cbfc611a
+web-1     | INFO:pdf-ingest.worker:Enqueued llm_refine_profile: job_id=2344e08d-f048-46f5-aabf-ddf25f27622f profile_id=b21ef140-c998-4770-8261-b665cbfc611a placeholder_id=2f4e264e-f863-47fb-8e03-07b6ffc228c2
+worker-1  | INFO:rq.worker:default: worker.llm_refine_profile('b21ef140-c998-4770-8261-b665cbfc611a', correlation_job_id='2f4e264e-f863-47fb-8e03-07b6ffc228c2') (2344e08d-f048-46f5-aabf-ddf25f27622f)
+web-1     | INFO:pdf-ingest:Enqueued LLM refine: job_id=2344e08d-f048-46f5-aabf-ddf25f27622f placeholder_id=2f4e264e-f863-47fb-8e03-07b6ffc228c2 profile=b21ef140-c998-4770-8261-b665cbfc611a
+web-1     | INFO:pdf-ingest:confirm-save returning: {'id': 'b21ef140-c998-4770-8261-b665cbfc611a', 'created_at': '2025-08-27T01:41:39.745205+00:00', 'updated_at': '2025-08-27T01:41:39.745205+00:00', 'status': 'saved', 'llm_job_id': '2344e08d-f048-46f5-aabf-ddf25f27622f', 'placeholderId': '2f4e264e-f863-47fb-8e03-07b6ffc228c2'}
+web-1     | INFO:     172.18.0.1:59476 - "POST /api/v1/confirm-save HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/2f4e264e-f863-47fb-8e03-07b6ffc228c2 Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:59476 - "GET /api/v1/llm-history/2f4e264e-f863-47fb-8e03-07b6ffc228c2 HTTP/1.1" 200 OK
+worker-1  | INFO:pdf-ingest.worker:LLM_REFINE_CALLED b21ef140-c998-4770-8261-b665cbfc611a session_injected False correlation_job_id=True
+worker-1  | INFO:pdf-ingest.worker:WORKER_ENTER b21ef140-c998-4770-8261-b665cbfc611a loaded_profile True
+worker-1  | INFO:pdf-ingest.worker:Invoking LLM refine: provider=mistral mock=True profile_id=b21ef140-c998-4770-8261-b665cbfc611a
+worker-1  | INFO:pdf-ingest.llm:refine_with_llm: returning mock profile (mock=True)
+worker-1  | INFO:pdf-ingest.worker:LLM_RESP_SNIPPET "{'name': 'Test User', 'email': 'test@example.com', 'summary': 'Test summary', 'skills': ['Python'], 'experience': [], 'rawText': 'raw', 'confidence': 0.9, 'metadata': {'source': 'manual', 'llm': 'mock', 'llmRefinedAt': None}}"
+worker-1  | INFO:pdf-ingest.worker:Updated existing LLMHistory (placeholder or job match) id=2f4e264e-f863-47fb-8e03-07b6ffc228c2 job_id=2f4e264e-f863-47fb-8e03-07b6ffc228c2 profile=b21ef140-c998-4770-8261-b665cbfc611a
+worker-1  | INFO:pdf-ingest.convex_persist:Calling Convex action https://neat-starfish-33.convex.site/api/actions/persistProfile (attempt 1/4)
+worker-1  | INFO:pdf-ingest.worker:Convex persist succeeded for profile b21ef140-c998-4770-8261-b665cbfc611a idempotency=9cc4c837-b88e-4111-9437-064fd4aee656 resp={'status': 'ok', 'result': {'profileId': 'b21ef140-c998-4770-8261-b665cbfc611a', 'updatedAt': 1756258900282, 'written': True}}
+worker-1  | INFO:pdf-ingest.worker:WORKER_META_MERGED b21ef140-c998-4770-8261-b665cbfc611a {'ai_flags': [], 'missing_fields': [], 'inferred_fields': {'name': {'value': 'Unknown', 'method': 'placeholder'}, 'email': {'value': '<missing-588c7d05-5722-4478-80a9-d09364a85c8f@example.invalid>', 'method': 'placeholder'}}, 'source': 'manual', 'llm': 'mock', 'llmRefinedAt': None, 'llmRefined': True, 'llmConfidence': 0.9}
+worker-1  | INFO:pdf-ingest.worker:DEBUG_META_AFTER_COMMIT_FRESH b21ef140-c998-4770-8261-b665cbfc611a {'llm': 'mock', 'source': 'manual', 'ai_flags': [], 'llmRefined': True, 'llmRefinedAt': None, 'llmConfidence': 0.9, 'missing_fields': [], 'inferred_fields': {'name': {'value': 'Unknown', 'method': 'placeholder'}, 'email': {'value': '<missing-588c7d05-5722-4478-80a9-d09364a85c8f@example.invalid>', 'method': 'placeholder'}}}
+worker-1  | INFO:rq.worker:default: Job OK (2344e08d-f048-46f5-aabf-ddf25f27622f)
+worker-1  | INFO:rq.worker:Result is kept for 500 seconds
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/2f4e264e-f863-47fb-8e03-07b6ffc228c2 Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:59476 - "GET /api/v1/llm-history/2f4e264e-f863-47fb-8e03-07b6ffc228c2 HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/confirm-save Origin: http://localhost:5174
+web-1     | INFO:pdf-ingest:confirm-save called email=bvnbgfgfgf
+web-1     | INFO:pdf-ingest:confirm-save called email=bvnbgfgfgf
+web-1     | INFO:pdf-ingest:confirm-save profile_payload keys: ['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:pdf-ingest:AI suggestions added: category=Unknown, flags=[]
+web-1     | INFO:pdf-ingest:confirm-save payload missing required fields after inference=['name'] payload_keys=['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence']
+web-1     | DEBUG:pdf-ingest:confirm-save entering transaction for email=bvnbgfgfgf payload_keys=['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:pdf-ingest:Attempting SELECT FOR UPDATE for email=bvnbgfgfgf
+web-1     | INFO:pdf-ingest:SELECT FOR UPDATE result for email=bvnbgfgfgf -> existing_id=None
+web-1     | INFO:pdf-ingest:Creating new profile for email=bvnbgfgfgf
+web-1     | INFO:pdf-ingest:Flushing new profile for email=bvnbgfgfgf
+web-1     | INFO:pdf-ingest:Flush complete for new profile temporary id=dd9d8cbd-ac6b-4986-9403-4f72c74ac484
+web-1     | INFO:pdf-ingest:Refreshing profile object after commit id=dd9d8cbd-ac6b-4986-9403-4f72c74ac484 (obj={'_sa_instance_state': <sqlalchemy.orm.state.InstanceState object at 0xffff8b1bb4d0>, 'name': 'Unknown', 'email': 'bvnbgfgfgf', 'summary': None, 'skills': [], 'experience': None, 'raw_text': None, 'confidence': 0.4, 'meta': {'ai_flags': [], 'missing_fields': [], 'inferred_fields': {'name': {'value': 'Unknown', 'method': 'placeholder'}}}, 'id': UUID('dd9d8cbd-ac6b-4986-9403-4f72c74ac484'), 'version': 1, 'created_at': datetime.datetime(2025, 8, 27, 1, 41, 41, 94787, tzinfo=datetime.timezone.utc), 'updated_at': datetime.datetime(2025, 8, 27, 1, 41, 41, 94787, tzinfo=datetime.timezone.utc)})
+web-1     | INFO:pdf-ingest:Refresh complete for profile id=dd9d8cbd-ac6b-4986-9403-4f72c74ac484 created_at=2025-08-27 01:41:41.094787+00:00 updated_at=2025-08-27 01:41:41.094787+00:00
+web-1     | INFO:pdf-ingest:Profile saved successfully: id=dd9d8cbd-ac6b-4986-9403-4f72c74ac484 created_at=2025-08-27 01:41:41.094787+00:00 updated_at=2025-08-27 01:41:41.094787+00:00
+web-1     | INFO:pdf-ingest:Confidence 0.4 < threshold 0.6, enqueuing LLM refine for profile dd9d8cbd-ac6b-4986-9403-4f72c74ac484
+web-1     | INFO:pdf-ingest.worker:Created placeholder LLMHistory (pre-enqueue) id=4a04b7fc-42e7-4b45-a5d2-b1a8e429e1ac for profile dd9d8cbd-ac6b-4986-9403-4f72c74ac484
+web-1     | INFO:pdf-ingest.worker:Enqueued llm_refine_profile: job_id=a0e69276-e3af-42eb-921e-745ac74d37a4 profile_id=dd9d8cbd-ac6b-4986-9403-4f72c74ac484 placeholder_id=4a04b7fc-42e7-4b45-a5d2-b1a8e429e1ac
+web-1     | INFO:pdf-ingest:Enqueued LLM refine: job_id=a0e69276-e3af-42eb-921e-745ac74d37a4 placeholder_id=4a04b7fc-42e7-4b45-a5d2-b1a8e429e1ac profile=dd9d8cbd-ac6b-4986-9403-4f72c74ac484
+web-1     | INFO:pdf-ingest:confirm-save returning: {'id': 'dd9d8cbd-ac6b-4986-9403-4f72c74ac484', 'created_at': '2025-08-27T01:41:41.094787+00:00', 'updated_at': '2025-08-27T01:41:41.094787+00:00', 'status': 'saved', 'llm_job_id': 'a0e69276-e3af-42eb-921e-745ac74d37a4', 'placeholderId': '4a04b7fc-42e7-4b45-a5d2-b1a8e429e1ac'}
+worker-1  | INFO:rq.worker:default: worker.llm_refine_profile('dd9d8cbd-ac6b-4986-9403-4f72c74ac484', correlation_job_id='4a04b7fc-42e7-4b45-a5d2-b1a8e429e1ac') (a0e69276-e3af-42eb-921e-745ac74d37a4)
+web-1     | INFO:     172.18.0.1:59476 - "POST /api/v1/confirm-save HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/4a04b7fc-42e7-4b45-a5d2-b1a8e429e1ac Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:59476 - "GET /api/v1/llm-history/4a04b7fc-42e7-4b45-a5d2-b1a8e429e1ac HTTP/1.1" 200 OK
+worker-1  | INFO:pdf-ingest.worker:LLM_REFINE_CALLED dd9d8cbd-ac6b-4986-9403-4f72c74ac484 session_injected False correlation_job_id=True
+worker-1  | INFO:pdf-ingest.worker:WORKER_ENTER dd9d8cbd-ac6b-4986-9403-4f72c74ac484 loaded_profile True
+worker-1  | INFO:pdf-ingest.worker:Invoking LLM refine: provider=mistral mock=True profile_id=dd9d8cbd-ac6b-4986-9403-4f72c74ac484
+worker-1  | INFO:pdf-ingest.llm:refine_with_llm: returning mock profile (mock=True)
+worker-1  | INFO:pdf-ingest.worker:LLM_RESP_SNIPPET "{'name': 'Test User', 'email': 'test@example.com', 'summary': 'Test summary', 'skills': ['Python'], 'experience': [], 'rawText': 'raw', 'confidence': 0.9, 'metadata': {'source': 'manual', 'llm': 'mock', 'llmRefinedAt': None}}"
+worker-1  | INFO:pdf-ingest.worker:Updated existing LLMHistory (placeholder or job match) id=4a04b7fc-42e7-4b45-a5d2-b1a8e429e1ac job_id=4a04b7fc-42e7-4b45-a5d2-b1a8e429e1ac profile=dd9d8cbd-ac6b-4986-9403-4f72c74ac484
+worker-1  | INFO:pdf-ingest.convex_persist:Calling Convex action https://neat-starfish-33.convex.site/api/actions/persistProfile (attempt 1/4)
+worker-1  | INFO:pdf-ingest.worker:Convex persist succeeded for profile dd9d8cbd-ac6b-4986-9403-4f72c74ac484 idempotency=46e6c5fb-adc2-4709-8640-803bca1f5317 resp={'status': 'ok', 'result': {'profileId': 'dd9d8cbd-ac6b-4986-9403-4f72c74ac484', 'updatedAt': 1756258901624, 'written': True}}
+worker-1  | INFO:pdf-ingest.worker:WORKER_META_MERGED dd9d8cbd-ac6b-4986-9403-4f72c74ac484 {'ai_flags': [], 'missing_fields': [], 'inferred_fields': {'name': {'value': 'Unknown', 'method': 'placeholder'}}, 'source': 'manual', 'llm': 'mock', 'llmRefinedAt': None, 'llmRefined': True, 'llmConfidence': 0.9}
+worker-1  | INFO:pdf-ingest.worker:DEBUG_META_AFTER_COMMIT_FRESH dd9d8cbd-ac6b-4986-9403-4f72c74ac484 {'llm': 'mock', 'source': 'manual', 'ai_flags': [], 'llmRefined': True, 'llmRefinedAt': None, 'llmConfidence': 0.9, 'missing_fields': [], 'inferred_fields': {'name': {'value': 'Unknown', 'method': 'placeholder'}}}
+worker-1  | INFO:rq.worker:default: Job OK (a0e69276-e3af-42eb-921e-745ac74d37a4)
+worker-1  | INFO:rq.worker:Result is kept for 500 seconds
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/4a04b7fc-42e7-4b45-a5d2-b1a8e429e1ac Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:59486 - "GET /api/v1/llm-history/4a04b7fc-42e7-4b45-a5d2-b1a8e429e1ac HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/confirm-save Origin: http://localhost:5174
+web-1     | INFO:pdf-ingest:confirm-save called email=None
+web-1     | INFO:pdf-ingest:confirm-save called email=None
+web-1     | INFO:pdf-ingest:confirm-save profile_payload keys: ['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:pdf-ingest:AI suggestions added: category=Unknown, flags=[]
+web-1     | INFO:pdf-ingest:confirm-save payload missing required fields after inference=['email'] payload_keys=['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence']
+web-1     | DEBUG:pdf-ingest:confirm-save entering transaction for email=<missing-22572325-df32-4fc1-8334-ebe33741423e@example.invalid> payload_keys=['name', 'email', 'summary', 'skills', 'experience', 'education', 'rawText', 'confidence', 'metadata']
+web-1     | INFO:pdf-ingest:Attempting SELECT FOR UPDATE for email=<missing-22572325-df32-4fc1-8334-ebe33741423e@example.invalid>
+web-1     | INFO:pdf-ingest:SELECT FOR UPDATE result for email=<missing-22572325-df32-4fc1-8334-ebe33741423e@example.invalid> -> existing_id=None
+web-1     | INFO:pdf-ingest:Creating new profile for email=<missing-22572325-df32-4fc1-8334-ebe33741423e@example.invalid>
+web-1     | INFO:pdf-ingest:Flushing new profile for email=<missing-22572325-df32-4fc1-8334-ebe33741423e@example.invalid>
+web-1     | INFO:pdf-ingest:Flush complete for new profile temporary id=3a28aa3c-3a91-4027-85d8-fd70b046ca1b
+web-1     | INFO:pdf-ingest:Refreshing profile object after commit id=3a28aa3c-3a91-4027-85d8-fd70b046ca1b (obj={'_sa_instance_state': <sqlalchemy.orm.state.InstanceState object at 0xffff8b1b88f0>, 'name': 'bfgfffg', 'email': '<missing-22572325-df32-4fc1-8334-ebe33741423e@example.invalid>', 'summary': None, 'skills': [], 'experience': None, 'raw_text': None, 'confidence': 0.2, 'meta': {'ai_flags': [], 'missing_fields': [], 'inferred_fields': {'email': {'value': '<missing-22572325-df32-4fc1-8334-ebe33741423e@example.invalid>', 'method': 'placeholder'}}}, 'id': UUID('3a28aa3c-3a91-4027-85d8-fd70b046ca1b'), 'version': 1, 'created_at': datetime.datetime(2025, 8, 27, 1, 41, 42, 251972, tzinfo=datetime.timezone.utc), 'updated_at': datetime.datetime(2025, 8, 27, 1, 41, 42, 251972, tzinfo=datetime.timezone.utc)})
+web-1     | INFO:pdf-ingest:Refresh complete for profile id=3a28aa3c-3a91-4027-85d8-fd70b046ca1b created_at=2025-08-27 01:41:42.251972+00:00 updated_at=2025-08-27 01:41:42.251972+00:00
+web-1     | INFO:pdf-ingest:Profile saved successfully: id=3a28aa3c-3a91-4027-85d8-fd70b046ca1b created_at=2025-08-27 01:41:42.251972+00:00 updated_at=2025-08-27 01:41:42.251972+00:00
+web-1     | INFO:pdf-ingest:Confidence 0.2 < threshold 0.6, enqueuing LLM refine for profile 3a28aa3c-3a91-4027-85d8-fd70b046ca1b
+web-1     | INFO:pdf-ingest.worker:Created placeholder LLMHistory (pre-enqueue) id=6f56cbfa-834a-4dc4-a619-83f495c612a8 for profile 3a28aa3c-3a91-4027-85d8-fd70b046ca1b
+web-1     | INFO:pdf-ingest.worker:Enqueued llm_refine_profile: job_id=82a3ab14-3ea4-47c6-9632-d943c27abc37 profile_id=3a28aa3c-3a91-4027-85d8-fd70b046ca1b placeholder_id=6f56cbfa-834a-4dc4-a619-83f495c612a8
+web-1     | INFO:pdf-ingest:Enqueued LLM refine: job_id=82a3ab14-3ea4-47c6-9632-d943c27abc37 placeholder_id=6f56cbfa-834a-4dc4-a619-83f495c612a8 profile=3a28aa3c-3a91-4027-85d8-fd70b046ca1b
+web-1     | INFO:pdf-ingest:confirm-save returning: {'id': '3a28aa3c-3a91-4027-85d8-fd70b046ca1b', 'created_at': '2025-08-27T01:41:42.251972+00:00', 'updated_at': '2025-08-27T01:41:42.251972+00:00', 'status': 'saved', 'llm_job_id': '82a3ab14-3ea4-47c6-9632-d943c27abc37', 'placeholderId': '6f56cbfa-834a-4dc4-a619-83f495c612a8'}
+web-1     | INFO:     172.18.0.1:59486 - "POST /api/v1/confirm-save HTTP/1.1" 200 OK
+worker-1  | INFO:rq.worker:default: worker.llm_refine_profile('3a28aa3c-3a91-4027-85d8-fd70b046ca1b', correlation_job_id='6f56cbfa-834a-4dc4-a619-83f495c612a8') (82a3ab14-3ea4-47c6-9632-d943c27abc37)
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/6f56cbfa-834a-4dc4-a619-83f495c612a8 Origin: http://localhost:5174
+web-1     | INFO:     172.18.0.1:59486 - "GET /api/v1/llm-history/6f56cbfa-834a-4dc4-a619-83f495c612a8 HTTP/1.1" 200 OK
+worker-1  | INFO:pdf-ingest.worker:LLM_REFINE_CALLED 3a28aa3c-3a91-4027-85d8-fd70b046ca1b session_injected False correlation_job_id=True
+worker-1  | INFO:pdf-ingest.worker:WORKER_ENTER 3a28aa3c-3a91-4027-85d8-fd70b046ca1b loaded_profile True
+worker-1  | INFO:pdf-ingest.worker:Invoking LLM refine: provider=mistral mock=True profile_id=3a28aa3c-3a91-4027-85d8-fd70b046ca1b
+worker-1  | INFO:pdf-ingest.llm:refine_with_llm: returning mock profile (mock=True)
+worker-1  | INFO:pdf-ingest.worker:LLM_RESP_SNIPPET "{'name': 'Test User', 'email': 'test@example.com', 'summary': 'Test summary', 'skills': ['Python'], 'experience': [], 'rawText': 'raw', 'confidence': 0.9, 'metadata': {'source': 'manual', 'llm': 'mock', 'llmRefinedAt': None}}"
+worker-1  | INFO:pdf-ingest.worker:Updated existing LLMHistory (placeholder or job match) id=6f56cbfa-834a-4dc4-a619-83f495c612a8 job_id=6f56cbfa-834a-4dc4-a619-83f495c612a8 profile=3a28aa3c-3a91-4027-85d8-fd70b046ca1b
+worker-1  | INFO:pdf-ingest.convex_persist:Calling Convex action https://neat-starfish-33.convex.site/api/actions/persistProfile (attempt 1/4)
+worker-1  | INFO:pdf-ingest.worker:Convex persist succeeded for profile 3a28aa3c-3a91-4027-85d8-fd70b046ca1b idempotency=ced009a8-5ef0-4d6a-b91c-3f5cc0a2de44 resp={'status': 'ok', 'result': {'profileId': '3a28aa3c-3a91-4027-85d8-fd70b046ca1b', 'updatedAt': 1756258902798, 'written': True}}
+worker-1  | INFO:pdf-ingest.worker:WORKER_META_MERGED 3a28aa3c-3a91-4027-85d8-fd70b046ca1b {'ai_flags': [], 'missing_fields': [], 'inferred_fields': {'email': {'value': '<missing-22572325-df32-4fc1-8334-ebe33741423e@example.invalid>', 'method': 'placeholder'}}, 'source': 'manual', 'llm': 'mock', 'llmRefinedAt': None, 'llmRefined': True, 'llmConfidence': 0.9}
+worker-1  | INFO:pdf-ingest.worker:DEBUG_META_AFTER_COMMIT_FRESH 3a28aa3c-3a91-4027-85d8-fd70b046ca1b {'llm': 'mock', 'source': 'manual', 'ai_flags': [], 'llmRefined': True, 'llmRefinedAt': None, 'llmConfidence': 0.9, 'missing_fields': [], 'inferred_fields': {'email': {'value': '<missing-22572325-df32-4fc1-8334-ebe33741423e@example.invalid>', 'method': 'placeholder'}}}
+worker-1  | INFO:rq.worker:default: Job OK (82a3ab14-3ea4-47c6-9632-d943c27abc37)
+worker-1  | INFO:rq.worker:Result is kept for 500 seconds

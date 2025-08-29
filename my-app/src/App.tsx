@@ -14,6 +14,7 @@ import ProposalDisplay from "./components/ProposalDisplay";
 import ProposalsList from "./components/ProposalsList";
 import DarkModeToggle from "./components/dark-mode-toggle/DarkModeToggle";
 import type { FormValues } from "./components/ProposalInputForm.schemas";
+import ProfileEditorUnified from "./components/ProfileEditorUnified";
 
 export default function App() {
   const [proposalContent, setProposalContent] = React.useState<string | null>(
@@ -92,20 +93,26 @@ export default function App() {
               </Flex>
             </Unauthenticated>
             <Authenticated>
-              <div className="relative w-full max-w-4xl px-4 mx-auto">
-                <div className="h-[calc(60vh)] overflow-auto">
-                  <ProposalDisplay proposalContent={proposalContent} loading={loading} error={error} />
+              {typeof window !== "undefined" && window.location.pathname === "/profile/edit" ? (
+                <div className="relative w-full max-w-4xl px-4 mx-auto">
+                  <ProfileEditorUnified />
                 </div>
+              ) : (
+                <div className="relative w-full max-w-4xl px-4 mx-auto">
+                  <div className="h-[calc(60vh)] overflow-auto">
+                    <ProposalDisplay proposalContent={proposalContent} loading={loading} error={error} />
+                  </div>
 
-                <div className="py-4">
-                  <ProfileForm />
-                  <ProposalInputForm onSubmit={handleProposalSubmit} />
-                </div>
+                  <div className="py-4">
+                    <ProfileForm />
+                    <ProposalInputForm onSubmit={handleProposalSubmit} />
+                  </div>
 
-                <div className="mt-6">
-                  <ProposalsList />
+                  <div className="mt-6">
+                    <ProposalsList />
+                  </div>
                 </div>
-              </div>
+              )}
             </Authenticated>
           </Flex>
         </main>

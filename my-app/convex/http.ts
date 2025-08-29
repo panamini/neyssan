@@ -1,8 +1,23 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { ingestProfileHandler, llmRefineHandler } from "./http_actions";
+
+
+
+
+
 
 const http = httpRouter();
+
+// Simple health check route to verify HTTP route registration (ping)
+http.route({
+  path: "/ping",
+  method: "GET",
+  handler: httpAction(async () => {
+    return new Response("pong", { status: 200, headers: { "Content-Type": "text/plain" } });
+  }),
+});
 
 http.route({
   path: "/test/generate",
@@ -38,49 +53,17 @@ http.route({
   }),
 });
 
-// Profile ingest HTTP route
+// Clean profile ingestion endpoint for client-side parsed data
 http.route({
-  path: "/profiles/ingest",
+  path: "/ingestProfile",
   method: "POST",
-  handler: httpAction(async ({ runMutation, auth }, request) => {
-    try {
-      const body = await request.json();
-      // Basic payload acceptance; detailed validation is performed in internal mutation
-      const profile = body;
+  handler: httpAction(ingestProfileHandler),
+});
 
-      const identity = await auth.getUserIdentity();
-      if (!identity) {
-        return new Response(JSON.stringify({ error: "Not authenticated" }), { status: 401 });
-      }
-
-      // Ensure user exists
-      await runMutation(internal.users.createOrUpdateUser, {
-        clerkId: identity.subject,
-        email: identity.email ?? "unknown@example.com",
-        name: identity.name,
-      });
-
-      // Call internal mutation to patch profile (internal.profiles.patchProfile)
-      if ((internal as any).profiles && (internal as any).profiles.patchProfile) {
-        await runMutation((internal as any).profiles.patchProfile, {
-          profile,
-        });
-        return new Response(JSON.stringify({ status: "ok" }), { status: 200 });
-      } else {
-        // As a fallback, attempt to call public mutation if available
-        if ((internal as any).profiles && (internal as any).profilesPublic) {
-          await runMutation((internal as any).profilesPublic, {
-            profile,
-          });
-          return new Response(JSON.stringify({ status: "ok", fallback: true }), { status: 200 });
-        }
-        return new Response(JSON.stringify({ status: "accepted", message: "patchProfile not available" }), { status: 202 });
-      }
-    } catch (err: any) {
-      console.error("HTTP /profiles/ingest error:", err);
-      return new Response(JSON.stringify({ error: String(err) }), { status: 500 });
-    }
-  }),
+http.route({
+  path: "/llm-refine",
+  method: "POST",
+  handler: httpAction(llmRefineHandler),
 });
 
 export default http;

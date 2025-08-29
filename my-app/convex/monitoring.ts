@@ -1,6 +1,5 @@
 import { internalMutation, internalQuery } from './_generated/server';
 import { v } from 'convex/values';
-import * as Monitoring from './model/monitoring';
 import { internal } from "./_generated/api";
 
 export const trackError = (error: Error) => {
@@ -8,7 +7,6 @@ export const trackError = (error: Error) => {
   // TODO: Implement proper error tracking logic here
 };
 
-// Define strict types for metadata with explicit optionals
 const metadataValidator = v.object({
   operation: v.optional(v.string()),
   status: v.optional(v.string()),
@@ -18,7 +16,7 @@ const metadataValidator = v.object({
   heapTotal: v.optional(v.number()),
   rss: v.optional(v.number()),
   functionType: v.optional(v.string())
-})
+});
 
 export const getMetrics = internalQuery({
   args: {
@@ -44,7 +42,7 @@ export const getMetrics = internalQuery({
       _creationTime: metric._creationTime
     }));
   }
-})
+});
 
 export const recordMetric = internalMutation({
   args: {
@@ -53,18 +51,16 @@ export const recordMetric = internalMutation({
     metadata: v.optional(metadataValidator)
   },
   handler: async (ctx, args) => {
-    const metricDoc = {
+    // Directly insert the metric into the database
+    return await ctx.db.insert("metrics", {
       name: args.name,
       value: args.value,
       timestamp: Date.now(),
-      labels: { 
-        ...(args.metadata as any) 
-      },
+      labels: { ...(args.metadata as any) },
       metadata: args.metadata || {}
-    };
-    return await Monitoring.recordMetric(ctx, metricDoc);
+    });
   }
-})
+});
 
 export const createAlert = internalMutation({
   args: {
@@ -74,27 +70,30 @@ export const createAlert = internalMutation({
     metadata: v.optional(v.object({}))
   },
   handler: async (ctx, args) => {
-    return await Monitoring.createAlert(ctx, {
+    return await ctx.db.insert("alerts", {
       type: args.type,
       severity: args.severity,
       message: args.message,
-      metadata: args.metadata ?? {}
-    })
+      metadata: args.metadata ?? {},
+      resolved: false,
+      acknowledged: false,
+      timestamp: Date.now()
+    });
   }
-})
+});
 
 export const resolveAlert = internalMutation({
   args: {
     id: v.id('alerts')
   },
   handler: async (ctx, { id }) => {
-    const now = Date.now()
+    const now = Date.now();
     return await ctx.db.patch(id, {
       resolved: true,
       resolvedAt: now
-    })
+    });
   }
-})
+});
 
 export const getActiveAlerts = internalQuery({
   args: {},
@@ -103,14 +102,14 @@ export const getActiveAlerts = internalQuery({
       .query('alerts')
       .withIndex('by_resolved')
       .filter(q => q.eq(q.field('resolved'), false))
-      .collect()
+      .collect();
   }
-})
+});
 
 export const checkAlerts = internalMutation({
   args: {},
   handler: async (ctx) => {
-    const activeAlerts = await ctx.runQuery(internal.monitoring.getActiveAlerts);
+    const activeAlerts = await ctx.runQuery(internal.monitoring.getActiveAlerts, {});
 
     console.log("Checking active alerts:", activeAlerts);
 
@@ -127,28 +126,24 @@ export const checkAlerts = internalMutation({
     for (const metric of recentMetrics) {
       const threshold = thresholds[metric.name] || 100;
 
-      if (metric.value > threshold) {
-        const existingAlert = activeAlerts.find(
-          (alert: { type: string; _id: string }) => alert.type === `${metric.name}_threshold_exceeded`
-        );
+      const existingAlert = activeAlerts.find(
+        (alert: { type: string; _id: string }) => alert.type === `${metric.name}_threshold_exceeded`
+      );
 
+      if (metric.value > threshold) {
         if (!existingAlert) {
           await ctx.runMutation(internal.monitoring.createAlert, {
             type: `${metric.name}_threshold_exceeded`,
             severity: "warning",
             message: `${metric.name} exceeded threshold: ${metric.value} > ${threshold}`,
-            metadata: { 
-              metricName: metric.name, 
-              currentValue: metric.value, 
-              threshold 
+            metadata: {
+              metricName: metric.name,
+              currentValue: metric.value,
+              threshold
             }
           });
         }
       } else {
-        const existingAlert = activeAlerts.find(
-          (alert: { type: string; _id: string }) => alert.type === `${metric.name}_threshold_exceeded`
-        );
-
         if (existingAlert) {
           await ctx.runMutation(internal.monitoring.resolveAlert, {
             id: existingAlert._id

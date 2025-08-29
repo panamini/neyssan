@@ -9,6 +9,7 @@ import { useMutation, useConvex } from "convex/react";
 import styles from "./ProposalInputForm.module.css";
 import ProfileView from "./ProfileView";
 import { SkillAdder, ExperienceAdder, EducationAdder } from "./ProfileEditors";
+import ProfileReviewModal from "./ProfileReviewModal";
 
 const _schema = z.object({
   resumeText: z.string().min(20).optional(),
@@ -25,6 +26,18 @@ export default function ProfileForm() {
 
   const [status, setStatus] = React.useState<string | null>(null);
   console.log("ProfileForm rendered - status:", status);
+
+  // New: parsed profile and modal state for review-before-save flow
+  const [parsedProfile, setParsedProfile] = React.useState<any | null>(null);
+  const [showReviewModal, setShowReviewModal] = React.useState(false);
+
+  // NOTE:
+  // ProfileForm no longer handles direct file parsing/upload. The ProfileReviewModal
+  // is the single place that accepts a file (Load CV) and handles parse -> confirm-save -> llm-refine -> persist.
+  // This avoids confusion where two places both tried to upload/parse and opens modal unexpectedly.
+  // To load a new CV, open the Review modal (it exposes its own file picker).
+  // To open the modal for editing the existing profile (ProfileView load), call setShowReviewModal(true) and
+  // pass parsedProfile sourced from backend (handled elsewhere).
 
   const convex = useConvex();
   const [currentProfile, setCurrentProfile] = React.useState<any>(null);
@@ -62,7 +75,7 @@ export default function ProfileForm() {
       setStatus("Summary saved");
       setTimeout(() => setStatus(null), 2000);
     } catch (err: any) {
-      console.error("Failed to save summary:", err);
+      console.error("Failed to save summary", err);
       setStatus(`Failed to save: ${err?.message ?? String(err)}`);
     }
   };
@@ -72,13 +85,13 @@ export default function ProfileForm() {
     try {
       // Prefer calling the typed public mutation; fall back to http ingest if needed.
       if (values.resumeText && values.resumeText.length > 20) {
-        await profilesPublic({
-          profile: {
-            summary: values.resumeText.substring(0, 2000), // lightweight summary for now
-            rawText: values.resumeText.substring(0, 2000),
-            metadata: { source: "manual_paste", importedAt: Date.now() },
-          },
-        });
+          await profilesPublic({
+            profile: {
+              summary: values.resumeText.substring(0, 2000), // lightweight summary for now
+              raw_text: values.resumeText.substring(0, 2000),
+              metadata: { source: "manual_paste", importedAt: Date.now() },
+            },
+          });
       } else {
         throw new Error("Please paste your resume text (min 20 chars).");
       }
@@ -93,8 +106,73 @@ export default function ProfileForm() {
     }
   }
 
+  // callback passed to modal when user confirms save
+  const handleModalSaved = async (result: any) => {
+    // result can be backend response (id etc) or an object containing { profile, __closeAfterSave }
+    console.debug("Modal saved result:", result);
+    try {
+      const profileFromResult = result?.profile ?? null;
+      const id = result?.id ?? (profileFromResult && profileFromResult.id) ?? null;
+
+      if (profileFromResult) {
+        // If the modal returned a merged/full profile object, use it directly to update UI.
+        console.debug("Using merged profile from modal:", profileFromResult);
+        setCurrentProfile(profileFromResult);
+        setSummaryDraft(profileFromResult.summary ?? "");
+        setExpanded(true);
+      } else if (id) {
+        // Fetch the saved profile from the backend by id (not via Convex user query)
+        const backendBase = (import.meta as any).env?.VITE_PDF_INGEST_URL ?? "";
+        const url = backendBase ? `${backendBase}/api/v1/profiles/${id}` : `/api/v1/profiles/${id}`;
+
+        const resp = await fetch(url);
+        if (!resp.ok) {
+          console.warn("Failed to fetch saved profile", await resp.text());
+        } else {
+          const profileJson = await resp.json();
+          console.debug("Fetched saved profile:", profileJson);
+          setCurrentProfile(profileJson);
+          setSummaryDraft(profileJson.summary ?? "");
+          setExpanded(true);
+        }
+      } else {
+        // fallback to existing fetchMyProfile if no id or profile returned
+        await fetchMyProfile();
+      }
+
+      // Respect the modal's explicit close flag if provided; default = false (do not close)
+      const shouldClose = result?.__closeAfterSave ?? false;
+      if (shouldClose) {
+        // Only clear the parsedProfile and close the modal when the modal explicitly requests it.
+        setParsedProfile(null);
+        setShowReviewModal(false);
+      }
+
+      setStatus("Profile saved");
+      setTimeout(() => setStatus(null), 2000);
+    } catch (err: any) {
+      console.error("Error handling saved modal result", err);
+      setStatus("Saved but failed to refresh profile");
+    }
+  };
+
   return (
     <div className="w-full max-w-4xl p-3 mb-4 border-2 border-yellow-400" data-testid="profile-ingestion-card">
+      <ProfileReviewModal
+        visible={showReviewModal}
+        parsedProfile={parsedProfile}
+        onClose={() => {
+          // When closing modal, always refresh the canonical profile stored in backend/Convex
+          setShowReviewModal(false);
+          setParsedProfile(null);
+          void fetchMyProfile();
+        }}
+        onSaved={(res) => {
+          // Modal will return the saved result. We handle UI update and ensure we fetch canonical data.
+          handleModalSaved(res);
+        }}
+      />
+
       <div className="p-4 rounded-md bg-gray-50 dark:bg-gray-900">
         <h3 className="mb-2 text-lg font-medium">Profile ingestion</h3>
         <form
@@ -103,6 +181,21 @@ export default function ProfileForm() {
           }}
           className="grid gap-3"
         >
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                // Open the ProfileReviewModal. The modal contains its own Load CV picker for uploading a new file.
+                // When opening from here we want the modal in "new upload" mode (no parsedProfile passed).
+                setParsedProfile(null);
+                setShowReviewModal(true);
+              }}
+              className="px-3 py-1 bg-gray-200 rounded"
+            >
+              Load my CV
+            </button>
+          </div>
+
           <textarea
             placeholder="Paste your resume / CV text (optional, min 20 chars)"
             rows={4}
@@ -147,60 +240,60 @@ export default function ProfileForm() {
                   {/* Header */}
                   <div className="flex items-center justify-between">
                     <div>
-                    {editingName ? (
-                      <div className="flex items-center gap-2">
-                        <input
-                          aria-label="Edit name"
-                          value={nameDraft}
-                          onChange={(e) => setNameDraft(e.target.value)}
-                          className="px-2 py-1 text-sm border rounded"
-                        />
-                        <button
-                          onClick={() => { void (async () => {
-                              try {
-                                setStatus("Saving name...");
-                                await profilesPublic({ profile: { name: nameDraft } });
-                                await fetchMyProfile();
-                                setEditingName(false);
-                                setStatus("Name saved");
-                                setTimeout(() => setStatus(null), 2000);
-                              } catch (err: any) {
-                                console.error("Failed to save name", err);
-                                setStatus(`Failed: ${err?.message ?? String(err)}`);
-                              }
-                            })(); }}
-                          className="px-2 py-1 text-sm text-white bg-blue-600 rounded"
-                        >
-                          Save
-                        </button>
-                        <button
-                          onClick={() => {
-                            setEditingName(false);
-                            setNameDraft((currentProfile && currentProfile.name) || "");
-                          }}
-                          className="px-2 py-1 text-sm bg-gray-200 rounded"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    ) : (
-                      <div>
-                        <div className="text-lg font-semibold">{currentProfile.name ?? "No name"}</div>
-                        <div className="mt-1">
+                      {editingName ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            aria-label="Edit name"
+                            value={nameDraft}
+                            onChange={(e) => setNameDraft(e.target.value)}
+                            className="px-2 py-1 text-sm border rounded"
+                          />
+                          <button
+                            onClick={() => { void (async () => {
+                                try {
+                                  setStatus("Saving name...");
+                                  await profilesPublic({ profile: { name: nameDraft } });
+                                  await fetchMyProfile();
+                                  setEditingName(false);
+                                  setStatus("Name saved");
+                                  setTimeout(() => setStatus(null), 2000);
+                                } catch (err: any) {
+                                  console.error("Failed to save name", err);
+                                  setStatus(`Failed: ${err?.message ?? String(err)}`);
+                                }
+                              })(); }}
+                            className="px-2 py-1 text-sm text-white bg-blue-600 rounded"
+                          >
+                            Save
+                          </button>
                           <button
                             onClick={() => {
+                              setEditingName(false);
                               setNameDraft((currentProfile && currentProfile.name) || "");
-                              setEditingName(true);
                             }}
                             className="px-2 py-1 text-sm bg-gray-200 rounded"
                           >
-                            Edit
+                            Cancel
                           </button>
                         </div>
-                      </div>
-                    )}
-                    {currentProfile.email && <div className="mt-1 text-sm text-gray-600">{currentProfile.email}</div>}
-                  </div>
+                      ) : (
+                        <div>
+                          <div className="text-lg font-semibold">{currentProfile.name ?? "No name"}</div>
+                          <div className="mt-1">
+                            <button
+                              onClick={() => {
+                                setNameDraft((currentProfile && currentProfile.name) || "");
+                                setEditingName(true);
+                              }}
+                              className="px-2 py-1 text-sm bg-gray-200 rounded"
+                            >
+                              Edit
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      {currentProfile.email && <div className="mt-1 text-sm text-gray-600">{currentProfile.email}</div>}
+                    </div>
 
                     <div className="flex items-center gap-2">
                       {/* Edit summary button */}
@@ -266,7 +359,8 @@ export default function ProfileForm() {
                     )}
                   </div>
 
-                  {/* LinkedIn (separate field) */}
+                  {/* The rest of the profile UI (LinkedIn, Skills, Experience, Education, ProfileView) */}
+                  {/* LinkedIn, Skills, Experience, Education blocks unchanged from previous implementation */}
                   <div>
                     <h4 className="mb-1 text-sm font-medium">LinkedIn</h4>
                     {currentProfile.linkedIn ? (
@@ -281,7 +375,6 @@ export default function ProfileForm() {
                         </a>
                         <button
                           onClick={() => { void (async () => {
-                            // prompt for new URL
                             const next = window.prompt("Edit LinkedIn URL", currentProfile.linkedIn || "");
                             if (next !== null) {
                               try {
@@ -328,7 +421,6 @@ export default function ProfileForm() {
                     )}
                   </div>
 
-                  {/* Skills editor */}
                   <div>
                     <h4 className="mb-1 text-sm font-medium">Skills</h4>
                     <div className="flex flex-wrap items-center gap-2">
@@ -373,7 +465,6 @@ export default function ProfileForm() {
                     </div>
                   </div>
 
-                  {/* Experience editor */}
                   <div>
                     <h4 className="mb-1 text-sm font-medium">Experience</h4>
                     <div className="space-y-2">
@@ -388,7 +479,6 @@ export default function ProfileForm() {
                             <div className="flex gap-2">
                               <button
                                 onClick={() => { void (async () => {
-                                  // simple delete
                                   try {
                                     const next = (currentProfile.experience || []).filter((_: unknown, i: number) => i !== idx);
                                     setStatus("Saving experience...");
@@ -425,7 +515,6 @@ export default function ProfileForm() {
                     </div>
                   </div>
 
-                  {/* Education editor */}
                   <div>
                     <h4 className="mb-1 text-sm font-medium">Education</h4>
                     <div className="space-y-2">
@@ -457,7 +546,6 @@ export default function ProfileForm() {
                     </div>
                   </div>
 
-                  {/* Formatted ProfileView (hide summary because we render it above) */}
                   <ProfileView profile={currentProfile} hideSummary />
                 </div>
               ) : (

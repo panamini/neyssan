@@ -1,0 +1,373 @@
+worker-1  | INFO:pdf-ingest.worker_entry:Connecting to Redis at redis://redis:6379
+worker-1  | INFO:pdf-ingest.worker_entry:Starting RQ worker (listening on queue: default)
+worker-1  | INFO:rq.worker:Worker rq:worker:7871a85be29a41e592e14c5d57f6cf4a: started, version 1.1.0
+worker-1  | INFO:rq.worker:*** Listening on default...
+web-1     | DEBUG:pdf-ingest:Debug file handler attached to pdf-ingest logger: /tmp/pdf_ingest_debug.log
+web-1     | INFO:     Started server process [1]
+web-1     | INFO:     Waiting for application startup.
+web-1     | 2025-08-28 12:58:57,961 INFO sqlalchemy.engine.Engine select pg_catalog.version()
+web-1     | 2025-08-28 12:58:57,961 INFO sqlalchemy.engine.Engine [raw sql] ()
+web-1     | INFO:sqlalchemy.engine.Engine:select pg_catalog.version()
+web-1     | INFO:sqlalchemy.engine.Engine:[raw sql] ()
+web-1     | 2025-08-28 12:58:57,961 INFO sqlalchemy.engine.Engine select current_schema()
+web-1     | 2025-08-28 12:58:57,962 INFO sqlalchemy.engine.Engine [raw sql] ()
+web-1     | INFO:sqlalchemy.engine.Engine:select current_schema()
+web-1     | INFO:sqlalchemy.engine.Engine:[raw sql] ()
+web-1     | 2025-08-28 12:58:57,962 INFO sqlalchemy.engine.Engine show standard_conforming_strings
+web-1     | 2025-08-28 12:58:57,962 INFO sqlalchemy.engine.Engine [raw sql] ()
+web-1     | INFO:sqlalchemy.engine.Engine:show standard_conforming_strings
+web-1     | INFO:sqlalchemy.engine.Engine:[raw sql] ()
+web-1     | 2025-08-28 12:58:57,963 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+web-1     | INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+web-1     | 2025-08-28 12:58:57,965 INFO sqlalchemy.engine.Engine SELECT pg_catalog.pg_class.relname 
+web-1     | FROM pg_catalog.pg_class JOIN pg_catalog.pg_namespace ON pg_catalog.pg_namespace.oid = pg_catalog.pg_class.relnamespace 
+web-1     | WHERE pg_catalog.pg_class.relname = $1::VARCHAR AND pg_catalog.pg_class.relkind = ANY (ARRAY[$2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::VARCHAR, $6::VARCHAR]) AND pg_catalog.pg_table_is_visible(pg_catalog.pg_class.oid) AND pg_catalog.pg_namespace.nspname != $7::VARCHAR
+web-1     | 2025-08-28 12:58:57,965 INFO sqlalchemy.engine.Engine [generated in 0.00019s] ('profiles', 'r', 'p', 'f', 'v', 'm', 'pg_catalog')
+web-1     | INFO:sqlalchemy.engine.Engine:SELECT pg_catalog.pg_class.relname 
+web-1     | FROM pg_catalog.pg_class JOIN pg_catalog.pg_namespace ON pg_catalog.pg_namespace.oid = pg_catalog.pg_class.relnamespace 
+web-1     | WHERE pg_catalog.pg_class.relname = $1::VARCHAR AND pg_catalog.pg_class.relkind = ANY (ARRAY[$2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::VARCHAR, $6::VARCHAR]) AND pg_catalog.pg_table_is_visible(pg_catalog.pg_class.oid) AND pg_catalog.pg_namespace.nspname != $7::VARCHAR
+web-1     | INFO:sqlalchemy.engine.Engine:[generated in 0.00019s] ('profiles', 'r', 'p', 'f', 'v', 'm', 'pg_catalog')
+web-1     | 2025-08-28 12:58:57,966 INFO sqlalchemy.engine.Engine SELECT pg_catalog.pg_class.relname 
+web-1     | FROM pg_catalog.pg_class JOIN pg_catalog.pg_namespace ON pg_catalog.pg_namespace.oid = pg_catalog.pg_class.relnamespace 
+web-1     | WHERE pg_catalog.pg_class.relname = $1::VARCHAR AND pg_catalog.pg_class.relkind = ANY (ARRAY[$2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::VARCHAR, $6::VARCHAR]) AND pg_catalog.pg_table_is_visible(pg_catalog.pg_class.oid) AND pg_catalog.pg_namespace.nspname != $7::VARCHAR
+web-1     | 2025-08-28 12:58:57,966 INFO sqlalchemy.engine.Engine [cached since 0.001278s ago] ('llm_history', 'r', 'p', 'f', 'v', 'm', 'pg_catalog')
+web-1     | INFO:sqlalchemy.engine.Engine:SELECT pg_catalog.pg_class.relname 
+web-1     | FROM pg_catalog.pg_class JOIN pg_catalog.pg_namespace ON pg_catalog.pg_namespace.oid = pg_catalog.pg_class.relnamespace 
+web-1     | WHERE pg_catalog.pg_class.relname = $1::VARCHAR AND pg_catalog.pg_class.relkind = ANY (ARRAY[$2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::VARCHAR, $6::VARCHAR]) AND pg_catalog.pg_table_is_visible(pg_catalog.pg_class.oid) AND pg_catalog.pg_namespace.nspname != $7::VARCHAR
+web-1     | INFO:sqlalchemy.engine.Engine:[cached since 0.001278s ago] ('llm_history', 'r', 'p', 'f', 'v', 'm', 'pg_catalog')
+web-1     | 2025-08-28 12:58:57,966 INFO sqlalchemy.engine.Engine ALTER TABLE IF EXISTS profiles ADD COLUMN IF NOT EXISTS version INTEGER DEFAULT 1
+web-1     | 2025-08-28 12:58:57,966 INFO sqlalchemy.engine.Engine [generated in 0.00005s] ()
+web-1     | INFO:sqlalchemy.engine.Engine:ALTER TABLE IF EXISTS profiles ADD COLUMN IF NOT EXISTS version INTEGER DEFAULT 1
+web-1     | INFO:sqlalchemy.engine.Engine:[generated in 0.00005s] ()
+web-1     | 2025-08-28 12:58:57,967 INFO sqlalchemy.engine.Engine 
+web-1     |                         CREATE TABLE IF NOT EXISTS llm_history (
+web-1     |                             id UUID PRIMARY KEY,
+web-1     |                             profile_id UUID NOT NULL,
+web-1     |                             run_time TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+web-1     |                             provider TEXT,
+web-1     |                             model TEXT,
+web-1     |                             job_id TEXT,
+web-1     |                             request_payload JSONB,
+web-1     |                             response_snippet TEXT,
+web-1     |                             full_response JSONB,
+web-1     |                             confidence DOUBLE PRECISION,
+web-1     | INFO:sqlalchemy.engine.Engine:
+web-1     |                         CREATE TABLE IF NOT EXISTS llm_history (
+web-1     |                             merged BOOLEAN DEFAULT FALSE,
+web-1     |                             merge_notes TEXT
+web-1     |                         );
+web-1     |                         CREATE INDEX IF NOT EXISTS ix_llm_history_profile_id ON llm_history (profile_id);
+web-1     |                         CREATE INDEX IF NOT EXISTS ix_llm_history_job_id ON llm_history (job_id);
+web-1     |                         
+web-1     | 2025-08-28 12:58:57,967 INFO sqlalchemy.engine.Engine [generated in 0.00004s] ()
+web-1     |                             id UUID PRIMARY KEY,
+web-1     |                             profile_id UUID NOT NULL,
+web-1     |                             run_time TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+web-1     |                             provider TEXT,
+web-1     |                             model TEXT,
+web-1     |                             job_id TEXT,
+web-1     |                             request_payload JSONB,
+web-1     |                             response_snippet TEXT,
+web-1     |                             full_response JSONB,
+web-1     |                             confidence DOUBLE PRECISION,
+web-1     |                             merged BOOLEAN DEFAULT FALSE,
+web-1     |                             merge_notes TEXT
+web-1     |                         );
+web-1     |                         CREATE INDEX IF NOT EXISTS ix_llm_history_profile_id ON llm_history (profile_id);
+web-1     |                         CREATE INDEX IF NOT EXISTS ix_llm_history_job_id ON llm_history (job_id);
+web-1     |                         
+web-1     | INFO:sqlalchemy.engine.Engine:[generated in 0.00004s] ()
+web-1     | 2025-08-28 12:58:57,969 INFO sqlalchemy.engine.Engine COMMIT
+web-1     | INFO:sqlalchemy.engine.Engine:COMMIT
+web-1     | INFO:     Application startup complete.
+web-1     | INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+web-1     | INFO:pdf-ingest:Request: GET http://127.0.0.1:8000/api/v1/health Origin: None
+web-1     | INFO:     172.18.0.1:64634 - "GET /api/v1/health HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/parse-now Origin: http://localhost:5173
+web-1     | INFO:     172.18.0.1:64610 - "POST /api/v1/parse-now HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: OPTIONS http://localhost:8000/api/v1/confirm-save Origin: http://localhost:5173
+web-1     | INFO:     172.18.0.1:64610 - "OPTIONS /api/v1/confirm-save HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/confirm-save Origin: http://localhost:5173
+web-1     | DEBUG:pdf-ingest.confirm_save:No raw_text found in incoming payload for profile id=91f8b194-ebb5-4cbb-a7d6-d14112d88db1
+web-1     | 2025-08-28 12:59:46,522 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+web-1     | INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+web-1     | 2025-08-28 12:59:46,525 INFO sqlalchemy.engine.Engine INSERT INTO profiles (id, name, email, summary, skills, experience, raw_text, confidence, version, created_at, updated_at) VALUES ($1::UUID, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::JSONB, $6::JSONB, $7::VARCHAR, $8::FLOAT, $9::INTEGER, $10::TIMESTAMP WITH TIME ZONE, $11::TIMESTAMP WITH TIME ZONE) ON CONFLICT (email) DO UPDATE SET name = excluded.name, summary = excluded.summary, skills = excluded.skills, experience = excluded.experience, raw_text = excluded.raw_text, confidence = excluded.confidence, version = excluded.version, updated_at = $12::TIMESTAMP WITH TIME ZONE RETURNING profiles.id, profiles.created_at, profiles.updated_at, profiles.confidence
+web-1     | 2025-08-28 12:59:46,525 INFO sqlalchemy.engine.Engine [no key 0.00013s] ('91f8b194-ebb5-4cbb-a7d6-d14112d88db1', 'United States', 'email@email.com', '1515 Pacific Ave\nLos Angeles, CA 90291\nUnited States\n3868683442\nemail@email.com', '["Investigation skills", "Safety compliance", "Criminal justice knowledge", "Restraining devices", "Martial arts/Physical combat", "training"]', 'null', None, 0.7500000000000001, 1, datetime.datetime(2025, 8, 28, 12, 59, 46, 520793, tzinfo=datetime.timezone.utc), datetime.datetime(2025, 8, 28, 12, 59, 46, 520793, tzinfo=datetime.timezone.utc), datetime.datetime(2025, 8, 28, 12, 59, 46, 520793, tzinfo=datetime.timezone.utc))
+web-1     | INFO:sqlalchemy.engine.Engine:INSERT INTO profiles (id, name, email, summary, skills, experience, raw_text, confidence, version, created_at, updated_at) VALUES ($1::UUID, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::JSONB, $6::JSONB, $7::VARCHAR, $8::FLOAT, $9::INTEGER, $10::TIMESTAMP WITH TIME ZONE, $11::TIMESTAMP WITH TIME ZONE) ON CONFLICT (email) DO UPDATE SET name = excluded.name, summary = excluded.summary, skills = excluded.skills, experience = excluded.experience, raw_text = excluded.raw_text, confidence = excluded.confidence, version = excluded.version, updated_at = $12::TIMESTAMP WITH TIME ZONE RETURNING profiles.id, profiles.created_at, profiles.updated_at, profiles.confidence
+web-1     | INFO:sqlalchemy.engine.Engine:[no key 0.00013s] ('91f8b194-ebb5-4cbb-a7d6-d14112d88db1', 'United States', 'email@email.com', '1515 Pacific Ave\nLos Angeles, CA 90291\nUnited States\n3868683442\nemail@email.com', '["Investigation skills", "Safety compliance", "Criminal justice knowledge", "Restraining devices", "Martial arts/Physical combat", "training"]', 'null', None, 0.7500000000000001, 1, datetime.datetime(2025, 8, 28, 12, 59, 46, 520793, tzinfo=datetime.timezone.utc), datetime.datetime(2025, 8, 28, 12, 59, 46, 520793, tzinfo=datetime.timezone.utc), datetime.datetime(2025, 8, 28, 12, 59, 46, 520793, tzinfo=datetime.timezone.utc))
+web-1     | 2025-08-28 12:59:46,528 INFO sqlalchemy.engine.Engine COMMIT
+web-1     | INFO:sqlalchemy.engine.Engine:COMMIT
+web-1     | INFO:     172.18.0.1:64610 - "POST /api/v1/confirm-save HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: OPTIONS http://localhost:8000/api/v1/llm-refine Origin: http://localhost:5173
+web-1     | INFO:     172.18.0.1:64610 - "OPTIONS /api/v1/llm-refine HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/llm-refine Origin: http://localhost:5173
+web-1     | INFO:pdf-ingest.worker:Created placeholder LLMHistory (pre-enqueue) id=0c8ee943-3e0d-4634-be81-a5fd5ac0ee86 for profile 37332957-4405-40e0-b6bd-37b2a5360cdd
+web-1     | INFO:pdf-ingest.worker:Enqueued llm_refine_profile: job_id=ec91fd16-effa-49ef-b5c7-5f82039abe05 profile_id=37332957-4405-40e0-b6bd-37b2a5360cdd placeholder_id=0c8ee943-3e0d-4634-be81-a5fd5ac0ee86
+web-1     | INFO:     172.18.0.1:64620 - "POST /api/v1/llm-refine HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/0c8ee943-3e0d-4634-be81-a5fd5ac0ee86 Origin: http://localhost:5173
+web-1     | 2025-08-28 12:59:46,549 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+web-1     | INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+worker-1  | INFO:rq.worker:default: worker.llm_refine_profile('37332957-4405-40e0-b6bd-37b2a5360cdd', correlation_job_id='0c8ee943-3e0d-4634-be81-a5fd5ac0ee86') (ec91fd16-effa-49ef-b5c7-5f82039abe05)
+web-1     | 2025-08-28 12:59:46,550 INFO sqlalchemy.engine.Engine SELECT llm_history.id, llm_history.profile_id, llm_history.run_time, llm_history.provider, llm_history.model, llm_history.job_id, llm_history.request_payload, llm_history.response_snippet, llm_history.full_response, llm_history.confidence, llm_history.merged, llm_history.merge_notes, llm_history.convex_idempotency_key, llm_history.convex_write_status, llm_history.convex_error, llm_history.convex_written_at, llm_history.convex_attempts, llm_history.convex_last_attempt_at 
+web-1     | FROM llm_history 
+web-1     | WHERE llm_history.job_id = $1::VARCHAR ORDER BY llm_history.run_time DESC
+web-1     | 2025-08-28 12:59:46,550 INFO sqlalchemy.engine.Engine [generated in 0.00007s] ('0c8ee943-3e0d-4634-be81-a5fd5ac0ee86',)
+web-1     | INFO:sqlalchemy.engine.Engine:SELECT llm_history.id, llm_history.profile_id, llm_history.run_time, llm_history.provider, llm_history.model, llm_history.job_id, llm_history.request_payload, llm_history.response_snippet, llm_history.full_response, llm_history.confidence, llm_history.merged, llm_history.merge_notes, llm_history.convex_idempotency_key, llm_history.convex_write_status, llm_history.convex_error, llm_history.convex_written_at, llm_history.convex_attempts, llm_history.convex_last_attempt_at 
+web-1     | FROM llm_history 
+web-1     | WHERE llm_history.job_id = $1::VARCHAR ORDER BY llm_history.run_time DESC
+web-1     | INFO:sqlalchemy.engine.Engine:[generated in 0.00007s] ('0c8ee943-3e0d-4634-be81-a5fd5ac0ee86',)
+web-1     | INFO:     172.18.0.1:64620 - "GET /api/v1/llm-history/0c8ee943-3e0d-4634-be81-a5fd5ac0ee86 HTTP/1.1" 200 OK
+web-1     | 2025-08-28 12:59:46,551 INFO sqlalchemy.engine.Engine ROLLBACK
+web-1     | INFO:sqlalchemy.engine.Engine:ROLLBACK
+worker-1  | INFO:pdf-ingest.worker:LLM_REFINE_CALLED 37332957-4405-40e0-b6bd-37b2a5360cdd session_injected False correlation_job_id=True
+worker-1  | INFO:pdf-ingest.worker:WORKER_ENTER 37332957-4405-40e0-b6bd-37b2a5360cdd loaded_profile True
+worker-1  | WARNING:pdf-ingest.worker:Raw text validation failed for profile 37332957-4405-40e0-b6bd-37b2a5360cdd: Raw text too short for meaningful extraction (code: short_text)
+worker-1  | INFO:rq.worker:default: Job OK (ec91fd16-effa-49ef-b5c7-5f82039abe05)
+worker-1  | INFO:rq.worker:Result is kept for 500 seconds
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/0c8ee943-3e0d-4634-be81-a5fd5ac0ee86 Origin: http://localhost:5173
+web-1     | INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+web-1     | 2025-08-28 12:59:47,560 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+web-1     | 2025-08-28 12:59:47,561 INFO sqlalchemy.engine.Engine SELECT llm_history.id, llm_history.profile_id, llm_history.run_time, llm_history.provider, llm_history.model, llm_history.job_id, llm_history.request_payload, llm_history.response_snippet, llm_history.full_response, llm_history.confidence, llm_history.merged, llm_history.merge_notes, llm_history.convex_idempotency_key, llm_history.convex_write_status, llm_history.convex_error, llm_history.convex_written_at, llm_history.convex_attempts, llm_history.convex_last_attempt_at 
+web-1     | INFO:sqlalchemy.engine.Engine:SELECT llm_history.id, llm_history.profile_id, llm_history.run_time, llm_history.provider, llm_history.model, llm_history.job_id, llm_history.request_payload, llm_history.response_snippet, llm_history.full_response, llm_history.confidence, llm_history.merged, llm_history.merge_notes, llm_history.convex_idempotency_key, llm_history.convex_write_status, llm_history.convex_error, llm_history.convex_written_at, llm_history.convex_attempts, llm_history.convex_last_attempt_at 
+web-1     | FROM llm_history 
+web-1     | WHERE llm_history.job_id = $1::VARCHAR ORDER BY llm_history.run_time DESC
+web-1     | INFO:sqlalchemy.engine.Engine:[cached since 1.011s ago] ('0c8ee943-3e0d-4634-be81-a5fd5ac0ee86',)
+web-1     | FROM llm_history 
+web-1     | WHERE llm_history.job_id = $1::VARCHAR ORDER BY llm_history.run_time DESC
+web-1     | 2025-08-28 12:59:47,561 INFO sqlalchemy.engine.Engine [cached since 1.011s ago] ('0c8ee943-3e0d-4634-be81-a5fd5ac0ee86',)
+web-1     | INFO:     172.18.0.1:64620 - "GET /api/v1/llm-history/0c8ee943-3e0d-4634-be81-a5fd5ac0ee86 HTTP/1.1" 200 OK
+web-1     | 2025-08-28 12:59:47,564 INFO sqlalchemy.engine.Engine ROLLBACK
+web-1     | INFO:sqlalchemy.engine.Engine:ROLLBACK
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/0c8ee943-3e0d-4634-be81-a5fd5ac0ee86 Origin: http://localhost:5173
+web-1     | 2025-08-28 12:59:49,575 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+web-1     | INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+web-1     | 2025-08-28 12:59:49,576 INFO sqlalchemy.engine.Engine SELECT llm_history.id, llm_history.profile_id, llm_history.run_time, llm_history.provider, llm_history.model, llm_history.job_id, llm_history.request_payload, llm_history.response_snippet, llm_history.full_response, llm_history.confidence, llm_history.merged, llm_history.merge_notes, llm_history.convex_idempotency_key, llm_history.convex_write_status, llm_history.convex_error, llm_history.convex_written_at, llm_history.convex_attempts, llm_history.convex_last_attempt_at 
+web-1     | FROM llm_history 
+web-1     | WHERE llm_history.job_id = $1::VARCHAR ORDER BY llm_history.run_time DESC
+web-1     | INFO:sqlalchemy.engine.Engine:SELECT llm_history.id, llm_history.profile_id, llm_history.run_time, llm_history.provider, llm_history.model, llm_history.job_id, llm_history.request_payload, llm_history.response_snippet, llm_history.full_response, llm_history.confidence, llm_history.merged, llm_history.merge_notes, llm_history.convex_idempotency_key, llm_history.convex_write_status, llm_history.convex_error, llm_history.convex_written_at, llm_history.convex_attempts, llm_history.convex_last_attempt_at 
+web-1     | FROM llm_history 
+web-1     | WHERE llm_history.job_id = $1::VARCHAR ORDER BY llm_history.run_time DESC
+web-1     | INFO:sqlalchemy.engine.Engine:[cached since 3.026s ago] ('0c8ee943-3e0d-4634-be81-a5fd5ac0ee86',)
+web-1     | 2025-08-28 12:59:49,576 INFO sqlalchemy.engine.Engine [cached since 3.026s ago] ('0c8ee943-3e0d-4634-be81-a5fd5ac0ee86',)
+web-1     | INFO:     172.18.0.1:64620 - "GET /api/v1/llm-history/0c8ee943-3e0d-4634-be81-a5fd5ac0ee86 HTTP/1.1" 200 OK
+web-1     | 2025-08-28 12:59:49,579 INFO sqlalchemy.engine.Engine ROLLBACK
+web-1     | INFO:sqlalchemy.engine.Engine:ROLLBACK
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/0c8ee943-3e0d-4634-be81-a5fd5ac0ee86 Origin: http://localhost:5173
+web-1     | INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+web-1     | 2025-08-28 12:59:53,592 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+web-1     | 2025-08-28 12:59:53,592 INFO sqlalchemy.engine.Engine SELECT llm_history.id, llm_history.profile_id, llm_history.run_time, llm_history.provider, llm_history.model, llm_history.job_id, llm_history.request_payload, llm_history.response_snippet, llm_history.full_response, llm_history.confidence, llm_history.merged, llm_history.merge_notes, llm_history.convex_idempotency_key, llm_history.convex_write_status, llm_history.convex_error, llm_history.convex_written_at, llm_history.convex_attempts, llm_history.convex_last_attempt_at 
+web-1     | FROM llm_history 
+web-1     | WHERE llm_history.job_id = $1::VARCHAR ORDER BY llm_history.run_time DESC
+web-1     | INFO:sqlalchemy.engine.Engine:SELECT llm_history.id, llm_history.profile_id, llm_history.run_time, llm_history.provider, llm_history.model, llm_history.job_id, llm_history.request_payload, llm_history.response_snippet, llm_history.full_response, llm_history.confidence, llm_history.merged, llm_history.merge_notes, llm_history.convex_idempotency_key, llm_history.convex_write_status, llm_history.convex_error, llm_history.convex_written_at, llm_history.convex_attempts, llm_history.convex_last_attempt_at 
+web-1     | FROM llm_history 
+web-1     | WHERE llm_history.job_id = $1::VARCHAR ORDER BY llm_history.run_time DESC
+web-1     | INFO:sqlalchemy.engine.Engine:[cached since 7.043s ago] ('0c8ee943-3e0d-4634-be81-a5fd5ac0ee86',)
+web-1     | 2025-08-28 12:59:53,593 INFO sqlalchemy.engine.Engine [cached since 7.043s ago] ('0c8ee943-3e0d-4634-be81-a5fd5ac0ee86',)
+web-1     | INFO:     172.18.0.1:64620 - "GET /api/v1/llm-history/0c8ee943-3e0d-4634-be81-a5fd5ac0ee86 HTTP/1.1" 200 OK
+web-1     | 2025-08-28 12:59:53,596 INFO sqlalchemy.engine.Engine ROLLBACK
+web-1     | INFO:sqlalchemy.engine.Engine:ROLLBACK
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/0c8ee943-3e0d-4634-be81-a5fd5ac0ee86 Origin: http://localhost:5173
+web-1     | INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+web-1     | 2025-08-28 13:00:01,610 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+web-1     | 2025-08-28 13:00:01,610 INFO sqlalchemy.engine.Engine SELECT llm_history.id, llm_history.profile_id, llm_history.run_time, llm_history.provider, llm_history.model, llm_history.job_id, llm_history.request_payload, llm_history.response_snippet, llm_history.full_response, llm_history.confidence, llm_history.merged, llm_history.merge_notes, llm_history.convex_idempotency_key, llm_history.convex_write_status, llm_history.convex_error, llm_history.convex_written_at, llm_history.convex_attempts, llm_history.convex_last_attempt_at 
+web-1     | FROM llm_history 
+web-1     | WHERE llm_history.job_id = $1::VARCHAR ORDER BY llm_history.run_time DESC
+web-1     | INFO:sqlalchemy.engine.Engine:SELECT llm_history.id, llm_history.profile_id, llm_history.run_time, llm_history.provider, llm_history.model, llm_history.job_id, llm_history.request_payload, llm_history.response_snippet, llm_history.full_response, llm_history.confidence, llm_history.merged, llm_history.merge_notes, llm_history.convex_idempotency_key, llm_history.convex_write_status, llm_history.convex_error, llm_history.convex_written_at, llm_history.convex_attempts, llm_history.convex_last_attempt_at 
+web-1     | FROM llm_history 
+web-1     | WHERE llm_history.job_id = $1::VARCHAR ORDER BY llm_history.run_time DESC
+web-1     | INFO:sqlalchemy.engine.Engine:[cached since 15.06s ago] ('0c8ee943-3e0d-4634-be81-a5fd5ac0ee86',)
+web-1     | 2025-08-28 13:00:01,610 INFO sqlalchemy.engine.Engine [cached since 15.06s ago] ('0c8ee943-3e0d-4634-be81-a5fd5ac0ee86',)
+web-1     | INFO:     172.18.0.1:59088 - "GET /api/v1/llm-history/0c8ee943-3e0d-4634-be81-a5fd5ac0ee86 HTTP/1.1" 200 OK
+web-1     | INFO:sqlalchemy.engine.Engine:ROLLBACK
+web-1     | 2025-08-28 13:00:01,616 INFO sqlalchemy.engine.Engine ROLLBACK
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/0c8ee943-3e0d-4634-be81-a5fd5ac0ee86 Origin: http://localhost:5173
+web-1     | INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+web-1     | 2025-08-28 13:00:17,629 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+web-1     | INFO:sqlalchemy.engine.Engine:SELECT llm_history.id, llm_history.profile_id, llm_history.run_time, llm_history.provider, llm_history.model, llm_history.job_id, llm_history.request_payload, llm_history.response_snippet, llm_history.full_response, llm_history.confidence, llm_history.merged, llm_history.merge_notes, llm_history.convex_idempotency_key, llm_history.convex_write_status, llm_history.convex_error, llm_history.convex_written_at, llm_history.convex_attempts, llm_history.convex_last_attempt_at 
+web-1     | FROM llm_history 
+web-1     | WHERE llm_history.job_id = $1::VARCHAR ORDER BY llm_history.run_time DESC
+web-1     | 2025-08-28 13:00:17,630 INFO sqlalchemy.engine.Engine SELECT llm_history.id, llm_history.profile_id, llm_history.run_time, llm_history.provider, llm_history.model, llm_history.job_id, llm_history.request_payload, llm_history.response_snippet, llm_history.full_response, llm_history.confidence, llm_history.merged, llm_history.merge_notes, llm_history.convex_idempotency_key, llm_history.convex_write_status, llm_history.convex_error, llm_history.convex_written_at, llm_history.convex_attempts, llm_history.convex_last_attempt_at 
+web-1     | FROM llm_history 
+web-1     | WHERE llm_history.job_id = $1::VARCHAR ORDER BY llm_history.run_time DESC
+web-1     | 2025-08-28 13:00:17,630 INFO sqlalchemy.engine.Engine [cached since 31.08s ago] ('0c8ee943-3e0d-4634-be81-a5fd5ac0ee86',)
+web-1     | INFO:sqlalchemy.engine.Engine:[cached since 31.08s ago] ('0c8ee943-3e0d-4634-be81-a5fd5ac0ee86',)
+web-1     | INFO:     172.18.0.1:63450 - "GET /api/v1/llm-history/0c8ee943-3e0d-4634-be81-a5fd5ac0ee86 HTTP/1.1" 200 OK
+web-1     | 2025-08-28 13:00:17,634 INFO sqlalchemy.engine.Engine ROLLBACK
+web-1     | INFO:sqlalchemy.engine.Engine:ROLLBACK
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/parse-now Origin: http://localhost:5173
+web-1     | INFO:     172.18.0.1:61406 - "POST /api/v1/parse-now HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/confirm-save Origin: http://localhost:5173
+web-1     | INFO:pdf-ingest.confirm_save:Draft profile (no persistence) id=be09ce4c-e2ba-497b-bea6-80a04e7b4f47
+web-1     | INFO:     172.18.0.1:61406 - "POST /api/v1/confirm-save HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/llm-refine Origin: http://localhost:5173
+web-1     | WARNING:pdf-ingest.worker:Profile be09ce4c-e2ba-497b-bea6-80a04e7b4f47 does not exist in database after waiting 2.00s, skipping placeholder creation
+web-1     | INFO:pdf-ingest.worker:Enqueued llm_refine_profile: job_id=3ec99e08-7b90-4800-adcd-1b408bb4e260 profile_id=be09ce4c-e2ba-497b-bea6-80a04e7b4f47 placeholder_id=None
+web-1     | INFO:     172.18.0.1:61406 - "POST /api/v1/llm-refine HTTP/1.1" 200 OK
+worker-1  | INFO:rq.worker:default: worker.llm_refine_profile('be09ce4c-e2ba-497b-bea6-80a04e7b4f47') (3ec99e08-7b90-4800-adcd-1b408bb4e260)
+worker-1  | INFO:pdf-ingest.worker:LLM_REFINE_CALLED be09ce4c-e2ba-497b-bea6-80a04e7b4f47 session_injected False correlation_job_id=False
+worker-1  | INFO:pdf-ingest.worker:WORKER_ENTER be09ce4c-e2ba-497b-bea6-80a04e7b4f47 loaded_profile False
+worker-1  | INFO:rq.worker:default: Job OK (3ec99e08-7b90-4800-adcd-1b408bb4e260)
+worker-1  | INFO:rq.worker:Result is kept for 500 seconds
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/0c8ee943-3e0d-4634-be81-a5fd5ac0ee86 Origin: http://localhost:5173
+web-1     | INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+web-1     | 2025-08-28 13:00:47,646 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+web-1     | 2025-08-28 13:00:47,646 INFO sqlalchemy.engine.Engine SELECT llm_history.id, llm_history.profile_id, llm_history.run_time, llm_history.provider, llm_history.model, llm_history.job_id, llm_history.request_payload, llm_history.response_snippet, llm_history.full_response, llm_history.confidence, llm_history.merged, llm_history.merge_notes, llm_history.convex_idempotency_key, llm_history.convex_write_status, llm_history.convex_error, llm_history.convex_written_at, llm_history.convex_attempts, llm_history.convex_last_attempt_at 
+web-1     | FROM llm_history 
+web-1     | WHERE llm_history.job_id = $1::VARCHAR ORDER BY llm_history.run_time DESC
+web-1     | INFO:sqlalchemy.engine.Engine:SELECT llm_history.id, llm_history.profile_id, llm_history.run_time, llm_history.provider, llm_history.model, llm_history.job_id, llm_history.request_payload, llm_history.response_snippet, llm_history.full_response, llm_history.confidence, llm_history.merged, llm_history.merge_notes, llm_history.convex_idempotency_key, llm_history.convex_write_status, llm_history.convex_error, llm_history.convex_written_at, llm_history.convex_attempts, llm_history.convex_last_attempt_at 
+web-1     | FROM llm_history 
+web-1     | WHERE llm_history.job_id = $1::VARCHAR ORDER BY llm_history.run_time DESC
+web-1     | INFO:sqlalchemy.engine.Engine:[cached since 61.1s ago] ('0c8ee943-3e0d-4634-be81-a5fd5ac0ee86',)
+web-1     | 2025-08-28 13:00:47,647 INFO sqlalchemy.engine.Engine [cached since 61.1s ago] ('0c8ee943-3e0d-4634-be81-a5fd5ac0ee86',)
+web-1     | INFO:     172.18.0.1:61728 - "GET /api/v1/llm-history/0c8ee943-3e0d-4634-be81-a5fd5ac0ee86 HTTP/1.1" 200 OK
+web-1     | 2025-08-28 13:00:47,650 INFO sqlalchemy.engine.Engine ROLLBACK
+web-1     | INFO:sqlalchemy.engine.Engine:ROLLBACK
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/0c8ee943-3e0d-4634-be81-a5fd5ac0ee86 Origin: http://localhost:5173
+web-1     | 2025-08-28 13:01:18,591 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+web-1     | INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+web-1     | 2025-08-28 13:01:18,591 INFO sqlalchemy.engine.Engine SELECT llm_history.id, llm_history.profile_id, llm_history.run_time, llm_history.provider, llm_history.model, llm_history.job_id, llm_history.request_payload, llm_history.response_snippet, llm_history.full_response, llm_history.confidence, llm_history.merged, llm_history.merge_notes, llm_history.convex_idempotency_key, llm_history.convex_write_status, llm_history.convex_error, llm_history.convex_written_at, llm_history.convex_attempts, llm_history.convex_last_attempt_at 
+web-1     | FROM llm_history 
+web-1     | WHERE llm_history.job_id = $1::VARCHAR ORDER BY llm_history.run_time DESC
+web-1     | INFO:sqlalchemy.engine.Engine:SELECT llm_history.id, llm_history.profile_id, llm_history.run_time, llm_history.provider, llm_history.model, llm_history.job_id, llm_history.request_payload, llm_history.response_snippet, llm_history.full_response, llm_history.confidence, llm_history.merged, llm_history.merge_notes, llm_history.convex_idempotency_key, llm_history.convex_write_status, llm_history.convex_error, llm_history.convex_written_at, llm_history.convex_attempts, llm_history.convex_last_attempt_at 
+web-1     | FROM llm_history 
+web-1     | WHERE llm_history.job_id = $1::VARCHAR ORDER BY llm_history.run_time DESC
+web-1     | 2025-08-28 13:01:18,591 INFO sqlalchemy.engine.Engine [cached since 92.04s ago] ('0c8ee943-3e0d-4634-be81-a5fd5ac0ee86',)
+web-1     | INFO:sqlalchemy.engine.Engine:[cached since 92.04s ago] ('0c8ee943-3e0d-4634-be81-a5fd5ac0ee86',)
+web-1     | INFO:     172.18.0.1:64528 - "GET /api/v1/llm-history/0c8ee943-3e0d-4634-be81-a5fd5ac0ee86 HTTP/1.1" 200 OK
+web-1     | 2025-08-28 13:01:18,594 INFO sqlalchemy.engine.Engine ROLLBACK
+web-1     | INFO:sqlalchemy.engine.Engine:ROLLBACK
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/0c8ee943-3e0d-4634-be81-a5fd5ac0ee86 Origin: http://localhost:5173
+web-1     | 2025-08-28 13:01:49,592 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+web-1     | INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+web-1     | 2025-08-28 13:01:49,593 INFO sqlalchemy.engine.Engine SELECT llm_history.id, llm_history.profile_id, llm_history.run_time, llm_history.provider, llm_history.model, llm_history.job_id, llm_history.request_payload, llm_history.response_snippet, llm_history.full_response, llm_history.confidence, llm_history.merged, llm_history.merge_notes, llm_history.convex_idempotency_key, llm_history.convex_write_status, llm_history.convex_error, llm_history.convex_written_at, llm_history.convex_attempts, llm_history.convex_last_attempt_at 
+web-1     | FROM llm_history 
+web-1     | WHERE llm_history.job_id = $1::VARCHAR ORDER BY llm_history.run_time DESC
+web-1     | INFO:sqlalchemy.engine.Engine:SELECT llm_history.id, llm_history.profile_id, llm_history.run_time, llm_history.provider, llm_history.model, llm_history.job_id, llm_history.request_payload, llm_history.response_snippet, llm_history.full_response, llm_history.confidence, llm_history.merged, llm_history.merge_notes, llm_history.convex_idempotency_key, llm_history.convex_write_status, llm_history.convex_error, llm_history.convex_written_at, llm_history.convex_attempts, llm_history.convex_last_attempt_at 
+web-1     | FROM llm_history 
+web-1     | WHERE llm_history.job_id = $1::VARCHAR ORDER BY llm_history.run_time DESC
+web-1     | 2025-08-28 13:01:49,593 INFO sqlalchemy.engine.Engine [cached since 123s ago] ('0c8ee943-3e0d-4634-be81-a5fd5ac0ee86',)
+web-1     | INFO:sqlalchemy.engine.Engine:[cached since 123s ago] ('0c8ee943-3e0d-4634-be81-a5fd5ac0ee86',)
+web-1     | INFO:     172.18.0.1:62730 - "GET /api/v1/llm-history/0c8ee943-3e0d-4634-be81-a5fd5ac0ee86 HTTP/1.1" 200 OK
+web-1     | INFO:sqlalchemy.engine.Engine:ROLLBACK
+web-1     | 2025-08-28 13:01:49,595 INFO sqlalchemy.engine.Engine ROLLBACK
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/0c8ee943-3e0d-4634-be81-a5fd5ac0ee86 Origin: http://localhost:5173
+web-1     | INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+web-1     | 2025-08-28 13:02:20,592 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+web-1     | INFO:sqlalchemy.engine.Engine:SELECT llm_history.id, llm_history.profile_id, llm_history.run_time, llm_history.provider, llm_history.model, llm_history.job_id, llm_history.request_payload, llm_history.response_snippet, llm_history.full_response, llm_history.confidence, llm_history.merged, llm_history.merge_notes, llm_history.convex_idempotency_key, llm_history.convex_write_status, llm_history.convex_error, llm_history.convex_written_at, llm_history.convex_attempts, llm_history.convex_last_attempt_at 
+web-1     | FROM llm_history 
+web-1     | WHERE llm_history.job_id = $1::VARCHAR ORDER BY llm_history.run_time DESC
+web-1     | 2025-08-28 13:02:20,593 INFO sqlalchemy.engine.Engine SELECT llm_history.id, llm_history.profile_id, llm_history.run_time, llm_history.provider, llm_history.model, llm_history.job_id, llm_history.request_payload, llm_history.response_snippet, llm_history.full_response, llm_history.confidence, llm_history.merged, llm_history.merge_notes, llm_history.convex_idempotency_key, llm_history.convex_write_status, llm_history.convex_error, llm_history.convex_written_at, llm_history.convex_attempts, llm_history.convex_last_attempt_at 
+web-1     | FROM llm_history 
+web-1     | WHERE llm_history.job_id = $1::VARCHAR ORDER BY llm_history.run_time DESC
+web-1     | 2025-08-28 13:02:20,593 INFO sqlalchemy.engine.Engine [cached since 154s ago] ('0c8ee943-3e0d-4634-be81-a5fd5ac0ee86',)
+web-1     | INFO:sqlalchemy.engine.Engine:[cached since 154s ago] ('0c8ee943-3e0d-4634-be81-a5fd5ac0ee86',)
+web-1     | INFO:     172.18.0.1:64442 - "GET /api/v1/llm-history/0c8ee943-3e0d-4634-be81-a5fd5ac0ee86 HTTP/1.1" 200 OK
+web-1     | 2025-08-28 13:02:20,596 INFO sqlalchemy.engine.Engine ROLLBACK
+web-1     | INFO:sqlalchemy.engine.Engine:ROLLBACK
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/parse-now Origin: http://localhost:5173
+web-1     | INFO:     172.18.0.1:63510 - "POST /api/v1/parse-now HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/confirm-save Origin: http://localhost:5173
+web-1     | INFO:pdf-ingest.confirm_save:Draft profile (no persistence) id=b9bd38f9-cef3-47d5-b3de-c2cc64e87287
+web-1     | INFO:     172.18.0.1:63510 - "POST /api/v1/confirm-save HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/llm-refine Origin: http://localhost:5173
+web-1     | WARNING:pdf-ingest.worker:Profile b9bd38f9-cef3-47d5-b3de-c2cc64e87287 does not exist in database after waiting 2.00s, skipping placeholder creation
+web-1     | INFO:pdf-ingest.worker:Enqueued llm_refine_profile: job_id=8f626647-2f23-4bb6-94ac-086eec1d7b9f profile_id=b9bd38f9-cef3-47d5-b3de-c2cc64e87287 placeholder_id=None
+worker-1  | INFO:rq.worker:default: worker.llm_refine_profile('b9bd38f9-cef3-47d5-b3de-c2cc64e87287') (8f626647-2f23-4bb6-94ac-086eec1d7b9f)
+web-1     | INFO:     172.18.0.1:63510 - "POST /api/v1/llm-refine HTTP/1.1" 200 OK
+worker-1  | INFO:pdf-ingest.worker:LLM_REFINE_CALLED b9bd38f9-cef3-47d5-b3de-c2cc64e87287 session_injected False correlation_job_id=False
+worker-1  | INFO:pdf-ingest.worker:WORKER_ENTER b9bd38f9-cef3-47d5-b3de-c2cc64e87287 loaded_profile False
+worker-1  | INFO:rq.worker:default: Job OK (8f626647-2f23-4bb6-94ac-086eec1d7b9f)
+worker-1  | INFO:rq.worker:Result is kept for 500 seconds
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/parse-now Origin: http://localhost:5173
+web-1     | INFO:     172.18.0.1:64844 - "POST /api/v1/parse-now HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/confirm-save Origin: http://localhost:5173
+web-1     | DEBUG:pdf-ingest.confirm_save:No raw_text found in incoming payload for profile id=ab34d84a-522d-457d-a50e-1c12ed64e3fa
+web-1     | 2025-08-28 13:02:41,099 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+web-1     | INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+web-1     | 2025-08-28 13:02:41,100 INFO sqlalchemy.engine.Engine INSERT INTO profiles (id, name, email, summary, skills, experience, raw_text, confidence, version, created_at, updated_at) VALUES ($1::UUID, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::JSONB, $6::JSONB, $7::VARCHAR, $8::FLOAT, $9::INTEGER, $10::TIMESTAMP WITH TIME ZONE, $11::TIMESTAMP WITH TIME ZONE) ON CONFLICT (email) DO UPDATE SET name = excluded.name, summary = excluded.summary, skills = excluded.skills, experience = excluded.experience, raw_text = excluded.raw_text, confidence = excluded.confidence, version = excluded.version, updated_at = $12::TIMESTAMP WITH TIME ZONE RETURNING profiles.id, profiles.created_at, profiles.updated_at, profiles.confidence
+web-1     | 2025-08-28 13:02:41,100 INFO sqlalchemy.engine.Engine [no key 0.00010s] ('ab34d84a-522d-457d-a50e-1c12ed64e3fa', 'United States', 'email@email.com', '1515 Pacific Ave\nLos Angeles, CA 90291\nUnited States\n3868683442\nemail@email.com', '["Investigation skills", "Safety compliance", "Criminal justice knowledge", "Restraining devices", "Martial arts/Physical combat", "training"]', 'null', None, 0.7500000000000001, 1, datetime.datetime(2025, 8, 28, 13, 2, 41, 99120, tzinfo=datetime.timezone.utc), datetime.datetime(2025, 8, 28, 13, 2, 41, 99120, tzinfo=datetime.timezone.utc), datetime.datetime(2025, 8, 28, 13, 2, 41, 99120, tzinfo=datetime.timezone.utc))
+web-1     | INFO:sqlalchemy.engine.Engine:INSERT INTO profiles (id, name, email, summary, skills, experience, raw_text, confidence, version, created_at, updated_at) VALUES ($1::UUID, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::JSONB, $6::JSONB, $7::VARCHAR, $8::FLOAT, $9::INTEGER, $10::TIMESTAMP WITH TIME ZONE, $11::TIMESTAMP WITH TIME ZONE) ON CONFLICT (email) DO UPDATE SET name = excluded.name, summary = excluded.summary, skills = excluded.skills, experience = excluded.experience, raw_text = excluded.raw_text, confidence = excluded.confidence, version = excluded.version, updated_at = $12::TIMESTAMP WITH TIME ZONE RETURNING profiles.id, profiles.created_at, profiles.updated_at, profiles.confidence
+web-1     | INFO:sqlalchemy.engine.Engine:[no key 0.00010s] ('ab34d84a-522d-457d-a50e-1c12ed64e3fa', 'United States', 'email@email.com', '1515 Pacific Ave\nLos Angeles, CA 90291\nUnited States\n3868683442\nemail@email.com', '["Investigation skills", "Safety compliance", "Criminal justice knowledge", "Restraining devices", "Martial arts/Physical combat", "training"]', 'null', None, 0.7500000000000001, 1, datetime.datetime(2025, 8, 28, 13, 2, 41, 99120, tzinfo=datetime.timezone.utc), datetime.datetime(2025, 8, 28, 13, 2, 41, 99120, tzinfo=datetime.timezone.utc), datetime.datetime(2025, 8, 28, 13, 2, 41, 99120, tzinfo=datetime.timezone.utc))
+web-1     | 2025-08-28 13:02:41,101 INFO sqlalchemy.engine.Engine COMMIT
+web-1     | INFO:sqlalchemy.engine.Engine:COMMIT
+web-1     | INFO:     172.18.0.1:64844 - "POST /api/v1/confirm-save HTTP/1.1" 200 OK
+web-1     | INFO:pdf-ingest:Request: POST http://localhost:8000/api/v1/llm-refine Origin: http://localhost:5173
+web-1     | INFO:pdf-ingest.worker:Created placeholder LLMHistory (pre-enqueue) id=10afccd9-191b-40ba-a729-11993a3613fb for profile 37332957-4405-40e0-b6bd-37b2a5360cdd
+web-1     | INFO:pdf-ingest.worker:Enqueued llm_refine_profile: job_id=859fddfb-c44c-4e4a-99e7-c16a34a67920 profile_id=37332957-4405-40e0-b6bd-37b2a5360cdd placeholder_id=10afccd9-191b-40ba-a729-11993a3613fb
+web-1     | INFO:     172.18.0.1:64844 - "POST /api/v1/llm-refine HTTP/1.1" 200 OK
+worker-1  | INFO:rq.worker:default: worker.llm_refine_profile('37332957-4405-40e0-b6bd-37b2a5360cdd', correlation_job_id='10afccd9-191b-40ba-a729-11993a3613fb') (859fddfb-c44c-4e4a-99e7-c16a34a67920)
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/10afccd9-191b-40ba-a729-11993a3613fb Origin: http://localhost:5173
+web-1     | 2025-08-28 13:02:41,116 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+web-1     | INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+web-1     | INFO:sqlalchemy.engine.Engine:SELECT llm_history.id, llm_history.profile_id, llm_history.run_time, llm_history.provider, llm_history.model, llm_history.job_id, llm_history.request_payload, llm_history.response_snippet, llm_history.full_response, llm_history.confidence, llm_history.merged, llm_history.merge_notes, llm_history.convex_idempotency_key, llm_history.convex_write_status, llm_history.convex_error, llm_history.convex_written_at, llm_history.convex_attempts, llm_history.convex_last_attempt_at 
+web-1     | FROM llm_history 
+web-1     | WHERE llm_history.job_id = $1::VARCHAR ORDER BY llm_history.run_time DESC
+web-1     | INFO:sqlalchemy.engine.Engine:[cached since 174.6s ago] ('10afccd9-191b-40ba-a729-11993a3613fb',)
+web-1     | 2025-08-28 13:02:41,116 INFO sqlalchemy.engine.Engine SELECT llm_history.id, llm_history.profile_id, llm_history.run_time, llm_history.provider, llm_history.model, llm_history.job_id, llm_history.request_payload, llm_history.response_snippet, llm_history.full_response, llm_history.confidence, llm_history.merged, llm_history.merge_notes, llm_history.convex_idempotency_key, llm_history.convex_write_status, llm_history.convex_error, llm_history.convex_written_at, llm_history.convex_attempts, llm_history.convex_last_attempt_at 
+web-1     | FROM llm_history 
+web-1     | WHERE llm_history.job_id = $1::VARCHAR ORDER BY llm_history.run_time DESC
+web-1     | 2025-08-28 13:02:41,116 INFO sqlalchemy.engine.Engine [cached since 174.6s ago] ('10afccd9-191b-40ba-a729-11993a3613fb',)
+web-1     | INFO:     172.18.0.1:64844 - "GET /api/v1/llm-history/10afccd9-191b-40ba-a729-11993a3613fb HTTP/1.1" 200 OK
+web-1     | 2025-08-28 13:02:41,117 INFO sqlalchemy.engine.Engine ROLLBACK
+web-1     | INFO:sqlalchemy.engine.Engine:ROLLBACK
+worker-1  | INFO:pdf-ingest.worker:LLM_REFINE_CALLED 37332957-4405-40e0-b6bd-37b2a5360cdd session_injected False correlation_job_id=True
+worker-1  | INFO:pdf-ingest.worker:WORKER_ENTER 37332957-4405-40e0-b6bd-37b2a5360cdd loaded_profile True
+worker-1  | WARNING:pdf-ingest.worker:Raw text validation failed for profile 37332957-4405-40e0-b6bd-37b2a5360cdd: Raw text too short for meaningful extraction (code: short_text)
+worker-1  | INFO:rq.worker:default: Job OK (859fddfb-c44c-4e4a-99e7-c16a34a67920)
+worker-1  | INFO:rq.worker:Result is kept for 500 seconds
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/10afccd9-191b-40ba-a729-11993a3613fb Origin: http://localhost:5173
+web-1     | 2025-08-28 13:02:42,125 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+web-1     | INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+web-1     | 2025-08-28 13:02:42,125 INFO sqlalchemy.engine.Engine SELECT llm_history.id, llm_history.profile_id, llm_history.run_time, llm_history.provider, llm_history.model, llm_history.job_id, llm_history.request_payload, llm_history.response_snippet, llm_history.full_response, llm_history.confidence, llm_history.merged, llm_history.merge_notes, llm_history.convex_idempotency_key, llm_history.convex_write_status, llm_history.convex_error, llm_history.convex_written_at, llm_history.convex_attempts, llm_history.convex_last_attempt_at 
+web-1     | FROM llm_history 
+web-1     | WHERE llm_history.job_id = $1::VARCHAR ORDER BY llm_history.run_time DESC
+web-1     | INFO:sqlalchemy.engine.Engine:SELECT llm_history.id, llm_history.profile_id, llm_history.run_time, llm_history.provider, llm_history.model, llm_history.job_id, llm_history.request_payload, llm_history.response_snippet, llm_history.full_response, llm_history.confidence, llm_history.merged, llm_history.merge_notes, llm_history.convex_idempotency_key, llm_history.convex_write_status, llm_history.convex_error, llm_history.convex_written_at, llm_history.convex_attempts, llm_history.convex_last_attempt_at 
+web-1     | FROM llm_history 
+web-1     | WHERE llm_history.job_id = $1::VARCHAR ORDER BY llm_history.run_time DESC
+web-1     | 2025-08-28 13:02:42,125 INFO sqlalchemy.engine.Engine [cached since 175.6s ago] ('10afccd9-191b-40ba-a729-11993a3613fb',)
+web-1     | INFO:sqlalchemy.engine.Engine:[cached since 175.6s ago] ('10afccd9-191b-40ba-a729-11993a3613fb',)
+web-1     | INFO:     172.18.0.1:64844 - "GET /api/v1/llm-history/10afccd9-191b-40ba-a729-11993a3613fb HTTP/1.1" 200 OK
+web-1     | 2025-08-28 13:02:42,128 INFO sqlalchemy.engine.Engine ROLLBACK
+web-1     | INFO:sqlalchemy.engine.Engine:ROLLBACK
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/10afccd9-191b-40ba-a729-11993a3613fb Origin: http://localhost:5173
+web-1     | INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+web-1     | 2025-08-28 13:02:44,137 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+web-1     | 2025-08-28 13:02:44,138 INFO sqlalchemy.engine.Engine SELECT llm_history.id, llm_history.profile_id, llm_history.run_time, llm_history.provider, llm_history.model, llm_history.job_id, llm_history.request_payload, llm_history.response_snippet, llm_history.full_response, llm_history.confidence, llm_history.merged, llm_history.merge_notes, llm_history.convex_idempotency_key, llm_history.convex_write_status, llm_history.convex_error, llm_history.convex_written_at, llm_history.convex_attempts, llm_history.convex_last_attempt_at 
+web-1     | FROM llm_history 
+web-1     | WHERE llm_history.job_id = $1::VARCHAR ORDER BY llm_history.run_time DESC
+web-1     | 2025-08-28 13:02:44,138 INFO sqlalchemy.engine.Engine [cached since 177.6s ago] ('10afccd9-191b-40ba-a729-11993a3613fb',)
+web-1     | INFO:sqlalchemy.engine.Engine:SELECT llm_history.id, llm_history.profile_id, llm_history.run_time, llm_history.provider, llm_history.model, llm_history.job_id, llm_history.request_payload, llm_history.response_snippet, llm_history.full_response, llm_history.confidence, llm_history.merged, llm_history.merge_notes, llm_history.convex_idempotency_key, llm_history.convex_write_status, llm_history.convex_error, llm_history.convex_written_at, llm_history.convex_attempts, llm_history.convex_last_attempt_at 
+web-1     | FROM llm_history 
+web-1     | WHERE llm_history.job_id = $1::VARCHAR ORDER BY llm_history.run_time DESC
+web-1     | INFO:sqlalchemy.engine.Engine:[cached since 177.6s ago] ('10afccd9-191b-40ba-a729-11993a3613fb',)
+web-1     | INFO:     172.18.0.1:64844 - "GET /api/v1/llm-history/10afccd9-191b-40ba-a729-11993a3613fb HTTP/1.1" 200 OK
+web-1     | 2025-08-28 13:02:44,141 INFO sqlalchemy.engine.Engine ROLLBACK
+web-1     | INFO:sqlalchemy.engine.Engine:ROLLBACK
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/10afccd9-191b-40ba-a729-11993a3613fb Origin: http://localhost:5173
+web-1     | 2025-08-28 13:02:48,151 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+web-1     | INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+web-1     | 2025-08-28 13:02:48,152 INFO sqlalchemy.engine.Engine SELECT llm_history.id, llm_history.profile_id, llm_history.run_time, llm_history.provider, llm_history.model, llm_history.job_id, llm_history.request_payload, llm_history.response_snippet, llm_history.full_response, llm_history.confidence, llm_history.merged, llm_history.merge_notes, llm_history.convex_idempotency_key, llm_history.convex_write_status, llm_history.convex_error, llm_history.convex_written_at, llm_history.convex_attempts, llm_history.convex_last_attempt_at 
+web-1     | FROM llm_history 
+web-1     | WHERE llm_history.job_id = $1::VARCHAR ORDER BY llm_history.run_time DESC
+web-1     | INFO:sqlalchemy.engine.Engine:SELECT llm_history.id, llm_history.profile_id, llm_history.run_time, llm_history.provider, llm_history.model, llm_history.job_id, llm_history.request_payload, llm_history.response_snippet, llm_history.full_response, llm_history.confidence, llm_history.merged, llm_history.merge_notes, llm_history.convex_idempotency_key, llm_history.convex_write_status, llm_history.convex_error, llm_history.convex_written_at, llm_history.convex_attempts, llm_history.convex_last_attempt_at 
+web-1     | FROM llm_history 
+web-1     | WHERE llm_history.job_id = $1::VARCHAR ORDER BY llm_history.run_time DESC
+web-1     | 2025-08-28 13:02:48,152 INFO sqlalchemy.engine.Engine [cached since 181.6s ago] ('10afccd9-191b-40ba-a729-11993a3613fb',)
+web-1     | INFO:sqlalchemy.engine.Engine:[cached since 181.6s ago] ('10afccd9-191b-40ba-a729-11993a3613fb',)
+web-1     | INFO:     172.18.0.1:64844 - "GET /api/v1/llm-history/10afccd9-191b-40ba-a729-11993a3613fb HTTP/1.1" 200 OK
+web-1     | 2025-08-28 13:02:48,155 INFO sqlalchemy.engine.Engine ROLLBACK
+web-1     | INFO:sqlalchemy.engine.Engine:ROLLBACK
+web-1     | INFO:pdf-ingest:Request: GET http://localhost:8000/api/v1/llm-history/10afccd9-191b-40ba-a729-11993a3613fb Origin: http://localhost:5173
+web-1     | 2025-08-28 13:02:56,165 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+web-1     | INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+web-1     | 2025-08-28 13:02:56,165 INFO sqlalchemy.engine.Engine SELECT llm_history.id, llm_history.profile_id, llm_history.run_time, llm_history.provider, llm_history.model, llm_history.job_id, llm_history.request_payload, llm_history.response_snippet, llm_history.full_response, llm_history.confidence, llm_history.merged, llm_history.merge_notes, llm_history.convex_idempotency_key, llm_history.convex_write_status, llm_history.convex_error, llm_history.convex_written_at, llm_history.convex_attempts, llm_history.convex_last_attempt_at 
+web-1     | FROM llm_history 
+web-1     | WHERE llm_history.job_id = $1::VARCHAR ORDER BY llm_history.run_time DESC
+web-1     | 2025-08-28 13:02:56,166 INFO sqlalchemy.engine.Engine [cached since 189.6s ago] ('10afccd9-191b-40ba-a729-11993a3613fb',)
+web-1     | INFO:sqlalchemy.engine.Engine:SELECT llm_history.id, llm_history.profile_id, llm_history.run_time, llm_history.provider, llm_history.model, llm_history.job_id, llm_history.request_payload, llm_history.response_snippet, llm_history.full_response, llm_history.confidence, llm_history.merged, llm_history.merge_notes, llm_history.convex_idempotency_key, llm_history.convex_write_status, llm_history.convex_error, llm_history.convex_written_at, llm_history.convex_attempts, llm_history.convex_last_attempt_at 
+web-1     | FROM llm_history 
+web-1     | WHERE llm_history.job_id = $1::VARCHAR ORDER BY llm_history.run_time DESC
+web-1     | INFO:sqlalchemy.engine.Engine:[cached since 189.6s ago] ('10afccd9-191b-40ba-a729-11993a3613fb',)
+web-1     | INFO:     172.18.0.1:62748 - "GET /api/v1/llm-history/10afccd9-191b-40ba-a729-11993a3613fb HTTP/1.1" 200 OK
+web-1     | 2025-08-28 13:02:56,168 INFO sqlalchemy.engine.Engine ROLLBACK
+web-1     | INFO:sqlalchemy.engine.Engine:ROLLBACK

@@ -1,5 +1,11 @@
 
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# Common ignore patterns
+.DS_Store
+*.log
+*.bk
+alembic_backups/
+node_modules/
 
 # dependencies
 /node_modules

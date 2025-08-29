@@ -1,6 +1,6 @@
 import { mutation, query } from './_generated/server';
 import { v } from "convex/values";
-import { recordMetric } from "./metrics";
+import { internal } from './_generated/api';
 import * as Monitoring from './monitoring';
 
 export const trackError = mutation({
@@ -16,7 +16,7 @@ export const healthCheck = mutation({
   args: {},
   handler: async (ctx: any): Promise<{ status: string }> => {
     try {
-      await recordMetric(ctx, {
+      await ctx.runMutation(internal.metrics.recordMetric, {
         name: 'health_check',
         value: 1,
         metadata: {
@@ -27,7 +27,7 @@ export const healthCheck = mutation({
       });
       return { status: 'healthy' };
     } catch (error: any) {
-      await recordMetric(ctx, {
+      await ctx.runMutation(internal.metrics.recordMetric, {
         name: 'error',
         value: 1,
         metadata: {
@@ -51,7 +51,7 @@ export const ping = mutation({
   },
   handler: async (ctx: any, args): Promise<{ pong: boolean; service: string | undefined }> => {
     try {
-      await recordMetric(ctx, {
+      await ctx.runMutation(internal.metrics.recordMetric, {
         name: 'ping',
         value: 1,
         metadata: {
@@ -62,7 +62,7 @@ export const ping = mutation({
       });
       return { pong: true, service: args.service };
     } catch (error: any) {
-      await recordMetric(ctx, {
+      await ctx.runMutation(internal.metrics.recordMetric, {
         name: 'error',
         value: 1,
         metadata: {

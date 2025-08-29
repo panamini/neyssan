@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as actions_persistProfile from "../actions/persistProfile.js";
 import type * as alerts from "../alerts.js";
 import type * as analytics from "../analytics.js";
 import type * as auth from "../auth.js";
@@ -21,7 +22,9 @@ import type * as deleteProposalPublic from "../deleteProposalPublic.js";
 import type * as functions from "../functions.js";
 import type * as generateProposalMutation from "../generateProposalMutation.js";
 import type * as http from "../http.js";
+import type * as http_actions from "../http_actions.js";
 import type * as ingestProfile from "../ingestProfile.js";
+import type * as jobs from "../jobs.js";
 import type * as langchain_chains_base_chain from "../langchain/chains/base_chain.js";
 import type * as langchain_chains_chain_factory from "../langchain/chains/chain_factory.js";
 import type * as langchain_chains_creative_chain from "../langchain/chains/creative_chain.js";
@@ -42,16 +45,22 @@ import type * as langchain_types from "../langchain/types.js";
 import type * as langchain_utils_cache from "../langchain/utils/cache.js";
 import type * as langchain_utils_index from "../langchain/utils/index.js";
 import type * as langchain_utils_metrics from "../langchain/utils/metrics.js";
+import type * as llm from "../llm.js";
 import type * as metrics from "../metrics.js";
-import type * as migration from "../migration.js";
+import type * as migrations from "../migrations.js";
 import type * as model_metrics from "../model/metrics.js";
 import type * as model_monitoring from "../model/monitoring.js";
 import type * as monitoring from "../monitoring.js";
+import type * as mutations_updateUserProfile from "../mutations/updateUserProfile.js";
+import type * as mutations_upsertProfile from "../mutations/upsertProfile.js";
+import type * as parsePdf from "../parsePdf.js";
 import type * as populateDisplayName from "../populateDisplayName.js";
 import type * as profiles from "../profiles.js";
 import type * as profilesPublic from "../profilesPublic.js";
 import type * as proposals from "../proposals.js";
 import type * as proposalsPublic from "../proposalsPublic.js";
+import type * as queries_getLatestCV from "../queries/getLatestCV.js";
+import type * as queries_getProfileCount from "../queries/getProfileCount.js";
 import type * as saveJobAndProposal from "../saveJobAndProposal.js";
 import type * as scheduler from "../scheduler.js";
 import type * as sync from "../sync.js";
@@ -63,16 +72,19 @@ import type * as types_validators from "../types/validators.js";
 import type * as updateProposalPublic from "../updateProposalPublic.js";
 import type * as users from "../users.js";
 import type * as utils_auth from "../utils/auth.js";
+import type * as utils_cv_parser from "../utils/cv_parser.js";
 import type * as utils_error from "../utils/error.js";
 import type * as utils_types from "../utils/types.js";
 import type * as utils_validation from "../utils/validation.js";
 import type * as utils_validators from "../utils/validators.js";
+import type * as workerGateway from "../workerGateway.js";
 
 import type {
   ApiFromModules,
   FilterApi,
   FunctionReference,
 } from "convex/server";
+
 /**
  * A utility for referencing Convex functions in your app's API.
  *
@@ -82,6 +94,7 @@ import type {
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  "actions/persistProfile": typeof actions_persistProfile;
   alerts: typeof alerts;
   analytics: typeof analytics;
   auth: typeof auth;
@@ -95,7 +108,9 @@ declare const fullApi: ApiFromModules<{
   functions: typeof functions;
   generateProposalMutation: typeof generateProposalMutation;
   http: typeof http;
+  http_actions: typeof http_actions;
   ingestProfile: typeof ingestProfile;
+  jobs: typeof jobs;
   "langchain/chains/base_chain": typeof langchain_chains_base_chain;
   "langchain/chains/chain_factory": typeof langchain_chains_chain_factory;
   "langchain/chains/creative_chain": typeof langchain_chains_creative_chain;
@@ -116,16 +131,22 @@ declare const fullApi: ApiFromModules<{
   "langchain/utils/cache": typeof langchain_utils_cache;
   "langchain/utils/index": typeof langchain_utils_index;
   "langchain/utils/metrics": typeof langchain_utils_metrics;
+  llm: typeof llm;
   metrics: typeof metrics;
-  migration: typeof migration;
+  migrations: typeof migrations;
   "model/metrics": typeof model_metrics;
   "model/monitoring": typeof model_monitoring;
   monitoring: typeof monitoring;
+  "mutations/updateUserProfile": typeof mutations_updateUserProfile;
+  "mutations/upsertProfile": typeof mutations_upsertProfile;
+  parsePdf: typeof parsePdf;
   populateDisplayName: typeof populateDisplayName;
   profiles: typeof profiles;
   profilesPublic: typeof profilesPublic;
   proposals: typeof proposals;
   proposalsPublic: typeof proposalsPublic;
+  "queries/getLatestCV": typeof queries_getLatestCV;
+  "queries/getProfileCount": typeof queries_getProfileCount;
   saveJobAndProposal: typeof saveJobAndProposal;
   scheduler: typeof scheduler;
   sync: typeof sync;
@@ -137,10 +158,12 @@ declare const fullApi: ApiFromModules<{
   updateProposalPublic: typeof updateProposalPublic;
   users: typeof users;
   "utils/auth": typeof utils_auth;
+  "utils/cv_parser": typeof utils_cv_parser;
   "utils/error": typeof utils_error;
   "utils/types": typeof utils_types;
   "utils/validation": typeof utils_validation;
   "utils/validators": typeof utils_validators;
+  workerGateway: typeof workerGateway;
 }>;
 declare const fullApiWithMounts: typeof fullApi;
 
@@ -168,6 +191,7 @@ export declare const components: {
                 period: number;
                 rate: number;
                 shards?: number;
+                start?: null;
               }
             | {
                 capacity?: number;
@@ -192,6 +216,59 @@ export declare const components: {
         { before?: number },
         null
       >;
+      getServerTime: FunctionReference<"mutation", "internal", {}, number>;
+      getValue: FunctionReference<
+        "query",
+        "internal",
+        {
+          config:
+            | {
+                capacity?: number;
+                kind: "token bucket";
+                maxReserved?: number;
+                period: number;
+                rate: number;
+                shards?: number;
+                start?: null;
+              }
+            | {
+                capacity?: number;
+                kind: "fixed window";
+                maxReserved?: number;
+                period: number;
+                rate: number;
+                shards?: number;
+                start?: number;
+              };
+          key?: string;
+          name: string;
+          sampleShards?: number;
+        },
+        {
+          config:
+            | {
+                capacity?: number;
+                kind: "token bucket";
+                maxReserved?: number;
+                period: number;
+                rate: number;
+                shards?: number;
+                start?: null;
+              }
+            | {
+                capacity?: number;
+                kind: "fixed window";
+                maxReserved?: number;
+                period: number;
+                rate: number;
+                shards?: number;
+                start?: number;
+              };
+          shard: number;
+          ts: number;
+          value: number;
+        }
+      >;
       rateLimit: FunctionReference<
         "mutation",
         "internal",
@@ -204,6 +281,7 @@ export declare const components: {
                 period: number;
                 rate: number;
                 shards?: number;
+                start?: null;
               }
             | {
                 capacity?: number;
@@ -229,73 +307,8 @@ export declare const components: {
         null
       >;
     };
-    public: {
-      checkRateLimit: FunctionReference<
-        "query",
-        "internal",
-        {
-          config:
-            | {
-                capacity?: number;
-                kind: "token bucket";
-                maxReserved?: number;
-                period: number;
-                rate: number;
-                shards?: number;
-              }
-            | {
-                capacity?: number;
-                kind: "fixed window";
-                maxReserved?: number;
-                period: number;
-                rate: number;
-                shards?: number;
-                start?: number;
-              };
-          count?: number;
-          key?: string;
-          name: string;
-          reserve?: boolean;
-          throws?: boolean;
-        },
-        { ok: true; retryAfter?: number } | { ok: false; retryAfter: number }
-      >;
-      rateLimit: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          config:
-            | {
-                capacity?: number;
-                kind: "token bucket";
-                maxReserved?: number;
-                period: number;
-                rate: number;
-                shards?: number;
-              }
-            | {
-                capacity?: number;
-                kind: "fixed window";
-                maxReserved?: number;
-                period: number;
-                rate: number;
-                shards?: number;
-                start?: number;
-              };
-          count?: number;
-          key?: string;
-          name: string;
-          reserve?: boolean;
-          throws?: boolean;
-        },
-        { ok: true; retryAfter?: number } | { ok: false; retryAfter: number }
-      >;
-      resetRateLimit: FunctionReference<
-        "mutation",
-        "internal",
-        { key?: string; name: string },
-        null
-      >;
+    time: {
+      getServerTime: FunctionReference<"mutation", "internal", {}, number>;
     };
   };
   migrations: {
@@ -358,83 +371,6 @@ export declare const components: {
         }>
       >;
       migrate: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          batchSize?: number;
-          cursor?: string | null;
-          dryRun: boolean;
-          fnHandle: string;
-          name: string;
-          next?: Array<{ fnHandle: string; name: string }>;
-        },
-        {
-          batchSize?: number;
-          cursor?: string | null;
-          error?: string;
-          isDone: boolean;
-          latestEnd?: number;
-          latestStart: number;
-          name: string;
-          next?: Array<string>;
-          processed: number;
-          state: "inProgress" | "success" | "failed" | "canceled" | "unknown";
-        }
-      >;
-    };
-    public: {
-      cancel: FunctionReference<
-        "mutation",
-        "internal",
-        { name: string },
-        {
-          batchSize?: number;
-          cursor?: string | null;
-          error?: string;
-          isDone: boolean;
-          latestEnd?: number;
-          latestStart: number;
-          name: string;
-          next?: Array<string>;
-          processed: number;
-          state: "inProgress" | "success" | "failed" | "canceled" | "unknown";
-        }
-      >;
-      cancelAll: FunctionReference<
-        "mutation",
-        "internal",
-        { sinceTs?: number },
-        Array<{
-          batchSize?: number;
-          cursor?: string | null;
-          error?: string;
-          isDone: boolean;
-          latestEnd?: number;
-          latestStart: number;
-          name: string;
-          next?: Array<string>;
-          processed: number;
-          state: "inProgress" | "success" | "failed" | "canceled" | "unknown";
-        }>
-      >;
-      getStatus: FunctionReference<
-        "query",
-        "internal",
-        { limit?: number; migrationNames?: Array<string> },
-        Array<{
-          batchSize?: number;
-          cursor?: string | null;
-          error?: string;
-          isDone: boolean;
-          latestEnd?: number;
-          latestStart: number;
-          name: string;
-          next?: Array<string>;
-          processed: number;
-          state: "inProgress" | "success" | "failed" | "canceled" | "unknown";
-        }>
-      >;
-      runMigration: FunctionReference<
         "mutation",
         "internal",
         {

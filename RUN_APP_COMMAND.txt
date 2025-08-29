@@ -1,0 +1,23 @@
+To start the app safely from the repo root, run:
+
+# 1) Preferred (safe): checks for host port conflicts and starts services
+./safe-start.sh
+
+# 2) If you already confirmed ports are free and want to proceed without checks:
+./safe-start.sh --force
+
+# Notes:
+- Run these from the repository root (same directory containing safe-start.sh).
+- safe-start.sh will:
+  - Check that pdf-ingest/.env exists
+  - Start docker compose services (web, db, redis, worker)
+  - Wait for Postgres and the backend to be responsive
+  - Print guidance to tail logs
+
+- To view logs after starting:
+  cd pdf-ingest
+  docker compose logs -f --no-color web worker
+
+- To stop services:
+  cd pdf-ingest
+  docker compose down

@@ -6,7 +6,7 @@ export default defineSchema({
     clerkId: v.string(),
     email: v.string(),
     name: v.optional(v.string()),
-  }).index("by_clerk_id", ["clerkId"]),
+    }).index("by_clerk_id", ["clerkId"]),
 
   proposals: defineTable({
     userId: v.id("userProfiles"), // Changed to v.id("userProfiles") to reference userProfiles table
@@ -36,55 +36,66 @@ export default defineSchema({
     .index("by_created", ["createdAt"])
     .index("by_user_and_status", ["userId", "status"]),
 
-  userProfiles: defineTable({
-    clerkId: v.string(),
-    email: v.string(),
-    name: v.optional(v.string()),
-    version: v.number(),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-    preferences: v.object({
-      rateLimits: v.optional(v.any()),
-      writingStyle: v.string(),
-      tonePreference: v.string(),
-      autoSend: v.boolean(),
-    }),
-    // New optional profile fields for ingestion
-    summary: v.optional(v.string()),
-    skills: v.optional(v.array(v.string())),
-    experience: v.optional(
-      v.array(
-        v.object({
-          company: v.string(),
-          title: v.string(),
-          startDate: v.optional(v.number()),
-          endDate: v.optional(v.number()),
-          description: v.optional(v.string()),
-        })
-      )
-    ),
-    education: v.optional(
-      v.array(
-        v.object({
-          school: v.string(),
-          degree: v.optional(v.string()),
-          fieldOfStudy: v.optional(v.string()),
-          startDate: v.optional(v.number()),
-          endDate: v.optional(v.number()),
-        })
-      )
-    ),
+    userProfiles: defineTable({
+        // External canonical profile id (used by upsertProfile)
+        profileId: v.optional(v.string()),
+        clerkId: v.optional(v.string()),
+        email: v.string(),
+        name: v.optional(v.string()),
+        version: v.number(),
+        createdAt: v.number(),
+        updatedAt: v.number(),
+        preferences: v.object({
+            rateLimits: v.optional(v.any()),
+            writingStyle: v.string(),
+            tonePreference: v.string(),
+            autoSend: v.boolean(),
+        }),
+        // New optional profile fields for ingestion
+        summary: v.optional(v.string()),
+        skills: v.optional(v.array(v.string())),
+        experience: v.optional(
+            v.array(
+                v.object({
+                    company: v.string(),
+                    title: v.string(),
+                    // Accept either string dates (ISO or human) or numeric timestamps
+                    startDate: v.optional(v.union(v.string(), v.number(), v.null())),
+                    endDate: v.optional(v.union(v.string(), v.number(), v.null())),
+                    description: v.optional(v.string()),
+                    current: v.optional(v.boolean()),
+                })
+            )
+        ),
+        education: v.optional(
+            v.array(
+                v.object({
+                    school: v.string(),
+                    degree: v.optional(v.string()),
+                    fieldOfStudy: v.optional(v.string()),
+                    startDate: v.optional(v.union(v.string(), v.number(), v.null())),
+                    endDate: v.optional(v.union(v.string(), v.number(), v.null())),
+                })
+            )
+        ),
 
-    // Additional optional fields added to support profile ingestion
-    linkedIn: v.optional(v.string()),
-    rawText: v.optional(v.string()),
-    metadata: v.optional(
-      v.object({
-        source: v.optional(v.string()),
-        importedAt: v.optional(v.number()),
-      })
-    ),
-  }).index("by_clerk_id", ["clerkId"]),
+        // Additional optional fields added to support profile ingestion
+        linkedIn: v.optional(v.string()),
+        raw_text: v.optional(v.string()),
+        metadata: v.optional(
+            v.object({
+                source: v.optional(v.string()),
+                importedAt: v.optional(v.number()),
+                // optional parsing metadata
+                confidence: v.optional(v.number()),
+                filename: v.optional(v.string()),
+            })
+        ),
+
+        // Fields used by upsert logic
+        idempotencyKeys: v.optional(v.array(v.string())),
+        achievements: v.optional(v.array(v.string())),
+    }).index("by_profileId", ["profileId"]).index("by_clerk_id", ["clerkId"]),
 
   rateLimits: defineTable({
     userId: v.id("users"), // Changed to v.id("users") for proper referencing
@@ -164,4 +175,45 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index("by_user", ["userId"]),
+
+  // New: LLM jobs queue table
+  llmJobs: defineTable({
+    profileId: v.id("userProfiles"),
+    placeholderId: v.optional(v.string()),
+    status: v.string(), // queued, processing, finished, failed
+    rawText: v.optional(v.string()),
+    options: v.optional(v.any()),
+    requestedBy: v.optional(v.string()), // clerkId or service id
+
+    // Worker / lifecycle fields (optional)
+    attempts: v.optional(v.number()),
+    lockedBy: v.optional(v.string()),
+    startedAt: v.optional(v.number()),
+    historyId: v.optional(v.id("llmHistory")),
+    lastError: v.optional(v.string()),
+
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_profile", ["profileId"])
+    .index("by_status", ["status"])
+    .index("by_created", ["createdAt"]),
+
+  // New: LLM history table to persist LLM responses and patches
+  llmHistory: defineTable({
+    profileId: v.id("userProfiles"),
+    jobId: v.optional(v.string()),
+    placeholderId: v.optional(v.string()),
+    provider: v.optional(v.string()),
+    model: v.optional(v.string()),
+    full_response: v.optional(v.any()),
+    patch: v.optional(v.any()),
+    confidence: v.optional(v.number()),
+    merged: v.optional(v.boolean()),
+    createdAt: v.number(),
+  })
+    .index("by_profile", ["profileId"])
+    .index("by_placeholder", ["placeholderId"])
+    .index("by_job", ["jobId"])
+    .index("by_created", ["createdAt"]),
 });
