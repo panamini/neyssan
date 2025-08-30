@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as actions_formatCompleteCV from "../actions/formatCompleteCV.js";
 import type * as actions_persistProfile from "../actions/persistProfile.js";
 import type * as alerts from "../alerts.js";
 import type * as analytics from "../analytics.js";
@@ -45,6 +46,7 @@ import type * as langchain_types from "../langchain/types.js";
 import type * as langchain_utils_cache from "../langchain/utils/cache.js";
 import type * as langchain_utils_index from "../langchain/utils/index.js";
 import type * as langchain_utils_metrics from "../langchain/utils/metrics.js";
+import type * as lib_utils from "../lib/utils.js";
 import type * as llm from "../llm.js";
 import type * as metrics from "../metrics.js";
 import type * as migrations from "../migrations.js";
@@ -95,6 +97,7 @@ import type {
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  "actions/formatCompleteCV": typeof actions_formatCompleteCV;
   "actions/persistProfile": typeof actions_persistProfile;
   alerts: typeof alerts;
   analytics: typeof analytics;
@@ -132,6 +135,7 @@ declare const fullApi: ApiFromModules<{
   "langchain/utils/cache": typeof langchain_utils_cache;
   "langchain/utils/index": typeof langchain_utils_index;
   "langchain/utils/metrics": typeof langchain_utils_metrics;
+  "lib/utils": typeof lib_utils;
   llm: typeof llm;
   metrics: typeof metrics;
   migrations: typeof migrations;

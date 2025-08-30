@@ -150,3 +150,36 @@ If you'd like, I can:
 - Add a GitHub Action YAML that runs `npm ci && npm run test` and collects results.
 
 Tell me which of those you want next and I’ll implement it.
+
+## Testing guidance — prefer accessible queries
+
+Short recommendation for writing resilient frontend tests:
+
+- Prefer accessibility-first queries from Testing Library:
+  - getByRole / findByRole (with accessible name) for buttons, headings, lists, etc.
+  - getByLabelText / findByLabelText for form controls and interactive elements.
+  - Use within(container) to scope queries to a specific card / panel to avoid brittle global matches.
+- Avoid relying on exact visible text or fragile DOM traversals (e.g., closest('section')), which tend to break with layout changes.
+- When a control opens a confirmation modal or triggers an async flow, assert on the modal / final state rather than transient DOM structure.
+
+Example patterns:
+```ts
+// scope to the draft card by its sr-only label
+const draftLabel = screen.getAllByText(/Summary\s*\(Draft\)/i)[0];
+const draftCard = draftLabel.closest('div')!;
+const editBtn = within(draftCard).getByRole('button', { name: /Edit/i });
+fireEvent.click(editBtn);
+
+// use aria-label for accept/discard action buttons
+const acceptBtn = screen.getByLabelText(/Accept suggestion for Summary/i);
+fireEvent.click(acceptBtn);
+
+// if confirmation modal appears, confirm the modal action
+const applyBtn = await screen.findByRole('button', { name: /Apply/i });
+fireEvent.click(applyBtn);
+
+// always prefer findBy* for async expectations
+await screen.findByText(/Profile saved/i);
+```
+
+These small conventions reduce flakiness, improve accessibility, and make tests easier to maintain.
