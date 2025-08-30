@@ -1,0 +1,252 @@
+:root {
+  /* Light theme (Design tokens) */
+
+  /* Golden ratio constant for derived tokens */
+  --phi: 1.618;
+
+  /* 8px Grid unit (base spacing). All spacing tokens are multiples of this unit. */
+  --grid-unit: 8px;
+  --space-1: calc(var(--grid-unit) * 1);  /* 8px */
+  --space-2: calc(var(--grid-unit) * 2);  /* 16px */
+  --space-3: calc(var(--grid-unit) * 3);  /* 24px */
+  --space-4: calc(var(--grid-unit) * 4);  /* 32px */
+  --space-5: calc(var(--grid-unit) * 5);  /* 40px */
+  --space-6: calc(var(--grid-unit) * 6);  /* 48px */
+  --space-8: calc(var(--grid-unit) * 8);  /* 64px */
+  --space-10: calc(var(--grid-unit) * 10);/* 80px */
+  --space-12: calc(var(--grid-unit) * 12);/* 96px */
+  --space-14: calc(var(--grid-unit) * 14);/* 112px */
+  --space-16: calc(var(--grid-unit) * 16);/* 128px */
+
+  /* Semantic color tokens (strict grayscale for UI) */
+  --background: #ffffff;
+  --foreground: #050505;
+  --primary: #343434;
+  --muted: #919191;
+  --accent: #626262;
+  --hover: #000000;
+  --job-field-bg: #BFBFBF;
+  --text-muted: var(--muted);
+  --dark-text: var(--foreground);
+
+  /* Status tokens (mapped to grayscale by default to enforce brand palette) */
+  --success: var(--accent);
+  --danger: var(--accent);
+  --warning: var(--accent);
+
+  /* On-color tokens (text color for use on semantic backgrounds) */
+  --on-primary: #ffffff;
+  --on-success: var(--on-accent);
+  --on-danger: var(--on-accent);
+  --on-warning: var(--on-accent);
+  --on-accent: #ffffff;
+
+  /* Component sizing tokens (golden-ratio derived) */
+  --header-height: var(--space-8); /* 64px */
+  --footer-height: var(--space-5); /* 40px */
+
+  /* Button interaction hierarchy (primary / base / tertiary) */
+  --btn-height-base: var(--space-3); /* 24px */
+  --btn-height-primary: calc(var(--btn-height-base) * var(--phi)); /* ~38.8px */
+  --btn-height-tertiary: calc(var(--btn-height-base) / var(--phi)); /* ~14.8px */
+
+  /* Layout width tokens using golden ratio (main / sidebar) */
+  --main-width: 61.8%;
+  --sidebar-width: 38.2%;
+
+  /* Input / textarea sizing */
+  --input-base-height: var(--btn-height-base);
+  --textarea-base-height: calc(var(--btn-height-base) * 3);
+
+  /* Modal / card / toast / pill tokens */
+  --modal-max-width: 900px;
+  --modal-padding: var(--space-3);
+  --card-padding: var(--space-2);
+  --card-radius: 0.5rem;
+  --pill-height: var(--btn-height-tertiary);
+  --toast-max-width: 360px;
+  --toast-padding: var(--space-2);
+  --toast-height: calc(var(--btn-height-base) + var(--space-2));
+
+  /* Accessibility helpers */
+  --focus-ring: 3px;
+  --shadow-color: rgba(16,24,40,0.08);
+}
+
+.dark {
+  --phi: 1.618;
+
+  --grid-unit: 8px;
+  --space-1: calc(var(--grid-unit) * 1);
+  --space-2: calc(var(--grid-unit) * 2);
+  --space-3: calc(var(--grid-unit) * 3);
+  --space-4: calc(var(--grid-unit) * 4);
+  --space-5: calc(var(--grid-unit) * 5);
+  --space-6: calc(var(--grid-unit) * 6);
+  --space-8: calc(var(--grid-unit) * 8);
+  --space-10: calc(var(--grid-unit) * 10);
+  --space-12: calc(var(--grid-unit) * 12);
+
+  --background: #272727;
+  --foreground: #eeeeee;
+  --primary: #bfbfbf;
+  --muted: #919191;
+  --accent: #a7a7a7;
+  --hover: #f8f8f8;
+  --job-field-bg: #010101;
+  --text-muted: var(--muted);
+  --dark-text: var(--foreground);
+
+  /* Dark mode semantic tokens (only use saturated colors for critical status to preserve contrast) */
+  --success: #059669;
+  --danger: #ef4444;
+  --warning: #d97706;
+
+  --on-primary: #000000;
+  --on-success: #000000;
+  --on-danger: #ffffff;
+  --on-warning: #000000;
+  --on-accent: #000000;
+}
+
+/* Base element styling */
+html, body, #root {
+  height: 100%;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Link styling should use semantic primary token */
+a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Component utility tokens (kept for legacy @apply support; prefer using primitives) */
+/* These are intentionally minimal — new components should consume the CSS variables above. */
+
+/* Preserve a few legacy aliases used across the codebase (avoid mass replace until QA) */
+:root {
+  --text-muted: var(--muted);
+}
+
+/* Golden-ratio scrollbar & chip tokens (card-specific, minimal visual footprint) */
+/* Derived values follow the project's 8px baseline and φ ≈ 1.618 */
+:root {
+  --scroll-track-width: calc(var(--grid-unit) / var(--phi)); /* ~4.94px -> renders ~5px */
+  --scroll-thumb-width: calc(var(--scroll-track-width) * 0.8); /* ~4px visual thumb */
+  --scroll-gap: 2px; /* tiny inset from card border */
+  /* Default card height fallback (can be overridden per-card with inline var) */
+  --card-height: 480px;
+  /* Fixed minimal thumb length to keep scroll thumbs visually consistent across containers.
+     On many browsers the actual thumb length is computed from content/container ratio,
+     but min-height will prevent overly long thumbs and makes different containers appear
+     more similar without JS. Adjust this value if you want a shorter/longer thumb. */
+  --scroll-thumb-min-height: 12px;
+}
+
+/* Reviewer card container helper:
+   - apply `.cv-reviewer` to the reviewer root so the scrollbar styles and
+     dynamic --card-height semantics apply.
+   - .custom-scrollbar enables themed, minimal scrollbars.
+*/
+.cv-reviewer {
+  --card-height: 480px; /* overridden by JS ResizeObserver when available */
+  padding-right: var(--scroll-gap); /* thin inset so track sits slightly inside border */
+  min-height: 0; /* allow nested flex children to size correctly */
+  box-sizing: border-box;
+}
+
+/* Token-driven thin scrollbars applied to any element using the helper class.
+   Also target common overflow container classes to maximize coverage across the UI.
+   This avoids needing to add the helper class everywhere in markup. */
+.custom-scrollbar,
+.overflow-auto.custom-scrollbar,
+.flex-1.custom-scrollbar,
+.cv-reviewer.custom-scrollbar {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* WebKit (Chrome, Edge, Safari) */
+.custom-scrollbar::-webkit-scrollbar,
+.overflow-auto.custom-scrollbar::-webkit-scrollbar,
+.flex-1.custom-scrollbar::-webkit-scrollbar,
+.cv-reviewer.custom-scrollbar::-webkit-scrollbar {
+  width: var(--scroll-track-width, 5px);
+  height: var(--scroll-track-width, 5px);
+}
+
+.custom-scrollbar::-webkit-scrollbar-track,
+.overflow-auto.custom-scrollbar::-webkit-scrollbar-track,
+.flex-1.custom-scrollbar::-webkit-scrollbar-track,
+.cv-reviewer.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb,
+.overflow-auto.custom-scrollbar::-webkit-scrollbar-thumb,
+.flex-1.custom-scrollbar::-webkit-scrollbar-thumb,
+.cv-reviewer.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--accent);
+  border-radius: 999px;
+  /* Use the token-driven minimal thumb height so different scroll containers render
+     thumbs of comparable visual length. Lower this value (e.g. 10px) for a shorter thumb. */
+  min-height: var(--scroll-thumb-min-height, 12px);
+  border: 1px solid rgba(0,0,0,0.06);
+}
+
+/* Firefox */
+.custom-scrollbar,
+.overflow-auto.custom-scrollbar,
+.flex-1.custom-scrollbar,
+.cv-reviewer.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) transparent;
+  -ms-overflow-style: auto;
+  padding-right: calc(var(--scroll-gap));
+}
+
+/* Chip / pill tokens (used for skills) — Golden-ratio aligned to tokens */
+:root {
+  --pill-height: var(--btn-height-tertiary); /* ~14.8px (derived) */
+  --chip-font-size: 0.75rem; /* readable on small pills */
+  --chip-padding-x: 0.5rem; /* ~8px */
+  --chip-padding-y: 0.125rem; /* ~2px */
+  --chip-bg: var(--job-field-bg);
+  --chip-color: var(--foreground);
+  --chip-radius: 999px;
+}
+
+/* Chip helper class used in RefinementField for consistent pills */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  font-size: var(--chip-font-size);
+  padding: var(--chip-padding-y) var(--chip-padding-x);
+  height: var(--pill-height);
+  line-height: calc(var(--pill-height));
+  background: var(--chip-bg);
+  color: var(--chip-color);
+  border-radius: var(--chip-radius);
+  box-shadow: none;
+}
+
+/* Accessibility helpers: focus ring for keyboard users */
+:focus {
+  outline: none;
+}
+:focus-visible {
+  box-shadow: 0 0 0 var(--focus-ring) rgba(100,100,100,0.15);
+  border-radius: 4px;
+}
+
+/* QA visual aid removed — production hides scrollbars and keeps cards scrollable via mouse/touch/keyboard */
+/* End of globals */

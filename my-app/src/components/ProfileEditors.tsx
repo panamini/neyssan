@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { Button } from "./ui/button";
 
 type SkillAdderProps = {
   onAdd: (skill: string) => Promise<void> | void;
@@ -16,17 +17,16 @@ export function SkillAdder({ onAdd }: SkillAdderProps) {
         className="px-2 py-1 text-sm border rounded"
         placeholder="Add skill"
       />
-      <button
-          onClick={() => {
+      <Button
+          onClick={() =>{
             const v = value.trim();
             if (!v) return;
             void onAdd(v);
             setValue("");
           }}
-        className="px-2 py-1 text-sm bg-gray-200 rounded"
+        className="px-2 py-1 text-sm bg-surface-muted rounded"
       >
-        Add
-      </button>
+        Add</Button>
     </div>
   );
 }
@@ -59,8 +59,8 @@ export function ExperienceAdder({ onAdd }: ExperienceAdderProps) {
         <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description" rows={2} className="px-2 py-1 text-sm border rounded md:col-span-2" />
       </div>
       <div className="flex gap-2 mt-2">
-        <button
-          onClick={() => {
+        <Button
+          onClick={() =>{
             const entry: ExperienceEntry = {
               company: company.trim() || undefined,
               title: title.trim() || undefined,
@@ -75,10 +75,9 @@ export function ExperienceAdder({ onAdd }: ExperienceAdderProps) {
             setEndDate("");
             setDescription("");
           }}
-          className="px-3 py-1 text-sm bg-gray-200 rounded"
+          className="px-3 py-1 text-sm bg-surface-muted rounded"
         >
-          Add experience
-        </button>
+          Add experience</Button>
       </div>
     </div>
   );
@@ -112,8 +111,8 @@ export function EducationAdder({ onAdd }: EducationAdderProps) {
         <input value={endDate} onChange={(e) => setEndDate(e.target.value)} placeholder="End date (YYYY-MM-DD or empty)" className="px-2 py-1 text-sm border rounded" />
       </div>
       <div className="flex gap-2 mt-2">
-        <button
-          onClick={() => {
+        <Button
+          onClick={() =>{
             const entry: EducationEntry = {
               school: school.trim() || undefined,
               degree: degree.trim() || undefined,
@@ -128,10 +127,9 @@ export function EducationAdder({ onAdd }: EducationAdderProps) {
             setStartDate("");
             setEndDate("");
           }}
-          className="px-3 py-1 text-sm bg-gray-200 rounded"
+          className="px-3 py-1 text-sm bg-surface-muted rounded"
         >
-          Add education
-        </button>
+          Add education</Button>
       </div>
     </div>
   );

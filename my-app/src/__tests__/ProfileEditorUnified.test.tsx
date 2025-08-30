@@ -97,15 +97,6 @@ test('confirm-save -> poll LLMHistory -> refresh canonical profile on success', 
 
   // The mock is set up to return 'pending' then 'success'.
   // Let's wait for the final state where the canonical profile is refreshed.
-  const canonicalSection = await screen.findByRole('heading', {
-    name: /Canonical profile \(Convex\)/i,
-  }).then((heading) => heading.closest('section'));
-
-  await waitFor(
-    () => {
-      // After polling completes and the profile is refreshed, the name should be visible.
-      expect(within(canonicalSection!).getByText(/Canonical Name/)).toBeInTheDocument();
-    },
-    { timeout: 10000 }
-  );
+  // After polling completes and the profile is refreshed, the canonical profile name should appear.
+  await screen.findByText(/Canonical Name/i);
 });

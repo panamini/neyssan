@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { Button } from "./ui/button";
 import { useMutation, useConvex } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import ProfileView from "./ProfileView";
@@ -109,15 +110,14 @@ export default function ProfileEditor() {
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-semibold">Profile Editor</h1>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowSettings(true)}
+          <Button
+            onClick={() =>setShowSettings(true)}
             aria-label="Open settings"
-            className="px-3 py-1 bg-gray-100 rounded hover:bg-gray-200"
+            className="px-3 py-1 rounded bg-surface hover:bg-surface-muted"
             title="Settings"
           >
-            ⚙️
-          </button>
-          {status && <div className="text-sm text-gray-600">{status}</div>}
+            ⚙️</Button>
+          {status && <div className="text-sm text-muted">{status}</div>}
         </div>
       </div>
 
@@ -125,7 +125,7 @@ export default function ProfileEditor() {
         {/* Left: Edit form */}
         <div className="space-y-4">
           {/* Ingest */}
-          <section className="p-4 bg-white border rounded">
+          <section className="p-4 border rounded bg-background">
             <h2 className="mb-2 text-lg font-medium">Ingest résumé</h2>
             <textarea
               rows={6}
@@ -135,15 +135,14 @@ export default function ProfileEditor() {
               className="w-full p-2 text-sm border rounded"
             />
               <div className="flex items-center gap-2 mt-2">
-              <button onClick={() => { void ingestResume(); }} className="px-3 py-1 text-white bg-blue-600 rounded">
-                Ingest profile
-              </button>
-              <div className="text-sm text-gray-500">Pastes summary + rawText to profile</div>
+              <Button onClick={() =>{ void ingestResume(); }} className="px-3 py-1 rounded text-background bg-accent">
+                Ingest profile</Button>
+              <div className="text-sm text-muted">Pastes summary + rawText to profile</div>
             </div>
           </section>
 
           {/* Modify structured fields */}
-          <section className="p-4 space-y-4 bg-white border rounded">
+          <section className="p-4 space-y-4 border rounded bg-background">
             <h2 className="text-lg font-medium">Modify profile</h2>
 
             {/* Display name */}
@@ -160,14 +159,13 @@ export default function ProfileEditor() {
                   placeholder="Display name"
                   className="w-full px-2 py-1 border rounded"
                 />
-                <button
-                  onClick={() => {
+                <Button
+                  onClick={() =>{
                     void updateField({ name: profile?.name ?? "" });
                   }}
-                  className="px-3 py-1 bg-gray-200 rounded"
+                  className="px-3 py-1 rounded bg-surface-muted"
                 >
-                  Save
-                </button>
+                  Save</Button>
               </div>
             </div>
 
@@ -200,7 +198,7 @@ export default function ProfileEditor() {
                   className="w-full px-2 py-1 border rounded"
                 />
                 <a
-                  className={clsx("px-3 py-1 rounded text-sm", profile?.linkedIn ? "bg-blue-600 text-white" : "bg-gray-200")}
+                  className={clsx("px-3 py-1 rounded text-sm", profile?.linkedIn ? "bg-accent text-background" : "bg-surface-muted")}
                   href={profile?.linkedIn ?? "#"}
                   target="_blank"
                   rel="noreferrer noopener"
@@ -215,18 +213,17 @@ export default function ProfileEditor() {
               <label className="block mb-1 text-sm font-medium">Skills</label>
               <div className="flex flex-wrap gap-2 mb-2">
                 {(profile?.skills || []).map((s: string, i: number) => (
-                  <span key={i} className="flex items-center gap-2 px-2 py-1 text-sm bg-gray-100 rounded">
+                  <span key={i} className="flex items-center gap-2 px-2 py-1 text-sm rounded bg-surface">
                     <span>{s}</span>
-                      <button
-                        onClick={() => {
+                      <Button
+                        onClick={() =>{
                           const next = (profile?.skills || []).filter((x: string) => x !== s);
                           void updateField({ skills: next });
                         }}
-                        className="px-1 text-xs bg-red-200 rounded"
+                        className="px-1 text-xs rounded bg-surface-muted"
                         aria-label={`Remove skill ${s}`}
                       >
-                        ×
-                      </button>
+                        ×</Button>
                   </span>
                 ))}
               </div>
@@ -245,17 +242,16 @@ export default function ProfileEditor() {
                 {(profile?.experience || []).map((exp: any, idx: number) => (
                   <div key={idx} className="p-2 border rounded">
                     <div className="text-sm font-semibold">{exp.title} — {exp.company}</div>
-                    {exp.description && <div className="mt-1 text-sm text-gray-700">{exp.description}</div>}
+                    {exp.description && <div className="mt-1 text-sm text-muted">{exp.description}</div>}
                     <div className="mt-2">
-                      <button
-                        onClick={() => {
+                      <Button
+                        onClick={() =>{
                           const next = (profile?.experience || []).filter((_: any, i: number) => i !== idx);
                           void updateField({ experience: next });
                         }}
-                        className="px-2 py-1 text-xs bg-red-200 rounded"
+                        className="px-2 py-1 text-xs rounded bg-surface-muted"
                       >
-                        Delete
-                      </button>
+                        Delete</Button>
                     </div>
                   </div>
                 ))}
@@ -275,17 +271,16 @@ export default function ProfileEditor() {
                 {(profile?.education || []).map((ed: any, idx: number) => (
                   <div key={idx} className="p-2 border rounded">
                     <div className="text-sm font-semibold">{ed.school} {ed.degree ? `— ${ed.degree}` : ""}</div>
-                    <div className="mt-1 text-sm text-gray-700">{ed.fieldOfStudy ?? ""}</div>
+                    <div className="mt-1 text-sm text-muted">{ed.fieldOfStudy ?? ""}</div>
                     <div className="mt-2">
-                      <button
-                        onClick={() => {
+                      <Button
+                        onClick={() =>{
                           const next = (profile?.education || []).filter((_: any, i: number) => i !== idx);
                           void updateField({ education: next });
                         }}
-                        className="px-2 py-1 text-xs bg-red-200 rounded"
+                        className="px-2 py-1 text-xs rounded bg-surface-muted"
                       >
-                        Delete
-                      </button>
+                        Delete</Button>
                     </div>
                   </div>
                 ))}
@@ -301,13 +296,13 @@ export default function ProfileEditor() {
         </div>
 
         {/* Right: Live preview */}
-        <aside className="p-4 bg-white border rounded">
+        <aside className="p-4 border rounded bg-background">
           <div className="flex items-start justify-between">
             <div>
               <h2 className="text-lg font-semibold">{profile?.name ?? profile?.email ?? "No user"}</h2>
-              <div className="text-sm text-gray-500">{profile?.email ?? ""}</div>
+              <div className="text-sm text-muted">{profile?.email ?? ""}</div>
             </div>
-            <div className="text-sm text-gray-600">
+            <div className="text-sm text-muted">
               Tone: {preferences.tonePreference}, Style: {preferences.writingStyle}, Auto-send: {preferences.autoSend ? "On" : "Off"}
             </div>
           </div>
@@ -321,7 +316,7 @@ export default function ProfileEditor() {
       {/* Settings modal */}
       {showSettings && (
         <div className="fixed inset-0 flex items-center justify-center bg-black/30">
-          <div className="w-full max-w-md p-6 bg-white rounded">
+          <div className="w-full max-w-md p-6 rounded bg-surface">
             <h3 className="mb-4 text-lg font-medium">Preferences</h3>
             <div className="space-y-3">
               <div>
@@ -360,8 +355,8 @@ export default function ProfileEditor() {
               </div>
 
                 <div className="flex justify-end gap-2 mt-4">
-                <button onClick={() => setShowSettings(false)} className="px-3 py-1 bg-gray-200 rounded">Cancel</button>
-                <button onClick={() => { void savePreferences(); }} className="px-3 py-1 text-white bg-blue-600 rounded">Save</button>
+                <Button onClick={() =>setShowSettings(false)} className="px-3 py-1 rounded bg-surface-muted">Cancel</Button>
+                <Button onClick={() =>{ void savePreferences(); }} className="px-3 py-1 rounded text-background bg-accent">Save</Button>
               </div>
             </div>
           </div>

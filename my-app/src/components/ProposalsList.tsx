@@ -2,6 +2,8 @@ import React from "react";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import InlineEditable from "./InlineEditable";
+import { Button } from "./ui/button";
+import { useToast } from "./ui/toast";
 
 export default function ProposalsList() {
   // Use a direct function reference (cast to any to avoid TS issues).
@@ -16,6 +18,7 @@ export default function ProposalsList() {
   const [editingContent, setEditingContent] = React.useState<string>("");
   const [isRegenerating, setIsRegenerating] = React.useState<string | null>(null);
   const [isUpdating, setIsUpdating] = React.useState<string | null>(null);
+  const { showToast } = useToast();
 
   // Helper to apply an updated proposal locally
   const applyLocalUpdate = (id: string, patch: Partial<any>) => {
@@ -57,13 +60,13 @@ export default function ProposalsList() {
             )}
           </div>
           <div className="flex gap-2 mt-2">
-            <button onClick={() => navigator.clipboard.writeText(p.content)} className="px-2 py-1 text-white bg-blue-600 rounded">
+            <Button onClick={() => navigator.clipboard.writeText(p.content)} variant="success" size="sm">
               Copy
-            </button>
+            </Button>
 
             {/* Regenerate */}
-            <button
-              onClick={async () => {
+            <Button
+              onClick={async () =>{
                 if (isRegenerating) return;
                 setIsRegenerating(p._id);
                 try {
@@ -85,29 +88,38 @@ export default function ProposalsList() {
                         content: res.proposalContent,
                         sections: [{ type: "text", content: res.proposalContent }],
                       });
-                    } catch (err) {
+                    } catch (err: any) {
                       console.warn("Failed to persist regenerated proposal:", err);
+                      const msg = err?.message ?? String(err);
+                      if (msg.includes("Proposal not found")) {
+                        // Proposal was removed while regeneration was in-flight — remove it locally and notify the user.
+                        removeLocalProposal(p._id);
+                        showToast("The proposal was removed while regenerating and has been removed from your list.", { variant: "warning" });
+                        // Exit early since there's nothing to persist.
+                        setIsRegenerating(null);
+                        return;
+                      }
                     }
                   } else {
-                    alert("Regeneration returned no content");
+                    showToast("Regeneration returned no content", { variant: "warning" });
                   }
                 } catch (err) {
                   console.error("Regenerate failed:", err);
-                  alert("Regeneration failed");
+                  showToast("Regeneration failed", { variant: "error" });
                 } finally {
                   setIsRegenerating(null);
                 }
               }}
-              className="px-2 py-1 text-white bg-green-600 rounded"
+              variant="success"
+              size="sm"
             >
-              {isRegenerating === p._id ? "Regenerating..." : "Regenerate"}
-            </button>
+              {isRegenerating === p._id ? "Regenerating..." : "Regenerate"}</Button>
 
             {/* Edit (inline editor is shown in the proposal div above) */}
             {editingId === p._id ? (
               <>
-                <button
-                  onClick={async () => {
+                <Button
+                  onClick={async () =>{
                     if (isUpdating) return;
                     setIsUpdating(p._id);
                     try {
@@ -118,41 +130,48 @@ export default function ProposalsList() {
                       });
                       applyLocalUpdate(p._id, { content: editingContent, updatedAt: Date.now() });
                       setEditingId(null);
-                    } catch (err) {
+                    } catch (err: any) {
                       console.error("Update failed:", err);
-                      alert("Update failed");
+                      const msg = err?.message ?? String(err);
+                      if (msg.includes("Proposal not found")) {
+                        // Proposal deleted while editing — remove locally and inform the user.
+                        removeLocalProposal(p._id);
+                        showToast("The proposal you were editing was deleted. It has been removed from the list.", { variant: "warning" });
+                      } else {
+                        showToast("Update failed", { variant: "error" });
+                      }
                     } finally {
                       setIsUpdating(null);
                     }
                   }}
-                  className="px-2 py-1 text-white bg-indigo-600 rounded"
+                  variant="accent"
+                  size="sm"
                 >
-                  {isUpdating === p._id ? "Saving..." : "Save"}
-                </button>
-                <button
-                  onClick={() => {
+                  {isUpdating === p._id ? "Saving..." : "Save"}</Button>
+                <Button
+                  onClick={() =>{
                     setEditingId(null);
                     setEditingContent(p.content || "");
                   }}
-                  className="px-2 py-1 text-white bg-gray-400 rounded"
+                  variant="secondary"
+                  size="sm"
                 >
-                  Cancel
-                </button>
+                  Cancel</Button>
               </>
             ) : (
-              <button
-                onClick={() => {
+              <Button
+                onClick={() =>{
                   setEditingId(p._id);
                   setEditingContent(p.content || "");
                 }}
-                className="px-2 py-1 text-white bg-yellow-600 rounded"
+                variant="warning"
+                size="sm"
               >
-                Edit
-              </button>
+                Edit</Button>
             )}
 
-            <button
-              onClick={async () => {
+            <Button
+              onClick={async () =>{
                 if (!confirm("Delete this proposal?")) return;
                 try {
                   await deleteProposal({ id: p._id });
@@ -160,13 +179,13 @@ export default function ProposalsList() {
                   console.log("Proposal deleted:", p._id);
                 } catch (err) {
                   console.error("Failed to delete proposal:", err);
-                  alert("Failed to delete proposal");
+                  showToast("Failed to delete proposal", { variant: "error" });
                 }
               }}
-              className="px-2 py-1 text-white bg-red-600 rounded"
+              variant="danger"
+              size="sm"
             >
-              Delete
-            </button>
+              Delete</Button>
           </div>
         </div>
       ))}

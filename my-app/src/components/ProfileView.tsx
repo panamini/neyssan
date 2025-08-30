@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { Button } from "./ui/button";
 import DOMPurify from "dompurify";
 
 type Experience = {
@@ -56,7 +57,7 @@ export default function ProfileView({ profile, hideSummary = false }: { profile:
         <div className="flex items-start justify-between">
           <div>
             <h2 className="text-lg font-semibold">{profile.name ?? "No name"}</h2>
-            {profile.email && <div className="text-sm text-gray-600">{profile.email}</div>}
+            {profile.email && <div className="text-sm text-muted">{profile.email}</div>}
             {profile.linkedIn && (
               <div className="mt-1">
                 <a
@@ -72,12 +73,11 @@ export default function ProfileView({ profile, hideSummary = false }: { profile:
           </div>
 
           <div>
-            <button
-              onClick={() => setShowRaw((s) => !s)}
-              className="px-2 py-1 text-sm bg-gray-200 rounded hover:bg-gray-300"
+            <Button
+              onClick={() =>setShowRaw((s) => !s)}
+              className="px-2 py-1 text-sm bg-surface-muted rounded hover:opacity-95"
             >
-              {showRaw ? "Pretty view" : "Show raw"}
-            </button>
+              {showRaw ? "Pretty view" : "Show raw"}</Button>
           </div>
         </div>
       </div>
@@ -95,7 +95,7 @@ export default function ProfileView({ profile, hideSummary = false }: { profile:
                   dangerouslySetInnerHTML={{ __html: summaryHtml }}
                 />
               ) : (
-                <div className="text-sm text-gray-500">No summary provided.</div>
+                <div className="text-sm text-muted">No summary provided.</div>
               )}
             </section>
           )}
@@ -108,14 +108,14 @@ export default function ProfileView({ profile, hideSummary = false }: { profile:
                 {profile.skills.map((s, i) => (
                   <span
                     key={i}
-                    className="px-2 py-1 text-xs bg-gray-100 rounded-full dark:bg-gray-700"
+                    className="px-2 py-1 text-xs bg-surface rounded-full dark:bg-surface-muted"
                   >
                     {s}
                   </span>
                 ))}
               </div>
             ) : (
-              <div className="text-sm text-gray-500">No skills recorded.</div>
+              <div className="text-sm text-muted">No skills recorded.</div>
             )}
           </section>
 
@@ -127,7 +127,7 @@ export default function ProfileView({ profile, hideSummary = false }: { profile:
                 {profile.experience.map((exp, idx) => (
                   <li key={idx} className="text-sm">
                     <div className="font-semibold">{exp.title} — {exp.company}</div>
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-muted">
                       {formatDate(exp.startDate)} {exp.startDate && exp.endDate ? "—" : ""} {formatDate(exp.endDate)}
                     </div>
                     {exp.description && <div className="mt-1 text-sm">{exp.description}</div>}
@@ -135,7 +135,7 @@ export default function ProfileView({ profile, hideSummary = false }: { profile:
                 ))}
               </ol>
             ) : (
-              <div className="text-sm text-gray-500">No experience recorded.</div>
+              <div className="text-sm text-muted">No experience recorded.</div>
             )}
           </section>
 
@@ -147,15 +147,15 @@ export default function ProfileView({ profile, hideSummary = false }: { profile:
                 {profile.education.map((ed, idx) => (
                   <li key={idx}>
                     <div className="font-medium">{ed.school} {ed.degree ? `— ${ed.degree}` : ""}</div>
-                    {ed.fieldOfStudy && <div className="text-xs text-gray-500">{ed.fieldOfStudy}</div>}
-                    <div className="text-xs text-gray-500">
+                    {ed.fieldOfStudy && <div className="text-xs text-muted">{ed.fieldOfStudy}</div>}
+                    <div className="text-xs text-muted">
                       {formatDate(ed.startDate)} {ed.startDate && ed.endDate ? "—" : ""} {formatDate(ed.endDate)}
                     </div>
                   </li>
                 ))}
               </ul>
             ) : (
-              <div className="text-sm text-gray-500">No education recorded.</div>
+              <div className="text-sm text-muted">No education recorded.</div>
             )}
           </section>
 
@@ -172,7 +172,7 @@ export default function ProfileView({ profile, hideSummary = false }: { profile:
           )}
         </div>
       ) : (
-        <div className="p-2 overflow-auto rounded bg-gray-50 max-h-64">
+        <div className="p-2 overflow-auto rounded bg-background max-h-64">
           <pre className="text-xs">{JSON.stringify(profile, null, 2)}</pre>
         </div>
       )}

@@ -48,36 +48,51 @@ export const upsertProfile = mutation({
       if (!Array.isArray(exp)) return [];
       return exp
         .filter((e) => e && typeof e === "object")
-        .map((e) => ({
-          title: e.title ?? e.jobTitle ?? null,
-          company: e.company ?? e.employer ?? null,
-          startDate: e.startDate ?? e.start ?? null,
-          endDate: e.endDate ?? e.end ?? null,
-          current: !!e.current,
-          description: e.description ?? e.details ?? null,
-        }));
+        .map((e) => {
+          const title = (e.title ?? e.jobTitle ?? "").toString().trim();
+          const company = (e.company ?? e.employer ?? "").toString().trim();
+          if (!title || !company) return null; // drop invalid entries that lack required fields
+          return {
+            title,
+            company,
+            startDate: e.startDate ?? e.start ?? undefined,
+            endDate: e.endDate ?? e.end ?? undefined,
+            current: !!e.current,
+            description: e.description ?? e.details ?? undefined,
+          };
+        })
+        .filter(Boolean) as Array<Record<string, any>>;
     };
 
     const coerceEducation = (edu: any) => {
       if (!Array.isArray(edu)) return [];
       return edu
         .filter((e) => e && typeof e === "object")
-        .map((e) => ({
-          degree: e.degree ?? e.program ?? null,
-          school: e.school ?? e.institution ?? null,
-          startDate: e.startDate ?? e.start ?? null,
-          endDate: e.endDate ?? e.end ?? null,
-          description: e.description ?? e.details ?? null,
-        }));
+        .map((e) => {
+          const school = (e.school ?? e.institution ?? "").toString().trim();
+          if (!school) return null; // drop entries without required school field
+          return {
+            school,
+            degree: e.degree ?? e.program ?? undefined,
+            fieldOfStudy: e.fieldOfStudy ?? undefined,
+            startDate: e.startDate ?? e.start ?? undefined,
+            endDate: e.endDate ?? e.end ?? undefined,
+            description: e.description ?? e.details ?? undefined,
+          };
+        })
+        .filter(Boolean) as Array<Record<string, any>>;
     };
 
     // Build normalized profile object to persist
     const incoming = args.profile || {};
     const normalizedProfile = {
       profileId: args.profileId,
-      name: incoming.name ?? null,
-      email: incoming.email ?? null,
-      summary: incoming.summary ?? null,
+      // Treat name as optional: use undefined when missing so Convex optional validators accept absence
+      name: incoming.name ?? undefined,
+      // Schema requires email: v.string() — coerce missing/null emails to empty string
+      email: incoming.email ?? "",
+      // Treat summary as optional: use undefined when missing instead of null
+      summary: incoming.summary ?? undefined,
       skills: dedupeStrings(incoming.skills),
       experience: coerceExperience(incoming.experience),
       education: coerceEducation(incoming.education),
@@ -96,35 +111,39 @@ export const upsertProfile = mutation({
       // If idempotencyKey already applied -> no-op success
       const existingKeys = Array.isArray(existing.idempotencyKeys) ? existing.idempotencyKeys : [];
       if (existingKeys.includes(args.idempotencyKey)) {
-        return { profileId: args.profileId, updatedAt: existing.updatedAt ?? existing.updatedAt, written: false };
+        return { profileId: args.profileId, convexId: existing._id, updatedAt: existing.updatedAt ?? existing.updatedAt, written: false };
       }
 
       // Merge fields conservatively: prefer incoming non-null values, otherwise keep existing.
       const merged = {
         profileId: args.profileId,
         idempotencyKeys: Array.from(new Set([...existingKeys, args.idempotencyKey])),
-        name: normalizedProfile.name ?? existing.name ?? null,
-        email: normalizedProfile.email ?? existing.email ?? null,
-        summary: normalizedProfile.summary ?? existing.summary ?? null,
+        // Use undefined when a value is absent so optional validators are satisfied
+        name: normalizedProfile.name ?? existing.name ?? undefined,
+        // Ensure merged email is always a string to satisfy schema
+        email: normalizedProfile.email ?? existing.email ?? "",
+        summary: normalizedProfile.summary ?? existing.summary ?? undefined,
         skills: (normalizedProfile.skills && normalizedProfile.skills.length > 0) ? normalizedProfile.skills : (existing.skills ?? []),
         experience: (normalizedProfile.experience && normalizedProfile.experience.length > 0) ? normalizedProfile.experience : (existing.experience ?? []),
         education: (normalizedProfile.education && normalizedProfile.education.length > 0) ? normalizedProfile.education : (existing.education ?? []),
         achievements: (normalizedProfile.achievements && normalizedProfile.achievements.length > 0) ? normalizedProfile.achievements : (existing.achievements ?? []),
         updatedAt: now,
       };
-
+ 
       // Persist merged document using patch (partial update)
-      await ctx.db.patch(existing._id, merged);
-
-      return { profileId: args.profileId, updatedAt: merged.updatedAt, written: true };
+      // Cast to any to avoid strict TS structural mismatch — runtime Convex validators are authoritative.
+      await ctx.db.patch(existing._id, merged as any);
+ 
+      return { profileId: args.profileId, convexId: existing._id, updatedAt: merged.updatedAt, written: true };
     } else {
       // Create new document
       const doc = {
         profileId: args.profileId,
         idempotencyKeys: [args.idempotencyKey],
-        name: normalizedProfile.name,
+        // Only include optional fields when present to avoid inserting nulls.
+        ...(normalizedProfile.name !== undefined && { name: normalizedProfile.name }),
         email: normalizedProfile.email,
-        summary: normalizedProfile.summary,
+        ...(normalizedProfile.summary !== undefined && { summary: normalizedProfile.summary }),
         skills: normalizedProfile.skills,
         experience: normalizedProfile.experience,
         education: normalizedProfile.education,
@@ -139,9 +158,9 @@ export const upsertProfile = mutation({
         },
         updatedAt: normalizedProfile.updatedAt,
       };
-
-      await ctx.db.insert("userProfiles", doc);
-      return { profileId: args.profileId, updatedAt: normalizedProfile.updatedAt, written: true };
+ 
+      const convexId = await ctx.db.insert("userProfiles", doc as any);
+      return { profileId: args.profileId, convexId, updatedAt: normalizedProfile.updatedAt, written: true };
     }
   },
 });

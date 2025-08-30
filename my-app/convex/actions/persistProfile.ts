@@ -59,7 +59,10 @@ http.route({
         profile: body.profile,
       });
 
-      return new Response(JSON.stringify({ status: "ok", result }), { status: 200, headers: { "Content-Type": "application/json" } });
+      // Ensure we return a definitive convexId at the top level so HTTP callers
+      // (pdf-ingest or other services) can consistently use the internal Convex id.
+      const convexId = (result as any)?.convexId ?? (result as any)?.profileId ?? null;
+      return new Response(JSON.stringify({ status: "ok", convexId, result }), { status: 200, headers: { "Content-Type": "application/json" } });
     } catch (err: any) {
       console.error("persistProfile action error:", err);
       return new Response(JSON.stringify({ error: String(err) }), { status: 500, headers: { "Content-Type": "application/json" } });

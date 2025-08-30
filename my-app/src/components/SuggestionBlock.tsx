@@ -1,7 +1,6 @@
 "use client";
-
-import React from "react";
-
+import { Button } from "./ui/button";
+ 
 export interface SuggestionBlockProps {
   title: string;
   suggestion?: string | null;
@@ -13,21 +12,17 @@ export function SuggestionBlock({ title, suggestion, onApply, onDiscard }: Sugge
   if (!suggestion || String(suggestion).trim().length === 0) return null;
 
   return (
-    <div className="p-3 mt-2 bg-white border rounded-md dark:bg-gray-800">
+    <div className="p-3 mt-2 border rounded-md bg-surface dark:bg-surface">
       <div className="flex items-start justify-between">
         <div className="flex-1">
-          <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">{title}</label>
-          <pre className="p-2 overflow-auto text-sm whitespace-pre-wrap border border-gray-200 rounded-md bg-gray-50 dark:bg-gray-900 dark:border-gray-700">
+          <label className="block mb-1 text-sm font-medium text-muted dark:text-gray-300">{title}</label>
+          <pre className="p-2 overflow-auto text-sm whitespace-pre-wrap border border-gray-200 rounded-md bg-background dark:bg-surface dark:border-gray-700">
             {suggestion}
           </pre>
         </div>
         <div className="flex flex-col gap-2 ml-3">
-          <button type="button" onClick={onApply} className="px-3 py-1 text-sm text-white bg-green-600 rounded-md hover:bg-green-700">
-            Load
-          </button>
-          <button type="button" onClick={onDiscard} className="px-3 py-1 text-sm bg-gray-200 rounded-md dark:bg-gray-700">
-            Discard
-          </button>
+          <Button type="button" onClick={onApply} className="px-3 py-1 text-sm rounded-md text-background bg-accent hover:opacity-95">Load</Button>
+          <Button type="button" onClick={onDiscard} className="px-3 py-1 text-sm rounded-md bg-surface-muted dark:bg-surface-muted">Discard</Button>
         </div>
       </div>
     </div>

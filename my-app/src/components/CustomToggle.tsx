@@ -1,4 +1,5 @@
 import React, { ReactNode } from "react";
+import { Button } from "./ui/button";
 import styles from "./CustomToggle.module.css";
 import clsx from "clsx";
 import { Star } from "lucide-react";
@@ -28,13 +29,11 @@ const CustomToggle: React.FC<CustomToggleProps> = ({
 
   if (isModelToggle) {
     return (
-      <button
+      <Button
         type="button"
         className={clsx(styles.toggleButton, styles.modelToggle)}
         onClick={handleClick}
-      >
-        {options.find((option) => option.value === value)?.label || "Select..."}
-      </button>
+      >{options.find((option) => option.value === value)?.label || "Select..."}</Button>
     );
   }
 
@@ -57,7 +56,7 @@ const CustomToggle: React.FC<CustomToggleProps> = ({
             <Star
               size={16}
               className={clsx({
-                "fill-current text-white": index < numStars,
+                "fill-current text-background": index < numStars,
               })}
             />
           </button>
@@ -69,17 +68,16 @@ const CustomToggle: React.FC<CustomToggleProps> = ({
   return (
     <div className={styles.toggleGroup}>
       {options.map((option) => (
-        <button
+        <Button
           key={option.value}
           type="button"
           className={clsx(
             styles.toggleButton,
             option.value === value ? styles.active : styles.inactive
           )}
-          onClick={() => onChange(option.value)}
+          onClick={() =>onChange(option.value)}
         >
-          {option.label}
-        </button>
+          {option.label}</Button>
       ))}
     </div>
   );

@@ -1,6 +1,46 @@
 @tailwind base;
 @tailwind components;
+
+/* Legacy utility mappings (moved from globals.css) so existing CSS Modules using @apply still work.
+   These are placed before @tailwind utilities so Tailwind recognizes the custom utility classes. */
+@layer utilities {
+  .text-muted { color: var(--text-muted); }
+  .text-dark-text { color: var(--foreground); } /* alias for legacy classes */
+  .text-dark-text-hover { color: var(--text-hover, var(--hover)); }
+  .placeholder-dark-text-muted::placeholder { color: var(--text-muted); }
+  .bg-job-field { background-color: var(--job-field-bg); }
+  .bg-background { background-color: var(--background); }
+  .text-foreground { color: var(--foreground); }
+  .text-background { color: var(--background); } /* used for button label on colored backgrounds */
+  .bg-primary { background-color: var(--primary); }
+  .bg-success { background-color: var(--success); }
+  .bg-danger { background-color: var(--danger); }
+  .bg-warning { background-color: var(--warning); }
+  .bg-accent { background-color: var(--accent); }
+  .border-accent { border-color: var(--accent); }
+  .hover-outline { outline-color: var(--hover); }
+
+  /* Added semantic text utilities mapped to grayscale tokens (status colors mapped to --accent) */
+  .text-danger { color: var(--danger); }
+  .text-success { color: var(--success); }
+  .text-warning { color: var(--accent); }
+}
+
 @tailwind utilities;
+/* Legacy utility mappings (moved from globals.css) so existing CSS Modules using @apply still work.
+   These are placed after Tailwind directives so @layer utilities is valid. */
+@layer utilities {
+  .text-muted { color: var(--text-muted); }
+  .text-dark-text { color: var(--foreground); } /* alias for legacy classes */
+  .text-dark-text-hover { color: var(--text-hover, var(--hover)); }
+  .placeholder-dark-text-muted::placeholder { color: var(--text-muted); }
+  .bg-job-field { background-color: var(--job-field-bg); }
+  .bg-background { background-color: var(--background); }
+  .text-foreground { color: var(--foreground); }
+  .bg-primary { background-color: var(--primary); }
+  .border-accent { border-color: var(--accent); }
+  .hover-outline { outline-color: var(--hover); }
+}
 
 :root {
   --background: #ffffff; /* Light mode background */

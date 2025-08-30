@@ -1,6 +1,7 @@
 import { mutation, internalMutation, internalAction } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
+import { Id } from "./_generated/dataModel";
 
 /**
  * Internal mutation: atomically insert an llmHistory row and mark the job completed.
@@ -70,7 +71,7 @@ export const refine = internalAction({
     const rawText: string | null = (job as any).rawText ?? null;
 
     // Choose model (default). You can extend startRefine to accept model/options later.
-    const model = "mistral-large-latest";
+    const model = "ministral-8b-2410";
 
     // Ensure API key exists
     const apiKey = process.env.MISTRAL_API_KEY;
@@ -147,35 +148,24 @@ export const refine = internalAction({
   },
 });
 
-/**
- * Public mutation called by the frontend to start a refinement.
- * It enqueues a job via internal.jobs.enqueueRefine and schedules the refine action.
- */
 export const startRefine = mutation({
   args: {
     profileId: v.id("userProfiles"),
     rawText: v.union(v.string(), v.null()),
     options: v.optional(v.any()),
   },
-  returns: v.object({
-    jobId: v.id("llmJobs"),
-    placeholderId: v.string(),
-  }),
-  handler: async (ctx, args) => {
-    // Create the job via internal mutation using the typed Convex Id.
-    const enqueueResult = await ctx.runMutation(internal.jobs.enqueueRefine, {
+  returns: v.id("llmJobs"),
+  handler: async (ctx, args): Promise<Id<"llmJobs">> => {
+    // Create the job via the strict internal mutation.
+    const jobId: Id<"llmJobs"> = await ctx.runMutation(internal.jobs.start, {
       profileId: args.profileId,
-      rawText: args.rawText ?? null,
+      rawText: args.rawText ?? "",
       options: args.options,
-      requestedBy: undefined,
+      reason: undefined,
     });
 
-    const { jobId, placeholderId } = enqueueResult as any;
-
-    // Schedule the internal action to run immediately (worker will pick it up)
-    await ctx.scheduler.runAfter(0, (internal as any).llm.refine, { jobId });
-
-    return { jobId, placeholderId };
+    // Return the Convex Id directly.
+    return jobId;
   },
 });
 
@@ -193,30 +183,87 @@ export const startRefineByString = mutation({
     rawText: v.union(v.string(), v.null()),
     options: v.optional(v.any()),
   },
-  returns: v.object({
-    jobId: v.id("llmJobs"),
-    placeholderId: v.string(),
-  }),
-  handler: async (ctx, args) => {
-    // Normalize the incoming profileId string into a Convex Id<"userProfiles">.
-    const normalizedProfileId = ctx.db.normalizeId("userProfiles", args.profileId);
+  returns: v.id("llmJobs"),
+  handler: async (ctx, args): Promise<Id<"llmJobs">> => {
+    // Attempt to normalize the incoming profileId string into a Convex Id<"userProfiles">.
+    // Many callers still provide the external UUID (profileId) produced by the pdf-ingest
+    // service. In that case, ctx.db.normalizeId will return falsy. To remain tolerant we:
+    // 1) try normalizeId (happy path)
+    // 2) if that fails, query userProfiles.by_profileId index for a row whose profileId field
+    //    matches the provided external id and use its Convex _id
+    // 3) if both fail, throw a clear error
+    let normalizedProfileId: Id<"userProfiles"> | null = null;
+    try {
+      normalizedProfileId = ctx.db.normalizeId("userProfiles", args.profileId);
+    } catch (e) {
+      // normalizeId might throw in some environments; swallow and fallback to lookup
+      normalizedProfileId = null;
+    }
+ 
     if (!normalizedProfileId) {
-      throw new Error("Invalid profileId");
+      // Fallback: find a profiles document whose external `profileId` matches the string.
+      try {
+        const rows = await ctx.db
+          .query("userProfiles")
+          .withIndex("by_profileId", (q) => q.eq("profileId", args.profileId))
+          .take(1);
+        if (rows && rows.length > 0) {
+          normalizedProfileId = rows[0]._id as Id<"userProfiles">;
+        }
+      } catch (e) {
+        // If the query fails, keep normalizedProfileId as null and handle below.
+        normalizedProfileId = null;
+      }
+    }
+ 
+    if (!normalizedProfileId) {
+      throw new Error(`Invalid profileId: "${args.profileId}". Could not normalize to a Convex id nor find a userProfiles document with that external profileId.`);
+    }
+ 
+    // Defensive: check that the normalized id actually exists in the database.
+    const profileDoc = await ctx.db.get(normalizedProfileId);
+    if (!profileDoc) {
+      throw new Error(`Profile not found for id "${normalizedProfileId}" (original: "${args.profileId}").`);
+    }
+ 
+    // Create the job via the strict internal mutation and return the job id directly.
+    const jobId: Id<"llmJobs"> = await ctx.runMutation(internal.jobs.start, {
+      profileId: normalizedProfileId,
+      rawText: args.rawText ?? "",
+      options: args.options,
+      reason: undefined,
+    });
+ 
+    return jobId;
+  },
+});
+
+/**
+ * Public: re-enqueue an existing job by string IDs (normalizes strings -> Convex Ids).
+ * Returns null at the boundary (Convex uses null for no-data mutations).
+ */
+export const enqueueRefine = mutation({
+  args: {
+    profileId: v.string(),
+    jobId: v.string(),
+    reason: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, { profileId, jobId, reason }): Promise<null> => {
+    const normalizedProfileId = ctx.db.normalizeId("userProfiles", profileId);
+    if (!normalizedProfileId) {
+      throw new Error(`Invalid profileId: "${profileId}"`);
+    }
+    const normalizedJobId = ctx.db.normalizeId("llmJobs", jobId);
+    if (!normalizedJobId) {
+      throw new Error(`Invalid jobId: "${jobId}"`);
     }
 
-    // Create the job via internal mutation using the normalized id
-    const enqueueResult = await ctx.runMutation(internal.jobs.enqueueRefine, {
+    await ctx.runMutation(internal.jobs.enqueue, {
       profileId: normalizedProfileId,
-      rawText: args.rawText ?? null,
-      options: args.options,
-      requestedBy: undefined,
+      jobId: normalizedJobId,
+      reason,
     });
-
-    const { jobId, placeholderId } = enqueueResult as any;
-
-    // Schedule the internal action to run immediately (worker will pick it up)
-    await ctx.scheduler.runAfter(0, (internal as any).llm.refine, { jobId });
-
-    return { jobId, placeholderId };
+    return null;
   },
 });

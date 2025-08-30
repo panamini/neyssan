@@ -1,3 +1,4 @@
+import "./styles/globals.css";
 "use client";
 
 import React from "react";
@@ -63,11 +64,11 @@ export default function App() {
   };
 
   return (
-    <div className="relative flex flex-col min-h-screen">
+    <div className="relative flex flex-col min-h-screen bg-background text-foreground">
       <Header />
       <div className="flex flex-row flex-grow">
         {/* Left Column */}
-          <div className="flex flex-col items-center w-16 p-4">
+          <div className="flex flex-col items-center w-16 p-2">
           <Authenticated>
             <UserButton />
           </Authenticated>
@@ -81,12 +82,12 @@ export default function App() {
               <Flex direction="column" gap="4" align="center" className="w-full max-w-md">
                 <p>Log in to generate proposals</p>
                 <SignInButton mode="modal">
-                  <button className="px-4 py-2 rounded-md bg-foreground text-background">
+                  <button className="px-4 py-2 rounded-md bg-primary text-background">
                     Sign in
                   </button>
                 </SignInButton>
                 <SignUpButton mode="modal">
-                  <button className="px-4 py-2 rounded-md bg-foreground text-background">
+                  <button className="px-4 py-2 rounded-md bg-primary text-background">
                     Sign up
                   </button>
                 </SignUpButton>
@@ -94,11 +95,11 @@ export default function App() {
             </Unauthenticated>
             <Authenticated>
               {typeof window !== "undefined" && window.location.pathname === "/profile/edit" ? (
-                <div className="relative w-full max-w-4xl px-4 mx-auto">
+                <div className="relative w-full max-w-4xl px-2 mx-auto">
                   <ProfileEditorUnified />
                 </div>
               ) : (
-                <div className="relative w-full max-w-4xl px-4 mx-auto">
+                <div className="relative w-full max-w-4xl px-2 mx-auto">
                   <div className="h-[calc(60vh)] overflow-auto">
                     <ProposalDisplay proposalContent={proposalContent} loading={loading} error={error} />
                   </div>

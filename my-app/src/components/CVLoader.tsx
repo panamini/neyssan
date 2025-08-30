@@ -1,23 +1,22 @@
 "use client";
-
+ 
 import { useState, useEffect, useRef } from "react";
 import { parsePdfArrayBuffer } from "../services/pdf/browser-cv-parser";
 import LoadingSpinner from "./LoadingSpinner";
+import { Button } from "./ui/button";
 
 type NormalizedProfile = { id?: string; name?: string | null; email?: string | null; summary?: string | null; skills?: string[] | null; experience?: any[] | null; education?: any[] | null; achievements?: string[] | null; rawText?: string | null; confidence?: number; metadata?: Record<string, unknown> | null; version?: number; };
 
 type Props = {
   onFileParsed: (parsedProfile: NormalizedProfile) => void;
   onError: (message: string | null) => void;
-  onSuccess?: (message: string | null) => void;
   label?: string;
 };
 
-export default function CVLoader({ onFileParsed, onError, onSuccess, label = "Load CV" }: Props) {
+export default function CVLoader({ onFileParsed, onError, label = "Load CV" }: Props) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [parsing, setParsing] = useState(false);
   const [sessionDataExists, setSessionDataExists] = useState(false);
-  const [localMsg, setLocalMsg] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -35,7 +34,7 @@ export default function CVLoader({ onFileParsed, onError, onSuccess, label = "Lo
     if (!file) return;
     setParsing(true);
     onError(null);
-    onSuccess && onSuccess(null);
+    // Intentionally do not call onSuccess here to avoid transient toasts
 
     try {
       const arrayBuffer = await file.arrayBuffer();
@@ -49,7 +48,7 @@ export default function CVLoader({ onFileParsed, onError, onSuccess, label = "Lo
       }
 
       onFileParsed(parsed as NormalizedProfile);
-      onSuccess && onSuccess("CV parsed successfully");
+      // Do not trigger onSuccess toast here; parent handles explicit messaging.
     } catch (err: any) {
       onError(err?.message ?? "Failed to parse CV");
     } finally {
@@ -86,7 +85,7 @@ export default function CVLoader({ onFileParsed, onError, onSuccess, label = "Lo
       }
 
       onError(null);
-      onSuccess && onSuccess("Restored previously parsed CV.");
+      // Do not trigger onSuccess toast here; parent handles explicit messaging.
       onFileParsed(parsed as NormalizedProfile);
     } catch (e) {
       console.error("Failed to reuse cached CV:", e);
@@ -102,10 +101,8 @@ export default function CVLoader({ onFileParsed, onError, onSuccess, label = "Lo
       console.error("Failed to clear sessionStorage:", e);
     }
     setSessionDataExists(false);
-    const msg = "Cleared cached CV";
-    onSuccess && onSuccess(msg);
-    setLocalMsg(msg);
-    setTimeout(() => setLocalMsg(null), 3000);
+    // Let parent handle showing any toasts to avoid duplicates.
+    // onSuccess intentionally not called to avoid extra toasts.
   };
 
   return (
@@ -121,8 +118,10 @@ export default function CVLoader({ onFileParsed, onError, onSuccess, label = "Lo
 
       {/* Main action: reuse cached parse when available, otherwise open file picker */}
       <div className="flex items-center gap-2">
-        <button
+        <Button
           type="button"
+          variant="secondary"
+          size="md"
           onClick={() => {
             if (parsing) return;
             if (sessionDataExists) {
@@ -132,10 +131,8 @@ export default function CVLoader({ onFileParsed, onError, onSuccess, label = "Lo
             }
           }}
           disabled={parsing}
-          className={`flex items-center gap-2 px-3 py-1 text-sm rounded transition-colors ${
-            sessionDataExists ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"
-          } hover:bg-opacity-90 disabled:bg-gray-200 disabled:text-gray-500`}
-          aria-label={sessionDataExists ? "Reuse last parsed CV" : "Load CV"}
+          className="px-3 py-1"
+          ariaLabel={sessionDataExists ? "Reuse last parsed CV" : "Load CV"}
           title={sessionDataExists ? "Reuse previously parsed CV" : label}
         >
           {parsing ? (
@@ -148,25 +145,26 @@ export default function CVLoader({ onFileParsed, onError, onSuccess, label = "Lo
               {sessionDataExists ? "Reuse last CV" : label}
             </span>
           )}
-        </button>
+        </Button>
 
         {/* Clear cached CV control (small, less intrusive than a full button) */}
         {sessionDataExists && (
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="md"
             onClick={clearCache}
             disabled={parsing}
-            className="px-2 py-1 text-sm text-red-800 bg-red-100 rounded hover:bg-red-200 disabled:bg-gray-200 disabled:text-gray-500"
+            className="flex items-center justify-center w-8 h-8 rounded"
             aria-label="Clear cached CV"
             title="Clear cached CV"
           >
-            ×
-          </button>
+            <span className="text-sm">×</span>
+          </Button>
         )}
       </div>
  
-      {/* local inline status (temporary) */}
-      {localMsg && <div className="ml-2 text-xs text-gray-600">{localMsg}</div>}
+      {/* local inline status removed in favor of global toasts */}
     </div>
   );
 };

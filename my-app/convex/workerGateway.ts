@@ -47,7 +47,6 @@ export const processJobRequest = action({
   handler: async (ctx, args): Promise<
     | Array<{
         _id: Id<"llmJobs">;
-        _creationTime: number;
         profileId: Id<"userProfiles">;
         placeholderId?: string;
         status: string;

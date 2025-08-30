@@ -41,7 +41,7 @@ const DarkModeToggle = () => {
   return (
     <button
       onClick={onThemeChange}
-      className="p-2 mt-4 transition-colors rounded-lg focus:outline-none hover:bg-gray-100 dark:hover:bg-gray-700"
+      className="p-2 mt-4 transition-colors rounded-lg focus:outline-none hover:bg-surface dark:hover:bg-gray-700"
       aria-pressed={isDarkTheme}
     >
       {isDarkTheme ? (

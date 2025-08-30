@@ -1,9 +1,13 @@
 "use client";
 
 import React from "react";
+import { Button } from "./ui/button";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import debounce from "lodash/debounce";
+import { Input } from "./ui/input";
+import { Card } from "./ui/card";
+import { useToast } from "./ui/toast";
 
 /**
  * ProfileEditorUnified
@@ -27,7 +31,8 @@ export default function ProfileEditorUnified() {
   const [missingFields, setMissingFields] = React.useState<string[]>([]);
   const [aiCategory, setAiCategory] = React.useState<string>("Unknown");
   const [aiFlags, setAiFlags] = React.useState<string[]>([]);
-
+  const { showToast } = useToast();
+  
   // Backend base URL (set in my-app/.env as VITE_PDF_INGEST_URL, e.g. http://127.0.0.1:8000)
   const baseUrl = (import.meta as any).env?.VITE_PDF_INGEST_URL || "";
 
@@ -179,11 +184,13 @@ export default function ProfileEditorUnified() {
         if (confirmBody.placeholderId) {
           setPlaceholderId(confirmBody.placeholderId);
         } else {
-          // If no placeholder, optionally call llm-refine to force refine
+          // If no placeholder, optionally call llm-refine to force refine.
+          // Prefer the definitive Convex id returned by confirm-save (convexId) when present.
+          const profileIdToUse = (confirmBody as any)?.convexId ?? confirmBody.id;
           const refineResp = await fetch(`${baseUrl}/api/v1/llm-refine`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ profileId: confirmBody.id }),
+            body: JSON.stringify({ profileId: profileIdToUse }),
           });
           if (refineResp.ok) {
             const r = await refineResp.json();
@@ -193,19 +200,19 @@ export default function ProfileEditorUnified() {
       } 
     } catch (e) {
       console.error("Upload/ingest failed", e);
-      alert("Upload failed: " + String(e));
+      showToast("Upload failed: " + String(e), { variant: "error" });
     }
   }
 
   async function reapplyRefine() {
     try {
       if (!profile) {
-        alert("No profile loaded to refine");
+        showToast("No profile loaded to refine", { variant: "warning" });
         return;
       }
       const pid = profile?._id;
       if (!pid) {
-        alert("Cannot determine profile id");
+        showToast("Cannot determine profile id", { variant: "warning" });
         return;
       }
       const resp = await fetch(`${baseUrl}/api/v1/llm-refine`, {
@@ -220,32 +227,32 @@ export default function ProfileEditorUnified() {
       }
     } catch (e) {
       console.error("Reapply refine failed", e);
-      alert("Reapply refine failed: " + String(e));
+      showToast("Reapply refine failed: " + String(e), { variant: "error" });
     }
   }
 
   return (
-    <div className="max-w-4xl p-4 mx-auto">
-      <h1 className="mb-4 text-2xl font-semibold">Profile Editor (Unified)</h1>
+    <div className="max-w-4xl p-2 mx-auto bg-background text-foreground">
+      <h1 className="mb-2 text-2xl font-semibold">Profile Editor (Unified)</h1>
 
       <div className="mb-4">
         {missingFields.length > 0 && (
-          <div className="p-2 mb-4 text-sm text-yellow-800 bg-yellow-100 border border-yellow-300 rounded">
+          <div className="p-2 mb-4 text-sm border rounded text-muted bg-surface-muted border-accent">
             Missing required fields: <strong>{missingFields.join(", ")}</strong>. You can still save, but consider adding them.
           </div>
         )}
       </div>
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <section className="p-4 bg-white border rounded">
+        <Card className="p-2 border rounded-md bg-background border-accent">
           <h2 className="mb-2 text-lg font-medium">Canonical profile (Convex)</h2>
-          <div className="mb-3 text-sm text-gray-600">This view reads the canonical profile from Convex. All authoritative writes are performed by the backend.</div>
-          <pre className="p-2 overflow-auto text-sm border rounded bg-gray-50 h-72">
+          <div className="mb-2 text-sm text-muted">This view reads the canonical profile from Convex. All authoritative writes are performed by the backend.</div>
+          <pre className="p-2 overflow-auto text-sm border rounded-md bg-background h-72">
             {profile ? JSON.stringify(profile, null, 2) : "Loading canonical profile..."}
           </pre>
 
           <div className="flex gap-2 mt-3">
-            <label className="px-3 py-2 bg-gray-100 rounded cursor-pointer">
+            <label className="px-3 py-2 border rounded-md cursor-pointer bg-background border-accent">
               Upload CV
               <input
                 type="file"
@@ -258,20 +265,19 @@ export default function ProfileEditorUnified() {
               />
             </label>
 
-            <button
-              onClick={() => {
+            <Button
+              onClick={() =>{
                 void reapplyRefine();
               }}
-              className="px-3 py-2 text-white bg-blue-600 rounded"
+              className="px-3 py-2 rounded-md text-background bg-primary"
             >
-              Reapply AI refine
-            </button>
+              Reapply AI refine</Button>
 
-            <button
-              onClick={async () => {
+            <Button
+              onClick={async () =>{
                 // Retry Convex persist for current placeholder if present
                 if (!placeholderId) {
-                  alert("No placeholder available to retry");
+                  showToast("No placeholder available to retry", { variant: "warning" });
                   return;
                 }
                 try {
@@ -290,39 +296,37 @@ export default function ProfileEditorUnified() {
                   }, 800);
                 } catch (err) {
                   console.error("Retry Convex persist failed", err);
-                  alert("Retry failed: " + String(err));
+                  showToast("Retry failed: " + String(err), { variant: "error" });
                 }
               }}
-              className="px-3 py-2 text-white bg-yellow-500 rounded"
+              className="px-3 py-2 rounded-md text-background bg-accent"
             >
-              Retry Convex persist
-            </button>
+              Retry Convex persist</Button>
 
-            <button
-              onClick={() => {
+            <Button
+              onClick={() =>{
                 void loadCanonical();
               }}
-              className="px-3 py-2 bg-gray-200 rounded"
+              className="px-3 py-2 rounded-md bg-surface"
             >
-              Refresh
-            </button>
+              Refresh</Button>
           </div>
 
           <div className="mt-3 text-sm">
             <div>Uploaded file: {fileName ?? "none"}</div>
             <div>LLMHistory placeholder: {placeholderId ?? "none"}</div>
             <div>Status: {llmStatus ? llmStatus.convex_write_status ?? JSON.stringify(llmStatus) : "idle"}</div>
-            {llmStatus?.convex_error && <div className="text-red-600">Error: {llmStatus.convex_error}</div>}
+            {llmStatus?.convex_error && <div className="text-danger">Error: {llmStatus.convex_error}</div>}
           </div>
-        </section>
+        </Card>
 
-        <section className="p-4 bg-white border rounded">
+        <Card className="p-2 border rounded-md bg-background border-accent">
           <h2 className="mb-2 text-lg font-medium">Edit (manual)</h2>
-          <div className="mb-3 text-sm text-gray-600">Manual edits should call backend endpoints to keep pdf-ingest as authoritative writer.</div>
+          <div className="mb-2 text-sm text-muted">Manual edits should call backend endpoints to keep pdf-ingest as authoritative writer.</div>
 
           <div>
             <label className="block mb-1 text-sm font-medium">Name</label>
-            <input
+            <Input
               type="text"
               defaultValue={profile?.name ?? ""}
               onBlur={(e) => {
@@ -339,13 +343,15 @@ export default function ProfileEditorUnified() {
                 };
                 debouncedSave(merged);
               }}
-              className={`w-full px-2 py-1 border rounded ${missingFields.includes("name") ? "border-red-500" : ""}`}
+              className={`w-full px-2 py-1 border rounded-md ${missingFields.includes("name") ? "border-danger" : ""}`}
+              size="md"
+              variant="default"
             />
           </div>
 
           <div className="mt-3">
             <label className="block mb-1 text-sm font-medium">Email</label>
-            <input
+            <Input
               type="email"
               defaultValue={profile?.email ?? ""}
               onBlur={(e) => {
@@ -361,7 +367,9 @@ export default function ProfileEditorUnified() {
                 };
                 debouncedSave(merged);
               }}
-              className={`w-full px-2 py-1 border rounded ${missingFields.includes("email") ? "border-red-500" : ""}`}
+              className={`w-full px-2 py-1 border rounded-md ${missingFields.includes("email") ? "border-danger" : ""}`}
+              size="md"
+              variant="default"
             />
           </div>
 
@@ -384,14 +392,14 @@ export default function ProfileEditorUnified() {
                 };
                 debouncedSave(merged);
               }}
-              className="w-full px-2 py-1 border rounded"
+              className="w-full px-2 py-1 border rounded-md"
             />
           </div>
-        </section>
+        </Card>
       </div>
 
       {aiCategory !== "Unknown" && (
-        <section className="p-4 mt-4 border rounded bg-blue-50">
+        <section className="p-2 mt-4 border rounded-md bg-background">
           <h3 className="mb-2 text-lg font-medium">AI Suggestions</h3>
           <p>Suggested Category: <strong>{aiCategory}</strong></p>
           {aiFlags.length > 0 && (

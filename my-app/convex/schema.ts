@@ -179,7 +179,7 @@ export default defineSchema({
   // New: LLM jobs queue table
   llmJobs: defineTable({
     profileId: v.id("userProfiles"),
-    placeholderId: v.optional(v.string()),
+    placeholderId: v.optional(v.union(v.string(), v.null())),
     status: v.string(), // queued, processing, finished, failed
     rawText: v.optional(v.string()),
     options: v.optional(v.any()),
@@ -200,15 +200,16 @@ export default defineSchema({
     .index("by_created", ["createdAt"]),
 
   // New: LLM history table to persist LLM responses and patches
-  llmHistory: defineTable({
+    llmHistory: defineTable({
     profileId: v.id("userProfiles"),
     jobId: v.optional(v.string()),
-    placeholderId: v.optional(v.string()),
+    placeholderId: v.optional(v.union(v.string(), v.null())),
     provider: v.optional(v.string()),
     model: v.optional(v.string()),
     full_response: v.optional(v.any()),
     patch: v.optional(v.any()),
-    confidence: v.optional(v.number()),
+    // Allow nulls for confidence since some providers or code paths may set null.
+    confidence: v.optional(v.union(v.number(), v.null())),
     merged: v.optional(v.boolean()),
     createdAt: v.number(),
   })

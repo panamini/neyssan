@@ -60,10 +60,45 @@ http.route({
   handler: httpAction(ingestProfileHandler),
 });
 
+// CORS origin (use environment variable in Convex dashboard for production)
+const CORS_ORIGIN = process.env.CLIENT_ORIGIN || "http://localhost:5173";
+
+// Helper to create a pre-flight OPTIONS response
+const preflightResponse = (origin: string | null = null) => {
+  const allowedOrigin = origin ?? CORS_ORIGIN;
+  return new Response(null, {
+    status: 204, // No Content
+    headers: new Headers({
+      "Access-Control-Allow-Origin": allowedOrigin,
+      "Access-Control-Allow-Methods": "POST, OPTIONS, GET",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      "Access-Control-Max-Age": "86400",
+      "Vary": "Origin",
+    }),
+  });
+};
+
+// OPTIONS handler for /ingestProfile (preflight)
+http.route({
+  path: "/ingestProfile",
+  method: "OPTIONS",
+  handler: httpAction(async (_ctx, request) => preflightResponse(request.headers.get("Origin"))),
+});
+
+// POST route delegates to http_actions.ingestProfileHandler
+// (already registered above)
+
+// /llm-refine routes delegate to http_actions
 http.route({
   path: "/llm-refine",
   method: "POST",
   handler: httpAction(llmRefineHandler),
+});
+
+http.route({
+  path: "/llm-refine",
+  method: "OPTIONS",
+  handler: httpAction(async (_ctx, request) => preflightResponse(request.headers.get("Origin"))),
 });
 
 export default http;

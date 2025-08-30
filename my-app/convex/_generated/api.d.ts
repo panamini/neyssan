@@ -51,6 +51,7 @@ import type * as migrations from "../migrations.js";
 import type * as model_metrics from "../model/metrics.js";
 import type * as model_monitoring from "../model/monitoring.js";
 import type * as monitoring from "../monitoring.js";
+import type * as mutations_refineField from "../mutations/refineField.js";
 import type * as mutations_updateUserProfile from "../mutations/updateUserProfile.js";
 import type * as mutations_upsertProfile from "../mutations/upsertProfile.js";
 import type * as parsePdf from "../parsePdf.js";
@@ -137,6 +138,7 @@ declare const fullApi: ApiFromModules<{
   "model/metrics": typeof model_metrics;
   "model/monitoring": typeof model_monitoring;
   monitoring: typeof monitoring;
+  "mutations/refineField": typeof mutations_refineField;
   "mutations/updateUserProfile": typeof mutations_updateUserProfile;
   "mutations/upsertProfile": typeof mutations_upsertProfile;
   parsePdf: typeof parsePdf;

@@ -4,6 +4,8 @@ import React from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import debounce from "lodash/debounce";
+import { Input } from "./ui/input";
+import { Card } from "./ui/card";
 
 /**
  * ProfileEditorUnified
@@ -22,8 +24,12 @@ import debounce from "lodash/debounce";
 export default function ProfileEditorUnified() {
   const [placeholderId, setPlaceholderId] = React.useState<string | null>(null);
   const [llmStatus, setLlmStatus] = React.useState<any>(null);
-  const [uploading, setUploading] = React.useState(false);
   const [fileName, setFileName] = React.useState<string | null>(null);
+  // New UI state for missing fields and AI suggestions
+  const [missingFields, setMissingFields] = React.useState<string[]>([]);
+  const [aiCategory, setAiCategory] = React.useState<string>("Unknown");
+  const [aiFlags, setAiFlags] = React.useState<string[]>([]);
+
   // Backend base URL (set in my-app/.env as VITE_PDF_INGEST_URL, e.g. http://127.0.0.1:8000)
   const baseUrl = (import.meta as any).env?.VITE_PDF_INGEST_URL || "";
 
@@ -31,34 +37,53 @@ export default function ProfileEditorUnified() {
 
   const calculateConfidence = (data: any) => {
     let score = 0;
-    if (data.name) score += 0.2;
-    if (data.email) score += 0.4;
-    if (data.summary) score += 0.15;
+    if (data?.name) score += 0.2;
+    if (data?.email) score += 0.4;
+    if (data?.summary) score += 0.15;
     // Add for skills/experience/etc.
-    return Math.min(1.0, score);  // Or default 1.0 if not computed
+    return Math.min(1.0, score); // Or default 1.0 if not computed
   };
 
   const debouncedSave = debounce(async (payload) => {
     try {
       const response = await fetch(`${baseUrl}/api/v1/confirm-save`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...payload,
           confidence: calculateConfidence(payload),
         }),
       });
-      if (!response.ok) throw new Error(await response.text());
-      // Handle success
+      if (!response.ok) {
+        // If backend returns structured error JSON, try to parse
+        let text = await response.text();
+        try {
+          const parsed = JSON.parse(text);
+          console.warn("confirm-save returned non-OK:", parsed);
+        } catch {
+          console.warn("confirm-save returned non-OK text:", text);
+        }
+        throw new Error(text);
+      }
+      const data = await response.json();
+
+      // Extract meta and surface missing fields / AI suggestions to the UI
+      const meta = data.meta || {};
+      setMissingFields(meta.missing_fields || []);
+      setAiCategory(meta.ai_category || "Unknown");
+      setAiFlags(meta.ai_flags || []);
+
+      if (data.placeholderId) {
+        setPlaceholderId(data.placeholderId);
+      }
     } catch (error) {
-      console.error('Save failed', error);
-      // UI toast/error
+      console.error("Save failed", error);
+      // UI toast/error handling can be added here
     }
   }, 500);
 
   async function loadCanonical() {
-    // The useConvex hook handles loading, so this function is now just for explicit refresh.
-    // The component will re-render automatically when the query result changes.
+    // The useQuery hook handles loading; this is a no-op refresh placeholder.
   }
 
   // Poll LLMHistory endpoint by placeholderId
@@ -124,7 +149,6 @@ export default function ProfileEditorUnified() {
 
   async function handleUpload(file: File | null) {
     if (!file) return;
-    setUploading(true);
     setFileName(file.name);
     try {
       // Use synchronous parse-now for quick feedback if supported
@@ -141,38 +165,39 @@ export default function ProfileEditorUnified() {
           body: JSON.stringify({ ...parsed, confidence: calculateConfidence(parsed) }),
         });
         if (!confirmResp.ok) {
-          // if confirm-save failed, fallback to enqueue llm-refine directly with profile payload
-          throw new Error("confirm-save failed: " + (await confirmResp.text()));
+          // if confirm-save failed, fallback to show error
+          const txt = await confirmResp.text();
+          throw new Error("confirm-save failed: " + txt);
         }
         const confirmBody = await confirmResp.json();
+
+        // Update UI meta state from returned meta
+        const meta = confirmBody.meta || {};
+        setMissingFields(meta.missing_fields || []);
+        setAiCategory(meta.ai_category || "Unknown");
+        setAiFlags(meta.ai_flags || []);
+
         // If a placeholder id is returned, monitor it
         if (confirmBody.placeholderId) {
           setPlaceholderId(confirmBody.placeholderId);
         } else {
-          // If no placeholder, optionally call llm-refine to force refine
+          // If no placeholder, optionally call llm-refine to force refine.
+          // Prefer the definitive Convex id returned by confirm-save (convexId) when present.
+          const profileIdToUse = (confirmBody as any)?.convexId ?? confirmBody.id;
           const refineResp = await fetch(`${baseUrl}/api/v1/llm-refine`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ profileId: confirmBody.id }),
+            body: JSON.stringify({ profileId: profileIdToUse }),
           });
           if (refineResp.ok) {
             const r = await refineResp.json();
             if (r.placeholderId) setPlaceholderId(r.placeholderId);
           }
         }
-      } else {
-        // If parse-now not available, upload to /api/v1/upload to create job and then call llm-refine if needed
-        const uploadForm = new FormData();
-        uploadForm.append("file", file);
-        const uploadResp = await fetch(`${baseUrl}/api/v1/upload`, { method: "POST", body: uploadForm });
-        if (!uploadResp.ok) throw new Error("upload failed: " + (await uploadResp.text()));
-        // The upload path is best-effort for this scaffold
-      }
+      } 
     } catch (e) {
       console.error("Upload/ingest failed", e);
       alert("Upload failed: " + String(e));
-    } finally {
-      setUploading(false);
     }
   }
 
@@ -204,19 +229,27 @@ export default function ProfileEditorUnified() {
   }
 
   return (
-    <div className="max-w-4xl p-4 mx-auto">
-      <h1 className="mb-4 text-2xl font-semibold">Profile Editor (Unified)</h1>
+    <div className="max-w-4xl p-2 mx-auto bg-background text-foreground">
+      <h1 className="mb-2 text-2xl font-semibold">Profile Editor (Unified)</h1>
+
+      <div className="mb-4">
+        {missingFields.length > 0 && (
+          <div className="p-2 mb-4 text-sm text-yellow-800 bg-yellow-100 border border-yellow-300 rounded">
+            Missing required fields: <strong>{missingFields.join(", ")}</strong>. You can still save, but consider adding them.
+          </div>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <section className="p-4 bg-white border rounded">
+        <Card className="p-2 border rounded-md bg-background border-accent">
           <h2 className="mb-2 text-lg font-medium">Canonical profile (Convex)</h2>
-          <div className="mb-3 text-sm text-gray-600">This view reads the canonical profile from Convex. All authoritative writes are performed by the backend.</div>
-          <pre className="p-2 overflow-auto text-sm border rounded bg-gray-50 h-72">
+          <div className="mb-2 text-sm text-muted">This view reads the canonical profile from Convex. All authoritative writes are performed by the backend.</div>
+          <pre className="p-2 overflow-auto text-sm border rounded-md bg-gray-50 h-72">
             {profile ? JSON.stringify(profile, null, 2) : "Loading canonical profile..."}
           </pre>
 
           <div className="flex gap-2 mt-3">
-            <label className="px-3 py-2 bg-gray-100 rounded cursor-pointer">
+            <label className="px-3 py-2 border rounded-md cursor-pointer bg-background border-accent">
               Upload CV
               <input
                 type="file"
@@ -233,7 +266,7 @@ export default function ProfileEditorUnified() {
               onClick={() => {
                 void reapplyRefine();
               }}
-              className="px-3 py-2 text-white bg-blue-600 rounded"
+              className="px-3 py-2 rounded-md text-background bg-primary"
             >
               Reapply AI refine
             </button>
@@ -264,7 +297,7 @@ export default function ProfileEditorUnified() {
                   alert("Retry failed: " + String(err));
                 }
               }}
-              className="px-3 py-2 text-white bg-yellow-500 rounded"
+              className="px-3 py-2 rounded-md text-background bg-accent"
             >
               Retry Convex persist
             </button>
@@ -273,7 +306,7 @@ export default function ProfileEditorUnified() {
               onClick={() => {
                 void loadCanonical();
               }}
-              className="px-3 py-2 bg-gray-200 rounded"
+              className="px-3 py-2 bg-gray-100 rounded-md"
             >
               Refresh
             </button>
@@ -285,15 +318,15 @@ export default function ProfileEditorUnified() {
             <div>Status: {llmStatus ? llmStatus.convex_write_status ?? JSON.stringify(llmStatus) : "idle"}</div>
             {llmStatus?.convex_error && <div className="text-red-600">Error: {llmStatus.convex_error}</div>}
           </div>
-        </section>
+        </Card>
 
-        <section className="p-4 bg-white border rounded">
+        <Card className="p-2 border rounded-md bg-background border-accent">
           <h2 className="mb-2 text-lg font-medium">Edit (manual)</h2>
-          <div className="mb-3 text-sm text-gray-600">Manual edits should call backend endpoints to keep pdf-ingest as authoritative writer.</div>
+          <div className="mb-2 text-sm text-muted">Manual edits should call backend endpoints to keep pdf-ingest as authoritative writer.</div>
 
           <div>
             <label className="block mb-1 text-sm font-medium">Name</label>
-            <input
+            <Input
               type="text"
               defaultValue={profile?.name ?? ""}
               onBlur={(e) => {
@@ -305,12 +338,38 @@ export default function ProfileEditorUnified() {
                   skills: profile?.skills ?? [],
                   experience: profile?.experience ?? [],
                   education: profile?.education ?? [],
-                  rawText: profile?.rawText ?? null,
+                  raw_text: profile?.raw_text ?? null,
                   metadata: profile?.metadata ?? {},
                 };
                 debouncedSave(merged);
               }}
-              className="w-full px-2 py-1 border rounded"
+              className={`w-full px-2 py-1 border rounded-md ${missingFields.includes("name") ? "border-red-500" : ""}`}
+              size="md"
+              variant="default"
+            />
+          </div>
+
+          <div className="mt-3">
+            <label className="block mb-1 text-sm font-medium">Email</label>
+            <Input
+              type="email"
+              defaultValue={profile?.email ?? ""}
+              onBlur={(e) => {
+                const merged = {
+                  name: profile?.name ?? null,
+                  email: e.currentTarget.value ?? null,
+                  summary: profile?.summary ?? null,
+                  skills: profile?.skills ?? [],
+                  experience: profile?.experience ?? [],
+                  education: profile?.education ?? [],
+                  raw_text: profile?.raw_text ?? null,
+                  metadata: profile?.metadata ?? {},
+                };
+                debouncedSave(merged);
+              }}
+              className={`w-full px-2 py-1 border rounded-md ${missingFields.includes("email") ? "border-red-500" : ""}`}
+              size="md"
+              variant="default"
             />
           </div>
 
@@ -328,16 +387,28 @@ export default function ProfileEditorUnified() {
                   skills: profile?.skills ?? [],
                   experience: profile?.experience ?? [],
                   education: profile?.education ?? [],
-                  rawText: profile?.rawText ?? null,
+                  raw_text: profile?.raw_text ?? null,
                   metadata: profile?.metadata ?? {},
                 };
                 debouncedSave(merged);
               }}
-              className="w-full px-2 py-1 border rounded"
+              className="w-full px-2 py-1 border rounded-md"
             />
           </div>
-        </section>
+        </Card>
       </div>
+
+      {aiCategory !== "Unknown" && (
+        <section className="p-2 mt-4 border rounded-md bg-gray-50">
+          <h3 className="mb-2 text-lg font-medium">AI Suggestions</h3>
+          <p>Suggested Category: <strong>{aiCategory}</strong></p>
+          {aiFlags.length > 0 && (
+            <ul className="pl-5 list-disc">
+              {aiFlags.map((flag, idx) => <li key={idx}>{flag}</li>)}
+            </ul>
+          )}
+        </section>
+      )}
     </div>
   );
 }

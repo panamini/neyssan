@@ -10,6 +10,7 @@ import styles from "./ProposalInputForm.module.css";
 import ProfileView from "./ProfileView";
 import { SkillAdder, ExperienceAdder, EducationAdder } from "./ProfileEditors";
 import ProfileReviewModal from "./ProfileReviewModal";
+import { Button } from "./ui/button";
 
 const _schema = z.object({
   resumeText: z.string().min(20).optional(),
@@ -157,7 +158,7 @@ export default function ProfileForm() {
   };
 
   return (
-    <div className="w-full max-w-4xl p-3 mb-4 border-2 border-yellow-400" data-testid="profile-ingestion-card">
+    <div className="w-full max-w-4xl p-3 mb-4 border-2 border-accent" data-testid="profile-ingestion-card">
       <ProfileReviewModal
         visible={showReviewModal}
         parsedProfile={parsedProfile}
@@ -173,7 +174,7 @@ export default function ProfileForm() {
         }}
       />
 
-      <div className="p-4 rounded-md bg-gray-50 dark:bg-gray-900">
+      <div className="p-4 rounded-md bg-background dark:bg-surface">
         <h3 className="mb-2 text-lg font-medium">Profile ingestion</h3>
         <form
           onSubmit={(e) => {
@@ -182,18 +183,18 @@ export default function ProfileForm() {
           className="grid gap-3"
         >
           <div className="flex items-center gap-2">
-            <button
+            <Button
               type="button"
               onClick={() => {
-                // Open the ProfileReviewModal. The modal contains its own Load CV picker for uploading a new file.
-                // When opening from here we want the modal in "new upload" mode (no parsedProfile passed).
                 setParsedProfile(null);
                 setShowReviewModal(true);
               }}
-              className="px-3 py-1 bg-gray-200 rounded"
+              className="px-3 py-1"
+              variant="secondary"
+              size="md"
             >
               Load my CV
-            </button>
+            </Button>
           </div>
 
           <textarea
@@ -203,20 +204,18 @@ export default function ProfileForm() {
             className={clsx(styles.inputElement)}
           />
           <div className="flex items-center gap-2">
-            <button
+            <Button
               type="submit"
-              className="px-3 py-1 rounded-md bg-foreground text-background"
-            >
-              Ingest profile
-            </button>
+              className="px-3 py-1 rounded-md bg-primary text-background"
+            >Ingest profile</Button>
             {status && <span className="text-sm">{status}</span>}
           </div>
         </form>
 
         <div className="pt-3 mt-4 border-t">
-          <button
+          <Button
             type="button"
-            onClick={() => {
+            onClick={() =>{
               // Toggle expanded state and fetch profile when opening
               setExpanded((prev) => {
                 const next = !prev;
@@ -228,10 +227,9 @@ export default function ProfileForm() {
             }}
             aria-expanded={expanded}
             aria-controls="profile-details"
-            className="px-3 py-1 text-white bg-blue-600 rounded-md"
+            className="px-3 py-1 rounded-md text-background bg-primary"
           >
-            {expanded ? "Close profile" : "View profile"}
-          </button>
+            {expanded ? "Close profile" : "View profile"}</Button>
 
           {expanded && (
             <div id="profile-details" className="mt-3" role="region" aria-label="User profile details">
@@ -248,8 +246,8 @@ export default function ProfileForm() {
                             onChange={(e) => setNameDraft(e.target.value)}
                             className="px-2 py-1 text-sm border rounded"
                           />
-                          <button
-                            onClick={() => { void (async () => {
+                          <Button
+                            onClick={() =>{ void (async () => {
                                 try {
                                   setStatus("Saving name...");
                                   await profilesPublic({ profile: { name: nameDraft } });
@@ -262,58 +260,53 @@ export default function ProfileForm() {
                                   setStatus(`Failed: ${err?.message ?? String(err)}`);
                                 }
                               })(); }}
-                            className="px-2 py-1 text-sm text-white bg-blue-600 rounded"
+                            className="px-2 py-1 text-sm rounded text-background bg-primary"
                           >
-                            Save
-                          </button>
-                          <button
-                            onClick={() => {
+                            Save</Button>
+                          <Button
+                            onClick={() =>{
                               setEditingName(false);
                               setNameDraft((currentProfile && currentProfile.name) || "");
                             }}
-                            className="px-2 py-1 text-sm bg-gray-200 rounded"
+                            className="px-2 py-1 text-sm rounded bg-surface-muted"
                           >
-                            Cancel
-                          </button>
+                            Cancel</Button>
                         </div>
                       ) : (
                         <div>
                           <div className="text-lg font-semibold">{currentProfile.name ?? "No name"}</div>
                           <div className="mt-1">
-                            <button
-                              onClick={() => {
+                            <Button
+                              onClick={() =>{
                                 setNameDraft((currentProfile && currentProfile.name) || "");
                                 setEditingName(true);
                               }}
-                              className="px-2 py-1 text-sm bg-gray-200 rounded"
+                              className="px-2 py-1 text-sm rounded bg-surface-muted"
                             >
-                              Edit
-                            </button>
+                              Edit</Button>
                           </div>
                         </div>
                       )}
-                      {currentProfile.email && <div className="mt-1 text-sm text-gray-600">{currentProfile.email}</div>}
+                      {currentProfile.email && <div className="mt-1 text-sm text-muted">{currentProfile.email}</div>}
                     </div>
 
                     <div className="flex items-center gap-2">
                       {/* Edit summary button */}
                       {!editingSummary ? (
-                        <button
-                          onClick={() => setEditingSummary(true)}
-                          className="px-2 py-1 text-sm bg-gray-200 rounded"
+                        <Button
+                          onClick={() =>setEditingSummary(true)}
+                          className="px-2 py-1 text-sm rounded bg-surface-muted"
                         >
-                          Edit summary
-                        </button>
+                          Edit summary</Button>
                       ) : (
-                        <button
-                          onClick={() => {
+                        <Button
+                          onClick={() =>{
                             setEditingSummary(false);
                             setSummaryDraft((currentProfile && currentProfile.summary) || "");
                           }}
-                          className="px-2 py-1 text-sm bg-gray-200 rounded"
+                          className="px-2 py-1 text-sm rounded bg-surface-muted"
                         >
-                          Cancel
-                        </button>
+                          Cancel</Button>
                       )}
                     </div>
                   </div>
@@ -330,21 +323,19 @@ export default function ProfileForm() {
                           className={clsx(styles.inputElement, "w-full")}
                         />
                         <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => { void saveSummary(); }}
-                            className="px-3 py-1 text-white bg-blue-600 rounded"
+                          <Button
+                            onClick={() =>{ void saveSummary(); }}
+                            className="px-3 py-1 rounded text-background bg-primary"
                           >
-                            Save
-                          </button>
-                          <button
-                            onClick={() => {
+                            Save</Button>
+                          <Button
+                            onClick={() =>{
                               setEditingSummary(false);
                               setSummaryDraft((currentProfile && currentProfile.summary) || "");
                             }}
-                            className="px-3 py-1 bg-gray-200 rounded"
+                            className="px-3 py-1 rounded bg-surface-muted"
                           >
-                            Cancel
-                          </button>
+                            Cancel</Button>
                           {status && <span className="text-sm">{status}</span>}
                         </div>
                       </div>
@@ -353,7 +344,7 @@ export default function ProfileForm() {
                         {currentProfile.summary ? (
                           <div dangerouslySetInnerHTML={{ __html: (currentProfile.summary) }} />
                         ) : (
-                          <div className="text-sm text-gray-500">No summary provided.</div>
+                          <div className="text-sm text-muted">No summary provided.</div>
                         )}
                       </div>
                     )}
@@ -373,8 +364,8 @@ export default function ProfileForm() {
                         >
                           Open LinkedIn
                         </a>
-                        <button
-                          onClick={() => { void (async () => {
+                        <Button
+                          onClick={() =>{ void (async () => {
                             const next = window.prompt("Edit LinkedIn URL", currentProfile.linkedIn || "");
                             if (next !== null) {
                               try {
@@ -389,15 +380,14 @@ export default function ProfileForm() {
                               }
                             }
                           })(); }}
-                          className="px-2 py-1 text-sm bg-gray-200 rounded"
+                          className="px-2 py-1 text-sm rounded bg-surface-muted"
                         >
-                          Edit
-                        </button>
+                          Edit</Button>
                       </div>
                     ) : (
                       <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => { void (async () => {
+                        <Button
+                          onClick={() =>{ void (async () => {
                             const url = window.prompt("Enter LinkedIn URL", "");
                             if (url) {
                               try {
@@ -412,11 +402,10 @@ export default function ProfileForm() {
                               }
                             }
                           })(); }}
-                          className="px-3 py-1 text-sm bg-gray-200 rounded"
+                          className="px-3 py-1 text-sm rounded bg-surface-muted"
                         >
-                          Add LinkedIn
-                        </button>
-                        <div className="text-sm text-gray-500">No LinkedIn provided.</div>
+                          Add LinkedIn</Button>
+                        <div className="text-sm text-muted">No LinkedIn provided.</div>
                       </div>
                     )}
                   </div>
@@ -425,11 +414,11 @@ export default function ProfileForm() {
                     <h4 className="mb-1 text-sm font-medium">Skills</h4>
                     <div className="flex flex-wrap items-center gap-2">
                       {(currentProfile.skills || []).map((s: string, i: number) => (
-                        <span key={i} className="flex items-center gap-2 px-2 py-1 text-xs bg-gray-100 rounded-full dark:bg-gray-700">
+                        <span key={i} className="flex items-center gap-2 px-2 py-1 text-xs rounded-full bg-surface dark:bg-surface-muted">
                           <span>{s}</span>
-                          <button
+                          <Button
                             aria-label={`Remove skill ${s}`}
-                            onClick={() => { void (async () => {
+                            onClick={() =>{ void (async () => {
                               try {
                                 const next = (currentProfile.skills || []).filter((x: string) => x !== s);
                                 setStatus("Saving skills...");
@@ -441,10 +430,9 @@ export default function ProfileForm() {
                                 setStatus(`Failed: ${err?.message ?? String(err)}`);
                               }
                             })(); }}
-                            className="text-xs px-1 py-0.5 bg-red-200 rounded"
+                            className="text-xs px-1 py-0.5 bg-surface-muted rounded"
                           >
-                            ×
-                          </button>
+                            ×</Button>
                         </span>
                       ))}
 
@@ -473,12 +461,12 @@ export default function ProfileForm() {
                           <div className="flex items-start justify-between">
                             <div>
                               <div className="font-semibold">{exp.title} — {exp.company}</div>
-                              <div className="text-xs text-gray-500">{exp.startDate ? new Date(exp.startDate).toLocaleDateString() : ""} {exp.endDate ? `— ${new Date(exp.endDate).toLocaleDateString()}` : ""}</div>
+                              <div className="text-xs text-muted">{exp.startDate ? new Date(exp.startDate).toLocaleDateString() : ""} {exp.endDate ? `— ${new Date(exp.endDate).toLocaleDateString()}` : ""}</div>
                               {exp.description && <div className="mt-1 text-sm">{exp.description}</div>}
                             </div>
                             <div className="flex gap-2">
-                              <button
-                                onClick={() => { void (async () => {
+                              <Button
+                                onClick={() =>{ void (async () => {
                                   try {
                                     const next = (currentProfile.experience || []).filter((_: unknown, i: number) => i !== idx);
                                     setStatus("Saving experience...");
@@ -490,10 +478,9 @@ export default function ProfileForm() {
                                     setStatus(`Failed: ${err?.message ?? String(err)}`);
                                   }
                                 })(); }}
-                                className="px-2 py-1 text-xs bg-red-200 rounded"
+                                className="px-2 py-1 text-xs rounded bg-surface-muted"
                               >
-                                Delete
-                              </button>
+                                Delete</Button>
                             </div>
                           </div>
                         </div>
@@ -523,8 +510,8 @@ export default function ProfileForm() {
                           <div className="flex items-start justify-between">
                             <div>
                               <div className="font-semibold">{ed.school} {ed.degree ? `— ${ed.degree}` : ""}</div>
-                              {ed.fieldOfStudy && <div className="text-xs text-gray-500">{ed.fieldOfStudy}</div>}
-                              <div className="text-xs text-gray-500">{ed.startDate ? new Date(ed.startDate).toLocaleDateString() : ""} {ed.endDate ? `— ${new Date(ed.endDate).toLocaleDateString()}` : ""}</div>
+                              {ed.fieldOfStudy && <div className="text-xs text-muted">{ed.fieldOfStudy}</div>}
+                              <div className="text-xs text-muted">{ed.startDate ? new Date(ed.startDate).toLocaleDateString() : ""} {ed.endDate ? `— ${new Date(ed.endDate).toLocaleDateString()}` : ""}</div>
                             </div>
                                 </div>
                         </div>
@@ -549,7 +536,7 @@ export default function ProfileForm() {
                   <ProfileView profile={currentProfile} hideSummary />
                 </div>
               ) : (
-                <div className="text-sm text-gray-500">Loading profile…</div>
+                <div className="text-sm text-muted">Loading profile…</div>
               )}
             </div>
           )}

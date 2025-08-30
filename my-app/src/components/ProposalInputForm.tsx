@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import clsx from "clsx";
 import { ArrowUp, Square, Wrench, Palette, Laugh, Smile, SmilePlus } from "lucide-react"; // Importing Lucide-react icons
 import CustomToggle from "./CustomToggle";
+import { Button } from "./ui/button";
 
 import { api } from "../../convex/_generated/api";
 import { useAction, useMutation } from "convex/react";
@@ -100,14 +101,16 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({ onSubmit }) => {
                 className={clsx(styles.inputElement, styles.jobField)}
                 placeholder="Paste Job Description"
               />
-              <button
+              <Button
                 type="submit"
                 disabled={form.watch("jobDescription").length < 10}
                 title={form.watch("jobDescription").length < 10 ? "Minimum 10 characters required" : ""}
-                className="absolute flex items-center justify-center px-2 py-1 text-sm font-medium text-white -translate-y-1/2 bg-gray-700 rounded-lg right-4 top-1/2 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-hover-outline hover:ring-2 hover:ring-hover-outline focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-dark-element dark:text-dark-text dark:hover:bg-jet-200"
+                className="absolute -translate-y-1/2 right-4 top-1/2"
+                variant="primary"
+                size="sm"
               >
-                {isGenerating ? <Square className="text-red-500" /> : <ArrowUp />}
-              </button>
+                {isGenerating ? <Square className="text-background" /> : <ArrowUp />}
+              </Button>
               {form.formState.errors.jobDescription && (
                 <p className={styles.errorMessage}>{form.formState.errors.jobDescription.message}</p>
               )}

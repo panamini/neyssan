@@ -61,11 +61,11 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   }
 
   if (error) {
-    return <div className="p-6 text-red-500">Error: {error}</div>;
+    return <div className="p-6 text-danger">Error: {error}</div>;
   }
 
   if (!proposalContent) {
-    return <div className="p-6 text-center text-gray-500">Generate a proposal to see the results here.</div>;
+    return <div className="p-6 text-center text-muted">Generate a proposal to see the results here.</div>;
   }
 
   return (

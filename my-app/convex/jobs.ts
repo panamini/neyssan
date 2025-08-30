@@ -1,36 +1,59 @@
 import { internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 
 /**
- * Enqueue a refine job: insert a job into llmJobs and return a placeholder id.
+ * Internal helpers for LLM jobs.
+ *
+ * - `start` creates a new job from a typed Convex Id and returns the inserted job _id.
+ * - `enqueue` re-queues an existing job (validates ownership) and schedules processing.
+ *
+ * These are internal mutations and should be invoked only via `ctx.runMutation` from
+ * public wrappers or internal actions, per Convex best-practices.
  */
-export const enqueueRefine = internalMutation({
+export const start = internalMutation({
   args: {
     profileId: v.id("userProfiles"),
-    rawText: v.union(v.string(), v.null()),
+    rawText: v.string(),
     options: v.optional(v.any()),
-    requestedBy: v.optional(v.string()),
+    reason: v.optional(v.string()),
   },
-  returns: v.object({
-    placeholderId: v.string(),
-    jobId: v.id("llmJobs"),
-  }),
-  handler: async (ctx, args) => {
+  returns: v.id("llmJobs"),
+  handler: async (ctx, { profileId, rawText, options }) => {
     const now = Date.now();
-    const placeholderId = `ph_${now}_${Math.floor(Math.random() * 100000)}`;
-
     const jobId = await ctx.db.insert("llmJobs", {
-      profileId: args.profileId,
-      placeholderId,
+      profileId,
       status: "queued",
-      ...(args.rawText !== null && args.rawText !== undefined ? { rawText: args.rawText } : {}),
-      ...(args.options !== undefined ? { options: args.options } : {}),
-      ...(args.requestedBy !== undefined ? { requestedBy: args.requestedBy } : {}),
+      rawText,
+      options,
       createdAt: now,
       updatedAt: now,
     });
+    // Schedule the refine internal action (worker) to run immediately.
+    await ctx.scheduler.runAfter(0, internal.llm.refine, { jobId });
+    return jobId;
+  },
+});
 
-    return { placeholderId, jobId };
+export const enqueue = internalMutation({
+  args: {
+    profileId: v.id("userProfiles"),
+    jobId: v.id("llmJobs"),
+    reason: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, { profileId, jobId }) => {
+    const job = await ctx.db.get(jobId);
+    if (!job) {
+      throw new Error("Job not found");
+    }
+    if (job.profileId !== profileId) {
+      throw new Error("Job does not belong to this profile");
+    }
+    const now = Date.now();
+    await ctx.db.patch(jobId, { status: "queued", updatedAt: now });
+    await ctx.scheduler.runAfter(0, internal.llm.refine, { jobId });
+    return null;
   },
 });
 
@@ -55,7 +78,7 @@ export const listPendingJobs = internalQuery({
       updatedAt: v.number(),
     })
   ),
-  handler: async (ctx, args) => {
+    handler: async (ctx, args) => {
     const size = args.batchSize ?? 5;
     // Query by status index "by_status" for "queued" jobs
     const jobs = await ctx.db
@@ -63,7 +86,18 @@ export const listPendingJobs = internalQuery({
       .withIndex("by_status", (q) => q.eq("status", "queued"))
       .order("asc")
       .take(size);
-    return jobs;
+    // Project allowed fields to satisfy the validator (exclude system fields like _creationTime).
+    return jobs.map((job: any) => ({
+      _id: job._id,
+      profileId: job.profileId,
+      placeholderId: job.placeholderId ?? undefined,
+      status: job.status,
+      rawText: job.rawText ?? undefined,
+      options: job.options ?? undefined,
+      requestedBy: job.requestedBy ?? undefined,
+      createdAt: job.createdAt,
+      updatedAt: job.updatedAt,
+    }));
   },
 });
 
@@ -113,7 +147,22 @@ export const claimJob = internalMutation({
     });
 
     const claimed = await ctx.db.get(args.jobId);
-    return claimed ?? null;
+    if (!claimed) return null;
+    // Project claimed job to exactly the fields declared in the return validator.
+    return {
+      _id: claimed._id,
+      profileId: claimed.profileId,
+      placeholderId: claimed.placeholderId ?? undefined,
+      status: claimed.status,
+      rawText: claimed.rawText ?? undefined,
+      options: claimed.options ?? undefined,
+      requestedBy: claimed.requestedBy ?? undefined,
+      createdAt: claimed.createdAt,
+      updatedAt: claimed.updatedAt,
+      attempts: claimed.attempts ?? undefined,
+      lockedBy: claimed.lockedBy ?? undefined,
+      startedAt: claimed.startedAt ?? undefined,
+    };
   },
 });
 
@@ -143,7 +192,30 @@ export const getJob = internalQuery({
   handler: async (ctx, args) => {
     const job = await ctx.db.get(args.jobId);
     if (!job) return null;
-    return job as any;
+    // Project job document to only the fields specified by the validator.
+    return {
+      _id: job._id,
+      profileId: job.profileId,
+      placeholderId: job.placeholderId ?? undefined,
+      status: job.status,
+      rawText: job.rawText ?? undefined,
+      options: job.options ?? undefined,
+      requestedBy: job.requestedBy ?? undefined,
+      createdAt: job.createdAt,
+      updatedAt: job.updatedAt,
+      attempts: job.attempts ?? undefined,
+      lockedBy: job.lockedBy ?? undefined,
+      startedAt: job.startedAt ?? undefined,
+      historyId: job.historyId ?? undefined,
+      lastError: job.lastError ?? undefined,
+    };
+  },
+});
+
+export const getHistoryById = internalQuery({
+  args: { historyId: v.id("llmHistory") },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.historyId);
   },
 });
 

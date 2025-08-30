@@ -112,7 +112,28 @@ export const get = query({
     if (!user) {
       return null;
     }
-    return await ctx.runQuery(internal.profiles.get);
+    // Call internal.profiles.get (may include system fields) and project only the fields
+    // declared in this query's return validator to avoid ReturnsValidationError.
+    const prof = await ctx.runQuery(internal.profiles.get);
+    if (!prof) return null;
+    return {
+      _id: prof._id,
+      _creationTime: prof._creationTime,
+      clerkId: prof.clerkId ?? undefined,
+      email: prof.email,
+      name: prof.name ?? undefined,
+      version: prof.version,
+      createdAt: prof.createdAt,
+      updatedAt: prof.updatedAt,
+      preferences: prof.preferences,
+      summary: prof.summary ?? undefined,
+      skills: prof.skills ?? undefined,
+      experience: prof.experience ?? undefined,
+      education: prof.education ?? undefined,
+      linkedIn: prof.linkedIn ?? undefined,
+      raw_text: prof.raw_text ?? undefined,
+      metadata: prof.metadata ?? undefined,
+    };
   },
 });
 
