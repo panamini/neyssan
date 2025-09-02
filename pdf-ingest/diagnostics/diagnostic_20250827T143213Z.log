@@ -1,0 +1,106 @@
+[14:32:13] === Starting diagnostics ===
+[14:32:13] Log file: /Users/pana/Documents/GitHub/neyssan/pdf-ingest/diagnostics/diagnostic_20250827T143213Z.log
+[14:32:13] Debug log will be written inside container at /tmp/pdf_ingest_debug.log and mounted to /Users/pana/Documents/GitHub/neyssan/pdf-ingest/diagnostics
+Step 1: Starting DB and Redis...
+2025-08-27T14:32:13Z db-1  | 2025-08-27 11:13:51.454 UTC [1] LOG:  listening on IPv6 address "::", port 5432
+2025-08-27T14:32:13Z db-1  | 2025-08-27 11:13:51.455 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2025-08-27T14:32:13Z db-1  | 2025-08-27 11:13:51.457 UTC [35] LOG:  database system was shut down at 2025-08-27 11:11:02 UTC
+2025-08-27T14:32:13Z db-1  | 2025-08-27 11:13:51.465 UTC [1] LOG:  database system is ready to accept connections
+2025-08-27T14:32:13Z db-1  | 2025-08-27 11:18:51.473 UTC [33] LOG:  checkpoint starting: time
+2025-08-27T14:32:13Z db-1  | 2025-08-27 11:18:56.185 UTC [33] LOG:  checkpoint complete: wrote 48 buffers (0.3%); 0 WAL file(s) added, 0 removed, 0 recycled; write=4.700 s, sync=0.007 s, total=4.712 s; sync files=26, longest=0.004 s, average=0.001 s; distance=294 kB, estimate=294 kB
+2025-08-27T14:32:13Z db-1  | 2025-08-27 11:25:55.406 UTC [859] ERROR:  invalid input syntax for type uuid: "<profile_id>" at character 33
+2025-08-27T14:32:13Z db-1  | 2025-08-27 11:25:55.406 UTC [859] STATEMENT:  SELECT * FROM profiles WHERE id='<profile_id>';
+2025-08-27T14:32:13Z db-1  | 2025-08-27 11:33:51.314 UTC [33] LOG:  checkpoint starting: time
+2025-08-27T14:32:13Z db-1  | 2025-08-27 11:33:51.641 UTC [33] LOG:  checkpoint complete: wrote 4 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.314 s, sync=0.005 s, total=0.327 s; sync files=4, longest=0.004 s, average=0.002 s; distance=11 kB, estimate=266 kB
+2025-08-27T14:32:13Z db-1  | 2025-08-27 14:13:54.397 UTC [33] LOG:  checkpoint starting: time
+2025-08-27T14:32:13Z db-1  | 2025-08-27 14:13:55.662 UTC [33] LOG:  checkpoint complete: wrote 13 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.256 s, sync=0.004 s, total=1.266 s; sync files=11, longest=0.003 s, average=0.001 s; distance=46 kB, estimate=244 kB
+2025-08-27T14:32:13Z db-1  | 2025-08-27 14:17:52.707 UTC [1] LOG:  received fast shutdown request
+2025-08-27T14:32:13Z db-1  | 2025-08-27 14:17:52.709 UTC [1] LOG:  aborting any active transactions
+2025-08-27T14:32:13Z db-1  | 2025-08-27 14:17:52.709 UTC [241] FATAL:  terminating connection due to administrator command
+2025-08-27T14:32:13Z db-1  | 2025-08-27 14:17:52.709 UTC [301] FATAL:  terminating connection due to administrator command
+2025-08-27T14:32:13Z db-1  | 2025-08-27 14:17:52.709 UTC [313] FATAL:  terminating connection due to administrator command
+2025-08-27T14:32:13Z db-1  | 2025-08-27 14:17:52.710 UTC [1] LOG:  background worker "logical replication launcher" (PID 38) exited with exit code 1
+2025-08-27T14:32:13Z db-1  | 2025-08-27 14:17:52.710 UTC [33] LOG:  shutting down
+2025-08-27T14:32:13Z db-1  | 2025-08-27 14:17:52.711 UTC [33] LOG:  checkpoint starting: shutdown immediate
+2025-08-27T14:32:13Z db-1  | 2025-08-27 14:17:52.715 UTC [33] LOG:  checkpoint complete: wrote 3 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.001 s, sync=0.002 s, total=0.005 s; sync files=3, longest=0.001 s, average=0.001 s; distance=11 kB, estimate=220 kB
+2025-08-27T14:32:13Z db-1  | 2025-08-27 14:17:52.716 UTC [1] LOG:  database system is shut down
+2025-08-27T14:32:13Z db-1  | 
+2025-08-27T14:32:13Z db-1  | PostgreSQL Database directory appears to contain a database; Skipping initialization
+2025-08-27T14:32:13Z db-1  | 
+2025-08-27T14:32:13Z db-1  | 2025-08-27 14:18:51.231 UTC [1] LOG:  starting PostgreSQL 15.14 (Debian 15.14-1.pgdg13+1) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit
+2025-08-27T14:32:13Z db-1  | 2025-08-27 14:18:51.231 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+2025-08-27T14:32:13Z db-1  | 2025-08-27 14:18:51.231 UTC [1] LOG:  listening on IPv6 address "::", port 5432
+2025-08-27T14:32:13Z db-1  | 2025-08-27 14:18:51.232 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2025-08-27T14:32:13Z db-1  | 2025-08-27 14:18:51.234 UTC [34] LOG:  database system was shut down at 2025-08-27 14:17:52 UTC
+2025-08-27T14:32:13Z db-1  | 2025-08-27 14:18:51.239 UTC [1] LOG:  database system is ready to accept connections
+2025-08-27T14:32:13Z db-1  | 2025-08-27 14:20:06.834 UTC [1] LOG:  received fast shutdown request
+2025-08-27T14:32:13Z db-1  | 2025-08-27 14:20:06.836 UTC [1] LOG:  aborting any active transactions
+2025-08-27T14:32:13Z db-1  | 2025-08-27 14:20:06.836 UTC [242] FATAL:  terminating connection due to administrator command
+2025-08-27T14:32:13Z db-1  | 2025-08-27 14:20:06.837 UTC [1] LOG:  background worker "logical replication launcher" (PID 37) exited with exit code 1
+2025-08-27T14:32:13Z db-1  | 2025-08-27 14:20:06.839 UTC [32] LOG:  shutting down
+2025-08-27T14:32:13Z db-1  | 2025-08-27 14:20:06.840 UTC [32] LOG:  checkpoint starting: shutdown immediate
+2025-08-27T14:32:13Z db-1  | 2025-08-27 14:20:06.844 UTC [32] LOG:  checkpoint complete: wrote 3 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.002 s, sync=0.001 s, total=0.006 s; sync files=2, longest=0.001 s, average=0.001 s; distance=1 kB, estimate=1 kB
+2025-08-27T14:32:13Z db-1  | 2025-08-27 14:20:06.846 UTC [1] LOG:  database system is shut down
+2025-08-27T14:32:13Z db-1  | 
+2025-08-27T14:32:13Z db-1  | PostgreSQL Database directory appears to contain a database; Skipping initialization
+2025-08-27T14:32:13Z db-1  | 
+2025-08-27T14:32:13Z db-1  | 2025-08-27 14:21:57.925 UTC [1] LOG:  starting PostgreSQL 15.14 (Debian 15.14-1.pgdg13+1) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit
+2025-08-27T14:32:13Z db-1  | 2025-08-27 14:21:57.925 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+2025-08-27T14:32:13Z db-1  | 2025-08-27 14:21:57.925 UTC [1] LOG:  listening on IPv6 address "::", port 5432
+2025-08-27T14:32:13Z db-1  | 2025-08-27 14:21:57.926 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2025-08-27T14:32:13Z db-1  | 2025-08-27 14:21:57.929 UTC [35] LOG:  database system was shut down at 2025-08-27 14:20:06 UTC
+2025-08-27T14:32:13Z db-1  | 2025-08-27 14:21:57.936 UTC [1] LOG:  database system is ready to accept connections
+2025-08-27T14:32:13Z db-1  | 2025-08-27 14:26:57.934 UTC [33] LOG:  checkpoint starting: time
+2025-08-27T14:32:13Z db-1  | 2025-08-27 14:26:57.941 UTC [33] LOG:  checkpoint complete: wrote 3 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.003 s, sync=0.001 s, total=0.007 s; sync files=2, longest=0.001 s, average=0.001 s; distance=1 kB, estimate=1 kB
+2025-08-27T14:32:13Z redis-1  | 1:M 27 Aug 2025 11:13:51.401 * Ready to accept connections tcp
+2025-08-27T14:32:13Z redis-1  | 1:M 27 Aug 2025 11:18:52.016 * 100 changes in 300 seconds. Saving...
+2025-08-27T14:32:13Z redis-1  | 1:M 27 Aug 2025 11:18:52.018 * Background saving started by pid 22
+2025-08-27T14:32:13Z redis-1  | 22:C 27 Aug 2025 11:18:52.024 * DB saved on disk
+2025-08-27T14:32:13Z redis-1  | 22:C 27 Aug 2025 11:18:52.024 * Fork CoW for RDB: current 0 MB, peak 0 MB, average 0 MB
+2025-08-27T14:32:13Z redis-1  | 1:M 27 Aug 2025 11:18:52.124 * Background saving terminated with success
+2025-08-27T14:32:13Z redis-1  | 1:M 27 Aug 2025 12:18:53.089 * 1 changes in 3600 seconds. Saving...
+2025-08-27T14:32:13Z redis-1  | 1:M 27 Aug 2025 12:18:53.091 * Background saving started by pid 23
+2025-08-27T14:32:13Z redis-1  | 23:C 27 Aug 2025 12:18:53.098 * DB saved on disk
+2025-08-27T14:32:13Z redis-1  | 23:C 27 Aug 2025 12:18:53.099 * Fork CoW for RDB: current 0 MB, peak 0 MB, average 0 MB
+2025-08-27T14:32:13Z redis-1  | 1:M 27 Aug 2025 12:18:53.197 * Background saving terminated with success
+2025-08-27T14:32:13Z redis-1  | 1:M 27 Aug 2025 13:18:54.094 * 1 changes in 3600 seconds. Saving...
+2025-08-27T14:32:13Z redis-1  | 1:M 27 Aug 2025 13:18:54.095 * Background saving started by pid 24
+2025-08-27T14:32:13Z redis-1  | 24:C 27 Aug 2025 13:18:54.102 * DB saved on disk
+2025-08-27T14:32:13Z redis-1  | 24:C 27 Aug 2025 13:18:54.102 * Fork CoW for RDB: current 0 MB, peak 0 MB, average 0 MB
+2025-08-27T14:32:13Z redis-1  | 1:M 27 Aug 2025 13:18:54.199 * Background saving terminated with success
+2025-08-27T14:32:13Z redis-1  | 1:signal-handler (1756304272) Received SIGTERM scheduling shutdown...
+2025-08-27T14:32:13Z redis-1  | 1:M 27 Aug 2025 14:17:52.777 * User requested shutdown...
+2025-08-27T14:32:13Z redis-1  | 1:M 27 Aug 2025 14:17:52.777 * Saving the final RDB snapshot before exiting.
+2025-08-27T14:32:13Z redis-1  | 1:M 27 Aug 2025 14:17:52.779 * DB saved on disk
+2025-08-27T14:32:13Z redis-1  | 1:M 27 Aug 2025 14:17:52.779 # Redis is now ready to exit, bye bye...
+2025-08-27T14:32:13Z redis-1  | 1:C 27 Aug 2025 14:18:51.182 * oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
+2025-08-27T14:32:13Z redis-1  | 1:C 27 Aug 2025 14:18:51.183 * Redis version=7.4.5, bits=64, commit=00000000, modified=0, pid=1, just started
+2025-08-27T14:32:13Z redis-1  | 1:C 27 Aug 2025 14:18:51.183 # Warning: no config file specified, using the default config. In order to specify a config file use redis-server /path/to/redis.conf
+2025-08-27T14:32:13Z redis-1  | 1:M 27 Aug 2025 14:18:51.183 * monotonic clock: POSIX clock_gettime
+2025-08-27T14:32:13Z redis-1  | 1:M 27 Aug 2025 14:18:51.184 * Running mode=standalone, port=6379.
+2025-08-27T14:32:13Z redis-1  | 1:M 27 Aug 2025 14:18:51.184 * Server initialized
+2025-08-27T14:32:13Z redis-1  | 1:M 27 Aug 2025 14:18:51.184 * Loading RDB produced by version 7.4.5
+2025-08-27T14:32:13Z redis-1  | 1:M 27 Aug 2025 14:18:51.184 * RDB age 59 seconds
+2025-08-27T14:32:13Z redis-1  | 1:M 27 Aug 2025 14:18:51.184 * RDB memory usage when created 1.50 Mb
+2025-08-27T14:32:13Z redis-1  | 1:M 27 Aug 2025 14:18:51.185 * Done loading RDB, keys loaded: 5, keys expired: 0.
+2025-08-27T14:32:13Z redis-1  | 1:M 27 Aug 2025 14:18:51.185 * DB loaded from disk: 0.001 seconds
+2025-08-27T14:32:13Z redis-1  | 1:M 27 Aug 2025 14:18:51.185 * Ready to accept connections tcp
+2025-08-27T14:32:13Z redis-1  | 1:signal-handler (1756304406) Received SIGTERM scheduling shutdown...
+2025-08-27T14:32:13Z redis-1  | 1:M 27 Aug 2025 14:20:06.926 * User requested shutdown...
+2025-08-27T14:32:13Z redis-1  | 1:M 27 Aug 2025 14:20:06.926 * Saving the final RDB snapshot before exiting.
+2025-08-27T14:32:13Z redis-1  | 1:M 27 Aug 2025 14:20:06.928 * DB saved on disk
+2025-08-27T14:32:13Z redis-1  | 1:M 27 Aug 2025 14:20:06.928 # Redis is now ready to exit, bye bye...
+2025-08-27T14:32:13Z redis-1  | 1:C 27 Aug 2025 14:21:57.872 * oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
+2025-08-27T14:32:13Z redis-1  | 1:C 27 Aug 2025 14:21:57.872 * Redis version=7.4.5, bits=64, commit=00000000, modified=0, pid=1, just started
+2025-08-27T14:32:13Z redis-1  | 1:C 27 Aug 2025 14:21:57.872 # Warning: no config file specified, using the default config. In order to specify a config file use redis-server /path/to/redis.conf
+2025-08-27T14:32:13Z redis-1  | 1:M 27 Aug 2025 14:21:57.873 * monotonic clock: POSIX clock_gettime
+2025-08-27T14:32:13Z redis-1  | 1:M 27 Aug 2025 14:21:57.874 * Running mode=standalone, port=6379.
+2025-08-27T14:32:13Z redis-1  | 1:M 27 Aug 2025 14:21:57.874 * Server initialized
+2025-08-27T14:32:13Z redis-1  | 1:M 27 Aug 2025 14:21:57.875 * Loading RDB produced by version 7.4.5
+2025-08-27T14:32:13Z redis-1  | 1:M 27 Aug 2025 14:21:57.875 * RDB age 111 seconds
+2025-08-27T14:32:13Z redis-1  | 1:M 27 Aug 2025 14:21:57.875 * RDB memory usage when created 1.17 Mb
+2025-08-27T14:32:13Z redis-1  | 1:M 27 Aug 2025 14:21:57.876 * Done loading RDB, keys loaded: 3, keys expired: 1.
+2025-08-27T14:32:13Z redis-1  | 1:M 27 Aug 2025 14:21:57.876 * DB loaded from disk: 0.002 seconds
+2025-08-27T14:32:13Z redis-1  | 1:M 27 Aug 2025 14:21:57.876 * Ready to accept connections tcp
+Step 2: Starting web and worker with LLM_MOCK=true...
+==== PARSE NOW: POST /api/v1/parse-now ====
