@@ -50,7 +50,7 @@ def _load_sample_profile() -> Dict[str, Any]:
         }
 
 
-def refine_with_llm(raw_text: str, mock: bool = True, examples: Optional[List[Dict[str, Any]]] = None, timeout: int = 30) -> Dict[str, Any]:
+def refine_with_llm(raw_text: str, mock: bool = True, examples: Optional[List[Dict[str, Any]]] = None, timeout: int = 60) -> Dict[str, Any]:
     """
     Given resume raw_text, return a dict conforming to NormalizedProfile.
 
@@ -140,7 +140,7 @@ def refine_with_llm(raw_text: str, mock: bool = True, examples: Optional[List[Di
                 ],
                 max_tokens=1500,
                 temperature=0.0,
-                timeout=timeout,
+                timeout=timeout, # Increased timeout
             )
             content = None
             if resp and "choices" in resp and len(resp["choices"]) > 0:
@@ -190,7 +190,7 @@ def refine_with_llm(raw_text: str, mock: bool = True, examples: Optional[List[Di
         LLM_RETRY_COUNT = int(os.getenv("LLM_RETRY_COUNT", "3"))
         LLM_RETRY_BACKOFF = float(os.getenv("LLM_RETRY_BACKOFF", "0.5"))
         LLM_TIMEOUT_CONNECT = float(os.getenv("LLM_TIMEOUT_CONNECT", "5.0"))
-        LLM_TIMEOUT_READ = float(os.getenv("LLM_TIMEOUT_READ", "20.0"))
+        LLM_TIMEOUT_READ = float(os.getenv("LLM_TIMEOUT_READ", "60.0"))
 
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
 

@@ -1,0 +1,41 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Roo <roo@example.com>
+Date: Sun, 31 Aug 2025 23:20:40 +0200
+Subject: [PATCH] ProfileView: display languages and contact fields when present
+
+Display `contact` (phone/address) and `languages` in the profile view when available.
+
+---
+ my-app/src/components/ProfileView.tsx | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/my-app/src/components/ProfileView.tsx b/my-app/src/components/ProfileView.tsx
+index 0000000..0000000 100644
+--- a/my-app/src/components/ProfileView.tsx
++++ b/my-app/src/components/ProfileView.tsx
+@@ -60,6 +60,21 @@ export default function ProfileView({ profile }: Props) {
+             {profile.email && <div className="text-sm text-muted">{profile.email}</div>}
+             {profile.linkedIn && (
+               <div className="mt-1">
+                 <a
+                   href={profile.linkedIn}
+                   target="_blank"
+                   rel="noreferrer"
+                 >
+                   {profile.linkedIn}
+                 </a>
+               </div>
+             )}
++            {/* New: contact (phone/address) */}
++            {profile.contact?.phone && <div className="text-sm text-muted">Phone: {profile.contact.phone}</div>}
++            {profile.contact?.address && <div className="text-sm text-muted">Address: {profile.contact.address}</div>}
++            {/* New: languages */}
++            {profile.languages && profile.languages.length > 0 && (
++              <div className="mt-2">
++                <h4 className="mb-1 text-sm font-medium">Languages</h4>
++                <div className="text-sm text-muted">{profile.languages.join(", ")}</div>
++              </div>
++            )}
+ 
+           </div>
+*** End Patch

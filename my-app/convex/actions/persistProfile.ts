@@ -61,7 +61,7 @@ http.route({
 
       // Ensure we return a definitive convexId at the top level so HTTP callers
       // (pdf-ingest or other services) can consistently use the internal Convex id.
-      const convexId = (result as any)?.convexId ?? (result as any)?.profileId ?? null;
+      const convexId = (result)?.convexId ?? (result)?.profileId ?? null;
       return new Response(JSON.stringify({ status: "ok", convexId, result }), { status: 200, headers: { "Content-Type": "application/json" } });
     } catch (err: any) {
       console.error("persistProfile action error:", err);

@@ -1,0 +1,32 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Roo <roo@example.com>
+Date: Sun, 31 Aug 2025 23:17:30 +0200
+Subject: [PATCH] llmPostProcessor: map langues/contact headers to canonical keys
+
+Add mapping rules so LLM/post-processor maps French/English headers for languages
+and contact into canonical 'languages' and 'contact' fieldKeys.
+
+---
+ my-app/convex/lib/parsing/llmPostProcessor.ts | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/my-app/convex/lib/parsing/llmPostProcessor.ts b/my-app/convex/lib/parsing/llmPostProcessor.ts
+index 0000000..0000000 100644
+--- a/my-app/convex/lib/parsing/llmPostProcessor.ts
++++ b/my-app/convex/lib/parsing/llmPostProcessor.ts
+@@ -120,6 +120,18 @@ export function parseLLMSections(text: string) {
+   }
+ 
+   function mapHeaderToField(header: string): string {
+-    // existing mapping rules below...
++    const h = String(header || "").toLowerCase();
++    // Languages (FR/EN)
++    if (/(^|\W)(langues|langue|languages|language)(\W|$)/.test(h)) return "languages";
++    // Contact / Coordonnées (FR)
++    if (/(^|\W)(coordonn[eé]es|coordonnees|contact details|contact)(\W|$)/.test(h)) return "contact";
++    // fallthrough to existing rules for summary/skills/experience/etc.
++    // existing mapping logic continues...
+   }
+ 
+   // rest of parseLLMSections...
+*** End Patch

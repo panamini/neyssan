@@ -230,7 +230,7 @@ export default function ProfileReviewModal({ visible, parsedProfile, onClose, on
     if (!res.ok) {
       let body = null;
       try { body = await res.json(); } catch (e) {}
-      throw new Error((body && (body as any).message) || `Request failed with status ${res.status}`);
+      throw new Error((body && (body).message) || `Request failed with status ${res.status}`);
     }
     return res.json();
   };
@@ -358,7 +358,7 @@ export default function ProfileReviewModal({ visible, parsedProfile, onClose, on
     setStatus('saving');
     setMessage(null);
   
-    let skills: string[] = form.skillsText?.split(",").map(s => s.trim()).filter(Boolean) ?? [];
+    const skills: string[] = form.skillsText?.split(",").map(s => s.trim()).filter(Boolean) ?? [];
     let experience: ExperienceItem[] = [];
     try {
       experience = JSON.parse(form.experienceText || "[]");
@@ -375,7 +375,7 @@ export default function ProfileReviewModal({ visible, parsedProfile, onClose, on
       // Skip including education in the saved payload; leave education as an empty array
       education = [];
     }
-    let achievements = form.achievementsText?.split("\n").map(s => s.trim()).filter(Boolean) ?? [];
+    const achievements = form.achievementsText?.split("\n").map(s => s.trim()).filter(Boolean) ?? [];
   
     const profileObj = {
       // Use undefined for optional fields to avoid sending nulls that violate Convex validators.
@@ -408,7 +408,7 @@ export default function ProfileReviewModal({ visible, parsedProfile, onClose, on
       addDebug({ event: 'handleSave.saveResult', res });
       if (!res || !res.profileId) throw new Error("Failed to save profile");
       
-      const convexId = (res as any).convexId ?? res.profileId;
+      const convexId = (res).convexId ?? res.profileId;
       setSavedProfileId(convexId);
       if (res.updatedAt) {
         setProfileVersion(typeof res.updatedAt === 'number' ? Math.floor(res.updatedAt / 1000) : profileVersion);

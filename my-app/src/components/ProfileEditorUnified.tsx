@@ -59,7 +59,7 @@ export default function ProfileEditorUnified() {
       });
       if (!response.ok) {
         // If backend returns structured error JSON, try to parse
-        let text = await response.text();
+        const text = await response.text();
         try {
           const parsed = JSON.parse(text);
           console.warn("confirm-save returned non-OK:", parsed);
@@ -186,7 +186,7 @@ export default function ProfileEditorUnified() {
         } else {
           // If no placeholder, optionally call llm-refine to force refine.
           // Prefer the definitive Convex id returned by confirm-save (convexId) when present.
-          const profileIdToUse = (confirmBody as any)?.convexId ?? confirmBody.id;
+          const profileIdToUse = (confirmBody)?.convexId ?? confirmBody.id;
           const refineResp = await fetch(`${baseUrl}/api/v1/llm-refine`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },

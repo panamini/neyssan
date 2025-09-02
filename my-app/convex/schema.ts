@@ -82,6 +82,13 @@ export default defineSchema({
         // Additional optional fields added to support profile ingestion
         linkedIn: v.optional(v.string()),
         raw_text: v.optional(v.string()),
+        // New dedicated fields for languages and contact
+        languages: v.optional(v.array(v.string())),
+        contact: v.optional(v.object({
+          // Contact stored as optional phone/address fields (freeform strings)
+          phone: v.optional(v.string()),
+          address: v.optional(v.string()),
+        })),
         metadata: v.optional(
             v.object({
                 source: v.optional(v.string()),
@@ -208,6 +215,10 @@ export default defineSchema({
     model: v.optional(v.string()),
     full_response: v.optional(v.any()),
     patch: v.optional(v.any()),
+    // New telemetry fields for post-mortem analysis
+    provider_used: v.optional(v.union(v.string(), v.null())),
+    sanitized_for_repair: v.optional(v.boolean()),
+    repair_returned_provider_shape: v.optional(v.boolean()),
     // Allow nulls for confidence since some providers or code paths may set null.
     confidence: v.optional(v.union(v.number(), v.null())),
     merged: v.optional(v.boolean()),

@@ -19,6 +19,8 @@ export interface RefinedContent {
   points?: string;
   achievements?: string;
   contact?: string;
+  // languages may be returned as a single string (comma-separated) or an array
+  languages?: string | string[];
   raw?: string; // unparsed full markdown fallback
 }
 
@@ -92,6 +94,9 @@ export function parseRefinedMarkdown(markdown: string | null | undefined): Refin
     experience: lookup(["parcours professionnel", "parcours", "experience", "professional experience", "work experience", "professional experience"]),
     education: lookup(["formation", "education", "studies", "formation"]),
     skills: lookup(["compétences", "skills", "competences", "core competencies", "core competencies"]),
+    // New lookups for languages and contact (FR/EN)
+    contact: lookup(["coordonnées", "coordonnees", "contact", "contact details", "coordonnées & contact"]),
+    languages: lookup(["langues", "languages", "langue", "language"]),
     points: lookup(["points forts", "points forts & différenciation", "strengths", "points forts", "core competencies"]),
     achievements: lookup(["réalisations", "achievements", "accomplishments", "opportunités", "opportunities"]),
   };

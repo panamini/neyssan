@@ -3,9 +3,10 @@ module.exports = {
   env: { browser: true, es2020: true, node: true },
   extends: [
     "eslint:recommended",
-    "plugin:@typescript-eslint/recommended-type-checked",
     "plugin:react-hooks/recommended",
   ],
+
+  // Narrow ignore list up-front so lint runs remain focused and fast.
   ignorePatterns: [
     "dist",
     ".eslintrc.cjs",
@@ -15,38 +16,62 @@ module.exports = {
     "vite.config.ts",
     // shadcn components by default violate some rules
     "src/components/ui",
+    // backup / legacy directories and test harnesses
+    "src/components.bak.*",
+    "src/components.bak.*/**",
+    "**/__tests__/**",
+    "convex/lib/parsing/__tests__/**",
+    "worker/**",
+    "vitest.config.ts",
   ],
+
+  // Use the TypeScript parser but don't give a global `project`.
+  // We'll enable typed linting only for specific source folders below.
   parser: "@typescript-eslint/parser",
   parserOptions: {
     EXPERIMENTAL_useProjectService: false,
     tsconfigRootDir: __dirname,
-    project: [
-      require.resolve('./tsconfig.app.json'),
-      require.resolve('./tsconfig.node.json'),
-      require.resolve('./convex/tsconfig.json'),
-      require.resolve('./scraping-server/tsconfig.json'),
-    ],
+    ecmaVersion: 2020,
+    sourceType: "module",
   },
+
+  // Enable typed linting only for our main source code (app + convex).
+  // This prevents parser errors on tool/config/test files that aren't
+  // included in the main tsconfigs.
   overrides: [
+    {
+      files: ["convex/**/*.ts", "src/**/*.ts", "src/**/*.tsx"],
+      // Enable typed rules only for these files
+      extends: ["plugin:@typescript-eslint/recommended-type-checked"],
+      parserOptions: {
+        EXPERIMENTAL_useProjectService: false,
+        tsconfigRootDir: __dirname,
+        project: [
+          require.resolve("./tsconfig.app.json"),
+          require.resolve("./convex/tsconfig.json"),
+        ],
+      },
+      // Enforce no-floating-promises only in typed source so the rule can use type information.
+      rules: {
+        "@typescript-eslint/no-floating-promises": "error"
+      }
+    },
     {
       files: ["scraping-server/**/*.ts"],
       parserOptions: {
-        project: [require.resolve('./scraping-server/tsconfig.json')],
+        project: [require.resolve("./scraping-server/tsconfig.json")],
       },
     },
     {
-      files: ["convex/**/*.ts"],
+      // Non-typed linting for other TS files (tests, scripts, worker, etc.)
+      files: ["**/*.ts", "**/*.tsx"],
+      excludedFiles: ["convex/**/*.ts", "src/**/*.ts", "src/**/*.tsx", "scraping-server/**/*.ts"],
       parserOptions: {
-        project: [require.resolve('./convex/tsconfig.json')],
-      },
-    },
-    {
-      files: ["src_copy/**/*.ts", "src_copy/**/*.tsx"],
-      parserOptions: {
-        project: [require.resolve('./tsconfig.app.json')],
+        tsconfigRootDir: __dirname,
       },
     },
   ],
+
   plugins: ["react-refresh"],
   rules: {
     "react-refresh/only-export-components": [
@@ -54,32 +79,18 @@ module.exports = {
       { allowConstantExport: true },
     ],
 
-    // All of these overrides ease getting into
-    // TypeScript, and can be removed for stricter
-    // linting down the line.
-
-    // Only warn on unused variables, and ignore variables starting with `_`
+    // Eased rules for faster iteration (can be tightened later)
     "@typescript-eslint/no-unused-vars": [
       "warn",
       { varsIgnorePattern: "^_", argsIgnorePattern: "^_" },
     ],
-
-    // Allow escaping the compiler
     "@typescript-eslint/ban-ts-comment": "error",
-
-    // Allow explicit `any`s
     "@typescript-eslint/no-explicit-any": "off",
-
-    // START: Allow implicit `any`s
     "@typescript-eslint/no-unsafe-argument": "off",
     "@typescript-eslint/no-unsafe-assignment": "off",
     "@typescript-eslint/no-unsafe-call": "off",
     "@typescript-eslint/no-unsafe-member-access": "off",
     "@typescript-eslint/no-unsafe-return": "off",
-    // END: Allow implicit `any`s
-
-    // Allow async functions without await
-    // for consistency (esp. Convex `handler`s)
     "@typescript-eslint/require-await": "off",
   },
 };

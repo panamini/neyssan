@@ -4,6 +4,7 @@ import { api } from "../convex/_generated/api";
 import pino from "pino";
 import type { Doc, Id } from "../convex/_generated/dataModel";
 
+import { parseCVEngine } from "../convex/lib/parsing_shared/engine";
 const log = pino({ level: process.env.LOG_LEVEL ?? "info" });
 
 const CONVEX_URL = process.env.CONVEX_URL ?? "http://127.0.0.1:8787";
@@ -14,13 +15,31 @@ if (!CONVEX_KEY) {
 }
 
 const convex = new ConvexHttpClient(CONVEX_URL, { auth: CONVEX_KEY });
-
+ 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const OPENAI_MODEL = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
-const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
-const MISTRAL_MODEL = process.env.MISTRAL_MODEL ?? "mistral-tiny";
-
-const LLM_PROVIDER = process.env.LLM_PROVIDER ?? "openai";
+import { llmConfig } from "../config/llmConfig";
+const OPENAI_MODEL = llmConfig.openaiModel ?? "gpt-4o-mini";
+const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY ?? llmConfig.mistralKey ?? null;
+const MISTRAL_MODEL = llmConfig.mistralModel ?? "mistral-small-latest";
+ 
+const LLM_PROVIDER = (process.env.LLM_PROVIDER as any) ?? llmConfig.provider ?? "openai";
+ 
+// One-time env dump to help confirm which provider will be used at runtime.
+// This prints presence (boolean) of critical keys and effective provider/model choices.
+try {
+  console.info("[worker][env-dump] provider-debug", {
+    LLM_PROVIDER: process.env.LLM_PROVIDER ?? llmConfig.provider,
+    OPENAI_API_KEY_present: !!(process.env.OPENAI_API_KEY ?? llmConfig.openaiKey),
+    MISTRAL_API_KEY_present: !!(process.env.MISTRAL_API_KEY ?? llmConfig.mistralKey),
+    OPENAI_MODEL: process.env.OPENAI_MODEL ?? llmConfig.openaiModel,
+    MISTRAL_MODEL: process.env.MISTRAL_MODEL ?? llmConfig.mistralModel,
+    FORCE_GPT_ONLY_env: process.env.FORCE_GPT_ONLY === "1",
+    DEV_LLM_MODEL: process.env.DEV_LLM_MODEL ?? null
+  });
+} catch (e) {
+  // Non-fatal; ensure worker continues running if logging fails
+  /* ignore */
+}
 
 async function callOpenAIChat(messages: Array<{ role: string; content: string }>) {
   if (!OPENAI_API_KEY) {
@@ -146,8 +165,84 @@ async function workerLoop() {
           }
 
           log.info({ jobId: job._id, profileId: claimed.profileId }, "Job claimed");
-
+  
           const rawText = claimed.rawText ?? claimed.options?.rawText ?? "";
+  
+          // Dev guard: when DEV_NO_LLM is set, avoid calling external LLMs.
+          // Instead, call the existing formatCompleteCV Convex action so the stored
+          // history includes a fully-formed, validated `normalized` parse. If that
+          // action fails, fall back to the lightweight inline heuristics.
+          if (process.env.DEV_NO_LLM === "1") {
+            try {
+              log.info({ jobId: job._id }, "DEV_NO_LLM active - using heuristics + formatCompleteCV flow");
+  
+              // Prefer the server-side formatting action (which itself will run heuristics
+              // when DEV_NO_LLM=1) to produce the normalized parse shape expected by the UI.
+              let normalized: any = null;
+              try {
+                const formatted = await convex.action(
+                  // Call the public action exported from convex/actions/formatCompleteCV.ts
+                  // The generated API exposes it under api.actions.formatCompleteCV.formatCompleteCV
+                  (api as any).actions.formatCompleteCV.formatCompleteCV,
+                  { rawText }
+                );
+                if (formatted && formatted.status === "ok" && formatted.result) {
+                  normalized = formatted.result;
+                } else {
+                  log.warn({ jobId: job._id, formatted }, "formatCompleteCV returned unexpected shape; falling back to inline heuristics");
+                }
+              } catch (fmtErr) {
+                log.warn({ err: fmtErr, jobId: job._id }, "formatCompleteCV action failed; falling back to inline heuristics");
+              }
+  
+              // If formatting action didn't produce a normalized result, build a small heuristic normalized patch.
+              const heuristicSummary = String(rawText)
+                .split(/\r?\n/)
+                .map(l => l.trim())
+                .filter(Boolean)
+                .slice(0, 8)
+                .join("\n");
+  
+              const storedPatch = {
+                raw: "<DEV_NO_LLM heuristics-or-action>",
+                normalized: normalized ?? {
+                  sections: [
+                    {
+                      title: "Heuristic Summary",
+                      content: heuristicSummary || String(rawText).slice(0, 500),
+                      fieldKey: "summary",
+                      confidence: 0.5
+                    }
+                  ]
+                }
+              };
+  
+              const historyId = (await convex.action(api.workerGateway.processJobRequest, {
+                operation: {
+                  type: "appendHistory",
+                  profileId: claimed.profileId,
+                  jobId: job._id,
+                  ...(claimed.placeholderId !== undefined ? { placeholderId: claimed.placeholderId } : {}),
+                  provider: "dev",
+                  model: "dev",
+                  full_response: null,
+                  patch: storedPatch,
+                  merged: false,
+                  createdAt: Date.now()
+                }
+              })) as Id<"llmHistory">;
+  
+              await convex.action(api.workerGateway.processJobRequest, {
+                operation: { type: "markJobCompleted", jobId: job._id, historyId }
+              });
+  
+              log.info({ jobId: job._id, historyId }, "DEV_NO_LLM job appended history (with normalized parse) and marked completed");
+            } catch (devErr) {
+              log.error({ err: devErr, jobId: job._id }, "DEV_NO_LLM flow failed - falling back to normal processing");
+            }
+            continue;
+          }
+  
           const messages = [
             {
               role: "system",
@@ -165,9 +260,24 @@ async function workerLoop() {
           const llmResp = await callLLM(messages);
           const llmText = llmResp.text ?? null;
           log.info({ jobId: job._id }, "LLM completed");
-
-          const patch = extractPatchFromText(llmText);
-
+  
+          // Attempt to extract a structured JSON patch; preserve both raw and normalized
+          // representations. normalized may be null if parsing fails.
+          const rawPatch = extractPatchFromText(llmText);
+          let storedPatch: any = rawPatch ?? llmText;
+          try {
+            // Attempt to run server-side normalizer (if loaded into runtime)
+            // This is defensive: if not present, we keep raw data only.
+            if (typeof (global as any).parseLLMSections === "function") {
+              const normalized = (global as any).parseLLMSections(String(rawPatch ?? llmText));
+              storedPatch = { raw: rawPatch ?? llmText, normalized };
+            } else {
+              storedPatch = { raw: rawPatch ?? llmText, normalized: null };
+            }
+          } catch (e) {
+            storedPatch = { raw: rawPatch ?? llmText, normalized: null };
+          }
+  
           const historyId = (await convex.action(api.workerGateway.processJobRequest, {
             operation: {
               type: "appendHistory",
@@ -177,7 +287,7 @@ async function workerLoop() {
               provider: LLM_PROVIDER,
               model: LLM_PROVIDER === "mistral" ? MISTRAL_MODEL : OPENAI_MODEL,
               full_response: llmResp.raw,
-              patch: patch ?? llmText,
+              patch: storedPatch,
               merged: false,
               createdAt: Date.now(),
             }

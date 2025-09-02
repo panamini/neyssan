@@ -1,0 +1,44 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Roo <roo@example.com>
+Date: Sun, 31 Aug 2025 23:16:00 +0200
+Subject: [PATCH] parsePdf: attempt languages and contact extraction
+
+Add conservative hooks to populate `languages` and `contact` fields when available
+from PDF heuristics. Implement helper stubs (extractLanguages / extractContactBlock)
+or call existing helpers if present.
+
+---
+ my-app/convex/parsePdf.ts | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/my-app/convex/parsePdf.ts b/my-app/convex/parsePdf.ts
+index 0000000..0000000 100644
+--- a/my-app/convex/parsePdf.ts
++++ b/my-app/convex/parsePdf.ts
+@@ -1,6 +1,18 @@
+   // existing imports...
+ 
+   const skills = extractSkills(text);
+   const experience = extractExperiences(text);
++  // Attempt heuristics for languages & contact.
++  // Prefer existing helper implementations if present; otherwise these
++  // act as extension points to implement reliable extraction.
++  let languages: string[] = [];
++  let contact: { phone?: string; address?: string } | undefined;
++  if (typeof extractLanguages === "function") {
++    try { languages = extractLanguages(text) || []; } catch {}
++  }
++  if (typeof extractContactBlock === "function") {
++    try { contact = extractContactBlock(text); } catch {}
++  }
+ 
+   // build normalized profile
+   return {
+     // ...
+     skills: skills ?? undefined,
+     experience: experience ?? undefined,
++    // New optional normalized fields
++    languages: languages.length ? languages : undefined,
++    contact: contact ? contact : undefined,
+   };
+*** End Patch

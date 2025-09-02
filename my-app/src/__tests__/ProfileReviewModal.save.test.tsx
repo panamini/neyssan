@@ -9,6 +9,8 @@ vi.mock("@clerk/clerk-react", () => ({
 // Mock Convex mutation hook to simulate a successful save (returns profileId and updatedAt)
 vi.mock("convex/react", () => ({
   useMutation: () => (async (args: any) => ({ profileId: args.profileId, updatedAt: Date.now() })),
+  // Provide a no-op useAction so components importing it don't throw during tests.
+  useAction: () => undefined,
 }));
 
 // Minimal CVLoader stub so tests can render the component (not used in this test)
@@ -32,10 +34,10 @@ describe("ProfileReviewModal — save / canonical sync", () => {
     fireEvent.click(editButton);
 
     // The editable textbox should appear inside the draft container
-    const summary = within(draftContainer).getByRole('textbox') as HTMLTextAreaElement;
+    const summary = within(draftContainer).getByRole('textbox');
 
     // Find the in-component "Save" button (editing footer)
-    const saveBtn = screen.getByRole('button', { name: /Save/i }) as HTMLButtonElement;
+    const saveBtn = screen.getByRole('button', { name: /Save/i });
 
 
     // Enter a draft value — Save should become enabled

@@ -8,7 +8,7 @@ import { ErrorBoundary } from "./ErrorBoundary.tsx";
 import "./index.css";
 import { ToastProvider } from "./components/ui/toast";
 
-const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
+const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL);
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

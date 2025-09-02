@@ -1,0 +1,38 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Roo <roo@example.com>
+Date: Sun, 31 Aug 2025 23:14:43 +0200
+Subject: [PATCH] profilesPublic: accept and persist languages/contact
+
+Expose languages and contact in public profile shapes and accept updates
+from clients so the UI can write the new fields.
+
+---
+ my-app/convex/profilesPublic.ts | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/my-app/convex/profilesPublic.ts b/my-app/convex/profilesPublic.ts
+index 0000000..0000000 100644
+--- a/my-app/convex/profilesPublic.ts
++++ b/my-app/convex/profilesPublic.ts
+@@ -1,6 +1,15 @@
+   export interface UserProfile {
+     ...
+     linkedIn?: string;
+     raw_text?: string;
++    // New canonical fields
++    languages?: string[];
++    contact?: {
++      phone?: string;
++      address?: string;
++    } | null;
+     metadata?: {
+       ...
+     }
+@@
+     // apply allowed updates
+     if (args.profile.linkedIn !== undefined) updates.linkedIn = args.profile.linkedIn;
++    if (args.profile.languages !== undefined) updates.languages = args.profile.languages;
++    if (args.profile.contact !== undefined) updates.contact = args.profile.contact;
+ 
+   // rest of handler unchanged...
+*** End Patch

@@ -169,4 +169,4 @@ export default function CVLoader({ onFileParsed, onError, onSuccess, label = "Lo
       {localMsg && <div className="ml-2 text-xs text-gray-600">{localMsg}</div>}
     </div>
   );
-};
+}

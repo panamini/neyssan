@@ -1,0 +1,50 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Roo <roo@example.com>
+Date: Sun, 31 Aug 2025 23:19:50 +0200
+Subject: [PATCH] ProfileReviewModal: include languages/contact in ensured sections & suggestions
+
+When the hardened parse returns languages/contact include them in reviewer sections
+and in the suggestions object (prefer top-level fields). This is non-destructive:
+the UI will still fall back to rawParsedSections if top-level fields are absent.
+
+---
+ my-app/src/components/ProfileReviewModal.tsx | 20 ++++++++++++++++++++
+ 1 file changed, 20 insertions(+)
+
+diff --git a/my-app/src/components/ProfileReviewModal.tsx b/my-app/src/components/ProfileReviewModal.tsx
+index 0000000..0000000 100644
+--- a/my-app/src/components/ProfileReviewModal.tsx
++++ b/my-app/src/components/ProfileReviewModal.tsx
+@@ -860,6 +860,26 @@ export default function ProfileReviewModal({ visible, parsedProfile, onClose, onSaved }: IProfileReviewProps) {
+           ensureSection("education", "Education", refinedFromAction.educationText ?? (refinedFromAction.education ? JSON.stringify(refinedFromAction.education, null, 2) : undefined));
+           ensureSection("achievements", "Achievements", refinedFromAction.achievements ?? undefined);
++          // Ensure languages/contact canonical sections are present when available
++          ensureSection(
++            "languages",
++            "Languages",
++            Array.isArray(refinedFromAction.languages) ? refinedFromAction.languages.join(", ") : refinedFromAction.languages ?? undefined
++          );
++          ensureSection(
++            "contact",
++            "Contact",
++            refinedFromAction.contact ? `${refinedFromAction.contact.phone ?? ""}${refinedFromAction.contact.address ? " / " + refinedFromAction.contact.address : ""}` : undefined
++          );
+ 
+           // Preserve ordering: identity, summary, skills, experience, education, achievements, then any others
+           const order = ["identity", "summary", "skills", "experience", "education", "achievements"];
+           const ordered = [...order.map(k => mapped.find(s => s.fieldKey === k)).filter(Boolean) as IReviewerSection[], ...mapped.filter(s => !order.includes(s.fieldKey ?? ""))];
+ 
+           setReviewerSections(ordered);
+           setReviewerVisible(true);
+ 
+           // Populate non-destructive suggestions panel for major fields (strings)
+           setSuggestions({
+             summary: refinedFromAction.summary ?? payload.rawText,
+             skills: Array.isArray(refinedFromAction.skills) ? refinedFromAction.skills.join(", ") : (refinedFromAction.skillsText ?? ""),
+             experience: refinedFromAction.experienceText ?? (refinedFromAction.experience ? JSON.stringify(refinedFromAction.experience, null, 2) : undefined),
+             education: refinedFromAction.educationText ?? (refinedFromAction.education ? JSON.stringify(refinedFromAction.education, null, 2) : undefined),
+             achievements: refinedFromAction.achievements ?? undefined,
++            languages: Array.isArray(refinedFromAction.languages) ? refinedFromAction.languages.join(", ") : refinedFromAction.languages ?? undefined,
++            contact: refinedFromAction.contact ? (refinedFromAction.contact.phone ?? "") + (refinedFromAction.contact.address ? " / " + refinedFromAction.contact.address : "") : undefined,
+           });
+*** End Patch

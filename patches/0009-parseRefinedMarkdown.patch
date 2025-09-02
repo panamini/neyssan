@@ -1,0 +1,34 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Roo <roo@example.com>
+Date: Sun, 31 Aug 2025 23:18:50 +0200
+Subject: [PATCH] parseRefinedMarkdown: detect languages and contact headings
+
+Teach the lightweight markdown parser to look up "langues / languages"
+and "coordonnées / contact" headings and return them in the RefinedContent
+object so frontend adapters can map into canonical fields.
+
+---
+ my-app/src/utils/parseRefinedMarkdown.ts | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/my-app/src/utils/parseRefinedMarkdown.ts b/my-app/src/utils/parseRefinedMarkdown.ts
+index 0000000..0000000 100644
+--- a/my-app/src/utils/parseRefinedMarkdown.ts
++++ b/my-app/src/utils/parseRefinedMarkdown.ts
+@@ -84,6 +84,18 @@ export function parseRefinedMarkdown(markdown: string | null | undefined): RefinedContent {
+     raw: md,
+     identity: lookup(["identité & coordonnées", "identite", "identity", "identité", "contact", "coordonnées", "contact details"]),
+     summary: lookup(["résumé professionnel", "résumé", "professional summary", "summary", "résumé professionnel", "professional summary", "professional summary"]),
+     experience: lookup(["parcours professionnel", "parcours", "experience", "professional experience", "work experience", "professional experience"]),
+     education: lookup(["formation", "education", "studies", "formation"]),
+     skills: lookup(["compétences", "skills", "competences", "core competencies", "core competencies"]),
++    // New lookups for languages and contact (FR/EN)
++    contact: lookup(["coordonnées", "coordonnees", "contact", "contact details", "coordonnées & contact"]),
++    languages: lookup(["langues", "languages", "langue", "language"]),
+     points: lookup(["points forts", "points forts & différenciation", "strengths", "points forts", "core competencies"]),
+     achievements: lookup(["réalisations", "achievements", "accomplishments", "opportunités", "opportunities"]),
+   };
+ 
+   return result;
+ }
+*** End Patch

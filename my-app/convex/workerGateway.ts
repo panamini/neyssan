@@ -28,6 +28,10 @@ export const processJobRequest = action({
         model: v.string(),
         full_response: v.any(),
         patch: v.any(),
+        // Telemetry fields (optional) to persist to llmHistory
+        provider_used: v.optional(v.union(v.string(), v.null())),
+        sanitized_for_repair: v.optional(v.boolean()),
+        repair_returned_provider_shape: v.optional(v.boolean()),
         confidence: v.optional(v.union(v.number(), v.null())),
         merged: v.optional(v.boolean()),
         createdAt: v.optional(v.number()),
@@ -71,7 +75,7 @@ export const processJobRequest = action({
         startedAt?: number;
       } | null)
     | Id<"llmHistory">
-    | null
+     
   > => {
     switch (args.operation.type) {
       case "listPendingJobs":
@@ -94,6 +98,10 @@ export const processJobRequest = action({
           model: args.operation.model,
           full_response: args.operation.full_response,
           patch: args.operation.patch,
+          // Pass through telemetry fields when present
+          ...(args.operation.provider_used !== undefined ? { provider_used: args.operation.provider_used } : {}),
+          ...(args.operation.sanitized_for_repair !== undefined ? { sanitized_for_repair: args.operation.sanitized_for_repair } : {}),
+          ...(args.operation.repair_returned_provider_shape !== undefined ? { repair_returned_provider_shape: args.operation.repair_returned_provider_shape } : {}),
           confidence: args.operation.confidence,
           merged: args.operation.merged,
           createdAt: args.operation.createdAt,

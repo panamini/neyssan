@@ -1,0 +1,29 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Roo <roo@example.com>
+Date: Sun, 31 Aug 2025 23:16:45 +0200
+Subject: [PATCH] formatCompleteCV: include languages/contact in refined schema
+
+Extend the server action's RefinedContent schema to include optional languages and contact
+fields so the action can return normalized values for the frontend.
+
+---
+ my-app/convex/actions/formatCompleteCV.ts | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/my-app/convex/actions/formatCompleteCV.ts b/my-app/convex/actions/formatCompleteCV.ts
+index 0000000..0000000 100644
+--- a/my-app/convex/actions/formatCompleteCV.ts
++++ b/my-app/convex/actions/formatCompleteCV.ts
+@@ -40,6 +40,12 @@ const RefinedContentSchema = z.object({
+   summary: z.string().optional(),
+   skills: z.array(z.string()).optional(),
++  // New fields for languages and contact
++  languages: z.array(z.string()).optional(),
++  contact: z.object({
++    phone: z.string().optional(),
++    address: z.string().optional(),
++  }).optional(),
+   // other fields...
+   rawParsedSections: z.array(ReviewerSectionSchema),
+   diagnostics: z.object({
+*** End Patch

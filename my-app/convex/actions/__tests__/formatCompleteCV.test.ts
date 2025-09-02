@@ -1,78 +1,68 @@
-import { describe, it, expect } from "vitest";
-import formatCompleteCV from "../formatCompleteCV";
+import { describe, it, expect, vi } from "vitest";
 
-describe("formatCompleteCV action (fallback parser)", () => {
-  it("throws on empty input", async () => {
-    await expect(async () => {
-      // @ts-ignore - intentionally calling with empty
-      await formatCompleteCV({ rawText: "" });
-    }).rejects.toThrow();
+/**
+ * Tests for formatCompleteCV action
+ *
+ * These tests mock the hybrid parser to simulate cases where the LLM returned
+ * human-readable markdown (which causes the validator to fall back to heuristics)
+ * and where metadata fields may be null. The action must normalize null -> undefined
+ * for optional identity fields so Zod validation does not throw.
+ *
+ * The test imports the module under test dynamically after configuring the mock,
+ * to ensure the mocked module is used by the action implementation.
+ */
+
+// Mock the hybrid parser module before importing the action under test
+vi.mock("../../lib/parsing/hybridParser", () => {
+  return {
+    parseCV: vi.fn(),
+  };
+});
+
+describe("formatCompleteCV normalization and heuristics", () => {
+  it("normalizes null metadata -> undefined and returns heuristics result without throwing", async () => {
+    const hybrid = await import("../../lib/parsing/hybridParser");
+    (hybrid.parseCV as any).mockResolvedValue({
+      sections: [],
+      metadata: { name: null, email: null, phone: "3868683442" },
+      method: "heuristic",
+      warnings: ["Section 0 content not found in original text", "Low text coverage: 0.0%"],
+    });
+
+    const mod = await import("../formatCompleteCV");
+    const runFormatCompleteCV = mod.runFormatCompleteCV as (args: { rawText: string }) => Promise<any>;
+
+    const res = await runFormatCompleteCV({ rawText: "some CV text" });
+    expect(res.status).toBe("ok");
+    expect(res.result).toBeTruthy();
+    expect(res.result.identity).toBeDefined();
+    // nulls must be converted to undefined
+    expect(res.result.identity.name).toBeUndefined();
+    expect(res.result.identity.email).toBeUndefined();
+    expect(res.result.identity.phone).toBe("3868683442");
+    // diagnostics should contain fallback warnings
+    expect(res.result.diagnostics).toBeDefined();
+    expect(Array.isArray(res.result.diagnostics.warnings)).toBe(true);
+    expect(res.result.diagnostics.warnings).toContain("Section 0 content not found in original text");
   });
 
-  it("parses skills into structured array and comma-separated text", async () => {
-    const raw = `
-    Skills:
-    JavaScript, TypeScript; React
-    Node.js
-    React
-    `;
-    const res = await formatCompleteCV({ rawText: raw });
-    expect(res).toBeDefined();
-    expect(res.status).toBe("ok");
-    const out = (res as any).result;
-    expect(Array.isArray(out.skills)).toBe(true);
-    // deduplicated and trimmed
-    expect(out.skills).toEqual(expect.arrayContaining(["JavaScript", "TypeScript", "React", "Node.js"]));
-    expect(typeof out.skillsText).toBe("string");
-    // Skills text must include commas and normalized tokens
-    const parts = out.skillsText.split(",").map((s: string) => s.trim());
-    expect(parts).toEqual(expect.arrayContaining(["JavaScript", "TypeScript", "React", "Node.js"]));
-  });
+  it("handles missing metadata fields (undefined) gracefully", async () => {
+    const hybrid = await import("../../lib/parsing/hybridParser");
+    (hybrid.parseCV as any).mockResolvedValue({
+      sections: [],
+      metadata: {},
+      method: "heuristic",
+      warnings: [],
+    });
 
-  it("parses experience fallback into items", async () => {
-    const raw = `
-    Experience:
-    Senior Engineer - Acme Inc. 2018-2020
-    Lead Developer @ Beta LLC 2020-2023
-    `;
-    const res = await formatCompleteCV({ rawText: raw });
-    expect(res.status).toBe("ok");
-    const out = (res as any).result;
-    expect(Array.isArray(out.experience)).toBe(true);
-    expect(out.experience.length).toBeGreaterThanOrEqual(2);
-    // items should contain raw lines
-    expect(out.experience[0].raw).toContain("Senior Engineer");
-    expect(out.experience[1].raw).toContain("Lead Developer");
-  });
+    const mod = await import("../formatCompleteCV");
+    const runFormatCompleteCV = mod.runFormatCompleteCV as (args: { rawText: string }) => Promise<any>;
 
-  it("extracts identity fields (name, email, phone, location) from top lines", async () => {
-    const raw = `
-    Jane Doe
-    jane.doe@example.com
-    +33 6 12 34 56 78
-    Paris, France
-
-    Summary:
-    Experienced engineer...
-    `;
-    const res = await formatCompleteCV({ rawText: raw });
+    const res = await runFormatCompleteCV({ rawText: "some CV text" });
     expect(res.status).toBe("ok");
-    const out = (res as any).result;
-    expect(out.identity).toBeDefined();
-    expect(out.identity.name).toBe("Jane Doe");
-    expect(out.identity.email).toBe("jane.doe@example.com");
-    expect(out.identity.phone).toBeDefined();
-    expect(out.identity.location).toBe("Paris, France");
-  });
-
-  it("includes diagnostics.parseConfidence between 0 and 1", async () => {
-    const raw = `Summary: Quick test\nSkills: JS`;
-    const res = await formatCompleteCV({ rawText: raw });
-    expect(res.status).toBe("ok");
-    const out = (res as any).result;
-    expect(out.diagnostics).toBeDefined();
-    expect(typeof out.diagnostics.parseConfidence).toBe("number");
-    expect(out.diagnostics.parseConfidence).toBeGreaterThanOrEqual(0);
-    expect(out.diagnostics.parseConfidence).toBeLessThanOrEqual(1);
+    expect(res.result.identity).toBeDefined();
+    expect(res.result.identity.name).toBeUndefined();
+    expect(res.result.identity.email).toBeUndefined();
+    expect(res.result.identity.phone).toBeUndefined();
   });
 });

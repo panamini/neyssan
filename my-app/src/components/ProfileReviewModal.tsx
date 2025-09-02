@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import LoadingSpinner from "./LoadingSpinner";
 import CVLoader from "./CVLoader";
 import { useAuth } from "@clerk/clerk-react";
-import { useMutation } from "convex/react";
+import * as convexReact from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { parseRefinedMarkdown, RefinedContent } from "../utils/parseRefinedMarkdown";
+import { clientFormatCompleteCV } from "../utils/simpleClientParse";
 import { RefinementField } from "./RefinementField";
 import { Button } from "./ui/button";
 import { useToast } from "./ui/toast";
@@ -65,8 +66,30 @@ export default function ProfileReviewModal({ visible, parsedProfile, onClose, on
   // useEffect will then consume-and-clear it.
   const [skipParsedProfileInit, setSkipParsedProfileInit] = useState<boolean>(false);
 
+  // Suppress immediate re-opening of the reviewer after a manual close or bulk-apply.
+  // This prevents a late-arriving background refine from instantly re-showing the reviewer.
+  const reviewerCloseSuppressedRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    addDebug({ event: 'reviewer.visible.change', visible: reviewerVisible, suppressedSince: reviewerCloseSuppressedRef.current });
+    if (reviewerVisible) {
+      // If the reviewer was closed recently by user action or bulk apply, automatically re-hide it.
+      const suppressedAt = reviewerCloseSuppressedRef.current;
+      if (suppressedAt && (Date.now() - suppressedAt) < 5000) {
+        addDebug({ event: 'reviewer.openSuppressedByRecentClose', ageMs: Date.now() - suppressedAt });
+        // Re-hide to honor user's recent close action.
+        setReviewerVisible(false);
+      }
+    }
+  }, [reviewerVisible]);
+
   const { isSignedIn, isLoaded: clerkLoaded, getToken } = useAuth();
-  const saveProfileMutation = useMutation((api as any)["mutations/upsertProfile"]?.upsertProfile);
+  // Use convexReact.* hooks so test mocks that only provide some hooks (e.g. useMutation)
+  // continue to work. We cast to any when invoking to avoid tight typing with generated api.
+  const saveProfileMutation = (convexReact as any).useMutation((api as any)["mutations/upsertProfile"]?.upsertProfile);
+  const startRefineMutation = (convexReact as any).useMutation((api as any)["llm"]?.startRefineByString);
+  // useAction may not be provided by test mocks; guard its presence.
+  const formatCompleteAction = (convexReact as any).useAction ? (convexReact as any).useAction((api as any)["actions/formatCompleteCV"]?.formatCompleteCV) : undefined;
   
   // In-modal debug output (visible to users during repro)
   const [debugLines, setDebugLines] = useState<string[]>([]);
@@ -238,122 +261,499 @@ export default function ProfileReviewModal({ visible, parsedProfile, onClose, on
     if (!res.ok) {
       let body = null;
       try { body = await res.json(); } catch (e) {}
-      throw new Error((body && (body as any).message) || `Request failed with status ${res.status}`);
+      throw new Error((body && (body).message) || `Request failed with status ${res.status}`);
     }
     return res.json();
   };
 
-  const startRefine = async (profileId: string) => {
-    // Debug: snapshot before starting refine
+  // Helper: prefer Convex client action hardened parse, then HTTP fallback, then client parser.
+  const callFormatCompleteCV = async (rawText: string) => {
+    let skipHttpFallback = false;
+    // Prefer Convex client action when available (avoids CORS and prefers websocket RPC)
     try {
-      console.debug('[ProfileReviewModal] startRefine called', {
-        profileId,
-        savedProfileId,
-        profileVersion,
-        status,
-        rawTextLocalPreview: String(rawTextLocal).slice(0, 200),
-      });
+      if (typeof formatCompleteAction === "function") {
+        try {
+          const actionResult = await formatCompleteAction({ rawText });
+          if (actionResult) {
+            // Normalize possible envelopes:
+            // - actionResult may be the direct refined object
+            // - or { status: 'ok', result: <refined> }
+            const normalized = (actionResult && typeof actionResult === "object" && "status" in actionResult && (actionResult).status === "ok" && "result" in actionResult)
+              ? (actionResult).result
+              : actionResult;
+            addDebug({ event: 'callFormatCompleteCV.convexAction', preview: String((normalized).summary ?? "").slice(0,200) });
+            return normalized;
+          }
+          addDebug({ event: 'callFormatCompleteCV.convexActionNoResult', actionResult });
+        } catch (e: any) {
+          const msg = String(e?.message ?? e);
+          addDebug({ event: 'callFormatCompleteCV.convexActionError', error: msg });
+          // If the Convex runtime reports the action is unavailable, avoid HTTP fallback
+          if (msg.includes('Could not find public function') || msg.includes('Did you forget to run `npx convex')) {
+            skipHttpFallback = true;
+            try { showToast('Convex action not available: run `npx convex dev` or deploy the functions (npx convex deploy)', { variant: 'warning' }); } catch (e) {}
+          }
+        }
+      }
     } catch (e) {
-      // avoid breaking in restricted consoles
+      // continue to http fallback
     }
-    setStatus('refining');
+  
+    // HTTP fallback to backend hardened parse (keeps existing behavior for environments without Convex client)
+    if (!skipHttpFallback) {
+      try {
+        const res = await authenticatedFetch(`${CONVEX_SITE_URL}/formatCompleteCV`, {
+          method: 'POST',
+          body: JSON.stringify({ rawText }),
+        });
+        if (res && res.status === 'ok' && res.result) {
+          addDebug({ event: 'callFormatCompleteCV.backend', preview: String(res.result.summary ?? "").slice(0,200) });
+          return res.result;
+        }
+        addDebug({ event: 'callFormatCompleteCV.backendNoResult', res });
+      } catch (e: any) {
+        const msg = String(e?.message ?? e);
+        addDebug({ event: 'callFormatCompleteCV.backendError', error: msg });
+        // If the HTTP path is blocked by CORS, inform the developer and avoid repeated noisy attempts
+        if (msg.includes('Failed to fetch') || msg.includes('403') || msg.includes('CORS') || msg.includes('preflight')) {
+          try { showToast('Backend HTTP parse blocked by CORS. Prefer running Convex dev or use the client parser.', { variant: 'warning' }); } catch (e) {}
+        }
+      }
+    } else {
+      addDebug({ event: 'callFormatCompleteCV.skipHttpFallback', reason: 'convex action unavailable' });
+    }
+  
+    // Fallback to lightweight client-side parse so reviewer still gets populated when backend is unreachable.
     try {
-      const payload = { profileId, rawText: rawTextLocal };
-      addDebug({ event: 'startRefine.payload', payload });
-      try { console.debug('[ProfileReviewModal] POST /llm-refine payload', payload); } catch (e) {}
-      const data = await authenticatedFetch(`${CONVEX_SITE_URL}/llm-refine`, {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
- 
-      addDebug({ event: 'startRefine.response', data });
-      try { console.debug('[ProfileReviewModal] /llm-refine response', data); } catch (e) {}
-      if (data.status === 'enqueued') {
-        setJobId(data.jobId);
+      const client = clientFormatCompleteCV(rawText);
+      if (client && client.status === 'ok' && client.result) {
+        addDebug({ event: 'callFormatCompleteCV.clientFallback', preview: String(client.result.summary ?? "").slice(0,200) });
+        return client.result;
+      }
+      addDebug({ event: 'callFormatCompleteCV.clientNoResult', client });
+    } catch (e) {
+      addDebug({ event: 'callFormatCompleteCV.clientError', error: String(e) });
+    }
+    return null;
+  };
+
+  // Deduping/coalescing of startRefine calls to avoid double-enqueue from
+  // parallel client flows (file-load + manual click). We key pendingRefines
+  // by `${profileId}:${shortHash(rawTextPreview)}` and store either a promise
+  // while inflight or the final jobId string once settled.
+  const pendingRefines = useRef<Record<string, Promise<string> | string>>({});
+  function shortHash(s: string) {
+    let h = 5381;
+    for (let i = 0; i < s.length; i++) h = ((h << 5) + h) + s.charCodeAt(i);
+    // Return a short base36 string slice to keep keys readable
+    return Math.abs(h).toString(36).slice(0, 8);
+  }
+  
+  const startRefine = async (profileId: string, rawTextForRefine?: string) => {
+    const raw = String(rawTextForRefine ?? rawTextLocal ?? "");
+    const key = `${profileId}:${shortHash(raw.slice(0, 200))}`;
+  
+    // If there's an existing settled jobId, reuse it immediately
+    const existing = pendingRefines.current[key];
+    if (existing) {
+      if (typeof existing === "string") {
+        try { addDebug({ event: 'startRefine.reuse.settled', key, jobId: existing }); } catch (e) {}
+        setJobId(existing);
         setStatus('enqueued');
         setIsPolling(true);
-      } else {
-        addDebug({ event: 'startRefine.enqueueFailed', data });
-        throw new Error('Failed to enqueue job');
+        return existing;
       }
-    } catch (err) {
-      console.error('Start refine error:', err);
-      setMessage({ type: 'error', text: String(err) });
-      setStatus('failed');
+      // existing is a promise -> await it and reuse result
+      try {
+        addDebug({ event: 'startRefine.reuse.inflight', key });
+        const awaited = await (existing);
+        pendingRefines.current[key] = awaited;
+        setJobId(awaited);
+        setStatus('enqueued');
+        setIsPolling(true);
+        return awaited;
+      } catch (e) {
+        // If the inflight promise failed, clear the entry and fall through to enqueue anew
+        addDebug({ event: 'startRefine.reuse.inflightFailed', key, error: String(e) });
+        delete pendingRefines.current[key];
+      }
+    }
+  
+    // Otherwise create a new inflight promise and store it immediately
+    const inflight = (async (): Promise<string> => {
+      // Debug: snapshot before starting refine
+      try {
+        console.debug('[ProfileReviewModal] startRefine called', {
+          profileId,
+          savedProfileId,
+          profileVersion,
+          status,
+          rawTextLocalPreview: String(rawTextLocal).slice(0, 200),
+          rawTextForRefinePreview: String(rawTextForRefine).slice(0, 200),
+        });
+      } catch (e) {
+        // avoid breaking in restricted consoles
+      }
+  
+      // Indicate local UI is starting refine for user feedback (do not override
+      // this if another caller reuses the final job above).
+      setStatus('refining');
+  
+      try {
+        const payload = { profileId, rawText: raw };
+        addDebug({ event: 'startRefine.payload', payload });
+        try { console.debug('[ProfileReviewModal] enqueue refine payload', payload); } catch (e) {}
+  
+        // Prefer calling the Convex mutation via client SDK when available
+        let skipHttpFallback = false;
+        if (typeof startRefineMutation === "function") {
+          try {
+            const data = await startRefineMutation(payload);
+            addDebug({ event: 'startRefine.mutationResponse', data });
+  
+            // Handle multiple possible shapes returned by Convex mutation:
+            if (data && typeof data === "object" && "status" in data && (data).status === 'enqueued') {
+              const jid = (data).jobId;
+              setJobId(jid);
+              setStatus('enqueued');
+              setIsPolling(true);
+              return jid;
+            }
+  
+            if (typeof data === "string") {
+              setJobId(data);
+              setStatus('enqueued');
+              setIsPolling(true);
+              return data;
+            }
+            if (data && typeof data === "object" && ("_id" in data || "id" in data)) {
+              const id = (data)._id ?? (data).id;
+              if (id) {
+                setJobId(id);
+                setStatus('enqueued');
+                setIsPolling(true);
+                return id;
+              }
+            }
+  
+            addDebug({ event: 'startRefine.mutationEnqueueFailed', data });
+            // fall through to HTTP fallback
+          } catch (e: any) {
+            const msg = String(e?.message ?? e);
+            addDebug({ event: 'startRefine.mutationError', error: msg });
+            if (msg.includes('Could not find public function') || msg.includes('Did you forget to run `npx convex')) {
+              skipHttpFallback = true;
+              try { showToast('Convex refine action not available: run `npx convex dev` or deploy the functions (npx convex deploy)', { variant: 'warning' }); } catch (e) {}
+            }
+            // fall through if not skipHttpFallback
+          }
+        }
+  
+        if (!skipHttpFallback) {
+          // HTTP fallback: POST to the /llm-refine endpoint (keeps existing behavior)
+          const data = await authenticatedFetch(`${CONVEX_SITE_URL}/llm-refine`, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          });
+  
+          addDebug({ event: 'startRefine.response', data });
+          try { console.debug('[ProfileReviewModal] /llm-refine response', data); } catch (e) {}
+          if (data.status === 'enqueued') {
+            setJobId(data.jobId);
+            setStatus('enqueued');
+            setIsPolling(true);
+            return data.jobId;
+          } else {
+            addDebug({ event: 'startRefine.enqueueFailed', data });
+            throw new Error('Failed to enqueue job');
+          }
+        } else {
+          addDebug({ event: 'startRefine.skipHttpFallback', reason: 'convex mutation unavailable' });
+          setMessage({ type: 'error', text: 'Refine cannot be started: Convex actions are not available in this environment.' });
+          setStatus('failed');
+          throw new Error('Convex actions unavailable');
+        }
+      } catch (err) {
+        console.error('Start refine error:', err);
+        setMessage({ type: 'error', text: String(err) });
+        setStatus('failed');
+        throw err;
+      }
+    })();
+  
+    pendingRefines.current[key] = inflight;
+    try {
+      const resultJobId = await inflight;
+      // Replace promise with settled jobId for quick reuse
+      pendingRefines.current[key] = resultJobId;
+      // Cleanup the cache entry after a short window to avoid memory leaks
+      setTimeout(() => {
+        try { delete pendingRefines.current[key]; } catch (e) {}
+      }, 30_000);
+      return resultJobId;
+    } catch (e) {
+      // Clear failed inflight entry so retries can attempt again
+      try { delete pendingRefines.current[key]; } catch (er) {}
+      throw e;
     }
   };
 
   useEffect(() => {
     if (!isPolling || !jobId) return;
 
+    const pollTimeout = setTimeout(() => {
+      setMessage({ type: 'error', text: 'Refinement is taking longer than expected. Please check back in a few minutes.' });
+      setIsPolling(false);
+      setStatus('failed');
+    }, 60000);
+
     const pollInterval = setInterval(async () => {
+      if (!isPolling) return;
       try {
-        try {
-          const data = await authenticatedFetch(`${CONVEX_SITE_URL}/llm-refine`, {
-            method: 'POST',
-            body: JSON.stringify({ jobId }),
-          });
-          addDebug({ event: 'poll.response', data });
-          setStatus(data.status);
-  
-          if (data.status === 'completed') {
-            addDebug({ event: 'poll.completed.result', result: data.result });
-            setResult(data.result);
-            // Parse the human-readable LLM content into structured suggestions (non-destructive)
+        const data = await authenticatedFetch(`${CONVEX_SITE_URL}/llm-refine`, {
+          method: 'POST',
+          body: JSON.stringify({ jobId }),
+        });
+        addDebug({ event: 'poll.response', data });
+        setStatus(data.status);
+
+        if (data.status === 'completed' || data.status === 'finished') {
+          // Normalize server status into a client-side 'completed' for consistent handling
+          addDebug({ event: 'poll.completed-or-finished.result', result: data.result, originalStatus: data.status });
+          try { setStatus('completed'); } catch (e) {}
+          setResult(data.result);
+
+          // Prefer server-side repaired normalized parse (defensive - faster and more reliable).
+          const normalized = data?.result?.patch?.normalized ?? data?.result?.normalized ?? null;
+          if (normalized) {
             try {
-              const content = data?.result?.full_response?.choices?.[0]?.message?.content;
-              addDebug({ event: 'poll.completed.contentType', type: typeof content });
-              if (typeof content === "string") {
-                const parsed = parseRefinedMarkdown(content);
-                addDebug({ event: 'poll.completed.parsed', parsed });
-                // Ensure suggestions/stagedEdits are populated. If the parser failed to
-                // extract named sections, fall back to using the full LLM content as the
-                // summary so the user sees something useful.
-                const parsedWithFallback = { ...parsed };
-                if (!parsedWithFallback.summary || parsedWithFallback.summary.trim().length === 0) {
-                  parsedWithFallback.summary = content;
-                  addDebug({ event: 'poll.parsed.fallbackSummaryApplied', length: String(parsedWithFallback.summary).length });
-                }
-                // suggestions: original suggestions from LLM
-                setSuggestions(parsedWithFallback);
-                // Minimal UX improvement: suggestions populated; require explicit accept to apply to draft
-                // Non-destructive: only apply fields that the parsed content provides and
-                // ensure we don't put non-JSON markdown into JSON editors (experience/education).
-                // Do NOT auto-load LLM suggestions into the user's draft.
-                // Keep parsed suggestions in `suggestions` / `stagedEdits` and require explicit user
-                // action ("Load into form") to apply them. This preserves the non-destructive UX.
-                addDebug({
-                  event: 'poll.autoLoadSkipped',
-                  reason: 'require-explicit-accept',
-                  preview: { summaryLength: String(parsedWithFallback.summary ?? "").length, skillsPreview: String(parsedWithFallback.skills ?? "").slice(0,80) }
+              // If the server persisted a minimal "repair_failed" sentinel, treat this as a terminal
+              // job with a best-effort preview rather than an in-progress refine. This prevents the UI
+              // from spinning indefinitely when repair couldn't produce a full normalized parse.
+              if ((normalized).warning === "repair_failed") {
+                addDebug({ event: 'poll.serverNormalized.repairFailed', diagnostics: (normalized).diagnostics ?? null });
+    
+                // Use the rawTextSnippet (if present) to populate a minimal reviewer so the user can see
+                // what the backend had and decide to retry or manually edit.
+                const snippet = (normalized).rawTextSnippet ?? String((data?.result?.full_response && JSON.stringify(data.result.full_response).slice(0,2000)) || "");
+                const fallbackSections: IReviewerSection[] = [
+                  { id: 'snippet-0', title: 'Refine preview (partial)', content: snippet, fieldKey: 'summary', dismissed: false }
+                ];
+                setReviewerSections(fallbackSections);
+    
+                setReviewerVisible(true);
+                setSuggestions({
+                  summary: snippet,
+                  skills: "",
+                  experience: "[]",
+                  education: "[]",
+                  achievements: undefined,
                 });
-              } else {
-                addDebug({ event: 'poll.completed.noStringContent', content });
+    
+                setSkipParsedProfileInit(true);
+                setMessage({ type: 'error', text: 'Refinement completed but the result could not be fully repaired. Showing best-effort preview — try again or edit manually.' });
+                addDebug({ event: 'poll.appliedServerMinimalPreview', preview: snippet.slice(0,200) });
+                setIsPolling(false);
+                return;
               }
+    
+              addDebug({ event: 'poll.completed.usingServerNormalized', preview: String(normalized.summary ?? "").slice(0,200) });
+    
+              const sections: IReviewerSection[] = (normalized.rawParsedSections || []).map((s: any, idx: number) => ({
+                id: s.id ?? `section-${idx}`,
+                title: s.title ?? s.fieldKey ?? `Section ${idx}`,
+                content: s.content ?? "",
+                fieldKey: s.fieldKey ?? "summary",
+                dismissed: !!s.dismissed,
+              }));
+    
+              // Synthesize basic sections when rawParsedSections is empty but other fields exist
+              if (!sections.length) {
+                const synthSections: IReviewerSection[] = [];
+                if (normalized.summary) synthSections.push({ id: 'summary-0', title: 'Summary', content: String(normalized.summary), fieldKey: 'summary', dismissed: false });
+                if (normalized.skills || normalized.skillsText) synthSections.push({ id: 'skills-0', title: 'Skills', content: Array.isArray(normalized.skills) ? normalized.skills.join(", ") : (normalized.skillsText ?? ""), fieldKey: 'skills', dismissed: false });
+                if (normalized.experienceText || normalized.experience) synthSections.push({ id: 'experience-0', title: 'Experience', content: normalized.experienceText ?? (normalized.experience ? JSON.stringify(normalized.experience, null, 2) : ""), fieldKey: 'experience', dismissed: false });
+                if (normalized.educationText || normalized.education) synthSections.push({ id: 'education-0', title: 'Education', content: normalized.educationText ?? (normalized.education ? JSON.stringify(normalized.education, null, 2) : ""), fieldKey: 'education', dismissed: false });
+                if (synthSections.length) setReviewerSections(synthSections);
+                else setReviewerSections(sections);
+              } else {
+                setReviewerSections(sections);
+              }
+    
+              setReviewerVisible(true);
+              setSuggestions({
+                summary: normalized.summary ?? normalized.rawText ?? "",
+                skills: Array.isArray(normalized.skills) ? normalized.skills.join(", ") : (normalized.skillsText ?? ""),
+                experience: normalized.experienceText ?? (normalized.experience ? JSON.stringify(normalized.experience, null, 2) : undefined),
+                education: normalized.educationText ?? (normalized.education ? JSON.stringify(normalized.education, null, 2) : undefined),
+                achievements: normalized.achievements ?? undefined,
+              });
+              setSkipParsedProfileInit(true);
+              addDebug({ event: 'poll.appliedServerNormalized', preview: { summaryLength: String(normalized.summary ?? "").length } });
             } catch (e) {
-              addDebug({ event: 'poll.parseError', error: String(e) });
-              console.error("parseRefinedMarkdown failed", e);
+              addDebug({ event: 'poll.applyServerNormalized.error', error: String(e) });
+            } finally {
+              setIsPolling(false);
             }
-            setIsPolling(false);
-            clearInterval(pollInterval);
-          } else if (data.status === 'failed') {
-            addDebug({ event: 'poll.failed', data });
-            setMessage({ type: 'error', text: data.message || 'Job failed' });
-            setIsPolling(false);
-            clearInterval(pollInterval);
+          } else {
+            // No server-normalized payload — fall back to robust provider-text extraction + server/client repair
+            let providerText: string | null = null;
+            try {
+              const fullResponse = data?.result?.full_response;
+              addDebug({ event: 'poll.completed.fullResponseShape', keys: fullResponse ? Object.keys(fullResponse) : null });
+
+              const extractProviderText = (resp: any): string | null => {
+                if (!resp) return null;
+                try {
+                  const c = resp?.choices?.[0]?.message?.content;
+                  if (typeof c === "string" && c.trim().length > 0) return c;
+                } catch {}
+                try { if (typeof resp?.text === "string" && resp.text.trim().length > 0) return resp.text; } catch {}
+                try { if (typeof resp?.output === "string" && resp.output.trim().length > 0) return resp.output; } catch {}
+                try {
+                  const o0 = resp?.output?.[0];
+                  if (typeof o0?.content === "string" && o0.content.trim().length > 0) return o0.content;
+                  if (typeof o0?.text === "string" && o0.text.trim().length > 0) return o0.text;
+                  if (typeof o0?.content?.text === "string" && o0.content.text.trim().length > 0) return o0.content.text;
+                } catch {}
+                return null;
+              };
+
+              providerText = extractProviderText(fullResponse);
+              addDebug({ event: 'poll.completed.contentCandidates', providerTextPresent: !!providerText, providerTextPreview: providerText ? String(providerText).slice(0,200) : null });
+
+              const callFormatWithTimeout = (text: string, ms = 8000) => {
+                return Promise.race([
+                  callFormatCompleteCV(text),
+                  new Promise((_, reject) => setTimeout(() => reject(new Error('formatCompleteCV timeout')), ms))
+                ]);
+              };
+
+              if (providerText) {
+                let refinedFromAction: any = null;
+                try {
+                  refinedFromAction = await callFormatWithTimeout(providerText, 8000);
+                  addDebug({ event: 'poll.formatCompleteCV.result', preview: String(refinedFromAction?.summary ?? "").slice(0,200) });
+                } catch (e) {
+                  addDebug({ event: 'poll.formatCompleteCV.errorOrTimeout', error: String(e) });
+                }
+
+                const isMeaningful = Boolean(
+                  refinedFromAction &&
+                  (
+                    (refinedFromAction.summary && String(refinedFromAction.summary).trim().length > 20) ||
+                    (Array.isArray(refinedFromAction?.rawParsedSections) && refinedFromAction.rawParsedSections.length > 0) ||
+                    (refinedFromAction.skills && ((Array.isArray(refinedFromAction.skills) && refinedFromAction.skills.length > 0) || (typeof refinedFromAction.skillsText === "string" && refinedFromAction.skillsText.trim().length > 0))) ||
+                    (refinedFromAction.experience && ((typeof refinedFromAction.experienceText === "string" && refinedFromAction.experienceText.trim().length > 0) || (Array.isArray(refinedFromAction.experience) && refinedFromAction.experience.length > 0))) ||
+                    (refinedFromAction.education && ((typeof refinedFromAction.educationText === "string" && refinedFromAction.educationText.trim().length > 0) || (Array.isArray(refinedFromAction.education) && refinedFromAction.education.length > 0)))
+                  )
+                );
+
+                if (isMeaningful) {
+                  const sections: IReviewerSection[] = (refinedFromAction.rawParsedSections || []).map((s: any, idx: number) => ({
+                    id: s.id ?? `section-${idx}`,
+                    title: s.title ?? s.fieldKey ?? `Section ${idx}`,
+                    content: s.content ?? "",
+                    fieldKey: s.fieldKey ?? "summary",
+                    dismissed: !!s.dismissed,
+                  }));
+                  if (!sections.length) {
+                    const synthSections: IReviewerSection[] = [];
+                    if (refinedFromAction.summary) synthSections.push({ id: 'summary-0', title: 'Summary', content: String(refinedFromAction.summary), fieldKey: 'summary', dismissed: false });
+                    if (refinedFromAction.skills || refinedFromAction.skillsText) synthSections.push({ id: 'skills-0', title: 'Skills', content: Array.isArray(refinedFromAction.skills) ? refinedFromAction.skills.join(", ") : (refinedFromAction.skillsText ?? ""), fieldKey: 'skills', dismissed: false });
+                    if (refinedFromAction.experienceText || refinedFromAction.experience) synthSections.push({ id: 'experience-0', title: 'Experience', content: refinedFromAction.experienceText ?? (refinedFromAction.experience ? JSON.stringify(refinedFromAction.experience, null, 2) : ""), fieldKey: 'experience', dismissed: false });
+                    if (refinedFromAction.educationText || refinedFromAction.education) synthSections.push({ id: 'education-0', title: 'Education', content: refinedFromAction.educationText ?? (refinedFromAction.education ? JSON.stringify(refinedFromAction.education, null, 2) : ""), fieldKey: 'education', dismissed: false });
+                    if (synthSections.length) {
+                      setReviewerSections(synthSections);
+                    } else {
+                      setReviewerSections(sections);
+                    }
+                  } else {
+                    setReviewerSections(sections);
+                  }
+
+                  setReviewerVisible(true);
+                  setSuggestions({
+                    summary: refinedFromAction.summary ?? providerText,
+                    skills: Array.isArray(refinedFromAction.skills) ? refinedFromAction.skills.join(", ") : (refinedFromAction.skillsText ?? ""),
+                    experience: refinedFromAction.experienceText ?? (refinedFromAction.experience ? JSON.stringify(refinedFromAction.experience, null, 2) : undefined),
+                    education: refinedFromAction.educationText ?? (refinedFromAction.education ? JSON.stringify(refinedFromAction.education, null, 2) : undefined),
+                    achievements: refinedFromAction.achievements ?? undefined,
+                  });
+                  setSkipParsedProfileInit(true);
+                  addDebug({ event: 'poll.formatCompleteCV.appliedToReviewer', preview: { summaryLength: String(refinedFromAction.summary ?? "").length } });
+                } else {
+                  addDebug({ event: 'poll.formatCompleteCV.ignoredOrEmpty', refinedFromAction });
+                  const parsed = parseRefinedMarkdown(providerText);
+                  const parsedWithFallback = { ...parsed };
+                  if (!parsedWithFallback.summary || parsedWithFallback.summary.trim().length === 0) parsedWithFallback.summary = providerText;
+                  setSuggestions(parsedWithFallback);
+                  addDebug({ event: 'poll.formatCompleteCV.fallbackToClientParse', parsedWithFallback });
+                }
+              } else {
+                // No provider textual content found; attempt server repair on fullResponse string if possible
+                try {
+                  const fallbackText = fullResponse ? JSON.stringify(fullResponse).slice(0, 2000) : "";
+                  let repaired: any = null;
+                  try {
+                    repaired = await callFormatWithTimeout(fallbackText, 8000);
+                    addDebug({ event: 'poll.formatCompleteCV.repairedFromFullResponse', preview: String(repaired?.summary ?? "").slice(0,200) });
+                  } catch (e) {
+                    addDebug({ event: 'poll.formatCompleteCV.repairFailedOrTimeout', error: String(e) });
+                  }
+                  if (repaired) {
+                    const sections: IReviewerSection[] = (repaired.rawParsedSections || []).map((s: any, idx: number) => ({
+                      id: s.id ?? `section-${idx}`,
+                      title: s.title ?? s.fieldKey ?? `Section ${idx}`,
+                      content: s.content ?? "",
+                      fieldKey: s.fieldKey ?? "summary",
+                      dismissed: !!s.dismissed,
+                    }));
+                    setReviewerSections(sections.length ? sections : []);
+                    setReviewerVisible(true);
+                    setSuggestions({
+                      summary: repaired.summary ?? fallbackText,
+                      skills: Array.isArray(repaired.skills) ? repaired.skills.join(", ") : (repaired.skillsText ?? ""),
+                      experience: repaired.experienceText ?? (repaired.experience ? JSON.stringify(repaired.experience, null, 2) : undefined),
+                      education: repaired.educationText ?? (repaired.education ? JSON.stringify(repaired.education, null, 2) : undefined),
+                      achievements: repaired.achievements ?? undefined,
+                    });
+                    setSkipParsedProfileInit(true);
+                    addDebug({ event: 'poll.formatCompleteCV.appliedToReviewerFromFullResponse', preview: { summaryLength: String(repaired.summary ?? "").length } });
+                  } else {
+                    const parsed = parseRefinedMarkdown(fallbackText);
+                    const parsedWithFallback = { ...parsed };
+                    if (!parsedWithFallback.summary || parsedWithFallback.summary.trim().length === 0) parsedWithFallback.summary = fallbackText;
+                    setSuggestions(parsedWithFallback);
+                    addDebug({ event: 'poll.formatCompleteCV.finalClientFallback', parsedWithFallback });
+                  }
+                } catch (e) {
+                  addDebug({ event: 'poll.formatCompleteCV.finalFallbackError', error: String(e) });
+                }
+              }
+            } catch (err) {
+              console.error('Polling error:', err);
+              setMessage({ type: 'error', text: String(err) });
+            } finally {
+              setIsPolling(false);
+            }
           }
-        } catch (err) {
-          throw err;
+        } else if (data.status === 'failed') {
+          addDebug({ event: 'poll.failed', data });
+          setMessage({ type: 'error', text: data.message || 'Job failed' });
+          setIsPolling(false);
         }
       } catch (err) {
         console.error('Polling error:', err);
         setMessage({ type: 'error', text: String(err) });
         setIsPolling(false);
-        clearInterval(pollInterval);
       }
     }, 2000);
 
-    return () => clearInterval(pollInterval);
+    return () => {
+      clearTimeout(pollTimeout);
+      clearInterval(pollInterval);
+    }
   }, [isPolling, jobId]);
 
   const handleSave = async (notifyParent = true) => {
@@ -366,7 +766,7 @@ export default function ProfileReviewModal({ visible, parsedProfile, onClose, on
     setStatus('saving');
     setMessage(null);
   
-    let skills: string[] = form.skillsText?.split(",").map((s: string) => s.trim()).filter(Boolean) ?? [];
+    const skills: string[] = form.skillsText?.split(",").map((s: string) => s.trim()).filter(Boolean) ?? [];
     let experience: IExperienceItem[] = [];
     try {
       experience = JSON.parse(form.experienceText || "[]");
@@ -383,7 +783,7 @@ export default function ProfileReviewModal({ visible, parsedProfile, onClose, on
       // Skip including education in the saved payload; leave education as an empty array
       education = [];
     }
-    let achievements = form.achievementsText?.split("\n").map((s: string) => s.trim()).filter(Boolean) ?? [];
+    const achievements = form.achievementsText?.split("\n").map((s: string) => s.trim()).filter(Boolean) ?? [];
   
     const profileObj = {
       // Use undefined for optional fields to avoid sending nulls that violate Convex validators.
@@ -416,7 +816,7 @@ export default function ProfileReviewModal({ visible, parsedProfile, onClose, on
       addDebug({ event: 'handleSave.saveResult', res });
       if (!res || !res.profileId) throw new Error("Failed to save profile");
       
-      const convexId = (res as any).convexId ?? res.profileId;
+      const convexId = (res).convexId ?? res.profileId;
       setSavedProfileId(convexId);
       if (res.updatedAt) {
         setProfileVersion(typeof res.updatedAt === 'number' ? Math.floor(res.updatedAt / 1000) : profileVersion);
@@ -577,7 +977,7 @@ export default function ProfileReviewModal({ visible, parsedProfile, onClose, on
     }
   
     if (profileIdToRefine) {
-      await startRefine(profileIdToRefine);
+      await startRefine(profileIdToRefine, rawTextLocal);
     }
   };
 
@@ -585,97 +985,56 @@ export default function ProfileReviewModal({ visible, parsedProfile, onClose, on
     setStatus('idle');
     addDebug({ event: 'handleCvParsed.invoked', parsedPreview: { name: parsed.name, email: parsed.email, rawLength: String(parsed.rawText ?? "").length } });
 
-    // Always update metadata/raw text and IDs without touching draft
+    // Directly update suggestions from the parsed content
+    setSuggestions({
+      summary: parsed.summary ?? parsed.rawText ?? "",
+      skills: Array.isArray(parsed.skills) ? parsed.skills.join(", ") : "",
+      experience: parsed.experience ? JSON.stringify(parsed.experience, null, 2) : "[]",
+      education: parsed.education ? JSON.stringify(parsed.education, null, 2) : "[]",
+      achievements: Array.isArray(parsed.achievements) ? parsed.achievements.join("\n") : "",
+    });
+
+    // Populate reviewer sections for immediate display
+    const sections: IReviewerSection[] = [
+      { id: 'summary-0', title: 'Summary', content: parsed.summary ?? parsed.rawText ?? "", fieldKey: 'summary', dismissed: false },
+      { id: 'skills-0', title: 'Skills', content: Array.isArray(parsed.skills) ? parsed.skills.join(", ") : "", fieldKey: 'skills', dismissed: false },
+      { id: 'experience-0', title: 'Experience', content: parsed.experience ? JSON.stringify(parsed.experience, null, 2) : "[]", fieldKey: 'experience', dismissed: false },
+      { id: 'education-0', title: 'Education', content: parsed.education ? JSON.stringify(parsed.education, null, 2) : "[]", fieldKey: 'education', dismissed: false },
+      { id: 'achievements-0', title: 'Achievements', content: Array.isArray(parsed.achievements) ? parsed.achievements.join("\n") : "", fieldKey: 'achievements', dismissed: false },
+    ];
+    setReviewerSections(sections);
+    setReviewerVisible(true);
+
+    // Update metadata and IDs without touching draft
     setRawTextLocal(parsed.rawText ?? "");
     setSavedProfileId((parsed as any).convexId ?? null);
     setProfileVersion(parsed.version ?? null);
-    // Do NOT update canonicalProfile here for inline parses — updating canonicalProfile
-    // causes visible-effect to initialize the draft form and overwrite user edits.
-    // canonicalProfile should only be set via the external parsedProfile prop (server-side).
 
-    // We will call the backend Convex action `formatCompleteCV` to produce
-    // a hardened parse (structured JSON + reviewer-ready strings). If the action
-    // fails, fall back to the lightweight parsed object that CVLoader produced.
-    let actionResult: any = null;
+    // Prevent parsedProfile prop from overwriting the draft
+    setSkipParsedProfileInit(true);
+    addDebug({ event: 'handleCvParsed.complete', summaryPreviewLength: String(parsed.summary ?? "").length });
+  };
+  // When a CV is loaded, trigger the background AI refine flow without overwriting the draft.
+  // Responsibilities:
+  //  - Show immediate parsed content via handleCvParsed (fast feedback)
+  //  - Harden the parsed text by calling formatCompleteCV and populate reviewerSections + suggestions
+  //    (non-destructive: do not write into `form` or canonicalProfile)
+  //  - Then enqueue the heavier LLM refine (/llm-refine) in background so long-running improvements can arrive later.
+  const handleFileLoadAndRefine = async (parsed: INormalizedProfile) => {
+    addDebug({ event: 'handleFileLoadAndRefine.invoked', parsedPreview: { name: parsed.name, rawLength: String(parsed.rawText ?? "").length } });
+    // Directly show the parsed CV content in suggestions and the reviewer.
+    await handleCvParsed(parsed);
+  
+    // Enqueue the heavier LLM refine in the background.
     try {
-      const payload = { rawText: parsed.rawText ?? parsed.summary ?? "" };
-      addDebug({ event: 'handleCvParsed.callAction', payloadPreview: String(payload.rawText).slice(0, 200) });
-      actionResult = await authenticatedFetch(`${CONVEX_SITE_URL}/formatCompleteCV`, {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
-      addDebug({ event: 'handleCvParsed.actionResult', actionResult });
-    } catch (err) {
-      addDebug({ event: 'handleCvParsed.actionError', error: String(err) });
-      actionResult = null;
-    }
-
-    // Normalize a result shape that the UI expects (RefinedContent-like)
-    let refined: any = null;
-    if (actionResult && actionResult.status === 'ok' && actionResult.result) {
-      refined = actionResult.result;
-    } else {
-      // fallback: convert the parsed INormalizedProfile into the refined shape
-      refined = {
-        summary: parsed.summary ?? parsed.rawText ?? "",
-        skills: parsed.skills ?? [],
-        skillsText: Array.isArray(parsed.skills) ? (parsed.skills || []).join(", ") : (parsed.metadata?.skillsText ?? ""),
-        experience: parsed.experience ?? [],
-        experienceText: parsed.experience ? JSON.stringify(parsed.experience, null, 2) : undefined,
-        education: parsed.education ?? [],
-        educationText: parsed.education ? JSON.stringify(parsed.education, null, 2) : undefined,
-        achievements: Array.isArray(parsed.achievements) ? parsed.achievements.join("\n") : String(parsed.achievements ?? ""),
-        identity: { name: parsed.name, email: parsed.email },
-        rawParsedSections: [
-          { id: "identity-0", title: "Identity", content: [parsed.name ?? "", parsed.email ?? ""].filter(Boolean).join(" / "), fieldKey: "identity" },
-          { id: "summary-0", title: "Summary", content: parsed.summary ?? parsed.rawText ?? "", fieldKey: "summary" },
-          { id: "skills-0", title: "Skills", content: (parsed.skills || []).join(", "), fieldKey: "skills" },
-          { id: "experience-0", title: "Experience", content: parsed.experience ? JSON.stringify(parsed.experience, null, 2) : "[]", fieldKey: "experience" },
-          { id: "education-0", title: "Education", content: parsed.education ? JSON.stringify(parsed.education, null, 2) : "[]", fieldKey: "education" },
-          { id: "achievements-0", title: "Achievements", content: Array.isArray(parsed.achievements) ? parsed.achievements.join("\n") : String(parsed.achievements ?? ""), fieldKey: "achievements" },
-        ],
-        diagnostics: { parseConfidence: 0.35, warnings: [] },
-      };
-    }
-
-    try {
-      // Convert server-provided rawParsedSections into the reviewer UI sections
-      const sections: IReviewerSection[] = (refined.rawParsedSections || []).map((s: any, idx: number) => ({
-        id: s.id ?? `section-${idx}`,
-        title: s.title ?? s.fieldKey ?? `Section ${idx}`,
-        content: s.content ?? "",
-        fieldKey: s.fieldKey ?? "summary",
-        dismissed: !!s.dismissed,
-      }));
-
-      setReviewerSections(sections);
-      setReviewerVisible(true);
-
-      // Populate the non-destructive suggestions panel (do NOT write into the main form).
-      // Use the structured JSON when available and fallback to reviewer-ready strings.
-      setSuggestions({
-        summary: refined.summary ?? parsed.summary ?? parsed.rawText ?? "",
-        skills: (Array.isArray(refined.skills) ? refined.skills.join(", ") : (refined.skillsText ?? "")),
-        experience: refined.experienceText ?? (refined.experience ? JSON.stringify(refined.experience, null, 2) : undefined),
-        education: refined.educationText ?? (refined.education ? JSON.stringify(refined.education, null, 2) : undefined),
-        achievements: refined.achievements ?? undefined,
-      });
-
-      // Mark that a parsedProfile prop (if it arrives) should NOT auto-initialize the draft.
-      setSkipParsedProfileInit(true);
-      addDebug({ event: 'handleCvParsed.complete', summaryPreviewLength: String(refined.summary ?? "").length, skillsPreview: String(refined.skills ?? refined.skillsText ?? "").slice(0,120) });
+      const profileIdToRefine = await ensureSavedForRefine();
+      if (profileIdToRefine) {
+        void startRefine(profileIdToRefine, parsed.rawText ?? '');
+      } else {
+        addDebug({ event: 'handleFileLoadAndRefine.skipStartRefine.noProfileId' });
+      }
     } catch (e) {
-      addDebug({ event: 'handleCvParsed.renderError', error: String(e) });
-      // As a last resort, open the reviewer with the minimal conversion
-      const fallbackSections: IReviewerSection[] = [
-        { id: "summary-0", title: "Summary", content: parsed.summary ?? parsed.rawText ?? "", fieldKey: "summary" },
-      ];
-      setReviewerSections(fallbackSections);
-      setReviewerVisible(true);
-      setSuggestions({
-        summary: parsed.summary ?? parsed.rawText ?? "",
-      });
-      setSkipParsedProfileInit(true);
+      addDebug({ event: 'handleFileLoadAndRefine.startRefine.error', error: String(e) });
     }
   };
 
@@ -906,53 +1265,55 @@ export default function ProfileReviewModal({ visible, parsedProfile, onClose, on
               <div className="p-2 mb-4 overflow-auto text-sm text-gray-800 whitespace-pre-wrap rounded max-h-40 bg-background dark:bg-surface dark:text-gray-100">{confirmAccept.value}</div>
               <div className="flex justify-end gap-2">
                 <Button onClick={() =>{ setConfirmAccept(null); }} className="px-3 py-2 rounded-md bg-surface-muted">Cancel</Button>
-                <Button onClick={async () =>{
-                  try {
-                    const { field, value } = confirmAccept;
-                    addDebug({ event: 'performAccept', field, preview: String(value).slice(0,200) });
-                    // snapshot current draft and suggestions for undo (deep clone to avoid mutation)
-                    setLastAppliedSnapshot({
-                      field: String(field),
-                      previousForm: JSON.parse(JSON.stringify(form)),
-                      acceptedValue: value,
-                      previousSuggestions: suggestions ? JSON.parse(JSON.stringify(suggestions)) : null,
-                    });
-                    // apply to draft
-                    switch (field) {
-                      case "skills":
-                        updateForm({ skillsText: value.split(",").map(s => s.trim()).filter(Boolean).join(", ") });
-                        break;
-                      case "experience":
-                        updateForm({ experienceText: value });
-                        break;
-                      case "education":
-                        updateForm({ educationText: value });
-                        break;
-                      case "achievements": {
-                        const lines = value.split(/\r?\n/).map(s => s.replace(/^[\-\*\•\s]+/, "").trim()).filter(Boolean);
-                        updateForm({ achievementsText: lines.join("\n") });
-                        break;
+                <Button onClick={() => {
+                  void (async () => {
+                    try {
+                      const { field, value } = confirmAccept;
+                      addDebug({ event: 'performAccept', field, preview: String(value).slice(0,200) });
+                      // snapshot current draft and suggestions for undo (deep clone to avoid mutation)
+                      setLastAppliedSnapshot({
+                        field: String(field),
+                        previousForm: JSON.parse(JSON.stringify(form)),
+                        acceptedValue: value,
+                        previousSuggestions: suggestions ? JSON.parse(JSON.stringify(suggestions)) : null,
+                      });
+                      // apply to draft
+                      switch (field) {
+                        case "skills":
+                          updateForm({ skillsText: value.split(",").map(s => s.trim()).filter(Boolean).join(", ") });
+                          break;
+                        case "experience":
+                          updateForm({ experienceText: value });
+                          break;
+                        case "education":
+                          updateForm({ educationText: value });
+                          break;
+                        case "achievements": {
+                          const lines = value.split(/\r?\n/).map(s => s.replace(/^[\-\*\•\s]+/, "").trim()).filter(Boolean);
+                          updateForm({ achievementsText: lines.join("\n") });
+                          break;
+                        }
+                        case "summary":
+                          updateForm({ summary: value });
+                          break;
+                        default:
+                          break;
                       }
-                      case "summary":
-                        updateForm({ summary: value });
-                        break;
-                      default:
-                        break;
+                      // remove suggestion after applying
+                      setSuggestions(prev => {
+                        if (!prev) return null;
+                        const next = { ...prev };
+                        delete (next as any)[confirmAccept.field];
+                        return Object.keys(next).length > 0 ? next : null;
+                      });
+                      setMessage({ type: 'success', text: 'Suggestion applied — you can Undo from the footer' });
+                    } catch (e) {
+                      addDebug({ event: 'performAccept.error', error: String(e) });
+                      setMessage({ type: 'error', text: 'Failed to apply suggestion' });
+                    } finally {
+                      setConfirmAccept(null);
                     }
-                    // remove suggestion after applying
-                    setSuggestions(prev => {
-                      if (!prev) return null;
-                      const next = { ...prev };
-                      delete (next as any)[confirmAccept.field];
-                      return Object.keys(next).length > 0 ? next : null;
-                    });
-                    setMessage({ type: 'success', text: 'Suggestion applied — you can Undo from the footer' });
-                  } catch (e) {
-                    addDebug({ event: 'performAccept.error', error: String(e) });
-                    setMessage({ type: 'error', text: 'Failed to apply suggestion' });
-                  } finally {
-                    setConfirmAccept(null);
-                  }
+                  })();
                 }} className="px-3 py-2 rounded-md text-background bg-accent">Apply</Button>
               </div>
             </div>
@@ -980,9 +1341,11 @@ export default function ProfileReviewModal({ visible, parsedProfile, onClose, on
           <div className="flex items-center gap-2 mr-auto">
             <CVLoader
               onFileParsed={(parsed) => {
-                // Clear any previous inline error and forward parsed profile
+                // Clear any previous inline error and launch the full file-load + background refine flow.
+                // handleFileLoadAndRefine is responsible for immediate parsed display + hardened backend parse
+                // and will not overwrite the user's draft.
                 setCvLoaderError(null);
-                handleCvParsed(parsed);
+                void handleFileLoadAndRefine(parsed);
               }}
               onError={(text) => {
                 // Show a subtle inline banner in the modal rather than a global toast.
@@ -1000,7 +1363,7 @@ export default function ProfileReviewModal({ visible, parsedProfile, onClose, on
           <div className="flex items-center gap-3 ml-4">
             <Button
               variant="primary"
-              onClick={handleRefineClick}
+              onClick={() => { void handleRefineClick(); }}
               disabled={status !== 'idle' || isFormEmpty()}
             >
               Raffiner AI
@@ -1023,7 +1386,7 @@ export default function ProfileReviewModal({ visible, parsedProfile, onClose, on
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-lg font-semibold">Review parsed CV</h3>
                 <div className="flex items-center gap-2">
-                  <Button onClick={() => { setReviewerVisible(false); try { showToast("Closed reviewer — no changes applied", { variant: "warning" }); } catch (e) {} }} className="px-3 py-1 rounded bg-surface-muted">Close</Button>
+                  <Button onClick={() => { addDebug({ event: 'reviewer.manualClose' }); reviewerCloseSuppressedRef.current = Date.now(); setReviewerVisible(false); try { showToast("Closed reviewer — no changes applied", { variant: "warning" }); } catch (e) {} }} className="px-3 py-1 rounded bg-surface-muted">Close</Button>
                 </div>
               </div>
  
@@ -1041,57 +1404,67 @@ export default function ProfileReviewModal({ visible, parsedProfile, onClose, on
               </div>
  
               <div className="flex justify-end gap-2 mt-3">
-                <Button onClick={async () => {
-                  // Apply remaining (non-dismissed) sections directly to the draft and persist.
-                  const remaining = reviewerSections.filter(s => !s.dismissed);
-                  const prevForm = { ...form };
-                  try {
-                    // Snapshot current draft and suggestions so we can undo the bulk apply (deep clone)
-                    setLastAppliedSnapshot({
-                      field: 'bulk',
-                      previousForm: JSON.parse(JSON.stringify(prevForm)),
-                      acceptedValue: JSON.stringify(remaining),
-                      previousSuggestions: suggestions ? JSON.parse(JSON.stringify(suggestions)) : null,
-                    });
-                    for (const s of remaining) {
-                      switch (s.fieldKey) {
-                        case "summary":
-                          updateForm({ summary: s.content });
-                          break;
-                        case "skills":
-                          updateForm({ skillsText: String(s.content ?? "") });
-                          break;
-                        case "experience":
-                          updateForm({ experienceText: s.content });
-                          break;
-                        case "education":
-                          updateForm({ educationText: s.content });
-                          break;
-                        case "achievements":
-                          updateForm({ achievementsText: String(s.content ?? "") });
-                          break;
-                        case "identity": {
-                          // identity formatted as "Name / Email" — map into name/email if present
-                          const parts = String(s.content || "").split("/").map(p => p.trim()).filter(Boolean);
-                          if (parts[0]) updateForm({ name: parts[0] });
-                          if (parts[1]) updateForm({ email: parts[1] });
-                          break;
+                <Button onClick={() => {
+                  void (async () => {
+                    addDebug({ event: 'reviewer.applyRemaining.start' });
+                    // Apply remaining (non-dismissed) sections directly to the draft and persist.
+                    const remaining = reviewerSections.filter(s => !s.dismissed);
+                    addDebug({ event: 'reviewer.applyRemaining.remainingCount', count: remaining.length });
+                    const prevForm = { ...form };
+                    try {
+                      // Snapshot current draft and suggestions so we can undo the bulk apply (deep clone)
+                      setLastAppliedSnapshot({
+                        field: 'bulk',
+                        previousForm: JSON.parse(JSON.stringify(prevForm)),
+                        acceptedValue: JSON.stringify(remaining),
+                        previousSuggestions: suggestions ? JSON.parse(JSON.stringify(suggestions)) : null,
+                      });
+                      for (const s of remaining) {
+                        switch (s.fieldKey) {
+                          case "summary":
+                            updateForm({ summary: s.content });
+                            break;
+                          case "skills":
+                            updateForm({ skillsText: String(s.content ?? "") });
+                            break;
+                          case "experience":
+                            updateForm({ experienceText: s.content });
+                            break;
+                          case "education":
+                            updateForm({ educationText: s.content });
+                            break;
+                          case "achievements":
+                            updateForm({ achievementsText: String(s.content ?? "") });
+                            break;
+                          case "identity": {
+                            // identity formatted as "Name / Email" — map into name/email if present
+                            const parts = String(s.content || "").split("/").map(p => p.trim()).filter(Boolean);
+                            if (parts[0]) updateForm({ name: parts[0] });
+                            if (parts[1]) updateForm({ email: parts[1] });
+                            break;
+                          }
+                          default:
+                            break;
                         }
-                        default:
-                          break;
                       }
+                      // Clear suggestions since we've applied the content directly
+                      setSuggestions(null);
+                      // Persist immediately (non-destructive)
+                      addDebug({ event: 'reviewer.applyRemaining.beforeSave' });
+                      await handleSave(false);
+                      addDebug({ event: 'reviewer.applyRemaining.afterSave' });
+                      // Suppress immediate re-open from background refines for 5s
+                      reviewerCloseSuppressedRef.current = Date.now();
+                      setReviewerVisible(false);
+                      addDebug({ event: 'reviewer.applyRemaining.setReviewerVisible.false' });
+                      try { showToast("Applied remaining sections and saved — Undo available", { variant: "success" }); } catch (e) {}
+                    } catch (err) {
+                      addDebug({ event: 'reviewer.applyRemaining.error', error: String(err) });
+                      // Restore prior form on error to avoid partial application
+                      try { setForm(prevForm); } catch (e) {}
+                      try { showToast("Failed to apply remaining sections", { variant: "error" }); } catch (e) {}
                     }
-                    // Clear suggestions since we've applied the content directly
-                    setSuggestions(null);
-                    // Persist immediately (non-destructive)
-                    await handleSave(false);
-                    setReviewerVisible(false);
-                    try { showToast("Applied remaining sections and saved — Undo available", { variant: "success" }); } catch (e) {}
-                  } catch (err) {
-                    // Restore prior form on error to avoid partial application
-                    try { setForm(prevForm); } catch (e) {}
-                    try { showToast("Failed to apply remaining sections", { variant: "error" }); } catch (e) {}
-                  }
+                  })();
                 }} className="px-3 py-2 rounded-md bg-accent text-background">Use remaining</Button>
  
               </div>

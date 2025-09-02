@@ -90,32 +90,43 @@ export const normalizeLlmHistory = migrations.define({
   table: "llmHistory",
   migrateOne: async (_ctx, doc) => {
     const patch: Record<string, unknown> = {};
-
+ 
     // Ensure createdAt timestamp exists
     if (!("createdAt" in doc) || doc.createdAt === undefined || doc.createdAt === null) {
       patch.createdAt = Date.now();
     }
-
+ 
     // Ensure merged flag exists
     if (!("merged" in doc) || doc.merged === undefined || doc.merged === null) {
       patch.merged = false;
     }
-
+ 
     // Ensure confidence exists (nullable numeric)
     if (!("confidence" in doc)) {
       patch.confidence = null;
     }
-
+ 
     // Ensure provider field exists (best-effort)
     if (!("provider" in doc)) {
       patch.provider = null;
     }
-
+ 
     // Ensure full_response exists (nullable)
     if (!("full_response" in doc)) {
       patch.full_response = null;
     }
-
+ 
+    // New telemetry fields: set sensible defaults if missing so analytics code can rely on them.
+    if (!("provider_used" in doc)) {
+      patch.provider_used = null;
+    }
+    if (!("sanitized_for_repair" in doc)) {
+      patch.sanitized_for_repair = false;
+    }
+    if (!("repair_returned_provider_shape" in doc)) {
+      patch.repair_returned_provider_shape = false;
+    }
+ 
     if (Object.keys(patch).length === 0) return {};
     return patch;
   },

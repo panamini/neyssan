@@ -61,11 +61,22 @@ http.route({
 });
 
 // CORS origin (use environment variable in Convex dashboard for production)
-const CORS_ORIGIN = process.env.CLIENT_ORIGIN || "http://localhost:5173";
+const PROD_ORIGIN = process.env.CLIENT_ORIGIN;
 
 // Helper to create a pre-flight OPTIONS response
-const preflightResponse = (origin: string | null = null) => {
-  const allowedOrigin = origin ?? CORS_ORIGIN;
+const preflightResponse = (origin: string | null) => {
+  // During development, allow any localhost port to support dynamic port selection by Vite.
+  // In production, strictly enforce the CLIENT_ORIGIN environment variable.
+  const isDev = /^http:\/\/localhost:\d+$/.test(origin ?? "");
+  const allowedOrigin = PROD_ORIGIN ?? (isDev ? origin! : "http://localhost:5173");
+
+  // If the request origin is not allowed, return a standard response without CORS headers.
+  if (!PROD_ORIGIN && !isDev) {
+    // Note: for production, you would likely return a 403 Forbidden error here,
+    // but for local dev, we respond gently to allow browser dev tools to report the error.
+    return new Response("Origin not allowed", { status: 403 });
+  }
+
   return new Response(null, {
     status: 204, // No Content
     headers: new Headers({

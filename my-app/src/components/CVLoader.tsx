@@ -167,4 +167,4 @@ export default function CVLoader({ onFileParsed, onError, label = "Load CV" }: P
       {/* local inline status removed in favor of global toasts */}
     </div>
   );
-};
+}

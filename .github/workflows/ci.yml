@@ -5,7 +5,8 @@ on:
   pull_request:
 
 jobs:
-  test:
+  # Existing python pytest job (pdf-ingest)
+  python-tests:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -27,5 +28,59 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r pdf-ingest/requirements.txt
           pip install pytest
+
       - name: Run pytest
         run: pytest -q
+
+  # New job: run JS tests in my-app with/without optional SDKs (openai, mistral)
+  js-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - node-version: 18
+            openai: false
+            mistral: false
+          - node-version: 18
+            openai: true
+            mistral: false
+          - node-version: 18
+            openai: false
+            mistral: true
+          - node-version: 18
+            openai: true
+            mistral: true
+    env:
+      # keep test determinism where possible
+      CI: "true"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Install dependencies (my-app)
+        working-directory: my-app
+        run: |
+          npm ci
+
+      - name: Install optional SDKs when requested
+        if: matrix.openai == 'true' || matrix.mistral == 'true'
+        working-directory: my-app
+        run: |
+          # Install optional SDKs only for this matrix lane so we exercise SDK code paths.
+          # Pinning is avoided here to use latest; adjust versions if you have a preferred SDK version.
+          if [ "${{ matrix.openai }}" = "true" ]; then
+            npm install openai --no-audit --no-fund
+          fi
+          if [ "${{ matrix.mistral }}" = "true" ]; then
+            npm install mistral --no-audit --no-fund
+          fi
+
+      - name: Run JS tests (vitest) in my-app
+        working-directory: my-app
+        run: |
+          npm test --silent

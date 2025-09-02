@@ -94,6 +94,10 @@ export const upsertProfile = mutation({
       // Treat summary as optional: use undefined when missing instead of null
       summary: incoming.summary ?? undefined,
       skills: dedupeStrings(incoming.skills),
+      // languages: dedupe and normalize if provided
+      languages: dedupeStrings(incoming.languages),
+      // contact is a freeform object; accept as-is when present
+      contact: incoming.contact ?? undefined,
       experience: coerceExperience(incoming.experience),
       education: coerceEducation(incoming.education),
       achievements: dedupeStrings(incoming.achievements),
@@ -123,6 +127,8 @@ export const upsertProfile = mutation({
         // Ensure merged email is always a string to satisfy schema
         email: normalizedProfile.email ?? existing.email ?? "",
         summary: normalizedProfile.summary ?? existing.summary ?? undefined,
+        languages: (normalizedProfile.languages && normalizedProfile.languages.length > 0) ? normalizedProfile.languages : (existing.languages ?? []),
+        contact: normalizedProfile.contact ?? existing.contact ?? undefined,
         skills: (normalizedProfile.skills && normalizedProfile.skills.length > 0) ? normalizedProfile.skills : (existing.skills ?? []),
         experience: (normalizedProfile.experience && normalizedProfile.experience.length > 0) ? normalizedProfile.experience : (existing.experience ?? []),
         education: (normalizedProfile.education && normalizedProfile.education.length > 0) ? normalizedProfile.education : (existing.education ?? []),
@@ -144,6 +150,8 @@ export const upsertProfile = mutation({
         ...(normalizedProfile.name !== undefined && { name: normalizedProfile.name }),
         email: normalizedProfile.email,
         ...(normalizedProfile.summary !== undefined && { summary: normalizedProfile.summary }),
+        ...(normalizedProfile.languages !== undefined && { languages: normalizedProfile.languages }),
+        ...(normalizedProfile.contact !== undefined && { contact: normalizedProfile.contact }),
         skills: normalizedProfile.skills,
         experience: normalizedProfile.experience,
         education: normalizedProfile.education,

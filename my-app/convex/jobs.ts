@@ -21,16 +21,83 @@ export const start = internalMutation({
   returns: v.id("llmJobs"),
   handler: async (ctx, { profileId, rawText, options }) => {
     const now = Date.now();
+
+    // Lightweight non-crypto short hash for observability (snippet-based).
+    function shortHash(s: string) {
+      let h = 2166136261;
+      for (let i = 0; i < s.length; i++) {
+        h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+      }
+      return (h >>> 0).toString(16);
+    }
+
+    const rawStr = String(rawText ?? "");
+    const rawSnippet = rawStr.slice(0, 200);
+    const rawHash = shortHash(rawSnippet);
+  
+    // Log creation metadata to help diagnose duplicate submissions.
+    console.log(
+      `[start] creating job profile=${String(profileId)} rawHash=${rawHash} rawLen=${rawStr.length} options=${JSON.stringify(
+        options
+      )} ts=${now}`
+    );
+  
+    // Server-side short-window dedupe:
+    // - Look for a recent job with the same rawHash created within the last `DEDUP_WINDOW_MS`
+    // - Only reuse jobs that are still queued or processing to avoid returning stale results.
+    // This is a defensive fallback in case multiple clients or flows enqueue nearly-identical jobs.
+    const DEDUP_WINDOW_MS = 10_000; // 10 seconds
+    try {
+      // Read a small recent window of jobs and perform in-memory filter (works without a dedicated index).
+      // Limit to a modest number to avoid scanning too much data.
+      const recentCandidates = await ctx.db.query("llmJobs").take(50);
+      const existing = recentCandidates.find((j: any) => {
+        try {
+          const jRaw = String((j).rawText ?? "").slice(0, 200);
+          const jHash = shortHash(jRaw);
+          const age = now - ((j).createdAt ?? 0);
+          const status = (j).status ?? "";
+          // Dedupe only when the profileId and rawHash match within the short window.
+          // Prevents accidentally reusing a job created for a different profile.
+          return (
+            String(j.profileId) === String(profileId) &&
+            jHash === rawHash &&
+            age >= 0 &&
+            age <= DEDUP_WINDOW_MS &&
+            (status === "queued" || status === "processing")
+          );
+        } catch {
+          return false;
+        }
+      });
+      if (existing) {
+        console.log(`[start] dedupe hit - reusing recent job ${String(existing._id)} profile=${String(existing.profileId)} rawHash=${rawHash} ageMs=${now - (existing.createdAt ?? 0)}`);
+        return existing._id;
+      }
+    } catch (e) {
+      // If dedupe scanning fails for any reason, log and continue to create a new job.
+      console.warn("[start] dedupe scan failed, proceeding to create job:", String(e));
+    }
+  
+    // Persist a copy of the caller-provided options with an internal trace field
+    // so we don't need to change the llmJobs schema. This embeds the short hash
+    // inside options for future debugging while keeping the DB shape stable.
+    const optionsWithTrace = options ? { ...options, __rawHash: rawHash } : undefined;
+  
     const jobId = await ctx.db.insert("llmJobs", {
       profileId,
       status: "queued",
       rawText,
-      options,
+      options: optionsWithTrace,
       createdAt: now,
       updatedAt: now,
     });
+  
     // Schedule the refine internal action (worker) to run immediately.
     await ctx.scheduler.runAfter(0, internal.llm.refine, { jobId });
+  
+    console.log(`[start] job created jobId=${String(jobId)} profile=${String(profileId)} rawHash=${rawHash}`);
+  
     return jobId;
   },
 });
@@ -132,11 +199,28 @@ export const claimJob = internalMutation({
     const job = await ctx.db.get(args.jobId);
     if (!job) return null;
 
+    // Safety: enforce a retry budget so jobs do not re-process indefinitely.
+    // If attempts exceed MAX_ATTEMPTS, mark the job failed and do not claim it.
+    const MAX_ATTEMPTS = 3;
+    const existingAttempts = (job as any).attempts ?? 0;
+    if (existingAttempts >= MAX_ATTEMPTS) {
+      console.log(`[claimJob] job ${String(args.jobId)} exceeded max attempts (${existingAttempts}) — marking failed`);
+      await ctx.db.patch(args.jobId, {
+        status: "failed",
+        lastError: `max attempts (${MAX_ATTEMPTS}) exceeded`,
+        updatedAt: Date.now(),
+      });
+      return null;
+    }
+
     // Only claim if still queued
-    if ((job as any).status !== "queued") return null;
+    if ((job as any).status !== "queued") {
+      console.log(`[claimJob] job ${String(args.jobId)} not queued (status=${(job as any).status}) — not claiming`);
+      return null;
+    }
 
     const now = Date.now();
-    const attempts = (job as any).attempts ? (job as any).attempts + 1 : 1;
+    const attempts = existingAttempts + 1;
 
     await ctx.db.patch(args.jobId, {
       status: "processing",
@@ -149,6 +233,7 @@ export const claimJob = internalMutation({
     const claimed = await ctx.db.get(args.jobId);
     if (!claimed) return null;
     // Project claimed job to exactly the fields declared in the return validator.
+    console.log(`[claimJob] claimed job ${String(args.jobId)} attempts=${attempts} lockedBy=${args.workerId}`);
     return {
       _id: claimed._id,
       profileId: claimed.profileId,
@@ -221,6 +306,11 @@ export const getHistoryById = internalQuery({
 
 /**
  * Append a history record (llmHistory). Returns the new history _id.
+ *
+ * Extended to accept telemetry fields used for post-mortem analysis:
+ * - provider_used: which provider was selected/used for this invocation (string|null)
+ * - sanitized_for_repair: whether the raw provider response was sanitized before repair (boolean)
+ * - repair_returned_provider_shape: whether the repair LLM returned a provider-shaped object (boolean)
  */
 export const appendHistory = internalMutation({
   args: {
@@ -231,6 +321,10 @@ export const appendHistory = internalMutation({
     model: v.optional(v.union(v.string(), v.null())),
     full_response: v.optional(v.any()),
     patch: v.optional(v.any()),
+    // Telemetry fields
+    provider_used: v.optional(v.union(v.string(), v.null())),
+    sanitized_for_repair: v.optional(v.boolean()),
+    repair_returned_provider_shape: v.optional(v.boolean()),
     confidence: v.optional(v.union(v.number(), v.null())),
     merged: v.optional(v.boolean()),
     createdAt: v.optional(v.number()),
@@ -238,6 +332,18 @@ export const appendHistory = internalMutation({
   returns: v.id("llmHistory"),
   handler: async (ctx, args) => {
     const now = args.createdAt ?? Date.now();
+
+    // Detect whether this job already has a history entry so we can flag the new history as merged.
+    let jobHasHistory = false;
+    if (args.jobId !== undefined && args.jobId !== null) {
+      try {
+        const job = await ctx.db.get(args.jobId as any);
+        jobHasHistory = !!(job && (job as any).historyId);
+      } catch {
+        jobHasHistory = false;
+      }
+    }
+
     const doc: any = {
       profileId: args.profileId,
       ...(args.jobId !== undefined ? { jobId: args.jobId } : {}),
@@ -246,11 +352,18 @@ export const appendHistory = internalMutation({
       ...(args.model !== undefined ? { model: args.model } : {}),
       ...(args.full_response !== undefined ? { full_response: args.full_response } : {}),
       ...(args.patch !== undefined ? { patch: args.patch } : {}),
+      // Telemetry persisted to llmHistory
+      ...(args.provider_used !== undefined ? { provider_used: args.provider_used } : {}),
+      ...(args.sanitized_for_repair !== undefined ? { sanitized_for_repair: args.sanitized_for_repair } : {}),
+      ...(args.repair_returned_provider_shape !== undefined ? { repair_returned_provider_shape: args.repair_returned_provider_shape } : {}),
       ...(args.confidence !== undefined ? { confidence: args.confidence } : {}),
-      ...(args.merged !== undefined ? { merged: args.merged } : {}),
+      // If caller didn't explicitly pass merged, infer it when an earlier history exists for this job.
+      ...(args.merged !== undefined ? { merged: args.merged } : jobHasHistory ? { merged: true } : {}),
       createdAt: now,
     };
     const id = await ctx.db.insert("llmHistory", doc);
+    const mergedFlag = args.merged !== undefined ? args.merged : jobHasHistory ? true : false;
+    console.log(`[appendHistory] appended history ${String(id)} for profile ${String(args.profileId)} job=${String(args.jobId ?? "null")} merged=${mergedFlag}`);
     return id;
   },
 });
@@ -267,9 +380,25 @@ export const markJobCompleted = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const job = await ctx.db.get(args.jobId);
+    const now = args.updatedAt ?? Date.now();
+    if (!job) return null;
+
+    // If a historyId already exists for this job, preserve the original historyId to avoid
+    // overwriting a previously accepted parse result. Update status/updatedAt but keep original history.
+    if ((job as any).historyId) {
+      console.log(`[markJobCompleted] job ${String(args.jobId)} already has historyId=${String((job as any).historyId)} — preserving original, updating status=${args.status ?? "finished"}`);
+      await ctx.db.patch(args.jobId, {
+        status: args.status ?? "finished",
+        updatedAt: now,
+      });
+      return null;
+    }
+
+    console.log(`[markJobCompleted] setting historyId=${String(args.historyId)} on job ${String(args.jobId)} status=${args.status ?? "finished"}`);
     await ctx.db.patch(args.jobId, {
       status: args.status ?? "finished",
-      updatedAt: args.updatedAt ?? Date.now(),
+      updatedAt: now,
       historyId: args.historyId,
     });
     return null;

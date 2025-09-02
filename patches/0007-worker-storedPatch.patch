@@ -1,0 +1,43 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Roo <roo@example.com>
+Date: Sun, 31 Aug 2025 23:18:10 +0200
+Subject: [PATCH] worker: store normalized patch + raw LLM output in llmHistory.patch
+
+Wrap stored patch in `{ raw, normalized }` when possible so downstream actions
+can prefer normalized server-side parse but retain raw text for audit.
+
+---
+ my-app/worker/llmWorker.ts | 22 ++++++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+diff --git a/my-app/worker/llmWorker.ts b/my-app/worker/llmWorker.ts
+index 0000000..0000000 100644
+--- a/my-app/worker/llmWorker.ts
++++ b/my-app/worker/llmWorker.ts
+@@ -160,6 +160,28 @@ async function workerLoop() {
+           const llmResp = await callLLM(messages);
+           const llmText = llmResp.text ?? null;
+           log.info({ jobId: job._id }, "LLM completed");
+ 
++          // Attempt to extract a structured JSON patch; preserve both raw and normalized
++          // representations. normalized may be null if parsing fails.
++          const patch = extractPatchFromText(llmText);
++          let storedPatch: any = patch ?? llmText;
++          try {
++            // Attempt to run server-side normalizer (if loaded into runtime)
++            // This is defensive: if not present, we keep raw data only.
++            if (typeof (global as any).parseLLMSections === "function") {
++              const normalized = (global as any).parseLLMSections(String(patch ?? llmText));
++              storedPatch = { raw: patch ?? llmText, normalized };
++            } else {
++              storedPatch = { raw: patch ?? llmText, normalized: null };
++            }
++          } catch (e) {
++            storedPatch = { raw: patch ?? llmText, normalized: null };
++          }
++
+           const patch = extractPatchFromText(llmText);
+ 
+           const historyId = (await convex.action(api.workerGateway.processJobRequest, {
+             operation: {
+*** End Patch

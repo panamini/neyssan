@@ -1,0 +1,32 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Roo <roo@example.com>
+Date: Sun, 31 Aug 2025 23:19:20 +0200
+Subject: [PATCH] simpleClientParse: map language/contact headers to fieldKeys
+
+Update the lightweight client-side parser to recognize language and contact headers
+so client fallback parsing returns these sections for the reviewer.
+
+---
+ my-app/src/utils/simpleClientParse.ts | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/my-app/src/utils/simpleClientParse.ts b/my-app/src/utils/simpleClientParse.ts
+index 0000000..0000000 100644
+--- a/my-app/src/utils/simpleClientParse.ts
++++ b/my-app/src/utils/simpleClientParse.ts
+@@ -46,7 +46,20 @@ export function clientFormatCompleteCV(rawText: string) {
+-        const fieldKey = key.includes("experience") ? "experience" : key.includes("project") ? "experience" : key.includes("skill") ? "skills" : key.includes("education") ? "education" : key.includes("identity") || key.includes("contact") ? "identity" : "summary";
++        const fieldKey = key.includes("experience") ? "experience"
++          : key.includes("project") ? "experience"
++          : key.includes("skill") ? "skills"
++          : key.includes("education") ? "education"
++          : key.includes("langue") || key.includes("language") || key.includes("langues") ? "languages"
++          : key.includes("contact") || key.includes("coordonn") ? "contact"
++          : key.includes("identity") ? "identity"
++          : "summary";
+         current = { title: header, content: [], fieldKey };
+       } else {
+         if (!current) {
+           current = { title: "Intro", content: [l], fieldKey: "summary" };
+         } else {
+*** End Patch

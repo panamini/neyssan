@@ -9,6 +9,8 @@ vi.mock("@clerk/clerk-react", () => ({
 // Mock Convex mutation hook to simulate a successful save
 vi.mock("convex/react", () => ({
   useMutation: () => (async (args: any) => ({ profileId: args.profileId, updatedAt: Date.now() })),
+  // Provide a no-op useAction for tests that don't need it but components may import it.
+  useAction: () => undefined,
 }));
 
 // Replace CVLoader with a controllable test double that exposes a button to simulate parsed CVs.

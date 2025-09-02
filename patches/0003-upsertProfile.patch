@@ -1,0 +1,22 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Roo <roo@example.com>
+Date: Sun, 31 Aug 2025 23:15:00 +0200
+Subject: [PATCH] upsertProfile: persist languages/contact when provided
+
+Ensure upsert mutation accepts and writes `languages` and `contact` fields from incoming profileData.
+
+---
+ my-app/convex/mutations/upsertProfile.ts | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/my-app/convex/mutations/upsertProfile.ts b/my-app/convex/mutations/upsertProfile.ts
+index 0000000..0000000 100644
+--- a/my-app/convex/mutations/upsertProfile.ts
++++ b/my-app/convex/mutations/upsertProfile.ts
+@@ -1,6 +1,9 @@
+         if (args.profileData.summary !== undefined) updates.summary = args.profileData.summary;
++        if (args.profileData.languages !== undefined) updates.languages = args.profileData.languages;
++        if (args.profileData.contact !== undefined) updates.contact = args.profileData.contact;
+ 
+         // existing upsert logic continues...
+*** End Patch

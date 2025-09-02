@@ -2,53 +2,75 @@ import { mutation, internalMutation, internalAction } from "./_generated/server"
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
+import { llmConfig } from "../config/llmConfig";
+import runFormatCompleteCV from "./actions/formatCompleteCV";
+
+/**
+ * Runtime fetch instrumentation (debug only)
+ *
+ * Purpose:
+ * - Capture and log a small stack-trace + URL every time `fetch` is invoked inside the Convex server
+ *   runtime. This helps identify the exact callsite when Convex warns about "unawaited operation: [fetch]".
+ * - The wrapper is intentionally lightweight and non-blocking: it returns the original Promise
+ *   unchanged while attaching metadata to the returned promise for correlation.
+ *
+ * Safety:
+ * - All logging is wrapped in try/catch to avoid crashing runtime if console isn't available.
+ * - We only install the wrapper once per process.
+ */
+try {
+  const globalAny: any = globalThis as any;
+  const origFetch = globalAny.fetch;
+  if (typeof origFetch === "function" && !globalAny.__fetchInstrumented) {
+    globalAny.__fetchInstrumented = true;
+    globalAny.fetch = function fetchInstrumented(...args: any[]) {
+      // Capture a lightweight stack for correlation
+      const url = args && args[0];
+      let stack: string | undefined = undefined;
+      try {
+        // Create an Error and grab its stack - this is cheap and fine for debug
+        stack = (new Error("fetch-instrument")).stack;
+      } catch { /* ignore */ }
+      try {
+        // Use console.info so these are visible in dev logs; keep payload small
+        console.info("[fetch-instrument] fetch called", { url: String(url).slice(0, 200), ts: Date.now() });
+      } catch { /* ignore */ }
+
+      // Call original fetch and attach metadata to the returned promise for later correlation.
+      const p = origFetch.apply(this, args);
+      try {
+        // Non-enumerable attach metadata so it doesn't break code that iterates keys
+        Object.defineProperty(p, "__fetch_instrumentation", {
+          value: { url: String(url).slice(0, 200), stack, ts: Date.now() },
+          configurable: true,
+          writable: false,
+          enumerable: false
+        });
+      } catch {
+        // best-effort only
+      }
+      return p;
+    };
+  }
+} catch (e) {
+  try { console.warn("[fetch-instrument] failed to install instrumentation:", String(e)); } catch {}
+}
 
 /**
  * Internal mutation: atomically insert an llmHistory row and mark the job completed.
  * This consolidates appendHistory + markJobCompleted into one server-side mutation.
  */
-export const storeResult = internalMutation({
-  args: {
-    jobId: v.id("llmJobs"),
-    profileId: v.id("userProfiles"),
-    placeholderId: v.optional(v.union(v.string(), v.null())),
-    provider: v.optional(v.union(v.string(), v.null())),
-    model: v.optional(v.union(v.string(), v.null())),
-    full_response: v.optional(v.any()),
-    patch: v.optional(v.any()),
-    confidence: v.optional(v.union(v.number(), v.null())),
-    merged: v.optional(v.boolean()),
-    createdAt: v.optional(v.number()),
-  },
-  returns: v.id("llmHistory"),
-  handler: async (ctx, args) => {
-    // Insert history record
-    const now = args.createdAt ?? Date.now();
-    const historyDoc: any = {
-      profileId: args.profileId,
-      ...(args.jobId !== undefined ? { jobId: args.jobId } : {}),
-      ...(args.placeholderId !== undefined ? { placeholderId: args.placeholderId } : {}),
-      ...(args.provider !== undefined ? { provider: args.provider } : {}),
-      ...(args.model !== undefined ? { model: args.model } : {}),
-      ...(args.full_response !== undefined ? { full_response: args.full_response } : {}),
-      ...(args.patch !== undefined ? { patch: args.patch } : {}),
-      ...(args.confidence !== undefined ? { confidence: args.confidence } : {}),
-      ...(args.merged !== undefined ? { merged: args.merged } : {}),
-      createdAt: now,
-    };
+/*
+  storeResult removed — callers should use internal.jobs.appendHistory + internal.jobs.markJobCompleted
+  This file previously contained a compatibility wrapper that inserted directly into llmHistory and patched
+  the job row. To ensure all job completions go through the centralized lifecycle (attempts tracking /
+  idempotency), any remaining code that used llm.storeResult should be updated to:
 
-    const historyId = await ctx.db.insert("llmHistory", historyDoc);
+    const historyId = await ctx.runMutation(internal.jobs.appendHistory, { ... });
+    await ctx.runMutation(internal.jobs.markJobCompleted, { jobId, historyId });
 
-    // Mark the job finished and link to historyId atomically (same mutation)
-    await ctx.db.patch(args.jobId, {
-      status: "finished",
-      updatedAt: Date.now(),
-      historyId,
-    });
-
-    return historyId;
-  },
-});
+  The wrapper was removed to avoid circular type inference and to enforce the single canonical path.
+*/
 
 /**
  * Internal action to run the external LLM call.
@@ -67,14 +89,27 @@ export const refine = internalAction({
       throw new Error("Job not found");
     }
 
-    // Use rawText from job (may be null/undefined)
-    const rawText: string | null = (job as any).rawText ?? null;
+    // Ensure processing goes through the claim/worker lifecycle so attempts are tracked.
+    // Try to claim the job atomically; if claim fails (already processing/claimed), abort.
+    // Use a deterministic workerId for the refine action so claims are attributable.
+    const WORKER_ID = `refine-${String(args.jobId)}`;
+    const claimed = await ctx.runMutation(internal.jobs.claimJob, {
+      jobId: args.jobId,
+      workerId: WORKER_ID,
+    });
+    if (!claimed) {
+      // Another worker claimed this job or it is no longer queued; abort refine.
+      return null;
+    }
 
-    // Choose model (default). You can extend startRefine to accept model/options later.
-    const model = "ministral-8b-2410";
+    // Use rawText from the claimed job (may be null/undefined)
+    const rawText: string | null = (claimed as any).rawText ?? null;
 
+    // Choose model (default). Use shared llmConfig to keep model selection consistent across services.
+    const model = llmConfig.mistralModel ?? llmConfig.model ?? process.env.MISTRAL_MODEL ?? "mistral-small-latest";
+ 
     // Ensure API key exists
-    const apiKey = process.env.MISTRAL_API_KEY;
+    const apiKey = llmConfig.mistralKey ?? process.env.MISTRAL_API_KEY;
     if (!apiKey) {
       // Mark job failed and return
       await ctx.runMutation(internal.jobs.markJobFailed, {
@@ -130,18 +165,106 @@ export const refine = internalAction({
       return null;
     }
 
-    // Persist the result using the atomic internal mutation defined above.
-    await ctx.runMutation((internal as any).llm.storeResult, {
-      jobId: args.jobId,
+    // Persist the result through the job lifecycle mutations so attempts and idempotency
+    // handling is consistent across all processing paths.
+    // Defensive: try to extract a usable text payload from the provider response and run
+    // the same formatCompleteCV repair path server-side so the history contains a normalized parse.
+    const extractProviderText = (resp: any): string | null => {
+      if (!resp) return null;
+      // Common shapes to try in order:
+      // - choices[0].message.content
+      // - text
+      // - output (string)
+      // - output[0].content or output[0].text
+      // - output?.[0]?.content?.text or output?.[0]?.content?.message
+      // - fallback to null (we avoid always stringifying huge objects here)
+      try {
+        const c = resp?.choices?.[0]?.message?.content;
+        if (typeof c === "string" && c.trim().length > 0) return c;
+      } catch {}
+      try {
+        if (typeof resp?.text === "string" && resp.text.trim().length > 0) return resp.text;
+      } catch {}
+      try {
+        if (typeof resp?.output === "string" && resp.output.trim().length > 0) return resp.output;
+      } catch {}
+      try {
+        const o0 = resp?.output?.[0];
+        if (typeof o0?.content === "string" && o0.content.trim().length > 0) return o0.content;
+        if (typeof o0?.text === "string" && o0.text.trim().length > 0) return o0.text;
+        if (typeof o0?.content?.text === "string" && o0.content.text.trim().length > 0) return o0.content.text;
+      } catch {}
+      return null;
+    };
+
+    let normalizedParse: any = null;
+    let sanitizedForRepair = false;
+    let repairReturnedProviderShape = false;
+    try {
+      const providerText = extractProviderText(full_response);
+      if (providerText) {
+        try {
+          // Run server-side normalized parse to produce reviewer-ready shape
+          const repaired = await runFormatCompleteCV({ rawText: providerText });
+          if (repaired && repaired.result) {
+            normalizedParse = repaired.result;
+            repairReturnedProviderShape = true;
+            sanitizedForRepair = true;
+          }
+        } catch (e) {
+          // Log and continue — we'll still persist the raw full_response
+          console.warn(`[refine] server-side formatCompleteCV failed for job ${String(args.jobId)}: ${String(e)}`);
+        }
+      }
+    } catch (e) {
+      console.warn(`[refine] providerText extraction/parsing failed for job ${String(args.jobId)}: ${String(e)}`);
+    }
+
+    // Ensure we persist a minimal, parseable patch even when repair fails so the client
+    // can treat the job as terminal and surface a helpful message (defense-in-depth).
+    const originalPatch = full_response?.patch ?? null;
+    const minimalNormalized = normalizedParse ?? {
+      // Minimal structure for the client to detect a failed repair and show a fallback UI.
+      // Keep it small to avoid storing huge raw blobs.
+      warning: "repair_failed",
+      // Provide a small snippet of the provider's textual payload to aid debugging/in-UI display.
+      rawTextSnippet: (typeof full_response === "string" ? String(full_response).slice(0, 800) : (full_response?.text ?? (rawText ?? "") ).toString().slice(0, 800)),
+      // Preserve diagnostic flags so telemetry/UX can show reason
+      diagnostics: {
+        sanitizedForRepair,
+        repairReturnedProviderShape,
+        confidence: confidence ?? full_response?.parsed?.confidence ?? null
+      }
+    };
+
+    const patchToPersist = normalizedParse
+      ? { normalized: normalizedParse, originalPatch }
+      : { normalized: minimalNormalized, originalPatch };
+
+    const historyId = await ctx.runMutation(internal.jobs.appendHistory, {
       profileId: job.profileId,
+      jobId: args.jobId,
       placeholderId: job.placeholderId ?? null,
       provider: "mistral",
       model,
       full_response,
-      patch: full_response?.patch ?? null,
+      patch: patchToPersist,
+      // Telemetry: persist provider selection and repair diagnostics (best-effort)
+      provider_used: "mistral",
+      sanitized_for_repair: sanitizedForRepair,
+      repair_returned_provider_shape: repairReturnedProviderShape,
       confidence: confidence ?? full_response?.parsed?.confidence ?? null,
       merged: false,
       createdAt: Date.now(),
+    });
+
+    // Link the job to the persisted history record using the centralized mutation which
+    // preserves the first accepted historyId and avoids overwriting on retries.
+    await ctx.runMutation(internal.jobs.markJobCompleted, {
+      jobId: args.jobId,
+      historyId,
+      status: "finished",
+      updatedAt: Date.now(),
     });
 
     return null;

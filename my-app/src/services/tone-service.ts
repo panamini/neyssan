@@ -137,13 +137,11 @@ export function createToneService() {
     },
 
     // Analyze text for tone consistency
-    // @ts-expect-error TS6133: 'text' is declared but its value is never read.
     // TODO: Use the 'text' parameter in the tone analysis implementation.
     analyzeTone(text: string, settings: ToneSettings): {
       consistency: number;
       suggestions: string[];
     } {
-      // @ts-expect-error TS6133: 'adjustment' is declared but its value is never read. It IS used.
       const adjustment = calculateToneAdjustment(settings);
       const consistency = calculateToneConsistency();
       const suggestions = generateToneSuggestions();
