@@ -163,18 +163,77 @@ queue = Queue("default", connection=redis_conn)
 def merge_profiles(original: Dict[str, Any], refined: Dict[str, Any]) -> Dict[str, Any]:
     """
     Defensively merges refined LLM data into the original profile.
-    - New values overwrite old, but None/empty values do not.
-    - For lists (like skills), it appends unique items.
+
+    Rules:
+    - Scalar values from `refined` overwrite `original` unless the refined value is
+      None, empty string, or an empty list.
+    - For lists of primitives (e.g. skills) perform an order-preserving merge
+      that keeps unique items.
+    - For lists of dicts (e.g. experience/education) prefer the refined list (replace).
+    - New keys from `refined` are added.
     """
-    merged = original.copy()
+    merged = dict(original) if original else {}
     for key, value in refined.items():
-        if value is not None and value != "" and value != []:
-            if isinstance(value, list) and key in original:
-                # Additive merge for lists, ensuring uniqueness
-                merged[key] = list(set(original.get(key, []) + value))
-            else:
+        if value is None or value == "" or value == []:
+            continue
+
+        orig_val = merged.get(key)
+
+        # If both original and refined are lists, handle merging logic.
+        if isinstance(value, list) and isinstance(orig_val, list):
+            # If either list contains dicts, treat as list-of-dicts and prefer refined.
+            if any(isinstance(i, dict) for i in orig_val) or any(isinstance(i, dict) for i in value):
                 merged[key] = value
+            else:
+                # Merge lists of primitives preserving order and uniqueness.
+                out: list = []
+                seen = set()
+                for item in [*orig_val, *value]:
+                    # Use a stable hashable representation for uniqueness.
+                    try:
+                        if isinstance(item, (dict, list)):
+                            h = json.dumps(item, sort_keys=True)
+                        else:
+                            h = item
+                    except Exception:
+                        h = str(item)
+                    if h in seen:
+                        continue
+                    seen.add(h)
+                    out.append(item)
+                merged[key] = out
+        else:
+            # For non-list or when original isn't a list, simply overwrite with refined.
+            merged[key] = value
     return merged
+
+
+def compute_minimal_patch(original: Dict[str, Any], candidate: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Minimal JSON-Patch-like generator used by tests.
+
+    Produces a dict: { "ops": [ {"op": "replace", "path": "/field", "value": ...}, ... ] }
+
+    Behavior:
+    - Compare top-level keys present in either original or candidate.
+    - If values are not deep-equal, produce a single 'replace' op for that path.
+    - This is intentionally simple (tests expect replace ops for changed top-level keys).
+    """
+    ops = []
+    def _normalize(v):
+        # Helper to make comparisons stable for common JSON types.
+        try:
+            return json.loads(json.dumps(v, sort_keys=True))
+        except Exception:
+            return v
+
+    all_keys = set((original or {}).keys()) | set((candidate or {}).keys())
+    for key in sorted(all_keys):
+        orig_val = original.get(key) if original else None
+        cand_val = candidate.get(key) if candidate else None
+        if _normalize(orig_val) != _normalize(cand_val):
+            ops.append({"op": "replace", "path": f"/{key}", "value": cand_val})
+    return {"ops": ops}
 
 def validate_raw_text(raw_text: str) -> None:
     """
