@@ -45,27 +45,27 @@ This plan is an evolution of the previous one, incorporating the findings from t
 
 ### **Phase 1: Create the Shared Library and Migrate Core Utilities**
 
-1.  **Scaffold `parsing_shared` library**:
-    *   Create the directory `my-app/convex/lib/parsing_shared`.
+1.  **Scaffold `parsing-shared` library**:
+    *   Create the directory `my-app/convex/lib/parsing-shared`.
     *   Create the file structure as previously designed (`api.ts`, `engine.ts`, `repair.ts`, etc.).
     *   Add a `README.md` explaining the purpose of the library.
 
 2.  **Migrate Utilities (Low-risk, high-value)**:
-    *   Move `repairJSON` from `hybridParser.ts` to `my-app/convex/lib/parsing_shared/repair.ts`.
-    *   Move `detectLanguageIsFrench` to `my-app/convex/lib/parsing_shared/utils.ts`.
-    *   Move the heuristic parsing logic (`parseWithEnhancedHeuristics`, `isPotentialHeader`) to `my-app/convex/lib/parsing_shared/heuristics.ts`.
-    *   Move `validateLLMOutput` to `my-app/convex/lib/parsing_shared/validation.ts`.
+    *   Move `repairJSON` from `hybridParser.ts` to `my-app/convex/lib/parsing-shared/repair.ts`.
+    *   Move `detectLanguageIsFrench` to `my-app/convex/lib/parsing-shared/utils.ts`.
+    *   Move the heuristic parsing logic (`parseWithEnhancedHeuristics`, `isPotentialHeader`) to `my-app/convex/lib/parsing-shared/heuristics.ts`.
+    *   Move `validateLLMOutput` to `my-app/convex/lib/parsing-shared/validation.ts`.
     *   **Crucially**, update `hybridParser.ts` to import these functions from their new locations. All existing tests for `hybridParser.ts` should still pass, confirming the move was successful without changing behavior.
 
 ### **Phase 2: Build the Core Engine & Migrate `refine` Action**
 
 3.  **Implement the Core Engine**:
-    *   In `parsing_shared/engine.ts`, create the main `parseCV` function. This function will orchestrate the full parsing flow (LLM -> validate -> repair -> retry -> fallback to heuristics).
+    *   In `parsing-shared/engine.ts`, create the main `parseCV` function. This function will orchestrate the full parsing flow (LLM -> validate -> repair -> retry -> fallback to heuristics).
     *   The engine will import and use the utilities migrated in the previous step.
     *   It will *not* call LLMs directly. Instead, it will take a `llmCaller` function as a parameter, making it highly testable. `(prompt, schema, opts) => Promise<string | object>`.
 
 4.  **Create the Provider Layer**:
-    *   In `parsing_shared/providers.ts`, create a function `createLLMCaller(config)`.
+    *   In `parsing-shared/providers.ts`, create a function `createLLMCaller(config)`.
     *   This function will use `llmConfig.ts` and `llmAdapters.ts` to create a concrete LLM calling function that handles provider selection, timeout/abort logic, and telemetry. This will encapsulate all the logic from `callPreferredProvider` and `callLLMWithTimeout`.
 
 5.  **Refactor `llm.ts` (`refine` action)**
@@ -73,7 +73,7 @@ This plan is an evolution of the previous one, incorporating the findings from t
     *   The `handler` will now look something like this:
         ```typescript
         // simplified example
-        const { parseCV } = await import("../lib/parsing_shared"); // Dynamic import
+        const { parseCV } = await import("../lib/parsing-shared"); // Dynamic import
         const parserResult = await parseCV({ rawText: job.rawText, ... });
         // ... persist parserResult
         ```
@@ -100,7 +100,7 @@ graph TD
         LLMWorker["llmWorker.ts"]
     end
 
-    subgraph "Shared Library: parsing_shared"
+    subgraph "Shared Library: parsing-shared"
         style SharedLib fill:#f9f9f9,stroke:#333,stroke-width:2px
 
         PublicAPI["index.ts (parseCV)"] --> Engine

@@ -31,6 +31,7 @@
     "dompurify": "^3.2.6",
     "jose": "^6.0.6",
     "jsonwebtoken": "^9.0.2",
+    "lodash": "^4.17.21",
     "lru-cache": "^11.0.2",
     "lucide-react": "^0.475.0",
     "node-fetch": "^3.3.2",
