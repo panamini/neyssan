@@ -10,6 +10,8 @@ import { extractLanguages, extractContactBlock } from "../../utils/parseHelpers"
 import { repairJSON } from "../parsing_shared/repair";
 import { detectLanguageIsFrench, sanitizeProviderResponse } from "../parsing_shared/utils";
 import { createLLMCaller } from "../parsing_shared/providers";
+import { mapSectionsToCV } from "./cvMapper";
+import type { ICVObject } from "./cvMapper";
 
 // JSON-native LLM caller with optional schema support.
 // Tries to use the OpenAI Responses API (if OPENAI_API_KEY is present), requesting a JSON response.
@@ -313,9 +315,11 @@ interface ParseResult {
     sanitizedForRepair?: boolean;
     repairReturnedProviderShape?: boolean;
   };
+  // Optional mapped canonical CV object (present when caller requests mapping)
+  cv?: ICVObject | null;
 }
 
-export async function parseCV(rawText: string): Promise<ParseResult> {
+export async function parseCV(rawText: string, options?: { returnMappedCV?: boolean }): Promise<ParseResult> {
   const warnings: string[] = [];
   let fallbackReason = '';
   
@@ -604,30 +608,50 @@ async function callPreferredProvider(
     // Final validation pass for sections
     const validation = validateLLMOutput(parsedSections, rawText);
     if (validation.isValid && validation.confidence > 0.7) {
-      return {
-        sections: parsedSections.sections.map((s: { title: string; content: string; fieldKey: string; confidence: number; }) => ({
-          ...s,
-          confidence: s.confidence * validation.confidence // Adjust confidence based on overall validation
-        })),
+      const sectionsAdjusted = parsedSections.sections.map((s: { title: string; content: string; fieldKey: string; confidence: number; }) => ({
+        ...s,
+        confidence: s.confidence * validation.confidence // Adjust confidence based on overall validation
+      }));
+      const result: ParseResult = {
+        sections: sectionsAdjusted,
         metadata: parsedMetadata,
         method: 'llm',
         warnings: validation.issues
       };
+      if (options?.returnMappedCV) {
+        try {
+          result.cv = mapSectionsToCV(sectionsAdjusted, parsedMetadata);
+          try { recordTelemetry("mapper.mapped", { method: "llm", sections: sectionsAdjusted.length }); } catch {}
+        } catch (mapErr: any) {
+          try { recordTelemetry("mapper.failed", { error: String(mapErr) }); } catch {}
+        }
+      }
+      return result;
     } else {
       // Lenient acceptance: if the LLM produced structured sections we accept them even when strict validation fails.
       // This improves robustness when providers return correct JSON but fuzzy matching lowers coverage.
       if (parsedSections && Array.isArray(parsedSections.sections) && parsedSections.sections.length > 0) {
         const warn = [`LLM validation failed strict checks: ${validation.issues.join(', ')}`];
         warnings.push(...validation.issues, ...warn);
-        return {
-          sections: parsedSections.sections.map((s: { title: string; content: string; fieldKey: string; confidence: number; }) => ({
-            ...s,
-            confidence: Math.max(0.4, (s.confidence ?? 0.5) * (validation.confidence || 0.5)) // accept but degrade confidence
-          })),
+        const sectionsAdjusted = parsedSections.sections.map((s: { title: string; content: string; fieldKey: string; confidence: number; }) => ({
+          ...s,
+          confidence: Math.max(0.4, (s.confidence ?? 0.5) * (validation.confidence || 0.5)) // accept but degrade confidence
+        }));
+        const result: ParseResult = {
+          sections: sectionsAdjusted,
           metadata: parsedMetadata,
           method: 'llm',
           warnings
         };
+        if (options?.returnMappedCV) {
+          try {
+            result.cv = mapSectionsToCV(sectionsAdjusted, parsedMetadata);
+            try { recordTelemetry("mapper.mapped", { method: "llm_lenient", sections: sectionsAdjusted.length }); } catch {}
+          } catch (mapErr: any) {
+            try { recordTelemetry("mapper.failed", { error: String(mapErr) }); } catch {}
+          }
+        }
+        return result;
       }
       fallbackReason = `LLM validation failed: ${validation.issues.join(', ')}`;
       warnings.push(...validation.issues);
@@ -644,12 +668,21 @@ async function callPreferredProvider(
   const heuristicSections = parseWithEnhancedHeuristics(rawText);
   const heuristicMetadata = extractMetadataHeuristically(rawText);
   
-  return {
+  const result: ParseResult = {
     sections: heuristicSections,
     metadata: heuristicMetadata,
     method: 'heuristic',
     warnings
   };
+  if (options?.returnMappedCV) {
+    try {
+      result.cv = mapSectionsToCV(heuristicSections, heuristicMetadata);
+      try { recordTelemetry("mapper.mapped", { method: "heuristic", sections: heuristicSections.length }); } catch {}
+    } catch (mapErr: any) {
+      try { recordTelemetry("mapper.failed", { error: String(mapErr) }); } catch {}
+    }
+  }
+  return result;
 }
 
 async function callOpenAIResponsesForRepair(prompt: string, text: string, opts?: { signal?: AbortSignal }): Promise<string> {
