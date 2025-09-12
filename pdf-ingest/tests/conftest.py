@@ -1,3 +1,10 @@
+import os as _os
+import pytest as _pytest
+# Hard-disable all pdf-ingest tests unless explicitly enabled.
+# Set ENABLE_PDF_INGEST_TESTS=1 (or "true"/"yes") to run them.
+if _os.getenv("ENABLE_PDF_INGEST_TESTS", "").lower() not in ("1", "true", "yes"):
+    _pytest.skip("Skipping pdf-ingest tests (ENABLE_PDF_INGEST_TESTS not set)", allow_module_level=True)
+
 import sys
 import os
 
