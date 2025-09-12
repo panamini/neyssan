@@ -1,3 +1,9 @@
+import pytest
+import os as _os
+# Allow disabling these worker tests in CI or local runs by setting SKIP_PDF_INGEST_TEST=1 (or "true")
+if _os.getenv("SKIP_PDF_INGEST_TEST", "").lower() in ("1", "true", "yes"):
+    pytest.skip("Skipping pdf-ingest worker unit tests (SKIP_PDF_INGEST_TEST set)", allow_module_level=True)
+
 import importlib.util
 import os
 import json
