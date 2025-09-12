@@ -10,9 +10,14 @@
     "predev": "convex dev --until-success && convex dashboard",
     "build": "tsc -b && vite build",
     "lint": "tsc && eslint .  --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+
     "preview": "vite preview",
     "test": "vitest --run --exclude pdf-ingest/*",
     "test:watch": "vitest"
+
+    "preview": "vite preview"
+
+
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.22.13",
