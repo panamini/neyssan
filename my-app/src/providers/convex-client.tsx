@@ -1,11 +1,10 @@
 import type { ReactNode } from 'react';
-import { ConvexProvider as BaseConvexProvider, ConvexReactClient } from 'convex/react';
+import { ConvexProvider as BaseConvexProvider } from 'convex/react';
+import { convexClient as convex } from '../lib/convex-client';
 
 export type ConvexProviderProps = {
   readonly children: ReactNode;
 };
-
-const convex = new ConvexReactClient(import.meta.env['CONVEX_URL'] as string);
 
 export function ConvexProvider({ children }: ConvexProviderProps): JSX.Element {
   return (

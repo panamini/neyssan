@@ -94,11 +94,12 @@ function normalizeToken(token: string): string | null {
  *  - "Deutsch\nItaliano"
  *  - "English / Spanish; French"
  */
-export function normalizeLanguagesFromText(text: string | null | undefined): string[] {
-  if (!text) return [];
+export function normalizeLanguagesFromTextDetailed(text: string | null | undefined): { normalized: string[]; raw: string[] } {
+  if (!text) return { normalized: [], raw: [] };
   // Split on commas, slashes, semicolons, newlines, and pipes
   const rawTokens = text.split(/[,\/;|\n]+/g).map((t) => t.trim()).filter(Boolean);
-  const result: string[] = [];
+  const normalizedResult: string[] = [];
+  const rawResult: string[] = [];
   const seen = new Set<string>();
   for (const tok of rawTokens) {
     const parts = tok.split(/\s+or\s+|\s+and\s+/i).map((p) => p.trim()).filter(Boolean);
@@ -107,11 +108,16 @@ export function normalizeLanguagesFromText(text: string | null | undefined): str
       if (!normalized) continue;
       if (!seen.has(normalized)) {
         seen.add(normalized);
-        result.push(normalized);
+        normalizedResult.push(normalized);
+        rawResult.push(part);
       }
     }
   }
-  return result;
+  return { normalized: normalizedResult, raw: rawResult };
+}
+
+export function normalizeLanguagesFromText(text: string | null | undefined): string[] {
+  return normalizeLanguagesFromTextDetailed(text).normalized;
 }
 
 /**

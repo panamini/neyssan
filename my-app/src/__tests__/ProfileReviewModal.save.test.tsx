@@ -21,16 +21,16 @@ vi.mock("../components/CVLoader", () => ({
 
 import ProfileReviewModal from "../components/ProfileReviewModal";
 
-describe("ProfileReviewModal — save / canonical sync", () => {
-  it("saves draft and persists changes into the preview", async () => {
+describe("ProfileReviewModal — save / canonical sync (migrated)", () => {
+  it("saves draft and persists changes into the preview (immediate-apply semantics)", async () => {
     render(<ProfileReviewModal visible={true} parsedProfile={null} onClose={() => {}} />);
 
     // Find the draft summary card (left column) via its sr-only label "Summary (Draft)"
-    const draftLabel = screen.getByText(/Summary\s*\(Draft\)/i);
+    const draftLabel = await screen.findByText(/Summary\s*\(Draft\)/i);
     const draftContainer = draftLabel.closest('div')!;
 
     // Click the Edit button for Summary to reveal the editable textarea
-    const editButton = screen.getByRole('button', { name: /Edit\s*Summary/i });
+    const editButton = await screen.findByRole('button', { name: /Edit\s*Summary/i });
     fireEvent.click(editButton);
 
     // The editable textbox should appear inside the draft container
@@ -38,7 +38,6 @@ describe("ProfileReviewModal — save / canonical sync", () => {
 
     // Find the in-component "Save" button (editing footer)
     const saveBtn = screen.getByRole('button', { name: /Save/i });
-
 
     // Enter a draft value — Save should become enabled
     fireEvent.change(summary, { target: { value: "My new summary" } });

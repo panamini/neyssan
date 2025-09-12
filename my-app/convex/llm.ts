@@ -340,9 +340,38 @@ export const startRefineByString = mutation({
     }
  
     if (!normalizedProfileId) {
-      throw new Error(`Invalid profileId: "${args.profileId}". Could not normalize to a Convex id nor find a userProfiles document with that external profileId.`);
+      // If no matching userProfiles doc exists for the external profileId, create a lightweight
+      // placeholder document to allow downstream processing to continue. This improves tolerance
+      // for callers that pass newly-issued external IDs that haven't yet been upserted.
+      // The placeholder mirrors the minimal shape produced by upsertProfile to satisfy schema constraints.
+      try {
+        const now = Date.now();
+        const placeholder: any = {
+          profileId: args.profileId,
+          idempotencyKeys: [],
+          email: "",
+          skills: [],
+          experience: [],
+          education: [],
+          achievements: [],
+          version: 1,
+          createdAt: now,
+          updatedAt: now,
+          preferences: {
+            writingStyle: "professional",
+            tonePreference: "formal",
+            autoSend: false,
+          },
+        };
+        const convexId = await ctx.db.insert("userProfiles", placeholder);
+        normalizedProfileId = convexId as Id<"userProfiles">;
+        console.info(`[startRefineByString] created placeholder userProfiles row for external profileId="${args.profileId}" -> convexId=${String(normalizedProfileId)}`);
+      } catch (e) {
+        // If insertion fails for any reason, throw the original clear error.
+        throw new Error(`Invalid profileId: "${args.profileId}". Could not normalize to a Convex id nor find a userProfiles document with that external profileId.`);
+      }
     }
- 
+  
     // Defensive: check that the normalized id actually exists in the database.
     const profileDoc = await ctx.db.get(normalizedProfileId);
     if (!profileDoc) {

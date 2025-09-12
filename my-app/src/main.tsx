@@ -2,13 +2,11 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { ClerkProvider, useAuth } from "@clerk/clerk-react";
 import { ConvexProviderWithClerk } from "convex/react-clerk";
-import { ConvexReactClient } from "convex/react";
+import { convexClient as convex } from "./lib/convex-client";
 import App from "./App.tsx";
 import { ErrorBoundary } from "./ErrorBoundary.tsx";
 import "./index.css";
 import { ToastProvider } from "./components/ui/toast";
-
-const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL);
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

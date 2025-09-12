@@ -16,6 +16,8 @@ export interface InputProps {
   className?: string;
   onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  autoFocus?: boolean;
 }
 
 export function Input(props: InputProps) {
@@ -32,6 +34,8 @@ export function Input(props: InputProps) {
     className,
     onChange,
     onBlur,
+    onKeyDown,
+    autoFocus,
   } = props;
 
   const base =
@@ -71,6 +75,8 @@ export function Input(props: InputProps) {
       type={type}
       onChange={onChange}
       onBlur={onBlur}
+      onKeyDown={onKeyDown}
+      autoFocus={autoFocus}
       className={classes}
     />
   );

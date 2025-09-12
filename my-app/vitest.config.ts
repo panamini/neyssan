@@ -16,7 +16,10 @@ globals: true,
 environment: 'jsdom',
 setupFiles: './src/setupTests.ts',
 env: {
-VITE_PDF_INGEST_URL: 'http://localhost:8000',
+  VITE_PDF_INGEST_URL: 'http://localhost:8000',
+  VITE_V1_SECTIONS: '1',
+  // Ensure debounced saves or editor timers do not keep the event loop alive in tests
+  TEST_DEBOUNCE_MS: '0',
 },
 testTimeout: 15000,
 hookTimeout: 15000,

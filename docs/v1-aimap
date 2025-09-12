@@ -1,0 +1,34 @@
+Yes. I validated that Profile, Summary, Skills, Languages, Education, and Experience are all integrated into the same persistence and normalization chain. Summary and typed sections (Experience/Education) also participate in representative-block synchronization. The only missing piece is the “Import from AI” action and ai-mapping utility. Evidence and references:
+
+- Profile modal
+  - Persists via context: ["updateStructuredItem()"](my-app/src/components/structured-blocks/ProfileModal.tsx:120)
+  - Modal component: ["ProfileModal()"](my-app/src/components/structured-blocks/ProfileModal.tsx:37)
+
+- Summary modal
+  - Uses Remirror and saves with safe JSON: ["ensureRemirrorDoc()"](my-app/src/components/structured-blocks/SummaryModal.tsx:22), ["updateStructuredItem()"](my-app/src/components/structured-blocks/SummaryModal.tsx:47)
+  - Normalizer synthesizes a linked summary block when needed: ["normalizeAndValidateCvDocument()"](my-app/src/lib/normalize-cv.ts:434), summary block synthesis at ["normalize-cv.ts"](my-app/src/lib/normalize-cv.ts:536)
+
+- Skills modal
+  - Modal returns structured rows: ["SkillsModal()"](my-app/src/components/structured-blocks/SkillsModal.tsx:20)
+  - Section wiring to persist: ["SectionEditor.tsx"](my-app/src/components/SectionEditor.tsx:797)
+
+- Languages modal
+  - Modal returns structured rows: ["LanguagesModal()"](my-app/src/components/structured-blocks/LanguagesModal.tsx:19)
+  - Section wiring to persist: ["SectionEditor.tsx"](my-app/src/components/SectionEditor.tsx:959)
+
+- Experience modal
+  - Precision-aware composition and Present semantics: ["ExperienceEducationModal.setUiField()"](my-app/src/components/structured-blocks/ExperienceEducationModal.tsx:154), Present handling at ["ExperienceEducationModal.tsx"](my-app/src/components/structured-blocks/ExperienceEducationModal.tsx:167)
+  - Section wiring to persist: ["SectionEditor.tsx"](my-app/src/components/SectionEditor.tsx:1293), save+close at ["SectionEditor.tsx"](my-app/src/components/SectionEditor.tsx:1326)
+
+- Education modal
+  - Precision-aware composition and Present semantics: ["ExperienceEducationModal.setUiField()"](my-app/src/components/structured-blocks/ExperienceEducationModal.tsx:493), Present handling at ["ExperienceEducationModal.tsx"](my-app/src/components/structured-blocks/ExperienceEducationModal.tsx:503)
+  - Section wiring to persist: ["SectionEditor.tsx"](my-app/src/components/SectionEditor.tsx:1333), save+close at ["SectionEditor.tsx"](my-app/src/components/SectionEditor.tsx:1364)
+
+- Context and normalization chain
+  - All structured updates flow through context’s structured update API: ["updateStructuredItem()"](my-app/src/contexts/CvLibraryContext.tsx:1296)
+  - After updates, context centralizes representative block generation: ["ensureRepresentativeBlocks()"](my-app/src/contexts/CvLibraryContext.tsx:1588)
+  - Representative blocks logic for typed sections (synthesis and pruning): ["ensureRepresentativeBlocks(cv)"](my-app/src/lib/normalize-cv.ts:206), pruning at ["normalize-cv.ts"](my-app/src/lib/normalize-cv.ts:368)
+
+Conclusion
+- The save paths for all modals are consistent and pass through CvLibraryContext, which re-applies ensureRepresentativeBlocks to keep Experience/Education synchronized. Summary has a special-case synthesis that ensures a single linked block exists.
+- Remaining work: add the ai-mapping utility and an “Import from AI” action (starting with Experience/Education), then optionally expose similar import hooks for Summary/Profile and list mapping for Skills/Languages. This is already captured in the updated v1 testing plan and todos.

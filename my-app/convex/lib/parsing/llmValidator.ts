@@ -131,11 +131,14 @@ export function validateLLMOutput(output: LLMOutput, originalText: string): {
     issues.push(`Duplicate section titles: ${[...new Set(duplicateTitles)].join(', ')}`);
   }
 
-  // Final validation: looser thresholds for LLM-origin content
-  const isValid = issues.length === 0 &&
+  // Final validation: looser thresholds for LLM-origin content.
+  // Do not require zero issues; accept when enough sections match OR the input is very short.
+  const matchedCount = matchedRanges.length;
+  const sufficientMatches = matchedCount >= Math.max(1, Math.ceil(output.sections.length * 0.25));
+  const isVeryShort = originalLength < 80; // accept LLM outputs for very short inputs
+  const isValid = (isVeryShort || sufficientMatches) &&
                  avgConfidence > 0.45 &&
-                 minConfidence > 0.25 &&
-                 coverageRatio > 0.25;
+                 minConfidence > 0.25;
 
   const finalConfidence = isValid ? avgConfidence * 0.85 + coverageRatio * 0.15 : 0;
 

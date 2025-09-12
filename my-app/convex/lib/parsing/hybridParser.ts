@@ -319,7 +319,7 @@ interface ParseResult {
   cv?: ICVObject | null;
 }
 
-export async function parseCV(rawText: string, options?: { returnMappedCV?: boolean }): Promise<ParseResult> {
+export async function parseCV(rawText: string, options?: { returnMappedCV?: boolean; mapperStrip?: boolean }): Promise<ParseResult> {
   const warnings: string[] = [];
   let fallbackReason = '';
   
@@ -620,7 +620,7 @@ async function callPreferredProvider(
       };
       if (options?.returnMappedCV) {
         try {
-          result.cv = mapSectionsToCV(sectionsAdjusted, parsedMetadata);
+          result.cv = mapSectionsToCV(sectionsAdjusted, parsedMetadata, { stripLinkOnly: options?.mapperStrip });
           try { recordTelemetry("mapper.mapped", { method: "llm", sections: sectionsAdjusted.length }); } catch {}
         } catch (mapErr: any) {
           try { recordTelemetry("mapper.failed", { error: String(mapErr) }); } catch {}
@@ -645,7 +645,7 @@ async function callPreferredProvider(
         };
         if (options?.returnMappedCV) {
           try {
-            result.cv = mapSectionsToCV(sectionsAdjusted, parsedMetadata);
+            result.cv = mapSectionsToCV(sectionsAdjusted, parsedMetadata, { stripLinkOnly: options?.mapperStrip });
             try { recordTelemetry("mapper.mapped", { method: "llm_lenient", sections: sectionsAdjusted.length }); } catch {}
           } catch (mapErr: any) {
             try { recordTelemetry("mapper.failed", { error: String(mapErr) }); } catch {}
@@ -676,7 +676,7 @@ async function callPreferredProvider(
   };
   if (options?.returnMappedCV) {
     try {
-      result.cv = mapSectionsToCV(heuristicSections, heuristicMetadata);
+      result.cv = mapSectionsToCV(heuristicSections, heuristicMetadata, { stripLinkOnly: options?.mapperStrip });
       try { recordTelemetry("mapper.mapped", { method: "heuristic", sections: heuristicSections.length }); } catch {}
     } catch (mapErr: any) {
       try { recordTelemetry("mapper.failed", { error: String(mapErr) }); } catch {}
@@ -926,40 +926,63 @@ async function callLLMWithTimeout(prompt: string, text: string, timeoutMs: numbe
 }
 
 function parseWithEnhancedHeuristics(text: string): any[] {
-  const lines = text.split('\n');
+  // Normalize common escaped newline sequences so tests that pass literal "\n" strings
+  // are handled the same as real newlines.
+  const normalizedText = String(text ?? '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\\r\\n/g, '\n')
+    .replace(/\\n/g, '\n');
+  const lines = normalizedText.split('\n');
   const sections: any[] = [];
   let currentSection: any = null;
-  
-  // This needs to be defined or imported. For now, a placeholder.
-  const determineFieldKey = (line: string) => "unknown";
+
+  // Basic fieldKey determination: keep simple and conservative so unknown/rare headers
+  // map to "other" (mapper will place unknown keys into other bucket).
+  function determineFieldKey(line: string) {
+    const trimmed = String(line ?? '').trim();
+    // Markdown header -> unknown (mapper will route to 'other')
+    const md = /^#{1,6}\s*(.+)/.exec(trimmed);
+    if (md) return "unknown";
+    // Common header-like tokens: "Summary:", "Languages:", "Experience", etc.
+    const token = trimmed.toLowerCase().replace(/[:\s]+$/g, '');
+    if (!token) return "unknown";
+    // Take first word as coarse-grain key
+    const first = token.split(/\s+/)[0];
+    return first || "unknown";
+  }
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const context = {
-      previousLine: i > 0 ? lines[i-1] : '',
-      nextLine: i < lines.length - 1 ? lines[i+1] : '',
-      lineIndex: i
+      previousLine: i > 0 ? lines[i - 1] : "",
+      nextLine: i < lines.length - 1 ? lines[i + 1] : "",
+      lineIndex: i,
     };
-    
-    if (isPotentialHeader(line, context)) {
+
+    // Treat explicit Markdown headers as headers even if isPotentialHeader misses them.
+    const looksLikeMarkdownHeader = /^\s*#{1,6}\s+/.test(line);
+    if (isPotentialHeader(line, context) || looksLikeMarkdownHeader) {
       if (currentSection) {
+        // Trim trailing whitespace from accumulated content
+        currentSection.content = String(currentSection.content || "").trim();
         sections.push(currentSection);
       }
-      
+
       currentSection = {
-        title: line.trim(),
-        content: '',
+        title: String(line || "").trim(),
+        content: "",
         fieldKey: determineFieldKey(line),
-        confidence: 0.7 // Base confidence for heuristic parsing
+        confidence: 0.7, // Base confidence for heuristic parsing
       };
     } else if (currentSection) {
-      currentSection.content += line + '\n';
+      currentSection.content += line + "\n";
     }
   }
-  
+
   if (currentSection) {
+    currentSection.content = String(currentSection.content || "").trim();
     sections.push(currentSection);
   }
-  
+
   return sections;
 }

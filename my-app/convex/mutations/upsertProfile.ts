@@ -1,6 +1,7 @@
 import { mutation } from "../_generated/server";
 import { v } from "convex/values";
 
+
 /**
  * Idempotent upsert mutation for canonical profiles.
  *
@@ -13,7 +14,7 @@ import { v } from "convex/values";
  *
  * Behavior:
  * - If a profiles document with profileId exists and already contains the idempotencyKey
- *   in its idempotencyKeys array, return success (no-op).
+ * in its idempotencyKeys array, return success (no-op).
  * - Otherwise create or update the profiles document, append the idempotencyKey, set updatedAt.
  */
 export const upsertProfile = mutation({
@@ -172,3 +173,4 @@ export const upsertProfile = mutation({
     }
   },
 });
+

@@ -1,7 +1,15 @@
 
 import React from "react";
- 
-const Header = () => {
+import DarkModeToggle from "../dark-mode-toggle/DarkModeToggle";
+import { Button } from "../ui/button";
+import { Plus } from "lucide-react";
+import { useCvLibrary } from "../../contexts/CvLibraryContext";
+import { isV1SectionsEnabled } from "../../lib/flags";
+
+const Header: React.FC = () => {
+  const { createNewCv } = useCvLibrary();
+  const v1 = isV1SectionsEnabled();
+
   // Navigate SPA-style to a path by pushing history and emitting popstate
   const navigate = (e: React.MouseEvent, path: string) => {
     e.preventDefault();
@@ -10,23 +18,41 @@ const Header = () => {
       window.dispatchEvent(new PopStateEvent("popstate"));
     }
   };
- 
+
   return (
     <header className="p-4 bg-background text-foreground">
       <nav className="flex items-center justify-between max-w-6xl mx-auto">
-        <div className="flex items-center space-x-4">
-          <a href="/" className="text-lg font-semibold">Neyssan</a>
-          <a
-            href="/profile/edit"
-            onClick={(e) => navigate(e, "/profile/edit")}
-            className="text-sm text-muted hover:text-foreground"
-          >
-            Profile Editor
+        <div className="flex items-center space-x-3">
+          <a href="/" className="text-lg font-semibold" onClick={(e) => navigate(e, "/")}>
+            Neyssan
           </a>
+          <div className="ml-2">
+            <DarkModeToggle />
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => {
+              try {
+                createNewCv();
+              } catch {
+                /* noop */
+              }
+            }}
+            size="sm"
+            className="inline-flex items-center gap-2 bg-[var(--primary)] text-[var(--foreground)] hover:opacity-90"
+            ariaLabel={v1 ? "Create new CV (v1 sections)" : "Create new CV"}
+            title={v1 ? "Create new CV (v1 sections)" : "Create new CV"}
+          >
+            <Plus className="w-4 h-4" />
+            <span className="hidden sm:inline">{v1 ? "New CV (v1)" : "New CV"}</span>
+            <span className="sm:hidden">New</span>
+          </Button>
         </div>
       </nav>
     </header>
   );
 };
- 
+
 export default Header;

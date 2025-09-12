@@ -248,5 +248,85 @@ a {
   border-radius: 4px;
 }
 
+/* Quill read-only preview styling — ensures Quill-produced HTML displays like the editor.
+   Applied to the preview container via class `ql-editor-readonly` used in ProfileReviewCard. */
+.ql-editor-readonly {
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  line-height: 1.5;
+  color: var(--foreground);
+  font-family: inherit;
+}
+
+/* Headings inside Quill preview */
+.ql-editor-readonly h1,
+.ql-editor-readonly h2,
+.ql-editor-readonly h3 {
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+/* Lists */
+.ql-editor-readonly ul,
+.ql-editor-readonly ol {
+  padding-left: 1.25rem;
+  margin: 0.5rem 0;
+}
+
+/* Links */
+.ql-editor-readonly a {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+/* Images in preview scale responsively */
+.prose.ql-editor-readonly img,
+.ql-editor-readonly img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Slightly smaller text on narrow screens */
+@media (max-width: 640px) {
+  .ql-editor-readonly {
+    font-size: 0.95rem;
+  }
+}
+
+/* Remirror editor helper styles
+   - Ensure the placeholder overlays the editor content and is visible in dark mode.
+   - Keep the inner prose layout untouched; only remove margins that can push the placeholder.
+*/
+.remirror-editor-container {
+  position: relative;
+}
+
+/* Target the placeholder we render (it has Tailwind classes including cursor-text and z-40).
+   This ensures the overlay sits above the editor content, has appropriate padding/color,
+   and allows pointer events so clicks focus the editor reliably.
+*/
+.remirror-editor-container .cursor-text.z-40,
+.remirror-editor-container > .cursor-text.z-40 {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  padding: 0.75rem; /* matches p-3 */
+  color: var(--text-muted);
+  background: transparent;
+  display: flex;
+  align-items: flex-start;
+  pointer-events: auto;
+  cursor: text;
+}
+
+/* Prevent prose default margins from shifting the overlay placement */
+.remirror-editor-container .prose {
+  margin: 0;
+  padding: 0;
+}
+
 /* QA visual aid removed — production hides scrollbars and keeps cards scrollable via mouse/touch/keyboard */
 /* End of globals */

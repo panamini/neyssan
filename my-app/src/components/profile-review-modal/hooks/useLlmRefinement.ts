@@ -1,0 +1,177 @@
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { useAuth } from '@clerk/clerk-react';
+import * as convexReact from 'convex/react';
+import { api } from '../../../../convex/_generated/api';
+import { useToast } from '../../ui/toast';
+import { parseRefinedMarkdown, RefinedContent } from '../../../utils/parseRefinedMarkdown';
+import { IReviewerSection, INormalizedProfile } from '../../../types/profile';
+import { clientFormatCompleteCV } from '../../../utils/simpleClientParse';
+
+const CONVEX_URL = import.meta.env?.VITE_CONVEX_URL ?? "";
+const CONVEX_SITE_URL = CONVEX_URL.replace('.cloud', '.site');
+
+export function useLlmRefinement(
+  rawTextLocal: string,
+  handleSave: (notifyParent?: boolean) => Promise<string | null>,
+  cvActions: any,
+  setReviewerVisible: (visible: boolean) => void,
+  setSuggestions: (suggestions: RefinedContent | null) => void,
+  setSkipParsedProfileInit: (skip: boolean) => void
+) {
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [status, setStatus] = useState<'idle' | 'refining' | 'enqueued' | 'running' | 'completed' | 'failed'>('idle');
+  const [isPolling, setIsPolling] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const { getToken } = useAuth();
+  const { showToast } = useToast();
+  const startRefineMutation = (convexReact as any).useMutation(api.llm.startRefineByString);
+  const formatCompleteAction = (convexReact as any).useAction ? (convexReact as any).useAction(api.actions.formatCompleteCV.formatCompleteCV) : undefined;
+  const pendingRefines = useRef<Record<string, Promise<string> | string>>({});
+
+  const authenticatedFetch = async (url: string, options: RequestInit = {}) => {
+    if (!getToken) throw new Error('useAuth.getToken not available');
+    const token = await getToken({ template: 'convex' });
+    if (!token) throw new Error('Authentication token not available');
+    const headers = {
+      'Content-Type': 'application/json',
+      ...(options.headers as Record<string, string> || {}),
+      Authorization: `Bearer ${token}`,
+    };
+    const res = await fetch(url, { ...options, headers });
+    if (!res.ok) {
+      let body = null;
+      try { body = await res.json(); } catch (e) {}
+      throw new Error((body && (body as any).message) || `Request failed with status ${res.status}`);
+    }
+    return res.json();
+  };
+
+  const callFormatCompleteCV = useCallback(async (rawText: string) => {
+    let skipHttpFallback = false;
+    try {
+      if (typeof formatCompleteAction === "function") {
+        const actionResult = await formatCompleteAction({ rawText });
+        if (actionResult) {
+          const normalized = (actionResult && typeof actionResult === "object" && "status" in actionResult && (actionResult as any).status === "ok" && "result" in actionResult)
+            ? (actionResult as any).result
+            : actionResult;
+          return normalized;
+        }
+      }
+    } catch (e: any) {
+      const msg = String(e?.message ?? e);
+      if (msg.includes('Could not find public function') || msg.includes('Did you forget to run `npx convex')) {
+        skipHttpFallback = true;
+        try { showToast('Convex action not available: run `npx convex dev` or deploy the functions (npx convex deploy)', { variant: 'warning' }); } catch (er) {}
+      }
+    }
+
+    if (!skipHttpFallback) {
+      try {
+        const res = await authenticatedFetch(`${CONVEX_SITE_URL}/formatCompleteCV`, {
+          method: 'POST',
+          body: JSON.stringify({ rawText }),
+        });
+        if (res && res.status === 'ok' && res.result) {
+          return res.result;
+        }
+      } catch (e: any) {
+        const msg = String(e?.message ?? e);
+        if (msg.includes('Failed to fetch') || msg.includes('403') || msg.includes('CORS') || msg.includes('preflight')) {
+          try { showToast('Backend HTTP parse blocked by CORS. Prefer running Convex dev or use the client parser.', { variant: 'warning' }); } catch (er) {}
+        }
+      }
+    }
+
+    try {
+      const client = clientFormatCompleteCV(rawText);
+      if (client && client.status === 'ok' && client.result) {
+        return client.result;
+      }
+    } catch (e) {
+    }
+    return null;
+  }, [authenticatedFetch, formatCompleteAction, showToast, CONVEX_SITE_URL]);
+
+  useEffect(() => {
+    if (!isPolling || !jobId) return;
+
+    const pollTimeout = setTimeout(() => {
+      setMessage({ type: 'error', text: 'Refinement is taking longer than expected. Please check back in a few minutes.' });
+      setIsPolling(false);
+      setStatus('failed');
+    }, 60000);
+
+    const pollInterval = setInterval(async () => {
+      if (!isPolling) return;
+      try {
+        const data = await authenticatedFetch(`${CONVEX_SITE_URL}/llm-refine`, {
+          method: 'POST',
+          body: JSON.stringify({ jobId }),
+        });
+        setStatus(data.status);
+
+        if (data.status === 'completed' || data.status === 'finished') {
+          setStatus('completed');
+          const normalized = data?.result?.patch?.normalized ?? data?.result?.normalized ?? null;
+          if (normalized) {
+            try {
+              // If the normalized content is a string (markdown), parse it into the frontend shape.
+              // Otherwise assume it's already in a structured RefinedContent-like shape and pass through.
+              const parsedNormalized: RefinedContent | null = typeof normalized === 'string'
+                ? parseRefinedMarkdown(normalized)
+                : (normalized as RefinedContent);
+
+              setSuggestions(parsedNormalized as RefinedContent | null);
+              setReviewerVisible(true);
+              setSkipParsedProfileInit(true);
+              setMessage({ type: 'success', text: 'AI refinement ready' });
+              setStatus('completed');
+              setIsPolling(false);
+            } catch (parseErr) {
+              // Keep existing error handling but log parsing issues and continue flow.
+              console.error('Failed to apply normalized refinement to reviewer UI:', parseErr);
+              // Don't overwrite the existing message in case the server provided one.
+              setMessage({ type: 'error', text: 'Failed to parse AI refinement result' });
+              setIsPolling(false);
+            }
+          }
+          setIsPolling(false);
+        } else if (data.status === 'failed') {
+          setMessage({ type: 'error', text: data.message || 'Job failed' });
+          setIsPolling(false);
+        }
+      } catch (err) {
+        console.error('Polling error:', err);
+        setMessage({ type: 'error', text: String(err) });
+        setIsPolling(false);
+      }
+    }, 2000);
+
+    return () => {
+      clearTimeout(pollTimeout);
+      clearInterval(pollInterval);
+    };
+  }, [isPolling, jobId, authenticatedFetch, callFormatCompleteCV, cvActions, setReviewerVisible, setSuggestions, setSkipParsedProfileInit]);
+
+  const startRefine = async (profileId: string) => {
+    // ... (startRefine logic)
+  };
+
+  const handleRefineClick = async () => {
+    setMessage(null);
+    const profileIdToRefine = await handleSave(false);
+
+    if (profileIdToRefine) {
+      await startRefine(profileIdToRefine);
+    }
+  };
+
+  return {
+    status,
+    message,
+    jobId,
+    handleRefineClick,
+  };
+}

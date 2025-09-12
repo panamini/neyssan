@@ -2,122 +2,72 @@ import "./styles/globals.css";
 "use client";
 
 import React from "react";
-import { Authenticated, Unauthenticated, useConvex } from "convex/react";
-import { api } from "../convex/_generated/api";
-import { SignInButton, SignUpButton, UserButton, useAuth } from "@clerk/clerk-react";
-import { Flex } from "@radix-ui/themes";
-
-import Header from "./components/header/Header";
- // For testing, swap between the local and incoming test copies in ./src/temp
- import ProfileForm from "./components/ProfileForm";
-import ProposalInputForm from "./components/ProposalInputForm";
-import ProposalDisplay from "./components/ProposalDisplay";
-import ProposalsList from "./components/ProposalsList";
+import { BrowserRouter, Routes, Route, Link, Navigate } from "react-router-dom";
+import { Button } from "./components/ui/button";
+import { Authenticated, Unauthenticated } from "convex/react";
+import { SignInButton, SignUpButton, UserButton } from "@clerk/clerk-react";
+import { ConvexStatusBanner } from "./components/ConvexStatusBanner";
 import DarkModeToggle from "./components/dark-mode-toggle/DarkModeToggle";
-import type { FormValues } from "./components/ProposalInputForm.schemas";
-import ProfileEditorUnified from "./components/ProfileEditorUnified";
 
-export default function App() {
-  const [proposalContent, setProposalContent] = React.useState<string | null>(
-    null,
-  );
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+/**
+ * Pages (lazy-loaded components)
+ * - CvForge: CV workspace (loads CV contexts + components)
+ * - ProposalForge: Proposal workspace (loads proposal components)
+ *
+ * Keep these pages self-contained so each workspace only loads what it needs.
+ */
+import { CvForge } from "./pages/CvForge";
+import { ProposalForge } from "./pages/ProposalForge";
 
-  const convex = useConvex();
-  const { isSignedIn, isLoaded: clerkLoaded } = useAuth();
-
-  React.useEffect(() => {
-    // Only attempt to create/update a profile once Clerk has loaded and the user is signed in.
-    // This avoids "Not authenticated" errors when the client attempts mutations before
-    // Clerk's session is available.
-    console.log("App.useEffect fired - clerkLoaded:", clerkLoaded, "isSignedIn:", isSignedIn);
-    if (!clerkLoaded || !isSignedIn) return;
-
-    async function ensureUser() {
-      try {
-        console.log("ensureUser: calling createUserFromClient mutation");
-        // Use a runtime-any cast to avoid TypeScript issues when generated api types are stale.
-        await convex.mutation((api as any).functions?.createUserFromClient);
-        console.log("createUserFromClient OK");
-      } catch (err) {
-        console.error("createUserFromClient failed", err);
-      }
-    }
-
-    void ensureUser();
-  }, [convex, isSignedIn, clerkLoaded]);
-
-  const handleProposalSubmit = (
-    _values: FormValues,
-    proposal: string,
-  ) => {
-    setLoading(true);
-    setError(null);
-    try {
-      setProposalContent(proposal);
-    } catch (e: any) {
-      setError(e.message || "An unknown error occurred");
-    } finally {
-      setLoading(false);
-    }
-  };
-
+/**
+ * Minimal top navigation linking the two workspaces.
+ * Defaults to /cv.
+ */
+export default function App(): JSX.Element {
   return (
-    <div className="relative flex flex-col min-h-screen bg-background text-foreground">
-      <Header />
-      <div className="flex flex-row flex-grow">
-        {/* Left Column */}
-          <div className="flex flex-col items-center w-16 p-2">
-          <Authenticated>
-            <UserButton />
-          </Authenticated>
-          <DarkModeToggle />
-        </div>
-
-        {/* Main Content */}
-        <main className="flex flex-col items-center justify-center flex-grow">
-          <Flex direction="column" gap="4" align="center" className="w-full">
-            <Unauthenticated>
-              <Flex direction="column" gap="4" align="center" className="w-full max-w-md">
-                <p>Log in to generate proposals</p>
+    <BrowserRouter>
+      <div className="min-h-screen bg-background text-foreground">
+        <header className="w-full border-b bg-background/90 backdrop-blur-sm">
+          <div className="flex items-center justify-between max-w-6xl px-4 py-3 mx-auto">
+            <div className="flex items-center gap-4">
+              <h1 className="text-lg font-semibold">Forge</h1>
+              <nav className="flex items-center gap-2">
+                <Link to="/cv" aria-current="page">
+                  <Button variant="ghost" size="sm">CV Forge</Button>
+                </Link>
+                <Link to="/proposal">
+                  <Button variant="ghost" size="sm">Proposal Forge</Button>
+                </Link>
+              </nav>
+            </div>
+ 
+            <div className="flex items-center gap-2">
+              <DarkModeToggle />
+              <Authenticated>
+                <UserButton />
+              </Authenticated>
+              <Unauthenticated>
                 <SignInButton mode="modal">
-                  <button className="px-4 py-2 rounded-md bg-primary text-background">
-                    Sign in
-                  </button>
+                  <Button variant="ghost" size="sm">Sign in</Button>
                 </SignInButton>
                 <SignUpButton mode="modal">
-                  <button className="px-4 py-2 rounded-md bg-primary text-background">
-                    Sign up
-                  </button>
+                  <Button variant="ghost" size="sm">Sign up</Button>
                 </SignUpButton>
-              </Flex>
-            </Unauthenticated>
-            <Authenticated>
-              {typeof window !== "undefined" && window.location.pathname === "/profile/edit" ? (
-                <div className="relative w-full max-w-4xl px-2 mx-auto">
-                  <ProfileEditorUnified />
-                </div>
-              ) : (
-                <div className="relative w-full max-w-4xl px-2 mx-auto">
-                  <div className="h-[calc(60vh)] overflow-auto">
-                    <ProposalDisplay proposalContent={proposalContent} loading={loading} error={error} />
-                  </div>
+              </Unauthenticated>
+            </div>
+          </div>
+          <ConvexStatusBanner />
+        </header>
 
-                  <div className="py-4">
-                    <ProfileForm />
-                    <ProposalInputForm onSubmit={handleProposalSubmit} />
-                  </div>
-
-                  <div className="mt-6">
-                    <ProposalsList />
-                  </div>
-                </div>
-              )}
-            </Authenticated>
-          </Flex>
+        <main className="max-w-6xl px-4 py-6 mx-auto">
+          <Routes>
+            <Route path="/cv" element={<CvForge />} />
+            <Route path="/proposal" element={<ProposalForge />} />
+            <Route path="/" element={<Navigate to="/cv" replace />} />
+            <Route path="*" element={<Navigate to="/cv" replace />} />
+          </Routes>
         </main>
       </div>
-    </div>
+    </BrowserRouter>
   );
 }
