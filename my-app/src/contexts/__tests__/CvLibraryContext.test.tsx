@@ -186,11 +186,11 @@ describe('CvLibraryContext', () => {
     await waitFor(() => expect(ctx.cvs.length).toBe(2));
     const secondId = ctx.currentCvId;
 
-    // Switch back to first
+    // Switch back to first — loadCv is async (persists outgoing before switching)
     act(() => {
       ctx.loadCv(firstId);
     });
-    expect(ctx.currentCvId).toBe(firstId);
+    await waitFor(() => expect(ctx.currentCvId).toBe(firstId));
 
     // Make an update to current cv to make it dirty
     const newState = { sections: [{ id: 's1', text: 'hello' }], source: 'manual', history: [] };
@@ -201,16 +201,12 @@ describe('CvLibraryContext', () => {
     // Immediately isDirty should be true because savedCvState hasn't been updated by debouncedSave yet
     await waitFor(() => expect(ctx.isDirty).toBe(true));
 
-    // Attempt to load second while dirty - with autosave-on-switch we should persist and switch immediately
-    let res: boolean | undefined;
+    // Attempt to load second while dirty — loadCv always persists outgoing async before switching,
+    // so it returns false and the switch completes asynchronously.
     act(() => {
-      res = ctx.loadCv(secondId);
+      ctx.loadCv(secondId);
     });
-    expect(res).toBe(true);
-    expect(ctx.currentCvId).toBe(secondId);
-
-    // wait for debounced save to complete (use real timers)
-    await new Promise((res) => setTimeout(res, parseInt(process.env.TEST_DEBOUNCE_MS || '1000', 10) + 50));
+    await waitFor(() => expect(ctx.currentCvId).toBe(secondId));
     await waitFor(() => expect(ctx.isDirty).toBe(false));
   });
 
