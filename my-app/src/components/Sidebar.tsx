@@ -1,6 +1,9 @@
 import React, { useRef, useState } from 'react';
-import { Plus, Pencil } from 'lucide-react';
+import { Plus, Pencil, Settings } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useQuery } from 'convex/react';
+import { useAuth } from '@clerk/clerk-react';
+import { api } from '../../convex/_generated/api';
 import { useCvLibrary } from '../contexts/CvLibraryContext';
 import { normalizeAndValidateCvDocument } from '../lib/normalize-cv';
 import CvRenameDialog from './CvRenameDialog';
@@ -28,6 +31,14 @@ export const Sidebar: React.FC = () => {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const isProposal = pathname.startsWith('/proposal');
+  const isStyle = pathname.startsWith('/style');
+
+  /* ── Proposals query (même source que ProposalsList) ────────── */
+  const { isLoaded, isSignedIn } = useAuth();
+  const proposals = useQuery(
+    api.proposalsPublic.default as any,
+    isLoaded && isSignedIn ? {} : "skip",
+  ) as Array<{ _id: string; _creationTime: number; title?: string; metadata?: { proposalType?: string } }> | undefined;
 
   /* ── Handlers (logique métier intacte) ───────────────────── */
 
@@ -187,6 +198,7 @@ export const Sidebar: React.FC = () => {
 
           {/* Resume nav item — always visible */}
           <div
+            onClick={() => navigate('/cv')}
             style={{
               display: "flex",
               alignItems: "center",
@@ -228,7 +240,7 @@ export const Sidebar: React.FC = () => {
                 title={cv.title}
                 date={updatedAt}
                 isActive={isActive}
-                onClick={() => handleLoadCv(cv.id)}
+                onClick={() => { handleLoadCv(cv.id); navigate('/cv'); }}
                 onRename={(e) => { e.stopPropagation(); handleRenameOpen(cv.id, cv.title); }}
                 onDelete={(e) => handleDelete(e, cv.id, cv.title)}
               />
@@ -303,6 +315,103 @@ export const Sidebar: React.FC = () => {
             {!collapsed && (
               <span style={{ fontSize: "var(--ts)", fontWeight: isProposal ? 600 : 500, color: isProposal ? "var(--ti)" : "var(--tm2)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>
                 Compose
+              </span>
+            )}
+          </div>
+
+          {/* Proposal sub-items under Compose */}
+          {!collapsed && isSignedIn && proposals && proposals.map((p) => {
+            const date = new Date(p._creationTime).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+            const typeLabel = p.metadata?.proposalType === "cover_letter" ? "Letter"
+              : p.metadata?.proposalType === "freelance_proposal" ? "Proposal"
+              : p.metadata?.proposalType === "application_message" ? "Message"
+              : "Letter";
+            return (
+              <SbDoc
+                key={p._id}
+                title={p.title ?? "Untitled"}
+                date={date}
+                docType={typeLabel}
+                isActive={false}
+                onClick={() => navigate('/proposal?view=saved')}
+                onRename={() => {}}
+                onDelete={() => {}}
+                hideActions
+              />
+            );
+          })}
+
+          {/* + New letter */}
+          {!collapsed && (
+            <button
+              onClick={() => navigate('/proposal')}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "var(--s3)",
+                padding: "var(--s2)",
+                paddingLeft: 32,
+                borderRadius: "var(--rs)",
+                cursor: "pointer",
+                height: 30,
+                color: "var(--tg2)",
+                fontSize: "var(--tx)",
+                transition: "all .12s var(--ez)",
+                background: "transparent",
+                border: "none",
+                width: "100%",
+                textAlign: "left",
+                fontFamily: "inherit",
+              }}
+              onMouseEnter={(e) => {
+                const b = e.currentTarget as HTMLButtonElement;
+                b.style.color = "var(--am)";
+                b.style.background = "var(--sf2)";
+              }}
+              onMouseLeave={(e) => {
+                const b = e.currentTarget as HTMLButtonElement;
+                b.style.color = "var(--tg2)";
+                b.style.background = "transparent";
+              }}
+            >
+              <Plus size={16} style={{ flexShrink: 0 }} />
+              <span style={{ whiteSpace: "nowrap" }}>New letter</span>
+            </button>
+          )}
+
+          {/* Section label SETTINGS */}
+          <span style={sbSec as React.CSSProperties}>Settings</span>
+
+          {/* Style nav item */}
+          <div
+            onClick={() => navigate('/style')}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "var(--s3)",
+              padding: `var(--s2) var(--s2)`,
+              borderRadius: "var(--rs)",
+              border: isStyle ? "1px solid var(--bo)" : "1px solid transparent",
+              cursor: "pointer",
+              height: 34,
+              background: isStyle ? "var(--sfr)" : "transparent",
+              boxShadow: isStyle ? "var(--sha)" : "none",
+              transition: "all .12s var(--ez)",
+              overflow: "hidden",
+            }}
+            onMouseEnter={(e) => {
+              if (!isStyle) (e.currentTarget as HTMLDivElement).style.background = "var(--sf2)";
+            }}
+            onMouseLeave={(e) => {
+              if (!isStyle) (e.currentTarget as HTMLDivElement).style.background = "transparent";
+            }}
+          >
+            <div style={{ width: 16, height: 16, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: isStyle ? "var(--ac)" : "var(--tg2)" }}>
+              <Settings size={16} />
+            </div>
+            {!collapsed && (
+              <span style={{ fontSize: "var(--ts)", fontWeight: isStyle ? 600 : 500, color: isStyle ? "var(--ti)" : "var(--tm2)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>
+                Style
               </span>
             )}
           </div>
@@ -408,13 +517,15 @@ export const Sidebar: React.FC = () => {
 interface SbDocProps {
   title: string;
   date: string;
+  docType?: string;
   isActive: boolean;
   onClick: () => void;
   onRename: (e: React.MouseEvent) => void;
   onDelete: (e: React.MouseEvent) => void;
+  hideActions?: boolean;
 }
 
-function SbDoc({ title, date, isActive, onClick, onRename, onDelete }: SbDocProps) {
+function SbDoc({ title, date, docType, isActive, onClick, onRename, onDelete, hideActions }: SbDocProps) {
   const [hovered, setHovered] = useState(false);
   const [delHovered, setDelHovered] = useState(false);
   const [renHovered, setRenHovered] = useState(false);
@@ -450,71 +561,75 @@ function SbDoc({ title, date, isActive, onClick, onRename, onDelete }: SbDocProp
         {title}
       </div>
       <div style={{ fontSize: 10, color: "var(--tg2)", marginTop: 2, display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}>
+        {docType && <span style={{ color: "var(--tm2)", fontWeight: 500 }}>{docType}</span>}
+        {docType && <span>·</span>}
         {date}
       </div>
 
-      {/* Rename button — appears on hover */}
-      <button
-        onClick={onRename}
-        onMouseEnter={() => setRenHovered(true)}
-        onMouseLeave={() => setRenHovered(false)}
-        title="Rename"
-        style={{
-          position: "absolute",
-          right: 24,
-          top: "50%",
-          transform: "translateY(-50%)",
-          width: 20,
-          height: 20,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          borderRadius: 3,
-          border: "none",
-          background: renHovered ? "var(--sf2)" : "transparent",
-          color: renHovered ? "var(--ti)" : "var(--tg2)",
-          cursor: "pointer",
-          padding: 0,
-          opacity: hovered ? 1 : 0,
-          transition: "opacity .1s var(--ez), color .1s var(--ez), background .1s var(--ez)",
-          fontFamily: "inherit",
-        }}
-      >
-        <Pencil size={10} />
-      </button>
+      {/* Rename + Delete buttons — appear on hover, hidden when hideActions */}
+      {!hideActions && (
+        <>
+          <button
+            onClick={onRename}
+            onMouseEnter={() => setRenHovered(true)}
+            onMouseLeave={() => setRenHovered(false)}
+            title="Rename"
+            style={{
+              position: "absolute",
+              right: 24,
+              top: "50%",
+              transform: "translateY(-50%)",
+              width: 20,
+              height: 20,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: 3,
+              border: "none",
+              background: renHovered ? "var(--sf2)" : "transparent",
+              color: renHovered ? "var(--ti)" : "var(--tg2)",
+              cursor: "pointer",
+              padding: 0,
+              opacity: hovered ? 1 : 0,
+              transition: "opacity .1s var(--ez), color .1s var(--ez), background .1s var(--ez)",
+              fontFamily: "inherit",
+            }}
+          >
+            <Pencil size={10} />
+          </button>
 
-      {/* Delete button — appears on hover, danger on its own hover */}
-      <button
-        onClick={onDelete}
-        onMouseEnter={() => setDelHovered(true)}
-        onMouseLeave={() => setDelHovered(false)}
-        title="Delete"
-        style={{
-          position: "absolute",
-          right: 4,
-          top: "50%",
-          transform: "translateY(-50%)",
-          width: 20,
-          height: 20,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          borderRadius: 3,
-          border: "none",
-          background: delHovered ? "var(--erb)" : "transparent",
-          color: delHovered ? "var(--ert)" : "var(--tg2)",
-          cursor: "pointer",
-          padding: 0,
-          opacity: hovered ? 1 : 0,
-          transition: "opacity .1s var(--ez), color .1s var(--ez), background .1s var(--ez)",
-          fontFamily: "inherit",
-        }}
-      >
-        {/* ✕ icon 10×10 */}
-        <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-          <path d="M2 2l8 8M10 2L2 10" />
-        </svg>
-      </button>
+          <button
+            onClick={onDelete}
+            onMouseEnter={() => setDelHovered(true)}
+            onMouseLeave={() => setDelHovered(false)}
+            title="Delete"
+            style={{
+              position: "absolute",
+              right: 4,
+              top: "50%",
+              transform: "translateY(-50%)",
+              width: 20,
+              height: 20,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: 3,
+              border: "none",
+              background: delHovered ? "var(--erb)" : "transparent",
+              color: delHovered ? "var(--ert)" : "var(--tg2)",
+              cursor: "pointer",
+              padding: 0,
+              opacity: hovered ? 1 : 0,
+              transition: "opacity .1s var(--ez), color .1s var(--ez), background .1s var(--ez)",
+              fontFamily: "inherit",
+            }}
+          >
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+              <path d="M2 2l8 8M10 2L2 10" />
+            </svg>
+          </button>
+        </>
+      )}
     </div>
   );
 }
