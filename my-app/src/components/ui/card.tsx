@@ -26,10 +26,35 @@ export function Card({ children, className, as = "div" }: CardProps) {
 export interface CardHeaderProps {
   children?: React.ReactNode;
   className?: string;
+  /**
+   * display=true : titre de section card (Fraunces tl/26px fw600 — .sct §11 dasti-spec-v1)
+   * display=false (défaut) : Source Sans semibold standard
+   */
+  display?: boolean;
 }
 
-export function CardHeader({ children, className }: CardHeaderProps) {
-  return <div className={clsx("mb-2 font-semibold text-foreground", className)}>{children}</div>;
+export function CardHeader({ children, className, display = false }: CardHeaderProps) {
+  if (display) {
+    return (
+      <div
+        className={clsx("text-ti", className)}
+        style={{
+          fontFamily: '"Fraunces", serif',
+          fontSize: "var(--tl)",
+          fontWeight: 600,
+          letterSpacing: "-.01em",
+          color: "var(--ti)",
+        }}
+      >
+        {children}
+      </div>
+    );
+  }
+  return (
+    <div className={clsx("mb-2 font-semibold text-foreground", className)}>
+      {children}
+    </div>
+  );
 }
 
 export interface CardContentProps {
