@@ -131,7 +131,7 @@ export function ProfileModal({ open, sectionId, item, onClose, onSavePatch }: Pr
         role="dialog"
         aria-modal="true"
         aria-label="Edit profile"
-        className="relative w-full max-w-2xl [background:var(--sfr)] rounded-rl [box-shadow:var(--shc)] overflow-auto max-h-[90vh]"
+        className="relative w-full max-w-2xl [background:var(--sfr)] border border-[color:var(--bm)] [border-radius:var(--rl)] [box-shadow:var(--shc)] overflow-auto max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
         onPointerDown={(e) => e.stopPropagation()}
       >
@@ -162,7 +162,7 @@ export function ProfileModal({ open, sectionId, item, onClose, onSavePatch }: Pr
               <label className="text-xs [color:var(--tg2)]" htmlFor="photoUrl">Photo URL</label>
               <input
                 id="photoUrl"
-                className="px-2 py-1 text-sm bg-transparent border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none w-72"
+                className="px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none w-72"
                 placeholder="https://..."
                 value={form.photoUrl}
                 onChange={(e) => handleChange("photoUrl", e.target.value)}
@@ -182,7 +182,7 @@ export function ProfileModal({ open, sectionId, item, onClose, onSavePatch }: Pr
               <label className="text-xs [color:var(--tg2)]" htmlFor="name">Name</label>
               <input
                 id="name"
-                className="w-full px-2 py-1 mt-1 text-sm bg-transparent border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                className="w-full px-2 py-1 mt-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
                 value={form.name}
                 onChange={(e) => handleChange("name", e.target.value)}
                 autoFocus
@@ -194,7 +194,7 @@ export function ProfileModal({ open, sectionId, item, onClose, onSavePatch }: Pr
                 <Briefcase className="w-4 h-4 [color:var(--tg2)]" />
                 <input
                   id="desiredPosition"
-                  className="w-full px-2 py-1 mt-1 text-sm bg-transparent border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                  className="w-full px-2 py-1 mt-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
                   value={form.desiredPosition}
                   onChange={(e) => handleChange("desiredPosition", e.target.value)}
                 />
@@ -207,7 +207,7 @@ export function ProfileModal({ open, sectionId, item, onClose, onSavePatch }: Pr
                 <Mail className="w-4 h-4 [color:var(--tg2)]" />
                 <input
                   id="email"
-                  className="w-full px-2 py-1 mt-1 text-sm bg-transparent border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                  className="w-full px-2 py-1 mt-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
                   value={form.email}
                   onChange={(e) => handleChange("email", e.target.value)}
                   type="email"
@@ -220,7 +220,7 @@ export function ProfileModal({ open, sectionId, item, onClose, onSavePatch }: Pr
                 <Phone className="w-4 h-4 [color:var(--tg2)]" />
                 <input
                   id="phone"
-                  className="w-full px-2 py-1 mt-1 text-sm bg-transparent border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                  className="w-full px-2 py-1 mt-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
                   value={form.phone}
                   onChange={(e) => handleChange("phone", e.target.value)}
                 />
@@ -232,7 +232,7 @@ export function ProfileModal({ open, sectionId, item, onClose, onSavePatch }: Pr
                 <Linkedin className="w-4 h-4 [color:var(--tg2)]" />
                 <input
                   id="linkedin"
-                  className="w-full px-2 py-1 mt-1 text-sm bg-transparent border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                  className="w-full px-2 py-1 mt-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
                   value={form.linkedin}
                   onChange={(e) => handleChange("linkedin", e.target.value)}
                   placeholder="https://linkedin.com/in/username"
@@ -245,7 +245,7 @@ export function ProfileModal({ open, sectionId, item, onClose, onSavePatch }: Pr
                 <Globe className="w-4 h-4 [color:var(--tg2)]" />
                 <input
                   id="website"
-                  className="w-full px-2 py-1 mt-1 text-sm bg-transparent border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                  className="w-full px-2 py-1 mt-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
                   value={form.website}
                   onChange={(e) => handleChange("website", e.target.value)}
                   placeholder="https://example.com"
@@ -258,7 +258,7 @@ export function ProfileModal({ open, sectionId, item, onClose, onSavePatch }: Pr
                 <MapPin className="w-4 h-4 [color:var(--tg2)]" />
                 <input
                   id="location"
-                  className="w-full px-2 py-1 mt-1 text-sm bg-transparent border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                  className="w-full px-2 py-1 mt-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
                   value={form.location}
                   onChange={(e) => handleChange("location", e.target.value)}
                 />
