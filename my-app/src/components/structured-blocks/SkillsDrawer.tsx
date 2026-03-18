@@ -195,8 +195,8 @@ export function SkillsDrawer({ open, items, onClose, onApply }: SkillsDrawerProp
                 tabIndex={tab === "manage" ? 0 : -1}
                 onClick={() => setTab("manage")}
                 className={[
-                  "px-3 py-1.5 text-sm rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1",
-                  tab === "manage" ? "bg-primary text-foreground" : "text-muted hover:opacity-90",
+                  "px-3 py-1.5 text-sm rounded-md focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]",
+                  tab === "manage" ? "[background:var(--ac)] [color:var(--op)]" : "[color:var(--tm2)] hover:[background:var(--sf2)]",
                 ].join(" ")}
               >
                 Manage
@@ -207,8 +207,8 @@ export function SkillsDrawer({ open, items, onClose, onApply }: SkillsDrawerProp
                 tabIndex={tab === "ai" ? 0 : -1}
                 onClick={() => setTab("ai")}
                 className={[
-                  "px-3 py-1.5 text-sm rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1",
-                  tab === "ai" ? "bg-primary text-foreground" : "text-muted hover:opacity-90",
+                  "px-3 py-1.5 text-sm rounded-md focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]",
+                  tab === "ai" ? "[background:var(--ac)] [color:var(--op)]" : "[color:var(--tm2)] hover:[background:var(--sf2)]",
                 ].join(" ")}
               >
                 AI Suggestions

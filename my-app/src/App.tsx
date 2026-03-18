@@ -4,15 +4,16 @@ import "./styles/globals.css";
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Authenticated, Unauthenticated } from "convex/react";
-import { SignInButton, SignUpButton, UserButton } from "@clerk/clerk-react";
+import { SignInButton, UserButton } from "@clerk/clerk-react";
 import { ConvexStatusBanner } from "./components/ConvexStatusBanner";
 import DarkModeToggle from "./components/dark-mode-toggle/DarkModeToggle";
 import { CvForge } from "./pages/CvForge";
 import { ProposalForge } from "./pages/ProposalForge";
+import { Sidebar } from "./components/Sidebar";
+import { CvLibraryProvider } from "./contexts/CvLibraryContext";
 
 /**
  * Breadcrumb label derived from current route.
- * Source : squelette dasti-v16 § topbar
  */
 function useBreadcrumb(): string {
   const { pathname } = useLocation();
@@ -21,8 +22,8 @@ function useBreadcrumb(): string {
 }
 
 /**
- * Topbar — h:54px (--hdr), breadcrumb "dasti › Page", Export PDF.
- * Frosted glass non activé (note §A spec — chantier séparé).
+ * Topbar — h:54px (--hdr), breadcrumb "dasti › Page".
+ * §17[A] frosted glass non activé — chantier séparé.
  */
 function Topbar() {
   const breadcrumb = useBreadcrumb();
@@ -55,15 +56,7 @@ function Topbar() {
         >
           dasti
         </span>
-        <span
-          style={{
-            fontSize: "var(--ts)",
-            color: "var(--tg2)",
-            display: "flex",
-            alignItems: "center",
-            gap: "var(--s2)",
-          }}
-        >
+        <span style={{ fontSize: "var(--ts)", color: "var(--tg2)", display: "flex", alignItems: "center", gap: "var(--s2)" }}>
           <span>›</span>
           <span style={{ color: "var(--ti)", fontWeight: 500 }}>{breadcrumb}</span>
         </span>
@@ -93,14 +86,11 @@ function Topbar() {
           onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = "var(--sfr)")}
           type="button"
         >
-          {/* Download icon */}
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
             <path d="M2 13h12M8 2v8M5 6l3 3 3-3" />
           </svg>
           Export PDF
         </button>
-
-        <DarkModeToggle />
 
         <Authenticated>
           <UserButton />
@@ -114,12 +104,13 @@ function Topbar() {
                 height: "var(--hs)",
                 padding: "0 var(--s3)",
                 borderRadius: "var(--rs)",
-                border: "1px solid transparent",
-                background: "transparent",
-                color: "var(--tm2)",
+                border: "1px solid var(--bm)",
+                background: "var(--sfr)",
+                color: "var(--ti)",
                 fontSize: "var(--ts)",
                 fontWeight: 500,
                 cursor: "pointer",
+                boxShadow: "var(--sha)",
                 transition: "all .12s var(--ez)",
                 fontFamily: "inherit",
               }}
@@ -127,27 +118,6 @@ function Topbar() {
               Sign in
             </button>
           </SignInButton>
-          <SignUpButton mode="modal">
-            <button
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                height: "var(--hs)",
-                padding: "0 var(--s3)",
-                borderRadius: "var(--rs)",
-                border: "1px solid transparent",
-                background: "transparent",
-                color: "var(--tm2)",
-                fontSize: "var(--ts)",
-                fontWeight: 500,
-                cursor: "pointer",
-                transition: "all .12s var(--ez)",
-                fontFamily: "inherit",
-              }}
-            >
-              Sign up
-            </button>
-          </SignUpButton>
         </Unauthenticated>
       </div>
     </header>
@@ -155,37 +125,52 @@ function Topbar() {
 }
 
 /**
- * AppShell — layout racine height:100vh overflow:hidden.
- * Séparé de App pour pouvoir utiliser useLocation (nécessite BrowserRouter parent).
- * §layout dasti-spec-v1 §17[A]
+ * AppShell — structure exacte du squelette dasti-v16 :
+ *   <div class="app">           flex-row h:100vh overflow:hidden
+ *     <aside class="sb">        sidebar h:100vh
+ *     <div class="page-area">   flex:1 flex-col overflow:hidden
+ *       <header class="top">    topbar 54px
+ *       <div class="pscroll">   flex:1 overflow:hidden → pages gèrent leur scroll
+ *
+ * CvLibraryProvider ici pour que Sidebar ait accès au contexte CV
+ * depuis n'importe quelle route.
  */
 function AppShell(): JSX.Element {
   return (
-    <div
-      className="pal-sauge"
-      style={{
-        height: "100vh",
-        overflow: "hidden",
-        display: "flex",
-        flexDirection: "column",
-        background: "var(--bg)",
-        color: "var(--ti)",
-        fontFamily: "'Source Sans 3', system-ui, sans-serif",
-      }}
-    >
-      <ConvexStatusBanner />
-      <Topbar />
+    <CvLibraryProvider>
+      {/* .app — flex row, h:100vh overflow:hidden */}
+      <div
+        className="pal-sauge"
+        style={{
+          display: "flex",
+          flexDirection: "row",
+          height: "100vh",
+          overflow: "hidden",
+          background: "var(--bg)",
+          color: "var(--ti)",
+          fontFamily: "'Source Sans 3', system-ui, sans-serif",
+        }}
+      >
+        {/* Sidebar — h:100vh depuis le parent flex */}
+        <Sidebar />
 
-      {/* Content area — flex:1 overflow:hidden pour que les pages gèrent leur propre scroll */}
-      <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-        <Routes>
-          <Route path="/cv" element={<CvForge />} />
-          <Route path="/proposal" element={<ProposalForge />} />
-          <Route path="/" element={<Navigate to="/cv" replace />} />
-          <Route path="*" element={<Navigate to="/cv" replace />} />
-        </Routes>
+        {/* .page-area — flex:1, flex-col */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
+          <ConvexStatusBanner />
+          <Topbar />
+
+          {/* .pscroll — flex:1 overflow:hidden, chaque page gère son propre scroll */}
+          <div style={{ flex: 1, overflow: "hidden" }}>
+            <Routes>
+              <Route path="/cv" element={<CvForge />} />
+              <Route path="/proposal" element={<ProposalForge />} />
+              <Route path="/" element={<Navigate to="/cv" replace />} />
+              <Route path="*" element={<Navigate to="/cv" replace />} />
+            </Routes>
+          </div>
+        </div>
       </div>
-    </div>
+    </CvLibraryProvider>
   );
 }
 

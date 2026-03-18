@@ -41,7 +41,7 @@ const DarkModeToggle = () => {
   return (
     <button
       onClick={onThemeChange}
-      className="p-2 mt-4 rounded-rs focus:outline-none hover:[background:var(--sf2)] [transition:all_.12s_var(--ez)]"
+      className="p-2 rounded-rs focus:outline-none hover:[background:var(--sf2)] [transition:all_.12s_var(--ez)]"
       aria-pressed={isDarkTheme}
     >
       {isDarkTheme ? (
