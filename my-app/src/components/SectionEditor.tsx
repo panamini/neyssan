@@ -604,7 +604,7 @@ export default function SectionEditor({
                 e.stopPropagation();
                 setSummaryModalOpen(true);
               }}
-              className="p-1 rounded bg-[var(--primary)] text-[var(--foreground)] hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-1"
+              className="p-1 rounded [background:transparent] [color:var(--tm2)] hover:[color:var(--ti)] hover:[background:var(--sf2)] focus:outline-none [transition:all_.12s_var(--ez)]"
               aria-label="Edit summary"
               title="Edit summary"
             >
@@ -635,7 +635,7 @@ export default function SectionEditor({
                   /* noop */
                 }
               }}
-              className="p-1 rounded hover:bg-[var(--accent)]/10 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-1"
+              className="p-1 rounded [background:transparent] [color:var(--tm2)] hover:[background:var(--sf2)] hover:[color:var(--ti)] focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
               aria-label="Clear summary"
               title="Clear summary"
             >
@@ -649,7 +649,7 @@ export default function SectionEditor({
                   onCollapseChange();
                 }}
                 aria-label={collapsed ? "Expand section" : "Collapse section"}
-                className="p-1 ml-2 rounded focus:outline-none focus:ring-2 focus:ring-offset-1"
+                className="p-1 ml-2 rounded focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
               >
                 <span className="[color:var(--tg2)]" aria-hidden>
                   {collapsed ? "▶" : "▼"}
@@ -930,7 +930,7 @@ export default function SectionEditor({
                   onCollapseChange();
                 }}
                 aria-label={collapsed ? "Expand section" : "Collapse section"}
-                className="p-1 ml-2 rounded focus:outline-none focus:ring-2 focus:ring-offset-1"
+                className="p-1 ml-2 rounded focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
               >
                 <span className="[color:var(--tg2)]" aria-hidden>
                   {collapsed ? "▶" : "▼"}
@@ -965,7 +965,7 @@ export default function SectionEditor({
                           /* noop */
                         }
                       }}
-                      className="inline-flex p-0.5 ml-1 rounded hover:bg-[var(--accent)]/10 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-0"
+                      className="inline-flex p-0.5 ml-1 rounded [background:transparent] hover:[background:var(--sf2)] focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
                       aria-label={`Remove ${s.name || "skill"}`}
                       title="Remove skill"
                     >
@@ -1019,41 +1019,9 @@ export default function SectionEditor({
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    try {
-                      handleSortByLevel();
-                    } catch {
-                      /* noop */
-                    }
-                  }}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-[color:var(--bo)] text-sm hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
-                  aria-label="Sort by proficiency (high to low)"
-                  title="Sort by level"
-                >
-                  Sort by level
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    try {
-                      handleSortAZ();
-                    } catch {
-                      /* noop */
-                    }
-                  }}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-[color:var(--bo)] text-sm hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
-                  aria-label="Sort skills alphabetically (A to Z)"
-                  title="Sort A→Z"
-                >
-                  A→Z
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
                     handleAddSkillInline();
                   }}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-primary text-foreground hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md [background:var(--ac)] [color:var(--op)] hover:brightness-110 focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
                   aria-label="Add skill"
                   title="Add skill"
                 >
@@ -1099,7 +1067,7 @@ export default function SectionEditor({
                         <button
                           type="button"
                           onClick={() => handlePinToCoreInline(String(row.id ?? idx))}
-                          className="p-1 rounded hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+                          className="p-1 rounded hover:opacity-90 focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
                           aria-label={`Pin ${row.name || "skill"} to top`}
                           title="Pin to top"
                         >
@@ -1108,7 +1076,7 @@ export default function SectionEditor({
                         <button
                           type="button"
                           onClick={() => handleRemoveSkillInline(String(row.id ?? idx))}
-                          className="p-1 rounded hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+                          className="p-1 rounded hover:opacity-90 focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
                           aria-label={`Remove ${row.name || "skill"}`}
                           title="Remove skill"
                         >
@@ -1386,7 +1354,7 @@ export default function SectionEditor({
                   onCollapseChange();
                 }}
                 aria-label={collapsed ? "Expand section" : "Collapse section"}
-                className="p-1 ml-2 rounded focus:outline-none focus:ring-2 focus:ring-offset-1"
+                className="p-1 ml-2 rounded focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
               >
                 <span className="[color:var(--tg2)]" aria-hidden>
                   {collapsed ? "▶" : "▼"}
@@ -1421,7 +1389,7 @@ export default function SectionEditor({
                           /* noop */
                         }
                       }}
-                      className="inline-flex p-0.5 ml-1 rounded hover:bg-[var(--accent)]/10 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-0"
+                      className="inline-flex p-0.5 ml-1 rounded [background:transparent] hover:[background:var(--sf2)] focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
                       aria-label={`Remove ${lng.name || "language"}`}
                       title="Remove language"
                     >
@@ -1449,7 +1417,7 @@ export default function SectionEditor({
                     e.stopPropagation();
                     handleAddLanguageInline();
                   }}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-primary text-foreground hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md [background:var(--ac)] [color:var(--op)] hover:brightness-110 focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
                   aria-label="Add language"
                   title="Add language"
                 >
@@ -1495,7 +1463,7 @@ export default function SectionEditor({
                         <button
                           type="button"
                           onClick={() => handleRemoveLanguageInline(String(row.id ?? idx))}
-                          className="p-1 rounded hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+                          className="p-1 rounded hover:opacity-90 focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
                           aria-label={`Remove ${row.name || "language"}`}
                           title="Remove language"
                         >
@@ -1568,7 +1536,7 @@ export default function SectionEditor({
         </span>
       );
       return href ? (
-        <a className="rounded focus:outline-none focus:ring-2 focus:ring-offset-1" href={href} target="_blank" rel="noreferrer" aria-label={ariaLabel}>
+        <a className="rounded focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]" href={href} target="_blank" rel="noreferrer" aria-label={ariaLabel}>
           {content}
         </a>
       ) : (
@@ -1587,7 +1555,7 @@ export default function SectionEditor({
                 e.stopPropagation();
                 setProfileModalOpen(true);
               }}
-              className="p-1 rounded bg-[var(--primary)] text-[var(--foreground)] hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-1"
+              className="p-1 rounded [background:transparent] [color:var(--tm2)] hover:[color:var(--ti)] hover:[background:var(--sf2)] focus:outline-none [transition:all_.12s_var(--ez)]"
               aria-label="Edit profile"
               title="Edit profile"
             >
@@ -1613,7 +1581,7 @@ export default function SectionEditor({
                   /* noop */
                 }
               }}
-              className="p-1 rounded hover:bg-[var(--accent)]/10 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-1"
+              className="p-1 rounded [background:transparent] [color:var(--tm2)] hover:[background:var(--sf2)] hover:[color:var(--ti)] focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
               aria-label="Clear profile"
               title="Clear profile"
             >
@@ -1627,7 +1595,7 @@ export default function SectionEditor({
                   onCollapseChange();
                 }}
                 aria-label={collapsed ? "Expand section" : "Collapse section"}
-                className="p-1 ml-2 rounded focus:outline-none focus:ring-2 focus:ring-offset-1"
+                className="p-1 ml-2 rounded focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
               >
                 <span className="[color:var(--tg2)]" aria-hidden>
                   {collapsed ? "▶" : "▼"}
@@ -1888,7 +1856,7 @@ export default function SectionEditor({
                     else if (sectionType === "education") setEducationModalOpen(true);
                   } catch { /* noop */ }
                 }}
-                className="p-1 rounded bg-[var(--primary)] text-[var(--foreground)] hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-1"
+                className="p-1 rounded [background:transparent] [color:var(--tm2)] hover:[color:var(--ti)] hover:[background:var(--sf2)] focus:outline-none [transition:all_.12s_var(--ez)]"
                 aria-label={`Edit ${sectionType}`}
                 title={`Edit ${sectionType}`}
               >
@@ -1903,7 +1871,7 @@ export default function SectionEditor({
                   onCollapseChange();
                 }}
                 aria-label={collapsed ? "Expand section" : "Collapse section"}
-                className="p-1 ml-2 rounded focus:outline-none focus:ring-2 focus:ring-offset-1"
+                className="p-1 ml-2 rounded focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
               >
                 <span className="[color:var(--tg2)]" aria-hidden>
                   {collapsed ? "▶" : "▼"}
@@ -2147,7 +2115,7 @@ export default function SectionEditor({
            }}
            aria-expanded={!collapsed}
            aria-label={collapsed ? "Expand section" : "Collapse section"}
-           className="p-1 ml-2 rounded focus:outline-none focus:ring-2 focus:ring-offset-1"
+           className="p-1 ml-2 rounded focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
          >
            <span className="[color:var(--tg2)]" aria-hidden>
                {collapsed ? "▶" : "▼"}

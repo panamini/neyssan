@@ -186,7 +186,7 @@ function ModalShell({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="px-2 py-1 rounded hover:bg-[var(--accent)]/10 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-1"
+            className="px-2 py-1 rounded [background:transparent] [color:var(--tm2)] hover:[background:var(--sf2)] hover:[color:var(--ti)] focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
           >
             Close
           </button>
@@ -207,7 +207,7 @@ function ModalShell({
               type="button"
               onClick={primaryAction.onClick}
               disabled={primaryAction.disabled}
-              className="px-3 py-2 text-sm font-medium rounded bg-[var(--primary)] text-[var(--foreground)] hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-1 disabled:opacity-50"
+              className="px-3 py-2 text-sm font-medium rounded [background:var(--ac)] [color:var(--op)] hover:brightness-110 focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)] disabled:opacity-50"
             >
               {primaryAction.label}
             </button>
@@ -402,7 +402,7 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
           <button
             type="button"
             onClick={() => void importFromClipboardExp()}
-            className="px-2 py-1 text-xs rounded bg-[var(--primary)] text-[var(--foreground)] hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-1"
+            className="px-2 py-1 text-xs rounded [background:var(--ac)] [color:var(--op)] hover:brightness-110 focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
             aria-label="Import from AI (experience)"
             title="Import from AI (experience)"
           >
@@ -428,7 +428,7 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
                 <button
                   type="button"
                   onClick={() => removeRow(idx)}
-                  className="px-2 py-1 text-xs rounded hover:bg-[var(--accent)]/10 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-1"
+                  className="px-2 py-1 text-xs rounded [background:transparent] [color:var(--tm2)] hover:[background:var(--sf2)] hover:[color:var(--ti)] focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
                   aria-label="Remove entry"
                 >
                   Remove
@@ -820,7 +820,7 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
           <button
             type="button"
             onClick={() => void importFromClipboardEdu()}
-            className="px-2 py-1 text-xs rounded bg-[var(--primary)] text-[var(--foreground)] hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-1"
+            className="px-2 py-1 text-xs rounded [background:var(--ac)] [color:var(--op)] hover:brightness-110 focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
             aria-label="Import from AI (education)"
             title="Import from AI (education)"
           >
@@ -846,7 +846,7 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
                 <button
                   type="button"
                   onClick={() => removeRow(idx)}
-                  className="px-2 py-1 text-xs rounded hover:bg-[var(--accent)]/10 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-1"
+                  className="px-2 py-1 text-xs rounded [background:transparent] [color:var(--tm2)] hover:[background:var(--sf2)] hover:[color:var(--ti)] focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
                   aria-label="Remove entry"
                 >
                   Remove

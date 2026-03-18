@@ -113,10 +113,10 @@ export function SegmentedRadio<T extends string>({
             }}
             className={[
               "px-2.5 py-1 text-xs sm:text-sm rounded-md [transition:background_.12s_var(--ez),color_.12s_var(--ez),border-color_.12s_var(--ez)]",
-              "focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1",
+              "focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]",
               isChecked
-                ? "bg-primary text-foreground"
-                : "bg-transparent text-muted hover:opacity-90",
+                ? "[background:var(--ac)] [color:var(--op)]"
+                : "[background:var(--sfr)] border [border-color:var(--bm)] [color:var(--ti)] hover:[background:var(--sf2)]",
             ].join(" ")}
             data-segment-name={srName}
           >

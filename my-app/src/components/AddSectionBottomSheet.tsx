@@ -108,7 +108,7 @@ export function AddSectionBottomSheet({ isOpen, onClose, onSelect }: AddSectionB
             type="button"
             aria-label="Close"
             onClick={onClose}
-            className="p-2 rounded hover:bg-[var(--accent)]/10 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-1"
+            className="p-2 rounded [background:transparent] [color:var(--tm2)] hover:[background:var(--sf2)] hover:[color:var(--ti)] focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
           >
             ✕
           </button>
@@ -119,7 +119,7 @@ export function AddSectionBottomSheet({ isOpen, onClose, onSelect }: AddSectionB
             {options.map((opt) => (
               <button
                 key={opt.type}
-                className={`p-3 text-left border rounded hover:bg-[var(--accent)]/5 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-1 ${
+                className={`p-3 text-left border rounded hover:[background:var(--sf2)] focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)] ${
                   opt.fullSpan ? "col-span-2" : ""
                 }`}
                 onClick={() => handlePick(opt.type)}

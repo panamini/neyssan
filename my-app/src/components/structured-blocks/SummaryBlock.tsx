@@ -267,7 +267,7 @@ export function SummaryBlock({ section, onOpenEditor }: SummaryBlockProps) {
               e.stopPropagation();
               setIsExpanded((v) => !v);
             }}
-            className="px-2 py-1 text-xs rounded hover:bg-[var(--accent)]/10 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-1"
+            className="px-2 py-1 text-xs rounded [background:transparent] [color:var(--tm2)] hover:[background:var(--sf2)] hover:[color:var(--ti)] focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
             aria-controls={regionId}
             aria-label={isExpanded ? "Collapse summary" : "Expand summary"}
           >
