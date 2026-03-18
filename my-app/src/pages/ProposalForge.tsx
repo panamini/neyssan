@@ -3,8 +3,6 @@ import { useConvexAuth, useQuery } from "convex/react";
 import ProposalInputForm from "../components/ProposalInputForm";
 import ProposalDisplay from "../components/ProposalDisplay";
 import ProposalsList from "../components/ProposalsList";
-import { Button } from "../components/ui/button";
-import { Flex } from "@radix-ui/themes";
 import type { FormValues } from "../components/ProposalInputForm.schemas";
 import { api } from "../../convex/_generated/api";
 import type { ProposalGenerationFallbackInfo } from "../lib/proposal-generation-ui";
@@ -20,31 +18,33 @@ type ProposalForgePrefill = {
 type ProposalForgeView = "compose" | "saved";
 
 /**
- * ProposalForge
+ * ProposalForge — page Write
  *
- * Dedicated Proposal workspace page. Keeps proposal-related components and state
- * isolated from the CV workspace.
+ * Toggle Compose / Open : underline tab style (§13 dasti-spec-v1).
+ * Intro panel .ip : eyebrow + h2 Fraunces + description.
+ * Layout : full-height scrollable (cohérent avec CvForge).
+ * Logique métier : intacte.
  */
 export function ProposalForge(): JSX.Element {
-  const handoffId = React.useMemo(() => new URLSearchParams(window.location.search).get("handoffId"), []);
+  const handoffId = React.useMemo(
+    () => new URLSearchParams(window.location.search).get("handoffId"),
+    [],
+  );
   const { isLoading: isConvexAuthLoading, isAuthenticated: isConvexAuthenticated } = useConvexAuth();
   const [proposalContent, setProposalContent] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [proposalType, setProposalType] = React.useState<FormValues["proposalType"] | null>(null);
-  const [fallbackInfo, setFallbackInfo] =
-    React.useState<ProposalGenerationFallbackInfo | null>(null);
+  const [fallbackInfo, setFallbackInfo] = React.useState<ProposalGenerationFallbackInfo | null>(null);
   const [activeView, setActiveView] = React.useState<ProposalForgeView>("compose");
+
   const handoffRecord = useQuery(
     api.proposalHandoffs.get,
     handoffId && isConvexAuthenticated ? { handoffId } : "skip",
   );
 
   const prefill = React.useMemo<ProposalForgePrefill>(() => {
-    if (!handoffRecord) {
-      return null;
-    }
-
+    if (!handoffRecord) return null;
     return {
       handoffId: handoffRecord.handoffId,
       jobTitle: handoffRecord.jobTitle,
@@ -53,6 +53,8 @@ export function ProposalForge(): JSX.Element {
       platform: handoffRecord.platform,
     };
   }, [handoffRecord]);
+
+  /* ── Handlers (logique métier intacte) ────────────────────── */
 
   const handleProposalStart = React.useCallback((values: FormValues) => {
     setLoading(true);
@@ -63,11 +65,7 @@ export function ProposalForge(): JSX.Element {
   }, []);
 
   const handleProposalSubmit = React.useCallback(
-    (
-      values: FormValues,
-      proposal: string,
-      nextFallbackInfo?: ProposalGenerationFallbackInfo,
-    ) => {
+    (values: FormValues, proposal: string, nextFallbackInfo?: ProposalGenerationFallbackInfo) => {
       setProposalType(values.proposalType);
       setProposalContent(proposal);
       setError(null);
@@ -94,79 +92,175 @@ export function ProposalForge(): JSX.Element {
     Boolean(handoffId) &&
     (isConvexAuthLoading || (isConvexAuthenticated && handoffRecord === undefined));
 
-  return (
-    <main>
-      <Flex direction="column" gap="4" align="stretch" className="w-full">
-        <h2 className="text-lg font-semibold">Proposal Forge</h2>
+  /* ── Tab underline style — §13 dasti-spec-v1 ─────────────── */
+  const tabBase: React.CSSProperties = {
+    display: "inline-flex",
+    alignItems: "center",
+    height: "var(--hs)",
+    padding: "0 var(--s3)",
+    borderRadius: "var(--rs) var(--rs) 0 0",
+    border: "none",
+    borderBottom: "2px solid transparent",
+    marginBottom: -1,
+    background: "transparent",
+    fontSize: "var(--ts)",
+    fontWeight: 500,
+    cursor: "pointer",
+    transition: "all .12s var(--ez)",
+    fontFamily: "inherit",
+  };
 
-        <div className="p-4 border rounded bg-background">
-          <p className="text-sm text-muted-foreground">
-            This workspace is dedicated to writing and managing proposals.
+  const tabActive: React.CSSProperties = {
+    ...tabBase,
+    color: "var(--ti)",
+    fontWeight: 600,
+    borderBottomColor: "var(--ac)",
+  };
+
+  const tabInactive: React.CSSProperties = {
+    ...tabBase,
+    color: "var(--tm2)",
+  };
+
+  return (
+    /* Full-height scrollable — cohérent avec CvForge */
+    <div style={{ height: "100%", overflowY: "auto", overflowX: "hidden", minWidth: 0 }}>
+      <div
+        style={{
+          padding: "var(--s8) var(--s7)",
+          display: "flex",
+          flexDirection: "column",
+          gap: "var(--s5)",
+          maxWidth: 960,
+        }}
+      >
+        {/* Intro panel — §13 dasti-spec-v1 */}
+        <div
+          style={{
+            padding: "var(--s5)",
+            borderRadius: "var(--rm)",
+            border: "1px solid var(--bo)",
+            background: "var(--sfr)",
+            boxShadow: "var(--sha)",
+          }}
+        >
+          <div
+            style={{
+              fontSize: "var(--tx)",
+              fontWeight: 600,
+              color: "var(--am)",
+              letterSpacing: ".14em",
+              textTransform: "uppercase",
+              marginBottom: "var(--s2)",
+            }}
+          >
+            Write
+          </div>
+          <h2
+            style={{
+              fontFamily: '"Fraunces", serif',
+              fontSize: "var(--tx2)",
+              fontWeight: 600,
+              letterSpacing: "-.01em",
+              color: "var(--ti)",
+              marginBottom: "var(--s2)",
+            }}
+          >
+            Write
+          </h2>
+          <p style={{ fontSize: "var(--ts)", color: "var(--tm2)", lineHeight: "var(--ls)" }}>
+            Rédigez et gérez vos lettres. Cliquez sur un document dans la barre latérale pour l'ouvrir.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2" aria-label="Proposal Forge views">
-          <Button
+        {/* Tab toggle — underline style §13 */}
+        <div style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--bo)" }}>
+          <button
             type="button"
-            size="sm"
-            variant={isComposeView ? "primary" : "secondary"}
+            style={isComposeView ? tabActive : tabInactive}
             onClick={() => setActiveView("compose")}
+            onMouseEnter={(e) => {
+              if (!isComposeView) (e.currentTarget as HTMLButtonElement).style.background = "var(--sf2)";
+            }}
+            onMouseLeave={(e) => {
+              if (!isComposeView) (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+            }}
           >
             Compose
-          </Button>
-          <Button
+          </button>
+          <button
             type="button"
-            size="sm"
-            variant={isSavedView ? "primary" : "secondary"}
+            style={isSavedView ? tabActive : tabInactive}
             onClick={() => setActiveView("saved")}
+            onMouseEnter={(e) => {
+              if (!isSavedView) (e.currentTarget as HTMLButtonElement).style.background = "var(--sf2)";
+            }}
+            onMouseLeave={(e) => {
+              if (!isSavedView) (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+            }}
           >
-            Saved
-          </Button>
+            Open
+          </button>
         </div>
 
-        <section className={isComposeView ? "block" : "hidden"} aria-hidden={!isComposeView}>
-          <div className="mt-4 flex flex-col gap-3">
-            <ProposalDisplay
-              proposalContent={proposalContent}
-              loading={loading}
-              error={error}
-              proposalType={proposalType}
-              fallbackInfo={fallbackInfo}
-            />
+        {/* Compose view */}
+        <section
+          style={{ display: isComposeView ? "flex" : "none", flexDirection: "column", gap: "var(--s4)" }}
+          aria-hidden={!isComposeView}
+        >
+          <ProposalDisplay
+            proposalContent={proposalContent}
+            loading={loading}
+            error={error}
+            proposalType={proposalType}
+            fallbackInfo={fallbackInfo}
+          />
 
           {isLoadingHandoff ? (
-            <div>
-              <div className="p-4 border rounded bg-background">
-                <p className="text-sm text-muted-foreground">
-                  Loading imported job offer…
-                </p>
-              </div>
+            <div
+              style={{
+                padding: "var(--s5)",
+                borderRadius: "var(--rm)",
+                border: "1px solid var(--bo)",
+                background: "var(--sfr)",
+                boxShadow: "var(--sha)",
+              }}
+            >
+              <p style={{ fontSize: "var(--ts)", color: "var(--tm2)" }}>
+                Loading imported job offer…
+              </p>
             </div>
           ) : (
-            <div>
-              <ProposalInputForm
-                onStart={handleProposalStart}
-                onSubmit={handleProposalSubmit}
-                onError={handleProposalError}
-                prefill={prefill}
-              />
-            </div>
+            <ProposalInputForm
+              onStart={handleProposalStart}
+              onSubmit={handleProposalSubmit}
+              onError={handleProposalError}
+              prefill={prefill}
+            />
           )}
-          </div>
         </section>
 
-        <section className={isSavedView ? "block" : "hidden"} aria-hidden={!isSavedView}>
-          <div className="p-4 border rounded bg-background">
-            <p className="text-sm text-muted-foreground">
+        {/* Open / Saved view */}
+        <section
+          style={{ display: isSavedView ? "flex" : "none", flexDirection: "column", gap: "var(--s4)" }}
+          aria-hidden={!isSavedView}
+        >
+          <div
+            style={{
+              padding: "var(--s5)",
+              borderRadius: "var(--rm)",
+              border: "1px solid var(--bo)",
+              background: "var(--sfr)",
+              boxShadow: "var(--sha)",
+            }}
+          >
+            <p style={{ fontSize: "var(--ts)", color: "var(--tm2)" }}>
               Browse saved proposals without leaving Proposal Forge.
             </p>
           </div>
-
-          <div className="mt-4">
-            <ProposalsList />
-          </div>
+          <ProposalsList />
         </section>
-      </Flex>
-    </main>
+      </div>
+    </div>
   );
 }
