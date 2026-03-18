@@ -932,7 +932,7 @@ describe("proposal provider busy handling", () => {
       "proof_line: <one short grounded sentence>",
     );
     expect(mockGpt4Generate.mock.calls[0]?.[0]).toContain(
-      "follow_up_line: <one short light conversational sentence>",
+      "follow_up_line: <one short same-thread continuation sentence>",
     );
     expect(mockGpt4Generate.mock.calls[0]?.[0]).toContain(
       "opener = contact context only. Name the role or contact context naturally. Do not carry proof, years, fit language, a background summary, or interest/application formulas.",
@@ -941,10 +941,10 @@ describe("proposal provider busy handling", () => {
       "proof_line = the only substantive sentence. Make it one concrete micro-proof: one real thing the candidate handled, shipped, designed, supported, operated, documented, or improved or, in no-context mode, one concrete work surface from the role.",
     );
     expect(mockGpt4Generate.mock.calls[0]?.[0]).toContain(
-      "Do not write proof_line as 'At my previous role...', 'I have a proven track record...', 'My background includes...', 'My experience includes...', 'I have experience in...', 'I worked as...', 'As a [role]...', or an alignment shell.",
+      "When supported experience is the proof, name the employer, site, project, artifact, workflow, result, or operating surface instead of hiding it behind anonymous previous-role or previous-employer setup.",
     );
     expect(mockGpt4Generate.mock.calls[0]?.[0]).toContain(
-      "Do not repeat the proof or use canned closes such as 'I'd love to discuss...', 'If useful, I can share a bit more detail.', 'my experience aligns', or generic detail-sharing filler.",
+      "Do not open a new topic, ask for a conversation, offer extra detail, point to the profile or portfolio, repeat the proof, mention reply behavior, or summarize fit, readiness, value, or future contribution.",
     );
     expect(mockGpt4Generate.mock.calls[0]?.[0]).toContain(
       "Application-message employer priority snapshot:",
