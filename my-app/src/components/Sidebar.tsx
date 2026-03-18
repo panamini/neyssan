@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { Plus, Pencil } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useCvLibrary } from '../contexts/CvLibraryContext';
 import { normalizeAndValidateCvDocument } from '../lib/normalize-cv';
 import CvRenameDialog from './CvRenameDialog';
@@ -24,6 +25,9 @@ export const Sidebar: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const { cvs, currentCv, loadCv, createNewCv, importCv, deleteCv, renameCv } = useCvLibrary();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const isProposal = pathname.startsWith('/proposal');
 
   /* ── Handlers (logique métier intacte) ───────────────────── */
 
@@ -267,6 +271,41 @@ export const Sidebar: React.FC = () => {
               <span style={{ whiteSpace: "nowrap" }}>New resume</span>
             </button>
           )}
+
+          {/* Section label WRITE */}
+          <span style={sbSec as React.CSSProperties}>Write</span>
+
+          {/* Compose nav item */}
+          <div
+            onClick={() => navigate('/proposal')}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "var(--s3)",
+              padding: `var(--s2) var(--s2) var(--s2) ${isProposal ? "30px" : "32px"}`,
+              borderRadius: "var(--rs)",
+              border: isProposal ? "1px solid var(--bo)" : "1px solid transparent",
+              cursor: "pointer",
+              height: 34,
+              background: isProposal ? "var(--sfr)" : "transparent",
+              borderLeft: isProposal ? "2px solid var(--ac)" : "none",
+              boxShadow: isProposal ? "var(--sha)" : "none",
+              transition: "all .12s var(--ez)",
+              overflow: "hidden",
+            }}
+          >
+            <div style={{ width: 16, height: 16, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: isProposal ? "var(--ac)" : "var(--tg2)" }}>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                <path d="M2 12L10 4l3 3L5 15H2v-3z" />
+                <path d="M8 6l2 2" />
+              </svg>
+            </div>
+            {!collapsed && (
+              <span style={{ fontSize: "var(--ts)", fontWeight: isProposal ? 600 : 500, color: isProposal ? "var(--ti)" : "var(--tm2)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>
+                Compose
+              </span>
+            )}
+          </div>
 
           {/* Error display */}
           {error && !collapsed && (

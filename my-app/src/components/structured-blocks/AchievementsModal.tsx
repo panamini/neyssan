@@ -180,7 +180,7 @@ export function AchievementsModal({ open, items, onClose, onSave }: Achievements
             <button
               type="button"
               onClick={handleAdd}
-              className="inline-flex items-center gap-1 px-2 py-1 text-sm text-[var(--foreground)] rounded bg-[var(--primary)] hover:bg-[var(--primary)]/90"
+              className="inline-flex items-center gap-1 px-2 py-1 text-sm rounded [background:var(--ac)] [color:var(--op)] hover:brightness-110 focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
               aria-label="Add achievement"
             >
               <Plus className="w-4 h-4" /> Add
@@ -252,7 +252,7 @@ export function AchievementsModal({ open, items, onClose, onSave }: Achievements
             <button
               type="button"
               onClick={() => void handleSave()}
-              className="px-3 py-2 text-[var(--foreground)] rounded bg-[var(--primary)] disabled:opacity-50"
+              className="px-3 py-2 rounded [background:var(--ac)] [color:var(--op)] hover:brightness-110 disabled:opacity-50 focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
               disabled={isSaving}
               aria-busy={isSaving}
             >

@@ -82,7 +82,7 @@ export function AchievementsBlock({ section, onChange }: AchievementsBlockProps)
               e.stopPropagation();
               setIsModalOpen(true);
             }}
-            className="p-1 rounded bg-[var(--primary)] text-[var(--foreground)] hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-1"
+            className="p-1 rounded [background:transparent] [color:var(--tm2)] hover:[color:var(--ti)] hover:[background:var(--sf2)] focus:outline-none [transition:all_.12s_var(--ez)]"
             aria-label="Edit achievements"
             title="Edit achievements"
           >
@@ -100,7 +100,7 @@ export function AchievementsBlock({ section, onChange }: AchievementsBlockProps)
               } catch {}
               handleClear();
             }}
-            className="p-1 rounded hover:bg-[var(--accent)]/10 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-1"
+            className="p-1 rounded [background:transparent] [color:var(--tm2)] hover:[color:var(--ti)] hover:[background:var(--sf2)] focus:outline-none [transition:all_.12s_var(--ez)]"
             aria-label="Clear achievements"
             title="Clear achievements"
           >
@@ -158,7 +158,7 @@ export function AchievementsBlock({ section, onChange }: AchievementsBlockProps)
               aria-controls={contentId}
               aria-expanded={isExpanded}
               onClick={() => setIsExpanded((v) => !v)}
-              className="px-2 py-1 text-xs rounded hover:bg-[var(--accent)]/10 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-1"
+              className="px-2 py-1 text-xs rounded [background:transparent] [color:var(--tm2)] hover:[background:var(--sf2)] hover:[color:var(--ti)] focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
             >
               {isExpanded ? "Read less" : "Read more"}
             </button>
