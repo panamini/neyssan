@@ -1,0 +1,1168 @@
+[
+  {
+    "ts": "2025-09-10T19:10:44.053Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] safeSetCurrentCv called",
+        {
+          "prevId": null,
+          "nextId": "d8dfd71b-baae-4942-8217-77e2afc1efda"
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.054Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] safeSetCurrentCv: prev null, next non-null, returning next"
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.114Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "c0c9a44a-7756-4d9e-9d77-730d83aea491",
+        {
+          "count": 1
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.114Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "b28895f4-9a4a-4ee2-a96c-5fd48eae4997",
+        {
+          "count": 2
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.114Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "488381cc-a23b-4391-8a5d-369f4ba6a6ae",
+        {
+          "count": 3
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.114Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "ea1aeea9-cc06-4257-b1b2-c507c0eceecd",
+        {
+          "count": 4
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.115Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "91a73870-9e36-49d1-a68b-af86d94af88e",
+        {
+          "count": 5
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.115Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "13d6c12e-f404-43a5-a5b7-a275c8d54366",
+        {
+          "count": 6
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.115Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "2dc20b0a-c025-4779-8795-ca7dbe9314b2",
+        {
+          "count": 7
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.115Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "d0a9f90f-55c4-41aa-aaf6-0d0c027575f6",
+        {
+          "count": 8
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.116Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "33d901aa-fcce-4fcd-8b79-60b5c84a9dc9",
+        {
+          "count": 9
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.116Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "f1b02ba2-1337-473c-ba91-7afe256f82d3",
+        {
+          "count": 10
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.116Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "17de28d3-0699-42a3-82b7-2d2f7b5a3f1a",
+        {
+          "count": 11
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.116Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "22ae7401-d086-41f0-ac36-bbb4eb2104f6",
+        {
+          "count": 12
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.117Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] unregisterBlockFlushCallback deleted",
+        "c0c9a44a-7756-4d9e-9d77-730d83aea491",
+        {
+          "count": 11
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.117Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] unregisterBlockFlushCallback deleted",
+        "b28895f4-9a4a-4ee2-a96c-5fd48eae4997",
+        {
+          "count": 10
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.117Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] unregisterBlockFlushCallback deleted",
+        "488381cc-a23b-4391-8a5d-369f4ba6a6ae",
+        {
+          "count": 9
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.117Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] unregisterBlockFlushCallback deleted",
+        "ea1aeea9-cc06-4257-b1b2-c507c0eceecd",
+        {
+          "count": 8
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.117Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] unregisterBlockFlushCallback deleted",
+        "91a73870-9e36-49d1-a68b-af86d94af88e",
+        {
+          "count": 7
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.117Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] unregisterBlockFlushCallback deleted",
+        "13d6c12e-f404-43a5-a5b7-a275c8d54366",
+        {
+          "count": 6
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.118Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] unregisterBlockFlushCallback deleted",
+        "2dc20b0a-c025-4779-8795-ca7dbe9314b2",
+        {
+          "count": 5
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.118Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] unregisterBlockFlushCallback deleted",
+        "d0a9f90f-55c4-41aa-aaf6-0d0c027575f6",
+        {
+          "count": 4
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.118Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] unregisterBlockFlushCallback deleted",
+        "33d901aa-fcce-4fcd-8b79-60b5c84a9dc9",
+        {
+          "count": 3
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.118Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] unregisterBlockFlushCallback deleted",
+        "f1b02ba2-1337-473c-ba91-7afe256f82d3",
+        {
+          "count": 2
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.118Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] unregisterBlockFlushCallback deleted",
+        "17de28d3-0699-42a3-82b7-2d2f7b5a3f1a",
+        {
+          "count": 1
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.118Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] unregisterBlockFlushCallback deleted",
+        "22ae7401-d086-41f0-ac36-bbb4eb2104f6",
+        {
+          "count": 0
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.118Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "c0c9a44a-7756-4d9e-9d77-730d83aea491",
+        {
+          "count": 1
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.118Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "b28895f4-9a4a-4ee2-a96c-5fd48eae4997",
+        {
+          "count": 2
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.118Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "488381cc-a23b-4391-8a5d-369f4ba6a6ae",
+        {
+          "count": 3
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.119Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "ea1aeea9-cc06-4257-b1b2-c507c0eceecd",
+        {
+          "count": 4
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.119Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "91a73870-9e36-49d1-a68b-af86d94af88e",
+        {
+          "count": 5
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.119Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "13d6c12e-f404-43a5-a5b7-a275c8d54366",
+        {
+          "count": 6
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.119Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "2dc20b0a-c025-4779-8795-ca7dbe9314b2",
+        {
+          "count": 7
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.119Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "d0a9f90f-55c4-41aa-aaf6-0d0c027575f6",
+        {
+          "count": 8
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.119Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "33d901aa-fcce-4fcd-8b79-60b5c84a9dc9",
+        {
+          "count": 9
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.119Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "f1b02ba2-1337-473c-ba91-7afe256f82d3",
+        {
+          "count": 10
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.119Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "17de28d3-0699-42a3-82b7-2d2f7b5a3f1a",
+        {
+          "count": 11
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.120Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "22ae7401-d086-41f0-ac36-bbb4eb2104f6",
+        {
+          "count": 12
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.145Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] unregisterBlockFlushCallback deleted",
+        "b28895f4-9a4a-4ee2-a96c-5fd48eae4997",
+        {
+          "count": 11
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.145Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] unregisterBlockFlushCallback deleted",
+        "c0c9a44a-7756-4d9e-9d77-730d83aea491",
+        {
+          "count": 10
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.145Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] unregisterBlockFlushCallback deleted",
+        "ea1aeea9-cc06-4257-b1b2-c507c0eceecd",
+        {
+          "count": 9
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.145Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] unregisterBlockFlushCallback deleted",
+        "488381cc-a23b-4391-8a5d-369f4ba6a6ae",
+        {
+          "count": 8
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.146Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] unregisterBlockFlushCallback deleted",
+        "13d6c12e-f404-43a5-a5b7-a275c8d54366",
+        {
+          "count": 7
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.146Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] unregisterBlockFlushCallback deleted",
+        "91a73870-9e36-49d1-a68b-af86d94af88e",
+        {
+          "count": 6
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.146Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] unregisterBlockFlushCallback deleted",
+        "2dc20b0a-c025-4779-8795-ca7dbe9314b2",
+        {
+          "count": 5
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.146Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] unregisterBlockFlushCallback deleted",
+        "33d901aa-fcce-4fcd-8b79-60b5c84a9dc9",
+        {
+          "count": 4
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.146Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] unregisterBlockFlushCallback deleted",
+        "d0a9f90f-55c4-41aa-aaf6-0d0c027575f6",
+        {
+          "count": 3
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.146Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] unregisterBlockFlushCallback deleted",
+        "f1b02ba2-1337-473c-ba91-7afe256f82d3",
+        {
+          "count": 2
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.146Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] unregisterBlockFlushCallback deleted",
+        "17de28d3-0699-42a3-82b7-2d2f7b5a3f1a",
+        {
+          "count": 1
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.146Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] unregisterBlockFlushCallback deleted",
+        "22ae7401-d086-41f0-ac36-bbb4eb2104f6",
+        {
+          "count": 0
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.146Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "c0c9a44a-7756-4d9e-9d77-730d83aea491",
+        {
+          "count": 1
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.147Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "b28895f4-9a4a-4ee2-a96c-5fd48eae4997",
+        {
+          "count": 2
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.147Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "488381cc-a23b-4391-8a5d-369f4ba6a6ae",
+        {
+          "count": 3
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.147Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "ea1aeea9-cc06-4257-b1b2-c507c0eceecd",
+        {
+          "count": 4
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.147Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "91a73870-9e36-49d1-a68b-af86d94af88e",
+        {
+          "count": 5
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.147Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "13d6c12e-f404-43a5-a5b7-a275c8d54366",
+        {
+          "count": 6
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.147Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "2dc20b0a-c025-4779-8795-ca7dbe9314b2",
+        {
+          "count": 7
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.147Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "d0a9f90f-55c4-41aa-aaf6-0d0c027575f6",
+        {
+          "count": 8
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.148Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "33d901aa-fcce-4fcd-8b79-60b5c84a9dc9",
+        {
+          "count": 9
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.148Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "f1b02ba2-1337-473c-ba91-7afe256f82d3",
+        {
+          "count": 10
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.148Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "17de28d3-0699-42a3-82b7-2d2f7b5a3f1a",
+        {
+          "count": 11
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.148Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "22ae7401-d086-41f0-ac36-bbb4eb2104f6",
+        {
+          "count": 12
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.148Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] unregisterBlockFlushCallback deleted",
+        "c0c9a44a-7756-4d9e-9d77-730d83aea491",
+        {
+          "count": 11
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.148Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] unregisterBlockFlushCallback deleted",
+        "b28895f4-9a4a-4ee2-a96c-5fd48eae4997",
+        {
+          "count": 10
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.148Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] unregisterBlockFlushCallback deleted",
+        "488381cc-a23b-4391-8a5d-369f4ba6a6ae",
+        {
+          "count": 9
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.148Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] unregisterBlockFlushCallback deleted",
+        "ea1aeea9-cc06-4257-b1b2-c507c0eceecd",
+        {
+          "count": 8
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.148Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] unregisterBlockFlushCallback deleted",
+        "91a73870-9e36-49d1-a68b-af86d94af88e",
+        {
+          "count": 7
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.149Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] unregisterBlockFlushCallback deleted",
+        "13d6c12e-f404-43a5-a5b7-a275c8d54366",
+        {
+          "count": 6
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.149Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] unregisterBlockFlushCallback deleted",
+        "2dc20b0a-c025-4779-8795-ca7dbe9314b2",
+        {
+          "count": 5
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.149Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] unregisterBlockFlushCallback deleted",
+        "d0a9f90f-55c4-41aa-aaf6-0d0c027575f6",
+        {
+          "count": 4
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.149Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] unregisterBlockFlushCallback deleted",
+        "33d901aa-fcce-4fcd-8b79-60b5c84a9dc9",
+        {
+          "count": 3
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.149Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] unregisterBlockFlushCallback deleted",
+        "f1b02ba2-1337-473c-ba91-7afe256f82d3",
+        {
+          "count": 2
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.149Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] unregisterBlockFlushCallback deleted",
+        "17de28d3-0699-42a3-82b7-2d2f7b5a3f1a",
+        {
+          "count": 1
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.149Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] unregisterBlockFlushCallback deleted",
+        "22ae7401-d086-41f0-ac36-bbb4eb2104f6",
+        {
+          "count": 0
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.149Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "c0c9a44a-7756-4d9e-9d77-730d83aea491",
+        {
+          "count": 1
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.149Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "b28895f4-9a4a-4ee2-a96c-5fd48eae4997",
+        {
+          "count": 2
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.149Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "488381cc-a23b-4391-8a5d-369f4ba6a6ae",
+        {
+          "count": 3
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.149Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "ea1aeea9-cc06-4257-b1b2-c507c0eceecd",
+        {
+          "count": 4
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.150Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "91a73870-9e36-49d1-a68b-af86d94af88e",
+        {
+          "count": 5
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.150Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "13d6c12e-f404-43a5-a5b7-a275c8d54366",
+        {
+          "count": 6
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.150Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "2dc20b0a-c025-4779-8795-ca7dbe9314b2",
+        {
+          "count": 7
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.150Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "d0a9f90f-55c4-41aa-aaf6-0d0c027575f6",
+        {
+          "count": 8
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.150Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "33d901aa-fcce-4fcd-8b79-60b5c84a9dc9",
+        {
+          "count": 9
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.150Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "f1b02ba2-1337-473c-ba91-7afe256f82d3",
+        {
+          "count": 10
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.150Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "17de28d3-0699-42a3-82b7-2d2f7b5a3f1a",
+        {
+          "count": 11
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:44.150Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] registerBlockFlushCallback set",
+        "22ae7401-d086-41f0-ac36-bbb4eb2104f6",
+        {
+          "count": 12
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:45.055Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] scheduleSave invoking adapter.save",
+        {
+          "docId": "d8dfd71b-baae-4942-8217-77e2afc1efda",
+          "lastSavedId": null,
+          "backendMetaKeys": [
+            "createdAt",
+            "updatedAt",
+            "version"
+          ],
+          "stack": [
+            "Error: save-call-stack",
+            "at http://localhost:5174/src/contexts/CvLibraryContext.tsx?t=1757531396363:411:27"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:45.058Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[ConvexStorageAdapter] save -> _patchMutation",
+        {
+          "docId": "d8dfd71b-baae-4942-8217-77e2afc1efda",
+          "backendMetaKeys": [],
+          "stack": [
+            "Error: convex-save-stack",
+            "at ConvexStorageAdapter.save (http://localhost:5174/src/adapters/StorageAdapter.ts:48:21)",
+            "at http://localhost:5174/src/contexts/CvLibraryContext.tsx?t=1757531396363:422:27"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "ts": "2025-09-10T19:10:45.533Z",
+    "entry": {
+      "source": "dbg",
+      "payload": [
+        "[CvLibraryContext] scheduleSave: lastSavedRef updated (metadata stripped)",
+        {
+          "docId": "d8dfd71b-baae-4942-8217-77e2afc1efda"
+        }
+      ]
+    }
+  }
+]

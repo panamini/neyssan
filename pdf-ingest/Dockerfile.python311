@@ -1,0 +1,33 @@
+# Dockerfile using Python 3.11 (recommended for local + CI reproducibility)
+# Usage:
+#  docker build -t pdf-ingest:py311 -f Dockerfile.python311 .
+#  docker run --rm -p 8000:8000 pdf-ingest:py311
+#
+# This image uses python:3.11-slim and installs only the non-OCR dependencies
+# for the scaffold. If you need OCR (pdf2image / pytesseract / poppler),
+# extend this image to install system deps (poppler, tesseract) and add Pillow.
+
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+WORKDIR /app
+
+# No system packages required in this image to avoid network/build issues in CI.
+# If you need OCR or packages that require system libraries, install them on the host
+# or extend this image with the necessary apt-get lines.
+
+# Copy only requirements first for better caching
+COPY requirements.txt /app/requirements.txt
+
+# Install Python deps
+RUN pip install --upgrade pip setuptools wheel \
+    && pip install --no-cache-dir -r /app/requirements.txt
+
+# Copy application
+COPY . /app
+
+EXPOSE 8000
+
+# Run the app
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]

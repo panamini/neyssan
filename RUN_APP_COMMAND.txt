@@ -1,0 +1,40 @@
+Dual-path parser + frontend dev stack
+====================================
+
+From the repo root you can now bring up the full structured upload stack (parser service + Convex backend + Vite frontend) in one step.
+
+## Quick start (full stack)
+
+```bash
+# run from repo root
+make dev
+```
+
+`make dev` simply calls the new helper script `./scripts/start-dev.sh`, which will:
+
+1. Hash `requirements.txt` and `cv_parser_service/requirements.txt` to decide if it needs to rebuild the Docker image (forced rebuild with `./scripts/start-dev.sh --rebuild`).
+2. Start/replace the hot-reload parser container (`cv-parser-service-dev`) on port 8000.
+3. Wait for `http://localhost:8000/healthz` to return 200.
+4. Export `CONVEX_PARSER_URL=http://127.0.0.1:8000/parse-cv` and launch `npm run dev` inside `my-app` (Convex dev runs locally alongside the Vite UI).
+
+The command blocks and streams both parser logs (until health is green) and then the frontend tooling. Hit `Ctrl+C` to stop; the script traps the signal, stops the container, and exits cleanly.
+
+## Parser-only mode
+
+If you just want the Python service without the frontend, run:
+
+```bash
+./scripts/start-dev.sh --service-only
+```
+
+This tails the uvicorn logs so you can immediately hit `http://localhost:8000/parse-cv` from other processes. Stop with `Ctrl+C`.
+
+## Manual helper commands
+
+- Force a clean Docker rebuild: `./scripts/start-dev.sh --rebuild`
+- Reuse the running container later: `docker start cv-parser-service-dev && docker logs -f cv-parser-service-dev`
+- Stop everything manually: `docker stop cv-parser-service-dev`
+
+## What changed from the old flow?
+
+The legacy `safe-start.sh` / docker-compose flow is no longer required for the parser pipeline. Use it only when you need the historical pdf-ingest stack. For day-to-day structured upload work, prefer `make dev`.

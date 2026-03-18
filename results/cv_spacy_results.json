@@ -1,0 +1,366 @@
+{
+  "entities": [
+    {
+      "text": "LOS ANGELES",
+      "label": "GPE",
+      "start_char": 31,
+      "end_char": 42
+    },
+    {
+      "text": "CA 90291",
+      "label": "FAC",
+      "start_char": 44,
+      "end_char": 52
+    },
+    {
+      "text": "UNITED STATES",
+      "label": "GPE",
+      "start_char": 54,
+      "end_char": 67
+    },
+    {
+      "text": "3868683442",
+      "label": "DATE",
+      "start_char": 69,
+      "end_char": 79
+    },
+    {
+      "text": "1515",
+      "label": "DATE",
+      "start_char": 99,
+      "end_char": 103
+    },
+    {
+      "text": "Pacific Ave",
+      "label": "LOC",
+      "start_char": 104,
+      "end_char": 115
+    },
+    {
+      "text": "Los Angeles",
+      "label": "GPE",
+      "start_char": 116,
+      "end_char": 127
+    },
+    {
+      "text": "CA 90291",
+      "label": "PERSON",
+      "start_char": 129,
+      "end_char": 137
+    },
+    {
+      "text": "United States",
+      "label": "GPE",
+      "start_char": 138,
+      "end_char": 151
+    },
+    {
+      "text": "3868683442",
+      "label": "DATE",
+      "start_char": 152,
+      "end_char": 162
+    },
+    {
+      "text": "San Antonio",
+      "label": "GPE",
+      "start_char": 195,
+      "end_char": 206
+    },
+    {
+      "text": "Resume Templates\n\n",
+      "label": "PERSON",
+      "start_char": 258,
+      "end_char": 276
+    },
+    {
+      "text": "Criminal",
+      "label": "ORG",
+      "start_char": 346,
+      "end_char": 354
+    },
+    {
+      "text": "Martial",
+      "label": "ORG",
+      "start_char": 395,
+      "end_char": 402
+    },
+    {
+      "text": "Mtb",
+      "label": "PERSON",
+      "start_char": 453,
+      "end_char": 456
+    },
+    {
+      "text": "English",
+      "label": "LANGUAGE",
+      "start_char": 477,
+      "end_char": 484
+    },
+    {
+      "text": "Spanish",
+      "label": "NORP",
+      "start_char": 486,
+      "end_char": 493
+    },
+    {
+      "text": "Italian",
+      "label": "NORP",
+      "start_char": 495,
+      "end_char": 502
+    },
+    {
+      "text": "Security Guard",
+      "label": "ORG",
+      "start_char": 532,
+      "end_char": 546
+    },
+    {
+      "text": "eight years",
+      "label": "DATE",
+      "start_char": 552,
+      "end_char": 563
+    },
+    {
+      "text": "CPO",
+      "label": "ORG",
+      "start_char": 841,
+      "end_char": 844
+    },
+    {
+      "text": "Certified \nProtection Guard",
+      "label": "ORG",
+      "start_char": 846,
+      "end_char": 873
+    },
+    {
+      "text": "ADT Security",
+      "label": "ORG",
+      "start_char": 916,
+      "end_char": 928
+    },
+    {
+      "text": "Port Washington",
+      "label": "GPE",
+      "start_char": 930,
+      "end_char": 945
+    },
+    {
+      "text": "January 2021",
+      "label": "DATE",
+      "start_char": 946,
+      "end_char": 958
+    },
+    {
+      "text": "April 2022",
+      "label": "DATE",
+      "start_char": 961,
+      "end_char": 971
+    },
+    {
+      "text": "the hour",
+      "label": "TIME",
+      "start_char": 1271,
+      "end_char": 1279
+    },
+    {
+      "text": "the day",
+      "label": "DATE",
+      "start_char": 1287,
+      "end_char": 1294
+    },
+    {
+      "text": "every 2 hours",
+      "label": "TIME",
+      "start_char": 1299,
+      "end_char": 1312
+    },
+    {
+      "text": "• Utilizing",
+      "label": "ORG",
+      "start_char": 1382,
+      "end_char": 1393
+    },
+    {
+      "text": "Copwatch",
+      "label": "ORG",
+      "start_char": 1639,
+      "end_char": 1647
+    },
+    {
+      "text": "Jogbani",
+      "label": "PERSON",
+      "start_char": 1649,
+      "end_char": 1656
+    },
+    {
+      "text": "January 2020",
+      "label": "DATE",
+      "start_char": 1657,
+      "end_char": 1669
+    },
+    {
+      "text": "April 2022",
+      "label": "DATE",
+      "start_char": 1672,
+      "end_char": 1682
+    },
+    {
+      "text": "Center",
+      "label": "ORG",
+      "start_char": 1784,
+      "end_char": 1790
+    },
+    {
+      "text": "CCTV",
+      "label": "ORG",
+      "start_char": 1959,
+      "end_char": 1963
+    },
+    {
+      "text": "• Ensure",
+      "label": "ORG",
+      "start_char": 1986,
+      "end_char": 1994
+    },
+    {
+      "text": "Certified Protection Guard Program",
+      "label": "ORG",
+      "start_char": 2237,
+      "end_char": 2271
+    },
+    {
+      "text": "International Foundation for Protection \nGuards",
+      "label": "ORG",
+      "start_char": 2280,
+      "end_char": 2327
+    },
+    {
+      "text": "Alexandria",
+      "label": "PERSON",
+      "start_char": 2329,
+      "end_char": 2339
+    },
+    {
+      "text": "January 2021",
+      "label": "DATE",
+      "start_char": 2340,
+      "end_char": 2352
+    },
+    {
+      "text": "April 2022",
+      "label": "DATE",
+      "start_char": 2355,
+      "end_char": 2365
+    },
+    {
+      "text": "Security Guard Certificate Program",
+      "label": "ORG",
+      "start_char": 2367,
+      "end_char": 2401
+    },
+    {
+      "text": "ASIS International",
+      "label": "ORG",
+      "start_char": 2410,
+      "end_char": 2428
+    },
+    {
+      "text": "North Naples",
+      "label": "GPE",
+      "start_char": 2430,
+      "end_char": 2442
+    },
+    {
+      "text": "April 2022",
+      "label": "DATE",
+      "start_char": 2443,
+      "end_char": 2453
+    },
+    {
+      "text": "April 2022",
+      "label": "DATE",
+      "start_char": 2456,
+      "end_char": 2466
+    },
+    {
+      "text": "Criminal Profiling",
+      "label": "ORG",
+      "start_char": 2560,
+      "end_char": 2578
+    },
+    {
+      "text": "Interviewing Techniques",
+      "label": "PERSON",
+      "start_char": 2580,
+      "end_char": 2603
+    },
+    {
+      "text": "Hawaii Western College",
+      "label": "ORG",
+      "start_char": 2664,
+      "end_char": 2686
+    },
+    {
+      "text": "January 2015",
+      "label": "DATE",
+      "start_char": 2687,
+      "end_char": 2699
+    },
+    {
+      "text": "November 2019",
+      "label": "DATE",
+      "start_char": 2702,
+      "end_char": 2715
+    },
+    {
+      "text": "73%",
+      "label": "PERCENT",
+      "start_char": 2814,
+      "end_char": 2817
+    },
+    {
+      "text": "• Enhancing",
+      "label": "ORG",
+      "start_char": 2898,
+      "end_char": 2909
+    },
+    {
+      "text": "15 360 degrees",
+      "label": "QUANTITY",
+      "start_char": 2952,
+      "end_char": 2966
+    },
+    {
+      "text": "CCTV",
+      "label": "ORG",
+      "start_char": 2967,
+      "end_char": 2971
+    },
+    {
+      "text": "93%",
+      "label": "PERCENT",
+      "start_char": 3082,
+      "end_char": 3085
+    },
+    {
+      "text": "28%",
+      "label": "PERCENT",
+      "start_char": 3242,
+      "end_char": 3245
+    },
+    {
+      "text": "26%",
+      "label": "PERCENT",
+      "start_char": 3326,
+      "end_char": 3329
+    }
+  ],
+  "personal_info": {
+    "emails": [
+      "email@email.com"
+    ],
+    "phones": [
+      "3868683442"
+    ]
+  }
+}

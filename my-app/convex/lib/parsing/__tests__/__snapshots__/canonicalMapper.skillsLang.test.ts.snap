@@ -1,0 +1,642 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`mapStrictProfileToCanonical (skills & languages) > captures education, skills, and languages with provenance 1`] = `
+{
+  "achievements": [],
+  "basics": {
+    "email": {
+      "meta": {
+        "bonusApplied": false,
+        "conf": 0.8799999999999999,
+        "section": "contact",
+        "source": "llm",
+      },
+      "value": "jane@example.com",
+    },
+    "location": {
+      "formatted": {
+        "meta": {
+          "bonusApplied": false,
+          "section": "location",
+          "source": "fallback",
+        },
+        "value": null,
+      },
+    },
+    "name": {
+      "meta": {
+        "bonusApplied": false,
+        "conf": 0.8799999999999999,
+        "section": "profile",
+        "source": "llm",
+      },
+      "value": "Jane Doe",
+    },
+    "phone": {
+      "meta": {
+        "bonusApplied": false,
+        "conf": 0.8799999999999999,
+        "section": "contact",
+        "source": "llm",
+      },
+      "value": "+15554443333",
+    },
+  },
+  "education": [
+    {
+      "achievements": [],
+      "area": {
+        "meta": {
+          "section": "education",
+          "source": "unknown",
+        },
+        "value": null,
+      },
+      "endDate": {
+        "meta": {
+          "conf": 0.6,
+          "section": "education",
+          "source": "llm",
+        },
+        "value": "2018",
+      },
+      "institution": {
+        "meta": {
+          "conf": 0.78,
+          "section": "education",
+          "source": "llm",
+        },
+        "value": "Stanford University",
+      },
+      "location": {
+        "meta": {
+          "section": "education",
+          "source": "unknown",
+        },
+        "value": null,
+      },
+      "score": {
+        "meta": {
+          "conf": 0.78,
+          "section": "education",
+          "source": "llm",
+        },
+        "value": "GPA: 3.8/4.0",
+      },
+      "startDate": {
+        "meta": {
+          "conf": 0.8,
+          "section": "education",
+          "source": "llm",
+        },
+        "value": "2013-12-31",
+      },
+      "studyType": {
+        "meta": {
+          "section": "education",
+          "source": "unknown",
+        },
+        "value": null,
+      },
+    },
+  ],
+  "languages": [
+    {
+      "fluency": {
+        "meta": {
+          "conf": 0.72,
+          "section": "languages",
+          "source": "llm",
+        },
+        "value": "Native",
+      },
+      "language": {
+        "meta": {
+          "conf": 0.72,
+          "section": "languages",
+          "source": "llm",
+        },
+        "value": "English",
+      },
+    },
+    {
+      "fluency": {
+        "meta": {
+          "conf": 0.72,
+          "section": "languages",
+          "source": "llm",
+        },
+        "value": "Professional",
+      },
+      "language": {
+        "meta": {
+          "conf": 0.72,
+          "section": "languages",
+          "source": "llm",
+        },
+        "value": "Spanish",
+      },
+    },
+  ],
+  "meta": {
+    "confidenceSummary": [
+      {
+        "conf": 0.8799999999999999,
+        "slot": "basics.name",
+        "source": "llm",
+      },
+      {
+        "conf": 0.8799999999999999,
+        "slot": "basics.email",
+        "source": "llm",
+      },
+      {
+        "conf": 0.8799999999999999,
+        "slot": "basics.phone",
+        "source": "llm",
+      },
+      {
+        "conf": null,
+        "slot": "basics.location.formatted",
+        "source": "fallback",
+      },
+      {
+        "conf": 0.555,
+        "slot": "work[0].company",
+        "source": "llm",
+      },
+      {
+        "conf": 0.555,
+        "slot": "work[0].position",
+        "source": "llm",
+      },
+      {
+        "conf": 0.6,
+        "slot": "work[0].startDate",
+        "source": "llm",
+      },
+      {
+        "conf": null,
+        "slot": "work[0].endDate",
+        "source": "unknown",
+      },
+      {
+        "conf": 0.8,
+        "slot": "work[0].isCurrent",
+        "source": "llm",
+      },
+      {
+        "conf": null,
+        "slot": "work[0].summary",
+        "source": "unknown",
+      },
+      {
+        "conf": 0.7,
+        "slot": "work[0].achievements[0]",
+        "source": "llm",
+      },
+      {
+        "conf": 0.78,
+        "slot": "education[0].institution",
+        "source": "llm",
+      },
+      {
+        "conf": null,
+        "slot": "education[0].area",
+        "source": "unknown",
+      },
+      {
+        "conf": null,
+        "slot": "education[0].studyType",
+        "source": "unknown",
+      },
+      {
+        "conf": 0.8,
+        "slot": "education[0].startDate",
+        "source": "llm",
+      },
+      {
+        "conf": 0.6,
+        "slot": "education[0].endDate",
+        "source": "llm",
+      },
+      {
+        "conf": 0.78,
+        "slot": "education[0].score",
+        "source": "llm",
+      },
+      {
+        "conf": null,
+        "slot": "education[0].location",
+        "source": "unknown",
+      },
+      {
+        "conf": 0.75,
+        "slot": "skills[0].name",
+        "source": "llm",
+      },
+      {
+        "conf": null,
+        "slot": "skills[0].level",
+        "source": "unknown",
+      },
+      {
+        "conf": 0.75,
+        "slot": "skills[1].name",
+        "source": "llm",
+      },
+      {
+        "conf": null,
+        "slot": "skills[1].level",
+        "source": "unknown",
+      },
+      {
+        "conf": 0.75,
+        "slot": "skills[2].name",
+        "source": "llm",
+      },
+      {
+        "conf": null,
+        "slot": "skills[2].level",
+        "source": "unknown",
+      },
+      {
+        "conf": 0.75,
+        "slot": "skills[3].name",
+        "source": "llm",
+      },
+      {
+        "conf": null,
+        "slot": "skills[3].level",
+        "source": "unknown",
+      },
+      {
+        "conf": 0.72,
+        "slot": "languages[0].language",
+        "source": "llm",
+      },
+      {
+        "conf": 0.72,
+        "slot": "languages[0].fluency",
+        "source": "llm",
+      },
+      {
+        "conf": 0.72,
+        "slot": "languages[1].language",
+        "source": "llm",
+      },
+      {
+        "conf": 0.72,
+        "slot": "languages[1].fluency",
+        "source": "llm",
+      },
+    ],
+    "telemetry": [
+      {
+        "bonusApplied": false,
+        "section": "profile",
+        "slot": "basics.name",
+        "winnerConf": 0.8799999999999999,
+        "winnerSource": "llm",
+      },
+      {
+        "bonusApplied": false,
+        "section": "contact",
+        "slot": "basics.email",
+        "winnerConf": 0.8799999999999999,
+        "winnerSource": "llm",
+      },
+      {
+        "bonusApplied": false,
+        "section": "contact",
+        "slot": "basics.phone",
+        "winnerConf": 0.8799999999999999,
+        "winnerSource": "llm",
+      },
+      {
+        "bonusApplied": false,
+        "section": "location",
+        "slot": "basics.location.formatted",
+        "winnerConf": null,
+        "winnerSource": "fallback",
+      },
+      {
+        "bonusApplied": undefined,
+        "section": "experience",
+        "slot": "work[0].company",
+        "winnerConf": 0.555,
+        "winnerSource": "llm",
+      },
+      {
+        "bonusApplied": undefined,
+        "section": "experience",
+        "slot": "work[0].position",
+        "winnerConf": 0.555,
+        "winnerSource": "llm",
+      },
+      {
+        "bonusApplied": undefined,
+        "section": "experience",
+        "slot": "work[0].startDate",
+        "winnerConf": 0.6,
+        "winnerSource": "llm",
+      },
+      {
+        "bonusApplied": undefined,
+        "section": "experience",
+        "slot": "work[0].endDate",
+        "winnerConf": null,
+        "winnerSource": "unknown",
+      },
+      {
+        "bonusApplied": undefined,
+        "section": "experience",
+        "slot": "work[0].isCurrent",
+        "winnerConf": 0.8,
+        "winnerSource": "llm",
+      },
+      {
+        "bonusApplied": undefined,
+        "section": "experience",
+        "slot": "work[0].summary",
+        "winnerConf": null,
+        "winnerSource": "unknown",
+      },
+      {
+        "bonusApplied": undefined,
+        "section": "experience",
+        "slot": "work[0].achievements[0]",
+        "winnerConf": 0.7,
+        "winnerSource": "llm",
+      },
+      {
+        "bonusApplied": undefined,
+        "section": "education",
+        "slot": "education[0].institution",
+        "winnerConf": 0.78,
+        "winnerSource": "llm",
+      },
+      {
+        "bonusApplied": undefined,
+        "section": "education",
+        "slot": "education[0].area",
+        "winnerConf": null,
+        "winnerSource": "unknown",
+      },
+      {
+        "bonusApplied": undefined,
+        "section": "education",
+        "slot": "education[0].studyType",
+        "winnerConf": null,
+        "winnerSource": "unknown",
+      },
+      {
+        "bonusApplied": undefined,
+        "section": "education",
+        "slot": "education[0].startDate",
+        "winnerConf": 0.8,
+        "winnerSource": "llm",
+      },
+      {
+        "bonusApplied": undefined,
+        "section": "education",
+        "slot": "education[0].endDate",
+        "winnerConf": 0.6,
+        "winnerSource": "llm",
+      },
+      {
+        "bonusApplied": undefined,
+        "section": "education",
+        "slot": "education[0].score",
+        "winnerConf": 0.78,
+        "winnerSource": "llm",
+      },
+      {
+        "bonusApplied": undefined,
+        "section": "education",
+        "slot": "education[0].location",
+        "winnerConf": null,
+        "winnerSource": "unknown",
+      },
+      {
+        "bonusApplied": undefined,
+        "section": "skills",
+        "slot": "skills[0].name",
+        "winnerConf": 0.75,
+        "winnerSource": "llm",
+      },
+      {
+        "bonusApplied": undefined,
+        "section": "skills",
+        "slot": "skills[0].level",
+        "winnerConf": null,
+        "winnerSource": "unknown",
+      },
+      {
+        "bonusApplied": undefined,
+        "section": "skills",
+        "slot": "skills[1].name",
+        "winnerConf": 0.75,
+        "winnerSource": "llm",
+      },
+      {
+        "bonusApplied": undefined,
+        "section": "skills",
+        "slot": "skills[1].level",
+        "winnerConf": null,
+        "winnerSource": "unknown",
+      },
+      {
+        "bonusApplied": undefined,
+        "section": "skills",
+        "slot": "skills[2].name",
+        "winnerConf": 0.75,
+        "winnerSource": "llm",
+      },
+      {
+        "bonusApplied": undefined,
+        "section": "skills",
+        "slot": "skills[2].level",
+        "winnerConf": null,
+        "winnerSource": "unknown",
+      },
+      {
+        "bonusApplied": undefined,
+        "section": "skills",
+        "slot": "skills[3].name",
+        "winnerConf": 0.75,
+        "winnerSource": "llm",
+      },
+      {
+        "bonusApplied": undefined,
+        "section": "skills",
+        "slot": "skills[3].level",
+        "winnerConf": null,
+        "winnerSource": "unknown",
+      },
+      {
+        "bonusApplied": undefined,
+        "section": "languages",
+        "slot": "languages[0].language",
+        "winnerConf": 0.72,
+        "winnerSource": "llm",
+      },
+      {
+        "bonusApplied": undefined,
+        "section": "languages",
+        "slot": "languages[0].fluency",
+        "winnerConf": 0.72,
+        "winnerSource": "llm",
+      },
+      {
+        "bonusApplied": undefined,
+        "section": "languages",
+        "slot": "languages[1].language",
+        "winnerConf": 0.72,
+        "winnerSource": "llm",
+      },
+      {
+        "bonusApplied": undefined,
+        "section": "languages",
+        "slot": "languages[1].fluency",
+        "winnerConf": 0.72,
+        "winnerSource": "llm",
+      },
+    ],
+  },
+  "skills": [
+    {
+      "keywords": [],
+      "level": {
+        "meta": {
+          "section": "skills",
+          "source": "unknown",
+        },
+        "value": null,
+      },
+      "name": {
+        "meta": {
+          "conf": 0.75,
+          "section": "skills",
+          "source": "llm",
+        },
+        "value": "TypeScript",
+      },
+    },
+    {
+      "keywords": [],
+      "level": {
+        "meta": {
+          "section": "skills",
+          "source": "unknown",
+        },
+        "value": null,
+      },
+      "name": {
+        "meta": {
+          "conf": 0.75,
+          "section": "skills",
+          "source": "llm",
+        },
+        "value": "React",
+      },
+    },
+    {
+      "keywords": [],
+      "level": {
+        "meta": {
+          "section": "skills",
+          "source": "unknown",
+        },
+        "value": null,
+      },
+      "name": {
+        "meta": {
+          "conf": 0.75,
+          "section": "skills",
+          "source": "llm",
+        },
+        "value": "Node.js",
+      },
+    },
+    {
+      "keywords": [],
+      "level": {
+        "meta": {
+          "section": "skills",
+          "source": "unknown",
+        },
+        "value": null,
+      },
+      "name": {
+        "meta": {
+          "conf": 0.75,
+          "section": "skills",
+          "source": "llm",
+        },
+        "value": "GraphQL",
+      },
+    },
+  ],
+  "work": [
+    {
+      "achievements": [
+        {
+          "meta": {
+            "conf": 0.7,
+            "section": "experience",
+            "source": "llm",
+          },
+          "value": "Built features",
+        },
+      ],
+      "company": {
+        "meta": {
+          "conf": 0.555,
+          "section": "experience",
+          "source": "llm",
+        },
+        "value": "Example Corp",
+      },
+      "endDate": {
+        "meta": {
+          "section": "experience",
+          "source": "unknown",
+        },
+        "value": null,
+      },
+      "isCurrent": {
+        "meta": {
+          "conf": 0.8,
+          "section": "experience",
+          "source": "llm",
+        },
+        "value": true,
+      },
+      "position": {
+        "meta": {
+          "conf": 0.555,
+          "section": "experience",
+          "source": "llm",
+        },
+        "value": "Full Stack Engineer",
+      },
+      "startDate": {
+        "meta": {
+          "conf": 0.6,
+          "section": "experience",
+          "source": "llm",
+        },
+        "value": "2019",
+      },
+      "summary": {
+        "meta": {
+          "section": "experience",
+          "source": "unknown",
+        },
+        "value": null,
+      },
+    },
+  ],
+}
+`;

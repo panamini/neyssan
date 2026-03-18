@@ -1,0 +1,25 @@
+{
+  "id": "c11cc155e096423db1b9080542d22ebf",
+  "created": 1773329359,
+  "model": "mistral-small-latest",
+  "usage": {
+    "prompt_tokens": 418,
+    "total_tokens": 655,
+    "completion_tokens": 237,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "object": "chat.completion",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "tool_calls": null,
+        "content": "Dear Hiring Manager,\n\nI’m excited to apply for the Full Stack Engineer role at your company. As a Frontend Engineer at BrightLayer, I’ve built data-heavy UI features using React and TypeScript while collaborating closely with backend engineers on API contracts. My experience gives me a solid foundation in frontend architecture and a practical understanding of how APIs shape user experiences. While my primary strength lies in frontend development, I’ve enjoyed working at the intersection of frontend and backend, which aligns with your need for someone who can contribute to both areas.\n\nI recognize that this role requires deeper backend expertise than my current experience provides, particularly in Node.js and database work. However, I’m eager to grow in these areas and bring my frontend strengths to your team. My ability to partner effectively with backend engineers—ensuring clean API contracts and robust UI integrations—could help bridge gaps while I expand my skills. I’m particularly drawn to the opportunity to contribute to scalable services, even if my direct experience in designing them is limited.\n\nI’d welcome the chance to discuss how my frontend expertise and collaborative approach could add value to your team. Thank you for your time and consideration.\n\nAlex Martin"
+      }
+    }
+  ]
+}

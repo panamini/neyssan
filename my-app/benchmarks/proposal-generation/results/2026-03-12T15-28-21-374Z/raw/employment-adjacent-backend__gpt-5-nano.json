@@ -1,0 +1,76 @@
+{
+  "id": "resp_0b8b754b0444f42d0069b2dbde8c2481959ae797bbe871f755",
+  "object": "response",
+  "created_at": 1773329374,
+  "status": "completed",
+  "background": false,
+  "billing": {
+    "payer": "developer"
+  },
+  "completed_at": 1773329376,
+  "error": null,
+  "frequency_penalty": 0,
+  "incomplete_details": null,
+  "instructions": null,
+  "max_output_tokens": 500,
+  "max_tool_calls": null,
+  "model": "gpt-5-nano-2025-08-07",
+  "output": [
+    {
+      "id": "rs_0b8b754b0444f42d0069b2dbded0a88195a64cc2073201a1a3",
+      "type": "reasoning",
+      "summary": []
+    },
+    {
+      "id": "msg_0b8b754b0444f42d0069b2dbdeea4c8195a0af460668dff1b9",
+      "type": "message",
+      "status": "completed",
+      "content": [
+        {
+          "type": "output_text",
+          "annotations": [],
+          "logprobs": [],
+          "text": "Dear Hiring Manager,\n\nI am excited to apply for the Full Stack Engineer role. With a solid frontend foundation in React and TypeScript, I bring hands-on experience designing and delivering data-heavy user interfaces and collaborating closely with backend teammates to shape API contracts. My background as a Frontend Engineer at BrightLayer has taught me how to translate product needs into clean, maintainable UI components while aligning with backend data flows.\n\nI value the balance between frontend performance and reliable API integration. I contribute to the frontend architecture discussions, focusing on scalable patterns for component reuse, state management, and type-safety that align with how services are designed on the backend. While my depth in backend development is limited, I actively engage with API design considerations to ensure the frontend and backend work cohesively.\n\nI am drawn to environments that emphasize product collaboration and thoughtful engineering trade-offs. I aim to contribute by delivering polished interfaces, improving data-driven UI experiences, and partnering with backend engineers to refine API contracts and data exchange. I look forward to the opportunity to bring my frontend strengths to your team and grow alongside your backend capabilities.\n\nSincerely,\nAlex Martin"
+        }
+      ],
+      "role": "assistant"
+    }
+  ],
+  "parallel_tool_calls": true,
+  "presence_penalty": 0,
+  "previous_response_id": null,
+  "prompt_cache_key": null,
+  "prompt_cache_retention": null,
+  "reasoning": {
+    "effort": "minimal",
+    "summary": null
+  },
+  "safety_identifier": null,
+  "service_tier": "default",
+  "store": true,
+  "temperature": 1,
+  "text": {
+    "format": {
+      "type": "text"
+    },
+    "verbosity": "medium"
+  },
+  "tool_choice": "auto",
+  "tools": [],
+  "top_logprobs": 0,
+  "top_p": 1,
+  "truncation": "disabled",
+  "usage": {
+    "input_tokens": 409,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 241,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 650
+  },
+  "user": null,
+  "metadata": {}
+}

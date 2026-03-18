@@ -1,0 +1,158 @@
+"use client";
+
+import React from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+
+import { api } from "../../convex/_generated/api";
+import { useAction } from "convex/react";
+import { formSchema, FormValues } from "./ProposalInputForm.schemas";
+
+interface ProposalInputFormProps {
+  onSubmit: (values: FormValues, proposalContent: string) => void;
+}
+
+const ProposalInputForm: React.FC<ProposalInputFormProps> = ({ onSubmit }) => {
+  const generateProposalAction = useAction(api.functions.generateProposal);
+  const [isGenerating, setIsGenerating] = React.useState(false);
+  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
+
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      jobTitle: "",
+      jobDescription: "",
+      proposalType: "technical" as const,
+      formalityLevel: "neutral",
+      creativity: "medium",
+    },
+  });
+
+  function handleSubmit(values: FormValues) {
+    setIsGenerating(true);
+    setErrorMessage(null);
+    generateProposalAction(values)
+      .then((result) => {
+        if (result) {
+          onSubmit(values, result.proposalContent);
+        }
+      })
+      .catch((error: any) => {
+        console.error("Error generating proposal:", error);
+        setErrorMessage("Failed to generate proposal. Please try again.");
+      })
+      .finally(() => {
+        setIsGenerating(false);
+      });
+  }
+
+  return (
+    <div className="space-y-4">
+      <form onSubmit={form.handleSubmit(handleSubmit)}>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {/* Main inputs */}
+          <div className="space-y-4 md:col-span-2">
+            <div>
+              <input
+                type="text"
+  id="jobTitle"
+  className="block w-full px-4 py-3 text-gray-700 placeholder-gray-400 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-800 focus:border-transparent dark:focus:border-gray-700 sm:text-sm dark:text-white dark:bg-gray-800 dark:border-gray-700"
+  {...form.register("jobTitle")}
+  placeholder="Enter Job Title"
+/>
+              {form.formState.errors.jobTitle && (
+                <p className="mt-1 text-sm text-red-600">{form.formState.errors.jobTitle.message}</p>
+              )}
+            </div>
+            <div>
+              <textarea
+                id="jobDescription"
+                rows={2}
+                className="block w-full px-4 py-3 text-gray-700 placeholder-gray-400 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent sm:text-sm dark:text-white dark:bg-gray-800 dark:border-gray-700"
+                {...form.register("jobDescription")}
+                placeholder="Paste Job Description"
+              />
+              {form.formState.errors.jobDescription && (
+                <p className="mt-1 text-sm text-red-600">{form.formState.errors.jobDescription.message}</p>
+              )}
+            </div>
+          </div>
+
+          {/* Controls row */}
+          <div className="flex items-center gap-2 md:col-span-2">
+            {/* Proposal Type */}
+            <div className="flex-1 min-w-[100px]">
+              <div className="relative">
+                <select
+                  id="proposalType"
+                  className="block w-full px-3 py-2 pr-8 text-sm border border-gray-300 rounded-lg appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:border-gray-700"
+                  {...form.register("proposalType")}
+                >
+                  <option value="technical">🔧 Technical</option>
+                  <option value="creative">🎨 Creative</option>
+                </select>
+                <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            {/* Formality Level */}
+            <div className="flex-1 min-w-[100px]">
+              <div className="relative">
+                <select
+                  id="formalityLevel"
+                  className="block w-full px-3 py-2 pr-8 text-sm border border-gray-300 rounded-lg appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:border-gray-700"
+                  {...form.register("formalityLevel")}
+                >
+                  <option value="informal">😊 Informal</option>
+                  <option value="neutral">😐 Neutral</option>
+                  <option value="formal">🎩 Formal</option>
+                </select>
+                <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            {/* Creativity Level */}
+            <div className="flex-1 min-w-[100px]">
+              <div className="relative">
+                <select
+                  id="creativity"
+                  className="block w-full px-3 py-2 pr-8 text-sm border border-gray-300 rounded-lg appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:border-gray-700"
+                  {...form.register("creativity")}
+                >
+                  <option value="low">💡 Low</option>
+                  <option value="medium">💡💡 Medium</option>
+                  <option value="high">💡💡💡 High</option>
+                </select>
+                <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            {/* Generate Button */}
+            <button
+              type="submit"
+              disabled={isGenerating}
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-500 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
+            >
+              {isGenerating ? "✨..." : "✨ Generate"}
+            </button>
+          </div>
+        </div>
+        {errorMessage && <p className="mt-2 text-sm text-red-500">{errorMessage}</p>}
+      </form>
+    </div>
+  );
+};
+
+export default ProposalInputForm;

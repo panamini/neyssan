@@ -1,0 +1,76 @@
+{
+  "id": "resp_0434395b7f7a6a8c0069b2dc1721a081948dd2204d67c1fbb3",
+  "object": "response",
+  "created_at": 1773329431,
+  "status": "completed",
+  "background": false,
+  "billing": {
+    "payer": "developer"
+  },
+  "completed_at": 1773329433,
+  "error": null,
+  "frequency_penalty": 0,
+  "incomplete_details": null,
+  "instructions": null,
+  "max_output_tokens": 500,
+  "max_tool_calls": null,
+  "model": "gpt-5-nano-2025-08-07",
+  "output": [
+    {
+      "id": "rs_0434395b7f7a6a8c0069b2dc17678c81948e77a8ca62ce7871",
+      "type": "reasoning",
+      "summary": []
+    },
+    {
+      "id": "msg_0434395b7f7a6a8c0069b2dc1785008194ab0f155e273b5343",
+      "type": "message",
+      "status": "completed",
+      "content": [
+        {
+          "type": "output_text",
+          "annotations": [],
+          "logprobs": [],
+          "text": "Dear Hiring Manager,\n\nI am writing to express interest in the Data Scientist role. While my background is in frontend engineering, I have gained transferable experience in experimentation design and cross-functional product work that aligns with the emphasis on rigorous testing and data-driven decisions. I am drawn to opportunities to apply structured experimentation thinking to model-driven questions, and I am committed to approaching problems with careful hypothesis formulation and result interpretation.\n\nIn my recent product-focused role at Northline Labs, I contributed to building experimentation dashboards that supported growth teams. This work required collaboration with engineers, product managers, and analysts to define metrics, design clear experiments, and interpret outcomes in a way that informs product decisions. I bring a careful, methodical mindset and an appreciation for how thoughtful experimentation can illuminate user behavior and product impact.\n\nI value roles that emphasize disciplined inquiry, transparent communication, and the practical use of data to guide decisions. I am eager to learn more about how the team approaches data science challenges and how I might contribute to designing experiments and translating findings into actionable insights. Thank you for considering my application.\n\nSincerely,\nAlex Martin"
+        }
+      ],
+      "role": "assistant"
+    }
+  ],
+  "parallel_tool_calls": true,
+  "presence_penalty": 0,
+  "previous_response_id": null,
+  "prompt_cache_key": null,
+  "prompt_cache_retention": null,
+  "reasoning": {
+    "effort": "minimal",
+    "summary": null
+  },
+  "safety_identifier": null,
+  "service_tier": "default",
+  "store": true,
+  "temperature": 1,
+  "text": {
+    "format": {
+      "type": "text"
+    },
+    "verbosity": "medium"
+  },
+  "tool_choice": "auto",
+  "tools": [],
+  "top_logprobs": 0,
+  "top_p": 1,
+  "truncation": "disabled",
+  "usage": {
+    "input_tokens": 382,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 236,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 618
+  },
+  "user": null,
+  "metadata": {}
+}

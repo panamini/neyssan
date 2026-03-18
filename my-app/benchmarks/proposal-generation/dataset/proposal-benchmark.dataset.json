@@ -1,0 +1,389 @@
+{
+  "version": 1,
+  "description": "Small manual-review benchmark dataset for proposal-generation model comparison.",
+  "cases": [
+    {
+      "id": "employment-strong-frontend",
+      "label": "Strong employment match: senior frontend engineer",
+      "jobTitle": "Senior Frontend Engineer",
+      "jobDescription": "We are hiring a Senior Frontend Engineer to lead React and TypeScript development for a customer-facing SaaS platform. The role includes building reusable UI systems, improving performance, collaborating with product and design, and mentoring junior engineers. Experience with analytics instrumentation and experimentation is a plus.",
+      "proposalType": "cover_letter",
+      "formalityLevel": "neutral",
+      "creativity": "medium",
+      "personalizationMode": "default",
+      "personalizationRichness": "rich",
+      "candidateContext": {
+        "name": "Alex Martin",
+        "summary": "Frontend engineer focused on React, TypeScript, design systems, and product-facing web apps.",
+        "desiredPosition": "Senior Frontend Engineer",
+        "topSkills": ["React", "TypeScript", "Design Systems", "Performance Optimization", "A/B Testing"],
+        "recentExperience": [
+          {
+            "company": "BrightLayer",
+            "position": "Frontend Engineer",
+            "highlights": [
+              "Led a design system migration used across 4 product squads.",
+              "Reduced page load time by 28 percent through bundle and rendering optimizations."
+            ]
+          },
+          {
+            "company": "Northline Labs",
+            "position": "Product Engineer",
+            "highlights": [
+              "Built experimentation dashboards used by product and growth teams.",
+              "Partnered directly with design on customer-facing workflow improvements."
+            ]
+          }
+        ],
+        "standoutAchievements": [
+          "Improved signup conversion by 11 percent after iterative UI experiments."
+        ]
+      },
+      "expectedGrounding": [
+        "Design system migration leadership",
+        "React and TypeScript experience",
+        "Performance optimization with a 28 percent improvement",
+        "Cross-functional work with design and product"
+      ],
+      "forbiddenClaims": [
+        "Do not claim staff-level leadership or people management beyond mentoring.",
+        "Do not invent backend ownership or mobile development."
+      ],
+      "notes": "Should feel confident and concrete without overstating scope."
+    },
+    {
+      "id": "employment-strong-product-ops",
+      "label": "Strong employment match: operations program manager",
+      "jobTitle": "Operations Program Manager",
+      "jobDescription": "The Operations Program Manager will coordinate cross-functional initiatives, improve process reliability, and drive reporting across customer support, onboarding, and internal operations. Strong stakeholder management and process documentation experience required.",
+      "proposalType": "cover_letter",
+      "formalityLevel": "formal",
+      "creativity": "low",
+      "personalizationMode": "default",
+      "personalizationRichness": "rich",
+      "candidateContext": {
+        "name": "Camille Bernard",
+        "summary": "Program and operations lead with experience improving support workflows and onboarding operations.",
+        "desiredPosition": "Operations Program Manager",
+        "topSkills": ["Program Management", "Process Design", "Stakeholder Management", "Reporting"],
+        "recentExperience": [
+          {
+            "company": "FlowDesk",
+            "position": "Operations Lead",
+            "highlights": [
+              "Standardized onboarding processes across support and implementation teams.",
+              "Built weekly reporting that surfaced SLA risks earlier."
+            ]
+          }
+        ],
+        "standoutAchievements": [
+          "Cut onboarding handoff errors by 35 percent after process redesign."
+        ]
+      },
+      "expectedGrounding": [
+        "Process redesign",
+        "Cross-functional coordination",
+        "Reporting and SLA visibility",
+        "Reduced onboarding errors"
+      ],
+      "forbiddenClaims": [
+        "Do not invent finance or supply chain expertise."
+      ]
+    },
+    {
+      "id": "freelance-strong-ui-copy",
+      "label": "Strong freelance match: landing page redesign",
+      "jobTitle": "Landing Page Redesign for B2B SaaS",
+      "jobDescription": "Need a freelance designer-developer to redesign a B2B SaaS landing page in Webflow or React. The goal is clearer messaging, stronger conversion, and cleaner visual hierarchy. Looking for someone who can propose an approach, not just execute pixels.",
+      "proposalType": "freelance_proposal",
+      "formalityLevel": "neutral",
+      "creativity": "medium",
+      "personalizationMode": "explicit_only",
+      "personalizationRichness": "rich",
+      "candidateContext": {
+        "name": "Jordan Lee",
+        "summary": "Freelance product designer and frontend builder focused on conversion-driven landing pages.",
+        "desiredPosition": "Freelance Product Designer",
+        "topSkills": ["Landing Pages", "Webflow", "React", "Messaging", "Conversion Optimization"],
+        "recentExperience": [
+          {
+            "company": "Independent",
+            "position": "Freelance Designer-Developer",
+            "highlights": [
+              "Redesigned a SaaS homepage that increased demo requests by 19 percent.",
+              "Delivered both messaging structure and responsive implementation."
+            ]
+          }
+        ],
+        "standoutAchievements": [
+          "Repeatedly paired copy structure with frontend execution on startup websites."
+        ]
+      },
+      "expectedGrounding": [
+        "Conversion-focused landing page work",
+        "Both design and implementation capability",
+        "Approach-oriented freelance framing"
+      ],
+      "forbiddenClaims": [
+        "Do not claim a full agency team.",
+        "Do not invent Webflow certifications."
+      ]
+    },
+    {
+      "id": "application-strong-support",
+      "label": "Strong application message: customer support specialist",
+      "jobTitle": "Customer Support Specialist",
+      "jobDescription": "We need a Customer Support Specialist who can manage email and chat support, document recurring issues, and keep communication calm and clear. SaaS support experience preferred.",
+      "proposalType": "application_message",
+      "formalityLevel": "neutral",
+      "creativity": "low",
+      "personalizationMode": "default",
+      "personalizationRichness": "sparse",
+      "candidateContext": {
+        "name": "Marie Lopez",
+        "summary": "Customer support specialist with SaaS ticketing and documentation experience.",
+        "desiredPosition": "Customer Support Specialist",
+        "topSkills": ["Email Support", "Chat Support", "Knowledge Base Writing"],
+        "recentExperience": [
+          {
+            "company": "CloudLane",
+            "position": "Support Associate",
+            "highlights": [
+              "Handled daily chat and email queues for SaaS customers.",
+              "Documented recurring issues into internal help content."
+            ]
+          }
+        ]
+      },
+      "expectedGrounding": [
+        "Email and chat support",
+        "Documentation of recurring issues",
+        "Clear communication"
+      ],
+      "forbiddenClaims": [
+        "Do not invent phone support leadership.",
+        "Do not claim enterprise account management."
+      ]
+    },
+    {
+      "id": "employment-adjacent-backend",
+      "label": "Adjacent match: backend-heavy full stack role",
+      "jobTitle": "Full Stack Engineer",
+      "jobDescription": "Looking for a Full Stack Engineer with strong Node.js backend skills, API design, database work, and enough React experience to contribute to the frontend. Experience designing scalable services is required.",
+      "proposalType": "cover_letter",
+      "formalityLevel": "neutral",
+      "creativity": "medium",
+      "personalizationMode": "default",
+      "personalizationRichness": "rich",
+      "candidateContext": {
+        "name": "Alex Martin",
+        "summary": "Frontend engineer with some API integration exposure and strong product collaboration.",
+        "desiredPosition": "Frontend Engineer",
+        "topSkills": ["React", "TypeScript", "Frontend Architecture"],
+        "recentExperience": [
+          {
+            "company": "BrightLayer",
+            "position": "Frontend Engineer",
+            "highlights": [
+              "Partnered with backend engineers on API contracts and data-heavy UI features."
+            ]
+          }
+        ]
+      },
+      "expectedGrounding": [
+        "Strong frontend strength",
+        "Some API collaboration",
+        "Honest acknowledgement that backend depth is limited"
+      ],
+      "forbiddenClaims": [
+        "Do not claim ownership of scalable backend services.",
+        "Do not invent database architecture experience."
+      ],
+      "notes": "Good honesty test."
+    },
+    {
+      "id": "employment-adjacent-analytics",
+      "label": "Adjacent match: growth analytics manager",
+      "jobTitle": "Growth Analytics Manager",
+      "jobDescription": "The Growth Analytics Manager will own acquisition dashboards, experiment analysis, funnel reporting, and cross-functional reporting to product and marketing leadership. SQL and business communication required.",
+      "proposalType": "cover_letter",
+      "formalityLevel": "formal",
+      "creativity": "low",
+      "personalizationMode": "default",
+      "personalizationRichness": "sparse",
+      "candidateContext": {
+        "name": "Jordan Lee",
+        "summary": "Product designer and frontend builder with experimentation exposure on growth-facing pages.",
+        "desiredPosition": "Product Designer",
+        "topSkills": ["Experimentation", "Landing Pages", "Product Collaboration"],
+        "recentExperience": [
+          {
+            "company": "Independent",
+            "position": "Freelance Designer-Developer",
+            "highlights": [
+              "Worked on conversion experiments for startup marketing pages."
+            ]
+          }
+        ]
+      },
+      "expectedGrounding": [
+        "Experimentation exposure only",
+        "No claim of analytics manager ownership"
+      ],
+      "forbiddenClaims": [
+        "Do not invent SQL expertise.",
+        "Do not imply ownership of acquisition dashboards."
+      ]
+    },
+    {
+      "id": "freelance-adjacent-research",
+      "label": "Adjacent freelance match: UX audit and recommendations",
+      "jobTitle": "UX Audit for SaaS Admin Dashboard",
+      "jobDescription": "Need a freelancer to review our SaaS admin dashboard and provide prioritized UX recommendations. No implementation required, but recommendations should be practical and grounded in user flows.",
+      "proposalType": "freelance_proposal",
+      "formalityLevel": "neutral",
+      "creativity": "medium",
+      "personalizationMode": "explicit_only",
+      "personalizationRichness": "sparse",
+      "candidateContext": {
+        "name": "Jordan Lee",
+        "summary": "Product designer and frontend builder focused on SaaS interfaces and conversion-oriented UX.",
+        "desiredPosition": "Freelance Product Designer",
+        "topSkills": ["UX Reviews", "SaaS Interfaces", "Prioritization"],
+        "recentExperience": [
+          {
+            "company": "Independent",
+            "position": "Freelance Designer-Developer",
+            "highlights": [
+              "Audited onboarding flows and proposed usability improvements for startup products."
+            ]
+          }
+        ]
+      },
+      "expectedGrounding": [
+        "UX review capability",
+        "Recommendation-oriented approach",
+        "SaaS interface familiarity"
+      ],
+      "forbiddenClaims": [
+        "Do not claim formal user research leadership or enterprise UX labs."
+      ]
+    },
+    {
+      "id": "application-adjacent-admin",
+      "label": "Adjacent application message: administrative coordinator",
+      "jobTitle": "Administrative Coordinator",
+      "jobDescription": "The Administrative Coordinator will manage schedules, documentation, vendor communication, and general office support. Highly organized communication and process follow-through required.",
+      "proposalType": "application_message",
+      "formalityLevel": "neutral",
+      "creativity": "low",
+      "personalizationMode": "default",
+      "personalizationRichness": "minimal",
+      "candidateContext": {
+        "name": "Camille Bernard",
+        "summary": "Operations lead experienced in coordination, process documentation, and cross-team communication.",
+        "desiredPosition": "Operations Coordinator",
+        "topSkills": ["Coordination", "Documentation", "Stakeholder Communication"]
+      },
+      "expectedGrounding": [
+        "Coordination and documentation strength",
+        "Process follow-through"
+      ],
+      "forbiddenClaims": [
+        "Do not invent office management or vendor procurement ownership."
+      ]
+    },
+    {
+      "id": "employment-weak-data-science",
+      "label": "Weak match: data scientist role",
+      "jobTitle": "Data Scientist",
+      "jobDescription": "Seeking a Data Scientist with machine learning, experimentation design, Python data tooling, and strong statistical modeling experience. Prior ownership of production ML systems is preferred.",
+      "proposalType": "cover_letter",
+      "formalityLevel": "formal",
+      "creativity": "low",
+      "personalizationMode": "default",
+      "personalizationRichness": "minimal",
+      "candidateContext": {
+        "name": "Alex Martin",
+        "summary": "Frontend engineer with experimentation exposure and cross-functional product work.",
+        "desiredPosition": "Frontend Engineer",
+        "topSkills": ["React", "TypeScript", "A/B Testing"],
+        "recentExperience": [
+          {
+            "company": "Northline Labs",
+            "position": "Product Engineer",
+            "highlights": [
+              "Built experimentation dashboards for growth teams."
+            ]
+          }
+        ]
+      },
+      "expectedGrounding": [
+        "Very cautious tone",
+        "Only transferable experimentation exposure should be mentioned"
+      ],
+      "forbiddenClaims": [
+        "Do not claim machine learning, Python data tooling, statistics, or production ML systems."
+      ]
+    },
+    {
+      "id": "freelance-weak-seo",
+      "label": "Weak freelance match: technical SEO overhaul",
+      "jobTitle": "Technical SEO Overhaul for Marketplace",
+      "jobDescription": "Looking for a freelancer to audit and improve technical SEO for a large marketplace site, including indexing, schema, crawl diagnostics, and internal linking recommendations.",
+      "proposalType": "freelance_proposal",
+      "formalityLevel": "neutral",
+      "creativity": "low",
+      "personalizationMode": "explicit_only",
+      "personalizationRichness": "minimal",
+      "candidateContext": {
+        "name": "Jordan Lee",
+        "summary": "Frontend-focused freelance designer-developer with conversion and landing page experience.",
+        "desiredPosition": "Freelance Product Designer",
+        "topSkills": ["Frontend", "Landing Pages", "Conversion Optimization"]
+      },
+      "expectedGrounding": [
+        "Should avoid pretending to be a technical SEO specialist"
+      ],
+      "forbiddenClaims": [
+        "Do not invent indexing, schema, or crawl diagnostics experience."
+      ]
+    },
+    {
+      "id": "employment-no-context-generalist",
+      "label": "No context case: operations associate",
+      "jobTitle": "Operations Associate",
+      "jobDescription": "The Operations Associate will support recurring processes, update internal records, and assist with communication across teams. We value reliability, clear communication, and willingness to learn.",
+      "proposalType": "cover_letter",
+      "formalityLevel": "neutral",
+      "creativity": "low",
+      "personalizationMode": "explicit_only",
+      "personalizationRichness": "none",
+      "candidateContext": null,
+      "expectedGrounding": [
+        "Should stay generic and motivation-based"
+      ],
+      "forbiddenClaims": [
+        "Do not invent prior operations roles or accomplishments."
+      ]
+    },
+    {
+      "id": "application-no-context-support",
+      "label": "No context case: application message for sales assistant",
+      "jobTitle": "Sales Assistant",
+      "jobDescription": "We are looking for a Sales Assistant who can coordinate follow-up, keep records organized, and communicate professionally with prospects and customers.",
+      "proposalType": "application_message",
+      "formalityLevel": "neutral",
+      "creativity": "low",
+      "personalizationMode": "explicit_only",
+      "personalizationRichness": "none",
+      "candidateContext": null,
+      "expectedGrounding": [
+        "Should remain honest about missing evidence"
+      ],
+      "forbiddenClaims": [
+        "Do not invent CRM expertise, quota ownership, or past sales achievements."
+      ]
+    }
+  ]
+}

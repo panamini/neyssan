@@ -1,0 +1,25 @@
+{
+  "id": "e9636994c6024f24b060e319373049fb",
+  "created": 1773329410,
+  "model": "mistral-small-latest",
+  "usage": {
+    "prompt_tokens": 324,
+    "total_tokens": 448,
+    "completion_tokens": 124,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "object": "chat.completion",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "tool_calls": null,
+        "content": "I’m Camille Bernard, an operations lead with experience in coordination, process documentation, and cross-team communication. My background in managing schedules, maintaining clear documentation, and ensuring follow-through aligns well with the Administrative Coordinator role. I thrive in structured environments where organization and communication are key, and I’m confident I can support your team’s administrative needs effectively.\n\nI’ve successfully coordinated workflows and maintained documentation to streamline operations, ensuring consistency and clarity. My ability to communicate with stakeholders and follow processes through to completion would allow me to contribute immediately. I’d welcome the opportunity to discuss how my skills can support your team."
+      }
+    }
+  ]
+}

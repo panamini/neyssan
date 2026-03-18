@@ -1,0 +1,599 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+OCR → HuggingFace Dataset Converter for LayoutLMv3/LiLT (multi-page aware + reading-order + hyphen-mend)
+
+- Robust to PP-Structure 2.x/3.x shapes (res, text_region, etc.)
+- Handles single- and multi-page JSON → emits one record per page
+- Looks for images by stem OR stem_page{N}.{ext}; same for annotations
+- Builds word-level tokens (with optional approximate token boxes), includes reading order
+- BIO labels from text- and bbox-based annotations
+- Normalizes bboxes to 0–1000 (LayoutLM convention)
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import random
+import logging
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Any, Iterable
+
+from PIL import Image
+from datasets import Dataset, DatasetDict, Features, Sequence, Value, ClassLabel
+
+# --------------------------------------------------------------------
+# Logging
+# --------------------------------------------------------------------
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+log = logging.getLogger("ocr2hf")
+
+# --------------------------------------------------------------------
+# Labels (BIO)
+# --------------------------------------------------------------------
+LABELS = [
+    "O",
+    "B-ROLE", "I-ROLE",
+    "B-COMPANY", "I-COMPANY",
+    "B-START_DATE", "I-START_DATE",
+    "B-END_DATE", "I-END_DATE",
+    "B-DEGREE", "I-DEGREE",
+    "B-INSTITUTION", "I-INSTITUTION",
+    "B-SKILL", "I-SKILL",
+    "B-CERTIFICATE", "I-CERTIFICATE",
+    "B-ACHIEVEMENT", "I-ACHIEVEMENT",
+]
+label2id = {label: i for i, label in enumerate(LABELS)}
+id2label = {i: label for i, label in enumerate(LABELS)}
+VALID_ENTS = {
+    "ROLE", "COMPANY", "START_DATE", "END_DATE",
+    "DEGREE", "INSTITUTION", "SKILL", "CERTIFICATE", "ACHIEVEMENT",
+}
+
+@dataclass
+class LineSpan:
+    text: str
+    polygon: List[Tuple[float, float]]
+    bbox: Tuple[float, float, float, float]
+
+# --------------------------------------------------------------------
+# Geometry & helpers
+# --------------------------------------------------------------------
+def polygon_to_bbox(points: Iterable[Iterable[float]]) -> Tuple[float, float, float, float]:
+    xs = [float(p[0]) for p in points]
+    ys = [float(p[1]) for p in points]
+    x0, y0, x1, y1 = min(xs), min(ys), max(xs), max(ys)
+    return x0, y0, x1, y1
+
+def clamp_bbox(box: Tuple[float, float, float, float], w: int, h: int) -> Tuple[float, float, float, float]:
+    x0, y0, x1, y1 = box
+    x0, y0 = max(0.0, x0), max(0.0, y0)
+    x1, y1 = min(float(w), x1), min(float(h), y1)
+    if x1 < x0: x0, x1 = x1, x0
+    if y1 < y0: y0, y1 = y1, y0
+    return x0, y0, x1, y1
+
+def normalize_bbox(box: Tuple[float, float, float, float], img_w: int, img_h: int) -> List[int]:
+    x0, y0, x1, y1 = box
+    # clamp first
+    x0, y0, x1, y1 = clamp_bbox((x0, y0, x1, y1), img_w, img_h)
+    return [
+        int(round(1000.0 * x0 / img_w)),
+        int(round(1000.0 * y0 / img_h)),
+        int(round(1000.0 * x1 / img_w)),
+        int(round(1000.0 * y1 / img_h)),
+    ]
+
+def iou(box1: Tuple[float, float, float, float], box2: Tuple[float, float, float, float]) -> float:
+    x0, y0, x1, y1 = box1
+    a0, b0, a1, b1 = box2
+    inter_x0, inter_y0 = max(x0, a0), max(y0, b0)
+    inter_x1, inter_y1 = min(x1, a1), min(y1, b1)
+    iw = max(0.0, inter_x1 - inter_x0)
+    ih = max(0.0, inter_y1 - inter_y0)
+    inter = iw * ih
+    if inter <= 0.0:
+        return 0.0
+    area1 = max(0.0, (x1 - x0)) * max(0.0, (y1 - y0))
+    area2 = max(0.0, (a1 - a0)) * max(0.0, (b1 - b0))
+    denom = area1 + area2 - inter
+    return float(inter / denom) if denom > 0 else 0.0
+
+# --------------------------------------------------------------------
+# PP-Structure parsing (robust to 2.x / 3.x)
+# --------------------------------------------------------------------
+def _iter_blocks(ocr_data: Any) -> Iterable[Dict[str, Any]]:
+    if isinstance(ocr_data, dict) and "result" in ocr_data:
+        blocks = ocr_data.get("result") or []
+        for b in blocks:
+            if isinstance(b, dict):
+                yield b
+    elif isinstance(ocr_data, list):
+        for b in ocr_data:
+            if isinstance(b, dict):
+                yield b
+    else:
+        return
+
+def _extract_line_spans_from_block(block: Dict[str, Any]) -> List[LineSpan]:
+    out: List[LineSpan] = []
+    # simple text + bbox or points
+    if "text" in block and ("points" in block or "bbox" in block):
+        text = str(block.get("text", "")).strip()
+        if not text:
+            return out
+        if "points" in block and block["points"]:
+            poly = [(float(x), float(y)) for x, y in block["points"]]
+            bbox = polygon_to_bbox(poly)
+        else:
+            bx = block.get("bbox", None)
+            if not bx or len(bx) != 4:
+                return out
+            x0, y0, x1, y1 = [float(v) for v in bx]
+            bbox = (x0, y0, x1, y1)
+            poly = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+        out.append(LineSpan(text=text, polygon=poly, bbox=bbox))
+        return out
+
+    # block with res
+    res = block.get("res", None)
+    btype = block.get("type", None)
+    if isinstance(res, list):
+        for item in res:
+            if isinstance(item, dict) and "text" in item:
+                text = str(item.get("text", "")).strip()
+                if not text:
+                    continue
+                if "text_region" in item and item["text_region"]:
+                    poly = [(float(x), float(y)) for x, y in item["text_region"]]
+                    bbox = polygon_to_bbox(poly)
+                elif "bbox" in item and item["bbox"] and len(item["bbox"]) == 4:
+                    x0, y0, x1, y1 = [float(v) for v in item["bbox"]]
+                    poly = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+                    bbox = (x0, y0, x1, y1)
+                else:
+                    continue
+                out.append(LineSpan(text=text, polygon=poly, bbox=bbox))
+            elif isinstance(item, (list, tuple)) and len(item) >= 2:
+                pts, payload = item[0], item[1]
+                poly = []
+                try:
+                    if pts and isinstance(pts[0], (list, tuple)) and len(pts[0]) == 2:
+                        poly = [(float(x), float(y)) for x, y in pts]
+                    elif isinstance(pts, (list, tuple)) and len(pts) >= 8:
+                        it = iter(pts)
+                        poly = [(float(x), float(y)) for x, y in zip(it, it)]
+                except Exception:
+                    poly = []
+                if not poly:
+                    continue
+                bbox = polygon_to_bbox(poly)
+                text = ""
+                if isinstance(payload, (list, tuple)) and len(payload) >= 1:
+                    text = str(payload[0]).strip()
+                elif isinstance(payload, dict) and "text" in payload:
+                    text = str(payload["text"]).strip()
+                if text:
+                    out.append(LineSpan(text=text, polygon=poly, bbox=bbox))
+    elif isinstance(res, str) and btype == "table":
+        # ignore raw table HTML unless explicitly included
+        pass
+    return out
+
+def _split_ocr_into_pages(ocr_data: Any) -> List[Any]:
+    if isinstance(ocr_data, dict) and isinstance(ocr_data.get("pages"), list):
+        return list(ocr_data["pages"])
+
+    page_field_candidates = ("page_idx", "page_index", "page_no", "page")
+    buckets: Dict[int, List[Dict[str, Any]]] = {}
+    collected = False
+
+    def _add(pi: int, blk: Dict[str, Any]):
+        buckets.setdefault(pi, []).append(blk)
+
+    if isinstance(ocr_data, dict) and "result" in ocr_data and isinstance(ocr_data["result"], list):
+        for blk in ocr_data["result"]:
+            if isinstance(blk, dict):
+                for k in page_field_candidates:
+                    if k in blk and isinstance(blk[k], int):
+                        _add(int(blk[k]), blk)
+                        collected = True
+                        break
+    elif isinstance(ocr_data, list):
+        for blk in ocr_data:
+            if isinstance(blk, dict):
+                for k in page_field_candidates:
+                    if k in blk and isinstance(blk[k], int):
+                        _add(int(blk[k]), blk)
+                        collected = True
+                        break
+
+    if collected and buckets:
+        pages = []
+        for pi in sorted(buckets.keys()):
+            pages.append({"result": buckets[pi], "_page_index": pi})
+        return pages
+
+    return [ocr_data]
+
+def parse_paddleocr_page(page_data: Any, include_tables_text: bool = False) -> List[LineSpan]:
+    lines: List[LineSpan] = []
+    for block in _iter_blocks(page_data):
+        btype = block.get("type")
+        if btype == "table" and isinstance(block.get("res"), str) and not include_tables_text:
+            continue
+        spans = _extract_line_spans_from_block(block)
+        if spans:
+            lines.extend(spans)
+    return lines
+
+# --------------------------------------------------------------------
+# Reading order & hyphen mend
+# --------------------------------------------------------------------
+def _reading_order_key(span: LineSpan) -> Tuple[float, float]:
+    # approximate: top then left
+    x0, y0, x1, y1 = span.bbox
+    return (round(y0 / 8) * 8, x0)
+
+_WORD_RE = re.compile(r"\w+|[^\w\s]", re.UNICODE)
+
+def tokenize_line(text: str) -> List[str]:
+    return [t for t in _WORD_RE.findall(text) if t.strip()]
+
+def approximate_token_boxes_from_line(tokens: List[str],
+                                     line_bbox: Tuple[float, float, float, float]) -> List[Tuple[float, float, float, float]]:
+    if not tokens:
+        return []
+    x0, y0, x1, y1 = line_bbox
+    width = max(1.0, x1 - x0)
+    lengths = [max(1, len(tok)) for tok in tokens]
+    total = float(sum(lengths))
+    boxes = []
+    cur = x0
+    for L in lengths:
+        w = width * (L / total)
+        nx = min(x1, cur + w)
+        boxes.append((cur, y0, nx, y1))
+        cur = nx
+    if boxes:
+        last = list(boxes[-1])
+        boxes[-1] = (last[0], last[1], x1, last[3])
+    return boxes
+
+def _lower_tokens(tokens: List[str]) -> List[str]:
+    return [t.lower() for t in tokens]
+
+def _find_text_matches(tokens: List[str], target_tokens: List[str]) -> List[Tuple[int, int]]:
+    matches = []
+    if not target_tokens:
+        return matches
+    ltoks = _lower_tokens(tokens)
+    tgt = _lower_tokens(target_tokens)
+    n, m = len(ltoks), len(tgt)
+    for i in range(0, n - m + 1):
+        if ltoks[i : i + m] == tgt:
+            matches.append((i, i + m - 1))
+    return matches
+
+def assign_bio_labels(tokens: List[str],
+                      token_boxes: List[Tuple[float, float, float, float]],
+                      annotations: Optional[List[Dict[str, Any]]],
+                      iou_threshold: float = 0.5) -> List[int]:
+    if not annotations:
+        return [label2id["O"]] * len(tokens)
+
+    labels = ["O"] * len(tokens)
+
+    # text-based matches
+    for ann in annotations:
+        ent = str(ann.get("label", "")).upper()
+        if ent not in VALID_ENTS:
+            continue
+        text_ann = ann.get("text", "")
+        if text_ann:
+            tgt_tokens = tokenize_line(str(text_ann))
+            for s, e in _find_text_matches(tokens, tgt_tokens):
+                labels[s] = f"B-{ent}"
+                for j in range(s + 1, e + 1):
+                    labels[j] = f"I-{ent}"
+
+    # bbox-based matches
+    for ann in annotations:
+        ent = str(ann.get("label", "")).upper()
+        if ent not in VALID_ENTS:
+            continue
+        bbox_ann = ann.get("bbox", None)
+        if bbox_ann and isinstance(bbox_ann, (list, tuple)) and len(bbox_ann) == 4:
+            ax0, ay0, ax1, ay1 = [float(v) for v in bbox_ann]
+            ann_box = (ax0, ay0, ax1, ay1)
+            hits = [i for i, tbox in enumerate(token_boxes)
+                    if iou(tbox, ann_box) >= iou_threshold]
+            if hits:
+                start = prev = hits[0]
+                for idx in hits[1:]:
+                    if idx == prev + 1:
+                        prev = idx
+                    else:
+                        labels[start] = f"B-{ent}"
+                        for j in range(start + 1, prev + 1):
+                            labels[j] = f"I-{ent}"
+                        start = prev = idx
+                # final span
+                labels[start] = f"B-{ent}"
+                for j in range(start + 1, prev + 1):
+                    labels[j] = f"I-{ent}"
+
+    return [label2id.get(l, label2id["O"]) for l in labels]
+
+# --------------------------------------------------------------------
+# File resolution (multi-page aware)
+def _find_image_for_stem(
+    images_dir: Path,
+    stem: str,
+    exts: List[str],
+    page_index: Optional[int] = None
+) -> Optional[Path]:
+    patterns = []
+    if page_index is not None:
+        N = page_index
+        patterns.extend([
+            f"{stem}_page{N}",
+            f"{stem}-page{N}",
+            f"{stem}_{N}",
+            f"{stem}-{N}",
+            f"{stem}-{N:03d}",
+            f"{stem}_{N:03d}",
+        ])
+    patterns.append(stem)
+    for base in patterns:
+        for ext in exts:
+            cand = images_dir / f"{base}{ext}"
+            if cand.exists():
+                return cand
+            cand2 = images_dir / f"{base}{ext.upper()}"
+            if cand2.exists():
+                return cand2
+    return None
+
+def _find_annotations_for_stem(
+    annotations_dir: Optional[Path],
+    stem: str,
+    page_index: Optional[int] = None
+) -> Optional[List[Dict[str, Any]]]:
+    if not annotations_dir:
+        return None
+    candidates = []
+    if page_index is not None:
+        N = page_index
+        candidates.extend([
+            annotations_dir / f"{stem}_page{N}.json",
+            annotations_dir / f"{stem}-page{N}.json",
+            annotations_dir / f"{stem}_{N}.json",
+            annotations_dir / f"{stem}-{N}.json",
+            annotations_dir / f"{stem}-{N:03d}.json",
+            annotations_dir / f"{stem}_{N:03d}.json",
+        ])
+    candidates.append(annotations_dir / f"{stem}.json")
+    for p in candidates:
+        if p.exists():
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception as e:
+                log.error(f"Failed to read annotations {p}: {e}")
+                return None
+    return None
+
+# --------------------------------------------------------------------
+# Builder (multi-page aware)
+def build_hf_dataset(
+    ocr_json_dir: Path,
+    images_dir: Path,
+    annotations_dir: Optional[Path],
+    output_dir: Path,
+    val_ratio: float = 0.2,
+    test_ratio: float = 0.0,
+    seed: int = 42,
+    tokenize_lines: bool = True,
+    approx_token_boxes: bool = True,
+    include_tables_text: bool = False,
+    image_exts: Optional[List[str]] = None,
+    iou_threshold: float = 0.5,
+    min_box_wh: float = 2.0,
+) -> None:
+    random.seed(seed)
+    image_exts = image_exts or [".png", ".jpg", ".jpeg", ".tiff", ".bmp"]
+
+    json_files = sorted(ocr_json_dir.glob("*.json"))
+    if not json_files:
+        raise FileNotFoundError(f"No OCR JSON files in {ocr_json_dir}")
+
+    records: List[Dict[str, Any]] = []
+    for jfile in json_files:
+        stem = jfile.stem
+        try:
+            with open(jfile, "r", encoding="utf-8") as f:
+                ocr_data = json.load(f)
+        except Exception as e:
+            log.error(f"Could not read OCR JSON {jfile}: {e}")
+            continue
+
+        pages = _split_ocr_into_pages(ocr_data)
+        if not pages:
+            log.warning(f"No pages parsed in {jfile}")
+            continue
+
+        for local_idx, page_payload in enumerate(pages, start=1):
+            upstream_idx = None
+            if isinstance(page_payload, dict):
+                for key in ("_page_index", "page_idx", "page_no", "page_index", "page"):
+                    if key in page_payload and isinstance(page_payload[key], int):
+                        upstream_idx = int(page_payload[key])
+                        break
+            page_idx = upstream_idx if upstream_idx is not None else local_idx
+
+            img_path = _find_image_for_stem(images_dir, stem, image_exts, page_index=page_idx)
+            if not img_path:
+                if len(pages) == 1:
+                    img_path = _find_image_for_stem(images_dir, stem, image_exts, page_index=None)
+                if not img_path:
+                    log.warning(f"No image found for {stem} page {page_idx}")
+                    continue
+
+            try:
+                with Image.open(img_path) as img:
+                    width, height = img.size
+            except Exception as e:
+                log.error(f"Could not open image {img_path}: {e}")
+                continue
+
+            line_spans = parse_paddleocr_page(page_payload, include_tables_text=include_tables_text)
+            if not line_spans:
+                log.warning(f"No OCR lines extracted in {stem} page {page_idx}")
+                continue
+
+            # sort by reading order
+            line_spans.sort(key=_reading_order_key)
+
+            # Build tokens/hyphen-mend across lines
+            tokens: List[str] = []
+            token_boxes_abs: List[Tuple[float, float, float, float]] = []
+            prev_line_tokens: List[str] = []
+            prev_line_boxes: List[Tuple[float, float, float, float]] = []
+
+            for ln in line_spans:
+                lb = clamp_bbox(ln.bbox, width, height)
+                if (lb[2] - lb[0]) < min_box_wh or (lb[3] - lb[1]) < min_box_wh:
+                    continue
+                if tokenize_lines:
+                    toks = tokenize_line(ln.text)
+                    if not toks:
+                        continue
+                    if approx_token_boxes:
+                        tboxes = approximate_token_boxes_from_line(toks, lb)
+                    else:
+                        tboxes = [lb] * len(toks)
+
+                    # hyphen-mend: if previous ended with hyphen, join
+                    if prev_line_tokens and prev_line_tokens[-1].endswith("-") and toks:
+                        # combine
+                        combined = prev_line_tokens[-1][:-1] + toks[0]
+                        tokens[-1] = combined
+                        # skip first of toks
+                        toks = toks[1:]
+                        tboxes = tboxes[1:]
+                    # append new
+                    for t, bx in zip(toks, tboxes):
+                        tokens.append(t)
+                        token_boxes_abs.append(clamp_bbox(bx, width, height))
+                    prev_line_tokens, prev_line_boxes = toks, tboxes
+                else:
+                    tokens.append(ln.text.strip())
+                    token_boxes_abs.append(lb)
+                    prev_line_tokens = [ln.text.strip()]
+                    prev_line_boxes = [lb]
+
+            if not tokens:
+                log.warning(f"No tokens derived for {stem} page {page_idx}")
+                continue
+
+            anns = _find_annotations_for_stem(annotations_dir, stem, page_index=page_idx)
+            ner_tags = assign_bio_labels(tokens, token_boxes_abs, anns, iou_threshold=iou_threshold)
+            bboxes_norm = [normalize_bbox(b, width, height) for b in token_boxes_abs]
+
+            rec_id = f"{stem}_p{page_idx:03d}"
+            records.append({
+                "id": rec_id,
+                "doc_id": stem,
+                "page_index": page_idx,
+                "words": tokens,
+                "bboxes": bboxes_norm,
+                "ner_tags": ner_tags,
+                "image_path": str(img_path),
+                "width": width,
+                "height": height,
+                "orig_json_path": str(jfile),
+            })
+
+    if not records:
+        raise ValueError("No valid samples to build dataset.")
+
+    # Splits
+    random.shuffle(records)
+    n = len(records)
+    n_test = int(round(n * test_ratio))
+    n_val = int(round(n * val_ratio))
+    if n_test + n_val >= n:
+        n_val = min(n_val, max(0, n - 1))
+        n_test = 0 if n_val == n - 1 else n_test
+
+    test_records = records[:n_test]
+    val_records = records[n_test:n_test + n_val]
+    train_records = records[n_test + n_val:]
+
+    def _mk_dataset(items: List[Dict[str, Any]]) -> Dataset:
+        features = Features({
+            "id": Value("string"),
+            "doc_id": Value("string"),
+            "page_index": Value("int32"),
+            "words": Sequence(Value("string")),
+            "bboxes": Sequence(Sequence(Value("int64"))),
+            "ner_tags": Sequence(ClassLabel(names=LABELS)),
+            "image_path": Value("string"),
+            "width": Value("int32"),
+            "height": Value("int32"),
+            "orig_json_path": Value("string"),
+        })
+        return Dataset.from_list(items, features=features)
+
+    dsplits = {}
+    if train_records:
+        dsplits["train"] = _mk_dataset(train_records)
+    if val_records:
+        dsplits["validation"] = _mk_dataset(val_records)
+    if test_records:
+        dsplits["test"] = _mk_dataset(test_records)
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    DatasetDict(dsplits).save_to_disk(str(output_dir))
+    log.info(f"✅ Dataset saved to {output_dir}")
+    log.info(f"   #pages → train={len(train_records)}  val={len(val_records)}  test={len(test_records)}")
+
+def main():
+    import argparse
+    ap = argparse.ArgumentParser(description="Convert PaddleOCR PP-Structure JSON → HF Dataset (multi-page aware)")
+    ap.add_argument("--ocr-json-dir", required=True, help="Directory with PP-Structure JSON files")
+    ap.add_argument("--images-dir", required=True, help="Directory with page images")
+    ap.add_argument("--annotations-dir", help="Directory with JSON annotations (optional)")
+    ap.add_argument("--output-dir", required=True, help="Output directory for HF dataset")
+    ap.add_argument("--val-ratio", type=float, default=0.2, help="Validation fraction (0..1)")
+    ap.add_argument("--test-ratio", type=float, default=0.0, help="Test fraction (0..1)")
+    ap.add_argument("--seed", type=int, default=42, help="Random seed for splits")
+    ap.add_argument("--no-tokenize-lines", action="store_true", help="Do NOT split lines into tokens")
+    ap.add_argument("--no-approx-token-boxes", action="store_true", help="Do NOT approximate token boxes; replicate line box per token instead")
+    ap.add_argument("--include-tables-text", action="store_true", help="Include raw table text if present (ignored by default)")
+    ap.add_argument("--image-exts", nargs="+", default=[".png", ".jpg", ".jpeg", ".tiff", ".bmp"], help="Allowed image extensions")
+    ap.add_argument("--iou-threshold", type=float, default=0.5, help="IoU threshold for bbox-based annotation match")
+    ap.add_argument("--min-box-wh", type=float, default=2.0, help="Filter out boxes smaller than this (pixels)")
+    args = ap.parse_args()
+
+    build_hf_dataset(
+        ocr_json_dir = Path(args.ocr_json_dir),
+        images_dir = Path(args.images_dir),
+        annotations_dir = Path(args.annotations_dir) if args.annotations_dir else None,
+        output_dir = Path(args.output_dir),
+        val_ratio = args.val_ratio,
+        test_ratio = args.test_ratio,
+        seed = args.seed,
+        tokenize_lines = not args.no_tokenize_lines,
+        approx_token_boxes = not args.no_approx_token_boxes,
+        include_tables_text = args.include_tables_text,
+        image_exts = args.image_exts,
+        iou_threshold = args.iou_threshold,
+        min_box_wh = args.min_box_wh,
+    )
+
+if __name__ == "__main__":
+    main()

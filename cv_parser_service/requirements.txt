@@ -1,0 +1,65 @@
+# API / Service
+fastapi==0.118.0
+uvicorn[standard]==0.30.6
+python-multipart==0.0.9
+mistralai>=1.9,<1.10
+
+# PDF text extraction
+pdfplumber==0.11.3
+pdfminer.six==20231228
+pypdfium2==4.30.0
+
+# OCR + layout (PaddleOCR 3.x)
+paddlepaddle==3.2.0
+paddleocr==3.2.0
+paddlex[ocr-core]==3.2.0
+
+# docTR OCR — keep the torch extra in the main venv (TF/keras moved to isolated venv on arm64)
+python-doctr[torch]==0.10.* ; platform_machine not in "arm64,aarch64"
+
+
+# HF / vision bits
+transformers==4.43.0
+datasets==2.20.0
+huggingface-hub==0.31.4
+fsspec==2024.3.1
+dill==0.3.7
+tokenizers==0.19.1
+safetensors==0.6.2
+timm==0.9.0
+accelerate==1.10.1
+seqeval==1.2.2
+
+# Raster PDF → images (needs poppler-utils at OS level)
+pdf2image==1.16.3
+Pillow==10.0.0 ; python_version < "3.13"
+Pillow>=11.0.0 ; python_version >= "3.13"
+
+# Core parsing / utils
+docling==2.55.0 ; platform_machine not in "arm64,aarch64"
+docling-core[chunking]==2.48.4 ; platform_machine not in "arm64,aarch64"
+typer==0.19.2
+phonenumbers==9.0.15
+numpy==1.24.3
+pandas==2.3.3
+scikit-learn==1.4.2
+
+# OCR fallback
+pytesseract==0.3.13
+
+# Test & tooling
+pytest==8.4.2
+pytest-cov==7.0.0
+tqdm==4.67.1
+requests==2.32.5
+urllib3==2.5.0
+rich==14.1.0
+
+# Shared runtime deps (keep pinned to avoid resolver backtracking)
+psutil==7.1.0
+anyio==4.11.0
+charset-normalizer==3.4.3
+starlette==0.48.0
+PyYAML==6.0.2
+click==8.3.0
+prometheus-client==0.20.0

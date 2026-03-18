@@ -1,0 +1,25 @@
+{
+  "id": "c8b3f18df2c741d2b3dcaf28e5d6c5af",
+  "created": 1773329418,
+  "model": "mistral-small-latest",
+  "usage": {
+    "prompt_tokens": 397,
+    "total_tokens": 616,
+    "completion_tokens": 219,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "object": "chat.completion",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "tool_calls": null,
+        "content": "Dear Hiring Manager,\n\nI am writing to express my interest in the Data Scientist position at your organization. While my background is primarily in frontend engineering, I have developed a strong foundation in experimentation design through my work at Northline Labs, where I built dashboards to support A/B testing for growth teams. This experience has given me a practical understanding of how to structure and analyze experiments to drive data-informed decisions.\n\nThough my expertise lies in React and TypeScript, I am eager to apply my problem-solving skills and analytical mindset to the challenges of data science. My work in experimentation has required me to collaborate closely with cross-functional teams, ensuring that insights are actionable and aligned with business goals. I am particularly drawn to this role because it emphasizes experimentation design, a skill I have honed in my current position.\n\nI am confident that my ability to translate complex data into meaningful insights, combined with my experience in experimentation, would allow me to contribute effectively to your team. I would welcome the opportunity to discuss how my background aligns with your needs.\n\nSincerely,\nAlex Martin"
+      }
+    }
+  ]
+}

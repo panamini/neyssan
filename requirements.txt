@@ -1,0 +1,1 @@
+-r cv_parser_service/requirements.txt

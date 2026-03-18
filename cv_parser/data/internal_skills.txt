@@ -1,0 +1,465 @@
+3d modeling
+account management
+accounting
+accounts payable
+accounts receivable
+acting
+adaptability
+adobe illustrator
+adobe photoshop
+adwords
+after effects
+agile
+ai
+air conditioning
+analytical thinking
+anatomy
+angular
+angular.js
+ansible
+apache spark
+api development
+artificial intelligence
+assembly
+assessment design
+athletic training
+attention to detail
+audit
+autoclaving
+aws
+aws ec2
+aws lambda
+azure
+azure functions
+bash
+bdd
+bert
+big data
+bigquery
+biochemistry
+biohazard handling
+biostatistics
+bitbucket
+bookkeeping
+branding
+bricklaying
+budget management
+budgeting
+business development
+c#
+c++
+cable installation
+campaign management
+canva
+carpentry
+cassandra
+cell culture
+centrifugation
+chai
+chef
+choreography
+chromatography
+ci/cd
+circleci
+circuit repair
+classification
+classroom management
+climbing
+clinical procedures
+clinical research
+clinical trials
+cloud
+cloudfront
+clustering
+cnn
+coaching
+collaboration
+color theory
+communication
+compensation and benefits
+compliance
+compliance audits
+computer vision
+concrete work
+conflict resolution
+confluence
+construction
+content marketing
+continuous improvement
+contract management
+copywriting
+corporate finance
+corporate law
+cost accounting
+craftsmanship
+crane operation
+creativity
+critical thinking
+crm
+curriculum development
+customer acquisition
+cv
+cypress
+dance
+dart
+dash
+data analysis
+data engineering
+data pipeline
+data privacy
+databricks
+dataproc
+decision making
+deep learning
+demolition
+dental hygiene
+dentistry
+devops
+diagnostics
+digital marketing
+django
+dna extraction
+docker
+docker-compose
+documentation
+driving
+drywall installation
+due diligence
+dynamodb
+e-learning
+e2e testing
+ecology
+educational technology
+ehr
+elasticsearch
+electrical work
+elixir
+email marketing
+emergency response
+empathy
+employee engagement
+employee relations
+employment law
+environmental science
+epidemiology
+equipment maintenance
+eslint
+ethics
+ethics approval
+etl
+event coordination
+excel
+express
+facebook ads
+fastapi
+field research
+figma
+financial analysis
+financial reporting
+fire safety
+first aid
+fitness training
+flask
+flooring installation
+flow cytometry
+flutter
+forecasting
+forklift operation
+gardening
+gas fitting
+gcp
+gcp cloud functions
+gdpr
+gel electrophoresis
+genetics
+git
+github
+github actions
+gitlab
+gitlab ci
+go
+good clinical practice
+good laboratory practice
+google analytics
+gpt
+graphic design
+grounds maintenance
+gym instruction
+hadoop
+hand tools
+hazard management
+health education
+healthcare administration
+heating systems
+heavy lifting
+heavy machinery operation
+helm
+hipaa compliance
+hr analytics
+hr policies
+hubspot
+hvac
+illustration
+immunology
+infection control
+initiative
+instructional design
+instrumental performance
+integration testing
+intellectual property
+interaction design
+interviewing
+inventory management
+investment analysis
+ionic
+irrigation
+istio
+iv therapy
+java
+javascript
+jenkins
+jest
+jira
+js
+junit
+k8s
+kafka
+kanban
+keras
+kotlin
+kubernetes
+lab instrumentation
+lab management
+lab safety
+lab testing
+laboratory technician
+landscaping
+laravel
+lawn care
+lead generation
+leadership
+leadership development
+lean
+learning management systems
+legal drafting
+legal research
+lesson planning
+lightgbm
+linkedin ads
+linting
+litigation
+loading
+logistics
+lstm
+machine learning
+machinery operation
+manual lifting
+market research
+market segmentation
+marketing automation
+masonry
+material handling
+matlab
+matplotlib
+mechanical repair
+medical assisting
+medical billing
+medical coding
+medical devices
+medical imaging
+medical records
+medication administration
+mentoring
+microbiology
+microscope operation
+microscopy
+microservices
+mlops
+mocha
+molecular biology
+mongodb
+motion graphics
+mountaineering
+music composition
+music production
+mysql
+negotiation
+neural networks
+next.js
+nlp
+nltk
+node
+node.js
+numpy
+nursing
+occupational therapy
+officiating
+onboarding
+opencv
+operations management
+organization
+osha compliance
+outdoor construction
+outdoor education
+packaging
+painting
+pandas
+patient care
+patient education
+patient monitoring equipment
+payroll
+pcr
+performance management
+personal training
+pharmacology
+pharmacy
+phlebotomy
+photography
+php
+physical conditioning
+physical therapy
+physiology
+pilates
+pipefitting
+pipetting
+plastering
+playwright
+plotly
+plumbing
+policy development
+postgresql
+power tools
+powershell
+ppc
+ppe usage
+predictive modeling
+prettier
+problem solving
+process improvement
+production planning
+professional development
+project management
+prototyping
+puppet
+pytest
+python
+pytorch
+quality assurance
+quickbooks
+r
+rabbitmq
+radiology
+rails
+react
+react native
+recruitment
+redis
+redux
+refereeing
+regression
+regulatory compliance
+rehabilitation
+reinforcement learning
+research methodology
+resource planning
+retention strategy
+risk assessment
+risk management
+rna extraction
+rnn
+roofing
+ruby
+rust
+s3
+safety protocols
+sales pipeline
+salesforce
+sample preparation
+sap
+scaffolding
+scala
+scikit-learn
+scrum
+sculpting
+seaborn
+selenium
+sem
+seo
+seq2seq
+sheet metal work
+singing
+site cleaning
+site supervision
+six sigma
+sketch
+social media marketing
+sound engineering
+spacy
+spark
+spectroscopy
+sports nutrition
+sports strategy
+spring
+spring boot
+sql
+sqlite
+stage management
+stakeholder management
+statistical analysis
+strategic planning
+strategic thinking
+strength training
+student counseling
+succession planning
+supply chain
+surgery
+surgical assistance
+svelte
+swift
+swimming instruction
+tableau
+tactical analysis
+talent acquisition
+tax preparation
+tdd
+team management
+teamwork
+tensorflow
+tensorflow.js
+terraform
+theater
+tile installation
+time management
+time series
+tools handling
+training and development
+training delivery
+transformers
+travisci
+tree trimming
+ts
+tutoring
+typescript
+typography
+ui design
+ultrasound
+unit testing
+unloading
+ux design
+valuation
+vendor management
+ventilation
+video editing
+visual design
+vital signs monitoring
+vitest
+vue
+vue.js
+warehouse work
+welding
+wireframing
+woodworking
+workflow optimization
+workforce planning
+xgboost
+yoga

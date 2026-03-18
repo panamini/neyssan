@@ -1,0 +1,76 @@
+{
+  "id": "resp_045bf5c008d5bf820069b2dbcdc6348193a78d4e8fc2054a73",
+  "object": "response",
+  "created_at": 1773329357,
+  "status": "completed",
+  "background": false,
+  "billing": {
+    "payer": "developer"
+  },
+  "completed_at": 1773329358,
+  "error": null,
+  "frequency_penalty": 0,
+  "incomplete_details": null,
+  "instructions": null,
+  "max_output_tokens": 500,
+  "max_tool_calls": null,
+  "model": "gpt-5-nano-2025-08-07",
+  "output": [
+    {
+      "id": "rs_045bf5c008d5bf820069b2dbce1c948193afba31fad23c7c13",
+      "type": "reasoning",
+      "summary": []
+    },
+    {
+      "id": "msg_045bf5c008d5bf820069b2dbce39048193b83b065c2a020e04",
+      "type": "message",
+      "status": "completed",
+      "content": [
+        {
+          "type": "output_text",
+          "annotations": [],
+          "logprobs": [],
+          "text": "I am Marie Lopez, a customer support specialist skilled in email and chat support for SaaS customers. In my role at CloudLane, I managed daily email and chat queues and documented recurring issues into internal help content, ensuring teams have clear, actionable guidance. I am focused on calm, concise communication and building a reliable knowledge base to reduce repeat inquiries. I am excited to contribute my experience in ticketing and documentation to help your customers feel supported and understood from first contact through resolution."
+        }
+      ],
+      "role": "assistant"
+    }
+  ],
+  "parallel_tool_calls": true,
+  "presence_penalty": 0,
+  "previous_response_id": null,
+  "prompt_cache_key": null,
+  "prompt_cache_retention": null,
+  "reasoning": {
+    "effort": "minimal",
+    "summary": null
+  },
+  "safety_identifier": null,
+  "service_tier": "default",
+  "store": true,
+  "temperature": 1,
+  "text": {
+    "format": {
+      "type": "text"
+    },
+    "verbosity": "medium"
+  },
+  "tool_choice": "auto",
+  "tools": [],
+  "top_logprobs": 0,
+  "top_p": 1,
+  "truncation": "disabled",
+  "usage": {
+    "input_tokens": 364,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 114,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 478
+  },
+  "user": null,
+  "metadata": {}
+}
