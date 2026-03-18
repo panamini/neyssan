@@ -122,56 +122,47 @@ export function ProposalForge(): JSX.Element {
     color: "var(--tm2)",
   };
 
+  /* ── Shared styles ───────────────────────────────────────── */
+  const eyebrow: React.CSSProperties = {
+    fontSize: "var(--tx)",
+    fontWeight: 600,
+    color: "var(--am)",
+    letterSpacing: ".14em",
+    textTransform: "uppercase",
+    marginBottom: "var(--s2)",
+  };
+
+  const panelCard: React.CSSProperties = {
+    borderRadius: "var(--rm)",
+    border: "1px solid var(--bo)",
+    background: "var(--sfr)",
+    boxShadow: "var(--sha)",
+    overflow: "hidden",
+    display: "flex",
+    flexDirection: "column",
+  };
+
+  const panelHeader: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "var(--s3) var(--s5)",
+    background: "var(--sf2)",
+    borderBottom: "1px solid var(--bo)",
+    flexShrink: 0,
+  };
+
+  /* ── φ grid — §13 dasti-spec-v1 ──────────────────────────── */
+  const phiGrid: React.CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: "minmax(320px,1fr) minmax(0,1.618fr)",
+    gap: "var(--s5)",
+    alignItems: "start",
+  };
+
   return (
-    /* Full-height scrollable — cohérent avec CvForge */
     <div style={{ height: "100%", overflowY: "auto", overflowX: "hidden", minWidth: 0 }}>
-      <div
-        style={{
-          padding: "var(--s8) var(--s7)",
-          display: "flex",
-          flexDirection: "column",
-          gap: "var(--s5)",
-          maxWidth: 960,
-        }}
-      >
-        {/* Intro panel — §13 dasti-spec-v1 */}
-        <div
-          style={{
-            padding: "var(--s5)",
-            borderRadius: "var(--rm)",
-            border: "1px solid var(--bo)",
-            background: "var(--sfr)",
-            boxShadow: "var(--sha)",
-          }}
-        >
-          <div
-            style={{
-              fontSize: "var(--tx)",
-              fontWeight: 600,
-              color: "var(--am)",
-              letterSpacing: ".14em",
-              textTransform: "uppercase",
-              marginBottom: "var(--s2)",
-            }}
-          >
-            Write
-          </div>
-          <h2
-            style={{
-              fontFamily: '"Fraunces", serif',
-              fontSize: "var(--tx2)",
-              fontWeight: 600,
-              letterSpacing: "-.01em",
-              color: "var(--ti)",
-              marginBottom: "var(--s2)",
-            }}
-          >
-            Write
-          </h2>
-          <p style={{ fontSize: "var(--ts)", color: "var(--tm2)", lineHeight: "var(--ls)" }}>
-            Rédigez et gérez vos lettres. Cliquez sur un document dans la barre latérale pour l'ouvrir.
-          </p>
-        </div>
+      <div style={{ padding: "var(--s8) var(--s7)", display: "flex", flexDirection: "column", gap: "var(--s5)" }}>
 
         {/* Tab toggle — underline style §13 */}
         <div style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--bo)" }}>
@@ -179,12 +170,8 @@ export function ProposalForge(): JSX.Element {
             type="button"
             style={isComposeView ? tabActive : tabInactive}
             onClick={() => setActiveView("compose")}
-            onMouseEnter={(e) => {
-              if (!isComposeView) (e.currentTarget as HTMLButtonElement).style.background = "var(--sf2)";
-            }}
-            onMouseLeave={(e) => {
-              if (!isComposeView) (e.currentTarget as HTMLButtonElement).style.background = "transparent";
-            }}
+            onMouseEnter={(e) => { if (!isComposeView) (e.currentTarget as HTMLButtonElement).style.background = "var(--sf2)"; }}
+            onMouseLeave={(e) => { if (!isComposeView) (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
           >
             Compose
           </button>
@@ -192,74 +179,96 @@ export function ProposalForge(): JSX.Element {
             type="button"
             style={isSavedView ? tabActive : tabInactive}
             onClick={() => setActiveView("saved")}
-            onMouseEnter={(e) => {
-              if (!isSavedView) (e.currentTarget as HTMLButtonElement).style.background = "var(--sf2)";
-            }}
-            onMouseLeave={(e) => {
-              if (!isSavedView) (e.currentTarget as HTMLButtonElement).style.background = "transparent";
-            }}
+            onMouseEnter={(e) => { if (!isSavedView) (e.currentTarget as HTMLButtonElement).style.background = "var(--sf2)"; }}
+            onMouseLeave={(e) => { if (!isSavedView) (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
           >
             Open
           </button>
         </div>
 
-        {/* Compose view */}
-        <section
-          style={{ display: isComposeView ? "flex" : "none", flexDirection: "column", gap: "var(--s4)" }}
-          aria-hidden={!isComposeView}
-        >
-          <ProposalDisplay
-            proposalContent={proposalContent}
-            loading={loading}
-            error={error}
-            proposalType={proposalType}
-            fallbackInfo={fallbackInfo}
-          />
+        {/* ── COMPOSE VIEW — φ grid ──────────────────────────── */}
+        <section style={{ display: isComposeView ? "block" : "none" }} aria-hidden={!isComposeView}>
+          <div style={phiGrid}>
 
-          {isLoadingHandoff ? (
-            <div
-              style={{
-                padding: "var(--s5)",
-                borderRadius: "var(--rm)",
-                border: "1px solid var(--bo)",
-                background: "var(--sfr)",
-                boxShadow: "var(--sha)",
-              }}
-            >
-              <p style={{ fontSize: "var(--ts)", color: "var(--tm2)" }}>
-                Loading imported job offer…
-              </p>
+            {/* Left panel — .cpn : form */}
+            <div style={panelCard}>
+              <div style={panelHeader}>
+                <div>
+                  <div style={eyebrow}>Compose</div>
+                  <h2 style={{ fontFamily: '"Fraunces", serif', fontSize: "var(--tm)", fontWeight: 600, letterSpacing: "-.01em", color: "var(--ti)" }}>
+                    New letter
+                  </h2>
+                </div>
+              </div>
+              <div style={{ flex: 1 }}>
+                {isLoadingHandoff ? (
+                  <div style={{ padding: "var(--s5)" }}>
+                    <p style={{ fontSize: "var(--ts)", color: "var(--tm2)" }}>Loading imported job offer…</p>
+                  </div>
+                ) : (
+                  <ProposalInputForm
+                    onStart={handleProposalStart}
+                    onSubmit={handleProposalSubmit}
+                    onError={handleProposalError}
+                    prefill={prefill}
+                  />
+                )}
+              </div>
             </div>
-          ) : (
-            <ProposalInputForm
-              onStart={handleProposalStart}
-              onSubmit={handleProposalSubmit}
-              onError={handleProposalError}
-              prefill={prefill}
-            />
-          )}
+
+            {/* Right panel — .opn : output */}
+            <div style={panelCard}>
+              <div style={panelHeader}>
+                <div>
+                  <div style={eyebrow}>Output</div>
+                  <h2 style={{ fontFamily: '"Fraunces", serif', fontSize: "var(--tm)", fontWeight: 600, letterSpacing: "-.01em", color: "var(--ti)" }}>
+                    Generated
+                  </h2>
+                </div>
+              </div>
+              <div style={{ flex: 1, padding: "var(--s5)" }}>
+                <ProposalDisplay
+                  proposalContent={proposalContent}
+                  loading={loading}
+                  error={error}
+                  proposalType={proposalType}
+                  fallbackInfo={fallbackInfo}
+                />
+              </div>
+            </div>
+
+          </div>
         </section>
 
-        {/* Open / Saved view */}
-        <section
-          style={{ display: isSavedView ? "flex" : "none", flexDirection: "column", gap: "var(--s4)" }}
-          aria-hidden={!isSavedView}
-        >
-          <div
-            style={{
-              padding: "var(--s5)",
-              borderRadius: "var(--rm)",
-              border: "1px solid var(--bo)",
-              background: "var(--sfr)",
-              boxShadow: "var(--sha)",
-            }}
-          >
-            <p style={{ fontSize: "var(--ts)", color: "var(--tm2)" }}>
-              Browse saved proposals without leaving Proposal Forge.
-            </p>
+        {/* ── LIBRARY VIEW — φ grid ──────────────────────────── */}
+        <section style={{ display: isSavedView ? "block" : "none" }} aria-hidden={!isSavedView}>
+          <div style={phiGrid}>
+
+            {/* Left panel — .cpn : context */}
+            <div style={panelCard}>
+              <div style={panelHeader}>
+                <div style={eyebrow}>Document</div>
+              </div>
+              <div style={{ padding: "var(--s5)", display: "flex", flexDirection: "column", gap: "var(--s3)" }}>
+                <p style={{ fontSize: "var(--ts)", color: "var(--tm2)", lineHeight: "var(--ls)" }}>
+                  Retrouvez vos documents sauvegardés. Copiez, regénérez ou supprimez depuis le panneau droit.
+                </p>
+              </div>
+            </div>
+
+            {/* Right panel — .opn : saved proposals list */}
+            <div style={panelCard}>
+              <div style={panelHeader}>
+                <div style={eyebrow}>Content</div>
+              </div>
+              <div style={{ flex: 1, padding: "var(--s5)" }}>
+                <ProposalsList />
+              </div>
+            </div>
+
           </div>
-          <ProposalsList />
         </section>
+
       </div>
     </div>
   );
