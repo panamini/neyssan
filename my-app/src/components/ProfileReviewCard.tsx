@@ -380,18 +380,19 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
         ))}
       </div>
 
-      <div className="p-3 mb-4 border border-bo rounded-rm [background:var(--sf1)]">
+      <div className="mb-4 border [border-color:var(--bo)] [border-radius:var(--rm)] [background:var(--sfr)] [box-shadow:var(--sha)] px-3 py-2">
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 ml-4">
+          <div className="flex items-center gap-2">
             {addableSectionOptions.length > 0 ? (
               <>
                 <select
                   aria-label="Add section type"
-                  className="px-2 py-1 border rounded"
+                  className="border [border-color:var(--bm)] [border-radius:var(--rs)] [background:var(--sfr)] [color:var(--ti)] text-ts focus:[border-color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none px-3 cursor-pointer min-w-[140px]"
+                  style={{ height: "var(--hs)", fontFamily: "inherit" }}
                   value={selectedNewSectionType}
                   onChange={(e) => setSelectedNewSectionType(e.target.value)}
                 >
-                  <option value="">— add optional section —</option>
+                  <option value="">Add section…</option>
                   {addableSectionOptions.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
@@ -401,17 +402,19 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
 
                 <button
                   type="button"
-                  className="px-2 py-1 rounded [background:var(--sf2)] hover:[background:var(--sf2)]"
+                  className="inline-flex items-center gap-1 border font-medium [transition:all_.12s_var(--ez)] px-3 text-ts rounded-[var(--rs)] [background:var(--ac)] [color:var(--op)] [border-color:transparent] [box-shadow:var(--sha)] hover:brightness-110 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ height: "var(--hs)", fontFamily: "inherit" }}
                   onClick={() => handleAddSection(selectedNewSectionType || undefined)}
                   disabled={!selectedNewSectionType}
                 >
-                  Add Section
+                  Add
                 </button>
 
                 {/* Mobile-only: open bottom sheet for selecting section type */}
                 <button
                   type="button"
-                  className="block px-2 py-1 ml-2 rounded [background:var(--sf2)] hover:[background:var(--sf2)] sm:hidden"
+                  className="block px-2 ml-2 border font-medium [transition:all_.12s_var(--ez)] text-ts rounded-[var(--rs)] [background:var(--sfr)] [border-color:var(--bm)] [color:var(--ti)] [box-shadow:var(--sha)] hover:[background:var(--sf2)] sm:hidden"
+                  style={{ height: "var(--hs)", fontFamily: "inherit" }}
                   onClick={() => setIsBottomSheetOpen(true)}
                   aria-label="Add section (mobile)"
                 >

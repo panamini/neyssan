@@ -1,6 +1,5 @@
 import React from "react";
 import { ProfileReviewCard } from "../components/ProfileReviewCard";
-import { CvToolbar } from "../components/header/CvToolbar";
 
 /**
  * CvForge — page Resume
@@ -60,10 +59,7 @@ export function CvForge(): JSX.Element {
           </p>
         </div>
 
-        {/* Workspace Toolbar */}
-        <CvToolbar />
-
-        {/* Main editor / review canvas */}
+        {/* Main editor / review canvas (toolbar intégrée dans ProfileReviewCard) */}
         <ProfileReviewCard />
       </div>
     </div>

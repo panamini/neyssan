@@ -88,7 +88,7 @@ export function SegmentedRadio<T extends string>({
       onKeyDown={handleKeyDown}
       className={[
         "inline-flex flex-wrap items-center gap-1 rounded-md p-1",
-        "bg-background border border-[color:var(--bo)]",
+        "[background:var(--sf2)] border border-[color:var(--bo)]",
         disabled ? "opacity-60 cursor-not-allowed" : "",
         className ?? "",
       ].join(" ")}

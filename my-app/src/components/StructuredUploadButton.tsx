@@ -353,7 +353,7 @@ export function StructuredUploadButton({
             onClick={() => trigger("default")}
             disabled={disabled || isBusy}
             className="inline-flex items-center"
-            variant="accent"
+            variant="secondary"
             size={size}
           >
             {isBusy && activeMode === "default" ? <Loader2 className="animate-spin" size={16} /> : <Upload size={16} />}
@@ -366,7 +366,7 @@ export function StructuredUploadButton({
             onClick={() => trigger("mistral")}
             disabled={disabled || isBusy || !mistralAvailable}
             className="inline-flex items-center"
-            variant="outline"
+            variant="secondary"
             size={size}
           >
             {isBusy && activeMode === "mistral" ? <Loader2 className="animate-spin" size={16} /> : <Upload size={16} />}
