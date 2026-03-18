@@ -1,0 +1,71 @@
+{
+  "id": "resp_00163cb435ab4e750069b2dab1e0188199a772723c252febd5",
+  "object": "response",
+  "created_at": 1773329073,
+  "status": "completed",
+  "background": false,
+  "billing": {
+    "payer": "developer"
+  },
+  "completed_at": 1773329078,
+  "error": null,
+  "frequency_penalty": 0,
+  "incomplete_details": null,
+  "instructions": null,
+  "max_output_tokens": 500,
+  "max_tool_calls": null,
+  "model": "gpt-4o-mini-2024-07-18",
+  "output": [
+    {
+      "id": "msg_00163cb435ab4e750069b2dab251108199a3b82fa6c548e001",
+      "type": "message",
+      "status": "completed",
+      "content": [
+        {
+          "type": "output_text",
+          "annotations": [],
+          "logprobs": [],
+          "text": "Dear Hiring Manager,\n\nI am writing to express my interest in the Operations Program Manager position. With a solid background in program and operations management, I have successfully improved support workflows and onboarding operations, making me well-suited for this role.\n\nIn my recent position as Operations Lead at FlowDesk, I standardized onboarding processes across support and implementation teams, which significantly reduced onboarding handoff errors by 35 percent. This experience has honed my ability to coordinate cross-functional initiatives effectively, ensuring that all stakeholders are aligned and informed throughout the process. I am particularly proud of the weekly reporting I developed, which surfaced SLA risks earlier, allowing for proactive management and improved reliability.\n\nMy strong stakeholder management skills have been instrumental in fostering collaboration and driving process documentation efforts. I believe that clear communication and thorough documentation are key to achieving operational excellence and enhancing overall performance. I am excited about the opportunity to bring my expertise in process design and reporting to your team.\n\nThank you for considering my application. I look forward to the possibility of contributing to your organization.\n\nSincerely,  \nCamille Bernard"
+        }
+      ],
+      "role": "assistant"
+    }
+  ],
+  "parallel_tool_calls": true,
+  "presence_penalty": 0,
+  "previous_response_id": null,
+  "prompt_cache_key": null,
+  "prompt_cache_retention": null,
+  "reasoning": {
+    "effort": null,
+    "summary": null
+  },
+  "safety_identifier": null,
+  "service_tier": "default",
+  "store": true,
+  "temperature": 0.2,
+  "text": {
+    "format": {
+      "type": "text"
+    },
+    "verbosity": "medium"
+  },
+  "tool_choice": "auto",
+  "tools": [],
+  "top_logprobs": 0,
+  "top_p": 1,
+  "truncation": "disabled",
+  "usage": {
+    "input_tokens": 421,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 213,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 634
+  },
+  "user": null,
+  "metadata": {}
+}

@@ -1,0 +1,71 @@
+{
+  "id": "resp_02ca8c1a1f1a3b3d0069b2daa1337081938ef107dab53c49e5",
+  "object": "response",
+  "created_at": 1773329057,
+  "status": "completed",
+  "background": false,
+  "billing": {
+    "payer": "developer"
+  },
+  "completed_at": 1773329062,
+  "error": null,
+  "frequency_penalty": 0,
+  "incomplete_details": null,
+  "instructions": null,
+  "max_output_tokens": 500,
+  "max_tool_calls": null,
+  "model": "gpt-4o-mini-2024-07-18",
+  "output": [
+    {
+      "id": "msg_02ca8c1a1f1a3b3d0069b2daa1b0f48193ade46e548ba5d938",
+      "type": "message",
+      "status": "completed",
+      "content": [
+        {
+          "type": "output_text",
+          "annotations": [],
+          "logprobs": [],
+          "text": "Dear Hiring Manager,\n\nI am excited to apply for the Senior Frontend Engineer position, where I can leverage my extensive experience in React and TypeScript to contribute to your customer-facing SaaS platform. At BrightLayer, I led a design system migration that streamlined development across four product squads, ensuring consistency and efficiency in our UI components. This experience has equipped me with the skills to build reusable UI systems that enhance user experience.\n\nPerformance optimization is a passion of mine, and I successfully reduced page load times by 28 percent through strategic bundle and rendering optimizations. I believe that a fast, responsive application is crucial for user satisfaction, and I am eager to bring this focus to your team. My recent role at Northline Labs involved building experimentation dashboards that empowered product and growth teams, allowing us to make data-driven decisions that improved signup conversion by 11 percent.\n\nCollaboration is key in any development process, and I have enjoyed partnering closely with design teams to enhance customer-facing workflows. I am also committed to mentoring junior engineers, sharing my knowledge, and fostering a collaborative environment. I look forward to the opportunity to contribute to your team.\n\nBest regards,  \nAlex Martin"
+        }
+      ],
+      "role": "assistant"
+    }
+  ],
+  "parallel_tool_calls": true,
+  "presence_penalty": 0,
+  "previous_response_id": null,
+  "prompt_cache_key": null,
+  "prompt_cache_retention": null,
+  "reasoning": {
+    "effort": null,
+    "summary": null
+  },
+  "safety_identifier": null,
+  "service_tier": "default",
+  "store": true,
+  "temperature": 0.2,
+  "text": {
+    "format": {
+      "type": "text"
+    },
+    "verbosity": "medium"
+  },
+  "tool_choice": "auto",
+  "tools": [],
+  "top_logprobs": 0,
+  "top_p": 1,
+  "truncation": "disabled",
+  "usage": {
+    "input_tokens": 527,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 233,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 760
+  },
+  "user": null,
+  "metadata": {}
+}

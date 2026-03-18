@@ -1,0 +1,71 @@
+{
+  "id": "resp_09a389b4361ea30e0069b2dbac644481939b1f3fc989be8683",
+  "object": "response",
+  "created_at": 1773329324,
+  "status": "completed",
+  "background": false,
+  "billing": {
+    "payer": "developer"
+  },
+  "completed_at": 1773329328,
+  "error": null,
+  "frequency_penalty": 0,
+  "incomplete_details": null,
+  "instructions": null,
+  "max_output_tokens": 500,
+  "max_tool_calls": null,
+  "model": "gpt-4o-mini-2024-07-18",
+  "output": [
+    {
+      "id": "msg_09a389b4361ea30e0069b2dbaca9ac81939c6dab40d2ae5283",
+      "type": "message",
+      "status": "completed",
+      "content": [
+        {
+          "type": "output_text",
+          "annotations": [],
+          "logprobs": [],
+          "text": "Dear Hiring Manager,\n\nI am writing to express my interest in the Operations Program Manager position. With a solid background in program and operations management, I have successfully improved support workflows and onboarding operations, making me well-suited for this role. At FlowDesk, I standardized onboarding processes across support and implementation teams, which significantly reduced onboarding handoff errors by 35 percent through effective process redesign.\n\nMy experience in building weekly reporting mechanisms has enhanced SLA visibility, allowing teams to identify risks earlier and take proactive measures. I understand the importance of cross-functional coordination and have effectively managed stakeholder relationships to ensure alignment and drive initiatives forward. My focus on process documentation has also been instrumental in creating a reliable framework for ongoing improvements.\n\nI am excited about the opportunity to contribute to your team by enhancing operational efficiency and fostering collaboration across departments. I believe my skills in process design and stakeholder management will be valuable assets in achieving your organizational goals.\n\nThank you for considering my application. I look forward to the possibility of discussing how I can contribute to your team.\n\nSincerely,  \nCamille Bernard"
+        }
+      ],
+      "role": "assistant"
+    }
+  ],
+  "parallel_tool_calls": true,
+  "presence_penalty": 0,
+  "previous_response_id": null,
+  "prompt_cache_key": null,
+  "prompt_cache_retention": null,
+  "reasoning": {
+    "effort": null,
+    "summary": null
+  },
+  "safety_identifier": null,
+  "service_tier": "default",
+  "store": true,
+  "temperature": 0.2,
+  "text": {
+    "format": {
+      "type": "text"
+    },
+    "verbosity": "medium"
+  },
+  "tool_choice": "auto",
+  "tools": [],
+  "top_logprobs": 0,
+  "top_p": 1,
+  "truncation": "disabled",
+  "usage": {
+    "input_tokens": 421,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 212,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 633
+  },
+  "user": null,
+  "metadata": {}
+}

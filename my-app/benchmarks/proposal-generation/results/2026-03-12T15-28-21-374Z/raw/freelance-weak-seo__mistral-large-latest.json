@@ -1,0 +1,25 @@
+{
+  "id": "f15aeb9433464c699bd16982f14071bb",
+  "created": 1773329438,
+  "model": "mistral-large-latest",
+  "usage": {
+    "prompt_tokens": 323,
+    "total_tokens": 539,
+    "completion_tokens": 216,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "object": "chat.completion",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "tool_calls": null,
+        "content": "**Freelance Proposal for Technical SEO Overhaul**\n\nHi [Client's Name],\n\nI’m Jordan Lee, a freelance product designer with a focus on frontend development and conversion optimization. While my primary work centers on landing pages and user experience, I understand the importance of technical SEO as a foundational element for marketplace visibility and performance. Your project—auditing and improving indexing, schema, crawl diagnostics, and internal linking—requires a specialist with deep technical SEO expertise, which falls outside my core skill set.\n\nThat said, if you’re open to collaboration, I’d be happy to connect you with trusted professionals in my network who specialize in technical SEO for large-scale sites. Alternatively, if there’s a design or frontend development component to this project where my experience could add value—such as optimizing page structure for conversions or improving UX to support SEO goals—I’d be glad to discuss how I might contribute.\n\nLet me know if you’d like to explore either option. I’m happy to help however makes the most sense for your needs.\n\nBest,\nJordan Lee"
+      }
+    }
+  ]
+}

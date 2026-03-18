@@ -1,0 +1,31 @@
+{
+  "normalized": {
+    "rawText": "PROFILE\nSafety conscious, attentive Security Guard with 5+ years protecting high-profile assets.\nPlace of birth: London, United Kingdom\nDriving license: Full UK\n\nEMPLOYMENT HISTORY\nSecurity Guard — SecureIt Ltd\nJanuary 2021 — April 2022\n• Coordinated night patrols and reduced incidents by 40%\n• Investigated escalations alongside law enforcement\n\nLoss Prevention Officer — RetailCo Group\nMay 2018 — December 2020\n- Monitored CCTV and supported incident response\n- Created shift logs and safety briefings\n\nEDUCATION\nDiploma in Criminology, City College, London, 2016\nCertificate in Security Operations, National Institute, 2014\n\nLANGUAGES\nEnglish (Native)\nSpanish – Intermediate\nItalian (Basic)\n\nSKILLS\nEmergency response\nInvestigation skills\nCustomer service focus\n\nACHIEVEMENTS\nEmployee of the Month 2021\nEmployee of the Month 2021 at SecureIt Ltd",
+    "rawSections": [
+      {
+        "label": "PROFILE",
+        "content": "Safety conscious, attentive Security Guard with 5+ years protecting high-profile assets.\nPlace of birth: London, United Kingdom\nDriving license: Full UK"
+      },
+      {
+        "label": "EMPLOYMENT HISTORY",
+        "content": "Security Guard — SecureIt Ltd\nJanuary 2021 — April 2022\n• Coordinated night patrols and reduced incidents by 40%\n• Investigated escalations alongside law enforcement\n\nLoss Prevention Officer — RetailCo Group\nMay 2018 — December 2020\n- Monitored CCTV and supported incident response\n- Created shift logs and safety briefings"
+      },
+      {
+        "label": "EDUCATION",
+        "content": "Diploma in Criminology, City College, London, 2016\nCertificate in Security Operations, National Institute, 2014"
+      },
+      {
+        "label": "LANGUAGES",
+        "content": "English (Native)\nSpanish – Intermediate\nItalian (Basic)"
+      },
+      {
+        "label": "SKILLS",
+        "content": "Emergency response\nInvestigation skills\nCustomer service focus"
+      },
+      {
+        "label": "ACHIEVEMENTS",
+        "content": "Employee of the Month 2021\nEmployee of the Month 2021 at SecureIt Ltd"
+      }
+    ]
+  }
+}

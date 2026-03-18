@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>dasti — v7</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,600;1,9..144,300;1,9..144,400;1,9..144,600&family=Source+Sans+3:wght@300;400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,400;0,8..60,600;1,8..60,400&family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<style>
+/*
+ * DASTI — NOTES D'IMPLÉMENTATION (migration React)
+ *
+ * [A] FROSTED GLASS
+ *     backdrop-filter fonctionne uniquement quand l'élément
+ *     scrollable est un SIBLING (pas un enfant) de l'élément flou.
+ *     En React : le contenu scrollant doit être dans un div
+ *     FRÈRE du topbar sticky, pas enfant. Même principe pour
+ *     les modals : .bdrop avec backdrop-filter:blur(8px) sur
+ *     l'overlay fonctionne car il est fixed sur body.
+ *     → implémenter dès la migration React de la page layout.
+ *
+ * [B] TYPO STYLE + PALETTE DANS RENDEROC
+ *     Les styles engaging/expert ignorent actuellement le
+ *     template layout (2col/editorial). En React, renderDoc()
+ *     doit être composé de deux axes indépendants :
+ *     layout(tpl) × typography(ts) avec couleur via CSS var.
+ *     → refactorer renderDoc comme composant pur React.
+ *
+ * [C] DRAG-AND-DROP SKILLS
+ *     Bouton sort différé. Utiliser @dnd-kit/sortable.
+ */
+:root{
+  --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:24px;--s6:32px;--s7:40px;--s8:64px;
+  --tx:12px;--ts:14px;--tb:16px;--tm:20px;--tl:26px;--tx2:32px;
+  --lx:16px;--ls:20px;--lb:24px;--ll:30px;--lx2:40px;
+  --rx:4px;--rs:6px;--rm:12px;--rl:18px;--rp:999px;
+  --hs:32px;--hm:40px;--hb:44px;--hdr:54px;--sw:248px;--swc:52px;
+  --ez:cubic-bezier(.25,.1,.25,1);--ezb:cubic-bezier(.34,1.56,.64,1);
+  /* Light */
+  --bg:hsl(38,16%,95%);--sf1:hsl(38,12%,93%);--sf2:hsl(36,14%,88%);--sfr:hsl(40,20%,99%);
+  --ti:hsl(30,12%,11%);--tm2:hsl(30,8%,42%);--tg2:hsl(30,6%,62%);
+  --bo:hsla(30,12%,11%,.08);--bm:hsla(30,12%,11%,.13);
+  --ac:hsl(155,22%,30%);--am:hsl(155,18%,40%);--ap:hsl(155,20%,88%);
+  --as:hsla(155,22%,30%,.09);--fr:hsla(155,22%,30%,.20);--op:hsl(155,18%,95%);
+  --ok:hsl(152,20%,28%);--okb:hsl(152,16%,92%);--okt:hsl(152,20%,22%);
+  --er:hsl(4,26%,34%);--erb:hsl(4,22%,92%);--ert:hsl(4,26%,28%);
+  --sha:0 1px 2px hsla(30,20%,8%,.05),0 3px 10px hsla(30,20%,8%,.04);
+  --shb:0 4px 14px hsla(30,20%,8%,.07),0 10px 28px hsla(30,20%,8%,.05);
+  --shc:0 8px 24px hsla(30,20%,8%,.09),0 20px 48px hsla(30,20%,8%,.07);
+}
+.dark{
+  --bg:hsl(80,5%,7%);--sf1:hsl(80,5%,11%);--sf2:hsl(78,5%,16%);--sfr:hsl(75,5%,19%);
+  --ti:hsl(46,12%,86%);--tm2:hsl(44,8%,60%);--tg2:hsl(42,6%,38%);
+  --bo:hsla(46,12%,86%,.08);--bm:hsla(46,12%,86%,.13);
+  --ok:hsl(152,22%,56%);--okb:hsl(152,13%,13%);--okt:hsl(152,22%,70%);
+  --er:hsl(4,24%,56%);--erb:hsl(4,15%,13%);--ert:hsl(4,24%,70%);
+  --sha:0 1px 3px hsla(0,0%,0%,.28),0 4px 12px hsla(0,0%,0%,.22);
+  --shb:0 4px 16px hsla(0,0%,0%,.36),0 12px 30px hsla(0,0%,0%,.28);
+  --shc:0 8px 28px hsla(0,0%,0%,.44),0 24px 52px hsla(0,0%,0%,.34);
+}
+.pal-sauge    {--ac:hsl(155,22%,30%);--am:hsl(155,18%,40%);--ap:hsl(155,20%,88%);--as:hsla(155,22%,30%,.09);--fr:hsla(155,22%,30%,.20);--op:hsl(155,18%,95%)}
+.dark.pal-sauge{--ac:hsl(155,28%,62%);--am:hsl(155,24%,72%);--ap:hsl(155,22%,20%);--as:hsla(155,28%,62%,.12);--fr:hsla(155,28%,62%,.24);--op:hsl(80,5%,7%)}
+.pal-ocre    {--ac:hsl(34,38%,32%);--am:hsl(34,34%,42%);--ap:hsl(36,30%,90%);--as:hsla(34,38%,32%,.09);--fr:hsla(34,38%,32%,.20);--op:hsl(36,28%,96%)}
+.dark.pal-ocre{--ac:hsl(36,32%,64%);--am:hsl(36,28%,74%);--ap:hsl(36,18%,18%);--as:hsla(36,32%,64%,.12);--fr:hsla(36,32%,64%,.24);--op:hsl(80,5%,7%)}
+.pal-pierre  {--ac:hsl(220,14%,30%);--am:hsl(220,12%,42%);--ap:hsl(220,14%,90%);--as:hsla(220,14%,30%,.09);--fr:hsla(220,14%,30%,.20);--op:hsl(220,14%,96%)}
+.dark.pal-pierre{--ac:hsl(220,18%,62%);--am:hsl(220,14%,72%);--ap:hsl(220,14%,16%);--as:hsla(220,18%,62%,.12);--fr:hsla(220,18%,62%,.24);--op:hsl(80,5%,7%)}
+.pal-bordeaux{--ac:hsl(348,22%,30%);--am:hsl(348,18%,42%);--ap:hsl(350,18%,90%);--as:hsla(348,22%,30%,.09);--fr:hsla(348,22%,30%,.20);--op:hsl(350,18%,96%)}
+.dark.pal-bordeaux{--ac:hsl(348,26%,60%);--am:hsl(348,22%,70%);--ap:hsl(348,16%,16%);--as:hsla(348,26%,60%,.12);--fr:hsla(348,26%,60%,.24);--op:hsl(80,5%,7%)}
+.pal-encre   {--ac:hsl(200,18%,24%);--am:hsl(200,14%,38%);--ap:hsl(200,14%,88%);--as:hsla(200,18%,24%,.09);--fr:hsla(200,18%,24%,.20);--op:hsl(200,14%,96%)}
+.dark.pal-encre{--ac:hsl(200,20%,60%);--am:hsl(200,16%,70%);--ap:hsl(200,14%,16%);--as:hsla(200,20%,60%,.12);--fr:hsla(200,20%,60%,.24);--op:hsl(80,5%,7%)}
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--ti);font-family:"Source Sans 3",system-ui,sans-serif;font-size:var(--tb);line-height:var(--lb);-webkit-font-smoothing:antialiased;transition:background .2s var(--ez),color .2s var(--ez)}
+a{color:var(--am);text-decoration:none}button,input,select,textarea{font:inherit}
+:focus{outline:none}:focus-visible{box-shadow:0 0 0 3px var(--fr);border-radius:var(--rs);outline:none}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--bm);border-radius:var(--rp)}
+.app{display:flex;height:100vh;overflow:hidden}
+
+/* ════ SIDEBAR ════ */
+.sb{
+  width:var(--sw);flex-shrink:0;
+  display:flex;flex-direction:column;
+  height:100vh;
+  border-right:1px solid var(--bo);
+  background:var(--sf1);
+  transition:width .22s var(--ez);
+  overflow:hidden;
+  position:relative;z-index:10;
+}
+.sb.col{width:var(--swc)}
+
+/* Top bar */
+.sb-top{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 var(--s3);height:var(--hdr);
+  border-bottom:1px solid var(--bo);flex-shrink:0;
+}
+.sb-brand{display:flex;align-items:center;gap:var(--s3);overflow:hidden;min-width:0}
+.sb-name{
+  font-family:"Fraunces",serif;font-size:var(--ts);font-weight:600;
+  letter-spacing:-.01em;color:var(--ti);
+  white-space:nowrap;
+  transition:opacity .18s var(--ez),transform .18s var(--ez);
+  transform-origin:left;
+}
+.sb.col .sb-name{opacity:0;transform:scaleX(0);pointer-events:none}
+.sb-tog{
+  width:26px;height:26px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  border-radius:var(--rs);border:1px solid var(--bo);
+  color:var(--tg2);background:var(--sfr);cursor:pointer;
+  transition:all .12s var(--ez);
+}
+.sb-tog:hover{color:var(--ti);border-color:var(--bm)}
+.sb-tog svg{transition:transform .22s var(--ez)}
+.sb.col .sb-tog svg{transform:rotate(180deg)}
+
+/* Nav */
+.sb-nav{flex:1;overflow-y:auto;overflow-x:hidden;padding:var(--s2);display:flex;flex-direction:column;gap:1px}
+
+/* Section labels — hide in collapsed */
+.sb-sec{
+  font-size:10px;font-weight:600;color:var(--tg2);
+  letter-spacing:.12em;text-transform:uppercase;
+  padding:var(--s3) var(--s2) var(--s1);
+  white-space:nowrap;overflow:hidden;
+  transition:opacity .18s var(--ez),max-height .22s var(--ez);
+  max-height:32px;
+}
+.sb.col .sb-sec{opacity:0;max-height:0;padding-top:0;padding-bottom:0;pointer-events:none}
+
+/* Nav items — main */
+.sb-item{
+  display:flex;align-items:center;
+  gap:var(--s3);
+  padding:var(--s2) var(--s2);
+  border-radius:var(--rs);border:1px solid transparent;
+  cursor:pointer;height:34px;
+  transition:all .12s var(--ez);
+  overflow:hidden;
+  position:relative;
+}
+.sb-item:hover{background:var(--sf2)}
+.sb-item.on{background:var(--sfr);border-color:var(--bo);box-shadow:var(--sha)}
+.sb-ic{width:16px;height:16px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--tm2);transition:color .12s var(--ez)}
+.sb-item.on .sb-ic{color:var(--ac)}
+.sb-cap{
+  font-size:var(--ts);font-weight:500;color:var(--tm2);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;
+  transition:opacity .18s var(--ez),transform .18s var(--ez);
+  transform-origin:left;
+}
+.sb-item.on .sb-cap{color:var(--ti);font-weight:600}
+.sb.col .sb-cap{opacity:0;transform:scaleX(0);pointer-events:none}
+
+/* Sub-document items — completely hidden in collapsed */
+.sb-doc{
+  display:flex;flex-direction:column;
+  padding:var(--s2) var(--s2) var(--s2) 32px;
+  border-radius:var(--rs);
+  cursor:pointer;
+  transition:all .12s var(--ez);
+  overflow:hidden;
+  max-height:80px;opacity:1;
+  position:relative;
+}
+.sb-doc:hover{background:var(--sf2)}
+.sb-doc.on{background:var(--sfr);padding-left:30px;border-left:2px solid var(--ac)}
+.sb.col .sb-doc{
+  max-height:0;opacity:0;
+  padding-top:0;padding-bottom:0;
+  pointer-events:none;
+  transition:max-height .22s var(--ez),opacity .18s var(--ez),padding .22s var(--ez);
+}
+.sb-doc-t{font-size:var(--ts);font-weight:500;color:var(--ti);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px}
+.sb-doc-m{font-size:10px;color:var(--tg2);margin-top:2px;display:flex;align-items:center;gap:4px;white-space:nowrap}
+.sb-doc-type{color:var(--tm2);font-weight:500}
+.sb-badge{display:inline-flex;align-items:center;height:14px;padding:0 4px;border-radius:3px;font-size:9px;font-weight:500;color:var(--tg2);border:none;background:transparent;margin-top:2px;letter-spacing:.02em}
+/* ✕ delete button — appears on hover, danger on its own hover */
+.sb-doc-del{
+  position:absolute;right:4px;top:50%;transform:translateY(-50%);
+  width:20px;height:20px;
+  display:flex;align-items:center;justify-content:center;
+  border-radius:3px;border:none;background:transparent;
+  color:var(--tg2);cursor:pointer;padding:0;
+  opacity:0;transition:opacity .1s var(--ez),color .1s var(--ez),background .1s var(--ez);
+}
+.sb-doc-del .icon{width:10px;height:10px}
+.sb-doc:hover .sb-doc-del{opacity:1}
+.sb-doc-del:hover{color:var(--ert);background:var(--erb)}
+
+/* Sidebar add button (collapsed shows just icon) */
+.sb-new{
+  display:flex;align-items:center;gap:var(--s3);
+  padding:var(--s2);border-radius:var(--rs);
+  cursor:pointer;height:30px;color:var(--tg2);
+  font-size:var(--tx);transition:all .12s var(--ez);
+  overflow:hidden;
+}
+.sb-new:hover{color:var(--am);background:var(--sf2)}
+.sb-new-ic{width:16px;height:16px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.sb-new-label{white-space:nowrap;overflow:hidden;transition:opacity .18s var(--ez),transform .18s var(--ez);transform-origin:left}
+.sb.col .sb-new-label{opacity:0;transform:scaleX(0);pointer-events:none}
+
+/* Sidebar footer */
+.sb-foot{
+  flex-shrink:0;padding:var(--s3);
+  border-top:1px solid var(--bo);
+  display:flex;align-items:center;gap:var(--s3);
+  overflow:hidden;
+}
+.sb.col .sb-foot{gap:0;justify-content:center}
+.sb-av{width:30px;height:30px;border-radius:var(--rp);background:var(--as);border:1px solid color-mix(in srgb,var(--ac) 22%,transparent);display:flex;align-items:center;justify-content:center;font-size:var(--tx);font-weight:600;color:var(--am);cursor:pointer;flex-shrink:0}
+.sb-foot-info{flex:1;min-width:0;overflow:hidden;transition:opacity .18s var(--ez),max-width .22s var(--ez);max-width:120px}
+.sb.col .sb-foot-info{opacity:0;max-width:0;pointer-events:none}
+.sb-foot-name{font-size:var(--ts);font-weight:600;color:var(--ti);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb-foot-hint{font-size:var(--tx);color:var(--tg2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb-thb{width:28px;height:28px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border-radius:var(--rs);border:1px solid transparent;color:var(--tg2);background:transparent;cursor:pointer;transition:all .12s var(--ez)}
+.sb-thb:hover{background:var(--sf2);color:var(--ti)}
+.sb.col .sb-thb{display:none}
+
+/* ════ PAGE AREA ════ */
+.page-area{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg);position:relative;overflow:hidden}
+/*
+ * [A] FROSTED GLASS — HTML prototype limitation:
+ * In this flex layout .top and .pscroll are siblings so .top
+ * cannot blur content scrolling in .pscroll unless .pscroll
+ * is absolutely positioned behind. In React, implement as:
+ *   <div class="page-area" style="position:relative">
+ *     <div class="pscroll" style="position:absolute;inset:0;overflow-y:auto;padding-top:54px">
+ *     <div class="top" style="position:absolute;top:0;left:0;right:0;backdrop-filter:blur(16px)">
+ * For this HTML skeleton, topbar uses a shadow to imply depth.
+ */
+.top{
+  height:var(--hdr);flex-shrink:0;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 var(--s7);
+  border-bottom:1px solid var(--bo);
+  background:var(--bg);
+  box-shadow:0 1px 0 var(--bo),0 2px 16px hsla(30,20%,8%,.06);
+  position:relative;z-index:5;
+  transition:background .2s var(--ez);
+}
+.top-l{display:flex;align-items:center;gap:var(--s4)}.top-r{display:flex;align-items:center;gap:var(--s2)}
+.crumb{font-size:var(--ts);color:var(--tg2);display:flex;align-items:center;gap:var(--s2)}.crumb span{color:var(--ti);font-weight:500}
+/* pscroll — overflow-y:auto so content scrolls behind sticky .top */
+.pscroll{flex:1;overflow-y:auto;position:relative}
+.page{display:none}.page.on{display:block}
+.main{padding:var(--s8) var(--s7);display:flex;flex-direction:column;gap:var(--s5);max-width:960px}
+
+/* ════ BUTTONS ════ */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--s2);border:1px solid transparent;border-radius:var(--rs);font-size:var(--ts);font-weight:500;cursor:pointer;white-space:nowrap;transition:all .12s var(--ez)}
+.btn:focus-visible{box-shadow:0 0 0 3px var(--fr);outline:none}.btn:disabled{opacity:.5;cursor:not-allowed;pointer-events:none}
+.bsm{height:var(--hs);padding:0 var(--s3)}.bmd{height:var(--hm);padding:0 var(--s4)}.blg{height:var(--hb);padding:0 var(--s6);font-size:var(--tb);border-radius:var(--rm)}
+.bp{background:var(--ac);color:var(--op);box-shadow:var(--sha)}.bp:hover{filter:brightness(1.08)}
+.bsec{background:var(--sfr);border-color:var(--bm);color:var(--ti);box-shadow:var(--sha)}.bsec:hover{background:var(--sf2)}
+.bgh{background:transparent;color:var(--tm2)}.bgh:hover{background:var(--sf2);color:var(--ti)}
+.bdn{background:var(--erb);border-color:color-mix(in srgb,var(--er) 28%,transparent);color:var(--ert)}.bdn:hover{background:var(--er);color:var(--op)}
+.ib{width:var(--hs);height:var(--hs);display:flex;align-items:center;justify-content:center;border-radius:var(--rs);border:1px solid transparent;color:var(--tm2);background:transparent;cursor:pointer;transition:all .12s var(--ez)}.ib:hover{background:var(--sf2);color:var(--ti)}
+/* Icon chip — type/tone selector, icon only */
+.ichip{width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;border-radius:var(--rs);border:1px solid var(--bo);background:var(--sfr);color:var(--tm2);cursor:pointer;flex-shrink:0;transition:all .12s var(--ez)}
+.ichip:hover,.ichip.on{border-color:var(--ac);background:var(--as);color:var(--am)}
+/* Status inline — "Letter · Signature" */
+.cbar-status{font-size:var(--tx);color:var(--tm2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0;padding:0 var(--s2)}
+.cbar-status strong{color:var(--ti);font-weight:600}
+.ib{width:var(--hs);height:var(--hs);display:flex;align-items:center;justify-content:center;border-radius:var(--rs);border:1px solid transparent;color:var(--tm2);background:transparent;cursor:pointer;transition:all .12s var(--ez)}.ib:hover{background:var(--sf2);color:var(--ti)}
+/* Generate / Stop button — fixed 32×32 circle, no animation */
+.gbtn{
+  width:var(--hs);height:var(--hs);
+  border-radius:var(--rp);
+  background:var(--ac);color:var(--op);
+  border:none;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+  transition:background .15s var(--ez),opacity .15s var(--ez);
+}
+.gbtn:hover{filter:brightness(1.1)}
+.gbtn.loading{background:var(--sf2);opacity:1;cursor:pointer} /* neutral bg — stop icon is now clearly visible */
+.gbtn .gi-send{display:block}
+.gbtn .gi-stop{display:none;color:var(--ti)}
+.gbtn.loading .gi-send{display:none}
+.gbtn.loading .gi-stop{display:block}
+/* Copy */
+.cbtn{position:relative;overflow:hidden}
+.cbtn-ok{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:var(--s2);opacity:0;transition:opacity .18s;pointer-events:none;color:var(--ok)}
+.cbtn.copied .cbtn-ok{opacity:1}.cbtn.copied .cbtn-def{opacity:0}
+.cbtn-def{display:flex;align-items:center;gap:var(--s2);transition:opacity .18s}
+
+/* ════ FORMS ════ */
+.fg{display:grid;gap:var(--s2)}.fl{font-size:var(--ts);font-weight:600;color:var(--ti)}.fh{font-size:var(--tx);color:var(--tg2);margin-top:1px}
+.field,select{width:100%;height:var(--hm);padding:0 var(--s3);border-radius:var(--rs);border:1px solid var(--bm);background:var(--sfr);color:var(--ti);font-size:var(--ts);transition:all .12s var(--ez)}
+.field:focus,select:focus{outline:none;border-color:var(--ac);box-shadow:0 0 0 3px var(--fr)}
+.field::placeholder{color:var(--tg2)}
+
+/* ════ SECTION CARD ════ */
+.sc{border-radius:var(--rm);border:1px solid var(--bo);background:var(--sfr);box-shadow:var(--sha);overflow:hidden}
+.sch{display:flex;align-items:center;justify-content:space-between;padding:var(--s3) var(--s5);background:var(--sf2);border-bottom:1px solid var(--bo)}
+.sct{font-family:"Fraunces",serif;font-size:var(--tl);font-weight:600;letter-spacing:-.01em;color:var(--ti)}.sca{display:flex;align-items:center;gap:var(--s2)}
+.scb{padding:var(--s5)}
+.ew{font-size:var(--tx);font-weight:600;color:var(--tg2);letter-spacing:.14em;text-transform:uppercase;margin-bottom:var(--s2)}.ew.ac{color:var(--am)}
+.ip{padding:var(--s5);border-radius:var(--rm);border:1px solid var(--bo);background:var(--sfr);box-shadow:var(--sha)}
+.ip h2{font-family:"Fraunces",serif;font-size:var(--tx2);font-weight:600;letter-spacing:-.01em;color:var(--ti);margin-bottom:var(--s2)}
+.ip p{font-size:var(--ts);color:var(--tm2);line-height:var(--ls)}
+.chips{display:flex;flex-wrap:wrap;gap:var(--s2);margin-top:var(--s3)}
+.chip{display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 var(--s2);border-radius:var(--rp);border:1px solid var(--bo);background:var(--sf2);font-size:var(--tx);color:var(--tm2)}
+.dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}.dok{background:var(--ok)}.dwa{background:hsl(34,36%,32%)}
+.pr2{display:flex;align-items:center;gap:var(--s4)}
+.avl{width:48px;height:48px;border-radius:var(--rp);background:var(--sf2);border:1px solid var(--bo);display:flex;align-items:center;justify-content:center;font-size:var(--ts);font-weight:600;color:var(--tm2);flex-shrink:0}
+.ctr{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--s5)}
+.ctb{font-family:"Fraunces",serif;font-size:var(--tx2);font-weight:600;letter-spacing:-.01em;color:var(--ti);background:transparent;border:none;cursor:pointer;border-radius:var(--rs);padding:var(--s1) var(--s2);margin:calc(-1*var(--s1)) calc(-1*var(--s2));transition:background .12s var(--ez)}.ctb:hover{background:var(--sf2)}
+.ast{display:flex;align-items:center;gap:var(--s3);padding:var(--s3) var(--s4);border-radius:var(--rm);border:1px solid var(--bo);background:var(--sf1);margin-bottom:var(--s4)}
+.skr{display:grid;grid-template-columns:1fr auto;align-items:center;gap:var(--s5);padding:var(--s3) 0;border-bottom:1px solid var(--bo)}.skr:last-child{border-bottom:none}
+.ldots{display:flex;gap:5px;align-items:center}
+.ld{width:10px;height:10px;border-radius:50%;border:1.5px solid var(--bm);cursor:pointer;transition:all .15s var(--ezb)}.ld:hover{border-color:var(--am);transform:scale(1.2)}.ld.on{background:var(--ac);border-color:var(--ac)}
+.llabel{font-size:10px;color:var(--tg2);margin-left:var(--s2);min-width:66px}
+
+/* ════ PROPOSAL COMPOSE ════ */
+.pg{display:grid;grid-template-columns:minmax(320px,1fr) minmax(0,1.618fr);gap:var(--s5);align-items:start}
+.cpn,.opn{padding:var(--s5);border-radius:var(--rl);border:1px solid var(--bo);background:var(--sfr);box-shadow:var(--sha);display:grid;gap:var(--s4)}
+
+/* Compose chatbox — relative for absolute pulse overlay */
+.siw{border:1px solid var(--bm);border-radius:var(--rm);background:var(--sf1);transition:box-shadow .12s var(--ez),border-color .12s var(--ez);position:relative}
+.siw:focus-within{border-color:var(--ac);box-shadow:0 0 0 3px var(--fr)}
+.sta{width:100%;min-height:200px;max-height:360px;padding:var(--s3) var(--s4) var(--s7);border:none;background:transparent;color:var(--ti);font-size:var(--ts);line-height:var(--lb);resize:vertical;outline:none;display:block}
+.sta::placeholder{color:var(--tg2)}
+
+/* Compose bar — sf1 which reads as a subtle tonal separator, not black */
+.cbar{
+  display:flex;align-items:center;gap:var(--s2);
+  padding:var(--s2) var(--s3);
+  border-top:1px solid var(--bo);
+  background:var(--sf1);
+  border-radius:0 0 calc(var(--rm) - 1px) calc(var(--rm) - 1px);
+  flex-wrap:nowrap;overflow:hidden;
+}
+
+/* Chip pills — icon + label, label hidden when cbar is narrow */
+.cpill{
+  display:inline-flex;align-items:center;gap:4px;
+  height:24px;padding:0 var(--s2);
+  border-radius:var(--rp);
+  border:1px solid var(--bo);background:var(--sfr);
+  font-size:var(--tx);font-weight:500;color:var(--tm2);
+  cursor:pointer;user-select:none;
+  transition:all .12s var(--ez);
+  white-space:nowrap;flex-shrink:0;
+}
+.cpill:hover,.cpill.on{border-color:var(--ac);background:var(--as);color:var(--am)}
+.cpill .cv{width:8px;height:8px;transition:transform .12s var(--ez);flex-shrink:0}
+.cpill.open .cv{transform:rotate(180deg)}
+/* Hide pill text labels when cbar gets tight (container query polyfill via js class) */
+.cbar.narrow .plabel{display:none}
+.cbar.narrow .cpill{padding:0 var(--s2)}
+
+/* Dropdown — fixed portal, opens upward */
+.cdmenu{position:fixed;z-index:900;min-width:220px;background:var(--sfr);border:1px solid var(--bm);border-radius:var(--rm);box-shadow:var(--shc);padding:var(--s1);display:none}
+.cdmenu.vis{display:block}
+.cdopt{padding:var(--s3) var(--s4);border-radius:var(--rs);cursor:pointer;transition:background .1s var(--ez)}
+.cdopt:hover{background:var(--sf2)}.cdopt.on{background:var(--as)}
+.cdo-name{font-size:var(--ts);font-weight:600;color:var(--ti)}
+.cdo-desc{font-size:var(--tx);color:var(--tg2);margin-top:3px;line-height:1.5}
+.spacer{flex:1}
+.pdesc{padding:var(--s3) var(--s4);border-radius:var(--rs);border:1px solid var(--bo);background:var(--sf1);font-size:var(--tx);color:var(--tm2);line-height:1.65}.pdesc strong{color:var(--ti);font-weight:600}
+
+/* Proposal library view — fixed 260px left panel, body takes rest */
+.plib{display:grid;grid-template-columns:260px 1fr;gap:var(--s5);align-items:start}
+.plib>*{min-width:0;overflow:hidden}
+.plib-panel{padding:var(--s5);border-radius:var(--rl);border:1px solid var(--bo);background:var(--sfr);box-shadow:var(--sha);display:grid;gap:var(--s4);min-width:0}
+.p-title-edit{
+  font-family:"Fraunces",serif;font-size:20px;font-weight:600;
+  letter-spacing:-.02em;color:var(--ti);line-height:1.35;
+  border:none;background:transparent;width:100%;max-width:100%;
+  outline:none;resize:none;overflow-wrap:break-word;word-break:break-word;overflow:hidden;
+}
+.p-meta{display:flex;align-items:center;gap:var(--s2);font-size:var(--tx);color:var(--tg2);flex-wrap:wrap;min-width:0}
+.p-sep{width:3px;height:3px;border-radius:50%;background:var(--bm);flex-shrink:0}
+.p-body{
+  font-family:"Source Serif 4",serif;font-size:14px;line-height:1.82;
+  color:var(--tm2);border:none;background:transparent;
+  width:100%;max-width:100%;outline:none;min-height:260px;resize:vertical;
+}
+.p-actions{display:flex;align-items:center;gap:var(--s3);padding-top:var(--s4);border-top:1px solid var(--bo)}
+
+/* ════ STYLE PAGE ════ */
+.stypg{display:grid;grid-template-columns:260px 1fr;gap:var(--s7);align-items:start}
+.sty-l{display:flex;flex-direction:column;gap:var(--s5)}
+.tcard{display:flex;align-items:center;gap:var(--s4);padding:var(--s4);border-radius:var(--rm);border:2px solid var(--bo);cursor:pointer;background:var(--sfr);transition:all .16s var(--ez)}
+.tcard:hover{border-color:var(--am);box-shadow:var(--shb)}.tcard.on{border-color:var(--ac);background:color-mix(in srgb,var(--as) 60%,var(--sfr));box-shadow:0 0 0 3px var(--as)}
+.tthumb{width:44px;height:56px;border-radius:3px;background:var(--sf2);flex-shrink:0;overflow:hidden;border:1px solid var(--bo)}
+.tinfo{flex:1}.tname{font-size:var(--ts);font-weight:600;color:var(--ti)}.tdesc{font-size:var(--tx);color:var(--tg2);margin-top:2px}.tsamp{margin-top:6px;font-size:11px;color:var(--tm2);line-height:1.4}
+.tchk{width:18px;height:18px;border-radius:50%;border:2px solid var(--bm);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .12s var(--ez)}.tcard.on .tchk{background:var(--ac);border-color:var(--ac)}
+/* Palette — compact dot row, nuancier style */
+.palgrid{display:flex;flex-direction:column;align-items:center;gap:var(--s3)}
+.palrow{display:flex;gap:var(--s3);align-items:center;justify-content:center}
+.palcard{width:20px;height:20px;border-radius:50%;cursor:pointer;flex-shrink:0;transition:transform .16s var(--ezb),box-shadow .16s var(--ez)}
+.palcard:hover{transform:scale(1.18)}
+.palcard.on{box-shadow:0 0 0 2px var(--sfr),0 0 0 4px var(--ac);transform:scale(1.1)}
+/* Name shown ABOVE the dots */
+.palname-display{font-size:var(--tx);font-weight:500;color:var(--tm2);text-align:center;letter-spacing:.06em;text-transform:uppercase;min-height:var(--lx)}
+
+/* Document preview wrapper — dark frame, white paper */
+.docframe{
+  border-radius:var(--rl);border:1px solid var(--bo);
+  background:hsl(38,8%,78%);  /* warm grey frame in light */
+  padding:var(--s4);box-shadow:var(--sha);
+}
+.dark .docframe{background:hsl(80,5%,12%)}  /* dark kaki frame in dark */
+.docpaper{background:white;border-radius:2px;box-shadow:var(--shb);overflow:hidden;border:1px solid hsla(0,0%,0%,.06)}
+
+/* Typography styles — document */
+.d-sig{font-family:"Source Serif 4",serif;padding:28px 32px;display:flex;flex-direction:column}
+.d-sig .dn{font-family:"Source Sans 3",sans-serif;font-size:17px;font-weight:600;letter-spacing:-.01em;color:#1a1916;margin-bottom:2px}
+.d-sig .dr{font-family:"Source Sans 3",sans-serif;font-size:10px;letter-spacing:.07em;text-transform:uppercase;margin-bottom:12px}
+.d-sig .dm{font-family:"Source Sans 3",sans-serif;font-size:10px;display:flex;gap:12px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid #e8e5e0}
+.d-sig .dsec{margin-bottom:12px}.d-sig .dh{font-family:"Source Sans 3",sans-serif;font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin-bottom:5px}
+.d-sig .db{font-size:11.5px;line-height:1.72;color:#3a3832}.d-sig .dj{font-family:"Source Sans 3",sans-serif;font-size:11px;font-weight:600;color:#1a1916;margin-bottom:1px}.d-sig .dw{font-size:10px;margin-bottom:4px;color:#9a9890}
+
+.d-eng{font-family:"Fraunces",serif;padding:28px 32px;display:flex;flex-direction:column}
+.d-eng .dn{font-size:19px;font-weight:600;letter-spacing:-.02em;color:#1a1916;margin-bottom:2px}
+.d-eng .dr{font-size:11px;font-style:italic;font-weight:300;margin-bottom:12px;color:#7a7870}
+.d-eng .dm{font-family:"Source Sans 3",sans-serif;font-size:10px;display:flex;gap:12px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid #e8e5e0;color:#7a7870}
+.d-eng .dsec{margin-bottom:12px}.d-eng .dh{font-size:13px;font-weight:600;margin-bottom:4px}
+.d-eng .db{font-size:12px;line-height:1.82;color:#3a3832;font-weight:300}.d-eng .dj{font-size:12px;font-weight:600;color:#1a1916;margin-bottom:1px}.d-eng .dw{font-size:10.5px;font-style:italic;font-weight:300;margin-bottom:4px;color:#9a9890}
+
+.d-exp{font-family:"IBM Plex Mono",monospace;padding:24px 28px;display:flex;flex-direction:column;background:#f7f6f4}
+.d-exp .dn{font-size:13px;font-weight:500;color:#1a1916;margin-bottom:2px}
+.d-exp .dr{font-size:9px;color:#7a7870;letter-spacing:.07em;text-transform:uppercase;margin-bottom:10px}
+.d-exp .dm{font-size:9px;color:#9a9890;display:flex;gap:10px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid #d0cdc8}
+.d-exp .dsec{margin-bottom:10px}.d-exp .dh{font-size:9px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px;padding-left:6px;border-left:2px solid}
+.d-exp .db{font-size:10px;line-height:1.7;color:#3a3832;font-weight:300}.d-exp .dj{font-size:10px;font-weight:500;color:#1a1916;margin-bottom:1px}.d-exp .dw{font-size:9px;margin-bottom:3px;color:#9a9890}
+
+/* Letter styles */
+.let-paper{background:white;border-radius:2px;box-shadow:var(--shb);overflow:hidden;border:1px solid hsla(0,0%,0%,.06)}
+.let-sig{font-family:"Source Serif 4",serif;padding:28px 32px}
+.let-eng{font-family:"Fraunces",serif;padding:28px 32px}
+.let-exp{font-family:"IBM Plex Mono",monospace;padding:24px 28px;background:#f7f6f4}
+.let-meta{font-family:"Source Sans 3",sans-serif;font-size:10px;color:#9a9890;margin-bottom:14px}
+.let-p{font-size:12.5px;line-height:1.82;color:#2e2c28;margin-bottom:12px}
+.let-eng .let-p{font-size:13px;line-height:1.92;font-weight:300}
+.let-exp .let-p{font-size:11px;line-height:1.75;font-weight:300}
+.let-sig2{font-family:"Fraunces",serif;font-size:15px;font-weight:600;color:#1a1916;margin-top:14px}
+.let-eng2{font-family:"Fraunces",serif;font-size:16px;font-weight:600;font-style:italic;color:#1a1916;margin-top:16px}
+.let-exp2{font-family:"IBM Plex Mono",monospace;font-size:11px;font-weight:500;color:#1a1916;margin-top:12px}
+
+/* ════ DIALOG ════ */
+/* Modals: backdrop-filter works here — .bdrop is position:fixed over body */
+.bdrop{position:fixed;inset:0;z-index:800;display:flex;align-items:center;justify-content:center;background:hsla(30,12%,11%,.32);backdrop-filter:blur(8px) saturate(1.2);-webkit-backdrop-filter:blur(8px) saturate(1.2)}
+.dlg{width:100%;max-width:680px;margin:var(--s4);background:var(--sfr);border:1px solid var(--bm);border-radius:var(--rl);box-shadow:var(--shc);max-height:90vh;overflow-y:auto}
+.dlh{display:flex;align-items:flex-start;justify-content:space-between;padding:var(--s6) var(--s6) var(--s4);border-bottom:1px solid var(--bo);position:sticky;top:0;background:var(--sfr);z-index:1}
+.dlt{font-family:"Fraunces",serif;font-size:var(--tx2);font-weight:600;letter-spacing:-.01em;line-height:var(--lx2);color:var(--ti)}.dlst{font-size:var(--ts);color:var(--tm2);margin-top:3px}
+.dlb{padding:var(--s5) var(--s6);display:flex;flex-direction:column;gap:var(--s5)}
+.dlf{display:flex;align-items:center;justify-content:space-between;padding:var(--s4) var(--s6);border-top:1px solid var(--bo);position:sticky;bottom:0;background:var(--sfr)}
+.dlf-l{font-size:var(--tx);color:var(--tg2)}.dlf-r{display:flex;gap:var(--s3)}
+.dzone{padding:var(--s5);border-radius:var(--rm);background:var(--sf1);border:1px solid var(--bo);display:flex;flex-direction:column;gap:var(--s4)}
+.dzone-t{font-family:"Fraunces",serif;font-size:var(--tm);font-weight:600;letter-spacing:-.01em;color:var(--ti);margin-bottom:calc(-1*var(--s2))}
+.dg2{display:grid;grid-template-columns:1fr 1fr;gap:var(--s4)}
+.date-row{display:grid;grid-template-columns:1fr 1fr;gap:var(--s4)}
+.date-col{display:flex;flex-direction:column;gap:var(--s2)}
+.date-selects{display:flex;gap:var(--s2)}.date-selects select{width:auto;flex:1;min-width:70px}
+.date-check{display:flex;align-items:center;gap:var(--s2);font-size:var(--ts);color:var(--tm2);margin-top:var(--s2)}
+.ec2{background:var(--sf1);border:1px solid var(--bo);border-radius:var(--rm);padding:var(--s5);display:flex;flex-direction:column;gap:var(--s4)}
+.ec2-h{display:flex;align-items:center;justify-content:space-between}
+.ec2-n{font-family:"Fraunces",serif;font-size:var(--tm);font-weight:600;letter-spacing:-.01em;color:var(--ti)}
+.rwe{border:1px solid var(--bm);border-radius:var(--rs);overflow:hidden;background:var(--sfr)}
+.rtb{display:flex;gap:2px;padding:var(--s2);background:var(--sf2);border-bottom:1px solid var(--bo)}
+.rbc{min-height:80px;padding:var(--s3) var(--s4);font-family:"Source Serif 4",serif;font-size:var(--ts);color:var(--ti);line-height:1.75}
+svg.icon{width:16px;height:16px;display:block;flex-shrink:0}
+.hidden{display:none!important}
+.row{display:flex;align-items:center;gap:var(--s2)}
+</style>
+</head>
+<body class="pal-sauge">
+<script>
+(function(){var s=localStorage.getItem('dasti'),d=window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches;if(s==='dark'||(!s&&d))document.body.classList.add('dark');})();
+
+function toggleTheme(){var dk=document.body.classList.toggle('dark');localStorage.setItem('dasti',dk?'dark':'light');document.getElementById('isun').classList.toggle('hidden',dk);document.getElementById('imoon').classList.toggle('hidden',!dk);renderDoc();renderLetter();}
+
+var sbOpen=true;
+function toggleSb(){sbOpen=!sbOpen;document.querySelector('.sb').classList.toggle('col',!sbOpen);}
+
+var PALS=['sauge','ocre','pierre','bordeaux','encre'];
+var currPal='sauge';
+function selPal(p){currPal=p;PALS.forEach(function(n){document.body.classList.remove('pal-'+n);});document.body.classList.add('pal-'+p);document.querySelectorAll('.palcard[data-pal]').forEach(c=>c.classList.toggle('on',c.dataset.pal===p));var nameEl=document.getElementById('pal-name-display');if(nameEl){var card=document.querySelector('.palcard[data-pal="'+p+'"]');nameEl.textContent=card?card.dataset.name||p:p;}renderDoc();}
+
+var NAMES={pgcv:'Resume','pg-write':'Write','pg-style':'Style'};
+function showPage(id){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
+  document.getElementById(id).classList.add('on');
+  document.getElementById('crumb').textContent=NAMES[id]||id;
+  document.querySelectorAll('.sb-item[data-p]').forEach(i=>i.classList.remove('on'));
+  var it=document.querySelector('.sb-item[data-p="'+id+'"]');if(it)it.classList.add('on');
+}
+function oD(id){document.getElementById(id).classList.remove('hidden')}
+function cD(id){document.getElementById(id).classList.add('hidden')}
+
+/* Proposal library — select doc and show editor */
+var PROPOSALS=[
+  {id:'p1',title:'Junior RUST Embedded Software Engineer',date:'18/03/2026 · 02:19',type:'Cover Letter',tone:'Signature',body:'Dear Hiring Manager,\n\nI bring a B.E. in EEE from Anna Ranganathan Engineering College and hands-on work at Lakshmi Electrical Control System, with additional experience as a Production Supervisor managing cross-functional teams in automotive wire harness assembly.\n\nI am particularly drawn to this opportunity because of the precision and systems-thinking it requires. My background in electrical control systems has given me a strong foundation in both technical execution and team coordination.\n\nCordialement,\nBoard Ramanathapuram'},
+  {id:'p2',title:'Junior RUST Embedded Software Engineer',date:'17/03/2026 · 20:57',type:'Cover Letter',tone:'Expert',body:'Dear Hiring Manager,\n\nI am writing to express my interest in the Junior RUST Embedded Software Engineer position. My B.E. in EEE and production supervision experience at Lakshmi Electrical make me a strong candidate for this technical role.\n\nCordialement,\nBoard Ramanathapuram'},
+  {id:'p3',title:'Senior UX Designer — Figma',date:'16/03/2026 · 14:30',type:'Freelance Proposal',tone:'Engaging',body:'Hello,\n\nI am excited to propose my services for your UX design project. With a background in production systems and a passion for user-centered design, I bring an unusual but valuable perspective to interface work.\n\nCordialement,\nBoard Ramanathapuram'},
+];
+var currPropId='p1';
+function selProp(id,el){
+  currPropId=id;
+  document.querySelectorAll('.sb-doc[data-pid]').forEach(d=>d.classList.remove('on'));
+  if(el)el.classList.add('on');
+  var p=PROPOSALS.find(function(x){return x.id===id;});
+  if(!p)return;
+  document.getElementById('pe-title').value=p.title;
+  document.getElementById('pe-date').textContent=p.date;
+  document.getElementById('pe-type').textContent=p.type;
+  document.getElementById('pe-tone').textContent=p.tone;
+  document.getElementById('pe-body').value=p.body;
+  /* if on write page, show editor */
+  if(document.getElementById('pg-write').classList.contains('on')){
+    showWriteView('lib');
+  } else {
+    showPage('pg-write');
+    showWriteView('lib');
+  }
+}
+function showWriteView(v){
+  document.getElementById('view-compose').style.display=v==='compose'?'block':'none';
+  document.getElementById('view-lib').style.display=v==='lib'?'block':'none';
+  document.querySelectorAll('.wv-btn').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+}
+
+var currTpl='swiss',currTS='signature';
+function selTpl(t){currTpl=t;document.querySelectorAll('.tcard[data-tpl]').forEach(c=>c.classList.toggle('on',c.dataset.tpl===t));renderDoc();}
+function selTS(t){currTS=t;document.querySelectorAll('.tcard[data-ts]').forEach(c=>c.classList.toggle('on',c.dataset.ts===t));renderDoc();renderLetter();}
+
+function getAc(){return getComputedStyle(document.body).getPropertyValue('--ac').trim();}
+
+function renderDoc(){
+  var c=document.getElementById('docrender');if(!c)return;
+  var ac=getAc();var ts=currTS;var tpl=currTpl;
+  var h='';
+  if(ts==='engaging'){
+    /* Engaging uses Fraunces throughout — section headers get accent color */
+    h=`<div class="d-eng"><div class="dn">Board Ramanathapuram</div><div class="dr">Production Supervisor · EEE Engineer</div><div class="dm"><span>kaviyarajan@live.com</span><span>+91 9894</span></div><div class="dsec"><div class="dh" style="color:${ac}">Profil</div><div class="db">Talent professional specialising in electrical control systems.</div></div><div class="dsec"><div class="dh" style="color:${ac}">Expérience</div><div class="dj">Production Supervisor</div><div class="dw">Lakshmi Electrical · 2020–2024</div><div class="db">Managed wire harness assembly for automotive OEMs.</div></div></div>`;
+  } else if(ts==='expert'){
+    /* Expert monospace — border-left accent + color on section headers */
+    h=`<div class="d-exp"><div class="dn">Board Ramanathapuram</div><div class="dr">Production Supervisor · EEE</div><div class="dm"><span>kaviyarajan@live.com</span><span>+91 9894</span></div><div class="dsec"><div class="dh" style="border-color:${ac};color:${ac}">PROFIL</div><div class="db">Talent professional specialising in electrical control systems.</div></div><div class="dsec"><div class="dh" style="border-color:${ac};color:${ac}">EXPÉRIENCE</div><div class="dj">Production Supervisor</div><div class="dw">Lakshmi Electrical // 2020–2024</div><div class="db">Managed wire harness assembly.</div></div></div>`;
+  } else if(tpl==='2col'){
+    h=`<div style="display:grid;grid-template-columns:130px 1fr;font-family:'Source Serif 4',serif"><div style="background:${ac};padding:20px 14px;display:flex;flex-direction:column;gap:12px"><div style="font-family:'Fraunces',serif;font-size:13px;font-weight:600;line-height:1.25;color:hsl(155,18%,95%)">Board Ramanathapuram</div><div><div style="font-size:9px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px;color:hsla(155,18%,95%,.6)">Contact</div><div style="font-size:10px;line-height:1.6;color:hsl(155,18%,88%)">kaviyarajan<br>@live.com</div></div></div><div style="padding:18px 22px;background:white;display:flex;flex-direction:column;gap:11px"><div><div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px;color:${ac};font-family:'Source Sans 3',sans-serif">Profil</div><div style="font-size:11px;line-height:1.65;color:#3a3832">Talent professional specialising in electrical control systems.</div></div><div><div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px;color:${ac};font-family:'Source Sans 3',sans-serif">Expérience</div><div style="font-size:11px;font-weight:600;color:#1a1916;font-family:'Source Sans 3',sans-serif">Production Supervisor</div><div style="font-size:10px;color:#9a9890;margin-bottom:3px;font-family:'Source Sans 3',sans-serif">Lakshmi Electrical · 2020–2024</div><div style="font-size:11px;line-height:1.65;color:#3a3832">Managed wire harness assembly.</div></div></div></div>`;
+  } else if(tpl==='editorial'){
+    h=`<div style="display:flex;flex-direction:column;font-family:'Source Serif 4',serif"><div style="background:${ac};padding:18px 26px"><div style="font-family:'Fraunces',serif;font-size:17px;font-weight:600;letter-spacing:-.02em;color:hsl(155,18%,95%)">Board Ramanathapuram</div><div style="font-size:9px;letter-spacing:.07em;text-transform:uppercase;margin-top:3px;color:hsla(155,18%,95%,.75);font-family:'Source Sans 3',sans-serif">Production Supervisor · EEE</div></div><div style="padding:18px 26px;background:white;display:flex;flex-direction:column;gap:11px"><div><div style="font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin-bottom:4px;padding-bottom:3px;border-bottom:1.5px solid;border-color:${ac}40;color:${ac};font-family:'Source Sans 3',sans-serif">Profil</div><div style="font-size:11px;line-height:1.65;color:#3a3832">Talent professional specialising in electrical control systems.</div></div><div><div style="font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin-bottom:4px;padding-bottom:3px;border-bottom:1.5px solid;border-color:${ac}40;color:${ac};font-family:'Source Sans 3',sans-serif">Expérience</div><div style="font-size:11px;font-weight:600;color:#1a1916;font-family:'Source Sans 3',sans-serif">Production Supervisor</div><div style="font-size:10px;color:#9a9890;margin-bottom:3px;font-family:'Source Sans 3',sans-serif">Lakshmi Electrical · 2020–2024</div><div style="font-size:11px;line-height:1.65;color:#3a3832">Managed wire harness assembly.</div></div></div></div>`;
+  } else {
+    h=`<div class="d-sig"><div class="dn">Board Ramanathapuram</div><div class="dr" style="color:${ac}">Production Supervisor · EEE</div><div class="dm"><span>kaviyarajan@live.com</span><span>+91 9894</span></div><div class="dsec"><div class="dh" style="color:${ac}">Profil</div><div class="db">Talent professional specialising in electrical control systems.</div></div><div class="dsec"><div class="dh" style="color:${ac}">Expérience</div><div class="dj">Production Supervisor</div><div class="dw">Lakshmi Electrical · 2020–2024</div><div class="db">Managed wire harness assembly.</div></div></div>`;
+  }
+  c.innerHTML=h;
+}
+
+function renderLetter(){
+  var inner='';
+  var ts=currTS;
+  if(ts==='engaging'){inner=`<div class="let-paper"><div class="let-eng"><div class="let-meta">Lettre de motivation · 18/03/2026</div><p class="let-p">Madame, Monsieur,</p><p class="let-p">Je vous écris pour exprimer mon vif intérêt pour le poste proposé. Passionné par les systèmes de contrôle et la coordination d'équipes, mon parcours correspond pleinement à vos attentes.</p><p class="let-p">Cordialement,</p><div class="let-eng2">Board Ramanathapuram</div></div></div>`;}
+  else if(ts==='expert'){inner=`<div class="let-paper"><div class="let-exp"><div class="let-meta">LETTRE DE MOTIVATION // 18-03-2026</div><p class="let-p">Madame, Monsieur,</p><p class="let-p">Je vous écris concernant le poste proposé. Mon expérience en supervision de production et systèmes électriques constitue un apport direct pour votre équipe.</p><p class="let-p">Cordialement,</p><div class="let-exp2">Board Ramanathapuram</div></div></div>`;}
+  else{inner=`<div class="let-paper"><div class="let-sig"><div class="let-meta">Lettre de motivation · 18/03/2026</div><p class="let-p">Madame, Monsieur,</p><p class="let-p">Je vous écris pour exprimer mon vif intérêt pour le poste proposé. Fort d'une expérience en supervision de production et en systèmes de contrôle électrique, je suis convaincu de pouvoir contribuer efficacement à votre équipe.</p><p class="let-p">Cordialement,</p><div class="let-sig2">Board Ramanathapuram</div></div></div>`;}
+  ['letrender','letrender-style'].forEach(function(id){var el=document.getElementById(id);if(el)el.innerHTML=inner;});
+}
+
+var openMenu=null;
+function toggleDrop(menuId,pillEl){
+  if(openMenu&&openMenu!==menuId){var pm=document.getElementById(openMenu);if(pm)pm.classList.remove('vis');var pp=document.querySelector('[data-menu="'+openMenu+'"]');if(pp)pp.classList.remove('open');}
+  var menu=document.getElementById(menuId);var willOpen=!menu.classList.contains('vis');
+  menu.classList.toggle('vis',willOpen);openMenu=willOpen?menuId:null;
+  if(willOpen){
+    var r=pillEl.getBoundingClientRect();
+    menu.style.left=r.left+'px';menu.style.bottom=(window.innerHeight-r.top+4)+'px';menu.style.top='auto';
+    setTimeout(function(){document.addEventListener('click',function closeM(e){if(!menu.contains(e.target)&&e.target!==pillEl){menu.classList.remove('vis');openMenu=null;document.removeEventListener('click',closeM);}});},0);
+  }
+}
+/* State for status display */
+var cbarState={type:'Letter',tone:'Signature'};
+function updateCbarStatus(){
+  var el=document.getElementById('cbar-status');
+  if(el)el.innerHTML='<strong>'+cbarState.type+'</strong> · '+cbarState.tone;
+}
+function pickOpt(menuId,val,label,desc){
+  document.getElementById(menuId).querySelectorAll('.cdopt').forEach(o=>o.classList.toggle('on',o.dataset.val===val));
+  document.getElementById(menuId).classList.remove('vis');
+  var pill=document.querySelector('[data-menu="'+menuId+'"]');if(pill)pill.classList.remove('open');
+  openMenu=null;
+  /* Update icon chip active + status */
+  if(menuId==='dm-type'){cbarState.type=label;document.getElementById('chip-type').classList.add('on');}
+  if(menuId==='dm-tone'){cbarState.tone=label;document.getElementById('chip-tone').classList.add('on');}
+  updateCbarStatus();
+  var pd=document.getElementById('pdesc-live');if(pd&&desc)pd.innerHTML='<strong>'+label+'</strong> — '+desc;
+}
+function doGen(btn){
+  var siw=btn.closest('.siw');
+  if(btn.classList.contains('loading')){
+    btn.classList.remove('loading');
+    return;
+  }
+  btn.classList.add('loading');
+  setTimeout(function(){
+    btn.classList.remove('loading');
+    renderLetter();
+  },1800);
+}
+function doCopy(btn){btn.classList.add('copied');setTimeout(()=>btn.classList.remove('copied'),1600);}
+
+document.addEventListener('DOMContentLoaded',function(){
+  document.querySelectorAll('.ldots').forEach(function(row){row.querySelectorAll('.ld').forEach(function(d,i){d.addEventListener('click',function(){row.querySelectorAll('.ld').forEach(function(x,j){x.classList.toggle('on',j<=i);});var lbl=row.nextElementSibling;if(lbl&&lbl.classList.contains('llabel'))lbl.textContent=['Beginner','Intermediate','Expert'][i]||'';});});});
+  renderDoc();renderLetter();showWriteView('compose');updateCbarStatus();
+  var dk=document.body.classList.contains('dark');document.getElementById('isun').classList.toggle('hidden',dk);document.getElementById('imoon').classList.toggle('hidden',!dk);
+  var cbars=document.querySelectorAll('.cbar');
+  if(window.ResizeObserver){
+    var ro=new ResizeObserver(function(entries){entries.forEach(function(e){e.target.classList.toggle('narrow',e.contentRect.width<340);});});
+    cbars.forEach(function(cb){ro.observe(cb);});
+  }
+});
+</script>
+
+<div class="app">
+  <!-- ═══════ SIDEBAR ═══════ -->
+  <aside class="sb">
+    <div class="sb-top">
+      <div class="sb-brand">
+        <!-- No logo/glyph — just the wordmark -->
+        <span class="sb-name">dasti</span>
+      </div>
+      <button class="sb-tog" onclick="toggleSb()" title="Toggle sidebar">
+        <svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M10 3L6 8l4 5"/></svg>
+      </button>
+    </div>
+
+    <nav class="sb-nav">
+      <span class="sb-sec">Resume</span>
+      <div class="sb-item on" data-p="pgcv" onclick="showPage('pgcv')">
+        <div class="sb-ic"><svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="3" y="1" width="10" height="14" rx="2"/><path d="M6 5h4M6 8h4M6 11h2"/></svg></div>
+        <span class="sb-cap">Resume</span>
+      </div>
+      <div class="sb-doc on" data-pid="p0" onclick="showPage('pgcv')"><div class="sb-doc-t">Board Ramanathapuram</div><div class="sb-doc-m">18/03/2026</div><button class="sb-doc-del" onclick="event.stopPropagation()" title="Delete"><svg class="icon" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 2l8 8M10 2L2 10"/></svg></button></div>
+      <div class="sb-doc" data-pid="cv1" onclick="showPage('pgcv')"><div class="sb-doc-t">Marion Bonnet — Design</div><div class="sb-doc-m">15/03/2026</div><button class="sb-doc-del" onclick="event.stopPropagation()" title="Delete"><svg class="icon" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 2l8 8M10 2L2 10"/></svg></button></div>
+      <div class="sb-doc" data-pid="cv2" onclick="showPage('pgcv')"><div class="sb-doc-t">Jake Ryan — Special Ops</div><div class="sb-doc-m">14/03/2026</div><button class="sb-doc-del" onclick="event.stopPropagation()" title="Delete"><svg class="icon" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 2l8 8M10 2L2 10"/></svg></button></div>
+      <div class="sb-new" onclick="showPage('pgcv')">
+        <div class="sb-new-ic"><svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg></div>
+        <span class="sb-new-label">New resume</span>
+      </div>
+
+      <span class="sb-sec" style="margin-top:var(--s3)">Write</span>
+      <div class="sb-item" data-p="pg-write" onclick="showPage('pg-write');setTimeout(()=>showWriteView('compose'),10)">
+        <div class="sb-ic"><svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 14h12M9 3l3 3-6 6H3V9l6-6z"/></svg></div>
+        <span class="sb-cap">Compose</span>
+      </div>
+      <div class="sb-doc" data-pid="p1" onclick="selProp('p1',this)"><div class="sb-doc-t">Junior RUST Embedded Eng.</div><div class="sb-doc-m">18/03 · 02:19 <span class="sb-doc-type">Letter</span></div><button class="sb-doc-del" onclick="event.stopPropagation()" title="Delete"><svg class="icon" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 2l8 8M10 2L2 10"/></svg></button></div>
+      <div class="sb-doc" data-pid="p2" onclick="selProp('p2',this)"><div class="sb-doc-t">Junior RUST Embedded Eng.</div><div class="sb-doc-m">17/03 · 20:57 <span class="sb-doc-type">Letter</span></div><button class="sb-doc-del" onclick="event.stopPropagation()" title="Delete"><svg class="icon" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 2l8 8M10 2L2 10"/></svg></button></div>
+      <div class="sb-doc" data-pid="p3" onclick="selProp('p3',this)"><div class="sb-doc-t">Senior UX — Figma</div><div class="sb-doc-m">16/03 · 14:30 <span class="sb-doc-type">Proposal</span></div><button class="sb-doc-del" onclick="event.stopPropagation()" title="Delete"><svg class="icon" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 2l8 8M10 2L2 10"/></svg></button></div>
+      <div class="sb-new" onclick="showPage('pg-write');setTimeout(()=>showWriteView('compose'),10)">
+        <div class="sb-new-ic"><svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg></div>
+        <span class="sb-new-label">New letter</span>
+      </div>
+
+      <span class="sb-sec" style="margin-top:var(--s3)">Settings</span>
+      <div class="sb-item" data-p="pg-style" onclick="showPage('pg-style');setTimeout(function(){renderDoc();renderLetter();},50)">
+        <div class="sb-ic">
+          <!-- Palette / style icon — not a sun -->
+          <svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+            <rect x="1" y="1" width="6" height="6" rx="1.5"/>
+            <rect x="9" y="1" width="6" height="6" rx="1.5"/>
+            <rect x="1" y="9" width="6" height="6" rx="1.5"/>
+            <rect x="9" y="9" width="6" height="6" rx="1.5"/>
+          </svg>
+        </div>
+        <span class="sb-cap">Style</span>
+      </div>
+    </nav>
+
+    <div class="sb-foot">
+      <div class="sb-av">P</div>
+      <div class="sb-foot-info">
+        <div class="sb-foot-name">Profile</div>
+        <div class="sb-foot-hint">Board Ramanathapuram</div>
+      </div>
+      <button class="sb-thb" onclick="toggleTheme()" title="Toggle theme">
+        <svg id="isun" class="icon hidden" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="3"/><path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3.05 3.05l1.06 1.06M11.89 11.89l1.06 1.06M3.05 12.95l1.06-1.06M11.89 4.11l1.06-1.06"/></svg>
+        <svg id="imoon" class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M13.5 9.5A6 6 0 0 1 6.5 2.5a6 6 0 1 0 7 7z"/></svg>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ═══════ PAGE AREA ═══════ -->
+  <div class="page-area">
+    <header class="top">
+      <div class="top-l"><div class="crumb">dasti &rsaquo; <span id="crumb">Resume</span></div></div>
+      <div class="top-r"><button class="btn bsec bsm"><svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 13h12M8 2v8M5 6l3 3 3-3"/></svg>Export PDF</button></div>
+    </header>
+
+    <div class="pscroll">
+
+      <!-- ══ RESUME ══ -->
+      <div class="page on" id="pgcv">
+        <div class="main">
+          <div class="ip"><div class="ew ac">Resume workspace</div><h2>Resume</h2><p>Sélectionnez un CV dans la barre latérale, importez ou éditez les sections ci-dessous.</p></div>
+          <div class="ast">
+            <select style="height:var(--hs);flex:1;max-width:200px"><option>— add section —</option><option>Achievements</option><option>Languages</option></select>
+            <button class="btn bsec bsm">Add</button>
+            <div class="spacer"></div>
+            <button class="btn bsec bsm"><svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 2v8M4 6l4-4 4 4M2 13h12"/></svg>Upload</button>
+            <button class="btn bsec bsm">OCR</button>
+          </div>
+          <div class="ctr"><button class="ctb">Board Ramanathapuram.</button><span style="font-size:var(--ts);color:var(--ok)">Saved</span></div>
+
+          <div class="sc"><div class="sch"><span class="sct">Profile</span><div class="sca"><button class="ib" onclick="oD('dp')" title="Edit"><svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M11 2l3 3-9 9H2v-3L11 2z"/></svg></button><button class="ib" title="Delete"><svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 4h12M5 4V2h6v2M6 7v5M10 7v5M3 4l1 10h8l1-10"/></svg></button></div></div>
+          <div class="scb"><div class="pr2"><div class="avl">BR</div><div><div style="font-size:var(--tm);font-weight:600;color:var(--ti);letter-spacing:-.01em">Board Ramanathapuram.</div><div style="font-size:var(--ts);color:var(--tm2);margin-top:2px">Desired position</div></div></div><div class="chips"><span class="chip"><span class="dot dok"></span>kaviyarajan@live.com</span><span class="chip"><span class="dot dok"></span>+91 9894743868</span><span class="chip"><span class="dot dwa"></span>Muniyasamy Nagar</span></div></div></div>
+
+          <div class="sc"><div class="sch"><span class="sct">Experience</span><div class="sca"><button class="ib" onclick="oD('de')" title="Edit"><svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M11 2l3 3-9 9H2v-3L11 2z"/></svg></button><button class="ib" title="Delete"><svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 4h12M5 4V2h6v2M6 7v5M10 7v5M3 4l1 10h8l1-10"/></svg></button></div></div>
+          <div class="scb"><div style="font-size:var(--ts);font-weight:500;color:var(--ti)">Lakshmi Electrical Control System</div><div style="font-size:var(--tx);color:var(--tm2);margin-top:2px">Production Supervisor · 2020–2024</div></div></div>
+
+          <div class="sc"><div class="sch"><span class="sct">Skills</span><div class="sca"><button class="ib" title="Add"><svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg></button></div></div>
+          <div class="scb">
+            <div class="skr"><input class="field" value="Banner Design" style="max-width:220px"><div style="display:flex;align-items:center"><div class="ldots"><div class="ld on"></div><div class="ld on"></div><div class="ld on"></div></div><span class="llabel">Expert</span></div></div>
+            <div class="skr"><input class="field" value="Flex Designing" style="max-width:220px"><div style="display:flex;align-items:center"><div class="ldots"><div class="ld on"></div><div class="ld on"></div><div class="ld"></div></div><span class="llabel">Intermediate</span></div></div>
+            <div class="skr"><input class="field" value="Poster Designing" style="max-width:220px"><div style="display:flex;align-items:center"><div class="ldots"><div class="ld on"></div><div class="ld"></div><div class="ld"></div></div><span class="llabel">Beginner</span></div></div>
+          </div></div>
+        </div>
+      </div>
+
+      <!-- ══ WRITE ══ -->
+      <div class="page" id="pg-write">
+        <div class="main">
+          <div class="ip"><div class="ew ac">Write</div><h2>Write</h2><p>Rédigez et gérez vos lettres. Cliquez sur un document dans la barre latérale pour l'ouvrir.</p></div>
+
+          <!-- View toggle — underline style, no green bg conflict with generate -->
+          <div style="display:flex;gap:0;border-bottom:1px solid var(--bo);margin-bottom:var(--s4)">
+            <button class="btn bgh bsm wv-btn on" data-v="compose" onclick="showWriteView('compose')" style="border-radius:var(--rs) var(--rs) 0 0;border-bottom:2px solid transparent;margin-bottom:-1px">Compose</button>
+            <button class="btn bgh bsm wv-btn" data-v="lib" onclick="showWriteView('lib')" style="border-radius:var(--rs) var(--rs) 0 0;border-bottom:2px solid transparent;margin-bottom:-1px">Open</button>
+          </div>
+          <style>
+            .wv-btn.on{color:var(--ti);font-weight:600;border-bottom-color:var(--ac)!important}
+            .wv-btn:not(.on){color:var(--tm2)}
+          </style>
+
+          <!-- Compose view -->
+          <div id="view-compose">
+            <div class="pg">
+              <div class="cpn">
+                <div><div style="font-family:'Fraunces',serif;font-size:var(--tx2);font-weight:600;letter-spacing:-.01em;color:var(--ti)">New letter</div><div style="font-size:var(--tx);color:var(--tg2);margin-top:var(--s1)">CV: <strong style="color:var(--ti)">Board Ramanathapuram</strong> · <a href="#">Change</a></div></div>
+                <div class="fg"><label class="fl">Job Title</label><input class="field" placeholder="e.g. Junior Embedded Engineer"></div>
+                <div class="fg">
+                  <label class="fl">Job Description</label>
+                  <div class="siw">
+                    <textarea class="sta" placeholder="Paste the job description here…"></textarea>
+                    <div class="cbar">
+                      <!-- Type icon chip -->
+                      <button class="ichip on" id="chip-type" title="Type de document" onclick="toggleDrop('dm-type',this)">
+                        <!-- Letter icon: document with lines -->
+                        <svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="3" y="1" width="10" height="14" rx="2"/><path d="M6 5h4M6 8h4M6 11h2"/></svg>
+                      </button>
+                      <!-- Tone icon chip -->
+                      <button class="ichip on" id="chip-tone" title="Tonalité" onclick="toggleDrop('dm-tone',this)">
+                        <!-- Slider/tone icon: 3 horizontal lines at different lengths -->
+                        <svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 4h8M2 8h12M2 12h5"/><circle cx="12" cy="4" r="2" fill="currentColor" stroke="none"/></svg>
+                      </button>
+                      <!-- Inline status — "Letter · Signature" -->
+                      <span class="cbar-status" id="cbar-status"><strong>Letter</strong> · Signature</span>
+                      <!-- Generate / Stop -->
+                      <button class="gbtn" onclick="doGen(this)" title="Generate">
+                        <svg class="gi-send icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 14V2M4 6l4-4 4 4"/></svg>
+                        <svg class="gi-stop icon" viewBox="0 0 16 16" fill="currentColor"><rect x="4" y="4" width="8" height="8" rx="1.5"/></svg>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="pdesc hidden" id="pdesc-live"><strong>Letter · Neutre</strong> — Équilibré, naturel, crédible.</div>
+                </div>
+              </div>
+              <div class="opn">
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:var(--s3)">
+                  <div><div class="ew" style="margin-bottom:var(--s2)">Output</div><div style="font-family:'Fraunces',serif;font-size:var(--tx2);font-weight:600;letter-spacing:-.01em;color:var(--ti)">Generated</div></div>
+                  <button class="btn bsec bsm cbtn" onclick="doCopy(this)"><span class="cbtn-def"><svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="5" y="5" width="9" height="9" rx="2"/><path d="M11 5V3a2 2 0 0 0-2-2H3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/></svg>Copy</span><span class="cbtn-ok"><svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 8l4 4 6-7"/></svg>Copied</span></button>
+                </div>
+                <div id="letrender"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Library / Edit view -->
+          <div id="view-lib" style="display:none">
+            <div class="pg"><!-- same grid as compose for visual consistency -->
+              <!-- Left: document metadata -->
+              <div class="cpn" style="gap:var(--s3)">
+                <div class="ew" style="margin-bottom:0">Document</div>
+                <textarea class="p-title-edit" id="pe-title" rows="2">Junior RUST Embedded Software Engineer</textarea>
+                <div class="p-meta">
+                  <span id="pe-date">18/03/2026 · 02:19</span>
+                  <span class="p-sep"></span>
+                  <span id="pe-type">Cover Letter</span>
+                  <span class="p-sep"></span>
+                  <span id="pe-tone">Neutre</span>
+                </div>
+                <span style="font-size:var(--tx);color:var(--ok)">● Auto-saved</span>
+              </div>
+
+              <!-- Right: content with Copy / Regenerate / Delete in header -->
+              <div class="opn" style="gap:var(--s3)">
+                <div style="display:flex;align-items:center;justify-content:space-between">
+                  <div class="ew" style="margin-bottom:0">Content</div>
+                  <div style="display:flex;align-items:center;gap:2px">
+                    <!-- Copy -->
+                    <button class="ib cbtn" onclick="doCopy(this)" title="Copy" style="position:relative;overflow:hidden">
+                      <span class="cbtn-def"><svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="5" y="5" width="9" height="9" rx="2"/><path d="M11 5V3a2 2 0 0 0-2-2H3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/></svg></span>
+                      <span class="cbtn-ok" style="color:var(--ok)"><svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 8l4 4 6-7"/></svg></span>
+                    </button>
+                    <!-- Regenerate -->
+                    <button class="ib" title="Regenerate">
+                      <svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 6A6 6 0 1 0 14 9"/><path d="M13.5 2v4h-4"/></svg>
+                    </button>
+                    <!-- Separator -->
+                    <div style="width:1px;height:16px;background:var(--bo);margin:0 2px"></div>
+                    <!-- Delete — ghost, danger only on hover -->
+                    <button class="ib" title="Delete"
+                      onmouseenter="this.style.color='var(--ert)';this.style.background='var(--erb)'"
+                      onmouseleave="this.style.color='';this.style.background=''">
+                      <svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 4h12M5 4V2h6v2M6 7v5M10 7v5M3 4l1 10h8l1-10"/></svg>
+                    </button>
+                  </div>
+                </div>
+                <textarea class="p-body" id="pe-body"></textarea>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ══ STYLE ══ -->
+      <div class="page" id="pg-style">
+        <div class="main">
+          <div class="ip"><div class="ew ac">Style</div><h2>Mise en page</h2><p>Contrôle le rendu de tous vos documents. Le contenu ne change pas.</p></div>
+          <div class="stypg">
+            <div class="sty-l">
+              <div class="sc"><div class="sch"><span class="sct" style="font-size:var(--tm)">Mise en page</span></div><div class="scb" style="display:flex;flex-direction:column;gap:var(--s3)">
+                <div class="tcard on" data-tpl="swiss" onclick="selTpl('swiss')"><div class="tthumb"><div style="padding:5px;display:flex;flex-direction:column;gap:2px"><div style="height:3px;border-radius:2px;background:var(--ac);width:88%"></div><div style="height:2px;border-radius:2px;background:var(--bm);width:52%"></div><div style="height:2px;border-radius:2px;background:var(--bm);width:78%"></div></div></div><div class="tinfo"><div class="tname">Swiss Minima</div><div class="tdesc">Colonne unique · sobre</div></div><div class="tchk"><svg style="width:10px;height:10px" viewBox="0 0 10 8" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"><path d="M1 4l3 3 5-6"/></svg></div></div>
+                <div class="tcard" data-tpl="2col" onclick="selTpl('2col')"><div class="tthumb"><div style="display:flex;height:100%"><div style="width:36%;background:var(--ac);opacity:.22"></div><div style="flex:1;padding:4px;display:flex;flex-direction:column;gap:2px"><div style="height:2px;border-radius:2px;background:var(--bm)"></div><div style="height:2px;border-radius:2px;background:var(--bm);width:60%"></div></div></div></div><div class="tinfo"><div class="tname">Two Column</div><div class="tdesc">Ratio φ · sidebar accent</div></div><div class="tchk"></div></div>
+                <div class="tcard" data-tpl="editorial" onclick="selTpl('editorial')"><div class="tthumb"><div style="display:flex;flex-direction:column;height:100%"><div style="height:26%;background:var(--ac);opacity:.22"></div><div style="flex:1;padding:4px;display:flex;flex-direction:column;gap:2px;margin-top:2px"><div style="height:2px;border-radius:2px;background:var(--bm)"></div></div></div></div><div class="tinfo"><div class="tname">Editorial</div><div class="tdesc">Header accent pleine largeur</div></div><div class="tchk"></div></div>
+              </div></div>
+
+              <div class="sc"><div class="sch"><span class="sct" style="font-size:var(--tm)">Style typographique</span></div><div class="scb" style="display:flex;flex-direction:column;gap:var(--s3)">
+                <div class="tcard tscard on" data-ts="signature" onclick="selTS('signature')">
+                  <div class="tinfo">
+                    <div style="font-family:'Fraunces',serif;font-size:17px;font-weight:600;letter-spacing:-.01em;color:var(--ti);line-height:1.2">Signature</div>
+                    <div style="font-family:'Source Serif 4',serif;font-size:var(--tx);color:var(--tm2);margin-top:3px;line-height:1.5">Sobre et professionnel.</div>
+                  </div>
+                  <div class="tchk"><svg style="width:10px;height:10px" viewBox="0 0 10 8" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"><path d="M1 4l3 3 5-6"/></svg></div>
+                </div>
+                <div class="tcard tscard" data-ts="engaging" onclick="selTS('engaging')">
+                  <div class="tinfo">
+                    <div style="font-family:'Fraunces',serif;font-size:17px;font-weight:600;font-style:italic;letter-spacing:-.01em;color:var(--ti);line-height:1.2">Engaging</div>
+                    <div style="font-family:'Fraunces',serif;font-size:var(--tx);font-weight:300;color:var(--tm2);margin-top:3px;line-height:1.5">Chaleureux et littéraire.</div>
+                  </div>
+                  <div class="tchk"></div>
+                </div>
+                <div class="tcard tscard" data-ts="expert" onclick="selTS('expert')">
+                  <div class="tinfo">
+                    <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:500;color:var(--ti);line-height:1.2;letter-spacing:-.01em">Expert</div>
+                    <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:300;color:var(--tm2);margin-top:3px;line-height:1.5">Factuel. Précis.</div>
+                  </div>
+                  <div class="tchk"></div>
+                </div>
+              </div></div>
+
+              <div class="sc"><div class="sch"><span class="sct" style="font-size:var(--tm)">Colors</span></div><div class="scb" style="padding:var(--s4) var(--s5)">
+                <div class="palgrid">
+                  <!-- Name display ABOVE the dots -->
+                  <div class="palname-display" id="pal-name-display">Sauge</div>
+                  <!-- Row 1: 3 dots -->
+                  <div class="palrow">
+                    <div class="palcard on" data-pal="sauge" data-name="Sauge" onclick="selPal('sauge')" style="background:hsl(155,22%,30%)"></div>
+                    <div class="palcard" data-pal="ocre" data-name="Ocre" onclick="selPal('ocre')" style="background:hsl(34,38%,36%)"></div>
+                    <div class="palcard" data-pal="pierre" data-name="Pierre" onclick="selPal('pierre')" style="background:hsl(220,14%,34%)"></div>
+                  </div>
+                  <!-- Row 2: 2 dots centred -->
+                  <div class="palrow">
+                    <div class="palcard" data-pal="bordeaux" data-name="Bordeaux" onclick="selPal('bordeaux')" style="background:hsl(348,22%,34%)"></div>
+                    <div class="palcard" data-pal="encre" data-name="Encre" onclick="selPal('encre')" style="background:hsl(200,18%,28%)"></div>
+                  </div>
+                </div>
+              </div></div>
+
+              <div style="display:flex;gap:var(--s3)"><button class="btn bsec bmd" style="flex:1">Aperçu PDF</button><button class="btn bp bmd" style="flex:1">Exporter PDF</button></div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:var(--s6)">
+              <div><div class="ew" style="margin-bottom:var(--s3)">Aperçu CV</div><div class="docframe"><div class="docpaper" id="docrender"></div></div></div>
+              <div><div class="ew" style="margin-bottom:var(--s3)">Aperçu lettre</div><div class="docframe" id="letrender-style"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Dropdown portals — in body root, position:fixed -->
+<div class="cdmenu" id="dm-type">
+  <div class="cdopt on" data-val="letter" onclick="pickOpt('dm-type','letter','Letter','')"><div class="cdo-name">Letter</div><div class="cdo-desc">Lettre de motivation pour candidature.</div></div>
+  <div class="cdopt" data-val="proposal" onclick="pickOpt('dm-type','proposal','Proposal','')"><div class="cdo-name">Proposal</div><div class="cdo-desc">Proposition pour mission freelance.</div></div>
+</div>
+<div class="cdmenu" id="dm-tone">
+  <div class="cdopt on" data-val="sig" onclick="pickOpt('dm-tone','sig','Neutre','Équilibré, naturel, crédible.')"><div class="cdo-name">Neutre</div><div class="cdo-desc">Équilibré, naturel, crédible.</div></div>
+  <div class="cdopt" data-val="exp" onclick="pickOpt('dm-tone','exp','Formel','Autoritaire, précis.')"><div class="cdo-name">Formel</div><div class="cdo-desc">Autoritaire, précis.</div></div>
+  <div class="cdopt" data-val="eng" onclick="pickOpt('dm-tone','eng','Chaleureux','Warm, personnel.')"><div class="cdo-name">Chaleureux</div><div class="cdo-desc">Chaud, personnel, créatif.</div></div>
+</div>
+
+<!-- ══ DIALOG Profile ══ -->
+<div class="bdrop hidden" id="dp" onclick="if(event.target===this)cD('dp')">
+  <div class="dlg"><div class="dlh"><div><div class="dlt">Edit profile</div><div class="dlst">Identité et coordonnées</div></div><button class="ib" onclick="cD('dp')" title="Close"><svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 3l10 10M13 3L3 13"/></svg></button></div>
+  <div class="dlb">
+    <div class="dzone"><div class="dzone-t">Identité</div><div class="dg2"><div class="fg"><label class="fl">Nom complet</label><input class="field" value="Board Ramanathapuram."></div><div class="fg"><label class="fl">Poste souhaité</label><input class="field" placeholder="e.g. Senior Designer"></div></div><div class="fg"><label class="fl">Photo URL</label><input class="field" placeholder="https://..."><span class="fh">Optionnel</span></div></div>
+    <div class="dzone"><div class="dzone-t">Contact</div><div class="dg2"><div class="fg"><label class="fl">Email</label><input class="field" value="kaviyarajan@live.com"></div><div class="fg"><label class="fl">Téléphone</label><input class="field" value="+91 9894743868"></div><div class="fg"><label class="fl">LinkedIn</label><input class="field" placeholder="linkedin.com/in/..."></div><div class="fg"><label class="fl">Site web</label><input class="field" placeholder="https://..."></div></div><div class="fg"><label class="fl">Adresse</label><input class="field" value="Muniyasamy Nagar, Em"></div></div>
+  </div>
+  <div class="dlf"><div class="dlf-l">Appliqué à tous les exports.</div><div class="dlf-r"><button class="btn bsec bmd" onclick="cD('dp')">Annuler</button><button class="btn bp bmd">Enregistrer</button></div></div></div>
+</div>
+
+<!-- ══ DIALOG Experience ══ -->
+<div class="bdrop hidden" id="de" onclick="if(event.target===this)cD('de')">
+  <div class="dlg"><div class="dlh"><div><div class="dlt">Edit experience</div><div class="dlst">Postes et responsabilités</div></div><button class="btn bgh bsm" onclick="cD('de')">Fermer</button></div>
+  <div class="dlb">
+    <div class="ec2"><div class="ec2-h"><div class="ec2-n">Entry 1</div><button class="ib" style="color:var(--ert)" title="Supprimer"><svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 4h12M5 4V2h6v2M6 7v5M10 7v5M3 4l1 10h8l1-10"/></svg></button></div>
+    <div class="dg2"><div class="fg"><label class="fl">Entreprise</label><input class="field" value="Lakshmi Electrical Control System"></div><div class="fg"><label class="fl">Poste</label><input class="field" placeholder="Intitulé"></div></div>
+    <div class="fg"><label class="fl">Lieu</label><input class="field" placeholder="Ville, Pays"></div>
+    <div class="date-row"><div class="date-col"><label class="fl">Début</label><div class="date-selects"><select><option>Mois</option><option>Jan</option><option>Jun</option></select><select><option>Année</option><option>2022</option><option>2024</option></select></div></div><div class="date-col"><label class="fl">Fin</label><div class="date-selects"><select><option>Mois</option></select><select><option>Année</option></select></div><label class="date-check"><input type="checkbox"> Poste actuel</label></div></div>
+    <div class="fg"><label class="fl">Responsabilités</label><div class="rwe"><div class="rtb"><button class="ib" title="Bold" style="width:28px;height:28px;font-weight:700;font-size:12px">B</button><button class="ib" title="Italic" style="width:28px;height:28px;font-style:italic;font-size:12px">I</button><button class="ib" title="Underline" style="width:28px;height:28px;text-decoration:underline;font-size:12px">U</button></div><div class="rbc" contenteditable="true">Managed production in wire harness and control panel assembly for automotive clients.</div></div></div></div>
+    <div class="ec2"><div class="ec2-h"><div class="ec2-n">Entry 2</div><button class="ib" style="color:var(--ert)" title="Supprimer"><svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 4h12M5 4V2h6v2M6 7v5M10 7v5M3 4l1 10h8l1-10"/></svg></button></div>
+    <div class="dg2"><div class="fg"><label class="fl">Entreprise</label><input class="field" placeholder="Nom"></div><div class="fg"><label class="fl">Poste</label><input class="field" placeholder="Intitulé"></div></div>
+    <div class="fg"><label class="fl">Lieu</label><input class="field" placeholder="Ville, Pays"></div>
+    <div class="date-row"><div class="date-col"><label class="fl">Début</label><div class="date-selects"><select><option>Mois</option></select><select><option>Année</option></select></div></div><div class="date-col"><label class="fl">Fin</label><div class="date-selects"><select><option>Mois</option></select><select><option>Année</option></select></div><label class="date-check"><input type="checkbox"> Poste actuel</label></div></div>
+    <div class="fg"><label class="fl">Responsabilités</label><div class="rwe"><div class="rtb"><button class="ib" title="Bold" style="width:28px;height:28px;font-weight:700;font-size:12px">B</button><button class="ib" title="Italic" style="width:28px;height:28px;font-style:italic;font-size:12px">I</button><button class="ib" title="Underline" style="width:28px;height:28px;text-decoration:underline;font-size:12px">U</button></div><div class="rbc" contenteditable="true" style="color:var(--tg2);font-style:italic">Ajoutez vos responsabilités…</div></div></div></div>
+    <button class="btn bsec bmd" style="width:100%;justify-content:center"><svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>Ajouter une entrée</button>
+  </div>
+  <div class="dlf"><div class="dlf-l">Ordre = ordre dans le CV.</div><div class="dlf-r"><button class="btn bsec bmd" onclick="cD('de')">Annuler</button><button class="btn bp bmd">Enregistrer tout</button></div></div></div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,71 @@
+{
+  "id": "resp_02daf98f4ae1097b0069b2dc11495c81948a06379b5799a0c0",
+  "object": "response",
+  "created_at": 1773329425,
+  "status": "completed",
+  "background": false,
+  "billing": {
+    "payer": "developer"
+  },
+  "completed_at": 1773329430,
+  "error": null,
+  "frequency_penalty": 0,
+  "incomplete_details": null,
+  "instructions": null,
+  "max_output_tokens": 500,
+  "max_tool_calls": null,
+  "model": "gpt-4o-mini-2024-07-18",
+  "output": [
+    {
+      "id": "msg_02daf98f4ae1097b0069b2dc11c664819480d911fc9bc0891b",
+      "type": "message",
+      "status": "completed",
+      "content": [
+        {
+          "type": "output_text",
+          "annotations": [],
+          "logprobs": [],
+          "text": "Dear Hiring Manager,\n\nI am writing to express my interest in the Data Scientist position. While my background is primarily in frontend engineering, I have gained valuable exposure to experimentation design through my recent role at Northline Labs, where I built experimentation dashboards for growth teams. This experience has equipped me with a solid understanding of A/B testing methodologies and the importance of data-driven decision-making.\n\nAlthough my expertise lies in frontend technologies like React and TypeScript, I am eager to expand my skill set into data science. I believe my experience in cross-functional product work has honed my ability to collaborate effectively with diverse teams, which is essential for driving successful data initiatives. I am particularly drawn to the opportunity to contribute to a data-driven environment and learn more about statistical modeling and machine learning.\n\nI am excited about the possibility of bringing my unique perspective to your team and contributing to impactful projects. Thank you for considering my application. I look forward to the opportunity to discuss how my background can align with your needs.\n\nSincerely,  \nAlex Martin"
+        }
+      ],
+      "role": "assistant"
+    }
+  ],
+  "parallel_tool_calls": true,
+  "presence_penalty": 0,
+  "previous_response_id": null,
+  "prompt_cache_key": null,
+  "prompt_cache_retention": null,
+  "reasoning": {
+    "effort": null,
+    "summary": null
+  },
+  "safety_identifier": null,
+  "service_tier": "default",
+  "store": true,
+  "temperature": 0.2,
+  "text": {
+    "format": {
+      "type": "text"
+    },
+    "verbosity": "medium"
+  },
+  "tool_choice": "auto",
+  "tools": [],
+  "top_logprobs": 0,
+  "top_p": 1,
+  "truncation": "disabled",
+  "usage": {
+    "input_tokens": 383,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 205,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 588
+  },
+  "user": null,
+  "metadata": {}
+}

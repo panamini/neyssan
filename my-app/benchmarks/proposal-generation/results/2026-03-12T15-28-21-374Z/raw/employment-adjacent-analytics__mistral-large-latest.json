@@ -1,0 +1,25 @@
+{
+  "id": "78388856d82f4cbeaf29e8fb8b26a4b2",
+  "created": 1773329379,
+  "model": "mistral-large-latest",
+  "usage": {
+    "prompt_tokens": 398,
+    "total_tokens": 647,
+    "completion_tokens": 249,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "object": "chat.completion",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "tool_calls": null,
+        "content": "Dear Hiring Manager,\n\nI’m excited to apply for the Growth Analytics Manager role, particularly given my hands-on experience designing and iterating on growth-facing pages through experimentation. In my recent work as a freelance designer-developer, I collaborated closely with startups to test and refine landing pages, using data-driven insights to inform design decisions. While my background is rooted in product design, this exposure to experimentation has given me a strong foundation in analyzing user behavior and translating findings into actionable improvements.\n\nThough my primary focus has been on the design and frontend implementation of growth initiatives, I’ve consistently worked alongside analytics teams to interpret results and align experiments with business goals. This cross-functional collaboration has sharpened my ability to communicate insights clearly to stakeholders, ensuring that design choices are both user-centered and data-informed.\n\nI’m eager to bring this perspective to a role that bridges experimentation and analytics, and I’m particularly interested in deepening my technical skills in areas like SQL and dashboard ownership. My experience collaborating with product and marketing teams positions me to contribute meaningfully to your growth objectives while growing into the full scope of the position.\n\nThank you for your time and consideration—I’d welcome the opportunity to discuss how my background could align with your needs.\n\nJordan Lee"
+      }
+    }
+  ]
+}

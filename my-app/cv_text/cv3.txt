@@ -1,0 +1,10 @@
+James Smith
+221B Baker Street, London, UK
+Email: james.smith@example.co.uk | Phone: +44 7700 900123
+
+Experience:
+Data Scientist, DeepAnalytics, March 2021 – Present
+Intern, AI Lab, June 2020 – February 2021
+
+Education:
+MSc in Data Science, University College London, 2020

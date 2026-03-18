@@ -1,0 +1,2 @@
+# cv_parser_service requirements are authoritative; spaCy kept optional via extras.
+-r cv_parser_service/requirements.txt

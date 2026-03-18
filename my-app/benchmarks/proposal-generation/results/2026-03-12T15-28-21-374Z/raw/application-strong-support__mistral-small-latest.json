@@ -1,0 +1,25 @@
+{
+  "id": "c0f5fcba6cba4a81a38af4b253ecd3fa",
+  "created": 1773329352,
+  "model": "mistral-small-latest",
+  "usage": {
+    "prompt_tokens": 372,
+    "total_tokens": 465,
+    "completion_tokens": 93,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "object": "chat.completion",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "tool_calls": null,
+        "content": "I’m Marie Lopez, a Customer Support Specialist with experience in SaaS ticketing and documentation. At CloudLane, I managed daily chat and email queues, resolving customer inquiries while maintaining clear and calm communication. I also documented recurring issues into internal help content to improve efficiency. My background aligns well with your need for someone who can handle email and chat support while keeping documentation organized and accessible. I’d welcome the opportunity to bring this experience to your team."
+      }
+    }
+  ]
+}

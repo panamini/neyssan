@@ -1,0 +1,25 @@
+{
+  "id": "6d436cf2a10048e1ae4ccdddb745fbed",
+  "created": 1773329412,
+  "model": "mistral-large-latest",
+  "usage": {
+    "prompt_tokens": 324,
+    "total_tokens": 432,
+    "completion_tokens": 108,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "object": "chat.completion",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "tool_calls": null,
+        "content": "I’m writing to apply for the Administrative Coordinator role. In my work as an operations lead, I’ve coordinated schedules, maintained detailed documentation, and ensured clear communication across teams—skills that align with the demands of this position. My focus has always been on keeping processes smooth and reliable, whether tracking tasks or supporting colleagues.\n\nI thrive in roles that require organization and follow-through, and I’d welcome the chance to bring that same approach to your team. Let me know if you’d like to discuss how my experience could fit your needs."
+      }
+    }
+  ]
+}

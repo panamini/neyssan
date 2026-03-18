@@ -1,0 +1,41 @@
+{
+  "sections": [
+    {
+      "title": "PROFIL",
+      "content": "Ingénieur logiciel expérimenté avec 5 ans d'expérience dans le développement backend.",
+      "fieldKey": "introduction",
+      "confidence": 0.8279413265306123
+    },
+    {
+      "title": "EXPÉRIENCE",
+      "content": "2020 - 2024 — Acme Corp\n- Ingénieur logiciel senior\n- Développement de services Node.js et TypeScript",
+      "fieldKey": "experience",
+      "confidence": 0.8369406887755103
+    },
+    {
+      "title": "COMPÉTENCES",
+      "content": "TypeScript, Node.js, PostgreSQL, Docker",
+      "fieldKey": "skills",
+      "confidence": 0.8279413265306123
+    },
+    {
+      "title": "COORDONNÉES",
+      "content": "john.doe@example.com\n+33 6 12 34 56 78\nhttps://linkedin.com/in/johndoe",
+      "fieldKey": "contact",
+      "confidence": 0.8819375
+    }
+  ],
+  "metadata": {
+    "name": null,
+    "email": null,
+    "phone": null,
+    "linkedinUrl": null,
+    "telemetry": {
+      "providerUsed": null,
+      "sanitizedForRepair": false,
+      "repairReturnedProviderShape": false
+    }
+  },
+  "method": "llm",
+  "warnings": []
+}

@@ -1,0 +1,76 @@
+{
+  "id": "resp_0d8cf8289804d26d0069b2dba2387c8198a53fa7098b7355b6",
+  "object": "response",
+  "created_at": 1773329314,
+  "status": "completed",
+  "background": false,
+  "billing": {
+    "payer": "developer"
+  },
+  "completed_at": 1773329316,
+  "error": null,
+  "frequency_penalty": 0,
+  "incomplete_details": null,
+  "instructions": null,
+  "max_output_tokens": 500,
+  "max_tool_calls": null,
+  "model": "gpt-5-nano-2025-08-07",
+  "output": [
+    {
+      "id": "rs_0d8cf8289804d26d0069b2dba281dc8198a7f2518dc94297a4",
+      "type": "reasoning",
+      "summary": []
+    },
+    {
+      "id": "msg_0d8cf8289804d26d0069b2dba2ada88198a4bb9637f6e09304",
+      "type": "message",
+      "status": "completed",
+      "content": [
+        {
+          "type": "output_text",
+          "annotations": [],
+          "logprobs": [],
+          "text": "Dear Hiring Manager,\n\nI am excited to apply for the Senior Frontend Engineer role, bringing a focused background in React, TypeScript, and design systems to lead customer-facing Web experiences. I’ve helped steer a design system migration across multiple product squads, shaping reusable UI components and patterns that support faster iteration and consistency. This work aligns with the responsibility to build scalable UI systems and improve developer velocity while delivering polished user experiences.\n\nIn previous roles, I partnered closely with product and design to refine customer-facing workflows and dashboards. I collaborated with design on interaction patterns and worked on performance optimizations that reduced page load times by 28 percent through bundle and rendering improvements. I’ve also contributed to analytics instrumentation and experimentation practices, supporting data-driven decisions to optimize signup flows and onboarding experiences, which complements the emphasis on experimentation in the role.\n\nAs a mentor, I’ve supported junior engineers through code reviews and guidance on best practices for React and TypeScript, fostering a collaborative environment and steady skill growth. I’m eager to bring my hands-on experience with performance optimization, design system governance, and cross-functional collaboration to your team and help drive impactful, measurable improvements for your SaaS platform.\n\nSincerely,\nAlex Martin"
+        }
+      ],
+      "role": "assistant"
+    }
+  ],
+  "parallel_tool_calls": true,
+  "presence_penalty": 0,
+  "previous_response_id": null,
+  "prompt_cache_key": null,
+  "prompt_cache_retention": null,
+  "reasoning": {
+    "effort": "minimal",
+    "summary": null
+  },
+  "safety_identifier": null,
+  "service_tier": "default",
+  "store": true,
+  "temperature": 1,
+  "text": {
+    "format": {
+      "type": "text"
+    },
+    "verbosity": "medium"
+  },
+  "tool_choice": "auto",
+  "tools": [],
+  "top_logprobs": 0,
+  "top_p": 1,
+  "truncation": "disabled",
+  "usage": {
+    "input_tokens": 526,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 256,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 782
+  },
+  "user": null,
+  "metadata": {}
+}

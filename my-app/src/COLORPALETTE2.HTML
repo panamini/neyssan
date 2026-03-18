@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minimalist Proposal App</title>
+    <!-- Inter font from Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* CSS Tokens provided by the user */
+        :root {
+            /* Light theme (Design tokens) */
+            --phi: 1.618;
+            --grid-unit: 8px;
+            --space-1: calc(var(--grid-unit) * 1);
+            --space-2: calc(var(--grid-unit) * 2);
+            --space-3: calc(var(--grid-unit) * 3);
+            --space-4: calc(var(--grid-unit) * 4);
+            --space-5: calc(var(--grid-unit) * 5);
+            --space-6: calc(var(--grid-unit) * 6);
+            --space-8: calc(var(--grid-unit) * 8);
+            --space-10: calc(var(--grid-unit) * 10);
+            --space-12: calc(var(--grid-unit) * 12);
+            --space-14: calc(var(--grid-unit) * 14);
+            --space-16: calc(var(--grid-unit) * 16);
+            --background: #F5F5F0;
+            --foreground: #333333;
+            --primary: #555555;
+            --muted: #AAAAAA;
+            --accent: #8899AA;
+            --hover: #778899;
+            --job-field-bg: #EAEAEA;
+            --text-muted: var(--muted);
+            --dark-text: var(--foreground);
+            --success: #6B8E23;
+            --danger: #B22222;
+            --warning: #D2B48C;
+            --on-primary: #ffffff;
+            --on-success: #ffffff;
+            --on-danger: #ffffff;
+            --on-warning: #ffffff;
+            --on-accent: #ffffff;
+            --header-height: var(--space-8);
+            --footer-height: var(--space-5);
+            --btn-height-base: var(--space-3);
+            --btn-height-primary: calc(var(--btn-height-base) * var(--phi));
+            --btn-height-tertiary: calc(var(--btn-height-base) / var(--phi));
+            --main-width: 61.8%;
+            --sidebar-width: 38.2%;
+            --input-base-height: var(--btn-height-base);
+            --textarea-base-height: calc(var(--btn-height-base) * 3);
+            --modal-max-width: 900px;
+            --modal-padding: var(--space-3);
+            --card-padding: var(--space-2);
+            --card-radius: 0.5rem;
+            --pill-height: var(--btn-height-tertiary);
+            --toast-max-width: 360px;
+            --toast-padding: var(--space-2);
+            --toast-height: calc(var(--btn-height-base) + var(--space-2));
+            --focus-ring: 3px;
+            --shadow-color: rgba(16,24,40,0.08);
+            --scroll-track-width: calc(var(--grid-unit) / var(--phi));
+            --scroll-thumb-width: calc(var(--scroll-track-width) * 0.8);
+            --scroll-gap: 2px;
+            --card-height: 480px;
+            --scroll-thumb-min-height: 12px;
+            --pill-height: var(--btn-height-tertiary);
+            --chip-font-size: 0.75rem;
+            --chip-padding-x: 0.5rem;
+            --chip-padding-y: 0.125rem;
+            --chip-bg: var(--job-field-bg);
+            --chip-color: var(--foreground);
+            --chip-radius: 999px;
+        }
+
+        .dark {
+            /* Dark theme (subtle dark mode) */
+            --background: #222222;
+            --foreground: #DDDDDD;
+            --primary: #BBBBBB;
+            --muted: #666666;
+            --accent: #8C7B9E;
+            --hover: #9E8CBE;
+            --job-field-bg: #111111;
+            --text-muted: var(--muted);
+            --dark-text: var(--foreground);
+            --success: #3D5C3D;
+            --danger: #7A4040;
+            --warning: #9A8B60;
+            --on-primary: #000000;
+            --on-success: #ffffff;
+            --on-danger: #ffffff;
+            --on-warning: #ffffff;
+            --on-accent: #000000;
+        }
+        
+        /* Core body and element styles */
+        html, body {
+            background-color: var(--background);
+            color: var(--foreground);
+            font-family: 'Inter', sans-serif;
+            transition: background-color 0.3s ease, color 0.3s ease;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            min-height: 100vh;
+        }
+        
+        /* Custom scrollbar styles based on provided tokens */
+        .custom-scrollbar::-webkit-scrollbar {
+          width: var(--scroll-track-width, 5px);
+          height: var(--scroll-track-width, 5px);
+        }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: var(--accent);
+          border-radius: 999px;
+          min-height: var(--scroll-thumb-min-height, 12px);
+          border: 1px solid rgba(0,0,0,0.06);
+        }
+        .custom-scrollbar {
+          scrollbar-width: thin;
+          scrollbar-color: var(--accent) transparent;
+        }
+        
+        .card {
+            background-color: var(--job-field-bg);
+            box-shadow: 0 4px 6px -1px var(--shadow-color);
+        }
+
+        .button {
+            height: var(--btn-height-base);
+            padding: 0 var(--space-2);
+            border-radius: var(--card-radius);
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .button:hover {
+            opacity: 0.9;
+        }
+
+        .active-palette-dot {
+            border: 2px solid var(--primary);
+            box-shadow: 0 0 0 2px var(--background);
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-8">
+
+    <div class="max-w-4xl mx-auto">
+        <header class="flex flex-col items-start justify-between mb-10 sm:flex-row sm:items-center">
+            <h1 class="mb-4 text-3xl font-bold sm:mb-0">Minimalist Proposal App</h1>
+            <div class="flex items-center space-x-4">
+                <button id="theme-toggle" class="button" style="background-color: var(--primary); color: var(--on-primary);">
+                    Toggle Theme
+                </button>
+            </div>
+        </header>
+
+        <main class="grid grid-cols-1 gap-6 mb-12 lg:grid-cols-3">
+            <!-- Sidebar for Palettes -->
+            <div class="p-4 rounded-lg lg:col-span-1 card sm:p-6">
+                <h2 class="mb-4 text-xl font-bold">Choose a Palette</h2>
+                <p class="mb-4 text-sm" style="color: var(--text-muted);">
+                    Select a color palette below to see it applied to your proposal. These palettes are inspired by complementary color theory and golden ratio principles.
+                </p>
+                <div id="palette-container" class="space-y-4">
+                    <!-- Palettes will be dynamically generated here -->
+                </div>
+            </div>
+
+            <!-- Main Proposal Area -->
+            <div class="p-4 rounded-lg lg:col-span-2 card sm:p-8">
+                <h2 class="mb-4 text-xl font-bold">Your Proposal</h2>
+                <div id="proposal-editor" contenteditable="true" class="w-full min-h-[300px] border border-transparent rounded-lg p-4 custom-scrollbar focus:border-accent focus:outline-none" style="background-color: var(--background); color: var(--foreground); line-height: 1.6;">
+                    <p class="mb-4">
+                        Dear Client,
+                    </p>
+                    <p class="mb-4">
+                        This document outlines my proposal for the new web design project. My design philosophy is rooted in minimalism and a professional, sleek aesthetic. The goal is to create a user experience that is clean, intuitive, and visually harmonious.
+                    </p>
+                    <p>
+                        I believe that by utilizing a subtle, elegant color palette and thoughtful typography, we can build a strong brand identity that resonates with your audience. The color schemes I will be using are based on Itten's color theory and complementary colors, which ensure a balanced and pleasing visual structure.
+                    </p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const themeToggleBtn = document.getElementById('theme-toggle');
+            const html = document.documentElement;
+            const paletteContainer = document.getElementById('palette-container');
+            const proposalEditor = document.getElementById('proposal-editor');
+            
+            const palettes = [
+                {
+                    name: "Serene Meadow",
+                    description: "A calming pastel palette with complementary green and muted red.",
+                    colors: ["#F5F5F0", "#D9E8D0", "#B22222", "#D2B48C", "#6B8E23"],
+                    cssVariables: {
+                        '--background': '#F5F5F0', '--foreground': '#333333', '--accent': '#D9E8D0', '--primary': '#6B8E23',
+                        '--muted': '#AAAAAA', '--on-primary': '#ffffff', '--on-accent': '#ffffff'
+                    },
+                    isDark: false
+                },
+                {
+                    name: "Urban Sunset",
+                    description: "A sophisticated dark mode palette with complementary blue and muted orange.",
+                    colors: ["#222222", "#8C7B9E", "#DDDDDD", "#A06B56", "#B2B2B2"],
+                    cssVariables: {
+                        '--background': '#222222', '--foreground': '#DDDDDD', '--accent': '#8C7B9E', '--primary': '#A06B56',
+                        '--muted': '#666666', '--on-primary': '#ffffff', '--on-accent': '#000000'
+                    },
+                    isDark: true
+                },
+                {
+                    name: "Golden Ratio",
+                    description: "A balanced, warm palette inspired by the golden ratio's proportion.",
+                    colors: ["#F9F7F3", "#EAE3D9", "#F7EFE5", "#C8B6A6", "#B1A196"],
+                    cssVariables: {
+                        '--background': '#F9F7F3', '--foreground': '#4B4A48', '--accent': '#C8B6A6', '--primary': '#B1A196',
+                        '--muted': '#AAAAAA', '--on-primary': '#ffffff', '--on-accent': '#ffffff'
+                    },
+                    isDark: false
+                },
+                {
+                    name: "Subtle Grey",
+                    description: "A clean, off-white and grey palette for a professional look.",
+                    colors: ["#F9F9F9", "#EAEAEA", "#A0A0A0", "#666666", "#333333"],
+                    cssVariables: {
+                        '--background': '#F9F9F9', '--foreground': '#333333', '--accent': '#A0A0A0', '--primary': '#666666',
+                        '--muted': '#AAAAAA', '--on-primary': '#ffffff', '--on-accent': '#ffffff'
+                    },
+                    isDark: false
+                },
+                {
+                    name: "Gemini Dark Grey",
+                    description: "A sleek, professional dark mode palette with a subtle blue-grey accent.",
+                    colors: ["#1A1A1A", "#333333", "#D4D4D4", "#5F749B", "#AAAAAA"],
+                    cssVariables: {
+                        '--background': '#1A1A1A', '--foreground': '#D4D4D4', '--accent': '#5F749B', '--primary': '#AAAAAA',
+                        '--muted': '#777777', '--on-primary': '#000000', '--on-accent': '#ffffff'
+                    },
+                    isDark: true
+                },
+                {
+                    name: "Universal Fibonacci 1",
+                    description: "A cool-toned light palette with colors derived from the Fibonacci sequence.",
+                    colors: ["#EFEFEF", "#D6E0E6", "#728A97", "#526773", "#334149"],
+                    cssVariables: {
+                        '--background': '#EFEFEF', '--foreground': '#334149', '--accent': '#728A97', '--primary': '#526773',
+                        '--muted': '#AAAAAA', '--on-primary': '#ffffff', '--on-accent': '#ffffff'
+                    },
+                    isDark: false
+                },
+                {
+                    name: "Universal Fibonacci 2",
+                    description: "A vibrant, warm palette using Fibonacci-inspired hue relationships.",
+                    colors: ["#F7F3EB", "#E0D7C9", "#A89482", "#776352", "#5E4D41"],
+                    cssVariables: {
+                        '--background': '#F7F3EB', '--foreground': '#5E4D41', '--accent': '#A89482', '--primary': '#776352',
+                        '--muted': '#C0B9B0', '--on-primary': '#ffffff', '--on-accent': '#ffffff'
+                    },
+                    isDark: false
+                },
+                {
+                    name: "Universal Golden Ratio 1",
+                    description: "A bold, dark theme with an accent color generated with the golden ratio.",
+                    colors: ["#2B2B2B", "#424242", "#87693A", "#614E2D", "#CFCFCF"],
+                    cssVariables: {
+                        '--background': '#2B2B2B', '--foreground': '#CFCFCF', '--accent': '#87693A', '--primary': '#614E2D',
+                        '--muted': '#555555', '--on-primary': '#ffffff', '--on-accent': '#000000'
+                    },
+                    isDark: true
+                },
+                {
+                    name: "Universal Golden Ratio 2",
+                    description: "A soft, complementary light theme based on the golden ratio.",
+                    colors: ["#F0F8FF", "#B0C4DE", "#87A3BF", "#667A99", "#3D5273"],
+                    cssVariables: {
+                        '--background': '#F0F8FF', '--foreground': '#3D5273', '--accent': '#B0C4DE', '--primary': '#667A99',
+                        '--muted': '#DCDCDC', '--on-primary': '#ffffff', '--on-accent': '#ffffff'
+                    },
+                    isDark: false
+                },
+                {
+                    name: "Elegance Gold",
+                    description: "A luxurious palette combining off-white with shades of gold and grey.",
+                    colors: ["#FDFCF7", "#E6D7B7", "#C9AD8A", "#666666", "#333333"],
+                    cssVariables: {
+                        '--background': '#FDFCF7', '--foreground': '#333333', '--accent': '#E6D7B7', '--primary': '#C9AD8A',
+                        '--muted': '#AAAAAA', '--on-primary': '#ffffff', '--on-accent': '#ffffff'
+                    },
+                    isDark: false
+                }
+            ];
+
+            // Helper function to render palettes
+            const renderPalettes = (activePaletteIndex = 0) => {
+                paletteContainer.innerHTML = ''; // Clear previous palettes
+                palettes.forEach((palette, index) => {
+                    const isActive = index === activePaletteIndex;
+                    const paletteDiv = document.createElement('div');
+                    paletteDiv.className = `p-3 rounded-lg flex flex-col cursor-pointer transition-all duration-200 ease-in-out card ${isActive ? 'active-palette-dot' : ''}`;
+                    paletteDiv.innerHTML = `
+                        <h3 class="mb-2 font-semibold">${palette.name}</h3>
+                        <p class="mb-2 text-xs" style="color: var(--text-muted);">${palette.description}</p>
+                        <div class="flex space-x-1">
+                            ${palette.colors.map(color => `<div class="w-6 h-6 rounded-full" style="background-color: ${color};"></div>`).join('')}
+                        </div>
+                    `;
+                    paletteDiv.addEventListener('click', () => {
+                        applyPalette(palette);
+                        renderPalettes(index); // Re-render to show active state
+                    });
+                    paletteContainer.appendChild(paletteDiv);
+                });
+            };
+
+            // Helper function to apply a palette and toggle theme class
+            const applyPalette = (palette) => {
+                for (const [key, value] of Object.entries(palette.cssVariables)) {
+                    document.documentElement.style.setProperty(key, value);
+                }
+                // Toggle the theme class based on the palette
+                html.classList.toggle('dark', palette.isDark);
+                html.classList.toggle('light', !palette.isDark);
+                updateThemeButtonStyles();
+            };
+
+            // Helper to update button styles and text based on current theme
+            const updateThemeButtonStyles = () => {
+                const isDark = html.classList.contains('dark');
+                const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim();
+                const onPrimaryColor = getComputedStyle(document.documentElement).getPropertyValue('--on-primary').trim();
+                themeToggleBtn.style.backgroundColor = primaryColor;
+                themeToggleBtn.style.color = onPrimaryColor;
+                themeToggleBtn.textContent = isDark ? "Light Mode" : "Dark Mode";
+            };
+
+            // Dark/Light mode toggle
+            themeToggleBtn.addEventListener('click', () => {
+                const isDark = html.classList.contains('dark');
+                html.classList.toggle('dark');
+                html.classList.toggle('light');
+                updateThemeButtonStyles();
+            });
+
+            // Initial setup - renders the first palette by default
+            renderPalettes(0);
+            applyPalette(palettes[0]);
+            updateThemeButtonStyles();
+        });
+    </script>
+</body>
+</html>

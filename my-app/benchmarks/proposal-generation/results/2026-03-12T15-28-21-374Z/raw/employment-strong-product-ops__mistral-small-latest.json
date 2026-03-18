@@ -1,0 +1,25 @@
+{
+  "id": "4d8ac59f0af3428abfdedf99a65489d1",
+  "created": 1773329317,
+  "model": "mistral-small-latest",
+  "usage": {
+    "prompt_tokens": 441,
+    "total_tokens": 674,
+    "completion_tokens": 233,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "object": "chat.completion",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "tool_calls": null,
+        "content": "Dear Hiring Manager,\n\nI am excited to apply for the Operations Program Manager role at your organization. With my background leading operations and program initiatives, I’ve focused on improving workflows and reducing inefficiencies—particularly in support and onboarding. At FlowDesk, I standardized onboarding processes across teams, which cut handoff errors by 35 percent and improved reliability. I also built weekly reporting to surface SLA risks earlier, ensuring proactive issue resolution. My experience aligns closely with your need for someone who can drive process reliability and cross-functional coordination.\n\nI thrive in roles that require stakeholder management and process documentation, having worked closely with support, implementation, and internal teams to align priorities and document best practices. My approach combines structured program management with a focus on measurable outcomes, ensuring initiatives deliver tangible improvements. I’m particularly drawn to this opportunity because it emphasizes improving reporting and operational visibility—areas where I’ve seen direct impact in my recent work.\n\nI would welcome the chance to discuss how my experience in process redesign and cross-functional collaboration could contribute to your team. Thank you for your time and consideration.\n\nSincerely,\nCamille Bernard"
+      }
+    }
+  ]
+}

@@ -1,0 +1,74 @@
+# pdf-ingest references
+Generated: 2025-09-02T15:49:06Z
+
+Files referencing pdf-ingest:
+- run-all.sh
+- .git/COMMIT_EDITMSG
+- .git/logs/HEAD
+- .git/logs/refs/heads/feature/llm-full-rawtext
+- .github/workflows/ci.yml
+- diagnostics/CAPTURE_WEB_TRACE.md
+- README_TUTO_SCRIPTS.MD
+- RUN_APP_COMMAND.txt
+- docs/AI_TASK_SETUP.md
+- docs/CONVEX_PERSIST_SUMMARY.md
+- alembic_backups/PLAN_DATABASE_REBASE.MD
+- alembic_backups/README.MD
+- remediate_migrations_v0_core-old.sh
+- remediate_migrations_v1_old.sh
+- remediate_migration_grok_v0_old.sh
+- remediate_migration_grok_v1.sh
+- migration_rebase_phase1.sh
+- safe-start.sh
+- my-app/HANDOVERPLAN_ANNEXE.MD
+- my-app/HANDOVERPLAN_V3.MD
+- my-app/HANDOVERPLAN_V6.MD
+- my-app/HANDOVERPLAN_v2.MD
+- my-app/HANDOVERPLAN_V5.MD
+- my-app/HANDOVERPLAN_v1.MD
+- my-app/HANDOVERPLAN_V4.MD
+- my-app/HANDOVERPLAN.MD
+- my-app/HANDOVERPLAN_V7.MD
+- my-app/HANDOVERPLANv0.MD
+- my-app/dist/assets/index-4Di5AHrp.js
+- my-app/convex/actions/persistProfile.ts
+- my-app/convex/llm.ts
+- my-app/convex/DEPRECATE_PYTHON_INGEST.md
+- my-app/src/components/ProfileEditorUnified.tsx
+- my-app/src/components.bak.1756564393/ProfileEditorUnified.tsx
+- my-app/src/components/ProfileEditorUnified.tsx.bak
+- pdf-ingest/PARSER_ROADMAP.MD
+- pdf-ingest/Run_BACKEND_DOCKER.MD
+- pdf-ingest/app copy-v0.bk
+- pdf-ingest/appv4.py
+- pdf-ingest/app copy-v1.bk
+- pdf-ingest/app.py
+- pdf-ingest/convex_persistv0.bk
+- pdf-ingest/convex_persist.py
+- pdf-ingest/Alembic_remediate_migration_script_v1
+- pdf-ingest/alembic/README
+- pdf-ingest/alembic/README_RUN_remediate_migrations.md
+- pdf-ingest/diagnostics/diagnostic_20250827T143213Z.log
+- pdf-ingest/diagnostics/diagnostic_20250827T223006Z.log
+- pdf-ingest/diagnostics/generate_chunk_prompts.py
+- pdf-ingest/diagnostics/pdf_ingest_debug.log
+- pdf-ingest/diagnostics/chunks/pdf_ingest_chunk_1_20250827T143227.log
+- pdf-ingest/pdf_ingest_debug_excerpt.py
+- pdf-ingest/scripts/backfill_convex_status.py
+- pdf-ingest/scripts/backfill_convex_retry-old.py
+- pdf-ingest/scripts/README.MD
+- pdf-ingest/DOCKER_COMMANDS.md
+- pdf-ingest/run_tests_docker.sh
+- pdf-ingest/convex_persist.py
+- pdf-ingest/.venv/pyvenv.cfg
+- pdf-ingest/.venv/bin/activate
+- pdf-ingest/.venv/bin/activate.csh
+- pdf-ingest/.venv/bin/watchfiles
+- pdf-ingest/.venv/bin/normalizer
+- pdf-ingest/.venv/bin/py.test
+- pdf-ingest/.venv/bin/websockets
+- pdf-ingest/.venv/bin/alembic
+- pdf-ingest/.venv/bin/uvicorn
+
+Review and next steps:
+- Confirm removal scope (full removal of pdf-ingest directory or partial removal of specific files/tests) before I apply changes.

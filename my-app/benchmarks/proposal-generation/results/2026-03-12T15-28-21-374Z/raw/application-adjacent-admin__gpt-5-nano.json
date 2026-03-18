@@ -1,0 +1,76 @@
+{
+  "id": "resp_09dd28248b50dcdc0069b2dc091f9c81998157407648ba9411",
+  "object": "response",
+  "created_at": 1773329417,
+  "status": "completed",
+  "background": false,
+  "billing": {
+    "payer": "developer"
+  },
+  "completed_at": 1773329418,
+  "error": null,
+  "frequency_penalty": 0,
+  "incomplete_details": null,
+  "instructions": null,
+  "max_output_tokens": 500,
+  "max_tool_calls": null,
+  "model": "gpt-5-nano-2025-08-07",
+  "output": [
+    {
+      "id": "rs_09dd28248b50dcdc0069b2dc0976988199ae9ca3ff3345f07b",
+      "type": "reasoning",
+      "summary": []
+    },
+    {
+      "id": "msg_09dd28248b50dcdc0069b2dc099b688199ad75e1df43eabe13",
+      "type": "message",
+      "status": "completed",
+      "content": [
+        {
+          "type": "output_text",
+          "annotations": [],
+          "logprobs": [],
+          "text": "I am Camille Bernard, an operations professional with a focus on coordination, documentation, and cross-team communication. I excel at organizing schedules, maintaining clear records, and ensuring stakeholders stay aligned through reliable process follow-through. My strength lies in translating complex workflows into documented steps and coordinating efforts across teams to keep projects moving smoothly. I am eager to bring my focus on coordination and thorough documentation to support the Administrative Coordinator role and contribute to efficient office operations."
+        }
+      ],
+      "role": "assistant"
+    }
+  ],
+  "parallel_tool_calls": true,
+  "presence_penalty": 0,
+  "previous_response_id": null,
+  "prompt_cache_key": null,
+  "prompt_cache_retention": null,
+  "reasoning": {
+    "effort": "minimal",
+    "summary": null
+  },
+  "safety_identifier": null,
+  "service_tier": "default",
+  "store": true,
+  "temperature": 1,
+  "text": {
+    "format": {
+      "type": "text"
+    },
+    "verbosity": "medium"
+  },
+  "tool_choice": "auto",
+  "tools": [],
+  "top_logprobs": 0,
+  "top_p": 1,
+  "truncation": "disabled",
+  "usage": {
+    "input_tokens": 314,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 106,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 420
+  },
+  "user": null,
+  "metadata": {}
+}

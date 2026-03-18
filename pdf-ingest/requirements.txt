@@ -1,0 +1,30 @@
+fastapi==0.95.2
+uvicorn[standard]==0.22.0
+pdfminer.six==20240706
+pydantic==1.10.12
+python-multipart==0.0.6
+
+# Database + async
+SQLAlchemy==2.0.22
+asyncpg==0.27.0
+# psycopg (sync driver) is recommended for new projects; keep for worker compatibility
+psycopg[binary]>=3.2
+# Add psycopg2-binary to satisfy sync SQLAlchemy's default postgresql dialect (psycopg2)
+psycopg2-binary>=2.9.7
+
+# Queue / Redis
+redis==4.5.5
+rq==1.1.0
+
+# Testing
+pytest==7.4.0
+httpx==0.24.1
+pytest-asyncio==0.22.0
+
+# NOTE: removed `mistralai` SDK from requirements to avoid dependency conflicts with FastAPI/pydantic.
+# The code uses direct HTTP calls to Mistral's chat/completions endpoint (llm.py) to avoid upgrading core deps.
+
+# Alembic for DB migrations (ensure CI and built images include alembic)
+alembic==1.16.4
+
+requests>=2.31.0

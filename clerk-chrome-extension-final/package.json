@@ -1,0 +1,54 @@
+{
+  "name": "clerk-chrome-extension-final",
+  "displayName": "Clerk chrome extension final",
+  "version": "0.0.1",
+  "description": "A basic Plasmo extension.",
+  "author": "Plasmo Corp. <foss@plasmo.com>",
+  "scripts": {
+    "clean:build": "node ./scripts/clean-build-outputs.mjs",
+    "dev": "npm run dev:local",
+    "dev:local": "node ./scripts/run-plasmo-local.mjs dev",
+    "build": "npm run build:prod",
+    "build:local": "node ./scripts/run-plasmo-local.mjs build",
+    "build:prod": "npm run clean:build && plasmo build --target=chrome-mv3-prod && node ./scripts/prune-build-outputs.mjs chrome-mv3-prod",
+    "package": "npm run package:prod",
+    "package:prod": "npm run build:prod && plasmo package --target=chrome-mv3-prod"
+  },
+  "dependencies": {
+    "@clerk/chrome-extension": "^2.2.10",
+    "axios": "^1.7.9",
+    "convex": "^1.19.2",
+    "plasmo": "0.90.3",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "react-router-dom": "^6.29.0"
+  },
+  "devDependencies": {
+    "@ianvs/prettier-plugin-sort-imports": "4.1.1",
+    "@types/chrome": "0.0.258",
+    "@types/node": "20.11.5",
+    "@types/react": "18.2.48",
+    "@types/react-dom": "18.2.18",
+    "autoprefixer": "10.4.0",
+    "postcss": "8.4.0",
+    "postcss-cli": "^11.0.0",
+    "prettier": "3.2.4",
+    "tailwindcss": "3.4.0",
+    "typescript": "5.3.3"
+  },
+  "manifest": {
+    "permissions": ["activeTab", "cookies", "storage"],
+    "host_permissions": [
+      "$PLASMO_PUBLIC_CLERK_SYNC_HOST/*",
+      "$CLERK_FRONTEND_API/*",
+      "$PLASMO_PUBLIC_CONVEX_URL/*"
+    ],
+    "action": {
+      "default_popup": "popup.html"
+      
+      
+    },
+    "key": "$CRX_PUBLIC_KEY"
+  },
+  "externals": ["react", "react-dom"]
+}

@@ -1,0 +1,10 @@
+John Doe
+123 Main Street, Paris, France
+Email: john.doe@example.com | Phone: +33 6 12 34 56 78
+
+Experience:
+Software Engineer, Acme Corp, April 2020 – Present
+Frontend Developer, WebSolutions, January 2018 – March 2020
+
+Education:
+Master's in Computer Science, University of Paris, 2017
