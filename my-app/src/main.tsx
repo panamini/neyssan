@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { ClerkProvider, useAuth, SignInButton } from "@clerk/clerk-react";
+import { ClerkProvider, useAuth } from "@clerk/clerk-react";
 import { ConvexProviderWithClerk } from "convex/react-clerk";
 import { convexClient as convex } from "./lib/convex-client";
 import App from "./App.tsx";
@@ -32,21 +32,6 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       <ClerkProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY}>
         <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
           <ToastProvider>
-            {/* Fixed top-right sign-in button visible across the app */}
-            <div className="pointer-events-none">
-              <div className="fixed top-4 right-4 z-50 pointer-events-auto">
-                <SignInButton mode="modal">
-                  <button
-                    type="button"
-                    aria-label="Sign in"
-                    className="[background:var(--sfr)] border border-[color:var(--bm)] [color:var(--ti)] px-3 py-2 rounded-[var(--rs)] [box-shadow:var(--sha)] hover:[background:var(--sf2)] focus:outline-none focus:[box-shadow:0_0_0_3px_var(--fr)]"
-                  >
-                    Sign in
-                  </button>
-                </SignInButton>
-              </div>
-            </div>
-
             <App />
           </ToastProvider>
         </ConvexProviderWithClerk>
