@@ -1,0 +1,76 @@
+# --------------------------------
+# Base: ignore everything
+# --------------------------------
+*
+
+# --------------------------------
+# Build inputs we must ship
+# --------------------------------
+!.dockerignore
+!requirements.txt
+!requirements.lock
+
+# --------------------------------
+# cv_parser_service FastAPI app
+# --------------------------------
+!cv_parser_service/
+!cv_parser_service/**
+cv_parser_service/__pycache__/
+cv_parser_service/**/__pycache__/
+cv_parser_service/tests/
+cv_parser_service/tests/**
+cv_parser_service/**/*.pyc
+cv_parser_service/**/*.pyo
+cv_parser_service/**/*.pytest_cache/
+cv_parser_service/Dockerfile_old.bk
+cv_parser_service/Dockerfile copy
+cv_parser_service/READMETOO.md
+cv_parser_service/README.md
+
+# --------------------------------
+# Core cv_parser library (runtime dependencies)
+# --------------------------------
+!cv_parser/
+!cv_parser/**
+cv_parser/__pycache__/
+cv_parser/**/__pycache__/
+cv_parser/tests/
+cv_parser/tests/**
+cv_parser/**/tests/**
+cv_parser/training/
+cv_parser/training/**
+cv_parser/scripts/
+cv_parser/scripts/**
+cv_parser/**/*.ipynb
+cv_parser/**/*.bak
+cv_parser/**/*.spacy
+cv_parser/data/raw/
+cv_parser/data/raw/**
+cv_parser/data/processed/
+cv_parser/data/processed/**
+cv_parser/ocr/tests/
+cv_parser/ocr/tests/**
+cv_parser/ocr/src/bak/
+cv_parser/ocr/src/bak/**
+cv_parser/ocr/src/**/*.bak
+cv_parser/ocr/data/raw_pdfs/
+cv_parser/ocr/data/raw_pdfs/**
+cv_parser/**/*.md
+
+# --------------------------------
+# Host helper scripts (entrypoints)
+# --------------------------------
+!scripts/
+scripts/**
+!scripts/start-parser-service.sh
+!scripts/start-dev.sh
+
+# --------------------------------
+# Global cache / build artefacts
+# --------------------------------
+**/__pycache__/
+**/.pytest_cache/
+**/*.py[cod]
+**/*.pyo
+**/*.log
+**/*.tmp

@@ -1,0 +1,76 @@
+{
+  "id": "resp_04573bbdd70f52c70069b2dbec95fc8194b93b1b53d7408735",
+  "object": "response",
+  "created_at": 1773329388,
+  "status": "completed",
+  "background": false,
+  "billing": {
+    "payer": "developer"
+  },
+  "completed_at": 1773329391,
+  "error": null,
+  "frequency_penalty": 0,
+  "incomplete_details": null,
+  "instructions": null,
+  "max_output_tokens": 500,
+  "max_tool_calls": null,
+  "model": "gpt-5-nano-2025-08-07",
+  "output": [
+    {
+      "id": "rs_04573bbdd70f52c70069b2dbece2f081948772ece655d7d6bf",
+      "type": "reasoning",
+      "summary": []
+    },
+    {
+      "id": "msg_04573bbdd70f52c70069b2dbed0128819497d3504b36337e51",
+      "type": "message",
+      "status": "completed",
+      "content": [
+        {
+          "type": "output_text",
+          "annotations": [],
+          "logprobs": [],
+          "text": "Dear Hiring Manager,\n\nI am excited to apply for the Growth Analytics Manager role. With a background as a product designer and frontend builder, I bring hands-on experience running experimentation on growth-facing pages and collaborating closely with product teams. My work on conversion experiments for startup marketing pages has sharpened my ability to translate data-driven insights into user-centric improvements, a practice I know is essential for effective funnel reporting and cross-functional communication.\n\nIn my freelance practice, I focused on experiments that tested how design and messaging impact user behavior, helping teams learn what resonates with users and where to invest resources. This perspective lends itself to established dashboards and reporting processes, where clear storytelling and concise implications drive aligned action across marketing and product leadership.\n\nI am drawn to a role that blends analytical rigor with collaboration across functions. I am eager to contribute by supporting the discovery process, framing experiment results, and helping teams interpret findings to inform product and growth decisions. I look forward to the possibility of bringing a designer’s sensitivity to user journeys and a collaborative mindset to your analytics cadence.\n\nSincerely,\nJordan Lee"
+        }
+      ],
+      "role": "assistant"
+    }
+  ],
+  "parallel_tool_calls": true,
+  "presence_penalty": 0,
+  "previous_response_id": null,
+  "prompt_cache_key": null,
+  "prompt_cache_retention": null,
+  "reasoning": {
+    "effort": "minimal",
+    "summary": null
+  },
+  "safety_identifier": null,
+  "service_tier": "default",
+  "store": true,
+  "temperature": 1,
+  "text": {
+    "format": {
+      "type": "text"
+    },
+    "verbosity": "medium"
+  },
+  "tool_choice": "auto",
+  "tools": [],
+  "top_logprobs": 0,
+  "top_p": 1,
+  "truncation": "disabled",
+  "usage": {
+    "input_tokens": 385,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 231,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 616
+  },
+  "user": null,
+  "metadata": {}
+}

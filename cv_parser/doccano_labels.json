@@ -1,0 +1,21 @@
+[
+  ["NAME", "Person full name", "#e6194B"],
+  ["EMAIL", "Email address", "#4363d8"],
+  ["PHONE", "Phone number", "#f58231"],
+  ["COMPANY", "Employer / organisation", "#911eb4"],
+  ["ROLE", "Job title / role", "#46f0f0"],
+  ["START_DATE", "Employment or education start date", "#f032e6"],
+  ["END_DATE", "Employment or education end date", "#bcf60c"],
+  ["DEGREE", "Degree title", "#fabebe"],
+  ["CERTIFICATE", "Certification", "#008080"],
+  ["GRADE", "Grade or GPA", "#9A6324"],
+  ["INSTITUTION", "Educational institution", "#ffd8b1"],
+  ["SKILL", "Skill or competency", "#3cb44b"],
+  ["LANGUAGE", "Language", "#ffe119"],
+  ["LOC", "Location", "#808000"],
+  ["GPE", "Geo-political entity", "#aaffc3"],
+  ["ADDRESS", "Postal address", "#800000"],
+  ["PROJECT", "Project name", "#a9a9a9"],
+  ["ACHIEVEMENT", "Achievement", "#000075"],
+  ["AWARD", "Award", "#aaffc3"]
+]

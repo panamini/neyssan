@@ -1,0 +1,62 @@
+.toggleGroup {
+  @apply inline-flex items-center w-full gap-1;
+  @apply md:w-auto;
+  @apply justify-start;
+}
+.toggleGroup {
+  @apply inline-flex items-center w-full gap-1;
+  @apply md:w-auto;
+}
+
+.toggleButton {
+  @apply p-2 rounded-rs;
+  transition: all .12s var(--ez);
+  color: var(--tm2);
+  background-color: var(--bg);
+  border: 1px solid transparent;
+  @apply focus:outline-none;
+}
+.toggleButton:hover {
+  background-color: var(--sf2);
+  color: var(--ti);
+}
+
+/* Dark mode — tokens auto-adaptent via .dark sur <html> */
+.dark .toggleButton {
+  background-color: var(--sf1);
+  color: var(--tm2);
+}
+
+.active {
+  background-color: var(--ac);
+  color: var(--op);
+  border-color: transparent;
+}
+
+/* Dark mode active — tokens auto-adaptent */
+.dark .active {
+  background-color: var(--ac);
+  color: var(--op);
+}
+
+.inactive {
+  /* Hover styles handled in .toggleButton */
+}
+
+.modelToggle {
+  @apply p-2 rounded-rs;
+  transition: all .12s var(--ez);
+  color: var(--tm2);
+  background-color: var(--bg);
+  border: 1px solid transparent;
+  @apply focus:outline-none;
+}
+.modelToggle:hover {
+  background-color: var(--sf2);
+  color: var(--ti);
+}
+
+.dark .modelToggle {
+  background-color: var(--sf1);
+  color: var(--tm2);
+}

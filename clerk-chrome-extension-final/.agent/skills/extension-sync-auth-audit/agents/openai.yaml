@@ -1,0 +1,4 @@
+interface:
+  display_name: "Extension Sync Auth Audit"
+  short_description: "Audit extension auth and scraper regressions"
+  default_prompt: "Use $extension-sync-auth-audit to audit Clerk Sync Host auth drift, handoff URL issues, or scraper regressions in the Neyssan Chrome extension."

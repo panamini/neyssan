@@ -1,0 +1,94 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>PDF Ingest - Test Upload</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 24px; }
+    .card { max-width: 700px; margin: 0 auto; border: 1px solid #ddd; padding: 16px; border-radius: 8px; }
+    pre { background:#f7f7f7; padding:12px; overflow:auto; }
+    .status { margin-top: 8px; color: #555; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>PDF Ingest — Test Upload</h2>
+    <p>Select a PDF file and click "Parse (sync)". This page calls <code>/api/v1/parse-now</code> and displays the JSON result.</p>
+
+    <label>
+      Backend base URL:
+      <input id="baseUrl" type="text" value="http://127.0.0.1:8000" style="width:60%" />
+    </label>
+
+    <div style="margin-top:12px;">
+      <input id="fileInput" type="file" accept="application/pdf" />
+      <button id="uploadBtn">Parse (sync)</button>
+    </div>
+
+    <div class="status" id="status"></div>
+
+    <h3>Response</h3>
+    <pre id="result">{ no result yet }</pre>
+  </div>
+
+  <script>
+    const uploadBtn = document.getElementById('uploadBtn');
+    const fileInput = document.getElementById('fileInput');
+    const resultEl = document.getElementById('result');
+    const statusEl = document.getElementById('status');
+    const baseUrlInput = document.getElementById('baseUrl');
+
+    uploadBtn.addEventListener('click', async () => {
+      const files = fileInput.files;
+      if (!files || files.length === 0) {
+        alert('Select a PDF first');
+        return;
+      }
+      const file = files[0];
+      const baseUrl = (baseUrlInput.value || '').replace(/\/$/, '');
+      const url = baseUrl + '/api/v1/parse-now';
+
+      statusEl.textContent = 'Uploading & parsing...';
+      resultEl.textContent = '';
+
+        try {
+        const form = new FormData();
+        form.append('file', file, file.name);
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 30000); // 30s timeout
+
+        const res = await fetch(url, {
+          method: 'POST',
+          body: form,
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeout);
+
+        if (!res.ok) {
+          let txt = '';
+          try { txt = await res.text(); } catch (e) { txt = '<no body>' }
+          resultEl.textContent = `HTTP ${res.status} ${res.statusText}\n\n${txt}`;
+          statusEl.textContent = 'Request failed';
+          console.error('Parse failed', res.status, res.statusText, txt);
+          return;
+        }
+
+        const json = await res.json();
+        resultEl.textContent = JSON.stringify(json, null, 2);
+        statusEl.textContent = 'Parsed successfully';
+      } catch (err) {
+        // Provide better diagnostics for network/mixed-content/CORS issues
+        if (err.name === 'AbortError') {
+          resultEl.textContent = 'Request timed out after 30s';
+        } else {
+          resultEl.textContent = String(err);
+        }
+        statusEl.textContent = 'Error';
+        console.error('Fetch error', err);
+      }
+    });
+  </script>
+</body>
+</html>

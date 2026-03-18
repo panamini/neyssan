@@ -1,0 +1,131 @@
+{
+  "experience": {
+    "en": [
+      "experience",
+      "work experience",
+      "professional experience",
+      "employment history",
+      "career history",
+      "career",
+      "roles",
+      "professional background",
+      "employment"
+    ],
+    "fr": [
+      "expérience",
+      "expériences",
+      "expérience professionnelle",
+      "expériences professionnelles",
+      "parcours professionnel"
+    ],
+    "es": [
+      "experiencia",
+      "experiencia laboral",
+      "experiencia profesional",
+      "historial laboral"
+    ],
+    "de": [
+      "erfahrung",
+      "berufserfahrung",
+      "beruflicher werdegang"
+    ]
+  },
+  "education": {
+    "en": [
+      "education",
+      "academic background",
+      "education & training",
+      "educational background",
+      "academic history",
+      "qualifications",
+      "degrees",
+      "training"
+    ],
+    "fr": [
+      "formation",
+      "parcours académique"
+    ],
+    "es": [
+      "educación",
+      "formación",
+      "antecedentes académicos"
+    ],
+    "de": [
+      "bildung",
+      "ausbildung",
+      "akademischer hintergrund"
+    ]
+  },
+  "skills": {
+    "en": [
+      "skills",
+      "key skills",
+      "technical skills",
+      "core competencies",
+      "competencies",
+      "strengths",
+      "skill set"
+    ],
+    "fr": [
+      "compétences",
+      "compétences techniques",
+      "compétences clés"
+    ],
+    "es": [
+      "habilidades",
+      "habilidades técnicas",
+      "competencias"
+    ],
+    "de": [
+      "fähigkeiten",
+      "kompetenzen",
+      "kenntnisse"
+    ]
+  },
+  "languages": {
+    "en": [
+      "languages",
+      "language skills",
+      "languages & proficiency"
+    ],
+    "fr": [
+      "langues",
+      "langues parlées"
+    ],
+    "es": [
+      "idiomas",
+      "idiomas y nivel"
+    ],
+    "de": [
+      "sprachen",
+      "sprachkenntnisse"
+    ]
+  },
+  "achievements": {
+    "en": [
+      "achievements",
+      "accomplishments",
+      "awards",
+      "career highlights",
+      "certifications",
+      "honors"
+    ],
+    "fr": [
+      "réalisations",
+      "récompenses",
+      "certifications",
+      "projets"
+    ],
+    "es": [
+      "logros",
+      "reconocimientos",
+      "premios",
+      "certificaciones"
+    ],
+    "de": [
+      "erfolge",
+      "auszeichnungen",
+      "zertifizierungen"
+    ]
+  }
+}

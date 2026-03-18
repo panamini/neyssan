@@ -1,0 +1,76 @@
+{
+  "id": "resp_002bf51d61a0c78c0069b2dc36cd048199a28e8bb7d5479345",
+  "object": "response",
+  "created_at": 1773329462,
+  "status": "completed",
+  "background": false,
+  "billing": {
+    "payer": "developer"
+  },
+  "completed_at": 1773329464,
+  "error": null,
+  "frequency_penalty": 0,
+  "incomplete_details": null,
+  "instructions": null,
+  "max_output_tokens": 500,
+  "max_tool_calls": null,
+  "model": "gpt-5-nano-2025-08-07",
+  "output": [
+    {
+      "id": "rs_002bf51d61a0c78c0069b2dc372aa481999756b9c3cd4a4247",
+      "type": "reasoning",
+      "summary": []
+    },
+    {
+      "id": "msg_002bf51d61a0c78c0069b2dc374ea481998aae91209f566f8a",
+      "type": "message",
+      "status": "completed",
+      "content": [
+        {
+          "type": "output_text",
+          "annotations": [],
+          "logprobs": [],
+          "text": "Dear Hiring Manager,\n\nI am excited to apply for the Operations Associate role. I bring a dependable mindset and a willingness to learn that align with your emphasis on reliability and clear communication. I am motivated by the opportunity to support recurring processes, keep internal records organized, and help facilitate smooth communication across teams.\n\nI value precision and accountability in my work, and I am committed to improving processes through careful attention to detail and timely follow-through. My focus on clear, direct communication helps me collaborate effectively with colleagues, ensuring that information flows accurately and promptly to support team goals.\n\nI am eager to contribute to your team by consistently showing up with a proactive attitude, asking thoughtful questions, and adapting as needed to keep operations running smoothly. Thank you for considering my application; I look forward to the possibility of bringing my steady work ethic and collaborative spirit to your organization.\n\nSincerely,\n[Candidate Name]"
+        }
+      ],
+      "role": "assistant"
+    }
+  ],
+  "parallel_tool_calls": true,
+  "presence_penalty": 0,
+  "previous_response_id": null,
+  "prompt_cache_key": null,
+  "prompt_cache_retention": null,
+  "reasoning": {
+    "effort": "minimal",
+    "summary": null
+  },
+  "safety_identifier": null,
+  "service_tier": "default",
+  "store": true,
+  "temperature": 1,
+  "text": {
+    "format": {
+      "type": "text"
+    },
+    "verbosity": "medium"
+  },
+  "tool_choice": "auto",
+  "tools": [],
+  "top_logprobs": 0,
+  "top_p": 1,
+  "truncation": "disabled",
+  "usage": {
+    "input_tokens": 333,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 194,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 527
+  },
+  "user": null,
+  "metadata": {}
+}

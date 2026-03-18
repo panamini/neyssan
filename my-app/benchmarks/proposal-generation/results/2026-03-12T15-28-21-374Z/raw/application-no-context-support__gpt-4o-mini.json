@@ -1,0 +1,71 @@
+{
+  "id": "resp_08624901b9a416cd0069b2dc3ceb78819aaf7650e40e47ff9b",
+  "object": "response",
+  "created_at": 1773329468,
+  "status": "completed",
+  "background": false,
+  "billing": {
+    "payer": "developer"
+  },
+  "completed_at": 1773329471,
+  "error": null,
+  "frequency_penalty": 0,
+  "incomplete_details": null,
+  "instructions": null,
+  "max_output_tokens": 500,
+  "max_tool_calls": null,
+  "model": "gpt-4o-mini-2024-07-18",
+  "output": [
+    {
+      "id": "msg_08624901b9a416cd0069b2dc3d45fc819aae246d74a889a22e",
+      "type": "message",
+      "status": "completed",
+      "content": [
+        {
+          "type": "output_text",
+          "annotations": [],
+          "logprobs": [],
+          "text": "I am excited to apply for the Sales Assistant position. I am confident in my ability to coordinate follow-ups and keep records organized, ensuring that communication with prospects and customers remains professional and efficient. I believe my strong organizational skills and attention to detail will contribute positively to your team. \n\nI am eager to bring my enthusiasm for sales and customer service to your company and help foster positive relationships with clients. Thank you for considering my application."
+        }
+      ],
+      "role": "assistant"
+    }
+  ],
+  "parallel_tool_calls": true,
+  "presence_penalty": 0,
+  "previous_response_id": null,
+  "prompt_cache_key": null,
+  "prompt_cache_retention": null,
+  "reasoning": {
+    "effort": null,
+    "summary": null
+  },
+  "safety_identifier": null,
+  "service_tier": "default",
+  "store": true,
+  "temperature": 0.2,
+  "text": {
+    "format": {
+      "type": "text"
+    },
+    "verbosity": "medium"
+  },
+  "tool_choice": "auto",
+  "tools": [],
+  "top_logprobs": 0,
+  "top_p": 1,
+  "truncation": "disabled",
+  "usage": {
+    "input_tokens": 299,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 87,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 386
+  },
+  "user": null,
+  "metadata": {}
+}

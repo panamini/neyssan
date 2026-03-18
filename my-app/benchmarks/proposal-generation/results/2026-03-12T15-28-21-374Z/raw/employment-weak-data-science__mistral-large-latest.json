@@ -1,0 +1,25 @@
+{
+  "id": "d70473be4787467e866d159cbc9eadbe",
+  "created": 1773329420,
+  "model": "mistral-large-latest",
+  "usage": {
+    "prompt_tokens": 397,
+    "total_tokens": 591,
+    "completion_tokens": 194,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "object": "chat.completion",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "tool_calls": null,
+        "content": "Dear Hiring Manager,\n\nI’m writing to express my interest in the Data Scientist position. While my background is primarily in frontend engineering, my recent work at Northline Labs has given me direct exposure to experimentation design and A/B testing frameworks. In this role, I collaborated closely with growth teams to build dashboards that tracked experiment performance, which required a careful understanding of statistical significance and variant analysis.\n\nThough my expertise lies in React and TypeScript, I’ve developed an appreciation for the rigor behind data-driven decision-making. My experience interpreting experiment results and communicating insights to cross-functional partners has reinforced the importance of clear, actionable data—skills I believe are transferable to a data science context.\n\nI’m eager to deepen my knowledge in areas like statistical modeling and machine learning, and I’m confident my analytical mindset and product-focused approach would allow me to contribute meaningfully to your team. Thank you for your time and consideration.\n\nSincerely,\nAlex Martin"
+      }
+    }
+  ]
+}

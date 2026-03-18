@@ -1,0 +1,76 @@
+{
+  "id": "resp_0863b715eef601cf0069b2dbb0d3e081939c51423e4033bbac",
+  "object": "response",
+  "created_at": 1773329328,
+  "status": "completed",
+  "background": false,
+  "billing": {
+    "payer": "developer"
+  },
+  "completed_at": 1773329331,
+  "error": null,
+  "frequency_penalty": 0,
+  "incomplete_details": null,
+  "instructions": null,
+  "max_output_tokens": 500,
+  "max_tool_calls": null,
+  "model": "gpt-5-nano-2025-08-07",
+  "output": [
+    {
+      "id": "rs_0863b715eef601cf0069b2dbb166d081939a9870fb557c824d",
+      "type": "reasoning",
+      "summary": []
+    },
+    {
+      "id": "msg_0863b715eef601cf0069b2dbb1817081939b0feb44c0cc4339",
+      "type": "message",
+      "status": "completed",
+      "content": [
+        {
+          "type": "output_text",
+          "annotations": [],
+          "logprobs": [],
+          "text": "Dear Hiring Manager,\n\nI am excited to apply for the Operations Program Manager role, bringing hands-on experience in coordinating cross-functional initiatives and improving process reliability. In my recent work as an Operations Lead, I standardized onboarding processes across support and implementation teams and built weekly reporting that surfaced SLA risks earlier. This combination of process design and proactive visibility is aligned with your goal of driving reporting across customer support, onboarding, and internal operations.\n\nI have focused on stakeholder management throughout my career, collaborating with diverse teams to map current workflows, identify bottlenecks, and implement practical improvements. My approach emphasizes clear process documentation and shared ownership, which helps ensure that cross-functional initiatives stay on track and outcomes are measurable.\n\nA key achievement from my background is reducing onboarding handoff errors by 35 percent through targeted process redesign. I bring that same mindset to continuously improve reliability and reduce friction across programs, while maintaining a clear, factual record of progress through structured reporting and documentation.\n\nThank you for considering my application. I look forward to the possibility of contributing to your team and discussing how my background can support your operations goals.\n\nCamille Bernard"
+        }
+      ],
+      "role": "assistant"
+    }
+  ],
+  "parallel_tool_calls": true,
+  "presence_penalty": 0,
+  "previous_response_id": null,
+  "prompt_cache_key": null,
+  "prompt_cache_retention": null,
+  "reasoning": {
+    "effort": "minimal",
+    "summary": null
+  },
+  "safety_identifier": null,
+  "service_tier": "default",
+  "store": true,
+  "temperature": 1,
+  "text": {
+    "format": {
+      "type": "text"
+    },
+    "verbosity": "medium"
+  },
+  "tool_choice": "auto",
+  "tools": [],
+  "top_logprobs": 0,
+  "top_p": 1,
+  "truncation": "disabled",
+  "usage": {
+    "input_tokens": 420,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 239,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 659
+  },
+  "user": null,
+  "metadata": {}
+}

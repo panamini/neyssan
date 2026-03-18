@@ -1,0 +1,667 @@
+import { safeParseCvDocument } from "../schemas/cvDocument.schema";
+import type { CvDocument, CvSection } from "../types/cvDocument";
+
+const LOCAL_DOC_PREFIXES = ["cv:", "cv-doc:"];
+const LOCAL_LIBRARY_KEYS = ["cvDocuments", "cvLibrary"];
+const ACTIVE_CV_STORAGE_KEY = "cvActiveId";
+const MAX_SUMMARY_LENGTH = 240;
+const MAX_SKILLS = 8;
+const MAX_RECENT_EXPERIENCE = 3;
+const MAX_HIGHLIGHTS_PER_EXPERIENCE = 2;
+const MAX_HIGHLIGHT_LENGTH = 110;
+const MAX_ACHIEVEMENTS = 4;
+const MAX_ACHIEVEMENT_LENGTH = 140;
+const SENTENCE_BOUNDARY_ABBREVIATIONS = [
+  "Pvt.",
+  "Ltd.",
+  "St.",
+  "Inc.",
+  "Co.",
+  "Corp.",
+] as const;
+const NUMERIC_RESIDUE_PATTERNS = [
+  /^\d+\s+(?:month|months|year|years)\s+work experience\b/i,
+  /^\d+\s+(?:month|months|year|years)\b/i,
+] as const;
+const MALFORMED_SNIPPET_PATTERNS = [
+  /\b(?:which|that|who|while|because|although|though|and|but|or)\.$/i,
+  /(?:[—-]|,\s*)(?:qualities?|skills?|strengths?|traits?|capabilities?)\.$/i,
+  /\b(?:a|an|the)\s+(?:skill|strength|quality|trait|ability|capability)\.$/i,
+] as const;
+
+export interface ProposalPersonalizationContext {
+  name?: string;
+  summary?: string;
+  desiredPosition?: string;
+  topSkills?: string[];
+  recentExperience?: Array<{
+    company?: string;
+    position?: string;
+    highlights?: string[];
+  }>;
+  standoutAchievements?: string[];
+}
+
+export type ProposalPersonalizationRichness =
+  | "none"
+  | "minimal"
+  | "sparse"
+  | "rich";
+
+export interface ActiveCvSnapshot {
+  title: string;
+  personalizationContext: ProposalPersonalizationContext | null;
+  updatedAt?: string;
+}
+
+export interface LocalCvPickerOption {
+  id: string;
+  title: string;
+  updatedAt?: string;
+  createdAt?: string;
+  profileName?: string;
+  desiredPosition?: string;
+  email?: string;
+  summarySnippet?: string;
+  isActive: boolean;
+}
+
+export interface ProposalGenerationPersonalizationPayload {
+  personalizationMode: "explicit_only";
+  personalizationContext?: ProposalPersonalizationContext;
+  personalizationRichness?: ProposalPersonalizationRichness;
+}
+
+type LooseRecord = Record<string, unknown>;
+
+function asRecord(value: unknown): LooseRecord | null {
+  return value && typeof value === "object" ? (value as LooseRecord) : null;
+}
+
+function readStringField(
+  record: LooseRecord | null,
+  key: string,
+): string | undefined {
+  if (!record) return undefined;
+  const value = record[key];
+  return typeof value === "string" ? value : undefined;
+}
+
+function readArrayField(record: LooseRecord | null, key: string): unknown[] {
+  if (!record) return [];
+  const value = record[key];
+  return Array.isArray(value) ? value : [];
+}
+
+function hasLocalStorage(): boolean {
+  try {
+    return (
+      typeof window !== "undefined" &&
+      typeof window.localStorage !== "undefined"
+    );
+  } catch {
+    return false;
+  }
+}
+
+function compactWhitespace(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function clampText(value: unknown, maxLength: number): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const compact = compactWhitespace(value);
+  if (!compact) return undefined;
+  if (compact.length <= maxLength) return compact;
+  return `${compact.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
+}
+
+function dedupe(values: Array<string | undefined>): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const value of values) {
+    if (!value) continue;
+    const key = value.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(value);
+  }
+  return out;
+}
+
+function extractText(value: unknown): string {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return value.map(extractText).join(" ");
+  if (typeof value === "object") {
+    const obj = value as Record<string, unknown>;
+    if (typeof obj.text === "string") return obj.text;
+    if (typeof obj.summary === "string") return obj.summary;
+    if (Array.isArray(obj.content))
+      return obj.content.map(extractText).join(" ");
+  }
+  return "";
+}
+
+function splitIntoSnippets(value: string): string[] {
+  const protectSentenceBoundaryAbbreviations = (input: string): string => {
+    let protectedValue = input;
+    for (const abbreviation of SENTENCE_BOUNDARY_ABBREVIATIONS) {
+      const escaped = abbreviation.replace(".", "\\.");
+      protectedValue = protectedValue.replace(
+        new RegExp(`\\b${escaped}(?=\\s|$)`, "g"),
+        abbreviation.replace(".", "__DOT__"),
+      );
+    }
+    return protectedValue;
+  };
+  const restoreSentenceBoundaryAbbreviations = (input: string): string =>
+    input.replace(/__DOT__/g, ".");
+  const snippetLooksMalformed = (snippet: string): boolean => {
+    const normalized = compactWhitespace(snippet);
+    if (!normalized) return true;
+    if (NUMERIC_RESIDUE_PATTERNS.some((pattern) => pattern.test(normalized))) {
+      return true;
+    }
+    if (MALFORMED_SNIPPET_PATTERNS.some((pattern) => pattern.test(normalized))) {
+      return true;
+    }
+    if (
+      /^(?:the|this|these|those)\b/i.test(normalized) &&
+      /\bi\s+(?:installed|built|developed|created|implemented|maintained|managed|configured|designed)\b/i.test(
+        normalized,
+      )
+    ) {
+      const match = normalized.match(
+        /\bi\s+(installed|built|developed|created|implemented|maintained|managed|configured|designed)\b/i,
+      );
+      if (match?.index !== undefined) {
+        const trailing = compactWhitespace(
+          normalized.slice(match.index + match[0].length),
+        );
+        if (
+          trailing &&
+          !/\b(?:were|was|are|is|reduced|improved|increased|decreased|provided|gave|enabled|helped|supported|kept|led|resulted|cut|boosted|made)\b/i.test(
+            trailing,
+          )
+        ) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+  const normalized = protectSentenceBoundaryAbbreviations(
+    value.replace(/\r/g, "\n").replace(/[•·●◦]/g, "\n"),
+  )
+    .split(/\n+/)
+    .flatMap((line) => line.split(/(?<=[.!?])\s+(?=[A-Z0-9])/))
+    .map((part) =>
+      compactWhitespace(restoreSentenceBoundaryAbbreviations(part)),
+    )
+    .filter((part) => Boolean(part) && !snippetLooksMalformed(part));
+  return dedupe(
+    normalized.map((part) => clampText(part, MAX_HIGHLIGHT_LENGTH)),
+  );
+}
+
+function getStructuredItems(section: CvSection | undefined): unknown[] {
+  if (!section || !Array.isArray(section.structuredContent)) return [];
+  return section.structuredContent as unknown[];
+}
+
+function getSectionByType(
+  doc: CvDocument,
+  type: CvSection["type"],
+): CvSection | undefined {
+  return Array.isArray(doc.sections)
+    ? doc.sections.find((section) => section.type === type)
+    : undefined;
+}
+
+function getTimestamp(doc: CvDocument): number {
+  const updatedAt = Date.parse(String(doc.metadata?.updatedAt ?? ""));
+  if (Number.isFinite(updatedAt)) return updatedAt;
+  const createdAt = Date.parse(String(doc.metadata?.createdAt ?? ""));
+  if (Number.isFinite(createdAt)) return createdAt;
+  return 0;
+}
+
+function parseStoredDocument(raw: string): CvDocument | null {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    const safe = safeParseCvDocument(parsed);
+    if (safe.ok) return safe.value;
+    const loose = asRecord(parsed);
+    if (loose && typeof loose.id === "string") {
+      return {
+        id: String(loose.id),
+        title: typeof loose.title === "string" ? loose.title : "Untitled CV",
+        metadata: asRecord(loose.metadata) ?? {
+          createdAt: new Date(0).toISOString(),
+          updatedAt: new Date(0).toISOString(),
+          version: 1,
+        },
+        sections: Array.isArray(loose.sections)
+          ? (loose.sections as CvDocument["sections"])
+          : [],
+        tags: Array.isArray(loose.tags) ? (loose.tags as string[]) : undefined,
+        summary: loose.summary,
+      } as CvDocument;
+    }
+  } catch {
+    // ignore malformed local entries
+  }
+  return null;
+}
+
+function getStoredDocumentById(id: string): CvDocument | null {
+  if (!hasLocalStorage()) return null;
+
+  let bestMatch: CvDocument | null = null;
+  for (const prefix of LOCAL_DOC_PREFIXES) {
+    const raw = window.localStorage.getItem(`${prefix}${id}`);
+    if (!raw) continue;
+    const doc = parseStoredDocument(raw);
+    if (!doc) continue;
+    if (!bestMatch || getTimestamp(doc) >= getTimestamp(bestMatch)) {
+      bestMatch = doc;
+    }
+  }
+
+  return bestMatch;
+}
+
+function getLibraryDocuments(): CvDocument[] {
+  if (!hasLocalStorage()) return [];
+
+  for (const key of LOCAL_LIBRARY_KEYS) {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) continue;
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed)) continue;
+      return parsed
+        .map((entry) => parseStoredDocument(JSON.stringify(entry)))
+        .filter((doc): doc is CvDocument => Boolean(doc));
+    } catch {
+      // ignore malformed library entries and try the next key
+    }
+  }
+
+  return [];
+}
+
+function readSummary(doc: CvDocument): string | undefined {
+  const topLevel = clampText(extractText(doc.summary), MAX_SUMMARY_LENGTH);
+  if (topLevel) return topLevel;
+
+  const summarySection = getSectionByType(doc, "summary");
+  const summaryItem = asRecord(getStructuredItems(summarySection)[0]);
+  const structured = clampText(
+    extractText(summaryItem?.summary),
+    MAX_SUMMARY_LENGTH,
+  );
+  if (structured) return structured;
+
+  const block = summarySection?.blocks?.[0];
+  return clampText(
+    extractText(block?.plainText ?? block?.content),
+    MAX_SUMMARY_LENGTH,
+  );
+}
+
+function readTopSkills(doc: CvDocument): string[] | undefined {
+  const skillsSection = getSectionByType(doc, "skills");
+  const skillItems = getStructuredItems(skillsSection);
+  const fromStructured = skillItems.map((item) => {
+    const record = asRecord(item);
+    return clampText(
+      readStringField(record, "name") ?? (typeof item === "string" ? item : ""),
+      40,
+    );
+  });
+  const fromTags = Array.isArray(doc.tags)
+    ? doc.tags.map((tag) => clampText(tag, 40))
+    : [];
+  const topSkills = dedupe([...fromStructured, ...fromTags]).slice(
+    0,
+    MAX_SKILLS,
+  );
+  return topSkills.length > 0 ? topSkills : undefined;
+}
+
+function readProfileIdentity(doc: CvDocument): {
+  name?: string;
+  desiredPosition?: string;
+} {
+  const profileSection = getSectionByType(doc, "profile");
+  const profileItem = asRecord(getStructuredItems(profileSection)[0]);
+  const name = clampText(readStringField(profileItem, "name"), 80);
+  const desiredPosition = clampText(
+    readStringField(profileItem, "desiredPosition") ??
+      readStringField(profileItem, "title"),
+    80,
+  );
+  return { name, desiredPosition };
+}
+
+function readProfileEmail(doc: CvDocument): string | undefined {
+  const profileSection = getSectionByType(doc, "profile");
+  const profileItem = asRecord(getStructuredItems(profileSection)[0]);
+  return clampText(readStringField(profileItem, "email"), 120);
+}
+
+function readRecentExperience(
+  doc: CvDocument,
+): ProposalPersonalizationContext["recentExperience"] {
+  const experienceSection = getSectionByType(doc, "experience");
+  const experienceItems = getStructuredItems(experienceSection);
+  const recentExperience = experienceItems
+    .slice(0, MAX_RECENT_EXPERIENCE)
+    .map((item) => {
+      const record = asRecord(item);
+      const position = clampText(
+        readStringField(record, "position") ?? readStringField(record, "title"),
+        80,
+      );
+      const company = clampText(readStringField(record, "company"), 80);
+
+      const highlightCandidates: string[] = [];
+      const achievements = readArrayField(record, "achievements");
+      if (achievements.length > 0) {
+        highlightCandidates.push(
+          ...achievements
+            .map((value) => (typeof value === "string" ? value : undefined))
+            .filter((value): value is string => Boolean(value)),
+        );
+      }
+      const responsibilityBullets = readArrayField(
+        record,
+        "responsibilityBullets",
+      );
+      if (responsibilityBullets.length > 0) {
+        highlightCandidates.push(
+          ...responsibilityBullets
+            .map((value) => (typeof value === "string" ? value : undefined))
+            .filter((value): value is string => Boolean(value)),
+        );
+      }
+      const responsibilitiesText = extractText(record?.responsibilities);
+      const descriptionText = extractText(record?.description);
+      if (responsibilitiesText)
+        highlightCandidates.push(...splitIntoSnippets(responsibilitiesText));
+      if (descriptionText)
+        highlightCandidates.push(...splitIntoSnippets(descriptionText));
+
+      const highlights = dedupe(
+        highlightCandidates.map((candidate) =>
+          clampText(candidate, MAX_HIGHLIGHT_LENGTH),
+        ),
+      ).slice(0, MAX_HIGHLIGHTS_PER_EXPERIENCE);
+
+      if (!position && !company && highlights.length === 0) return null;
+      return {
+        ...(company ? { company } : {}),
+        ...(position ? { position } : {}),
+        ...(highlights.length > 0 ? { highlights } : {}),
+      };
+    })
+    .filter(Boolean) as ProposalPersonalizationContext["recentExperience"];
+
+  return recentExperience && recentExperience.length > 0
+    ? recentExperience
+    : undefined;
+}
+
+function readStandoutAchievements(doc: CvDocument): string[] | undefined {
+  const achievementsSection = getSectionByType(doc, "achievements");
+  const explicitAchievements = getStructuredItems(achievementsSection).flatMap(
+    (item) => {
+      const record = asRecord(item);
+      return splitIntoSnippets(
+        readStringField(record, "text") ?? (typeof item === "string" ? item : ""),
+      ).map((snippet) => clampText(snippet, MAX_ACHIEVEMENT_LENGTH));
+    },
+  );
+
+  const experienceFallback = getStructuredItems(
+    getSectionByType(doc, "experience"),
+  )
+    .flatMap((item) => {
+      const record = asRecord(item);
+      return readArrayField(record, "achievements");
+    })
+    .flatMap((value) =>
+      typeof value === "string"
+        ? splitIntoSnippets(value).map((snippet) =>
+            clampText(snippet, MAX_ACHIEVEMENT_LENGTH),
+          )
+        : [],
+    );
+
+  const standoutAchievements = dedupe([
+    ...explicitAchievements,
+    ...experienceFallback,
+  ]).slice(0, MAX_ACHIEVEMENTS);
+  return standoutAchievements.length > 0 ? standoutAchievements : undefined;
+}
+
+export function extractPersonalizationContextFromCvDocument(
+  doc: CvDocument,
+): ProposalPersonalizationContext | null {
+  const identity = readProfileIdentity(doc);
+  const summary = readSummary(doc);
+  const topSkills = readTopSkills(doc);
+  const recentExperience = readRecentExperience(doc);
+  const standoutAchievements = readStandoutAchievements(doc);
+  const fallbackHeadline = recentExperience?.[0]?.position;
+
+  const context: ProposalPersonalizationContext = {
+    ...(identity.name ? { name: identity.name } : {}),
+    ...(summary ? { summary } : {}),
+    ...(identity.desiredPosition ?? fallbackHeadline
+      ? { desiredPosition: identity.desiredPosition ?? fallbackHeadline }
+      : {}),
+    ...(topSkills ? { topSkills } : {}),
+    ...(recentExperience ? { recentExperience } : {}),
+    ...(standoutAchievements ? { standoutAchievements } : {}),
+  };
+
+  return Object.keys(context).length > 0 ? context : null;
+}
+
+export function classifyPersonalizationRichness(
+  context: ProposalPersonalizationContext | null | undefined,
+): ProposalPersonalizationRichness {
+  if (!context) return "none";
+
+  const hasSummary = Boolean(context.summary);
+  const hasHeadline = Boolean(context.desiredPosition);
+  const skillCount = context.topSkills?.length ?? 0;
+  const experienceCount = context.recentExperience?.length ?? 0;
+  const highlightedExperienceCount =
+    context.recentExperience?.filter(
+      (entry) => (entry.highlights?.length ?? 0) > 0,
+    ).length ?? 0;
+  const achievementCount = context.standoutAchievements?.length ?? 0;
+
+  const hasUsableSupport =
+    hasSummary ||
+    hasHeadline ||
+    skillCount > 0 ||
+    experienceCount > 0 ||
+    achievementCount > 0;
+
+  if (!hasUsableSupport) return "none";
+
+  if (
+    experienceCount >= 2 ||
+    achievementCount >= 2 ||
+    (experienceCount >= 1 && achievementCount >= 1) ||
+    (experienceCount >= 1 && hasSummary && skillCount >= 2) ||
+    (highlightedExperienceCount >= 1 && skillCount >= 4)
+  ) {
+    return "rich";
+  }
+
+  if (
+    experienceCount >= 1 ||
+    achievementCount >= 1 ||
+    skillCount >= 4 ||
+    (hasSummary && skillCount >= 2) ||
+    (hasHeadline && skillCount >= 2)
+  ) {
+    return "sparse";
+  }
+
+  return "minimal";
+}
+
+export function buildActiveCvSnapshotFromCvDocument(
+  doc: CvDocument,
+): ActiveCvSnapshot {
+  const personalizationContext =
+    extractPersonalizationContextFromCvDocument(doc);
+  const richness = classifyPersonalizationRichness(personalizationContext);
+
+  return {
+    title: clampText(doc.title, 120) ?? "Untitled CV",
+    personalizationContext: richness === "none" ? null : personalizationContext,
+    ...(typeof doc.metadata?.updatedAt === "string"
+      ? { updatedAt: doc.metadata.updatedAt }
+      : {}),
+  };
+}
+
+export function getLocalActiveCvSnapshotById(
+  id: string,
+): ActiveCvSnapshot | null {
+  const nextId = compactWhitespace(id);
+  if (!nextId) return null;
+
+  const libraryDoc =
+    getLibraryDocuments().find((doc) => String(doc.id) === nextId) ?? null;
+  const doc = getStoredDocumentById(nextId) ?? libraryDoc;
+  if (!doc) return null;
+
+  return buildActiveCvSnapshotFromCvDocument(doc);
+}
+
+export function getActiveLocalPersonalizationSource(): {
+  title: string | null;
+  personalizationContext: ProposalPersonalizationContext | null;
+  richness?: ProposalPersonalizationRichness;
+} {
+  if (!hasLocalStorage()) {
+    return { title: null, personalizationContext: null };
+  }
+
+  const activeCvId = compactWhitespace(
+    window.localStorage.getItem(ACTIVE_CV_STORAGE_KEY) ?? "",
+  );
+  if (!activeCvId) {
+    return { title: null, personalizationContext: null };
+  }
+
+  const activeDoc = getStoredDocumentById(activeCvId);
+  if (!activeDoc) {
+    return { title: null, personalizationContext: null };
+  }
+
+  const snapshot = buildActiveCvSnapshotFromCvDocument(activeDoc);
+  const richness = classifyPersonalizationRichness(
+    snapshot.personalizationContext,
+  );
+
+  return {
+    title: snapshot.title,
+    personalizationContext: snapshot.personalizationContext,
+    richness,
+  };
+}
+
+export function buildAppProposalPersonalizationPayload(source: {
+  personalizationContext: ProposalPersonalizationContext | null;
+  richness?: ProposalPersonalizationRichness;
+}): ProposalGenerationPersonalizationPayload {
+  return {
+    personalizationMode: "explicit_only",
+    ...(source.richness ? { personalizationRichness: source.richness } : {}),
+    ...(source.personalizationContext
+      ? { personalizationContext: source.personalizationContext }
+      : {}),
+  };
+}
+
+export function listLocalCvPickerOptions(): LocalCvPickerOption[] {
+  if (!hasLocalStorage()) return [];
+
+  const activeCvId = compactWhitespace(
+    window.localStorage.getItem(ACTIVE_CV_STORAGE_KEY) ?? "",
+  );
+  const libraryDocs = getLibraryDocuments();
+  const candidateIds = new Set<string>();
+
+  for (const doc of libraryDocs) {
+    if (doc?.id) candidateIds.add(String(doc.id));
+  }
+  if (activeCvId) candidateIds.add(activeCvId);
+
+  const options = Array.from(candidateIds)
+    .map((id) => {
+      const libraryDoc =
+        libraryDocs.find((doc) => String(doc.id) === id) ?? null;
+      const doc = getStoredDocumentById(id) ?? libraryDoc;
+      if (!doc) return null;
+
+      const identity = readProfileIdentity(doc);
+      const email = readProfileEmail(doc);
+      const summarySnippet = readSummary(doc);
+      const updatedAt =
+        typeof doc.metadata?.updatedAt === "string"
+          ? doc.metadata.updatedAt
+          : undefined;
+      const createdAt =
+        typeof doc.metadata?.createdAt === "string"
+          ? doc.metadata.createdAt
+          : undefined;
+
+      return {
+        id: String(doc.id),
+        title: clampText(doc.title, 120) ?? "Untitled CV",
+        ...(updatedAt ? { updatedAt } : {}),
+        ...(createdAt ? { createdAt } : {}),
+        ...(identity.name ? { profileName: identity.name } : {}),
+        ...(identity.desiredPosition
+          ? { desiredPosition: identity.desiredPosition }
+          : {}),
+        ...(email ? { email } : {}),
+        ...(summarySnippet
+          ? { summarySnippet: clampText(summarySnippet, 120) }
+          : {}),
+        isActive: activeCvId === String(doc.id),
+      } satisfies LocalCvPickerOption;
+    })
+    .filter((option): option is LocalCvPickerOption => Boolean(option))
+    .sort((a, b) => {
+      if (a.isActive !== b.isActive) return a.isActive ? -1 : 1;
+      const aTs = Date.parse(a.updatedAt ?? a.createdAt ?? "") || 0;
+      const bTs = Date.parse(b.updatedAt ?? b.createdAt ?? "") || 0;
+      return bTs - aTs;
+    });
+
+  return options;
+}
+
+export function setActiveLocalCvId(id: string): void {
+  if (!hasLocalStorage()) return;
+  const nextId = compactWhitespace(id);
+  if (!nextId) return;
+  window.localStorage.setItem(ACTIVE_CV_STORAGE_KEY, nextId);
+}
+
+export function clearActiveLocalCvId(): void {
+  if (!hasLocalStorage()) return;
+  window.localStorage.removeItem(ACTIVE_CV_STORAGE_KEY);
+}

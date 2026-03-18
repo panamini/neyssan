@@ -1,0 +1,76 @@
+{
+  "id": "resp_022d0519644e1a990069b2dc3fa3f88190a25d9f192d02229b",
+  "object": "response",
+  "created_at": 1773329471,
+  "status": "completed",
+  "background": false,
+  "billing": {
+    "payer": "developer"
+  },
+  "completed_at": 1773329473,
+  "error": null,
+  "frequency_penalty": 0,
+  "incomplete_details": null,
+  "instructions": null,
+  "max_output_tokens": 500,
+  "max_tool_calls": null,
+  "model": "gpt-5-nano-2025-08-07",
+  "output": [
+    {
+      "id": "rs_022d0519644e1a990069b2dc4043248190880d0b88c23724a1",
+      "type": "reasoning",
+      "summary": []
+    },
+    {
+      "id": "msg_022d0519644e1a990069b2dc405f3c819084e919a4884e3c93",
+      "type": "message",
+      "status": "completed",
+      "content": [
+        {
+          "type": "output_text",
+          "annotations": [],
+          "logprobs": [],
+          "text": "I am applying for the Sales Assistant role and am eager to contribute by coordinating follow-ups, keeping records organized, and communicating professionally with prospects and customers. I bring a careful, detail-oriented approach to every task and am committed to maintaining clear, timely correspondence. I will support the team by ensuring that information is accurately tracked and readily accessible, and I will strive to present a courteous, professional image in all interactions. I welcome the opportunity to discuss how my approach can align with your needs."
+        }
+      ],
+      "role": "assistant"
+    }
+  ],
+  "parallel_tool_calls": true,
+  "presence_penalty": 0,
+  "previous_response_id": null,
+  "prompt_cache_key": null,
+  "prompt_cache_retention": null,
+  "reasoning": {
+    "effort": "minimal",
+    "summary": null
+  },
+  "safety_identifier": null,
+  "service_tier": "default",
+  "store": true,
+  "temperature": 1,
+  "text": {
+    "format": {
+      "type": "text"
+    },
+    "verbosity": "medium"
+  },
+  "tool_choice": "auto",
+  "tools": [],
+  "top_logprobs": 0,
+  "top_p": 1,
+  "truncation": "disabled",
+  "usage": {
+    "input_tokens": 298,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 115,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 413
+  },
+  "user": null,
+  "metadata": {}
+}

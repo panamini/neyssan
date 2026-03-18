@@ -1,0 +1,38 @@
+{
+  "sections": [
+    {
+      "title": "PROFIL",
+      "content": "Ingénieur logiciel expérimenté avec 5 ans d'expérience dans le développement backend.\n\n",
+      "fieldKey": "unknown",
+      "confidence": 0.7
+    },
+    {
+      "title": "EXPÉRIENCE",
+      "content": "2020 - 2024 — Acme Corp\n- Ingénieur logiciel senior\n- Développement de services Node.js et TypeScript\n\n",
+      "fieldKey": "unknown",
+      "confidence": 0.7
+    },
+    {
+      "title": "COMPÉTENCES",
+      "content": "TypeScript, Node.js, PostgreSQL, Docker\n\n",
+      "fieldKey": "unknown",
+      "confidence": 0.7
+    },
+    {
+      "title": "COORDONNÉES",
+      "content": "john.doe@example.com\n+33 6 12 34 56 78\nhttps://linkedin.com/in/johndoe\n  \n",
+      "fieldKey": "unknown",
+      "confidence": 0.7
+    }
+  ],
+  "metadata": {
+    "name": "COORDONNÉES",
+    "email": "john.doe@example.com",
+    "phone": "+33 6 12 34 56",
+    "linkedinUrl": "https://linkedin.com/in/johndoe"
+  },
+  "method": "heuristic",
+  "warnings": [
+    "LLM error: Attempt 2 failed to produce valid parsed output"
+  ]
+}

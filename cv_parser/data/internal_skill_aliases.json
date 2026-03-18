@@ -1,0 +1,13 @@
+{
+  "cd": "ci/cd",
+  "ci": "ci/cd",
+  "gke": "kubernetes",
+  "js": "javascript",
+  "k8s": "kubernetes",
+  "node": "node.js",
+  "rn": "react native",
+  "scikit": "scikit-learn",
+  "sklearn": "scikit-learn",
+  "tf": "tensorflow",
+  "ts": "typescript"
+}

@@ -1,0 +1,138 @@
+# syntax=docker/dockerfile:1.7
+
+###############################################
+# Base (multi-arch) — minimal OS + venv
+###############################################
+FROM python:3.10 AS base
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DEFAULT_TIMEOUT=120 \
+    PIP_RETRIES=5 \
+    VIRTUAL_ENV=/opt/venv \
+    PATH="/opt/venv/bin:${PATH}" \
+    PIP_EXTRA_INDEX_URL=https://download.pytorch.org/whl/cpu
+
+# Faster Debian mirror + apt cache + retries
+RUN if [ -f /etc/apt/sources.list ]; then sed -i 's|http://deb.debian.org/debian|http://cdn-aws.deb.debian.org/debian|g' /etc/apt/sources.list; fi
+RUN --mount=type=cache,target=/var/cache/apt \
+    apt-get update -o Acquire::Retries=5 --fix-missing && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      poppler-utils \
+      libglib2.0-0 libsm6 libxrender1 libxext6 libgl1 \
+      libgomp1 \
+      libgfortran5 \
+      libopenblas0-openmp \
+      liblapack3 \
+      curl && \
+    rm -rf /var/lib/apt/lists/*
+
+# Isolated virtualenv
+RUN python -m venv "${VIRTUAL_ENV}" && \
+    pip install --upgrade pip setuptools wheel
+
+WORKDIR /app
+
+###############################################
+# Deps — install Python deps into /opt/venv
+# Build this ONCE, tag it, and reuse forever.
+###############################################
+FROM base AS deps
+
+# Minimal build tooling (rarely needed; safe to keep)
+RUN --mount=type=cache,target=/var/cache/apt \
+    apt-get update -o Acquire::Retries=5 --fix-missing && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      build-essential git && \
+    rm -rf /var/lib/apt/lists/*
+
+# 1) Core foundations you always need
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-cache-dir "paddlepaddle==3.2.0"
+
+# 2) App deps — prefer lock if present for speed/determinism
+#    We copy both so Docker cache invalidates only when they change.
+COPY requirements.lock /tmp/requirements.lock
+COPY requirements.txt  /tmp/requirements.txt
+COPY requirements.txt /tmp/cv_parser_service/requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    bash -lc 'set -euo pipefail; \
+      if [[ -s /tmp/requirements.lock ]]; then \
+        echo ">>> Installing from requirements.lock"; \
+        python -m pip install --no-cache-dir -r /tmp/requirements.lock; \
+      else \
+        echo ">>> Installing from requirements.txt"; \
+        python -m pip install --no-cache-dir -r /tmp/requirements.txt; \
+      fi; \
+      echo ">>> Ensuring service requirements are installed"; \
+      # Use the copied /tmp/requirements.txt (works whether build context is repo root or subdir) ; \
+      python -m pip install --no-cache-dir -r /tmp/requirements.txt; \
+      python -m pip check; \
+      python -c "import fastapi, uvicorn"'
+
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python -m pip install --no-cache-dir -r /tmp/requirements.txt && \
+    python -c "import fastapi, uvicorn"
+
+# Optionally prewarm PaddleOCR models during build (no crash if offline)
+RUN <<'SHELL'
+if [ "$PREWARM" = "1" ]; then
+  python - <<'PY' || true
+from paddleocr import PaddleOCR
+PaddleOCR(use_textline_orientation=True, lang='en', ocr_version='PP-OCRv5', use_gpu=False)
+print("PaddleOCR models cached.")
+PY
+fi
+SHELL
+
+
+###############################################
+# Runtime — thin image; reuse the frozen venv
+###############################################
+FROM python:3.10 AS runtime
+
+ENV PYTHONUNBUFFERED=1 \
+    VIRTUAL_ENV=/opt/venv \
+    PATH="/opt/venv/bin:${PATH}" \
+    PADDLEOCR_HOME=/home/app/.paddlex \
+    PADDLE_MODEL_PATH=/home/app/.paddlex \
+    HF_HOME=/home/app/.cache/huggingface \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DEFAULT_TIMEOUT=120 \
+    PIP_RETRIES=5 \
+    OMP_NUM_THREADS=1 \
+    OPENBLAS_NUM_THREADS=1 \
+    MKL_NUM_THREADS=1 \
+    NUMEXPR_NUM_THREADS=1 \
+    CUDA_VISIBLE_DEVICES=""
+
+# OS libs only
+RUN if [ -f /etc/apt/sources.list ]; then sed -i 's|http://deb.debian.org/debian|http://cdn-aws.deb.debian.org/debian|g' /etc/apt/sources.list; fi && \
+    apt-get update -o Acquire::Retries=5 --fix-missing && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      poppler-utils \
+      libglib2.0-0 libsm6 libxrender1 libxext6 libgl1 \
+      libgomp1 \
+      libgfortran5 \
+      libopenblas0-openmp \
+      liblapack3 \
+      curl && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# ✅ Bring the entire prebuilt venv from deps (no dynamic COPY tricks)
+COPY --from=deps /opt/venv /opt/venv
+
+# App code last for faster rebuilds
+COPY . /app
+
+# Non-root user & writable caches
+RUN useradd -m -u 10001 -s /usr/sbin/nologin app && \
+    chown -R app:app /app /opt/venv
+USER app
+
+RUN mkdir -p "${PADDLEOCR_HOME}" "${HF_HOME}"
+
+EXPOSE 8000
+CMD ["python", "-c", "import platform, paddle; print('Ready on', platform.machine(), 'Paddle', paddle.__version__)"]

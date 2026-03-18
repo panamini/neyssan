@@ -1,0 +1,62 @@
+[
+  {
+    "file": "cv_3.pdf",
+    "expectedSections": ["profile", "experience", "education", "skills"]
+  },
+  {
+    "file": "cv_54.pdf",
+    "expectedSections": ["profile", "experience", "education"]
+  },
+  {
+    "file": "cv_77.pdf",
+    "expectedSections": ["profile", "experience", "skills"]
+  },
+  {
+    "file": "cv_103.pdf",
+    "expectedSections": ["profile", "experience", "education", "languages"]
+  },
+  {
+    "file": "cv_188.pdf",
+    "expectedSections": ["profile", "experience", "education"]
+  },
+  {
+    "file": "cv_256.pdf",
+    "expectedSections": ["profile", "experience", "skills", "projects"]
+  },
+  {
+    "file": "cv_333.pdf",
+    "expectedSections": ["profile", "experience", "education", "certifications"]
+  },
+  {
+    "file": "cv_402.pdf",
+    "expectedSections": ["profile", "experience", "education", "skills"]
+  },
+  {
+    "file": "cv_517.pdf",
+    "expectedSections": ["profile", "experience", "education"]
+  },
+  {
+    "file": "cv_621.pdf",
+    "expectedSections": ["profile", "experience", "education", "languages"]
+  },
+  {
+    "file": "cv_742.pdf",
+    "expectedSections": ["profile", "experience", "skills"]
+  },
+  {
+    "file": "cv_855.pdf",
+    "expectedSections": ["profile", "experience", "education", "skills", "languages"]
+  },
+  {
+    "file": "cv_963.pdf",
+    "expectedSections": ["profile", "experience", "education", "skills"]
+  },
+  {
+    "file": "cv_1044.pdf",
+    "expectedSections": ["profile", "experience", "education"]
+  },
+  {
+    "file": "cv_1158.pdf",
+    "expectedSections": ["profile", "experience", "education", "languages"]
+  }
+]
