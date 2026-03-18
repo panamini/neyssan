@@ -177,7 +177,7 @@ function ModalShell({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="relative w-full max-w-3xl [background:var(--sfr)] [color:var(--ti)] rounded-rl [box-shadow:var(--shc)] overflow-auto max-h-[90vh]"
+        className="relative w-full max-w-3xl [background:var(--sfr)] [color:var(--ti)] border border-[color:var(--bm)] [border-radius:var(--rl)] [box-shadow:var(--shc)] overflow-auto max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-bo">
@@ -441,7 +441,7 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
                   <input
                     value={row.company}
                     onChange={(e) => setField(idx, "company", e.target.value)}
-                    className="w-full px-2 py-1 mt-1 text-sm bg-transparent border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                    className="w-full px-2 py-1 mt-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
                   />
                 </div>
                 <div>
@@ -449,7 +449,7 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
                   <input
                     value={row.position}
                     onChange={(e) => setField(idx, "position", e.target.value)}
-                    className="w-full px-2 py-1 mt-1 text-sm bg-transparent border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                    className="w-full px-2 py-1 mt-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
                   />
                 </div>
                 <div className="md:col-span-2">
@@ -457,7 +457,7 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
                   <input
                     value={row.location ?? ""}
                     onChange={(e) => setField(idx, "location", e.target.value)}
-                    className="w-full px-2 py-1 mt-1 text-sm bg-transparent border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                    className="w-full px-2 py-1 mt-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
                   />
                 </div>
 
@@ -465,7 +465,7 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
                   <label className="text-xs opacity-70">Start date</label>
                   <div className="grid grid-cols-3 gap-2 mt-1">
                     <select
-                      className="px-2 py-1 text-sm bg-transparent border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                      className="px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
                       value={ui.startMonth}
                       onChange={(e) => setUiField(idx, { startMonth: e.target.value })}
                     >
@@ -484,7 +484,7 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
                       <option value="12">Dec</option>
                     </select>
                     <select
-                      className="px-2 py-1 text-sm bg-transparent border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                      className="px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
                       value={ui.startYear}
                       onChange={(e) => setUiField(idx, { startYear: e.target.value })}
                     >
@@ -500,7 +500,7 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
                         type="number"
                         min={1}
                         max={31}
-                        className="px-2 py-1 text-sm bg-transparent border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                        className="px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
                         value={ui.startDay}
                         onChange={(e) => setUiField(idx, { startDay: e.target.value })}
                         placeholder="Day"
@@ -532,7 +532,7 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
                   <label className="text-xs opacity-70">End date</label>
                   <div className="grid grid-cols-3 gap-2 mt-1">
                     <select
-                      className="px-2 py-1 text-sm bg-transparent border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none disabled:opacity-50"
+                      className="px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none disabled:opacity-50"
                       value={ui.endMonth}
                       disabled={ui.isCurrent}
                       onChange={(e) => setUiField(idx, { endMonth: e.target.value })}
@@ -552,7 +552,7 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
                       <option value="12">Dec</option>
                     </select>
                     <select
-                      className="px-2 py-1 text-sm bg-transparent border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none disabled:opacity-50"
+                      className="px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none disabled:opacity-50"
                       value={ui.endYear}
                       disabled={ui.isCurrent}
                       onChange={(e) => setUiField(idx, { endYear: e.target.value })}
@@ -569,7 +569,7 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
                         type="number"
                         min={1}
                         max={31}
-                        className="px-2 py-1 text-sm bg-transparent border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none disabled:opacity-50"
+                        className="px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none disabled:opacity-50"
                         value={ui.endDay}
                         disabled={ui.isCurrent}
                         onChange={(e) => setUiField(idx, { endDay: e.target.value })}
@@ -859,7 +859,7 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
                   <input
                     value={row.institution}
                     onChange={(e) => setField(idx, "institution", e.target.value)}
-                    className="w-full px-2 py-1 mt-1 text-sm bg-transparent border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                    className="w-full px-2 py-1 mt-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
                   />
                 </div>
                 <div>
@@ -867,7 +867,7 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
                   <input
                     value={row.degree ?? ""}
                     onChange={(e) => setField(idx, "degree", e.target.value)}
-                    className="w-full px-2 py-1 mt-1 text-sm bg-transparent border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                    className="w-full px-2 py-1 mt-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
                   />
                 </div>
                 <div>
@@ -875,7 +875,7 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
                   <input
                     value={row.fieldOfStudy ?? ""}
                     onChange={(e) => setField(idx, "fieldOfStudy", e.target.value)}
-                    className="w-full px-2 py-1 mt-1 text-sm bg-transparent border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                    className="w-full px-2 py-1 mt-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
                   />
                 </div>
                 <div>
@@ -883,7 +883,7 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
                   <input
                     value={row.grade ?? ""}
                     onChange={(e) => setField(idx, "grade", e.target.value)}
-                    className="w-full px-2 py-1 mt-1 text-sm bg-transparent border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                    className="w-full px-2 py-1 mt-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
                   />
                 </div>
 
@@ -891,7 +891,7 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
                   <label className="text-xs opacity-70">Start date</label>
                   <div className="grid grid-cols-3 gap-2 mt-1">
                     <select
-                      className="px-2 py-1 text-sm bg-transparent border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                      className="px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
                       value={ui.startMonth}
                       onChange={(e) => setUiField(idx, { startMonth: e.target.value })}
                     >
@@ -910,7 +910,7 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
                       <option value="12">Dec</option>
                     </select>
                     <select
-                      className="px-2 py-1 text-sm bg-transparent border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                      className="px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
                       value={ui.startYear}
                       onChange={(e) => setUiField(idx, { startYear: e.target.value })}
                     >
@@ -926,7 +926,7 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
                         type="number"
                         min={1}
                         max={31}
-                        className="px-2 py-1 text-sm bg-transparent border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                        className="px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
                         value={ui.startDay}
                         onChange={(e) => setUiField(idx, { startDay: e.target.value })}
                         placeholder="Day"
@@ -958,7 +958,7 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
                   <label className="text-xs opacity-70">End date</label>
                   <div className="grid grid-cols-3 gap-2 mt-1">
                     <select
-                      className="px-2 py-1 text-sm bg-transparent border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none disabled:opacity-50"
+                      className="px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none disabled:opacity-50"
                       value={ui.endMonth}
                       disabled={ui.isCurrent}
                       onChange={(e) => setUiField(idx, { endMonth: e.target.value })}
@@ -978,7 +978,7 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
                       <option value="12">Dec</option>
                     </select>
                     <select
-                      className="px-2 py-1 text-sm bg-transparent border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none disabled:opacity-50"
+                      className="px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none disabled:opacity-50"
                       value={ui.endYear}
                       disabled={ui.isCurrent}
                       onChange={(e) => setUiField(idx, { endYear: e.target.value })}
@@ -995,7 +995,7 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
                         type="number"
                         min={1}
                         max={31}
-                        className="px-2 py-1 text-sm bg-transparent border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none disabled:opacity-50"
+                        className="px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none disabled:opacity-50"
                         value={ui.endDay}
                         disabled={ui.isCurrent}
                         onChange={(e) => setUiField(idx, { endDay: e.target.value })}

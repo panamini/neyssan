@@ -156,7 +156,7 @@ export function AchievementsModal({ open, items, onClose, onSave }: Achievements
         role="dialog"
         aria-modal="true"
         aria-label="Edit achievements"
-        className="relative w-full max-w-2xl [background:var(--sfr)] rounded-rl [box-shadow:var(--shc)] overflow-auto max-h-[90vh]"
+        className="relative w-full max-w-2xl [background:var(--sfr)] border border-[color:var(--bm)] [border-radius:var(--rl)] [box-shadow:var(--shc)] overflow-auto max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-bo">
@@ -201,7 +201,7 @@ export function AchievementsModal({ open, items, onClose, onSave }: Achievements
                     </label>
                     <input
                       id={`achievement-text-${idx}`}
-                      className="w-full px-2 py-1 text-sm bg-transparent border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                      className="w-full px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
                       placeholder="e.g., Increased conversion rate by 15% in Q2"
                       value={row.text ?? ""}
                       onChange={(e) => updateRow(idx, { text: e.target.value })}
