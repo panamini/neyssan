@@ -2,41 +2,86 @@ import React from "react";
 import { CvLibraryProvider } from "../contexts/CvLibraryContext";
 import { Sidebar } from "../components/Sidebar";
 import { ProfileReviewCard } from "../components/ProfileReviewCard";
-import { Flex } from "@radix-ui/themes";
 import { CvToolbar } from "../components/header/CvToolbar";
 
 /**
- * CvForge
+ * CvForge — page Resume
  *
- * Dedicated CV workspace page. It mounts CvLibraryProvider so all CV-related
- * contexts and components are scoped to this page only.
- *
- * This page intentionally keeps a minimal layout so the CV workspace can
- * be iterated on independently from the proposal flow.
+ * Layout : sidebar dasti (248px/52px) + main scrollable flex-1.
+ * Intro panel .ip : eyebrow + h2 Fraunces + description (§13 dasti-spec-v1).
+ * CvLibraryProvider scoped à cette page uniquement.
  */
 export function CvForge(): JSX.Element {
   return (
     <CvLibraryProvider>
-      <div className="flex flex-row">
+      {/* Flex row, h:100% — occupe tout l'espace sous la topbar */}
+      <div style={{ display: "flex", height: "100%", overflow: "hidden" }}>
         <Sidebar />
-        <main className="flex-1 px-4 py-6">
-          <Flex direction="column" gap="4" align="stretch" className="w-full">
-            <h2 className="text-lg font-semibold">CV Forge</h2>
-            <div className="p-4 border rounded bg-background">
-              <p className="text-sm text-muted-foreground">
-                This workspace contains the CV library and editor. Use the sidebar to create or select a CV, then upload or edit it here.
+
+        {/* Main area — scrollable */}
+        <div
+          style={{
+            flex: 1,
+            overflowY: "auto",
+            overflowX: "hidden",
+            minWidth: 0,
+          }}
+        >
+          <div
+            style={{
+              padding: "var(--s8) var(--s7)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "var(--s5)",
+              maxWidth: 960,
+            }}
+          >
+            {/* Intro panel — §13 dasti-spec-v1 */}
+            <div
+              style={{
+                padding: "var(--s5)",
+                borderRadius: "var(--rm)",
+                border: "1px solid var(--bo)",
+                background: "var(--sfr)",
+                boxShadow: "var(--sha)",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "var(--tx)",
+                  fontWeight: 600,
+                  color: "var(--am)",
+                  letterSpacing: ".14em",
+                  textTransform: "uppercase",
+                  marginBottom: "var(--s2)",
+                }}
+              >
+                Resume workspace
+              </div>
+              <h2
+                style={{
+                  fontFamily: '"Fraunces", serif',
+                  fontSize: "var(--tx2)",
+                  fontWeight: 600,
+                  letterSpacing: "-.01em",
+                  color: "var(--ti)",
+                  marginBottom: "var(--s2)",
+                }}
+              >
+                Resume
+              </h2>
+              <p style={{ fontSize: "var(--ts)", color: "var(--tm2)", lineHeight: "var(--ls)" }}>
+                Sélectionnez un CV dans la barre latérale, importez ou éditez les sections ci-dessous.
               </p>
             </div>
 
             {/* Workspace Toolbar */}
-            <CvToolbar className="mt-1" />
+            <CvToolbar />
 
             {/* Main editor / review canvas */}
-            <div className="mt-4">
-              <ProfileReviewCard />
-            </div>
-          </Flex>
-        </main>
+            <ProfileReviewCard />
+          </div>
+        </div>
       </div>
     </CvLibraryProvider>
   );
