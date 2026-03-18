@@ -75,7 +75,7 @@ export function LanguagesModal({ open, items, onClose, onSave }: LanguagesModalP
         role="dialog"
         aria-modal="true"
         aria-label="Edit languages"
-        className="relative w-full max-w-2xl [background:var(--sfr)] rounded-rl [box-shadow:var(--shc)] overflow-auto max-h-[90vh]"
+        className="relative w-full max-w-2xl [background:var(--sfr)] border border-[color:var(--bm)] [border-radius:var(--rl)] [box-shadow:var(--shc)] overflow-auto max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-bo">
@@ -114,7 +114,7 @@ export function LanguagesModal({ open, items, onClose, onSave }: LanguagesModalP
                     <label className="text-xs sr-only [color:var(--tg2)]" htmlFor={`language-name-${idx}`}>Language name</label>
                     <input
                       id={`language-name-${idx}`}
-                      className="w-full px-2 py-1 text-sm bg-transparent border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                      className="w-full px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
                       placeholder="e.g., English"
                       value={row.name ?? ""}
                       onChange={(e) => updateRow(idx, { name: e.target.value })}

@@ -221,7 +221,7 @@ export function SummaryModal({ open, sectionId, item, onClose }: SummaryModalPro
         role="dialog"
         aria-modal="true"
         aria-label="Edit summary"
-        className="relative w-full max-w-3xl [background:var(--sfr)] rounded-rl [box-shadow:var(--shc)] overflow-auto max-h-[90vh]"
+        className="relative w-full max-w-3xl [background:var(--sfr)] border border-[color:var(--bm)] [border-radius:var(--rl)] [box-shadow:var(--shc)] overflow-auto max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-bo">
