@@ -1,0 +1,25 @@
+{
+  "id": "fd4709b2c76d4640993226bcaa33918b",
+  "created": 1773329453,
+  "model": "mistral-small-latest",
+  "usage": {
+    "prompt_tokens": 339,
+    "total_tokens": 525,
+    "completion_tokens": 186,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "object": "chat.completion",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "tool_calls": null,
+        "content": "Dear Hiring Manager,\n\nI am excited to apply for the Operations Associate position. I have always valued roles that require reliability and clear communication, and I am eager to bring these strengths to your team. My ability to manage recurring processes and maintain organized records aligns well with the responsibilities described. I thrive in environments where attention to detail and teamwork are essential, and I am confident I can contribute effectively to your operations.\n\nI enjoy assisting with cross-team communication and ensuring information flows smoothly. My willingness to learn and adapt quickly has helped me succeed in past roles, and I am eager to apply this mindset to support your team’s goals. I understand the importance of accuracy and consistency in operational tasks, and I take pride in delivering work that meets high standards.\n\nI would welcome the opportunity to discuss how my skills and enthusiasm can support your team. Thank you for your time and consideration.\n\nSincerely,\n[Your Name]"
+      }
+    }
+  ]
+}

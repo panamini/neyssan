@@ -1,0 +1,76 @@
+{
+  "id": "resp_05c43a479bf645ec0069b2daa74a7c8195ad5df31e911b8de9",
+  "object": "response",
+  "created_at": 1773329063,
+  "status": "completed",
+  "background": false,
+  "billing": {
+    "payer": "developer"
+  },
+  "completed_at": 1773329066,
+  "error": null,
+  "frequency_penalty": 0,
+  "incomplete_details": null,
+  "instructions": null,
+  "max_output_tokens": 500,
+  "max_tool_calls": null,
+  "model": "gpt-5-nano-2025-08-07",
+  "output": [
+    {
+      "id": "rs_05c43a479bf645ec0069b2daa7e7b8819584bfa9814fc46f55",
+      "type": "reasoning",
+      "summary": []
+    },
+    {
+      "id": "msg_05c43a479bf645ec0069b2daa803a48195a28a434db8f43980",
+      "type": "message",
+      "status": "completed",
+      "content": [
+        {
+          "type": "output_text",
+          "annotations": [],
+          "logprobs": [],
+          "text": "Dear Hiring Manager,\n\nI’m excited to apply for the Senior Frontend Engineer role, where I can bring a practical focus on React and TypeScript to a customer-facing SaaS platform. My background centers on building design systems and product-facing web apps, with a strong emphasis on performance and reusable UI components. I led a design system migration at BrightLayer that was adopted across four product squads, and I delivered bundle and rendering optimizations that cut page load time by 28 percent. I’m drawn to the chance to extend that work through scalable UI systems and thoughtful architectural decisions.\n\nI thrive in cross-functional settings, collaborating closely with design and product teams to ship improvements that matter to customers. At Northline Labs, I built experimentation dashboards and partnered with design on customer-facing workflow improvements, which aligns with the role’s focus on analytics instrumentation and experimentation. I’ve also contributed to iterative UI experiments that helped lift signup conversion, underscoring my eye for user-centered, data-informed design choices.\n\nI’m eager to mentor junior engineers, share practical guidance, and help raise the bar for frontend quality across the team. I look forward to the opportunity to discuss how my hands-on experience with design systems, React, and performance optimization can contribute to your platform’s success.\n\nAlex Martin"
+        }
+      ],
+      "role": "assistant"
+    }
+  ],
+  "parallel_tool_calls": true,
+  "presence_penalty": 0,
+  "previous_response_id": null,
+  "prompt_cache_key": null,
+  "prompt_cache_retention": null,
+  "reasoning": {
+    "effort": "minimal",
+    "summary": null
+  },
+  "safety_identifier": null,
+  "service_tier": "default",
+  "store": true,
+  "temperature": 1,
+  "text": {
+    "format": {
+      "type": "text"
+    },
+    "verbosity": "medium"
+  },
+  "tool_choice": "auto",
+  "tools": [],
+  "top_logprobs": 0,
+  "top_p": 1,
+  "truncation": "disabled",
+  "usage": {
+    "input_tokens": 526,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 271,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 797
+  },
+  "user": null,
+  "metadata": {}
+}

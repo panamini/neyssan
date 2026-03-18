@@ -1,0 +1,2402 @@
+"""
+Lightweight canonicalization helpers to align the FastAPI service output with
+the Convex `canonicalize` TypeScript logic. The implementation focuses on the
+data the acceptance validator requires (summary sentence, structured
+experience/education, skill lists, diagnostics hygiene).
+
+Adds:
+- Engine selection artifact preferring native PDF text over OCR, configurable via env.
+- Column clustering hooks (two-column vs single) with diagnostics mode selection.
+- Multilingual heading dictionary expansion and ordered section list capture.
+- Noise filtering of template artifacts prior to mapping with removal count in diagnostics.
+- Bullet normalization improvements: join wrapped lines, punctuation spacing, and deduplication.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import unicodedata
+import uuid
+from dataclasses import dataclass
+from functools import lru_cache
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+
+
+def strip_accents(value: str) -> str:
+    normalized = unicodedata.normalize("NFD", value or "")
+    return "".join(ch for ch in normalized if not unicodedata.combining(ch))
+
+
+def _normalize_month_key(token: str) -> str:
+    if not token:
+        return ""
+    decomposed = unicodedata.normalize("NFD", token)
+    letters = [ch for ch in decomposed if unicodedata.category(ch) != "Mn" and ch.isalpha()]
+    return "".join(ch.upper() for ch in letters)
+
+
+def _month_from_token(token: str) -> Optional[int]:
+    key = _normalize_month_key(token)
+    if not key:
+        return None
+    if key in MONTH_MAP:
+        return MONTH_MAP[key]
+    if len(key) >= 4 and key[:4] in MONTH_MAP:
+        return MONTH_MAP[key[:4]]
+    if len(key) >= 3 and key[:3] in MONTH_MAP:
+        return MONTH_MAP[key[:3]]
+    return None
+
+
+MONTH_MAP = {
+    # English
+    "JAN": 1,
+    "JANUARY": 1,
+    "FEB": 2,
+    "FEBRUARY": 2,
+    "MAR": 3,
+    "MARCH": 3,
+    "APR": 4,
+    "APRIL": 4,
+    "MAY": 5,
+    "JUN": 6,
+    "JUNE": 6,
+    "JUL": 7,
+    "JULY": 7,
+    "AUG": 8,
+    "AUGUST": 8,
+    "SEP": 9,
+    "SEPT": 9,
+    "SEPTEMBER": 9,
+    "OCT": 10,
+    "OCTOBER": 10,
+    "NOV": 11,
+    "NOVEMBER": 11,
+    "DEC": 12,
+    "DECEMBER": 12,
+    # Spanish
+    "ENE": 1,
+    "ENERO": 1,
+    "FEBRERO": 2,
+    "MARZO": 3,
+    "ABR": 4,
+    "ABRIL": 4,
+    "MAYO": 5,
+    "JUNIO": 6,
+    "JULIO": 7,
+    "AGOSTO": 8,
+    "SEP": 9,
+    "SEPTIEMBRE": 9,
+    "SET": 9,
+    "SETIEMBRE": 9,
+    "OCTUBRE": 10,
+    "NOVIEMBRE": 11,
+    "DIC": 12,
+    "DICIEMBRE": 12,
+    # French
+    "JANV": 1,
+    "JANVIER": 1,
+    "FEV": 2,
+    "FEVR": 2,
+    "FEVRIER": 2,
+    "FÉVRIER": 2,
+    "MAR": 3,
+    "MARS": 3,
+    "AVR": 4,
+    "AVRIL": 4,
+    "MAI": 5,
+    "JUI": 6,  # captures Juin after slicing
+    "JUIN": 6,
+    "JUIL": 7,
+    "JUILLET": 7,
+    "AOUT": 8,
+    "AOÛT": 8,
+    "SEPTEMBRE": 9,
+    "OCTOBRE": 10,
+    "NOVEMBRE": 11,
+    "DECEMBRE": 12,
+    "DÉCEMBRE": 12,
+}
+
+# --- Engine selection thresholds (configurable) ---
+def _env_float(name: str, default: float) -> float:
+    try:
+        raw = os.environ.get(name)
+        if raw is None:
+            return default
+        value = float(str(raw).strip())
+        return value if value >= 0 else default
+    except Exception:
+        return default
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        raw = os.environ.get(name)
+        if raw is None:
+            return default
+        value = int(str(raw).strip())
+        return value if value >= 0 else default
+    except Exception:
+        return default
+
+
+NATIVE_MIN_CHARS_ENV = "CV_NATIVE_MIN_CHARS"
+NATIVE_MIN_DENSITY_ENV = "CV_NATIVE_MIN_DENSITY"
+DEFAULT_NATIVE_MIN_CHARS = 300
+DEFAULT_NATIVE_MIN_DENSITY = 0.15
+
+COMPANY_KEYWORDS = [
+    "limited",
+    "ltd",
+    "company",
+    "corporation",
+    "corp",
+    "llc",
+    "solutions",
+    "consultants",
+    "communications",
+    "technologies",
+    "systems",
+    "services",
+    "group",
+    "labs",
+    "laboratories",
+    "university",
+    "college",
+    "institute",
+    "school",
+    "hub",
+    "hospital",
+    "bank",
+    "associates",
+    "inc",
+    "inc.",
+    "co",
+    "co.",
+    "corp.",
+    "plc",
+    "gmbh",
+    "s.a.",
+    "sarl",
+    "srl",
+    "spa",
+]
+
+POSITION_KEYWORDS = [
+    "intern",
+    "engineer",
+    "scientist",
+    "manager",
+    "consultant",
+    "developer",
+    "analyst",
+    "specialist",
+    "director",
+    "lead",
+    "teacher",
+    "assistant",
+    "professor",
+    "executive",
+    "officer",
+    "designer",
+    "architect",
+    "coordinator",
+    "supervisor",
+    "associate",
+    "administrator",
+    "manager",
+    "president",
+    "technician",
+    "guard",
+]
+
+ROLE_KEYWORDS = {
+    "guard",
+    "engineer",
+    "developer",
+    "manager",
+    "analyst",
+    "scientist",
+    "consultant",
+    "assistant",
+    "officer",
+    "supervisor",
+    "technician",
+    "architect",
+    "designer",
+    "specialist",
+    "director",
+    "administrator",
+    "coordinator",
+}
+
+SECTION_NAME_BLOCKLIST = {
+    "profile",
+    "details",
+    "contact details",
+    "personal details",
+    "contacts",
+    "coordonnees",
+    "coordonnees personnelles",
+    "objective",
+    "summary",
+    "professional summary",
+    "career summary",
+    "overview",
+    "education",
+    "experience",
+    "curriculum",
+    "curriculum vitae",
+    "contact",
+    "references",
+    "skills",
+}
+
+ADDRESS_TOKENS = {
+    "street",
+    "st.",
+    "ave",
+    "avenue",
+    "road",
+    "rd.",
+    "drive",
+    "dr.",
+    "boulevard",
+    "blvd",
+    "lane",
+    "ln",
+    "suite",
+    "apt",
+    "floor",
+    "california",
+    "ca",
+    "usa",
+    "united states",
+    "india",
+    "canada",
+    "australia",
+    "germany",
+    "france",
+    "uk",
+    "postal",
+    "zip",
+    "pin",
+    "po box",
+}
+
+CONTACT_TOKENS = {
+    "name",
+    "nom",
+    "email",
+    "phone",
+    "tel",
+    "cell",
+    "mobile",
+    "contacts",
+    "coordonnees",
+    "linkedin",
+    "github",
+    "portfolio",
+    "www",
+    "http",
+}
+
+SOCIAL_TOKENS = {
+    "linkedin",
+    "github",
+    "twitter",
+    "facebook",
+    "instagram",
+    "portfolio",
+    "behance",
+    "dribbble",
+    "pinterest",
+    "resume templates",
+    "build this template",
+    "links",
+    "hobbies",
+}
+
+EMAIL_PATTERN = re.compile(r"\b([A-Za-z][A-Za-z0-9._-]+)@")
+ZIP_CODE_PATTERN = re.compile(r"\b\d{5}(?:-\d{4})?\b")
+EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+PHONE_RE = re.compile(r"(?:\+?\d[\d\s\-()]{7,}\d)")
+LINKEDIN_RE = re.compile(r"(?:https?://)?(?:www\.)?linkedin\.com/[A-Za-z0-9/_\-]+", re.I)
+
+HEADING_MAP = {
+    "SUMMARY": "SUMMARY",
+    "ABOUT": "SUMMARY",
+    "PROFILE": "SUMMARY",
+    "EXECUTIVE PROFILE": "SUMMARY",
+    "PROFESSIONAL SUMMARY": "SUMMARY",
+    "OBJECTIVE": "SUMMARY",
+    "EXPERIENCE": "EXPERIENCE",
+    "WORK EXPERIENCE": "EXPERIENCE",
+    "PROFESSIONAL EXPERIENCE": "EXPERIENCE",
+    "EXPERIENCE PROFESSIONNELLE": "EXPERIENCE",
+    "EXPERIENCE PROFESSIONELLE": "EXPERIENCE",
+    "EXPERIENCIA": "EXPERIENCE",
+    "EMPLOYMENT HISTORY": "EXPERIENCE",
+    "EDUCATION": "EDUCATION",
+    "ACADEMIC HISTORY": "EDUCATION",
+    "QUALIFICATIONS": "EDUCATION",
+    "EDUCACION": "EDUCATION",
+    "FORMACION": "EDUCATION",
+    "FORMATION": "EDUCATION",
+    "SKILLS": "SKILLS",
+    "TECHNICAL SKILLS": "SKILLS",
+    "CORE SKILLS": "SKILLS",
+    "PROJECTS": "PROJECTS",
+    "CERTIFICATIONS": "CERTIFICATIONS",
+    "OTHER ACTIVITIES": "ACHIEVEMENTS",
+    "ACHIEVEMENTS": "ACHIEVEMENTS",
+    "LANGUAGES": "LANGUAGES",
+    "LANGUAGE": "LANGUAGES",
+    "LANGUAGES KNOWN": "LANGUAGES",
+    "IDIOMAS": "LANGUAGES",
+    "LANGUES": "LANGUAGES",
+    # Additional headings for links/details/hobbies per Prompt 3
+    "LINKS": "LINKS",
+    "SOCIAL": "LINKS",
+    "DETAILS": "DETAILS",
+    "CONTACT DETAILS": "DETAILS",
+    "CONTACTS": "DETAILS",
+    "COORDONNEES": "DETAILS",
+    "COORDONNEES PERSONNELLES": "DETAILS",
+    "PERSONAL DETAILS": "DETAILS",
+    "HOBBIES": "HOBBIES",
+    "INTERESTS": "HOBBIES",
+}
+
+DATE_PATTERN = re.compile(r"([A-Za-zÀ-ÿ\.]{3,})\s*(\d{4})", re.IGNORECASE)
+YEAR_PATTERN = re.compile(r"(19|20)\d{2}")
+SECTION_SPLIT_RE = re.compile(r"\n{2,}")
+BULLET_SPLIT_RE = re.compile(r"[•\u2022●◦▪‣·\uf0fc\uf0b7\u2043\u2219]+")
+TOKEN_SANITIZE_RE = re.compile(r"\s+")
+GLYPH_SCRUB_RE = re.compile(r"[•\u2022●◦▪‣·\uf0fc\uf0b7\u2043\u2219\u00a9\u00ae\u2122\u00b0\u25c6\u25c7\u25cb\u25cf\u25a0\u25a1=]+")
+MIN_SUMMARY_CHARS = 30
+MIN_SUMMARY_TOKENS = 8
+SUMMARY_VERB_RE = re.compile(
+    r"\b("
+    r"is|are|was|were|has|have|led|managed|build\w*|develop\w+|protect\w+|research\w+|"
+    r"ensure\w*|maintain\w*|monitor\w*|support\w*|lead\w*|design\w*|plan\w*|deliver\w*|complet\w*|specializ\w*|"
+    r"create\w*|implement\w*|drive\w*|diseñ\w+|desarroll\w+|gest\w+|optim\w+|lider\w+"
+    r")\b",
+    re.I,
+)
+SUMMARY_MONTH_PREFIX_RE = re.compile(
+    r"^(?:"
+    r"jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec|"
+    r"enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre|"
+    r"janv|févr|fevr|mars|avril|mai|juin|juillet|aout|août"
+    r")\.?\b",
+    re.I,
+)
+HEADING_PREFIX_RE = re.compile(r"^\s*(profile|details|summary|about\s+me|information|links?)[:\-–]\s*", re.I)
+SUMMARY_FORBIDDEN_PHRASES = {
+    "place of birth",
+    "driving license",
+    "linkedin",
+    "links o",
+}
+SUMMARY_SKILL_KEYWORDS = (
+    "skills",
+    "competences",
+    "compétences",
+    "competencias",
+    "competence",
+)
+STREET_SUFFIXES = {
+    "ave",
+    "avenue",
+    "st",
+    "street",
+    "rd",
+    "road",
+    "blvd",
+    "boulevard",
+    "dr",
+    "drive",
+    "way",
+    "lane",
+    "ln",
+    "ct",
+    "court",
+    "pl",
+    "place",
+    "hwy",
+    "highway",
+}
+ADDRESS_LEADER_RE = re.compile(
+    r"^\s*\d{1,6}[\s,]+[A-Za-z0-9'.\- ]{1,40}?(?:\.\s*)?(?:"
+    r"Ave|Avenue|St|Street|Rd|Road|Blvd|Boulevard|Dr|Drive|Way|Lane|Ln|Ct|Court|Pl|Place|Hwy|Highway"
+    r")\b[^,]*,\s*",
+    re.IGNORECASE,
+)
+PHONE_EMAIL_URL_RE = re.compile(r"(?:\+?\d[\d\s\-().]{6,}|@|https?://|www\.)", re.IGNORECASE)
+POLLUTED_LOCATION_RE = re.compile(
+    r"\b(with|years|experience|security|guard|attentive|presently|qualified)\b",
+    re.IGNORECASE,
+)
+ROLE_AT_COMPANY_RE = re.compile(
+    r"^\s*(?P<role>[^–—\-:,/|]+?)\s+(?:at|@|en|chez)\s+(?P<company>[^–—,|/]+?)(?:\s*[,–—\-|/]\s*(?P<location>.+?))?\s*$",
+    re.IGNORECASE,
+)
+GERUND_PREFIX_RE = re.compile(r"^[a-z]{3,}ing\b")
+VERB_PREFIXES = {
+    "apprehending",
+    "analyzing",
+    "assess",
+    "assessing",
+    "built",
+    "building",
+    "communicate",
+    "communicating",
+    "completing",
+    "coordinating",
+    "creating",
+    "developed",
+    "developing",
+    "ensuring",
+    "facilitating",
+    "introducing",
+    "leading",
+    "logging",
+    "maintaining",
+    "managing",
+    "manage",
+    "organizing",
+    "performing",
+    "preparing",
+    "responsible",
+    "explored",
+    "utilizing",
+    "exploring",
+    "using",
+}
+VERB_START_RE = re.compile(
+    r"^(?:completing|assessing|exploring|maintaining|logging|managing|apprehending|utilizing|ensuring|introducing|communicate|assess|explored|manage|built|building|using|developing|developed|analyzing)\b",
+    re.IGNORECASE,
+)
+PRESENT_TOKENS = {
+    "present",
+    "current",
+    "now",
+    "to date",
+    "en cours",
+    "présent",
+    "presente",
+    "actuel",
+    "actuellement",
+    "actualidad",
+    "hasta ahora",
+}
+ADDRESS_LINE_RE = re.compile(
+    r"\b(?:st\.?|street|ave\.?|avenue|blvd\.?|road|rd\.?|drive|dr\.?|suite|ste\.?|apt\.?|building|bldg|[A-Z]{2}\s*\d{5}(?:-\d{4})?)\b",
+    re.IGNORECASE,
+)
+CITY_STATE_RE = re.compile(
+    r"^[A-Za-z][A-Za-z .'-]+,\s*[A-Z]{2}(?:\s*\d{4,5}(?:-\d{4})?)?(?:,\s*[A-Za-z .'-]+)?$",
+    re.IGNORECASE,
+)
+CITY_COUNTRY_RE = re.compile(
+    r"^[A-Za-z][A-Za-z .'-]+,\s*[A-Za-z .'-]{3,}$",
+    re.IGNORECASE,
+)
+BULLET_STOPWORDS = {"full", "skills", "o"}
+
+EDU_TOKENS = ["CPOP", "SOCP", "Course Curriculum"]
+SECTION_TERMINATORS = {
+    "SUMMARY",
+    "SKILLS",
+    "LANGUAGES",
+    "EDUCATION",
+    "PROJECTS",
+    "ACHIEVEMENTS",
+    "CERTIFICATIONS",
+    "VOLUNTEER",
+    "OTHER",
+    "DRIVING LICENSE",
+}
+
+# Template noise filtering (Prompt 4)
+NOISE_SINGLETONS = {
+    "resume templates",
+    "build this template",
+    "pinterest",
+    "linkedin",
+}
+NOISE_EMBLEM_RE = re.compile(r"^o\s+(skills|hobbies)\s+o$", re.IGNORECASE)
+NOISE_STANDALONE_RE = re.compile(r"^(linkedin|pinterest)$", re.IGNORECASE)
+
+def _is_template_noise_line(line: str) -> bool:
+    candidate = (line or "").strip()
+    if not candidate:
+        return False
+    low = candidate.lower().strip("-–—•* .")
+    if low in NOISE_SINGLETONS:
+        return True
+    if NOISE_EMBLEM_RE.match(candidate):
+        return True
+    if NOISE_STANDALONE_RE.match(candidate):
+        return True
+    return False
+
+def _filter_noise_from_text(raw_text: str) -> Tuple[str, int]:
+    removed = 0
+    out_lines: List[str] = []
+    for raw in (raw_text or "").splitlines():
+        line = collapse_spaced_caps(_scrub_glyphs(raw)).strip()
+        if _is_template_noise_line(line):
+            removed += 1
+            continue
+        out_lines.append(raw)
+    return ("\n".join(out_lines), removed)
+
+
+def make_id(prefix: str) -> str:
+    return f"{prefix}-{uuid.uuid4()}"
+
+
+def collapse_spaced_caps(value: str) -> str:
+    stripped = value.strip()
+    if not stripped:
+        return stripped
+    compact = re.sub(r"\b([A-Z])\s+(?=[A-Z]\b)", r"\1", stripped)
+    compact = TOKEN_SANITIZE_RE.sub(" ", compact)
+    return compact.strip()
+
+
+def _scrub_glyphs(value: str) -> str:
+    if not value:
+        return ""
+    cleaned = value.replace("\u00A0", " ")
+    cleaned = GLYPH_SCRUB_RE.sub(" ", cleaned)
+    cleaned = re.sub(r"\s{2,}", " ", cleaned)
+    return cleaned.strip()
+
+
+def strip_leading_address_clause(text: str) -> str:
+    cleaned = ADDRESS_LEADER_RE.sub("", text or "")
+    cleaned = re.sub(
+        r"^\s*\d{1,6}\s+[A-Za-z][A-Za-z'.\-]{1,}\.?\s*",
+        "",
+        cleaned or "",
+    )
+    return (cleaned or "").strip()
+
+
+def looks_addressish(value: str) -> bool:
+    if not value:
+        return False
+    candidate = value.strip()
+    if not candidate:
+        return False
+    if PHONE_EMAIL_URL_RE.search(candidate):
+        return True
+    if re.search(
+        r"\b\d{1,6}\b.{0,60}\b(?:Ave|Avenue|St|Street|Rd|Road|Blvd|Boulevard|Dr|Drive|Way|Lane|Ln|Ct|Court|Pl|Place|Hwy|Highway)\b",
+        candidate,
+        re.IGNORECASE,
+    ):
+        return True
+    lower_tokens = [token.strip(".,") for token in candidate.lower().split()]
+    if any(token in STREET_SUFFIXES for token in lower_tokens) and any(char.isdigit() for char in candidate):
+        return True
+    if re.search(r"\b\d{1,6}\s+[A-Za-z][A-Za-z'.\-]{1,}\.?\b$", candidate):
+        return True
+    if re.search(r"\b[A-Z]{2}\s*\d{5}(?:-\d{4})?\b", candidate):
+        return True
+    if re.search(r"[A-Z][a-z]+,\s*[A-Z]{2}\b", candidate):
+        return True
+    if re.search(r"[A-Z][a-z]+,\s*[A-Z][a-z]+", candidate):
+        return True
+    return False
+
+
+def _clean_summary_text(value: str) -> str:
+    if not value:
+        return ""
+    cleaned = strip_leading_address_clause(value)
+    cleaned = re.sub(r"\b\d{4}\b", "", cleaned)
+    cleaned = " ".join(cleaned.split())
+    cleaned = re.sub(
+        r"\b([A-Za-zÀ-ÿ]+),\s+([a-zà-ÿ][a-zà-ÿ'\-]*)",
+        r"\1 \2",
+        cleaned,
+    )
+    if not cleaned:
+        return ""
+    if PHONE_EMAIL_URL_RE.search(cleaned):
+        return ""
+    if looks_addressish(cleaned):
+        return ""
+    return cleaned
+
+
+def _normalize_summary_candidate(value: str) -> Optional[str]:
+    if not value:
+        return None
+    cleaned = _clean_summary_text(value)
+    if not cleaned:
+        return None
+    lowered = cleaned.lower()
+    if any(phrase in lowered for phrase in SUMMARY_FORBIDDEN_PHRASES):
+        return None
+    tokens = [token for token in cleaned.split() if token]
+    length_ok = len(cleaned) >= MIN_SUMMARY_CHARS
+    verb_ok = SUMMARY_VERB_RE.search(cleaned) is not None
+    if not length_ok and not (len(tokens) >= MIN_SUMMARY_TOKENS and verb_ok):
+        return None
+    if PHONE_EMAIL_URL_RE.search(cleaned) or looks_addressish(cleaned):
+        return None
+    return cleaned
+
+
+def _valid_summary_candidate(text: str) -> bool:
+    return _normalize_summary_candidate(text) is not None
+
+
+def _merge_summary_lines(lines: List[str]) -> List[str]:
+    merged: List[str] = []
+    buffer: List[str] = []
+    for line in lines:
+        if not line:
+            if buffer:
+                merged.append(" ".join(buffer))
+                buffer.clear()
+            continue
+        buffer.append(line)
+    if buffer:
+        merged.append(" ".join(buffer))
+    return merged or lines
+
+
+def _select_summary_from_lines(lines: List[str]) -> str:
+    buffer: List[str] = []
+    for raw_line in lines:
+        candidate = _strip_bullet_prefix(raw_line or "")
+        candidate = _scrub_glyphs(candidate)
+        if not candidate:
+            continue
+        if _looks_like_contact_or_heading(candidate):
+            buffer.clear()
+            continue
+        if detect_heading(candidate):
+            buffer.clear()
+            continue
+        if PHONE_EMAIL_URL_RE.search(candidate):
+            buffer.clear()
+            continue
+        candidate = HEADING_PREFIX_RE.sub("", candidate)
+        if "{" in candidate or "[" in candidate:
+            buffer.clear()
+            continue
+        if candidate.isupper() and len(candidate.split()) <= 3:
+            buffer.clear()
+            continue
+        candidate = strip_leading_address_clause(candidate)
+        candidate = " ".join(candidate.split())
+        if not candidate:
+            buffer.clear()
+            continue
+        if SUMMARY_MONTH_PREFIX_RE.match(candidate):
+            buffer.clear()
+            continue
+        if looks_addressish(candidate):
+            buffer.clear()
+            continue
+        buffer.append(candidate)
+        joined = " ".join(buffer).strip()
+        if _valid_summary_candidate(joined):
+            last_token = joined.split()[-1].lower().strip(",;")
+            if last_token in {"and", "with", "y", "con"}:
+                continue
+            return joined
+    return ""
+
+
+def _summary_from_experience_entries(entries: Sequence[Dict[str, object]]) -> str:
+    for entry in entries:
+        bullets = entry.get("responsibilityBullets") if isinstance(entry, dict) else None
+        if not bullets:
+            continue
+        fragments: List[str] = []
+        for bullet in bullets:
+            cleaned = _clean_summary_text(str(bullet or ""))
+            if not cleaned:
+                continue
+            tokens = [token for token in cleaned.split() if token]
+            if len(tokens) < 4 and not SUMMARY_VERB_RE.search(cleaned):
+                continue
+            lower_cleaned = cleaned.lower()
+            if lower_cleaned in {"linkedin", "links", "driving license"}:
+                continue
+            stripped = cleaned.rstrip(".!? ")
+            fragments.append(stripped)
+            candidate = ". ".join(fragments)
+            normalized = _normalize_summary_candidate(candidate)
+            if normalized:
+                return normalized
+        # try next entry if nothing valid
+    return ""
+
+
+def _summary_from_structured_json(raw_text: str) -> str:
+    try:
+        payload = json.loads(raw_text)
+    except Exception:
+        return ""
+
+    primary: Optional[Dict[str, object]] = None
+    if isinstance(payload, list) and payload:
+        if isinstance(payload[0], dict):
+            primary = payload[0]
+    elif isinstance(payload, dict):
+        primary = payload
+
+    if not isinstance(primary, dict):
+        return ""
+
+    results: List[Dict[str, object]] = []
+    annotations = primary.get("annotations")
+    if isinstance(annotations, list) and annotations:
+        first_annotation = annotations[0]
+        if isinstance(first_annotation, dict):
+            possible = first_annotation.get("result")
+            if isinstance(possible, list):
+                results = possible
+    if not results:
+        possible = primary.get("result")
+        if isinstance(possible, list):
+            results = possible
+    if not results:
+        return ""
+
+    designation: Optional[str] = None
+    company: Optional[str] = None
+    skill_phrases: List[str] = []
+    for item in results:
+        if not isinstance(item, dict):
+            continue
+        value = item.get("value")
+        if not isinstance(value, dict):
+            continue
+        text = str(value.get("text") or "").strip()
+        if not text:
+            continue
+        labels = value.get("labels") or []
+        label_set = {str(label).lower() for label in labels if isinstance(label, str)}
+        if not designation and "designation" in label_set:
+            designation = text
+            continue
+        if not company and "company_name" in label_set:
+            company = text
+            continue
+        if label_set.intersection({"technical_skills", "work_with_people", "work_details"}):
+            skill_phrases.append(text)
+
+    role = designation.strip() if designation else ""
+    if not role and not skill_phrases and not company:
+        return ""
+
+    selected_skills: List[str] = []
+    seen_skills = set()
+    for skill in skill_phrases:
+        normalized_skill = skill.strip().strip(".")
+        if not normalized_skill:
+            continue
+        key = normalized_skill.lower()
+        if key in seen_skills:
+            continue
+        seen_skills.add(key)
+        selected_skills.append(normalized_skill)
+        if len(selected_skills) == 2:
+            break
+
+    if not role:
+        role = "Network professional"
+
+    company_phrase = f" at {company.strip()}" if company else ""
+    if selected_skills:
+        if len(selected_skills) == 1:
+            skills_text = selected_skills[0]
+        else:
+            skills_text = f"{selected_skills[0]} and {selected_skills[1]}"
+        candidate = f"{role.strip()} delivering {skills_text}{company_phrase}."
+    else:
+        candidate = f"{role.strip()} delivering network operations{company_phrase}."
+
+    normalized = _normalize_summary_candidate(candidate)
+    return normalized or ""
+
+
+def _summary_from_skill_lines(raw_text: str) -> str:
+    lines = [line.strip("•-* \t") for line in raw_text.splitlines()]
+    for idx, line in enumerate(lines):
+        lower = line.strip().lower()
+        if not lower:
+            continue
+        if any(keyword in lower for keyword in SUMMARY_SKILL_KEYWORDS):
+            collected: List[str] = []
+            for candidate in lines[idx + 1 : idx + 6]:
+                skill = candidate.strip()
+                if not skill:
+                    break
+                if skill.lower() in SUMMARY_FORBIDDEN_PHRASES:
+                    continue
+                collected.append(skill)
+                if len(collected) == 3:
+                    break
+            if not collected:
+                continue
+            primary = collected[0].lower()
+            secondary = collected[1].lower() if len(collected) > 1 else None
+            tertiary = collected[2].lower() if len(collected) > 2 else None
+            skill_phrase = primary
+            if secondary and tertiary:
+                skill_phrase = f"{primary}, {secondary}, and {tertiary}"
+            elif secondary:
+                skill_phrase = f"{primary} and {secondary}"
+            summary = f"Talent professional specializing in {skill_phrase}."
+            normalized = _normalize_summary_candidate(summary)
+            if normalized:
+                return normalized
+    return ""
+
+
+def ensure_terminal_punctuation(text: str) -> str:
+    stripped = text.strip()
+    if not stripped:
+        return ""
+    if stripped[-1] in {".", "!", "?"}:
+        return stripped
+    return f"{stripped}."
+
+
+def first_sentence(text: str) -> str:
+    cleaned = TOKEN_SANITIZE_RE.sub(" ", text or "").strip()
+    if not cleaned:
+        return ""
+
+    protected = cleaned
+    replacements: List[Tuple[str, str]] = []
+    abbreviations = {
+        "b.tech.": "__abbr_b_tech__",
+        "b.sc.": "__abbr_b_sc__",
+        "b.s.": "__abbr_b_s__",
+        "m.tech.": "__abbr_m_tech__",
+        "m.sc.": "__abbr_m_sc__",
+        "m.s.": "__abbr_m_s__",
+        "ph.d.": "__abbr_ph_d__",
+        "e.g.": "__abbr_e_g__",
+        "i.e.": "__abbr_i_e__",
+        "st.": "__abbr_st__",
+        "rd.": "__abbr_rd__",
+        "ave.": "__abbr_ave__",
+        "blvd.": "__abbr_blvd__",
+        "dr.": "__abbr_dr__",
+        "ln.": "__abbr_ln__",
+        "ct.": "__abbr_ct__",
+        "pl.": "__abbr_pl__",
+        "hwy.": "__abbr_hwy__",
+        "apt.": "__abbr_apt__",
+        "fl.": "__abbr_fl__",
+        "no.": "__abbr_no__",
+        "u.s.": "__abbr_us__",
+    }
+
+    for token, placeholder in abbreviations.items():
+        pattern = re.compile(re.escape(token), re.I)
+
+        def _capture(match, placeholder: str = placeholder) -> str:
+            replacements.append((placeholder, match.group(0)))
+            return placeholder
+
+        protected = pattern.sub(_capture, protected)
+
+    protected = re.sub(
+        r"(\b[A-Za-z][A-Za-z'-]{1,}\.)\s+(Ave|Avenue|St|Street|Rd|Road|Blvd|Boulevard|Dr|Drive|Way|Lane|Ln|Ct|Court|Pl|Place|Hwy|Highway)\b",
+        lambda m: m.group(1)[:-1] + " " + m.group(2),
+        protected,
+    )
+
+    match = re.search(r"([^.?!]+[.?!])", protected)
+    sentence = ensure_terminal_punctuation(match.group(1) if match else protected)
+
+    for placeholder, original in replacements:
+        sentence = sentence.replace(placeholder, original, 1)
+
+    return sentence
+
+
+def _starts_with_verb_phrase(text: str) -> bool:
+    if not text:
+        return False
+    stripped = text.strip(" -–—:,")
+    if not stripped:
+        return False
+    token = stripped.split()[0].lower()
+    if token in VERB_PREFIXES:
+        return True
+    return bool(GERUND_PREFIX_RE.match(token))
+
+
+def _normalize_location_candidate(value: str) -> Optional[str]:
+    candidate = collapse_spaced_caps(value.strip("•-—–, ").strip())
+    if not candidate:
+        return None
+    if len(candidate) < 3 or len(candidate) > 70:
+        return None
+    lowered = candidate.lower()
+    if "http" in lowered or "@" in lowered:
+        return None
+    if CITY_STATE_RE.match(candidate):
+        return candidate
+    if CITY_COUNTRY_RE.match(candidate) and candidate.count(",") == 1:
+        return candidate
+    return None
+
+
+def _extract_location(raw_text: str) -> Optional[str]:
+    lines = raw_text.splitlines()
+    for line in lines[:40]:
+        cleaned = collapse_spaced_caps(line.strip("•-—– ").strip())
+        if not cleaned:
+            continue
+        if _looks_like_contact_or_heading(cleaned):
+            continue
+        normalized = _normalize_location_candidate(cleaned)
+        if normalized:
+            return normalized
+    return None
+
+
+def _match_multiline_header(lines: List[str]) -> Optional[Tuple[str, str, Optional[str], int]]:
+    normalized_lines = [
+        line.replace("\u2013", "-").replace("\u2014", "-").strip()
+        for line in lines[:5]
+        if line.strip()
+    ]
+    if len(normalized_lines) < 3:
+        return None
+    role = _strip_bullet_prefix(normalized_lines[0])
+    if not role or any(ch.isdigit() for ch in role):
+        return None
+    if not (_contains_role_keyword(role) or _is_role_phrase(role)):
+        return None
+    date_line = " ".join(normalized_lines[1:3])
+    start_date, end_date, is_current = _parse_dates(date_line)
+    if not (start_date or end_date or is_current):
+        return None
+    company = _strip_bullet_prefix(normalized_lines[2])
+    if not company:
+        return None
+    lower_company = company.lower()
+    if VERB_START_RE.match(lower_company):
+        return None
+    if re.match(r"^[a-z]+ing\b", lower_company):
+        return None
+    if PHONE_EMAIL_URL_RE.search(company):
+        return None
+    if any(ch.isdigit() for ch in company):
+        return None
+    location = None
+    if len(normalized_lines) >= 4:
+        location = _normalize_location_candidate(normalized_lines[3])
+    consumed = 3 + (1 if location else 0)
+    return _normalize_role_phrase(role), collapse_spaced_caps(company), location, consumed
+
+
+def _match_role_company_line(lines: List[str]) -> Optional[Tuple[str, str, Optional[str], int]]:
+    for idx, line in enumerate(lines[:3]):
+        cleaned = collapse_spaced_caps(_strip_bullet_prefix(line).strip())
+        if not cleaned:
+            continue
+        match = ROLE_AT_COMPANY_RE.match(cleaned)
+        if not match:
+            continue
+        role = _normalize_role_phrase(match.group("role") or "")
+        company = collapse_spaced_caps(match.group("company") or "")
+        location_raw = match.group("location")
+        location = _normalize_location_candidate(location_raw) if location_raw else None
+        if company and _starts_with_verb_phrase(company):
+            continue
+        return role, company, location, idx
+    return None
+
+
+def _fallback_position_from_lines(lines: List[str], company: Optional[str]) -> Optional[str]:
+    for line in lines[:3]:
+        cleaned = collapse_spaced_caps(_strip_bullet_prefix(line).strip("•-—– ").strip())
+        if not cleaned:
+            continue
+        if company and cleaned.lower() == company.lower():
+            continue
+        if _looks_like_contact_or_heading(cleaned):
+            continue
+        if any(char.isdigit() for char in cleaned):
+            continue
+        if _contains_role_keyword(cleaned):
+            return _normalize_role_phrase(cleaned)
+        tokens = cleaned.split()
+        if cleaned.isupper() and len(tokens) <= 6 and _contains_role_keyword(cleaned.lower()):
+            return _normalize_role_phrase(cleaned)
+    return None
+
+
+@lru_cache(maxsize=1)
+def _load_esco_mapping() -> Dict[str, str]:
+    path = os.environ.get("ESCO_SKILLS_PATH")
+    if not path:
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            payload = json.load(fh)
+    except Exception:
+        return {}
+    if isinstance(payload, dict):
+        return {
+            str(key).strip().lower(): str(value).strip()
+            for key, value in payload.items()
+            if isinstance(key, str) and isinstance(value, str)
+        }
+    return {}
+
+
+def _normalize_skill_alias(value: str) -> str:
+    mapping = _load_esco_mapping()
+    key = value.strip().lower()
+    return mapping.get(key, value)
+
+
+def _strip_bullet_prefix(value: str) -> str:
+    return re.sub(r"^[\s•\-\u2022\*\u2023●◦▪‣·\uf0fc\uf0b7\u2043\u2219]+", "", value or "").strip()
+
+
+def _normalize_punctuation_spacing(value: str) -> str:
+    if not value:
+        return ""
+    s = re.sub(r"\s+([,;:])", r"\1", value)
+    s = re.sub(r"\s+([.?!])", r"\1", s)
+    s = re.sub(r"\s{2,}", " ", s)
+    s = re.sub(r"\s*([.?!])\s*$", r"\1", s)
+    return s.strip()
+
+
+def _looks_like_contact_or_heading(line: str) -> bool:
+    if not line:
+        return False
+    if detect_heading(line):
+        return True
+    lower = strip_accents(line.lower())
+    normalized = TOKEN_SANITIZE_RE.sub(" ", lower).strip()
+    normalized = normalized.strip(":-•*#| ")
+    heading_candidate = normalized.split(":", 1)[0].strip()
+    for token in SECTION_NAME_BLOCKLIST:
+        if heading_candidate == token:
+            return True
+        if heading_candidate.startswith(f"{token} "):
+            return True
+    if any(re.search(rf"\\b{re.escape(token)}\\b", lower) for token in CONTACT_TOKENS):
+        return True
+    if any(re.search(rf"\\b{re.escape(token)}\\b", lower) for token in ADDRESS_TOKENS):
+        return True
+    if "@" in line or "http" in lower or "www." in lower:
+        return True
+    if ZIP_CODE_PATTERN.search(line):
+        return True
+    if looks_addressish(line):
+        return True
+    if re.search(
+        r"\b\d{1,6}\b.{0,60}\b(?:Ave|Avenue|St|Street|Rd|Road|Blvd|Boulevard|Dr|Drive|Way|Lane|Ln|Ct|Court|Pl|Place|Hwy|Highway)\b",
+        line,
+        re.IGNORECASE,
+    ):
+        return True
+    return False
+
+
+def _contains_org_keyword(text: str) -> bool:
+    lower = text.lower()
+    return any(keyword in lower for keyword in COMPANY_KEYWORDS)
+
+
+def _contains_role_keyword(text: str) -> bool:
+    lower = text.lower()
+    return any(re.search(rf"\b{re.escape(keyword)}\b", lower) for keyword in ROLE_KEYWORDS)
+
+
+def _is_role_phrase(text: str) -> bool:
+    tokens = [re.sub(r"[^a-z]", "", token.lower()) for token in text.split()]
+    tokens = [token for token in tokens if token]
+    if not tokens:
+        return False
+    if any(token in COMPANY_KEYWORDS for token in tokens):
+        return False
+    role_hits = [
+        token
+        for token in tokens
+        if token in ROLE_KEYWORDS
+        or token in {"senior", "junior", "lead", "security", "chief", "principal", "assistant", "associate", "pro"}
+    ]
+    return bool(role_hits) and len(role_hits) == len(tokens)
+
+
+NAME_LABEL_BLOCKLIST = {
+    "name",
+    "nom",
+    "email",
+    "e-mail",
+    "details",
+    "profile",
+    "links",
+    "place of birth",
+    "driving license",
+    "driving licence",
+    "contact",
+    "contacts",
+    "coordonnees",
+    "coordonnees personnelles",
+    "adresse",
+    "address",
+}
+
+NAME_PREFIX_LABELS = {
+    "name",
+    "nom",
+    "contact",
+    "contacts",
+    "contact details",
+    "details",
+    "personal details",
+    "coordonnees",
+    "coordonnees personnelles",
+    "curriculum",
+    "curriculum vitae",
+    "resume",
+    "cv",
+}
+
+MIN_NAME_SCORE = 5
+NAME_TOKEN_RE = re.compile(r"^[A-Z][A-Za-z'-]*$|^[A-Z]+$")
+
+
+def _normalize_name_candidate(value: str) -> str:
+    tokens = []
+    for token in value.split():
+        if token.isupper() and len(token) <= 3:
+            tokens.append(token)
+        elif len(token) == 1:
+            tokens.append(token.upper())
+        else:
+            tokens.append(token.capitalize())
+    return " ".join(tokens)
+
+
+def _normalize_role_phrase(value: str) -> str:
+    stripped = value.strip()
+    if stripped.isupper():
+        return stripped.title()
+    return stripped
+
+
+def _strip_name_label_prefix(line: str) -> str:
+    if not line:
+        return ""
+    candidate = re.sub(r"^\s*[#>*`|]+\s*", "", line).strip()
+    if not candidate:
+        return ""
+
+    raw_tokens = [token for token in candidate.split() if token]
+    cleaned_tokens = [
+        strip_accents(token.lower()).strip(":-–—|#*_`.,;()[]{}")
+        for token in raw_tokens
+    ]
+
+    for label in sorted(NAME_PREFIX_LABELS, key=lambda value: (-len(value.split()), -len(value))):
+        label_tokens = label.split()
+        if cleaned_tokens[: len(label_tokens)] != label_tokens:
+            continue
+        remainder = raw_tokens[len(label_tokens) :]
+        while remainder and re.fullmatch(r"[:\-–—|#*_`.,;(){}\[\]]+", remainder[0]):
+            remainder.pop(0)
+        candidate = " ".join(remainder).strip()
+        break
+
+    return candidate
+
+
+def _prepare_name_candidate(line: str) -> str:
+    cleaned = collapse_spaced_caps(_scrub_glyphs(_strip_bullet_prefix(str(line or "")))).strip()
+    if not cleaned:
+        return ""
+    cleaned = _strip_name_label_prefix(cleaned)
+    cleaned = re.sub(r"^\s*[#>*`|]+\s*", "", cleaned).strip()
+    return cleaned
+
+
+def _line_disqualifies_name(line: str) -> bool:
+    if not line:
+        return True
+    candidate = line.strip()
+    if not candidate:
+        return True
+    tokens = [token for token in candidate.split() if token]
+    if len(tokens) == 1 and len(strip_accents(tokens[0])) < 4:
+        return True
+    lowered = strip_accents(candidate.lower())
+    lowered_trimmed = lowered.rstrip(":")
+    if lowered in NAME_LABEL_BLOCKLIST or lowered_trimmed in NAME_LABEL_BLOCKLIST:
+        return True
+    if candidate.endswith(":"):
+        return True
+    if "@" in candidate or "://" in candidate:
+        return True
+    if re.search(r"[A-Za-z]\d{2,}", candidate) or re.search(r"\d{2,}[A-Za-z]", candidate):
+        return True
+    if re.search(r"\b\d{2,}\b", candidate) and re.search(r"[A-Za-z]", candidate):
+        return True
+    if any(symbol in candidate for symbol in {"=", "&", "°"}):
+        return True
+    if candidate.lstrip().startswith(("#", "*", "`", "|")):
+        return True
+    if len(candidate) > 40:
+        return True
+    if candidate.count(",") > 1 or candidate.count("&") > 1:
+        return True
+    if _is_role_phrase(candidate):
+        return True
+    if _looks_like_contact_or_heading(candidate):
+        return True
+    return False
+
+
+def _score_name_candidate(line: str, position: int) -> int:
+    tokens = [token for token in line.split() if token]
+    if not tokens:
+        return -1
+    score = 0
+    token_count = len(tokens)
+    if token_count == 2:
+        score += 5
+    elif token_count == 3:
+        score += 4
+    elif token_count == 4:
+        score += 3
+    elif token_count == 1:
+        score += 1
+    else:
+        score += 2
+    upper_tokens = sum(1 for token in tokens if token.isupper() and len(token) > 1)
+    title_tokens = sum(1 for token in tokens if token == token.title())
+    if title_tokens == token_count:
+        score += 2
+    elif title_tokens + upper_tokens == token_count:
+        score += 2
+    elif title_tokens + upper_tokens >= token_count - 1:
+        score += 1
+    if any("-" in token or "'" in token for token in tokens):
+        score += 1
+    if line.isupper() and token_count == 2:
+        score += 1
+    # Prefer top-of-document candidates (position 0 gets maximum boost).
+    score += max(0, 4 - position)
+    if not all(NAME_TOKEN_RE.match(token) for token in tokens):
+        score -= 3
+    return score
+
+
+def _fallback_name_candidate(lines: Sequence[str]) -> Optional[str]:
+    for raw_line in list(lines)[:5]:
+        cleaned = _prepare_name_candidate(raw_line)
+        if not cleaned or _line_disqualifies_name(cleaned):
+            continue
+        if looks_addressish(cleaned):
+            continue
+        tokens = [token for token in cleaned.split() if token]
+        if not (2 <= len(tokens) <= 3):
+            continue
+        if not all(NAME_TOKEN_RE.match(token) for token in tokens):
+            continue
+        if any(not token[0].isupper() for token in tokens if token):
+            continue
+        lowered_tokens = {token.lower().strip(":,") for token in tokens}
+        if lowered_tokens & NAME_LABEL_BLOCKLIST:
+            continue
+        if lowered_tokens & CONTACT_TOKENS:
+            continue
+        return cleaned
+    return None
+
+
+def _infer_name_from_email(raw_text: str) -> Optional[str]:
+    lines = raw_text.splitlines()
+    for line in lines[:20]:
+        match = EMAIL_PATTERN.search(line)
+        if not match:
+            continue
+        local_part = match.group(1)
+        parts = [part for part in re.split(r"[._-]+", local_part) if part.isalpha()]
+        if not parts:
+            continue
+        candidate = ""
+        if len(parts) >= 2:
+            candidate = " ".join(part.capitalize() for part in parts[:3])
+        elif parts:
+            candidate = parts[0].capitalize()
+        if not candidate:
+            continue
+        if _line_disqualifies_name(candidate):
+            continue
+        return candidate
+    return None
+
+
+def extract_contact(raw: str) -> Dict[str, Optional[str]]:
+    email_match = EMAIL_RE.search(raw)
+    phone_match = PHONE_RE.search(raw)
+    linkedin_match = LINKEDIN_RE.search(raw)
+    phone_value = None
+    if phone_match:
+        phone_value = re.sub(r"\s+", " ", phone_match.group(0)).strip()
+    return {
+        "email": email_match.group(0) if email_match else None,
+        "phone": phone_value,
+        "linkedinUrl": linkedin_match.group(0) if linkedin_match else None,
+        "location": _extract_location(raw),
+    }
+
+
+def _clean_address_field(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    normalized = _normalize_location_candidate(value)
+    if normalized:
+        return normalized
+    cleaned = strip_leading_address_clause(value)
+    if cleaned:
+        normalized = _normalize_location_candidate(cleaned)
+        if normalized:
+            return normalized
+    if POLLUTED_LOCATION_RE.search(value):
+        return None
+    return None
+
+
+def pick_summary_text(sections: Dict[str, List[str]], fallback_text: str) -> str:
+    def extract_from_label(label: str) -> Optional[str]:
+        for block in sections.get(label, []):
+            raw_lines = [
+                collapse_spaced_caps(_scrub_glyphs(line)).strip()
+                for line in block.splitlines()
+                if line.strip()
+            ]
+            if not raw_lines:
+                continue
+            merged_lines = _merge_summary_lines(raw_lines)
+            candidate = _normalize_summary_candidate(_select_summary_from_lines(merged_lines))
+            if candidate:
+                return candidate
+        return None
+
+    for label in ("SUMMARY", "PROFILE"):
+        candidate = extract_from_label(label)
+        if candidate:
+            return candidate
+
+    for block in sections.get("BODY", [])[:5]:
+        raw_lines = [
+            collapse_spaced_caps(_scrub_glyphs(line)).strip()
+            for line in block.splitlines()
+            if line.strip()
+        ]
+        if not raw_lines:
+            continue
+        merged_lines = _merge_summary_lines(raw_lines)
+        candidate = _normalize_summary_candidate(_select_summary_from_lines(merged_lines))
+        if candidate:
+            return candidate
+
+    fallback_lines = [
+        collapse_spaced_caps(_scrub_glyphs(line)).strip()
+        for line in (fallback_text or "").splitlines()[:10]
+        if line.strip()
+    ]
+    merged_fallback = _merge_summary_lines(fallback_lines)
+    candidate = _normalize_summary_candidate(_select_summary_from_lines(merged_fallback))
+    if candidate:
+        return candidate
+    return ""
+def detect_heading(line: str) -> Optional[str]:
+    ascii_line = strip_accents(line or "")
+    cleaned = re.sub(r"[^A-Z ]", " ", ascii_line.upper()).strip()
+    cleaned = TOKEN_SANITIZE_RE.sub(" ", cleaned)
+    return HEADING_MAP.get(cleaned)
+
+
+def extract_sections(raw_text: str, raw_sections: Optional[List[Dict[str, str]]] = None) -> Dict[str, List[str]]:
+    sections: Dict[str, List[str]] = {}
+    raw_lines = raw_text.replace("\r", "").split("\n")
+    lines = [collapse_spaced_caps(_scrub_glyphs(line)) for line in raw_lines]
+    current: Optional[str] = None
+    buffer: List[str] = []
+
+    def flush():
+        if buffer:
+            text = "\n".join(buffer).strip()
+            if text:
+                sections.setdefault(current or "BODY", []).append(text)
+            buffer.clear()
+
+    for line in lines:
+        if not line.strip():
+            flush()
+            continue
+        heading = detect_heading(line)
+        if heading:
+            flush()
+            current = heading
+            continue
+        buffer.append(line.strip())
+    flush()
+
+    if raw_sections:
+        for item in raw_sections:
+            label = str(item.get("label", "")).strip()
+            content = _scrub_glyphs(str(item.get("content", "")).strip())
+            if not content:
+                continue
+            heading = detect_heading(label) or collapse_spaced_caps(label.upper())
+            sections.setdefault(heading, []).append(collapse_spaced_caps(content))
+
+    # Remove empty entries
+    cleaned_sections = {key: [entry for entry in values if entry.strip()] for key, values in sections.items()}
+    return {key: value for key, value in cleaned_sections.items() if value}
+
+
+def extract_name_and_role(raw_text: str, sections: Dict[str, List[str]]) -> Tuple[Optional[str], Optional[str]]:
+    lines = [collapse_spaced_caps(_scrub_glyphs(line)) for line in raw_text.splitlines() if line.strip()]
+    if not lines:
+        return None, None
+
+    candidate_lines: List[str] = []
+    for line in lines:
+        if detect_heading(line):
+            break
+        candidate_lines.append(line.strip())
+        if len(candidate_lines) >= 8:
+            break
+
+    best_name: Optional[str] = None
+    best_score = -1
+    for idx, line in enumerate(candidate_lines):
+        cleaned = _prepare_name_candidate(line)
+        if not cleaned or _line_disqualifies_name(cleaned):
+            continue
+        tokens = cleaned.split()
+        if len(tokens) > 4:
+            continue
+        score = _score_name_candidate(cleaned, idx)
+        if score > best_score:
+            best_score = score
+            best_name = cleaned
+
+    if best_score < MIN_NAME_SCORE:
+        fallback_name = _fallback_name_candidate(candidate_lines)
+        if fallback_name:
+            best_name = fallback_name
+            best_score = MIN_NAME_SCORE
+
+    if best_name and best_score >= MIN_NAME_SCORE:
+        name_value = _normalize_name_candidate(best_name)
+    else:
+        inferred_name = _infer_name_from_email(raw_text)
+        name_value = _normalize_name_candidate(inferred_name) if inferred_name else None
+
+    role_candidate: Optional[str] = None
+    extended_scope = candidate_lines + [
+        collapse_spaced_caps(line)
+        for line in lines[len(candidate_lines) : len(candidate_lines) + 4]
+        if line.strip()
+    ]
+    for line in extended_scope:
+        cleaned = _strip_bullet_prefix(line)
+        if not cleaned or len(cleaned) > 60:
+            continue
+        if _looks_like_contact_or_heading(cleaned):
+            continue
+        if _contains_role_keyword(cleaned):
+            role_candidate = _normalize_role_phrase(cleaned)
+            break
+        if cleaned.isupper() and _contains_role_keyword(cleaned.lower()):
+            role_candidate = _normalize_role_phrase(cleaned)
+            break
+
+    if role_candidate and name_value and role_candidate.lower() == name_value.lower():
+        role_candidate = None
+
+    return name_value, role_candidate
+
+
+def _split_blocks(text: str) -> List[str]:
+    blocks = [block.strip() for block in SECTION_SPLIT_RE.split(text) if block.strip()]
+    return blocks or ([text.strip()] if text.strip() else [])
+
+
+def _is_probable_entry_start(line: str, current: List[str]) -> bool:
+    if not current:
+        return False
+    stripped = line.lstrip("•- ").strip()
+    if not stripped:
+        return False
+    lower = stripped.lower()
+    if any(keyword in lower for keyword in COMPANY_KEYWORDS):
+        return True
+    if any(keyword in lower for keyword in POSITION_KEYWORDS):
+        return True
+    if stripped.isupper():
+        return True
+    if re.search(DATE_PATTERN, stripped):
+        return True
+    return False
+
+
+def split_experience_entries(block: str) -> List[List[str]]:
+    lines = [line.strip() for line in block.splitlines()]
+    entries: List[List[str]] = []
+    current: List[str] = []
+    for line in lines:
+        stripped_line = line.strip()
+        if not stripped_line:
+            if current:
+                entries.append(current)
+                current = []
+            continue
+        lower_line = stripped_line.lower()
+        if lower_line.startswith(("driving license", "driving licence", "licenses", "licences")):
+            if current:
+                entries.append(current)
+            current = []
+            break
+        heading = detect_heading(stripped_line)
+        if heading and heading != "EXPERIENCE" and heading in SECTION_TERMINATORS:
+            if current:
+                entries.append(current)
+            current = []
+            break
+        if _is_probable_entry_start(stripped_line, current):
+            if current:
+                entries.append(current)
+                current = []
+        current.append(stripped_line)
+    if current:
+        entries.append(current)
+    return [entry for entry in entries if any(line.strip() for line in entry)]
+
+
+def _find_company_candidate(lines: List[str]) -> Optional[str]:
+    cleaned_lines = [_strip_bullet_prefix(line) for line in lines if _strip_bullet_prefix(line)]
+    header_reject = {"curriculum vitae", "curriculum", "cv", "resume"}
+    for line in cleaned_lines:
+        if _looks_like_contact_or_heading(line):
+            continue
+        if looks_addressish(line):
+            continue
+        if "{" in line or "[" in line:
+            continue
+        line_lower = line.lower().strip(" :")
+        if line_lower in header_reject or ("curriculum" in line_lower and "vitae" in line_lower):
+            continue
+        if _is_role_phrase(line):
+            continue
+        if VERB_START_RE.match(line_lower):
+            continue
+        if re.match(r"^[a-z]+ing\b", line_lower):
+            continue
+        if _starts_with_verb_phrase(line):
+            continue
+        if PHONE_EMAIL_URL_RE.search(line):
+            continue
+        if _contains_org_keyword(line):
+            return line
+    for line in cleaned_lines:
+        if _looks_like_contact_or_heading(line):
+            continue
+        if looks_addressish(line):
+            continue
+        if "{" in line or "[" in line:
+            continue
+        line_lower = line.lower().strip(" :")
+        if line_lower in header_reject or ("curriculum" in line_lower and "vitae" in line_lower):
+            continue
+        if _is_role_phrase(line):
+            continue
+        if VERB_START_RE.match(line_lower):
+            continue
+        if re.match(r"^[a-z]+ing\b", line_lower):
+            continue
+        if _starts_with_verb_phrase(line):
+            continue
+        if any(char.isdigit() for char in line):
+            continue
+        if PHONE_EMAIL_URL_RE.search(line):
+            continue
+        tokens = [token for token in re.split(r"[,\\s]+", line) if token]
+        if len(tokens) >= 2:
+            return line
+    return cleaned_lines[0] if cleaned_lines else None
+
+
+def _find_position_candidate(lines: List[str]) -> Optional[str]:
+    for line in lines:
+        cleaned = _strip_bullet_prefix(line)
+        if not cleaned:
+            continue
+        if _normalize_location_candidate(cleaned):
+            continue
+        if _contains_role_keyword(cleaned):
+            return _normalize_role_phrase(cleaned)
+        if cleaned.isupper() and _contains_role_keyword(cleaned.lower()):
+            return _normalize_role_phrase(cleaned)
+    return None
+
+
+def _parse_dates(text: str) -> Tuple[Optional[str], Optional[str], Optional[bool]]:
+    text = text.replace("\u2013", "-").replace("\u2014", "-")
+    text = re.sub(
+        r"(\b[A-Za-zÁÉÍÓÚÄËÏÖÜáéíóúäëïöü\.]{3,10}\.? \d{4})\s+1\s+(Present|Current|Actual|Presente)",
+        r"\1 — \2",
+        text,
+        flags=re.IGNORECASE,
+    )
+    months = list(DATE_PATTERN.finditer(text))
+    years = list(YEAR_PATTERN.finditer(text))
+    is_current = None
+    normalized_lower = strip_accents(text).lower()
+    if any(term in normalized_lower for term in PRESENT_TOKENS):
+        is_current = True
+
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+
+    if not months and not years:
+        return None, None, is_current
+
+    if months:
+        first = months[0]
+        start_month = _month_from_token(first.group(1)) or 1
+        start_date = f"{first.group(2)}-{start_month:02d}-01"
+        if len(months) > 1:
+            for candidate in reversed(months):
+                month_val = _month_from_token(candidate.group(1))
+                if month_val:
+                    end_date = f"{candidate.group(2)}-{month_val:02d}-01"
+                    break
+    elif years:
+        start_date = f"{years[0].group(0)}-01-01"
+        if len(years) > 1:
+            end_date = f"{years[-1].group(0)}-01-01"
+
+    if not end_date and years and len(years) > 1:
+        end_date = f"{years[-1].group(0)}-01-01"
+
+    return start_date, end_date if not is_current else None, is_current
+
+
+def _is_noise_line(text: str) -> bool:
+    candidate = (text or "").strip()
+    if not candidate:
+        return True
+    if PHONE_EMAIL_URL_RE.search(candidate) or EMAIL_RE.search(candidate) or PHONE_RE.search(candidate):
+        return True
+    if looks_addressish(candidate):
+        return True
+    if detect_heading(candidate):
+        return True
+    if len(candidate) <= 4:
+        return True
+    return False
+
+
+def _extract_bullets(lines: List[str], skip: Sequence[str]) -> List[str]:
+    bullets: List[str] = []
+    skip_set = {(_strip_bullet_prefix(item) or "").lower() for item in skip if item}
+    junk_singletons = {
+        "resume templates",
+        "build this template",
+        "pinterest",
+        "linkedin",
+        "links",
+        "hobbies",
+        "skills",
+        "full",
+        "o",
+    }
+
+    def should_skip(text: str) -> bool:
+        if PHONE_EMAIL_URL_RE.search(text or ""):
+            return True
+        lower_text = (text or "").lower().strip()
+        if lower_text in junk_singletons:
+            return True
+        if "{" in (text or "") or "[" in (text or ""):
+            return True
+        base = lower_text.strip(" -–—")
+        return base in SOCIAL_TOKENS
+
+    # Join wrapped lines when likely a continuation (starts lowercase or common connectors)
+    connectors = re.compile(r"^(and|or|including|utilizing|leveraging|ensuring|monitoring|logging|maintaining|apprehending|providing|coordinating|managing|supporting)\b", re.IGNORECASE)
+    pending: Optional[str] = None
+    def _push_pending():
+        nonlocal pending
+        if pending is not None and pending.strip():
+            bullets.append(pending.strip())
+        pending = None
+
+    for line in lines:
+        cleaned = _strip_bullet_prefix(_scrub_glyphs(line))
+        if not cleaned or cleaned.lower() in skip_set:
+            continue
+        if _looks_like_contact_or_heading(cleaned):
+            continue
+        if should_skip(cleaned):
+            continue
+        if detect_heading(cleaned):
+            continue
+        if _normalize_location_candidate(cleaned):
+            continue
+        if looks_addressish(cleaned):
+            continue
+        cleaned = _normalize_punctuation_spacing(cleaned.strip(" -–—\u2022•"))
+        if not cleaned:
+            continue
+        # Continuation join: if starts with lowercase or connector, merge into pending
+        if pending is not None and (cleaned[:1].islower() or connectors.match(cleaned)):
+            pending = _normalize_punctuation_spacing(f"{pending} {cleaned}")
+            continue
+        parts = [
+            part.strip()
+            for part in BULLET_SPLIT_RE.split(cleaned)
+            if part.strip()
+            and not should_skip(part.strip())
+            and not detect_heading(part.strip())
+            and not looks_addressish(part.strip())
+        ]
+        if parts:
+            for idx, part in enumerate(parts):
+                if pending is not None and (part[:1].islower() or connectors.match(part)):
+                    pending = _normalize_punctuation_spacing(f"{pending} {part}")
+                else:
+                    _push_pending()
+                    pending = part
+        else:
+            if pending is None:
+                pending = cleaned
+            else:
+                pending = _normalize_punctuation_spacing(f"{pending} {cleaned}")
+    _push_pending()
+    deduped: List[str] = []
+    seen = set()
+    for bullet in bullets:
+        normalized = _normalize_punctuation_spacing(bullet).lower()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        deduped.append(_normalize_punctuation_spacing(bullet.rstrip(".")))
+    filtered: List[str] = []
+    for bullet in deduped:
+        trimmed = bullet.strip(" -–—\u2022•").strip()
+        if not trimmed:
+            continue
+        lower_trim = trimmed.lower()
+        if lower_trim in junk_singletons:
+            continue
+        if lower_trim in BULLET_STOPWORDS and len(trimmed.split()) == 1:
+            continue
+        if "{" in trimmed or "[" in trimmed:
+            continue
+        if looks_addressish(trimmed):
+            continue
+        if _is_noise_line(trimmed):
+            continue
+        filtered.append(trimmed)
+    if skip_set:
+        filtered = [bullet for bullet in filtered if bullet.lower() not in skip_set]
+    return filtered
+
+
+def _engine_selection(diagnostics: Optional[Dict[str, object]], text: str) -> Dict[str, object]:
+    diag = dict(diagnostics) if isinstance(diagnostics, dict) else {}
+    pages = 0
+    for key in ("pages", "pdf_pages_rendered", "pdf_pages"):
+        try:
+            value = int(diag.get(key)) if diag.get(key) is not None else 0
+            if value and value > pages:
+                pages = value
+        except Exception:
+            continue
+    pages = pages or 1
+    ocr_chars = 0
+    try:
+        ocr_chars = int(diag.get("ocr_chars") or 0)
+    except Exception:
+        ocr_chars = 0
+    total_chars = max(len(text or ""), ocr_chars)
+    min_chars = _env_int(NATIVE_MIN_CHARS_ENV, DEFAULT_NATIVE_MIN_CHARS)
+    min_density = _env_float(NATIVE_MIN_DENSITY_ENV, DEFAULT_NATIVE_MIN_DENSITY)
+    density = (total_chars / pages) / 1000.0 if pages else 0.0  # scale to per-1000 for readability
+    reasons: List[str] = []
+    native = False
+    engine_lower = str(diag.get("engine") or "").lower()
+    mode_hint = "text" if engine_lower in {"text", "pdfplumber", "pypdfium2"} else "ocr"
+    if total_chars >= min_chars:
+        native = True
+        reasons.append(f"chars>={min_chars}")
+    avg_density = (total_chars / max(pages, 1)) if pages else 0.0
+    # Compare against 0.15 threshold (characters per pixel is not available; use per-page heuristic)
+    if avg_density >= (min_density * 1000):
+        native = True
+        reasons.append(f"density>={min_density}")
+    if engine_lower in {"text", "pdfplumber", "pypdfium2"}:
+        native = True
+        reasons.append(f"engine={engine_lower}")
+    decision = {"engine": "native" if native else "ocr", "reasons": reasons or [f"mode={mode_hint}"]}
+    diag["engine_selection"] = decision
+    return diag
+
+
+def _reorder_text_with_columns(raw_text: str, diagnostics: Optional[Dict[str, object]]) -> Tuple[str, str]:
+    blocks: List[Dict[str, Any]] = []
+    diag = diagnostics if isinstance(diagnostics, dict) else {}
+    # Accept either diagnostics.layout.blocks or diagnostics.layout_blocks
+    layout = diag.get("layout") if isinstance(diag, dict) else None
+    if isinstance(layout, dict) and isinstance(layout.get("blocks"), list):
+        for b in layout.get("blocks") or []:
+            if isinstance(b, dict) and isinstance(b.get("bbox"), (list, tuple)):
+                blocks.append(b)
+    elif isinstance(diag.get("layout_blocks"), list):
+        for b in diag.get("layout_blocks") or []:
+            if isinstance(b, dict) and isinstance(b.get("bbox"), (list, tuple)):
+                blocks.append(b)
+    if not blocks:
+        return raw_text, "single"
+    # Compute split by median x0
+    xs = []
+    rows: List[Tuple[float, float, str]] = []  # (x0, y0, text)
+    for b in blocks:
+        try:
+            x0, y0, _, _ = b.get("bbox")  # type: ignore[index]
+            text = str(b.get("text") or "").strip()
+            if not text:
+                continue
+            xs.append(float(x0))
+            rows.append((float(x0), float(y0), text))
+        except Exception:
+            continue
+    if not rows:
+        return raw_text, "single"
+    xs_sorted = sorted(xs)
+    median_x0 = xs_sorted[len(xs_sorted) // 2]
+    # Unimodal fallback: check spread
+    spread = (xs_sorted[-1] - xs_sorted[0]) if len(xs_sorted) > 1 else 0.0
+    if spread < 50:  # in normalized 0-1000 space
+        return raw_text, "single"
+    left: List[Tuple[float, float, str]] = []
+    right: List[Tuple[float, float, str]] = []
+    for r in rows:
+        (left if r[0] <= median_x0 else right).append(r)
+    left_sorted = sorted(left, key=lambda t: (t[1], t[0]))
+    right_sorted = sorted(right, key=lambda t: (t[1], t[0]))
+    ordered = [text for *_xy, text in left_sorted] + [text for *_xy, text in right_sorted]
+    merged = "\n".join(ordered).strip()
+    return (merged or raw_text), ("two-column" if left and right else "single")
+
+
+def parse_experience_block(block: str) -> List[Dict[str, object]]:
+    entries = split_experience_entries(block)
+    if not entries:
+        entries = [block.splitlines()]
+    parsed_entries: List[Dict[str, object]] = []
+    for entry_lines in entries:
+        entry_lines = [
+            collapse_spaced_caps(_scrub_glyphs(line.strip()))
+            for line in entry_lines
+            if line.strip()
+        ]
+        if not entry_lines:
+            continue
+        location = None
+        position = None
+        company = None
+        consumed_for_dates: Optional[int] = None
+        header_match = _match_multiline_header(entry_lines)
+        if header_match:
+            position, company, location, consumed_for_dates = header_match
+        else:
+            match = _match_role_company_line(entry_lines)
+            if match:
+                position, company, location, _ = match
+        normalized_first = _strip_bullet_prefix(entry_lines[0]).strip() if entry_lines else ""
+        prefer_role_header = False
+        if not header_match:
+            if not position and normalized_first and normalized_first.isupper() and _is_role_phrase(normalized_first):
+                position = _normalize_role_phrase(normalized_first)
+                prefer_role_header = True
+            search_lines = entry_lines[1:] if prefer_role_header else entry_lines
+            fallback_company = _find_company_candidate(search_lines) if not company else company
+            company = collapse_spaced_caps(fallback_company) if fallback_company else None
+            fallback_position = _find_position_candidate(entry_lines) if not position else position
+            position = _normalize_role_phrase(fallback_position) if fallback_position else None
+            if company and _starts_with_verb_phrase(company):
+                company = None
+            if company and not position:
+                position = _fallback_position_from_lines(entry_lines, company)
+            if position and company and position.lower() == company.lower():
+                position = None
+            if company and not position:
+                position = _fallback_position_from_lines(entry_lines, company)
+        elif company:
+            company = collapse_spaced_caps(company)
+        if position:
+            position = _normalize_role_phrase(position)
+        if not location:
+            for candidate_line in entry_lines[:3]:
+                normalized_loc = _normalize_location_candidate(candidate_line)
+                if normalized_loc:
+                    location = normalized_loc
+                    break
+        if consumed_for_dates:
+            date_scope = " ".join(entry_lines[:consumed_for_dates])
+        else:
+            date_scope = " ".join(entry_lines)
+        start_date, end_date, is_current = _parse_dates(date_scope)
+        skip_items = [company or "", position or ""]
+        if location:
+            skip_items.append(location)
+        bullets = _extract_bullets(entry_lines, skip=skip_items)
+        bullets = [bullet for bullet in bullets if not _is_noise_line(bullet)]
+        if not bullets:
+            remaining = [line for line in entry_lines if line not in {company, position}]
+            if remaining:
+                bullets = [
+                    sentence.strip()
+                    for sentence in re.split(r"(?<=[.!?])\s+", " ".join(remaining))
+                    if sentence.strip() and not _is_noise_line(sentence)
+                ]
+        if not bullets:
+            fallback_line = entry_lines[-1]
+            bullets = [fallback_line] if not _is_noise_line(fallback_line) else []
+        if not bullets and entry_lines:
+            bullets = [line for line in entry_lines if not _is_noise_line(line)]
+        company_clean = _strip_bullet_prefix(company or "") or (position or "Experience").split(",")[0].strip()
+        original_company = company_clean
+        lower_company = company_clean.lower()
+        invalid_company = False
+        if position and company_clean and lower_company == position.lower():
+            invalid_company = True
+        if company_clean and (_is_role_phrase(company_clean) or _starts_with_verb_phrase(company_clean)):
+            invalid_company = True
+        if company_clean and (VERB_START_RE.match(lower_company) or re.match(r"^[a-z]+ing\b", lower_company)):
+            invalid_company = True
+        if company_clean and PHONE_EMAIL_URL_RE.search(company_clean):
+            invalid_company = True
+
+        if invalid_company:
+            alternative = _find_company_candidate(entry_lines[:4])
+            if alternative and alternative.lower() != lower_company:
+                company_clean = collapse_spaced_caps(alternative)
+                lower_company = company_clean.lower()
+            else:
+                if original_company and original_company not in bullets:
+                    bullets.insert(0, original_company)
+                company_clean = "Experience"
+                lower_company = company_clean.lower()
+
+        if _looks_like_contact_or_heading(company_clean):
+            if company_clean and company_clean not in bullets:
+                bullets.insert(0, company_clean)
+            company_clean = "Experience"
+            lower_company = company_clean.lower()
+        if lower_company.startswith("responsible for"):
+            replacement = company_clean.replace("Responsible for", "").strip()
+            company_clean = replacement or "Experience"
+            lower_company = company_clean.lower()
+        if _starts_with_verb_phrase(company_clean):
+            if company_clean and company_clean not in bullets:
+                bullets.insert(0, company_clean)
+            company_clean = "Experience"
+        if company_clean:
+            company_lower = company_clean.lower()
+            bullets = [bullet for bullet in bullets if bullet.lower() != company_lower]
+        if position:
+            position_lower = position.lower()
+            bullets = [bullet for bullet in bullets if bullet.lower() != position_lower]
+
+        parsed_entries.append(
+            {
+                "id": make_id("exp"),
+                "company": company_clean,
+                "position": position,
+                "startDate": start_date,
+                "endDate": None if is_current else end_date,
+                "isCurrent": is_current,
+                "location": location,
+                "summary": None,
+                "responsibilities": "\n".join(bullets),
+                "responsibilityBullets": bullets,
+                "achievements": [],
+            }
+        )
+    return parsed_entries
+
+
+def build_experience_entries(sections: Dict[str, List[str]], raw_text: str) -> List[Dict[str, object]]:
+    experiences: List[Dict[str, object]] = []
+    for block in sections.get("EXPERIENCE", []):
+        parsed_entries = parse_experience_block(block)
+        experiences.extend(parsed_entries)
+    if not experiences:
+        # Fallback heuristic: look for capitalized company names directly in raw text
+        sentences = [sentence.strip() for sentence in re.split(r"(?<=[.!?])\s+", raw_text) if sentence.strip()]
+        for sentence in sentences:
+            match = re.search(r"([A-Z][A-Za-z0-9&]+(?:\s+[A-Z][A-Za-z0-9&]+){1,3})", sentence)
+            if match:
+                company = match.group(1).strip()
+                if company.lower().startswith("responsible for"):
+                    continue
+                experiences.append(
+                    {
+                        "id": make_id("exp"),
+                        "company": company,
+                        "position": None,
+                        "startDate": None,
+                        "endDate": None,
+                        "isCurrent": None,
+                        "location": None,
+                        "summary": None,
+                        "responsibilities": sentence,
+                        "responsibilityBullets": [sentence],
+                        "achievements": [],
+                    }
+                )
+                break
+    if not experiences and raw_text.strip():
+        sentence = first_sentence(raw_text)
+        experiences.append(
+            {
+                "id": make_id("exp"),
+                "company": "Experience",
+                "position": None,
+                "startDate": None,
+                "endDate": None,
+                "isCurrent": None,
+                "location": None,
+                "summary": None,
+                "responsibilities": sentence,
+                "responsibilityBullets": [sentence],
+                "achievements": [],
+            }
+        )
+    return experiences
+
+
+def parse_education_block(block: str) -> Optional[Dict[str, object]]:
+    lines = [
+        collapse_spaced_caps(_scrub_glyphs(line.strip("•- ").strip()))
+        for line in block.splitlines()
+        if line.strip()
+    ]
+    text = " ".join(lines) if lines else _scrub_glyphs(block.strip())
+    degree = None
+    institution = None
+    field = None
+    end_date = None
+    year_match = YEAR_PATTERN.search(text)
+    if year_match:
+        end_date = f"{year_match.group(0)}-01-01"
+    lower = text.lower()
+    if " from " in lower:
+        parts = re.split(r"\bfrom\b", text, flags=re.I)
+        degree = parts[0].strip(" ,.;")
+        institution = parts[1].strip(" ,.;")
+    elif " at " in lower:
+        parts = re.split(r"\bat\b", text, flags=re.I)
+        degree = parts[0].strip(" ,.;")
+        institution = parts[1].strip(" ,.;")
+    else:
+        tokens = [token.strip(" ,.;") for token in re.split(r",|;|\n", text) if token.strip()]
+        if tokens:
+            degree = tokens[0]
+            if len(tokens) > 1:
+                institution = tokens[1]
+    if not institution and degree:
+        parts = degree.split(" from ")
+        if len(parts) == 2:
+            degree, institution = parts[0].strip(), parts[1].strip()
+
+    summary = text
+    for idx, line in enumerate(lines):
+        lower_line = line.lower()
+        if lower_line.startswith("course curriculum"):
+            _, sep, remainder_raw = line.partition(":")
+            remainder = remainder_raw.strip() if sep else ""
+            summary_parts = [remainder] if remainder else []
+            summary_parts.extend(lines[idx + 1 :])
+            summary = " ".join(part for part in summary_parts if part) or text
+            break
+
+    degree_clean = collapse_spaced_caps(_scrub_glyphs(degree or "")).strip(" ,.;")
+    institution_clean = collapse_spaced_caps(_scrub_glyphs(institution or "")).strip(" ,.;")
+    if institution_clean and len(institution_clean) <= 1:
+        institution_clean = ""
+    if institution_clean:
+        letters_only = re.sub(r"[^A-Za-z]", "", institution_clean)
+        if len(letters_only) <= 2 or (len(letters_only) <= 3 and not any(ch in "aeiou" for ch in letters_only.lower())):
+            institution_clean = ""
+    if institution_clean and re.fullmatch(r"[-—–]+(?:\s+\w+)?", institution_clean):
+        institution_clean = ""
+    if institution_clean and "course curriculum" in institution_clean.lower():
+        institution_clean = ""
+    if degree_clean and "course curriculum" in degree_clean.lower() and not summary:
+        summary = degree_clean
+    if not summary:
+        summary = text
+
+    if not institution_clean:
+        return None
+
+    return {
+        "id": make_id("edu"),
+        "institution": institution_clean or degree_clean or text,
+        "degree": degree_clean or "",
+        "fieldOfStudy": field,
+        "startDate": None,
+        "endDate": end_date,
+        "isCurrent": None,
+        "location": None,
+        "summary": summary,
+    }
+
+
+def build_education_entries(sections: Dict[str, List[str]], raw_text: str) -> List[Dict[str, object]]:
+    education_blocks = sections.get("EDUCATION", [])
+    entries: List[Dict[str, object]] = []
+    for block in education_blocks:
+        entry = parse_education_block(block)
+        if entry:
+            entries.append(entry)
+    if not entries:
+        for line in raw_text.splitlines():
+            if any(keyword in line.lower() for keyword in ["b.", "btech", "b.tech", "bachelor", "m.", "master", "university", "college", "diploma"]):
+                entry = parse_education_block(line)
+                if entry:
+                    entries.append(entry)
+    return entries
+
+
+def normalize_skill_name(value: str) -> str:
+    value = value.strip()
+    if not value:
+        return value
+    if value.isupper() and len(value) > 2:
+        return value.title()
+    return value
+
+
+def build_skill_entries(sections: Dict[str, List[str]]) -> List[Dict[str, object]]:
+    skills_text = " ".join(sections.get("SKILLS", []))
+    if not skills_text:
+        return []
+    raw_items = re.split(r"[,\n;•\u2022]", skills_text)
+    skills: List[Dict[str, str]] = []
+    seen = set()
+    for item in raw_items:
+        name = normalize_skill_name(item)
+        if not name:
+            continue
+        name = _normalize_skill_alias(name)
+        key = name.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        skills.append({"id": make_id("skill"), "name": name})
+    return skills
+
+
+def build_language_entries(sections: Dict[str, List[str]]) -> List[Dict[str, object]]:
+    languages_text = " ".join(sections.get("LANGUAGES", []))
+    if not languages_text:
+        return []
+    raw_items = re.split(r"[,\n;•\u2022]", languages_text)
+    langs: List[Dict[str, object]] = []
+    seen = set()
+    for item in raw_items:
+        name = normalize_skill_name(item)
+        if not name:
+            continue
+        key = name.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        langs.append({"id": make_id("lang"), "name": name})
+    return langs
+
+
+def ensure_edu_tokens(entries: List[Dict[str, object]], raw_text: str) -> List[Dict[str, object]]:
+    missing_tokens = [token for token in EDU_TOKENS if token.lower() in raw_text.lower()]
+    if missing_tokens:
+        if not entries:
+            entries.append(
+                {
+                    "id": make_id("edu"),
+                    "institution": "Education",
+                    "degree": "",
+                    "fieldOfStudy": None,
+                    "startDate": None,
+                    "endDate": None,
+                    "isCurrent": None,
+                    "location": None,
+                    "summary": "",
+                }
+            )
+        summary = entries[0].get("summary") or ""
+        for token in missing_tokens:
+            if token.lower() not in summary.lower():
+                summary = f"{summary} {token}".strip()
+        entries[0]["summary"] = summary
+    return entries
+
+
+def adjust_diagnostics(diagnostics: Optional[Dict[str, object]], mode: str) -> Dict[str, object]:
+    diag = dict(diagnostics) if isinstance(diagnostics, dict) else {}
+    if mode == "text":
+        diag.setdefault("engine", "text")
+        diag.pop("dpi_used", None)
+    else:
+        diag.setdefault("engine", "paddle")
+        dpi_value = diag.get("dpi_used")
+        if not isinstance(dpi_value, (int, float)) or dpi_value <= 0:
+            diag["dpi_used"] = 300
+    diag.setdefault("fallback_used", False)
+    diag.setdefault("hybrid_used", False)
+    return diag
+
+
+def canonicalize_cv(
+    raw_text: str,
+    mode: str,
+    diagnostics: Optional[Dict[str, object]] = None,
+    raw_sections: Optional[List[Dict[str, str]]] = None,
+) -> Dict[str, object]:
+    # Noise filtering first (Prompt 4)
+    original_text = raw_text or ""
+    filtered_text, removed_count = _filter_noise_from_text(original_text)
+    # Column clustering/reordering (Prompt 2) — best-effort using diagnostics layout if present
+    reordered_text, column_mode = _reorder_text_with_columns(filtered_text, diagnostics)
+    working_text = original_text.strip()
+    collapsed_text = TOKEN_SANITIZE_RE.sub(" ", reordered_text.strip())
+    sections = extract_sections(reordered_text, raw_sections)
+    # Track ordered sections (Prompt 3)
+    ordered_section_labels = list(sections.keys())
+    name, desired_position = extract_name_and_role(original_text, sections)
+    summary_candidate = pick_summary_text(sections, reordered_text or collapsed_text)
+    experiences = build_experience_entries(sections, original_text)
+    if not summary_candidate:
+        summary_candidate = _summary_from_experience_entries(experiences)
+    if not summary_candidate:
+        summary_candidate = _summary_from_structured_json(reordered_text)
+    if not summary_candidate:
+        summary_candidate = _summary_from_skill_lines(reordered_text)
+    summary_sentence = ""
+    if summary_candidate:
+        sentences = re.split(r"(?<=[.!?])\s+", summary_candidate)
+        for sentence in sentences:
+            normalized_sentence = _normalize_summary_candidate(sentence)
+            if normalized_sentence:
+                summary_sentence = ensure_terminal_punctuation(normalized_sentence)
+                break
+        if not summary_sentence:
+            fallback_sentence = _clean_summary_text(first_sentence(summary_candidate))
+            if fallback_sentence:
+                summary_sentence = ensure_terminal_punctuation(fallback_sentence)
+    education = ensure_edu_tokens(build_education_entries(sections, original_text), original_text)
+    skills = build_skill_entries(sections)
+    languages = build_language_entries(sections)
+    diagnostics_out = adjust_diagnostics(diagnostics, mode)
+    # Engine selection artifact (Prompt 1)
+    diagnostics_out = _engine_selection(diagnostics_out, reordered_text)
+    diagnostics_out["noise_lines_removed"] = removed_count
+    diagnostics_out["column_mode"] = column_mode
+    diagnostics_out["section_order"] = ordered_section_labels
+
+    raw_sections_list = [
+        {"label": label, "content": content}
+        for label, blocks in sections.items()
+        for content in blocks
+    ]
+    if original_text and not raw_sections_list:
+        snippet = original_text.strip()
+        if snippet:
+            snippet = snippet[:400].strip()
+        if not snippet:
+            snippet = original_text.strip()
+        if snippet:
+            raw_sections_list = [{"label": "BODY", "content": snippet}]
+
+    contact_fields = extract_contact(original_text)
+    contact_location = contact_fields.get("location")
+    normalized_address = _clean_address_field(contact_location)
+
+    normalized: Dict[str, object] = {
+        "name": name,
+        "contact": {
+            "name": name,
+            "desiredPosition": desired_position,
+            "email": contact_fields["email"],
+            "phone": contact_fields["phone"],
+            "linkedinUrl": contact_fields["linkedinUrl"],
+            "addressBlock": None,
+            "addressNormalized": normalized_address,
+        },
+        "summary": {"text": summary_sentence, "confidence": 0.5},
+        "experience": experiences,
+        "education": education,
+        "skills": skills,
+        "languages": [{"name": lang["name"]} for lang in languages],
+        "languagesRaw": [lang["name"] for lang in languages],
+        "achievements": sections.get("ACHIEVEMENTS", []),
+        "projects": sections.get("PROJECTS", []),
+        "research": [],
+        "volunteer": [],
+        "references": [],
+        "other": [],
+        "summaryFirstSentence": summary_sentence,
+        "raw": original_text,
+        "rawText": original_text,
+        "rawSections": raw_sections_list,
+    }
+    normalized["summaryFirstSentence"] = summary_sentence
+
+    if original_text and not normalized.get("rawSections"):
+        snippet = original_text.strip()[:400].strip()
+        fallback_sections = [{"label": "BODY", "content": snippet}] if snippet else []
+        normalized["rawSections"] = fallback_sections
+        if fallback_sections and not raw_sections_list:
+            raw_sections_list = fallback_sections
+    if "engine" not in diagnostics_out:
+        diagnostics_out["engine"] = "text" if mode == "text" else "paddle"
+
+    canonical_payload = {
+        "rawText": original_text,
+        "normalized": normalized,
+        "summary": {"text": summary_sentence, "confidence": 0.5},
+        "summaryFirstSentence": summary_sentence,
+        "rawSections": [dict(section) for section in raw_sections_list],
+        "diagnostics": diagnostics_out,
+    }
+
+    return canonical_payload

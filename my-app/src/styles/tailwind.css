@@ -1,0 +1,55 @@
+/* Tailwind entry file — import this from the app entry (main.tsx) */
+@tailwind base;
+@tailwind components;
+
+@layer utilities {
+  /* === Tokens dasti — utilitaires directs === */
+  .bg-sf1     { background-color: var(--sf1); }
+  .bg-sf2     { background-color: var(--sf2); }
+  .bg-sfr     { background-color: var(--sfr); }
+  .text-ti    { color: var(--ti); }
+  .text-tm2   { color: var(--tm2); }
+  .text-tg2   { color: var(--tg2); }
+  .border-bo  { border-color: var(--bo); }
+  .border-bm  { border-color: var(--bm); }
+  .bg-ac      { background-color: var(--ac); }
+  .text-op    { color: var(--op); }
+  .text-ok    { color: var(--ok); }
+  .text-okt   { color: var(--okt); }
+  .bg-okb     { background-color: var(--okb); }
+  .text-ert   { color: var(--ert); }
+  .bg-erb     { background-color: var(--erb); }
+  .text-wat   { color: var(--wat); }
+  .bg-wab     { background-color: var(--wab); }
+
+  /* === Aliases surface — utilisés dans les composants === */
+  .bg-surface         { background-color: var(--sf1); }
+  .bg-surface-muted   { background-color: var(--sf2); }
+  .bg-card            { background-color: var(--sfr); }
+
+  /* === Aliases texte === */
+  .text-muted               { color: var(--tm2); }
+  .text-muted-foreground    { color: var(--tm2); }
+  .text-primary-foreground  { color: var(--ti); }
+  .text-dark-text           { color: var(--ti); }
+  .text-dark-text-hover     { color: var(--ti); }
+  .placeholder-dark-text-muted::placeholder { color: var(--tg2); }
+
+  /* === Backward compat — anciens tokens app === */
+  .bg-job-field   { background-color: var(--sf1); }
+  .bg-background  { background-color: var(--sfr); }
+  .text-foreground { color: var(--ti); }
+  .text-background { color: var(--bg); }
+  .bg-primary     { background-color: var(--ti); }
+  .bg-accent      { background-color: var(--ac); }
+  .border-accent  { border-color: var(--bo); }
+  .bg-success     { background-color: var(--ok); }
+  .bg-danger      { background-color: var(--er); }
+  .bg-warning     { background-color: var(--wa); }
+  .text-danger    { color: var(--ert); }
+  .text-success   { color: var(--okt); }
+  .text-warning   { color: var(--wat); }
+  .hover-outline  { outline-color: var(--ac); }
+}
+
+@tailwind utilities;

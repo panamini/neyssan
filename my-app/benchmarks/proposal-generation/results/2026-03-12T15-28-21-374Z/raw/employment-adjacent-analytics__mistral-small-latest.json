@@ -1,0 +1,25 @@
+{
+  "id": "d5ab4f33c6c34b98b3cc801177887fba",
+  "created": 1773329376,
+  "model": "mistral-small-latest",
+  "usage": {
+    "prompt_tokens": 398,
+    "total_tokens": 632,
+    "completion_tokens": 234,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "object": "chat.completion",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "tool_calls": null,
+        "content": "Dear Hiring Manager,\n\nI’m excited to apply for the Growth Analytics Manager role at your company. As a product designer and frontend builder with hands-on experience in experimentation, I’ve collaborated on growth-facing pages to optimize user engagement and conversion. While my background is rooted in design and development, I’ve actively participated in A/B testing and funnel analysis for marketing pages, which has deepened my appreciation for data-driven decision-making. I’m eager to leverage this experience to support your team’s analytical efforts and contribute to cross-functional reporting.\n\nMy work as a freelance designer-developer involved designing and iterating on landing pages based on performance metrics, giving me practical insight into how experimentation impacts user behavior. I’ve worked closely with product and marketing teams to align on goals and communicate findings, which has honed my ability to translate technical insights into actionable recommendations. While I’m still developing my SQL skills, I’m a quick learner and confident in my ability to apply structured query logic to analyze and present data effectively.\n\nI’d welcome the opportunity to discuss how my experience in experimentation and collaboration could support your team’s growth initiatives. Thank you for your time and consideration.\n\nJordan Lee"
+      }
+    }
+  ]
+}

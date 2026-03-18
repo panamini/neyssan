@@ -1,0 +1,25 @@
+{
+  "id": "7709e07c89e74212b4fcf5237df923e4",
+  "created": 1773329103,
+  "model": "mistral-large-latest",
+  "usage": {
+    "prompt_tokens": 372,
+    "total_tokens": 462,
+    "completion_tokens": 90,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "object": "chat.completion",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "tool_calls": null,
+        "content": "I’m writing to apply for the Customer Support Specialist role. At CloudLane, I managed daily email and chat queues for SaaS customers, ensuring responses were clear and helpful. I also documented recurring issues into internal help content, which helped streamline support for the team.\n\nMy experience aligns with what you’re looking for—handling support channels while keeping communication calm and organized. I’d welcome the chance to contribute in a similar capacity."
+      }
+    }
+  ]
+}

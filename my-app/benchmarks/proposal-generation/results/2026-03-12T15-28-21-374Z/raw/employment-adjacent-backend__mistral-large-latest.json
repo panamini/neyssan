@@ -1,0 +1,25 @@
+{
+  "id": "7419bb119d1c4edf8a5cfc608863a425",
+  "created": 1773329361,
+  "model": "mistral-large-latest",
+  "usage": {
+    "prompt_tokens": 418,
+    "total_tokens": 687,
+    "completion_tokens": 269,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "object": "chat.completion",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "tool_calls": null,
+        "content": "Dear Hiring Manager,\n\nI’m excited to apply for the Full Stack Engineer role, particularly because my background in frontend development and collaboration with backend teams aligns well with the technical and collaborative aspects of the position. At BrightLayer, I worked closely with backend engineers to define API contracts and build data-heavy UI features using React and TypeScript. This experience gave me firsthand insight into how frontend and backend systems interact, and I’m eager to deepen my contributions across the full stack.\n\nWhile my professional focus has been on frontend architecture, I’ve enjoyed bridging the gap between UI and API design, ensuring smooth integration and a cohesive user experience. My work often involved troubleshooting API responses and refining data flows, which sharpened my ability to think critically about how services communicate. I’m confident in my ability to contribute meaningfully to frontend development and collaborate effectively on backend tasks, even if my depth in Node.js or scalable service design is still growing.\n\nI’d welcome the opportunity to bring my frontend expertise and enthusiasm for full-stack problem-solving to your team. I’m particularly drawn to roles that encourage cross-disciplinary learning, and I’d be excited to expand my skills in backend development while delivering value from day one. Thank you for your time and consideration—I’d love to discuss how my experience could support your goals.\n\nBest regards,\nAlex Martin"
+      }
+    }
+  ]
+}

@@ -1,0 +1,64 @@
+name: parser-smoke
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install parser dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r cv_parser_service/requirements.txt \
+            || python -m pip install fastapi uvicorn
+          mkdir -p artifacts
+
+      - name: Start parser
+        run: |
+          bash scripts/parser.sh start
+
+      - name: Wait for health
+        run: |
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 0.5
+          done
+          echo "Parser not healthy"
+          tail -n 200 tmp/parser.log || true
+          exit 1
+
+      - name: ABC smoke
+        env:
+          PARSER_URL: http://127.0.0.1:8000/parse-cv
+        run: |
+          python scripts/run_abc.py | tee artifacts/abc_smoke_result.txt
+
+      - name: Parse fixtures
+        env:
+          PARSER_URL: http://127.0.0.1:8000/parse-cv
+        run: |
+          python scripts/parse.py fixtures/fixturetest
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parser-artifacts
+          path: |
+            artifacts/**
+            tmp/parser.log
+
+      - name: Stop parser
+        if: always()
+        run: bash scripts/parser.sh stop

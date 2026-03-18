@@ -1,0 +1,71 @@
+{
+  "id": "resp_0c625351e59541270069b2dc33ef0c8193bb99063cd652b64e",
+  "object": "response",
+  "created_at": 1773329459,
+  "status": "completed",
+  "background": false,
+  "billing": {
+    "payer": "developer"
+  },
+  "completed_at": 1773329462,
+  "error": null,
+  "frequency_penalty": 0,
+  "incomplete_details": null,
+  "instructions": null,
+  "max_output_tokens": 500,
+  "max_tool_calls": null,
+  "model": "gpt-4o-mini-2024-07-18",
+  "output": [
+    {
+      "id": "msg_0c625351e59541270069b2dc34489481938535df0b0b72eb22",
+      "type": "message",
+      "status": "completed",
+      "content": [
+        {
+          "type": "output_text",
+          "annotations": [],
+          "logprobs": [],
+          "text": "Dear Hiring Manager,\n\nI am excited to apply for the Operations Associate position. I am drawn to this role because I believe that effective operations are the backbone of any successful organization. I am eager to contribute to your team by supporting recurring processes and ensuring that internal records are updated accurately.\n\nI pride myself on my reliability and clear communication skills, which I believe are essential for fostering collaboration across teams. I am committed to learning and adapting quickly, which I see as vital in a dynamic work environment. I am enthusiastic about the opportunity to assist in streamlining operations and enhancing team communication.\n\nI am looking forward to the possibility of bringing my dedication and willingness to learn to your organization. Thank you for considering my application. I hope to discuss how I can contribute to your team.\n\nSincerely,  \n[Your Name]"
+        }
+      ],
+      "role": "assistant"
+    }
+  ],
+  "parallel_tool_calls": true,
+  "presence_penalty": 0,
+  "previous_response_id": null,
+  "prompt_cache_key": null,
+  "prompt_cache_retention": null,
+  "reasoning": {
+    "effort": null,
+    "summary": null
+  },
+  "safety_identifier": null,
+  "service_tier": "default",
+  "store": true,
+  "temperature": 0.2,
+  "text": {
+    "format": {
+      "type": "text"
+    },
+    "verbosity": "medium"
+  },
+  "tool_choice": "auto",
+  "tools": [],
+  "top_logprobs": 0,
+  "top_p": 1,
+  "truncation": "disabled",
+  "usage": {
+    "input_tokens": 334,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 162,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 496
+  },
+  "user": null,
+  "metadata": {}
+}

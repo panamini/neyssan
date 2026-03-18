@@ -1,0 +1,76 @@
+{
+  "id": "resp_0e9edd19a5a1378a0069b2dad4473c819aad4a920283923cb8",
+  "object": "response",
+  "created_at": 1773329108,
+  "status": "completed",
+  "background": false,
+  "billing": {
+    "payer": "developer"
+  },
+  "completed_at": 1773329109,
+  "error": null,
+  "frequency_penalty": 0,
+  "incomplete_details": null,
+  "instructions": null,
+  "max_output_tokens": 500,
+  "max_tool_calls": null,
+  "model": "gpt-5-nano-2025-08-07",
+  "output": [
+    {
+      "id": "rs_0e9edd19a5a1378a0069b2dad492d8819a8ea10348999a0355",
+      "type": "reasoning",
+      "summary": []
+    },
+    {
+      "id": "msg_0e9edd19a5a1378a0069b2dad4b364819a8d520a9c14807016",
+      "type": "message",
+      "status": "completed",
+      "content": [
+        {
+          "type": "output_text",
+          "annotations": [],
+          "logprobs": [],
+          "text": "I am Marie Lopez, a Customer Support Specialist with hands-on experience in SaaS ticketing, email and chat support, and knowledge base documentation. In my role at CloudLane, I managed daily chat and email queues for SaaS customers and documented recurring issues to improve internal help content. I am committed to keeping communication calm and clear, ensuring timely responses, and translating patterns into concise, helpful documentation. I am excited to bring my focus on efficient problem resolution and structured knowledge sharing to your team to support smooth customer experiences."
+        }
+      ],
+      "role": "assistant"
+    }
+  ],
+  "parallel_tool_calls": true,
+  "presence_penalty": 0,
+  "previous_response_id": null,
+  "prompt_cache_key": null,
+  "prompt_cache_retention": null,
+  "reasoning": {
+    "effort": "minimal",
+    "summary": null
+  },
+  "safety_identifier": null,
+  "service_tier": "default",
+  "store": true,
+  "temperature": 1,
+  "text": {
+    "format": {
+      "type": "text"
+    },
+    "verbosity": "medium"
+  },
+  "tool_choice": "auto",
+  "tools": [],
+  "top_logprobs": 0,
+  "top_p": 1,
+  "truncation": "disabled",
+  "usage": {
+    "input_tokens": 364,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 122,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 486
+  },
+  "user": null,
+  "metadata": {}
+}

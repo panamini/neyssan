@@ -1,0 +1,71 @@
+{
+  "id": "resp_081c707b0da6d7780069b2dbe8a30c8199b73d33fe8489f0f5",
+  "object": "response",
+  "created_at": 1773329384,
+  "status": "completed",
+  "background": false,
+  "billing": {
+    "payer": "developer"
+  },
+  "completed_at": 1773329388,
+  "error": null,
+  "frequency_penalty": 0,
+  "incomplete_details": null,
+  "instructions": null,
+  "max_output_tokens": 500,
+  "max_tool_calls": null,
+  "model": "gpt-4o-mini-2024-07-18",
+  "output": [
+    {
+      "id": "msg_081c707b0da6d7780069b2dbe9183c81998a0428d05bf9c0c2",
+      "type": "message",
+      "status": "completed",
+      "content": [
+        {
+          "type": "output_text",
+          "annotations": [],
+          "logprobs": [],
+          "text": "Dear Hiring Manager,\n\nI am excited to apply for the Growth Analytics Manager position. With my background as a product designer and frontend builder, I have gained valuable experience in experimentation, particularly on growth-facing pages. My recent work as a freelance designer-developer involved conducting conversion experiments for startup marketing pages, which has deepened my understanding of how data-driven decisions can enhance user engagement and drive growth.\n\nCollaboration has been a key aspect of my professional journey. I have worked closely with product teams to align design strategies with business objectives, ensuring that our experiments are not only innovative but also grounded in user needs. This experience has honed my ability to communicate effectively across functions, making complex ideas accessible to both technical and non-technical stakeholders.\n\nI am eager to bring my skills in experimentation and product collaboration to your team, contributing to the development of insightful funnel reporting and cross-functional analyses. I believe my unique perspective as a designer will add value to your growth initiatives.\n\nThank you for considering my application. I look forward to the opportunity to discuss how I can contribute to your team.\n\nSincerely,  \nJordan Lee"
+        }
+      ],
+      "role": "assistant"
+    }
+  ],
+  "parallel_tool_calls": true,
+  "presence_penalty": 0,
+  "previous_response_id": null,
+  "prompt_cache_key": null,
+  "prompt_cache_retention": null,
+  "reasoning": {
+    "effort": null,
+    "summary": null
+  },
+  "safety_identifier": null,
+  "service_tier": "default",
+  "store": true,
+  "temperature": 0.2,
+  "text": {
+    "format": {
+      "type": "text"
+    },
+    "verbosity": "medium"
+  },
+  "tool_choice": "auto",
+  "tools": [],
+  "top_logprobs": 0,
+  "top_p": 1,
+  "truncation": "disabled",
+  "usage": {
+    "input_tokens": 386,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 221,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 607
+  },
+  "user": null,
+  "metadata": {}
+}

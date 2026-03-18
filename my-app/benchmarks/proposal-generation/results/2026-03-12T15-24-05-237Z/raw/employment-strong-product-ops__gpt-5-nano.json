@@ -1,0 +1,76 @@
+{
+  "id": "resp_0013106787826e500069b2dab6b5cc819b9d030fded5790eab",
+  "object": "response",
+  "created_at": 1773329078,
+  "status": "completed",
+  "background": false,
+  "billing": {
+    "payer": "developer"
+  },
+  "completed_at": 1773329081,
+  "error": null,
+  "frequency_penalty": 0,
+  "incomplete_details": null,
+  "instructions": null,
+  "max_output_tokens": 500,
+  "max_tool_calls": null,
+  "model": "gpt-5-nano-2025-08-07",
+  "output": [
+    {
+      "id": "rs_0013106787826e500069b2dab765b8819bab2249d9b4a331fc",
+      "type": "reasoning",
+      "summary": []
+    },
+    {
+      "id": "msg_0013106787826e500069b2dab78554819bbe8ae6611b7f59be",
+      "type": "message",
+      "status": "completed",
+      "content": [
+        {
+          "type": "output_text",
+          "annotations": [],
+          "logprobs": [],
+          "text": "Dear Hiring Manager,\n\nI am applying for the Operations Program Manager role with a focus on coordinating cross-functional initiatives, improving process reliability, and driving reporting across customer support, onboarding, and internal operations. In my current capacity as an operations lead, I have standardized onboarding processes across support and implementation teams, which directly supports greater cross-functional coordination and clearer handoffs. I also built weekly reporting that surfaced SLA risks earlier, aligning stakeholder teams around priorities and risk mitigation.\n\nMy approach to program management centers on structured process design and stakeholder collaboration. By redesigning onboarding workflows, I reduced handoff errors by 35 percent, demonstrating how careful attention to process details and documentation can deliver tangible reliability improvements. I aim to bring that same rigor to the broader operations program, ensuring that cross-team initiatives have clear owners, milestones, and measurable outcomes.\n\nI am drawn to opportunities where reporting clarity and SLA visibility drive better decisions. My experience with targeted reporting and process documentation supports transparent progress tracking and accountability across customer support, onboarding, and internal operations. I am excited to contribute to a role that values disciplined process design, effective cross-functional coordination, and data-informed improvements.\n\nSincerely,\nCamille Bernard"
+        }
+      ],
+      "role": "assistant"
+    }
+  ],
+  "parallel_tool_calls": true,
+  "presence_penalty": 0,
+  "previous_response_id": null,
+  "prompt_cache_key": null,
+  "prompt_cache_retention": null,
+  "reasoning": {
+    "effort": "minimal",
+    "summary": null
+  },
+  "safety_identifier": null,
+  "service_tier": "default",
+  "store": true,
+  "temperature": 1,
+  "text": {
+    "format": {
+      "type": "text"
+    },
+    "verbosity": "medium"
+  },
+  "tool_choice": "auto",
+  "tools": [],
+  "top_logprobs": 0,
+  "top_p": 1,
+  "truncation": "disabled",
+  "usage": {
+    "input_tokens": 420,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 251,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 671
+  },
+  "user": null,
+  "metadata": {}
+}

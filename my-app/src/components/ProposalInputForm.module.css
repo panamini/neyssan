@@ -1,0 +1,24 @@
+.container {
+  @apply p-6 border-0 rounded-lg shadow-none bg-background;
+}
+
+.inputElement {
+  @apply w-full px-4 py-1 rounded-md text-foreground focus:outline-none;
+}
+
+.jobField {
+  background-color: var(--job-field-bg);
+  color: var(--foreground);
+}
+
+.jobField textarea,
+.jobField input {
+  background-color: transparent;
+  color: var(--ti);
+}
+
+.errorMessage {
+  margin-top: var(--s1);
+  font-size: var(--ts);
+  color: var(--ert);
+}

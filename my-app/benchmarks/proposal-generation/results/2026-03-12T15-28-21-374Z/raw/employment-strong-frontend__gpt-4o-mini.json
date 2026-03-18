@@ -1,0 +1,71 @@
+{
+  "id": "resp_07bacf6a444f276c0069b2db9d346081909fff00ab1f75f6ca",
+  "object": "response",
+  "created_at": 1773329309,
+  "status": "completed",
+  "background": false,
+  "billing": {
+    "payer": "developer"
+  },
+  "completed_at": 1773329313,
+  "error": null,
+  "frequency_penalty": 0,
+  "incomplete_details": null,
+  "instructions": null,
+  "max_output_tokens": 500,
+  "max_tool_calls": null,
+  "model": "gpt-4o-mini-2024-07-18",
+  "output": [
+    {
+      "id": "msg_07bacf6a444f276c0069b2db9dad7c819094023b5d4e36585f",
+      "type": "message",
+      "status": "completed",
+      "content": [
+        {
+          "type": "output_text",
+          "annotations": [],
+          "logprobs": [],
+          "text": "Dear Hiring Manager,\n\nI am excited to apply for the Senior Frontend Engineer position. With a strong focus on React and TypeScript, I have successfully led a design system migration at BrightLayer, which has been utilized across multiple product squads. This experience has honed my ability to build reusable UI components that enhance both performance and user experience.\n\nAt BrightLayer, I achieved a 28 percent reduction in page load time through targeted optimizations, demonstrating my commitment to performance enhancement. Additionally, my role at Northline Labs involved creating experimentation dashboards that empowered product and growth teams, allowing us to make data-driven decisions that improved signup conversion by 11 percent. Collaborating closely with design teams has been a key aspect of my work, ensuring that customer-facing workflows are both intuitive and effective.\n\nI am particularly drawn to this role because of the opportunity to mentor junior engineers while continuing to push the boundaries of frontend development. I am eager to contribute my skills in building robust, high-performance applications that delight users.\n\nThank you for considering my application. I look forward to the possibility of discussing how I can contribute to your team.\n\nSincerely,  \nAlex Martin"
+        }
+      ],
+      "role": "assistant"
+    }
+  ],
+  "parallel_tool_calls": true,
+  "presence_penalty": 0,
+  "previous_response_id": null,
+  "prompt_cache_key": null,
+  "prompt_cache_retention": null,
+  "reasoning": {
+    "effort": null,
+    "summary": null
+  },
+  "safety_identifier": null,
+  "service_tier": "default",
+  "store": true,
+  "temperature": 0.2,
+  "text": {
+    "format": {
+      "type": "text"
+    },
+    "verbosity": "medium"
+  },
+  "tool_choice": "auto",
+  "tools": [],
+  "top_logprobs": 0,
+  "top_p": 1,
+  "truncation": "disabled",
+  "usage": {
+    "input_tokens": 527,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 229,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 756
+  },
+  "user": null,
+  "metadata": {}
+}

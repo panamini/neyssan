@@ -1,0 +1,25 @@
+CV PARSING SUMMARY (SPACY MODE)
+==================================================
+
+ENTITIES FOUND:
+  DATE: 15
+  FAC: 1
+  GPE: 7
+  LANGUAGE: 1
+  LOC: 1
+  NORP: 2
+  ORG: 19
+  PERCENT: 4
+  PERSON: 6
+  QUANTITY: 1
+  TIME: 2
+
+PERSONAL INFORMATION:
+  emails: ['email@email.com']
+  phones: ['3868683442']
+
+EXPERIENCE: No entries found
+
+SKILLS: No skills found
+
+CONFIDENCE SCORES: Not available

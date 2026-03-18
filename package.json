@@ -1,0 +1,14 @@
+{
+  "name": "neyssan-monorepo-root",
+  "private": true,
+  "version": "0.0.0",
+  "license": "UNLICENSED",
+  "scripts": {
+    "dev": "cd my-app && npm run dev",
+    "dev:frontend": "cd my-app && npm run dev:frontend",
+    "dev:backend": "cd my-app && npm run dev:backend",
+    "test": "cd my-app && npm test",
+    "parser": "TAIL_LOGS=0 ./scripts/start-dev.sh --service-only",
+    "parser:rebuild": "TAIL_LOGS=0 FORCE_REBUILD=true ./scripts/start-dev.sh --service-only --rebuild"
+  }
+}

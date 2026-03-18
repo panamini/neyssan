@@ -1,0 +1,512 @@
+{
+  "runId": "2026-03-12T15-24-05-237Z",
+  "createdAt": "2026-03-12T15:25:09.875Z",
+  "datasetPath": "/Volumes/video/kay/app/pouraurelien/save/neyssan/my-app/benchmarks/proposal-generation/dataset/proposal-benchmark.dataset.json",
+  "models": [
+    "mistral-small-latest",
+    "mistral-large-latest",
+    "gpt-4o-mini",
+    "gpt-5-nano"
+  ],
+  "generationConfig": {
+    "temperature": 0.2,
+    "maxOutputTokens": 500
+  },
+  "notes": [
+    "Loaded env files: /Volumes/video/kay/app/pouraurelien/save/neyssan/my-app/.env, /Volumes/video/kay/app/pouraurelien/save/neyssan/my-app/.env.local"
+  ],
+  "records": [
+    {
+      "benchmarkCase": {
+        "id": "employment-strong-frontend",
+        "label": "Strong employment match: senior frontend engineer",
+        "jobTitle": "Senior Frontend Engineer",
+        "jobDescription": "We are hiring a Senior Frontend Engineer to lead React and TypeScript development for a customer-facing SaaS platform. The role includes building reusable UI systems, improving performance, collaborating with product and design, and mentoring junior engineers. Experience with analytics instrumentation and experimentation is a plus.",
+        "proposalType": "cover_letter",
+        "formalityLevel": "neutral",
+        "creativity": "medium",
+        "personalizationMode": "default",
+        "personalizationRichness": "rich",
+        "candidateContext": {
+          "name": "Alex Martin",
+          "summary": "Frontend engineer focused on React, TypeScript, design systems, and product-facing web apps.",
+          "desiredPosition": "Senior Frontend Engineer",
+          "topSkills": [
+            "React",
+            "TypeScript",
+            "Design Systems",
+            "Performance Optimization",
+            "A/B Testing"
+          ],
+          "recentExperience": [
+            {
+              "company": "BrightLayer",
+              "position": "Frontend Engineer",
+              "highlights": [
+                "Led a design system migration used across 4 product squads.",
+                "Reduced page load time by 28 percent through bundle and rendering optimizations."
+              ]
+            },
+            {
+              "company": "Northline Labs",
+              "position": "Product Engineer",
+              "highlights": [
+                "Built experimentation dashboards used by product and growth teams.",
+                "Partnered directly with design on customer-facing workflow improvements."
+              ]
+            }
+          ],
+          "standoutAchievements": [
+            "Improved signup conversion by 11 percent after iterative UI experiments."
+          ]
+        },
+        "expectedGrounding": [
+          "Design system migration leadership",
+          "React and TypeScript experience",
+          "Performance optimization with a 28 percent improvement",
+          "Cross-functional work with design and product"
+        ],
+        "forbiddenClaims": [
+          "Do not claim staff-level leadership or people management beyond mentoring.",
+          "Do not invent backend ownership or mobile development."
+        ],
+        "notes": "Should feel confident and concrete without overstating scope."
+      },
+      "prompt": "Write a tailored employment cover letter for \"Senior Frontend Engineer\". Job description: We are hiring a Senior Frontend Engineer to lead React and TypeScript development for a customer-facing SaaS platform. The role includes building reusable UI systems, improving performance, collaborating with product and design, and mentoring junior engineers. Experience with analytics instrumentation and experimentation is a plus.. Output only the letter body. Start with a salutation line such as: Dear Hiring Manager, Write in first person. Write 3 to 4 short paragraphs. Keep the total length around 180 to 220 words. End with a simple professional closing and the candidate name on the final line. Do not use headings, bullet points, tables, subject lines, signature blocks, or postal/contact header lines. Keep it natural, specific, and human. Use the candidate background as the only source of claims about the candidate. Every qualification, achievement, or strength you mention must be grounded in the candidate background. Never treat the job description as evidence about the candidate. Do not invent employers, software tools, certifications, years of experience, measurable outcomes, degrees, or side projects. If an important requirement is missing from the candidate background, do not imply that the candidate already has it. Prefer fewer claims over invented claims. Use \"neutral\" formality and \"medium\" creativity only as tone guidance.\n\nCandidate background for personalization:\n- Name: Alex Martin\n- Professional summary: Frontend engineer focused on React, TypeScript, design systems, and product-facing web apps.\n- Target role / headline: Senior Frontend Engineer\n- Core skills: React, TypeScript, Design Systems, Performance Optimization, A/B Testing\n- Recent experience:\n  - Frontend Engineer at BrightLayer: Led a design system migration used across 4 product squads.; Reduced page load time by 28 percent through bundle and rendering optimizations.\n  - Product Engineer at Northline Labs: Built experimentation dashboards used by product and growth teams.; Partnered directly with design on customer-facing workflow improvements.\n- Standout achievements: Improved signup conversion by 11 percent after iterative UI experiments.\nUse this background only to tailor tone and relevance.\nDo not invent employers, achievements, years, or technical experience.\n\nGrounding priorities:\n- Design system migration leadership\n- React and TypeScript experience\n- Performance optimization with a 28 percent improvement\n- Cross-functional work with design and product\n\nForbidden claims:\n- Do not claim staff-level leadership or people management beyond mentoring.\n- Do not invent backend ownership or mobile development.\n\nCase notes: Should feel confident and concrete without overstating scope.",
+      "results": {
+        "mistral-small-latest": {
+          "status": "ok",
+          "model": "mistral-small-latest",
+          "provider": "mistral",
+          "outputText": "Dear Hiring Manager,\n\nI’m excited to apply for the Senior Frontend Engineer role at your company. With a focus on React and TypeScript, I’ve built scalable UI systems and optimized performance for customer-facing SaaS platforms. At BrightLayer, I led a design system migration adopted by four product squads, ensuring consistency and efficiency across teams. I also reduced page load times by 28 percent through targeted optimizations, directly improving user experience.\n\nCollaboration is a key part of my approach. At Northline Labs, I worked closely with design and product teams to build experimentation dashboards and refine customer workflows. My experience with A/B testing and analytics instrumentation helped increase signup conversions by 11 percent through iterative UI improvements. I’d love to bring this cross-functional mindset to your team, bridging technical execution with product goals.\n\nMentoring junior engineers is something I enjoy, and I’m eager to contribute to your platform’s growth while learning from your team. I’d welcome the chance to discuss how my skills align with your needs.\n\nBest regards,\nAlex Martin",
+          "latencyMs": 2560,
+          "usage": {
+            "inputTokens": 542,
+            "outputTokens": 217,
+            "totalTokens": 759
+          },
+          "cost": {
+            "inputCostUsd": 0.000054199999999999996,
+            "outputCostUsd": 0.0000651,
+            "totalCostUsd": 0.0001193
+          },
+          "rawResponsePath": "/Volumes/video/kay/app/pouraurelien/save/neyssan/my-app/benchmarks/proposal-generation/results/2026-03-12T15-24-05-237Z/raw/employment-strong-frontend__mistral-small-latest.json"
+        },
+        "mistral-large-latest": {
+          "status": "ok",
+          "model": "mistral-large-latest",
+          "provider": "mistral",
+          "outputText": "Dear Hiring Manager,\n\nI’m excited to apply for the Senior Frontend Engineer role. My work has centered on React and TypeScript for customer-facing web apps, particularly in building and scaling design systems. At BrightLayer, I led a migration that unified four product squads under a single, reusable UI framework, which streamlined development and improved consistency across the platform. That experience aligns closely with what you’re looking for—leading frontend architecture while collaborating with product and design teams.\n\nPerformance optimization is another area where I’ve made a measurable impact. By refining bundle delivery and rendering strategies, I reduced page load time by 28 percent, directly improving user experience. I also have hands-on experience with experimentation, having built dashboards at Northline Labs that helped product and growth teams test and iterate on customer-facing workflows. One of those experiments drove an 11 percent lift in signup conversion, reinforcing how small UI changes can meaningfully move business metrics.\n\nBeyond technical work, I enjoy mentoring junior engineers and bridging gaps between disciplines. Whether pairing with designers on new components or aligning with product on feature priorities, I’ve found that clear communication and shared ownership lead to better outcomes. I’d welcome the chance to bring that approach to your team.\n\nBest regards,\nAlex Martin",
+          "latencyMs": 6123,
+          "usage": {
+            "inputTokens": 542,
+            "outputTokens": 257,
+            "totalTokens": 799
+          },
+          "cost": {
+            "inputCostUsd": 0.000271,
+            "outputCostUsd": 0.0003855,
+            "totalCostUsd": 0.0006565
+          },
+          "rawResponsePath": "/Volumes/video/kay/app/pouraurelien/save/neyssan/my-app/benchmarks/proposal-generation/results/2026-03-12T15-24-05-237Z/raw/employment-strong-frontend__mistral-large-latest.json"
+        },
+        "gpt-4o-mini": {
+          "status": "ok",
+          "model": "gpt-4o-mini",
+          "provider": "openai",
+          "outputText": "Dear Hiring Manager,\n\nI am excited to apply for the Senior Frontend Engineer position, where I can leverage my extensive experience in React and TypeScript to contribute to your customer-facing SaaS platform. At BrightLayer, I led a design system migration that streamlined development across four product squads, ensuring consistency and efficiency in our UI components. This experience has equipped me with the skills to build reusable UI systems that enhance user experience.\n\nPerformance optimization is a passion of mine, and I successfully reduced page load times by 28 percent through strategic bundle and rendering optimizations. I believe that a fast, responsive application is crucial for user satisfaction, and I am eager to bring this focus to your team. My recent role at Northline Labs involved building experimentation dashboards that empowered product and growth teams, allowing us to make data-driven decisions that improved signup conversion by 11 percent.\n\nCollaboration is key in any development process, and I have enjoyed partnering closely with design teams to enhance customer-facing workflows. I am also committed to mentoring junior engineers, sharing my knowledge, and fostering a collaborative environment. I look forward to the opportunity to contribute to your team.\n\nBest regards,  \nAlex Martin",
+          "latencyMs": 9244,
+          "usage": {
+            "inputTokens": 527,
+            "outputTokens": 233,
+            "totalTokens": 760
+          },
+          "cost": {
+            "inputCostUsd": 0.00007905,
+            "outputCostUsd": 0.00013979999999999998,
+            "totalCostUsd": 0.00021884999999999998
+          },
+          "rawResponsePath": "/Volumes/video/kay/app/pouraurelien/save/neyssan/my-app/benchmarks/proposal-generation/results/2026-03-12T15-24-05-237Z/raw/employment-strong-frontend__gpt-4o-mini.json"
+        },
+        "gpt-5-nano": {
+          "status": "ok",
+          "model": "gpt-5-nano",
+          "provider": "openai",
+          "outputText": "Dear Hiring Manager,\n\nI’m excited to apply for the Senior Frontend Engineer role, where I can bring a practical focus on React and TypeScript to a customer-facing SaaS platform. My background centers on building design systems and product-facing web apps, with a strong emphasis on performance and reusable UI components. I led a design system migration at BrightLayer that was adopted across four product squads, and I delivered bundle and rendering optimizations that cut page load time by 28 percent. I’m drawn to the chance to extend that work through scalable UI systems and thoughtful architectural decisions.\n\nI thrive in cross-functional settings, collaborating closely with design and product teams to ship improvements that matter to customers. At Northline Labs, I built experimentation dashboards and partnered with design on customer-facing workflow improvements, which aligns with the role’s focus on analytics instrumentation and experimentation. I’ve also contributed to iterative UI experiments that helped lift signup conversion, underscoring my eye for user-centered, data-informed design choices.\n\nI’m eager to mentor junior engineers, share practical guidance, and help raise the bar for frontend quality across the team. I look forward to the opportunity to discuss how my hands-on experience with design systems, React, and performance optimization can contribute to your platform’s success.\n\nAlex Martin",
+          "latencyMs": 3238,
+          "usage": {
+            "inputTokens": 526,
+            "outputTokens": 271,
+            "totalTokens": 797
+          },
+          "cost": {
+            "inputCostUsd": 0.000026300000000000002,
+            "outputCostUsd": 0.00010839999999999999,
+            "totalCostUsd": 0.0001347
+          },
+          "rawResponsePath": "/Volumes/video/kay/app/pouraurelien/save/neyssan/my-app/benchmarks/proposal-generation/results/2026-03-12T15-24-05-237Z/raw/employment-strong-frontend__gpt-5-nano.json"
+        }
+      }
+    },
+    {
+      "benchmarkCase": {
+        "id": "employment-strong-product-ops",
+        "label": "Strong employment match: operations program manager",
+        "jobTitle": "Operations Program Manager",
+        "jobDescription": "The Operations Program Manager will coordinate cross-functional initiatives, improve process reliability, and drive reporting across customer support, onboarding, and internal operations. Strong stakeholder management and process documentation experience required.",
+        "proposalType": "cover_letter",
+        "formalityLevel": "formal",
+        "creativity": "low",
+        "personalizationMode": "default",
+        "personalizationRichness": "rich",
+        "candidateContext": {
+          "name": "Camille Bernard",
+          "summary": "Program and operations lead with experience improving support workflows and onboarding operations.",
+          "desiredPosition": "Operations Program Manager",
+          "topSkills": [
+            "Program Management",
+            "Process Design",
+            "Stakeholder Management",
+            "Reporting"
+          ],
+          "recentExperience": [
+            {
+              "company": "FlowDesk",
+              "position": "Operations Lead",
+              "highlights": [
+                "Standardized onboarding processes across support and implementation teams.",
+                "Built weekly reporting that surfaced SLA risks earlier."
+              ]
+            }
+          ],
+          "standoutAchievements": [
+            "Cut onboarding handoff errors by 35 percent after process redesign."
+          ]
+        },
+        "expectedGrounding": [
+          "Process redesign",
+          "Cross-functional coordination",
+          "Reporting and SLA visibility",
+          "Reduced onboarding errors"
+        ],
+        "forbiddenClaims": [
+          "Do not invent finance or supply chain expertise."
+        ]
+      },
+      "prompt": "Write a tailored employment cover letter for \"Operations Program Manager\". Job description: The Operations Program Manager will coordinate cross-functional initiatives, improve process reliability, and drive reporting across customer support, onboarding, and internal operations. Strong stakeholder management and process documentation experience required.. Output only the letter body. Start with a salutation line such as: Dear Hiring Manager, Write in first person. Write 3 to 4 short paragraphs. Keep the total length around 180 to 220 words. End with a simple professional closing and the candidate name on the final line. Do not use headings, bullet points, tables, subject lines, signature blocks, or postal/contact header lines. Keep it natural, specific, and human. Use the candidate background as the only source of claims about the candidate. Every qualification, achievement, or strength you mention must be grounded in the candidate background. Never treat the job description as evidence about the candidate. Do not invent employers, software tools, certifications, years of experience, measurable outcomes, degrees, or side projects. If an important requirement is missing from the candidate background, do not imply that the candidate already has it. Prefer fewer claims over invented claims. Use \"formal\" formality and \"low\" creativity only as tone guidance.\n\nCandidate background for personalization:\n- Name: Camille Bernard\n- Professional summary: Program and operations lead with experience improving support workflows and onboarding operations.\n- Target role / headline: Operations Program Manager\n- Core skills: Program Management, Process Design, Stakeholder Management, Reporting\n- Recent experience:\n  - Operations Lead at FlowDesk: Standardized onboarding processes across support and implementation teams.; Built weekly reporting that surfaced SLA risks earlier.\n- Standout achievements: Cut onboarding handoff errors by 35 percent after process redesign.\nUse this background only to tailor tone and relevance.\nDo not invent employers, achievements, years, or technical experience.\n\nGrounding priorities:\n- Process redesign\n- Cross-functional coordination\n- Reporting and SLA visibility\n- Reduced onboarding errors\n\nForbidden claims:\n- Do not invent finance or supply chain expertise.",
+      "results": {
+        "mistral-small-latest": {
+          "status": "ok",
+          "model": "mistral-small-latest",
+          "provider": "mistral",
+          "outputText": "Dear Hiring Manager,\n\nI am excited to apply for the Operations Program Manager role. With my background leading operations and program initiatives, I’ve focused on improving support workflows and onboarding processes to drive efficiency and reliability. At FlowDesk, I standardized onboarding procedures across teams, which reduced handoff errors by 35 percent after a targeted redesign. My approach combines process documentation with cross-functional collaboration to ensure alignment and scalability.\n\nIn this role, I’d leverage my experience in stakeholder management to coordinate initiatives across customer support, onboarding, and internal operations. I’ve built reporting systems that surface SLA risks earlier, providing leadership with actionable insights. My work at FlowDesk also involved designing weekly reports that improved visibility into operational bottlenecks, a skill I’d apply to enhance your team’s reporting framework.\n\nI’m confident my ability to streamline processes and manage cross-functional programs would add value to your team. I’d welcome the opportunity to discuss how my experience aligns with your goals.\n\nSincerely,\nCamille Bernard",
+          "latencyMs": 2191,
+          "usage": {
+            "inputTokens": 441,
+            "outputTokens": 213,
+            "totalTokens": 654
+          },
+          "cost": {
+            "inputCostUsd": 0.0000441,
+            "outputCostUsd": 0.0000639,
+            "totalCostUsd": 0.000108
+          },
+          "rawResponsePath": "/Volumes/video/kay/app/pouraurelien/save/neyssan/my-app/benchmarks/proposal-generation/results/2026-03-12T15-24-05-237Z/raw/employment-strong-product-ops__mistral-small-latest.json"
+        },
+        "mistral-large-latest": {
+          "status": "ok",
+          "model": "mistral-large-latest",
+          "provider": "mistral",
+          "outputText": "Dear Hiring Manager,\n\nI’m excited to apply for the Operations Program Manager role. As a program and operations lead, I’ve focused on improving support workflows and onboarding operations—areas where cross-functional coordination and process reliability are critical. At FlowDesk, I standardized onboarding processes across support and implementation teams, ensuring smoother handoffs and clearer expectations for all stakeholders.\n\nOne of my key priorities has been driving visibility through reporting. I built weekly dashboards that surfaced SLA risks earlier, allowing teams to address potential delays before they escalated. This not only improved accountability but also strengthened collaboration between departments. My approach to process design is grounded in reducing friction—after redesigning our onboarding workflows, we cut handoff errors by 35 percent.\n\nStakeholder management has been central to my work, whether aligning support teams with implementation or ensuring leadership had actionable insights. I’d welcome the opportunity to bring this experience to your team, helping streamline operations and enhance process reliability.\n\nBest regards,\nCamille Bernard",
+          "latencyMs": 5089,
+          "usage": {
+            "inputTokens": 441,
+            "outputTokens": 211,
+            "totalTokens": 652
+          },
+          "cost": {
+            "inputCostUsd": 0.0002205,
+            "outputCostUsd": 0.0003165,
+            "totalCostUsd": 0.0005369999999999999
+          },
+          "rawResponsePath": "/Volumes/video/kay/app/pouraurelien/save/neyssan/my-app/benchmarks/proposal-generation/results/2026-03-12T15-24-05-237Z/raw/employment-strong-product-ops__mistral-large-latest.json"
+        },
+        "gpt-4o-mini": {
+          "status": "ok",
+          "model": "gpt-4o-mini",
+          "provider": "openai",
+          "outputText": "Dear Hiring Manager,\n\nI am writing to express my interest in the Operations Program Manager position. With a solid background in program and operations management, I have successfully improved support workflows and onboarding operations, making me well-suited for this role.\n\nIn my recent position as Operations Lead at FlowDesk, I standardized onboarding processes across support and implementation teams, which significantly reduced onboarding handoff errors by 35 percent. This experience has honed my ability to coordinate cross-functional initiatives effectively, ensuring that all stakeholders are aligned and informed throughout the process. I am particularly proud of the weekly reporting I developed, which surfaced SLA risks earlier, allowing for proactive management and improved reliability.\n\nMy strong stakeholder management skills have been instrumental in fostering collaboration and driving process documentation efforts. I believe that clear communication and thorough documentation are key to achieving operational excellence and enhancing overall performance. I am excited about the opportunity to bring my expertise in process design and reporting to your team.\n\nThank you for considering my application. I look forward to the possibility of contributing to your organization.\n\nSincerely,  \nCamille Bernard",
+          "latencyMs": 4880,
+          "usage": {
+            "inputTokens": 421,
+            "outputTokens": 213,
+            "totalTokens": 634
+          },
+          "cost": {
+            "inputCostUsd": 0.00006314999999999999,
+            "outputCostUsd": 0.0001278,
+            "totalCostUsd": 0.00019094999999999998
+          },
+          "rawResponsePath": "/Volumes/video/kay/app/pouraurelien/save/neyssan/my-app/benchmarks/proposal-generation/results/2026-03-12T15-24-05-237Z/raw/employment-strong-product-ops__gpt-4o-mini.json"
+        },
+        "gpt-5-nano": {
+          "status": "ok",
+          "model": "gpt-5-nano",
+          "provider": "openai",
+          "outputText": "Dear Hiring Manager,\n\nI am applying for the Operations Program Manager role with a focus on coordinating cross-functional initiatives, improving process reliability, and driving reporting across customer support, onboarding, and internal operations. In my current capacity as an operations lead, I have standardized onboarding processes across support and implementation teams, which directly supports greater cross-functional coordination and clearer handoffs. I also built weekly reporting that surfaced SLA risks earlier, aligning stakeholder teams around priorities and risk mitigation.\n\nMy approach to program management centers on structured process design and stakeholder collaboration. By redesigning onboarding workflows, I reduced handoff errors by 35 percent, demonstrating how careful attention to process details and documentation can deliver tangible reliability improvements. I aim to bring that same rigor to the broader operations program, ensuring that cross-team initiatives have clear owners, milestones, and measurable outcomes.\n\nI am drawn to opportunities where reporting clarity and SLA visibility drive better decisions. My experience with targeted reporting and process documentation supports transparent progress tracking and accountability across customer support, onboarding, and internal operations. I am excited to contribute to a role that values disciplined process design, effective cross-functional coordination, and data-informed improvements.\n\nSincerely,\nCamille Bernard",
+          "latencyMs": 2655,
+          "usage": {
+            "inputTokens": 420,
+            "outputTokens": 251,
+            "totalTokens": 671
+          },
+          "cost": {
+            "inputCostUsd": 0.000021000000000000002,
+            "outputCostUsd": 0.0001004,
+            "totalCostUsd": 0.0001214
+          },
+          "rawResponsePath": "/Volumes/video/kay/app/pouraurelien/save/neyssan/my-app/benchmarks/proposal-generation/results/2026-03-12T15-24-05-237Z/raw/employment-strong-product-ops__gpt-5-nano.json"
+        }
+      }
+    },
+    {
+      "benchmarkCase": {
+        "id": "freelance-strong-ui-copy",
+        "label": "Strong freelance match: landing page redesign",
+        "jobTitle": "Landing Page Redesign for B2B SaaS",
+        "jobDescription": "Need a freelance designer-developer to redesign a B2B SaaS landing page in Webflow or React. The goal is clearer messaging, stronger conversion, and cleaner visual hierarchy. Looking for someone who can propose an approach, not just execute pixels.",
+        "proposalType": "freelance_proposal",
+        "formalityLevel": "neutral",
+        "creativity": "medium",
+        "personalizationMode": "explicit_only",
+        "personalizationRichness": "rich",
+        "candidateContext": {
+          "name": "Jordan Lee",
+          "summary": "Freelance product designer and frontend builder focused on conversion-driven landing pages.",
+          "desiredPosition": "Freelance Product Designer",
+          "topSkills": [
+            "Landing Pages",
+            "Webflow",
+            "React",
+            "Messaging",
+            "Conversion Optimization"
+          ],
+          "recentExperience": [
+            {
+              "company": "Independent",
+              "position": "Freelance Designer-Developer",
+              "highlights": [
+                "Redesigned a SaaS homepage that increased demo requests by 19 percent.",
+                "Delivered both messaging structure and responsive implementation."
+              ]
+            }
+          ],
+          "standoutAchievements": [
+            "Repeatedly paired copy structure with frontend execution on startup websites."
+          ]
+        },
+        "expectedGrounding": [
+          "Conversion-focused landing page work",
+          "Both design and implementation capability",
+          "Approach-oriented freelance framing"
+        ],
+        "forbiddenClaims": [
+          "Do not claim a full agency team.",
+          "Do not invent Webflow certifications."
+        ]
+      },
+      "prompt": "Write a client-facing freelance proposal for \"Landing Page Redesign for B2B SaaS\". Job description: Need a freelance designer-developer to redesign a B2B SaaS landing page in Webflow or React. The goal is clearer messaging, stronger conversion, and cleaner visual hierarchy. Looking for someone who can propose an approach, not just execute pixels.. Write in first person. Focus on relevant experience, understanding of the client's need, a concise approach, and a clear closing. Keep it specific and persuasive without sounding bloated. Avoid headings unless they materially improve clarity. Use the candidate background as the only source of claims about the candidate. Every qualification, achievement, or strength you mention must be grounded in the candidate background. Never treat the job description as evidence about the candidate. Do not invent employers, software tools, certifications, years of experience, measurable outcomes, degrees, or side projects. If an important requirement is missing from the candidate background, do not imply that the candidate already has it. Prefer fewer claims over invented claims. Use \"neutral\" formality and \"medium\" creativity only as tone guidance.\n\nCandidate background for personalization:\n- Name: Jordan Lee\n- Professional summary: Freelance product designer and frontend builder focused on conversion-driven landing pages.\n- Target role / headline: Freelance Product Designer\n- Core skills: Landing Pages, Webflow, React, Messaging, Conversion Optimization\n- Recent experience:\n  - Freelance Designer-Developer at Independent: Redesigned a SaaS homepage that increased demo requests by 19 percent.; Delivered both messaging structure and responsive implementation.\n- Standout achievements: Repeatedly paired copy structure with frontend execution on startup websites.\nUse this background only to tailor tone and relevance.\nDo not invent employers, achievements, years, or technical experience.\n\nGrounding priorities:\n- Conversion-focused landing page work\n- Both design and implementation capability\n- Approach-oriented freelance framing\n\nForbidden claims:\n- Do not claim a full agency team.\n- Do not invent Webflow certifications.",
+      "results": {
+        "mistral-small-latest": {
+          "status": "ok",
+          "model": "mistral-small-latest",
+          "provider": "mistral",
+          "outputText": "**Proposal: Landing Page Redesign for B2B SaaS**\n\nHi [Client's Name],\n\nI’m Jordan Lee, a freelance product designer and frontend builder specializing in conversion-driven landing pages. I’ve worked with startups to refine messaging and execution—like a recent SaaS homepage redesign that increased demo requests by 19%—so I understand how to align visual hierarchy with clear, action-oriented copy.\n\nFor your project, I’d propose a structured approach:\n1. **Audit the current page** to identify friction points in messaging and user flow.\n2. **Propose a revised structure** that prioritizes clarity and conversion, balancing copy and visuals.\n3. **Build the redesign** in Webflow or React, ensuring responsiveness and performance.\n\nI’ve consistently paired copy strategy with frontend execution, so I’ll deliver both the design and implementation—no handoffs or gaps. My goal is to create a page that not only looks polished but also drives measurable results.\n\nLet’s discuss how to tailor this to your goals. I’m available to connect this week.\n\nBest,\nJordan Lee\n[Your Contact Info]",
+          "latencyMs": 2873,
+          "usage": {
+            "inputTokens": 430,
+            "outputTokens": 234,
+            "totalTokens": 664
+          },
+          "cost": {
+            "inputCostUsd": 0.000043,
+            "outputCostUsd": 0.0000702,
+            "totalCostUsd": 0.0001132
+          },
+          "rawResponsePath": "/Volumes/video/kay/app/pouraurelien/save/neyssan/my-app/benchmarks/proposal-generation/results/2026-03-12T15-24-05-237Z/raw/freelance-strong-ui-copy__mistral-small-latest.json"
+        },
+        "mistral-large-latest": {
+          "status": "ok",
+          "model": "mistral-large-latest",
+          "provider": "mistral",
+          "outputText": "**Freelance Proposal: Landing Page Redesign for B2B SaaS**\n\nHi [Client's Name],\n\nI’m Jordan Lee, a freelance product designer and frontend builder who specializes in conversion-driven landing pages for B2B SaaS. Your project—clearer messaging, stronger conversion, and a cleaner visual hierarchy—aligns exactly with what I do. I don’t just execute pixels; I propose an approach that ties design decisions directly to your goals.\n\nHere’s how I’d tackle this:\n\n1. **Audit & Messaging First**: I’d start by reviewing your current page to identify friction points in the user journey, then refine the messaging hierarchy to ensure the value proposition is immediate and compelling. This isn’t just about aesthetics—it’s about structuring the copy to guide visitors toward conversion.\n\n2. **Design & Implementation in Tandem**: Whether we use Webflow or React, I’ll design with implementation in mind, ensuring the final build is responsive, fast, and aligned with your brand. My recent work includes a SaaS homepage redesign that increased demo requests by 19%, where I handled both the messaging structure and the frontend execution.\n\n3. **Iterative Testing**: I’ll propose a lightweight testing plan (e.g., A/B variants on key CTAs or headlines) to validate what works before finalizing the design.\n\nI’d love to discuss your specific goals and how we can refine this approach together. Let me know a time that works for you—I’m happy to jump on a call or share references from similar projects.\n\nLooking forward to your thoughts.\n\nBest,\nJordan Lee",
+          "latencyMs": 6769,
+          "usage": {
+            "inputTokens": 430,
+            "outputTokens": 332,
+            "totalTokens": 762
+          },
+          "cost": {
+            "inputCostUsd": 0.000215,
+            "outputCostUsd": 0.000498,
+            "totalCostUsd": 0.000713
+          },
+          "rawResponsePath": "/Volumes/video/kay/app/pouraurelien/save/neyssan/my-app/benchmarks/proposal-generation/results/2026-03-12T15-24-05-237Z/raw/freelance-strong-ui-copy__mistral-large-latest.json"
+        },
+        "gpt-4o-mini": {
+          "status": "ok",
+          "model": "gpt-4o-mini",
+          "provider": "openai",
+          "outputText": "I’m excited about the opportunity to redesign your B2B SaaS landing page. With my background as a freelance product designer and frontend builder, I specialize in creating conversion-driven landing pages that not only look great but also effectively communicate key messages.\n\nI understand that your goal is to enhance clarity in messaging, strengthen conversion rates, and establish a cleaner visual hierarchy. My recent experience includes redesigning a SaaS homepage that resulted in a 19% increase in demo requests. This success stemmed from my ability to pair effective messaging structures with responsive frontend execution, ensuring that users not only engage with the content but are also compelled to take action.\n\nFor your project, I propose an approach that starts with a thorough analysis of your current landing page. I’ll identify areas where messaging can be refined and where visual elements can be optimized for better user flow. By leveraging either Webflow or React, I can implement these changes seamlessly, ensuring that the final product is both visually appealing and functionally robust.\n\nI believe that a successful landing page redesign is not just about aesthetics; it’s about creating a cohesive experience that guides users toward conversion. I’m committed to collaborating closely with you throughout the process to ensure that the final design aligns with your vision and objectives.\n\nI would love to discuss this project further and explore how we can work together to achieve your goals. Thank you for considering my proposal. I look forward to the possibility of collaborating with you.",
+          "latencyMs": 6534,
+          "usage": {
+            "inputTokens": 410,
+            "outputTokens": 288,
+            "totalTokens": 698
+          },
+          "cost": {
+            "inputCostUsd": 0.00006149999999999999,
+            "outputCostUsd": 0.0001728,
+            "totalCostUsd": 0.0002343
+          },
+          "rawResponsePath": "/Volumes/video/kay/app/pouraurelien/save/neyssan/my-app/benchmarks/proposal-generation/results/2026-03-12T15-24-05-237Z/raw/freelance-strong-ui-copy__gpt-4o-mini.json"
+        },
+        "gpt-5-nano": {
+          "status": "ok",
+          "model": "gpt-5-nano",
+          "provider": "openai",
+          "outputText": "Hi there,\n\nI’m Jordan Lee, a freelance product designer and frontend builder focused on conversion-driven landing pages. I’ve built and redesigned SaaS landing pages with a clear eye on messaging, visual hierarchy, and measurable outcomes, while delivering the frontend as part of the same engagement. I won’t just deliver pixels—I’ll propose a practical approach that aligns with your goals and moves visitors toward demos, trials, or signups.\n\nUnderstanding your need\nBased on your brief, you’re targeting a B2B SaaS landing page that communicates value clearly, improves conversion, and presents a clean, scannable visual hierarchy. You want someone who can think through the messaging, structure, and interaction, then implement it in Webflow or React. You’re looking for a partner who can propose an approach, not just execute.\n\nHow I’ll approach the project\n- Discovery and messaging framework: I’ll start with a concise messaging brief to capture your target buyer, their problem, the primary value proposition, and the key differentiators. This will translate into a messaging structure—headline, subheadline, and supporting value statements that are testable and aligned to the user journey.\n- Information architecture and hierarchy: I’ll map the landing page sections to the buyer’s decision process (awareness, justification, action). We’ll emphasize the most compelling proof (benefits, outcomes, social proof) and ensure the value proposition is legible within the first view.\n- Design system and visual clarity: I’ll craft a clean visual hierarchy with consistent typography, color, and spacing that supports scannability. The goal is to guide the eye to the primary conversion point without clutter, while preserving a distinctive brand feel.\n- Conversion-driven structure: I’ll propose a streamlined hero with a strong CTA, benefit-focused bullets, and proof elements (customer logos, outcome metrics) placed to reinforce trust. I’ll also consider supporting CTAs and micro-interactions that reduce friction.\n- Implementation plan: I’ll deliver a production-ready layout in Webflow or React, depending on your team’s workflow and preference. If Webflow is chosen, I’ll structure components for clean reuse and responsive behavior. If React is preferred, I’ll outline a component hierarchy that aligns with the design system and keeps future iteration simple.\n- Collaboration and iteration: I’ll present a proposed page structure and a first-pass design that reflects the messaging framework. From there, I’ll",
+          "latencyMs": 4568,
+          "usage": {
+            "inputTokens": 409,
+            "outputTokens": 500,
+            "totalTokens": 909
+          },
+          "cost": {
+            "inputCostUsd": 0.000020450000000000002,
+            "outputCostUsd": 0.0002,
+            "totalCostUsd": 0.00022045000000000002
+          },
+          "rawResponsePath": "/Volumes/video/kay/app/pouraurelien/save/neyssan/my-app/benchmarks/proposal-generation/results/2026-03-12T15-24-05-237Z/raw/freelance-strong-ui-copy__gpt-5-nano.json"
+        }
+      }
+    },
+    {
+      "benchmarkCase": {
+        "id": "application-strong-support",
+        "label": "Strong application message: customer support specialist",
+        "jobTitle": "Customer Support Specialist",
+        "jobDescription": "We need a Customer Support Specialist who can manage email and chat support, document recurring issues, and keep communication calm and clear. SaaS support experience preferred.",
+        "proposalType": "application_message",
+        "formalityLevel": "neutral",
+        "creativity": "low",
+        "personalizationMode": "default",
+        "personalizationRichness": "sparse",
+        "candidateContext": {
+          "name": "Marie Lopez",
+          "summary": "Customer support specialist with SaaS ticketing and documentation experience.",
+          "desiredPosition": "Customer Support Specialist",
+          "topSkills": [
+            "Email Support",
+            "Chat Support",
+            "Knowledge Base Writing"
+          ],
+          "recentExperience": [
+            {
+              "company": "CloudLane",
+              "position": "Support Associate",
+              "highlights": [
+                "Handled daily chat and email queues for SaaS customers.",
+                "Documented recurring issues into internal help content."
+              ]
+            }
+          ]
+        },
+        "expectedGrounding": [
+          "Email and chat support",
+          "Documentation of recurring issues",
+          "Clear communication"
+        ],
+        "forbiddenClaims": [
+          "Do not invent phone support leadership.",
+          "Do not claim enterprise account management."
+        ]
+      },
+      "prompt": "Write a complete job application message for \"Customer Support Specialist\". Job description: We need a Customer Support Specialist who can manage email and chat support, document recurring issues, and keep communication calm and clear. SaaS support experience preferred.. Output only the message body. Write in first person. Keep it about 70 to 100 words. Use 1 to 2 short paragraphs only. Do not use headings, bullet points, subject lines, or contact/signature blocks. Keep it concise, direct, and human. Use the candidate background as the only source of claims about the candidate. Every qualification, achievement, or strength you mention must be grounded in the candidate background. Never treat the job description as evidence about the candidate. Do not invent employers, software tools, certifications, years of experience, measurable outcomes, degrees, or side projects. If an important requirement is missing from the candidate background, do not imply that the candidate already has it. Prefer fewer claims over invented claims. Use \"neutral\" formality and \"low\" creativity only as tone guidance.\n\nCandidate background for personalization:\n- Name: Marie Lopez\n- Professional summary: Customer support specialist with SaaS ticketing and documentation experience.\n- Target role / headline: Customer Support Specialist\n- Core skills: Email Support, Chat Support, Knowledge Base Writing\n- Recent experience:\n  - Support Associate at CloudLane: Handled daily chat and email queues for SaaS customers.; Documented recurring issues into internal help content.\nUse this background only to tailor tone and relevance.\nDo not invent employers, achievements, years, or technical experience.\n\nGrounding priorities:\n- Email and chat support\n- Documentation of recurring issues\n- Clear communication\n\nForbidden claims:\n- Do not invent phone support leadership.\n- Do not claim enterprise account management.",
+      "results": {
+        "mistral-small-latest": {
+          "status": "ok",
+          "model": "mistral-small-latest",
+          "provider": "mistral",
+          "outputText": "I’m Marie Lopez, a customer support specialist with experience in SaaS ticketing and documentation. At CloudLane, I managed daily email and chat queues, resolving customer inquiries while maintaining clear and calm communication. I also documented recurring issues into internal help content to improve efficiency. My background aligns well with your need for a support specialist who can handle email and chat support while keeping documentation organized and accessible. I’d welcome the opportunity to bring this experience to your team.",
+          "latencyMs": 1280,
+          "usage": {
+            "inputTokens": 372,
+            "outputTokens": 95,
+            "totalTokens": 467
+          },
+          "cost": {
+            "inputCostUsd": 0.0000372,
+            "outputCostUsd": 0.0000285,
+            "totalCostUsd": 0.0000657
+          },
+          "rawResponsePath": "/Volumes/video/kay/app/pouraurelien/save/neyssan/my-app/benchmarks/proposal-generation/results/2026-03-12T15-24-05-237Z/raw/application-strong-support__mistral-small-latest.json"
+        },
+        "mistral-large-latest": {
+          "status": "ok",
+          "model": "mistral-large-latest",
+          "provider": "mistral",
+          "outputText": "I’m writing to apply for the Customer Support Specialist role. At CloudLane, I managed daily email and chat queues for SaaS customers, ensuring responses were clear and helpful. I also documented recurring issues into internal help content, which helped streamline support for the team.\n\nMy experience aligns with what you’re looking for—handling support channels while keeping communication calm and organized. I’d welcome the chance to contribute in a similar capacity.",
+          "latencyMs": 2151,
+          "usage": {
+            "inputTokens": 372,
+            "outputTokens": 90,
+            "totalTokens": 462
+          },
+          "cost": {
+            "inputCostUsd": 0.000186,
+            "outputCostUsd": 0.000135,
+            "totalCostUsd": 0.000321
+          },
+          "rawResponsePath": "/Volumes/video/kay/app/pouraurelien/save/neyssan/my-app/benchmarks/proposal-generation/results/2026-03-12T15-24-05-237Z/raw/application-strong-support__mistral-large-latest.json"
+        },
+        "gpt-4o-mini": {
+          "status": "ok",
+          "model": "gpt-4o-mini",
+          "provider": "openai",
+          "outputText": "I am excited to apply for the Customer Support Specialist position. In my recent role as a Support Associate at CloudLane, I managed daily chat and email support for SaaS customers, ensuring clear and calm communication. I also documented recurring issues, contributing to our internal help content, which enhanced our team's efficiency. I believe my experience aligns well with your needs, and I am eager to bring my skills in email and chat support to your team. Thank you for considering my application.",
+          "latencyMs": 2734,
+          "usage": {
+            "inputTokens": 365,
+            "outputTokens": 96,
+            "totalTokens": 461
+          },
+          "cost": {
+            "inputCostUsd": 0.000054749999999999996,
+            "outputCostUsd": 0.0000576,
+            "totalCostUsd": 0.00011235
+          },
+          "rawResponsePath": "/Volumes/video/kay/app/pouraurelien/save/neyssan/my-app/benchmarks/proposal-generation/results/2026-03-12T15-24-05-237Z/raw/application-strong-support__gpt-4o-mini.json"
+        },
+        "gpt-5-nano": {
+          "status": "ok",
+          "model": "gpt-5-nano",
+          "provider": "openai",
+          "outputText": "I am Marie Lopez, a Customer Support Specialist with hands-on experience in SaaS ticketing, email and chat support, and knowledge base documentation. In my role at CloudLane, I managed daily chat and email queues for SaaS customers and documented recurring issues to improve internal help content. I am committed to keeping communication calm and clear, ensuring timely responses, and translating patterns into concise, helpful documentation. I am excited to bring my focus on efficient problem resolution and structured knowledge sharing to your team to support smooth customer experiences.",
+          "latencyMs": 1728,
+          "usage": {
+            "inputTokens": 364,
+            "outputTokens": 122,
+            "totalTokens": 486
+          },
+          "cost": {
+            "inputCostUsd": 0.000018200000000000002,
+            "outputCostUsd": 0.0000488,
+            "totalCostUsd": 0.000067
+          },
+          "rawResponsePath": "/Volumes/video/kay/app/pouraurelien/save/neyssan/my-app/benchmarks/proposal-generation/results/2026-03-12T15-24-05-237Z/raw/application-strong-support__gpt-5-nano.json"
+        }
+      }
+    }
+  ]
+}

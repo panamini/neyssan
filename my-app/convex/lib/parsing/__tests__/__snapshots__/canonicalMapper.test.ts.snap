@@ -1,0 +1,290 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`mapStrictProfileToCanonical > produces a canonical CV with telemetry and confidences 1`] = `
+{
+  "achievements": [
+    {
+      "meta": {
+        "section": "achievements",
+        "source": "fallback",
+      },
+      "value": "Led core product migration",
+    },
+  ],
+  "basics": {
+    "email": {
+      "meta": {
+        "bonusApplied": false,
+        "conf": 0.9,
+        "section": "contact",
+        "source": "llm",
+      },
+      "value": "jane@example.com",
+    },
+    "location": {
+      "formatted": {
+        "meta": {
+          "bonusApplied": false,
+          "section": "location",
+          "source": "fallback",
+        },
+        "value": null,
+      },
+    },
+    "name": {
+      "meta": {
+        "bonusApplied": false,
+        "conf": 0.9,
+        "section": "profile",
+        "source": "llm",
+      },
+      "value": "Jane Doe",
+    },
+    "phone": {
+      "meta": {
+        "bonusApplied": false,
+        "conf": 0.9,
+        "section": "contact",
+        "source": "llm",
+      },
+      "value": "+1 (555) 111-2222",
+    },
+  },
+  "education": [],
+  "languages": [],
+  "meta": {
+    "confidenceSummary": [
+      {
+        "conf": 0.9,
+        "slot": "basics.name",
+        "source": "llm",
+      },
+      {
+        "conf": 0.9,
+        "slot": "basics.email",
+        "source": "llm",
+      },
+      {
+        "conf": 0.9,
+        "slot": "basics.phone",
+        "source": "llm",
+      },
+      {
+        "conf": null,
+        "slot": "basics.location.formatted",
+        "source": "fallback",
+      },
+      {
+        "conf": 0.5775,
+        "slot": "work[0].company",
+        "source": "llm",
+      },
+      {
+        "conf": 0.5775,
+        "slot": "work[0].position",
+        "source": "llm",
+      },
+      {
+        "conf": 0.8,
+        "slot": "work[0].startDate",
+        "source": "llm",
+      },
+      {
+        "conf": null,
+        "slot": "work[0].endDate",
+        "source": "unknown",
+      },
+      {
+        "conf": 0.8,
+        "slot": "work[0].isCurrent",
+        "source": "llm",
+      },
+      {
+        "conf": 0.5775,
+        "slot": "work[0].summary",
+        "source": "llm",
+      },
+      {
+        "conf": 0.7,
+        "slot": "work[0].achievements[0]",
+        "source": "llm",
+      },
+      {
+        "conf": 0.5775,
+        "slot": "work[0].highlights[0]",
+        "source": "llm",
+      },
+      {
+        "conf": null,
+        "slot": "achievements[0]",
+        "source": "fallback",
+      },
+    ],
+    "telemetry": [
+      {
+        "bonusApplied": false,
+        "section": "profile",
+        "slot": "basics.name",
+        "winnerConf": 0.9,
+        "winnerSource": "llm",
+      },
+      {
+        "bonusApplied": false,
+        "section": "contact",
+        "slot": "basics.email",
+        "winnerConf": 0.9,
+        "winnerSource": "llm",
+      },
+      {
+        "bonusApplied": false,
+        "section": "contact",
+        "slot": "basics.phone",
+        "winnerConf": 0.9,
+        "winnerSource": "llm",
+      },
+      {
+        "bonusApplied": false,
+        "section": "location",
+        "slot": "basics.location.formatted",
+        "winnerConf": null,
+        "winnerSource": "fallback",
+      },
+      {
+        "bonusApplied": undefined,
+        "section": "experience",
+        "slot": "work[0].company",
+        "winnerConf": 0.5775,
+        "winnerSource": "llm",
+      },
+      {
+        "bonusApplied": undefined,
+        "section": "experience",
+        "slot": "work[0].position",
+        "winnerConf": 0.5775,
+        "winnerSource": "llm",
+      },
+      {
+        "bonusApplied": undefined,
+        "section": "experience",
+        "slot": "work[0].startDate",
+        "winnerConf": 0.8,
+        "winnerSource": "llm",
+      },
+      {
+        "bonusApplied": undefined,
+        "section": "experience",
+        "slot": "work[0].endDate",
+        "winnerConf": null,
+        "winnerSource": "unknown",
+      },
+      {
+        "bonusApplied": undefined,
+        "section": "experience",
+        "slot": "work[0].isCurrent",
+        "winnerConf": 0.8,
+        "winnerSource": "llm",
+      },
+      {
+        "bonusApplied": undefined,
+        "section": "experience",
+        "slot": "work[0].summary",
+        "winnerConf": 0.5775,
+        "winnerSource": "llm",
+      },
+      {
+        "bonusApplied": undefined,
+        "section": "experience",
+        "slot": "work[0].achievements[0]",
+        "winnerConf": 0.7,
+        "winnerSource": "llm",
+      },
+      {
+        "bonusApplied": undefined,
+        "section": "experience",
+        "slot": "work[0].highlights[0]",
+        "winnerConf": 0.5775,
+        "winnerSource": "llm",
+      },
+      {
+        "bonusApplied": undefined,
+        "section": "achievements",
+        "slot": "achievements[0]",
+        "winnerConf": null,
+        "winnerSource": "fallback",
+      },
+    ],
+  },
+  "skills": [],
+  "work": [
+    {
+      "achievements": [
+        {
+          "meta": {
+            "conf": 0.7,
+            "section": "experience",
+            "source": "llm",
+          },
+          "value": "Led core product migration",
+        },
+      ],
+      "company": {
+        "meta": {
+          "conf": 0.5775,
+          "section": "experience",
+          "source": "llm",
+        },
+        "value": "Acme Corp",
+      },
+      "endDate": {
+        "meta": {
+          "section": "experience",
+          "source": "unknown",
+        },
+        "value": null,
+      },
+      "highlights": [
+        {
+          "meta": {
+            "conf": 0.5775,
+            "section": "experience",
+            "source": "llm",
+          },
+          "value": "Owns core platform roadmap",
+        },
+      ],
+      "isCurrent": {
+        "meta": {
+          "conf": 0.8,
+          "section": "experience",
+          "source": "llm",
+        },
+        "value": true,
+      },
+      "position": {
+        "meta": {
+          "conf": 0.5775,
+          "section": "experience",
+          "source": "llm",
+        },
+        "value": "Senior Developer",
+      },
+      "startDate": {
+        "meta": {
+          "conf": 0.8,
+          "section": "experience",
+          "source": "llm",
+        },
+        "value": "2020-01-01",
+      },
+      "summary": {
+        "meta": {
+          "conf": 0.5775,
+          "section": "experience",
+          "source": "llm",
+        },
+        "value": "Owns core platform roadmap",
+      },
+    },
+  ],
+}
+`;

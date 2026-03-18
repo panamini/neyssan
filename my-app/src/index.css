@@ -1,0 +1,158 @@
+/* ============================================================
+   index.css — Styles globaux app-spécifiques
+   Les tokens dasti sont définis dans src/styles/globals.css
+   ============================================================ */
+
+/* Custom Scrollbar Styles (global, hors composants) */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--bm);
+  border-radius: var(--rp);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--am);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--bm) transparent;
+}
+
+body {
+  margin: 0;
+  font-family: 'Source Sans 3', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--bg);
+  color: var(--ti);
+}
+
+/* §13 Proposal text helpers — px fixes dasti */
+.proposal-h1 {
+  font-size: var(--tx2); /* 32px */
+  font-weight: 700;
+  margin-bottom: var(--s2);
+}
+
+.proposal-h2 {
+  font-size: var(--tl); /* 26px */
+  font-weight: 700;
+  margin-bottom: var(--s2);
+}
+
+.proposal-p {
+  margin-bottom: var(--s2);
+  line-height: var(--lb);
+}
+
+code {
+  font-family: 'IBM Plex Mono', source-code-pro, Menlo, Monaco, Consolas, monospace;
+}
+
+/* Radix Switch Styles */
+.SwitchRoot {
+  --switch-thumb-transform: translateX(2px);
+  --switch-track-background: var(--sf2);
+  --switch-track-border: var(--bm);
+  --switch-background: var(--sf1);
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid var(--switch-track-border);
+  background-color: var(--switch-track-background);
+  border-radius: var(--rp);
+  box-sizing: border-box;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  width: 48px;
+  height: 24px;
+}
+.SwitchRoot:focus {
+  outline: none;
+}
+.SwitchRoot:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.SwitchRoot[data-state='checked'] {
+  --switch-track-background: var(--ac);
+  --switch-track-border: var(--ac);
+}
+.SwitchRoot[data-state='checked'] .SwitchThumb {
+  --switch-thumb-transform: translateX(24px);
+}
+
+.SwitchThumb {
+  display: block;
+  background-color: var(--op);
+  border-radius: var(--rp);
+  box-shadow: 0 2px 2px var(--shadow-color);
+  transition: transform 100ms var(--ez);
+  transform: var(--switch-thumb-transform);
+  width: 20px;
+  height: 20px;
+}
+.SwitchThumb:disabled {
+  background-color: var(--tg2);
+}
+.SwitchThumb:focus {
+  outline: none;
+}
+
+/* Dark mode select */
+.dark select {
+  background-color: var(--sf1);
+  color: var(--ti);
+}
+
+.dark select:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--fr);
+  border-color: var(--ac);
+}
+
+/* Rich text editor list defaults */
+.rich-content ul { list-style: disc; padding-left: var(--s5); }
+.rich-content ol { list-style: decimal; padding-left: var(--s5); }
+.rich-content li { margin-left: var(--s1); }
+
+/* Remirror tokens */
+:root {
+  --copy-line-height: var(--lb);
+  --remirror-copy-line-height: var(--lb);
+  --remirror-paragraph-margin-bottom: var(--s2);
+  --remirror-list-indent: var(--s5);
+  --remirror-list-marker-color: var(--tg2);
+}
+
+.rich-content .remirror-paragraph {
+  line-height: var(--remirror-copy-line-height);
+  margin: 0 0 var(--remirror-paragraph-margin-bottom) 0;
+}
+
+.rich-content p {
+  line-height: var(--remirror-copy-line-height);
+  margin: 0 0 var(--remirror-paragraph-margin-bottom) 0;
+}
+
+.rich-content ul { list-style: disc; padding-left: var(--remirror-list-indent); color: var(--remirror-list-marker-color); }
+.rich-content ol { list-style: decimal; padding-left: var(--remirror-list-indent); color: var(--remirror-list-marker-color); }
+
+.rich-content .remirror-placeholder {
+  color: var(--tg2);
+  opacity: 0.85;
+  font-style: italic;
+  pointer-events: none;
+  font-size: var(--ts);
+  line-height: var(--remirror-copy-line-height);
+}

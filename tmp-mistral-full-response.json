@@ -1,0 +1,22 @@
+{
+  "id": "ddc80dcb99f04fe5814a70ef66b135c3",
+  "created": 1756749000,
+  "model": "mistral-small-latest",
+  "usage": {
+    "prompt_tokens": 180,
+    "total_tokens": 376,
+    "completion_tokens": 196
+  },
+  "object": "chat.completion",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "tool_calls": null,
+        "content": "Here is the structured JSON representation of the provided CV:\n\n```json\n{\n  \"profile\": \"Ingénieur logiciel expérimenté avec 5 ans d'expérience dans le développement backend.\",\n  \"experience\": [\n    {\n      \"company\": \"Acme Corp\",\n      \"position\": \"Ingénieur logiciel senior\",\n      \"duration\": \"2020 - 2024\",\n      \"responsibilities\": [\n        \"Développement de services Node.js et TypeScript\"\n      ]\n    }\n  ],\n  \"skills\": [\n    \"TypeScript\",\n    \"Node.js\",\n    \"PostgreSQL\",\n    \"Docker\"\n  ],\n  \"contact\": {\n    \"email\": \"john.doe@example.com\",\n    \"phone\": \"+33 6 12 34 56 78\",\n    \"linkedin\": \"https://linkedin.com/in/johndoe\"\n  }\n}\n```"
+      }
+    }
+  ]
+}

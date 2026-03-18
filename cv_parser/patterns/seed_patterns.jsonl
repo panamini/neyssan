@@ -1,0 +1,24 @@
+{"label": "EMAIL", "pattern": [{"TEXT": {"REGEX": "(?i)^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}$"}}], "id": "email_regex"}
+{"label": "PHONE", "pattern": [{"TEXT": {"REGEX": "^\\+?[0-9][0-9()\\-\\s]{6,}$"}}], "id": "phone_regex"}
+{"label": "ROLE", "pattern": [{"LOWER": "software"}, {"LOWER": "engineer"}], "id": "role_software_engineer"}
+{"label": "ROLE", "pattern": [{"LOWER": "data"}, {"LOWER": "scientist"}], "id": "role_data_scientist"}
+{"label": "ROLE", "pattern": [{"LOWER": "product"}, {"LOWER": "manager"}], "id": "role_product_manager"}
+{"label": "ROLE", "pattern": [{"LOWER": "project"}, {"LOWER": "manager"}], "id": "role_project_manager"}
+{"label": "ROLE", "pattern": [{"LOWER": "senior"}, {"LOWER": "developer"}], "id": "role_senior_developer"}
+{"label": "ROLE", "pattern": [{"LOWER": "marketing"}, {"LOWER": "manager"}], "id": "role_marketing_manager"}
+{"label": "ROLE", "pattern": [{"LOWER": "operations"}, {"LOWER": "manager"}], "id": "role_operations_manager"}
+{"label": "ROLE", "pattern": [{"LOWER": "business"}, {"LOWER": "analyst"}], "id": "role_business_analyst"}
+{"label": "DEGREE", "pattern": [{"TEXT": {"REGEX": "(?i)^b\\.?sc\\.?$"}}], "id": "degree_bsc"}
+{"label": "DEGREE", "pattern": [{"TEXT": {"REGEX": "(?i)^m\\.?sc\\.?$"}}], "id": "degree_msc"}
+{"label": "DEGREE", "pattern": [{"LOWER": "bachelor"}, {"LOWER": "of"}, {"LOWER": "science"}], "id": "degree_bachelor_science"}
+{"label": "DEGREE", "pattern": [{"LOWER": "bachelor"}, {"LOWER": "of"}, {"LOWER": "arts"}], "id": "degree_bachelor_arts"}
+{"label": "DEGREE", "pattern": [{"LOWER": "master"}, {"LOWER": "of"}, {"LOWER": "business"}, {"LOWER": "administration"}], "id": "degree_mba"}
+{"label": "DEGREE", "pattern": [{"TEXT": {"REGEX": "(?i)^mba$"}}], "id": "degree_mba_short"}
+{"label": "DEGREE", "pattern": [{"TEXT": {"REGEX": "(?i)^ph\\.?d\\.?$"}}], "id": "degree_phd"}
+{"label": "DEGREE", "pattern": [{"LOWER": "associate"}, {"LOWER": "degree"}], "id": "degree_associate"}
+{"label": "END_DATE", "pattern": [{"LOWER": "present"}], "id": "date_present"}
+{"label": "END_DATE", "pattern": [{"LOWER": "current"}], "id": "date_current"}
+{"label": "END_DATE", "pattern": [{"LOWER": "till"}], "id": "date_till"}
+{"label": "END_DATE", "pattern": [{"LOWER": "until"}], "id": "date_until"}
+{"label": "END_DATE", "pattern": [{"LOWER": "through"}], "id": "date_through"}
+{"label": "START_DATE", "pattern": [{"LOWER": "since"}], "id": "date_since"}

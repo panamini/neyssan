@@ -1,0 +1,25 @@
+{
+  "id": "d5568f7e76694978a3e8194b3ef94c95",
+  "created": 1773329465,
+  "model": "mistral-small-latest",
+  "usage": {
+    "prompt_tokens": 302,
+    "total_tokens": 401,
+    "completion_tokens": 99,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "object": "chat.completion",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "tool_calls": null,
+        "content": "I’m interested in the Sales Assistant position and would welcome the opportunity to contribute to your team. I’m comfortable managing follow-ups, organizing records, and communicating professionally with customers, as I’ve done in past roles. I take pride in staying detail-oriented and responsive, which helps ensure smooth interactions and efficient processes.\n\nI’m eager to bring my organizational skills and customer-focused approach to this role. If you’d like to discuss how I could support your team, I’d be happy to connect."
+      }
+    }
+  ]
+}

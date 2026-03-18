@@ -1,0 +1,134 @@
+# ==============================================================
+# .gitignore — neyssan project
+# Règle : ne commiter que le code source. Jamais de binaires,
+#          dépendances, secrets, ou données de test.
+# ==============================================================
+
+# --- OS ----------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+
+# --- Éditeurs ----------------------------------------------------
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# --- Node / JS ---------------------------------------------------
+node_modules/
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.npm/
+
+# --- Build outputs -----------------------------------------------
+dist/
+build/
+.cache/
+coverage/
+*.tsbuildinfo
+.next/
+out/
+
+# --- Python venvs (JAMAIS dans git) ------------------------------
+.venv/
+venv/
+ENV/
+env/
+**/.venv/
+**/venv/
+lib/python*/
+.python-version
+
+# --- Python compiled ---------------------------------------------
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+*.egg-info/
+.eggs/
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- Secrets / Env (garder .env.example) -------------------------
+.env
+.env.*
+!.env.example
+!.env.local.example
+!**/.env.example
+*.bk
+*.envlocal*
+*.envlocalDEV*
+*.envproduction*
+
+# --- Données de test et fixtures ---------------------------------
+/fixtures/
+my-app/testdata/
+my-app/spacy_training/
+my-app/scraping-server/
+
+# --- Artifacts runtime -------------------------------------------
+artifacts/
+diagnostics/
+tmp/
+*.log
+logs/
+.verify-venv/
+my-app/.parser-tunnel-url
+pdf-ingest/.env
+pdf-ingest/.env.alembic
+
+# --- Docs / notes internes (pas du code) -------------------------
+/docs/
+roocode_doc/
+alembic_backups/
+pdf-ingest.disabled/
+
+# --- Claude Code (sessions locales) ------------------------------
+.claude/
+
+# --- Backups et données sensibles --------------------------------
+*.sql
+*.db
+*.sqlite
+*.sqlite3
+backup_*.sql
+.gitsshkey.md
+audit_report.json
+
+# --- Docker cache ------------------------------------------------
+.buildx-cache
+
+# --- Fichiers lourds / binaires ----------------------------------
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.mp4
+*.zip
+*.tar.gz
+*.gz
+*.whl
+*.model
+*.bin
+*.pt
+*.pth
+*.onnx
+*.h5
+
+# --- Convex generated (regénéré automatiquement) -----------------
+my-app/convex/_generated/
+
+# --- Vite / vitest -----------------------------------------------
+my-app/src/__tests__/**/__snapshots__/
