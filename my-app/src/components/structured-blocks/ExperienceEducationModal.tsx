@@ -399,17 +399,6 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
       primaryAction={{ label: "Save", onClick: () => onSave(local) }}
     >
       <div className="space-y-6">
-        <div className="flex items-center justify-end">
-          <button
-            type="button"
-            onClick={() => void importFromClipboardExp()}
-            className="px-2 py-1 text-xs rounded [background:var(--ac)] [color:var(--op)] hover:brightness-110 focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
-            aria-label="Import from AI (experience)"
-            title="Import from AI (experience)"
-          >
-            Import from AI
-          </button>
-        </div>
         {local.length === 0 && (
           <div className="px-3 py-2 text-sm rounded [background:var(--sf1)] [color:var(--tm2)]">
             No experience yet. Use “Add entry” to create one.
@@ -423,13 +412,13 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
             startShowDay: false, endShowDay: false, isCurrent: false,
           };
           return (
-            <div key={String(row.id ?? idx)} className="p-3 border rounded-md">
-              <div className="flex items-center justify-between mb-3">
-                <div className="text-sm font-medium opacity-80">Entry {idx + 1}</div>
+            <div key={String(row.id ?? idx)} className="[background:var(--sf1)] border border-[color:var(--bo)] [border-radius:var(--rm)] [padding:var(--s5)]">
+              <div className="flex items-center justify-between [margin-bottom:var(--s3)]">
+                <div style={{ fontFamily: '"Fraunces", serif', fontSize: "var(--ts)", fontWeight: 600, color: "var(--ti)" }}>Entry {idx + 1}</div>
                 <button
                   type="button"
                   onClick={() => removeRow(idx)}
-                  className="px-2 py-1 text-xs rounded [background:transparent] [color:var(--tm2)] hover:[background:var(--sf2)] hover:[color:var(--ti)] focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
+                  className="px-2 py-1 text-xs rounded [background:transparent] [color:var(--tm2)] hover:[background:var(--erb)] hover:[color:var(--ert)] focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
                   aria-label="Remove entry"
                 >
                   Remove
@@ -817,17 +806,6 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
       primaryAction={{ label: "Save", onClick: () => onSave(local) }}
     >
       <div className="space-y-6">
-        <div className="flex items-center justify-end">
-          <button
-            type="button"
-            onClick={() => void importFromClipboardEdu()}
-            className="px-2 py-1 text-xs rounded [background:var(--ac)] [color:var(--op)] hover:brightness-110 focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
-            aria-label="Import from AI (education)"
-            title="Import from AI (education)"
-          >
-            Import from AI
-          </button>
-        </div>
         {local.length === 0 && (
           <div className="px-3 py-2 text-sm rounded [background:var(--sf1)] [color:var(--tm2)]">
             No education yet. Use “Add entry” to create one.
@@ -841,13 +819,13 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
             startShowDay: false, endShowDay: false, isCurrent: false,
           };
           return (
-            <div key={String(row.id ?? idx)} className="p-3 border rounded-md">
-              <div className="flex items-center justify-between mb-3">
-                <div className="text-sm font-medium opacity-80">Entry {idx + 1}</div>
+            <div key={String(row.id ?? idx)} className="[background:var(--sf1)] border border-[color:var(--bo)] [border-radius:var(--rm)] [padding:var(--s5)]">
+              <div className="flex items-center justify-between [margin-bottom:var(--s3)]">
+                <div style={{ fontFamily: '"Fraunces", serif', fontSize: "var(--ts)", fontWeight: 600, color: "var(--ti)" }}>Entry {idx + 1}</div>
                 <button
                   type="button"
                   onClick={() => removeRow(idx)}
-                  className="px-2 py-1 text-xs rounded [background:transparent] [color:var(--tm2)] hover:[background:var(--sf2)] hover:[color:var(--ti)] focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
+                  className="px-2 py-1 text-xs rounded [background:transparent] [color:var(--tm2)] hover:[background:var(--erb)] hover:[color:var(--ert)] focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
                   aria-label="Remove entry"
                 >
                   Remove
