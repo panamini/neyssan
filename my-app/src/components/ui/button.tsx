@@ -31,7 +31,7 @@ export function Button({
   ariaLabel,
 }: ButtonProps) {
   // §11 dasti — base : inline-flex, border 1px, radius rs, ts fw500, transition .12s ez
-  const base = "inline-flex items-center justify-center border font-medium focus:outline-none";
+  const base = "inline-flex items-center justify-center border font-medium focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]";
   const transition = "[transition:all_.12s_var(--ez)]";
 
   // §4 Hauteurs interactives dasti (px fixes)
