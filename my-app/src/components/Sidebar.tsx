@@ -95,9 +95,9 @@ export const Sidebar: React.FC = () => {
   };
 
   const sbTop: React.CSSProperties = {
+    position: "relative",
     display: "flex",
     alignItems: "center",
-    justifyContent: "space-between",
     padding: "0 var(--s3)",
     height: "var(--hdr)",
     borderBottom: "1px solid var(--bo)",
@@ -123,28 +123,18 @@ export const Sidebar: React.FC = () => {
       <div style={sb}>
         {/* ── Top bar ─────────────────────────────────────── */}
         <div style={sbTop}>
-          {/* Wordmark "dasti" — Fraunces, hidden in collapsed */}
-          {!collapsed && (
-            <span
-              style={{
-                fontFamily: '"Fraunces", serif',
-                fontSize: "var(--ts)",
-                fontWeight: 600,
-                letterSpacing: "-.01em",
-                color: "var(--ti)",
-                whiteSpace: "nowrap",
-                transition: "opacity .18s var(--ez)",
-              }}
-            >
-              dasti
-            </span>
-          )}
+          {/* Logo placeholder — logo à ajouter plus tard */}
+          <div style={{ flex: 1 }} />
 
-          {/* Collapse toggle — ‹ / › */}
+          {/* Collapse toggle — ‹ / › — position absolute right pour x fixe */}
           <button
             onClick={() => setCollapsed((c) => !c)}
             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             style={{
+              position: "absolute",
+              right: "var(--s3)",
+              top: "50%",
+              transform: "translateY(-50%)",
               width: 26,
               height: 26,
               flexShrink: 0,
@@ -156,8 +146,7 @@ export const Sidebar: React.FC = () => {
               color: "var(--tg2)",
               background: "var(--sfr)",
               cursor: "pointer",
-              transition: "all .12s var(--ez)",
-              marginLeft: collapsed ? "auto" : 0,
+              transition: "color .12s var(--ez), border-color .12s var(--ez), background .12s var(--ez)",
               fontFamily: "inherit",
             }}
             onMouseEnter={(e) => {
