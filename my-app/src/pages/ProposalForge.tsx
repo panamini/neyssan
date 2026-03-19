@@ -240,33 +240,9 @@ export function ProposalForge(): JSX.Element {
           </div>
         </section>
 
-        {/* ── LIBRARY VIEW — φ grid ──────────────────────────── */}
+        {/* ── LIBRARY VIEW — .plib grid (260px 1fr) ──────────── */}
         <section style={{ display: isSavedView ? "block" : "none" }} aria-hidden={!isSavedView}>
-          <div style={phiGrid}>
-
-            {/* Left panel — .cpn : context */}
-            <div style={panelCard}>
-              <div style={panelHeader}>
-                <div style={eyebrow}>Document</div>
-              </div>
-              <div style={{ padding: "var(--s5)", display: "flex", flexDirection: "column", gap: "var(--s3)" }}>
-                <p style={{ fontSize: "var(--ts)", color: "var(--tm2)", lineHeight: "var(--ls)" }}>
-                  Retrouvez vos documents sauvegardés. Copiez, regénérez ou supprimez depuis le panneau droit.
-                </p>
-              </div>
-            </div>
-
-            {/* Right panel — .opn : saved proposals list */}
-            <div style={panelCard}>
-              <div style={panelHeader}>
-                <div style={eyebrow}>Content</div>
-              </div>
-              <div style={{ flex: 1, padding: "var(--s5)" }}>
-                <ProposalsList />
-              </div>
-            </div>
-
-          </div>
+          <ProposalsList />
         </section>
 
       </div>
