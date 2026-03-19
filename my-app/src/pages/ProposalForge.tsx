@@ -34,6 +34,7 @@ export function ProposalForge(): JSX.Element {
   const [proposalContent, setProposalContent] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [errorDetail, setErrorDetail] = React.useState<string | null>(null);
   const [proposalType, setProposalType] = React.useState<FormValues["proposalType"] | null>(null);
   const [fallbackInfo, setFallbackInfo] = React.useState<ProposalGenerationFallbackInfo | null>(null);
   const [activeView, setActiveView] = React.useState<ProposalForgeView>("compose");
@@ -61,6 +62,7 @@ export function ProposalForge(): JSX.Element {
     setProposalType(values.proposalType);
     setProposalContent(null);
     setError(null);
+    setErrorDetail(null);
     setFallbackInfo(null);
   }, []);
 
@@ -76,11 +78,12 @@ export function ProposalForge(): JSX.Element {
   );
 
   const handleProposalError = React.useCallback(
-    (message: string, values: FormValues) => {
+    (message: string, values: FormValues, rawReason?: string | null) => {
       setLoading(false);
       setProposalType(values.proposalType);
       setProposalContent(null);
       setError(message);
+      setErrorDetail(rawReason ?? null);
       setFallbackInfo(null);
     },
     [],
@@ -227,6 +230,7 @@ export function ProposalForge(): JSX.Element {
                   proposalContent={proposalContent}
                   loading={loading}
                   error={error}
+                  errorDetail={errorDetail}
                   proposalType={proposalType}
                   fallbackInfo={fallbackInfo}
                 />

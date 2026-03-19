@@ -43,7 +43,7 @@ interface ProposalInputFormProps {
     fallbackInfo?: ProposalGenerationFallbackInfo,
   ) => void;
   onStart?: (values: FormValues) => void;
-  onError?: (message: string, values: FormValues) => void;
+  onError?: (message: string, values: FormValues, rawReason?: string | null) => void;
   prefill?: {
     handoffId: string;
     jobTitle: string;
@@ -404,8 +404,9 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
         proposalType: values.proposalType,
         hasCandidateContext,
       });
+      const rawReason = error instanceof Error ? error.message : null;
       setErrorMessage(nextErrorMessage);
-      onError?.(nextErrorMessage, values);
+      onError?.(nextErrorMessage, values, rawReason);
     } finally {
       setIsGenerating(false);
     }
