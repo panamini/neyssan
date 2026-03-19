@@ -1,11 +1,12 @@
 import React from "react";
+import { Check, Copy } from "lucide-react";
 import type { FormValues } from "./ProposalInputForm.schemas";
-import { Button } from "./ui/button";
-import { useToast } from "./ui/toast";
+import type { ProposalVoicePreset } from "../../convex/lib/proposals/voicePresets";
 import {
   getProposalGenerationFallbackDisclosureMessage,
   type ProposalGenerationFallbackInfo,
 } from "../lib/proposal-generation-ui";
+import { getProposalDocumentTypography } from "../lib/proposal-document-typography";
 
 interface ProposalDisplayProps {
   proposalContent: string | null;
@@ -15,6 +16,9 @@ interface ProposalDisplayProps {
   errorDetail?: string | null;
   proposalType?: FormValues["proposalType"] | null;
   fallbackInfo?: ProposalGenerationFallbackInfo | null;
+  onCopy?: () => void;
+  copyFeedback?: "idle" | "copied";
+  voicePreset?: ProposalVoicePreset | null;
 }
 
 const parseMarkdown = (content: string) => {
@@ -82,7 +86,7 @@ function renderPlainLetterBody(content: string) {
 
   if (paragraphs.length === 0) {
     return (
-      <p className="text-[15px] leading-7 text-foreground">
+      <p style={{ fontFamily: "inherit", fontSize: "inherit", lineHeight: "inherit", fontWeight: "inherit", letterSpacing: "inherit", color: "inherit" }}>
         {stripInlineMarkdown(content)}
       </p>
     );
@@ -91,7 +95,11 @@ function renderPlainLetterBody(content: string) {
   return (
     <>
       {paragraphs.map((paragraph, index) => (
-        <p key={index} className="mb-4 whitespace-pre-line text-[15px] leading-7 text-foreground last:mb-0">
+        <p
+          key={index}
+          className="mb-4 whitespace-pre-line last:mb-0"
+          style={{ fontFamily: "inherit", fontSize: "inherit", lineHeight: "inherit", fontWeight: "inherit", letterSpacing: "inherit", color: "inherit" }}
+        >
           {paragraph}
         </p>
       ))}
@@ -99,7 +107,7 @@ function renderPlainLetterBody(content: string) {
   );
 }
 
-function getDisplayedProposalText(
+export function getDisplayedProposalText(
   content: string,
   proposalType?: FormValues["proposalType"] | null,
 ): string {
@@ -119,7 +127,7 @@ function getDisplayedProposalText(
     .trim();
 }
 
-function fallbackCopyText(text: string): boolean {
+export function fallbackCopyText(text: string): boolean {
   try {
     const textarea = document.createElement("textarea");
     textarea.value = text;
@@ -148,60 +156,18 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   errorDetail = null,
   proposalType,
   fallbackInfo = null,
+  onCopy,
+  copyFeedback = "idle",
+  voicePreset = null,
 }) => {
-  const { showToast } = useToast();
-  const [copyFeedback, setCopyFeedback] = React.useState<"idle" | "copied">(
-    "idle",
-  );
   const fallbackDisclosure = getProposalGenerationFallbackDisclosureMessage(
     fallbackInfo ?? {},
   );
-  const copyFeedbackTimeoutRef = React.useRef<number | null>(null);
-
-  React.useEffect(() => {
-    return () => {
-      if (copyFeedbackTimeoutRef.current !== null) {
-        window.clearTimeout(copyFeedbackTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  const handleCopy = React.useCallback(async () => {
-    if (!proposalContent) return;
-
-    const displayedProposalText = getDisplayedProposalText(
-      proposalContent,
-      proposalType,
-    );
-
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(displayedProposalText);
-      } else if (!fallbackCopyText(displayedProposalText)) {
-        throw new Error("Clipboard unavailable");
-      }
-
-      setCopyFeedback("copied");
-      if (copyFeedbackTimeoutRef.current !== null) {
-        window.clearTimeout(copyFeedbackTimeoutRef.current);
-      }
-      copyFeedbackTimeoutRef.current = window.setTimeout(() => {
-        setCopyFeedback("idle");
-        copyFeedbackTimeoutRef.current = null;
-      }, 2000);
-      showToast("Proposal copied", { variant: "success" });
-    } catch (copyError) {
-      console.warn("Failed to copy proposal:", copyError);
-      showToast("Copy failed", {
-        variant: "error",
-        description: "Clipboard access was unavailable.",
-      });
-    }
-  }, [proposalContent, proposalType, showToast]);
+  const documentTypography = getProposalDocumentTypography(voicePreset);
 
   if (loading) {
     return (
-      <div className="rounded-lg border border-[color:var(--bo)] bg-background p-6">
+      <div className="rounded-[var(--rm)] border border-[color:var(--bo)] [background:var(--sf1)] p-6">
         <div className="text-sm font-medium text-foreground">
           Generating proposal
         </div>
@@ -217,7 +183,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       <div
         role="alert"
         aria-live="assertive"
-        className="rounded-lg border border-[color:var(--er)] [background:var(--erb)] p-6"
+        className="rounded-[var(--rm)] border border-[color:var(--er)] [background:var(--erb)] p-6"
       >
         <div className="text-sm font-medium [color:var(--ert)]">
           Proposal generation failed
@@ -239,7 +205,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
 
   if (!proposalContent) {
     return (
-      <div className="rounded-lg border border-[color:var(--bo)] bg-background p-6 text-center text-muted">
+      <div className="rounded-[var(--rm)] border border-[color:var(--bo)] [background:var(--sf1)] p-6 text-center text-muted">
         Generate a proposal to see the results here.
       </div>
     );
@@ -249,40 +215,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     proposalType === "cover_letter" || proposalType === "application_message";
 
   return (
-    <div className="rounded-lg border border-[color:var(--bo)] bg-background p-6">
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <div className="text-sm font-medium text-foreground">
-          Generated proposal
-        </div>
-        <Button
-          type="button"
-          size="sm"
-          variant="secondary"
-          className="shrink-0"
-          onClick={() => {
-            void handleCopy();
-          }}
-        >
-          {copyFeedback === "copied" ? "Copied" : "Copy"}
-        </Button>
-      </div>
-      {/* Model diagnostics strip — shown in dev or when there was a fallback */}
-      {(fallbackInfo?.requestedModelType || fallbackInfo?.actualModelType) && (
-        <div
-          className="mb-3 flex flex-wrap gap-x-3 gap-y-1 text-xs [color:var(--tg2)]"
-          aria-label="Generation diagnostics"
-        >
-          {fallbackInfo.requestedModelType && (
-            <span>requested: <span className="[color:var(--tm2)]">{fallbackInfo.requestedModelType}</span></span>
-          )}
-          {fallbackInfo.actualModelType && fallbackInfo.actualModelType !== fallbackInfo.requestedModelType && (
-            <span>actual: <span className="[color:var(--tm2)]">{fallbackInfo.actualModelType}</span></span>
-          )}
-          {fallbackInfo.fallbackTriggerCode && (
-            <span>trigger: <span className="[color:var(--tm2)]">{fallbackInfo.fallbackTriggerCode}</span></span>
-          )}
-        </div>
-      )}
+    <div className="grid gap-4">
       {fallbackDisclosure ? (
         <div
           role="status"
@@ -292,15 +225,51 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           {fallbackDisclosure}
         </div>
       ) : null}
-      {isLetterLike ? (
-        <div className="max-w-none">
-          {renderPlainLetterBody(proposalContent)}
+      <div
+        style={{
+          borderRadius: "var(--rm)",
+          border: "1px solid var(--bo)",
+          background: "var(--bg)",
+          padding: "var(--s6)",
+          minHeight: 360,
+        }}
+      >
+        {onCopy ? (
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "var(--s3)" }}>
+            <button
+              type="button"
+              onClick={onCopy}
+              title={copyFeedback === "copied" ? "Copied" : "Copy"}
+              aria-label={copyFeedback === "copied" ? "Copied" : "Copy"}
+              className="dasti-icon-button"
+              style={{ color: copyFeedback === "copied" ? "var(--ok)" : undefined }}
+            >
+              {copyFeedback === "copied" ? <Check size={16} strokeWidth={2} aria-hidden="true" /> : <Copy size={16} strokeWidth={1.5} aria-hidden="true" />}
+            </button>
+          </div>
+        ) : null}
+        <div
+          style={{
+            fontFamily: documentTypography.fontFamily,
+            fontSize: documentTypography.fontSize,
+            lineHeight: documentTypography.lineHeight,
+            fontWeight: documentTypography.fontWeight,
+            letterSpacing: documentTypography.letterSpacing,
+            color: "var(--ti)",
+            maxWidth: "none",
+          }}
+        >
+          {isLetterLike ? (
+            <div className="max-w-none">
+              {renderPlainLetterBody(proposalContent)}
+            </div>
+          ) : (
+            <div className="prose prose-lg max-w-none dark:prose-invert prose-neutral">
+              {parseMarkdown(proposalContent)}
+            </div>
+          )}
         </div>
-      ) : (
-        <div className="prose prose-lg prose-gray dark:prose-invert max-w-none">
-          {parseMarkdown(proposalContent)}
-        </div>
-      )}
+      </div>
     </div>
   );
 };

@@ -28,3 +28,6 @@ convex/_generated
 
 /testdata/cv
 /testdata/
+
+# Temporary audit artifacts
+tmp-audit/

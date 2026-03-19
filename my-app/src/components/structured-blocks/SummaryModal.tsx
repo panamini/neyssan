@@ -20,6 +20,7 @@ import { useCvLibrary } from "../../contexts/CvLibraryContext";
 import { X } from "lucide-react";
 import { TextSelection } from "prosemirror-state";
 import { docToPlainText } from "../remirror-editor/utils/text";
+import { Button } from "../ui/button";
 
 interface SummaryModalProps {
   open: boolean;
@@ -216,58 +217,61 @@ export function SummaryModal({ open, sectionId, item, onClose }: SummaryModalPro
 
   return (
     <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4" onMouseDownCapture={(e) => e.stopPropagation()}>
-      <div className="absolute inset-0" onClick={() => (isSaving ? null : onClose())}  style={{ background: 'hsla(30,12%,11%,.32)', backdropFilter: 'blur(8px)' }} />
+      <div
+        className="absolute inset-0"
+        onClick={() => (isSaving ? null : onClose())}
+        style={{ background: "hsla(30,12%,11%,.32)", backdropFilter: "blur(8px) saturate(1.2)" }}
+      />
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Edit summary"
-        className="relative w-full max-w-3xl [background:var(--sfr)] border border-[color:var(--bm)] [border-radius:var(--rl)] [box-shadow:var(--shc)] overflow-auto max-h-[90vh]"
+        className="dasti-modal"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-bo">
-          <h2 className="text-lg font-semibold">Edit summary</h2>
+        <div className="dasti-modal-header">
+          <div className="dasti-modal-heading">
+            <h2 className="dasti-modal-title">Edit summary</h2>
+            <p className="dasti-modal-subtitle">Profile narrative and positioning</p>
+          </div>
+
           <button
             type="button"
             onClick={() => (isSaving ? null : onClose())}
             aria-label="Close"
-            className="p-1 rounded hover:[background:var(--sf2)] disabled:opacity-50"
+            className="dasti-modal-close"
             disabled={isSaving}
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="p-4 space-y-3">
-          <div>
-            <label className="text-xs [color:var(--tg2)]">Summary</label>
-            <div className="relative mt-2 border rounded">
+        <div className="dasti-modal-body">
+          <section className="dasti-zone">
+            <h3 className="dasti-zone-title">Summary</h3>
+            <div className="dasti-rich">
               <Remirror manager={manager} initialContent={state} onChange={handleChange}>
-                <div className="p-2 rich-content">
+                <div className="rich-content">
+                  <EditorToolbar position="top" />
                   <EditorComponent />
-                  <EditorToolbar position="bottom" />
                 </div>
               </Remirror>
             </div>
-          </div>
 
-          <div className="flex items-center justify-end gap-2 mt-2">
-            <button
-              type="button"
-              onClick={() => (isSaving ? null : onClose())}
-              className="px-3 py-2 rounded [background:var(--sf2)] disabled:opacity-50"
-              disabled={isSaving}
-            >
+            <div className="dasti-hint">Keep this short, specific, and aligned with the target role.</div>
+          </section>
+        </div>
+
+        <div className="dasti-modal-footer">
+          <div className="dasti-modal-footer-note">Used in your resume header and exports.</div>
+
+          <div className="dasti-modal-actions">
+            <Button type="button" variant="secondary" onClick={() => (isSaving ? null : onClose())} disabled={isSaving}>
               Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleSave()}
-              className="px-3 py-2 [background:var(--ac)] [color:var(--op)] rounded disabled:opacity-50"
-              disabled={isSaving}
-              aria-busy={isSaving}
-            >
+            </Button>
+            <Button type="button" variant="primary" onClick={() => void handleSave()} disabled={isSaving} ariaLabel="Save summary">
               Save
-            </button>
+            </Button>
           </div>
         </div>
       </div>

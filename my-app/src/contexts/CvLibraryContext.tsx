@@ -973,13 +973,24 @@ const flushPendingEdits = useCallback((): void => {
     try {
       // Ensure metadata exists and bump updatedAt/version conservatively
       // Strip legacy cvState before persisting to satisfy schema validation.
-      const { cvState: _legacyCvState, ...coreDoc } = documentToSave as any;
+      const { cvState: legacyCvState, ...coreDoc } = documentToSave as any;
+      const normalizedResult = normalizeAndValidateCvDocument(
+        coreDoc,
+        typeof coreDoc?.title === "string" ? coreDoc.title : undefined,
+      );
+      if (!normalizedResult.success) {
+        throw new Error(`Save normalization failed: ${normalizedResult.errors.join("; ")}`);
+      }
+
+      const normalizedCore = applyAutoTitleIfPlaceholder(
+        ensureRepresentativeBlocks(normalizeToV1Document(normalizedResult.document))
+      );
       const docCopy: CvDocument = {
-        ...coreDoc,
+        ...normalizedCore,
         metadata: {
-          ...(coreDoc.metadata ?? { createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), version: 1 }),
+          ...(normalizedCore.metadata ?? { createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), version: 1 }),
           updatedAt: new Date().toISOString(),
-          version: (coreDoc.metadata?.version ?? 0) + 1,
+          version: (normalizedCore.metadata?.version ?? 0) + 1,
         },
       };
 
@@ -1002,7 +1013,7 @@ const flushPendingEdits = useCallback((): void => {
           const activeDoc = currentCvRef.current;
           const withLegacy = {
             ...(docCopy as any),
-            cvState: (documentToSave as any)?.cvState ?? (activeDoc as any)?.cvState,
+            cvState: legacyCvState ?? (activeDoc as any)?.cvState,
           };
           lastSavedRef.current = stripMetadata(withLegacy) as CvDocument | null;
           dbg("[CvLibraryContext] performSave: lastSavedRef updated (metadata stripped, cvState preserved for dirty detection)", { docId: docCopy.id });
@@ -1016,24 +1027,26 @@ const flushPendingEdits = useCallback((): void => {
       try {
         const activeDoc = currentCvRef.current;
         if (typeof setCurrentCv === "function" && activeDoc && String(activeDoc.id) === String(docCopy.id)) {
-          setCurrentCv((prev) => {
-            try {
-              if (!prev) return prev;
-              const prevMeta = (prev as any).metadata ?? null;
-              const savedMeta = (docCopy as any).metadata ?? null;
-              if (!deepEqual(prevMeta, savedMeta)) {
-                const patched: CvDocument = { ...prev, metadata: savedMeta };
-                dbg("[CvLibraryContext] performSave: synced currentCv.metadata with saved snapshot", { docId: docCopy.id });
-                return patched;
-              }
-              dbg("[CvLibraryContext] performSave: metadata is equal, not syncing", { docId: docCopy.id });
-              return prev;
-            } catch {
-              /* noop */
-            }
-            return prev;
-          });
+          const normalizedActiveDoc = {
+            ...(docCopy as any),
+            cvState: legacyCvState ?? (activeDoc as any)?.cvState,
+          } as CvDocument;
+          const shouldSyncContent =
+            !deepEqual(stripMetadata(activeDoc), stripMetadata(normalizedActiveDoc)) ||
+            !deepEqual((activeDoc as any).metadata ?? null, (normalizedActiveDoc as any).metadata ?? null);
+          if (shouldSyncContent) {
+            safeSetCurrentCv(normalizedActiveDoc);
+            dbg("[CvLibraryContext] performSave: synced normalized currentCv with saved snapshot", { docId: docCopy.id });
+          } else {
+            dbg("[CvLibraryContext] performSave: currentCv already matches saved snapshot", { docId: docCopy.id });
+          }
         }
+      } catch {
+        /* noop */
+      }
+
+      try {
+        setCvs((prev) => prev.map((doc) => (String(doc.id) === String(docCopy.id) ? docCopy : doc)));
       } catch {
         /* noop */
       }
@@ -2077,7 +2090,30 @@ const flushPendingEdits = useCallback((): void => {
             sections: [toInsert],
           } as CvDocument;
         } else {
-          nextCv = { ...prev, sections: [...prev.sections, toInsert] };
+          const preferredSectionOrder = [
+            "profile",
+            "summary",
+            "experience",
+            "achievements",
+            "education",
+            "skills",
+            "languages",
+          ] as const;
+          const preferredOrderIndex = new Map(
+            preferredSectionOrder.map((sectionType, index) => [sectionType, index] as const)
+          );
+          const nextSections = [...prev.sections, toInsert]
+            .map((entry, index) => ({ entry, index }))
+            .sort((a, b) => {
+              const aType = String((a.entry as any)?.type ?? "");
+              const bType = String((b.entry as any)?.type ?? "");
+              const aRank = preferredOrderIndex.get(aType as any) ?? Number.MAX_SAFE_INTEGER;
+              const bRank = preferredOrderIndex.get(bType as any) ?? Number.MAX_SAFE_INTEGER;
+              if (aRank !== bRank) return aRank - bRank;
+              return a.index - b.index;
+            })
+            .map(({ entry }) => entry);
+          nextCv = { ...prev, sections: nextSections };
         }
 
         // Centralized: generate representative blocks for typed sections
@@ -2369,8 +2405,8 @@ function redoCtx(): void {
     <CvLibraryContext.Provider value={value}>
       <>
         {children}
-        {/* Development-only debug toggle (renders in dev to avoid typing in console) */}
-        <DebugToggle />
+        {/* Development-only debug toggle (gated to non-production) */}
+        {process.env.NODE_ENV !== "production" && <DebugToggle />}
         {/* Development-only live debug panel for CV editor logs */}
         {typeof window !== "undefined" && (window as any).__CV_EDITOR_DEBUG__ ? <DebugPanel /> : null}
       </>

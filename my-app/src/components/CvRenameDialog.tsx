@@ -10,9 +10,20 @@ interface CvRenameDialogProps {
   currentTitle: string;
   onClose: () => void;
   onSave: (nextTitle: string) => void;
+  title?: string;
+  placeholder?: string;
+  saveLabel?: string;
 }
 
-export function CvRenameDialog({ open, currentTitle, onClose, onSave }: CvRenameDialogProps) {
+export function CvRenameDialog({
+  open,
+  currentTitle,
+  onClose,
+  onSave,
+  title = "Rename CV",
+  placeholder = "CV title",
+  saveLabel = "Save",
+}: CvRenameDialogProps) {
   const [renameValue, setRenameValue] = React.useState(currentTitle);
 
   React.useEffect(() => {
@@ -34,13 +45,13 @@ export function CvRenameDialog({ open, currentTitle, onClose, onSave }: CvRename
   }
 
   return (
-    <Dialog open={open} onClose={onClose} title="Rename CV">
+    <Dialog open={open} onClose={onClose} title={title}>
       <form onSubmit={handleSubmit}>
         <DialogContent className="space-y-3">
           <Input
             value={renameValue}
             onChange={(e) => setRenameValue(e.target.value)}
-            placeholder="CV title"
+            placeholder={placeholder}
             autoFocus
           />
         </DialogContent>
@@ -49,7 +60,7 @@ export function CvRenameDialog({ open, currentTitle, onClose, onSave }: CvRename
             Cancel
           </Button>
           <Button type="submit" variant="primary" size="sm" disabled={!trimmedRenameValue}>
-            Save
+            {saveLabel}
           </Button>
         </DialogActions>
       </form>

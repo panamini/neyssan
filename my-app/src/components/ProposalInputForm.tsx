@@ -7,7 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import clsx from "clsx";
 import { createPortal } from "react-dom";
 import { Button } from "./ui/button";
-import { Dialog, DialogActions, DialogContent } from "./ui/dialog";
+import { Dialog, DialogContent } from "./ui/dialog";
 
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
@@ -35,6 +35,7 @@ import {
   getProposalGenerationUiErrorMessage,
   type ProposalGenerationFallbackInfo,
 } from "../lib/proposal-generation-ui";
+import { ArrowUp, ChevronDown, Plus, Square, X } from "lucide-react";
 
 interface ProposalInputFormProps {
   onSubmit: (
@@ -68,9 +69,9 @@ const VISIBLE_PROPOSAL_TYPE_OPTIONS = [
 ] as const;
 
 const TONE_OPTIONS: Array<{ id: ProposalVoicePreset; uiLabel: string; description: string }> = [
-  { id: "signature", uiLabel: "Neutre", description: "Balanced, natural, and credible." },
-  { id: "expert", uiLabel: "Formel", description: "More precise, structured, and authoritative." },
-  { id: "engaging", uiLabel: "Chaleureux", description: "Warmer, more lively, and still professional." },
+  { id: "signature", uiLabel: "Balanced", description: "Balanced, natural, and credible." },
+  { id: "expert", uiLabel: "Formal", description: "More precise, structured, and authoritative." },
+  { id: "engaging", uiLabel: "Warm", description: "Warmer, more lively, and still professional." },
 ];
 
 const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
@@ -98,26 +99,17 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   const [cvOptions, setCvOptions] = React.useState<LocalCvPickerOption[]>(() =>
     listLocalCvPickerOptions(),
   );
-  const appliedPrefillRef = React.useRef<string | null>(null);
+  const appliedPrefillRef = React.useRef<{
+    handoffId: string;
+    jobTitle: string;
+    jobDescription: string;
+  } | null>(null);
   const appliedSavedVoicePresetRef = React.useRef(false);
   const lastSharedSnapshotSyncStateRef = React.useRef<string | null>(null);
 
   const refreshActiveCvState = React.useCallback(() => {
     setActiveCvSource(getActiveLocalPersonalizationSource());
     setCvOptions(listLocalCvPickerOptions());
-  }, []);
-
-  const formatCvDate = React.useCallback((value?: string) => {
-    if (!value) return null;
-    const parsed = Date.parse(value);
-    if (!Number.isFinite(parsed)) return null;
-    try {
-      return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(
-        new Date(parsed),
-      );
-    } catch {
-      return new Date(parsed).toLocaleDateString();
-    }
   }, []);
 
   React.useEffect(() => {
@@ -294,29 +286,64 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   }, [form, selectedProposalType]);
 
   React.useEffect(() => {
-    if (!prefill?.handoffId) return;
-    if (appliedPrefillRef.current === prefill.handoffId) return;
-
-    const currentValues = form.getValues();
-    const hasUserContent =
-      form.formState.isDirty ||
-      currentValues.jobTitle.trim().length > 0 ||
-      currentValues.jobDescription.trim().length > 0;
-
-    if (!hasUserContent) {
-      form.setValue("jobTitle", prefill.jobTitle, {
-        shouldDirty: false,
-        shouldTouch: false,
-        shouldValidate: true,
-      });
-      form.setValue("jobDescription", prefill.jobDescription, {
-        shouldDirty: false,
-        shouldTouch: false,
-        shouldValidate: true,
-      });
+    // Prefill removed (navigated away from handoff URL):
+    // clear any fields that still contain the prefill content so stale job
+    // description cannot survive into the next generation.
+    if (!prefill?.handoffId) {
+      if (appliedPrefillRef.current !== null) {
+        const prev = appliedPrefillRef.current;
+        const currentTitle = form.getValues("jobTitle");
+        const currentDesc = form.getValues("jobDescription");
+        if (currentTitle === prev.jobTitle) {
+          form.setValue("jobTitle", "", { shouldDirty: false, shouldTouch: false, shouldValidate: false });
+        }
+        if (currentDesc === prev.jobDescription) {
+          form.setValue("jobDescription", "", { shouldDirty: false, shouldTouch: false, shouldValidate: false });
+        }
+        appliedPrefillRef.current = null;
+      }
+      return;
     }
 
-    appliedPrefillRef.current = prefill.handoffId;
+    // Same handoff — already applied, nothing to do.
+    if (appliedPrefillRef.current?.handoffId === prefill.handoffId) return;
+
+    const isFirstHandoff = appliedPrefillRef.current === null;
+
+    if (isFirstHandoff) {
+      // On first mount, only apply if the form is empty (user may have started typing).
+      const currentValues = form.getValues();
+      const hasUserContent =
+        form.formState.isDirty ||
+        currentValues.jobTitle.trim().length > 0 ||
+        currentValues.jobDescription.trim().length > 0;
+      if (hasUserContent) {
+        // Record the handoff as seen but don't overwrite.
+        appliedPrefillRef.current = {
+          handoffId: prefill.handoffId,
+          jobTitle: prefill.jobTitle,
+          jobDescription: prefill.jobDescription,
+        };
+        return;
+      }
+    }
+
+    // First load on empty form, OR a different handoffId arrived — always apply.
+    form.setValue("jobTitle", prefill.jobTitle, {
+      shouldDirty: false,
+      shouldTouch: false,
+      shouldValidate: true,
+    });
+    form.setValue("jobDescription", prefill.jobDescription, {
+      shouldDirty: false,
+      shouldTouch: false,
+      shouldValidate: true,
+    });
+    appliedPrefillRef.current = {
+      handoffId: prefill.handoffId,
+      jobTitle: prefill.jobTitle,
+      jobDescription: prefill.jobDescription,
+    };
   }, [form, prefill]);
 
   function handleVoicePresetChange(preset: ProposalVoicePreset) {
@@ -357,6 +384,23 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
     const hasCandidateContext = Boolean(
       currentActiveCvSource.personalizationContext,
     );
+
+    if (import.meta.env.DEV) {
+      console.debug("[ProposalInputForm] Audit A — active CV context", {
+        cvTitle: currentActiveCvSource.title,
+        hasCv: hasCandidateContext,
+        topSkills: currentActiveCvSource.personalizationContext?.topSkills ?? null,
+        recentExperience: currentActiveCvSource.personalizationContext?.recentExperience ?? null,
+        standoutAchievements: currentActiveCvSource.personalizationContext?.standoutAchievements ?? null,
+        desiredPosition: currentActiveCvSource.personalizationContext?.desiredPosition ?? null,
+      });
+      console.debug("[ProposalInputForm] Audit B — job values", {
+        jobTitle: values.jobTitle,
+        jobDescriptionLength: values.jobDescription?.length ?? 0,
+        jobDescriptionPreview: values.jobDescription?.slice(0, 200) ?? null,
+        proposalType: values.proposalType,
+      });
+    }
 
     try {
       setIsGenerating(true);
@@ -496,33 +540,33 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
 
   return (
     <div className={styles.container}>
-      <div className="flex flex-wrap items-center gap-2 mb-3 text-sm text-muted-foreground">
-        <span>
-          Using CV:{" "}
-          <span className="font-medium text-foreground">
-            {activeCvSource.title ?? "none"}
-          </span>
-        </span>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="px-2"
-          onClick={handleOpenCvPicker}
-        >
-          Change CV
-        </Button>
-        {activeCvSource.title && (
-          <Button
+      <div className="mb-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+        <div className="inline-flex max-w-full items-center overflow-hidden rounded-[var(--rs)] border border-transparent [background:transparent] transition-colors hover:[background:var(--sf2)]">
+          <button
             type="button"
-            variant="ghost"
-            size="sm"
-            className="px-2"
-            onClick={handleClearCv}
+            onClick={handleOpenCvPicker}
+            className="inline-flex min-w-0 items-center gap-1 px-2 py-1 text-left transition-colors hover:text-foreground focus:outline-none focus-visible:[box-shadow:inset_0_0_0_1px_var(--bm)]"
+            title="Choose resume"
           >
-            Use no CV
-          </Button>
-        )}
+            <span>Resume:</span>
+            <span className="truncate font-medium text-foreground">
+              {activeCvSource.title ?? "none"}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={activeCvSource.title ? handleClearCv : handleOpenCvPicker}
+            className="dasti-icon-button shrink-0"
+            aria-label={activeCvSource.title ? "Clear resume" : "Choose resume"}
+            title={activeCvSource.title ? "Clear resume" : "Choose resume"}
+          >
+            {activeCvSource.title ? (
+              <X className="h-3.5 w-3.5" aria-hidden />
+            ) : (
+              <Plus className="h-3.5 w-3.5" aria-hidden />
+            )}
+          </button>
+        </div>
       </div>
       {(prefill?.platform || prefill?.sourceUrl) && (
         <div className="mb-3 text-sm text-muted-foreground">
@@ -548,31 +592,28 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
       <Dialog
         open={isCvPickerOpen}
         onClose={() => setIsCvPickerOpen(false)}
-        title="Choose CV"
-        className="max-w-lg"
+        title="Choose resume"
+        className="max-w-2xl [background:var(--sf1)]"
       >
-        <DialogContent className="space-y-4">
+        <DialogContent className="space-y-4 [background:var(--sf1)]">
           <p className="text-sm text-muted-foreground">
-            Select the CV Proposal Forge should use for personalization.
+            Select the resume Proposal Forge should use for personalization.
           </p>
           {cvOptions.length === 0 ? (
-            <div className="rounded-md border border-[color:var(--bo)] bg-background px-3 py-4 text-sm text-muted-foreground">
-              No local CVs found yet. Create or import one in CV Forge.
+            <div className="rounded-[var(--rm)] border border-[color:var(--bo)] [background:var(--sf2)] px-4 py-4 text-sm text-muted-foreground">
+              No local resumes found yet. Create or import one in Resume.
             </div>
           ) : (
             <div className="space-y-2 max-h-[50vh] overflow-y-auto">
               {cvOptions.map((option) => {
-                const updatedLabel = formatCvDate(
-                  option.updatedAt ?? option.createdAt,
-                );
                 return (
                   <div
                     key={option.id}
                     className={clsx(
-                      "w-full rounded-lg border p-3 transition-colors",
+                      "w-full rounded-[var(--rm)] border p-4 transition-colors",
                       option.isActive
-                        ? "border-[color:var(--ac)] [background:var(--as)]"
-                        : "border-[color:var(--bo)] bg-background hover:[background:var(--as)]",
+                        ? "border-[color:var(--ac)] [background:var(--as)] [box-shadow:var(--sha)]"
+                        : "border-[color:var(--bo)] [background:var(--sf2)] hover:border-[color:var(--bm)] hover:[background:var(--sfr)]",
                     )}
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -605,8 +646,9 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                             variant={option.isActive ? "secondary" : "primary"}
                             size="sm"
                             onClick={() => handleSelectCv(option.id)}
+                            disabled={option.isActive}
                           >
-                            {option.isActive ? "Using this CV" : "Use this CV"}
+                            Use
                           </Button>
                           <Button
                             type="button"
@@ -614,16 +656,15 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                             size="sm"
                             onClick={() => handleEditCv(option.id)}
                           >
-                            Edit in CV Forge
+                            Edit
                           </Button>
                         </div>
                         <div className="flex flex-col items-end gap-2 text-xs text-muted-foreground">
                           {option.isActive && (
-                            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-primary">
+                            <span className="rounded-full border border-[color:var(--ac)] bg-[color:var(--ap)] px-2 py-0.5 [color:var(--am)]">
                               Current
                             </span>
                           )}
-                          {updatedLabel && <span>Updated {updatedLabel}</span>}
                         </div>
                       </div>
                     </div>
@@ -633,26 +674,9 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
             </div>
           )}
         </DialogContent>
-        <DialogActions className="justify-end">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={handleClearCv}
-          >
-            Use no CV
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={() => setIsCvPickerOpen(false)}
-          >
-            Close
-          </Button>
-        </DialogActions>
       </Dialog>
       <form
+        autoComplete="off"
         onSubmit={(e) => {
           void form.handleSubmit(handleSubmit)(e);
         }}
@@ -667,6 +691,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                 {...form.register("jobTitle")}
                 className={clsx(styles.inputElement, styles.jobField)}
                 placeholder="Enter Job Title"
+                autoComplete="off"
               />
               {form.formState.errors.jobTitle && (
                 <p className={styles.errorMessage}>
@@ -675,15 +700,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
               )}
             </div>
             {/* .siw — chatbox well */}
-            <div
-              style={{
-                border: "1px solid var(--bm)",
-                borderRadius: "var(--rm)",
-                background: "var(--sf1)",
-                marginTop: "var(--s2)",
-                transition: "box-shadow .12s var(--ez), border-color .12s var(--ez)",
-              }}
-            >
+            <div className={styles.composeWell}>
               <textarea
                 id="jobDescription"
                 {...form.register("jobDescription")}
@@ -716,69 +733,77 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                   borderRadius: "0 0 calc(var(--rm) - 1px) calc(var(--rm) - 1px)",
                 }}
               >
-                {/* Type ichip */}
+                {/* Type dropdown */}
                 <button
                   ref={typeChipRef}
                   type="button"
                   title="Document type"
                   onClick={(e) => { e.stopPropagation(); toggleMenu("type"); }}
                   style={{
-                    width: 26, height: 26,
-                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                    height: 26,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "6px",
+                    padding: "0 var(--s2)",
                     borderRadius: "var(--rs)",
-                    border: "1px solid var(--ac)",
-                    background: "var(--as)",
-                    color: "var(--am)",
+                    border: "1px solid transparent",
+                    background: "transparent",
+                    color: "var(--tm2)",
                     cursor: "pointer",
                     flexShrink: 0,
-                    transition: "all .12s var(--ez)",
+                    transition: "background .12s var(--ez), color .12s var(--ez)",
+                  }}
+                  onMouseEnter={(e) => {
+                    const b = e.currentTarget as HTMLButtonElement;
+                    b.style.background = "var(--sf2)";
+                    b.style.color = "var(--ti)";
+                  }}
+                  onMouseLeave={(e) => {
+                    const b = e.currentTarget as HTMLButtonElement;
+                    b.style.background = "transparent";
+                    b.style.color = "var(--tm2)";
                   }}
                 >
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                    <rect x="3" y="1" width="10" height="14" rx="2" />
-                    <path d="M6 5h4M6 8h4M6 11h2" />
-                  </svg>
+                  <span style={{ fontSize: "var(--tx)", fontWeight: 500 }}>{typeLabel}</span>
+                  <ChevronDown size={12} strokeWidth={1.5} aria-hidden="true" />
                 </button>
-                {/* Tone ichip */}
+                {/* Tone dropdown */}
                 <button
                   ref={toneChipRef}
                   type="button"
                   title="Tone"
                   onClick={(e) => { e.stopPropagation(); toggleMenu("tone"); }}
                   style={{
-                    width: 26, height: 26,
-                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                    height: 26,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "6px",
+                    padding: "0 var(--s2)",
                     borderRadius: "var(--rs)",
-                    border: "1px solid var(--ac)",
-                    background: "var(--as)",
-                    color: "var(--am)",
+                    border: "1px solid transparent",
+                    background: "transparent",
+                    color: "var(--tm2)",
                     cursor: "pointer",
                     flexShrink: 0,
-                    transition: "all .12s var(--ez)",
+                    transition: "background .12s var(--ez), color .12s var(--ez)",
+                  }}
+                  onMouseEnter={(e) => {
+                    const b = e.currentTarget as HTMLButtonElement;
+                    b.style.background = "var(--sf2)";
+                    b.style.color = "var(--ti)";
+                  }}
+                  onMouseLeave={(e) => {
+                    const b = e.currentTarget as HTMLButtonElement;
+                    b.style.background = "transparent";
+                    b.style.color = "var(--tm2)";
                   }}
                 >
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                    <path d="M2 4h8M2 8h12M2 12h5" />
-                    <circle cx="12" cy="4" r="2" fill="currentColor" stroke="none" />
-                  </svg>
+                  <span style={{ fontSize: "var(--tx)", fontWeight: 500 }}>{toneUiLabel}</span>
+                  <ChevronDown size={12} strokeWidth={1.5} aria-hidden="true" />
                 </button>
-                {/* .cbar-status */}
-                <span
-                  style={{
-                    flex: 1,
-                    fontSize: "var(--tx)",
-                    color: "var(--tm2)",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    padding: "0 var(--s2)",
-                    minWidth: 0,
-                  }}
-                >
-                  <strong style={{ color: "var(--ti)", fontWeight: 600 }}>{typeLabel}</strong>
-                  {" · "}
-                  {toneUiLabel}
-                </span>
+                <div style={{ flex: 1 }} />
                 {/* .gbtn — generate / stop */}
                 <button
                   type="submit"
@@ -788,10 +813,10 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                   style={{
                     width: "var(--hs)",
                     height: "var(--hs)",
-                    borderRadius: "var(--rp)",
+                    borderRadius: "var(--rs)",
                     background: isGenerating ? "var(--sf2)" : "var(--ac)",
                     color: isGenerating ? "var(--ti)" : "var(--op)",
-                    border: "none",
+                    border: "1px solid transparent",
                     cursor: (!isGenerating && watchedJobDescription.length < 10) ? "not-allowed" : "pointer",
                     display: "inline-flex",
                     alignItems: "center",
@@ -802,13 +827,9 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                   }}
                 >
                   {isGenerating ? (
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                      <rect x="4" y="4" width="8" height="8" rx="1.5" />
-                    </svg>
+                    <Square size={16} fill="currentColor" strokeWidth={0} />
                   ) : (
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                      <path d="M8 14V2M4 6l4-4 4 4" />
-                    </svg>
+                    <ArrowUp size={16} strokeWidth={1.5} />
                   )}
                 </button>
               </div>
