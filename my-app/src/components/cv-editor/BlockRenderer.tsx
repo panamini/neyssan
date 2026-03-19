@@ -507,7 +507,7 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
                 /* noop */
               }
             }}
-            className="px-2 py-1 text-sm text-[var(--foreground)] bg-[var(--danger)] rounded [box-shadow:var(--sha)] hover:bg-[var(--danger)]/90 focus:outline-none focus:ring-2 focus:ring-[var(--danger)]"
+            className="px-2 py-1 text-sm [color:var(--ert)] [background:var(--erb)] border border-[color:var(--er)] rounded [box-shadow:var(--sha)] hover:[background:var(--er)] hover:[color:var(--op)] focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
           >
             Delete Block
           </button>

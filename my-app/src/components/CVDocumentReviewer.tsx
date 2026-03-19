@@ -108,7 +108,7 @@ export function CVDocumentReviewer({
               <div className="flex items-center gap-2">
                 {!section.dismissed && (
                   <button
-                    className="px-2 py-1 rounded-md text-[var(--on-accent)] bg-[var(--accent)] hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                    className="px-2 py-1 rounded-md [color:var(--op)] [background:var(--ac)] hover:brightness-110 focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
                     aria-label={`Dismiss section ${section.title}`}
                     onClick={() => handleDismiss(section.id)}
                   >
