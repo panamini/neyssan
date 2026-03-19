@@ -176,6 +176,18 @@
 }
 
 /* ============================================================
+   TAILWIND RING RESET
+   Neutralise --tw-ring-offset-color:#fff et --tw-ring-color:rgb(59 130 246/.5)
+   que Tailwind injecte globalement. Notre focus ring dasti via box-shadow reste intact.
+   ============================================================ */
+*, *::before, *::after {
+  --tw-ring-offset-color: transparent;
+  --tw-ring-color: transparent;
+  --tw-ring-offset-shadow: 0 0 #0000;
+  --tw-ring-shadow: 0 0 #0000;
+}
+
+/* ============================================================
    BASE ELEMENT STYLING
    ============================================================ */
 html, body, #root {
