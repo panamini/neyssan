@@ -948,6 +948,122 @@ textarea.dasti-field {
   opacity: 1;
 }
 
+/* ProposalInputForm — all styling in dasti tokens, no CSS modules or Tailwind */
+.pf-container {
+  padding: var(--s5);
+  border: none;
+  border-radius: var(--rm);
+  background: transparent;
+}
+.pf-input {
+  width: 100%;
+  padding: var(--s2) var(--s3);
+  border-radius: var(--rs);
+  font-size: var(--ts);
+  color: var(--ti);
+  background: var(--sfr);
+  border: 1px solid var(--bo);
+  outline: none;
+  font-family: inherit;
+  transition: border-color .12s var(--ez), box-shadow .12s var(--ez);
+}
+.pf-input:focus {
+  border-color: var(--ac);
+  box-shadow: var(--focus-shadow-soft);
+}
+.pf-input:-webkit-autofill,
+.pf-input:-webkit-autofill:hover,
+.pf-input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px var(--sfr) inset;
+  box-shadow: 0 0 0 1000px var(--sfr) inset;
+  -webkit-text-fill-color: var(--ti);
+  caret-color: var(--ti);
+  transition: background-color 9999s ease-out 0s;
+}
+.pf-compose-well {
+  border: 1px solid var(--bm);
+  border-radius: var(--rm);
+  background: var(--sf1);
+  margin-top: var(--s2);
+  transition: border-color .12s var(--ez), box-shadow .12s var(--ez);
+}
+.pf-compose-well:focus-within {
+  border-color: var(--ac);
+  box-shadow: var(--focus-shadow-soft);
+}
+.pf-error {
+  margin-top: var(--s1);
+  font-size: var(--ts);
+  color: var(--ert);
+}
+.pf-cv-pill {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  overflow: hidden;
+  border-radius: var(--rs);
+  border: 1px solid transparent;
+  background: transparent;
+  transition: background .12s var(--ez);
+}
+.pf-cv-pill:hover { background: var(--sf2); }
+.pf-cv-pick-btn {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--s1);
+  padding: var(--s1) var(--s2);
+  text-align: left;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--ts);
+  color: var(--tm2);
+  transition: color .12s var(--ez);
+}
+.pf-cv-pick-btn:hover { color: var(--ti); }
+.pf-cv-pick-btn:focus { outline: none; }
+.pf-cv-pick-btn:focus-visible { box-shadow: inset 0 0 0 1px var(--bm); }
+.pf-cv-option {
+  width: 100%;
+  border-radius: var(--rm);
+  border: 1px solid var(--bo);
+  padding: var(--s4);
+  background: var(--sf2);
+  transition: border-color .12s var(--ez), background .12s var(--ez);
+  cursor: pointer;
+}
+.pf-cv-option:hover {
+  border-color: var(--bm);
+  background: var(--sfr);
+}
+.pf-cv-option--active {
+  border-color: var(--ac);
+  background: var(--as);
+  box-shadow: var(--sha);
+  cursor: default;
+}
+.pf-cv-option--active:hover {
+  border-color: var(--ac);
+  background: var(--as);
+}
+.pf-cv-badge {
+  border-radius: var(--rp);
+  border: 1px solid var(--ac);
+  background: var(--ap);
+  padding: 2px var(--s2);
+  font-size: var(--tx);
+  color: var(--am);
+}
+.pf-source-link {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  color: inherit;
+  transition: color .12s var(--ez);
+}
+.pf-source-link:hover { color: var(--ti); }
+
 /* ProposalInputForm — chip & menu-option hover (replaces onMouseEnter/Leave mutations) */
 .pf-chip {
   height: var(--hs); /* 32px — on 8px grid */
