@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { ILanguageItem, Level } from "../../types/cvDocument";
 import { X, Plus, Trash2 } from "lucide-react";
-import { SegmentedRadio } from "../ui/SegmentedRadio";
 
 interface LanguagesModalProps {
   open: boolean;
@@ -120,17 +119,30 @@ export function LanguagesModal({ open, items, onClose, onSave }: LanguagesModalP
                       onChange={(e) => updateRow(idx, { name: e.target.value })}
                     />
                   </div>
-                  <div className="col-span-4">
-                    <span id={`language-level-label-${idx}`} className="text-xs sr-only [color:var(--tg2)]">Language level</span>
-                    <SegmentedRadio<Level>
-                      id={`language-level-${idx}`}
-                      name={`language-level-${idx}`}
-                      value={row.level}
-                      options={LEVELS.map((lvl) => ({ value: lvl, label: lvl }))}
-                      onChange={(lvl) => updateRow(idx, { level: lvl })}
-                      className="w-full"
-                      aria-labelledby={`language-level-label-${idx}`}
-                    />
+                  <div className="col-span-4 flex items-center gap-1.5" role="group" aria-label="Language level">
+                    {(["Beginner", "Intermediate", "Fluent"] as Level[]).map((lvl, di) => {
+                      const activeIdx = ["Beginner", "Intermediate", "Fluent"].indexOf(row.level as string);
+                      const filled = di <= activeIdx;
+                      return (
+                        <button
+                          key={lvl}
+                          type="button"
+                          title={lvl}
+                          aria-label={lvl}
+                          onClick={() => updateRow(idx, { level: lvl })}
+                          style={{
+                            width: 10, height: 10, borderRadius: "50%", padding: 0,
+                            cursor: "pointer", flexShrink: 0, border: "1.5px solid",
+                            borderColor: filled ? "var(--ac)" : "var(--bo)",
+                            background: filled ? "var(--ac)" : "transparent",
+                            transition: "all .12s var(--ez)",
+                          }}
+                        />
+                      );
+                    })}
+                    <span style={{ fontSize: 10, color: "var(--tg2)", marginLeft: 2 }}>
+                      {String(row.level ?? "")}
+                    </span>
                   </div>
                   <div className="flex items-center justify-end col-span-1">
                     <button
