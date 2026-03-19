@@ -130,6 +130,7 @@ export default function ProposalsList() {
   const [editContent, setEditContent] = React.useState<string>("");
   const [isRegenerating, setIsRegenerating] = React.useState<string | null>(null);
   const [isUpdating, setIsUpdating] = React.useState<string | null>(null);
+  const [copied, setCopied] = React.useState(false);
   const { showToast } = useToast();
 
   const applyLocalUpdate = (id: string, patch: Partial<SavedProposalRecord>) => {
@@ -422,19 +423,40 @@ export default function ProposalsList() {
           </div>
           {selected && (
             <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-              {/* Copy */}
+              {/* Copy — feedback "Copied" 1.5s (.cbtn/.cbtn-ok pattern) */}
               <button
                 type="button"
-                title="Copy"
-                style={ibStyle}
-                onClick={() => void navigator.clipboard.writeText(selected.content ?? "")}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--sf2)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--ti)"; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "var(--tm2)"; }}
+                title={copied ? "Copied!" : "Copy"}
+                style={{
+                  ...ibStyle,
+                  color: copied ? "var(--ok)" : (ibStyle as React.CSSProperties).color,
+                  gap: copied ? "var(--s1)" : 0,
+                  paddingLeft: copied ? "var(--s2)" : undefined,
+                  paddingRight: copied ? "var(--s2)" : undefined,
+                  transition: "color .12s var(--ez), background .12s var(--ez)",
+                }}
+                onClick={() => {
+                  void navigator.clipboard.writeText(selected.content ?? "").then(() => {
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 1500);
+                  });
+                }}
+                onMouseEnter={(e) => { if (!copied) { (e.currentTarget as HTMLButtonElement).style.background = "var(--sf2)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--ti)"; } }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = copied ? "var(--ok)" : "var(--tm2)"; }}
               >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                  <rect x="5" y="5" width="9" height="9" rx="2" />
-                  <path d="M11 5V3a2 2 0 0 0-2-2H3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" />
-                </svg>
+                {copied ? (
+                  <>
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M2 7l3.5 3.5L12 3" />
+                    </svg>
+                    <span style={{ fontSize: "var(--tx)", fontWeight: 500 }}>Copied</span>
+                  </>
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                    <rect x="5" y="5" width="9" height="9" rx="2" />
+                    <path d="M11 5V3a2 2 0 0 0-2-2H3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" />
+                  </svg>
+                )}
               </button>
               {/* Regenerate */}
               <button
