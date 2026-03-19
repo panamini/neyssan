@@ -11,6 +11,8 @@ interface ProposalDisplayProps {
   proposalContent: string | null;
   loading: boolean;
   error: string | null;
+  /** Raw backend error message — shown as dev-only diagnostic block */
+  errorDetail?: string | null;
   proposalType?: FormValues["proposalType"] | null;
   fallbackInfo?: ProposalGenerationFallbackInfo | null;
 }
@@ -137,10 +139,13 @@ function fallbackCopyText(text: string): boolean {
   }
 }
 
+const isDev = import.meta.env.DEV;
+
 const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   proposalContent,
   loading,
   error,
+  errorDetail = null,
   proposalType,
   fallbackInfo = null,
 }) => {
@@ -212,12 +217,22 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       <div
         role="alert"
         aria-live="assertive"
-        className="rounded-lg border border-danger/30 bg-danger/5 p-6"
+        className="rounded-lg border border-[color:var(--er)] [background:var(--erb)] p-6"
       >
-        <div className="text-sm font-medium text-danger">
+        <div className="text-sm font-medium [color:var(--ert)]">
           Proposal generation failed
         </div>
-        <p className="mt-2 text-sm leading-6 text-foreground">{error}</p>
+        <p className="mt-2 text-sm leading-6 [color:var(--ti)]">{error}</p>
+        {isDev && errorDetail && (
+          <details className="mt-4">
+            <summary className="cursor-pointer text-xs [color:var(--tg2)] select-none">
+              Dev — raw backend reason
+            </summary>
+            <pre className="mt-2 whitespace-pre-wrap break-all rounded [background:var(--sf2)] p-3 text-xs [color:var(--tg2)] leading-5">
+              {errorDetail}
+            </pre>
+          </details>
+        )}
       </div>
     );
   }
@@ -251,6 +266,23 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           {copyFeedback === "copied" ? "Copied" : "Copy"}
         </Button>
       </div>
+      {/* Model diagnostics strip — shown in dev or when there was a fallback */}
+      {(fallbackInfo?.requestedModelType || fallbackInfo?.actualModelType) && (
+        <div
+          className="mb-3 flex flex-wrap gap-x-3 gap-y-1 text-xs [color:var(--tg2)]"
+          aria-label="Generation diagnostics"
+        >
+          {fallbackInfo.requestedModelType && (
+            <span>requested: <span className="[color:var(--tm2)]">{fallbackInfo.requestedModelType}</span></span>
+          )}
+          {fallbackInfo.actualModelType && fallbackInfo.actualModelType !== fallbackInfo.requestedModelType && (
+            <span>actual: <span className="[color:var(--tm2)]">{fallbackInfo.actualModelType}</span></span>
+          )}
+          {fallbackInfo.fallbackTriggerCode && (
+            <span>trigger: <span className="[color:var(--tm2)]">{fallbackInfo.fallbackTriggerCode}</span></span>
+          )}
+        </div>
+      )}
       {fallbackDisclosure ? (
         <div
           role="status"
