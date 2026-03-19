@@ -86,6 +86,8 @@ export function ProposalForge(): JSX.Element {
     [],
   );
 
+  const [hoveredTab, setHoveredTab] = React.useState<ProposalForgeView | null>(null);
+
   const isComposeView = activeView === "compose";
   const isSavedView = activeView === "saved";
   const isLoadingHandoff =
@@ -93,33 +95,27 @@ export function ProposalForge(): JSX.Element {
     (isConvexAuthLoading || (isConvexAuthenticated && handoffRecord === undefined));
 
   /* ── Tab underline style — §13 dasti-spec-v1 ─────────────── */
-  const tabBase: React.CSSProperties = {
-    display: "inline-flex",
-    alignItems: "center",
-    height: "var(--hs)",
-    padding: "0 var(--s3)",
-    borderRadius: "var(--rs) var(--rs) 0 0",
-    border: "none",
-    borderBottom: "2px solid transparent",
-    marginBottom: -1,
-    background: "transparent",
-    fontSize: "var(--ts)",
-    fontWeight: 500,
-    cursor: "pointer",
-    transition: "all .12s var(--ez)",
-    fontFamily: "inherit",
-  };
-
-  const tabActive: React.CSSProperties = {
-    ...tabBase,
-    color: "var(--ti)",
-    fontWeight: 600,
-    borderBottomColor: "var(--ac)",
-  };
-
-  const tabInactive: React.CSSProperties = {
-    ...tabBase,
-    color: "var(--tm2)",
+  const tabStyle = (view: ProposalForgeView): React.CSSProperties => {
+    const isActive = activeView === view;
+    const isHovered = !isActive && hoveredTab === view;
+    return {
+      display: "inline-flex",
+      alignItems: "center",
+      height: "var(--hs)",
+      padding: "0 var(--s3)",
+      borderRadius: "var(--rs) var(--rs) 0 0",
+      border: "none",
+      borderBottom: `2px solid ${isActive ? "var(--ac)" : "transparent"}`,
+      marginBottom: -1,
+      background: isHovered ? "var(--sf2)" : "transparent",
+      fontSize: "var(--ts)",
+      fontWeight: isActive ? 600 : 500,
+      color: isActive ? "var(--ti)" : "var(--tm2)",
+      cursor: "pointer",
+      transition: "all .12s var(--ez)",
+      fontFamily: "inherit",
+      outline: "none",
+    };
   };
 
   /* ── Shared styles ───────────────────────────────────────── */
@@ -168,19 +164,19 @@ export function ProposalForge(): JSX.Element {
         <div style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--bo)" }}>
           <button
             type="button"
-            style={isComposeView ? tabActive : tabInactive}
+            style={tabStyle("compose")}
             onClick={() => setActiveView("compose")}
-            onMouseEnter={(e) => { if (!isComposeView) (e.currentTarget as HTMLButtonElement).style.background = "var(--sf2)"; }}
-            onMouseLeave={(e) => { if (!isComposeView) (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
+            onMouseEnter={() => setHoveredTab("compose")}
+            onMouseLeave={() => setHoveredTab(null)}
           >
             Compose
           </button>
           <button
             type="button"
-            style={isSavedView ? tabActive : tabInactive}
+            style={tabStyle("saved")}
             onClick={() => setActiveView("saved")}
-            onMouseEnter={(e) => { if (!isSavedView) (e.currentTarget as HTMLButtonElement).style.background = "var(--sf2)"; }}
-            onMouseLeave={(e) => { if (!isSavedView) (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
+            onMouseEnter={() => setHoveredTab("saved")}
+            onMouseLeave={() => setHoveredTab(null)}
           >
             Open
           </button>
