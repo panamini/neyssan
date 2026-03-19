@@ -5,8 +5,7 @@ import { useForm } from "react-hook-form";
 import styles from "./ProposalInputForm.module.css";
 import { zodResolver } from "@hookform/resolvers/zod";
 import clsx from "clsx";
-import { ArrowUp, Loader2 } from "lucide-react";
-import CustomToggle from "./CustomToggle";
+import { createPortal } from "react-dom";
 import { Button } from "./ui/button";
 import { Dialog, DialogActions, DialogContent } from "./ui/dialog";
 
@@ -67,6 +66,12 @@ const VISIBLE_PROPOSAL_TYPE_OPTIONS = [
   { value: "cover_letter", label: "Cover Letter" },
   { value: "freelance_proposal", label: "Freelance Proposal" },
 ] as const;
+
+const TONE_OPTIONS: Array<{ id: ProposalVoicePreset; uiLabel: string; description: string }> = [
+  { id: "signature", uiLabel: "Neutre", description: "Balanced, natural, and credible." },
+  { id: "expert", uiLabel: "Formel", description: "More precise, structured, and authoritative." },
+  { id: "engaging", uiLabel: "Chaleureux", description: "Warmer, more lively, and still professional." },
+];
 
 const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   onSubmit,
@@ -462,6 +467,32 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
     window.dispatchEvent(new PopStateEvent("popstate"));
   }
 
+  /* ── Cbar state (Type + Tone dropdowns) ─────────────────── */
+  const [openMenu, setOpenMenu] = React.useState<"type" | "tone" | null>(null);
+  const [menuPos, setMenuPos] = React.useState<{ left: number; bottom: number }>({ left: 0, bottom: 0 });
+  const typeChipRef = React.useRef<HTMLButtonElement>(null);
+  const toneChipRef = React.useRef<HTMLButtonElement>(null);
+
+  const toggleMenu = React.useCallback((which: "type" | "tone") => {
+    const ref = which === "type" ? typeChipRef : toneChipRef;
+    if (openMenu === which) { setOpenMenu(null); return; }
+    if (ref.current) {
+      const r = ref.current.getBoundingClientRect();
+      setMenuPos({ left: r.left, bottom: window.innerHeight - r.top + 4 });
+    }
+    setOpenMenu(which);
+  }, [openMenu]);
+
+  React.useEffect(() => {
+    if (!openMenu) return;
+    const close = () => setOpenMenu(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [openMenu]);
+
+  const typeLabel = selectedProposalType === "cover_letter" ? "Letter" : "Proposal";
+  const toneUiLabel = TONE_OPTIONS.find(t => t.id === displayedVoicePreset)?.uiLabel ?? selectedVoicePresetDefinition.label;
+
   return (
     <div className={styles.container}>
       <div className="flex flex-wrap items-center gap-2 mb-3 text-sm text-muted-foreground">
@@ -642,41 +673,150 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                 </p>
               )}
             </div>
-            <div className="relative mt-2">
+            {/* .siw — chatbox well */}
+            <div
+              style={{
+                border: "1px solid var(--bm)",
+                borderRadius: "var(--rm)",
+                background: "var(--sf1)",
+                marginTop: "var(--s2)",
+                transition: "box-shadow .12s var(--ez), border-color .12s var(--ez)",
+              }}
+            >
               <textarea
                 id="jobDescription"
-                rows={2}
                 {...form.register("jobDescription")}
-                className={clsx(styles.inputElement, styles.jobField)}
-                placeholder="Paste Job Description"
+                style={{
+                  width: "100%",
+                  minHeight: 200,
+                  maxHeight: 360,
+                  padding: "var(--s3) var(--s4)",
+                  border: "none",
+                  background: "transparent",
+                  color: "var(--ti)",
+                  fontSize: "var(--ts)",
+                  lineHeight: "var(--lb)",
+                  resize: "vertical",
+                  outline: "none",
+                  display: "block",
+                  fontFamily: "inherit",
+                }}
+                placeholder="Paste the job description here…"
               />
-              <Button
-                type="submit"
-                aria-busy={isGenerating}
-                disabled={isGenerating || watchedJobDescription.length < 10}
-                title={
-                  isGenerating
-                    ? "Generation in progress"
-                    : watchedJobDescription.length < 10
-                    ? "Minimum 10 characters required"
-                    : ""
-                }
-                className="absolute -translate-y-1/2 right-4 top-1/2"
-                variant="primary"
-                size="sm"
+              {/* .cbar */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "var(--s2)",
+                  padding: "var(--s2) var(--s3)",
+                  borderTop: "1px solid var(--bo)",
+                  background: "var(--sf1)",
+                  borderRadius: "0 0 calc(var(--rm) - 1px) calc(var(--rm) - 1px)",
+                }}
               >
-                {isGenerating ? (
-                  <Loader2 className="text-background animate-spin" />
-                ) : (
-                  <ArrowUp />
-                )}
-              </Button>
-              {form.formState.errors.jobDescription && (
-                <p className={styles.errorMessage}>
-                  {form.formState.errors.jobDescription.message}
-                </p>
-              )}
+                {/* Type ichip */}
+                <button
+                  ref={typeChipRef}
+                  type="button"
+                  title="Document type"
+                  onClick={(e) => { e.stopPropagation(); toggleMenu("type"); }}
+                  style={{
+                    width: 26, height: 26,
+                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                    borderRadius: "var(--rs)",
+                    border: "1px solid var(--ac)",
+                    background: "var(--as)",
+                    color: "var(--am)",
+                    cursor: "pointer",
+                    flexShrink: 0,
+                    transition: "all .12s var(--ez)",
+                  }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                    <rect x="3" y="1" width="10" height="14" rx="2" />
+                    <path d="M6 5h4M6 8h4M6 11h2" />
+                  </svg>
+                </button>
+                {/* Tone ichip */}
+                <button
+                  ref={toneChipRef}
+                  type="button"
+                  title="Tone"
+                  onClick={(e) => { e.stopPropagation(); toggleMenu("tone"); }}
+                  style={{
+                    width: 26, height: 26,
+                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                    borderRadius: "var(--rs)",
+                    border: "1px solid var(--ac)",
+                    background: "var(--as)",
+                    color: "var(--am)",
+                    cursor: "pointer",
+                    flexShrink: 0,
+                    transition: "all .12s var(--ez)",
+                  }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                    <path d="M2 4h8M2 8h12M2 12h5" />
+                    <circle cx="12" cy="4" r="2" fill="currentColor" stroke="none" />
+                  </svg>
+                </button>
+                {/* .cbar-status */}
+                <span
+                  style={{
+                    flex: 1,
+                    fontSize: "var(--tx)",
+                    color: "var(--tm2)",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    padding: "0 var(--s2)",
+                    minWidth: 0,
+                  }}
+                >
+                  <strong style={{ color: "var(--ti)", fontWeight: 600 }}>{typeLabel}</strong>
+                  {" · "}
+                  {toneUiLabel}
+                </span>
+                {/* .gbtn — generate / stop */}
+                <button
+                  type="submit"
+                  aria-busy={isGenerating}
+                  disabled={!isGenerating && watchedJobDescription.length < 10}
+                  title={isGenerating ? "Generating…" : watchedJobDescription.length < 10 ? "Minimum 10 characters required" : "Generate"}
+                  style={{
+                    width: "var(--hs)",
+                    height: "var(--hs)",
+                    borderRadius: "var(--rp)",
+                    background: isGenerating ? "var(--sf2)" : "var(--ac)",
+                    color: isGenerating ? "var(--ti)" : "var(--op)",
+                    border: "none",
+                    cursor: (!isGenerating && watchedJobDescription.length < 10) ? "not-allowed" : "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                    transition: "background .15s var(--ez), opacity .15s var(--ez)",
+                    opacity: (!isGenerating && watchedJobDescription.length < 10) ? 0.4 : 1,
+                  }}
+                >
+                  {isGenerating ? (
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                      <rect x="4" y="4" width="8" height="8" rx="1.5" />
+                    </svg>
+                  ) : (
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                      <path d="M8 14V2M4 6l4-4 4 4" />
+                    </svg>
+                  )}
+                </button>
+              </div>
             </div>
+            {form.formState.errors.jobDescription && (
+              <p className={styles.errorMessage}>
+                {form.formState.errors.jobDescription.message}
+              </p>
+            )}
             {errorMessage && (
               <p
                 role="alert"
@@ -686,82 +826,72 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
               </p>
             )}
           </div>
-          {/* Controls row */}
-          <div className="flex flex-wrap items-center gap-4 md:col-span-2">
-            {/* Proposal Type */}
-            <div className="flex-1 min-w-[150px] flex items-center gap-2">
-              <CustomToggle
-                options={VISIBLE_PROPOSAL_TYPE_OPTIONS}
-                value={selectedProposalType}
-                onChange={(value: string) =>
-                  form.setValue(
-                    "proposalType",
-                    value as "cover_letter" | "freelance_proposal",
-                  )
-                }
-              />
-            </div>
-          </div>
-
-          <div className="md:col-span-2 rounded-lg border border-[color:var(--bo)] [background:var(--sfr)] p-4">
-            <div className="flex flex-col gap-3">
-              <div>
-                <div className="text-sm font-medium text-foreground">
-                  Voice preset
-                </div>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Presets are the main tone control. Advanced controls can still
-                  override the baseline without removing the preset&apos;s
-                  lightweight style guidance.
-                </p>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                {availableVoicePresets.map((preset) => (
-                  <Button
-                    key={preset.id}
-                    type="button"
-                    size="sm"
-                    variant={
-                      preset.id === displayedVoicePreset
-                        ? "primary"
-                        : "secondary"
-                    }
-                    className="min-w-[120px]"
-                    onClick={() => handleVoicePresetChange(preset.id)}
-                  >
-                    {preset.label}
-                  </Button>
-                ))}
-              </div>
-
-              <div className="rounded-md border border-[color:var(--bo)] [background:var(--as)] px-3 py-2 text-sm">
-                <div className="font-medium text-foreground">
-                  {selectedVoicePresetDefinition.label}
-                </div>
-                <p className="mt-1 text-muted-foreground">
-                  {selectedVoicePresetDefinition.description}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Baseline:{" "}
-                  {capitalizeLabel(
-                    selectedVoicePresetDefinition.formalityLevel,
-                  )}{" "}
-                  formality,{" "}
-                  {capitalizeLabel(selectedVoicePresetDefinition.creativity)}{" "}
-                  creativity
-                </p>
-              </div>
-
-              {voicePresetSaveError && (
-                <p className="text-sm text-muted-foreground">
-                  {voicePresetSaveError}
-                </p>
-              )}
-            </div>
-          </div>
         </div>
       </form>
+      {/* Portal dropdowns for cbar */}
+      {openMenu !== null && createPortal(
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: "fixed",
+            zIndex: 900,
+            minWidth: 220,
+            background: "var(--sfr)",
+            border: "1px solid var(--bm)",
+            borderRadius: "var(--rm)",
+            boxShadow: "var(--shc)",
+            padding: "var(--s1)",
+            left: menuPos.left,
+            bottom: menuPos.bottom,
+            top: "auto",
+          }}
+        >
+          {openMenu === "type" && (
+            <>
+              {([
+                { value: "cover_letter", label: "Letter", desc: "Cover letter for a job application" },
+                { value: "freelance_proposal", label: "Proposal", desc: "Freelance proposal for a project" },
+              ] as const).map((opt) => (
+                <div
+                  key={opt.value}
+                  onClick={() => { form.setValue("proposalType", opt.value, { shouldDirty: true, shouldValidate: true }); setOpenMenu(null); }}
+                  style={{
+                    padding: "var(--s3) var(--s4)",
+                    borderRadius: "var(--rs)",
+                    cursor: "pointer",
+                    background: selectedProposalType === opt.value ? "var(--as)" : "transparent",
+                    transition: "background .1s var(--ez)",
+                  }}
+                  onMouseEnter={(e) => { if (selectedProposalType !== opt.value) (e.currentTarget as HTMLDivElement).style.background = "var(--sf2)"; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = selectedProposalType === opt.value ? "var(--as)" : "transparent"; }}
+                >
+                  <div style={{ fontSize: "var(--ts)", fontWeight: 600, color: "var(--ti)" }}>{opt.label}</div>
+                  <div style={{ fontSize: "var(--tx)", color: "var(--tg2)", marginTop: 3, lineHeight: 1.5 }}>{opt.desc}</div>
+                </div>
+              ))}
+            </>
+          )}
+          {openMenu === "tone" && TONE_OPTIONS.map((opt) => (
+            <div
+              key={opt.id}
+              onClick={() => { handleVoicePresetChange(opt.id); setOpenMenu(null); }}
+              style={{
+                padding: "var(--s3) var(--s4)",
+                borderRadius: "var(--rs)",
+                cursor: "pointer",
+                background: displayedVoicePreset === opt.id ? "var(--as)" : "transparent",
+                transition: "background .1s var(--ez)",
+              }}
+              onMouseEnter={(e) => { if (displayedVoicePreset !== opt.id) (e.currentTarget as HTMLDivElement).style.background = "var(--sf2)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = displayedVoicePreset === opt.id ? "var(--as)" : "transparent"; }}
+            >
+              <div style={{ fontSize: "var(--ts)", fontWeight: 600, color: "var(--ti)" }}>{opt.uiLabel}</div>
+              <div style={{ fontSize: "var(--tx)", color: "var(--tg2)", marginTop: 3, lineHeight: 1.5 }}>{opt.description}</div>
+            </div>
+          ))}
+        </div>,
+        document.body
+      )}
     </div>
   );
 };
