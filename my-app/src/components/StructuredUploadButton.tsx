@@ -349,7 +349,7 @@ export function StructuredUploadButton({
           <Button
             type="button"
             aria-label={primaryLabel}
-            title={primaryLabel}
+            title={primaryHelperText}
             onClick={() => trigger("default")}
             disabled={disabled || isBusy}
             className="inline-flex items-center"
@@ -362,7 +362,7 @@ export function StructuredUploadButton({
           <Button
             type="button"
             aria-label={secondaryLabel}
-            title={mistralAvailable ? secondaryLabel : "Scanned/image OCR upload is unavailable in this environment."}
+            title={mistralAvailable ? secondaryHelperText : "Scanned/image OCR upload is unavailable in this environment."}
             onClick={() => trigger("mistral")}
             disabled={disabled || isBusy || !mistralAvailable}
             className="inline-flex items-center"
@@ -372,11 +372,6 @@ export function StructuredUploadButton({
             {isBusy && activeMode === "mistral" ? <Loader2 className="animate-spin" size={16} /> : <Upload size={16} />}
             <span className="ml-2 text-xs sm:text-sm">{secondaryLabel}</span>
           </Button>
-        </div>
-
-        <div className="mt-2 flex flex-col gap-1 text-xs text-muted-foreground">
-          <div>{primaryHelperText}</div>
-          <div>{secondaryHelperText}</div>
         </div>
         {errorMsg ? (
           <span role="status" aria-live="polite" className="sr-only">

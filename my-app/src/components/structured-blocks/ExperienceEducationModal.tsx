@@ -18,6 +18,7 @@ import {
 import type { RemirrorJSON } from "remirror";
 import { ensureRemirrorDoc } from "../remirror-editor/utils/conversion";
 import { EditorToolbar } from "../remirror-editor/components/EditorToolbar";
+import { X } from "lucide-react";
 
 type UiPatch = Partial<{
   startYear: string;
@@ -186,9 +187,9 @@ function ModalShell({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="px-2 py-1 rounded [background:transparent] [color:var(--tm2)] hover:[background:var(--sf2)] hover:[color:var(--ti)] focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
+            className="p-1 rounded [background:transparent] [color:var(--tm2)] hover:[background:var(--sf2)] hover:[color:var(--ti)] focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
           >
-            Close
+            <X className="w-5 h-5" />
           </button>
         </div>
 
