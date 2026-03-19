@@ -564,7 +564,13 @@ export function getActiveLocalPersonalizationSource(): {
     return { title: null, personalizationContext: null };
   }
 
-  const activeDoc = getStoredDocumentById(activeCvId);
+  // Mirror the same two-step resolution used in getLocalActiveCvSnapshotById()
+  // and listLocalCvPickerOptions(): check prefixed keys first, then fall back
+  // to the library array. Without this, CVs stored only in cvDocuments/cvLibrary
+  // appear selected in the picker but arrive as null personalization at generation.
+  const libraryDoc =
+    getLibraryDocuments().find((doc) => String(doc.id) === activeCvId) ?? null;
+  const activeDoc = getStoredDocumentById(activeCvId) ?? libraryDoc;
   if (!activeDoc) {
     return { title: null, personalizationContext: null };
   }
