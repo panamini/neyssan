@@ -22,13 +22,9 @@ const CONVEX_DEPLOYMENT: string | undefined = (import.meta as any)?.env?.CONVEX_
  * 2) Fallback to CONVEX_DEPLOYMENT=env:slug form to derive https://slug.convex.site
  */
 function computeConvexSiteUrl(): string | undefined {
-  // eslint-disable-next-line no-console
-  console.log("[StrictUploadButton] computeConvexSiteUrl: VITE_CONVEX_URL", CONVEX_URL);
   if (typeof CONVEX_URL === "string" && CONVEX_URL.trim()) {
     return CONVEX_URL.replace(".cloud", ".site");
   }
-  // eslint-disable-next-line no-console
-  console.log("[StrictUploadButton] computeConvexSiteUrl: CONVEX_DEPLOYMENT", CONVEX_DEPLOYMENT);
   if (typeof CONVEX_DEPLOYMENT === "string" && CONVEX_DEPLOYMENT.includes(":")) {
     const parts = CONVEX_DEPLOYMENT.split(":");
     const slug = parts[1]?.trim();
@@ -133,14 +129,10 @@ export function StrictUploadButton(props: StrictUploadButtonProps) {
     (api as any)["actions/extractProfileStrict"]?.extractProfileStrict ??
     null;
 
-  // eslint-disable-next-line no-console
-  console.log("[StrictUploadButton] useAction: withSpansRef", withSpansRef);
   const withSpans = (convexReact as any).useAction && withSpansRef
     ? (convexReact as any).useAction(withSpansRef)
     : undefined;
 
-  // eslint-disable-next-line no-console
-  console.log("[StrictUploadButton] useAction: strictOnlyRef", strictOnlyRef);
   const strictOnly = (convexReact as any).useAction && strictOnlyRef
     ? (convexReact as any).useAction(strictOnlyRef)
     : undefined;

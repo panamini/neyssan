@@ -48,9 +48,9 @@ function Topbar() {
         <span
           style={{
             fontFamily: '"Fraunces", serif',
-            fontSize: "var(--ts)",
+            fontSize: "var(--tm)",
             fontWeight: 600,
-            letterSpacing: "-.01em",
+            letterSpacing: "-.02em",
             color: "var(--ti)",
           }}
         >

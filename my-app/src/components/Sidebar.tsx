@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, FileText, Plus, Pencil, Settings, X } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useMutation, useQuery } from 'convex/react';
-import { useAuth } from '@clerk/clerk-react';
+import { useAuth, useUser } from '@clerk/clerk-react';
 import { api } from '../../convex/_generated/api';
 import { useCvLibrary } from '../contexts/CvLibraryContext';
 import { normalizeAndValidateCvDocument } from '../lib/normalize-cv';
@@ -23,6 +23,9 @@ import { useToast } from './ui/toast';
 const SB_EXPANDED = 248;
 const SB_COLLAPSED = 52;
 
+/** IDs currently waiting for a second-click delete confirmation */
+type ConfirmingMap = Record<string, true>;
+
 export const Sidebar: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(() =>
@@ -31,6 +34,8 @@ export const Sidebar: React.FC = () => {
   const [renameTarget, setRenameTarget] = useState<{ id: string; title: string } | null>(null);
   const [proposalRenameTarget, setProposalRenameTarget] = useState<{ id: string; title: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingCv, setConfirmingCv] = useState<ConfirmingMap>({});
+  const [confirmingProposal, setConfirmingProposal] = useState<ConfirmingMap>({});
   const fileRef = useRef<HTMLInputElement | null>(null);
   const { cvs, currentCv, loadCv, createNewCv, importCv, deleteCv, renameCv } = useCvLibrary();
   const navigate = useNavigate();
@@ -57,6 +62,10 @@ export const Sidebar: React.FC = () => {
 
   /* ── Proposals query (même source que ProposalsList) ────────── */
   const { isLoaded, isSignedIn } = useAuth();
+  const { user } = useUser();
+  const userInitials = user
+    ? ((user.firstName?.[0] ?? "") + (user.lastName?.[0] ?? "")).toUpperCase() || user.emailAddresses?.[0]?.emailAddress?.[0]?.toUpperCase() || "?"
+    : "?";
   const proposals = useQuery(
     api.proposalsPublic.default as any,
     isLoaded && isSignedIn ? {} : "skip",
@@ -92,9 +101,14 @@ export const Sidebar: React.FC = () => {
     }
   };
 
-  const handleDelete = (e: React.MouseEvent, id: string, title: string) => {
+  const handleDeleteRequest = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (!window.confirm(`Delete "${title}"?`)) return;
+    setConfirmingCv((prev) => ({ ...prev, [id]: true }));
+  };
+
+  const handleDeleteConfirm = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    setConfirmingCv((prev) => { const n = { ...prev }; delete n[id]; return n; });
     try { deleteCv(id); }
     catch (err) {
       console.error("[Sidebar] deleteCv failed", err);
@@ -102,9 +116,19 @@ export const Sidebar: React.FC = () => {
     }
   };
 
-  const handleDeleteProposal = async (e: React.MouseEvent, id: string, title: string) => {
+  const handleDeleteCancel = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (!window.confirm(`Delete "${title}"?`)) return;
+    setConfirmingCv((prev) => { const n = { ...prev }; delete n[id]; return n; });
+  };
+
+  const handleDeleteProposalRequest = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    setConfirmingProposal((prev) => ({ ...prev, [id]: true }));
+  };
+
+  const handleDeleteProposalConfirm = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    setConfirmingProposal((prev) => { const n = { ...prev }; delete n[id]; return n; });
     try {
       await deleteProposal({ id });
       if (selectedProposalId === id) {
@@ -115,6 +139,11 @@ export const Sidebar: React.FC = () => {
       console.error("[Sidebar] deleteProposal failed", err);
       showToast("Failed to delete proposal", { variant: "error" });
     }
+  };
+
+  const handleDeleteProposalCancel = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    setConfirmingProposal((prev) => { const n = { ...prev }; delete n[id]; return n; });
   };
 
   const handleRenameProposal = (e: React.MouseEvent, id: string, title: string) => {
@@ -171,7 +200,7 @@ export const Sidebar: React.FC = () => {
   const sbSec: React.CSSProperties = sidebarCollapsed
     ? { opacity: 0, maxHeight: 0, overflow: "hidden", padding: 0, pointerEvents: "none" }
     : {
-        fontSize: 10,
+        fontSize: "var(--tx)",
         fontWeight: 600,
         color: "var(--tg2)",
         letterSpacing: ".12em",
@@ -187,71 +216,33 @@ export const Sidebar: React.FC = () => {
       <div style={sb}>
         {/* ── Top bar ─────────────────────────────────────── */}
         <div style={sbTop}>
-          {/* Dasti mark */}
+          {/* Wordmark — always visible, collapses to just "d" */}
           <span
             style={{
-              width: 28,
-              height: 28,
-              borderRadius: "var(--rs)",
-              border: "1px solid var(--bo)",
-              background: "var(--sf2)",
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
               fontFamily: '"Fraunces", serif',
-              fontSize: "13px",
+              fontSize: sidebarCollapsed ? "var(--tm)" : "var(--ts)",
               fontWeight: 600,
-              letterSpacing: "-.01em",
+              letterSpacing: "-.02em",
               color: "var(--ti)",
               whiteSpace: "nowrap",
-              opacity: sidebarCollapsed ? 0 : 1,
-              transform: sidebarCollapsed ? "scaleX(0)" : "scaleX(1)",
-              transformOrigin: "left",
-              transition: "opacity .18s var(--ez), transform .18s var(--ez)",
-              pointerEvents: sidebarCollapsed ? "none" : "auto",
+              overflow: "hidden",
+              transition: "font-size .18s var(--ez)",
+              userSelect: "none",
             }}
           >
-            (d)
+            {sidebarCollapsed ? "d" : "dasti"}
           </span>
 
           <div style={{ flex: 1 }} />
 
-          {/* Collapse toggle — ‹ / › — position absolute right pour x fixe */}
+          {/* Collapse toggle — ‹ / › */}
           <button
             onClick={() => {
               if (!forcedCollapsed) setCollapsed((c) => !c);
             }}
             title={forcedCollapsed ? "Sidebar auto-collapses on narrow widths" : collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            style={{
-              position: "absolute",
-              right: "var(--s3)",
-              top: "50%",
-              transform: "translateY(-50%)",
-              width: 26,
-              height: 26,
-              flexShrink: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              borderRadius: "var(--rs)",
-              border: "1px solid var(--bo)",
-              color: "var(--tg2)",
-              background: "var(--sfr)",
-              cursor: "pointer",
-              opacity: forcedCollapsed ? 0.55 : 1,
-              transition: "color .12s var(--ez), border-color .12s var(--ez), background .12s var(--ez)",
-              fontFamily: "inherit",
-            }}
-            onMouseEnter={(e) => {
-              const b = e.currentTarget as HTMLButtonElement;
-              b.style.color = "var(--ti)";
-              b.style.borderColor = "var(--bm)";
-            }}
-            onMouseLeave={(e) => {
-              const b = e.currentTarget as HTMLButtonElement;
-              b.style.color = "var(--tg2)";
-              b.style.borderColor = "var(--bo)";
-            }}
+            className="sb-toggle"
+            disabled={forcedCollapsed}
           >
             <ChevronLeft
               size={16}
@@ -276,35 +267,32 @@ export const Sidebar: React.FC = () => {
           {/* Section label RESUME */}
           <span style={sbSec as React.CSSProperties}>Resume</span>
 
-          {/* Resume nav item — route-conditional active state (C04) */}
+          {/* Resume nav item */}
           <div
+            role="button"
+            tabIndex={0}
             onClick={() => { void navigate('/cv'); }}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") void navigate('/cv'); }}
+            className={`sb-nav-item sb-tooltip-wrap${isResume ? " sb-nav-item--active" : ""}`}
             style={{
-              display: "flex",
-              alignItems: "center",
               justifyContent: sidebarCollapsed ? "center" : "flex-start",
               gap: "var(--s3)",
-              padding: sidebarCollapsed ? 0 : compactDensity ? "var(--s2)" : "var(--s2) var(--s3)",
-              borderRadius: "var(--rs)",
-              border: isResume ? "1px solid var(--bo)" : "1px solid transparent",
+              padding: sidebarCollapsed ? 0 : "var(--s2) var(--s3)",
               cursor: "pointer",
-              height: compactDensity ? 32 : 34,
+              height: 34,
               width: sidebarCollapsed ? 36 : "100%",
               alignSelf: sidebarCollapsed ? "center" : "stretch",
-              background: isResume ? "var(--sfr)" : "transparent",
-              boxShadow: isResume ? "var(--sha)" : "none",
-              transition: "all .12s var(--ez)",
-              overflow: "hidden",
             }}
           >
             <div style={{ width: 16, height: 16, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: isResume ? "var(--ac)" : "var(--tm2)" }}>
-              <FileText size={15} strokeWidth={1.5} />
+              <FileText size={16} strokeWidth={1.5} />
             </div>
             {!sidebarCollapsed && (
               <span style={{ fontSize: "var(--ts)", fontWeight: isResume ? 600 : 500, color: isResume ? "var(--ti)" : "var(--tm2)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>
                 Studio
               </span>
             )}
+            {sidebarCollapsed && <span className="sb-tooltip">Studio</span>}
           </div>
 
           {/* CV document sub-items — sb-doc style */}
@@ -312,7 +300,7 @@ export const Sidebar: React.FC = () => {
             const isActive = currentCv?.id === cv.id;
             const updatedAt = new Date(
               cv.metadata?.updatedAt ?? cv.metadata?.createdAt ?? Date.now()
-            ).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+            ).toLocaleDateString(undefined, { day: "2-digit", month: "2-digit", year: "2-digit" });
 
             return sidebarCollapsed ? null : (
               <SbDoc
@@ -321,45 +309,19 @@ export const Sidebar: React.FC = () => {
                 date={updatedAt}
                 isActive={isActive}
                 dense={compactDensity}
+                isConfirming={Boolean(confirmingCv[cv.id])}
                 onClick={() => { handleLoadCv(cv.id); void navigate('/cv'); }}
                 onRename={(e) => { e.stopPropagation(); handleRenameOpen(cv.id, cv.title); }}
-                onDelete={(e) => handleDelete(e, cv.id, cv.title)}
+                onDeleteRequest={(e) => handleDeleteRequest(e, cv.id)}
+                onDeleteConfirm={(e) => handleDeleteConfirm(e, cv.id)}
+                onDeleteCancel={(e) => handleDeleteCancel(e, cv.id)}
               />
             );
           })}
 
           {/* New CV link */}
           {!sidebarCollapsed && (
-            <button
-              onClick={handleCreate}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "var(--s3)",
-                padding: compactDensity ? "var(--s2)" : "var(--s2) var(--s2) var(--s2) var(--s3)",
-                borderRadius: "var(--rs)",
-                cursor: "pointer",
-                height: compactDensity ? 28 : 30,
-                color: "var(--tg2)",
-                fontSize: "var(--tx)",
-                transition: "all .12s var(--ez)",
-                background: "transparent",
-                border: "none",
-                width: "100%",
-                textAlign: "left",
-                fontFamily: "inherit",
-              }}
-              onMouseEnter={(e) => {
-                const b = e.currentTarget as HTMLButtonElement;
-                b.style.color = "var(--am)";
-                b.style.background = "var(--sf2)";
-              }}
-              onMouseLeave={(e) => {
-                const b = e.currentTarget as HTMLButtonElement;
-                b.style.color = "var(--tg2)";
-                b.style.background = "transparent";
-              }}
-            >
+            <button onClick={handleCreate} className="sb-new-btn">
               <Plus size={16} style={{ flexShrink: 0 }} />
               <span style={{ whiteSpace: "nowrap" }}>New resume</span>
             </button>
@@ -368,40 +330,37 @@ export const Sidebar: React.FC = () => {
           {/* Section label WRITE */}
           <span style={sbSec as React.CSSProperties}>Write</span>
 
-          {/* Compose nav item — .sb-item.on anatomy (C04) */}
+          {/* Compose nav item */}
           <div
+            role="button"
+            tabIndex={0}
             onClick={() => { void navigate('/proposal'); }}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") void navigate('/proposal'); }}
+            className={`sb-nav-item sb-tooltip-wrap${isProposal ? " sb-nav-item--active" : ""}`}
             style={{
-              display: "flex",
-              alignItems: "center",
               justifyContent: sidebarCollapsed ? "center" : "flex-start",
               gap: "var(--s3)",
-              padding: sidebarCollapsed ? 0 : compactDensity ? "var(--s2)" : "var(--s2) var(--s3)",
-              borderRadius: "var(--rs)",
-              border: isProposal ? "1px solid var(--bo)" : "1px solid transparent",
+              padding: sidebarCollapsed ? 0 : "var(--s2) var(--s3)",
               cursor: "pointer",
-              height: compactDensity ? 32 : 34,
+              height: 34,
               width: sidebarCollapsed ? 36 : "100%",
               alignSelf: sidebarCollapsed ? "center" : "stretch",
-              background: isProposal ? "var(--sfr)" : "transparent",
-              boxShadow: isProposal ? "var(--sha)" : "none",
-              transition: "all .12s var(--ez)",
-              overflow: "hidden",
             }}
           >
             <div style={{ width: 16, height: 16, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: isProposal ? "var(--ac)" : "var(--tm2)" }}>
-              <Pencil size={15} strokeWidth={1.5} />
+              <Pencil size={16} strokeWidth={1.5} />
             </div>
             {!sidebarCollapsed && (
               <span style={{ fontSize: "var(--ts)", fontWeight: isProposal ? 600 : 500, color: isProposal ? "var(--ti)" : "var(--tm2)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>
                 Compose
               </span>
             )}
+            {sidebarCollapsed && <span className="sb-tooltip">Compose</span>}
           </div>
 
           {/* Proposal sub-items under Compose */}
           {!sidebarCollapsed && isSignedIn && proposals && proposals.map((p) => {
-            const date = new Date(p._creationTime).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+            const date = new Date(p._creationTime).toLocaleDateString(undefined, { day: "2-digit", month: "2-digit", year: "2-digit" });
             const typeLabel = p.metadata?.proposalType === "cover_letter" ? "Letter"
               : p.metadata?.proposalType === "freelance_proposal" ? "Proposal"
               : p.metadata?.proposalType === "application_message" ? "Message"
@@ -415,49 +374,21 @@ export const Sidebar: React.FC = () => {
                 docType={typeLabel}
                 isActive={isActive}
                 dense={compactDensity}
+                isConfirming={Boolean(confirmingProposal[p._id])}
                 onClick={() => { void navigate(`/proposal?view=saved&id=${encodeURIComponent(p._id)}`); }}
                 onRename={(e) => {
                   void handleRenameProposal(e, p._id, p.title ?? "Untitled");
                 }}
-                onDelete={(e) => {
-                  void handleDeleteProposal(e, p._id, p.title ?? "Untitled");
-                }}
+                onDeleteRequest={(e) => handleDeleteProposalRequest(e, p._id)}
+                onDeleteConfirm={(e) => { void handleDeleteProposalConfirm(e, p._id); }}
+                onDeleteCancel={(e) => handleDeleteProposalCancel(e, p._id)}
               />
             );
           })}
 
           {/* + New letter */}
           {!sidebarCollapsed && (
-            <button
-              onClick={() => { void navigate('/proposal'); }}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "var(--s3)",
-                padding: compactDensity ? "var(--s2)" : "var(--s2) var(--s2) var(--s2) var(--s3)",
-                borderRadius: "var(--rs)",
-                cursor: "pointer",
-                height: compactDensity ? 28 : 30,
-                color: "var(--tg2)",
-                fontSize: "var(--tx)",
-                transition: "all .12s var(--ez)",
-                background: "transparent",
-                border: "none",
-                width: "100%",
-                textAlign: "left",
-                fontFamily: "inherit",
-              }}
-              onMouseEnter={(e) => {
-                const b = e.currentTarget as HTMLButtonElement;
-                b.style.color = "var(--am)";
-                b.style.background = "var(--sf2)";
-              }}
-              onMouseLeave={(e) => {
-                const b = e.currentTarget as HTMLButtonElement;
-                b.style.color = "var(--tg2)";
-                b.style.background = "transparent";
-              }}
-            >
+            <button onClick={() => { void navigate('/proposal'); }} className="sb-new-btn">
               <Plus size={16} style={{ flexShrink: 0 }} />
               <span style={{ whiteSpace: "nowrap" }}>New letter</span>
             </button>
@@ -468,39 +399,30 @@ export const Sidebar: React.FC = () => {
 
           {/* Style nav item */}
           <div
+            role="button"
+            tabIndex={0}
             onClick={() => { void navigate('/style'); }}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") void navigate('/style'); }}
+            className={`sb-nav-item sb-tooltip-wrap${isStyle ? " sb-nav-item--active" : ""}`}
             style={{
-              display: "flex",
-              alignItems: "center",
               justifyContent: sidebarCollapsed ? "center" : "flex-start",
               gap: "var(--s3)",
-              padding: sidebarCollapsed ? 0 : compactDensity ? "var(--s2)" : `var(--s2) var(--s3)`,
-              borderRadius: "var(--rs)",
-              border: isStyle ? "1px solid var(--bo)" : "1px solid transparent",
+              padding: sidebarCollapsed ? 0 : "var(--s2) var(--s3)",
               cursor: "pointer",
-              height: compactDensity ? 32 : 34,
+              height: 34,
               width: sidebarCollapsed ? 36 : "100%",
               alignSelf: sidebarCollapsed ? "center" : "stretch",
-              background: isStyle ? "var(--sfr)" : "transparent",
-              boxShadow: isStyle ? "var(--sha)" : "none",
-              transition: "all .12s var(--ez)",
-              overflow: "hidden",
-            }}
-            onMouseEnter={(e) => {
-              if (!isStyle) (e.currentTarget as HTMLDivElement).style.background = "var(--sf2)";
-            }}
-            onMouseLeave={(e) => {
-              if (!isStyle) (e.currentTarget as HTMLDivElement).style.background = "transparent";
             }}
           >
             <div style={{ width: 16, height: 16, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: isStyle ? "var(--ac)" : "var(--tg2)" }}>
-              <Settings size={16} />
+              <Settings size={16} strokeWidth={1.5} />
             </div>
             {!sidebarCollapsed && (
               <span style={{ fontSize: "var(--ts)", fontWeight: isStyle ? 600 : 500, color: isStyle ? "var(--ti)" : "var(--tm2)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>
                 Style
               </span>
             )}
+            {sidebarCollapsed && <span className="sb-tooltip">Style</span>}
           </div>
 
           {/* Error display */}
@@ -527,8 +449,8 @@ export const Sidebar: React.FC = () => {
           {/* Avatar */}
           <div
             style={{
-              width: 30,
-              height: 30,
+              width: "var(--hs)",
+              height: "var(--hs)",
               borderRadius: "var(--rp)",
               background: "var(--as)",
               border: "1px solid color-mix(in srgb, var(--ac) 22%, transparent)",
@@ -542,7 +464,7 @@ export const Sidebar: React.FC = () => {
               flexShrink: 0,
             }}
           >
-            P
+            {isSignedIn ? userInitials : "?"}
           </div>
 
           {/* Name + hint — hidden in collapsed (C06) */}
@@ -620,17 +542,42 @@ interface SbDocProps {
   docType?: string;
   isActive: boolean;
   dense?: boolean;
+  isConfirming?: boolean;
   onClick: () => void;
   onRename: (e: React.MouseEvent) => void;
-  onDelete: (e: React.MouseEvent) => void;
+  onDeleteRequest: (e: React.MouseEvent) => void;
+  onDeleteConfirm: (e: React.MouseEvent) => void;
+  onDeleteCancel: (e: React.MouseEvent) => void;
   hideActions?: boolean;
   hideRenameAction?: boolean;
 }
 
-function SbDoc({ title, date, docType, isActive, dense = false, onClick, onRename, onDelete, hideActions, hideRenameAction }: SbDocProps) {
+function SbDoc({
+  title, date, docType, isActive, dense = false, isConfirming = false,
+  onClick, onRename, onDeleteRequest, onDeleteConfirm, onDeleteCancel,
+  hideActions, hideRenameAction,
+}: SbDocProps) {
   const [hovered, setHovered] = useState(false);
-  const [delHovered, setDelHovered] = useState(false);
-  const [renHovered, setRenHovered] = useState(false);
+
+  if (isConfirming) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          padding: "var(--s2) var(--s2) var(--s2) var(--s4)",
+          borderRadius: "var(--rs)",
+          border: "1px solid var(--er)",
+          background: "var(--erb)",
+          gap: "var(--s2)",
+        }}
+      >
+        <span className="sb-doc-confirm__label">Delete "{title.length > 18 ? title.slice(0, 18) + "…" : title}"?</span>
+        <button className="sb-doc-confirm__yes" onClick={onDeleteConfirm}>Delete</button>
+        <button className="sb-doc-confirm__no" onClick={onDeleteCancel}>Cancel</button>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -640,13 +587,12 @@ function SbDoc({ title, date, docType, isActive, dense = false, onClick, onRenam
       style={{
         display: "flex",
         flexDirection: "column",
-        padding: dense ? "7px var(--s2) 7px 34px" : "var(--s2) var(--s2) var(--s2) 40px",
+        padding: dense ? "7px var(--s2) 7px var(--s5)" : "var(--s2) var(--s2) var(--s2) var(--s5)",
         borderRadius: "var(--rs)",
         cursor: "pointer",
-        transition: "all .12s var(--ez)",
+        transition: "background .12s var(--ez), box-shadow .12s var(--ez)",
         position: "relative",
         background: isActive ? "var(--sfr)" : hovered ? "var(--sf2)" : "transparent",
-        border: isActive ? "1px solid var(--bo)" : "1px solid transparent",
         boxShadow: isActive ? "var(--sha)" : "none",
       }}
     >
@@ -654,83 +600,57 @@ function SbDoc({ title, date, docType, isActive, dense = false, onClick, onRenam
         style={{
           fontSize: "var(--ts)",
           fontWeight: isActive ? 600 : 500,
-          color: isActive ? "var(--ti)" : "var(--ti)",
+          color: "var(--ti)",
           lineHeight: 1.24,
           whiteSpace: "nowrap",
           overflow: "hidden",
           textOverflow: "ellipsis",
-          maxWidth: dense ? 150 : 160,
+          paddingRight: hovered && !hideActions ? 48 : 0,
+          transition: "padding-right .1s var(--ez)",
         }}
       >
         {title}
       </div>
-      <div style={{ fontSize: dense ? 9.5 : 10, color: "var(--tg2)", marginTop: 1, display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap", lineHeight: 1.28 }}>
+      <div style={{ fontSize: 10, color: "var(--tg2)", marginTop: 1, display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap", lineHeight: 1.28 }}>
         {date}
         {docType && <span>·</span>}
         {docType && <span style={{ color: "var(--tm2)", fontWeight: 500 }}>{docType}</span>}
       </div>
 
-      {/* Rename + Delete buttons — appear on hover, hidden when hideActions */}
+      {/* Rename + Delete — appear on hover */}
       {!hideActions && (
         <>
           {!hideRenameAction && (
             <button
               onClick={onRename}
-              onMouseEnter={() => setRenHovered(true)}
-              onMouseLeave={() => setRenHovered(false)}
               title="Rename"
+              className="dasti-icon-button dasti-icon-button--compact"
               style={{
                 position: "absolute",
                 right: 24,
                 top: "50%",
                 transform: "translateY(-50%)",
-                width: 20,
-                height: 20,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: 3,
-                border: "none",
-                background: renHovered ? "var(--sf2)" : "transparent",
-                color: renHovered ? "var(--ti)" : "var(--tg2)",
-                cursor: "pointer",
-                padding: 0,
                 opacity: hovered ? 1 : 0,
-                transition: "opacity .1s var(--ez), color .1s var(--ez), background .1s var(--ez)",
-                fontFamily: "inherit",
+                transition: "opacity .1s var(--ez)",
               }}
             >
-              <Pencil size={10} />
+              <Pencil size={12} />
             </button>
           )}
-
           <button
-            onClick={onDelete}
-            onMouseEnter={() => setDelHovered(true)}
-            onMouseLeave={() => setDelHovered(false)}
+            onClick={onDeleteRequest}
             title="Delete"
+            className="dasti-icon-button dasti-icon-button--compact dasti-icon-button--danger"
             style={{
               position: "absolute",
-              right: 4,
+              right: "var(--s1)",
               top: "50%",
               transform: "translateY(-50%)",
-              width: 20,
-              height: 20,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              borderRadius: 3,
-              border: "none",
-              background: delHovered ? "var(--erb)" : "transparent",
-              color: delHovered ? "var(--ert)" : "var(--tg2)",
-              cursor: "pointer",
-              padding: 0,
               opacity: hovered ? 1 : 0,
-              transition: "opacity .1s var(--ez), color .1s var(--ez), background .1s var(--ez)",
-              fontFamily: "inherit",
+              transition: "opacity .1s var(--ez)",
             }}
           >
-            <X size={10} strokeWidth={1.75} />
+            <X size={12} strokeWidth={1.75} />
           </button>
         </>
       )}

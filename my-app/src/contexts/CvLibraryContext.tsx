@@ -1655,7 +1655,6 @@ const flushPendingEdits = useCallback((): void => {
   useEffect(() => {
     if (isDirty && currentCv && !isSavingRef.current) {
       // eslint-disable-next-line @typescript-eslint/no-floating-promises
-      console.log(`[CvLibraryContext] useEffect triggered - isDirty: ${isDirty}, currentCv.id: ${currentCv.id}`);
       void scheduleSave(currentCv);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2405,8 +2404,8 @@ function redoCtx(): void {
     <CvLibraryContext.Provider value={value}>
       <>
         {children}
-        {/* Development-only debug toggle (gated to non-production) */}
-        {process.env.NODE_ENV !== "production" && <DebugToggle />}
+        {/* Development-only debug toggle — only shown in dev mode with ?debug=1 in URL */}
+        {import.meta.env.DEV && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("debug") === "1" && <DebugToggle />}
         {/* Development-only live debug panel for CV editor logs */}
         {typeof window !== "undefined" && (window as any).__CV_EDITOR_DEBUG__ ? <DebugPanel /> : null}
       </>
