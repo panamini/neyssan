@@ -18,7 +18,8 @@ import {
 import type { RemirrorJSON } from "remirror";
 import { ensureRemirrorDoc } from "../remirror-editor/utils/conversion";
 import { EditorToolbar } from "../remirror-editor/components/EditorToolbar";
-import { X } from "lucide-react";
+import { Trash2, X } from "lucide-react";
+import { Button } from "../ui/button";
 
 type UiPatch = Partial<{
   startYear: string;
@@ -142,11 +143,11 @@ function RichEditor({
   );
 
   return (
-    <div className="mt-1 border rounded">
+    <div className="dasti-rich">
       <Remirror manager={manager} initialContent={state} onChange={handleChange}>
-        <div className="p-2 rich-content">
+        <div className="rich-content">
+          <EditorToolbar position="top" />
           <EditorComponent />
-          <EditorToolbar position="bottom" />
         </div>
       </Remirror>
     </div>
@@ -155,16 +156,20 @@ function RichEditor({
 
 function ModalShell({
   title,
+  subtitle,
   open,
   onClose,
   children,
   primaryAction,
+  footerNote,
 }: {
   title: string;
+  subtitle?: string;
   open: boolean;
   onClose: () => void;
   children: React.ReactNode;
   primaryAction?: { label: string; onClick: () => void; disabled?: boolean };
+  footerNote?: string;
 }) {
   if (!open) return null;
   return (
@@ -173,46 +178,48 @@ function ModalShell({
       onMouseDownCapture={(e) => e.stopPropagation()}
       onPointerDownCapture={(e) => e.stopPropagation()}
     >
-      <div className="absolute inset-0" onClick={onClose} aria-hidden  style={{ background: 'hsla(30,12%,11%,.32)', backdropFilter: 'blur(8px)' }} />
+      <div
+        className="absolute inset-0"
+        onClick={onClose}
+        aria-hidden
+        style={{ background: "hsla(30,12%,11%,.32)", backdropFilter: "blur(8px) saturate(1.2)" }}
+      />
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="relative w-full max-w-3xl [background:var(--sfr)] [color:var(--ti)] border border-[color:var(--bm)] [border-radius:var(--rl)] [box-shadow:var(--shc)] overflow-auto max-h-[90vh]"
+        className="dasti-modal"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-bo">
-          <h2 className="text-lg font-semibold">{title}</h2>
+        <div className="dasti-modal-header">
+          <div className="dasti-modal-heading">
+            <h2 className="dasti-modal-title">{title}</h2>
+            {subtitle ? <p className="dasti-modal-subtitle">{subtitle}</p> : null}
+          </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="p-1 rounded [background:transparent] [color:var(--tm2)] hover:[background:var(--sf2)] hover:[color:var(--ti)] focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
+            className="dasti-modal-close"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="p-4">{children}</div>
+        <div className="dasti-modal-body">{children}</div>
 
-        <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-bo">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-3 py-2 rounded [background:var(--sf2)] hover:brightness-95 focus:outline-none focus:[box-shadow:0_0_0_3px_var(--fr)]"
-          >
-            Cancel
-          </button>
-          {primaryAction ? (
-            <button
-              type="button"
-              onClick={primaryAction.onClick}
-              disabled={primaryAction.disabled}
-              className="px-3 py-2 text-sm font-medium rounded [background:var(--ac)] [color:var(--op)] hover:brightness-110 focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)] disabled:opacity-50"
-            >
-              {primaryAction.label}
-            </button>
-          ) : null}
+        <div className="dasti-modal-footer">
+          <div className="dasti-modal-footer-note">{footerNote ?? "Applied to the active resume."}</div>
+          <div className="dasti-modal-actions">
+            <Button type="button" variant="secondary" onClick={onClose}>
+              Cancel
+            </Button>
+            {primaryAction ? (
+              <Button type="button" variant="primary" onClick={primaryAction.onClick} disabled={primaryAction.disabled}>
+                {primaryAction.label}
+              </Button>
+            ) : null}
+          </div>
         </div>
       </div>
     </div>
@@ -394,13 +401,15 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
   return (
     <ModalShell
       title="Edit experience"
+      subtitle="Roles and responsibilities"
       open={open}
       onClose={onClose}
-      primaryAction={{ label: "Save", onClick: () => onSave(local) }}
+      primaryAction={{ label: "Save all", onClick: () => onSave(local) }}
+      footerNote="Order follows your resume."
     >
-      <div className="space-y-6">
+      <div className="space-y-5">
         {local.length === 0 && (
-          <div className="px-3 py-2 text-sm rounded [background:var(--sf1)] [color:var(--tm2)]">
+          <div className="dasti-hint">
             No experience yet. Use “Add entry” to create one.
           </div>
         )}
@@ -412,50 +421,54 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
             startShowDay: false, endShowDay: false, isCurrent: false,
           };
           return (
-            <div key={String(row.id ?? idx)} className="[background:var(--sf1)] border border-[color:var(--bo)] [border-radius:var(--rm)] [padding:var(--s5)]">
-              <div className="flex items-center justify-between [margin-bottom:var(--s3)]">
-                <div style={{ fontFamily: '"Fraunces", serif', fontSize: "var(--ts)", fontWeight: 600, color: "var(--ti)" }}>Entry {idx + 1}</div>
+            <section key={String(row.id ?? idx)} className="dasti-zone">
+              <div className="dasti-zone-header">
+                <h3 className="dasti-zone-title">Entry {idx + 1}</h3>
                 <button
                   type="button"
                   onClick={() => removeRow(idx)}
-                  className="px-2 py-1 text-xs rounded [background:transparent] [color:var(--tm2)] hover:[background:var(--erb)] hover:[color:var(--ert)] focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
+                  className="dasti-modal-close"
+                  style={{ height: 28, minWidth: 28, padding: 0 }}
                   aria-label="Remove entry"
                 >
-                  Remove
+                  <Trash2 className="h-4 w-4" />
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <div>
-                  <label className="text-xs opacity-70">Company</label>
+              <div className="dasti-grid-2">
+                <label className="dasti-field-group">
+                  <span className="dasti-label">Company</span>
                   <input
                     value={row.company}
                     onChange={(e) => setField(idx, "company", e.target.value)}
-                    className="w-full px-2 py-1 mt-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                    className="dasti-field"
                   />
-                </div>
-                <div>
-                  <label className="text-xs opacity-70">Position</label>
+                </label>
+
+                <label className="dasti-field-group">
+                  <span className="dasti-label">Position</span>
                   <input
                     value={row.position}
                     onChange={(e) => setField(idx, "position", e.target.value)}
-                    className="w-full px-2 py-1 mt-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                    className="dasti-field"
                   />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="text-xs opacity-70">Location</label>
+                </label>
+
+                <label className="dasti-field-group" style={{ gridColumn: "1 / -1" }}>
+                  <span className="dasti-label">Location</span>
                   <input
                     value={row.location ?? ""}
                     onChange={(e) => setField(idx, "location", e.target.value)}
-                    className="w-full px-2 py-1 mt-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                    className="dasti-field"
+                    placeholder="City, Country"
                   />
-                </div>
+                </label>
 
-                <div>
-                  <label className="text-xs opacity-70">Start date</label>
-                  <div className="grid grid-cols-3 gap-2 mt-1">
+                <div className="dasti-field-group">
+                  <span className="dasti-label">Start date</span>
+                  <div style={{ display: "grid", gridTemplateColumns: ui.startShowDay ? "1fr 1fr 1fr" : "1fr 1fr auto", gap: "var(--s2)" }}>
                     <select
-                      className="px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                      className="dasti-select"
                       value={ui.startMonth}
                       onChange={(e) => setUiField(idx, { startMonth: e.target.value })}
                     >
@@ -474,7 +487,7 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
                       <option value="12">Dec</option>
                     </select>
                     <select
-                      className="px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                      className="dasti-select"
                       value={ui.startYear}
                       onChange={(e) => setUiField(idx, { startYear: e.target.value })}
                     >
@@ -490,7 +503,7 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
                         type="number"
                         min={1}
                         max={31}
-                        className="px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                        className="dasti-field"
                         value={ui.startDay}
                         onChange={(e) => setUiField(idx, { startDay: e.target.value })}
                         placeholder="Day"
@@ -498,7 +511,7 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
                     ) : (
                       <button
                         type="button"
-                        className="text-xs text-left text-[var(--accent)] hover:underline"
+                        className="text-left text-xs [color:var(--tm2)] hover:[color:var(--ti)]"
                         onClick={() => setUiField(idx, { startShowDay: true })}
                       >
                         Add day
@@ -506,10 +519,10 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
                     )}
                   </div>
                   {ui.startShowDay && (
-                    <div className="mt-1">
+                    <div>
                       <button
                         type="button"
-                        className="text-xs opacity-70 hover:underline"
+                        className="text-xs [color:var(--tg2)] hover:[color:var(--ti)]"
                         onClick={() => setUiField(idx, { startShowDay: false, startDay: "" })}
                       >
                         Remove day
@@ -518,11 +531,11 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
                   )}
                 </div>
 
-                <div>
-                  <label className="text-xs opacity-70">End date</label>
-                  <div className="grid grid-cols-3 gap-2 mt-1">
+                <div className="dasti-field-group">
+                  <span className="dasti-label">End date</span>
+                  <div style={{ display: "grid", gridTemplateColumns: ui.endShowDay ? "1fr 1fr 1fr" : "1fr 1fr auto", gap: "var(--s2)" }}>
                     <select
-                      className="px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none disabled:opacity-50"
+                      className="dasti-select"
                       value={ui.endMonth}
                       disabled={ui.isCurrent}
                       onChange={(e) => setUiField(idx, { endMonth: e.target.value })}
@@ -542,7 +555,7 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
                       <option value="12">Dec</option>
                     </select>
                     <select
-                      className="px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none disabled:opacity-50"
+                      className="dasti-select"
                       value={ui.endYear}
                       disabled={ui.isCurrent}
                       onChange={(e) => setUiField(idx, { endYear: e.target.value })}
@@ -559,7 +572,7 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
                         type="number"
                         min={1}
                         max={31}
-                        className="px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none disabled:opacity-50"
+                        className="dasti-field"
                         value={ui.endDay}
                         disabled={ui.isCurrent}
                         onChange={(e) => setUiField(idx, { endDay: e.target.value })}
@@ -568,7 +581,7 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
                     ) : (
                       <button
                         type="button"
-                        className="text-xs text-left text-[var(--accent)] hover:underline disabled:opacity-50"
+                        className="text-left text-xs [color:var(--tm2)] hover:[color:var(--ti)] disabled:opacity-50"
                         disabled={ui.isCurrent}
                         onClick={() => setUiField(idx, { endShowDay: true })}
                       >
@@ -577,32 +590,32 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
                     )}
                   </div>
                   {ui.endShowDay && !ui.isCurrent && (
-                    <div className="mt-1">
+                    <div>
                       <button
                         type="button"
-                        className="text-xs opacity-70 hover:underline"
+                        className="text-xs [color:var(--tg2)] hover:[color:var(--ti)]"
                         onClick={() => setUiField(idx, { endShowDay: false, endDay: "" })}
                       >
                         Remove day
                       </button>
                     </div>
                   )}
-                  <div className="flex items-center gap-2 mt-2">
+                  <div className="flex items-center gap-2" style={{ marginTop: "var(--s2)" }}>
                     <input
                       id={`exp-present-${idx}`}
                       type="checkbox"
-                      className="w-4 h-4 accent-[var(--primary)]"
+                      className="h-4 w-4 accent-[var(--primary)]"
                       checked={ui.isCurrent}
                       onChange={(e) => setUiField(idx, { isCurrent: e.target.checked, endYear: "", endMonth: "", endDay: "", endShowDay: false })}
                     />
-                    <label htmlFor={`exp-present-${idx}`} className="text-sm">
-                      Currently working here (Present)
+                    <label htmlFor={`exp-present-${idx}`} className="dasti-hint">
+                      Current role
                     </label>
                   </div>
                 </div>
 
-                <div className="md:col-span-2">
-                  <label className="text-xs opacity-70">Responsibilities / Achievements</label>
+                <div className="dasti-field-group" style={{ gridColumn: "1 / -1" }}>
+                  <span className="dasti-label">Responsibilities</span>
                   <RichEditor
                     initialContent={
                       (() => {
@@ -614,20 +627,17 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
                     }
                     onChangeDoc={(doc) => setField(idx, "responsibilities", doc)}
                   />
+                  <div className="dasti-hint">Describe scope, output, and notable outcomes.</div>
                 </div>
               </div>
-            </div>
+            </section>
           );
         })}
 
         <div>
-          <button
-            type="button"
-            onClick={addRow}
-            className="px-3 py-2 text-sm rounded [background:var(--sf2)] hover:brightness-95 focus:outline-none focus:[box-shadow:0_0_0_3px_var(--fr)]"
-          >
+          <Button type="button" variant="secondary" onClick={addRow}>
             Add entry
-          </button>
+          </Button>
         </div>
       </div>
     </ModalShell>
@@ -801,13 +811,15 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
   return (
     <ModalShell
       title="Edit education"
+      subtitle="Study and qualifications"
       open={open}
       onClose={onClose}
-      primaryAction={{ label: "Save", onClick: () => onSave(local) }}
+      primaryAction={{ label: "Save all", onClick: () => onSave(local) }}
+      footerNote="Order follows your resume."
     >
-      <div className="space-y-6">
+      <div className="space-y-5">
         {local.length === 0 && (
-          <div className="px-3 py-2 text-sm rounded [background:var(--sf1)] [color:var(--tm2)]">
+          <div className="dasti-hint">
             No education yet. Use “Add entry” to create one.
           </div>
         )}
@@ -819,58 +831,62 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
             startShowDay: false, endShowDay: false, isCurrent: false,
           };
           return (
-            <div key={String(row.id ?? idx)} className="[background:var(--sf1)] border border-[color:var(--bo)] [border-radius:var(--rm)] [padding:var(--s5)]">
-              <div className="flex items-center justify-between [margin-bottom:var(--s3)]">
-                <div style={{ fontFamily: '"Fraunces", serif', fontSize: "var(--ts)", fontWeight: 600, color: "var(--ti)" }}>Entry {idx + 1}</div>
+            <section key={String(row.id ?? idx)} className="dasti-zone">
+              <div className="dasti-zone-header">
+                <h3 className="dasti-zone-title">Entry {idx + 1}</h3>
                 <button
                   type="button"
                   onClick={() => removeRow(idx)}
-                  className="px-2 py-1 text-xs rounded [background:transparent] [color:var(--tm2)] hover:[background:var(--erb)] hover:[color:var(--ert)] focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
+                  className="dasti-modal-close"
+                  style={{ height: 28, minWidth: 28, padding: 0 }}
                   aria-label="Remove entry"
                 >
-                  Remove
+                  <Trash2 className="h-4 w-4" />
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <div>
-                  <label className="text-xs opacity-70">Institution</label>
+              <div className="dasti-grid-2">
+                <label className="dasti-field-group">
+                  <span className="dasti-label">Institution</span>
                   <input
                     value={row.institution}
                     onChange={(e) => setField(idx, "institution", e.target.value)}
-                    className="w-full px-2 py-1 mt-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                    className="dasti-field"
                   />
-                </div>
-                <div>
-                  <label className="text-xs opacity-70">Degree</label>
+                </label>
+
+                <label className="dasti-field-group">
+                  <span className="dasti-label">Degree</span>
                   <input
                     value={row.degree ?? ""}
                     onChange={(e) => setField(idx, "degree", e.target.value)}
-                    className="w-full px-2 py-1 mt-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                    className="dasti-field"
                   />
-                </div>
-                <div>
-                  <label className="text-xs opacity-70">Field of study</label>
+                </label>
+
+                <label className="dasti-field-group">
+                  <span className="dasti-label">Field of study</span>
                   <input
                     value={row.fieldOfStudy ?? ""}
                     onChange={(e) => setField(idx, "fieldOfStudy", e.target.value)}
-                    className="w-full px-2 py-1 mt-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                    className="dasti-field"
                   />
-                </div>
-                <div>
-                  <label className="text-xs opacity-70">Grade</label>
+                </label>
+
+                <label className="dasti-field-group">
+                  <span className="dasti-label">Grade</span>
                   <input
                     value={row.grade ?? ""}
                     onChange={(e) => setField(idx, "grade", e.target.value)}
-                    className="w-full px-2 py-1 mt-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                    className="dasti-field"
                   />
-                </div>
+                </label>
 
-                <div>
-                  <label className="text-xs opacity-70">Start date</label>
-                  <div className="grid grid-cols-3 gap-2 mt-1">
+                <div className="dasti-field-group">
+                  <span className="dasti-label">Start date</span>
+                  <div style={{ display: "grid", gridTemplateColumns: ui.startShowDay ? "1fr 1fr 1fr" : "1fr 1fr auto", gap: "var(--s2)" }}>
                     <select
-                      className="px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                      className="dasti-select"
                       value={ui.startMonth}
                       onChange={(e) => setUiField(idx, { startMonth: e.target.value })}
                     >
@@ -889,7 +905,7 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
                       <option value="12">Dec</option>
                     </select>
                     <select
-                      className="px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                      className="dasti-select"
                       value={ui.startYear}
                       onChange={(e) => setUiField(idx, { startYear: e.target.value })}
                     >
@@ -905,7 +921,7 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
                         type="number"
                         min={1}
                         max={31}
-                        className="px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                        className="dasti-field"
                         value={ui.startDay}
                         onChange={(e) => setUiField(idx, { startDay: e.target.value })}
                         placeholder="Day"
@@ -913,31 +929,29 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
                     ) : (
                       <button
                         type="button"
-                        className="text-xs text-left text-[var(--accent)] hover:underline"
+                        className="text-left text-xs [color:var(--tm2)] hover:[color:var(--ti)]"
                         onClick={() => setUiField(idx, { startShowDay: true })}
                       >
                         Add day
                       </button>
                     )}
                   </div>
-                  {ui.startShowDay && (
-                    <div className="mt-1">
-                      <button
-                        type="button"
-                        className="text-xs opacity-70 hover:underline"
-                        onClick={() => setUiField(idx, { startShowDay: false, startDay: "" })}
-                      >
-                        Remove day
-                      </button>
-                    </div>
-                  )}
+                  {ui.startShowDay ? (
+                    <button
+                      type="button"
+                      className="w-fit text-xs [color:var(--tg2)] hover:[color:var(--ti)]"
+                      onClick={() => setUiField(idx, { startShowDay: false, startDay: "" })}
+                    >
+                      Remove day
+                    </button>
+                  ) : null}
                 </div>
 
-                <div>
-                  <label className="text-xs opacity-70">End date</label>
-                  <div className="grid grid-cols-3 gap-2 mt-1">
+                <div className="dasti-field-group">
+                  <span className="dasti-label">End date</span>
+                  <div style={{ display: "grid", gridTemplateColumns: ui.endShowDay ? "1fr 1fr 1fr" : "1fr 1fr auto", gap: "var(--s2)" }}>
                     <select
-                      className="px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none disabled:opacity-50"
+                      className="dasti-select"
                       value={ui.endMonth}
                       disabled={ui.isCurrent}
                       onChange={(e) => setUiField(idx, { endMonth: e.target.value })}
@@ -957,7 +971,7 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
                       <option value="12">Dec</option>
                     </select>
                     <select
-                      className="px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none disabled:opacity-50"
+                      className="dasti-select"
                       value={ui.endYear}
                       disabled={ui.isCurrent}
                       onChange={(e) => setUiField(idx, { endYear: e.target.value })}
@@ -974,7 +988,7 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
                         type="number"
                         min={1}
                         max={31}
-                        className="px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none disabled:opacity-50"
+                        className="dasti-field"
                         value={ui.endDay}
                         disabled={ui.isCurrent}
                         onChange={(e) => setUiField(idx, { endDay: e.target.value })}
@@ -983,7 +997,7 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
                     ) : (
                       <button
                         type="button"
-                        className="text-xs text-left text-[var(--accent)] hover:underline disabled:opacity-50"
+                        className="text-left text-xs [color:var(--tm2)] hover:[color:var(--ti)] disabled:opacity-50"
                         disabled={ui.isCurrent}
                         onClick={() => setUiField(idx, { endShowDay: true })}
                       >
@@ -991,43 +1005,37 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
                       </button>
                     )}
                   </div>
-                  {ui.endShowDay && !ui.isCurrent && (
-                    <div className="mt-1">
-                      <button
-                        type="button"
-                        className="text-xs opacity-70 hover:underline"
-                        onClick={() => setUiField(idx, { endShowDay: false, endDay: "" })}
-                      >
-                        Remove day
-                      </button>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2 mt-2">
+                  {ui.endShowDay && !ui.isCurrent ? (
+                    <button
+                      type="button"
+                      className="w-fit text-xs [color:var(--tg2)] hover:[color:var(--ti)]"
+                      onClick={() => setUiField(idx, { endShowDay: false, endDay: "" })}
+                    >
+                      Remove day
+                    </button>
+                  ) : null}
+                  <div className="flex items-center gap-2" style={{ marginTop: "var(--s2)" }}>
                     <input
                       id={`edu-present-${idx}`}
                       type="checkbox"
-                      className="w-4 h-4 accent-[var(--primary)]"
+                      className="h-4 w-4 accent-[var(--primary)]"
                       checked={ui.isCurrent}
                       onChange={(e) => setUiField(idx, { isCurrent: e.target.checked, endYear: "", endMonth: "", endDay: "", endShowDay: false })}
                     />
-                    <label htmlFor={`edu-present-${idx}`} className="text-sm">
-                      Currently here (Present)
+                    <label htmlFor={`edu-present-${idx}`} className="dasti-hint">
+                      Current study
                     </label>
                   </div>
                 </div>
               </div>
-            </div>
+            </section>
           );
         })}
 
         <div>
-          <button
-            type="button"
-            onClick={addRow}
-            className="px-3 py-2 text-sm rounded [background:var(--sf2)] hover:brightness-95 focus:outline-none focus:[box-shadow:0_0_0_3px_var(--fr)]"
-          >
+          <Button type="button" variant="secondary" onClick={addRow}>
             Add entry
-          </button>
+          </Button>
         </div>
       </div>
     </ModalShell>

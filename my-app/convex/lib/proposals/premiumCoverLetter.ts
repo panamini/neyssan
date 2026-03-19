@@ -1263,8 +1263,9 @@ export function buildPremiumCoverLetterPrompt(args: {
     "Do not spend body space on admiration, benefits attraction, checklist summaries, generic enthusiasm, or tool repetition.",
     "Treat topResponsibilities as the employer-side priority order. Use keyRequirements only when they sharpen those responsibilities, and keep preferredQualifications or lowValueChecklist out of the lead.",
     "Preset affects rhetorical texture only. It must not change truthfulness, claim strength, or evidence priority.",
+    "Across cv_direct and cv_adjacent modes, sound like a person making a case in a letter, not a memo explaining why the evidence is relevant.",
     presetGuidance,
-    "For cv_adjacent, use an honest transfer bridge without claiming direct target-role experience, direct responsibility for the target role's core work, or experience as the target role.",
+    "For cv_adjacent, keep the transfer honest and concrete; phrase the link as what this background helps with in the role's actual work, not as a generalized explanation of fit or a claim of direct target-role experience.",
     "For no_cv, there is no supported candidate history. Use job-offer work surfaces not prior history.",
     "For no_cv, stay in first person and sound like a candidate, not a role summary or memo; vary the opening and avoid repeated stems like 'I am drawn to work...', 'I am applying... with a clear focus on...', 'This role centers on...', or 'The highest-value work...'.",
     "For no_cv, do not claim prior roles, achievements, credentials, tool usage, readiness, or impact; keep employerValueBlock on operational consequence and closeLine on modest first-person ownership.",
@@ -1278,10 +1279,11 @@ export function buildPremiumCoverLetterPrompt(args: {
     "Body-part rules: complete natural sentences only; no greeting, signoff, signature, markdown, or bullets.",
     "Opening: position through the strongest relevant evidence, not generic fit language.",
     "ProofBlock: develop the top evidence first, then add one supporting concrete detail when available.",
-    "EmployerValueBlock: explain why that evidence matters for the role's highest-value work, using topResponsibilities before requirements and never echoing preferredQualifications or checklist noise.",
+    "EmployerValueBlock: move directly to an employer-facing implication — what cleaner, faster, or more reliable looks like when this evidence is applied in this specific role. Write it as a natural continuation of the proof, not as a step back to explain why the proof matters. Use topResponsibilities before requirements. Never echo preferredQualifications or checklist noise.",
     "For cv_adjacent, translate adjacent workflow evidence into role value without implying the candidate has already done the target role itself.",
     "For no_cv, ground opening and proof in concrete role priorities.",
-    "CloseLine: one short forward-looking sentence without repeating the employerValueBlock.",
+    "CloseLine: one short forward-looking sentence that is role-specific and situational — it can reference a concrete next step, a specific contribution, or a detail from the operating context of this role. Vary the shape each time.",
+    "Banned openers for any block: 'That combination', 'Applied to', 'Applied in', 'Applied here', 'That kind of', 'That background'. Banned close stems: 'I would welcome the chance to', \"I'd welcome the chance to\", 'I would bring that same', 'I would bring that level'.",
     `Structured brief: ${JSON.stringify(args.brief)}`,
   ].join("\n");
 }
@@ -1291,12 +1293,12 @@ function resolvePremiumCoverLetterPresetGuidance(
 ): string {
   switch (preset) {
     case "expert":
-      return "Preset contract for expert: compact, professional, and controlled; use one measured analytical sentence about the role's workflow, demands, or operating context when the brief supports it, and keep the tone restrained rather than warm.";
+      return "Preset contract for expert: compact, professional, and controlled; when the brief supports it, make one precise employer-facing observation about what controlled execution produces for this specific role — embedded in natural letter prose, not delivered as a stand-alone analytical sentence.";
     case "engaging":
       return "Preset contract for engaging: warmer but restrained; let one grounded sentence show who benefits when coordination, reporting, service, or follow-through are done well, using team, stakeholder, customer, guest, vendor, or user context when the brief supports it; avoid neutral template lead-ins such as a flat relevance summary, and keep the warmth concrete rather than enthusiastic.";
     case "signature":
     default:
-      return "Preset contract for signature: professional, warm, personal, concise, and stable; make the opening sound like direct first-person professional positioning, follow with one grounded employer-facing relevance sentence when material exists, and do not let it read like colder expert analysis or a minimal shell.";
+      return "Preset contract for signature: professional, warm, personal, concise, and stable; make the opening sound like direct first-person professional positioning, then let the next movement continue naturally from the evidence — do not step back into an abstract relevance sentence, and do not let it read like colder expert analysis or a minimal shell.";
   }
 }
 

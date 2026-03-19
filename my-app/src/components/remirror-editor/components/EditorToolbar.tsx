@@ -1,6 +1,7 @@
 import React from 'react';
 import { useCommands, useActive, useChainedCommands } from '@remirror/react';
 import { BoldExtension, ItalicExtension, UnderlineExtension } from 'remirror/extensions';
+import { Bold, Italic, List, Underline } from "lucide-react";
 
 export const EditorToolbar: React.FC<{ position?: 'top' | 'bottom' }> = ({ position = 'top' }) => {
   // Include list fallback command when toggleBulletList is not wired by the manager
@@ -27,7 +28,7 @@ export const EditorToolbar: React.FC<{ position?: 'top' | 'bottom' }> = ({ posit
         aria-label="Toggle bold"
         type="button"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-bold"><path d="M14 12a4 4 0 0 0 0-8H6v8"/><path d="M15 20a4 4 0 0 0 0-8H6v8Z"/></svg>
+        <Bold size={16} />
       </button>
       <button
         onClick={() => {
@@ -38,7 +39,7 @@ export const EditorToolbar: React.FC<{ position?: 'top' | 'bottom' }> = ({ posit
         aria-label="Toggle italic"
         type="button"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-italic"><line x1="19" x2="10" y1="4" y2="4"/><line x1="14" x2="5" y1="20" y2="20"/><line x1="15" x2="9" y1="4" y2="20"/></svg>
+        <Italic size={16} />
       </button>
       <button
         onClick={() => {
@@ -49,7 +50,7 @@ export const EditorToolbar: React.FC<{ position?: 'top' | 'bottom' }> = ({ posit
         aria-label="Toggle underline"
         type="button"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-underline"><path d="M6 4v6a6 6 0 0 0 12 0V4"/><path d="M4 20h16"/></svg>
+        <Underline size={16} />
       </button>
       <button
         onMouseDown={(e) => e.preventDefault()}
@@ -84,14 +85,7 @@ export const EditorToolbar: React.FC<{ position?: 'top' | 'bottom' }> = ({ posit
         type="button"
         title="Bullet list"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-list">
-          <line x1="10" y1="6" x2="21" y2="6"></line>
-          <line x1="10" y1="12" x2="21" y2="12"></line>
-          <line x1="10" y1="18" x2="21" y2="18"></line>
-          <circle cx="4" cy="6" r="1"></circle>
-          <circle cx="4" cy="12" r="1"></circle>
-          <circle cx="4" cy="18" r="1"></circle>
-        </svg>
+        <List size={16} />
       </button>
     </div>
   );

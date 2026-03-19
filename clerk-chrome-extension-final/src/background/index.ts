@@ -14,10 +14,29 @@ import {
   writeSignedInExtensionAuthState
 } from "../lib/extension-auth-state";
 
-// Local-dev extension builds must talk to the same Convex backend as the local app.
-// Keep this explicit here because the background bundle is still inlining a stale prod URL
-// despite the local Plasmo env files being aligned to neat-starfish-33.
-const CONVEX_URL = "https://neat-starfish-33.convex.cloud";
+const FALLBACK_CONVEX_URL = "https://neat-starfish-33.convex.cloud";
+
+function resolveConvexUrl(): string {
+  const explicitUrl = (process.env.PLASMO_PUBLIC_CONVEX_URL ?? "").trim();
+  if (explicitUrl) {
+    return explicitUrl;
+  }
+
+  const deployment = (process.env.CONVEX_DEPLOYMENT ?? "").trim();
+  if (deployment.includes(":")) {
+    const [, slug] = deployment.split(":", 2);
+    if (slug) {
+      return `https://${slug}.convex.cloud`;
+    }
+  }
+
+  console.warn(
+    "[clerk-sync][background] Missing PLASMO_PUBLIC_CONVEX_URL and CONVEX_DEPLOYMENT, using fallback Convex URL.",
+  );
+  return FALLBACK_CONVEX_URL;
+}
+
+const CONVEX_URL = resolveConvexUrl();
 const convex = new ConvexHttpClient(CONVEX_URL);
 let currentToken: string | null = null;
 const PUBLISHABLE_KEY = process.env.PLASMO_PUBLIC_CLERK_PUBLISHABLE_KEY ?? "";
@@ -53,7 +72,6 @@ async function getBackgroundClerk() {
   });
 
   return createClerkClient({
-    background: true,
     publishableKey: PUBLISHABLE_KEY,
     syncHost: SYNC_HOST || undefined
   });

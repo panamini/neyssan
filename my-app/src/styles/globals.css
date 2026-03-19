@@ -173,6 +173,7 @@
   --radius-sm: var(--rs); --radius-md: var(--rm);
   --radius-lg: var(--rl); --radius-pill: var(--rp);
   --ease: var(--ez); --ease-bounce: var(--ezb);
+  --focus-shadow-soft: 0 0 0 2px color-mix(in srgb, var(--fr) 58%, transparent);
 }
 
 /* ============================================================
@@ -181,10 +182,10 @@
    que Tailwind injecte globalement. Notre focus ring dasti via box-shadow reste intact.
    ============================================================ */
 *, *::before, *::after {
-  --tw-ring-offset-color: transparent;
-  --tw-ring-color: transparent;
-  --tw-ring-offset-shadow: 0 0 #0000;
-  --tw-ring-shadow: 0 0 #0000;
+  --tw-ring-offset-color: transparent !important;
+  --tw-ring-color: transparent !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
 }
 
 /* ============================================================
@@ -199,6 +200,12 @@ html, body, #root {
   -moz-osx-font-smoothing: grayscale;
   line-height: var(--lb);
   -webkit-text-size-adjust: 100%;
+  overscroll-behavior: none;
+}
+
+html,
+body {
+  overflow: hidden;
 }
 
 a {
@@ -309,8 +316,332 @@ a {
   outline: none;
 }
 :focus-visible {
-  box-shadow: 0 0 0 var(--focus-ring) var(--fr);
+  box-shadow: var(--focus-shadow-soft);
   border-radius: var(--rx);
+}
+
+button,
+[type="button"],
+[type="submit"],
+[type="reset"],
+[role="button"],
+input,
+textarea,
+select {
+  transition: box-shadow .12s var(--ez), border-color .12s var(--ez), background-color .12s var(--ez), color .12s var(--ez);
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+[type="button"],
+[type="submit"],
+[type="reset"] {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+}
+
+button::-moz-focus-inner,
+[type="button"]::-moz-focus-inner,
+[type="submit"]::-moz-focus-inner,
+[type="reset"]::-moz-focus-inner {
+  border: 0;
+  padding: 0;
+}
+
+:where(button, [type="button"], [type="submit"], [type="reset"], [role="button"], a, input, textarea, select):focus-visible {
+  box-shadow: var(--focus-shadow-soft) !important;
+}
+
+:where(input, textarea, select):focus {
+  box-shadow: var(--focus-shadow-soft) !important;
+}
+
+.dasti-icon-button {
+  width: var(--hs);
+  height: var(--hs);
+  min-width: var(--hs);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--rs);
+  background: transparent;
+  color: var(--tg2);
+  cursor: pointer;
+  line-height: 1;
+  transition:
+    background-color .12s var(--ez),
+    color .12s var(--ez),
+    border-color .12s var(--ez),
+    box-shadow .12s var(--ez);
+}
+
+.dasti-icon-button:hover {
+  background: var(--sf2);
+  color: var(--ti);
+}
+
+.dasti-icon-button:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--bm) !important;
+}
+
+.dasti-icon-button--compact {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  border-radius: var(--rx);
+}
+
+.dasti-icon-button--danger:hover {
+  background: var(--erb);
+  color: var(--ert);
+}
+
+.dasti-icon-button svg {
+  pointer-events: none;
+}
+
+/* ============================================================
+   DASTI MODALS
+   ============================================================ */
+.dasti-modal {
+  width: 100%;
+  max-width: 720px;
+  margin: var(--s4);
+  position: relative;
+  z-index: 1;
+  isolation: isolate;
+  background: var(--sfr);
+  color: var(--ti);
+  border: 1px solid var(--bm);
+  border-radius: var(--rl);
+  box-shadow: var(--shc);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.dasti-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s4);
+  padding: var(--s6) var(--s6) var(--s4);
+  border-bottom: 1px solid var(--bo);
+  position: sticky;
+  top: 0;
+  background: var(--sfr);
+  z-index: 2;
+}
+
+.dasti-modal-heading {
+  min-width: 0;
+}
+
+.dasti-modal-title {
+  margin: 0;
+  font-family: "Fraunces", serif;
+  font-size: var(--tx2);
+  font-weight: 600;
+  letter-spacing: -.01em;
+  line-height: var(--lx2);
+  color: var(--ti);
+}
+
+.dasti-modal-subtitle {
+  margin: 3px 0 0;
+  font-size: var(--ts);
+  line-height: var(--ls);
+  color: var(--tm2);
+}
+
+.dasti-modal-close {
+  height: var(--hs);
+  min-width: var(--hs);
+  padding: 0 var(--s2);
+  border-radius: var(--rs);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--tm2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.dasti-modal-close:hover {
+  background: var(--sf2);
+  color: var(--ti);
+}
+
+.dasti-modal-body {
+  padding: var(--s5) var(--s6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s5);
+  position: relative;
+  z-index: 1;
+}
+
+.dasti-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s4);
+  padding: var(--s4) var(--s6);
+  border-top: 1px solid var(--bo);
+  position: sticky;
+  bottom: 0;
+  background: var(--sfr);
+  z-index: 2;
+}
+
+.dasti-modal-footer-note {
+  font-size: var(--tx);
+  line-height: var(--lx);
+  color: var(--tg2);
+}
+
+.dasti-modal-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s3);
+}
+
+.dasti-zone {
+  padding: var(--s5);
+  border-radius: var(--rm);
+  background: var(--sf1);
+  border: 1px solid var(--bo);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  position: relative;
+  z-index: 1;
+}
+
+.dasti-zone-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+
+.dasti-zone-title {
+  margin: 0 0 calc(-1 * var(--s2));
+  font-family: "Fraunces", serif;
+  font-size: var(--tm);
+  font-weight: 600;
+  letter-spacing: -.01em;
+  color: var(--ti);
+}
+
+.dasti-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s4);
+}
+
+.dasti-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.dasti-label {
+  font-size: var(--ts);
+  font-weight: 600;
+  color: var(--ti);
+}
+
+.dasti-hint {
+  font-size: var(--tx);
+  line-height: var(--lx);
+  color: var(--tg2);
+}
+
+.dasti-field,
+.dasti-select {
+  width: 100%;
+  height: var(--hm);
+  padding: 0 var(--s3);
+  border-radius: var(--rs);
+  border: 1px solid var(--bm);
+  background: var(--sf2);
+  color: var(--ti);
+  font-size: var(--ts);
+  line-height: var(--ls);
+}
+
+textarea.dasti-field {
+  min-height: 120px;
+  height: auto;
+  resize: vertical;
+  padding: var(--s3);
+}
+
+.dasti-field::placeholder,
+.dasti-select::placeholder {
+  color: var(--tg2);
+}
+
+.dasti-field:disabled,
+.dasti-select:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+.dasti-rich {
+  border: 1px solid var(--bm);
+  border-radius: var(--rs);
+  overflow: hidden;
+  background: var(--sfr);
+}
+
+.dasti-rich .rich-content {
+  padding: 0;
+}
+
+.dasti-rich .ProseMirror {
+  min-height: 120px;
+  padding: var(--s3) var(--s4);
+  font-family: "Source Serif 4", serif;
+  font-size: var(--ts);
+  line-height: 1.75;
+  color: var(--ti);
+  outline: none;
+}
+
+.dasti-rich .ProseMirror p {
+  margin: 0 0 .9em;
+}
+
+.dasti-rich .ProseMirror p:last-child {
+  margin-bottom: 0;
+}
+
+@media (max-width: 768px) {
+  .dasti-modal-header,
+  .dasti-modal-body,
+  .dasti-modal-footer {
+    padding-left: var(--s4);
+    padding-right: var(--s4);
+  }
+
+  .dasti-grid-2 {
+    grid-template-columns: 1fr;
+  }
+
+  .dasti-modal-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .dasti-modal-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
 }
 
 /* ============================================================

@@ -16,10 +16,8 @@ import { SkillsDrawer } from "./structured-blocks/SkillsDrawer";
 import BlockRenderer from "./cv-editor/BlockRenderer";
 import AchievementsBlock from "./structured-blocks/AchievementsBlock";
 import { useSectionFlushSubscription } from "../hooks/use-flush-subscription";
-import { Pencil, Trash2, X, Pin } from "lucide-react";
+import { Pencil, Trash2, X, Pin, Plus } from "lucide-react";
 import { ExperienceModal, EducationModal } from "./structured-blocks/ExperienceEducationModal";
-import { SegmentedRadio } from "./ui/SegmentedRadio";
-import { levelOptions } from "./ui/levelLabels";
 
 import { formatRangeFromItem } from "../lib/date-utils";
 import { splitResponsibilitiesIntoBullets } from "../utils/cv/mapping-utils";
@@ -32,6 +30,88 @@ import { isExperienceRenderable, isEducationRenderable } from "../utils/cv/rende
 
 import type { RemirrorJSON } from 'remirror';
 import type { CvSection, IExperienceItem, IEducationItem, IProfileItem, ISummaryItem, ISkillItem, ILanguageItem, Level } from '../types/cvDocument';
+
+const SKILL_DOT_LEVELS: Array<{ value: Level; label: string }> = [
+  { value: "Beginner", label: "Beginner" },
+  { value: "Intermediate", label: "Intermediate" },
+  { value: "Advanced", label: "Expert" },
+];
+
+const LANGUAGE_DOT_LEVELS: Array<{ value: Level; label: string }> = [
+  { value: "Beginner", label: "Beginner" },
+  { value: "Intermediate", label: "Intermediate" },
+  { value: "Fluent", label: "Fluent" },
+];
+
+function getDotIndex(value: Level, kind: "skill" | "language"): number {
+  if (kind === "skill") {
+    if (value === "Beginner" || value === "Elementary") return 0;
+    if (value === "Intermediate") return 1;
+    return 2;
+  }
+
+  if (value === "Beginner" || value === "Elementary") return 0;
+  if (value === "Intermediate" || value === "Advanced") return 1;
+  return 2;
+}
+
+function LevelDots({
+  value,
+  levels,
+  kind,
+  onChange,
+  readOnly = false,
+  ariaLabel,
+}: {
+  value: Level;
+  levels: Array<{ value: Level; label: string }>;
+  kind: "skill" | "language";
+  onChange?: (value: Level) => void;
+  readOnly?: boolean;
+  ariaLabel: string;
+}) {
+  const activeIndex = getDotIndex(value, kind);
+  const activeLabel = levels[activeIndex]?.label ?? levels[0]?.label ?? "";
+
+  return (
+    <div className="inline-flex items-center gap-2 min-w-0">
+      <div className="flex items-center gap-[5px]" role={readOnly ? undefined : "group"} aria-label={ariaLabel}>
+        {levels.map((level, index) => {
+          const filled = index <= activeIndex;
+          const sharedStyle: React.CSSProperties = {
+            width: 10,
+            height: 10,
+            borderRadius: "var(--rp)",
+            border: "1px solid",
+            borderColor: filled ? "var(--ac)" : "var(--bm)",
+            background: filled ? "var(--ac)" : "transparent",
+            transition: "transform .12s var(--ezb), background .12s var(--ez), border-color .12s var(--ez)",
+            flexShrink: 0,
+          };
+
+          if (readOnly) {
+            return <span key={level.label} aria-hidden style={sharedStyle} />;
+          }
+
+          return (
+            <button
+              key={level.label}
+              type="button"
+              aria-label={`${ariaLabel}: ${level.label}`}
+              title={level.label}
+              onClick={() => onChange?.(level.value)}
+              className="hover:scale-[1.18] focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
+              style={{ ...sharedStyle, cursor: "pointer" }}
+            />
+          );
+        })}
+      </div>
+      <span style={{ fontSize: 10, color: "var(--tg2)", minWidth: 66, whiteSpace: "nowrap" }}>
+        {activeLabel}
+      </span>
+    </div>
+  );
+}
 
 interface SectionEditorProps {
   section: CvSection;
@@ -604,7 +684,7 @@ export default function SectionEditor({
                 e.stopPropagation();
                 setSummaryModalOpen(true);
               }}
-              className="p-1 rounded [background:transparent] [color:var(--tm2)] hover:[color:var(--ti)] hover:[background:var(--sf2)] focus:outline-none [transition:all_.12s_var(--ez)]"
+              className="dasti-icon-button"
               aria-label="Edit summary"
               title="Edit summary"
             >
@@ -635,7 +715,7 @@ export default function SectionEditor({
                   /* noop */
                 }
               }}
-              className="p-1 rounded [background:transparent] [color:var(--tm2)] hover:[background:var(--sf2)] hover:[color:var(--ti)] focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
+              className="dasti-icon-button dasti-icon-button--danger"
               aria-label="Clear summary"
               title="Clear summary"
             >
@@ -815,9 +895,6 @@ export default function SectionEditor({
         e.preventDefault();
         const row = skillRows[idx];
         persistRows(skillRows, String(row?.id ?? idx));
-        // Move focus to level control for efficient editing
-        const next = document.getElementById(`skill-level-${idx}`);
-        next?.focus();
       }
     }
 
@@ -917,7 +994,7 @@ export default function SectionEditor({
         <div className="flex items-center justify-between p-3 [background:var(--sf1)]">
           <h3 className="text-lg font-semibold">{section.title}</h3>
           <div className="flex items-center gap-2">
-            {/* Edit (Pencil) button hidden — inline editing via inputs + SegmentedRadio is preferred.
+            {/* Edit button stays hidden — inline editing uses the dot control below.
                 SkillsModal component remains in place and can be re-enabled in future by restoring this button. */}
             <div aria-hidden className="w-6" />
             {/* Manage button intentionally hidden to avoid accidental usage of Phase 2 drawer.
@@ -946,15 +1023,20 @@ export default function SectionEditor({
               {items.length === 0 ? (
                 <span className="text-sm [color:var(--tg2)]">No skills yet</span>
               ) : (
-                items.map((s, i) => (
+                items.map((s) => (
                   <span
                     key={s.id}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full [background:var(--sf2)] [color:var(--tm2)]"
+                    className="inline-flex items-center gap-2 px-2.5 py-1 text-xs rounded-full [background:var(--sf2)] [color:var(--tm2)]"
                     aria-label={`${s.name} ${s.level}`}
                   >
-                    <span className="font-medium">{s.name}</span>
-                    <span className="opacity-70">•</span>
-                    <span className="opacity-80">{s.level}</span>
+                    <span className="font-medium [color:var(--ti)]">{s.name}</span>
+                    <LevelDots
+                      value={s.level}
+                      levels={SKILL_DOT_LEVELS}
+                      kind="skill"
+                      readOnly={true}
+                      ariaLabel={`${s.name} level`}
+                    />
                     <button
                       type="button"
                       onClick={(e) => {
@@ -965,7 +1047,7 @@ export default function SectionEditor({
                           /* noop */
                         }
                       }}
-                      className="inline-flex p-0.5 ml-1 rounded [background:transparent] hover:[background:var(--sf2)] focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
+                      className="dasti-icon-button dasti-icon-button--compact ml-1"
                       aria-label={`Remove ${s.name || "skill"}`}
                       title="Remove skill"
                     >
@@ -1021,11 +1103,11 @@ export default function SectionEditor({
                     e.stopPropagation();
                     handleAddSkillInline();
                   }}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md [background:var(--ac)] [color:var(--op)] hover:brightness-110 focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
+                  className="dasti-icon-button"
                   aria-label="Add skill"
                   title="Add skill"
                 >
-                  <span className="text-sm">Add</span>
+                  <Plus className="h-4 w-4" aria-hidden />
                 </button>
               </div>
             </div>
@@ -1037,7 +1119,7 @@ export default function SectionEditor({
             ) : (
               <div className="space-y-2">
                 {skillRows.map((row, idx) => (
-                  <div key={row.id ?? `row-${idx}`} className="grid items-center grid-cols-12 gap-2">
+                  <div key={row.id ?? `row-${idx}`} className="group grid items-center grid-cols-12 gap-2">
                     <div className="col-span-7">
                       <label className="text-xs sr-only" htmlFor={`skill-name-inline-${idx}`}>Skill name</label>
                       <input
@@ -1050,24 +1132,21 @@ export default function SectionEditor({
                         onKeyDown={(e) => handleNameKeyDownInline(e, idx)}
                       />
                     </div>
-                    <div className="col-span-4">
-                      <span id={`skill-level-label-${idx}`} className="text-xs sr-only">Skill level</span>
-                      <SegmentedRadio<ISkillItem["level"]>
-                        id={`skill-level-${idx}`}
-                        name={`skill-level-${idx}`}
+                    <div className="col-span-4 flex items-center justify-end pr-2">
+                      <LevelDots
                         value={row.level}
-                        options={levelOptions()}
-                        onChange={(lvl) => handleLevelChangeInline(idx, lvl as Level)}
-                        className="w-full"
-                        aria-labelledby={`skill-level-label-${idx}`}
+                        levels={SKILL_DOT_LEVELS}
+                        kind="skill"
+                        onChange={(lvl) => handleLevelChangeInline(idx, lvl)}
+                        ariaLabel={`Skill level for ${row.name || `row ${idx + 1}`}`}
                       />
                     </div>
-                    <div className="flex items-center justify-end col-span-1">
-                      <div className="flex items-center gap-1">
+                    <div className="col-span-1 flex items-center justify-end">
+                      <div className="flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
                         <button
                           type="button"
                           onClick={() => handlePinToCoreInline(String(row.id ?? idx))}
-                          className="p-1 rounded hover:opacity-90 focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
+                          className="dasti-icon-button"
                           aria-label={`Pin ${row.name || "skill"} to top`}
                           title="Pin to top"
                         >
@@ -1076,7 +1155,7 @@ export default function SectionEditor({
                         <button
                           type="button"
                           onClick={() => handleRemoveSkillInline(String(row.id ?? idx))}
-                          className="p-1 rounded hover:opacity-90 focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
+                          className="dasti-icon-button dasti-icon-button--danger"
                           aria-label={`Remove ${row.name || "skill"}`}
                           title="Remove skill"
                         >
@@ -1273,12 +1352,8 @@ export default function SectionEditor({
         e.preventDefault();
         const row = languageRows[idx];
         persistLanguageRows(languageRows, String(row?.id ?? idx));
-        const next = document.getElementById(`language-level-${idx}`);
-        next?.focus();
       }
     }
- 
-    const LANGUAGE_LEVELS: Level[] = ["Beginner", "Elementary", "Intermediate", "Advanced", "Fluent"];
  
     function handleLevelChangeLanguage(idx: number, lvl: Level) {
       // Update local row immediately.
@@ -1344,7 +1419,7 @@ export default function SectionEditor({
         <div className="flex items-center justify-between p-3 [background:var(--sf1)]">
           <h3 className="text-lg font-semibold">{section.title}</h3>
           <div className="flex items-center gap-2">
-            {/* Edit (Pencil) button hidden — inline editing via inputs + SegmentedRadio is used for languages. */}
+            {/* Edit button stays hidden; languages use the inline dot control below. */}
             <div aria-hidden className="w-6" />
             {typeof onCollapseChange === "function" && (
               <button
@@ -1373,12 +1448,17 @@ export default function SectionEditor({
                 items.map((lng) => (
                   <span
                     key={lng.id}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full [background:var(--sf2)] [color:var(--tm2)]"
+                    className="inline-flex items-center gap-2 px-2.5 py-1 text-xs rounded-full [background:var(--sf2)] [color:var(--tm2)]"
                     aria-label={`${lng.name} ${lng.level}`}
                   >
-                    <span className="font-medium">{lng.name}</span>
-                    <span className="opacity-70">•</span>
-                    <span className="opacity-80">{lng.level}</span>
+                    <span className="font-medium [color:var(--ti)]">{lng.name}</span>
+                    <LevelDots
+                      value={lng.level}
+                      levels={LANGUAGE_DOT_LEVELS}
+                      kind="language"
+                      readOnly={true}
+                      ariaLabel={`${lng.name} level`}
+                    />
                     <button
                       type="button"
                       onClick={(e) => {
@@ -1389,7 +1469,7 @@ export default function SectionEditor({
                           /* noop */
                         }
                       }}
-                      className="inline-flex p-0.5 ml-1 rounded [background:transparent] hover:[background:var(--sf2)] focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
+                      className="dasti-icon-button dasti-icon-button--compact ml-1"
                       aria-label={`Remove ${lng.name || "language"}`}
                       title="Remove language"
                     >
@@ -1417,11 +1497,11 @@ export default function SectionEditor({
                     e.stopPropagation();
                     handleAddLanguageInline();
                   }}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md [background:var(--ac)] [color:var(--op)] hover:brightness-110 focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
+                  className="dasti-icon-button"
                   aria-label="Add language"
                   title="Add language"
                 >
-                  <span className="text-sm">Add</span>
+                  <Plus className="h-4 w-4" aria-hidden />
                 </button>
               </div>
             </div>
@@ -1433,7 +1513,7 @@ export default function SectionEditor({
             ) : (
               <div className="space-y-2">
                 {languageRows.map((row, idx) => (
-                  <div key={row.id ?? `row-${idx}`} className="grid items-center grid-cols-12 gap-2">
+                  <div key={row.id ?? `row-${idx}`} className="group grid items-center grid-cols-12 gap-2">
                     <div className="col-span-7">
                       <label className="text-xs sr-only" htmlFor={`language-name-inline-${idx}`}>Language name</label>
                       <input
@@ -1446,24 +1526,21 @@ export default function SectionEditor({
                         onKeyDown={(e) => handleNameKeyDownLanguage(e, idx)}
                       />
                     </div>
-                    <div className="col-span-4">
-                      <span id={`language-level-label-${idx}`} className="text-xs sr-only">Language level</span>
-                      <SegmentedRadio<ILanguageItem["level"]>
-                        id={`language-level-${idx}`}
-                        name={`language-level-${idx}`}
+                    <div className="col-span-4 flex items-center justify-end pr-2">
+                      <LevelDots
                         value={row.level}
-                        options={LANGUAGE_LEVELS.map((lvl) => ({ value: lvl, label: lvl }))}
-                        onChange={(lvl) => handleLevelChangeLanguage(idx, lvl as Level)}
-                        className="w-full"
-                        aria-labelledby={`language-level-label-${idx}`}
+                        levels={LANGUAGE_DOT_LEVELS}
+                        kind="language"
+                        onChange={(lvl) => handleLevelChangeLanguage(idx, lvl)}
+                        ariaLabel={`Language level for ${row.name || `row ${idx + 1}`}`}
                       />
                     </div>
-                    <div className="flex items-center justify-end col-span-1">
-                      <div className="flex items-center gap-1">
+                    <div className="col-span-1 flex items-center justify-end">
+                      <div className="flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
                         <button
                           type="button"
                           onClick={() => handleRemoveLanguageInline(String(row.id ?? idx))}
-                          className="p-1 rounded hover:opacity-90 focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
+                          className="dasti-icon-button dasti-icon-button--danger"
                           aria-label={`Remove ${row.name || "language"}`}
                           title="Remove language"
                         >
@@ -1555,7 +1632,7 @@ export default function SectionEditor({
                 e.stopPropagation();
                 setProfileModalOpen(true);
               }}
-              className="p-1 rounded [background:transparent] [color:var(--tm2)] hover:[color:var(--ti)] hover:[background:var(--sf2)] focus:outline-none [transition:all_.12s_var(--ez)]"
+              className="dasti-icon-button"
               aria-label="Edit profile"
               title="Edit profile"
             >
@@ -1581,7 +1658,7 @@ export default function SectionEditor({
                   /* noop */
                 }
               }}
-              className="p-1 rounded [background:transparent] [color:var(--tm2)] hover:[background:var(--sf2)] hover:[color:var(--ti)] focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
+              className="dasti-icon-button dasti-icon-button--danger"
               aria-label="Clear profile"
               title="Clear profile"
             >
@@ -1856,7 +1933,7 @@ export default function SectionEditor({
                     else if (sectionType === "education") setEducationModalOpen(true);
                   } catch { /* noop */ }
                 }}
-                className="p-1 rounded [background:transparent] [color:var(--tm2)] hover:[color:var(--ti)] hover:[background:var(--sf2)] focus:outline-none [transition:all_.12s_var(--ez)]"
+                className="dasti-icon-button"
                 aria-label={`Edit ${sectionType}`}
                 title={`Edit ${sectionType}`}
               >

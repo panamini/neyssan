@@ -338,7 +338,7 @@ describe("ProposalInputForm provider-busy handling", () => {
       'button[type="submit"]',
     ) as HTMLButtonElement | null;
 
-    expect(screen.getByText(/Using CV:/i)).toHaveTextContent("Using CV: none");
+    expect(screen.getByText(/Resume:/i)).toHaveTextContent("Resume: none");
     expect(submitButton).not.toBeNull();
 
     fireEvent.change(jobTitleInput, {

@@ -5,6 +5,7 @@ import { X, Plus, Trash2, Check } from "lucide-react";
 interface AchievementsModalProps {
   open: boolean;
   items: IAchievementItem[];
+  appendBlankOnOpen?: boolean;
   onClose: () => void;
   onSave: (next: IAchievementItem[]) => void;
 }
@@ -14,7 +15,7 @@ function newAchievement(): IAchievementItem {
   return { id, text: "" };
 }
 
-export function AchievementsModal({ open, items, onClose, onSave }: AchievementsModalProps) {
+export function AchievementsModal({ open, items, appendBlankOnOpen = false, onClose, onSave }: AchievementsModalProps) {
   const [rows, setRows] = useState<IAchievementItem[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [savedTick, setSavedTick] = useState<string | null>(null);
@@ -34,28 +35,33 @@ export function AchievementsModal({ open, items, onClose, onSave }: Achievements
   // Seed rows only when the modal opens or when the real items content changes
   const lastSeedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!open) return;
-    try {
-      const nextStr = JSON.stringify(items ?? []);
-      if (lastSeedRef.current === nextStr) return;
-      lastSeedRef.current = nextStr;
-      setRows(JSON.parse(nextStr) as IAchievementItem[]);
-    } catch {
-      // Fallback to safe clone on failure
-      setRows(JSON.parse(JSON.stringify(items ?? [])) as IAchievementItem[]);
+    if (!open) {
+      lastSeedRef.current = null;
     }
-  }, [open, items]);
+  }, [open]);
 
-  // If modal opens with zero rows, auto-seed a blank row so user can type immediately.
   useEffect(() => {
     if (!open) return;
     try {
-      if (!rows || rows.length === 0) {
-        setRows([newAchievement()]);
-        // Focus the first input after it mounts
-        setTimeout(() => {
+      const nextSeedKey = JSON.stringify({ items: items ?? [], appendBlankOnOpen });
+      if (lastSeedRef.current === nextSeedKey) return;
+      lastSeedRef.current = nextSeedKey;
+
+      const baseRows = JSON.parse(JSON.stringify(items ?? [])) as IAchievementItem[];
+      const nextRows = baseRows.length > 0 ? baseRows : [newAchievement()];
+      let focusIndex = baseRows.length > 0 ? -1 : 0;
+
+      if (appendBlankOnOpen) {
+        nextRows.push(newAchievement());
+        focusIndex = nextRows.length - 1;
+      }
+
+      setRows(nextRows);
+
+      if (focusIndex >= 0) {
+        window.setTimeout(() => {
           try {
-            const el = document.getElementById("achievement-text-0") as HTMLInputElement | null;
+            const el = document.getElementById(`achievement-text-${focusIndex}`) as HTMLInputElement | null;
             el?.focus();
           } catch {
             /* noop */
@@ -63,9 +69,13 @@ export function AchievementsModal({ open, items, onClose, onSave }: Achievements
         }, 50);
       }
     } catch {
-      /* noop */
+      const fallbackRows = items && items.length > 0 ? [...items] : [newAchievement()];
+      if (appendBlankOnOpen) {
+        fallbackRows.push(newAchievement());
+      }
+      setRows(fallbackRows);
     }
-  }, [open, rows.length]);
+  }, [open, items, appendBlankOnOpen]);
 
 
   if (!open) return null;
@@ -101,18 +111,16 @@ export function AchievementsModal({ open, items, onClose, onSave }: Achievements
   function handleRemove(idx: number) {
     setRows((prev) => {
       const next = prev.filter((_, i) => i !== idx);
-      // If removing last row leaves no rows, seed one so UI never forces "Add"
       if (next.length === 0) {
-        // small async seed to avoid state collision
-        setTimeout(() => {
+        window.setTimeout(() => {
           try {
-            setRows([newAchievement()]);
             const el = document.getElementById("achievement-text-0") as HTMLInputElement | null;
             el?.focus();
           } catch {
             /* noop */
           }
         }, 30);
+        return [newAchievement()];
       }
       return next;
     });
@@ -180,10 +188,10 @@ export function AchievementsModal({ open, items, onClose, onSave }: Achievements
             <button
               type="button"
               onClick={handleAdd}
-              className="inline-flex items-center gap-1 px-2 py-1 text-sm rounded [background:var(--ac)] [color:var(--op)] hover:brightness-110 focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--rs)] border border-transparent [background:transparent] [color:var(--tm2)] transition-colors hover:[background:var(--sf2)] hover:[color:var(--ti)] focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
               aria-label="Add achievement"
             >
-              <Plus className="w-4 h-4" /> Add
+              <Plus className="w-4 h-4" />
             </button>
           </div>
 

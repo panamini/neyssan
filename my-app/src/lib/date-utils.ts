@@ -13,8 +13,12 @@ export const PRESENT_LABEL = 'Present';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'] as const;
 
+function isEpochSentinel(iso?: string | null): boolean {
+  return typeof iso === 'string' && iso.startsWith('1970-01-01');
+}
+
 export function formatByPrecision(iso?: string | null, precision?: DatePrecision): string {
-  if (!iso) return '';
+  if (!iso || isEpochSentinel(iso)) return '';
   try {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return '';
@@ -63,7 +67,7 @@ export interface DateRangedItem {
 
 /** Convenience: format a date range directly from a CV item. */
 export function formatRangeFromItem(item?: DateRangedItem | null): string {
-  if (!item?.startDate) return '';
+  if (!item?.startDate || isEpochSentinel(item.startDate)) return '';
   return formatDateRange(item.startDate, item.endDate, {
     startPrecision: item.startDatePrecision,
     endPrecision: item.endDatePrecision,
