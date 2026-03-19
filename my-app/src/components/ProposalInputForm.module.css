@@ -1,19 +1,40 @@
 .container {
-  @apply p-6 border-0 rounded-lg shadow-none bg-background;
+  padding: var(--s5);
+  border: none;
+  border-radius: var(--rm);
+  background: transparent;
 }
 
 .inputElement {
-  @apply w-full px-4 py-1 rounded-md text-foreground focus:outline-none;
+  width: 100%;
+  padding: var(--s2) var(--s3);
+  border-radius: var(--rs);
+  font-size: var(--ts);
+  color: var(--ti);
+  background: var(--sf1);
+  border: 1px solid var(--bo);
+  outline: none;
+  transition: border-color .12s var(--ez), box-shadow .12s var(--ez);
+}
+
+.inputElement:focus {
+  border-color: var(--ac);
+  box-shadow: 0 0 0 3px var(--fr);
+  background: var(--sf1);
 }
 
 .jobField {
-  background-color: var(--job-field-bg);
-  color: var(--foreground);
+  background: var(--sf1);
+  color: var(--ti);
+}
+
+.jobField:focus {
+  background: var(--sf1);
 }
 
 .jobField textarea,
 .jobField input {
-  background-color: transparent;
+  background: transparent;
   color: var(--ti);
 }
 
