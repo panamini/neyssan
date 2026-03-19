@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
+import { Trash2 } from "lucide-react";
 import { Button } from "./ui/button";
 import LoadingSpinner from "./LoadingSpinner";
 import { Input } from "./ui/input";
@@ -172,9 +173,7 @@ export function RefinementField({
             onClick={onClear}
             className="p-1 rounded [color:var(--tm2)] hover:[background:var(--sf2)]"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M8 3h8l1 4H7l1-4z" />
-            </svg>
+            <Trash2 className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
       </div>

@@ -357,7 +357,7 @@ export function StrictUploadButton(props: StrictUploadButtonProps) {
           "rounded-md",
           "[box-shadow:var(--sha)]",
           "bg-accent text-background hover:bg-accent/90",
-          "focus-visible:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]",
+          "focus-visible:outline-none",
           "px-3",
           className ?? "",
         ].join(" ")}

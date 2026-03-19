@@ -118,6 +118,10 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
       (s) => String(s.id) === String(sectionId)
     );
   }, [currentCv?.sections, sectionId]);
+  const sectionType = String(section?.type ?? "");
+  const showDeleteAction =
+    typeof onDelete === "function" &&
+    !["experience", "education"].includes(sectionType);
 
   const isStructuredSection = section?.type === "experience" || section?.type === "education";
   
@@ -496,7 +500,7 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
         )}
       </div>
   
-      {onDelete && (
+      {showDeleteAction && (
         <div className="mt-2">
           <button
             type="button"
@@ -516,4 +520,3 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
     </div>
   );
 }
-

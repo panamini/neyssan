@@ -2,6 +2,7 @@
 
 import React from "react";
 import clsx from "clsx";
+import { X } from "lucide-react";
 
 export interface DialogProps {
   open: boolean;
@@ -15,7 +16,7 @@ export function Dialog({ open, onClose, title, children, className }: DialogProp
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
       <div
         className="fixed inset-0 backdrop-blur-[8px] saturate-120"
         style={{ background: 'hsla(30,12%,11%,.32)' }}
@@ -23,12 +24,24 @@ export function Dialog({ open, onClose, title, children, className }: DialogProp
         aria-hidden="true"
       />
       <div className={clsx(
-        "relative [background:var(--sfr)] border border-bm rounded-rl [box-shadow:var(--shc)] max-w-dlg w-full mx-4",
+        "relative isolate [background:var(--sfr)] border border-bm rounded-rl [box-shadow:var(--shc)] max-w-dlg w-full",
         className
       )}>
         {title && (
-          <div className="px-6 py-4 border-b border-bo">
-            <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+          <div className="flex items-start justify-between gap-4 px-6 py-5 border-b border-bo">
+            <div className="min-w-0">
+              <h2 className="font-['Fraunces'] text-[var(--tm)] font-semibold leading-[var(--ll)] text-foreground">
+                {title}
+              </h2>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="inline-flex h-[var(--hs)] min-w-[var(--hs)] items-center justify-center rounded-[var(--rs)] border border-transparent bg-transparent px-2 [color:var(--tm2)] transition-colors hover:[background:var(--sf2)] hover:[color:var(--ti)]"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
         )}
         {children}

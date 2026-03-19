@@ -1,4 +1,5 @@
 import React from "react";
+import { Check, Copy, RotateCcw, Trash2 } from "lucide-react";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { useAuth } from "@clerk/clerk-react";
 import { api } from "../../convex/_generated/api";
@@ -16,6 +17,7 @@ import {
   type ProposalFormalityLevel,
   type ProposalVoicePreset,
 } from "../../convex/lib/proposals/voicePresets";
+import { getProposalDocumentTypography } from "../lib/proposal-document-typography";
 
 type SavedProposalType =
   | "cover_letter"
@@ -90,31 +92,27 @@ function typeLabel(t: SavedProposalType): string {
 }
 
 const TONE_UI: Record<string, string> = {
-  signature: "Neutre",
-  expert: "Formel",
-  engaging: "Chaleureux",
+  signature: "Balanced",
+  expert: "Formal",
+  engaging: "Warm",
 };
 
 function toneLabel(preset: ProposalVoicePreset): string {
   return TONE_UI[preset] ?? preset;
 }
 
-/* ── .ib button style ─────────────────────────────────── */
-const ibStyle: React.CSSProperties = {
-  width: "var(--hs)",
-  height: "var(--hs)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  borderRadius: "var(--rs)",
-  border: "1px solid transparent",
-  color: "var(--tm2)",
-  background: "transparent",
-  cursor: "pointer",
-  transition: "all .12s var(--ez)",
-};
+interface ProposalsListProps {
+  selectedProposalId?: string | null;
+  onSelectedProposalIdChange?: (id: string | null) => void;
+}
 
-export default function ProposalsList() {
+export default function ProposalsList({
+  selectedProposalId = null,
+  onSelectedProposalIdChange,
+}: ProposalsListProps) {
+  const [viewportWidth, setViewportWidth] = React.useState(() =>
+    typeof window === "undefined" ? 1440 : window.innerWidth,
+  );
   const { isLoaded, isSignedIn } = useAuth();
   const proposals = useQuery(
     api.proposalsPublic.default as any,
@@ -132,6 +130,31 @@ export default function ProposalsList() {
   const [isUpdating, setIsUpdating] = React.useState<string | null>(null);
   const [copied, setCopied] = React.useState(false);
   const { showToast } = useToast();
+  const isCompactLibraryLayout = viewportWidth < 1180;
+  const libraryPanelPadding = isCompactLibraryLayout ? "var(--s4)" : "var(--s5)";
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const handleResize = () => {
+      setViewportWidth(window.innerWidth);
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  const selectProposal = React.useCallback(
+    (proposal: SavedProposalRecord | null, syncSelection: boolean) => {
+      setSelectedId(proposal?._id ?? null);
+      setEditTitle(proposal?.title ?? "");
+      setEditContent(proposal?.content ?? "");
+      if (syncSelection) {
+        onSelectedProposalIdChange?.(proposal?._id ?? null);
+      }
+    },
+    [onSelectedProposalIdChange],
+  );
 
   const applyLocalUpdate = (id: string, patch: Partial<SavedProposalRecord>) => {
     setLocalProposals((prev) =>
@@ -144,13 +167,9 @@ export default function ProposalsList() {
       const next = prev ? prev.filter((p) => p._id !== id) : prev;
       // Auto-select another proposal after deletion
       if (selectedId === id && next && next.length > 0) {
-        setSelectedId(next[0]._id);
-        setEditTitle(next[0].title ?? "");
-        setEditContent(next[0].content ?? "");
+        selectProposal(next[0], true);
       } else if (selectedId === id) {
-        setSelectedId(null);
-        setEditTitle("");
-        setEditContent("");
+        selectProposal(null, true);
       }
       return next;
     });
@@ -160,15 +179,30 @@ export default function ProposalsList() {
     if (proposals && !localProposals) setLocalProposals(proposals);
   }, [localProposals, proposals]);
 
-  // Auto-select first proposal
   React.useEffect(() => {
     const list = localProposals ?? proposals;
-    if (list && list.length > 0 && !selectedId) {
-      setSelectedId(list[0]._id);
-      setEditTitle(list[0].title ?? "");
-      setEditContent(list[0].content ?? "");
+    if (!list || list.length === 0) return;
+
+    if (selectedProposalId) {
+      const requested = list.find((proposal) => proposal._id === selectedProposalId);
+      if (requested) {
+        if (requested._id !== selectedId) {
+          selectProposal(requested, false);
+        }
+        return;
+      }
+
+      if (selectedId !== list[0]._id) {
+        selectProposal(list[0], false);
+      }
+      onSelectedProposalIdChange?.(list[0]._id);
+      return;
     }
-  }, [localProposals, proposals, selectedId]);
+
+    if (!selectedId) {
+      selectProposal(list[0], true);
+    }
+  }, [localProposals, proposals, selectedId, selectedProposalId, selectProposal, onSelectedProposalIdChange]);
 
   const displayList = localProposals ?? proposals ?? [];
   const selected = displayList.find((p) => p._id === selectedId) ?? null;
@@ -192,6 +226,9 @@ export default function ProposalsList() {
     : "";
   const selType = selected ? typeLabel(getStoredProposalType(selected)) : "";
   const selTone = selected ? toneLabel(getStoredVoicePreset(selected)) : "";
+  const selectedTypography = getProposalDocumentTypography(
+    selected ? getStoredVoicePreset(selected) : null,
+  );
 
   async function handleSaveContent() {
     if (!selected || isUpdating) return;
@@ -279,7 +316,7 @@ export default function ProposalsList() {
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "260px 1fr",
+        gridTemplateColumns: isCompactLibraryLayout ? "minmax(0,1fr)" : "260px 1fr",
         gap: "var(--s5)",
         alignItems: "start",
         minWidth: 0,
@@ -288,7 +325,7 @@ export default function ProposalsList() {
       {/* ── Left panel: .plib-panel — metadata ────────── */}
       <div
         style={{
-          padding: "var(--s5)",
+          padding: libraryPanelPadding,
           borderRadius: "var(--rl)",
           border: "1px solid var(--bo)",
           background: "var(--sfr)",
@@ -301,7 +338,7 @@ export default function ProposalsList() {
       >
         {/* Eyebrow */}
         <div style={{ fontSize: "var(--tx)", fontWeight: 600, color: "var(--am)", letterSpacing: ".14em", textTransform: "uppercase" }}>
-          Document
+          Details
         </div>
 
         {selected ? (
@@ -318,7 +355,7 @@ export default function ProposalsList() {
                 fontWeight: 600,
                 letterSpacing: "-.02em",
                 color: "var(--ti)",
-                lineHeight: 1.35,
+                lineHeight: 1.22,
                 border: "none",
                 background: "transparent",
                 width: "100%",
@@ -327,12 +364,11 @@ export default function ProposalsList() {
                 overflowWrap: "break-word",
                 wordBreak: "break-word",
                 overflow: "hidden",
-                fontFamily: '"Fraunces", serif',
               } as React.CSSProperties}
             />
 
             {/* .p-meta */}
-            <div style={{ display: "flex", alignItems: "center", gap: "var(--s2)", fontSize: "var(--tx)", color: "var(--tg2)", flexWrap: "wrap", minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--s2)", fontSize: "var(--tx)", color: "var(--tg2)", flexWrap: "wrap", minWidth: 0, lineHeight: 1.24 }}>
               <span>{selDate}</span>
               <span style={pSep} />
               <span>{selType}</span>
@@ -359,53 +395,15 @@ export default function ProposalsList() {
             ) : null}
           </>
         ) : (
-          <p style={{ fontSize: "var(--ts)", color: "var(--tg2)" }}>Select a document.</p>
+          <p style={{ fontSize: "var(--ts)", color: "var(--tg2)" }}>Select a draft.</p>
         )}
 
-        {/* Proposal list */}
-        {displayList.length > 1 && (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "var(--s1)",
-              borderTop: "1px solid var(--bo)",
-              paddingTop: "var(--s3)",
-            }}
-          >
-            {displayList.map((p) => {
-              const isActive = p._id === selectedId;
-              const d = new Date(p._creationTime).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" });
-              return (
-                <div
-                  key={p._id}
-                  onClick={() => { setSelectedId(p._id); setEditTitle(p.title ?? ""); setEditContent(p.content ?? ""); }}
-                  style={{
-                    padding: "var(--s2) var(--s3)",
-                    borderRadius: "var(--rs)",
-                    cursor: "pointer",
-                    background: isActive ? "var(--as)" : "transparent",
-                    border: isActive ? "1px solid var(--ac)" : "1px solid transparent",
-                    transition: "all .12s var(--ez)",
-                    minWidth: 0,
-                    overflow: "hidden",
-                  }}
-                  onMouseEnter={(e) => { if (!isActive) (e.currentTarget as HTMLDivElement).style.background = "var(--sf2)"; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = isActive ? "var(--as)" : "transparent"; }}
-                >
-                  <div style={{ fontSize: "var(--ts)", fontWeight: 600, color: "var(--ti)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.title ?? "Untitled"}</div>
-                  <div style={{ fontSize: "var(--tx)", color: "var(--tg2)" }}>{d}</div>
-                </div>
-              );
-            })}
-          </div>
-        )}
       </div>
 
       {/* ── Right panel: .plib-panel — content ─────────── */}
       <div
         style={{
-          padding: "var(--s5)",
+          padding: libraryPanelPadding,
           borderRadius: "var(--rl)",
           border: "1px solid var(--bo)",
           background: "var(--sfr)",
@@ -419,7 +417,7 @@ export default function ProposalsList() {
         {/* Header: eyebrow + action icons */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ fontSize: "var(--tx)", fontWeight: 600, color: "var(--am)", letterSpacing: ".14em", textTransform: "uppercase" }}>
-            Content
+            Draft
           </div>
           {selected && (
             <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
@@ -427,51 +425,27 @@ export default function ProposalsList() {
               <button
                 type="button"
                 title={copied ? "Copied!" : "Copy"}
-                style={{
-                  ...ibStyle,
-                  color: copied ? "var(--ok)" : (ibStyle as React.CSSProperties).color,
-                  gap: copied ? "var(--s1)" : 0,
-                  paddingLeft: copied ? "var(--s2)" : undefined,
-                  paddingRight: copied ? "var(--s2)" : undefined,
-                  transition: "color .12s var(--ez), background .12s var(--ez)",
-                }}
+                className="dasti-icon-button"
+                style={{ color: copied ? "var(--ok)" : undefined }}
                 onClick={() => {
                   void navigator.clipboard.writeText(selected.content ?? "").then(() => {
                     setCopied(true);
                     setTimeout(() => setCopied(false), 1500);
                   });
                 }}
-                onMouseEnter={(e) => { if (!copied) { (e.currentTarget as HTMLButtonElement).style.background = "var(--sf2)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--ti)"; } }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = copied ? "var(--ok)" : "var(--tm2)"; }}
               >
-                {copied ? (
-                  <>
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M2 7l3.5 3.5L12 3" />
-                    </svg>
-                    <span style={{ fontSize: "var(--tx)", fontWeight: 500 }}>Copied</span>
-                  </>
-                ) : (
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                    <rect x="5" y="5" width="9" height="9" rx="2" />
-                    <path d="M11 5V3a2 2 0 0 0-2-2H3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" />
-                  </svg>
-                )}
+                {copied ? <Check size={14} strokeWidth={1.8} aria-hidden="true" /> : <Copy size={16} strokeWidth={1.5} />}
               </button>
               {/* Regenerate */}
               <button
                 type="button"
                 title={isRegenerating === selected._id ? "Regenerating…" : "Regenerate"}
-                style={{ ...ibStyle, opacity: isRegenerating === selected._id ? 0.5 : 1 }}
+                className="dasti-icon-button"
+                style={{ opacity: isRegenerating === selected._id ? 0.5 : 1 }}
                 onClick={() => void handleRegenerate()}
                 disabled={Boolean(isRegenerating)}
-                onMouseEnter={(e) => { if (!isRegenerating) { (e.currentTarget as HTMLButtonElement).style.background = "var(--sf2)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--ti)"; } }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "var(--tm2)"; }}
               >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M13.5 6A6 6 0 1 0 14 9" />
-                  <path d="M13.5 2v4h-4" />
-                </svg>
+                <RotateCcw size={16} strokeWidth={1.5} />
               </button>
               {/* Separator */}
               <div style={{ width: 1, height: 16, background: "var(--bo)", margin: "0 2px" }} />
@@ -479,14 +453,10 @@ export default function ProposalsList() {
               <button
                 type="button"
                 title="Delete"
-                style={ibStyle}
+                className="dasti-icon-button dasti-icon-button--danger"
                 onClick={() => void handleDelete()}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--erb)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--ert)"; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "var(--tm2)"; }}
               >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                  <path d="M2 4h12M5 4V2h6v2M6 7v5M10 7v5M3 4l1 10h8l1-10" />
-                </svg>
+                <Trash2 size={16} strokeWidth={1.5} />
               </button>
             </div>
           )}
@@ -500,9 +470,11 @@ export default function ProposalsList() {
             onBlur={() => void handleSaveContent()}
             placeholder="Content will appear here…"
             style={{
-              fontFamily: '"Source Serif 4", serif',
-              fontSize: 14,
-              lineHeight: 1.82,
+              fontFamily: selectedTypography.fontFamily,
+              fontSize: selectedTypography.fontSize,
+              lineHeight: selectedTypography.lineHeight,
+              fontWeight: selectedTypography.fontWeight,
+              letterSpacing: selectedTypography.letterSpacing,
               color: "var(--tm2)",
               border: "none",
               background: "transparent",
@@ -514,7 +486,7 @@ export default function ProposalsList() {
             }}
           />
         ) : (
-          <p style={{ fontSize: "var(--ts)", color: "var(--tg2)" }}>Select a document from the left panel.</p>
+          <p style={{ fontSize: "var(--ts)", color: "var(--tg2)" }}>Select a draft from the left panel.</p>
         )}
       </div>
     </div>

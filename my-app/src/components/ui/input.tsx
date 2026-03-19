@@ -41,7 +41,7 @@ export function Input(props: InputProps) {
   // §11 dasti .field : w:100% h:hm · rs · sf1 bg · bm border · ts
   // focus: ac border + fr ring 3px (pas de ring-offset)
   const base =
-    "inline-flex items-center w-full rounded-rs text-ts [background:var(--sf1)] [color:var(--ti)] placeholder:[color:var(--tg2)] [transition:all_.12s_var(--ez)] focus:outline-none focus:[border-color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)]";
+    "inline-flex items-center w-full rounded-rs text-ts [background:var(--sf1)] [color:var(--ti)] placeholder:[color:var(--tg2)] [transition:background-color_.12s_var(--ez),border-color_.12s_var(--ez),color_.12s_var(--ez),box-shadow_.12s_var(--ez)] focus:outline-none focus:[border-color:var(--ac)]";
 
   const sizeMap: Record<string, string> = {
     sm: "px-2 py-1",

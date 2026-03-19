@@ -1,8 +1,10 @@
 import React from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useConvexAuth, useQuery } from "convex/react";
 import ProposalInputForm from "../components/ProposalInputForm";
-import ProposalDisplay from "../components/ProposalDisplay";
+import ProposalDisplay, { fallbackCopyText, getDisplayedProposalText } from "../components/ProposalDisplay";
 import ProposalsList from "../components/ProposalsList";
+import { useToast } from "../components/ui/toast";
 import type { FormValues } from "../components/ProposalInputForm.schemas";
 import { api } from "../../convex/_generated/api";
 import type { ProposalGenerationFallbackInfo } from "../lib/proposal-generation-ui";
@@ -26,9 +28,23 @@ type ProposalForgeView = "compose" | "saved";
  * Logique métier : intacte.
  */
 export function ProposalForge(): JSX.Element {
+  const { search } = useLocation();
+  const navigate = useNavigate();
+  const { showToast } = useToast();
+  const [viewportWidth, setViewportWidth] = React.useState(() =>
+    typeof window === "undefined" ? 1440 : window.innerWidth,
+  );
   const handoffId = React.useMemo(
-    () => new URLSearchParams(window.location.search).get("handoffId"),
-    [],
+    () => new URLSearchParams(search).get("handoffId"),
+    [search],
+  );
+  const requestedView = React.useMemo<ProposalForgeView>(() => {
+    const view = new URLSearchParams(search).get("view");
+    return view === "saved" ? "saved" : "compose";
+  }, [search]);
+  const selectedProposalId = React.useMemo(
+    () => new URLSearchParams(search).get("id"),
+    [search],
   );
   const { isLoading: isConvexAuthLoading, isAuthenticated: isConvexAuthenticated } = useConvexAuth();
   const [proposalContent, setProposalContent] = React.useState<string | null>(null);
@@ -36,8 +52,10 @@ export function ProposalForge(): JSX.Element {
   const [error, setError] = React.useState<string | null>(null);
   const [errorDetail, setErrorDetail] = React.useState<string | null>(null);
   const [proposalType, setProposalType] = React.useState<FormValues["proposalType"] | null>(null);
+  const [proposalVoicePreset, setProposalVoicePreset] = React.useState<FormValues["voicePreset"] | null>(null);
   const [fallbackInfo, setFallbackInfo] = React.useState<ProposalGenerationFallbackInfo | null>(null);
-  const [activeView, setActiveView] = React.useState<ProposalForgeView>("compose");
+  const [copyFeedback, setCopyFeedback] = React.useState<"idle" | "copied">("idle");
+  const copyFeedbackTimeoutRef = React.useRef<number | null>(null);
 
   const handoffRecord = useQuery(
     api.proposalHandoffs.get,
@@ -60,6 +78,7 @@ export function ProposalForge(): JSX.Element {
   const handleProposalStart = React.useCallback((values: FormValues) => {
     setLoading(true);
     setProposalType(values.proposalType);
+    setProposalVoicePreset(values.voicePreset);
     setProposalContent(null);
     setError(null);
     setErrorDetail(null);
@@ -69,6 +88,7 @@ export function ProposalForge(): JSX.Element {
   const handleProposalSubmit = React.useCallback(
     (values: FormValues, proposal: string, nextFallbackInfo?: ProposalGenerationFallbackInfo) => {
       setProposalType(values.proposalType);
+      setProposalVoicePreset(values.voicePreset);
       setProposalContent(proposal);
       setError(null);
       setFallbackInfo(nextFallbackInfo ?? null);
@@ -81,6 +101,7 @@ export function ProposalForge(): JSX.Element {
     (message: string, values: FormValues, rawReason?: string | null) => {
       setLoading(false);
       setProposalType(values.proposalType);
+      setProposalVoicePreset(values.voicePreset);
       setProposalContent(null);
       setError(message);
       setErrorDetail(rawReason ?? null);
@@ -89,10 +110,83 @@ export function ProposalForge(): JSX.Element {
     [],
   );
 
+  React.useEffect(() => {
+    return () => {
+      if (copyFeedbackTimeoutRef.current !== null) {
+        window.clearTimeout(copyFeedbackTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const handleResize = () => {
+      setViewportWidth(window.innerWidth);
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  const updateProposalRoute = React.useCallback(
+    (view: ProposalForgeView, nextProposalId: string | null = null) => {
+      const params = new URLSearchParams(search);
+      if (view === "saved") {
+        params.set("view", "saved");
+        params.delete("handoffId");
+        if (nextProposalId) {
+          params.set("id", nextProposalId);
+        } else {
+          params.delete("id");
+        }
+      } else {
+        params.delete("view");
+        params.delete("id");
+      }
+      const nextSearch = params.toString();
+      void navigate(nextSearch ? `/proposal?${nextSearch}` : "/proposal");
+    },
+    [navigate, search],
+  );
+
+  const handleCopyOutput = React.useCallback(async () => {
+    if (!proposalContent) return;
+
+    const displayedProposalText = getDisplayedProposalText(proposalContent, proposalType);
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(displayedProposalText);
+      } else if (!fallbackCopyText(displayedProposalText)) {
+        throw new Error("Clipboard unavailable");
+      }
+
+      setCopyFeedback("copied");
+      if (copyFeedbackTimeoutRef.current !== null) {
+        window.clearTimeout(copyFeedbackTimeoutRef.current);
+      }
+      copyFeedbackTimeoutRef.current = window.setTimeout(() => {
+        setCopyFeedback("idle");
+        copyFeedbackTimeoutRef.current = null;
+      }, 2000);
+      showToast("Proposal copied", { variant: "success" });
+    } catch (copyError) {
+      console.warn("Failed to copy proposal:", copyError);
+      showToast("Copy failed", {
+        variant: "error",
+        description: "Clipboard access was unavailable.",
+      });
+    }
+  }, [proposalContent, proposalType, showToast]);
+
   const [hoveredTab, setHoveredTab] = React.useState<ProposalForgeView | null>(null);
 
+  const activeView = requestedView;
   const isComposeView = activeView === "compose";
   const isSavedView = activeView === "saved";
+  const isCompactComposeLayout = viewportWidth < 1180;
+  const isNarrowLaptop = viewportWidth < 1360;
   const isLoadingHandoff =
     Boolean(handoffId) &&
     (isConvexAuthLoading || (isConvexAuthenticated && handoffRecord === undefined));
@@ -132,43 +226,101 @@ export function ProposalForge(): JSX.Element {
   };
 
   const panelCard: React.CSSProperties = {
-    borderRadius: "var(--rm)",
+    borderRadius: "var(--rl)",
     border: "1px solid var(--bo)",
     background: "var(--sfr)",
     boxShadow: "var(--sha)",
-    overflow: "hidden",
-    display: "flex",
-    flexDirection: "column",
+    padding: "var(--s5)",
+    display: "grid",
+    gap: "var(--s4)",
+    minWidth: 0,
   };
 
   const panelHeader: React.CSSProperties = {
     display: "flex",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "space-between",
-    padding: "var(--s3) var(--s5)",
-    background: "var(--sf2)",
-    borderBottom: "1px solid var(--bo)",
-    flexShrink: 0,
+    gap: "var(--s3)",
+  };
+
+  const panelTitle: React.CSSProperties = {
+    fontFamily: '"Fraunces", serif',
+    fontSize: "var(--tx2)",
+    fontWeight: 600,
+    letterSpacing: "-.01em",
+    color: "var(--ti)",
+  };
+
+  const panelMeta: React.CSSProperties = {
+    fontSize: "var(--tx)",
+    color: "var(--tg2)",
+    marginTop: "var(--s1)",
+    lineHeight: 1.5,
   };
 
   /* ── φ grid — §13 dasti-spec-v1 ──────────────────────────── */
   const phiGrid: React.CSSProperties = {
     display: "grid",
-    gridTemplateColumns: "minmax(320px,1fr) minmax(0,1.618fr)",
+    gridTemplateColumns: isCompactComposeLayout
+      ? "minmax(0,1fr)"
+      : "minmax(320px,1fr) minmax(360px,1.618fr)",
     gap: "var(--s5)",
     alignItems: "start",
   };
 
   return (
-    <div style={{ height: "100%", overflowY: "auto", overflowX: "hidden", minWidth: 0 }}>
-      <div style={{ padding: "var(--s8) var(--s7)", display: "flex", flexDirection: "column", gap: "var(--s5)" }}>
+    <div
+      style={{
+        height: "100%",
+        overflowY: "auto",
+        overflowX: "hidden",
+        overscrollBehaviorY: "contain",
+        background: "var(--bg)",
+        minWidth: 0,
+      }}
+    >
+      <div
+        style={{
+          padding: isCompactComposeLayout ? "var(--s5) var(--s4)" : isNarrowLaptop ? "var(--s7) var(--s6)" : "var(--s8) var(--s7)",
+          display: "flex",
+          flexDirection: "column",
+          gap: "var(--s5)",
+        }}
+      >
+        <div
+          style={{
+            padding: "var(--s5)",
+            borderRadius: "var(--rm)",
+            border: "1px solid var(--bo)",
+            background: "var(--sfr)",
+            boxShadow: "var(--sha)",
+            maxWidth: isCompactComposeLayout ? 720 : isNarrowLaptop ? 860 : 960,
+          }}
+        >
+          <div style={eyebrow}>Write</div>
+          <h2
+            style={{
+              fontFamily: '"Fraunces", serif',
+              fontSize: "var(--tx2)",
+              fontWeight: 600,
+              letterSpacing: "-.01em",
+              color: "var(--ti)",
+              marginBottom: "var(--s2)",
+            }}
+          >
+            Write
+          </h2>
+          <p style={{ fontSize: "var(--ts)", color: "var(--tm2)", lineHeight: "var(--ls)" }}>
+            Draft and manage your letters here. Click any saved document in the sidebar to open it.
+          </p>
+        </div>
 
         {/* Tab toggle — underline style §13 */}
         <div style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--bo)" }}>
           <button
             type="button"
             style={tabStyle("compose")}
-            onClick={() => setActiveView("compose")}
+            onClick={() => updateProposalRoute("compose")}
             onMouseEnter={() => setHoveredTab("compose")}
             onMouseLeave={() => setHoveredTab(null)}
           >
@@ -177,73 +329,78 @@ export function ProposalForge(): JSX.Element {
           <button
             type="button"
             style={tabStyle("saved")}
-            onClick={() => setActiveView("saved")}
+            onClick={() => updateProposalRoute("saved", selectedProposalId)}
             onMouseEnter={() => setHoveredTab("saved")}
             onMouseLeave={() => setHoveredTab(null)}
           >
-            Open
+            Library
           </button>
         </div>
 
         {/* ── COMPOSE VIEW — φ grid ──────────────────────────── */}
-        <section style={{ display: isComposeView ? "block" : "none" }} aria-hidden={!isComposeView}>
-          <div style={phiGrid}>
+        {isComposeView ? (
+          <section aria-hidden={false}>
+            <div style={phiGrid}>
 
-            {/* Left panel — .cpn : form */}
-            <div style={panelCard}>
-              <div style={panelHeader}>
+              {/* Left panel — .cpn : form */}
+              <div style={panelCard}>
+                <div style={panelHeader}>
+                  <div style={eyebrow}>Job Offer</div>
+                </div>
                 <div>
-                  <div style={eyebrow}>Compose</div>
-                  <h2 style={{ fontFamily: '"Fraunces", serif', fontSize: "var(--tm)", fontWeight: 600, letterSpacing: "-.01em", color: "var(--ti)" }}>
-                    New letter
-                  </h2>
+                  {isLoadingHandoff ? (
+                    <div style={{ paddingTop: "var(--s2)" }}>
+                      <p style={{ fontSize: "var(--ts)", color: "var(--tm2)" }}>Loading imported job offer…</p>
+                    </div>
+                  ) : (
+                    <ProposalInputForm
+                      onStart={handleProposalStart}
+                      onSubmit={handleProposalSubmit}
+                      onError={handleProposalError}
+                      prefill={prefill}
+                    />
+                  )}
                 </div>
               </div>
-              <div style={{ flex: 1 }}>
-                {isLoadingHandoff ? (
-                  <div style={{ padding: "var(--s5)" }}>
-                    <p style={{ fontSize: "var(--ts)", color: "var(--tm2)" }}>Loading imported job offer…</p>
-                  </div>
-                ) : (
-                  <ProposalInputForm
-                    onStart={handleProposalStart}
-                    onSubmit={handleProposalSubmit}
-                    onError={handleProposalError}
-                    prefill={prefill}
+
+              {/* Right panel — .opn : output */}
+              <div style={panelCard}>
+                <div style={panelHeader}>
+                  <div style={eyebrow}>Draft</div>
+                </div>
+                <div>
+                  <ProposalDisplay
+                    proposalContent={proposalContent}
+                    loading={loading}
+                    error={error}
+                    errorDetail={errorDetail}
+                    proposalType={proposalType}
+                    voicePreset={proposalVoicePreset}
+                    fallbackInfo={fallbackInfo}
+                    onCopy={
+                      proposalContent && !loading && !error
+                        ? () => {
+                            void handleCopyOutput();
+                          }
+                        : undefined
+                    }
+                    copyFeedback={copyFeedback}
                   />
-                )}
-              </div>
-            </div>
-
-            {/* Right panel — .opn : output */}
-            <div style={panelCard}>
-              <div style={panelHeader}>
-                <div>
-                  <div style={eyebrow}>Output</div>
-                  <h2 style={{ fontFamily: '"Fraunces", serif', fontSize: "var(--tm)", fontWeight: 600, letterSpacing: "-.01em", color: "var(--ti)" }}>
-                    Generated
-                  </h2>
                 </div>
               </div>
-              <div style={{ flex: 1, padding: "var(--s5)" }}>
-                <ProposalDisplay
-                  proposalContent={proposalContent}
-                  loading={loading}
-                  error={error}
-                  errorDetail={errorDetail}
-                  proposalType={proposalType}
-                  fallbackInfo={fallbackInfo}
-                />
-              </div>
             </div>
-
-          </div>
-        </section>
+          </section>
+        ) : null}
 
         {/* ── LIBRARY VIEW — .plib grid (260px 1fr) ──────────── */}
-        <section style={{ display: isSavedView ? "block" : "none" }} aria-hidden={!isSavedView}>
-          <ProposalsList />
-        </section>
+        {isSavedView ? (
+          <section aria-hidden={false}>
+            <ProposalsList
+              selectedProposalId={selectedProposalId}
+              onSelectedProposalIdChange={(id) => updateProposalRoute("saved", id)}
+            />
+          </section>
+        ) : null}
 
       </div>
     </div>
