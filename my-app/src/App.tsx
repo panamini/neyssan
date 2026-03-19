@@ -1,14 +1,13 @@
 import "./styles/globals.css";
-"use client";
 
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Unauthenticated } from "convex/react";
 import { SignInButton } from "@clerk/clerk-react";
 import { ConvexStatusBanner } from "./components/ConvexStatusBanner";
-import DarkModeToggle from "./components/dark-mode-toggle/DarkModeToggle";
 import { CvForge } from "./pages/CvForge";
 import { ProposalForge } from "./pages/ProposalForge";
+import { StyleForge } from "./pages/StyleForge";
 import { Sidebar } from "./components/Sidebar";
 import { CvLibraryProvider } from "./contexts/CvLibraryContext";
 
@@ -18,12 +17,13 @@ import { CvLibraryProvider } from "./contexts/CvLibraryContext";
 function useBreadcrumb(): string {
   const { pathname } = useLocation();
   if (pathname.startsWith("/proposal")) return "Write";
+  if (pathname.startsWith("/style")) return "Style";
   return "Resume";
 }
 
 /**
  * Topbar — h:54px (--hdr), breadcrumb "dasti › Page".
- * §17[A] frosted glass non activé — chantier séparé.
+ * §17[A] frosted glass remains a separate workstream.
  */
 function Topbar() {
   const breadcrumb = useBreadcrumb();
@@ -62,7 +62,7 @@ function Topbar() {
         </span>
       </div>
 
-      {/* Right — auth + dark mode */}
+      {/* Right — auth only when logged out */}
       <div style={{ display: "flex", alignItems: "center", gap: "var(--s2)" }}>
         <Unauthenticated>
           <SignInButton mode="modal">
@@ -133,6 +133,7 @@ function AppShell(): JSX.Element {
             <Routes>
               <Route path="/cv" element={<CvForge />} />
               <Route path="/proposal" element={<ProposalForge />} />
+              <Route path="/style" element={<StyleForge />} />
               <Route path="/" element={<Navigate to="/cv" replace />} />
               <Route path="*" element={<Navigate to="/cv" replace />} />
             </Routes>

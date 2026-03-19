@@ -179,6 +179,76 @@ const strongDirectRankingConflictContext: PremiumCoverLetterPersonalizationConte
     ],
   };
 
+// no_cv: no prior experience, system must rely on job offer content only
+const noCvEntryOfficeContext: PremiumCoverLetterPersonalizationContext = {
+  name: "Sophie Martin",
+};
+
+// multi-employer: two employers with unequal evidence weight
+// current role has strong quantified proof; older role has only task-level detail
+// tests that the writer prioritizes current/stronger evidence over weaker older entries
+const multiEmployerRankingContext: PremiumCoverLetterPersonalizationContext = {
+  name: "Carlos Mendez",
+  summary:
+    "Operations lead coordinating cross-team delivery, project tracking, and reporting for client-facing and internal teams.",
+  topSkills: [
+    "Project coordination",
+    "Cross-functional reporting",
+    "Stakeholder communication",
+    "Process improvement",
+  ],
+  recentExperience: [
+    {
+      company: "BrightPath Solutions",
+      position: "Operations Lead",
+      highlights: [
+        "Reduced project delivery delays by 31% by restructuring cross-team handoffs and weekly review cadence.",
+        "Led coordination across a 6-person team spanning operations, finance, and client services.",
+        "Built a real-time project status dashboard used by senior leadership for weekly reporting.",
+      ],
+    },
+    {
+      company: "Clover Admin Services",
+      position: "Administrative Coordinator",
+      highlights: [
+        "Managed scheduling, correspondence, and document filing for a 12-person office team.",
+        "Coordinated travel bookings and expense reports for three department heads.",
+      ],
+    },
+  ],
+  standoutAchievements: [
+    "Recognized for operational improvement at BrightPath after the delay reduction initiative.",
+  ],
+};
+
+// clean engaging direct: strong direct match, no checklist noise, no ranking conflict
+// tests engaging preset doing its warm-but-grounded job without distractions
+const cleanEngagingDirectContext: PremiumCoverLetterPersonalizationContext = {
+  name: "Priya Sharma",
+  summary:
+    "Customer success manager building retention through structured onboarding and proactive account management.",
+  topSkills: [
+    "Account management",
+    "Customer onboarding",
+    "Stakeholder communication",
+    "Health-score reporting",
+  ],
+  recentExperience: [
+    {
+      company: "Lumio Health",
+      position: "Customer Success Manager",
+      highlights: [
+        "Improved 90-day retention by 18% by redesigning onboarding checkpoints and escalation triggers.",
+        "Managed a portfolio of 40+ enterprise accounts with quarterly business reviews.",
+        "Built a customer health-score dashboard used by the CS team to prioritize at-risk accounts.",
+      ],
+    },
+  ],
+  standoutAchievements: [
+    "Top-performing CSM two consecutive quarters based on NPS and retention metrics.",
+  ],
+};
+
 export const coverLetterBenchmarkCases: CoverLetterBenchmarkCase[] = [
   {
     id: "security-hyatt",
@@ -249,5 +319,41 @@ export const coverLetterBenchmarkCases: CoverLetterBenchmarkCase[] = [
     notes:
       "Direct case with strong quantified proof and leadership scope alongside many distracting weaker details.",
     realismTag: "strong_direct_ranking_conflict",
+  },
+  {
+    id: "no-cv-entry-office",
+    preset: "engaging",
+    jobTitle: "Office Coordinator",
+    jobDescription:
+      "Coordinate daily office operations, manage scheduling and correspondence, handle supply ordering, support onboarding logistics, and keep shared administrative workflows organized across a busy team.",
+    personalizationContext: noCvEntryOfficeContext,
+    expectedContextClass: "no_cv",
+    notes:
+      "No CV case with name only; system must build the letter entirely from job offer content without inventing candidate history.",
+    realismTag: "no_cv_entry",
+  },
+  {
+    id: "multi-employer-ranking",
+    preset: "signature",
+    jobTitle: "Project Operations Lead",
+    jobDescription:
+      "Lead cross-functional project coordination, manage delivery tracking and reporting, and drive operational cadence across teams to keep projects moving on time.",
+    personalizationContext: multiEmployerRankingContext,
+    expectedContextClass: "cv_direct",
+    notes:
+      "Two-employer case where the current role has strong quantified proof and the older role has only task-level detail; tests that the writer prioritizes the stronger evidence.",
+    realismTag: "multi_employer_ranking",
+  },
+  {
+    id: "clean-engaging-direct",
+    preset: "engaging",
+    jobTitle: "Customer Success Manager",
+    jobDescription:
+      "Own enterprise account health, lead quarterly business reviews, coordinate onboarding for new customers, and build reporting that keeps the CS team focused on retention and expansion.",
+    personalizationContext: cleanEngagingDirectContext,
+    expectedContextClass: "cv_direct",
+    notes:
+      "Clean strong-direct case with no checklist noise or ranking conflict; tests engaging preset doing its warm-but-grounded job on a straightforward match.",
+    realismTag: "clean_engaging_direct",
   },
 ];

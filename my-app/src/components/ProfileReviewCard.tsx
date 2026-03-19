@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
+import { ChevronDown, GripHorizontal, Plus } from "lucide-react";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import SectionComponent from "./cv-editor/Section";
 import SelectedBlockInspector from "./SelectedBlockInspector";
@@ -216,10 +217,7 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
             {...attributes}
             {...listeners}
           >
-            {/* simple drag handle · use three bars */}
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <path d="M3 9h18M3 15h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <GripHorizontal size={16} strokeWidth={2} aria-hidden />
           </button>
         </div>
  
@@ -381,33 +379,40 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
       </div>
 
       <div className="mb-4 border [border-color:var(--bo)] [border-radius:var(--rm)] [background:var(--sfr)] [box-shadow:var(--sha)] px-3 py-2">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-2">
             {addableSectionOptions.length > 0 ? (
               <>
-                <select
-                  aria-label="Add section type"
-                  className="border [border-color:var(--bm)] [border-radius:var(--rs)] [background:var(--sfr)] [color:var(--ti)] text-ts focus:[border-color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none px-3 cursor-pointer min-w-[140px]"
-                  style={{ height: "var(--hs)", fontFamily: "inherit" }}
-                  value={selectedNewSectionType}
-                  onChange={(e) => setSelectedNewSectionType(e.target.value)}
-                >
-                  <option value="">Add section…</option>
-                  {addableSectionOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <select
+                    aria-label="Add section type"
+                    className="appearance-none border [border-color:var(--bm)] [border-radius:var(--rs)] [background:var(--sfr)] [color:var(--ti)] text-ts focus:[border-color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none pl-3 pr-8 cursor-pointer min-w-[152px]"
+                    style={{ height: "var(--hs)", fontFamily: "inherit" }}
+                    value={selectedNewSectionType}
+                    onChange={(e) => setSelectedNewSectionType(e.target.value)}
+                  >
+                    <option value="">Add section</option>
+                    {addableSectionOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown
+                    className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 [color:var(--tg2)]"
+                    aria-hidden
+                  />
+                </div>
 
                 <button
                   type="button"
-                  className="inline-flex items-center gap-1 border font-medium [transition:all_.12s_var(--ez)] px-3 text-ts rounded-[var(--rs)] [background:var(--ac)] [color:var(--op)] [border-color:transparent] [box-shadow:var(--sha)] hover:brightness-110 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                  style={{ height: "var(--hs)", fontFamily: "inherit" }}
+                  className="dasti-icon-button disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={() => handleAddSection(selectedNewSectionType || undefined)}
                   disabled={!selectedNewSectionType}
+                  aria-label="Add selected section"
+                  title="Add section"
                 >
-                  Add
+                  <Plus className="h-4 w-4" aria-hidden />
                 </button>
 
                 {/* Mobile-only: open bottom sheet for selecting section type */}
@@ -426,30 +431,6 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
                 All optional sections are already added.
               </span>
             )}
-          </div>
-
-          {/* Right-aligned editor actions */}
-          <div className="flex items-center gap-2 ml-auto">
-            <StructuredUploadButton
-              contextKey={currentCv?.id ?? ""}
-              sections={sections as unknown as import("../types/cvDocument").CvSection[]}
-              onApplyToSections={(updated) => {
-                try {
-                  reorderSections(updated as any);
-                } catch {
-                  /* noop */
-                }
-              }}
-              onResult={(payload) => {
-                try {
-                  console.debug("[ProfileReviewCard] structured payload", payload);
-                } catch { /* noop */ }
-              }}
-              label="Upload CV"
-              ocrLabel="Scanned PDF / Image (OCR)"
-              size="sm"
-              className=""
-            />
           </div>
         </div>
       </div>
@@ -478,7 +459,7 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
 
       {!isLoading && currentCv && (
         <div>
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <button
               type="button"
               className="text-left text-lg font-semibold text-foreground [transition:color_.12s_var(--ez)] hover:text-foreground/80 focus:outline-none focus:[box-shadow:0_0_0_3px_var(--fr)] rounded-sm"
@@ -488,12 +469,32 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
             >
               {currentCv.title}
             </button>
-            <div className="text-sm">
-              {isDirty ? (
-                <span className="text-wat">Saving...</span>
-              ) : (
-                <span className="text-okt">Saved</span>
-              )}
+            <div className="flex items-center gap-2">
+              <span className="sr-only" aria-live="polite" role="status">
+                {isDirty ? "Saving" : "Saved"}
+              </span>
+              <StructuredUploadButton
+                contextKey={currentCv?.id ?? ""}
+                sections={sections as unknown as import("../types/cvDocument").CvSection[]}
+                onApplyToSections={(updated) => {
+                  try {
+                    reorderSections(updated as any);
+                  } catch {
+                    /* noop */
+                  }
+                }}
+                onResult={(payload) => {
+                  try {
+                    console.debug("[ProfileReviewCard] structured payload", payload);
+                  } catch {
+                    /* noop */
+                  }
+                }}
+                label="Upload"
+                ocrLabel="Scan"
+                size="sm"
+                className=""
+              />
             </div>
           </div>
 

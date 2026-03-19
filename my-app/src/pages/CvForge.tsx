@@ -10,7 +10,15 @@ import { ProfileReviewCard } from "../components/ProfileReviewCard";
  */
 export function CvForge(): JSX.Element {
   return (
-    <div style={{ height: "100%", overflowY: "auto", overflowX: "hidden" }}>
+    <div
+      style={{
+        height: "100%",
+        overflowY: "auto",
+        overflowX: "hidden",
+        overscrollBehaviorY: "contain",
+        background: "var(--bg)",
+      }}
+    >
       <div
         style={{
           padding: "var(--s8) var(--s7)",

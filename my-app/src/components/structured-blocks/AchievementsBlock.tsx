@@ -2,7 +2,8 @@ import React, { useMemo, useState } from "react";
 import type { CvSection } from "../../schemas/cvDocument.schema";
 import AchievementsDisplay from "../cv-display/AchievementsDisplay";
 import AchievementsModal from "./AchievementsModal";
-import { Pencil, Trash2 } from "lucide-react";
+import { Trash2, Plus } from "lucide-react";
+import { docToPlainText } from "../remirror-editor/utils/text";
 
 /**
  * AchievementsBlock
@@ -25,22 +26,64 @@ interface AchievementsBlockProps {
 
 export function AchievementsBlock({ section, onChange }: AchievementsBlockProps) {
   const items = useMemo(() => {
-    try {
-      if (!Array.isArray(section.structuredContent)) return [];
-      return (section.structuredContent as any[]).map((it) => {
-        // support legacy string items as well as object { id, text }
-        if (typeof it === "string") {
-          return { id: `ach-${Math.random().toString(36).slice(2, 8)}`, text: String(it) };
-        }
-        const o = it as { id?: string; text?: string; achievement?: string };
-        const id = String(o.id ?? `ach-${Math.random().toString(36).slice(2, 8)}`);
-        const text = String(o.text ?? o.achievement ?? "");
-        return { id, text };
+    const normalizedItems: Array<{ id: string; text: string }> = [];
+    const seenTexts = new Set<string>();
+
+    const pushItem = (rawText: unknown, rawId?: unknown) => {
+      const text = String(rawText ?? "").trim();
+      if (!text) return;
+      const dedupeKey = text.toLowerCase();
+      if (seenTexts.has(dedupeKey)) return;
+      seenTexts.add(dedupeKey);
+      normalizedItems.push({
+        id: typeof rawId === "string" && rawId.trim().length > 0
+          ? rawId
+          : `ach-${Math.random().toString(36).slice(2, 8)}`,
+        text,
       });
+    };
+
+    try {
+      if (Array.isArray(section.structuredContent)) {
+        (section.structuredContent as any[]).forEach((it) => {
+          if (typeof it === "string") {
+            pushItem(it);
+            return;
+          }
+          const o = it as { id?: string; text?: string; achievement?: string };
+          pushItem(o.text ?? o.achievement ?? "", o.id);
+        });
+      }
+
+      if (Array.isArray(section.blocks)) {
+        section.blocks.forEach((block) => {
+          let blockText = "";
+          if (typeof (block as any)?.plainText === "string") {
+            blockText = (block as any).plainText;
+          } else {
+            try {
+              blockText = docToPlainText((block as any)?.content);
+            } catch {
+              blockText = "";
+            }
+          }
+
+          if (!blockText && typeof (block as any)?.title === "string" && !/^Achievement\s+\d+$/i.test(String((block as any).title))) {
+            blockText = String((block as any).title);
+          }
+
+          pushItem(
+            blockText,
+            (block as any)?.attributes?.linkedStructuredId ?? (block as any)?.id,
+          );
+        });
+      }
+
+      return normalizedItems;
     } catch {
-      return [];
+      return normalizedItems;
     }
-  }, [section.structuredContent]);
+  }, [section.blocks, section.structuredContent]);
 
   const [isExpanded, setIsExpanded] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -50,13 +93,13 @@ export function AchievementsBlock({ section, onChange }: AchievementsBlockProps)
 
   function handleSave(next: Array<{ id?: string; text: string }>) {
     try {
-      // sanitize
       const sanitized = next.map((r, idx) => ({ id: String(r.id ?? `ach-${Math.random().toString(36).slice(2, 8)}-${idx}`), text: String(r.text ?? "").trim() }))
         .filter((r) => r.text.length > 0);
-      const updatedSection = { ...section, structuredContent: sanitized as any };
+      const updatedSection = { ...section, structuredContent: sanitized as any, blocks: [] as any };
       onChange(updatedSection as CvSection);
     } finally {
       setIsModalOpen(false);
+      setSeedOnOpen(false);
     }
   }
 
@@ -80,13 +123,14 @@ export function AchievementsBlock({ section, onChange }: AchievementsBlockProps)
             type="button"
             onClick={(e) => {
               e.stopPropagation();
+              setSeedOnOpen(true);
               setIsModalOpen(true);
             }}
-            className="p-1 rounded [background:transparent] [color:var(--tm2)] hover:[color:var(--ti)] hover:[background:var(--sf2)] focus:outline-none [transition:all_.12s_var(--ez)]"
-            aria-label="Edit achievements"
-            title="Edit achievements"
+            className="dasti-icon-button"
+            aria-label="Add achievement"
+            title="Add achievement"
           >
-            <Pencil className="w-4 h-4" aria-hidden />
+            <Plus className="w-4 h-4" aria-hidden />
           </button>
           <button
             type="button"
@@ -100,7 +144,7 @@ export function AchievementsBlock({ section, onChange }: AchievementsBlockProps)
               } catch {}
               handleClear();
             }}
-            className="p-1 rounded [background:transparent] [color:var(--tm2)] hover:[color:var(--ti)] hover:[background:var(--sf2)] focus:outline-none [transition:all_.12s_var(--ez)]"
+            className="dasti-icon-button dasti-icon-button--danger"
             aria-label="Clear achievements"
             title="Clear achievements"
           >
@@ -110,7 +154,29 @@ export function AchievementsBlock({ section, onChange }: AchievementsBlockProps)
       </div>
 
       <div className="p-4">
-        <div id={contentId} role="region" aria-expanded={isExpanded} className="text-sm [color:var(--ti)]">
+        <div
+          id={contentId}
+          role="region"
+          aria-expanded={isExpanded}
+          className="text-sm [color:var(--ti)]"
+          onClick={() => {
+            if (items.length === 0) return;
+            setSeedOnOpen(false);
+            setIsModalOpen(true);
+          }}
+          onKeyDown={(e) => {
+            if (items.length === 0) return;
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setSeedOnOpen(false);
+              setIsModalOpen(true);
+            }
+          }}
+          tabIndex={items.length > 0 ? 0 : -1}
+          aria-label={items.length > 0 ? "Edit achievements" : undefined}
+          title={items.length > 0 ? "Click to edit achievements" : undefined}
+          style={{ cursor: items.length > 0 ? "pointer" : "default" }}
+        >
           {items.length === 0 ? (
             <div
               className="[color:var(--tg2)] cursor-text"
@@ -168,8 +234,8 @@ export function AchievementsBlock({ section, onChange }: AchievementsBlockProps)
 
       <AchievementsModal
         open={isModalOpen}
-        // Seed a blank row when opening from the empty-state click
-        items={isModalOpen && seedOnOpen && items.length === 0 ? [{ id: "ach-temp-0", text: "" }] : items}
+        items={items}
+        appendBlankOnOpen={seedOnOpen}
         onClose={() => {
           setIsModalOpen(false);
           setSeedOnOpen(false);
