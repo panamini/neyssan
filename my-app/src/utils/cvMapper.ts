@@ -12,8 +12,6 @@ export function processCV(sections: Section[]): Section[] {
   // 2. Auto-format content (e.g., ensure titles are bold, lists are bulleted).
   // 3. Normalize heading hierarchies.
   
-  console.log('Processing CV sections (currently a placeholder)...');
-  
   // For now, just return the sections as-is.
   return sections;
 }

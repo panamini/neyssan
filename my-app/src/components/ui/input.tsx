@@ -38,10 +38,11 @@ export function Input(props: InputProps) {
     autoFocus,
   } = props;
 
-  // §11 dasti .field : w:100% h:hm · rs · sf1 bg · bm border · ts
+  // §11 dasti .field : w:100% h:hm · rs · sfr bg · bm border · ts
+  // Input uses --sfr (near-white) so it visually stands out from --sf1 card backgrounds.
   // focus: ac border + fr ring 3px (pas de ring-offset)
   const base =
-    "inline-flex items-center w-full rounded-rs text-ts [background:var(--sf1)] [color:var(--ti)] placeholder:[color:var(--tg2)] [transition:background-color_.12s_var(--ez),border-color_.12s_var(--ez),color_.12s_var(--ez),box-shadow_.12s_var(--ez)] focus:outline-none focus:[border-color:var(--ac)]";
+    "inline-flex items-center w-full rounded-rs text-ts [background:var(--sfr)] [color:var(--ti)] placeholder:[color:var(--tg2)] [transition:background-color_.12s_var(--ez),border-color_.12s_var(--ez),color_.12s_var(--ez),box-shadow_.12s_var(--ez)] focus:outline-none focus:[border-color:var(--ac)]";
 
   const sizeMap: Record<string, string> = {
     sm: "px-2 py-1",

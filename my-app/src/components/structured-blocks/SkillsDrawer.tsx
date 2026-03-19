@@ -44,6 +44,7 @@ export function SkillsDrawer({ open, items, onClose, onApply }: SkillsDrawerProp
   const [tab, setTab] = React.useState<TabKey>("manage");
   const [selected, setSelected] = React.useState<Set<string>>(() => new Set());
   const [levelChoice, setLevelChoice] = React.useState<Level>("Intermediate");
+  const [isDeleteConfirming, setIsDeleteConfirming] = React.useState(false);
 
   // Anchor for shift-click range selection
   const anchorRef = React.useRef<{ bucket: Bucket; index: number } | null>(null);
@@ -120,17 +121,9 @@ export function SkillsDrawer({ open, items, onClose, onApply }: SkillsDrawerProp
 
   function handleDeleteSelected() {
     if (!onApply || selected.size === 0) return;
-    try {
-      const ok =
-        typeof window !== "undefined"
-          ? window.confirm(`Delete ${selected.size} selected skill${selected.size !== 1 ? "s" : ""}?`)
-          : true;
-      if (!ok) return;
-    } catch {
-      // proceed
-    }
     mutate((list) => list.filter((it) => !selected.has(idOf(it))));
     setSelected(new Set());
+    setIsDeleteConfirming(false);
   }
 
   // Shift-click range selection logic
@@ -280,15 +273,23 @@ export function SkillsDrawer({ open, items, onClose, onApply }: SkillsDrawerProp
                       To Familiar
                     </button>
                     <div className="w-px h-5 bg-accent/60" aria-hidden />
+                    {isDeleteConfirming ? (
+                      <span className="sb-doc-confirm" style={{ gap: "var(--s2)" }}>
+                        <span className="sb-doc-confirm__label" style={{ fontSize: "var(--tx)" }}>Delete {selected.size}?</span>
+                        <button type="button" className="sb-doc-confirm__yes" onClick={handleDeleteSelected}>Delete</button>
+                        <button type="button" className="sb-doc-confirm__no" onClick={() => setIsDeleteConfirming(false)}>Cancel</button>
+                      </span>
+                    ) : (
                     <button
                       type="button"
-                      onClick={handleDeleteSelected}
+                      onClick={() => setIsDeleteConfirming(true)}
                       disabled={bulkDisabled}
                       className="px-2 py-1 text-sm border rounded border-[color:var(--bo)] disabled:opacity-50 hover:opacity-90"
                       title="Delete selected"
                     >
                       Delete
                     </button>
+                    )}
                   </div>
                 </div>
 

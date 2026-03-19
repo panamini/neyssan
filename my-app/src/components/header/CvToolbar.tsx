@@ -47,24 +47,7 @@ export function CvToolbar({ className = "" }: CvToolbarProps): JSX.Element {
       {/* Add button */}
       <button
         type="button"
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: "var(--s2)",
-          height: "var(--hs)",
-          padding: "0 var(--s3)",
-          borderRadius: "var(--rs)",
-          border: "1px solid var(--bm)",
-          background: "var(--ac)",
-          color: "var(--op)",
-          fontSize: "var(--ts)",
-          fontWeight: 500,
-          cursor: "pointer",
-          fontFamily: "inherit",
-          transition: "filter .12s var(--ez)",
-        }}
-        onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.filter = "brightness(1.1)")}
-        onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.filter = "none")}
+        className="ctb-btn ctb-btn--primary"
       >
         <Plus size={14} />
         Add
@@ -76,34 +59,7 @@ export function CvToolbar({ className = "" }: CvToolbarProps): JSX.Element {
       {/* Upload button */}
       <button
         type="button"
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: "var(--s2)",
-          height: "var(--hs)",
-          padding: "0 var(--s3)",
-          borderRadius: "var(--rs)",
-          border: "1px solid var(--bo)",
-          background: "var(--sfr)",
-          color: "var(--tm2)",
-          fontSize: "var(--ts)",
-          fontWeight: 500,
-          cursor: "pointer",
-          fontFamily: "inherit",
-          transition: "all .12s var(--ez)",
-        }}
-        onMouseEnter={(e) => {
-          const b = e.currentTarget as HTMLButtonElement;
-          b.style.color = "var(--ti)";
-          b.style.borderColor = "var(--bm)";
-          b.style.background = "var(--sf2)";
-        }}
-        onMouseLeave={(e) => {
-          const b = e.currentTarget as HTMLButtonElement;
-          b.style.color = "var(--tm2)";
-          b.style.borderColor = "var(--bo)";
-          b.style.background = "var(--sfr)";
-        }}
+        className="ctb-btn ctb-btn--ghost"
       >
         <Upload size={14} />
         Upload
@@ -112,34 +68,7 @@ export function CvToolbar({ className = "" }: CvToolbarProps): JSX.Element {
       {/* Scanned PDF button */}
       <button
         type="button"
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: "var(--s2)",
-          height: "var(--hs)",
-          padding: "0 var(--s3)",
-          borderRadius: "var(--rs)",
-          border: "1px solid var(--bo)",
-          background: "var(--sfr)",
-          color: "var(--tm2)",
-          fontSize: "var(--ts)",
-          fontWeight: 500,
-          cursor: "pointer",
-          fontFamily: "inherit",
-          transition: "all .12s var(--ez)",
-        }}
-        onMouseEnter={(e) => {
-          const b = e.currentTarget as HTMLButtonElement;
-          b.style.color = "var(--ti)";
-          b.style.borderColor = "var(--bm)";
-          b.style.background = "var(--sf2)";
-        }}
-        onMouseLeave={(e) => {
-          const b = e.currentTarget as HTMLButtonElement;
-          b.style.color = "var(--tm2)";
-          b.style.borderColor = "var(--bo)";
-          b.style.background = "var(--sfr)";
-        }}
+        className="ctb-btn ctb-btn--ghost"
       >
         <ScanLine size={14} />
         Scanned PDF

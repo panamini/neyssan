@@ -135,14 +135,16 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
   }, [sections, v1Enabled, hasMeaningfulAchievementsSection]);
 
   React.useEffect(() => {
-    try {
-      // eslint-disable-next-line no-console
-      console.debug(
-        "[ProfileReviewCard] sections snapshot",
-        sections.map((section) => ({ type: section.type, blocks: section.blocks?.length ?? 0, items: Array.isArray((section as any)?.structuredContent) ? (section as any).structuredContent.length : null }))
-      );
-    } catch {
-      /* noop */
+    if (typeof window !== "undefined" && (window as any).__CV_EDITOR_DEBUG__ === true) {
+      try {
+        // eslint-disable-next-line no-console
+        console.debug(
+          "[ProfileReviewCard] sections snapshot",
+          sections.map((section) => ({ type: section.type, blocks: section.blocks?.length ?? 0, items: Array.isArray((section as any)?.structuredContent) ? (section as any).structuredContent.length : null }))
+        );
+      } catch {
+        /* noop */
+      }
     }
   }, [sections]);
   const sensors = useSensors(useSensor(PointerSensor));
@@ -449,10 +451,20 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
       )}
 
       {!isLoading && !currentCv && (
-        <div className="p-4 border rounded-md border-bo [background:var(--sfr)] text-foreground">
-          <p className="mb-2">No CV loaded.</p>
-          <p className="text-sm [color:var(--tg2)]">
-            Provide a <code>cvId</code> prop to load a CV, or open the library to select one.
+        <div
+          style={{
+            padding: "var(--s5)",
+            borderRadius: "var(--rm)",
+            border: "1px solid var(--bo)",
+            background: "var(--sfr)",
+            boxShadow: "var(--sha)",
+          }}
+        >
+          <p style={{ fontSize: "var(--ts)", fontWeight: 600, color: "var(--ti)", marginBottom: "var(--s2)" }}>
+            No resume selected
+          </p>
+          <p style={{ fontSize: "var(--ts)", color: "var(--tg2)", lineHeight: "var(--ls)" }}>
+            Select a resume from the sidebar, or create a new one using the + button.
           </p>
         </div>
       )}
@@ -484,10 +496,13 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
                   }
                 }}
                 onResult={(payload) => {
-                  try {
-                    console.debug("[ProfileReviewCard] structured payload", payload);
-                  } catch {
-                    /* noop */
+                  if (typeof window !== "undefined" && (window as any).__CV_EDITOR_DEBUG__ === true) {
+                    try {
+                      // eslint-disable-next-line no-console
+                      console.debug("[ProfileReviewCard] structured payload", payload);
+                    } catch {
+                      /* noop */
+                    }
                   }
                 }}
                 label="Upload"

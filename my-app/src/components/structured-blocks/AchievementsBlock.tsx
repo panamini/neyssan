@@ -89,6 +89,7 @@ export function AchievementsBlock({ section, onChange }: AchievementsBlockProps)
   const [isModalOpen, setIsModalOpen] = useState(false);
   // When true and list is empty, seed the modal with a blank row and focus it.
   const [seedOnOpen, setSeedOnOpen] = useState(false);
+  const [isClearConfirming, setIsClearConfirming] = useState(false);
   const contentId = useMemo(() => `ach-content-${String(section.id)}`, [section.id]);
 
   function handleSave(next: Array<{ id?: string; text: string }>) {
@@ -132,24 +133,23 @@ export function AchievementsBlock({ section, onChange }: AchievementsBlockProps)
           >
             <Plus className="w-4 h-4" aria-hidden />
           </button>
+          {isClearConfirming ? (
+            <span className="sb-doc-confirm" style={{ gap: "var(--s2)" }}>
+              <span className="sb-doc-confirm__label" style={{ fontSize: "var(--tx)" }}>Clear all?</span>
+              <button type="button" className="sb-doc-confirm__yes" onClick={(e) => { e.stopPropagation(); setIsClearConfirming(false); handleClear(); }}>Clear</button>
+              <button type="button" className="sb-doc-confirm__no" onClick={(e) => { e.stopPropagation(); setIsClearConfirming(false); }}>Cancel</button>
+            </span>
+          ) : (
           <button
             type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              try {
-                if (typeof window !== "undefined") {
-                  const confirmClear = window.confirm("Clear achievements? This will remove all achievement items.");
-                  if (!confirmClear) return;
-                }
-              } catch {}
-              handleClear();
-            }}
+            onClick={(e) => { e.stopPropagation(); setIsClearConfirming(true); }}
             className="dasti-icon-button dasti-icon-button--danger"
             aria-label="Clear achievements"
             title="Clear achievements"
           >
             <Trash2 className="w-4 h-4" aria-hidden />
           </button>
+          )}
         </div>
       </div>
 
