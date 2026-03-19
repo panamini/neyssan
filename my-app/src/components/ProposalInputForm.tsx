@@ -688,19 +688,6 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
           </div>
           {/* Controls row */}
           <div className="flex flex-wrap items-center gap-4 md:col-span-2">
-            {/* Model Type */}
-            {/* Model Type */}
-            <div className="flex-1 min-w-[150px] flex items-center gap-2">
-              <CustomToggle
-                isModelToggle={true}
-                options={VISIBLE_MODEL_OPTIONS}
-                value={selectedModelType}
-                onChange={(value: string) =>
-                  form.setValue("modelType", value as "chatgpt")
-                }
-              />
-            </div>
-
             {/* Proposal Type */}
             <div className="flex-1 min-w-[150px] flex items-center gap-2">
               <CustomToggle
