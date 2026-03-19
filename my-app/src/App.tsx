@@ -3,8 +3,8 @@ import "./styles/globals.css";
 
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
-import { Authenticated, Unauthenticated } from "convex/react";
-import { SignInButton, UserButton } from "@clerk/clerk-react";
+import { Unauthenticated } from "convex/react";
+import { SignInButton } from "@clerk/clerk-react";
 import { ConvexStatusBanner } from "./components/ConvexStatusBanner";
 import DarkModeToggle from "./components/dark-mode-toggle/DarkModeToggle";
 import { CvForge } from "./pages/CvForge";
@@ -62,39 +62,8 @@ function Topbar() {
         </span>
       </div>
 
-      {/* Right — Export PDF + auth + dark mode */}
+      {/* Right — auth + dark mode */}
       <div style={{ display: "flex", alignItems: "center", gap: "var(--s2)" }}>
-        <button
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "var(--s2)",
-            height: "var(--hs)",
-            padding: "0 var(--s3)",
-            borderRadius: "var(--rs)",
-            border: "1px solid var(--bm)",
-            background: "var(--sfr)",
-            color: "var(--ti)",
-            fontSize: "var(--ts)",
-            fontWeight: 500,
-            cursor: "pointer",
-            boxShadow: "var(--sha)",
-            transition: "all .12s var(--ez)",
-            fontFamily: "inherit",
-          }}
-          onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = "var(--sf2)")}
-          onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = "var(--sfr)")}
-          type="button"
-        >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-            <path d="M2 13h12M8 2v8M5 6l3 3 3-3" />
-          </svg>
-          Export PDF
-        </button>
-
-        <Authenticated>
-          <UserButton />
-        </Authenticated>
         <Unauthenticated>
           <SignInButton mode="modal">
             <button
