@@ -34,7 +34,7 @@ export default function ProfileEditorUnified() {
   const { showToast } = useToast();
   
   // Backend base URL (set in my-app/.env as VITE_PDF_INGEST_URL, e.g. http://127.0.0.1:8000)
-  const baseUrl = (import.meta as any).env?.VITE_PDF_INGEST_URL || "";
+  const baseUrl = import.meta.env.VITE_PDF_INGEST_URL || "";
 
   const profile = useQuery(api.profilesPublic.get);
 

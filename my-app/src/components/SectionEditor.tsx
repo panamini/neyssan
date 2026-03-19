@@ -266,11 +266,15 @@ export default function SectionEditor({
   // Mount/unmount diagnostics with stable mount id to correlate with register/unregister churn
   const mountIdRef = useRef<string>(uuidv4());
   useEffect(() => {
-    // eslint-disable-next-line no-console
-    console.debug("[SectionEditor] mount", { mountId: mountIdRef.current, sectionId: section.id });
-    return () => {
+    if (typeof window !== "undefined" && (window as any).__CV_EDITOR_DEBUG__ === true) {
       // eslint-disable-next-line no-console
-      console.debug("[SectionEditor] unmount", { mountId: mountIdRef.current, sectionId: section.id });
+      console.debug("[SectionEditor] mount", { mountId: mountIdRef.current, sectionId: section.id });
+    }
+    return () => {
+      if (typeof window !== "undefined" && (window as any).__CV_EDITOR_DEBUG__ === true) {
+        // eslint-disable-next-line no-console
+        console.debug("[SectionEditor] unmount", { mountId: mountIdRef.current, sectionId: section.id });
+      }
     };
   // we intentionally leave deps empty to log physical mount/unmounts only
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -472,7 +476,6 @@ export default function SectionEditor({
     const viewDom = (manager as any)?.view?.dom as HTMLElement | undefined;
     if (!viewDom) return;
     const handleFocusIn = () => {
-      console.log("[SectionEditor] editor focused", { sectionId: section.id });
       onFocus?.(String(section.id));
     };
     const handleFocusOut = () => {
@@ -535,24 +538,6 @@ export default function SectionEditor({
   const { isV1Active, selectedInspector, closeInspector } = useCvLibrary();
 
   // Dev-only runtime diagnostics: log which branch we will render for this section.
-  // Helps QA confirm whether collapsed view uses v1-structured content or a legacy fallback.
-  useEffect(() => {
-    try {
-      const blocksCount = Array.isArray(section.blocks) ? section.blocks.length : 0;
-      const structuredCount = Array.isArray(section.structuredContent) ? section.structuredContent.length : 0;
-      // eslint-disable-next-line no-console
-      console.debug("[SectionEditor] render-mode", {
-        sectionId: String(section.id),
-        sectionType,
-        isV1Active,
-        blocksCount,
-        structuredCount,
-        title: section.title,
-      });
-    } catch {
-      /* noop */
-    }
-  }, [section.id, sectionType, isV1Active, section.blocks, section.structuredContent, section.title]);
 
   // Hybrid profile editor: collapsed card + dedicated modal for structured fields
   const [isProfileModalOpen, setProfileModalOpen] = useState<boolean>(false);
@@ -565,6 +550,7 @@ export default function SectionEditor({
   const [isEducationModalOpen, setEducationModalOpen] = useState<boolean>(false);
   // Skills drawer (Phase 2 skeleton)
   const [isSkillsDrawerOpen, setSkillsDrawerOpen] = useState<boolean>(false);
+  const [isClearConfirming, setClearConfirming] = useState<boolean>(false);
   
   // (moved) The flush-related hooks and refs were moved higher up in the component
   // to resolve TypeScript declaration errors and to support the stable-ref pattern for registration.
@@ -690,37 +676,32 @@ export default function SectionEditor({
             >
               <Pencil className="w-4 h-4" aria-hidden />
             </button>
+            {isClearConfirming ? (
+              <span className="sb-doc-confirm" style={{ gap: "var(--s2)" }}>
+                <span className="sb-doc-confirm__label" style={{ fontSize: "var(--tx)" }}>Clear?</span>
+                <button
+                  type="button"
+                  className="sb-doc-confirm__yes"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setClearConfirming(false);
+                    try { onContentChange?.(String(section.id), ensureRemirrorDoc(undefined as any)); } catch { /* noop */ }
+                    try { onChange(index, { ...section, structuredContent: [] as any } as any); } catch { /* noop */ }
+                  }}
+                >Clear</button>
+                <button type="button" className="sb-doc-confirm__no" onClick={(e) => { e.stopPropagation(); setClearConfirming(false); }}>Cancel</button>
+              </span>
+            ) : (
             <button
               type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                try {
-                  const confirmClear =
-                    typeof window !== "undefined"
-                      ? window.confirm("Clear Summary? This will remove your summary text.")
-                      : true;
-                  if (!confirmClear) return;
-                } catch {
-                  /* noop */
-                }
-                try {
-                  onContentChange?.(String(section.id), ensureRemirrorDoc(undefined as any));
-                } catch {
-                  /* noop */
-                }
-                try {
-                  const updated = { ...section, structuredContent: [] as any };
-                  onChange(index, updated as any);
-                } catch {
-                  /* noop */
-                }
-              }}
+              onClick={(e) => { e.stopPropagation(); setClearConfirming(true); }}
               className="dasti-icon-button dasti-icon-button--danger"
               aria-label="Clear summary"
               title="Clear summary"
             >
               <Trash2 className="w-4 h-4" aria-hidden />
             </button>
+            )}
             {typeof onCollapseChange === "function" && (
               <button
                 type="button"
@@ -1063,16 +1044,6 @@ export default function SectionEditor({
             <div className="mt-2 space-y-2">
               {Array.isArray(section.blocks) && section.blocks.length > 0 ? (
                 <>
-                  {(() => {
-                    try {
-                      // eslint-disable-next-line no-console
-                      console.debug("[SectionEditor] skills: rendering collapsed blocks", {
-                        sectionId: String(section.id),
-                        blocks: section.blocks.length,
-                      });
-                    } catch { /* noop */ }
-                    return null;
-                  })()}
                   {section.blocks.map((b: any) => (
                     <div key={String(b.id)} className="p-0">
                       <BlockRenderer
@@ -1183,16 +1154,6 @@ export default function SectionEditor({
             {/* Representative blocks (kept for parity/debug) */}
             {Array.isArray(section.blocks) && section.blocks.length > 0 ? (
               <div className="mt-2 space-y-2">
-                {(() => {
-                  try {
-                    // eslint-disable-next-line no-console
-                    console.debug("[SectionEditor] skills: rendering expanded blocks", {
-                      sectionId: String(section.id),
-                      blocks: section.blocks.length,
-                    });
-                  } catch { /* noop */ }
-                  return null;
-                })()}
                 {section.blocks.map((b: any) => (
                   <div key={String(b.id)} className="p-0">
                     <BlockRenderer
@@ -1638,32 +1599,31 @@ export default function SectionEditor({
             >
               <Pencil className="w-4 h-4" aria-hidden />
             </button>
+            {isClearConfirming ? (
+              <span className="sb-doc-confirm" style={{ gap: "var(--s2)" }}>
+                <span className="sb-doc-confirm__label" style={{ fontSize: "var(--tx)" }}>Clear?</span>
+                <button
+                  type="button"
+                  className="sb-doc-confirm__yes"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setClearConfirming(false);
+                    try { onChange(index, { ...section, structuredContent: [] as any } as any); } catch { /* noop */ }
+                  }}
+                >Clear</button>
+                <button type="button" className="sb-doc-confirm__no" onClick={(e) => { e.stopPropagation(); setClearConfirming(false); }}>Cancel</button>
+              </span>
+            ) : (
             <button
               type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                try {
-                  const confirmClear =
-                    typeof window !== "undefined"
-                      ? window.confirm("Clear Profile? This will remove all profile information.")
-                      : true;
-                  if (!confirmClear) return;
-                } catch {
-                  /* noop */
-                }
-                try {
-                  const updated = { ...section, structuredContent: [] as any };
-                  onChange(index, updated as any);
-                } catch {
-                  /* noop */
-                }
-              }}
+              onClick={(e) => { e.stopPropagation(); setClearConfirming(true); }}
               className="dasti-icon-button dasti-icon-button--danger"
               aria-label="Clear profile"
               title="Clear profile"
             >
               <Trash2 className="w-4 h-4" aria-hidden />
             </button>
+            )}
             {typeof onCollapseChange === "function" && (
               <button
                 type="button"

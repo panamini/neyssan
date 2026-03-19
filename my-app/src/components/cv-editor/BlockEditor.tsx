@@ -15,6 +15,7 @@ export function BlockEditor({
 }) {
   const [isEditing, setIsEditing] = React.useState<boolean>(false);
   const [staged, setStaged] = React.useState(block.content);
+  const [isConfirmingDelete, setIsConfirmingDelete] = React.useState(false);
 
   React.useEffect(() => {
     setStaged(block.content);
@@ -41,11 +42,7 @@ export function BlockEditor({
   }, [block.content]);
 
   const handleDelete = React.useCallback(() => {
-    // confirm delete
-    // eslint-disable-next-line no-alert
-    if (confirm("Delete this block?")) {
-      onDelete();
-    }
+    onDelete();
   }, [onDelete]);
 
   // Create a fake section shape expected by RemirrorEditor
@@ -108,13 +105,21 @@ export function BlockEditor({
             >
               Cancel
             </button>
-            <button
-              type="button"
-              onClick={handleDelete}
-              className="px-3 py-1 ml-auto text-[var(--foreground)] bg-[var(--danger)] rounded hover:bg-[var(--danger)]/90"
-            >
-              Delete
-            </button>
+            {isConfirmingDelete ? (
+              <span className="sb-doc-confirm ml-auto" style={{ gap: "var(--s2)" }}>
+                <span className="sb-doc-confirm__label" style={{ fontSize: "var(--tx)" }}>Delete block?</span>
+                <button type="button" className="sb-doc-confirm__yes" onClick={handleDelete}>Delete</button>
+                <button type="button" className="sb-doc-confirm__no" onClick={() => setIsConfirmingDelete(false)}>Cancel</button>
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsConfirmingDelete(true)}
+                className="px-3 py-1 ml-auto text-[var(--foreground)] bg-[var(--danger)] rounded hover:bg-[var(--danger)]/90"
+              >
+                Delete
+              </button>
+            )}
           </div>
         </div>
       )}

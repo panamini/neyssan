@@ -167,12 +167,38 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
 
   if (loading) {
     return (
-      <div className="rounded-[var(--rm)] border border-[color:var(--bo)] [background:var(--sf1)] p-6">
-        <div className="text-sm font-medium text-foreground">
-          Generating proposal
+      <div className="rounded-[var(--rm)] border border-[color:var(--bo)] [background:var(--sf1)] p-6" aria-busy="true" aria-label="Generating proposal">
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--s3)" }}>
+          {[0.85, 1, 0.72, 0.95, 0.6].map((w, i) => (
+            <div
+              key={i}
+              style={{
+                height: 13,
+                borderRadius: 4,
+                width: `${w * 100}%`,
+                background: "linear-gradient(90deg, var(--sf2) 25%, var(--sfr) 50%, var(--sf2) 75%)",
+                backgroundSize: "200% 100%",
+                animation: `dasti-shimmer 1.4s ease-in-out ${i * 0.1}s infinite`,
+              }}
+            />
+          ))}
+          <div style={{ height: "var(--s3)" }} />
+          {[0.9, 0.78, 1, 0.55].map((w, i) => (
+            <div
+              key={`b${i}`}
+              style={{
+                height: 13,
+                borderRadius: 4,
+                width: `${w * 100}%`,
+                background: "linear-gradient(90deg, var(--sf2) 25%, var(--sfr) 50%, var(--sf2) 75%)",
+                backgroundSize: "200% 100%",
+                animation: `dasti-shimmer 1.4s ease-in-out ${(i + 5) * 0.1}s infinite`,
+              }}
+            />
+          ))}
         </div>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Preparing the latest draft now.
+        <p style={{ marginTop: "var(--s4)", fontSize: "var(--tx)", color: "var(--tg2)" }}>
+          Generating…
         </p>
       </div>
     );

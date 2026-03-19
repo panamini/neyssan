@@ -550,7 +550,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
           >
             <span>Resume:</span>
             <span className="truncate font-medium text-foreground">
-              {activeCvSource.title ?? "none"}
+              {activeCvSource.title ?? "not selected"}
             </span>
           </button>
           <button
@@ -685,6 +685,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
           {/* Main inputs */}
           <div className="md:col-span-2">
             <div>
+              <label htmlFor="jobTitle" className="sr-only">Job title</label>
               <input
                 type="text"
                 id="jobTitle"
@@ -738,32 +739,8 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                   ref={typeChipRef}
                   type="button"
                   title="Document type"
+                  className="pf-chip"
                   onClick={(e) => { e.stopPropagation(); toggleMenu("type"); }}
-                  style={{
-                    height: 26,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: "6px",
-                    padding: "0 var(--s2)",
-                    borderRadius: "var(--rs)",
-                    border: "1px solid transparent",
-                    background: "transparent",
-                    color: "var(--tm2)",
-                    cursor: "pointer",
-                    flexShrink: 0,
-                    transition: "background .12s var(--ez), color .12s var(--ez)",
-                  }}
-                  onMouseEnter={(e) => {
-                    const b = e.currentTarget as HTMLButtonElement;
-                    b.style.background = "var(--sf2)";
-                    b.style.color = "var(--ti)";
-                  }}
-                  onMouseLeave={(e) => {
-                    const b = e.currentTarget as HTMLButtonElement;
-                    b.style.background = "transparent";
-                    b.style.color = "var(--tm2)";
-                  }}
                 >
                   <span style={{ fontSize: "var(--tx)", fontWeight: 500 }}>{typeLabel}</span>
                   <ChevronDown size={12} strokeWidth={1.5} aria-hidden="true" />
@@ -773,32 +750,8 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                   ref={toneChipRef}
                   type="button"
                   title="Tone"
+                  className="pf-chip"
                   onClick={(e) => { e.stopPropagation(); toggleMenu("tone"); }}
-                  style={{
-                    height: 26,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: "6px",
-                    padding: "0 var(--s2)",
-                    borderRadius: "var(--rs)",
-                    border: "1px solid transparent",
-                    background: "transparent",
-                    color: "var(--tm2)",
-                    cursor: "pointer",
-                    flexShrink: 0,
-                    transition: "background .12s var(--ez), color .12s var(--ez)",
-                  }}
-                  onMouseEnter={(e) => {
-                    const b = e.currentTarget as HTMLButtonElement;
-                    b.style.background = "var(--sf2)";
-                    b.style.color = "var(--ti)";
-                  }}
-                  onMouseLeave={(e) => {
-                    const b = e.currentTarget as HTMLButtonElement;
-                    b.style.background = "transparent";
-                    b.style.color = "var(--tm2)";
-                  }}
                 >
                   <span style={{ fontSize: "var(--tx)", fontWeight: 500 }}>{toneUiLabel}</span>
                   <ChevronDown size={12} strokeWidth={1.5} aria-hidden="true" />
@@ -877,15 +830,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                 <div
                   key={opt.value}
                   onClick={() => { form.setValue("proposalType", opt.value, { shouldDirty: true, shouldValidate: true }); setOpenMenu(null); }}
-                  style={{
-                    padding: "var(--s3) var(--s4)",
-                    borderRadius: "var(--rs)",
-                    cursor: "pointer",
-                    background: selectedProposalType === opt.value ? "var(--as)" : "transparent",
-                    transition: "background .1s var(--ez)",
-                  }}
-                  onMouseEnter={(e) => { if (selectedProposalType !== opt.value) (e.currentTarget as HTMLDivElement).style.background = "var(--sf2)"; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = selectedProposalType === opt.value ? "var(--as)" : "transparent"; }}
+                  className={`pf-menu-option${selectedProposalType === opt.value ? " pf-menu-option--active" : ""}`}
                 >
                   <div style={{ fontSize: "var(--ts)", fontWeight: 600, color: "var(--ti)" }}>{opt.label}</div>
                   <div style={{ fontSize: "var(--tx)", color: "var(--tg2)", marginTop: 3, lineHeight: 1.5 }}>{opt.desc}</div>
@@ -897,15 +842,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
             <div
               key={opt.id}
               onClick={() => { handleVoicePresetChange(opt.id); setOpenMenu(null); }}
-              style={{
-                padding: "var(--s3) var(--s4)",
-                borderRadius: "var(--rs)",
-                cursor: "pointer",
-                background: displayedVoicePreset === opt.id ? "var(--as)" : "transparent",
-                transition: "background .1s var(--ez)",
-              }}
-              onMouseEnter={(e) => { if (displayedVoicePreset !== opt.id) (e.currentTarget as HTMLDivElement).style.background = "var(--sf2)"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = displayedVoicePreset === opt.id ? "var(--as)" : "transparent"; }}
+              className={`pf-menu-option${displayedVoicePreset === opt.id ? " pf-menu-option--active" : ""}`}
             >
               <div style={{ fontSize: "var(--ts)", fontWeight: 600, color: "var(--ti)" }}>{opt.uiLabel}</div>
               <div style={{ fontSize: "var(--tx)", color: "var(--tg2)", marginTop: 3, lineHeight: 1.5 }}>{opt.description}</div>

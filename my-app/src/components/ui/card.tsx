@@ -10,7 +10,7 @@ export interface CardProps {
 }
 
 export function Card({ children, className, as = "div" }: CardProps) {
-  const Tag = as as any;
+  const Tag = as as React.ElementType;
   return (
     <Tag
       className={clsx(
