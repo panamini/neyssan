@@ -507,7 +507,7 @@ export function StyleForge(): JSX.Element {
                           height: 48,
                           borderRadius: "var(--rs)",
                           border: "1px solid var(--bo)",
-                          background: "var(--sf1)",
+                          background: "var(--sfr)",
                           padding: 5,
                           display: "flex",
                           flexDirection: option.id === "two-column" ? "row" : "column",
@@ -516,7 +516,7 @@ export function StyleForge(): JSX.Element {
                       >
                         {option.id === "two-column" ? (
                           <>
-                            <div style={{ width: "36%", borderRadius: "var(--rx)", background: activePalette.accent, opacity: 0.22 }} />
+                            <div style={{ width: "36%", borderRadius: "var(--rx)", background: activePalette.accent, opacity: 0.45 }} />
                             <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2, paddingTop: 2 }}>
                               <div style={{ height: 2, borderRadius: 2, background: "var(--bm)" }} />
                               <div style={{ height: 2, width: "65%", borderRadius: 2, background: "var(--bm)" }} />
@@ -525,7 +525,7 @@ export function StyleForge(): JSX.Element {
                           </>
                         ) : option.id === "editorial" ? (
                           <>
-                            <div style={{ height: "26%", borderRadius: "var(--rx)", background: activePalette.accent, opacity: 0.22 }} />
+                            <div style={{ height: "26%", borderRadius: "var(--rx)", background: activePalette.accent, opacity: 0.45 }} />
                             <div style={{ display: "flex", flexDirection: "column", gap: 2, paddingTop: 2 }}>
                               <div style={{ height: 2, borderRadius: 2, background: "var(--bm)" }} />
                               <div style={{ height: 2, width: "60%", borderRadius: 2, background: "var(--bm)" }} />
@@ -652,46 +652,9 @@ export function StyleForge(): JSX.Element {
               </div>
             </section>
 
-            <div style={{ display: "flex", gap: "var(--s3)" }}>
-              <button
-                type="button"
-                disabled
-                style={{
-                  flex: 1,
-                  height: "var(--hm)",
-                  borderRadius: "var(--rs)",
-                  border: "1px solid var(--bm)",
-                  background: "var(--sfr)",
-                  color: "var(--ti)",
-                  fontSize: "var(--ts)",
-                  fontWeight: 500,
-                  boxShadow: "var(--sha)",
-                  opacity: 0.65,
-                  cursor: "not-allowed",
-                }}
-              >
-                PDF Preview
-              </button>
-              <button
-                type="button"
-                disabled
-                style={{
-                  flex: 1,
-                  height: "var(--hm)",
-                  borderRadius: "var(--rs)",
-                  border: "1px solid var(--ac)",
-                  background: activePalette.accent,
-                  color: "var(--op)",
-                  fontSize: "var(--ts)",
-                  fontWeight: 500,
-                  boxShadow: "var(--sha)",
-                  opacity: 0.65,
-                  cursor: "not-allowed",
-                }}
-              >
-                Export PDF
-              </button>
-            </div>
+            <p style={{ fontSize: "var(--tx)", color: "var(--tg2)", lineHeight: "var(--ls)" }}>
+              PDF export — coming soon
+            </p>
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--s6)", minWidth: 0 }}>

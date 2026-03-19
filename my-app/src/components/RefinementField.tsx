@@ -212,6 +212,7 @@ export function RefinementField({
               />
             ) : (
               <textarea
+                aria-label={`${label} edit`}
                 value={localText}
                 onChange={e => setLocalText(e.target.value)}
                 rows={6}

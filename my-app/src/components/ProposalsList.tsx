@@ -129,6 +129,7 @@ export default function ProposalsList({
   const [isRegenerating, setIsRegenerating] = React.useState<string | null>(null);
   const [isUpdating, setIsUpdating] = React.useState<string | null>(null);
   const [copied, setCopied] = React.useState(false);
+  const [isConfirmingDelete, setIsConfirmingDelete] = React.useState(false);
   const { showToast } = useToast();
   const isCompactLibraryLayout = viewportWidth < 1180;
   const libraryPanelPadding = isCompactLibraryLayout ? "var(--s4)" : "var(--s5)";
@@ -222,7 +223,7 @@ export default function ProposalsList({
   }
 
   const selDate = selected
-    ? new Date(selected._creationTime).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" })
+    ? new Date(selected._creationTime).toLocaleDateString(undefined, { day: "2-digit", month: "2-digit", year: "2-digit" })
     : "";
   const selType = selected ? typeLabel(getStoredProposalType(selected)) : "";
   const selTone = selected ? toneLabel(getStoredVoicePreset(selected)) : "";
@@ -296,9 +297,9 @@ export default function ProposalsList({
     }
   }
 
-  async function handleDelete() {
+  async function handleDeleteConfirm() {
     if (!selected) return;
-    if (!confirm("Delete this proposal?")) return;
+    setIsConfirmingDelete(false);
     try {
       await deleteProposal({ id: selected._id });
       removeLocalProposal(selected._id);
@@ -345,13 +346,14 @@ export default function ProposalsList({
           <>
             {/* .p-title-edit */}
             <textarea
+              aria-label="Proposal title"
               value={editTitle}
               rows={2}
               onChange={(e) => setEditTitle(e.target.value)}
               onBlur={() => void handleSaveTitle()}
               style={{
                 fontFamily: '"Fraunces", serif',
-                fontSize: 20,
+                fontSize: "var(--tx2)",
                 fontWeight: 600,
                 letterSpacing: "-.02em",
                 color: "var(--ti)",
@@ -449,15 +451,23 @@ export default function ProposalsList({
               </button>
               {/* Separator */}
               <div style={{ width: 1, height: 16, background: "var(--bo)", margin: "0 2px" }} />
-              {/* Delete — danger on hover */}
-              <button
-                type="button"
-                title="Delete"
-                className="dasti-icon-button dasti-icon-button--danger"
-                onClick={() => void handleDelete()}
-              >
-                <Trash2 size={16} strokeWidth={1.5} />
-              </button>
+              {/* Delete — inline confirmation */}
+              {isConfirmingDelete ? (
+                <span className="sb-doc-confirm" style={{ gap: "var(--s2)" }}>
+                  <span className="sb-doc-confirm__label" style={{ fontSize: "var(--tx)" }}>Delete?</span>
+                  <button type="button" className="sb-doc-confirm__yes" onClick={() => void handleDeleteConfirm()}>Delete</button>
+                  <button type="button" className="sb-doc-confirm__no" onClick={() => setIsConfirmingDelete(false)}>Cancel</button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  title="Delete"
+                  className="dasti-icon-button dasti-icon-button--danger"
+                  onClick={() => setIsConfirmingDelete(true)}
+                >
+                  <Trash2 size={16} strokeWidth={1.5} />
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -465,6 +475,7 @@ export default function ProposalsList({
         {/* .p-body */}
         {selected ? (
           <textarea
+            aria-label="Proposal content"
             value={editContent}
             onChange={(e) => setEditContent(e.target.value)}
             onBlur={() => void handleSaveContent()}

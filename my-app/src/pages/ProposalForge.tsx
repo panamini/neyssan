@@ -180,8 +180,6 @@ export function ProposalForge(): JSX.Element {
     }
   }, [proposalContent, proposalType, showToast]);
 
-  const [hoveredTab, setHoveredTab] = React.useState<ProposalForgeView | null>(null);
-
   const activeView = requestedView;
   const isComposeView = activeView === "compose";
   const isSavedView = activeView === "saved";
@@ -191,30 +189,6 @@ export function ProposalForge(): JSX.Element {
     Boolean(handoffId) &&
     (isConvexAuthLoading || (isConvexAuthenticated && handoffRecord === undefined));
 
-  /* ── Tab underline style — §13 dasti-spec-v1 ─────────────── */
-  const tabStyle = (view: ProposalForgeView): React.CSSProperties => {
-    const isActive = activeView === view;
-    const isHovered = !isActive && hoveredTab === view;
-    return {
-      display: "inline-flex",
-      alignItems: "center",
-      height: "var(--hs)",
-      padding: "0 var(--s3)",
-      borderRadius: "var(--rs) var(--rs) 0 0",
-      border: "none",
-      borderBottom: `2px solid ${isActive ? "var(--ac)" : "transparent"}`,
-      marginBottom: -1,
-      background: isHovered ? "var(--sf2)" : "transparent",
-      fontSize: "var(--ts)",
-      fontWeight: isActive ? 600 : 500,
-      color: isActive ? "var(--ti)" : "var(--tm2)",
-      cursor: "pointer",
-      transition: "all .12s var(--ez)",
-      fontFamily: "inherit",
-      outline: "none",
-    };
-  };
-
   /* ── Shared styles ───────────────────────────────────────── */
   const eyebrow: React.CSSProperties = {
     fontSize: "var(--tx)",
@@ -222,7 +196,7 @@ export function ProposalForge(): JSX.Element {
     color: "var(--am)",
     letterSpacing: ".14em",
     textTransform: "uppercase",
-    marginBottom: "var(--s2)",
+    marginBottom: "var(--s4)",
   };
 
   const panelCard: React.CSSProperties = {
@@ -281,57 +255,30 @@ export function ProposalForge(): JSX.Element {
     >
       <div
         style={{
-          padding: isCompactComposeLayout ? "var(--s5) var(--s4)" : isNarrowLaptop ? "var(--s7) var(--s6)" : "var(--s8) var(--s7)",
+          padding: isCompactComposeLayout ? "var(--s5) var(--s4)" : "var(--s7)",
           display: "flex",
           flexDirection: "column",
           gap: "var(--s5)",
+          maxWidth: isCompactComposeLayout ? 720 : isNarrowLaptop ? 860 : 960,
+          margin: "0 auto",
+          width: "100%",
         }}
       >
-        <div
-          style={{
-            padding: "var(--s5)",
-            borderRadius: "var(--rm)",
-            border: "1px solid var(--bo)",
-            background: "var(--sfr)",
-            boxShadow: "var(--sha)",
-            maxWidth: isCompactComposeLayout ? 720 : isNarrowLaptop ? 860 : 960,
-          }}
-        >
-          <div style={eyebrow}>Write</div>
-          <h2
-            style={{
-              fontFamily: '"Fraunces", serif',
-              fontSize: "var(--tx2)",
-              fontWeight: 600,
-              letterSpacing: "-.01em",
-              color: "var(--ti)",
-              marginBottom: "var(--s2)",
-            }}
-          >
-            Write
-          </h2>
-          <p style={{ fontSize: "var(--ts)", color: "var(--tm2)", lineHeight: "var(--ls)" }}>
-            Draft and manage your letters here. Click any saved document in the sidebar to open it.
-          </p>
-        </div>
-
         {/* Tab toggle — underline style §13 */}
         <div style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--bo)" }}>
           <button
             type="button"
-            style={tabStyle("compose")}
+            className="pf-tab"
+            data-active={activeView === "compose" ? "true" : undefined}
             onClick={() => updateProposalRoute("compose")}
-            onMouseEnter={() => setHoveredTab("compose")}
-            onMouseLeave={() => setHoveredTab(null)}
           >
             Compose
           </button>
           <button
             type="button"
-            style={tabStyle("saved")}
+            className="pf-tab"
+            data-active={activeView === "saved" ? "true" : undefined}
             onClick={() => updateProposalRoute("saved", selectedProposalId)}
-            onMouseEnter={() => setHoveredTab("saved")}
-            onMouseLeave={() => setHoveredTab(null)}
           >
             Library
           </button>

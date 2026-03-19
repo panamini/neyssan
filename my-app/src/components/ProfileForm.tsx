@@ -26,7 +26,6 @@ export default function ProfileForm() {
   const profilesPublic = useMutation(api.profilesPublic.default);
 
   const [status, setStatus] = React.useState<string | null>(null);
-  console.log("ProfileForm rendered - status:", status);
 
   // New: parsed profile and modal state for review-before-save flow
   const [parsedProfile, setParsedProfile] = React.useState<any | null>(null);
@@ -110,14 +109,12 @@ export default function ProfileForm() {
   // callback passed to modal when user confirms save
   const handleModalSaved = async (result: any) => {
     // result can be backend response (id etc) or an object containing { profile, __closeAfterSave }
-    console.debug("Modal saved result:", result);
     try {
       const profileFromResult = result?.profile ?? null;
       const id = result?.id ?? (profileFromResult && profileFromResult.id) ?? null;
 
       if (profileFromResult) {
         // If the modal returned a merged/full profile object, use it directly to update UI.
-        console.debug("Using merged profile from modal:", profileFromResult);
         setCurrentProfile(profileFromResult);
         setSummaryDraft(profileFromResult.summary ?? "");
         setExpanded(true);
@@ -131,7 +128,6 @@ export default function ProfileForm() {
           console.warn("Failed to fetch saved profile", await resp.text());
         } else {
           const profileJson = await resp.json();
-          console.debug("Fetched saved profile:", profileJson);
           setCurrentProfile(profileJson);
           setSummaryDraft(profileJson.summary ?? "");
           setExpanded(true);
@@ -198,6 +194,7 @@ export default function ProfileForm() {
           </div>
 
           <textarea
+            aria-label="Resume text"
             placeholder="Paste your resume / CV text (optional, min 20 chars)"
             rows={4}
             {...form.register("resumeText")}
@@ -317,6 +314,7 @@ export default function ProfileForm() {
                     {editingSummary ? (
                       <div className="space-y-2">
                         <textarea
+                          aria-label="Edit summary"
                           value={summaryDraft}
                           onChange={(e) => setSummaryDraft(e.target.value)}
                           rows={4}
