@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
-import { ChevronDown, GripHorizontal, Plus } from "lucide-react";
+import { ChevronDown, FileText, GripHorizontal, Plus } from "lucide-react";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import SectionComponent from "./cv-editor/Section";
 import SelectedBlockInspector from "./SelectedBlockInspector";
@@ -412,19 +412,53 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
       {!isLoading && !currentCv && (
         <div
           style={{
-            padding: "var(--s5)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "var(--s4)",
+            padding: "var(--s9) var(--s5)",
             borderRadius: "var(--rm)",
             border: "1px solid var(--bo)",
             background: "var(--sfr)",
             boxShadow: "var(--sha)",
+            textAlign: "center",
           }}
         >
-          <p style={{ fontSize: "var(--ts)", fontWeight: 600, color: "var(--ti)", marginBottom: "var(--s2)" }}>
-            No resume selected
-          </p>
-          <p style={{ fontSize: "var(--ts)", color: "var(--tg2)", lineHeight: "var(--ls)" }}>
-            Select a resume from the sidebar, or create a new one using the + button.
-          </p>
+          {/* Icon */}
+          <div
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: "var(--rm)",
+              border: "1px solid var(--bo)",
+              background: "var(--sf2)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "var(--am)",
+            }}
+          >
+            <FileText size={22} strokeWidth={1.4} />
+          </div>
+          {/* Heading */}
+          <div>
+            <h2
+              style={{
+                fontFamily: '"Fraunces", serif',
+                fontSize: "var(--tm)",
+                fontWeight: 600,
+                letterSpacing: "-.01em",
+                color: "var(--ti)",
+                margin: "0 0 var(--s2)",
+              }}
+            >
+              Your resume space is ready
+            </h2>
+            <p style={{ fontSize: "var(--ts)", color: "var(--tg2)", lineHeight: "var(--ls)", margin: 0 }}>
+              Select a resume from the sidebar, or create a new one to get started.
+            </p>
+          </div>
         </div>
       )}
 
@@ -546,8 +580,23 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
 
           <div>
             {sections.length === 0 ? (
-              <div className="p-3 border rounded-md border-bo [background:var(--sfr)] text-foreground">
-                This CV has no sections yet.
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: "var(--s3)",
+                  padding: "var(--s7) var(--s5)",
+                  borderRadius: "var(--rm)",
+                  border: "1px solid var(--bo)",
+                  background: "var(--sfr)",
+                  boxShadow: "var(--sha)",
+                  textAlign: "center",
+                  color: "var(--tg2)",
+                }}
+              >
+                <FileText size={24} strokeWidth={1.3} />
+                <span style={{ fontSize: "var(--ts)", fontWeight: 500 }}>No sections yet — add one below</span>
               </div>
             ) : DISABLE_DND_FOR_DEBUG ? (
               <>

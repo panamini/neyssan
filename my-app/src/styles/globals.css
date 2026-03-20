@@ -858,6 +858,16 @@ textarea.dasti-field {
   padding: 0;
 }
 
+/* Fix: ProseMirror inherits surface bg → no white flash on dark→light switch */
+.ProseMirror {
+  background: transparent !important;
+  color: inherit;
+}
+.remirror-editor-wrapper,
+.remirror-editor {
+  background: transparent;
+}
+
 /* ============================================================
    SECTION CARD — dasti v1 §11
    ============================================================ */
