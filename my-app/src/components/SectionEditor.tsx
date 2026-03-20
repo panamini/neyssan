@@ -1110,7 +1110,7 @@ export default function SectionEditor({
 
             {skillRows.length === 0 ? (
               <div className="py-2 text-xs" style={{ color: "var(--tg2)" }}>
-                Add a skill like JavaScript or Project Management
+                Click + to add your first skill
               </div>
             ) : (
               <div className="divide-y divide-[color:var(--bo)]">
@@ -1132,7 +1132,7 @@ export default function SectionEditor({
                       id={`skill-name-inline-${idx}`}
                       className="flex-1 min-w-0 bg-transparent border-0 text-sm focus:outline-none"
                       style={{ color: "var(--ti)" }}
-                      placeholder="e.g., React"
+                      placeholder="Skill name"
                       value={row.name ?? ""}
                       onChange={(e) => handleNameChangeInline(idx, e.target.value)}
                       onBlur={() => handleNameBlurInline(idx)}
@@ -1482,7 +1482,7 @@ export default function SectionEditor({
 
             {languageRows.length === 0 ? (
               <div className="py-2 text-xs" style={{ color: "var(--tg2)" }}>
-                Add a language like English or French
+                Click + to add your first language
               </div>
             ) : (
               <div className="divide-y divide-[color:var(--bo)]">
@@ -1504,7 +1504,7 @@ export default function SectionEditor({
                       id={`language-name-inline-${idx}`}
                       className="flex-1 min-w-0 bg-transparent border-0 text-sm focus:outline-none"
                       style={{ color: "var(--ti)" }}
-                      placeholder="e.g., English"
+                      placeholder="Language name"
                       value={row.name ?? ""}
                       onChange={(e) => handleNameChangeLanguage(idx, e.target.value)}
                       onBlur={() => handleNameBlurLanguage(idx)}

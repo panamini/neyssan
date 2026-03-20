@@ -209,7 +209,7 @@ export function generateCvTemplate(title?: string): CvDocument {
       id: uuidv4(),
       title: "Achievements",
       type: "achievements" as const,
-      blocks: [makeTextBlock()],
+      blocks: [],
       structuredContent: [],
       collapsed: true,
     },
