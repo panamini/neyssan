@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { IAchievementItem } from "../../types/cvDocument";
 import { X, Plus, Check } from "lucide-react";
+import { Button } from "../ui/button";
 
 interface AchievementsModalProps {
   open: boolean;
@@ -19,6 +20,7 @@ export function AchievementsModal({ open, items, appendBlankOnOpen = false, onCl
   const [rows, setRows] = useState<IAchievementItem[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [savedTick, setSavedTick] = useState<string | null>(null);
+  const [isClearConfirming, setIsClearConfirming] = useState(false);
 
   // Focus restore: remember the element that opened the modal and restore focus to it on close
   const openerRef = useRef<HTMLElement | null>(null);
@@ -37,6 +39,7 @@ export function AchievementsModal({ open, items, appendBlankOnOpen = false, onCl
   useEffect(() => {
     if (!open) {
       lastSeedRef.current = null;
+      setIsClearConfirming(false);
     }
   }, [open]);
 
@@ -149,6 +152,13 @@ export function AchievementsModal({ open, items, appendBlankOnOpen = false, onCl
     }
   }
 
+  function handleClear() {
+    setRows([newAchievement()]);
+    setIsClearConfirming(false);
+    onSave([]);
+    onClose();
+  }
+
   return (
     <div
       className="fixed inset-0 z-[10000] flex items-center justify-center p-4"
@@ -255,6 +265,26 @@ export function AchievementsModal({ open, items, appendBlankOnOpen = false, onCl
           </div>
 
           <div className="flex items-center justify-end gap-2">
+            {isClearConfirming ? (
+              <span className="sb-doc-confirm" style={{ gap: "var(--s2)" }}>
+                <span className="sb-doc-confirm__label" style={{ fontSize: "var(--tx)" }}>Clear all?</span>
+                <button type="button" className="sb-doc-confirm__yes" onClick={handleClear}>
+                  Clear
+                </button>
+                <button type="button" className="sb-doc-confirm__no" onClick={() => setIsClearConfirming(false)}>
+                  Cancel
+                </button>
+              </span>
+            ) : (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setIsClearConfirming(true)}
+                disabled={isSaving}
+              >
+                Clear all
+              </Button>
+            )}
             <button
               type="button"
               onClick={() => void handleSave()}

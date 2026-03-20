@@ -16,7 +16,7 @@ import { SkillsDrawer } from "./structured-blocks/SkillsDrawer";
 import BlockRenderer from "./cv-editor/BlockRenderer";
 import AchievementsBlock from "./structured-blocks/AchievementsBlock";
 import { useSectionFlushSubscription } from "../hooks/use-flush-subscription";
-import { Pen, Trash, X, Pin, PinOff, Plus, UserRound } from "lucide-react";
+import { ScrollText, Trash, X, Pin, PinOff, Plus, UserRound } from "lucide-react";
 import { ExperienceModal, EducationModal } from "./structured-blocks/ExperienceEducationModal";
 
 import { formatRangeFromItem } from "../lib/date-utils";
@@ -576,7 +576,6 @@ export default function SectionEditor({
   const [isEducationModalOpen, setEducationModalOpen] = useState<boolean>(false);
   // Skills drawer (Phase 2 skeleton)
   const [isSkillsDrawerOpen, setSkillsDrawerOpen] = useState<boolean>(false);
-  const [isClearConfirming, setClearConfirming] = useState<boolean>(false);
   const profilePhotoInputRef = useRef<HTMLInputElement | null>(null);
   
   // (moved) The flush-related hooks and refs were moved higher up in the component
@@ -689,46 +688,18 @@ export default function SectionEditor({
         <div className="flex items-center justify-between p-3 [background:var(--sf1)]">
           <h3 className="text-lg font-semibold">{section.title}</h3>
           <div className="flex items-center" style={{ gap: 2 }}>
-            {!isClearConfirming && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSummaryModalOpen(true);
-                }}
-                className="dasti-icon-button"
-                aria-label="Edit summary"
-                title="Edit summary"
-              >
-                <Pen className="w-4 h-4" aria-hidden />
-              </button>
-            )}
-            {isClearConfirming ? (
-              <span className="sb-doc-confirm">
-                <span className="sb-doc-confirm__label">Clear?</span>
-                <button
-                  type="button"
-                  className="sb-doc-confirm__yes"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setClearConfirming(false);
-                    try { onContentChange?.(String(section.id), ensureRemirrorDoc(undefined as any)); } catch { /* noop */ }
-                    try { onChange(index, { ...section, structuredContent: [] as any } as any); } catch { /* noop */ }
-                  }}
-                >Clear</button>
-                <button type="button" className="sb-doc-confirm__no" onClick={(e) => { e.stopPropagation(); setClearConfirming(false); }}>Cancel</button>
-              </span>
-            ) : (
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); setClearConfirming(true); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setSummaryModalOpen(true);
+              }}
               className="dasti-icon-button"
-              aria-label="Clear summary"
-              title="Clear summary"
+              aria-label="Edit summary"
+              title="Edit summary"
             >
-              <Trash className="w-4 h-4" aria-hidden />
+              <ScrollText className="w-4 h-4" strokeWidth={1.5} aria-hidden />
             </button>
-            )}
             {typeof onCollapseChange === "function" && (
               <button
                 type="button"
@@ -1567,6 +1538,10 @@ export default function SectionEditor({
       profilePhotoInputRef.current?.click();
     }
 
+    function openProfileModal() {
+      setProfileModalOpen(true);
+    }
+
     function handleProfilePhotoChange(event: React.ChangeEvent<HTMLInputElement>) {
       const file = event.target.files?.[0] ?? null;
       event.target.value = "";
@@ -1591,7 +1566,14 @@ export default function SectionEditor({
         </span>
       );
       return href ? (
-        <a className="rounded focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]" href={href} target="_blank" rel="noreferrer" aria-label={ariaLabel}>
+        <a
+          className="rounded focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
+          href={href}
+          target="_blank"
+          rel="noreferrer"
+          aria-label={ariaLabel}
+          onClick={(e) => e.stopPropagation()}
+        >
           {content}
         </a>
       ) : (
@@ -1604,45 +1586,18 @@ export default function SectionEditor({
         <div className="flex items-center justify-between p-3 [background:var(--sf1)]">
           <h3 className="text-lg font-semibold">{section.title}</h3>
           <div className="flex items-center gap-2">
-            {!isClearConfirming && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setProfileModalOpen(true);
-                }}
-                className="dasti-icon-button"
-                aria-label="Edit profile"
-                title="Edit profile"
-              >
-                <Pen className="w-4 h-4" aria-hidden />
-              </button>
-            )}
-            {isClearConfirming ? (
-              <span className="sb-doc-confirm">
-                <span className="sb-doc-confirm__label">Clear?</span>
-                <button
-                  type="button"
-                  className="sb-doc-confirm__yes"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setClearConfirming(false);
-                    try { onChange(index, { ...section, structuredContent: [] as any } as any); } catch { /* noop */ }
-                  }}
-                >Clear</button>
-                <button type="button" className="sb-doc-confirm__no" onClick={(e) => { e.stopPropagation(); setClearConfirming(false); }}>Cancel</button>
-              </span>
-            ) : (
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); setClearConfirming(true); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                openProfileModal();
+              }}
               className="dasti-icon-button"
-              aria-label="Clear profile"
-              title="Clear profile"
+              aria-label="Edit profile"
+              title="Edit profile"
             >
-              <Trash className="w-4 h-4" aria-hidden />
+              <ScrollText className="w-4 h-4" strokeWidth={1.5} aria-hidden />
             </button>
-            )}
             {typeof onCollapseChange === "function" && (
               <button
                 type="button"
@@ -1662,7 +1617,29 @@ export default function SectionEditor({
         </div>
 
         {!collapsed && (
-          <div className="p-4">
+          <div
+            className="p-4 cursor-pointer"
+            role="button"
+            tabIndex={0}
+            aria-label="Edit profile"
+            onClick={(e) => {
+              const target = e.target as HTMLElement | null;
+              if (target && target !== e.currentTarget && target.closest("a, button, input, textarea, select")) {
+                return;
+              }
+              openProfileModal();
+            }}
+            onKeyDown={(e) => {
+              const target = e.target as HTMLElement | null;
+              if (target && target !== e.currentTarget && target.closest("a, button, input, textarea, select")) {
+                return;
+              }
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                openProfileModal();
+              }
+            }}
+          >
             <div className="flex items-start gap-4">
               <div>
                 <input
@@ -1676,7 +1653,10 @@ export default function SectionEditor({
                 />
                 <button
                   type="button"
-                  onClick={openProfilePhotoPicker}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openProfilePhotoPicker();
+                  }}
                   className="relative flex items-center justify-center overflow-hidden text-sm font-semibold border rounded-rm focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
                   style={{
                     width: "var(--s8)",
@@ -1825,6 +1805,24 @@ export default function SectionEditor({
     const hasRenderableStructured = renderableStructured.length > 0;
     const hasBlocks = Array.isArray(section.blocks) && section.blocks.length > 0;
 
+    function openStructuredModal() {
+      try {
+        if (sectionType === "experience") setExperienceModalOpen(true);
+        else if (sectionType === "education") setEducationModalOpen(true);
+      } catch {
+        /* noop */
+      }
+    }
+
+    function hasActiveSelection() {
+      try {
+        const selection = typeof window !== "undefined" ? window.getSelection() : null;
+        return Boolean(selection && typeof selection.toString === "function" && selection.toString().length > 0);
+      } catch {
+        return false;
+      }
+    }
+
     const renderStructuredPreview = (rawItem: any, idx: number, variant: "compact" | "detailed") => {
       const structuredId = String(rawItem?.id ?? idx);
       const isExp = sectionType === "experience";
@@ -1932,16 +1930,13 @@ export default function SectionEditor({
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  try {
-                    if (sectionType === "experience") setExperienceModalOpen(true);
-                    else if (sectionType === "education") setEducationModalOpen(true);
-                  } catch { /* noop */ }
+                  openStructuredModal();
                 }}
                 className="dasti-icon-button"
                 aria-label={`Edit ${sectionType}`}
                 title={`Edit ${sectionType}`}
               >
-                <Pen className="w-4 h-4" aria-hidden />
+                <ScrollText className="w-4 h-4" strokeWidth={1.5} aria-hidden />
               </button>
             ) : null}
             {typeof onCollapseChange === "function" && (
@@ -1965,7 +1960,24 @@ export default function SectionEditor({
         
 
         {collapsed && (
-          <div className="px-4 pb-3">
+          <div
+            className="px-4 pb-3 cursor-pointer"
+            role="button"
+            tabIndex={0}
+            aria-label={`Edit ${sectionType}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (hasActiveSelection()) return;
+              openStructuredModal();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.stopPropagation();
+                openStructuredModal();
+              }
+            }}
+          >
             {hasRenderableStructured ? (
               <div className="cv-entry-stack">
                 {renderableStructured.map((it, i) => renderStructuredPreview(it, i, "compact"))}
@@ -1979,7 +1991,24 @@ export default function SectionEditor({
         )}
 
         {!collapsed && (
-          <div className="p-4 space-y-4">
+          <div
+            className="p-4 space-y-4 cursor-pointer"
+            role="button"
+            tabIndex={0}
+            aria-label={`Edit ${sectionType}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (hasActiveSelection()) return;
+              openStructuredModal();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.stopPropagation();
+                openStructuredModal();
+              }
+            }}
+          >
             {hasBlocks ? (
               <div className="cv-entry-stack">
                 {section.blocks.map((block) => (
