@@ -421,10 +421,10 @@ export function StyleForge(): JSX.Element {
     >
       <div
         style={{
-          padding: "var(--s8) var(--s7)",
+          padding: "var(--s7)",
           display: "flex",
           flexDirection: "column",
-          gap: "var(--s6)",
+          gap: "var(--s5)",
         }}
       >
         <div

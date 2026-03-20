@@ -6,6 +6,7 @@ import { Unauthenticated } from "convex/react";
 import { SignInButton } from "@clerk/clerk-react";
 import { ConvexStatusBanner } from "./components/ConvexStatusBanner";
 import { CvForge } from "./pages/CvForge";
+import { CvsLibrary } from "./pages/CvsLibrary";
 import { ProposalForge } from "./pages/ProposalForge";
 import { ProposalsLibrary } from "./pages/ProposalsLibrary";
 import { StyleForge } from "./pages/StyleForge";
@@ -115,6 +116,7 @@ function AppShell(): JSX.Element {
           <div style={{ flex: 1, overflow: "hidden" }}>
             <Routes>
               <Route path="/cv" element={<CvForge />} />
+              <Route path="/cvs" element={<CvsLibrary />} />
               <Route path="/proposal" element={<ProposalForge />} />
               <Route path="/proposals" element={<ProposalsLibrary />} />
               <Route path="/style" element={<StyleForge />} />
