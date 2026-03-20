@@ -484,9 +484,10 @@ button::-moz-focus-inner,
    ============================================================ */
 .sb-nav-item {
   cursor: pointer;
-  background: transparent;
+  background: var(--sf1);  /* match sidebar bg — avoids transparent→color flash */
   box-shadow: none;
   border: none !important;  /* removes any inline border from JSX */
+  transition: background .12s var(--ez), box-shadow .12s var(--ez);
 }
 .sb-nav-item:hover {
   background: var(--sf2);
