@@ -211,9 +211,6 @@ function ModalShell({
         <div className="dasti-modal-footer">
           <div className="dasti-modal-footer-note">{footerNote ?? "Applied to the active resume."}</div>
           <div className="dasti-modal-actions">
-            <Button type="button" variant="secondary" onClick={onClose}>
-              Cancel
-            </Button>
             {primaryAction ? (
               <Button type="button" variant="primary" onClick={primaryAction.onClick} disabled={primaryAction.disabled}>
                 {primaryAction.label}
