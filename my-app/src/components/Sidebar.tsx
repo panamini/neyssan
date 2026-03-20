@@ -127,7 +127,10 @@ export const Sidebar: React.FC = () => {
   };
 
   const handleCreate = () => {
-    try { createNewCv(undefined, { forceV1: true }); }
+    try {
+      createNewCv(undefined, { forceV1: true });
+      void navigate('/cv');
+    }
     catch (err) { console.error("[Sidebar] createNewCv failed", err); }
   };
 
