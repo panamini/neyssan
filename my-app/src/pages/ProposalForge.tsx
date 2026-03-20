@@ -263,7 +263,7 @@ export function ProposalForge(): JSX.Element {
     display: "grid",
     gridTemplateColumns: isCompactComposeLayout
       ? "minmax(0,1fr)"
-      : "minmax(320px,1fr) minmax(360px,1.618fr)",
+      : "1fr 1fr",
     gap: "var(--s5)",
     alignItems: "start",
   };
