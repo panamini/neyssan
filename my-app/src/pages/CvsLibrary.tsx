@@ -1,7 +1,19 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { FileText, Plus, X, Check } from "lucide-react";
+import { Plus, X, Check } from "lucide-react";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
+import { buildActiveCvSnapshotFromCvDocument } from "../lib/proposal-personalization";
+import type { CvDocument, IProfileItem } from "../types/cvDocument";
+
+function readProfileLocation(cv: CvDocument): string {
+  const profileSection = Array.isArray(cv.sections)
+    ? cv.sections.find((section) => section.type === "profile")
+    : undefined;
+  const profileItem = Array.isArray(profileSection?.structuredContent)
+    ? (profileSection?.structuredContent[0] as IProfileItem | undefined)
+    : undefined;
+  return String(profileItem?.location ?? "").trim();
+}
 
 export function CvsLibrary(): JSX.Element {
   const navigate = useNavigate();
@@ -119,7 +131,6 @@ export function CvsLibrary(): JSX.Element {
               color: "var(--tg2)",
             }}
           >
-            <FileText size={32} strokeWidth={1.2} />
             <div style={{ fontSize: "var(--ts)", fontWeight: 500 }}>No resumes yet</div>
             <button
               onClick={() => { createNewCv(); void navigate("/cv"); }}
@@ -159,14 +170,13 @@ export function CvsLibrary(): JSX.Element {
               const updatedAt = new Date(
                 cv.metadata?.updatedAt ?? cv.metadata?.createdAt ?? Date.now(),
               ).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" });
-
-              const core = (cv.core as any);
-              const profileName: string = core?.profile?.name ?? "";
-              const position: string = core?.profile?.position ?? core?.profile?.desiredPosition ?? "";
-              const location: string = [core?.profile?.city, core?.profile?.country].filter(Boolean).join(", ");
-              const summary: string = core?.profile?.summary ?? core?.profile?.objective ?? core?.profile?.bio ?? "";
-              const summarySnippet = summary ? summary.slice(0, 180) : "";
-              const hasProfile = !!(profileName || position);
+              const snapshot = buildActiveCvSnapshotFromCvDocument(cv);
+              const personalization = snapshot.personalizationContext;
+              const profileName = String(personalization?.name ?? "").trim();
+              const position = String(personalization?.desiredPosition ?? "").trim();
+              const location = readProfileLocation(cv);
+              const summarySnippet = String(personalization?.summary ?? "").trim();
+              const identityLine = [profileName, position, location].filter(Boolean).join(" · ");
               const isConfirming = confirmingId === cv.id;
 
               return (
@@ -207,28 +217,12 @@ export function CvsLibrary(): JSX.Element {
                       el.style.borderColor = "var(--bo)";
                     }}
                   >
-                    {/* Top row: file icon + date */}
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", paddingRight: 20 }}>
-                      <div
-                        style={{
-                          width: 28,
-                          height: 28,
-                          borderRadius: "var(--rs)",
-                          border: "1px solid var(--bo)",
-                          background: "var(--sf2)",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          color: "var(--am)",
-                          flexShrink: 0,
-                        }}
-                      >
-                        <FileText size={14} strokeWidth={1.5} />
-                      </div>
+                    {/* Date */}
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", width: "100%", paddingRight: 20 }}>
                       <span style={{ fontSize: "var(--tx)", color: "var(--tg2)" }}>{updatedAt}</span>
                     </div>
 
-                    {/* Title — Fraunces serif, same as proposal cards */}
+                    {/* Title */}
                     <div
                       style={{
                         fontFamily: '"Fraunces", serif',
@@ -247,30 +241,28 @@ export function CvsLibrary(): JSX.Element {
                       {cv.title}
                     </div>
 
-                    {/* Name · Position · Location */}
-                    {(profileName || position || location) && (
+                    {identityLine && (
                       <div
                         style={{
                           fontSize: "var(--tx)",
                           color: "var(--tm2)",
-                          lineHeight: 1.5,
+                          lineHeight: "var(--lx)",
                           overflow: "hidden",
                           textOverflow: "ellipsis",
                           whiteSpace: "nowrap",
                           width: "100%",
                         }}
                       >
-                        {[profileName, position, location].filter(Boolean).join(" · ")}
+                        {identityLine}
                       </div>
                     )}
 
-                    {/* Summary snippet — rich preview like proposals */}
                     {summarySnippet && (
                       <div
                         style={{
                           fontSize: "var(--tx)",
                           color: "var(--tg2)",
-                          lineHeight: 1.55,
+                          lineHeight: "var(--ls)",
                           display: "-webkit-box",
                           WebkitLineClamp: 3,
                           WebkitBoxOrient: "vertical",
@@ -281,17 +273,15 @@ export function CvsLibrary(): JSX.Element {
                       </div>
                     )}
 
-                    {/* Empty placeholder for cards with no profile data */}
-                    {!hasProfile && !summarySnippet && (
+                    {!identityLine && !summarySnippet && (
                       <div
                         style={{
                           fontSize: "var(--tx)",
-                          color: "var(--tg2)",
-                          fontStyle: "italic",
-                          lineHeight: 1.5,
+                          color: "var(--tm2)",
+                          lineHeight: "var(--lx)",
                         }}
                       >
-                        No profile data yet
+                        Draft resume
                       </div>
                     )}
                   </button>
