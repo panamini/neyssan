@@ -35,7 +35,7 @@ import {
   getProposalGenerationUiErrorMessage,
   type ProposalGenerationFallbackInfo,
 } from "../lib/proposal-generation-ui";
-import { ArrowUp, ChevronDown, Plus, Square, X } from "lucide-react";
+import { ArrowUp, ChevronDown, FileText, Plus, Square, X } from "lucide-react";
 
 interface ProposalInputFormProps {
   onSubmit: (
@@ -606,61 +606,90 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
           ) : (
             <div className="space-y-2 max-h-[50vh] overflow-y-auto">
               {cvOptions.map((option) => {
+                const dateStr = (() => {
+                  const raw = option.updatedAt ?? option.createdAt;
+                  if (!raw) return null;
+                  const d = new Date(raw);
+                  return isNaN(d.getTime()) ? null : d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+                })();
                 return (
                   <div
                     key={option.id}
-                    className={clsx(
-                      "w-full rounded-[var(--rm)] border p-4 transition-colors",
-                      option.isActive
-                        ? "border-[color:var(--ac)] [background:var(--as)] [box-shadow:var(--sha)]"
-                        : "border-[color:var(--bo)] [background:var(--sf2)] hover:border-[color:var(--bm)] hover:[background:var(--sfr)]",
-                    )}
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: "var(--s3)",
+                      padding: "var(--s3) var(--s4)",
+                      borderRadius: "var(--rm)",
+                      border: `1px solid ${option.isActive ? "var(--ac)" : "var(--bo)"}`,
+                      background: option.isActive ? "var(--as)" : "var(--sfr)",
+                      boxShadow: "var(--sha)",
+                      transition: "border-color .12s var(--ez), background .12s var(--ez)",
+                    }}
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="font-medium text-foreground">
+                    {/* Doc icon */}
+                    <div style={{
+                      width: 30, height: 30, flexShrink: 0,
+                      borderRadius: "var(--rs)",
+                      background: "var(--sf2)",
+                      border: "1px solid var(--bo)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      marginTop: 1,
+                    }}>
+                      <FileText size={13} strokeWidth={1.5} color="var(--am)" />
+                    </div>
+
+                    {/* Content */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {/* Title + date */}
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--s2)" }}>
+                        <span style={{ fontSize: "var(--ts)", fontWeight: 600, color: "var(--ti)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {option.title}
-                        </div>
-                        {(option.profileName || option.desiredPosition) && (
-                          <div className="mt-1 text-sm text-foreground/90">
-                            {[option.profileName, option.desiredPosition]
-                              .filter(Boolean)
-                              .join(" · ")}
-                          </div>
-                        )}
-                        {option.email && (
-                          <div className="mt-1 text-sm text-muted-foreground">
-                            {option.email}
-                          </div>
-                        )}
-                        {option.summarySnippet && (
-                          <div className="mt-2 text-sm text-muted-foreground line-clamp-2">
-                            {option.summarySnippet}
-                          </div>
+                        </span>
+                        {dateStr && (
+                          <span style={{ fontSize: "var(--tx)", color: "var(--tg2)", flexShrink: 0 }}>{dateStr}</span>
                         )}
                       </div>
-                      <div className="flex shrink-0 flex-col items-end gap-2">
-                        <div className="flex flex-wrap justify-end gap-2">
-                          {!option.isActive && (
-                            <Button
-                              type="button"
-                              variant="primary"
-                              size="sm"
-                              onClick={() => handleSelectCv(option.id)}
-                            >
-                              Use
-                            </Button>
-                          )}
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEditCv(option.id)}
-                          >
-                            Edit
-                          </Button>
+
+                      {/* Name · position */}
+                      {(option.profileName || option.desiredPosition) && (
+                        <div style={{ fontSize: "var(--tx)", color: "var(--tm2)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {[option.profileName, option.desiredPosition].filter(Boolean).join(" · ")}
                         </div>
-                      </div>
+                      )}
+
+                      {/* Summary snippet */}
+                      {option.summarySnippet && (
+                        <div style={{
+                          fontSize: "var(--tx)", color: "var(--tg2)", marginTop: 4,
+                          display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
+                          lineHeight: 1.5,
+                        }}>
+                          {option.summarySnippet}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Actions */}
+                    <div style={{ display: "flex", flexShrink: 0, alignItems: "center", gap: "var(--s2)", marginTop: 2 }}>
+                      {option.isActive ? (
+                        <span style={{
+                          fontSize: 10, fontWeight: 600, letterSpacing: ".06em",
+                          padding: "2px 8px", borderRadius: 99,
+                          background: "var(--ap)", color: "var(--am)",
+                          border: "1px solid var(--ac)",
+                          whiteSpace: "nowrap",
+                        }}>
+                          ✓ In use
+                        </span>
+                      ) : (
+                        <Button type="button" variant="primary" size="sm" onClick={() => handleSelectCv(option.id)}>
+                          Use
+                        </Button>
+                      )}
+                      <Button type="button" variant="ghost" size="sm" onClick={() => handleEditCv(option.id)}>
+                        Edit
+                      </Button>
                     </div>
                   </div>
                 );

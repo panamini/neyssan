@@ -484,7 +484,6 @@ button::-moz-focus-inner,
 }
 .sb-nav-item--active {
   background: var(--sf2) !important;
-  box-shadow: inset 2px 0 0 0 var(--am) !important;
 }
 
 /* ============================================================
