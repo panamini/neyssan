@@ -356,19 +356,11 @@ export const Sidebar: React.FC = () => {
             <span style={navLabel(isStyle)}>Style</span>
           </div>
 
-          {/* Dark mode toggle — just below Settings icon, aligned with nav */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: sidebarCollapsed ? "center" : "flex-start",
-              gap: sidebarCollapsed ? 0 : "var(--s3)",
-              padding: sidebarCollapsed ? 0 : "var(--s2)",
-              height: compactDensity ? 32 : 34,
-              width: "100%",
-            }}
-          >
-            <DarkModeToggle />
+          {/* Dark mode toggle — same icon-slot structure as other nav items */}
+          <div style={navItemBase} className="sb-nav-item">
+            <div style={{ width: 16, height: 16, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <DarkModeToggle compact />
+            </div>
           </div>
 
           {/* Error display */}
