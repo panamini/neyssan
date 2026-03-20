@@ -132,7 +132,7 @@ code {
   --remirror-copy-line-height: var(--lb);
   --remirror-paragraph-margin-bottom: var(--s2);
   --remirror-list-indent: var(--s5);
-  --remirror-list-marker-color: var(--tg2);
+  --remirror-list-marker-color: var(--tm2);
 }
 
 .rich-content .remirror-paragraph {
@@ -145,8 +145,9 @@ code {
   margin: 0 0 var(--remirror-paragraph-margin-bottom) 0;
 }
 
-.rich-content ul { list-style: disc; padding-left: var(--remirror-list-indent); color: var(--remirror-list-marker-color); }
-.rich-content ol { list-style: decimal; padding-left: var(--remirror-list-indent); color: var(--remirror-list-marker-color); }
+.rich-content ul { list-style: disc; padding-left: var(--remirror-list-indent); color: inherit; }
+.rich-content ol { list-style: decimal; padding-left: var(--remirror-list-indent); color: inherit; }
+.rich-content li::marker { color: var(--remirror-list-marker-color); }
 
 .rich-content .remirror-placeholder {
   color: var(--tg2);
