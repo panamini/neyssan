@@ -349,13 +349,26 @@ button::-moz-focus-inner,
   box-shadow: var(--focus-shadow-soft) !important;
 }
 
-/* Input field contrast — use --sfr (near-white/near-dark) so inputs visually
-   stand out from --sf1 card backgrounds (5% lightness difference is too subtle).
-   :where() gives 0 specificity so any class or inline style overrides this. */
-:where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
-       textarea,
-       select) {
-  background-color: var(--sfr);
+/* Sidebar hamburger toggle */
+.sb-toggle {
+  width: var(--hs);
+  height: var(--hs);
+  min-width: var(--hs);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: var(--rs);
+  background: transparent;
+  color: var(--tg2);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background .12s var(--ez), color .12s var(--ez);
+}
+.sb-toggle:hover {
+  background: var(--sf2);
+  color: var(--ti);
 }
 
 .dasti-icon-button {
