@@ -353,7 +353,10 @@ export default function ProposalsList({
               onChange={(e) => setEditTitle(e.target.value)}
               onBlur={() => {
                 void handleSaveTitle();
-                if (titleTextareaRef.current) titleTextareaRef.current.scrollTop = 0;
+                if (titleTextareaRef.current) {
+                  const ta = titleTextareaRef.current;
+                  requestAnimationFrame(() => { ta.scrollTop = 0; });
+                }
               }}
               style={{
                 fontFamily: '"Fraunces", serif',
@@ -463,7 +466,6 @@ export default function ProposalsList({
               {isConfirmingDelete ? (
                 /* Inline confirm */
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                  <span style={{ fontSize: "var(--tx)", color: "var(--tg2)", whiteSpace: "nowrap" }}>Delete?</span>
                   <button
                     type="button"
                     title="Confirm delete"
