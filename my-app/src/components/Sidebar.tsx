@@ -505,14 +505,14 @@ function SbNewAction({ label, dense, onClick }: { label: string; dense: boolean;
         color: "var(--tg2)",
         fontSize: "var(--tx)",
         transition: "all .12s var(--ez)",
-        background: "transparent",
+        background: "var(--sf1)",
         border: "none",
         width: "100%",
         textAlign: "left",
         fontFamily: "inherit",
       }}
       onMouseEnter={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.color = "var(--am)"; b.style.background = "var(--sf2)"; }}
-      onMouseLeave={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.color = "var(--tg2)"; b.style.background = "transparent"; }}
+      onMouseLeave={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.color = "var(--tg2)"; b.style.background = "var(--sf1)"; }}
     >
       <Plus size={14} style={{ flexShrink: 0 }} />
       <span style={{ whiteSpace: "nowrap" }}>{label}</span>
@@ -598,7 +598,7 @@ function SbDoc({ title, date, docType, isActive, dense = false, onClick, onRenam
         transition: "background .12s var(--ez), box-shadow .12s var(--ez)",
         position: "relative",
         /* active = slight bg lift + left accent stripe via inset box-shadow */
-        background: isActive ? "var(--sf2)" : hovered ? "var(--sf2)" : "transparent",
+        background: isActive ? "var(--sf2)" : hovered ? "var(--sf2)" : "var(--sf1)",
         boxShadow: "none",
       }}
     >
