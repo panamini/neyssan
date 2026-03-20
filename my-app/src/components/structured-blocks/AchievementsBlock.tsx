@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import type { CvSection } from "../../schemas/cvDocument.schema";
 import AchievementsDisplay from "../cv-display/AchievementsDisplay";
 import AchievementsModal from "./AchievementsModal";
-import { Trash2, Plus } from "lucide-react";
+import { Trash, Plus } from "lucide-react";
 import { docToPlainText } from "../remirror-editor/utils/text";
 
 /**
@@ -149,7 +149,7 @@ export function AchievementsBlock({ section, onChange }: AchievementsBlockProps)
             aria-label="Clear achievements"
             title="Clear achievements"
           >
-            <Trash2 className="w-4 h-4" aria-hidden />
+            <Trash className="w-4 h-4" aria-hidden />
           </button>
           )}
         </div>

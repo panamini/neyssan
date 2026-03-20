@@ -1,5 +1,5 @@
 import React from "react";
-import { Check, Copy, RotateCcw, Trash2, X } from "lucide-react";
+import { Check, Copy, RotateCcw, Trash, X } from "lucide-react";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { useAuth } from "@clerk/clerk-react";
 import { api } from "../../convex/_generated/api";
@@ -89,6 +89,14 @@ function typeLabel(t: SavedProposalType): string {
   if (t === "cover_letter") return "Letter";
   if (t === "freelance_proposal") return "Proposal";
   return "Message";
+}
+
+function typeBadgeStyle(type: SavedProposalType): React.CSSProperties {
+  if (type === "freelance_proposal") {
+    return { background: "var(--ap)", color: "var(--am)", border: "1px solid var(--ac)" };
+  }
+
+  return { background: "var(--sf2)", color: "var(--tm2)", border: "1px solid var(--bo)" };
 }
 
 const TONE_UI: Record<string, string> = {
@@ -310,10 +318,6 @@ export default function ProposalsList({
     }
   }
 
-  const pSep: React.CSSProperties = {
-    width: 3, height: 3, borderRadius: "50%", background: "var(--bm)", flexShrink: 0,
-  };
-
   return (
     <div
       style={{
@@ -338,55 +342,67 @@ export default function ProposalsList({
           overflow: "hidden",
         }}
       >
-        {/* Eyebrow */}
-        <div style={{ fontSize: "var(--tx)", fontWeight: 600, color: "var(--am)", letterSpacing: ".14em", textTransform: "uppercase" }}>
-          Details
-        </div>
-
         {selected ? (
           <>
-            {/* .p-title-edit */}
-            <textarea
-              ref={titleTextareaRef}
-              value={editTitle}
-              rows={2}
-              onChange={(e) => setEditTitle(e.target.value)}
-              onBlur={() => {
-                void handleSaveTitle();
-                if (titleTextareaRef.current) {
-                  const ta = titleTextareaRef.current;
-                  requestAnimationFrame(() => { ta.scrollTop = 0; });
-                }
-              }}
-              style={{
-                fontFamily: '"Fraunces", serif',
-                fontSize: 20,
-                fontWeight: 600,
-                letterSpacing: "-.02em",
-                color: "var(--ti)",
-                lineHeight: 1.22,
-                border: "none",
-                background: "transparent",
-                width: "100%",
-                outline: "none",
-                resize: "none",
-                overflowWrap: "break-word",
-                wordBreak: "break-word",
-                overflow: "hidden",
-              } as React.CSSProperties}
-            />
+            <div style={{ display: "grid", gap: "var(--s2)", minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--s3)", minWidth: 0 }}>
+                <span
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 600,
+                    letterSpacing: ".08em",
+                    textTransform: "uppercase",
+                    padding: "2px 7px",
+                    borderRadius: 99,
+                    whiteSpace: "nowrap",
+                    ...typeBadgeStyle(getStoredProposalType(selected)),
+                  }}
+                >
+                  {selType}
+                </span>
+                <span style={{ fontSize: "var(--tx)", color: "var(--tg2)", whiteSpace: "nowrap", flexShrink: 0 }}>
+                  {selDate}
+                </span>
+              </div>
 
-            {/* .p-meta */}
-            <div style={{ display: "flex", alignItems: "center", gap: "var(--s2)", fontSize: "var(--tx)", color: "var(--tg2)", flexWrap: "wrap", minWidth: 0, lineHeight: 1.24 }}>
-              <span>{selDate}</span>
-              <span style={pSep} />
-              <span>{selType}</span>
-              <span style={pSep} />
-              <span>{selTone}</span>
+              <div style={{ display: "grid", gap: "var(--s1)", minWidth: 0 }}>
+                <textarea
+                  ref={titleTextareaRef}
+                  value={editTitle}
+                  rows={2}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  onBlur={() => {
+                    void handleSaveTitle();
+                    if (titleTextareaRef.current) {
+                      const ta = titleTextareaRef.current;
+                      requestAnimationFrame(() => { ta.scrollTop = 0; });
+                    }
+                  }}
+                  style={{
+                    fontFamily: '"Fraunces", serif',
+                    fontSize: 20,
+                    fontWeight: 600,
+                    letterSpacing: "-.02em",
+                    color: "var(--ti)",
+                    lineHeight: 1.16,
+                    border: "none",
+                    background: "transparent",
+                    width: "100%",
+                    outline: "none",
+                    resize: "none",
+                    overflowWrap: "break-word",
+                    wordBreak: "break-word",
+                    overflow: "hidden",
+                    padding: 0,
+                    margin: 0,
+                  } as React.CSSProperties}
+                />
+
+                <div style={{ fontSize: "var(--tx)", color: "var(--tm2)", lineHeight: 1.32 }}>
+                  Tone · {selTone}
+                </div>
+              </div>
             </div>
-
-            {/* Auto-saved indicator */}
-            <span style={{ fontSize: "var(--tx)", color: "var(--ok)" }}>● Auto-saved</span>
 
             {/* Fallback disclosure */}
             {getProposalGenerationFallbackDisclosureMessage({
@@ -491,7 +507,7 @@ export default function ProposalsList({
                   className="dasti-icon-button dasti-icon-button--danger"
                   onClick={() => setIsConfirmingDelete(true)}
                 >
-                  <Trash2 size={16} strokeWidth={1.5} />
+                  <Trash size={16} strokeWidth={1.5} />
                 </button>
               )}
             </div>

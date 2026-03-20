@@ -500,6 +500,20 @@ button::-moz-focus-inner,
   box-shadow: inset 0 0 0 1px var(--bm) !important; /* subtle ring, works light + dark */
 }
 
+.sb-nav-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--tm2);
+}
+
+.sb-nav-item--active .sb-nav-icon {
+  color: var(--ti);
+}
+
 /* ============================================================
    CLERK USERBUTTON — dasti style override
    Square-ish avatar, accent-coloured initials bg
@@ -938,16 +952,38 @@ textarea.dasti-field {
   stroke-width: 1.65;
 }
 
-.styleforge-palette-swatch {
-  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M14.5 4.5 19.5 9.5' stroke='%23211f1a' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M12.75 6.25 17.75 11.25' stroke='%23211f1a' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='m4 20 4.5-1.25 8.75-8.75a1.77 1.77 0 0 0 0-2.5l-.75-.75a1.77 1.77 0 0 0-2.5 0L5.25 15.5 4 20Z' fill='%23f4efe6' stroke='%23211f1a' stroke-width='1.75' stroke-linejoin='round'/%3E%3C/svg%3E") 3 19, pointer;
+.styleforge-palette-swatch,
+.styleforge-color-wheel {
+  cursor: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2218%22%20height%3D%2218%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23211f1a%22%20stroke-width%3D%221.8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m2%2022%201-1h3l9-9%22%3E%3C%2Fpath%3E%3Cpath%20d%3D%22M3%2021v-3l9-9%22%3E%3C%2Fpath%3E%3Cpath%20d%3D%22m15%206%203.4-3.4a2.1%202.1%200%201%201%203%203L18%209l.4.4a2.1%202.1%200%201%201-3%203l-3.8-3.8a2.1%202.1%200%201%201%203-3l.4.4Z%22%3E%3C%2Fpath%3E%3C%2Fsvg%3E") 3 17, crosshair;
 }
 
-.dark .styleforge-palette-swatch {
-  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M14.5 4.5 19.5 9.5' stroke='%23efe8d7' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M12.75 6.25 17.75 11.25' stroke='%23efe8d7' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='m4 20 4.5-1.25 8.75-8.75a1.77 1.77 0 0 0 0-2.5l-.75-.75a1.77 1.77 0 0 0-2.5 0L5.25 15.5 4 20Z' fill='%23312f28' stroke='%23efe8d7' stroke-width='1.75' stroke-linejoin='round'/%3E%3C/svg%3E") 3 19, pointer;
+.dark .styleforge-palette-swatch,
+.dark .styleforge-color-wheel {
+  cursor: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2218%22%20height%3D%2218%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23efe8d7%22%20stroke-width%3D%221.8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m2%2022%201-1h3l9-9%22%3E%3C%2Fpath%3E%3Cpath%20d%3D%22M3%2021v-3l9-9%22%3E%3C%2Fpath%3E%3Cpath%20d%3D%22m15%206%203.4-3.4a2.1%202.1%200%201%201%203%203L18%209l.4.4a2.1%202.1%200%201%201-3%203l-3.8-3.8a2.1%202.1%200%201%201%203-3l.4.4Z%22%3E%3C%2Fpath%3E%3C%2Fsvg%3E") 3 17, crosshair;
 }
 
 .styleforge-palette-swatch:hover {
   transform: translateY(-1px);
+}
+
+.styleforge-color-wheel {
+  touch-action: none;
+}
+
+.styleforge-color-popover {
+  animation: styleforge-frost-fade .18s var(--ez) both;
+  transform-origin: center bottom;
+}
+
+@keyframes styleforge-frost-fade {
+  from {
+    opacity: 0;
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
 }
 
 /* ============================================================
