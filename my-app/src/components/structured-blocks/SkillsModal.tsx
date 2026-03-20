@@ -110,7 +110,7 @@ export function SkillsModal({ open, items, onClose, onSave }: SkillsModalProps) 
             ) : (
               rows.map((row, idx) => (
                 <div key={row.id ?? `row-${idx}`} className="grid items-center grid-cols-12 gap-2">
-                  <div className="col-span-7">
+                  <div className="col-span-5">
                     <label className="text-xs sr-only [color:var(--tg2)]" htmlFor={`skill-name-${idx}`}>Skill name</label>
                     <input
                       id={`skill-name-${idx}`}
@@ -120,7 +120,7 @@ export function SkillsModal({ open, items, onClose, onSave }: SkillsModalProps) 
                       onChange={(e) => updateRow(idx, { name: e.target.value })}
                     />
                   </div>
-                  <div className="col-span-4 flex items-center gap-1.5" role="group" aria-label="Skill level">
+                  <div className="col-span-6 flex items-center gap-1.5" role="group" aria-label="Skill level">
                     {(["Beginner", "Intermediate", "Advanced"] as Level[]).map((lvl, di) => {
                       const activeIdx = ["Beginner", "Intermediate", "Advanced"].indexOf(row.level as string);
                       const filled = di <= activeIdx;
@@ -136,7 +136,6 @@ export function SkillsModal({ open, items, onClose, onSave }: SkillsModalProps) 
                             cursor: "pointer", flexShrink: 0, border: "1.5px solid",
                             borderColor: filled ? "var(--ac)" : "var(--bo)",
                             background: filled ? "var(--ac)" : "transparent",
-                            transition: "all .12s var(--ez)",
                           }}
                         />
                       );

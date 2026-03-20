@@ -248,7 +248,6 @@ export function SummaryModal({ open, sectionId, item, onClose }: SummaryModalPro
 
         <div className="dasti-modal-body">
           <section className="dasti-zone">
-            <h3 className="dasti-zone-title">Summary</h3>
             <div className="dasti-rich">
               <Remirror manager={manager} initialContent={state} onChange={handleChange}>
                 <div className="rich-content">
