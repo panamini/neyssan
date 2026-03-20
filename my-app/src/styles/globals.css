@@ -467,6 +467,9 @@ button::-moz-focus-inner,
   .card-group:hover .card-delete-btn {
     opacity: 1;
   }
+  .card-group:focus-within .card-delete-btn {
+    opacity: 1;
+  }
 }
 
 /* ============================================================
