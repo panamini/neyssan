@@ -1,5 +1,5 @@
 import React from "react";
-import { Check, Copy, RotateCcw, Trash2 } from "lucide-react";
+import { Check, Copy, RotateCcw, Trash2, X } from "lucide-react";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { useAuth } from "@clerk/clerk-react";
 import { api } from "../../convex/_generated/api";
@@ -129,6 +129,8 @@ export default function ProposalsList({
   const [isRegenerating, setIsRegenerating] = React.useState<string | null>(null);
   const [isUpdating, setIsUpdating] = React.useState<string | null>(null);
   const [copied, setCopied] = React.useState(false);
+  const [isConfirmingDelete, setIsConfirmingDelete] = React.useState(false);
+  const titleTextareaRef = React.useRef<HTMLTextAreaElement>(null);
   const { showToast } = useToast();
   const isCompactLibraryLayout = viewportWidth < 1180;
   const libraryPanelPadding = isCompactLibraryLayout ? "var(--s4)" : "var(--s5)";
@@ -149,6 +151,7 @@ export default function ProposalsList({
       setSelectedId(proposal?._id ?? null);
       setEditTitle(proposal?.title ?? "");
       setEditContent(proposal?.content ?? "");
+      setIsConfirmingDelete(false);
       if (syncSelection) {
         onSelectedProposalIdChange?.(proposal?._id ?? null);
       }
@@ -298,7 +301,6 @@ export default function ProposalsList({
 
   async function handleDelete() {
     if (!selected) return;
-    if (!confirm("Delete this proposal?")) return;
     try {
       await deleteProposal({ id: selected._id });
       removeLocalProposal(selected._id);
@@ -345,10 +347,14 @@ export default function ProposalsList({
           <>
             {/* .p-title-edit */}
             <textarea
+              ref={titleTextareaRef}
               value={editTitle}
               rows={2}
               onChange={(e) => setEditTitle(e.target.value)}
-              onBlur={() => void handleSaveTitle()}
+              onBlur={() => {
+                void handleSaveTitle();
+                if (titleTextareaRef.current) titleTextareaRef.current.scrollTop = 0;
+              }}
               style={{
                 fontFamily: '"Fraunces", serif',
                 fontSize: 20,
@@ -421,43 +427,72 @@ export default function ProposalsList({
           </div>
           {selected && (
             <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-              {/* Copy — feedback "Copied" 1.5s (.cbtn/.cbtn-ok pattern) */}
-              <button
-                type="button"
-                title={copied ? "Copied!" : "Copy"}
-                className="dasti-icon-button"
-                style={{ color: copied ? "var(--ok)" : undefined }}
-                onClick={() => {
-                  void navigator.clipboard.writeText(selected.content ?? "").then(() => {
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 1500);
-                  });
-                }}
-              >
-                {copied ? <Check size={14} strokeWidth={1.8} aria-hidden="true" /> : <Copy size={16} strokeWidth={1.5} />}
-              </button>
-              {/* Regenerate */}
-              <button
-                type="button"
-                title={isRegenerating === selected._id ? "Regenerating…" : "Regenerate"}
-                className="dasti-icon-button"
-                style={{ opacity: isRegenerating === selected._id ? 0.5 : 1 }}
-                onClick={() => void handleRegenerate()}
-                disabled={Boolean(isRegenerating)}
-              >
-                <RotateCcw size={16} strokeWidth={1.5} />
-              </button>
-              {/* Separator */}
-              <div style={{ width: 1, height: 16, background: "var(--bo)", margin: "0 2px" }} />
-              {/* Delete — danger on hover */}
-              <button
-                type="button"
-                title="Delete"
-                className="dasti-icon-button dasti-icon-button--danger"
-                onClick={() => void handleDelete()}
-              >
-                <Trash2 size={16} strokeWidth={1.5} />
-              </button>
+              {!isConfirmingDelete && (
+                <>
+                  {/* Copy */}
+                  <button
+                    type="button"
+                    title={copied ? "Copied!" : "Copy"}
+                    className="dasti-icon-button"
+                    style={{ color: copied ? "var(--ok)" : undefined }}
+                    onClick={() => {
+                      void navigator.clipboard.writeText(selected.content ?? "").then(() => {
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 1500);
+                      });
+                    }}
+                  >
+                    {copied ? <Check size={14} strokeWidth={1.8} aria-hidden="true" /> : <Copy size={16} strokeWidth={1.5} />}
+                  </button>
+                  {/* Regenerate */}
+                  <button
+                    type="button"
+                    title={isRegenerating === selected._id ? "Regenerating…" : "Regenerate"}
+                    className="dasti-icon-button"
+                    style={{ opacity: isRegenerating === selected._id ? 0.5 : 1 }}
+                    onClick={() => void handleRegenerate()}
+                    disabled={Boolean(isRegenerating)}
+                  >
+                    <RotateCcw size={16} strokeWidth={1.5} />
+                  </button>
+                  {/* Separator */}
+                  <div style={{ width: 1, height: 16, background: "var(--bo)", margin: "0 2px" }} />
+                </>
+              )}
+
+              {isConfirmingDelete ? (
+                /* Inline confirm */
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                  <span style={{ fontSize: "var(--tx)", color: "var(--tg2)", whiteSpace: "nowrap" }}>Delete?</span>
+                  <button
+                    type="button"
+                    title="Confirm delete"
+                    className="dasti-icon-button dasti-icon-button--compact"
+                    style={{ color: "var(--ok)" }}
+                    onClick={() => { void handleDelete(); setIsConfirmingDelete(false); }}
+                  >
+                    <Check size={12} strokeWidth={2.5} />
+                  </button>
+                  <button
+                    type="button"
+                    title="Cancel"
+                    className="dasti-icon-button dasti-icon-button--compact"
+                    onClick={() => setIsConfirmingDelete(false)}
+                  >
+                    <X size={12} strokeWidth={2} />
+                  </button>
+                </span>
+              ) : (
+                /* Delete trigger */
+                <button
+                  type="button"
+                  title="Delete"
+                  className="dasti-icon-button dasti-icon-button--danger"
+                  onClick={() => setIsConfirmingDelete(true)}
+                >
+                  <Trash2 size={16} strokeWidth={1.5} />
+                </button>
+              )}
             </div>
           )}
         </div>

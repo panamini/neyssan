@@ -357,6 +357,28 @@ button::-moz-focus-inner,
   box-shadow: var(--focus-shadow-soft) !important;
 }
 
+/* Sidebar hamburger toggle */
+.sb-toggle {
+  width: var(--hs);
+  height: var(--hs);
+  min-width: var(--hs);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: var(--rs);
+  background: transparent;
+  color: var(--tg2);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background .12s var(--ez), color .12s var(--ez);
+}
+.sb-toggle:hover {
+  background: var(--sf2);
+  color: var(--ti);
+}
+
 .dasti-icon-button {
   width: var(--hs);
   height: var(--hs);
