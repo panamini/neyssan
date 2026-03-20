@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import type { CvSection } from "../../schemas/cvDocument.schema";
 import AchievementsDisplay from "../cv-display/AchievementsDisplay";
 import AchievementsModal from "./AchievementsModal";
-import { Trash, Plus } from "lucide-react";
+import { ScrollText } from "lucide-react";
 import { docToPlainText } from "../remirror-editor/utils/text";
 
 /**
@@ -89,7 +89,6 @@ export function AchievementsBlock({ section, onChange }: AchievementsBlockProps)
   const [isModalOpen, setIsModalOpen] = useState(false);
   // When true and list is empty, seed the modal with a blank row and focus it.
   const [seedOnOpen, setSeedOnOpen] = useState(false);
-  const [isClearConfirming, setIsClearConfirming] = useState(false);
   const contentId = useMemo(() => `ach-content-${String(section.id)}`, [section.id]);
 
   function handleSave(next: Array<{ id?: string; text: string }>) {
@@ -104,15 +103,6 @@ export function AchievementsBlock({ section, onChange }: AchievementsBlockProps)
     }
   }
 
-  function handleClear() {
-    try {
-      const updated = { ...section, structuredContent: [] as any, blocks: [] as any };
-      onChange(updated as CvSection);
-    } catch {
-      /* noop */
-    }
-  }
-
   // Collapsed preview handled by AchievementsDisplay via maxItems prop
 
   return (
@@ -120,38 +110,19 @@ export function AchievementsBlock({ section, onChange }: AchievementsBlockProps)
       <div className="flex items-center justify-between p-3 [background:var(--sf1)]">
         <h3 className="text-lg font-semibold">{section.title}</h3>
         <div className="flex items-center" style={{ gap: 2 }}>
-          {!isClearConfirming && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setSeedOnOpen(true);
-                setIsModalOpen(true);
-              }}
-              className="dasti-icon-button"
-              aria-label="Add achievement"
-              title="Add achievement"
-            >
-              <Plus className="w-4 h-4" aria-hidden />
-            </button>
-          )}
-          {isClearConfirming ? (
-            <span className="sb-doc-confirm" style={{ gap: "var(--s2)" }}>
-              <span className="sb-doc-confirm__label" style={{ fontSize: "var(--tx)" }}>Clear all?</span>
-              <button type="button" className="sb-doc-confirm__yes" onClick={(e) => { e.stopPropagation(); setIsClearConfirming(false); handleClear(); }}>Clear</button>
-              <button type="button" className="sb-doc-confirm__no" onClick={(e) => { e.stopPropagation(); setIsClearConfirming(false); }}>Cancel</button>
-            </span>
-          ) : (
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); setIsClearConfirming(true); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setSeedOnOpen(false);
+              setIsModalOpen(true);
+            }}
             className="dasti-icon-button"
-            aria-label="Clear achievements"
-            title="Clear achievements"
+            aria-label="Edit achievements"
+            title="Edit achievements"
           >
-            <Trash className="w-4 h-4" aria-hidden />
+            <ScrollText className="w-4 h-4" strokeWidth={1.5} aria-hidden />
           </button>
-          )}
         </div>
       </div>
 
