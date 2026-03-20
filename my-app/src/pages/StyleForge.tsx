@@ -28,22 +28,22 @@ const typographyOptions: Array<{
     id: "signature",
     name: "Signature",
     description: "Calm and clear.",
-    titleStyle: { fontFamily: '"Fraunces", serif', fontSize: 18, fontWeight: 600, letterSpacing: "-.02em" },
-    descriptionStyle: { fontFamily: '"Source Sans 3", sans-serif', fontSize: "var(--tx)", fontWeight: 600, letterSpacing: ".05em", textTransform: "uppercase" },
+    titleStyle: { fontFamily: '"Fraunces", serif', fontSize: 18, lineHeight: "var(--ls)", fontWeight: 600, letterSpacing: "-.02em" },
+    descriptionStyle: { fontFamily: '"Source Sans 3", sans-serif', fontSize: "var(--tx)", lineHeight: "var(--lx)", fontWeight: 600, letterSpacing: ".05em", textTransform: "uppercase" },
   },
   {
     id: "engaging",
     name: "Engaging",
     description: "Warm and literary.",
-    titleStyle: { fontFamily: '"Source Sans 3", sans-serif', fontSize: 17, fontWeight: 600, letterSpacing: "-.01em" },
-    descriptionStyle: { fontFamily: '"Source Sans 3", sans-serif', fontSize: "var(--tx)", fontWeight: 400, lineHeight: 1.5 },
+    titleStyle: { fontFamily: '"Source Sans 3", sans-serif', fontSize: 17, lineHeight: "var(--ls)", fontWeight: 600, letterSpacing: "-.01em" },
+    descriptionStyle: { fontFamily: '"Source Sans 3", sans-serif', fontSize: "var(--tx)", fontWeight: 400, lineHeight: "var(--lx)" },
   },
   {
     id: "expert",
     name: "Expert",
     description: "Precise and technical.",
-    titleStyle: { fontFamily: '"IBM Plex Mono", monospace', fontSize: 13, fontWeight: 500, letterSpacing: "-.01em" },
-    descriptionStyle: { fontFamily: '"IBM Plex Mono", monospace', fontSize: 10, fontWeight: 300, lineHeight: 1.5 },
+    titleStyle: { fontFamily: '"IBM Plex Mono", monospace', fontSize: 13, lineHeight: "var(--lx)", fontWeight: 500, letterSpacing: "-.01em" },
+    descriptionStyle: { fontFamily: '"IBM Plex Mono", monospace', fontSize: 10, fontWeight: 300, lineHeight: "var(--lx)" },
   },
 ];
 
@@ -89,6 +89,9 @@ const sectionBodyStyle: React.CSSProperties = {
   flexDirection: "column",
   gap: "var(--s3)",
 };
+
+// Optical spacing here is intentionally local: Layout, Typography, and Colors
+// use different type scales, so one global title/subtitle gap reads unevenly.
 
 const previewFrameStyle: React.CSSProperties = {
   borderRadius: "var(--rl)",
@@ -323,12 +326,12 @@ function SelectionCheck({ active }: { active: boolean }) {
         width: 18,
         height: 18,
         borderRadius: "var(--rp)",
-        background: active ? "var(--ac)" : "transparent",
-        border: active ? "1px solid var(--ac)" : "1px solid var(--bo)",
+        background: active ? "var(--ti)" : "transparent",
+        border: active ? "1px solid var(--ti)" : "1px solid var(--bo)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        color: "var(--op)",
+        color: active ? "var(--bg)" : "var(--ti)",
         flexShrink: 0,
       }}
     >
@@ -707,8 +710,8 @@ export function StyleForge(): JSX.Element {
               <div style={sectionBodyStyle}>
                 {layoutOptions.map((option) => {
                   const active = option.id === layoutTemplate;
-                  const optionAccent = active ? activeAccent : "var(--bm)";
-                  const previewSurface = active ? "var(--sf2)" : "var(--sf1)";
+                  const optionAccent = active ? "var(--tm2)" : "var(--bm)";
+                  const previewSurface = active ? "var(--sf1)" : "var(--sfr)";
                   const previewLine = active ? "var(--tm2)" : "var(--bm)";
                   return (
                     <button
@@ -722,8 +725,8 @@ export function StyleForge(): JSX.Element {
                         gap: "var(--s3)",
                         padding: "var(--s3)",
                         borderRadius: "var(--rm)",
-                        border: active ? "1px solid var(--ac)" : "1px solid var(--bo)",
-                        background: active ? "var(--as)" : "var(--sfr)",
+                        border: active ? "1px solid var(--bm)" : "1px solid var(--bo)",
+                        background: active ? "var(--sf2)" : "var(--sfr)",
                         cursor: "pointer",
                         textAlign: "left",
                         fontFamily: "inherit",
@@ -766,9 +769,9 @@ export function StyleForge(): JSX.Element {
                           </>
                         )}
                       </div>
-                      <div>
-                        <div style={{ fontSize: "var(--ts)", fontWeight: 600, color: active ? "var(--ac)" : "var(--ti)" }}>{option.name}</div>
-                        <div style={{ fontSize: "var(--tx)", color: active ? "var(--am)" : "var(--tm2)", marginTop: 3 }}>{option.description}</div>
+                      <div style={{ display: "grid", gap: 0 }}>
+                        <div style={{ fontSize: "var(--ts)", lineHeight: "var(--lx)", fontWeight: 600, color: "var(--ti)" }}>{option.name}</div>
+                        <div style={{ fontSize: "var(--tx)", lineHeight: "var(--lx)", color: "var(--tm2)" }}>{option.description}</div>
                       </div>
                       <SelectionCheck active={active} />
                     </button>
@@ -794,16 +797,16 @@ export function StyleForge(): JSX.Element {
                         gap: "var(--s3)",
                         padding: "var(--s3)",
                         borderRadius: "var(--rm)",
-                        border: active ? "1px solid var(--ac)" : "1px solid var(--bo)",
-                        background: active ? "var(--as)" : "var(--sfr)",
+                        border: active ? "1px solid var(--bm)" : "1px solid var(--bo)",
+                        background: active ? "var(--sf2)" : "var(--sfr)",
                         cursor: "pointer",
                         textAlign: "left",
                         fontFamily: "inherit",
                       }}
                     >
-                      <div>
-                        <div style={{ ...option.titleStyle, color: active ? "var(--ac)" : "var(--ti)" }}>{option.name}</div>
-                        <div style={{ ...option.descriptionStyle, color: active ? "var(--am)" : "var(--tm2)", marginTop: 3 }}>{option.description}</div>
+                      <div style={{ display: "grid", gap: "calc(var(--s1) / 2)" }}>
+                        <div style={{ ...option.titleStyle, color: "var(--ti)" }}>{option.name}</div>
+                        <div style={{ ...option.descriptionStyle, color: "var(--tm2)" }}>{option.description}</div>
                       </div>
                       <SelectionCheck active={active} />
                     </button>
@@ -819,11 +822,12 @@ export function StyleForge(): JSX.Element {
                   style={{
                     fontFamily: '"Source Sans 3", sans-serif',
                     fontSize: "var(--tx)",
+                    lineHeight: "var(--lx)",
                     fontWeight: 500,
                     color: "var(--tm2)",
                     letterSpacing: "0",
                     textTransform: "none",
-                    marginTop: 4,
+                    marginTop: 0,
                   }}
                 >
                   {activePaletteLabel}
@@ -1012,7 +1016,7 @@ export function StyleForge(): JSX.Element {
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--s6)", minWidth: 0 }}>
             <div>
               <div style={{ fontSize: "var(--tx)", fontWeight: 600, color: "var(--am)", letterSpacing: ".14em", textTransform: "uppercase", marginBottom: "var(--s3)" }}>
-                CV Preview
+                Resume Preview
               </div>
               <div style={previewFrameStyle}>{cvPreview}</div>
             </div>
