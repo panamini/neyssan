@@ -629,9 +629,10 @@ button::-moz-focus-inner,
 }
 
 .dasti-modal-close {
+  width: var(--hs);
   height: var(--hs);
   min-width: var(--hs);
-  padding: 0 var(--s2);
+  padding: 0;
   border-radius: var(--rs);
   border: 1px solid transparent;
   background: transparent;
