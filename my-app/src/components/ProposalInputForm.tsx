@@ -2,6 +2,7 @@
 
 import React from "react";
 import { useForm } from "react-hook-form";
+import styles from "./ProposalInputForm.module.css";
 import { zodResolver } from "@hookform/resolvers/zod";
 import clsx from "clsx";
 import { createPortal } from "react-dom";
@@ -538,38 +539,37 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   const toneUiLabel = TONE_OPTIONS.find(t => t.id === displayedVoicePreset)?.uiLabel ?? selectedVoicePresetDefinition.label;
 
   return (
-    <div className="pf-container">
-      {/* Resume selector row */}
-      <div style={{ marginBottom: "var(--s3)", display: "flex", flexWrap: "wrap", alignItems: "center", gap: "var(--s2)", fontSize: "var(--ts)", color: "var(--tm2)" }}>
-        <div className="pf-cv-pill">
+    <div className={styles.container}>
+      <div className="mb-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+        <div className="inline-flex max-w-full items-center overflow-hidden rounded-[var(--rs)] border border-transparent [background:transparent] transition-colors hover:[background:var(--sf2)]">
           <button
             type="button"
             onClick={handleOpenCvPicker}
-            className="pf-cv-pick-btn"
+            className="inline-flex min-w-0 items-center gap-1 px-2 py-1 text-left transition-colors hover:text-foreground focus:outline-none focus-visible:[box-shadow:inset_0_0_0_1px_var(--bm)]"
             title="Choose resume"
           >
             <span>Resume:</span>
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 600, color: "var(--ti)" }}>
-              {activeCvSource.title ?? "not selected"}
+            <span className="truncate font-medium text-foreground">
+              {activeCvSource.title ?? "none"}
             </span>
           </button>
           <button
             type="button"
             onClick={activeCvSource.title ? handleClearCv : handleOpenCvPicker}
-            className="dasti-icon-button"
+            className="dasti-icon-button shrink-0"
             aria-label={activeCvSource.title ? "Clear resume" : "Choose resume"}
             title={activeCvSource.title ? "Clear resume" : "Choose resume"}
           >
             {activeCvSource.title ? (
-              <X size={14} aria-hidden />
+              <X className="h-3.5 w-3.5" aria-hidden />
             ) : (
-              <Plus size={14} aria-hidden />
+              <Plus className="h-3.5 w-3.5" aria-hidden />
             )}
           </button>
         </div>
       </div>
       {(prefill?.platform || prefill?.sourceUrl) && (
-        <div style={{ marginBottom: "var(--s3)", fontSize: "var(--ts)", color: "var(--tm2)" }}>
+        <div className="mb-3 text-sm text-muted-foreground">
           Imported from{" "}
           {prefill?.platform
             ? capitalizeLabel(prefill.platform)
@@ -581,7 +581,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                 href={prefill.sourceUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="pf-source-link"
+                className="underline underline-offset-2 hover:text-foreground"
               >
                 View source
               </a>
@@ -593,48 +593,54 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
         open={isCvPickerOpen}
         onClose={() => setIsCvPickerOpen(false)}
         title="Choose resume"
+        className="max-w-2xl [background:var(--sf1)]"
       >
-        <DialogContent>
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--s4)" }}>
-            <p style={{ fontSize: "var(--ts)", color: "var(--tm2)" }}>
-              Select the resume Proposal Forge should use for personalization.
-            </p>
-            {cvOptions.length === 0 ? (
-              <div style={{ borderRadius: "var(--rm)", border: "1px solid var(--bo)", background: "var(--sf2)", padding: "var(--s4)", fontSize: "var(--ts)", color: "var(--tm2)" }}>
-                No local resumes found yet. Create or import one in Resume.
-              </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "var(--s2)", maxHeight: "50vh", overflowY: "auto" }}>
-                {cvOptions.map((option) => (
+        <DialogContent className="space-y-4 [background:var(--sf1)]">
+          <p className="text-sm text-muted-foreground">
+            Select the resume Proposal Forge should use for personalization.
+          </p>
+          {cvOptions.length === 0 ? (
+            <div className="rounded-[var(--rm)] border border-[color:var(--bo)] [background:var(--sf2)] px-4 py-4 text-sm text-muted-foreground">
+              No local resumes found yet. Create or import one in Resume.
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+              {cvOptions.map((option) => {
+                return (
                   <div
                     key={option.id}
-                    className={clsx("pf-cv-option", option.isActive && "pf-cv-option--active")}
+                    className={clsx(
+                      "w-full rounded-[var(--rm)] border p-4 transition-colors",
+                      option.isActive
+                        ? "border-[color:var(--ac)] [background:var(--as)] [box-shadow:var(--sha)]"
+                        : "border-[color:var(--bo)] [background:var(--sf2)] hover:border-[color:var(--bm)] hover:[background:var(--sfr)]",
+                    )}
                   >
-                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "var(--s3)" }}>
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ fontWeight: 600, color: "var(--ti)" }}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium text-foreground">
                           {option.title}
                         </div>
                         {(option.profileName || option.desiredPosition) && (
-                          <div style={{ marginTop: "var(--s1)", fontSize: "var(--ts)", color: "var(--ti)" }}>
+                          <div className="mt-1 text-sm text-foreground/90">
                             {[option.profileName, option.desiredPosition]
                               .filter(Boolean)
                               .join(" · ")}
                           </div>
                         )}
                         {option.email && (
-                          <div style={{ marginTop: "var(--s1)", fontSize: "var(--ts)", color: "var(--tm2)" }}>
+                          <div className="mt-1 text-sm text-muted-foreground">
                             {option.email}
                           </div>
                         )}
                         {option.summarySnippet && (
-                          <div style={{ marginTop: "var(--s2)", fontSize: "var(--ts)", color: "var(--tm2)", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                          <div className="mt-2 text-sm text-muted-foreground line-clamp-2">
                             {option.summarySnippet}
                           </div>
                         )}
                       </div>
-                      <div style={{ display: "flex", flexShrink: 0, flexDirection: "column", alignItems: "flex-end", gap: "var(--s2)" }}>
-                        <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: "var(--s2)" }}>
+                      <div className="flex shrink-0 flex-col items-end gap-2">
+                        <div className="flex flex-wrap justify-end gap-2">
                           <Button
                             type="button"
                             variant={option.isActive ? "secondary" : "primary"}
@@ -653,16 +659,20 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                             Edit
                           </Button>
                         </div>
-                        {option.isActive && (
-                          <span className="pf-cv-badge">Current</span>
-                        )}
+                        <div className="flex flex-col items-end gap-2 text-xs text-muted-foreground">
+                          {option.isActive && (
+                            <span className="rounded-full border border-[color:var(--ac)] bg-[color:var(--ap)] px-2 py-0.5 [color:var(--am)]">
+                              Current
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
       <form
@@ -671,116 +681,173 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
           void form.handleSubmit(handleSubmit)(e);
         }}
       >
-        <div>
-          <label htmlFor="jobTitle" className="sr-only">Job title</label>
-          <input
-            type="text"
-            id="jobTitle"
-            {...form.register("jobTitle")}
-            className="pf-input"
-            placeholder="Enter Job Title"
-            autoComplete="off"
-          />
-          {form.formState.errors.jobTitle && (
-            <p className="pf-error">
-              {form.formState.errors.jobTitle.message}
-            </p>
-          )}
-          {/* .siw — chatbox well */}
-          <div className="pf-compose-well">
-            <textarea
-              id="jobDescription"
-              {...form.register("jobDescription")}
-              style={{
-                width: "100%",
-                minHeight: 200,
-                maxHeight: 360,
-                padding: "var(--s3) var(--s4)",
-                border: "none",
-                background: "transparent",
-                color: "var(--ti)",
-                fontSize: "var(--ts)",
-                lineHeight: "var(--lb)",
-                resize: "vertical",
-                outline: "none",
-                display: "block",
-                fontFamily: "inherit",
-              }}
-              placeholder="Paste the job description here…"
-            />
-            {/* .cbar */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "var(--s2)",
-                padding: "var(--s2) var(--s3)",
-                borderTop: "1px solid var(--bo)",
-                background: "var(--sf1)",
-                borderRadius: "0 0 calc(var(--rm) - 1px) calc(var(--rm) - 1px)",
-              }}
-            >
-              <button
-                ref={typeChipRef}
-                type="button"
-                title="Document type"
-                className="pf-chip"
-                onClick={(e) => { e.stopPropagation(); toggleMenu("type"); }}
-              >
-                <span style={{ fontSize: "var(--tx)", fontWeight: 500 }}>{typeLabel}</span>
-                <ChevronDown size={12} strokeWidth={1.5} aria-hidden="true" />
-              </button>
-              <button
-                ref={toneChipRef}
-                type="button"
-                title="Tone"
-                className="pf-chip"
-                onClick={(e) => { e.stopPropagation(); toggleMenu("tone"); }}
-              >
-                <span style={{ fontSize: "var(--tx)", fontWeight: 500 }}>{toneUiLabel}</span>
-                <ChevronDown size={12} strokeWidth={1.5} aria-hidden="true" />
-              </button>
-              <div style={{ flex: 1 }} />
-              {/* .gbtn — generate / stop */}
-              <button
-                type="submit"
-                aria-busy={isGenerating}
-                disabled={!isGenerating && watchedJobDescription.length < 10}
-                title={isGenerating ? "Generating…" : watchedJobDescription.length < 10 ? "Minimum 10 characters required" : "Generate"}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {/* Main inputs */}
+          <div className="md:col-span-2">
+            <div>
+              <input
+                type="text"
+                id="jobTitle"
+                {...form.register("jobTitle")}
+                className={clsx(styles.inputElement, styles.jobField)}
+                placeholder="Enter Job Title"
+                autoComplete="off"
+              />
+              {form.formState.errors.jobTitle && (
+                <p className={styles.errorMessage}>
+                  {form.formState.errors.jobTitle.message}
+                </p>
+              )}
+            </div>
+            {/* .siw — chatbox well */}
+            <div className={styles.composeWell}>
+              <textarea
+                id="jobDescription"
+                {...form.register("jobDescription")}
                 style={{
-                  width: "var(--hs)",
-                  height: "var(--hs)",
-                  borderRadius: "var(--rs)",
-                  background: isGenerating ? "var(--sf2)" : "var(--ac)",
-                  color: isGenerating ? "var(--ti)" : "var(--op)",
-                  border: "1px solid transparent",
-                  cursor: (!isGenerating && watchedJobDescription.length < 10) ? "not-allowed" : "pointer",
-                  display: "inline-flex",
+                  width: "100%",
+                  minHeight: 200,
+                  maxHeight: 360,
+                  padding: "var(--s3) var(--s4)",
+                  border: "none",
+                  background: "transparent",
+                  color: "var(--ti)",
+                  fontSize: "var(--ts)",
+                  lineHeight: "var(--lb)",
+                  resize: "vertical",
+                  outline: "none",
+                  display: "block",
+                  fontFamily: "inherit",
+                }}
+                placeholder="Paste the job description here…"
+              />
+              {/* .cbar */}
+              <div
+                style={{
+                  display: "flex",
                   alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                  transition: "background .15s var(--ez), opacity .15s var(--ez)",
-                  opacity: (!isGenerating && watchedJobDescription.length < 10) ? 0.4 : 1,
+                  gap: "var(--s2)",
+                  padding: "var(--s2) var(--s3)",
+                  borderTop: "1px solid var(--bo)",
+                  background: "var(--sf1)",
+                  borderRadius: "0 0 calc(var(--rm) - 1px) calc(var(--rm) - 1px)",
                 }}
               >
-                {isGenerating ? (
-                  <Square size={16} fill="currentColor" strokeWidth={0} />
-                ) : (
-                  <ArrowUp size={16} strokeWidth={1.5} />
-                )}
-              </button>
+                {/* Type dropdown */}
+                <button
+                  ref={typeChipRef}
+                  type="button"
+                  title="Document type"
+                  onClick={(e) => { e.stopPropagation(); toggleMenu("type"); }}
+                  style={{
+                    height: 26,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "6px",
+                    padding: "0 var(--s2)",
+                    borderRadius: "var(--rs)",
+                    border: "1px solid transparent",
+                    background: "transparent",
+                    color: "var(--tm2)",
+                    cursor: "pointer",
+                    flexShrink: 0,
+                    transition: "background .12s var(--ez), color .12s var(--ez)",
+                  }}
+                  onMouseEnter={(e) => {
+                    const b = e.currentTarget as HTMLButtonElement;
+                    b.style.background = "var(--sf2)";
+                    b.style.color = "var(--ti)";
+                  }}
+                  onMouseLeave={(e) => {
+                    const b = e.currentTarget as HTMLButtonElement;
+                    b.style.background = "transparent";
+                    b.style.color = "var(--tm2)";
+                  }}
+                >
+                  <span style={{ fontSize: "var(--tx)", fontWeight: 500 }}>{typeLabel}</span>
+                  <ChevronDown size={12} strokeWidth={1.5} aria-hidden="true" />
+                </button>
+                {/* Tone dropdown */}
+                <button
+                  ref={toneChipRef}
+                  type="button"
+                  title="Tone"
+                  onClick={(e) => { e.stopPropagation(); toggleMenu("tone"); }}
+                  style={{
+                    height: 26,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "6px",
+                    padding: "0 var(--s2)",
+                    borderRadius: "var(--rs)",
+                    border: "1px solid transparent",
+                    background: "transparent",
+                    color: "var(--tm2)",
+                    cursor: "pointer",
+                    flexShrink: 0,
+                    transition: "background .12s var(--ez), color .12s var(--ez)",
+                  }}
+                  onMouseEnter={(e) => {
+                    const b = e.currentTarget as HTMLButtonElement;
+                    b.style.background = "var(--sf2)";
+                    b.style.color = "var(--ti)";
+                  }}
+                  onMouseLeave={(e) => {
+                    const b = e.currentTarget as HTMLButtonElement;
+                    b.style.background = "transparent";
+                    b.style.color = "var(--tm2)";
+                  }}
+                >
+                  <span style={{ fontSize: "var(--tx)", fontWeight: 500 }}>{toneUiLabel}</span>
+                  <ChevronDown size={12} strokeWidth={1.5} aria-hidden="true" />
+                </button>
+                <div style={{ flex: 1 }} />
+                {/* .gbtn — generate / stop */}
+                <button
+                  type="submit"
+                  aria-busy={isGenerating}
+                  disabled={!isGenerating && watchedJobDescription.length < 10}
+                  title={isGenerating ? "Generating…" : watchedJobDescription.length < 10 ? "Minimum 10 characters required" : "Generate"}
+                  style={{
+                    width: "var(--hs)",
+                    height: "var(--hs)",
+                    borderRadius: "var(--rs)",
+                    background: isGenerating ? "var(--sf2)" : "var(--ac)",
+                    color: isGenerating ? "var(--ti)" : "var(--op)",
+                    border: "1px solid transparent",
+                    cursor: (!isGenerating && watchedJobDescription.length < 10) ? "not-allowed" : "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                    transition: "background .15s var(--ez), opacity .15s var(--ez)",
+                    opacity: (!isGenerating && watchedJobDescription.length < 10) ? 0.4 : 1,
+                  }}
+                >
+                  {isGenerating ? (
+                    <Square size={16} fill="currentColor" strokeWidth={0} />
+                  ) : (
+                    <ArrowUp size={16} strokeWidth={1.5} />
+                  )}
+                </button>
+              </div>
             </div>
+            {form.formState.errors.jobDescription && (
+              <p className={styles.errorMessage}>
+                {form.formState.errors.jobDescription.message}
+              </p>
+            )}
+            {errorMessage && (
+              <p
+                role="alert"
+                className={styles.errorMessage}
+              >
+                {errorMessage}
+              </p>
+            )}
           </div>
-          {form.formState.errors.jobDescription && (
-            <p className="pf-error">
-              {form.formState.errors.jobDescription.message}
-            </p>
-          )}
-          {errorMessage && (
-            <p role="alert" className="pf-error">
-              {errorMessage}
-            </p>
-          )}
         </div>
       </form>
       {/* Portal dropdowns for cbar */}

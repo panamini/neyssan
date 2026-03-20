@@ -225,7 +225,7 @@ export default function ProposalsList({
   }
 
   const selDate = selected
-    ? new Date(selected._creationTime).toLocaleDateString(undefined, { day: "2-digit", month: "2-digit", year: "2-digit" })
+    ? new Date(selected._creationTime).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" })
     : "";
   const selType = selected ? typeLabel(getStoredProposalType(selected)) : "";
   const selTone = selected ? toneLabel(getStoredVoicePreset(selected)) : "";
@@ -299,7 +299,7 @@ export default function ProposalsList({
     }
   }
 
-  async function handleDeleteConfirm() {
+  async function handleDelete() {
     if (!selected) return;
     try {
       await deleteProposal({ id: selected._id });
@@ -357,7 +357,7 @@ export default function ProposalsList({
               }}
               style={{
                 fontFamily: '"Fraunces", serif',
-                fontSize: "var(--tx2)",
+                fontSize: 20,
                 fontWeight: 600,
                 letterSpacing: "-.02em",
                 color: "var(--ti)",
@@ -499,7 +499,6 @@ export default function ProposalsList({
         {/* .p-body */}
         {selected ? (
           <textarea
-            aria-label="Proposal content"
             value={editContent}
             onChange={(e) => setEditContent(e.target.value)}
             onBlur={() => void handleSaveContent()}

@@ -25,9 +25,6 @@ const SB_EXPANDED = 248;
 const SB_COLLAPSED = 52;
 const SB_MAX_ITEMS = 5;
 
-/** IDs currently waiting for a second-click delete confirmation */
-type ConfirmingMap = Record<string, true>;
-
 export const Sidebar: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(() =>
@@ -36,8 +33,6 @@ export const Sidebar: React.FC = () => {
   const [renameTarget, setRenameTarget] = useState<{ id: string; title: string } | null>(null);
   const [proposalRenameTarget, setProposalRenameTarget] = useState<{ id: string; title: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [confirmingCv, setConfirmingCv] = useState<ConfirmingMap>({});
-  const [confirmingProposal, setConfirmingProposal] = useState<ConfirmingMap>({});
   const fileRef = useRef<HTMLInputElement | null>(null);
   const { cvs, currentCv, loadCv, createNewCv, importCv, deleteCv, renameCv } = useCvLibrary();
   const navigate = useNavigate();
@@ -64,10 +59,6 @@ export const Sidebar: React.FC = () => {
 
   /* ── Proposals query (même source que ProposalsList) ────────── */
   const { isLoaded, isSignedIn } = useAuth();
-  const { user } = useUser();
-  const userInitials = user
-    ? ((user.firstName?.[0] ?? "") + (user.lastName?.[0] ?? "")).toUpperCase() || user.emailAddresses?.[0]?.emailAddress?.[0]?.toUpperCase() || "?"
-    : "?";
   const proposals = useQuery(
     api.proposalsPublic.default as any,
     isLoaded && isSignedIn ? {} : "skip",
@@ -112,7 +103,7 @@ export const Sidebar: React.FC = () => {
     }
   };
 
-  const handleDeleteCancel = (e: React.MouseEvent, id: string) => {
+  const handleDeleteProposal = async (e: React.MouseEvent, id: string, title: string) => {
     e.stopPropagation();
     try {
       await deleteProposal({ id });
@@ -124,11 +115,6 @@ export const Sidebar: React.FC = () => {
       console.error("[Sidebar] deleteProposal failed", err);
       showToast("Failed to delete proposal", { variant: "error" });
     }
-  };
-
-  const handleDeleteProposalCancel = (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    setConfirmingProposal((prev) => { const n = { ...prev }; delete n[id]; return n; });
   };
 
   const handleRenameProposal = (e: React.MouseEvent, id: string, title: string) => {
@@ -186,7 +172,7 @@ export const Sidebar: React.FC = () => {
   const sbSec: React.CSSProperties = sidebarCollapsed
     ? { opacity: 0, maxHeight: 0, overflow: "hidden", padding: 0, pointerEvents: "none" }
     : {
-        fontSize: "var(--tx)",
+        fontSize: 10,
         fontWeight: 600,
         color: "var(--tg2)",
         letterSpacing: ".12em",
@@ -243,34 +229,35 @@ export const Sidebar: React.FC = () => {
           {/* Section label RESUME */}
           <span style={sbSec as React.CSSProperties}>Resume</span>
 
-          {/* Resume nav item */}
+          {/* Resume nav item — route-conditional active state (C04) */}
           <div
-            role="button"
-            tabIndex={0}
             onClick={() => { void navigate('/cv'); }}
-            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") void navigate('/cv'); }}
-            className={`sb-nav-item sb-tooltip-wrap${isResume ? " sb-nav-item--active" : ""}`}
             style={{
+              display: "flex",
+              alignItems: "center",
               justifyContent: sidebarCollapsed ? "center" : "flex-start",
               gap: "var(--s3)",
               padding: sidebarCollapsed ? 0 : "var(--s2)",
               borderRadius: "var(--rs)",
               border: isResume ? "1px solid var(--bo)" : "1px solid transparent",
               cursor: "pointer",
-              height: 34,
+              height: compactDensity ? 32 : 34,
               width: sidebarCollapsed ? 36 : "100%",
               alignSelf: sidebarCollapsed ? "center" : "stretch",
+              background: isResume ? "var(--sfr)" : "transparent",
+              boxShadow: isResume ? "var(--sha)" : "none",
+              transition: "all .12s var(--ez)",
+              overflow: "hidden",
             }}
           >
             <div style={{ width: 16, height: 16, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: isResume ? "var(--ac)" : "var(--tm2)" }}>
-              <FileText size={16} strokeWidth={1.5} />
+              <FileText size={15} strokeWidth={1.5} />
             </div>
             {!sidebarCollapsed && (
               <span style={{ fontSize: "var(--ts)", fontWeight: isResume ? 600 : 500, color: isResume ? "var(--ti)" : "var(--tm2)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>
                 Studio
               </span>
             )}
-            {sidebarCollapsed && <span className="sb-tooltip">Studio</span>}
           </div>
 
           {/* CV document sub-items — capped at SB_MAX_ITEMS */}
@@ -286,7 +273,6 @@ export const Sidebar: React.FC = () => {
                 date={updatedAt}
                 isActive={isActive}
                 dense={compactDensity}
-                isConfirming={Boolean(confirmingCv[cv.id])}
                 onClick={() => { handleLoadCv(cv.id); void navigate('/cv'); }}
                 onRename={(e) => { e.stopPropagation(); handleRenameOpen(cv.id, cv.title); }}
                 onDelete={(e) => handleDelete(e, cv.id)}
@@ -311,34 +297,35 @@ export const Sidebar: React.FC = () => {
           {/* Section label WRITE */}
           <span style={sbSec as React.CSSProperties}>Write</span>
 
-          {/* Compose nav item */}
+          {/* Compose nav item — .sb-item.on anatomy (C04) */}
           <div
-            role="button"
-            tabIndex={0}
             onClick={() => { void navigate('/proposal'); }}
-            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") void navigate('/proposal'); }}
-            className={`sb-nav-item sb-tooltip-wrap${isProposal ? " sb-nav-item--active" : ""}`}
             style={{
+              display: "flex",
+              alignItems: "center",
               justifyContent: sidebarCollapsed ? "center" : "flex-start",
               gap: "var(--s3)",
               padding: sidebarCollapsed ? 0 : "var(--s2)",
               borderRadius: "var(--rs)",
               border: isProposal ? "1px solid var(--bo)" : "1px solid transparent",
               cursor: "pointer",
-              height: 34,
+              height: compactDensity ? 32 : 34,
               width: sidebarCollapsed ? 36 : "100%",
               alignSelf: sidebarCollapsed ? "center" : "stretch",
+              background: isProposal ? "var(--sfr)" : "transparent",
+              boxShadow: isProposal ? "var(--sha)" : "none",
+              transition: "all .12s var(--ez)",
+              overflow: "hidden",
             }}
           >
             <div style={{ width: 16, height: 16, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: isProposal ? "var(--ac)" : "var(--tm2)" }}>
-              <Pencil size={16} strokeWidth={1.5} />
+              <Pencil size={15} strokeWidth={1.5} />
             </div>
             {!sidebarCollapsed && (
               <span style={{ fontSize: "var(--ts)", fontWeight: isProposal ? 600 : 500, color: isProposal ? "var(--ti)" : "var(--tm2)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>
                 Compose
               </span>
             )}
-            {sidebarCollapsed && <span className="sb-tooltip">Compose</span>}
           </div>
 
           {/* Proposal sub-items — capped at SB_MAX_ITEMS */}
@@ -357,7 +344,6 @@ export const Sidebar: React.FC = () => {
                 docType={typeLabel}
                 isActive={isActive}
                 dense={compactDensity}
-                isConfirming={Boolean(confirmingProposal[p._id])}
                 onClick={() => { void navigate(`/proposal?view=saved&id=${encodeURIComponent(p._id)}`); }}
                 onRename={(e) => { void handleRenameProposal(e, p._id, p.title ?? "Untitled"); }}
                 onDelete={(e) => { void handleDeleteProposal(e, p._id, p.title ?? "Untitled"); }}
@@ -384,32 +370,39 @@ export const Sidebar: React.FC = () => {
 
           {/* Style nav item */}
           <div
-            role="button"
-            tabIndex={0}
             onClick={() => { void navigate('/style'); }}
-            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") void navigate('/style'); }}
-            className={`sb-nav-item sb-tooltip-wrap${isStyle ? " sb-nav-item--active" : ""}`}
             style={{
+              display: "flex",
+              alignItems: "center",
               justifyContent: sidebarCollapsed ? "center" : "flex-start",
               gap: "var(--s3)",
               padding: sidebarCollapsed ? 0 : "var(--s2)",
               borderRadius: "var(--rs)",
               border: isStyle ? "1px solid var(--bo)" : "1px solid transparent",
               cursor: "pointer",
-              height: 34,
+              height: compactDensity ? 32 : 34,
               width: sidebarCollapsed ? 36 : "100%",
               alignSelf: sidebarCollapsed ? "center" : "stretch",
+              background: isStyle ? "var(--sfr)" : "transparent",
+              boxShadow: isStyle ? "var(--sha)" : "none",
+              transition: "all .12s var(--ez)",
+              overflow: "hidden",
+            }}
+            onMouseEnter={(e) => {
+              if (!isStyle) (e.currentTarget as HTMLDivElement).style.background = "var(--sf2)";
+            }}
+            onMouseLeave={(e) => {
+              if (!isStyle) (e.currentTarget as HTMLDivElement).style.background = "transparent";
             }}
           >
             <div style={{ width: 16, height: 16, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: isStyle ? "var(--ac)" : "var(--tg2)" }}>
-              <Settings size={16} strokeWidth={1.5} />
+              <Settings size={16} />
             </div>
             {!sidebarCollapsed && (
               <span style={{ fontSize: "var(--ts)", fontWeight: isStyle ? 600 : 500, color: isStyle ? "var(--ti)" : "var(--tm2)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>
                 Style
               </span>
             )}
-            {sidebarCollapsed && <span className="sb-tooltip">Style</span>}
           </div>
 
           {/* Error display */}
@@ -580,21 +573,14 @@ interface SbDocProps {
   docType?: string;
   isActive: boolean;
   dense?: boolean;
-  isConfirming?: boolean;
   onClick: () => void;
   onRename: (e: React.MouseEvent) => void;
-  onDeleteRequest: (e: React.MouseEvent) => void;
-  onDeleteConfirm: (e: React.MouseEvent) => void;
-  onDeleteCancel: (e: React.MouseEvent) => void;
+  onDelete: (e: React.MouseEvent) => void;
   hideActions?: boolean;
   hideRenameAction?: boolean;
 }
 
-function SbDoc({
-  title, date, docType, isActive, dense = false, isConfirming = false,
-  onClick, onRename, onDeleteRequest, onDeleteConfirm, onDeleteCancel,
-  hideActions, hideRenameAction,
-}: SbDocProps) {
+function SbDoc({ title, date, docType, isActive, dense = false, onClick, onRename, onDelete, hideActions, hideRenameAction }: SbDocProps) {
   const [hovered, setHovered] = useState(false);
   const [renHovered, setRenHovered] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
@@ -616,12 +602,13 @@ function SbDoc({
       style={{
         display: "flex",
         flexDirection: "column",
-        padding: dense ? "7px var(--s2) 7px var(--s5)" : "var(--s2) var(--s2) var(--s2) var(--s5)",
+        padding: dense ? "7px var(--s2) 7px 34px" : "var(--s2) var(--s2) var(--s2) 40px",
         borderRadius: "var(--rs)",
         cursor: isConfirming ? "default" : "pointer",
         transition: "all .12s var(--ez)",
         position: "relative",
         background: isActive ? "var(--sfr)" : hovered ? "var(--sf2)" : "transparent",
+        border: isActive ? "1px solid var(--bo)" : "1px solid transparent",
         boxShadow: isActive ? "var(--sha)" : "none",
       }}
     >
@@ -634,13 +621,12 @@ function SbDoc({
           whiteSpace: "nowrap",
           overflow: "hidden",
           textOverflow: "ellipsis",
-          paddingRight: hovered && !hideActions ? 48 : 0,
-          transition: "padding-right .1s var(--ez)",
+          maxWidth: dense ? 150 : 160,
         }}
       >
         {title}
       </div>
-      <div style={{ fontSize: 10, color: "var(--tg2)", marginTop: 1, display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap", lineHeight: 1.28 }}>
+      <div style={{ fontSize: dense ? 9.5 : 10, color: "var(--tg2)", marginTop: 1, display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap", lineHeight: 1.28 }}>
         {date}
         {docType && <span>·</span>}
         {docType && <span style={{ color: "var(--tm2)", fontWeight: 500 }}>{docType}</span>}
