@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ChevronLeft, FileText, Plus, Pencil, Settings, X } from 'lucide-react';
+import { Menu, FileText, Plus, Pencil, Settings, X } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useMutation, useQuery } from 'convex/react';
 import { useAuth } from '@clerk/clerk-react';
+import { UserButton } from '@clerk/clerk-react';
 import { api } from '../../convex/_generated/api';
 import { useCvLibrary } from '../contexts/CvLibraryContext';
 import { normalizeAndValidateCvDocument } from '../lib/normalize-cv';
@@ -159,13 +160,14 @@ export const Sidebar: React.FC = () => {
   };
 
   const sbTop: React.CSSProperties = {
-    position: "relative",
     display: "flex",
     alignItems: "center",
-    padding: "0 var(--s3)",
+    gap: "var(--s2)",
+    padding: "0 var(--s2)",
     height: "var(--hdr)",
     borderBottom: "1px solid var(--bo)",
     flexShrink: 0,
+    justifyContent: sidebarCollapsed ? "center" : "flex-start",
   };
 
   const sbSec: React.CSSProperties = sidebarCollapsed
@@ -187,78 +189,30 @@ export const Sidebar: React.FC = () => {
       <div style={sb}>
         {/* ── Top bar ─────────────────────────────────────── */}
         <div style={sbTop}>
-          {/* Dasti mark */}
-          <span
-            style={{
-              width: 28,
-              height: 28,
-              borderRadius: "var(--rs)",
-              border: "1px solid var(--bo)",
-              background: "var(--sf2)",
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontFamily: '"Fraunces", serif',
-              fontSize: "13px",
-              fontWeight: 600,
-              letterSpacing: "-.01em",
-              color: "var(--ti)",
-              whiteSpace: "nowrap",
-              opacity: sidebarCollapsed ? 0 : 1,
-              transform: sidebarCollapsed ? "scaleX(0)" : "scaleX(1)",
-              transformOrigin: "left",
-              transition: "opacity .18s var(--ez), transform .18s var(--ez)",
-              pointerEvents: sidebarCollapsed ? "none" : "auto",
-            }}
-          >
-            (d)
-          </span>
-
-          <div style={{ flex: 1 }} />
-
-          {/* Collapse toggle — ‹ / › — position absolute right pour x fixe */}
+          {/* Hamburger toggle — single button, always top-left */}
           <button
-            onClick={() => {
-              if (!forcedCollapsed) setCollapsed((c) => !c);
-            }}
+            className="sb-toggle"
+            onClick={() => { if (!forcedCollapsed) setCollapsed((c) => !c); }}
             title={forcedCollapsed ? "Sidebar auto-collapses on narrow widths" : collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            style={{
-              position: "absolute",
-              right: "var(--s3)",
-              top: "50%",
-              transform: "translateY(-50%)",
-              width: 26,
-              height: 26,
-              flexShrink: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              borderRadius: "var(--rs)",
-              border: "1px solid var(--bo)",
-              color: "var(--tg2)",
-              background: "var(--sfr)",
-              cursor: "pointer",
-              opacity: forcedCollapsed ? 0.55 : 1,
-              transition: "color .12s var(--ez), border-color .12s var(--ez), background .12s var(--ez)",
-              fontFamily: "inherit",
-            }}
-            onMouseEnter={(e) => {
-              const b = e.currentTarget as HTMLButtonElement;
-              b.style.color = "var(--ti)";
-              b.style.borderColor = "var(--bm)";
-            }}
-            onMouseLeave={(e) => {
-              const b = e.currentTarget as HTMLButtonElement;
-              b.style.color = "var(--tg2)";
-              b.style.borderColor = "var(--bo)";
-            }}
           >
-            <ChevronLeft
-              size={16}
-              strokeWidth={1.5}
-              style={{ transform: sidebarCollapsed ? "rotate(180deg)" : "none", transition: "transform .22s var(--ez)" }}
-            />
+            <Menu size={16} strokeWidth={1.5} />
           </button>
+
+          {/* Wordmark — hidden when collapsed */}
+          {!sidebarCollapsed && (
+            <span
+              style={{
+                fontFamily: '"Fraunces", serif',
+                fontSize: "15px",
+                fontWeight: 600,
+                letterSpacing: "-.02em",
+                color: "var(--ti)",
+                whiteSpace: "nowrap",
+              }}
+            >
+              dasti
+            </span>
+          )}
         </div>
 
         {/* ── Nav ─────────────────────────────────────────── */}
@@ -524,25 +478,9 @@ export const Sidebar: React.FC = () => {
             justifyContent: sidebarCollapsed ? "center" : "flex-start",
           }}
         >
-          {/* Avatar */}
-          <div
-            style={{
-              width: 30,
-              height: 30,
-              borderRadius: "var(--rp)",
-              background: "var(--as)",
-              border: "1px solid color-mix(in srgb, var(--ac) 22%, transparent)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "var(--tx)",
-              fontWeight: 600,
-              color: "var(--am)",
-              cursor: "pointer",
-              flexShrink: 0,
-            }}
-          >
-            P
+          {/* Avatar — Clerk UserButton */}
+          <div style={{ flexShrink: 0, display: "flex", alignItems: "center" }}>
+            <UserButton afterSignOutUrl="/" />
           </div>
 
           {/* Name + hint — hidden in collapsed (C06) */}

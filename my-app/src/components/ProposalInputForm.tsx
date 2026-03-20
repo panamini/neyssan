@@ -873,7 +873,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
               {([
                 { value: "cover_letter", label: "Letter", desc: "Cover letter for a job application" },
                 { value: "freelance_proposal", label: "Proposal", desc: "Freelance proposal for a project" },
-              ] as const).map((opt) => (
+              ] as const).filter((opt) => opt.value !== selectedProposalType).map((opt) => (
                 <div
                   key={opt.value}
                   onClick={() => { form.setValue("proposalType", opt.value, { shouldDirty: true, shouldValidate: true }); setOpenMenu(null); }}
@@ -881,11 +881,11 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                     padding: "var(--s3) var(--s4)",
                     borderRadius: "var(--rs)",
                     cursor: "pointer",
-                    background: selectedProposalType === opt.value ? "var(--as)" : "transparent",
+                    background: "transparent",
                     transition: "background .1s var(--ez)",
                   }}
-                  onMouseEnter={(e) => { if (selectedProposalType !== opt.value) (e.currentTarget as HTMLDivElement).style.background = "var(--sf2)"; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = selectedProposalType === opt.value ? "var(--as)" : "transparent"; }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = "var(--sf2)"; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}
                 >
                   <div style={{ fontSize: "var(--ts)", fontWeight: 600, color: "var(--ti)" }}>{opt.label}</div>
                   <div style={{ fontSize: "var(--tx)", color: "var(--tg2)", marginTop: 3, lineHeight: 1.5 }}>{opt.desc}</div>
@@ -893,7 +893,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
               ))}
             </>
           )}
-          {openMenu === "tone" && TONE_OPTIONS.map((opt) => (
+          {openMenu === "tone" && TONE_OPTIONS.filter((opt) => opt.id !== displayedVoicePreset).map((opt) => (
             <div
               key={opt.id}
               onClick={() => { handleVoicePresetChange(opt.id); setOpenMenu(null); }}
@@ -901,11 +901,11 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                 padding: "var(--s3) var(--s4)",
                 borderRadius: "var(--rs)",
                 cursor: "pointer",
-                background: displayedVoicePreset === opt.id ? "var(--as)" : "transparent",
+                background: "transparent",
                 transition: "background .1s var(--ez)",
               }}
-              onMouseEnter={(e) => { if (displayedVoicePreset !== opt.id) (e.currentTarget as HTMLDivElement).style.background = "var(--sf2)"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = displayedVoicePreset === opt.id ? "var(--as)" : "transparent"; }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = "var(--sf2)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}
             >
               <div style={{ fontSize: "var(--ts)", fontWeight: 600, color: "var(--ti)" }}>{opt.uiLabel}</div>
               <div style={{ fontSize: "var(--tx)", color: "var(--tg2)", marginTop: 3, lineHeight: 1.5 }}>{opt.description}</div>
