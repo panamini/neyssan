@@ -221,7 +221,7 @@ export const Sidebar: React.FC = () => {
               display: "flex",
               alignItems: "center",
               justifyContent: sidebarCollapsed ? "center" : "flex-start",
-              gap: "var(--s3)",
+              gap: sidebarCollapsed ? 0 : "var(--s3)",
               padding: sidebarCollapsed ? 0 : "var(--s2)",
               borderRadius: "var(--rs)",
               border: isResume ? "1px solid var(--bo)" : "1px solid transparent",
@@ -268,7 +268,7 @@ export const Sidebar: React.FC = () => {
             <SbViewAll
               label={`View all (${cvs.length})`}
               dense={compactDensity}
-              onClick={() => { void navigate('/cv'); }}
+              onClick={() => { void navigate('/cvs'); }}
             />
           )}
 
@@ -287,7 +287,7 @@ export const Sidebar: React.FC = () => {
               display: "flex",
               alignItems: "center",
               justifyContent: sidebarCollapsed ? "center" : "flex-start",
-              gap: "var(--s3)",
+              gap: sidebarCollapsed ? 0 : "var(--s3)",
               padding: sidebarCollapsed ? 0 : "var(--s2)",
               borderRadius: "var(--rs)",
               border: isProposal ? "1px solid var(--bo)" : "1px solid transparent",
@@ -356,7 +356,7 @@ export const Sidebar: React.FC = () => {
               display: "flex",
               alignItems: "center",
               justifyContent: sidebarCollapsed ? "center" : "flex-start",
-              gap: "var(--s3)",
+              gap: sidebarCollapsed ? 0 : "var(--s3)",
               padding: sidebarCollapsed ? 0 : "var(--s2)",
               borderRadius: "var(--rs)",
               border: isStyle ? "1px solid var(--bo)" : "1px solid transparent",
