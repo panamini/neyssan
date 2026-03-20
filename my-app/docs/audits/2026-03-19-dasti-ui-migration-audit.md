@@ -2,14 +2,14 @@
 Date: 2026-03-19
 
 ## Scope
-- Goal: compare the current React UI against `dasti-v16.html` as the visual source of truth and `dasti-spec-v1.md` as the design-system / behavior source of truth.
+- Goal: compare the current React UI against `dasti-v16.html` as the visual source of truth and `dasti-spec-v2.md` as the design-system / behavior source of truth.
 - In scope: page shell, sidebar, topbar, compose/open behavior, spacing, hierarchy, typography, colors, borders, shadows, radii, buttons, scroll containers, duplicate UI trees, and UI-only migration regressions.
 - Out of scope: proposal-generation backend logic, Convex/server logic except when it changes visible UI behavior.
 
 ## Method
 - Read the two reference files:
   - `UI/UI-SPEC/dasti-v16.html`
-  - `UI/UI-SPEC/dasti-spec-v1.md`
+  - `my-app/docs/specs/dasti-spec-v2.md`
 - Inspected the active React route tree and UI components under `my-app/src/`.
 - Ran the frontend locally and captured light-mode screenshots for:
   - current `/cv`
@@ -412,8 +412,8 @@ This addendum preserves the first-pass audit. It classifies the later user obser
 - Relevant files:
   - active code: `src/App.tsx:28-92`
   - Dasti source of truth: `UI/UI-SPEC/dasti-v16.html:687-689`
-  - Dasti source of truth: `UI/UI-SPEC/dasti-spec-v1.md:435-458`
-  - Dasti source of truth: `UI/UI-SPEC/dasti-spec-v1.md:471-482`
+  - Dasti source of truth: `my-app/docs/specs/dasti-spec-v2.md:435-458`
+  - Dasti source of truth: `my-app/docs/specs/dasti-spec-v2.md:471-482`
 - Priority impact: slight refinement only. Keep the first-pass topbar priority, but interpret it as preserving breadcrumb + logged-out sign-in behavior while restoring `Export PDF`.
 
 ### D06. Step 7 — Sidebar toggle button position
@@ -431,5 +431,5 @@ This addendum preserves the first-pass audit. It classifies the later user obser
 - Relevant files:
   - active code: `src/components/Sidebar.tsx:125-127`
   - Dasti source of truth: `UI/UI-SPEC/dasti-v16.html:620-624`
-  - Dasti source of truth: `UI/UI-SPEC/dasti-spec-v1.md:435-452`
+  - Dasti source of truth: `my-app/docs/specs/dasti-spec-v2.md:435-452`
 - Priority impact: no change. This remains a restore-the-wordmark fix, not a remove-it fix.
