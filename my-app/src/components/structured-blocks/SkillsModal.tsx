@@ -140,7 +140,7 @@ export function SkillsModal({ open, items, onClose, onSave }: SkillsModalProps) 
                   <input
                     id={`skill-name-${idx}`}
                     className="flex-1 min-w-0 px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
-                    placeholder="e.g., React"
+                    placeholder="Skill name"
                     value={row.name ?? ""}
                     onChange={(e) => updateRow(idx, { name: e.target.value })}
                   />

@@ -1611,6 +1611,19 @@ const flushPendingEdits = useCallback((): void => {
         } as any;
       }
 
+      // Apply canonical section ordering so imported CVs always show sections in the right order
+      const preferredImportOrder = [
+        "profile", "summary", "experience", "achievements",
+        "education", "skills", "languages",
+      ] as const;
+      const importOrderIndex = new Map(preferredImportOrder.map((t, i) => [t, i]));
+      const reorderedSections = [...validated.sections].sort((a, b) => {
+        const aRank = importOrderIndex.get(String((a as any).type ?? "") as any) ?? 999;
+        const bRank = importOrderIndex.get(String((b as any).type ?? "") as any) ?? 999;
+        return aRank - bRank;
+      });
+      validated.sections = reorderedSections as any;
+
       const validatedWithReps = applyAutoTitleIfPlaceholder(ensureRepresentativeBlocks(validated));
 
       // Replace current CV atomically with validated document
