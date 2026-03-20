@@ -23,6 +23,7 @@ import { useToast } from './ui/toast';
 
 const SB_EXPANDED = 248;
 const SB_COLLAPSED = 52;
+const SB_MAX_ITEMS = 5;
 
 export const Sidebar: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
@@ -259,14 +260,13 @@ export const Sidebar: React.FC = () => {
             )}
           </div>
 
-          {/* CV document sub-items — sb-doc style */}
-          {cvs.map((cv) => {
+          {/* CV document sub-items — capped at SB_MAX_ITEMS */}
+          {!sidebarCollapsed && cvs.slice(0, SB_MAX_ITEMS).map((cv) => {
             const isActive = currentCv?.id === cv.id;
             const updatedAt = new Date(
               cv.metadata?.updatedAt ?? cv.metadata?.createdAt ?? Date.now()
             ).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" });
-
-            return sidebarCollapsed ? null : (
+            return (
               <SbDoc
                 key={cv.id}
                 title={cv.title}
@@ -280,41 +280,18 @@ export const Sidebar: React.FC = () => {
             );
           })}
 
-          {/* New CV link */}
+          {/* View all CVs — shown when list is capped */}
+          {!sidebarCollapsed && cvs.length > SB_MAX_ITEMS && (
+            <SbViewAll
+              label={`View all (${cvs.length})`}
+              dense={compactDensity}
+              onClick={() => { void navigate('/cv'); }}
+            />
+          )}
+
+          {/* New CV */}
           {!sidebarCollapsed && (
-            <button
-              onClick={handleCreate}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "var(--s3)",
-                padding: compactDensity ? "var(--s2)" : "var(--s2) var(--s2) var(--s2) var(--s3)",
-                borderRadius: "var(--rs)",
-                cursor: "pointer",
-                height: compactDensity ? 28 : 30,
-                color: "var(--tg2)",
-                fontSize: "var(--tx)",
-                transition: "all .12s var(--ez)",
-                background: "transparent",
-                border: "none",
-                width: "100%",
-                textAlign: "left",
-                fontFamily: "inherit",
-              }}
-              onMouseEnter={(e) => {
-                const b = e.currentTarget as HTMLButtonElement;
-                b.style.color = "var(--am)";
-                b.style.background = "var(--sf2)";
-              }}
-              onMouseLeave={(e) => {
-                const b = e.currentTarget as HTMLButtonElement;
-                b.style.color = "var(--tg2)";
-                b.style.background = "transparent";
-              }}
-            >
-              <Plus size={16} style={{ flexShrink: 0 }} />
-              <span style={{ whiteSpace: "nowrap" }}>New resume</span>
-            </button>
+            <SbNewAction label="New resume" dense={compactDensity} onClick={handleCreate} />
           )}
 
           {/* Section label WRITE */}
@@ -351,8 +328,8 @@ export const Sidebar: React.FC = () => {
             )}
           </div>
 
-          {/* Proposal sub-items under Compose */}
-          {!sidebarCollapsed && isSignedIn && proposals && proposals.map((p) => {
+          {/* Proposal sub-items — capped at SB_MAX_ITEMS */}
+          {!sidebarCollapsed && isSignedIn && proposals && proposals.slice(0, SB_MAX_ITEMS).map((p) => {
             const date = new Date(p._creationTime).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" });
             const typeLabel = p.metadata?.proposalType === "cover_letter" ? "Letter"
               : p.metadata?.proposalType === "freelance_proposal" ? "Proposal"
@@ -368,51 +345,24 @@ export const Sidebar: React.FC = () => {
                 isActive={isActive}
                 dense={compactDensity}
                 onClick={() => { void navigate(`/proposal?view=saved&id=${encodeURIComponent(p._id)}`); }}
-                onRename={(e) => {
-                  void handleRenameProposal(e, p._id, p.title ?? "Untitled");
-                }}
-                onDelete={(e) => {
-                  void handleDeleteProposal(e, p._id, p.title ?? "Untitled");
-                }}
+                onRename={(e) => { void handleRenameProposal(e, p._id, p.title ?? "Untitled"); }}
+                onDelete={(e) => { void handleDeleteProposal(e, p._id, p.title ?? "Untitled"); }}
               />
             );
           })}
 
-          {/* + New letter */}
+          {/* View all proposals — shown when list is capped */}
+          {!sidebarCollapsed && proposals && proposals.length > SB_MAX_ITEMS && (
+            <SbViewAll
+              label={`View all (${proposals.length})`}
+              dense={compactDensity}
+              onClick={() => { void navigate('/proposal?view=saved'); }}
+            />
+          )}
+
+          {/* New letter */}
           {!sidebarCollapsed && (
-            <button
-              onClick={() => { void navigate('/proposal'); }}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "var(--s3)",
-                padding: compactDensity ? "var(--s2)" : "var(--s2) var(--s2) var(--s2) var(--s3)",
-                borderRadius: "var(--rs)",
-                cursor: "pointer",
-                height: compactDensity ? 28 : 30,
-                color: "var(--tg2)",
-                fontSize: "var(--tx)",
-                transition: "all .12s var(--ez)",
-                background: "transparent",
-                border: "none",
-                width: "100%",
-                textAlign: "left",
-                fontFamily: "inherit",
-              }}
-              onMouseEnter={(e) => {
-                const b = e.currentTarget as HTMLButtonElement;
-                b.style.color = "var(--am)";
-                b.style.background = "var(--sf2)";
-              }}
-              onMouseLeave={(e) => {
-                const b = e.currentTarget as HTMLButtonElement;
-                b.style.color = "var(--tg2)";
-                b.style.background = "transparent";
-              }}
-            >
-              <Plus size={16} style={{ flexShrink: 0 }} />
-              <span style={{ whiteSpace: "nowrap" }}>New letter</span>
-            </button>
+            <SbNewAction label="New letter" dense={compactDensity} onClick={() => { void navigate('/proposal'); }} />
           )}
 
           {/* Section label SETTINGS */}
@@ -544,6 +494,73 @@ export const Sidebar: React.FC = () => {
     </>
   );
 };
+
+/* ─────────────────────────────────────────────────────────────
+   SbNewAction — "+ New …" button (aligned with nav icons)
+   ───────────────────────────────────────────────────────────── */
+
+function SbNewAction({ label, dense, onClick }: { label: string; dense: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--s3)",
+        padding: "var(--s2)",
+        borderRadius: "var(--rs)",
+        cursor: "pointer",
+        height: dense ? 28 : 30,
+        color: "var(--tg2)",
+        fontSize: "var(--tx)",
+        transition: "all .12s var(--ez)",
+        background: "transparent",
+        border: "none",
+        width: "100%",
+        textAlign: "left",
+        fontFamily: "inherit",
+      }}
+      onMouseEnter={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.color = "var(--am)"; b.style.background = "var(--sf2)"; }}
+      onMouseLeave={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.color = "var(--tg2)"; b.style.background = "transparent"; }}
+    >
+      <Plus size={14} style={{ flexShrink: 0 }} />
+      <span style={{ whiteSpace: "nowrap" }}>{label}</span>
+    </button>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
+   SbViewAll — "View all (N) →" link
+   ───────────────────────────────────────────────────────────── */
+
+function SbViewAll({ label, dense, onClick }: { label: string; dense: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--s2)",
+        padding: dense ? "2px var(--s2) 2px 34px" : "2px var(--s2) 2px 40px",
+        borderRadius: "var(--rs)",
+        cursor: "pointer",
+        height: 22,
+        color: "var(--tg2)",
+        fontSize: "var(--tx)",
+        transition: "color .1s var(--ez)",
+        background: "transparent",
+        border: "none",
+        width: "100%",
+        textAlign: "left",
+        fontFamily: "inherit",
+      }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "var(--am)"; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "var(--tg2)"; }}
+    >
+      <span style={{ whiteSpace: "nowrap" }}>{label} →</span>
+    </button>
+  );
+}
 
 /* ─────────────────────────────────────────────────────────────
    SbDoc — sous-document sidebar (CV item)
