@@ -687,7 +687,8 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                         )}
                         <Button type="button" variant="ghost" size="sm" onClick={() => handleEditCv(option.id)}>
                           Edit
-                      </Button>
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 );
