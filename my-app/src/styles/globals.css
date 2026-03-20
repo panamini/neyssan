@@ -6,6 +6,7 @@
 /* --- Palette accent Sauge (défaut) -------------------------
    Surcharger via classe body.pal-* pour les autres palettes  */
 :root {
+  color-scheme: light;
   --ac:  hsl(155,22%,30%);  /* accent solid */
   --am:  hsl(155,24%,44%);  /* accent mid */
   --ap:  hsl(155,22%,92%);  /* accent pale */
@@ -74,6 +75,7 @@
 
 /* --- §6 Mode Dark — Graphite Kaki Tellurique -------------- */
 .dark {
+  color-scheme: dark;
   --bg:  hsl(80,5%,7%);
   --sf1: hsl(80,5%,11%);
   --sf2: hsl(78,5%,16%);
@@ -201,6 +203,7 @@ html, body, #root {
   height: 100%;
   background: var(--bg);
   color: var(--ti);
+  transition: background-color .12s var(--ez), color .12s var(--ez);
   font-family: 'Source Sans 3', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -742,6 +745,7 @@ textarea.dasti-field {
   border-radius: var(--rs);
   overflow: hidden;
   background: var(--sfr);
+  transition: background-color .12s var(--ez), border-color .12s var(--ez);
 }
 
 .dasti-rich .rich-content {
