@@ -207,6 +207,14 @@ export function generateCvTemplate(title?: string): CvDocument {
     },
     {
       id: uuidv4(),
+      title: "Achievements",
+      type: "achievements" as const,
+      blocks: [makeTextBlock()],
+      structuredContent: [],
+      collapsed: true,
+    },
+    {
+      id: uuidv4(),
       title: "Education",
       type: "education" as const,
       blocks: educationBlocks,
@@ -228,14 +236,6 @@ export function generateCvTemplate(title?: string): CvDocument {
       blocks: [],
       structuredContent: [initialLanguageItem],
       collapsed: false,
-    },
-    {
-      id: uuidv4(),
-      title: "Achievements",
-      type: "achievements" as const,
-      blocks: [makeTextBlock()],
-      structuredContent: [],
-      collapsed: true,
     },
     {
       id: uuidv4(),

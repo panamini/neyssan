@@ -126,12 +126,7 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
           { value: "certifications", label: "Certifications" },
           { value: "contact", label: "Contact" },
         ];
-    return options.filter((option) => {
-      if (option.value === "achievements") {
-        return !hasMeaningfulAchievementsSection;
-      }
-      return !existingTypes.has(option.value);
-    });
+    return options.filter((option) => !existingTypes.has(option.value));
   }, [sections, v1Enabled, hasMeaningfulAchievementsSection]);
 
   React.useEffect(() => {
