@@ -468,7 +468,6 @@ export default function ProposalsList({
                     type="button"
                     title="Confirm delete"
                     className="dasti-icon-button dasti-icon-button--compact"
-                    style={{ color: "var(--ok)" }}
                     onClick={() => { void handleDelete(); setIsConfirmingDelete(false); }}
                   >
                     <Check size={12} strokeWidth={2.5} />
