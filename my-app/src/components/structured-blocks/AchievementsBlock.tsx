@@ -120,19 +120,21 @@ export function AchievementsBlock({ section, onChange }: AchievementsBlockProps)
       <div className="flex items-center justify-between p-3 [background:var(--sf1)]">
         <h3 className="text-lg font-semibold">{section.title}</h3>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setSeedOnOpen(true);
-              setIsModalOpen(true);
-            }}
-            className="dasti-icon-button"
-            aria-label="Add achievement"
-            title="Add achievement"
-          >
-            <Plus className="w-4 h-4" aria-hidden />
-          </button>
+          {!isClearConfirming && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSeedOnOpen(true);
+                setIsModalOpen(true);
+              }}
+              className="dasti-icon-button"
+              aria-label="Add achievement"
+              title="Add achievement"
+            >
+              <Plus className="w-4 h-4" aria-hidden />
+            </button>
+          )}
           {isClearConfirming ? (
             <span className="sb-doc-confirm" style={{ gap: "var(--s2)" }}>
               <span className="sb-doc-confirm__label" style={{ fontSize: "var(--tx)" }}>Clear all?</span>

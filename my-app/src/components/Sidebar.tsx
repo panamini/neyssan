@@ -369,7 +369,6 @@ export const Sidebar: React.FC = () => {
             }}
           >
             <DarkModeToggle />
-            <span style={navLabel(false)}>Theme</span>
           </div>
 
           {/* Error display */}
@@ -556,7 +555,7 @@ function SbDoc({ title, date, docType, isActive, dense = false, onClick, onRenam
         position: "relative",
         /* active = slight bg lift + left accent stripe via inset box-shadow */
         background: isActive ? "var(--sf2)" : hovered ? "var(--sf2)" : "transparent",
-        boxShadow: isActive ? "inset 2px 0 0 0 var(--am)" : "none",
+        boxShadow: "none",
       }}
     >
       <div
