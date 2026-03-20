@@ -203,7 +203,6 @@ html, body, #root {
   height: 100%;
   background: var(--bg);
   color: var(--ti);
-  transition: background-color .12s var(--ez), color .12s var(--ez);
   font-family: 'Source Sans 3', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -487,7 +486,6 @@ button::-moz-focus-inner,
   background: var(--sf1);  /* match sidebar bg — avoids transparent→color flash */
   box-shadow: none;
   border: none !important;  /* removes any inline border from JSX */
-  transition: background .12s var(--ez), box-shadow .12s var(--ez);
 }
 .sb-nav-item:hover {
   background: var(--sf2);
@@ -746,7 +744,6 @@ textarea.dasti-field {
   border-radius: var(--rs);
   overflow: hidden;
   background: var(--sfr);
-  transition: background-color .12s var(--ez), border-color .12s var(--ez);
 }
 
 .dasti-rich .rich-content {

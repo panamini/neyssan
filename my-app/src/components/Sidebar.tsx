@@ -239,7 +239,6 @@ export const Sidebar: React.FC = () => {
     height: compactDensity ? 32 : 34,
     width: "100%",
     alignSelf: "stretch",
-    transition: "background .12s var(--ez), box-shadow .12s var(--ez)",
     overflow: "hidden",
     userSelect: "none",
   };
@@ -580,7 +579,7 @@ function SbDoc({ title, date, docType, isActive, dense = false, onClick, onRenam
     display: "flex", alignItems: "center", justifyContent: "center",
     borderRadius: 3, border: "none", background: "transparent",
     color: "var(--tg2)", cursor: "pointer", padding: 0,
-    transition: "color .1s var(--ez), background .1s var(--ez)",
+    transition: "color .1s var(--ez)",
     fontFamily: "inherit", flexShrink: 0,
   };
 
@@ -595,7 +594,6 @@ function SbDoc({ title, date, docType, isActive, dense = false, onClick, onRenam
         padding: dense ? "7px var(--s2) 7px 32px" : "var(--s2) var(--s2) var(--s2) 38px",
         borderRadius: "var(--rs)",
         cursor: isConfirming ? "default" : "pointer",
-        transition: "background .12s var(--ez), box-shadow .12s var(--ez)",
         position: "relative",
         /* active = slight bg lift + left accent stripe via inset box-shadow */
         background: isActive ? "var(--sf2)" : hovered ? "var(--sf2)" : "var(--sf1)",
