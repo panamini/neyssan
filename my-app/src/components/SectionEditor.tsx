@@ -81,7 +81,6 @@ function LevelDots({
     border: "1px solid",
     borderColor: filled ? "var(--ac)" : "var(--bm)",
     background: filled ? "var(--ac)" : "transparent",
-    transition: "background .12s var(--ez), border-color .12s var(--ez), transform .12s var(--ezb)",
     flexShrink: 0,
     pointerEvents: "none",
   });
@@ -133,7 +132,7 @@ function LevelDots({
           );
         })}
       </div>
-      <span style={{ fontSize: "var(--tx)", color: "var(--tg2)", minWidth: 60, whiteSpace: "nowrap" }}>
+      <span style={{ fontSize: "var(--tx)", color: "var(--tg2)", minWidth: 48, whiteSpace: "nowrap" }}>
         {activeLabel}
       </span>
     </div>
@@ -1117,6 +1116,17 @@ export default function SectionEditor({
               <div className="divide-y divide-[color:var(--bo)]">
                 {skillRows.map((row, idx) => (
                   <div key={row.id ?? `row-${idx}`} className="group flex items-center gap-2 py-1.5">
+                    {/* Level dots — LEFT */}
+                    <div style={{ flexShrink: 0 }}>
+                      <LevelDots
+                        value={row.level}
+                        levels={SKILL_DOT_LEVELS}
+                        kind="skill"
+                        onChange={(lvl) => handleLevelChangeInline(idx, lvl)}
+                        ariaLabel={`Skill level for ${row.name || `row ${idx + 1}`}`}
+                      />
+                    </div>
+                    {/* Name — CENTER (flex-1) */}
                     <label className="sr-only" htmlFor={`skill-name-inline-${idx}`}>Skill name</label>
                     <input
                       id={`skill-name-inline-${idx}`}
@@ -1128,15 +1138,6 @@ export default function SectionEditor({
                       onBlur={() => handleNameBlurInline(idx)}
                       onKeyDown={(e) => handleNameKeyDownInline(e, idx)}
                     />
-                    <div style={{ width: 68, display: "flex", justifyContent: "flex-end", flexShrink: 0 }}>
-                      <LevelDots
-                        value={row.level}
-                        levels={SKILL_DOT_LEVELS}
-                        kind="skill"
-                        onChange={(lvl) => handleLevelChangeInline(idx, lvl)}
-                        ariaLabel={`Skill level for ${row.name || `row ${idx + 1}`}`}
-                      />
-                    </div>
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity" style={{ flexShrink: 0 }}>
                       <button
                         type="button"
@@ -1487,6 +1488,17 @@ export default function SectionEditor({
               <div className="divide-y divide-[color:var(--bo)]">
                 {languageRows.map((row, idx) => (
                   <div key={row.id ?? `row-${idx}`} className="group flex items-center gap-2 py-1.5">
+                    {/* Level dots — LEFT */}
+                    <div style={{ flexShrink: 0 }}>
+                      <LevelDots
+                        value={row.level}
+                        levels={LANGUAGE_DOT_LEVELS}
+                        kind="language"
+                        onChange={(lvl) => handleLevelChangeLanguage(idx, lvl)}
+                        ariaLabel={`Language level for ${row.name || `row ${idx + 1}`}`}
+                      />
+                    </div>
+                    {/* Name — CENTER (flex-1) */}
                     <label className="sr-only" htmlFor={`language-name-inline-${idx}`}>Language name</label>
                     <input
                       id={`language-name-inline-${idx}`}
@@ -1498,18 +1510,7 @@ export default function SectionEditor({
                       onBlur={() => handleNameBlurLanguage(idx)}
                       onKeyDown={(e) => handleNameKeyDownLanguage(e, idx)}
                     />
-                    <div style={{ width: 68, display: "flex", justifyContent: "flex-end", flexShrink: 0 }}>
-                      <LevelDots
-                        value={row.level}
-                        levels={LANGUAGE_DOT_LEVELS}
-                        kind="language"
-                        onChange={(lvl) => handleLevelChangeLanguage(idx, lvl)}
-                        ariaLabel={`Language level for ${row.name || `row ${idx + 1}`}`}
-                      />
-                    </div>
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity" style={{ flexShrink: 0 }}>
-                      {/* spacer matching pin button width so columns align with skills */}
-                      <div style={{ width: 20, height: 20, flexShrink: 0 }} aria-hidden />
                       <button
                         type="button"
                         onClick={() => handleRemoveLanguageInline(String(row.id ?? idx))}
