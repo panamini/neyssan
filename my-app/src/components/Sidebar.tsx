@@ -503,7 +503,7 @@ function SbNewAction({ label, dense, onClick }: { label: string; dense: boolean;
         height: dense ? 28 : 30,
         color: "var(--tg2)",
         fontSize: "var(--tx)",
-        transition: "all .12s var(--ez)",
+        transition: "color .12s var(--ez)",
         background: "var(--sf1)",
         border: "none",
         width: "100%",
