@@ -3,7 +3,13 @@
 import * as React from "react";
 import { Sun, MoonStar } from "lucide-react";
 
-const DarkModeToggle = () => {
+interface DarkModeToggleProps {
+  /** When true, renders a bare 16×16 icon button (no padding, no hover bg)
+   *  for embedding inside the sidebar's 16px icon slot. */
+  compact?: boolean;
+}
+
+const DarkModeToggle = ({ compact = false }: DarkModeToggleProps) => {
   // Initialize state from localStorage, then system preference
   const [isDarkTheme, setIsDarkTheme] = React.useState(() => {
     const storedTheme = localStorage.getItem("theme");
@@ -37,6 +43,24 @@ const DarkModeToggle = () => {
       document.documentElement.classList.remove("dark");
     }
   };
+
+  if (compact) {
+    return (
+      <button
+        onClick={onThemeChange}
+        className="w-4 h-4 p-0 flex items-center justify-center bg-transparent border-0 cursor-pointer focus:outline-none"
+        style={{ color: "var(--tg2)" }}
+        aria-pressed={isDarkTheme}
+      >
+        {isDarkTheme ? (
+          <MoonStar className="w-4 h-4" aria-hidden />
+        ) : (
+          <Sun className="w-4 h-4" aria-hidden />
+        )}
+        <span className="sr-only">Toggle Dark Mode</span>
+      </button>
+    );
+  }
 
   return (
     <button
