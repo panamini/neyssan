@@ -1861,14 +1861,15 @@ export function buildTypedSectionsFromNormalized(normalized: PartialNormalizedCv
     };
   }
 
+  // Canonical section order: profile → summary → experience → achievements → education → skills → languages
   const ordered: CvSection[] = [];
   if (profileSection) ordered.push(profileSection);
   if (summarySection) ordered.push(summarySection);
   if (experienceSection) ordered.push(experienceSection);
+  if (achievementsSection) ordered.push(achievementsSection);
   if (educationSection) ordered.push(educationSection);
   if (skillsSection) ordered.push(skillsSection);
   if (languagesSection) ordered.push(languagesSection);
-  if (achievementsSection) ordered.push(achievementsSection);
 
   return ordered;
 }
