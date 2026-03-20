@@ -210,7 +210,7 @@ export function SummaryBlock({ section, onOpenEditor }: SummaryBlockProps) {
 
   return (
     <div
-      className={`p-3 [background:var(--sfr)] border border-bo rounded transition-colors duration-[120ms]${isEmpty ? " cursor-text" : ""}`}
+      className={`p-3 [background:var(--sfr)] border border-bo rounded${isEmpty ? " cursor-text" : ""}`}
       onClick={(e) => {
         if (!isEmpty) return;
         try {
