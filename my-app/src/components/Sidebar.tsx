@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Menu, FileText, Plus, Pencil, Settings, X, Check } from 'lucide-react';
+import { Menu, FileText, Plus, Pencil, Settings, X, Check, Trash2 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useMutation, useQuery } from 'convex/react';
 import { useAuth } from '@clerk/clerk-react';
@@ -166,7 +166,6 @@ export const Sidebar: React.FC = () => {
     height: "var(--hdr)",
     borderBottom: "1px solid var(--bo)",
     flexShrink: 0,
-    justifyContent: sidebarCollapsed ? "center" : "flex-start",
   };
 
   const sbSec: React.CSSProperties = sidebarCollapsed
@@ -197,21 +196,6 @@ export const Sidebar: React.FC = () => {
             <Menu size={16} strokeWidth={1.5} />
           </button>
 
-          {/* Wordmark — hidden when collapsed */}
-          {!sidebarCollapsed && (
-            <span
-              style={{
-                fontFamily: '"Fraunces", serif',
-                fontSize: "15px",
-                fontWeight: 600,
-                letterSpacing: "-.02em",
-                color: "var(--ti)",
-                whiteSpace: "nowrap",
-              }}
-            >
-              dasti
-            </span>
-          )}
         </div>
 
         {/* ── Nav ─────────────────────────────────────────── */}
@@ -250,14 +234,12 @@ export const Sidebar: React.FC = () => {
               overflow: "hidden",
             }}
           >
-            <div style={{ width: 16, height: 16, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: isResume ? "var(--ac)" : "var(--tm2)" }}>
+            <div style={{ width: 16, height: 16, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: isResume ? "var(--ti)" : "var(--tm2)" }}>
               <FileText size={15} strokeWidth={1.5} />
             </div>
-            {!sidebarCollapsed && (
-              <span style={{ fontSize: "var(--ts)", fontWeight: isResume ? 600 : 500, color: isResume ? "var(--ti)" : "var(--tm2)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>
-                Studio
-              </span>
-            )}
+            <span style={{ fontSize: "var(--ts)", fontWeight: isResume ? 600 : 500, color: isResume ? "var(--ti)" : "var(--tm2)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1, maxWidth: sidebarCollapsed ? 0 : 200, opacity: sidebarCollapsed ? 0 : 1, transition: "opacity .15s var(--ez), max-width .22s var(--ez)", pointerEvents: sidebarCollapsed ? "none" : "auto" }}>
+              Studio
+            </span>
           </div>
 
           {/* CV document sub-items — capped at SB_MAX_ITEMS */}
@@ -318,14 +300,12 @@ export const Sidebar: React.FC = () => {
               overflow: "hidden",
             }}
           >
-            <div style={{ width: 16, height: 16, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: isProposal ? "var(--ac)" : "var(--tm2)" }}>
+            <div style={{ width: 16, height: 16, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: isProposal ? "var(--ti)" : "var(--tm2)" }}>
               <Pencil size={15} strokeWidth={1.5} />
             </div>
-            {!sidebarCollapsed && (
-              <span style={{ fontSize: "var(--ts)", fontWeight: isProposal ? 600 : 500, color: isProposal ? "var(--ti)" : "var(--tm2)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>
-                Compose
-              </span>
-            )}
+            <span style={{ fontSize: "var(--ts)", fontWeight: isProposal ? 600 : 500, color: isProposal ? "var(--ti)" : "var(--tm2)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1, maxWidth: sidebarCollapsed ? 0 : 200, opacity: sidebarCollapsed ? 0 : 1, transition: "opacity .15s var(--ez), max-width .22s var(--ez)", pointerEvents: sidebarCollapsed ? "none" : "auto" }}>
+              Compose
+            </span>
           </div>
 
           {/* Proposal sub-items — capped at SB_MAX_ITEMS */}
@@ -395,14 +375,12 @@ export const Sidebar: React.FC = () => {
               if (!isStyle) (e.currentTarget as HTMLDivElement).style.background = "transparent";
             }}
           >
-            <div style={{ width: 16, height: 16, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: isStyle ? "var(--ac)" : "var(--tg2)" }}>
+            <div style={{ width: 16, height: 16, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: isStyle ? "var(--ti)" : "var(--tg2)" }}>
               <Settings size={16} />
             </div>
-            {!sidebarCollapsed && (
-              <span style={{ fontSize: "var(--ts)", fontWeight: isStyle ? 600 : 500, color: isStyle ? "var(--ti)" : "var(--tm2)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>
-                Style
-              </span>
-            )}
+            <span style={{ fontSize: "var(--ts)", fontWeight: isStyle ? 600 : 500, color: isStyle ? "var(--ti)" : "var(--tm2)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1, maxWidth: sidebarCollapsed ? 0 : 200, opacity: sidebarCollapsed ? 0 : 1, transition: "opacity .15s var(--ez), max-width .22s var(--ez)", pointerEvents: sidebarCollapsed ? "none" : "auto" }}>
+              Style
+            </span>
           </div>
 
           {/* Error display */}
@@ -681,7 +659,7 @@ function SbDoc({ title, date, docType, isActive, dense = false, onClick, onRenam
                 onMouseLeave={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.color = "var(--tg2)"; }}
                 onClick={(e) => { e.stopPropagation(); setIsConfirming(true); }}
               >
-                <X size={10} strokeWidth={1.75} />
+                <Trash2 size={10} strokeWidth={1.75} />
               </button>
             </>
           )}
