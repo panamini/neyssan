@@ -21,6 +21,7 @@ interface AchievementsDisplayProps {
   maxItems?: number | null; // when provided, render only first N items (collapsed preview)
   truncateChars?: number; // when maxItems is set and there is only one long item, truncate to this length
   className?: string;
+  separatedItems?: boolean;
 }
 
 /**
@@ -35,6 +36,7 @@ export function AchievementsDisplay({
   maxItems = null,
   truncateChars = 200,
   className,
+  separatedItems = false,
 }: AchievementsDisplayProps): JSX.Element | null {
   const DEBUG = typeof window !== "undefined" && (window as any).__CV_EDITOR_DEBUG__ === true;
 
@@ -71,7 +73,16 @@ export function AchievementsDisplay({
   const docKey = `${itemId}:${stableStringify(doc)}`;
 
   return (
-    <div className={["rich-content achievements-display [color:var(--ti)]", className].filter(Boolean).join(" ")} key={docKey}>
+    <div
+      className={[
+        "rich-content achievements-display [color:var(--ti)]",
+        separatedItems ? "achievements-display--separated" : "",
+        className,
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      key={docKey}
+    >
       <ReadOnlyAchievements doc={doc} />
     </div>
   );

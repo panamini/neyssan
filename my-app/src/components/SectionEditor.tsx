@@ -1820,18 +1820,18 @@ export default function SectionEditor({
         const hasMoreBullets = variant === "compact" && bulletSource.length > bulletList.length;
 
         return (
-          <div key={structuredId} className="space-y-1">
+          <div key={structuredId} className="space-y-1 py-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="text-sm font-medium truncate [color:var(--ti)]">{title}</div>
                 {subtitle ? (
-                  <div className="text-xs truncate [color:var(--tg2)]">{subtitle}</div>
+                  <div className="text-xs truncate [color:var(--tm2)]">{subtitle}</div>
                 ) : null}
               </div>
-              <div className="text-xs shrink-0 [color:var(--tg2)]">{dates}</div>
+              <div className="text-xs shrink-0 [color:var(--tm2)]">{dates}</div>
             </div>
             {bulletList.length > 0 ? (
-              <ul className="ml-4 space-y-1 text-xs list-disc [color:var(--tm2)]">
+              <ul className="ml-4 space-y-1 text-xs list-disc [color:var(--ti)]">
                 {bulletList.map((line, bulletIdx) => (
                   <li key={`${structuredId}-bullet-${bulletIdx}`} className="leading-snug">
                     {line}
@@ -1840,7 +1840,7 @@ export default function SectionEditor({
               </ul>
             ) : null}
             {hasMoreBullets ? (
-              <div className="ml-4 text-[11px] [color:var(--tg2)]">Expand to view more details.</div>
+              <div className="ml-4 text-[11px] [color:var(--tm2)]">Expand to view more details.</div>
             ) : null}
           </div>
         );
@@ -1860,21 +1860,21 @@ export default function SectionEditor({
           : description;
 
       return (
-        <div key={structuredId} className="space-y-1">
+        <div key={structuredId} className="space-y-1 py-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="text-sm font-medium truncate [color:var(--ti)]">{title}</div>
               {subtitle ? (
-                <div className="text-xs truncate [color:var(--tg2)]">{subtitle}</div>
+                <div className="text-xs truncate [color:var(--tm2)]">{subtitle}</div>
               ) : null}
             </div>
-            <div className="text-xs shrink-0 [color:var(--tg2)]">{dates}</div>
+            <div className="text-xs shrink-0 [color:var(--tm2)]">{dates}</div>
           </div>
           {truncatedDescription ? (
-            <p className="ml-0 text-xs leading-snug [color:var(--tm2)]">{truncatedDescription}</p>
+            <p className="ml-0 text-xs leading-snug [color:var(--ti)]">{truncatedDescription}</p>
           ) : null}
           {!truncatedDescription && hasObjectDescription ? (
-            <p className="ml-0 text-xs italic [color:var(--tg2)]">Detailed description available.</p>
+            <p className="ml-0 text-xs italic [color:var(--tm2)]">Detailed description available.</p>
           ) : null}
         </div>
       );
@@ -1925,7 +1925,7 @@ export default function SectionEditor({
         {collapsed && (
           <div className="px-4 pb-3">
             {hasRenderableStructured ? (
-              <div className="space-y-2">
+              <div className="cv-entry-stack">
                 {renderableStructured.map((it, i) => renderStructuredPreview(it, i, "compact"))}
               </div>
             ) : hasBlocks ? (
@@ -1939,18 +1939,20 @@ export default function SectionEditor({
         {!collapsed && (
           <div className="p-4 space-y-4">
             {hasBlocks ? (
-              section.blocks.map((block) => (
-                <div key={String(block.id)} className="p-0">
-                  <BlockRenderer
-                    sectionId={String(section.id)}
-                    block={block as any}
-                    onDelete={() => handleDeleteBlock(String(block.id))}
-                    disableChevron={true}
-                  />
-                </div>
-              ))
+              <div className="cv-entry-stack">
+                {section.blocks.map((block) => (
+                  <div key={String(block.id)} className="p-0">
+                    <BlockRenderer
+                      sectionId={String(section.id)}
+                      block={block as any}
+                      onDelete={() => handleDeleteBlock(String(block.id))}
+                      disableChevron={true}
+                    />
+                  </div>
+                ))}
+              </div>
             ) : hasRenderableStructured ? (
-              <div className="space-y-3">
+              <div className="cv-entry-stack">
                 {renderableStructured.map((it, i) => renderStructuredPreview(it, i, "detailed"))}
               </div>
             ) : (

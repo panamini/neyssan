@@ -382,6 +382,12 @@ button::-moz-focus-inner,
   flex-shrink: 0;
   transition: color .12s var(--ez);
 }
+.sb-toggle--collapse {
+  cursor: w-resize;
+}
+.sb-toggle--expand {
+  cursor: e-resize;
+}
 .sb-toggle:hover {
   background: var(--sf2);
   color: var(--ti);
@@ -714,7 +720,7 @@ button::-moz-focus-inner,
   padding: 0 var(--s3);
   border-radius: var(--rs);
   border: 1px solid var(--bm);
-  background: var(--sf2);
+  background: var(--sfr);
   color: var(--ti);
   font-size: var(--ts);
   line-height: var(--ls);
@@ -918,6 +924,30 @@ textarea.dasti-field {
   background: var(--sf2);
   border-bottom: 1px solid var(--bo);
   padding: var(--s3) var(--s5);
+}
+
+.cv-entry-stack > * + * {
+  border-top: 1px solid var(--bo);
+}
+
+.cv-entry-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: var(--tm2);
+  stroke-width: 1.65;
+}
+
+.styleforge-palette-swatch {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M14.5 4.5 19.5 9.5' stroke='%23211f1a' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M12.75 6.25 17.75 11.25' stroke='%23211f1a' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='m4 20 4.5-1.25 8.75-8.75a1.77 1.77 0 0 0 0-2.5l-.75-.75a1.77 1.77 0 0 0-2.5 0L5.25 15.5 4 20Z' fill='%23f4efe6' stroke='%23211f1a' stroke-width='1.75' stroke-linejoin='round'/%3E%3C/svg%3E") 3 19, pointer;
+}
+
+.dark .styleforge-palette-swatch {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M14.5 4.5 19.5 9.5' stroke='%23efe8d7' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M12.75 6.25 17.75 11.25' stroke='%23efe8d7' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='m4 20 4.5-1.25 8.75-8.75a1.77 1.77 0 0 0 0-2.5l-.75-.75a1.77 1.77 0 0 0-2.5 0L5.25 15.5 4 20Z' fill='%23312f28' stroke='%23efe8d7' stroke-width='1.75' stroke-linejoin='round'/%3E%3C/svg%3E") 3 19, pointer;
+}
+
+.styleforge-palette-swatch:hover {
+  transform: translateY(-1px);
 }
 
 /* ============================================================
