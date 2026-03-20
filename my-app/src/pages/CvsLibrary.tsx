@@ -1,11 +1,12 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { FileText, Plus } from "lucide-react";
+import { FileText, Plus, X, Check } from "lucide-react";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 
 export function CvsLibrary(): JSX.Element {
   const navigate = useNavigate();
-  const { cvs, loadCv, createNewCv } = useCvLibrary();
+  const { cvs, loadCv, createNewCv, deleteCv } = useCvLibrary();
+  const [confirmingId, setConfirmingId] = React.useState<string | null>(null);
 
   const sorted = React.useMemo(
     () =>
@@ -20,6 +21,11 @@ export function CvsLibrary(): JSX.Element {
   function handleOpen(id: string) {
     loadCv(id);
     void navigate("/cv");
+  }
+
+  function handleDelete(id: string) {
+    deleteCv(id);
+    setConfirmingId(null);
   }
 
   return (
@@ -154,80 +160,167 @@ export function CvsLibrary(): JSX.Element {
                 cv.metadata?.updatedAt ?? cv.metadata?.createdAt ?? Date.now(),
               ).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" });
 
-              // Derive a quick preview line from the CV
               const profileName = (cv.core as any)?.profile?.name ?? "";
               const position = (cv.core as any)?.profile?.position ?? (cv.core as any)?.profile?.desiredPosition ?? "";
+              const isConfirming = confirmingId === cv.id;
 
               return (
-                <button
+                <div
                   key={cv.id}
-                  onClick={() => handleOpen(cv.id)}
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "flex-start",
-                    gap: "var(--s3)",
-                    padding: "var(--s4)",
-                    borderRadius: "var(--rm)",
-                    border: "1px solid var(--bo)",
-                    background: "var(--sfr)",
-                    boxShadow: "var(--sha)",
-                    cursor: "pointer",
-                    textAlign: "left",
-                    transition: "background .12s var(--ez), border-color .12s var(--ez)",
-                    fontFamily: "inherit",
-                    width: "100%",
-                  }}
-                  onMouseEnter={(e) => {
-                    const el = e.currentTarget as HTMLButtonElement;
-                    el.style.background = "var(--sf2)";
-                    el.style.borderColor = "var(--bm)";
-                  }}
-                  onMouseLeave={(e) => {
-                    const el = e.currentTarget as HTMLButtonElement;
-                    el.style.background = "var(--sfr)";
-                    el.style.borderColor = "var(--bo)";
-                  }}
+                  className="card-group"
+                  style={{ position: "relative" }}
+                  onMouseLeave={() => { if (isConfirming) setConfirmingId(null); }}
                 >
-                  {/* Icon + date row */}
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
-                    <FileText size={14} strokeWidth={1.5} color="var(--am)" />
-                    <span style={{ fontSize: "var(--tx)", color: "var(--tg2)" }}>{updatedAt}</span>
-                  </div>
-
-                  {/* Title */}
-                  <div
+                  {/* Main card button */}
+                  <button
+                    onClick={() => handleOpen(cv.id)}
                     style={{
-                      fontSize: "var(--ts)",
-                      fontWeight: 600,
-                      color: "var(--ti)",
-                      lineHeight: 1.4,
-                      display: "-webkit-box",
-                      WebkitLineClamp: 2,
-                      WebkitBoxOrient: "vertical",
-                      overflow: "hidden",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "flex-start",
+                      gap: "var(--s3)",
+                      padding: "var(--s4)",
+                      borderRadius: "var(--rm)",
+                      border: "1px solid var(--bo)",
+                      background: "var(--sfr)",
+                      boxShadow: "var(--sha)",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      transition: "background .12s var(--ez), border-color .12s var(--ez)",
+                      fontFamily: "inherit",
+                      width: "100%",
+                    }}
+                    onMouseEnter={(e) => {
+                      const el = e.currentTarget as HTMLButtonElement;
+                      el.style.background = "var(--sf2)";
+                      el.style.borderColor = "var(--bm)";
+                    }}
+                    onMouseLeave={(e) => {
+                      const el = e.currentTarget as HTMLButtonElement;
+                      el.style.background = "var(--sfr)";
+                      el.style.borderColor = "var(--bo)";
                     }}
                   >
-                    {cv.title}
-                  </div>
+                    {/* Icon + date row */}
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", paddingRight: 20 }}>
+                      <FileText size={14} strokeWidth={1.5} color="var(--am)" />
+                      <span style={{ fontSize: "var(--tx)", color: "var(--tg2)" }}>{updatedAt}</span>
+                    </div>
 
-                  {/* Profile name + position */}
-                  {(profileName || position) && (
+                    {/* Title */}
                     <div
                       style={{
-                        fontSize: "var(--tx)",
-                        color: "var(--tm2)",
-                        lineHeight: 1.5,
+                        fontSize: "var(--ts)",
+                        fontWeight: 600,
+                        color: "var(--ti)",
+                        lineHeight: 1.4,
                         display: "-webkit-box",
                         WebkitLineClamp: 2,
                         WebkitBoxOrient: "vertical",
                         overflow: "hidden",
                       }}
                     >
-                      {[profileName, position].filter(Boolean).join(" · ")}
+                      {cv.title}
                     </div>
+
+                    {/* Profile name + position */}
+                    {(profileName || position) && (
+                      <div
+                        style={{
+                          fontSize: "var(--tx)",
+                          color: "var(--tm2)",
+                          lineHeight: 1.5,
+                          display: "-webkit-box",
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: "vertical",
+                          overflow: "hidden",
+                        }}
+                      >
+                        {[profileName, position].filter(Boolean).join(" · ")}
+                      </div>
+                    )}
+                  </button>
+
+                  {/* Delete — confirm overlay or X trigger */}
+                  {isConfirming ? (
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: 8,
+                        right: 8,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 3,
+                        background: "var(--sfr)",
+                        border: "1px solid var(--bo)",
+                        borderRadius: "var(--rs)",
+                        padding: "2px 6px 2px 8px",
+                        boxShadow: "var(--shb)",
+                        zIndex: 2,
+                      }}
+                    >
+                      <span style={{ fontSize: "var(--tx)", color: "var(--tg2)", whiteSpace: "nowrap" }}>Delete?</span>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDelete(cv.id); }}
+                        title="Confirm delete"
+                        style={{
+                          display: "inline-flex", alignItems: "center", justifyContent: "center",
+                          width: 22, height: 22, border: "1px solid var(--bm)", borderRadius: "var(--rx)",
+                          background: "transparent", cursor: "pointer", color: "var(--tg2)", fontFamily: "inherit",
+                          transition: "all .1s var(--ez)",
+                        }}
+                        onMouseEnter={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "var(--erb)"; b.style.color = "var(--ert)"; b.style.borderColor = "var(--ert)"; }}
+                        onMouseLeave={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.color = "var(--tg2)"; b.style.borderColor = "var(--bm)"; }}
+                      >
+                        <Check size={11} />
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setConfirmingId(null); }}
+                        title="Cancel"
+                        style={{
+                          display: "inline-flex", alignItems: "center", justifyContent: "center",
+                          width: 22, height: 22, border: "1px solid transparent", borderRadius: "var(--rx)",
+                          background: "transparent", cursor: "pointer", color: "var(--tg2)", fontFamily: "inherit",
+                          transition: "all .1s var(--ez)",
+                        }}
+                        onMouseEnter={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "var(--sf2)"; b.style.color = "var(--ti)"; }}
+                        onMouseLeave={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.color = "var(--tg2)"; }}
+                      >
+                        <X size={11} />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setConfirmingId(cv.id); }}
+                      className="card-delete-btn"
+                      title="Delete"
+                      aria-label="Delete"
+                      style={{
+                        position: "absolute",
+                        top: 8,
+                        right: 8,
+                        zIndex: 1,
+                        width: 24,
+                        height: 24,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        borderRadius: "var(--rs)",
+                        border: "1px solid transparent",
+                        background: "transparent",
+                        color: "var(--tg2)",
+                        cursor: "pointer",
+                        padding: 0,
+                        fontFamily: "inherit",
+                        transition: "background .1s var(--ez), color .1s var(--ez)",
+                      }}
+                      onMouseEnter={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "var(--erb)"; b.style.color = "var(--ert)"; }}
+                      onMouseLeave={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.color = "var(--tg2)"; }}
+                    >
+                      <X size={13} />
+                    </button>
                   )}
-                </button>
+                </div>
               );
             })}
           </div>
