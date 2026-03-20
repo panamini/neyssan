@@ -109,7 +109,7 @@ export function LanguagesModal({ open, items, onClose, onSave }: LanguagesModalP
             ) : (
               rows.map((row, idx) => (
                 <div key={row.id ?? `row-${idx}`} className="grid items-center grid-cols-12 gap-2">
-                  <div className="col-span-7">
+                  <div className="col-span-5">
                     <label className="text-xs sr-only [color:var(--tg2)]" htmlFor={`language-name-${idx}`}>Language name</label>
                     <input
                       id={`language-name-${idx}`}
@@ -119,7 +119,7 @@ export function LanguagesModal({ open, items, onClose, onSave }: LanguagesModalP
                       onChange={(e) => updateRow(idx, { name: e.target.value })}
                     />
                   </div>
-                  <div className="col-span-4 flex items-center gap-1.5" role="group" aria-label="Language level">
+                  <div className="col-span-6 flex items-center gap-1.5" role="group" aria-label="Language level">
                     {(["Beginner", "Intermediate", "Fluent"] as Level[]).map((lvl, di) => {
                       const activeIdx = ["Beginner", "Intermediate", "Fluent"].indexOf(row.level as string);
                       const filled = di <= activeIdx;
@@ -135,7 +135,6 @@ export function LanguagesModal({ open, items, onClose, onSave }: LanguagesModalP
                             cursor: "pointer", flexShrink: 0, border: "1.5px solid",
                             borderColor: filled ? "var(--ac)" : "var(--bo)",
                             background: filled ? "var(--ac)" : "transparent",
-                            transition: "all .12s var(--ez)",
                           }}
                         />
                       );
