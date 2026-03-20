@@ -404,7 +404,7 @@ button::-moz-focus-inner,
   border: 1px solid transparent;
   border-radius: var(--rs);
   background: transparent;
-  color: var(--tg2);
+  color: var(--tm2);
   cursor: pointer;
   line-height: 1;
   transition:
@@ -559,10 +559,16 @@ button::-moz-focus-inner,
   transition: background .1s var(--ez), color .1s var(--ez);
 }
 
-.sb-doc-confirm__yes:hover {
+.sb-doc-confirm__yes {
   background: var(--erb);
   color: var(--ert);
   border-color: var(--ert);
+}
+
+.sb-doc-confirm__yes:hover {
+  background: var(--er);
+  color: var(--op);
+  border-color: var(--er);
 }
 
 .sb-doc-confirm__no:hover {
