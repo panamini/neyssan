@@ -380,62 +380,7 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
         ))}
       </div>
 
-      <div className="mb-4 border [border-color:var(--bo)] [border-radius:var(--rm)] [background:var(--sfr)] [box-shadow:var(--sha)] px-3 py-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-2">
-            {addableSectionOptions.length > 0 ? (
-              <>
-                <div className="relative">
-                  <select
-                    aria-label="Add section type"
-                    className="appearance-none border [border-color:var(--bm)] [border-radius:var(--rs)] [background:var(--sfr)] [color:var(--ti)] text-ts focus:[border-color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none pl-3 pr-8 cursor-pointer min-w-[152px]"
-                    style={{ height: "var(--hs)", fontFamily: "inherit" }}
-                    value={selectedNewSectionType}
-                    onChange={(e) => setSelectedNewSectionType(e.target.value)}
-                  >
-                    <option value="">Add section</option>
-                    {addableSectionOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown
-                    className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 [color:var(--tg2)]"
-                    aria-hidden
-                  />
-                </div>
-
-                <button
-                  type="button"
-                  className="dasti-icon-button disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={() => handleAddSection(selectedNewSectionType || undefined)}
-                  disabled={!selectedNewSectionType}
-                  aria-label="Add selected section"
-                  title="Add section"
-                >
-                  <Plus className="h-4 w-4" aria-hidden />
-                </button>
-
-                {/* Mobile-only: open bottom sheet for selecting section type */}
-                <button
-                  type="button"
-                  className="block px-2 ml-2 border font-medium [transition:all_.12s_var(--ez)] text-ts rounded-[var(--rs)] [background:var(--sfr)] [border-color:var(--bm)] [color:var(--ti)] [box-shadow:var(--sha)] hover:[background:var(--sf2)] sm:hidden"
-                  style={{ height: "var(--hs)", fontFamily: "inherit" }}
-                  onClick={() => setIsBottomSheetOpen(true)}
-                  aria-label="Add section (mobile)"
-                >
-                  Add
-                </button>
-              </>
-            ) : (
-              <span className="text-xs [color:var(--tg2)]">
-                All optional sections are already added.
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
+      {/* Toolbar is rendered below the title only when a CV is loaded — see the !isLoading && currentCv block */}
 
       {/* Add Section Bottom Sheet (mobile) */}
       <AddSectionBottomSheet
@@ -471,7 +416,8 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
 
       {!isLoading && currentCv && (
         <div>
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          {/* ── CV title ────────────────────────────────────── */}
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
             <button
               type="button"
               className="text-left text-lg font-semibold text-foreground [transition:color_.12s_var(--ez)] hover:text-foreground/80 focus:outline-none focus:[box-shadow:0_0_0_3px_var(--fr)] rounded-sm"
@@ -481,36 +427,92 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
             >
               {currentCv.title}
             </button>
-            <div className="flex items-center gap-2">
-              <span className="sr-only" aria-live="polite" role="status">
-                {isDirty ? "Saving" : "Saved"}
-              </span>
-              <StructuredUploadButton
-                contextKey={currentCv?.id ?? ""}
-                sections={sections as unknown as import("../types/cvDocument").CvSection[]}
-                onApplyToSections={(updated) => {
-                  try {
-                    reorderSections(updated as any);
-                  } catch {
-                    /* noop */
-                  }
-                }}
-                onResult={(payload) => {
-                  if (typeof window !== "undefined" && (window as any).__CV_EDITOR_DEBUG__ === true) {
-                    try {
-                      // eslint-disable-next-line no-console
-                      console.debug("[ProfileReviewCard] structured payload", payload);
-                    } catch {
-                      /* noop */
-                    }
-                  }
-                }}
-                label="Upload"
-                ocrLabel="Scan"
-                size="sm"
-                className=""
-              />
-            </div>
+            <span className="sr-only" aria-live="polite" role="status">
+              {isDirty ? "Saving" : "Saved"}
+            </span>
+          </div>
+
+          {/* ── Unified toolbar: Add section + Import ───────── */}
+          <div
+            className="mb-4"
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              gap: "var(--s2)",
+              padding: "var(--s2) var(--s3)",
+              borderRadius: "var(--rs)",
+              border: "1px solid var(--bo)",
+              background: "var(--sfr)",
+              boxShadow: "var(--sha)",
+            }}
+          >
+            {addableSectionOptions.length > 0 ? (
+              <>
+                <div className="relative" style={{ flex: "0 0 auto" }}>
+                  <select
+                    aria-label="Add section type"
+                    className="appearance-none border [border-color:var(--bm)] [border-radius:var(--rs)] [background:var(--sfr)] [color:var(--ti)] text-ts focus:[border-color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none pl-3 pr-8 cursor-pointer min-w-[140px]"
+                    style={{ height: "var(--hs)", fontFamily: "inherit" }}
+                    value={selectedNewSectionType}
+                    onChange={(e) => setSelectedNewSectionType(e.target.value)}
+                  >
+                    <option value="">Add section</option>
+                    {addableSectionOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown
+                    className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 [color:var(--tg2)]"
+                    aria-hidden
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  className="dasti-icon-button disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => handleAddSection(selectedNewSectionType || undefined)}
+                  disabled={!selectedNewSectionType}
+                  aria-label="Add selected section"
+                  title="Add section"
+                >
+                  <Plus className="h-4 w-4" aria-hidden />
+                </button>
+
+                {/* Mobile bottom sheet trigger */}
+                <button
+                  type="button"
+                  className="block px-2 border font-medium [transition:all_.12s_var(--ez)] text-ts rounded-[var(--rs)] [background:var(--sfr)] [border-color:var(--bm)] [color:var(--ti)] [box-shadow:var(--sha)] hover:[background:var(--sf2)] sm:hidden"
+                  style={{ height: "var(--hs)", fontFamily: "inherit" }}
+                  onClick={() => setIsBottomSheetOpen(true)}
+                  aria-label="Add section (mobile)"
+                >
+                  Add
+                </button>
+              </>
+            ) : (
+              <span className="text-xs [color:var(--tg2)]">All sections added.</span>
+            )}
+
+            {/* Divider */}
+            <div style={{ width: 1, height: "var(--hs)", background: "var(--bo)", flexShrink: 0 }} />
+
+            {/* Import dropdown */}
+            <StructuredUploadButton
+              contextKey={currentCv?.id ?? ""}
+              sections={sections as unknown as import("../types/cvDocument").CvSection[]}
+              onApplyToSections={(updated) => {
+                try { reorderSections(updated as any); } catch { /* noop */ }
+              }}
+              onResult={(payload) => {
+                if (typeof window !== "undefined" && (window as any).__CV_EDITOR_DEBUG__ === true) {
+                  try { console.debug("[ProfileReviewCard] structured payload", payload); } catch { /* noop */ }
+                }
+              }}
+              renderAs="dropdown"
+            />
           </div>
 
           <CvRenameDialog

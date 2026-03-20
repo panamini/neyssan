@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import * as convexReact from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Button } from "./ui/button";
-import { Upload, Loader2 } from "lucide-react";
+import { Upload, Loader2, ScanLine, ChevronDown } from "lucide-react";
 import { useToast } from "./ui/toast";
 import type { CvSection } from "../types/cvDocument";
 import { buildTypedSectionsFromNormalized, applyStrictContactToSections } from "../utils/cv/mapping-utils";
@@ -21,6 +21,8 @@ export interface StructuredUploadButtonProps {
   size?: "sm" | "md" | "lg";
   disabled?: boolean;
   contextKey?: string;
+  /** When "dropdown", renders a single split button with a popover instead of two separate buttons */
+  renderAs?: "buttons" | "dropdown";
 }
 
 type StructuredPayload = {
@@ -46,6 +48,7 @@ export function StructuredUploadButton({
   size = "sm",
   disabled,
   contextKey,
+  renderAs = "buttons",
 }: StructuredUploadButtonProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [status, setStatus] = useState<"idle" | "reading" | "calling">("idle");
@@ -325,6 +328,19 @@ export function StructuredUploadButton({
     }
   }, [structuredAction, onApplyToSections, onResult, showToast]);
 
+  const [dropOpen, setDropOpen] = React.useState(false);
+  const dropRef = React.useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  React.useEffect(() => {
+    if (!dropOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (dropRef.current && !dropRef.current.contains(e.target as Node)) setDropOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [dropOpen]);
+
   const primaryLabel = label ?? "Upload CV";
   const secondaryLabel = ocrLabel ?? "Scanned PDF / Image (OCR)";
   const primaryHelperText = helperText ?? "Best for normal PDFs and TXT resumes.";
@@ -335,15 +351,131 @@ export function StructuredUploadButton({
     }
   }, [enableMistral]);
 
+  const fileInput = (
+    <input
+      ref={inputRef}
+      type="file"
+      accept={pendingMode === "mistral" ? OCR_ACCEPT : DEFAULT_ACCEPT}
+      className="hidden"
+      onChange={handleChange}
+    />
+  );
+
+  if (renderAs === "dropdown") {
+    return (
+      <>
+        {fileInput}
+        <div ref={dropRef} style={{ position: "relative", display: "inline-flex" }}>
+          {/* Main trigger */}
+          <button
+            type="button"
+            disabled={disabled || isBusy}
+            onClick={() => setDropOpen((o) => !o)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              height: "var(--hs)",
+              padding: "0 var(--s3)",
+              borderRadius: "var(--rs)",
+              border: "1px solid var(--bm)",
+              background: "var(--sfr)",
+              color: "var(--ti)",
+              fontSize: "var(--ts)",
+              fontWeight: 500,
+              cursor: disabled || isBusy ? "not-allowed" : "pointer",
+              opacity: disabled || isBusy ? 0.5 : 1,
+              transition: "all .12s var(--ez)",
+              fontFamily: "inherit",
+              whiteSpace: "nowrap",
+            }}
+            onMouseEnter={(e) => { if (!disabled && !isBusy) (e.currentTarget as HTMLButtonElement).style.background = "var(--sf2)"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--sfr)"; }}
+          >
+            {isBusy ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+            Import
+            <ChevronDown size={11} style={{ opacity: 0.6, marginLeft: 1 }} />
+          </button>
+
+          {/* Dropdown menu */}
+          {dropOpen && (
+            <div
+              style={{
+                position: "absolute",
+                top: "calc(100% + 4px)",
+                left: 0,
+                zIndex: 50,
+                minWidth: 180,
+                background: "var(--sfr)",
+                border: "1px solid var(--bo)",
+                borderRadius: "var(--rs)",
+                boxShadow: "var(--sha)",
+                overflow: "hidden",
+              }}
+            >
+              <button
+                type="button"
+                disabled={disabled || isBusy}
+                onClick={() => { setDropOpen(false); trigger("default"); }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "var(--s2)",
+                  width: "100%",
+                  padding: "var(--s2) var(--s3)",
+                  background: "transparent",
+                  border: "none",
+                  color: "var(--ti)",
+                  fontSize: "var(--ts)",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  fontFamily: "inherit",
+                  transition: "background .1s",
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--sf2)"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
+              >
+                <Upload size={13} style={{ flexShrink: 0, color: "var(--am)" }} />
+                <span>Upload PDF / TXT</span>
+              </button>
+              <div style={{ height: 1, background: "var(--bo)", margin: "0 var(--s3)" }} />
+              <button
+                type="button"
+                disabled={disabled || isBusy || !mistralAvailable}
+                title={mistralAvailable ? undefined : "Scanned/image OCR is unavailable in this environment"}
+                onClick={() => { setDropOpen(false); trigger("mistral"); }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "var(--s2)",
+                  width: "100%",
+                  padding: "var(--s2) var(--s3)",
+                  background: "transparent",
+                  border: "none",
+                  color: !mistralAvailable ? "var(--tg2)" : "var(--ti)",
+                  fontSize: "var(--ts)",
+                  cursor: !mistralAvailable ? "not-allowed" : "pointer",
+                  textAlign: "left",
+                  fontFamily: "inherit",
+                  transition: "background .1s",
+                }}
+                onMouseEnter={(e) => { if (mistralAvailable) (e.currentTarget as HTMLButtonElement).style.background = "var(--sf2)"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
+              >
+                <ScanLine size={13} style={{ flexShrink: 0, color: mistralAvailable ? "var(--am)" : "var(--tg2)" }} />
+                <span>Scan image / OCR</span>
+              </button>
+            </div>
+          )}
+        </div>
+        {errorMsg && <span role="status" aria-live="polite" className="sr-only">{errorMsg}</span>}
+      </>
+    );
+  }
+
   return (
     <>
-      <input
-        ref={inputRef}
-        type="file"
-        accept={pendingMode === "mistral" ? OCR_ACCEPT : DEFAULT_ACCEPT}
-        className="hidden"
-        onChange={handleChange}
-      />
+      {fileInput}
       <div className={className ?? ""}>
         <div className="flex flex-wrap items-center gap-2">
           <Button
@@ -369,7 +501,7 @@ export function StructuredUploadButton({
             variant="secondary"
             size={size}
           >
-            {isBusy && activeMode === "mistral" ? <Loader2 className="animate-spin" size={16} /> : <Upload size={16} />}
+            {isBusy && activeMode === "mistral" ? <Loader2 className="animate-spin" size={16} /> : <ScanLine size={16} />}
             <span className="ml-2 text-xs sm:text-sm">{secondaryLabel}</span>
           </Button>
         </div>
