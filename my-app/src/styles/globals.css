@@ -336,7 +336,7 @@ button,
 input,
 textarea,
 select {
-  transition: box-shadow .12s var(--ez), border-color .12s var(--ez), background-color .12s var(--ez), color .12s var(--ez);
+  transition: box-shadow .12s var(--ez), border-color .12s var(--ez), color .12s var(--ez);
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -376,11 +376,11 @@ button::-moz-focus-inner,
   padding: 0;
   border: none;
   border-radius: var(--rs);
-  background: transparent;
+  background: var(--sf1);
   color: var(--tg2);
   cursor: pointer;
   flex-shrink: 0;
-  transition: background .12s var(--ez), color .12s var(--ez);
+  transition: color .12s var(--ez);
 }
 .sb-toggle:hover {
   background: var(--sf2);
@@ -402,7 +402,6 @@ button::-moz-focus-inner,
   cursor: pointer;
   line-height: 1;
   transition:
-    background-color .12s var(--ez),
     color .12s var(--ez),
     border-color .12s var(--ez),
     box-shadow .12s var(--ez);
