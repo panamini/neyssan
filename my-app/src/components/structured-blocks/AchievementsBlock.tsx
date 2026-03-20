@@ -213,9 +213,9 @@ export function AchievementsBlock({ section, onChange }: AchievementsBlockProps)
               No achievements yet — click to start typing
             </div>
           ) : isExpanded ? (
-            <AchievementsDisplay itemId={String(section.id)} items={items} />
+            <AchievementsDisplay itemId={String(section.id)} items={items} separatedItems={true} />
           ) : (
-            <AchievementsDisplay itemId={String(section.id)} items={items} maxItems={2} />
+            <AchievementsDisplay itemId={String(section.id)} items={items} maxItems={2} separatedItems={true} />
           )}
         </div>
 
