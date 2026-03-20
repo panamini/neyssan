@@ -15,15 +15,38 @@ import { useToast } from './ui/toast';
  * Sidebar — dasti v1
  *
  * Layout : 248px expanded / 52px collapsed (CSS transition .22s).
- * Sections : RESUME (CV library) — WRITE et SETTINGS sont des chantiers séparés.
- * Logique métier : loadCv, createNewCv, renameCv, deleteCv, importCv — intacte.
- *
- * §12 dasti-spec-v1 : sidebar structure, collapse, sb-doc items, footer.
+ * Active state : CSS classes only — .sb-nav-item + .sb-nav-item--active.
+ *   bg = var(--sf2) (one step above sidebar --sf1, works light+dark alike)
+ *   left accent stripe = box-shadow inset 2px (no border, no layout shift)
  */
 
 const SB_EXPANDED = 248;
 const SB_COLLAPSED = 52;
 const SB_MAX_ITEMS = 5;
+
+/* Shared appearance for Clerk UserButton — dasti tokens */
+const clerkAppearance = {
+  elements: {
+    avatarBox: {
+      width: "26px",
+      height: "26px",
+      borderRadius: "6px",   /* --rs */
+    },
+    userButtonAvatarBox: {
+      width: "26px",
+      height: "26px",
+      borderRadius: "6px",
+    },
+    userButtonTrigger: {
+      boxShadow: "none",
+      outline: "none",
+    },
+  },
+  variables: {
+    colorPrimary: "hsl(155,22%,30%)",  /* --ac light */
+    borderRadius: "6px",
+  },
+} as const;
 
 export const Sidebar: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
@@ -50,14 +73,12 @@ export const Sidebar: React.FC = () => {
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
-    const handleResize = () => {
-      setViewportWidth(window.innerWidth);
-    };
+    const handleResize = () => setViewportWidth(window.innerWidth);
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  /* ── Proposals query (même source que ProposalsList) ────────── */
+  /* ── Proposals query ────────────────────────────────────── */
   const { isLoaded, isSignedIn } = useAuth();
   const proposals = useQuery(
     api.proposalsPublic.default as any,
@@ -66,7 +87,7 @@ export const Sidebar: React.FC = () => {
   const deleteProposal = useMutation((api as any).deleteProposalPublic?.default);
   const updateProposal = useMutation((api as any).updateProposalPublic?.default);
 
-  /* ── Handlers (logique métier intacte) ───────────────────── */
+  /* ── Handlers ────────────────────────────────────────────── */
 
   const handleLoadCv = (id: string) => {
     try { loadCv(id); }
@@ -107,9 +128,7 @@ export const Sidebar: React.FC = () => {
     e.stopPropagation();
     try {
       await deleteProposal({ id });
-      if (selectedProposalId === id) {
-        void navigate('/proposal?view=saved');
-      }
+      if (selectedProposalId === id) void navigate('/proposal?view=saved');
       showToast("Proposal deleted", { variant: "success" });
     } catch (err) {
       console.error("[Sidebar] deleteProposal failed", err);
@@ -134,15 +153,7 @@ export const Sidebar: React.FC = () => {
     }
   };
 
-  const footerHint = (() => {
-    if (isProposal) {
-      const activeProposal = proposals?.find((proposal) => proposal._id === selectedProposalId);
-      return activeProposal?.title ?? "Proposal library";
-    }
-    return currentCv?.title ?? "No resume selected";
-  })();
-
-  /* ── Styles inline (tokens dasti) ───────────────────────── */
+  /* ── Styles (tokens dasti) ───────────────────────────────── */
 
   const sb: React.CSSProperties = {
     width: sidebarCollapsed ? SB_COLLAPSED : compactDensity ? 232 : SB_EXPANDED,
@@ -161,7 +172,6 @@ export const Sidebar: React.FC = () => {
   const sbTop: React.CSSProperties = {
     display: "flex",
     alignItems: "center",
-    gap: "var(--s2)",
     padding: sidebarCollapsed ? 0 : "0 var(--s2)",
     justifyContent: sidebarCollapsed ? "center" : "flex-start",
     height: "var(--hdr)",
@@ -183,20 +193,54 @@ export const Sidebar: React.FC = () => {
         maxHeight: 40,
       };
 
+  /* Shared structural style for the three main nav items.
+     Visual states (bg, shadow, border) are handled by CSS classes
+     .sb-nav-item and .sb-nav-item--active in globals.css.          */
+  const navItemBase: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: sidebarCollapsed ? "center" : "flex-start",
+    gap: sidebarCollapsed ? 0 : "var(--s3)",
+    padding: sidebarCollapsed ? 0 : "var(--s2)",
+    borderRadius: "var(--rs)",
+    cursor: "pointer",
+    height: compactDensity ? 32 : 34,
+    width: "100%",
+    alignSelf: "stretch",
+    transition: "background .12s var(--ez), box-shadow .12s var(--ez)",
+    overflow: "hidden",
+    userSelect: "none",
+  };
+
+  /* Shared text span style for nav item labels */
+  function navLabel(active: boolean): React.CSSProperties {
+    return {
+      fontSize: "var(--ts)",
+      fontWeight: active ? 600 : 500,
+      color: active ? "var(--ti)" : "var(--tm2)",
+      whiteSpace: "nowrap",
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      flex: 1,
+      maxWidth: sidebarCollapsed ? 0 : 200,
+      opacity: sidebarCollapsed ? 0 : 1,
+      transition: "opacity .15s var(--ez), max-width .22s var(--ez)",
+      pointerEvents: sidebarCollapsed ? "none" : "auto",
+    };
+  }
+
   return (
     <>
       <div style={sb}>
-        {/* ── Top bar ─────────────────────────────────────── */}
+        {/* ── Top bar — hamburger only ─────────────────────── */}
         <div style={sbTop}>
-          {/* Hamburger toggle — single button, always top-left */}
           <button
             className="sb-toggle"
             onClick={() => { if (!forcedCollapsed) setCollapsed((c) => !c); }}
-            title={forcedCollapsed ? "Sidebar auto-collapses on narrow widths" : collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={forcedCollapsed ? "Auto-collapses on narrow screens" : collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             <Menu size={16} strokeWidth={1.5} />
           </button>
-
         </div>
 
         {/* ── Nav ─────────────────────────────────────────── */}
@@ -211,40 +255,21 @@ export const Sidebar: React.FC = () => {
             gap: 1,
           }}
         >
-          {/* Section label RESUME */}
+          {/* RESUME section */}
           <span style={sbSec as React.CSSProperties}>Resume</span>
 
-          {/* Resume nav item — route-conditional active state (C04) */}
           <div
-            onClick={() => { void navigate('/cv'); }}
+            onClick={() => void navigate('/cv')}
             className={isResume ? "sb-nav-item sb-nav-item--active" : "sb-nav-item"}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: sidebarCollapsed ? "center" : "flex-start",
-              gap: sidebarCollapsed ? 0 : "var(--s3)",
-              padding: sidebarCollapsed ? 0 : "var(--s2)",
-              borderRadius: "var(--rs)",
-              border: isResume ? "1px solid var(--bo)" : "1px solid transparent",
-              cursor: "pointer",
-              height: compactDensity ? 32 : 34,
-              width: "100%",
-              alignSelf: "stretch",
-              background: isResume ? "var(--sfr)" : "transparent",
-              boxShadow: isResume ? "var(--sha)" : "none",
-              transition: "all .12s var(--ez)",
-              overflow: "hidden",
-            }}
+            style={navItemBase}
           >
             <div style={{ width: 16, height: 16, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: isResume ? "var(--ti)" : "var(--tm2)" }}>
               <FileText size={15} strokeWidth={1.5} />
             </div>
-            <span style={{ fontSize: "var(--ts)", fontWeight: isResume ? 600 : 500, color: isResume ? "var(--ti)" : "var(--tm2)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1, maxWidth: sidebarCollapsed ? 0 : 200, opacity: sidebarCollapsed ? 0 : 1, transition: "opacity .15s var(--ez), max-width .22s var(--ez)", pointerEvents: sidebarCollapsed ? "none" : "auto" }}>
-              Studio
-            </span>
+            <span style={navLabel(isResume)}>Studio</span>
           </div>
 
-          {/* CV document sub-items — capped at SB_MAX_ITEMS */}
+          {/* CV sub-items */}
           {!sidebarCollapsed && cvs.slice(0, SB_MAX_ITEMS).map((cv) => {
             const isActive = currentCv?.id === cv.id;
             const updatedAt = new Date(
@@ -264,54 +289,29 @@ export const Sidebar: React.FC = () => {
             );
           })}
 
-          {/* View all CVs — shown when list is capped */}
           {!sidebarCollapsed && cvs.length > SB_MAX_ITEMS && (
-            <SbViewAll
-              label={`View all (${cvs.length})`}
-              dense={compactDensity}
-              onClick={() => { void navigate('/cvs'); }}
-            />
+            <SbViewAll label={`View all (${cvs.length})`} dense={compactDensity} onClick={() => void navigate('/cvs')} />
           )}
 
-          {/* New CV */}
           {!sidebarCollapsed && (
             <SbNewAction label="New resume" dense={compactDensity} onClick={handleCreate} />
           )}
 
-          {/* Section label WRITE */}
+          {/* WRITE section */}
           <span style={sbSec as React.CSSProperties}>Write</span>
 
-          {/* Compose nav item — .sb-item.on anatomy (C04) */}
           <div
-            onClick={() => { void navigate('/proposal'); }}
+            onClick={() => void navigate('/proposal')}
             className={isProposal ? "sb-nav-item sb-nav-item--active" : "sb-nav-item"}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: sidebarCollapsed ? "center" : "flex-start",
-              gap: sidebarCollapsed ? 0 : "var(--s3)",
-              padding: sidebarCollapsed ? 0 : "var(--s2)",
-              borderRadius: "var(--rs)",
-              border: isProposal ? "1px solid var(--bo)" : "1px solid transparent",
-              cursor: "pointer",
-              height: compactDensity ? 32 : 34,
-              width: "100%",
-              alignSelf: "stretch",
-              background: isProposal ? "var(--sfr)" : "transparent",
-              boxShadow: isProposal ? "var(--sha)" : "none",
-              transition: "all .12s var(--ez)",
-              overflow: "hidden",
-            }}
+            style={navItemBase}
           >
             <div style={{ width: 16, height: 16, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: isProposal ? "var(--ti)" : "var(--tm2)" }}>
               <Pencil size={15} strokeWidth={1.5} />
             </div>
-            <span style={{ fontSize: "var(--ts)", fontWeight: isProposal ? 600 : 500, color: isProposal ? "var(--ti)" : "var(--tm2)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1, maxWidth: sidebarCollapsed ? 0 : 200, opacity: sidebarCollapsed ? 0 : 1, transition: "opacity .15s var(--ez), max-width .22s var(--ez)", pointerEvents: sidebarCollapsed ? "none" : "auto" }}>
-              Compose
-            </span>
+            <span style={navLabel(isProposal)}>Compose</span>
           </div>
 
-          {/* Proposal sub-items — capped at SB_MAX_ITEMS */}
+          {/* Proposal sub-items */}
           {!sidebarCollapsed && isSignedIn && proposals && proposals.slice(0, SB_MAX_ITEMS).map((p) => {
             const date = new Date(p._creationTime).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" });
             const typeLabel = p.metadata?.proposalType === "cover_letter" ? "Letter"
@@ -327,75 +327,60 @@ export const Sidebar: React.FC = () => {
                 docType={typeLabel}
                 isActive={isActive}
                 dense={compactDensity}
-                onClick={() => { void navigate(`/proposal?view=saved&id=${encodeURIComponent(p._id)}`); }}
+                onClick={() => void navigate(`/proposal?view=saved&id=${encodeURIComponent(p._id)}`)}
                 onRename={(e) => { void handleRenameProposal(e, p._id, p.title ?? "Untitled"); }}
                 onDelete={(e) => { void handleDeleteProposal(e, p._id, p.title ?? "Untitled"); }}
               />
             );
           })}
 
-          {/* View all proposals — shown when list is capped */}
           {!sidebarCollapsed && proposals && proposals.length > SB_MAX_ITEMS && (
-            <SbViewAll
-              label={`View all (${proposals.length})`}
-              dense={compactDensity}
-              onClick={() => { void navigate('/proposals'); }}
-            />
+            <SbViewAll label={`View all (${proposals.length})`} dense={compactDensity} onClick={() => void navigate('/proposals')} />
           )}
 
-          {/* New letter */}
           {!sidebarCollapsed && (
-            <SbNewAction label="New letter" dense={compactDensity} onClick={() => { void navigate('/proposal'); }} />
+            <SbNewAction label="New letter" dense={compactDensity} onClick={() => void navigate('/proposal')} />
           )}
 
-          {/* Section label SETTINGS */}
+          {/* SETTINGS section */}
           <span style={sbSec as React.CSSProperties}>Settings</span>
 
-          {/* Style nav item */}
           <div
-            onClick={() => { void navigate('/style'); }}
+            onClick={() => void navigate('/style')}
             className={isStyle ? "sb-nav-item sb-nav-item--active" : "sb-nav-item"}
+            style={navItemBase}
+          >
+            <div style={{ width: 16, height: 16, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: isStyle ? "var(--ti)" : "var(--tg2)" }}>
+              <Settings size={16} />
+            </div>
+            <span style={navLabel(isStyle)}>Style</span>
+          </div>
+
+          {/* Dark mode toggle — just below Settings icon, aligned with nav */}
+          <div
             style={{
               display: "flex",
               alignItems: "center",
               justifyContent: sidebarCollapsed ? "center" : "flex-start",
               gap: sidebarCollapsed ? 0 : "var(--s3)",
               padding: sidebarCollapsed ? 0 : "var(--s2)",
-              borderRadius: "var(--rs)",
-              border: isStyle ? "1px solid var(--bo)" : "1px solid transparent",
-              cursor: "pointer",
               height: compactDensity ? 32 : 34,
               width: "100%",
-              alignSelf: "stretch",
-              background: isStyle ? "var(--sfr)" : "transparent",
-              boxShadow: isStyle ? "var(--sha)" : "none",
-              transition: "all .12s var(--ez)",
-              overflow: "hidden",
-            }}
-            onMouseEnter={(e) => {
-              if (!isStyle) (e.currentTarget as HTMLDivElement).style.background = "var(--sf2)";
-            }}
-            onMouseLeave={(e) => {
-              if (!isStyle) (e.currentTarget as HTMLDivElement).style.background = "transparent";
             }}
           >
-            <div style={{ width: 16, height: 16, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: isStyle ? "var(--ti)" : "var(--tg2)" }}>
-              <Settings size={16} />
-            </div>
-            <span style={{ fontSize: "var(--ts)", fontWeight: isStyle ? 600 : 500, color: isStyle ? "var(--ti)" : "var(--tm2)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1, maxWidth: sidebarCollapsed ? 0 : 200, opacity: sidebarCollapsed ? 0 : 1, transition: "opacity .15s var(--ez), max-width .22s var(--ez)", pointerEvents: sidebarCollapsed ? "none" : "auto" }}>
-              Style
-            </span>
+            <DarkModeToggle />
+            <span style={navLabel(false)}>Theme</span>
           </div>
 
           {/* Error display */}
           {error && !sidebarCollapsed && (
-            <div style={{ padding: "var(--s2) var(--s2)", fontSize: "var(--tx)", color: "var(--ert)" }}>
+            <div style={{ padding: "var(--s2)", fontSize: "var(--tx)", color: "var(--ert)" }}>
               {error}
             </div>
           )}
         </nav>
 
-        {/* ── Footer — avatar + theme toggle ──────────────── */}
+        {/* ── Footer — avatar only ─────────────────────────── */}
         <div
           style={{
             flexShrink: 0,
@@ -403,24 +388,17 @@ export const Sidebar: React.FC = () => {
             borderTop: "1px solid var(--bo)",
             display: "flex",
             alignItems: "center",
-            gap: "var(--s3)",
-            overflow: "hidden",
             justifyContent: sidebarCollapsed ? "center" : "flex-start",
+            overflow: "hidden",
           }}
         >
-          {/* Avatar — Clerk UserButton */}
           <div style={{ flexShrink: 0, display: "flex", alignItems: "center" }}>
-            <UserButton afterSignOutUrl="/" />
-          </div>
-
-          {/* Theme toggle — fades out when collapsed */}
-          <div style={{ maxWidth: sidebarCollapsed ? 0 : 40, opacity: sidebarCollapsed ? 0 : 1, overflow: "hidden", flexShrink: 0, transition: "opacity .15s var(--ez), max-width .22s var(--ez)", pointerEvents: sidebarCollapsed ? "none" : "auto" }}>
-            <DarkModeToggle />
+            <UserButton afterSignOutUrl="/" appearance={clerkAppearance} />
           </div>
         </div>
       </div>
 
-      {/* ── Rename dialog — logique intacte ─────────────── */}
+      {/* ── Rename dialogs ───────────────────────────────── */}
       <CvRenameDialog
         open={renameTarget !== null}
         currentTitle={renameTarget?.title ?? ""}
@@ -433,12 +411,10 @@ export const Sidebar: React.FC = () => {
         title="Rename proposal"
         placeholder="Proposal title"
         onClose={() => setProposalRenameTarget(null)}
-        onSave={(nextTitle) => {
-          void handleProposalRenameSave(nextTitle);
-        }}
+        onSave={(nextTitle) => { void handleProposalRenameSave(nextTitle); }}
       />
 
-      {/* Hidden file input for JSON import (legacy) */}
+      {/* Hidden file input for JSON import */}
       <input
         ref={fileRef}
         type="file"
@@ -468,7 +444,7 @@ export const Sidebar: React.FC = () => {
 };
 
 /* ─────────────────────────────────────────────────────────────
-   SbNewAction — "+ New …" button (aligned with nav icons)
+   SbNewAction — "+ New …" row
    ───────────────────────────────────────────────────────────── */
 
 function SbNewAction({ label, dense, onClick }: { label: string; dense: boolean; onClick: () => void }) {
@@ -535,8 +511,7 @@ function SbViewAll({ label, dense, onClick }: { label: string; dense: boolean; o
 }
 
 /* ─────────────────────────────────────────────────────────────
-   SbDoc — sous-document sidebar (CV item)
-   §11 dasti-spec-v1 : .sb-doc style
+   SbDoc — document sub-item
    ───────────────────────────────────────────────────────────── */
 
 interface SbDocProps {
@@ -577,19 +552,18 @@ function SbDoc({ title, date, docType, isActive, dense = false, onClick, onRenam
         padding: dense ? "7px var(--s2) 7px 32px" : "var(--s2) var(--s2) var(--s2) 38px",
         borderRadius: "var(--rs)",
         cursor: isConfirming ? "default" : "pointer",
-        transition: "all .12s var(--ez)",
+        transition: "background .12s var(--ez), box-shadow .12s var(--ez)",
         position: "relative",
+        /* active = slight bg lift + left accent stripe via inset box-shadow */
         background: isActive ? "var(--sf2)" : hovered ? "var(--sf2)" : "transparent",
-        border: "1px solid transparent",
-        borderLeft: isActive ? "2px solid var(--am)" : "2px solid transparent",
-        boxShadow: "none",
+        boxShadow: isActive ? "inset 2px 0 0 0 var(--am)" : "none",
       }}
     >
       <div
         style={{
           fontSize: "var(--ts)",
           fontWeight: isActive ? 600 : 500,
-          color: "var(--ti)",
+          color: isActive ? "var(--ti)" : "var(--tm2)",
           lineHeight: 1.24,
           whiteSpace: "nowrap",
           overflow: "hidden",
@@ -605,14 +579,12 @@ function SbDoc({ title, date, docType, isActive, dense = false, onClick, onRenam
         {docType && <span style={{ color: "var(--tm2)", fontWeight: 500 }}>{docType}</span>}
       </div>
 
-      {/* Action buttons — appear on hover */}
       {!hideActions && (hovered || isConfirming) && (
         <div
           style={{ position: "absolute", right: 4, top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", gap: 2 }}
           onClick={(e) => e.stopPropagation()}
         >
           {isConfirming ? (
-            /* Inline confirm: ✓ (neutral) + ✗ */
             <>
               <button
                 title="Confirm delete"
@@ -634,7 +606,6 @@ function SbDoc({ title, date, docType, isActive, dense = false, onClick, onRenam
               </button>
             </>
           ) : (
-            /* Normal hover actions: rename + delete trigger */
             <>
               {!hideRenameAction && (
                 <button
