@@ -44,7 +44,7 @@ export const Sidebar: React.FC = () => {
   const isProposal = pathname.startsWith('/proposal');
   const isStyle = pathname.startsWith('/style');
   const isResume = pathname.startsWith('/cv');
-  const forcedCollapsed = viewportWidth < 1220;
+  const forcedCollapsed = viewportWidth < 768;
   const sidebarCollapsed = collapsed || forcedCollapsed;
   const compactDensity = viewportWidth < 1360;
 
