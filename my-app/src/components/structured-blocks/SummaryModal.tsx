@@ -265,9 +265,6 @@ export function SummaryModal({ open, sectionId, item, onClose }: SummaryModalPro
           <div className="dasti-modal-footer-note">Used in your resume header and exports.</div>
 
           <div className="dasti-modal-actions">
-            <Button type="button" variant="secondary" onClick={() => (isSaving ? null : onClose())} disabled={isSaving}>
-              Cancel
-            </Button>
             <Button type="button" variant="primary" onClick={() => void handleSave()} disabled={isSaving} ariaLabel="Save summary">
               Save
             </Button>
