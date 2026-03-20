@@ -593,9 +593,9 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
         open={isCvPickerOpen}
         onClose={() => setIsCvPickerOpen(false)}
         title="Choose resume"
-        className="max-w-2xl [background:var(--sf1)]"
+        className="max-w-2xl"
       >
-        <DialogContent className="space-y-4 [background:var(--sf1)]">
+        <DialogContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
             Select the resume Proposal Forge should use for personalization.
           </p>
@@ -641,15 +641,9 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
 
                     {/* Content */}
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      {/* Title + date */}
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--s2)" }}>
-                        <span style={{ fontSize: "var(--ts)", fontWeight: 600, color: "var(--ti)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {option.title}
-                        </span>
-                        {dateStr && (
-                          <span style={{ fontSize: "var(--tx)", color: "var(--tg2)", flexShrink: 0 }}>{dateStr}</span>
-                        )}
-                      </div>
+                      <span style={{ fontSize: "var(--ts)", fontWeight: 600, color: "var(--ti)", overflow: "hidden", textOverflow: "ellipsis", display: "block", whiteSpace: "nowrap" }}>
+                        {option.title}
+                      </span>
 
                       {/* Name · position */}
                       {(option.profileName || option.desiredPosition) && (
@@ -670,25 +664,29 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                       )}
                     </div>
 
-                    {/* Actions */}
-                    <div style={{ display: "flex", flexShrink: 0, alignItems: "center", gap: "var(--s2)", marginTop: 2 }}>
-                      {option.isActive ? (
-                        <span style={{
-                          fontSize: 10, fontWeight: 600, letterSpacing: ".06em",
-                          padding: "2px 8px", borderRadius: 99,
-                          background: "var(--ap)", color: "var(--am)",
-                          border: "1px solid var(--ac)",
-                          whiteSpace: "nowrap",
-                        }}>
-                          ✓ In use
-                        </span>
-                      ) : (
-                        <Button type="button" variant="primary" size="sm" onClick={() => handleSelectCv(option.id)}>
-                          Use
-                        </Button>
+                    {/* Right column: date on top, actions below — always same position */}
+                    <div style={{ display: "flex", flexDirection: "column", flexShrink: 0, alignItems: "flex-end", gap: "var(--s2)" }}>
+                      {dateStr && (
+                        <span style={{ fontSize: "var(--tx)", color: "var(--tg2)", lineHeight: 1 }}>{dateStr}</span>
                       )}
-                      <Button type="button" variant="ghost" size="sm" onClick={() => handleEditCv(option.id)}>
-                        Edit
+                      <div style={{ display: "flex", alignItems: "center", gap: "var(--s2)" }}>
+                        {option.isActive ? (
+                          <span style={{
+                            fontSize: 10, fontWeight: 600, letterSpacing: ".06em",
+                            padding: "2px 8px", borderRadius: 99,
+                            background: "var(--sf2)", color: "var(--tm2)",
+                            border: "1px solid var(--bo)",
+                            whiteSpace: "nowrap",
+                          }}>
+                            ✓ In use
+                          </span>
+                        ) : (
+                          <Button type="button" variant="secondary" size="sm" onClick={() => handleSelectCv(option.id)}>
+                            Use
+                          </Button>
+                        )}
+                        <Button type="button" variant="ghost" size="sm" onClick={() => handleEditCv(option.id)}>
+                          Edit
                       </Button>
                     </div>
                   </div>

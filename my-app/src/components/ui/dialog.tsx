@@ -24,11 +24,18 @@ export function Dialog({ open, onClose, title, children, className }: DialogProp
         aria-hidden="true"
       />
       <div className={clsx(
-        "relative isolate [background:var(--sfr)] border border-bm rounded-rl [box-shadow:var(--shc)] max-w-dlg w-full",
+        "relative isolate [background:var(--sfr)] border border-bm rounded-rl [box-shadow:var(--shc)] max-w-dlg w-full overflow-hidden",
         className
       )}>
         {title && (
-          <div className="flex items-start justify-between gap-4 px-6 py-5 border-b border-bo">
+          <div
+            className="flex items-start justify-between gap-4 px-6 py-5 border-b border-bo"
+            style={{
+              background: "var(--frost-bg)",
+              backdropFilter: "blur(12px) saturate(1.4)",
+              WebkitBackdropFilter: "blur(12px) saturate(1.4)",
+            }}
+          >
             <div className="min-w-0">
               <h2 className="font-['Fraunces'] text-[var(--tm)] font-semibold leading-[var(--ll)] text-foreground">
                 {title}
