@@ -308,7 +308,7 @@ export function ProposalForge(): JSX.Element {
             onMouseEnter={() => setHoveredTab("saved")}
             onMouseLeave={() => setHoveredTab(null)}
           >
-            Library
+            Saved
           </button>
         </div>
 
