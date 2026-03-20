@@ -1622,9 +1622,9 @@ const flushPendingEdits = useCallback((): void => {
         const bRank = importOrderIndex.get(String((b as any).type ?? "") as any) ?? 999;
         return aRank - bRank;
       });
-      validated.sections = reorderedSections as any;
+      const validatedReordered = { ...validated, sections: reorderedSections } as CvDocument;
 
-      const validatedWithReps = applyAutoTitleIfPlaceholder(ensureRepresentativeBlocks(validated));
+      const validatedWithReps = applyAutoTitleIfPlaceholder(ensureRepresentativeBlocks(validatedReordered));
 
       // Replace current CV atomically with validated document
       safeSetCurrentCv(validatedWithReps);
