@@ -162,7 +162,8 @@ export const Sidebar: React.FC = () => {
     display: "flex",
     alignItems: "center",
     gap: "var(--s2)",
-    padding: "0 var(--s2)",
+    padding: sidebarCollapsed ? 0 : "0 var(--s2)",
+    justifyContent: sidebarCollapsed ? "center" : "flex-start",
     height: "var(--hdr)",
     borderBottom: "1px solid var(--bo)",
     flexShrink: 0,
@@ -204,7 +205,7 @@ export const Sidebar: React.FC = () => {
             flex: 1,
             overflowY: "auto",
             overflowX: "hidden",
-            padding: "var(--s2)",
+            padding: sidebarCollapsed ? "var(--s2) 0" : "var(--s2)",
             display: "flex",
             flexDirection: "column",
             gap: 1,
@@ -226,8 +227,8 @@ export const Sidebar: React.FC = () => {
               border: isResume ? "1px solid var(--bo)" : "1px solid transparent",
               cursor: "pointer",
               height: compactDensity ? 32 : 34,
-              width: sidebarCollapsed ? 36 : "100%",
-              alignSelf: sidebarCollapsed ? "center" : "stretch",
+              width: "100%",
+              alignSelf: "stretch",
               background: isResume ? "var(--sfr)" : "transparent",
               boxShadow: isResume ? "var(--sha)" : "none",
               transition: "all .12s var(--ez)",
@@ -292,8 +293,8 @@ export const Sidebar: React.FC = () => {
               border: isProposal ? "1px solid var(--bo)" : "1px solid transparent",
               cursor: "pointer",
               height: compactDensity ? 32 : 34,
-              width: sidebarCollapsed ? 36 : "100%",
-              alignSelf: sidebarCollapsed ? "center" : "stretch",
+              width: "100%",
+              alignSelf: "stretch",
               background: isProposal ? "var(--sfr)" : "transparent",
               boxShadow: isProposal ? "var(--sha)" : "none",
               transition: "all .12s var(--ez)",
@@ -336,7 +337,7 @@ export const Sidebar: React.FC = () => {
             <SbViewAll
               label={`View all (${proposals.length})`}
               dense={compactDensity}
-              onClick={() => { void navigate('/proposal?view=saved'); }}
+              onClick={() => { void navigate('/proposals'); }}
             />
           )}
 
@@ -361,8 +362,8 @@ export const Sidebar: React.FC = () => {
               border: isStyle ? "1px solid var(--bo)" : "1px solid transparent",
               cursor: "pointer",
               height: compactDensity ? 32 : 34,
-              width: sidebarCollapsed ? 36 : "100%",
-              alignSelf: sidebarCollapsed ? "center" : "stretch",
+              width: "100%",
+              alignSelf: "stretch",
               background: isStyle ? "var(--sfr)" : "transparent",
               boxShadow: isStyle ? "var(--sha)" : "none",
               transition: "all .12s var(--ez)",
@@ -395,11 +396,11 @@ export const Sidebar: React.FC = () => {
         <div
           style={{
             flexShrink: 0,
-            padding: "var(--s3)",
+            padding: sidebarCollapsed ? "var(--s3) 0" : "var(--s3)",
             borderTop: "1px solid var(--bo)",
             display: "flex",
             alignItems: "center",
-            gap: sidebarCollapsed ? 0 : "var(--s3)",
+            gap: "var(--s3)",
             overflow: "hidden",
             justifyContent: sidebarCollapsed ? "center" : "flex-start",
           }}
@@ -409,20 +410,10 @@ export const Sidebar: React.FC = () => {
             <UserButton afterSignOutUrl="/" />
           </div>
 
-          {/* Name + hint — hidden in collapsed (C06) */}
-          {!sidebarCollapsed && (
-            <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
-              <div style={{ fontSize: "var(--ts)", fontWeight: 600, color: "var(--ti)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                Profile
-              </div>
-              <div style={{ fontSize: "var(--tx)", color: "var(--tg2)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                {footerHint}
-              </div>
-            </div>
-          )}
-
-          {/* Theme toggle — hidden in collapsed */}
-          {!sidebarCollapsed && <DarkModeToggle />}
+          {/* Theme toggle — fades out when collapsed */}
+          <div style={{ maxWidth: sidebarCollapsed ? 0 : 40, opacity: sidebarCollapsed ? 0 : 1, overflow: "hidden", flexShrink: 0, transition: "opacity .15s var(--ez), max-width .22s var(--ez)", pointerEvents: sidebarCollapsed ? "none" : "auto" }}>
+            <DarkModeToggle />
+          </div>
         </div>
       </div>
 
