@@ -108,18 +108,9 @@ export function LanguagesModal({ open, items, onClose, onSave }: LanguagesModalP
               <div className="px-3 py-2 text-sm rounded [color:var(--tg2)] [background:var(--sf1)]">No languages yet. Add your first language.</div>
             ) : (
               rows.map((row, idx) => (
-                <div key={row.id ?? `row-${idx}`} className="grid items-center grid-cols-12 gap-2">
-                  <div className="col-span-5">
-                    <label className="text-xs sr-only [color:var(--tg2)]" htmlFor={`language-name-${idx}`}>Language name</label>
-                    <input
-                      id={`language-name-${idx}`}
-                      className="w-full px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
-                      placeholder="e.g., English"
-                      value={row.name ?? ""}
-                      onChange={(e) => updateRow(idx, { name: e.target.value })}
-                    />
-                  </div>
-                  <div className="col-span-6 flex items-center gap-1.5" role="group" aria-label="Language level">
+                <div key={row.id ?? `row-${idx}`} className="flex items-center gap-2">
+                  {/* Level dots — LEFT */}
+                  <div className="flex items-center gap-1.5 flex-shrink-0" role="group" aria-label="Language level" style={{ width: 88 }}>
                     {(["Beginner", "Intermediate", "Fluent"] as Level[]).map((lvl, di) => {
                       const activeIdx = ["Beginner", "Intermediate", "Fluent"].indexOf(row.level as string);
                       const filled = di <= activeIdx;
@@ -139,20 +130,28 @@ export function LanguagesModal({ open, items, onClose, onSave }: LanguagesModalP
                         />
                       );
                     })}
-                    <span style={{ fontSize: 10, color: "var(--tg2)", marginLeft: 2 }}>
-                      {String(row.level ?? "")}
+                    <span style={{ fontSize: 10, color: "var(--tg2)", whiteSpace: "nowrap" }}>
+                      {({ Beginner: "Beginner", Intermediate: "Mid", Fluent: "Fluent" } as Record<string, string>)[row.level as string] ?? String(row.level ?? "")}
                     </span>
                   </div>
-                  <div className="flex items-center justify-end col-span-1">
-                    <button
-                      type="button"
-                      onClick={() => handleRemove(idx)}
-                      className="p-1 rounded hover:[background:var(--erb)]"
-                      aria-label={`Remove ${row.name || "language"}`}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+                  {/* Name input — CENTER (flex-1) */}
+                  <label className="sr-only" htmlFor={`language-name-${idx}`}>Language name</label>
+                  <input
+                    id={`language-name-${idx}`}
+                    className="flex-1 min-w-0 px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                    placeholder="e.g., English"
+                    value={row.name ?? ""}
+                    onChange={(e) => updateRow(idx, { name: e.target.value })}
+                  />
+                  {/* Delete — RIGHT */}
+                  <button
+                    type="button"
+                    onClick={() => handleRemove(idx)}
+                    className="flex-shrink-0 p-1 rounded hover:[background:var(--erb)]"
+                    aria-label={`Remove ${row.name || "language"}`}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               ))
             )}
