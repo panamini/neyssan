@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Menu, FileText, MoonStar, Plus, Pencil, Settings, Sun, X, Check, Trash2 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useMutation, useQuery } from 'convex/react';
-import { useAuth } from '@clerk/clerk-react';
+import { useAuth, useUser } from '@clerk/clerk-react';
 import { UserButton } from '@clerk/clerk-react';
 import { api } from '../../convex/_generated/api';
 import { useCvLibrary } from '../contexts/CvLibraryContext';
@@ -20,6 +20,14 @@ function useDarkMode(): [boolean, () => void] {
       return window.matchMedia("(prefers-color-scheme: dark)").matches;
     } catch { return false; }
   });
+
+  /* Sync DOM class with state on mount — prevents two-click issue when
+     localStorage and documentElement.classList are out of sync on load. */
+  React.useEffect(() => {
+    document.documentElement.classList.toggle("dark", isDark);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally runs once at mount only
+
   const toggle = React.useCallback(() => {
     setIsDark(prev => {
       const next = !prev;
@@ -72,6 +80,7 @@ const clerkAppearance = {
 
 export const Sidebar: React.FC = () => {
   const [isDarkMode, toggleDarkMode] = useDarkMode();
+  const { user } = useUser();
   const [collapsed, setCollapsed] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(() =>
     typeof window === "undefined" ? 1440 : window.innerWidth,
@@ -392,6 +401,7 @@ export const Sidebar: React.FC = () => {
             <div style={{ width: 16, height: 16, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--tg2)", pointerEvents: "none" }}>
               {isDarkMode ? <MoonStar size={15} strokeWidth={1.5} /> : <Sun size={15} strokeWidth={1.5} />}
             </div>
+            <span style={navLabel(false)}>{isDarkMode ? "Dark" : "Light"}</span>
           </div>
 
           {/* Error display */}
@@ -411,12 +421,23 @@ export const Sidebar: React.FC = () => {
             display: "flex",
             alignItems: "center",
             justifyContent: sidebarCollapsed ? "center" : "flex-start",
+            gap: "var(--s3)",
             overflow: "hidden",
           }}
         >
           <div style={{ flexShrink: 0, display: "flex", alignItems: "center" }}>
             <UserButton afterSignOutUrl="/" appearance={clerkAppearance} />
           </div>
+          {!sidebarCollapsed && (
+            <div style={{ minWidth: 0, overflow: "hidden", opacity: sidebarCollapsed ? 0 : 1, transition: "opacity .15s var(--ez)", display: "flex", flexDirection: "column", gap: 1 }}>
+              <div style={{ fontSize: "var(--ts)", fontWeight: 600, color: "var(--ti)", lineHeight: 1.414, letterSpacing: "-.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {user?.firstName ?? user?.username ?? "Account"}
+              </div>
+              <div style={{ fontSize: "var(--tx)", fontWeight: 500, color: "var(--tg2)", lineHeight: 1.414, letterSpacing: ".06em", textTransform: "uppercase", whiteSpace: "nowrap" }}>
+                Free
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -603,7 +624,7 @@ function SbDoc({ title, date, docType, isActive, dense = false, onClick, onRenam
 
       {!hideActions && (hovered || isConfirming) && (
         <div
-          style={{ position: "absolute", right: 4, top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", gap: 2 }}
+          style={{ position: "absolute", right: 4, top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", gap: 2, background: "var(--sf2)", paddingLeft: 6, boxShadow: "-10px 0 8px 4px var(--sf2)" }}
           onClick={(e) => e.stopPropagation()}
         >
           {isConfirming ? (
