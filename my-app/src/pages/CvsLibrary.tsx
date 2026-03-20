@@ -310,12 +310,12 @@ export function CvsLibrary(): JSX.Element {
                         title="Confirm delete"
                         style={{
                           display: "inline-flex", alignItems: "center", justifyContent: "center",
-                          width: 22, height: 22, border: "1px solid var(--bm)", borderRadius: "var(--rx)",
-                          background: "transparent", cursor: "pointer", color: "var(--tg2)", fontFamily: "inherit",
+                          width: 22, height: 22, border: "1px solid transparent", borderRadius: "var(--rx)",
+                          background: "var(--erb)", cursor: "pointer", color: "var(--ert)", fontFamily: "inherit",
                           transition: "all .1s var(--ez)",
                         }}
-                        onMouseEnter={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "var(--erb)"; b.style.color = "var(--ert)"; b.style.borderColor = "var(--ert)"; }}
-                        onMouseLeave={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.color = "var(--tg2)"; b.style.borderColor = "var(--bm)"; }}
+                        onMouseEnter={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "var(--er)"; b.style.color = "var(--op)"; b.style.borderColor = "transparent"; }}
+                        onMouseLeave={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "var(--erb)"; b.style.color = "var(--ert)"; b.style.borderColor = "transparent"; }}
                       >
                         <Check size={11} />
                       </button>

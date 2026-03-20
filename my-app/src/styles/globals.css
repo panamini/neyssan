@@ -434,6 +434,18 @@ button::-moz-focus-inner,
   color: var(--ert);
 }
 
+.dasti-icon-button--confirm {
+  background: var(--erb);
+  color: var(--ert);
+  border-color: transparent;
+}
+
+.dasti-icon-button--confirm:hover {
+  background: var(--er);
+  color: var(--op);
+  border-color: transparent;
+}
+
 .dasti-icon-button svg {
   pointer-events: none;
 }
