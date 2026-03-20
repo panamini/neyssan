@@ -44,10 +44,12 @@ export function ProfileModal({ open, sectionId, item, onClose, onSavePatch }: Pr
   const { updateStructuredItem } = useCvLibrary();
   const [form, setForm] = useState<FormState>(() => buildInitialForm(item));
   const [isSaving, setIsSaving] = useState(false);
+  const [isClearConfirming, setIsClearConfirming] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setForm(buildInitialForm(item));
+    setIsClearConfirming(false);
   }, [open, item]);
 
   if (!open) return null;
@@ -95,6 +97,34 @@ export function ProfileModal({ open, sectionId, item, onClose, onSavePatch }: Pr
       setIsSaving(false);
       onClose();
     }
+  }
+
+  function handleClear() {
+    if (!itemId) {
+      onClose();
+      return;
+    }
+
+    const patch: Partial<IProfileItem> = {
+      name: undefined,
+      desiredPosition: undefined,
+      email: undefined,
+      phone: undefined,
+      linkedin: undefined,
+      website: undefined,
+      location: undefined,
+      photoUrl: undefined,
+    };
+
+    try {
+      onSavePatch?.(patch);
+    } catch {
+      /* non-fatal */
+    }
+
+    updateStructuredItem(String(sectionId), itemId, patch as Partial<Record<string, any>>);
+    setIsClearConfirming(false);
+    onClose();
   }
 
   return (
@@ -236,6 +266,21 @@ export function ProfileModal({ open, sectionId, item, onClose, onSavePatch }: Pr
           <div className="dasti-modal-footer-note">Applied to all resume exports.</div>
 
           <div className="dasti-modal-actions">
+            {isClearConfirming ? (
+              <span className="sb-doc-confirm" style={{ gap: "var(--s2)" }}>
+                <span className="sb-doc-confirm__label" style={{ fontSize: "var(--tx)" }}>Clear?</span>
+                <button type="button" className="sb-doc-confirm__yes" onClick={handleClear}>
+                  Clear
+                </button>
+                <button type="button" className="sb-doc-confirm__no" onClick={() => setIsClearConfirming(false)}>
+                  Cancel
+                </button>
+              </span>
+            ) : (
+              <Button type="button" variant="secondary" onClick={() => setIsClearConfirming(true)} disabled={isSaving}>
+                Clear
+              </Button>
+            )}
             <Button type="button" variant="primary" onClick={() => void handleSave()} disabled={isSaving}>
               Save
             </Button>
