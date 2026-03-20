@@ -206,24 +206,24 @@ export function CvsLibrary(): JSX.Element {
                       el.style.borderColor = "var(--bo)";
                     }}
                   >
-                    {/* Top row: status badge + date */}
+                    {/* Top row: file icon + date */}
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", paddingRight: 20 }}>
-                      <span
+                      <div
                         style={{
-                          fontSize: 10,
-                          fontWeight: 600,
-                          letterSpacing: ".08em",
-                          textTransform: "uppercase",
-                          padding: "2px 7px",
-                          borderRadius: 99,
-                          ...(hasProfile
-                            ? { background: "var(--ap)", color: "var(--am)", border: "1px solid color-mix(in srgb, var(--ac) 30%, transparent)" }
-                            : { background: "var(--sf2)", color: "var(--tg2)", border: "1px solid var(--bo)" }
-                          ),
+                          width: 28,
+                          height: 28,
+                          borderRadius: "var(--rs)",
+                          border: "1px solid var(--bo)",
+                          background: "var(--sf2)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "var(--am)",
+                          flexShrink: 0,
                         }}
                       >
-                        {hasProfile ? "Resume" : "Draft"}
-                      </span>
+                        <FileText size={14} strokeWidth={1.5} />
+                      </div>
                       <span style={{ fontSize: "var(--tx)", color: "var(--tg2)" }}>{updatedAt}</span>
                     </div>
 
