@@ -905,6 +905,11 @@ export default function SectionEditor({
         e.preventDefault();
         const row = skillRows[idx];
         persistRows(skillRows, String(row?.id ?? idx));
+        (e.target as HTMLInputElement).blur();
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        (e.target as HTMLInputElement).blur();
       }
     }
 
@@ -1321,6 +1326,11 @@ export default function SectionEditor({
         e.preventDefault();
         const row = languageRows[idx];
         persistLanguageRows(languageRows, String(row?.id ?? idx));
+        (e.target as HTMLInputElement).blur();
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        (e.target as HTMLInputElement).blur();
       }
     }
  
@@ -1494,6 +1504,8 @@ export default function SectionEditor({
                       ariaLabel={`Language level for ${row.name || `row ${idx + 1}`}`}
                     />
                     <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                      {/* spacer matching pin button width so columns align with skills */}
+                      <div style={{ width: 20, height: 20, flexShrink: 0 }} aria-hidden />
                       <button
                         type="button"
                         onClick={() => handleRemoveLanguageInline(String(row.id ?? idx))}

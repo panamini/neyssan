@@ -490,6 +490,7 @@ button::-moz-focus-inner,
 }
 .sb-nav-item--active {
   background: var(--sf2) !important;
+  box-shadow: inset 0 0 0 1px var(--bm) !important; /* subtle ring, works light + dark */
 }
 
 /* ============================================================
