@@ -32,6 +32,7 @@ interface SummaryModalProps {
 export function SummaryModal({ open, sectionId, item, onClose }: SummaryModalProps) {
   const { updateStructuredItem } = useCvLibrary();
   const [isSaving, setIsSaving] = useState(false);
+  const [isClearConfirming, setIsClearConfirming] = useState(false);
 
   // Initialize Remirror doc once when opened
   // Treat UI placeholder docs as empty so clicking "Start typing here" opens a blank editor.
@@ -111,6 +112,7 @@ export function SummaryModal({ open, sectionId, item, onClose }: SummaryModalPro
   useEffect(() => {
     if (!open) return;
     initialDocRef.current = sanitizeInitial(item?.summary);
+    setIsClearConfirming(false);
   }, [open, item?.summary]);
 
   const extensions = useMemo(
@@ -215,6 +217,18 @@ export function SummaryModal({ open, sectionId, item, onClose }: SummaryModalPro
     }
   }
 
+  function handleClear() {
+    const itemId = String((item as any)?.id ?? "");
+    if (!itemId) {
+      onClose();
+      return;
+    }
+
+    updateStructuredItem(String(sectionId), itemId, { summary: ensureRemirrorDoc(undefined as any) });
+    setIsClearConfirming(false);
+    onClose();
+  }
+
   return (
     <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4" onMouseDownCapture={(e) => e.stopPropagation()}>
       <div
@@ -265,6 +279,21 @@ export function SummaryModal({ open, sectionId, item, onClose }: SummaryModalPro
           <div className="dasti-modal-footer-note">Used in your resume header and exports.</div>
 
           <div className="dasti-modal-actions">
+            {isClearConfirming ? (
+              <span className="sb-doc-confirm" style={{ gap: "var(--s2)" }}>
+                <span className="sb-doc-confirm__label" style={{ fontSize: "var(--tx)" }}>Clear?</span>
+                <button type="button" className="sb-doc-confirm__yes" onClick={handleClear}>
+                  Clear
+                </button>
+                <button type="button" className="sb-doc-confirm__no" onClick={() => setIsClearConfirming(false)}>
+                  Cancel
+                </button>
+              </span>
+            ) : (
+              <Button type="button" variant="secondary" onClick={() => setIsClearConfirming(true)} disabled={isSaving}>
+                Clear
+              </Button>
+            )}
             <Button type="button" variant="primary" onClick={() => void handleSave()} disabled={isSaving} ariaLabel="Save summary">
               Save
             </Button>
