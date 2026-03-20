@@ -58,6 +58,18 @@ const paletteOptions: Array<{
   { id: "bordeaux", name: "Bordeaux", accent: "hsl(348,22%,34%)" },
   { id: "encre", name: "Ink", accent: "hsl(200,18%,28%)" },
 ];
+const PALETTE_SWATCH_SIZE = 20;
+const PALETTE_RING_RADIUS = 32;
+const PALETTE_HEX_CENTER = PALETTE_RING_RADIUS + PALETTE_SWATCH_SIZE / 2;
+const PALETTE_HEX_SIZE = PALETTE_HEX_CENTER * 2;
+const paletteHexPoints: Array<{ id: PaletteChoice; angle: number }> = [
+  { id: "sauge", angle: -90 },
+  { id: "ocre", angle: -30 },
+  { id: "pierre", angle: 30 },
+  { id: "custom", angle: 90 },
+  { id: "bordeaux", angle: 150 },
+  { id: "encre", angle: 210 },
+];
 
 const sectionCardStyle: React.CSSProperties = {
   borderRadius: "var(--rl)",
@@ -103,7 +115,18 @@ const previewFrameStyle: React.CSSProperties = {
 
 const previewPaperBaseStyle: React.CSSProperties = {
   borderRadius: 2,
-  border: "1px solid hsla(0,0%,0%,.06)",
+  borderTopWidth: 1,
+  borderTopStyle: "solid",
+  borderTopColor: "hsla(0,0%,0%,.06)",
+  borderRightWidth: 1,
+  borderRightStyle: "solid",
+  borderRightColor: "hsla(0,0%,0%,.06)",
+  borderBottomWidth: 1,
+  borderBottomStyle: "solid",
+  borderBottomColor: "hsla(0,0%,0%,.06)",
+  borderLeftWidth: 1,
+  borderLeftStyle: "solid",
+  borderLeftColor: "hsla(0,0%,0%,.06)",
   boxShadow: "var(--shb)",
   overflow: "hidden",
   minHeight: 360,
@@ -408,6 +431,9 @@ function getPreviewTypography(style: TypographyStyle, accent: string) {
 }
 
 export function StyleForge(): JSX.Element {
+  const [viewportWidth, setViewportWidth] = React.useState(() =>
+    typeof window === "undefined" ? 1440 : window.innerWidth,
+  );
   const [layoutTemplate, setLayoutTemplate] = React.useState<LayoutTemplate>("swiss");
   const [typographyStyle, setTypographyStyle] = React.useState<TypographyStyle>("signature");
   const [palette, setPalette] = React.useState<PaletteChoice>("sauge");
@@ -422,6 +448,7 @@ export function StyleForge(): JSX.Element {
   const activePalette = paletteOptions.find((option) => option.id === palette);
   const activeAccent = activePalette?.accent ?? customAccent;
   const activePaletteLabel = activePalette?.name.toLowerCase() ?? customAccent.toLowerCase();
+  const isCompactStyleLayout = viewportWidth < 1180;
   const wheelHandle = React.useMemo(() => getWheelHandlePosition(customAccent), [customAccent]);
   const pickerAnchor = isCustomPickerOpen && pickerRef.current
     ? pickerRef.current.getBoundingClientRect()
@@ -440,6 +467,17 @@ export function StyleForge(): JSX.Element {
 
     setCustomAccent(nextColor);
     setPalette("custom");
+  }, []);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const handleResize = () => {
+      setViewportWidth(window.innerWidth);
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   React.useEffect(() => {
@@ -484,6 +522,17 @@ export function StyleForge(): JSX.Element {
     paintColorWheel(wheelCanvasRef.current);
   }, [isCustomPickerOpen]);
 
+  const swatchBaseStyle: React.CSSProperties = React.useMemo(
+    () => ({
+      width: PALETTE_SWATCH_SIZE,
+      height: PALETTE_SWATCH_SIZE,
+      borderRadius: "var(--rp)",
+      boxSizing: "border-box",
+      transition: "transform .12s var(--ezb), box-shadow .12s var(--ez), background .12s var(--ez)",
+    }),
+    [],
+  );
+
   const renderPreviewSection = React.useCallback(
     (section: typeof sampleSections[number], variant: "default" | "compact" = "default") => {
       const spacing = variant === "compact" ? 10 : 12;
@@ -492,7 +541,9 @@ export function StyleForge(): JSX.Element {
           ? {
               ...previewTypography.sectionTitle,
               paddingLeft: 6,
-              borderLeft: `2px solid ${activeAccent}`,
+              borderLeftWidth: 2,
+              borderLeftStyle: "solid" as const,
+              borderLeftColor: activeAccent,
             }
           : previewTypography.sectionTitle;
 
@@ -648,10 +699,22 @@ export function StyleForge(): JSX.Element {
   const letterPreview = React.useMemo(() => {
     const leadAccent =
       layoutTemplate === "editorial"
-        ? { borderTop: `12px solid ${activeAccent}` }
+        ? {
+            borderTopWidth: 12,
+            borderTopStyle: "solid" as const,
+            borderTopColor: activeAccent,
+          }
         : layoutTemplate === "two-column"
-          ? { borderLeft: `10px solid ${activeAccent}` }
-          : { borderTop: `8px solid ${activeAccent}` };
+          ? {
+              borderLeftWidth: 10,
+              borderLeftStyle: "solid" as const,
+              borderLeftColor: activeAccent,
+            }
+          : {
+              borderTopWidth: 8,
+              borderTopStyle: "solid" as const,
+              borderTopColor: activeAccent,
+            };
 
     return (
       <div
@@ -699,7 +762,9 @@ export function StyleForge(): JSX.Element {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "minmax(260px, 320px) minmax(0, 1fr)",
+            gridTemplateColumns: isCompactStyleLayout
+              ? "minmax(0, 1fr)"
+              : "minmax(260px, 320px) minmax(0, 1fr)",
             gap: "var(--s7)",
             alignItems: "start",
           }}
@@ -834,10 +899,54 @@ export function StyleForge(): JSX.Element {
                 </div>
               </div>
               <div style={sectionBodyStyle}>
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "var(--s3)" }}>
-                  <div style={{ display: "flex", justifyContent: "center", gap: "var(--s3)" }}>
-                    {paletteOptions.slice(0, 3).map((option) => {
+                <div style={{ display: "flex", justifyContent: "center", width: "100%" }}>
+                  <div
+                    style={{
+                      position: "relative",
+                      width: PALETTE_HEX_SIZE,
+                      height: PALETTE_HEX_SIZE,
+                    }}
+                  >
+                    {paletteHexPoints.map((entry) => {
+                      const angle = (entry.angle * Math.PI) / 180;
+                      const left = PALETTE_HEX_CENTER + Math.cos(angle) * PALETTE_RING_RADIUS;
+                      const top = PALETTE_HEX_CENTER + Math.sin(angle) * PALETTE_RING_RADIUS;
+
+                      if (entry.id === "custom") {
+                        return (
+                          <div
+                            key="custom"
+                            ref={pickerRef}
+                            style={{
+                              position: "absolute",
+                              left,
+                              top,
+                              transform: "translate(-50%, -50%)",
+                            }}
+                          >
+                            <button
+                              type="button"
+                              title={palette === "custom" ? customAccent.toLowerCase() : "custom"}
+                              className="styleforge-palette-swatch"
+                              onClick={() => setIsCustomPickerOpen((open) => !open)}
+                              style={{
+                                ...swatchBaseStyle,
+                                border: palette === "custom" ? "2px solid var(--sfr)" : "1px solid transparent",
+                                background: palette === "custom" ? customAccent : "var(--sf2)",
+                                boxShadow:
+                                  palette === "custom"
+                                    ? `0 0 0 4px ${customAccent}`
+                                    : "none",
+                              }}
+                            />
+                          </div>
+                        );
+                      }
+
+                      const option = paletteOptions.find((paletteOption) => paletteOption.id === entry.id);
+                      if (!option) return null;
                       const active = option.id === palette;
+
                       return (
                         <button
                           key={option.id}
@@ -846,57 +955,18 @@ export function StyleForge(): JSX.Element {
                           title={option.name}
                           className="styleforge-palette-swatch"
                           style={{
-                            width: 20,
-                            height: 20,
-                            borderRadius: "var(--rp)",
+                            position: "absolute",
+                            left,
+                            top,
+                            transform: "translate(-50%, -50%)",
+                            ...swatchBaseStyle,
                             border: active ? "2px solid var(--sfr)" : "1px solid transparent",
                             background: option.accent,
                             boxShadow: active ? `0 0 0 4px ${option.accent}` : "none",
-                            transition: "transform .12s var(--ezb), box-shadow .12s var(--ez)",
                           }}
                         />
                       );
                     })}
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "center", gap: "var(--s3)", position: "relative" }}>
-                    {paletteOptions.slice(3).map((option) => {
-                      const active = option.id === palette;
-                      return (
-                        <button
-                          key={option.id}
-                          type="button"
-                          onClick={() => setPalette(option.id)}
-                          title={option.name}
-                          className="styleforge-palette-swatch"
-                          style={{
-                            width: 20,
-                            height: 20,
-                            borderRadius: "var(--rp)",
-                            border: active ? "2px solid var(--sfr)" : "1px solid transparent",
-                            background: option.accent,
-                            boxShadow: active ? `0 0 0 4px ${option.accent}` : "none",
-                            transition: "transform .12s var(--ezb), box-shadow .12s var(--ez)",
-                          }}
-                        />
-                      );
-                    })}
-                    <div ref={pickerRef} style={{ position: "relative" }}>
-                      <button
-                        type="button"
-                        title={palette === "custom" ? customAccent.toLowerCase() : "custom"}
-                        className="styleforge-palette-swatch"
-                        onClick={() => setIsCustomPickerOpen((open) => !open)}
-                        style={{
-                          width: 20,
-                          height: 20,
-                          borderRadius: "var(--rp)",
-                          border: palette === "custom" ? "2px solid var(--sfr)" : "1px solid var(--bo)",
-                          background: palette === "custom" ? customAccent : "var(--sf2)",
-                          boxShadow: palette === "custom" ? `0 0 0 4px ${customAccent}` : "none",
-                          transition: "transform .12s var(--ezb), box-shadow .12s var(--ez), background .12s var(--ez)",
-                        }}
-                      />
-                    </div>
                   </div>
                 </div>
               </div>
