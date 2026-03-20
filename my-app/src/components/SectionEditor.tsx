@@ -1090,94 +1090,69 @@ export default function SectionEditor({
         )}
 
         {!collapsed && (
-          <div className="p-4 space-y-3">
-            {/* Inline-first editing surface */}
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-muted">
-                Add, remove, or edit your skills and levels
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleAddSkillInline();
-                  }}
-                  className="dasti-icon-button"
-                  aria-label="Add skill"
-                  title="Add skill"
-                >
-                  <Plus className="h-4 w-4" aria-hidden />
-                </button>
-              </div>
+          <div className="px-3 pb-2">
+            {/* Add button */}
+            <div className="flex items-center justify-end py-1.5">
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handleAddSkillInline(); }}
+                className="dasti-icon-button dasti-icon-button--compact"
+                aria-label="Add skill"
+                title="Add skill"
+              >
+                <Plus className="h-3 w-3" aria-hidden />
+              </button>
             </div>
 
             {skillRows.length === 0 ? (
-              <div className="px-3 py-2 text-sm border rounded border-[color:var(--bo)] bg-background text-muted">
+              <div className="py-2 text-xs" style={{ color: "var(--tg2)" }}>
                 Add a skill like JavaScript or Project Management
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="divide-y divide-[color:var(--bo)]">
                 {skillRows.map((row, idx) => (
-                  <div key={row.id ?? `row-${idx}`} className="group grid items-center grid-cols-12 gap-2">
-                    <div className="col-span-7">
-                      <label className="text-xs sr-only" htmlFor={`skill-name-inline-${idx}`}>Skill name</label>
-                      <input
-                        id={`skill-name-inline-${idx}`}
-                        className="w-full px-2 py-1 text-sm border rounded bg-background text-foreground border-[color:var(--bo)]"
-                        placeholder="e.g., React"
-                        value={row.name ?? ""}
-                        onChange={(e) => handleNameChangeInline(idx, e.target.value)}
-                        onBlur={() => handleNameBlurInline(idx)}
-                        onKeyDown={(e) => handleNameKeyDownInline(e, idx)}
-                      />
-                    </div>
-                    <div className="col-span-4 flex items-center justify-end pr-2">
-                      <LevelDots
-                        value={row.level}
-                        levels={SKILL_DOT_LEVELS}
-                        kind="skill"
-                        onChange={(lvl) => handleLevelChangeInline(idx, lvl)}
-                        ariaLabel={`Skill level for ${row.name || `row ${idx + 1}`}`}
-                      />
-                    </div>
-                    <div className="col-span-1 flex items-center justify-end">
-                      <div className="flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
-                        <button
-                          type="button"
-                          onClick={() => handlePinToCoreInline(String(row.id ?? idx))}
-                          className="dasti-icon-button"
-                          aria-label={idx === 0 ? `${row.name || "skill"} is pinned to top` : `Pin ${row.name || "skill"} to top`}
-                          title={idx === 0 ? "Pinned to top" : "Pin to top"}
-                          style={idx === 0 ? { color: "var(--ac)" } : undefined}
-                        >
-                          {idx === 0
-                            ? <PinOff className="w-4 h-4" aria-hidden />
-                            : <Pin className="w-4 h-4" aria-hidden />
-                          }
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveSkillInline(String(row.id ?? idx))}
-                          className="dasti-icon-button dasti-icon-button--danger"
-                          aria-label={`Remove ${row.name || "skill"}`}
-                          title="Remove skill"
-                        >
-                          <X className="w-4 h-4" aria-hidden />
-                        </button>
-                      </div>
-                    </div>
-                    {/* Subtle Saved tick per row */}
-                    <div className="col-span-12">
-                      <span
-                        className={[
-                          "text-xs transition-opacity",
-                          savedTick && String(savedTick) === String(row.id ?? idx) ? "opacity-90" : "opacity-0",
-                        ].join(" ")}
-                        aria-live="polite"
+                  <div key={row.id ?? `row-${idx}`} className="group flex items-center gap-2 py-1.5">
+                    <label className="sr-only" htmlFor={`skill-name-inline-${idx}`}>Skill name</label>
+                    <input
+                      id={`skill-name-inline-${idx}`}
+                      className="flex-1 min-w-0 bg-transparent border-0 text-sm focus:outline-none"
+                      style={{ color: "var(--ti)" }}
+                      placeholder="e.g., React"
+                      value={row.name ?? ""}
+                      onChange={(e) => handleNameChangeInline(idx, e.target.value)}
+                      onBlur={() => handleNameBlurInline(idx)}
+                      onKeyDown={(e) => handleNameKeyDownInline(e, idx)}
+                    />
+                    <LevelDots
+                      value={row.level}
+                      levels={SKILL_DOT_LEVELS}
+                      kind="skill"
+                      onChange={(lvl) => handleLevelChangeInline(idx, lvl)}
+                      ariaLabel={`Skill level for ${row.name || `row ${idx + 1}`}`}
+                    />
+                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                      <button
+                        type="button"
+                        onClick={() => handlePinToCoreInline(String(row.id ?? idx))}
+                        className="dasti-icon-button dasti-icon-button--compact"
+                        aria-label={idx === 0 ? `${row.name || "skill"} is pinned to top` : `Pin ${row.name || "skill"} to top`}
+                        title={idx === 0 ? "Pinned to top" : "Pin to top"}
+                        style={idx === 0 ? { color: "var(--ac)" } : undefined}
                       >
-                        ✓ Saved
-                      </span>
+                        {idx === 0
+                          ? <PinOff className="w-3 h-3" aria-hidden />
+                          : <Pin className="w-3 h-3" aria-hidden />
+                        }
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSkillInline(String(row.id ?? idx))}
+                        className="dasti-icon-button dasti-icon-button--compact dasti-icon-button--danger"
+                        aria-label={`Remove ${row.name || "skill"}`}
+                        title="Remove skill"
+                      >
+                        <X className="w-3 h-3" aria-hidden />
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -1478,81 +1453,56 @@ export default function SectionEditor({
         )}
 
         {!collapsed && (
-          <div className="p-4 space-y-3">
-            {/* Inline-first editing surface for languages */}
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-muted">
-                Add, remove, or edit your languages and levels
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleAddLanguageInline();
-                  }}
-                  className="dasti-icon-button"
-                  aria-label="Add language"
-                  title="Add language"
-                >
-                  <Plus className="h-4 w-4" aria-hidden />
-                </button>
-              </div>
+          <div className="px-3 pb-2">
+            {/* Add button */}
+            <div className="flex items-center justify-end py-1.5">
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handleAddLanguageInline(); }}
+                className="dasti-icon-button dasti-icon-button--compact"
+                aria-label="Add language"
+                title="Add language"
+              >
+                <Plus className="h-3 w-3" aria-hidden />
+              </button>
             </div>
- 
+
             {languageRows.length === 0 ? (
-              <div className="px-3 py-2 text-sm border rounded border-[color:var(--bo)] bg-background text-muted">
+              <div className="py-2 text-xs" style={{ color: "var(--tg2)" }}>
                 Add a language like English or French
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="divide-y divide-[color:var(--bo)]">
                 {languageRows.map((row, idx) => (
-                  <div key={row.id ?? `row-${idx}`} className="group grid items-center grid-cols-12 gap-2">
-                    <div className="col-span-7">
-                      <label className="text-xs sr-only" htmlFor={`language-name-inline-${idx}`}>Language name</label>
-                      <input
-                        id={`language-name-inline-${idx}`}
-                        className="w-full px-2 py-1 text-sm border rounded bg-background text-foreground border-[color:var(--bo)]"
-                        placeholder="e.g., English"
-                        value={row.name ?? ""}
-                        onChange={(e) => handleNameChangeLanguage(idx, e.target.value)}
-                        onBlur={() => handleNameBlurLanguage(idx)}
-                        onKeyDown={(e) => handleNameKeyDownLanguage(e, idx)}
-                      />
-                    </div>
-                    <div className="col-span-4 flex items-center justify-end pr-2">
-                      <LevelDots
-                        value={row.level}
-                        levels={LANGUAGE_DOT_LEVELS}
-                        kind="language"
-                        onChange={(lvl) => handleLevelChangeLanguage(idx, lvl)}
-                        ariaLabel={`Language level for ${row.name || `row ${idx + 1}`}`}
-                      />
-                    </div>
-                    <div className="col-span-1 flex items-center justify-end">
-                      <div className="flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveLanguageInline(String(row.id ?? idx))}
-                          className="dasti-icon-button dasti-icon-button--danger"
-                          aria-label={`Remove ${row.name || "language"}`}
-                          title="Remove language"
-                        >
-                          <X className="w-4 h-4" aria-hidden />
-                        </button>
-                      </div>
-                    </div>
-                    {/* Subtle Saved tick per row */}
-                    <div className="col-span-12">
-                      <span
-                        className={[
-                          "text-xs transition-opacity",
-                          savedTick && String(savedTick) === String(row.id ?? idx) ? "opacity-90" : "opacity-0",
-                        ].join(" ")}
-                        aria-live="polite"
+                  <div key={row.id ?? `row-${idx}`} className="group flex items-center gap-2 py-1.5">
+                    <label className="sr-only" htmlFor={`language-name-inline-${idx}`}>Language name</label>
+                    <input
+                      id={`language-name-inline-${idx}`}
+                      className="flex-1 min-w-0 bg-transparent border-0 text-sm focus:outline-none"
+                      style={{ color: "var(--ti)" }}
+                      placeholder="e.g., English"
+                      value={row.name ?? ""}
+                      onChange={(e) => handleNameChangeLanguage(idx, e.target.value)}
+                      onBlur={() => handleNameBlurLanguage(idx)}
+                      onKeyDown={(e) => handleNameKeyDownLanguage(e, idx)}
+                    />
+                    <LevelDots
+                      value={row.level}
+                      levels={LANGUAGE_DOT_LEVELS}
+                      kind="language"
+                      onChange={(lvl) => handleLevelChangeLanguage(idx, lvl)}
+                      ariaLabel={`Language level for ${row.name || `row ${idx + 1}`}`}
+                    />
+                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveLanguageInline(String(row.id ?? idx))}
+                        className="dasti-icon-button dasti-icon-button--compact dasti-icon-button--danger"
+                        aria-label={`Remove ${row.name || "language"}`}
+                        title="Remove language"
                       >
-                        ✓ Saved
-                      </span>
+                        <X className="w-3 h-3" aria-hidden />
+                      </button>
                     </div>
                   </div>
                 ))}
