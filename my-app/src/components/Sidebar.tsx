@@ -269,7 +269,13 @@ export const Sidebar: React.FC = () => {
         {/* ── Top bar — hamburger only ─────────────────────── */}
         <div style={sbTop}>
           <button
-            className="sb-toggle"
+            className={
+              forcedCollapsed
+                ? "sb-toggle"
+                : sidebarCollapsed
+                ? "sb-toggle sb-toggle--expand"
+                : "sb-toggle sb-toggle--collapse"
+            }
             onClick={() => { if (!forcedCollapsed) setCollapsed((c) => !c); }}
             title={forcedCollapsed ? "Auto-collapses on narrow screens" : collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >

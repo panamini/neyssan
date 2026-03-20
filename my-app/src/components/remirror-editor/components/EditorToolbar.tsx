@@ -9,9 +9,10 @@ export const EditorToolbar: React.FC<{ position?: 'top' | 'bottom' }> = ({ posit
   const chain = useChainedCommands() as any;
   const active = useActive();
 
-  const buttonStyle = "p-2 rounded hover:[background:var(--sf2)]";
-  const activeButtonStyle = "[background:var(--sf2)]";
-  const containerBase = "flex items-center p-1 space-x-1 [background:var(--sf1)] border-bo";
+  const buttonStyle =
+    "inline-flex items-center justify-center p-2 rounded-[var(--rs)] [color:var(--tm2)] transition-colors hover:[background:var(--sf2)] hover:[color:var(--ti)]";
+  const activeButtonStyle = "[background:var(--sf2)] [color:var(--ti)]";
+  const containerBase = "flex items-center p-1 space-x-1 [background:var(--sf1)] [color:var(--tm2)] border-bo";
   const containerClass = position === 'bottom'
     ? `${containerBase} border-t rounded-b-md`
     : `${containerBase} border-b rounded-t-md`;

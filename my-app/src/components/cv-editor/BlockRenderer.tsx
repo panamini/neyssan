@@ -367,7 +367,7 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
   }
 
   return (
-    <div className="mb-2">
+    <div className={isStructuredSection ? "" : "mb-2"}>
       <div
         onPointerDown={onPointerDownSetActive}
         // Make sure the container doesn't swallow the click for the Edit button
@@ -417,7 +417,13 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
             onCollapseToggle={handleCollapseToggle}
           />
         ) : (
-          <div className="p-3 [background:var(--sfr)] border border-bo rounded [color:var(--ti)]">
+          <div
+            className={
+              isStructuredSection
+                ? "py-3 [color:var(--ti)]"
+                : "p-3 [background:var(--sfr)] border border-bo rounded [color:var(--ti)]"
+            }
+          >
             <div className="flex items-center justify-between">
                 {linkedItem && section ? (
                     <RichSummary item={linkedItem} sectionType={section.type} />
@@ -488,10 +494,12 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
 
               if (Array.isArray(itemsToShow) && itemsToShow.length > 0) {
                 return (
-                  <AchievementsDisplay
-                    itemId={String((((effectiveLinkedItem as any)?.id ?? (linkedItem as any)?.id) ?? block?.id) ?? "")}
-                    items={itemsToShow}
-                  />
+                  <div className="mt-2">
+                    <AchievementsDisplay
+                      itemId={String((((effectiveLinkedItem as any)?.id ?? (linkedItem as any)?.id) ?? block?.id) ?? "")}
+                      items={itemsToShow}
+                    />
+                  </div>
                 );
               }
               return null;
