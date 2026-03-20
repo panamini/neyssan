@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Menu, FileText, MoonStar, Plus, Pencil, Settings, Sun, X, Check, Trash2 } from 'lucide-react';
+import { Menu, FileUser, MoonStar, Plus, Pen, PenLine, PanelLeftDashed, FolderTree, SunMedium, X, Check, Trash } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useMutation, useQuery } from 'convex/react';
 import { useAuth, useUser } from '@clerk/clerk-react';
@@ -303,8 +303,8 @@ export const Sidebar: React.FC = () => {
             className={isResume ? "sb-nav-item sb-nav-item--active" : "sb-nav-item"}
             style={navItemBase}
           >
-            <div style={{ width: 16, height: 16, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: isResume ? "var(--ti)" : "var(--tm2)" }}>
-              <FileText size={15} strokeWidth={1.5} />
+            <div className="sb-nav-icon">
+              <FileUser size={15} strokeWidth={1.5} />
             </div>
             <span style={navLabel(isResume)}>Studio</span>
           </div>
@@ -345,8 +345,8 @@ export const Sidebar: React.FC = () => {
             className={isProposal ? "sb-nav-item sb-nav-item--active" : "sb-nav-item"}
             style={navItemBase}
           >
-            <div style={{ width: 16, height: 16, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: isProposal ? "var(--ti)" : "var(--tm2)" }}>
-              <Pencil size={15} strokeWidth={1.5} />
+            <div className="sb-nav-icon">
+              <PenLine size={15} strokeWidth={1.5} />
             </div>
             <span style={navLabel(isProposal)}>Compose</span>
           </div>
@@ -390,8 +390,8 @@ export const Sidebar: React.FC = () => {
             className={isStyle ? "sb-nav-item sb-nav-item--active" : "sb-nav-item"}
             style={navItemBase}
           >
-            <div style={{ width: 16, height: 16, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: isStyle ? "var(--ti)" : "var(--tg2)" }}>
-              <Settings size={16} />
+            <div className="sb-nav-icon">
+              <PanelLeftDashed size={16} strokeWidth={1.5} />
             </div>
             <span style={navLabel(isStyle)}>Style</span>
           </div>
@@ -407,7 +407,7 @@ export const Sidebar: React.FC = () => {
             onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleDarkMode(); } }}
           >
             <div style={{ width: 16, height: 16, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--tg2)", pointerEvents: "none" }}>
-              {isDarkMode ? <MoonStar size={15} strokeWidth={1.5} /> : <Sun size={15} strokeWidth={1.5} />}
+              {isDarkMode ? <MoonStar size={15} strokeWidth={1.5} /> : <SunMedium size={15} strokeWidth={1.5} />}
             </div>
             <span style={navLabel(false)}>{isDarkMode ? "Dark" : "Light"}</span>
           </div>
@@ -437,12 +437,12 @@ export const Sidebar: React.FC = () => {
             <UserButton afterSignOutUrl="/" appearance={clerkAppearance} />
           </div>
           {!sidebarCollapsed && (
-            <div style={{ minWidth: 0, overflow: "hidden", opacity: sidebarCollapsed ? 0 : 1, transition: "opacity .15s var(--ez)", display: "flex", flexDirection: "column", gap: 1 }}>
-              <div style={{ fontSize: "var(--ts)", fontWeight: 600, color: "var(--ti)", lineHeight: 1.414, letterSpacing: "-.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <div style={{ minWidth: 0, overflow: "hidden", opacity: sidebarCollapsed ? 0 : 1, transition: "opacity .15s var(--ez)", display: "flex", flexDirection: "column", gap: 0 }}>
+              <div style={{ fontSize: "var(--ts)", fontWeight: 600, color: "var(--ti)", lineHeight: 1.18, letterSpacing: "-.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {user?.firstName ?? user?.username ?? "Account"}
               </div>
-              <div style={{ fontSize: "var(--tx)", fontWeight: 500, color: "var(--tg2)", lineHeight: 1.414, letterSpacing: ".06em", textTransform: "uppercase", whiteSpace: "nowrap" }}>
-                Free
+              <div style={{ fontSize: "var(--tx)", fontWeight: 500, color: "var(--tm2)", lineHeight: 1.18, letterSpacing: "0", textTransform: "none", whiteSpace: "nowrap" }}>
+                free
               </div>
             </div>
           )}
@@ -556,6 +556,7 @@ function SbViewAll({ label, dense, onClick }: { label: string; dense: boolean; o
       onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "var(--am)"; }}
       onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "var(--tg2)"; }}
     >
+      <FolderTree size={13} strokeWidth={1.6} style={{ flexShrink: 0 }} />
       <span style={{ whiteSpace: "nowrap" }}>{label} →</span>
     </button>
   );
@@ -584,9 +585,9 @@ function SbDoc({ title, date, docType, isActive, dense = false, onClick, onRenam
   const [isConfirming, setIsConfirming] = useState(false);
 
   const btnBase: React.CSSProperties = {
-    width: 20, height: 20,
+    width: "var(--s4)", height: "var(--s4)",
     display: "flex", alignItems: "center", justifyContent: "center",
-    borderRadius: 3, border: "none", background: "transparent",
+    borderRadius: "var(--rx)", border: "none", background: "transparent",
     color: "var(--tg2)", cursor: "pointer", padding: 0,
     transition: "color .1s var(--ez)",
     fontFamily: "inherit", flexShrink: 0,
@@ -631,7 +632,7 @@ function SbDoc({ title, date, docType, isActive, dense = false, onClick, onRenam
 
       {!hideActions && (hovered || isConfirming) && (
         <div
-          style={{ position: "absolute", right: 4, top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", gap: 2, background: "var(--sf2)", paddingLeft: 6, boxShadow: "-10px 0 8px 4px var(--sf2)" }}
+          style={{ position: "absolute", right: "var(--s1)", top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", gap: 0, background: "var(--sf2)", paddingLeft: 0, boxShadow: "-10px 0 8px 4px var(--sf2)" }}
           onClick={(e) => e.stopPropagation()}
         >
           {isConfirming ? (
@@ -662,10 +663,10 @@ function SbDoc({ title, date, docType, isActive, dense = false, onClick, onRenam
                   onClick={onRename}
                   onMouseEnter={() => setRenHovered(true)}
                   onMouseLeave={() => setRenHovered(false)}
-                  title="Rename"
-                  style={{ ...btnBase, background: renHovered ? "var(--sf2)" : "transparent", color: renHovered ? "var(--ti)" : "var(--tg2)" }}
-                >
-                  <Pencil size={10} />
+                title="Rename"
+                style={{ ...btnBase, background: renHovered ? "var(--sf2)" : "transparent", color: renHovered ? "var(--ti)" : "var(--tg2)" }}
+              >
+                  <Pen size={10} strokeWidth={1.75} />
                 </button>
               )}
               <button
@@ -675,7 +676,7 @@ function SbDoc({ title, date, docType, isActive, dense = false, onClick, onRenam
                 onMouseLeave={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.color = "var(--tg2)"; }}
                 onClick={(e) => { e.stopPropagation(); setIsConfirming(true); }}
               >
-                <Trash2 size={10} strokeWidth={1.75} />
+                <Trash size={10} strokeWidth={1.75} />
               </button>
             </>
           )}

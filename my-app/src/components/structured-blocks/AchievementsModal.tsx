@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { IAchievementItem } from "../../types/cvDocument";
-import { X, Plus, Trash2, Check } from "lucide-react";
+import { X, Plus, Trash, Check } from "lucide-react";
 
 interface AchievementsModalProps {
   open: boolean;
@@ -240,7 +240,7 @@ export function AchievementsModal({ open, items, appendBlankOnOpen = false, onCl
                       className="p-1 rounded hover:[background:var(--erb)]"
                       aria-label={`Remove achievement ${idx + 1}`}
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash className="w-4 h-4" />
                     </button>
                   </div>
                 </div>

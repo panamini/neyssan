@@ -219,7 +219,7 @@ try {
   /* non-fatal in unusual test harnesses */
 }
 
-// Stable lucide-react icon mocks used by UI tests (e.g., Trash2 in SectionEditor)
+// Stable lucide-react icon mocks used by UI tests (e.g., Trash in SectionEditor)
 vi.mock('lucide-react', async (importOriginal) => {
   // keep actual in case tests need other exports
   const actual: any = await importOriginal().catch(() => ({}));
@@ -234,7 +234,13 @@ vi.mock('lucide-react', async (importOriginal) => {
   const base = {
     ...actual,
     // common icons used across tests
+    Pen: Stub,
     Pencil: Stub,
+    PenLine: Stub,
+    FileUser: Stub,
+    PanelLeftDashed: Stub,
+    FolderTree: Stub,
+    Trash: Stub,
     Trash2: Stub,
     X: Stub,
     Plus: Stub,

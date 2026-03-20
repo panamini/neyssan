@@ -23,7 +23,9 @@ vi.mock("lucide-react", () => {
   const Stub = () => null;
   return {
     X: Stub,
+    Pen: Stub,
     Pencil: Stub,
+    PenLine: Stub,
     Mail: Stub,
     Phone: Stub,
     Linkedin: Stub,
@@ -31,6 +33,7 @@ vi.mock("lucide-react", () => {
     MapPin: Stub,
     UserRound: Stub,
     Briefcase: Stub,
+    Trash: Stub,
     Trash2: Stub,
   };
 });

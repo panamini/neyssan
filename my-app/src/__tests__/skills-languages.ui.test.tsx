@@ -34,9 +34,13 @@ vi.mock("lucide-react", () => {
   return {
     X: Stub,
     Plus: Stub,
+    Pen: Stub,
+    Trash: Stub,
     Trash2: Stub,
     Pencil: Stub,
+    PenLine: Stub,
     Pin: Stub,
+    PinOff: Stub,
     Mail: Stub,
     Phone: Stub,
     Linkedin: Stub,
