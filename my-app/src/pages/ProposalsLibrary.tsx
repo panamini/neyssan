@@ -240,14 +240,17 @@ export function ProposalsLibrary(): JSX.Element {
                     {/* Title */}
                     <div
                       style={{
+                        fontFamily: '"Fraunces", serif',
                         fontSize: "var(--ts)",
                         fontWeight: 600,
+                        letterSpacing: "-.01em",
                         color: "var(--ti)",
-                        lineHeight: 1.4,
+                        lineHeight: 1.35,
                         display: "-webkit-box",
                         WebkitLineClamp: 2,
                         WebkitBoxOrient: "vertical",
                         overflow: "hidden",
+                        minHeight: "2.7em",
                       }}
                     >
                       {p.title ?? "Untitled"}
