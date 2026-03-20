@@ -132,7 +132,7 @@ function LevelDots({
           );
         })}
       </div>
-      <span style={{ fontSize: "var(--tx)", color: "var(--tg2)", minWidth: 48, whiteSpace: "nowrap" }}>
+      <span style={{ fontSize: "var(--tx)", color: "var(--tm2)", whiteSpace: "nowrap", lineHeight: "var(--lx)" }}>
         {activeLabel}
       </span>
     </div>
@@ -979,12 +979,7 @@ export default function SectionEditor({
       <div className="mb-4 border border-bo rounded-rm section-container">
         <div className="flex items-center justify-between p-3 [background:var(--sf1)]">
           <h3 className="text-lg font-semibold">{section.title}</h3>
-          <div className="flex items-center" style={{ gap: 2 }}>
-            {/* Edit button stays hidden — inline editing uses the dot control below.
-                SkillsModal component remains in place and can be re-enabled in future by restoring this button. */}
-            <div aria-hidden className="w-6" />
-            {/* Manage button intentionally hidden to avoid accidental usage of Phase 2 drawer.
-                SkillsDrawer and its logic remain in the codebase for future enablement. */}
+          <div className="flex items-center">
             {typeof onCollapseChange === "function" && (
               <button
                 type="button"
@@ -993,7 +988,7 @@ export default function SectionEditor({
                   onCollapseChange();
                 }}
                 aria-label={collapsed ? "Expand section" : "Collapse section"}
-                className="p-1 ml-2 rounded focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
+                className="p-1 rounded focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
               >
                 <span className="[color:var(--tg2)]" aria-hidden>
                   {collapsed ? "▶" : "▼"}
@@ -1012,7 +1007,7 @@ export default function SectionEditor({
                 items.map((s) => (
                   <span
                     key={s.id}
-                    className="inline-flex items-center gap-2 px-2.5 py-1 text-xs rounded-full [background:var(--sf2)] [color:var(--tm2)]"
+                    className="card-group inline-flex items-center gap-2 px-2.5 py-1 text-xs rounded-full [background:var(--sf2)] [color:var(--tm2)]"
                     aria-label={`${s.name} ${s.level}`}
                   >
                     <span className="font-medium [color:var(--ti)]">{s.name}</span>
@@ -1033,7 +1028,7 @@ export default function SectionEditor({
                           /* noop */
                         }
                       }}
-                      className="dasti-icon-button dasti-icon-button--compact ml-1"
+                      className="card-delete-btn dasti-icon-button dasti-icon-button--compact ml-1"
                       aria-label={`Remove ${s.name || "skill"}`}
                       title="Remove skill"
                     >
@@ -1087,9 +1082,33 @@ export default function SectionEditor({
             ) : (
               <div className="divide-y divide-[color:var(--bo)]">
                 {skillRows.map((row, idx) => (
-                  <div key={row.id ?? `row-${idx}`} className="group flex items-center gap-2 py-1.5">
-                    {/* Level dots — LEFT */}
-                    <div style={{ flexShrink: 0 }}>
+                  <div
+                    key={row.id ?? `row-${idx}`}
+                    className="group grid items-center gap-3 py-2 min-w-0"
+                    style={{
+                      gridTemplateColumns:
+                        "minmax(0, 1fr) calc(var(--s8) + var(--s8) + var(--s2)) calc(var(--s4) + var(--s4) + var(--s3))",
+                    }}
+                  >
+                    <div className="min-w-0">
+                      <label className="sr-only" htmlFor={`skill-name-inline-${idx}`}>Skill name</label>
+                      <input
+                        id={`skill-name-inline-${idx}`}
+                        className="w-full min-w-0 bg-transparent border-0 text-sm font-medium focus:outline-none"
+                        style={{
+                          color: "var(--ti)",
+                          lineHeight: "var(--ls)",
+                        }}
+                        placeholder="Skill name"
+                        value={row.name ?? ""}
+                        onChange={(e) => handleNameChangeInline(idx, e.target.value)}
+                        onBlur={() => handleNameBlurInline(idx)}
+                        onKeyDown={(e) => handleNameKeyDownInline(e, idx)}
+                      />
+                    </div>
+                    <div
+                      className="min-w-0"
+                    >
                       <LevelDots
                         value={row.level}
                         levels={SKILL_DOT_LEVELS}
@@ -1098,19 +1117,9 @@ export default function SectionEditor({
                         ariaLabel={`Skill level for ${row.name || `row ${idx + 1}`}`}
                       />
                     </div>
-                    {/* Name — CENTER (flex-1) */}
-                    <label className="sr-only" htmlFor={`skill-name-inline-${idx}`}>Skill name</label>
-                    <input
-                      id={`skill-name-inline-${idx}`}
-                      className="flex-1 min-w-0 bg-transparent border-0 text-sm focus:outline-none"
-                      style={{ color: "var(--ti)" }}
-                      placeholder="Skill name"
-                      value={row.name ?? ""}
-                      onChange={(e) => handleNameChangeInline(idx, e.target.value)}
-                      onBlur={() => handleNameBlurInline(idx)}
-                      onKeyDown={(e) => handleNameKeyDownInline(e, idx)}
-                    />
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity" style={{ flexShrink: 0 }}>
+                    <div
+                      className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
+                    >
                       <button
                         type="button"
                         onClick={() => handlePinToCoreInline(String(row.id ?? idx))}
@@ -1372,9 +1381,7 @@ export default function SectionEditor({
       <div className="mb-4 border border-bo rounded-rm section-container">
         <div className="flex items-center justify-between p-3 [background:var(--sf1)]">
           <h3 className="text-lg font-semibold">{section.title}</h3>
-          <div className="flex items-center gap-2">
-            {/* Edit button stays hidden; languages use the inline dot control below. */}
-            <div aria-hidden className="w-6" />
+          <div className="flex items-center">
             {typeof onCollapseChange === "function" && (
               <button
                 type="button"
@@ -1383,7 +1390,7 @@ export default function SectionEditor({
                   onCollapseChange();
                 }}
                 aria-label={collapsed ? "Expand section" : "Collapse section"}
-                className="p-1 ml-2 rounded focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
+                className="p-1 rounded focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
               >
                 <span className="[color:var(--tg2)]" aria-hidden>
                   {collapsed ? "▶" : "▼"}
@@ -1402,7 +1409,7 @@ export default function SectionEditor({
                 items.map((lng) => (
                   <span
                     key={lng.id}
-                    className="inline-flex items-center gap-2 px-2.5 py-1 text-xs rounded-full [background:var(--sf2)] [color:var(--tm2)]"
+                    className="card-group inline-flex items-center gap-2 px-2.5 py-1 text-xs rounded-full [background:var(--sf2)] [color:var(--tm2)]"
                     aria-label={`${lng.name} ${lng.level}`}
                   >
                     <span className="font-medium [color:var(--ti)]">{lng.name}</span>
@@ -1423,7 +1430,7 @@ export default function SectionEditor({
                           /* noop */
                         }
                       }}
-                      className="dasti-icon-button dasti-icon-button--compact ml-1"
+                      className="card-delete-btn dasti-icon-button dasti-icon-button--compact ml-1"
                       aria-label={`Remove ${lng.name || "language"}`}
                       title="Remove language"
                     >
@@ -1459,9 +1466,33 @@ export default function SectionEditor({
             ) : (
               <div className="divide-y divide-[color:var(--bo)]">
                 {languageRows.map((row, idx) => (
-                  <div key={row.id ?? `row-${idx}`} className="group flex items-center gap-2 py-1.5">
-                    {/* Level dots — LEFT */}
-                    <div style={{ flexShrink: 0 }}>
+                  <div
+                    key={row.id ?? `row-${idx}`}
+                    className="group grid items-center gap-3 py-2 min-w-0"
+                    style={{
+                      gridTemplateColumns:
+                        "minmax(0, 1fr) calc(var(--s8) + var(--s8) + var(--s2)) calc(var(--s4) + var(--s4))",
+                    }}
+                  >
+                    <div className="min-w-0">
+                      <label className="sr-only" htmlFor={`language-name-inline-${idx}`}>Language name</label>
+                      <input
+                        id={`language-name-inline-${idx}`}
+                        className="w-full min-w-0 bg-transparent border-0 text-sm font-medium focus:outline-none"
+                        style={{
+                          color: "var(--ti)",
+                          lineHeight: "var(--ls)",
+                        }}
+                        placeholder="Language name"
+                        value={row.name ?? ""}
+                        onChange={(e) => handleNameChangeLanguage(idx, e.target.value)}
+                        onBlur={() => handleNameBlurLanguage(idx)}
+                        onKeyDown={(e) => handleNameKeyDownLanguage(e, idx)}
+                      />
+                    </div>
+                    <div
+                      className="min-w-0"
+                    >
                       <LevelDots
                         value={row.level}
                         levels={LANGUAGE_DOT_LEVELS}
@@ -1470,19 +1501,9 @@ export default function SectionEditor({
                         ariaLabel={`Language level for ${row.name || `row ${idx + 1}`}`}
                       />
                     </div>
-                    {/* Name — CENTER (flex-1) */}
-                    <label className="sr-only" htmlFor={`language-name-inline-${idx}`}>Language name</label>
-                    <input
-                      id={`language-name-inline-${idx}`}
-                      className="flex-1 min-w-0 bg-transparent border-0 text-sm focus:outline-none"
-                      style={{ color: "var(--ti)" }}
-                      placeholder="Language name"
-                      value={row.name ?? ""}
-                      onChange={(e) => handleNameChangeLanguage(idx, e.target.value)}
-                      onBlur={() => handleNameBlurLanguage(idx)}
-                      onKeyDown={(e) => handleNameKeyDownLanguage(e, idx)}
-                    />
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity" style={{ flexShrink: 0 }}>
+                    <div
+                      className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
+                    >
                       <button
                         type="button"
                         onClick={() => handleRemoveLanguageInline(String(row.id ?? idx))}
