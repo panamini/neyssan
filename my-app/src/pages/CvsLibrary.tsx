@@ -173,7 +173,7 @@ export function CvsLibrary(): JSX.Element {
                 <div
                   key={cv.id}
                   className="card-group"
-                  style={{ position: "relative" }}
+                  style={{ position: "relative", display: "flex", flexDirection: "column" }}
                   onMouseLeave={() => { if (isConfirming) setConfirmingId(null); }}
                 >
                   {/* Main card button */}
@@ -194,6 +194,7 @@ export function CvsLibrary(): JSX.Element {
                       transition: "background .12s var(--ez), border-color .12s var(--ez)",
                       fontFamily: "inherit",
                       width: "100%",
+                      flex: 1,
                     }}
                     onMouseEnter={(e) => {
                       const el = e.currentTarget as HTMLButtonElement;
@@ -240,6 +241,7 @@ export function CvsLibrary(): JSX.Element {
                         WebkitLineClamp: 2,
                         WebkitBoxOrient: "vertical",
                         overflow: "hidden",
+                        minHeight: "2.7em",
                       }}
                     >
                       {cv.title}
