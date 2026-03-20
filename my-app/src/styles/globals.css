@@ -426,6 +426,25 @@ button::-moz-focus-inner,
 }
 
 /* ============================================================
+   LIBRARY CARD GROUP — delete button hover reveal
+   On touch devices the X is always visible.
+   On pointer-capable (hover) devices it fades in on card hover.
+   ============================================================ */
+.card-delete-btn {
+  opacity: 1; /* always visible on touch / mobile */
+}
+
+@media (hover: hover) {
+  .card-delete-btn {
+    opacity: 0;
+    transition: opacity .15s var(--ez);
+  }
+  .card-group:hover .card-delete-btn {
+    opacity: 1;
+  }
+}
+
+/* ============================================================
    SHIMMER SKELETON
    ============================================================ */
 @keyframes shimmer {

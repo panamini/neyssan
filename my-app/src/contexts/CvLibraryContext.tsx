@@ -1479,7 +1479,7 @@ const flushPendingEdits = useCallback((): void => {
       setCvs((prev) => {
         const exists = prev.some((c) => c.id === cv.id);
         if (exists) return prev.map((c) => (c.id === cv.id ? cv : c));
-        return [...prev, cv];
+        return [cv, ...prev]; // prepend — newest first
       });
       cacheDocumentLocally(cv);
       // Schedule save like other entry points for consistency
@@ -1571,7 +1571,7 @@ const flushPendingEdits = useCallback((): void => {
       setCvs((prev) => {
         const exists = prev.some((c) => c.id === cv.id);
         if (exists) return prev.map((c) => (c.id === cv.id ? cv : c));
-        return [...prev, cv];
+        return [cv, ...prev]; // prepend — newest first
       });
       cacheDocumentLocally(cv);
       // Trigger a debounced save but do not await here.
