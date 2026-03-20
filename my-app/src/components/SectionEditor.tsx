@@ -688,7 +688,7 @@ export default function SectionEditor({
       <div className="mb-4 border border-bo rounded-rm section-container">
         <div className="flex items-center justify-between p-3 [background:var(--sf1)]">
           <h3 className="text-lg font-semibold">{section.title}</h3>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center" style={{ gap: 2 }}>
             {!isClearConfirming && (
               <button
                 type="button"
@@ -696,7 +696,7 @@ export default function SectionEditor({
                   e.stopPropagation();
                   setSummaryModalOpen(true);
                 }}
-                className="dasti-icon-button dasti-icon-button--compact"
+                className="dasti-icon-button"
                 aria-label="Edit summary"
                 title="Edit summary"
               >
@@ -722,7 +722,7 @@ export default function SectionEditor({
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); setClearConfirming(true); }}
-              className="dasti-icon-button dasti-icon-button--compact dasti-icon-button--danger"
+              className="dasti-icon-button"
               aria-label="Clear summary"
               title="Clear summary"
             >
@@ -1008,7 +1008,7 @@ export default function SectionEditor({
       <div className="mb-4 border border-bo rounded-rm section-container">
         <div className="flex items-center justify-between p-3 [background:var(--sf1)]">
           <h3 className="text-lg font-semibold">{section.title}</h3>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center" style={{ gap: 2 }}>
             {/* Edit button stays hidden — inline editing uses the dot control below.
                 SkillsModal component remains in place and can be re-enabled in future by restoring this button. */}
             <div aria-hidden className="w-6" />
@@ -1611,7 +1611,7 @@ export default function SectionEditor({
                   e.stopPropagation();
                   setProfileModalOpen(true);
                 }}
-                className="dasti-icon-button dasti-icon-button--compact"
+                className="dasti-icon-button"
                 aria-label="Edit profile"
                 title="Edit profile"
               >
@@ -1636,7 +1636,7 @@ export default function SectionEditor({
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); setClearConfirming(true); }}
-              className="dasti-icon-button dasti-icon-button--compact dasti-icon-button--danger"
+              className="dasti-icon-button"
               aria-label="Clear profile"
               title="Clear profile"
             >
@@ -1926,7 +1926,7 @@ export default function SectionEditor({
       <div className="mb-4 border border-bo rounded-rm section-container">
         <div className="flex items-center justify-between p-3 [background:var(--sf1)]">
           <h3 className="text-lg font-semibold">{section.title}</h3>
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center" style={{ gap: 2 }}>
             {isV1Active ? (
               <button
                 type="button"
@@ -1937,7 +1937,7 @@ export default function SectionEditor({
                     else if (sectionType === "education") setEducationModalOpen(true);
                   } catch { /* noop */ }
                 }}
-                className="dasti-icon-button dasti-icon-button--compact"
+                className="dasti-icon-button"
                 aria-label={`Edit ${sectionType}`}
                 title={`Edit ${sectionType}`}
               >

@@ -119,7 +119,7 @@ export function AchievementsBlock({ section, onChange }: AchievementsBlockProps)
     <div className="mb-4 border border-bo rounded-rm section-container">
       <div className="flex items-center justify-between p-3 [background:var(--sf1)]">
         <h3 className="text-lg font-semibold">{section.title}</h3>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center" style={{ gap: 2 }}>
           {!isClearConfirming && (
             <button
               type="button"
@@ -145,7 +145,7 @@ export function AchievementsBlock({ section, onChange }: AchievementsBlockProps)
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); setIsClearConfirming(true); }}
-            className="dasti-icon-button dasti-icon-button--danger"
+            className="dasti-icon-button"
             aria-label="Clear achievements"
             title="Clear achievements"
           >
