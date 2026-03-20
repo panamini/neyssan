@@ -485,7 +485,18 @@ export default function ProposalsList({
                   <button
                     type="button"
                     title="Confirm delete"
-                    className="dasti-icon-button dasti-icon-button--compact"
+                    className="dasti-icon-button dasti-icon-button--compact dasti-icon-button--confirm"
+                    style={{ background: "var(--erb)", color: "var(--ert)" }}
+                    onMouseEnter={(e) => {
+                      const b = e.currentTarget as HTMLButtonElement;
+                      b.style.background = "var(--er)";
+                      b.style.color = "var(--op)";
+                    }}
+                    onMouseLeave={(e) => {
+                      const b = e.currentTarget as HTMLButtonElement;
+                      b.style.background = "var(--erb)";
+                      b.style.color = "var(--ert)";
+                    }}
                     onClick={() => { void handleDelete(); setIsConfirmingDelete(false); }}
                   >
                     <Check size={12} strokeWidth={2.5} />
@@ -504,7 +515,7 @@ export default function ProposalsList({
                 <button
                   type="button"
                   title="Delete"
-                  className="dasti-icon-button dasti-icon-button--danger"
+                  className="dasti-icon-button"
                   onClick={() => setIsConfirmingDelete(true)}
                 >
                   <Trash size={16} strokeWidth={1.5} />
