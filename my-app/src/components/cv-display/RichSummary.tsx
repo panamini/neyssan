@@ -30,15 +30,15 @@ export function RichSummary({ item, sectionType }: RichSummaryProps): JSX.Elemen
     return (
       <div className="flex items-start space-x-3">
         <div className="flex-shrink-0">
-          <Briefcase className="w-5 h-5 [color:var(--tg2)]" />
+          <Briefcase className="w-5 h-5 [color:var(--tm2)]" />
         </div>
         <div className="flex-1">
           <p className="font-medium [color:var(--ti)]">{exp.position}</p>
           <p className="text-sm [color:var(--tm2)]">
             {exp.company}
-            {exp.location && <span className="[color:var(--tg2)]"> &middot; {exp.location}</span>}
+            {exp.location && <span> &middot; {exp.location}</span>}
           </p>
-          {range && <p className="text-xs [color:var(--tg2)]">{range}</p>}
+          {range && <p className="text-xs [color:var(--tm2)]">{range}</p>}
         </div>
       </div>
     );
@@ -54,15 +54,15 @@ export function RichSummary({ item, sectionType }: RichSummaryProps): JSX.Elemen
     return (
       <div className="flex items-start space-x-3">
         <div className="flex-shrink-0">
-          <GraduationCap className="w-5 h-5 [color:var(--tg2)]" />
+          <GraduationCap className="w-5 h-5 [color:var(--tm2)]" />
         </div>
         <div className="flex-1">
           <p className="font-medium [color:var(--ti)]">{edu.institution}</p>
           <p className="text-sm [color:var(--tm2)]">
             {edu.degree}
-            {edu.fieldOfStudy && <span className="[color:var(--tg2)]">, {edu.fieldOfStudy}</span>}
+            {edu.fieldOfStudy && <span>, {edu.fieldOfStudy}</span>}
           </p>
-          {range && <p className="text-xs [color:var(--tg2)]">{range}</p>}
+          {range && <p className="text-xs [color:var(--tm2)]">{range}</p>}
         </div>
       </div>
     );
