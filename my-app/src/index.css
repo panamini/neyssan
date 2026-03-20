@@ -149,6 +149,12 @@ code {
 .rich-content ol { list-style: decimal; padding-left: var(--remirror-list-indent); color: inherit; }
 .rich-content li::marker { color: var(--remirror-list-marker-color); }
 
+.achievements-display--separated :is(ul, ol) > li + li {
+  border-top: 1px solid var(--bo);
+  margin-top: var(--s3);
+  padding-top: var(--s3);
+}
+
 .rich-content .remirror-placeholder {
   color: var(--tg2);
   opacity: 0.85;

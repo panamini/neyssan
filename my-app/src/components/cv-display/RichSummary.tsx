@@ -30,7 +30,7 @@ export function RichSummary({ item, sectionType }: RichSummaryProps): JSX.Elemen
     return (
       <div className="flex items-start space-x-3">
         <div className="flex-shrink-0">
-          <Briefcase className="w-5 h-5 [color:var(--tm2)]" />
+          <Briefcase className="cv-entry-icon" />
         </div>
         <div className="flex-1">
           <p className="font-medium [color:var(--ti)]">{exp.position}</p>
@@ -54,7 +54,7 @@ export function RichSummary({ item, sectionType }: RichSummaryProps): JSX.Elemen
     return (
       <div className="flex items-start space-x-3">
         <div className="flex-shrink-0">
-          <GraduationCap className="w-5 h-5 [color:var(--tm2)]" />
+          <GraduationCap className="cv-entry-icon" />
         </div>
         <div className="flex-1">
           <p className="font-medium [color:var(--ti)]">{edu.institution}</p>

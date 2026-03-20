@@ -568,13 +568,13 @@ export function StyleForge(): JSX.Element {
                           type="button"
                           onClick={() => setPalette(option.id)}
                           title={option.name}
+                          className="styleforge-palette-swatch"
                           style={{
                             width: 20,
                             height: 20,
                             borderRadius: "var(--rp)",
                             border: active ? "2px solid var(--sfr)" : "1px solid transparent",
                             background: option.accent,
-                            cursor: "pointer",
                             boxShadow: active ? `0 0 0 4px ${activePalette.accent}` : "none",
                             transition: "transform .12s var(--ezb), box-shadow .12s var(--ez)",
                           }}
@@ -591,13 +591,13 @@ export function StyleForge(): JSX.Element {
                           type="button"
                           onClick={() => setPalette(option.id)}
                           title={option.name}
+                          className="styleforge-palette-swatch"
                           style={{
                             width: 20,
                             height: 20,
                             borderRadius: "var(--rp)",
                             border: active ? "2px solid var(--sfr)" : "1px solid transparent",
                             background: option.accent,
-                            cursor: "pointer",
                             boxShadow: active ? `0 0 0 4px ${activePalette.accent}` : "none",
                             transition: "transform .12s var(--ezb), box-shadow .12s var(--ez)",
                           }}
