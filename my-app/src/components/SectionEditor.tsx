@@ -664,21 +664,23 @@ export default function SectionEditor({
         <div className="flex items-center justify-between p-3 [background:var(--sf1)]">
           <h3 className="text-lg font-semibold">{section.title}</h3>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setSummaryModalOpen(true);
-              }}
-              className="dasti-icon-button"
-              aria-label="Edit summary"
-              title="Edit summary"
-            >
-              <Pencil className="w-4 h-4" aria-hidden />
-            </button>
+            {!isClearConfirming && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSummaryModalOpen(true);
+                }}
+                className="dasti-icon-button"
+                aria-label="Edit summary"
+                title="Edit summary"
+              >
+                <Pencil className="w-4 h-4" aria-hidden />
+              </button>
+            )}
             {isClearConfirming ? (
-              <span className="sb-doc-confirm" style={{ gap: "var(--s2)" }}>
-                <span className="sb-doc-confirm__label" style={{ fontSize: "var(--tx)" }}>Clear?</span>
+              <span className="sb-doc-confirm">
+                <span className="sb-doc-confirm__label">Clear?</span>
                 <button
                   type="button"
                   className="sb-doc-confirm__yes"
@@ -1587,21 +1589,23 @@ export default function SectionEditor({
         <div className="flex items-center justify-between p-3 [background:var(--sf1)]">
           <h3 className="text-lg font-semibold">{section.title}</h3>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setProfileModalOpen(true);
-              }}
-              className="dasti-icon-button"
-              aria-label="Edit profile"
-              title="Edit profile"
-            >
-              <Pencil className="w-4 h-4" aria-hidden />
-            </button>
+            {!isClearConfirming && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setProfileModalOpen(true);
+                }}
+                className="dasti-icon-button"
+                aria-label="Edit profile"
+                title="Edit profile"
+              >
+                <Pencil className="w-4 h-4" aria-hidden />
+              </button>
+            )}
             {isClearConfirming ? (
-              <span className="sb-doc-confirm" style={{ gap: "var(--s2)" }}>
-                <span className="sb-doc-confirm__label" style={{ fontSize: "var(--tx)" }}>Clear?</span>
+              <span className="sb-doc-confirm">
+                <span className="sb-doc-confirm__label">Clear?</span>
                 <button
                   type="button"
                   className="sb-doc-confirm__yes"
