@@ -427,8 +427,7 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
                 <button
                   type="button"
                   onClick={() => removeRow(idx)}
-                  className="dasti-modal-close"
-                  style={{ height: 28, minWidth: 28, padding: 0 }}
+                  className="dasti-icon-button"
                   aria-label="Remove entry"
                 >
                   <Trash className="h-4 w-4" />
@@ -837,8 +836,7 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
                 <button
                   type="button"
                   onClick={() => removeRow(idx)}
-                  className="dasti-modal-close"
-                  style={{ height: 28, minWidth: 28, padding: 0 }}
+                  className="dasti-icon-button"
                   aria-label="Remove entry"
                 >
                   <Trash className="h-4 w-4" />

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { ILanguageItem, Level } from "../../types/cvDocument";
-import { X, Plus, Trash } from "lucide-react";
+import { X, Plus } from "lucide-react";
+import { Button } from "../ui/button";
 
 interface LanguagesModalProps {
   open: boolean;
@@ -83,7 +84,7 @@ export function LanguagesModal({ open, items, onClose, onSave }: LanguagesModalP
             type="button"
             onClick={() => (isSaving ? null : onClose())}
             aria-label="Close"
-            className="p-1 rounded hover:[background:var(--sf2)] disabled:opacity-50"
+            className="dasti-modal-close disabled:opacity-50"
             disabled={isSaving}
           >
             <X className="w-5 h-5" />
@@ -93,14 +94,17 @@ export function LanguagesModal({ open, items, onClose, onSave }: LanguagesModalP
         <div className="p-4 space-y-4">
           <div className="flex items-center justify-between">
             <div className="text-sm [color:var(--tm2)]">Add, remove, or edit languages and proficiency</div>
-            <button
+            <Button
               type="button"
               onClick={handleAdd}
-              className="inline-flex items-center gap-1 px-2 py-1 text-sm rounded [background:var(--ac)] [color:var(--op)] hover:brightness-110 focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
-              aria-label="Add language"
+              variant="ghost"
+              size="sm"
+              ariaLabel="Add language"
+              className="gap-1"
             >
-              <Plus className="w-4 h-4" /> Add
-            </button>
+              <Plus className="w-4 h-4" />
+              Add
+            </Button>
           </div>
 
           <div className="space-y-2">
@@ -108,7 +112,7 @@ export function LanguagesModal({ open, items, onClose, onSave }: LanguagesModalP
               <div className="px-3 py-2 text-sm rounded [color:var(--tg2)] [background:var(--sf1)]">No languages yet. Add your first language.</div>
             ) : (
               rows.map((row, idx) => (
-                <div key={row.id ?? `row-${idx}`} className="flex items-center gap-2">
+                <div key={row.id ?? `row-${idx}`} className="group flex items-center gap-2">
                   {/* Level dots — LEFT */}
                   <div className="flex items-center gap-1.5 flex-shrink-0" role="group" aria-label="Language level" style={{ width: 88 }}>
                     {(["Beginner", "Intermediate", "Fluent"] as Level[]).map((lvl, di) => {
@@ -147,10 +151,11 @@ export function LanguagesModal({ open, items, onClose, onSave }: LanguagesModalP
                   <button
                     type="button"
                     onClick={() => handleRemove(idx)}
-                    className="flex-shrink-0 p-1 rounded hover:[background:var(--erb)]"
+                    className="dasti-modal-close flex-shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
                     aria-label={`Remove ${row.name || "language"}`}
+                    title={`Remove ${row.name || "language"}`}
                   >
-                    <Trash className="w-4 h-4" />
+                    <X className="w-4 h-4" />
                   </button>
                 </div>
               ))
@@ -158,14 +163,6 @@ export function LanguagesModal({ open, items, onClose, onSave }: LanguagesModalP
           </div>
 
           <div className="flex items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => (isSaving ? null : onClose())}
-              className="px-3 py-2 rounded [background:var(--sf2)] disabled:opacity-50"
-              disabled={isSaving}
-            >
-              Cancel
-            </button>
             <button
               type="button"
               onClick={() => void handleSave()}
