@@ -465,17 +465,37 @@ button::-moz-focus-inner,
 }
 
 /* ============================================================
-   SIDEBAR NAV ITEMS — dark mode: typography-only active state
+   SIDEBAR NAV ITEMS — sf2 bg step + inset left accent stripe
+   Elite pattern (Notion / Linear / Claude.ai):
+     • No border, no floating shadow
+     • Active = var(--sf2) bg (one step above sidebar --sf1, works
+       both light and dark) + 2px inset accent stripe via box-shadow
+     • Hover = same sf2 bg, no stripe
+   Both light and dark handled by the tokens automatically.
    ============================================================ */
 .sb-nav-item {
   cursor: pointer;
+  background: transparent;
+  box-shadow: none;
+  border: none !important;  /* removes any inline border from JSX */
+}
+.sb-nav-item:hover {
+  background: var(--sf2);
+}
+.sb-nav-item--active {
+  background: var(--sf2) !important;
+  box-shadow: inset 2px 0 0 0 var(--am) !important;
 }
 
-/* In dark mode, active nav items rely on font-weight + color only — no card */
-.dark .sb-nav-item--active {
-  background: transparent !important;
-  border-color: transparent !important;
-  box-shadow: none !important;
+/* ============================================================
+   CLERK USERBUTTON — dasti style override
+   Square-ish avatar, accent-coloured initials bg
+   ============================================================ */
+.cl-avatarBox,
+.cl-userButtonAvatarBox {
+  border-radius: 6px !important;  /* --rs */
+  width:  26px !important;
+  height: 26px !important;
 }
 
 /* ============================================================
