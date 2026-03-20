@@ -1,0 +1,71 @@
+.container {
+  padding: var(--s5);
+  border: none;
+  border-radius: var(--rm);
+  background: transparent;
+}
+
+.inputElement {
+  width: 100%;
+  padding: var(--s2) var(--s3);
+  border-radius: var(--rs);
+  font-size: var(--ts);
+  color: var(--ti);
+  background: var(--sf1);
+  border: 1px solid var(--bo);
+  outline: none;
+  transition: border-color .12s var(--ez), box-shadow .12s var(--ez);
+}
+
+.inputElement:focus {
+  border-color: var(--ac);
+  box-shadow: var(--focus-shadow-soft);
+  background: var(--sf1);
+}
+
+.jobField {
+  background: var(--sf1);
+  color: var(--ti);
+}
+
+.jobField:focus {
+  background: var(--sf1);
+}
+
+.jobField textarea,
+.jobField input {
+  background: transparent;
+  color: var(--ti);
+}
+
+.composeWell {
+  border: 1px solid var(--bm);
+  border-radius: var(--rm);
+  background: var(--sf1);
+  margin-top: var(--s2);
+  transition: border-color .12s var(--ez), box-shadow .12s var(--ez);
+}
+
+.composeWell:focus-within {
+  border-color: var(--ac);
+  box-shadow: var(--focus-shadow-soft);
+}
+
+.inputElement:-webkit-autofill,
+.inputElement:-webkit-autofill:hover,
+.inputElement:-webkit-autofill:focus,
+.jobField:-webkit-autofill,
+.jobField:-webkit-autofill:hover,
+.jobField:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px var(--sf1) inset;
+  box-shadow: 0 0 0 1000px var(--sf1) inset;
+  -webkit-text-fill-color: var(--ti);
+  caret-color: var(--ti);
+  transition: background-color 9999s ease-out 0s;
+}
+
+.errorMessage {
+  margin-top: var(--s1);
+  font-size: var(--ts);
+  color: var(--ert);
+}
