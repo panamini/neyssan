@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Menu, FileText, Plus, Pencil, Settings, X, Check, Trash2 } from 'lucide-react';
+import { Menu, FileText, MoonStar, Plus, Pencil, Settings, Sun, X, Check, Trash2 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useMutation, useQuery } from 'convex/react';
 import { useAuth } from '@clerk/clerk-react';
@@ -8,8 +8,30 @@ import { api } from '../../convex/_generated/api';
 import { useCvLibrary } from '../contexts/CvLibraryContext';
 import { normalizeAndValidateCvDocument } from '../lib/normalize-cv';
 import CvRenameDialog from './CvRenameDialog';
-import DarkModeToggle from './dark-mode-toggle/DarkModeToggle';
 import { useToast } from './ui/toast';
+
+/** Inline dark-mode hook — reads localStorage + system preference, writes both. */
+function useDarkMode(): [boolean, () => void] {
+  const [isDark, setIsDark] = React.useState(() => {
+    try {
+      const stored = localStorage.getItem("theme");
+      if (stored === "dark") return true;
+      if (stored === "light") return false;
+      return window.matchMedia("(prefers-color-scheme: dark)").matches;
+    } catch { return false; }
+  });
+  const toggle = React.useCallback(() => {
+    setIsDark(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem("theme", next ? "dark" : "light");
+        document.documentElement.classList.toggle("dark", next);
+      } catch { /* noop */ }
+      return next;
+    });
+  }, []);
+  return [isDark, toggle];
+}
 
 /**
  * Sidebar — dasti v1
@@ -49,6 +71,7 @@ const clerkAppearance = {
 } as const;
 
 export const Sidebar: React.FC = () => {
+  const [isDarkMode, toggleDarkMode] = useDarkMode();
   const [collapsed, setCollapsed] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(() =>
     typeof window === "undefined" ? 1440 : window.innerWidth,
@@ -356,10 +379,18 @@ export const Sidebar: React.FC = () => {
             <span style={navLabel(isStyle)}>Style</span>
           </div>
 
-          {/* Dark mode toggle — same icon-slot structure as other nav items */}
-          <div style={navItemBase} className="sb-nav-item">
-            <div style={{ width: 16, height: 16, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <DarkModeToggle compact />
+          {/* Dark mode toggle — full row is the click target */}
+          <div
+            style={navItemBase}
+            className="sb-nav-item"
+            onClick={toggleDarkMode}
+            role="button"
+            tabIndex={0}
+            aria-pressed={isDarkMode}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleDarkMode(); } }}
+          >
+            <div style={{ width: 16, height: 16, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--tg2)", pointerEvents: "none" }}>
+              {isDarkMode ? <MoonStar size={15} strokeWidth={1.5} /> : <Sun size={15} strokeWidth={1.5} />}
             </div>
           </div>
 
