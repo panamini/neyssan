@@ -160,8 +160,13 @@ export function CvsLibrary(): JSX.Element {
                 cv.metadata?.updatedAt ?? cv.metadata?.createdAt ?? Date.now(),
               ).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" });
 
-              const profileName = (cv.core as any)?.profile?.name ?? "";
-              const position = (cv.core as any)?.profile?.position ?? (cv.core as any)?.profile?.desiredPosition ?? "";
+              const core = (cv.core as any);
+              const profileName: string = core?.profile?.name ?? "";
+              const position: string = core?.profile?.position ?? core?.profile?.desiredPosition ?? "";
+              const location: string = [core?.profile?.city, core?.profile?.country].filter(Boolean).join(", ");
+              const summary: string = core?.profile?.summary ?? core?.profile?.objective ?? core?.profile?.bio ?? "";
+              const summarySnippet = summary ? summary.slice(0, 180) : "";
+              const hasProfile = !!(profileName || position);
               const isConfirming = confirmingId === cv.id;
 
               return (
@@ -201,19 +206,36 @@ export function CvsLibrary(): JSX.Element {
                       el.style.borderColor = "var(--bo)";
                     }}
                   >
-                    {/* Icon + date row */}
+                    {/* Top row: status badge + date */}
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", paddingRight: 20 }}>
-                      <FileText size={14} strokeWidth={1.5} color="var(--am)" />
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 600,
+                          letterSpacing: ".08em",
+                          textTransform: "uppercase",
+                          padding: "2px 7px",
+                          borderRadius: 99,
+                          ...(hasProfile
+                            ? { background: "var(--ap)", color: "var(--am)", border: "1px solid color-mix(in srgb, var(--ac) 30%, transparent)" }
+                            : { background: "var(--sf2)", color: "var(--tg2)", border: "1px solid var(--bo)" }
+                          ),
+                        }}
+                      >
+                        {hasProfile ? "Resume" : "Draft"}
+                      </span>
                       <span style={{ fontSize: "var(--tx)", color: "var(--tg2)" }}>{updatedAt}</span>
                     </div>
 
-                    {/* Title */}
+                    {/* Title — Fraunces serif, same as proposal cards */}
                     <div
                       style={{
+                        fontFamily: '"Fraunces", serif',
                         fontSize: "var(--ts)",
                         fontWeight: 600,
+                        lineHeight: 1.35,
+                        letterSpacing: "-.01em",
                         color: "var(--ti)",
-                        lineHeight: 1.4,
                         display: "-webkit-box",
                         WebkitLineClamp: 2,
                         WebkitBoxOrient: "vertical",
@@ -223,20 +245,51 @@ export function CvsLibrary(): JSX.Element {
                       {cv.title}
                     </div>
 
-                    {/* Profile name + position */}
-                    {(profileName || position) && (
+                    {/* Name · Position · Location */}
+                    {(profileName || position || location) && (
                       <div
                         style={{
                           fontSize: "var(--tx)",
                           color: "var(--tm2)",
                           lineHeight: 1.5,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          width: "100%",
+                        }}
+                      >
+                        {[profileName, position, location].filter(Boolean).join(" · ")}
+                      </div>
+                    )}
+
+                    {/* Summary snippet — rich preview like proposals */}
+                    {summarySnippet && (
+                      <div
+                        style={{
+                          fontSize: "var(--tx)",
+                          color: "var(--tg2)",
+                          lineHeight: 1.55,
                           display: "-webkit-box",
-                          WebkitLineClamp: 2,
+                          WebkitLineClamp: 3,
                           WebkitBoxOrient: "vertical",
                           overflow: "hidden",
                         }}
                       >
-                        {[profileName, position].filter(Boolean).join(" · ")}
+                        {summarySnippet}
+                      </div>
+                    )}
+
+                    {/* Empty placeholder for cards with no profile data */}
+                    {!hasProfile && !summarySnippet && (
+                      <div
+                        style={{
+                          fontSize: "var(--tx)",
+                          color: "var(--tg2)",
+                          fontStyle: "italic",
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        No profile data yet
                       </div>
                     )}
                   </button>
