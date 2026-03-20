@@ -426,6 +426,84 @@ button::-moz-focus-inner,
 }
 
 /* ============================================================
+   SHIMMER SKELETON
+   ============================================================ */
+@keyframes shimmer {
+  0%   { background-position: -600px 0; }
+  100% { background-position:  600px 0; }
+}
+
+.shimmer-line {
+  border-radius: var(--rs);
+  background: linear-gradient(
+    90deg,
+    var(--sf2) 25%,
+    var(--sfr) 50%,
+    var(--sf2) 75%
+  );
+  background-size: 1200px 100%;
+  animation: shimmer 1.4s infinite linear;
+}
+
+/* ============================================================
+   SIDEBAR NAV ITEMS — dark mode: typography-only active state
+   ============================================================ */
+.sb-nav-item {
+  cursor: pointer;
+}
+
+/* In dark mode, active nav items rely on font-weight + color only — no card */
+.dark .sb-nav-item--active {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* ============================================================
+   SB-DOC INLINE CONFIRM  (Clear? / Delete?)
+   ============================================================ */
+.sb-doc-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.sb-doc-confirm__label {
+  font-size: var(--tx);
+  color: var(--tg2);
+  white-space: nowrap;
+}
+
+.sb-doc-confirm__yes,
+.sb-doc-confirm__no {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--hs);
+  padding: 0 var(--s3);
+  border-radius: var(--rs);
+  border: 1px solid var(--bm);
+  background: var(--sfr);
+  color: var(--ti);
+  font-size: var(--tx);
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: inherit;
+  transition: background .1s var(--ez), color .1s var(--ez);
+}
+
+.sb-doc-confirm__yes:hover {
+  background: var(--erb);
+  color: var(--ert);
+  border-color: var(--ert);
+}
+
+.sb-doc-confirm__no:hover {
+  background: var(--sf2);
+}
+
+/* ============================================================
    DASTI MODALS
    ============================================================ */
 .dasti-modal {

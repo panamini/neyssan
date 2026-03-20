@@ -390,8 +390,22 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
       />
 
       {isLoading && (
-        <div className="p-3 border rounded-md border-bo [background:var(--sfr)] text-foreground">
-          Loading...
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--s4)" }}>
+          {/* Title row shimmer */}
+          <div className="shimmer-line" style={{ height: 24, width: "55%", borderRadius: "var(--rs)" }} />
+          {/* Toolbar shimmer */}
+          <div className="shimmer-line" style={{ height: 36, width: "100%", borderRadius: "var(--rs)" }} />
+          {/* Section cards shimmer */}
+          {[0.9, 0.75, 0.85].map((w, i) => (
+            <div key={i} style={{ borderRadius: "var(--rm)", border: "1px solid var(--bo)", overflow: "hidden" }}>
+              <div className="shimmer-line" style={{ height: 48, width: "100%", borderRadius: 0 }} />
+              <div style={{ padding: "var(--s4)", display: "flex", flexDirection: "column", gap: "var(--s3)" }}>
+                <div className="shimmer-line" style={{ height: 12, width: `${Math.round(w * 100)}%` }} />
+                <div className="shimmer-line" style={{ height: 12, width: `${Math.round((w - 0.2) * 100)}%` }} />
+                <div className="shimmer-line" style={{ height: 12, width: `${Math.round((w - 0.1) * 100)}%` }} />
+              </div>
+            </div>
+          ))}
         </div>
       )}
 

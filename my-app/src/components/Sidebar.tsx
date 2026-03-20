@@ -217,6 +217,7 @@ export const Sidebar: React.FC = () => {
           {/* Resume nav item — route-conditional active state (C04) */}
           <div
             onClick={() => { void navigate('/cv'); }}
+            className={isResume ? "sb-nav-item sb-nav-item--active" : "sb-nav-item"}
             style={{
               display: "flex",
               alignItems: "center",
@@ -283,6 +284,7 @@ export const Sidebar: React.FC = () => {
           {/* Compose nav item — .sb-item.on anatomy (C04) */}
           <div
             onClick={() => { void navigate('/proposal'); }}
+            className={isProposal ? "sb-nav-item sb-nav-item--active" : "sb-nav-item"}
             style={{
               display: "flex",
               alignItems: "center",
@@ -352,6 +354,7 @@ export const Sidebar: React.FC = () => {
           {/* Style nav item */}
           <div
             onClick={() => { void navigate('/style'); }}
+            className={isStyle ? "sb-nav-item sb-nav-item--active" : "sb-nav-item"}
             style={{
               display: "flex",
               alignItems: "center",
