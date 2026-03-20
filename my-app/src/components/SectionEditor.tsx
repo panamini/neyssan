@@ -40,7 +40,7 @@ const SKILL_DOT_LEVELS: Array<{ value: Level; label: string }> = [
 const LANGUAGE_DOT_LEVELS: Array<{ value: Level; label: string }> = [
   { value: "Beginner", label: "Beginner" },
   { value: "Intermediate", label: "Intermediate" },
-  { value: "Fluent", label: "Fluent" },
+  { value: "Fluent", label: "Advanced" },
 ];
 
 function getDotIndex(value: Level, kind: "skill" | "language"): number {
@@ -1128,14 +1128,16 @@ export default function SectionEditor({
                       onBlur={() => handleNameBlurInline(idx)}
                       onKeyDown={(e) => handleNameKeyDownInline(e, idx)}
                     />
-                    <LevelDots
-                      value={row.level}
-                      levels={SKILL_DOT_LEVELS}
-                      kind="skill"
-                      onChange={(lvl) => handleLevelChangeInline(idx, lvl)}
-                      ariaLabel={`Skill level for ${row.name || `row ${idx + 1}`}`}
-                    />
-                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                    <div style={{ width: 68, display: "flex", justifyContent: "flex-end", flexShrink: 0 }}>
+                      <LevelDots
+                        value={row.level}
+                        levels={SKILL_DOT_LEVELS}
+                        kind="skill"
+                        onChange={(lvl) => handleLevelChangeInline(idx, lvl)}
+                        ariaLabel={`Skill level for ${row.name || `row ${idx + 1}`}`}
+                      />
+                    </div>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity" style={{ flexShrink: 0 }}>
                       <button
                         type="button"
                         onClick={() => handlePinToCoreInline(String(row.id ?? idx))}
@@ -1496,14 +1498,16 @@ export default function SectionEditor({
                       onBlur={() => handleNameBlurLanguage(idx)}
                       onKeyDown={(e) => handleNameKeyDownLanguage(e, idx)}
                     />
-                    <LevelDots
-                      value={row.level}
-                      levels={LANGUAGE_DOT_LEVELS}
-                      kind="language"
-                      onChange={(lvl) => handleLevelChangeLanguage(idx, lvl)}
-                      ariaLabel={`Language level for ${row.name || `row ${idx + 1}`}`}
-                    />
-                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                    <div style={{ width: 68, display: "flex", justifyContent: "flex-end", flexShrink: 0 }}>
+                      <LevelDots
+                        value={row.level}
+                        levels={LANGUAGE_DOT_LEVELS}
+                        kind="language"
+                        onChange={(lvl) => handleLevelChangeLanguage(idx, lvl)}
+                        ariaLabel={`Language level for ${row.name || `row ${idx + 1}`}`}
+                      />
+                    </div>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity" style={{ flexShrink: 0 }}>
                       {/* spacer matching pin button width so columns align with skills */}
                       <div style={{ width: 20, height: 20, flexShrink: 0 }} aria-hidden />
                       <button
