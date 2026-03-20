@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Menu, FileText, Plus, Pencil, Settings, X } from 'lucide-react';
+import { Menu, FileText, Plus, Pencil, Settings, X, Check } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useMutation, useQuery } from 'convex/react';
 import { useAuth } from '@clerk/clerk-react';
@@ -93,9 +93,8 @@ export const Sidebar: React.FC = () => {
     }
   };
 
-  const handleDelete = (e: React.MouseEvent, id: string, title: string) => {
+  const handleDelete = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (!window.confirm(`Delete "${title}"?`)) return;
     try { deleteCv(id); }
     catch (err) {
       console.error("[Sidebar] deleteCv failed", err);
@@ -105,7 +104,6 @@ export const Sidebar: React.FC = () => {
 
   const handleDeleteProposal = async (e: React.MouseEvent, id: string, title: string) => {
     e.stopPropagation();
-    if (!window.confirm(`Delete "${title}"?`)) return;
     try {
       await deleteProposal({ id });
       if (selectedProposalId === id) {
@@ -238,7 +236,7 @@ export const Sidebar: React.FC = () => {
               alignItems: "center",
               justifyContent: sidebarCollapsed ? "center" : "flex-start",
               gap: "var(--s3)",
-              padding: sidebarCollapsed ? 0 : compactDensity ? "var(--s2)" : "var(--s2) var(--s3)",
+              padding: sidebarCollapsed ? 0 : "var(--s2)",
               borderRadius: "var(--rs)",
               border: isResume ? "1px solid var(--bo)" : "1px solid transparent",
               cursor: "pointer",
@@ -277,7 +275,7 @@ export const Sidebar: React.FC = () => {
                 dense={compactDensity}
                 onClick={() => { handleLoadCv(cv.id); void navigate('/cv'); }}
                 onRename={(e) => { e.stopPropagation(); handleRenameOpen(cv.id, cv.title); }}
-                onDelete={(e) => handleDelete(e, cv.id, cv.title)}
+                onDelete={(e) => handleDelete(e, cv.id)}
               />
             );
           })}
@@ -330,7 +328,7 @@ export const Sidebar: React.FC = () => {
               alignItems: "center",
               justifyContent: sidebarCollapsed ? "center" : "flex-start",
               gap: "var(--s3)",
-              padding: sidebarCollapsed ? 0 : compactDensity ? "var(--s2)" : "var(--s2) var(--s3)",
+              padding: sidebarCollapsed ? 0 : "var(--s2)",
               borderRadius: "var(--rs)",
               border: isProposal ? "1px solid var(--bo)" : "1px solid transparent",
               cursor: "pointer",
@@ -428,7 +426,7 @@ export const Sidebar: React.FC = () => {
               alignItems: "center",
               justifyContent: sidebarCollapsed ? "center" : "flex-start",
               gap: "var(--s3)",
-              padding: sidebarCollapsed ? 0 : compactDensity ? "var(--s2)" : `var(--s2) var(--s3)`,
+              padding: sidebarCollapsed ? 0 : "var(--s2)",
               borderRadius: "var(--rs)",
               border: isStyle ? "1px solid var(--bo)" : "1px solid transparent",
               cursor: "pointer",
@@ -567,20 +565,29 @@ interface SbDocProps {
 
 function SbDoc({ title, date, docType, isActive, dense = false, onClick, onRename, onDelete, hideActions, hideRenameAction }: SbDocProps) {
   const [hovered, setHovered] = useState(false);
-  const [delHovered, setDelHovered] = useState(false);
   const [renHovered, setRenHovered] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
+
+  const btnBase: React.CSSProperties = {
+    width: 20, height: 20,
+    display: "flex", alignItems: "center", justifyContent: "center",
+    borderRadius: 3, border: "none", background: "transparent",
+    color: "var(--tg2)", cursor: "pointer", padding: 0,
+    transition: "color .1s var(--ez), background .1s var(--ez)",
+    fontFamily: "inherit", flexShrink: 0,
+  };
 
   return (
     <div
-      onClick={onClick}
+      onClick={isConfirming ? undefined : onClick}
       onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseLeave={() => { setHovered(false); setIsConfirming(false); }}
       style={{
         display: "flex",
         flexDirection: "column",
         padding: dense ? "7px var(--s2) 7px 34px" : "var(--s2) var(--s2) var(--s2) 40px",
         borderRadius: "var(--rs)",
-        cursor: "pointer",
+        cursor: isConfirming ? "default" : "pointer",
         transition: "all .12s var(--ez)",
         position: "relative",
         background: isActive ? "var(--sfr)" : hovered ? "var(--sf2)" : "transparent",
@@ -592,7 +599,7 @@ function SbDoc({ title, date, docType, isActive, dense = false, onClick, onRenam
         style={{
           fontSize: "var(--ts)",
           fontWeight: isActive ? 600 : 500,
-          color: isActive ? "var(--ti)" : "var(--ti)",
+          color: "var(--ti)",
           lineHeight: 1.24,
           whiteSpace: "nowrap",
           overflow: "hidden",
@@ -608,69 +615,60 @@ function SbDoc({ title, date, docType, isActive, dense = false, onClick, onRenam
         {docType && <span style={{ color: "var(--tm2)", fontWeight: 500 }}>{docType}</span>}
       </div>
 
-      {/* Rename + Delete buttons — appear on hover, hidden when hideActions */}
-      {!hideActions && (
-        <>
-          {!hideRenameAction && (
-            <button
-              onClick={onRename}
-              onMouseEnter={() => setRenHovered(true)}
-              onMouseLeave={() => setRenHovered(false)}
-              title="Rename"
-              style={{
-                position: "absolute",
-                right: 24,
-                top: "50%",
-                transform: "translateY(-50%)",
-                width: 20,
-                height: 20,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: 3,
-                border: "none",
-                background: renHovered ? "var(--sf2)" : "transparent",
-                color: renHovered ? "var(--ti)" : "var(--tg2)",
-                cursor: "pointer",
-                padding: 0,
-                opacity: hovered ? 1 : 0,
-                transition: "opacity .1s var(--ez), color .1s var(--ez), background .1s var(--ez)",
-                fontFamily: "inherit",
-              }}
-            >
-              <Pencil size={10} />
-            </button>
+      {/* Action buttons — appear on hover */}
+      {!hideActions && (hovered || isConfirming) && (
+        <div
+          style={{ position: "absolute", right: 4, top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", gap: 2 }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {isConfirming ? (
+            /* Inline confirm: ✓ (neutral) + ✗ */
+            <>
+              <button
+                title="Confirm delete"
+                style={btnBase}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--sf2)"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
+                onClick={(e) => { e.stopPropagation(); onDelete(e); setIsConfirming(false); }}
+              >
+                <Check size={10} strokeWidth={2.5} />
+              </button>
+              <button
+                title="Cancel"
+                style={btnBase}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--sf2)"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
+                onClick={(e) => { e.stopPropagation(); setIsConfirming(false); }}
+              >
+                <X size={10} strokeWidth={2} />
+              </button>
+            </>
+          ) : (
+            /* Normal hover actions: rename + delete trigger */
+            <>
+              {!hideRenameAction && (
+                <button
+                  onClick={onRename}
+                  onMouseEnter={() => setRenHovered(true)}
+                  onMouseLeave={() => setRenHovered(false)}
+                  title="Rename"
+                  style={{ ...btnBase, background: renHovered ? "var(--sf2)" : "transparent", color: renHovered ? "var(--ti)" : "var(--tg2)" }}
+                >
+                  <Pencil size={10} />
+                </button>
+              )}
+              <button
+                title="Delete"
+                style={btnBase}
+                onMouseEnter={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "var(--erb)"; b.style.color = "var(--ert)"; }}
+                onMouseLeave={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.color = "var(--tg2)"; }}
+                onClick={(e) => { e.stopPropagation(); setIsConfirming(true); }}
+              >
+                <X size={10} strokeWidth={1.75} />
+              </button>
+            </>
           )}
-
-          <button
-            onClick={onDelete}
-            onMouseEnter={() => setDelHovered(true)}
-            onMouseLeave={() => setDelHovered(false)}
-            title="Delete"
-            style={{
-              position: "absolute",
-              right: 4,
-              top: "50%",
-              transform: "translateY(-50%)",
-              width: 20,
-              height: 20,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              borderRadius: 3,
-              border: "none",
-              background: delHovered ? "var(--erb)" : "transparent",
-              color: delHovered ? "var(--ert)" : "var(--tg2)",
-              cursor: "pointer",
-              padding: 0,
-              opacity: hovered ? 1 : 0,
-              transition: "opacity .1s var(--ez), color .1s var(--ez), background .1s var(--ez)",
-              fontFamily: "inherit",
-            }}
-          >
-            <X size={10} strokeWidth={1.75} />
-          </button>
-        </>
+        </div>
       )}
     </div>
   );
