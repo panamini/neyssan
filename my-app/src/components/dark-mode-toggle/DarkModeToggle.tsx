@@ -45,9 +45,9 @@ const DarkModeToggle = () => {
       aria-pressed={isDarkTheme}
     >
       {isDarkTheme ? (
-        <MoonStar className="w-5 h-5 text-ti" />
+        <MoonStar className="w-4 h-4 text-tg2" />
       ) : (
-        <Sun className="w-5 h-5 text-ti" />
+        <Sun className="w-4 h-4 text-tg2" />
       )}
       <span className="sr-only">Toggle Dark Mode</span>
     </button>

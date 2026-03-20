@@ -429,47 +429,6 @@ export function StyleForge(): JSX.Element {
       >
         <div
           style={{
-            padding: "var(--s5)",
-            borderRadius: "var(--rm)",
-            border: "1px solid var(--bo)",
-            background: "var(--sfr)",
-            boxShadow: "var(--sha)",
-            maxWidth: 960,
-            display: "grid",
-            gap: "var(--s2)",
-          }}
-        >
-          <div
-            style={{
-              fontSize: "var(--tx)",
-              fontWeight: 600,
-              color: "var(--am)",
-              letterSpacing: ".14em",
-              textTransform: "uppercase",
-            }}
-          >
-            Style
-          </div>
-          <h2
-            style={{
-              fontFamily: '"Fraunces", serif',
-              fontSize: "var(--tx2)",
-              lineHeight: "var(--lx2)",
-              fontWeight: 600,
-              letterSpacing: "-.01em",
-              color: "var(--ti)",
-              margin: 0,
-            }}
-          >
-            Layout
-          </h2>
-          <p style={{ fontSize: "var(--ts)", color: "var(--tm2)", lineHeight: "var(--ls)", margin: 0, maxWidth: "42ch" }}>
-            Controls the rendering of every document.
-          </p>
-        </div>
-
-        <div
-          style={{
             display: "grid",
             gridTemplateColumns: "minmax(260px, 320px) minmax(0, 1fr)",
             gap: "var(--s7)",

@@ -1,32 +1,21 @@
 import "./styles/globals.css";
 
 import React from "react";
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Unauthenticated } from "convex/react";
 import { SignInButton } from "@clerk/clerk-react";
 import { ConvexStatusBanner } from "./components/ConvexStatusBanner";
 import { CvForge } from "./pages/CvForge";
 import { ProposalForge } from "./pages/ProposalForge";
+import { ProposalsLibrary } from "./pages/ProposalsLibrary";
 import { StyleForge } from "./pages/StyleForge";
 import { Sidebar } from "./components/Sidebar";
 import { CvLibraryProvider } from "./contexts/CvLibraryContext";
 
 /**
- * Breadcrumb label derived from current route.
- */
-function useBreadcrumb(): string {
-  const { pathname } = useLocation();
-  if (pathname.startsWith("/proposal")) return "Write";
-  if (pathname.startsWith("/style")) return "Style";
-  return "Resume";
-}
-
-/**
- * Topbar — h:54px (--hdr), breadcrumb "dasti › Page".
- * §17[A] frosted glass remains a separate workstream.
+ * Topbar — h:54px (--hdr), wordmark only.
  */
 function Topbar() {
-  const breadcrumb = useBreadcrumb();
   return (
     <header
       style={{
@@ -43,24 +32,18 @@ function Topbar() {
         zIndex: 5,
       }}
     >
-      {/* Left — wordmark + breadcrumb */}
-      <div style={{ display: "flex", alignItems: "center", gap: "var(--s4)" }}>
-        <span
-          style={{
-            fontFamily: '"Fraunces", serif',
-            fontSize: "var(--tm)",
-            fontWeight: 600,
-            letterSpacing: "-.02em",
-            color: "var(--ti)",
-          }}
-        >
-          dasti
-        </span>
-        <span style={{ fontSize: "var(--ts)", color: "var(--tg2)", display: "flex", alignItems: "center", gap: "var(--s2)" }}>
-          <span>›</span>
-          <span style={{ color: "var(--ti)", fontWeight: 500 }}>{breadcrumb}</span>
-        </span>
-      </div>
+      {/* Left — wordmark only */}
+      <span
+        style={{
+          fontFamily: '"Fraunces", serif',
+          fontSize: "var(--tm)",
+          fontWeight: 600,
+          letterSpacing: "-.02em",
+          color: "var(--ti)",
+        }}
+      >
+        dasti
+      </span>
 
       {/* Right — auth only when logged out */}
       <div style={{ display: "flex", alignItems: "center", gap: "var(--s2)" }}>
@@ -133,6 +116,7 @@ function AppShell(): JSX.Element {
             <Routes>
               <Route path="/cv" element={<CvForge />} />
               <Route path="/proposal" element={<ProposalForge />} />
+              <Route path="/proposals" element={<ProposalsLibrary />} />
               <Route path="/style" element={<StyleForge />} />
               <Route path="/" element={<Navigate to="/cv" replace />} />
               <Route path="*" element={<Navigate to="/cv" replace />} />
