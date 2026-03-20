@@ -16,7 +16,7 @@ import { SkillsDrawer } from "./structured-blocks/SkillsDrawer";
 import BlockRenderer from "./cv-editor/BlockRenderer";
 import AchievementsBlock from "./structured-blocks/AchievementsBlock";
 import { useSectionFlushSubscription } from "../hooks/use-flush-subscription";
-import { Pencil, Trash2, X, Pin, PinOff, Plus } from "lucide-react";
+import { Pen, Trash, X, Pin, PinOff, Plus, UserRound } from "lucide-react";
 import { ExperienceModal, EducationModal } from "./structured-blocks/ExperienceEducationModal";
 
 import { formatRangeFromItem } from "../lib/date-utils";
@@ -561,7 +561,7 @@ export default function SectionEditor({
 
   // Determine whether v1 rendering should be active for this document.
   // Use the canonical runtime detector from CvLibraryContext.
-  const { isV1Active, selectedInspector, closeInspector } = useCvLibrary();
+  const { isV1Active, selectedInspector, closeInspector, updateStructuredItem } = useCvLibrary();
 
   // Dev-only runtime diagnostics: log which branch we will render for this section.
 
@@ -577,6 +577,7 @@ export default function SectionEditor({
   // Skills drawer (Phase 2 skeleton)
   const [isSkillsDrawerOpen, setSkillsDrawerOpen] = useState<boolean>(false);
   const [isClearConfirming, setClearConfirming] = useState<boolean>(false);
+  const profilePhotoInputRef = useRef<HTMLInputElement | null>(null);
   
   // (moved) The flush-related hooks and refs were moved higher up in the component
   // to resolve TypeScript declaration errors and to support the stable-ref pattern for registration.
@@ -663,8 +664,6 @@ export default function SectionEditor({
   if (sectionType === "summary") {
     // Always render the structured SummaryBlock UI and ignore any legacy blocks.
     // Persist changes via context-level structured update to avoid relying on parent onChange.
-    const { updateStructuredItem } = useCvLibrary();
-
     function handleSummaryPersist(updatedSection: CvSection) {
       try {
         const scFirst = Array.isArray(updatedSection.structuredContent) ? (updatedSection.structuredContent as any[])[0] : null;
@@ -697,11 +696,11 @@ export default function SectionEditor({
                   e.stopPropagation();
                   setSummaryModalOpen(true);
                 }}
-                className="dasti-icon-button"
+                className="dasti-icon-button dasti-icon-button--compact"
                 aria-label="Edit summary"
                 title="Edit summary"
               >
-                <Pencil className="w-4 h-4" aria-hidden />
+                <Pen className="w-4 h-4" aria-hidden />
               </button>
             )}
             {isClearConfirming ? (
@@ -723,11 +722,11 @@ export default function SectionEditor({
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); setClearConfirming(true); }}
-              className="dasti-icon-button dasti-icon-button--danger"
+              className="dasti-icon-button dasti-icon-button--compact dasti-icon-button--danger"
               aria-label="Clear summary"
               title="Clear summary"
             >
-              <Trash2 className="w-4 h-4" aria-hidden />
+              <Trash className="w-4 h-4" aria-hidden />
             </button>
             )}
             {typeof onCollapseChange === "function" && (
@@ -807,12 +806,14 @@ export default function SectionEditor({
           </div>
         )}
 
-        <SummaryModal
-          open={isSummaryModalOpen}
-          sectionId={String(section.id)}
-          item={(Array.isArray(section.structuredContent) && section.structuredContent.length > 0 ? (section.structuredContent[0] as ISummaryItem) : null)}
-          onClose={() => setSummaryModalOpen(false)}
-        />
+        {isSummaryModalOpen ? (
+          <SummaryModal
+            open={isSummaryModalOpen}
+            sectionId={String(section.id)}
+            item={(Array.isArray(section.structuredContent) && section.structuredContent.length > 0 ? (section.structuredContent[0] as ISummaryItem) : null)}
+            onClose={() => setSummaryModalOpen(false)}
+          />
+        ) : null}
       </div>
     );
   }
@@ -1552,6 +1553,7 @@ export default function SectionEditor({
   // Structured "profile" section: collapsed card + ProfileModal (no Remirror)
   if (sectionType === "profile") {
     const item = (Array.isArray(structured) && structured.length > 0 ? structured[0] : null) as IProfileItem | null;
+    const itemId = String(item?.id ?? "");
     const name = String(item?.name ?? "");
     const desiredPosition = String(item?.desiredPosition ?? "");
     const email = String(item?.email ?? "");
@@ -1561,9 +1563,24 @@ export default function SectionEditor({
     const location = String(item?.location ?? "");
     const photoUrl = String(item?.photoUrl ?? "");
 
-    const initials = name
-      ? name.trim().split(/\s+/).slice(0, 2).map(p => p[0]?.toUpperCase() ?? "").join("")
-      : "";
+    function openProfilePhotoPicker() {
+      profilePhotoInputRef.current?.click();
+    }
+
+    function handleProfilePhotoChange(event: React.ChangeEvent<HTMLInputElement>) {
+      const file = event.target.files?.[0] ?? null;
+      event.target.value = "";
+
+      if (!file || !itemId) return;
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        const nextPhotoUrl = typeof reader.result === "string" ? reader.result : "";
+        if (!nextPhotoUrl) return;
+        updateStructuredItem(String(section.id), itemId, { photoUrl: nextPhotoUrl });
+      };
+      reader.readAsDataURL(file);
+    }
 
     function Chip({ icon, text, href, ariaLabel }: { icon: React.ReactNode; text: string; href?: string; ariaLabel: string }) {
       if (!text) return null;
@@ -1594,11 +1611,11 @@ export default function SectionEditor({
                   e.stopPropagation();
                   setProfileModalOpen(true);
                 }}
-                className="dasti-icon-button"
+                className="dasti-icon-button dasti-icon-button--compact"
                 aria-label="Edit profile"
                 title="Edit profile"
               >
-                <Pencil className="w-4 h-4" aria-hidden />
+                <Pen className="w-4 h-4" aria-hidden />
               </button>
             )}
             {isClearConfirming ? (
@@ -1619,11 +1636,11 @@ export default function SectionEditor({
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); setClearConfirming(true); }}
-              className="dasti-icon-button dasti-icon-button--danger"
+              className="dasti-icon-button dasti-icon-button--compact dasti-icon-button--danger"
               aria-label="Clear profile"
               title="Clear profile"
             >
-              <Trash2 className="w-4 h-4" aria-hidden />
+              <Trash className="w-4 h-4" aria-hidden />
             </button>
             )}
             {typeof onCollapseChange === "function" && (
@@ -1647,13 +1664,38 @@ export default function SectionEditor({
         {!collapsed && (
           <div className="p-4">
             <div className="flex items-start gap-4">
-              <div className="relative flex items-center justify-center w-16 h-16 overflow-hidden text-sm font-semibold rounded-full [background:var(--sf2)] [color:var(--ti)]">
-                {photoUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={photoUrl} alt={name ? `${name} avatar` : "Profile avatar"} className="object-cover w-full h-full" />
-                ) : (
-                  <span aria-hidden="true">{initials || " "}</span>
-                )}
+              <div>
+                <input
+                  ref={profilePhotoInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/jpg"
+                  onChange={handleProfilePhotoChange}
+                  className="sr-only"
+                  tabIndex={-1}
+                  aria-hidden
+                />
+                <button
+                  type="button"
+                  onClick={openProfilePhotoPicker}
+                  className="relative flex items-center justify-center overflow-hidden text-sm font-semibold border rounded-rm focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
+                  style={{
+                    width: "var(--s8)",
+                    height: "calc(var(--s8) + var(--s4))",
+                    background: "var(--sf2)",
+                    borderColor: "var(--bo)",
+                    color: "var(--ti)",
+                    cursor: "pointer",
+                  }}
+                  aria-label={photoUrl ? "Change profile photo" : "Upload profile photo"}
+                  title={photoUrl ? "Change profile photo" : "Upload profile photo"}
+                >
+                  {photoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={photoUrl} alt={name ? `${name} portrait` : "Profile portrait"} className="object-cover w-full h-full" />
+                  ) : (
+                    <UserRound aria-hidden strokeWidth={1.75} className="[color:var(--tm2)]" style={{ width: "var(--s7)", height: "var(--s7)" }} />
+                  )}
+                </button>
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex flex-col">
@@ -1895,11 +1937,11 @@ export default function SectionEditor({
                     else if (sectionType === "education") setEducationModalOpen(true);
                   } catch { /* noop */ }
                 }}
-                className="dasti-icon-button"
+                className="dasti-icon-button dasti-icon-button--compact"
                 aria-label={`Edit ${sectionType}`}
                 title={`Edit ${sectionType}`}
               >
-                <Pencil className="w-4 h-4" aria-hidden />
+                <Pen className="w-4 h-4" aria-hidden />
               </button>
             ) : null}
             {typeof onCollapseChange === "function" && (
@@ -1961,7 +2003,7 @@ export default function SectionEditor({
           </div>
         )}
         {/* Typed v1 modals for Experience/Education */}
-        {isV1Active && sectionType === "experience" ? (
+        {isV1Active && sectionType === "experience" && isExperienceModalOpen ? (
           <ExperienceModal
             open={isExperienceModalOpen}
             onClose={() => setExperienceModalOpen(false)}
@@ -2000,7 +2042,7 @@ export default function SectionEditor({
             }}
           />
         ) : null}
-        {isV1Active && sectionType === "education" ? (
+        {isV1Active && sectionType === "education" && isEducationModalOpen ? (
           <EducationModal
             open={isEducationModalOpen}
             onClose={() => setEducationModalOpen(false)}

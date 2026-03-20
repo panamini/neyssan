@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { ILanguageItem, Level } from "../../types/cvDocument";
-import { X, Plus, Trash2 } from "lucide-react";
+import { X, Plus, Trash } from "lucide-react";
 
 interface LanguagesModalProps {
   open: boolean;
@@ -150,7 +150,7 @@ export function LanguagesModal({ open, items, onClose, onSave }: LanguagesModalP
                     className="flex-shrink-0 p-1 rounded hover:[background:var(--erb)]"
                     aria-label={`Remove ${row.name || "language"}`}
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash className="w-4 h-4" />
                   </button>
                 </div>
               ))
