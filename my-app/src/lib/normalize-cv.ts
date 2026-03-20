@@ -870,9 +870,11 @@ export function normalizeAndValidateCvDocument(
       });
     });
 
-    // Ensure essential template sections exist (exclude optional extras like projects/certifications)
+    // Ensure essential template sections exist (exclude optional extras like projects/certifications/achievements/languages)
+    // achievements and languages are opt-in: users add them explicitly; we must NOT auto-inject them
+    // into a document that doesn't already contain them (e.g. the V1 minimal 5-section skeleton).
     const finalTypes = new Set(sections.map((s) => s.type));
-    const OPTIONAL_EXTRAS = new Set(["projects", "certifications"]);
+    const OPTIONAL_EXTRAS = new Set(["projects", "certifications", "achievements", "languages"]);
     for (const tmpl of template.sections) {
       if (OPTIONAL_EXTRAS.has(String(tmpl.type))) continue;
       if (!finalTypes.has(tmpl.type)) sections.push(CvSectionSchemaStrict.parse(tmpl));
