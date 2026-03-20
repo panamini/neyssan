@@ -458,7 +458,6 @@ export function StyleForge(): JSX.Element {
                         cursor: "pointer",
                         textAlign: "left",
                         fontFamily: "inherit",
-                        transition: "border-color .12s var(--ez)",
                       }}
                     >
                       <div
@@ -531,7 +530,6 @@ export function StyleForge(): JSX.Element {
                         cursor: "pointer",
                         textAlign: "left",
                         fontFamily: "inherit",
-                        transition: "border-color .12s var(--ez)",
                       }}
                     >
                       <div>

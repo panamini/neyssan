@@ -385,7 +385,6 @@ export function StructuredUploadButton({
               fontWeight: 500,
               cursor: disabled || isBusy ? "not-allowed" : "pointer",
               opacity: disabled || isBusy ? 0.5 : 1,
-              transition: "all .12s var(--ez)",
               fontFamily: "inherit",
               whiteSpace: "nowrap",
             }}
