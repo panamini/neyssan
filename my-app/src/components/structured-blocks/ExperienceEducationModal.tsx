@@ -18,7 +18,7 @@ import {
 import type { RemirrorJSON } from "remirror";
 import { ensureRemirrorDoc } from "../remirror-editor/utils/conversion";
 import { EditorToolbar } from "../remirror-editor/components/EditorToolbar";
-import { Trash2, X } from "lucide-react";
+import { Trash, X } from "lucide-react";
 import { Button } from "../ui/button";
 
 type UiPatch = Partial<{
@@ -431,7 +431,7 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
                   style={{ height: 28, minWidth: 28, padding: 0 }}
                   aria-label="Remove entry"
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Trash className="h-4 w-4" />
                 </button>
               </div>
 
@@ -841,7 +841,7 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
                   style={{ height: 28, minWidth: 28, padding: 0 }}
                   aria-label="Remove entry"
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Trash className="h-4 w-4" />
                 </button>
               </div>
 

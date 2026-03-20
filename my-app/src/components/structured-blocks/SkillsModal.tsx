@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import type { ISkillItem, Level } from "../../types/cvDocument";
-import { X, Plus, Trash2 } from "lucide-react";
+import { X, Plus, Trash } from "lucide-react";
 import { LEVELS } from "../ui/levelLabels";
 
 interface SkillsModalProps {
@@ -151,7 +151,7 @@ export function SkillsModal({ open, items, onClose, onSave }: SkillsModalProps) 
                     className="flex-shrink-0 p-1 rounded hover:[background:var(--erb)]"
                     aria-label={`Remove ${row.name || "skill"}`}
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash className="w-4 h-4" />
                   </button>
                 </div>
               ))

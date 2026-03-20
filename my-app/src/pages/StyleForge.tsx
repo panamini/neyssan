@@ -1,9 +1,11 @@
 import React from "react";
+import { createPortal } from "react-dom";
 import { Check } from "lucide-react";
 
 type LayoutTemplate = "swiss" | "two-column" | "editorial";
 type TypographyStyle = "signature" | "engaging" | "expert";
 type PaletteKey = "sauge" | "ocre" | "pierre" | "bordeaux" | "encre";
+type PaletteChoice = PaletteKey | "custom";
 
 const layoutOptions: Array<{
   id: LayoutTemplate;
@@ -65,6 +67,13 @@ const sectionCardStyle: React.CSSProperties = {
   overflow: "hidden",
 };
 
+const floatingSectionCardStyle: React.CSSProperties = {
+  ...sectionCardStyle,
+  overflow: "visible",
+  position: "relative",
+  zIndex: 2,
+};
+
 const sectionHeaderStyle: React.CSSProperties = {
   padding: "var(--s4) var(--s5) 0",
   fontFamily: '"Fraunces", serif',
@@ -115,6 +124,197 @@ const sampleSections = [
     body: "Lean manufacturing, electrical systems, QA handoff, team coordination.",
   },
 ];
+
+const COLOR_WHEEL_SIZE = 112;
+const COLOR_WHEEL_RADIUS = COLOR_WHEEL_SIZE / 2;
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function componentToHex(value: number) {
+  return Math.round(value).toString(16).padStart(2, "0");
+}
+
+function hsvToHex(hue: number, saturation: number, value: number) {
+  const h = ((hue % 360) + 360) % 360;
+  const s = clamp(saturation, 0, 1);
+  const v = clamp(value, 0, 1);
+  const chroma = v * s;
+  const segment = h / 60;
+  const x = chroma * (1 - Math.abs((segment % 2) - 1));
+  let r = 0;
+  let g = 0;
+  let b = 0;
+
+  if (segment >= 0 && segment < 1) {
+    r = chroma;
+    g = x;
+  } else if (segment < 2) {
+    r = x;
+    g = chroma;
+  } else if (segment < 3) {
+    g = chroma;
+    b = x;
+  } else if (segment < 4) {
+    g = x;
+    b = chroma;
+  } else if (segment < 5) {
+    r = x;
+    b = chroma;
+  } else {
+    r = chroma;
+    b = x;
+  }
+
+  const match = v - chroma;
+  return `#${componentToHex((r + match) * 255)}${componentToHex((g + match) * 255)}${componentToHex((b + match) * 255)}`.toLowerCase();
+}
+
+function hsvToRgb(hue: number, saturation: number, value: number) {
+  const h = ((hue % 360) + 360) % 360;
+  const s = clamp(saturation, 0, 1);
+  const v = clamp(value, 0, 1);
+  const chroma = v * s;
+  const segment = h / 60;
+  const x = chroma * (1 - Math.abs((segment % 2) - 1));
+  let r = 0;
+  let g = 0;
+  let b = 0;
+
+  if (segment >= 0 && segment < 1) {
+    r = chroma;
+    g = x;
+  } else if (segment < 2) {
+    r = x;
+    g = chroma;
+  } else if (segment < 3) {
+    g = chroma;
+    b = x;
+  } else if (segment < 4) {
+    g = x;
+    b = chroma;
+  } else if (segment < 5) {
+    r = x;
+    b = chroma;
+  } else {
+    r = chroma;
+    b = x;
+  }
+
+  const match = v - chroma;
+  return {
+    r: Math.round((r + match) * 255),
+    g: Math.round((g + match) * 255),
+    b: Math.round((b + match) * 255),
+  };
+}
+
+function hexToRgb(hex: string) {
+  const normalized = String(hex ?? "").trim().replace("#", "");
+  const safeHex = normalized.length === 6 ? normalized : "7a7870";
+  return {
+    r: parseInt(safeHex.slice(0, 2), 16),
+    g: parseInt(safeHex.slice(2, 4), 16),
+    b: parseInt(safeHex.slice(4, 6), 16),
+  };
+}
+
+function hexToHsv(hex: string) {
+  const { r, g, b } = hexToRgb(hex);
+  const red = r / 255;
+  const green = g / 255;
+  const blue = b / 255;
+  const max = Math.max(red, green, blue);
+  const min = Math.min(red, green, blue);
+  const delta = max - min;
+  let hue = 0;
+
+  if (delta !== 0) {
+    if (max === red) {
+      hue = 60 * (((green - blue) / delta) % 6);
+    } else if (max === green) {
+      hue = 60 * ((blue - red) / delta + 2);
+    } else {
+      hue = 60 * ((red - green) / delta + 4);
+    }
+  }
+
+  if (hue < 0) hue += 360;
+
+  return {
+    h: hue,
+    s: max === 0 ? 0 : delta / max,
+    v: max,
+  };
+}
+
+function getColorFromWheelPoint(x: number, y: number) {
+  const dx = x - COLOR_WHEEL_RADIUS;
+  const dy = y - COLOR_WHEEL_RADIUS;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+
+  if (distance > COLOR_WHEEL_RADIUS) return null;
+
+  const hue = ((Math.atan2(dy, dx) * 180) / Math.PI + 360) % 360;
+  const saturation = clamp(distance / COLOR_WHEEL_RADIUS, 0, 1);
+  return hsvToHex(hue, saturation, 1);
+}
+
+function getWheelHandlePosition(hex: string) {
+  const { h, s } = hexToHsv(hex);
+  const angle = (h * Math.PI) / 180;
+  const radius = COLOR_WHEEL_RADIUS * s;
+
+  return {
+    left: COLOR_WHEEL_RADIUS + Math.cos(angle) * radius,
+    top: COLOR_WHEEL_RADIUS + Math.sin(angle) * radius,
+  };
+}
+
+function paintColorWheel(canvas: HTMLCanvasElement) {
+  const dpr = typeof window === "undefined" ? 1 : Math.max(window.devicePixelRatio || 1, 1);
+  const size = COLOR_WHEEL_SIZE;
+  const pixelSize = Math.round(size * dpr);
+  const radius = pixelSize / 2;
+
+  canvas.width = pixelSize;
+  canvas.height = pixelSize;
+  canvas.style.width = `${size}px`;
+  canvas.style.height = `${size}px`;
+
+  const context = canvas.getContext("2d");
+  if (!context) return;
+
+  const image = context.createImageData(pixelSize, pixelSize);
+  const data = image.data;
+
+  for (let y = 0; y < pixelSize; y += 1) {
+    for (let x = 0; x < pixelSize; x += 1) {
+      const dx = x + 0.5 - radius;
+      const dy = y + 0.5 - radius;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      const offset = (y * pixelSize + x) * 4;
+
+      if (distance > radius) {
+        data[offset + 3] = 0;
+        continue;
+      }
+
+      const hue = ((Math.atan2(dy, dx) * 180) / Math.PI + 360) % 360;
+      const saturation = clamp(distance / radius, 0, 1);
+      const { r, g, b } = hsvToRgb(hue, saturation, 1);
+
+      data[offset] = r;
+      data[offset + 1] = g;
+      data[offset + 2] = b;
+      data[offset + 3] = 255;
+    }
+  }
+
+  context.clearRect(0, 0, pixelSize, pixelSize);
+  context.putImageData(image, 0, 0);
+}
 
 function SelectionCheck({ active }: { active: boolean }) {
   return (
@@ -207,13 +407,79 @@ function getPreviewTypography(style: TypographyStyle, accent: string) {
 export function StyleForge(): JSX.Element {
   const [layoutTemplate, setLayoutTemplate] = React.useState<LayoutTemplate>("swiss");
   const [typographyStyle, setTypographyStyle] = React.useState<TypographyStyle>("signature");
-  const [palette, setPalette] = React.useState<PaletteKey>("sauge");
+  const [palette, setPalette] = React.useState<PaletteChoice>("sauge");
+  const [customAccent, setCustomAccent] = React.useState<string>("#7a7870");
+  const [isCustomPickerOpen, setIsCustomPickerOpen] = React.useState(false);
+  const pickerRef = React.useRef<HTMLDivElement | null>(null);
+  const popoverRef = React.useRef<HTMLDivElement | null>(null);
+  const wheelRef = React.useRef<HTMLDivElement | null>(null);
+  const wheelCanvasRef = React.useRef<HTMLCanvasElement | null>(null);
+  const draggingWheelRef = React.useRef(false);
 
-  const activePalette = paletteOptions.find((option) => option.id === palette) ?? paletteOptions[0];
+  const activePalette = paletteOptions.find((option) => option.id === palette);
+  const activeAccent = activePalette?.accent ?? customAccent;
+  const activePaletteLabel = activePalette?.name.toLowerCase() ?? customAccent.toLowerCase();
+  const wheelHandle = React.useMemo(() => getWheelHandlePosition(customAccent), [customAccent]);
+  const pickerAnchor = isCustomPickerOpen && pickerRef.current
+    ? pickerRef.current.getBoundingClientRect()
+    : null;
   const previewTypography = React.useMemo(
-    () => getPreviewTypography(typographyStyle, activePalette.accent),
-    [typographyStyle, activePalette.accent],
+    () => getPreviewTypography(typographyStyle, activeAccent),
+    [typographyStyle, activeAccent],
   );
+
+  const updateCustomAccentFromPoint = React.useCallback((clientX: number, clientY: number) => {
+    const wheelRect = wheelRef.current?.getBoundingClientRect();
+    if (!wheelRect) return;
+
+    const nextColor = getColorFromWheelPoint(clientX - wheelRect.left, clientY - wheelRect.top);
+    if (!nextColor) return;
+
+    setCustomAccent(nextColor);
+    setPalette("custom");
+  }, []);
+
+  React.useEffect(() => {
+    if (!isCustomPickerOpen) return undefined;
+
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!draggingWheelRef.current) return;
+      updateCustomAccentFromPoint(event.clientX, event.clientY);
+    };
+
+    const handlePointerUp = () => {
+      draggingWheelRef.current = false;
+    };
+
+    const handlePointerDownOutside = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (pickerRef.current?.contains(target)) return;
+      if (popoverRef.current?.contains(target)) return;
+      setIsCustomPickerOpen(false);
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsCustomPickerOpen(false);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointerdown", handlePointerDownOutside);
+    window.addEventListener("keydown", handleEscape);
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointerdown", handlePointerDownOutside);
+      window.removeEventListener("keydown", handleEscape);
+      draggingWheelRef.current = false;
+    };
+  }, [isCustomPickerOpen, updateCustomAccentFromPoint]);
+
+  React.useEffect(() => {
+    if (!isCustomPickerOpen || !wheelCanvasRef.current) return;
+    paintColorWheel(wheelCanvasRef.current);
+  }, [isCustomPickerOpen]);
 
   const renderPreviewSection = React.useCallback(
     (section: typeof sampleSections[number], variant: "default" | "compact" = "default") => {
@@ -223,7 +489,7 @@ export function StyleForge(): JSX.Element {
           ? {
               ...previewTypography.sectionTitle,
               paddingLeft: 6,
-              borderLeft: `2px solid ${activePalette.accent}`,
+              borderLeft: `2px solid ${activeAccent}`,
             }
           : previewTypography.sectionTitle;
 
@@ -237,7 +503,7 @@ export function StyleForge(): JSX.Element {
         </div>
       );
     },
-    [activePalette.accent, previewTypography, typographyStyle],
+    [activeAccent, previewTypography, typographyStyle],
   );
 
   const cvPreview = React.useMemo(() => {
@@ -253,7 +519,7 @@ export function StyleForge(): JSX.Element {
         >
           <div
             style={{
-              background: activePalette.accent,
+              background: activeAccent,
               padding: "20px 14px",
               display: "flex",
               flexDirection: "column",
@@ -316,7 +582,7 @@ export function StyleForge(): JSX.Element {
         >
           <div
             style={{
-              background: activePalette.accent,
+              background: activeAccent,
               padding: "18px 26px",
             }}
           >
@@ -345,7 +611,7 @@ export function StyleForge(): JSX.Element {
           background: previewTypography.paperBackground,
         }}
       >
-        <div style={{ height: 12, background: activePalette.accent }} />
+        <div style={{ height: 12, background: activeAccent }} />
         <div
           style={{
             padding: typographyStyle === "expert" ? "24px 28px" : "28px 32px",
@@ -374,15 +640,15 @@ export function StyleForge(): JSX.Element {
         </div>
       </div>
     );
-  }, [activePalette.accent, layoutTemplate, previewTypography, renderPreviewSection, typographyStyle]);
+  }, [activeAccent, layoutTemplate, previewTypography, renderPreviewSection, typographyStyle]);
 
   const letterPreview = React.useMemo(() => {
     const leadAccent =
       layoutTemplate === "editorial"
-        ? { borderTop: `12px solid ${activePalette.accent}` }
+        ? { borderTop: `12px solid ${activeAccent}` }
         : layoutTemplate === "two-column"
-          ? { borderLeft: `10px solid ${activePalette.accent}` }
-          : { borderTop: `8px solid ${activePalette.accent}` };
+          ? { borderLeft: `10px solid ${activeAccent}` }
+          : { borderTop: `8px solid ${activeAccent}` };
 
     return (
       <div
@@ -406,7 +672,7 @@ export function StyleForge(): JSX.Element {
         <div style={{ ...previewTypography.letterSignature, marginTop: 14 }}>Board Ramanathapuram</div>
       </div>
     );
-  }, [activePalette.accent, layoutTemplate, previewTypography, typographyStyle]);
+  }, [activeAccent, layoutTemplate, previewTypography, typographyStyle]);
 
   return (
     <div
@@ -441,6 +707,9 @@ export function StyleForge(): JSX.Element {
               <div style={sectionBodyStyle}>
                 {layoutOptions.map((option) => {
                   const active = option.id === layoutTemplate;
+                  const optionAccent = active ? activeAccent : "var(--bm)";
+                  const previewSurface = active ? "var(--sf2)" : "var(--sf1)";
+                  const previewLine = active ? "var(--tm2)" : "var(--bm)";
                   return (
                     <button
                       key={option.id}
@@ -464,8 +733,8 @@ export function StyleForge(): JSX.Element {
                         style={{
                           height: 48,
                           borderRadius: "var(--rs)",
-                          border: "1px solid var(--bo)",
-                          background: "var(--sfr)",
+                          border: active ? "1px solid var(--fr)" : "1px solid var(--bo)",
+                          background: previewSurface,
                           padding: 5,
                           display: "flex",
                           flexDirection: option.id === "two-column" ? "row" : "column",
@@ -474,32 +743,32 @@ export function StyleForge(): JSX.Element {
                       >
                         {option.id === "two-column" ? (
                           <>
-                            <div style={{ width: "36%", borderRadius: "var(--rx)", background: activePalette.accent, opacity: 0.45 }} />
+                            <div style={{ width: "36%", borderRadius: "var(--rx)", background: optionAccent }} />
                             <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2, paddingTop: 2 }}>
-                              <div style={{ height: 2, borderRadius: 2, background: "var(--bm)" }} />
-                              <div style={{ height: 2, width: "65%", borderRadius: 2, background: "var(--bm)" }} />
-                              <div style={{ height: 2, width: "80%", borderRadius: 2, background: "var(--bm)" }} />
+                              <div style={{ height: 2, borderRadius: 2, background: previewLine }} />
+                              <div style={{ height: 2, width: "65%", borderRadius: 2, background: previewLine }} />
+                              <div style={{ height: 2, width: "80%", borderRadius: 2, background: previewLine }} />
                             </div>
                           </>
                         ) : option.id === "editorial" ? (
                           <>
-                            <div style={{ height: "26%", borderRadius: "var(--rx)", background: activePalette.accent, opacity: 0.45 }} />
+                            <div style={{ height: "26%", borderRadius: "var(--rx)", background: optionAccent }} />
                             <div style={{ display: "flex", flexDirection: "column", gap: 2, paddingTop: 2 }}>
-                              <div style={{ height: 2, borderRadius: 2, background: "var(--bm)" }} />
-                              <div style={{ height: 2, width: "60%", borderRadius: 2, background: "var(--bm)" }} />
+                              <div style={{ height: 2, borderRadius: 2, background: previewLine }} />
+                              <div style={{ height: 2, width: "60%", borderRadius: 2, background: previewLine }} />
                             </div>
                           </>
                         ) : (
                           <>
-                            <div style={{ height: 6, borderRadius: 2, background: activePalette.accent }} />
-                            <div style={{ height: 2, width: "52%", borderRadius: 2, background: "var(--bm)" }} />
-                            <div style={{ height: 2, width: "78%", borderRadius: 2, background: "var(--bm)" }} />
+                            <div style={{ height: 6, borderRadius: 2, background: optionAccent }} />
+                            <div style={{ height: 2, width: "52%", borderRadius: 2, background: previewLine }} />
+                            <div style={{ height: 2, width: "78%", borderRadius: 2, background: previewLine }} />
                           </>
                         )}
                       </div>
                       <div>
-                        <div style={{ fontSize: "var(--ts)", fontWeight: 600, color: "var(--ti)" }}>{option.name}</div>
-                        <div style={{ fontSize: "var(--tx)", color: "var(--tm2)", marginTop: 3 }}>{option.description}</div>
+                        <div style={{ fontSize: "var(--ts)", fontWeight: 600, color: active ? "var(--ac)" : "var(--ti)" }}>{option.name}</div>
+                        <div style={{ fontSize: "var(--tx)", color: active ? "var(--am)" : "var(--tm2)", marginTop: 3 }}>{option.description}</div>
                       </div>
                       <SelectionCheck active={active} />
                     </button>
@@ -533,8 +802,8 @@ export function StyleForge(): JSX.Element {
                       }}
                     >
                       <div>
-                        <div style={{ ...option.titleStyle, color: "var(--ti)" }}>{option.name}</div>
-                        <div style={{ ...option.descriptionStyle, color: "var(--tm2)", marginTop: 3 }}>{option.description}</div>
+                        <div style={{ ...option.titleStyle, color: active ? "var(--ac)" : "var(--ti)" }}>{option.name}</div>
+                        <div style={{ ...option.descriptionStyle, color: active ? "var(--am)" : "var(--tm2)", marginTop: 3 }}>{option.description}</div>
                       </div>
                       <SelectionCheck active={active} />
                     </button>
@@ -543,21 +812,24 @@ export function StyleForge(): JSX.Element {
               </div>
             </section>
 
-            <section style={sectionCardStyle}>
-              <div style={sectionHeaderStyle}>Colors</div>
-              <div style={sectionBodyStyle}>
+            <section style={floatingSectionCardStyle}>
+              <div style={sectionHeaderStyle}>
+                <div>Colors</div>
                 <div
                   style={{
+                    fontFamily: '"Source Sans 3", sans-serif',
                     fontSize: "var(--tx)",
                     fontWeight: 500,
-                    color: "var(--tg2)",
-                    textTransform: "uppercase",
-                    letterSpacing: ".08em",
-                    textAlign: "center",
+                    color: "var(--tm2)",
+                    letterSpacing: "0",
+                    textTransform: "none",
+                    marginTop: 4,
                   }}
                 >
-                  {activePalette.name}
+                  {activePaletteLabel}
                 </div>
+              </div>
+              <div style={sectionBodyStyle}>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "var(--s3)" }}>
                   <div style={{ display: "flex", justifyContent: "center", gap: "var(--s3)" }}>
                     {paletteOptions.slice(0, 3).map((option) => {
@@ -575,14 +847,14 @@ export function StyleForge(): JSX.Element {
                             borderRadius: "var(--rp)",
                             border: active ? "2px solid var(--sfr)" : "1px solid transparent",
                             background: option.accent,
-                            boxShadow: active ? `0 0 0 4px ${activePalette.accent}` : "none",
+                            boxShadow: active ? `0 0 0 4px ${option.accent}` : "none",
                             transition: "transform .12s var(--ezb), box-shadow .12s var(--ez)",
                           }}
                         />
                       );
                     })}
                   </div>
-                  <div style={{ display: "flex", justifyContent: "center", gap: "var(--s3)" }}>
+                  <div style={{ display: "flex", justifyContent: "center", gap: "var(--s3)", position: "relative" }}>
                     {paletteOptions.slice(3).map((option) => {
                       const active = option.id === palette;
                       return (
@@ -598,16 +870,139 @@ export function StyleForge(): JSX.Element {
                             borderRadius: "var(--rp)",
                             border: active ? "2px solid var(--sfr)" : "1px solid transparent",
                             background: option.accent,
-                            boxShadow: active ? `0 0 0 4px ${activePalette.accent}` : "none",
+                            boxShadow: active ? `0 0 0 4px ${option.accent}` : "none",
                             transition: "transform .12s var(--ezb), box-shadow .12s var(--ez)",
                           }}
                         />
                       );
                     })}
+                    <div ref={pickerRef} style={{ position: "relative" }}>
+                      <button
+                        type="button"
+                        title={palette === "custom" ? customAccent.toLowerCase() : "custom"}
+                        className="styleforge-palette-swatch"
+                        onClick={() => setIsCustomPickerOpen((open) => !open)}
+                        style={{
+                          width: 20,
+                          height: 20,
+                          borderRadius: "var(--rp)",
+                          border: palette === "custom" ? "2px solid var(--sfr)" : "1px solid var(--bo)",
+                          background: palette === "custom" ? customAccent : "var(--sf2)",
+                          boxShadow: palette === "custom" ? `0 0 0 4px ${customAccent}` : "none",
+                          transition: "transform .12s var(--ezb), box-shadow .12s var(--ez), background .12s var(--ez)",
+                        }}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
             </section>
+            {isCustomPickerOpen && pickerAnchor && typeof document !== "undefined"
+              ? createPortal(
+                  <div
+                    ref={popoverRef}
+                    className="styleforge-color-popover"
+                    role="dialog"
+                    aria-label="Custom color picker"
+                    style={{
+                      position: "fixed",
+                      top: pickerAnchor.top,
+                      left: pickerAnchor.left + pickerAnchor.width / 2,
+                      transform: "translate(-50%, calc(-100% - var(--s3)))",
+                      padding: "var(--s3)",
+                      borderRadius: "var(--rl)",
+                      border: "1px solid var(--bo)",
+                      background: "var(--sfr)",
+                      boxShadow: "var(--shc), inset 0 1px 0 var(--bm)",
+                      backdropFilter: "blur(18px) saturate(1.08)",
+                      WebkitBackdropFilter: "blur(18px) saturate(1.08)",
+                      overflow: "visible",
+                      isolation: "isolate",
+                      zIndex: 240,
+                    }}
+                  >
+                    <div
+                      ref={wheelRef}
+                      className="styleforge-color-wheel"
+                      role="slider"
+                      aria-label="Choose custom accent color"
+                      aria-valuetext={customAccent.toLowerCase()}
+                      tabIndex={0}
+                      onPointerDown={(event) => {
+                        event.preventDefault();
+                        draggingWheelRef.current = true;
+                        event.currentTarget.focus();
+                        updateCustomAccentFromPoint(event.clientX, event.clientY);
+                      }}
+                      onKeyDown={(event) => {
+                        const current = hexToHsv(customAccent);
+                        let nextHue = current.h;
+                        let nextSaturation = current.s;
+
+                        if (event.key === "ArrowLeft") nextHue = current.h - 6;
+                        if (event.key === "ArrowRight") nextHue = current.h + 6;
+                        if (event.key === "ArrowUp") nextSaturation = clamp(current.s + 0.05, 0, 1);
+                        if (event.key === "ArrowDown") nextSaturation = clamp(current.s - 0.05, 0, 1);
+
+                        if (nextHue !== current.h || nextSaturation !== current.s) {
+                          event.preventDefault();
+                          setCustomAccent(hsvToHex(nextHue, nextSaturation, 1));
+                          setPalette("custom");
+                        }
+                      }}
+                      style={{
+                        position: "relative",
+                        width: COLOR_WHEEL_SIZE,
+                        height: COLOR_WHEEL_SIZE,
+                        borderRadius: "50%",
+                        border: "1px solid var(--bo)",
+                        overflow: "hidden",
+                        isolation: "isolate",
+                        background: "var(--sfr)",
+                        boxShadow: "inset 0 1px 0 var(--bm), var(--sha)",
+                        outline: "none",
+                      }}
+                    >
+                      <canvas
+                        ref={wheelCanvasRef}
+                        aria-hidden
+                        style={{
+                          display: "block",
+                          width: "100%",
+                          height: "100%",
+                          borderRadius: "50%",
+                        }}
+                      />
+                      <div
+                        aria-hidden
+                        style={{
+                          position: "absolute",
+                          inset: 0,
+                          borderRadius: "50%",
+                          boxShadow: "inset 0 0 0 1px hsla(0,0%,100%,.08)",
+                          pointerEvents: "none",
+                        }}
+                      />
+                      <div
+                        aria-hidden
+                        style={{
+                          position: "absolute",
+                          left: wheelHandle.left - 6,
+                          top: wheelHandle.top - 6,
+                          width: 12,
+                          height: 12,
+                          borderRadius: "50%",
+                          background: customAccent,
+                          border: "1.5px solid var(--sfr)",
+                          boxShadow: "0 0 0 1px var(--bm), var(--sha)",
+                          pointerEvents: "none",
+                        }}
+                      />
+                    </div>
+                  </div>,
+                  document.body,
+                )
+              : null}
 
             <p style={{ fontSize: "var(--tx)", color: "var(--tg2)", lineHeight: "var(--ls)" }}>
               PDF export — coming soon

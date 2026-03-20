@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Trash2, ArrowUp, ArrowDown, Plus } from "lucide-react";
+import { Trash, ArrowUp, ArrowDown, Plus } from "lucide-react";
 import type { CvSection } from "../../schemas/cvDocument.schema";
 
 /**
@@ -128,7 +128,7 @@ export function SkillsBlock({ section, onChange }: { section: CvSection; onChang
                 className="p-1 rounded hover:[background:var(--erb)]"
                 aria-label={`Remove ${s}`}
               >
-                <Trash2 size={14} />
+                <Trash size={14} />
               </button>
             </div>
           </div>
