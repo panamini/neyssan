@@ -583,13 +583,14 @@ function SbDoc({ title, date, docType, isActive, dense = false, onClick, onRenam
   const [hovered, setHovered] = useState(false);
   const [renHovered, setRenHovered] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
+  const actionMaskSurface = "var(--sf2)";
 
   const btnBase: React.CSSProperties = {
     width: "var(--s4)", height: "var(--s4)",
     display: "flex", alignItems: "center", justifyContent: "center",
     borderRadius: "var(--rx)", border: "none", background: "transparent",
-    color: "var(--tg2)", cursor: "pointer", padding: 0,
-    transition: "color .1s var(--ez)",
+    color: "var(--tm2)", cursor: "pointer", padding: 0,
+    transition: "background .1s var(--ez), color .1s var(--ez)",
     fontFamily: "inherit", flexShrink: 0,
   };
 
@@ -632,25 +633,37 @@ function SbDoc({ title, date, docType, isActive, dense = false, onClick, onRenam
 
       {!hideActions && (hovered || isConfirming) && (
         <div
-          style={{ position: "absolute", right: "var(--s1)", top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", gap: 0, background: "var(--sf2)", paddingLeft: 0, boxShadow: "-10px 0 8px 4px var(--sf2)" }}
+          style={{ position: "absolute", right: "var(--s1)", top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", gap: 0, background: "transparent", paddingLeft: 0, boxShadow: `-10px 0 8px 4px ${actionMaskSurface}` }}
           onClick={(e) => e.stopPropagation()}
         >
           {isConfirming ? (
             <>
               <button
                 title="Confirm delete"
-                style={btnBase}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--sf2)"; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
+                style={{ ...btnBase, borderRadius: "var(--rx)", background: "var(--erb)", color: "var(--ert)" }}
+                onMouseEnter={(e) => {
+                  const b = e.currentTarget as HTMLButtonElement;
+                  b.style.background = "var(--er)";
+                  b.style.color = "var(--op)";
+                }}
+                onMouseLeave={(e) => {
+                  const b = e.currentTarget as HTMLButtonElement;
+                  b.style.background = "var(--erb)";
+                  b.style.color = "var(--ert)";
+                }}
                 onClick={(e) => { e.stopPropagation(); onDelete(e); setIsConfirming(false); }}
               >
                 <Check size={10} strokeWidth={2.5} />
               </button>
               <button
                 title="Cancel"
-                style={btnBase}
+                style={{ ...btnBase, borderRadius: "var(--rx)", background: "var(--sf2)", color: "var(--ti)" }}
                 onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--sf2)"; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
+                onMouseLeave={(e) => {
+                  const b = e.currentTarget as HTMLButtonElement;
+                  b.style.background = "var(--sf2)";
+                  b.style.color = "var(--ti)";
+                }}
                 onClick={(e) => { e.stopPropagation(); setIsConfirming(false); }}
               >
                 <X size={10} strokeWidth={2} />
@@ -664,7 +677,7 @@ function SbDoc({ title, date, docType, isActive, dense = false, onClick, onRenam
                   onMouseEnter={() => setRenHovered(true)}
                   onMouseLeave={() => setRenHovered(false)}
                 title="Rename"
-                style={{ ...btnBase, background: renHovered ? "var(--sf2)" : "transparent", color: renHovered ? "var(--ti)" : "var(--tg2)" }}
+                style={{ ...btnBase, background: renHovered ? "var(--sfr)" : "transparent", color: renHovered ? "var(--ti)" : "var(--tm2)" }}
               >
                   <Pen size={10} strokeWidth={1.75} />
                 </button>
@@ -672,8 +685,16 @@ function SbDoc({ title, date, docType, isActive, dense = false, onClick, onRenam
               <button
                 title="Delete"
                 style={btnBase}
-                onMouseEnter={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "var(--erb)"; b.style.color = "var(--ert)"; }}
-                onMouseLeave={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.color = "var(--tg2)"; }}
+                onMouseEnter={(e) => {
+                  const b = e.currentTarget as HTMLButtonElement;
+                  b.style.background = "var(--sfr)";
+                  b.style.color = "var(--ti)";
+                }}
+                onMouseLeave={(e) => {
+                  const b = e.currentTarget as HTMLButtonElement;
+                  b.style.background = "transparent";
+                  b.style.color = "var(--tm2)";
+                }}
                 onClick={(e) => { e.stopPropagation(); setIsConfirming(true); }}
               >
                 <Trash size={10} strokeWidth={1.75} />
