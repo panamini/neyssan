@@ -281,10 +281,13 @@ export function ProposalForge(): JSX.Element {
     >
       <div
         style={{
-          padding: isCompactComposeLayout ? "var(--s5) var(--s4)" : isNarrowLaptop ? "var(--s7) var(--s6)" : "var(--s8) var(--s7)",
+          padding: isCompactComposeLayout ? "var(--s5) var(--s4)" : "var(--s5) var(--s6)",
           display: "flex",
           flexDirection: "column",
           gap: "var(--s5)",
+          maxWidth: isCompactComposeLayout ? 720 : isNarrowLaptop ? 1000 : 1200,
+          margin: "0 auto",
+          width: "100%",
         }}
       >
         <div
@@ -294,7 +297,7 @@ export function ProposalForge(): JSX.Element {
             border: "1px solid var(--bo)",
             background: "var(--sfr)",
             boxShadow: "var(--sha)",
-            maxWidth: isCompactComposeLayout ? 720 : isNarrowLaptop ? 860 : 960,
+            maxWidth: isCompactComposeLayout ? 720 : isNarrowLaptop ? 1000 : 1200,
           }}
         >
           <div style={eyebrow}>Write</div>
