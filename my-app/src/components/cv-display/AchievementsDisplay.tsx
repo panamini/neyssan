@@ -71,7 +71,7 @@ export function AchievementsDisplay({
   const docKey = `${itemId}:${stableStringify(doc)}`;
 
   return (
-    <div className={["rich-content [color:var(--ti)]", className].filter(Boolean).join(" ")} key={docKey}>
+    <div className={["rich-content achievements-display [color:var(--ti)]", className].filter(Boolean).join(" ")} key={docKey}>
       <ReadOnlyAchievements doc={doc} />
     </div>
   );

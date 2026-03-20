@@ -81,13 +81,13 @@ export function SectionDisplay({ section }: SectionDisplayProps): JSX.Element {
           <div className="min-w-0">
             <h3 className="text-sm font-semibold [color:var(--ti)] truncate">{title}</h3>
             {subtitle ? (
-              <p className="text-xs [color:var(--tg2)] truncate">{subtitle}</p>
+              <p className="text-xs [color:var(--tm2)] truncate">{subtitle}</p>
             ) : null}
           </div>
-          <span className="text-xs [color:var(--tg2)] shrink-0">{dates}</span>
+          <span className="text-xs [color:var(--tm2)] shrink-0">{dates}</span>
         </div>
         {bulletList.length > 0 ? (
-          <ul className="ml-4 space-y-1 text-xs list-disc [color:var(--tm2)]">
+          <ul className="ml-4 space-y-1 text-xs list-disc [color:var(--ti)]">
             {bulletList.map((line, bulletIdx) => (
               <li key={`${key}-bullet-${bulletIdx}`} className="leading-snug">
                 {line}
@@ -96,7 +96,7 @@ export function SectionDisplay({ section }: SectionDisplayProps): JSX.Element {
           </ul>
         ) : null}
         {remainingCount > 0 ? (
-          <p className="ml-4 text-[11px] [color:var(--tg2)]">+{remainingCount} more point(s)</p>
+          <p className="ml-4 text-[11px] [color:var(--tm2)]">+{remainingCount} more point(s)</p>
         ) : null}
       </article>
     );
@@ -135,19 +135,19 @@ export function SectionDisplay({ section }: SectionDisplayProps): JSX.Element {
           <div className="min-w-0">
             <h3 className="text-sm font-semibold [color:var(--ti)] truncate">{title}</h3>
             {subtitle ? (
-              <p className="text-xs [color:var(--tg2)] truncate">{subtitle}</p>
+              <p className="text-xs [color:var(--tm2)] truncate">{subtitle}</p>
             ) : null}
           </div>
-          <span className="text-xs [color:var(--tg2)] shrink-0">{dates}</span>
+          <span className="text-xs [color:var(--tm2)] shrink-0">{dates}</span>
         </div>
         {truncatedDescription ? (
-          <p className="text-xs leading-snug [color:var(--tm2)]">{truncatedDescription}</p>
+          <p className="text-xs leading-snug [color:var(--ti)]">{truncatedDescription}</p>
         ) : null}
         {!truncatedDescription && hasObjectDescription ? (
-          <p className="text-xs italic [color:var(--tg2)]">Detailed description available.</p>
+          <p className="text-xs italic [color:var(--tm2)]">Detailed description available.</p>
         ) : null}
         {achievements.length > 0 ? (
-          <ul className="ml-4 space-y-1 text-[11px] list-disc [color:var(--tg2)]">
+          <ul className="ml-4 space-y-1 text-[11px] list-disc [color:var(--ti)]">
             {achievements.slice(0, 3).map((line, bulletIdx) => (
               <li key={`${key}-edu-ach-${bulletIdx}`} className="leading-snug">
                 {line}
@@ -277,4 +277,3 @@ export function SectionDisplay({ section }: SectionDisplayProps): JSX.Element {
     </section>
   );
 }
-
