@@ -1156,7 +1156,7 @@ export default function SectionEditor({
                       <button
                         type="button"
                         onClick={() => handleRemoveSkillInline(String(row.id ?? idx))}
-                        className="dasti-icon-button dasti-icon-button--compact dasti-icon-button--danger"
+                        className="dasti-icon-button dasti-icon-button--compact"
                         aria-label={`Remove ${row.name || "skill"}`}
                         title="Remove skill"
                       >
@@ -1515,7 +1515,7 @@ export default function SectionEditor({
                       <button
                         type="button"
                         onClick={() => handleRemoveLanguageInline(String(row.id ?? idx))}
-                        className="dasti-icon-button dasti-icon-button--compact dasti-icon-button--danger"
+                        className="dasti-icon-button dasti-icon-button--compact"
                         aria-label={`Remove ${row.name || "language"}`}
                         title="Remove language"
                       >

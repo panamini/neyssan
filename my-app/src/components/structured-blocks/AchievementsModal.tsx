@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { IAchievementItem } from "../../types/cvDocument";
-import { X, Plus, Trash, Check } from "lucide-react";
+import { X, Plus, Check } from "lucide-react";
 
 interface AchievementsModalProps {
   open: boolean;
@@ -173,7 +173,7 @@ export function AchievementsModal({ open, items, appendBlankOnOpen = false, onCl
             type="button"
             onClick={() => (isSaving ? null : onClose())}
             aria-label="Close"
-            className="p-1 rounded hover:[background:var(--sf2)] disabled:opacity-50"
+            className="dasti-modal-close disabled:opacity-50"
             disabled={isSaving}
           >
             <X className="w-5 h-5" />
@@ -188,8 +188,9 @@ export function AchievementsModal({ open, items, appendBlankOnOpen = false, onCl
             <button
               type="button"
               onClick={handleAdd}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--rs)] border border-transparent [background:transparent] [color:var(--tm2)] transition-colors hover:[background:var(--sf2)] hover:[color:var(--ti)] focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
+              className="dasti-modal-close"
               aria-label="Add achievement"
+              title="Add achievement"
             >
               <Plus className="w-4 h-4" />
             </button>
@@ -202,8 +203,12 @@ export function AchievementsModal({ open, items, appendBlankOnOpen = false, onCl
               </div>
             ) : (
               rows.map((row, idx) => (
-                <div key={row.id ?? `row-${idx}`} className="grid items-center grid-cols-12 gap-2">
-                  <div className="col-span-11">
+                <div
+                  key={row.id ?? `row-${idx}`}
+                  className="group grid items-start gap-2"
+                  style={{ gridTemplateColumns: "minmax(0, 1fr) var(--hs)" }}
+                >
+                  <div className="min-w-0">
                     <label className="text-xs sr-only [color:var(--tg2)]" htmlFor={`achievement-text-${idx}`}>
                       Achievement text
                     </label>
@@ -233,14 +238,15 @@ export function AchievementsModal({ open, items, appendBlankOnOpen = false, onCl
                       <Check className="w-3 h-3" /> Saved
                     </div>
                   </div>
-                  <div className="flex items-center justify-end col-span-1">
+                  <div className="flex items-start justify-end">
                     <button
                       type="button"
                       onClick={() => handleRemove(idx)}
-                      className="p-1 rounded hover:[background:var(--erb)]"
+                      className="dasti-modal-close opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
                       aria-label={`Remove achievement ${idx + 1}`}
+                      title={`Remove achievement ${idx + 1}`}
                     >
-                      <Trash className="w-4 h-4" />
+                      <X className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
@@ -249,14 +255,6 @@ export function AchievementsModal({ open, items, appendBlankOnOpen = false, onCl
           </div>
 
           <div className="flex items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => (isSaving ? null : onClose())}
-              className="px-3 py-2 rounded [background:var(--sf2)] disabled:opacity-50"
-              disabled={isSaving}
-            >
-              Cancel
-            </button>
             <button
               type="button"
               onClick={() => void handleSave()}
