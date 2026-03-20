@@ -571,14 +571,15 @@ function SbDoc({ title, date, docType, isActive, dense = false, onClick, onRenam
       style={{
         display: "flex",
         flexDirection: "column",
-        padding: dense ? "7px var(--s2) 7px 34px" : "var(--s2) var(--s2) var(--s2) 40px",
+        padding: dense ? "7px var(--s2) 7px 32px" : "var(--s2) var(--s2) var(--s2) 38px",
         borderRadius: "var(--rs)",
         cursor: isConfirming ? "default" : "pointer",
         transition: "all .12s var(--ez)",
         position: "relative",
-        background: isActive ? "var(--sfr)" : hovered ? "var(--sf2)" : "transparent",
-        border: isActive ? "1px solid var(--bo)" : "1px solid transparent",
-        boxShadow: isActive ? "var(--sha)" : "none",
+        background: isActive ? "var(--sf2)" : hovered ? "var(--sf2)" : "transparent",
+        border: "1px solid transparent",
+        borderLeft: isActive ? "2px solid var(--am)" : "2px solid transparent",
+        boxShadow: "none",
       }}
     >
       <div
