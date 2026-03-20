@@ -16,7 +16,7 @@ import { SkillsDrawer } from "./structured-blocks/SkillsDrawer";
 import BlockRenderer from "./cv-editor/BlockRenderer";
 import AchievementsBlock from "./structured-blocks/AchievementsBlock";
 import { useSectionFlushSubscription } from "../hooks/use-flush-subscription";
-import { Pencil, Trash2, X, Pin, Plus } from "lucide-react";
+import { Pencil, Trash2, X, Pin, PinOff, Plus } from "lucide-react";
 import { ExperienceModal, EducationModal } from "./structured-blocks/ExperienceEducationModal";
 
 import { formatRangeFromItem } from "../lib/date-utils";
@@ -73,24 +73,35 @@ function LevelDots({
   const activeIndex = getDotIndex(value, kind);
   const activeLabel = levels[activeIndex]?.label ?? levels[0]?.label ?? "";
 
+  const dotStyle = (filled: boolean): React.CSSProperties => ({
+    display: "block",
+    width: 10,
+    height: 10,
+    borderRadius: "var(--rp)",
+    border: "1px solid",
+    borderColor: filled ? "var(--ac)" : "var(--bm)",
+    background: filled ? "var(--ac)" : "transparent",
+    transition: "background .12s var(--ez), border-color .12s var(--ez), transform .12s var(--ezb)",
+    flexShrink: 0,
+    pointerEvents: "none",
+  });
+
   return (
     <div className="inline-flex items-center gap-2 min-w-0">
-      <div className="flex items-center gap-[5px]" role={readOnly ? undefined : "group"} aria-label={ariaLabel}>
+      <div className="flex items-center gap-0" role={readOnly ? undefined : "group"} aria-label={ariaLabel}>
         {levels.map((level, index) => {
           const filled = index <= activeIndex;
-          const sharedStyle: React.CSSProperties = {
-            width: 10,
-            height: 10,
-            borderRadius: "var(--rp)",
-            border: "1px solid",
-            borderColor: filled ? "var(--ac)" : "var(--bm)",
-            background: filled ? "var(--ac)" : "transparent",
-            transition: "transform .12s var(--ezb), background .12s var(--ez), border-color .12s var(--ez)",
-            flexShrink: 0,
-          };
 
           if (readOnly) {
-            return <span key={level.label} aria-hidden style={sharedStyle} />;
+            return (
+              <span
+                key={level.label}
+                aria-hidden
+                style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 16, height: 16, flexShrink: 0 }}
+              >
+                <span style={dotStyle(filled)} />
+              </span>
+            );
           }
 
           return (
@@ -100,13 +111,29 @@ function LevelDots({
               aria-label={`${ariaLabel}: ${level.label}`}
               title={level.label}
               onClick={() => onChange?.(level.value)}
-              className="hover:scale-[1.18] focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
-              style={{ ...sharedStyle, cursor: "pointer" }}
-            />
+              className="focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)] group/dot"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 16,
+                height: 16,
+                padding: 0,
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                flexShrink: 0,
+              }}
+            >
+              <span
+                style={dotStyle(filled)}
+                className="group-hover/dot:scale-[1.25] transition-transform"
+              />
+            </button>
           );
         })}
       </div>
-      <span style={{ fontSize: 10, color: "var(--tg2)", minWidth: 66, whiteSpace: "nowrap" }}>
+      <span style={{ fontSize: "var(--tx)", color: "var(--tg2)", minWidth: 60, whiteSpace: "nowrap" }}>
         {activeLabel}
       </span>
     </div>
@@ -1120,10 +1147,14 @@ export default function SectionEditor({
                           type="button"
                           onClick={() => handlePinToCoreInline(String(row.id ?? idx))}
                           className="dasti-icon-button"
-                          aria-label={`Pin ${row.name || "skill"} to top`}
-                          title="Pin to top"
+                          aria-label={idx === 0 ? `${row.name || "skill"} is pinned to top` : `Pin ${row.name || "skill"} to top`}
+                          title={idx === 0 ? "Pinned to top" : "Pin to top"}
+                          style={idx === 0 ? { color: "var(--ac)" } : undefined}
                         >
-                          <Pin className="w-4 h-4" aria-hidden />
+                          {idx === 0
+                            ? <PinOff className="w-4 h-4" aria-hidden />
+                            : <Pin className="w-4 h-4" aria-hidden />
+                          }
                         </button>
                         <button
                           type="button"
