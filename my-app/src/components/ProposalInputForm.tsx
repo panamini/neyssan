@@ -641,15 +641,16 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                       </div>
                       <div className="flex shrink-0 flex-col items-end gap-2">
                         <div className="flex flex-wrap justify-end gap-2">
-                          <Button
-                            type="button"
-                            variant={option.isActive ? "secondary" : "primary"}
-                            size="sm"
-                            onClick={() => handleSelectCv(option.id)}
-                            disabled={option.isActive}
-                          >
-                            Use
-                          </Button>
+                          {!option.isActive && (
+                            <Button
+                              type="button"
+                              variant="primary"
+                              size="sm"
+                              onClick={() => handleSelectCv(option.id)}
+                            >
+                              Use
+                            </Button>
+                          )}
                           <Button
                             type="button"
                             variant="ghost"
@@ -658,13 +659,6 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                           >
                             Edit
                           </Button>
-                        </div>
-                        <div className="flex flex-col items-end gap-2 text-xs text-muted-foreground">
-                          {option.isActive && (
-                            <span className="rounded-full border border-[color:var(--ac)] bg-[color:var(--ap)] px-2 py-0.5 [color:var(--am)]">
-                              Current
-                            </span>
-                          )}
                         </div>
                       </div>
                     </div>
