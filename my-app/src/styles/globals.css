@@ -4,13 +4,23 @@
    ============================================================ */
 
 /* --- Palette accent Sauge (défaut) -------------------------
-   Accent tokens live ONLY in .pal-* classes (see bottom).
-   :root does NOT define --ac/--am/--ap/--as/--fr/--op to
-   avoid conflicts with .pal-sauge overrides loaded later.
-   AppShell always applies .pal-sauge on the root div.       */
-/* Accent tokens are NOT defined on .dark directly — they live exclusively in .pal-* classes
-   (e.g. .dark.pal-sauge). AppShell always applies .pal-sauge, so standalone .dark accent
-   tokens would be dead code and a source of confusion. */
+   Surcharger via classe body.pal-* pour les autres palettes  */
+:root {
+  --ac:  hsl(155,22%,30%);  /* accent solid */
+  --am:  hsl(155,24%,44%);  /* accent mid */
+  --ap:  hsl(155,22%,92%);  /* accent pale */
+  --as:  hsl(155,18%,88%);  /* accent soft */
+  --fr:  hsl(155,22%,56%);  /* focus ring */
+  --op:  hsl(40,20%,99%);   /* on-primary */
+}
+.dark {
+  --ac:  hsl(155,28%,62%);
+  --am:  hsl(155,28%,72%);
+  --ap:  hsl(155,20%,18%);
+  --as:  hsl(155,18%,22%);
+  --fr:  hsl(155,28%,78%);
+  --op:  hsl(80,5%,7%);
+}
 
 /* --- Tokens universels (indépendants du thème) ------------- */
 :root {
@@ -18,7 +28,7 @@
   --s1: 4px;  --s2: 8px;  --s3: 12px; --s4: 16px;
   --s5: 24px; --s6: 32px; --s7: 40px; --s8: 64px;
 
-  /* §2 Type scale — pragmatic web scale anchored on 8px grid */
+  /* §2 Type scale √2 depuis 12px */
   --tx:  12px; --ts: 14px; --tb: 16px;
   --tm:  20px; --tl: 26px; --tx2: 32px;
 
@@ -29,7 +39,7 @@
   --rx: 4px; --rs: 6px; --rm: 12px; --rl: 18px; --rp: 999px;
 
   /* §4 Hauteurs interactives */
-  --hs: 32px; --hm: 40px; --hb: 44px; --hdr: 56px;
+  --hs: 32px; --hm: 40px; --hb: 44px; --hdr: 54px;
 
   /* §10 Transitions */
   --ez:  cubic-bezier(.25,.1,.25,1);
@@ -49,8 +59,7 @@
   --bm:  hsla(30,12%,11%,.13);
 
   /* §6 Sémantiques light — désaturées, analogiques */
-  /* --ok hue shifted to 142° (13° from accent at 155°) for clear differentiation */
-  --ok:  hsl(142,20%,28%); --okb: hsl(142,16%,92%); --okt: hsl(142,20%,22%);
+  --ok:  hsl(152,20%,28%); --okb: hsl(152,16%,92%); --okt: hsl(152,20%,22%);
   --er:  hsl(4,26%,34%);   --erb: hsl(4,22%,92%);   --ert: hsl(4,26%,28%);
   --wa:  hsl(34,36%,32%);  --wab: hsl(34,30%,92%);  --wat: hsl(34,36%,26%);
 
@@ -73,8 +82,7 @@
   --bm:  hsla(46,12%,86%,.13);
 
   /* §6 Sémantiques dark — sat ≤26% Itten */
-  /* --ok hue shifted to 142° to match light mode separation from accent */
-  --ok:  hsl(142,22%,56%); --okb: hsl(142,13%,13%); --okt: hsl(142,22%,70%);
+  --ok:  hsl(152,22%,56%); --okb: hsl(152,13%,13%); --okt: hsl(152,22%,70%);
   --er:  hsl(4,24%,56%);   --erb: hsl(4,15%,13%);   --ert: hsl(4,24%,70%);
   --wa:  hsl(36,26%,58%);  --wab: hsl(36,13%,13%);  --wat: hsl(36,26%,72%);
 
@@ -422,7 +430,7 @@ button::-moz-focus-inner,
    ============================================================ */
 .dasti-modal {
   width: 100%;
-  max-width: var(--modal-max-width); /* 680px — matches token */
+  max-width: 720px;
   margin: var(--s4);
   position: relative;
   z-index: 1;
@@ -464,7 +472,7 @@ button::-moz-focus-inner,
 }
 
 .dasti-modal-subtitle {
-  margin: var(--s1) 0 0;
+  margin: 3px 0 0;
   font-size: var(--ts);
   line-height: var(--ls);
   color: var(--tm2);
@@ -809,378 +817,6 @@ textarea.dasti-field {
 .fraunces {
   font-family: 'Fraunces', serif;
   letter-spacing: -0.01em;
-}
-
-/* ============================================================
-   SIDEBAR UTILITIES — replaces onMouseEnter/Leave mutations
-   ============================================================ */
-
-/* Collapse toggle button */
-.sb-toggle {
-  position: absolute;
-  right: var(--s3);
-  top: 50%;
-  transform: translateY(-50%);
-  width: 26px;
-  height: 26px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--rs);
-  border: 1px solid var(--bo);
-  color: var(--tg2);
-  background: var(--sfr);
-  cursor: pointer;
-  transition: color .12s var(--ez), border-color .12s var(--ez), background .12s var(--ez);
-  font-family: inherit;
-}
-.sb-toggle:hover {
-  color: var(--ti);
-  border-color: var(--bm);
-  background: var(--sf2);
-}
-.sb-toggle:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-
-/* Nav item (Studio / Compose / Style) */
-.sb-nav-item {
-  display: flex;
-  align-items: center;
-  border-radius: var(--rs);
-  border: 1px solid transparent;
-  cursor: pointer;
-  transition: background .12s var(--ez), border-color .12s var(--ez), box-shadow .12s var(--ez);
-  overflow: hidden;
-}
-.sb-nav-item:hover:not(.sb-nav-item--active) {
-  background: var(--sf2);
-}
-.sb-nav-item--active {
-  background: var(--sfr);
-  border-color: var(--bo);
-  box-shadow: var(--sha);
-}
-
-/* New-doc button (New resume / New letter) */
-.sb-new-btn {
-  display: flex;
-  align-items: center;
-  gap: var(--s3);
-  padding: var(--s2) var(--s2) var(--s2) var(--s3);
-  border-radius: var(--rs);
-  cursor: pointer;
-  height: var(--hs); /* 32px — grid-aligned */
-  color: var(--tg2);
-  font-size: var(--tx);
-  transition: color .12s var(--ez), background .12s var(--ez);
-  background: transparent;
-  border: none;
-  width: 100%;
-  text-align: left;
-  font-family: inherit;
-}
-.sb-new-btn:hover {
-  color: var(--am);
-  background: var(--sf2);
-}
-
-/* Inline delete-confirm row on SbDoc items */
-.sb-doc-confirm {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  padding: 0 var(--s2);
-}
-.sb-doc-confirm__label {
-  font-size: var(--tx);
-  color: var(--ert);
-  flex: 1;
-  white-space: nowrap;
-}
-.sb-doc-confirm__yes {
-  height: 22px;
-  padding: 0 var(--s2);
-  border-radius: var(--rs);
-  border: 1px solid var(--er);
-  background: var(--erb);
-  color: var(--ert);
-  font-size: var(--tx);
-  font-weight: 600;
-  cursor: pointer;
-  font-family: inherit;
-  transition: background .1s var(--ez);
-}
-.sb-doc-confirm__yes:hover {
-  background: var(--er);
-  color: var(--op);
-}
-.sb-doc-confirm__no {
-  height: 22px;
-  padding: 0 var(--s2);
-  border-radius: var(--rs);
-  border: 1px solid var(--bo);
-  background: transparent;
-  color: var(--tg2);
-  font-size: var(--tx);
-  cursor: pointer;
-  font-family: inherit;
-  transition: background .1s var(--ez);
-}
-.sb-doc-confirm__no:hover {
-  background: var(--sf2);
-  color: var(--ti);
-}
-
-/* Collapsed sidebar icon tooltip */
-.sb-tooltip-wrap {
-  position: relative;
-}
-.sb-tooltip-wrap .sb-tooltip {
-  position: absolute;
-  left: calc(100% + var(--s2));
-  top: 50%;
-  transform: translateY(-50%);
-  background: var(--sfr);
-  border: 1px solid var(--bm);
-  border-radius: var(--rs);
-  box-shadow: var(--shb);
-  padding: var(--s1) var(--s2);
-  font-size: var(--tx);
-  font-weight: 500;
-  color: var(--ti);
-  white-space: nowrap;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity .12s var(--ez);
-  z-index: 100;
-}
-.sb-tooltip-wrap:hover .sb-tooltip {
-  opacity: 1;
-}
-
-/* ProposalInputForm — all styling in dasti tokens, no CSS modules or Tailwind */
-.pf-container {
-  padding: var(--s5);
-  border: none;
-  border-radius: var(--rm);
-  background: transparent;
-}
-.pf-input {
-  width: 100%;
-  padding: var(--s2) var(--s3);
-  border-radius: var(--rs);
-  font-size: var(--ts);
-  color: var(--ti);
-  background: var(--sfr);
-  border: 1px solid var(--bo);
-  outline: none;
-  font-family: inherit;
-  transition: border-color .12s var(--ez), box-shadow .12s var(--ez);
-}
-.pf-input:focus {
-  border-color: var(--ac);
-  box-shadow: var(--focus-shadow-soft);
-}
-.pf-input:-webkit-autofill,
-.pf-input:-webkit-autofill:hover,
-.pf-input:-webkit-autofill:focus {
-  -webkit-box-shadow: 0 0 0 1000px var(--sfr) inset;
-  box-shadow: 0 0 0 1000px var(--sfr) inset;
-  -webkit-text-fill-color: var(--ti);
-  caret-color: var(--ti);
-  transition: background-color 9999s ease-out 0s;
-}
-.pf-compose-well {
-  border: 1px solid var(--bm);
-  border-radius: var(--rm);
-  background: var(--sf1);
-  margin-top: var(--s2);
-  transition: border-color .12s var(--ez), box-shadow .12s var(--ez);
-}
-.pf-compose-well:focus-within {
-  border-color: var(--ac);
-  box-shadow: var(--focus-shadow-soft);
-}
-.pf-error {
-  margin-top: var(--s1);
-  font-size: var(--ts);
-  color: var(--ert);
-}
-.pf-cv-pill {
-  display: inline-flex;
-  max-width: 100%;
-  align-items: center;
-  overflow: hidden;
-  border-radius: var(--rs);
-  border: 1px solid transparent;
-  background: transparent;
-  transition: background .12s var(--ez);
-}
-.pf-cv-pill:hover { background: var(--sf2); }
-.pf-cv-pick-btn {
-  display: inline-flex;
-  min-width: 0;
-  align-items: center;
-  gap: var(--s1);
-  padding: var(--s1) var(--s2);
-  text-align: left;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  font-family: inherit;
-  font-size: var(--ts);
-  color: var(--tm2);
-  transition: color .12s var(--ez);
-}
-.pf-cv-pick-btn:hover { color: var(--ti); }
-.pf-cv-pick-btn:focus { outline: none; }
-.pf-cv-pick-btn:focus-visible { box-shadow: inset 0 0 0 1px var(--bm); }
-.pf-cv-option {
-  width: 100%;
-  border-radius: var(--rm);
-  border: 1px solid var(--bo);
-  padding: var(--s4);
-  background: var(--sf2);
-  transition: border-color .12s var(--ez), background .12s var(--ez);
-  cursor: pointer;
-}
-.pf-cv-option:hover {
-  border-color: var(--bm);
-  background: var(--sfr);
-}
-.pf-cv-option--active {
-  border-color: var(--ac);
-  background: var(--as);
-  box-shadow: var(--sha);
-  cursor: default;
-}
-.pf-cv-option--active:hover {
-  border-color: var(--ac);
-  background: var(--as);
-}
-.pf-cv-badge {
-  border-radius: var(--rp);
-  border: 1px solid var(--ac);
-  background: var(--ap);
-  padding: 2px var(--s2);
-  font-size: var(--tx);
-  color: var(--am);
-}
-.pf-source-link {
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  color: inherit;
-  transition: color .12s var(--ez);
-}
-.pf-source-link:hover { color: var(--ti); }
-
-/* ProposalInputForm — chip & menu-option hover (replaces onMouseEnter/Leave mutations) */
-.pf-chip {
-  height: var(--hs); /* 32px — on 8px grid */
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 0 var(--s2);
-  border-radius: var(--rs);
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--tm2);
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: background .12s var(--ez), color .12s var(--ez);
-  font-family: inherit;
-}
-.pf-chip:hover {
-  background: var(--sf2);
-  color: var(--ti);
-}
-.pf-menu-option {
-  padding: var(--s3) var(--s4);
-  border-radius: var(--rs);
-  cursor: pointer;
-  background: transparent;
-  transition: background .1s var(--ez);
-}
-.pf-menu-option:hover {
-  background: var(--sf2);
-}
-.pf-menu-option--active {
-  background: var(--as);
-}
-.pf-menu-option--active:hover {
-  background: var(--as);
-}
-
-/* Shimmer animation — used by ProposalDisplay loading skeleton */
-@keyframes dasti-shimmer {
-  0%   { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
-
-/* CvToolbar buttons */
-.ctb-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s2);
-  height: var(--hs);
-  padding: 0 var(--s3);
-  border-radius: var(--rs);
-  font-size: var(--ts);
-  font-weight: 500;
-  cursor: pointer;
-  font-family: inherit;
-}
-.ctb-btn--primary {
-  border: 1px solid var(--bm);
-  background: var(--ac);
-  color: var(--op);
-  transition: filter .12s var(--ez);
-}
-.ctb-btn--primary:hover {
-  filter: brightness(1.1);
-}
-.ctb-btn--ghost {
-  border: 1px solid var(--bo);
-  background: var(--sfr);
-  color: var(--tm2);
-  transition: background .12s var(--ez), color .12s var(--ez), border-color .12s var(--ez);
-}
-.ctb-btn--ghost:hover {
-  background: var(--sf2);
-  color: var(--ti);
-  border-color: var(--bm);
-}
-
-/* ProposalForge underline tabs */
-.pf-tab {
-  display: inline-flex;
-  align-items: center;
-  height: var(--hs);
-  padding: 0 var(--s3);
-  border-radius: var(--rs) var(--rs) 0 0;
-  border: none;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  background: transparent;
-  font-size: var(--ts);
-  font-weight: 500;
-  color: var(--tm2);
-  cursor: pointer;
-  transition: all .12s var(--ez);
-  font-family: inherit;
-  outline: none;
-}
-.pf-tab:not([data-active="true"]):hover {
-  background: var(--sf2);
-}
-.pf-tab[data-active="true"] {
-  border-bottom-color: var(--ac);
-  font-weight: 600;
-  color: var(--ti);
 }
 
 /* End of globals */

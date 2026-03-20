@@ -180,6 +180,8 @@ export function ProposalForge(): JSX.Element {
     }
   }, [proposalContent, proposalType, showToast]);
 
+  const [hoveredTab, setHoveredTab] = React.useState<ProposalForgeView | null>(null);
+
   const activeView = requestedView;
   const isComposeView = activeView === "compose";
   const isSavedView = activeView === "saved";
@@ -189,6 +191,30 @@ export function ProposalForge(): JSX.Element {
     Boolean(handoffId) &&
     (isConvexAuthLoading || (isConvexAuthenticated && handoffRecord === undefined));
 
+  /* ── Tab underline style — §13 dasti-spec-v1 ─────────────── */
+  const tabStyle = (view: ProposalForgeView): React.CSSProperties => {
+    const isActive = activeView === view;
+    const isHovered = !isActive && hoveredTab === view;
+    return {
+      display: "inline-flex",
+      alignItems: "center",
+      height: "var(--hs)",
+      padding: "0 var(--s3)",
+      borderRadius: "var(--rs) var(--rs) 0 0",
+      border: "none",
+      borderBottom: `2px solid ${isActive ? "var(--ac)" : "transparent"}`,
+      marginBottom: -1,
+      background: isHovered ? "var(--sf2)" : "transparent",
+      fontSize: "var(--ts)",
+      fontWeight: isActive ? 600 : 500,
+      color: isActive ? "var(--ti)" : "var(--tm2)",
+      cursor: "pointer",
+      transition: "all .12s var(--ez)",
+      fontFamily: "inherit",
+      outline: "none",
+    };
+  };
+
   /* ── Shared styles ───────────────────────────────────────── */
   const eyebrow: React.CSSProperties = {
     fontSize: "var(--tx)",
@@ -196,7 +222,7 @@ export function ProposalForge(): JSX.Element {
     color: "var(--am)",
     letterSpacing: ".14em",
     textTransform: "uppercase",
-    marginBottom: "var(--s4)",
+    marginBottom: "var(--s2)",
   };
 
   const panelCard: React.CSSProperties = {
@@ -296,17 +322,19 @@ export function ProposalForge(): JSX.Element {
         <div style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--bo)" }}>
           <button
             type="button"
-            className="pf-tab"
-            data-active={activeView === "compose" ? "true" : undefined}
+            style={tabStyle("compose")}
             onClick={() => updateProposalRoute("compose")}
+            onMouseEnter={() => setHoveredTab("compose")}
+            onMouseLeave={() => setHoveredTab(null)}
           >
             Compose
           </button>
           <button
             type="button"
-            className="pf-tab"
-            data-active={activeView === "saved" ? "true" : undefined}
+            style={tabStyle("saved")}
             onClick={() => updateProposalRoute("saved", selectedProposalId)}
+            onMouseEnter={() => setHoveredTab("saved")}
+            onMouseLeave={() => setHoveredTab(null)}
           >
             Library
           </button>
