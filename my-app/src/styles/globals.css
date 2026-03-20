@@ -67,6 +67,9 @@
   --sha: 0 1px 2px hsla(30,20%,8%,.05), 0 3px 10px hsla(30,20%,8%,.04);
   --shb: 0 4px 14px hsla(30,20%,8%,.07), 0 10px 28px hsla(30,20%,8%,.05);
   --shc: 0 8px 24px hsla(30,20%,8%,.09), 0 20px 48px hsla(30,20%,8%,.07);
+
+  /* §9 Frost — dialog header backdrop bg */
+  --frost-bg: hsla(40,20%,99%,0.84);
 }
 
 /* --- §6 Mode Dark — Graphite Kaki Tellurique -------------- */
@@ -90,6 +93,9 @@
   --sha: 0 1px 3px hsla(0,0%,0%,.28), 0 4px 12px hsla(0,0%,0%,.22);
   --shb: 0 4px 16px hsla(0,0%,0%,.36), 0 12px 30px hsla(0,0%,0%,.28);
   --shc: 0 8px 28px hsla(0,0%,0%,.44), 0 24px 52px hsla(0,0%,0%,.34);
+
+  /* §9 Frost — dialog header backdrop bg */
+  --frost-bg: hsla(75,5%,19%,0.82);
 }
 
 /* ============================================================
