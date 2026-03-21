@@ -23,6 +23,7 @@ import {
 import {
   buildAppProposalPersonalizationPayload,
   clearActiveLocalCvId,
+  formatCvDisplaySubtitle,
   getActiveLocalPersonalizationSource,
   getLocalActiveCvSnapshotById,
   listLocalCvPickerOptions,
@@ -567,13 +568,29 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
               No local resumes found yet. Create or import one in Resume.
             </div>
           ) : (
-            <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                gap: "var(--space-card-grid)",
+                maxHeight: "50vh",
+                overflowY: "auto",
+              }}
+            >
               {cvOptions.map((option) => {
                 const isSelected = pendingCvId === option.id || (pendingCvId === null && option.isActive);
+                const chooserDateSource = option.updatedAt ?? option.createdAt ?? null;
+                const chooserDate = chooserDateSource
+                  ? new Date(chooserDateSource).toLocaleDateString("en-US", {
+                      day: "2-digit",
+                      month: "2-digit",
+                      year: "2-digit",
+                    })
+                  : null;
                 return (
                   <div
                     key={option.id}
-                    className="dasti-doc-card dasti-doc-card--chooser"
+                    className={clsx("dasti-doc-card dasti-doc-card--library dasti-doc-card--chooser dasti-doc-card--cv-library", isSelected && "dasti-doc-card--selected")}
                     role="button"
                     tabIndex={0}
                     aria-pressed={isSelected}
@@ -587,17 +604,32 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                     style={{
                       gap: "var(--s3)",
                       borderColor: isSelected ? "var(--bm)" : "var(--bo)",
-                      background: isSelected ? "var(--sf2)" : "var(--sfr)",
                     }}
-                  >
-                    <div className="dasti-doc-card__stack">
-                      <div className="dasti-doc-card__header">
-                        <h3 className="dasti-doc-card__title">{option.title}</h3>
-                      </div>
+                    >
+                      <div className="dasti-doc-card__stack">
+                        <div className="dasti-doc-card__header">
+                          <div className="dasti-doc-card__title-frame">
+                            <h3 className="dasti-doc-card__title">{option.title}</h3>
+                          </div>
+                        </div>
 
                       <div className="dasti-doc-card__meta">
-                        {[option.profileName, option.desiredPosition].filter(Boolean).join(" · ") || "Draft resume"}
+                        {formatCvDisplaySubtitle({
+                          title: option.title,
+                          profileName: option.profileName,
+                          desiredPosition: option.desiredPosition,
+                          email: option.email,
+                          linkedin: option.linkedin,
+                          website: option.website,
+                          phone: option.phone,
+                        }) || "Draft resume"}
                       </div>
+
+                      {chooserDate ? (
+                        <div className="dasti-doc-card__footer dasti-doc-card__footer--stamp-only">
+                          <div className="dasti-doc-card__stamp">{chooserDate}</div>
+                        </div>
+                      ) : null}
                     </div>
 
                     <div className="dasti-doc-card__actions-rail dasti-doc-card__actions-rail--chooser">

@@ -2,17 +2,32 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, X, Check } from "lucide-react";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
-import { buildActiveCvSnapshotFromCvDocument } from "../lib/proposal-personalization";
+import {
+  buildActiveCvSnapshotFromCvDocument,
+  formatCvDisplaySubtitle,
+} from "../lib/proposal-personalization";
 import type { CvDocument, IProfileItem } from "../types/cvDocument";
 
-function readProfileLocation(cv: CvDocument): string {
+function readProfileContact(cv: CvDocument): {
+  email?: string;
+  phone?: string;
+  linkedin?: string;
+  website?: string;
+  location?: string;
+} {
   const profileSection = Array.isArray(cv.sections)
     ? cv.sections.find((section) => section.type === "profile")
     : undefined;
   const profileItem = Array.isArray(profileSection?.structuredContent)
     ? (profileSection?.structuredContent[0] as IProfileItem | undefined)
     : undefined;
-  return String(profileItem?.location ?? "").trim();
+  return {
+    ...(String(profileItem?.email ?? "").trim() ? { email: String(profileItem?.email ?? "").trim() } : {}),
+    ...(String(profileItem?.phone ?? "").trim() ? { phone: String(profileItem?.phone ?? "").trim() } : {}),
+    ...(String(profileItem?.linkedin ?? "").trim() ? { linkedin: String(profileItem?.linkedin ?? "").trim() } : {}),
+    ...(String(profileItem?.website ?? "").trim() ? { website: String(profileItem?.website ?? "").trim() } : {}),
+    ...(String(profileItem?.location ?? "").trim() ? { location: String(profileItem?.location ?? "").trim() } : {}),
+  };
 }
 
 export function CvsLibrary(): JSX.Element {
@@ -144,14 +159,24 @@ export function CvsLibrary(): JSX.Element {
             {sorted.map((cv) => {
               const updatedAt = new Date(
                 cv.metadata?.updatedAt ?? cv.metadata?.createdAt ?? Date.now(),
-              ).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+              ).toLocaleDateString("en-US", { day: "2-digit", month: "2-digit", year: "2-digit" });
               const snapshot = buildActiveCvSnapshotFromCvDocument(cv);
               const personalization = snapshot.personalizationContext;
               const profileName = String(personalization?.name ?? "").trim();
               const position = String(personalization?.desiredPosition ?? "").trim();
-              const location = readProfileLocation(cv);
+              const contact = readProfileContact(cv);
               const summarySnippet = String(personalization?.summary ?? "").trim();
-              const identityLine = [profileName, position, location].filter(Boolean).join(" · ");
+              const cardTitle = snapshot.title;
+              const identityLine = formatCvDisplaySubtitle({
+                title: String(cv.title ?? ""),
+                profileName,
+                desiredPosition: position,
+                email: contact.email,
+                linkedin: contact.linkedin,
+                website: contact.website,
+                phone: contact.phone,
+                location: contact.location,
+              });
               const isConfirming = confirmingId === cv.id;
 
               return (
@@ -164,28 +189,35 @@ export function CvsLibrary(): JSX.Element {
                   {/* Main card button */}
                   <button
                     onClick={() => handleOpen(cv.id)}
-                    className="dasti-doc-card"
+                    className="dasti-doc-card dasti-doc-card--library dasti-doc-card--cv-library"
                     style={{ flex: 1, paddingRight: "var(--s6)" }}
                   >
                     <div className="dasti-doc-card__stack">
                       <div className="dasti-doc-card__header">
-                        <h2 className="dasti-doc-card__title">{cv.title}</h2>
-                        <div className="dasti-doc-card__date">{updatedAt}</div>
+                        <div className="dasti-doc-card__title-frame">
+                          <h2 className="dasti-doc-card__title">{cardTitle}</h2>
+                        </div>
                       </div>
 
                       <div className="dasti-doc-card__meta">
                         {identityLine || "Draft resume"}
                       </div>
 
-                      <p
-                        className={
-                          summarySnippet
-                            ? "dasti-doc-card__snippet"
-                            : "dasti-doc-card__snippet dasti-doc-card__snippet--muted"
-                        }
-                      >
-                        {summarySnippet || "Profile details will appear here once the resume is filled in."}
-                      </p>
+                      <div className="dasti-doc-card__body-band">
+                        <p
+                          className={
+                            summarySnippet
+                              ? "dasti-doc-card__snippet dasti-doc-card__snippet--library"
+                              : "dasti-doc-card__snippet dasti-doc-card__snippet--library dasti-doc-card__snippet--muted"
+                          }
+                        >
+                          {summarySnippet || "Profile preview appears here."}
+                        </p>
+                      </div>
+
+                      <div className="dasti-doc-card__footer dasti-doc-card__footer--stamp-only">
+                        <div className="dasti-doc-card__stamp">{updatedAt}</div>
+                      </div>
                     </div>
                   </button>
 
