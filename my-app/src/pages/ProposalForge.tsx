@@ -53,6 +53,8 @@ export function ProposalForge(): JSX.Element {
   const [errorDetail, setErrorDetail] = React.useState<string | null>(null);
   const [proposalType, setProposalType] = React.useState<FormValues["proposalType"] | null>(null);
   const [proposalVoicePreset, setProposalVoicePreset] = React.useState<FormValues["voicePreset"] | null>(null);
+  const [proposalDocumentTitle, setProposalDocumentTitle] = React.useState<string>("");
+  const [proposalDocumentMeta, setProposalDocumentMeta] = React.useState<string>("");
   const [fallbackInfo, setFallbackInfo] = React.useState<ProposalGenerationFallbackInfo | null>(null);
   const [copyFeedback, setCopyFeedback] = React.useState<"idle" | "copied">("idle");
   const copyFeedbackTimeoutRef = React.useRef<number | null>(null);
@@ -75,26 +77,43 @@ export function ProposalForge(): JSX.Element {
 
   /* ── Handlers (logique métier intacte) ────────────────────── */
 
+  const formatProposalTypeLabel = React.useCallback((type: FormValues["proposalType"]) => {
+    if (type === "cover_letter") return "Letter";
+    if (type === "application_message") return "Message";
+    return "Proposal";
+  }, []);
+
+  const formatProposalToneLabel = React.useCallback((preset: FormValues["voicePreset"]) => {
+    if (preset === "signature") return "Balanced";
+    if (preset === "expert") return "Formal";
+    if (preset === "engaging") return "Warm";
+    return preset;
+  }, []);
+
   const handleProposalStart = React.useCallback((values: FormValues) => {
     setLoading(true);
     setProposalType(values.proposalType);
     setProposalVoicePreset(values.voicePreset);
+    setProposalDocumentTitle(values.jobTitle.trim() || formatProposalTypeLabel(values.proposalType));
+    setProposalDocumentMeta([formatProposalTypeLabel(values.proposalType), formatProposalToneLabel(values.voicePreset)].join(" · "));
     setProposalContent(null);
     setError(null);
     setErrorDetail(null);
     setFallbackInfo(null);
-  }, []);
+  }, [formatProposalToneLabel, formatProposalTypeLabel]);
 
   const handleProposalSubmit = React.useCallback(
     (values: FormValues, proposal: string, nextFallbackInfo?: ProposalGenerationFallbackInfo) => {
       setProposalType(values.proposalType);
       setProposalVoicePreset(values.voicePreset);
+      setProposalDocumentTitle(values.jobTitle.trim() || formatProposalTypeLabel(values.proposalType));
+      setProposalDocumentMeta([formatProposalTypeLabel(values.proposalType), formatProposalToneLabel(values.voicePreset)].join(" · "));
       setProposalContent(proposal);
       setError(null);
       setFallbackInfo(nextFallbackInfo ?? null);
       setLoading(false);
     },
-    [],
+    [formatProposalToneLabel, formatProposalTypeLabel],
   );
 
   const handleProposalError = React.useCallback(
@@ -102,12 +121,14 @@ export function ProposalForge(): JSX.Element {
       setLoading(false);
       setProposalType(values.proposalType);
       setProposalVoicePreset(values.voicePreset);
+      setProposalDocumentTitle(values.jobTitle.trim() || formatProposalTypeLabel(values.proposalType));
+      setProposalDocumentMeta([formatProposalTypeLabel(values.proposalType), formatProposalToneLabel(values.voicePreset)].join(" · "));
       setProposalContent(null);
       setError(message);
       setErrorDetail(rawReason ?? null);
       setFallbackInfo(null);
     },
-    [],
+    [formatProposalToneLabel, formatProposalTypeLabel],
   );
 
   React.useEffect(() => {
@@ -215,43 +236,6 @@ export function ProposalForge(): JSX.Element {
     };
   };
 
-  /* ── Shared styles ───────────────────────────────────────── */
-  const eyebrow: React.CSSProperties = {
-    fontSize: "var(--tx)",
-    fontWeight: 600,
-    color: "var(--am)",
-    letterSpacing: ".14em",
-    textTransform: "uppercase",
-    marginBottom: "var(--s2)",
-  };
-
-  const panelCard: React.CSSProperties = {
-    padding: "var(--s5)",
-    gap: "var(--space-card-grid)",
-  };
-
-  const panelHeader: React.CSSProperties = {
-    display: "flex",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: "var(--s3)",
-  };
-
-  const panelTitle: React.CSSProperties = {
-    fontFamily: '"Fraunces", serif',
-    fontSize: "var(--tx2)",
-    fontWeight: 600,
-    letterSpacing: "-.01em",
-    color: "var(--ti)",
-  };
-
-  const panelMeta: React.CSSProperties = {
-    fontSize: "var(--tx)",
-    color: "var(--tg2)",
-    marginTop: "var(--s1)",
-    lineHeight: 1.5,
-  };
-
   /* ── φ grid — §13 dasti-spec-v1 ──────────────────────────── */
   const phiGrid: React.CSSProperties = {
     display: "grid",
@@ -312,10 +296,7 @@ export function ProposalForge(): JSX.Element {
             <div style={phiGrid}>
 
               {/* Left panel — .cpn : form */}
-              <div className="dasti-surface-panel dasti-surface-panel--spacious" style={panelCard}>
-                <div style={panelHeader}>
-                  <div style={eyebrow}>Job Offer</div>
-                </div>
+              <div style={{ display: "grid", minWidth: 0 }}>
                 <div>
                   {isLoadingHandoff ? (
                     <div style={{ paddingTop: "var(--s2)" }}>
@@ -333,19 +314,18 @@ export function ProposalForge(): JSX.Element {
               </div>
 
               {/* Right panel — .opn : output */}
-              <div className="dasti-surface-panel dasti-surface-panel--spacious" style={panelCard}>
-                <div style={panelHeader}>
-                  <div style={eyebrow}>Draft</div>
-                </div>
+              <div style={{ display: "grid", minWidth: 0 }}>
                 <div>
                   <ProposalDisplay
                     proposalContent={proposalContent}
                     loading={loading}
-                    error={error}
-                    errorDetail={errorDetail}
-                    proposalType={proposalType}
-                    voicePreset={proposalVoicePreset}
-                    fallbackInfo={fallbackInfo}
+                  error={error}
+                  errorDetail={errorDetail}
+                  proposalType={proposalType}
+                  voicePreset={proposalVoicePreset}
+                  documentTitle={proposalDocumentTitle}
+                  documentMeta={proposalDocumentMeta}
+                  fallbackInfo={fallbackInfo}
                     onCopy={
                       proposalContent && !loading && !error
                         ? () => {

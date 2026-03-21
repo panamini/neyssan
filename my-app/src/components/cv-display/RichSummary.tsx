@@ -72,12 +72,12 @@ export function RichSummary({ item, sectionType }: RichSummaryProps): JSX.Elemen
       ].filter(l => l.value);
 
       return (
-        <div>
-          <p className="text-lg font-bold">{safeItem.name}</p>
-          <p className="text-sm [color:var(--tg2)]">{safeItem.label}</p>
-          <div className="flex flex-wrap mt-1 text-sm gap-x-4 gap-y-1">
+        <div className="cv-preview-stack">
+          <p className="cv-profile-name">{safeItem.name}</p>
+          <p className="cv-profile-role">{safeItem.label}</p>
+          <div className="cv-contact-links">
             {contactLinks.map(link => (
-              <a href={link.value} key={link.key} className="[color:var(--tm2)] hover:underline">
+              <a href={link.value} key={link.key} className="cv-contact-link">
                 {link.value}{link.icon}
               </a>
             ))}
