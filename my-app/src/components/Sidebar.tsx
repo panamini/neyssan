@@ -312,14 +312,10 @@ export const Sidebar: React.FC = () => {
           {/* CV sub-items */}
           {!sidebarCollapsed && cvs.slice(0, SB_MAX_ITEMS).map((cv) => {
             const isActive = currentCv?.id === cv.id;
-            const updatedAt = new Date(
-              cv.metadata?.updatedAt ?? cv.metadata?.createdAt ?? Date.now()
-            ).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" });
             return (
               <SbDoc
                 key={cv.id}
                 title={cv.title}
-                date={updatedAt}
                 isActive={isActive}
                 dense={compactDensity}
                 onClick={() => { handleLoadCv(cv.id); void navigate('/cv'); }}
@@ -353,18 +349,11 @@ export const Sidebar: React.FC = () => {
 
           {/* Proposal sub-items */}
           {!sidebarCollapsed && isSignedIn && proposals && proposals.slice(0, SB_MAX_ITEMS).map((p) => {
-            const date = new Date(p._creationTime).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" });
-            const typeLabel = p.metadata?.proposalType === "cover_letter" ? "Letter"
-              : p.metadata?.proposalType === "freelance_proposal" ? "Proposal"
-              : p.metadata?.proposalType === "application_message" ? "Message"
-              : "Letter";
             const isActive = isProposal && proposalView === "saved" && selectedProposalId === p._id;
             return (
               <SbDoc
                 key={p._id}
                 title={p.title ?? "Untitled"}
-                date={date}
-                docType={typeLabel}
                 isActive={isActive}
                 dense={compactDensity}
                 onClick={() => void navigate(`/proposal?view=saved&id=${encodeURIComponent(p._id)}`)}
@@ -396,22 +385,6 @@ export const Sidebar: React.FC = () => {
             <span style={navLabel(isStyle)}>Style</span>
           </div>
 
-          {/* Dark mode toggle — full row is the click target */}
-          <div
-            style={navItemBase}
-            className="sb-nav-item"
-            onClick={toggleDarkMode}
-            role="button"
-            tabIndex={0}
-            aria-pressed={isDarkMode}
-            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleDarkMode(); } }}
-          >
-            <div style={{ width: 16, height: 16, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--tg2)", pointerEvents: "none" }}>
-              {isDarkMode ? <MoonStar size={15} strokeWidth={1.5} /> : <SunMedium size={15} strokeWidth={1.5} />}
-            </div>
-            <span style={navLabel(false)}>{isDarkMode ? "Dark" : "Light"}</span>
-          </div>
-
           {/* Error display */}
           {error && !sidebarCollapsed && (
             <div style={{ padding: "var(--s2)", fontSize: "var(--tx)", color: "var(--ert)" }}>
@@ -421,29 +394,40 @@ export const Sidebar: React.FC = () => {
         </nav>
 
         {/* ── Footer — avatar only ─────────────────────────── */}
-        <div
-          style={{
-            flexShrink: 0,
-            padding: sidebarCollapsed ? "var(--s3) 0" : "var(--s3)",
-            borderTop: "1px solid var(--bo)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: sidebarCollapsed ? "center" : "flex-start",
-            gap: "var(--s3)",
-            overflow: "hidden",
-          }}
-        >
+        <div className={sidebarCollapsed ? "sb-footer sb-footer--collapsed" : "sb-footer"}>
           <div style={{ flexShrink: 0, display: "flex", alignItems: "center" }}>
             <UserButton afterSignOutUrl="/" appearance={clerkAppearance} />
           </div>
           {!sidebarCollapsed && (
-            <div style={{ minWidth: 0, overflow: "hidden", opacity: sidebarCollapsed ? 0 : 1, transition: "opacity .15s var(--ez)", display: "flex", flexDirection: "column", gap: 0 }}>
-              <div style={{ fontSize: "var(--ts)", fontWeight: 600, color: "var(--ti)", lineHeight: 1.18, letterSpacing: "-.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <div className="sb-footer__account" style={{ flex: 1 }}>
+              <div className="sb-footer__title">
                 {user?.firstName ?? user?.username ?? "Account"}
               </div>
-              <div style={{ fontSize: "var(--tx)", fontWeight: 500, color: "var(--tm2)", lineHeight: 1.18, letterSpacing: "0", textTransform: "none", whiteSpace: "nowrap" }}>
+              <div className="sb-footer__subtitle">
                 free
               </div>
+            </div>
+          )}
+          {!sidebarCollapsed && (
+            <div className="sb-theme-toggle" role="group" aria-label="Theme">
+              <button
+                type="button"
+                className={isDarkMode ? "sb-theme-toggle__option" : "sb-theme-toggle__option sb-theme-toggle__option--active"}
+                onClick={toggleDarkMode}
+                aria-pressed={!isDarkMode}
+                title="Light mode"
+              >
+                <SunMedium size={14} strokeWidth={1.6} />
+              </button>
+              <button
+                type="button"
+                className={isDarkMode ? "sb-theme-toggle__option sb-theme-toggle__option--active" : "sb-theme-toggle__option"}
+                onClick={toggleDarkMode}
+                aria-pressed={isDarkMode}
+                title="Dark mode"
+              >
+                <MoonStar size={14} strokeWidth={1.6} />
+              </button>
             </div>
           )}
         </div>
@@ -568,8 +552,6 @@ function SbViewAll({ label, dense, onClick }: { label: string; dense: boolean; o
 
 interface SbDocProps {
   title: string;
-  date: string;
-  docType?: string;
   isActive: boolean;
   dense?: boolean;
   onClick: () => void;
@@ -579,7 +561,7 @@ interface SbDocProps {
   hideRenameAction?: boolean;
 }
 
-function SbDoc({ title, date, docType, isActive, dense = false, onClick, onRename, onDelete, hideActions, hideRenameAction }: SbDocProps) {
+function SbDoc({ title, isActive, dense = false, onClick, onRename, onDelete, hideActions, hideRenameAction }: SbDocProps) {
   const [hovered, setHovered] = useState(false);
   const [renHovered, setRenHovered] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
@@ -625,15 +607,11 @@ function SbDoc({ title, date, docType, isActive, dense = false, onClick, onRenam
       >
         {title}
       </div>
-      <div style={{ fontSize: dense ? 9.5 : 10, color: "var(--tg2)", marginTop: 1, display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap", lineHeight: 1.28 }}>
-        {date}
-        {docType && <span>·</span>}
-        {docType && <span style={{ color: "var(--tm2)", fontWeight: 500 }}>{docType}</span>}
-      </div>
 
       {!hideActions && (hovered || isConfirming) && (
         <div
-          style={{ position: "absolute", right: "var(--s1)", top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", gap: 0, background: "transparent", paddingLeft: 0, boxShadow: `-10px 0 8px 4px ${actionMaskSurface}` }}
+          className="dasti-icon-cluster dasti-icon-cluster--flush"
+          style={{ position: "absolute", right: "var(--s1)", top: "50%", transform: "translateY(-50%)", background: "transparent", paddingLeft: 0, boxShadow: `-10px 0 8px 4px ${actionMaskSurface}` }}
           onClick={(e) => e.stopPropagation()}
         >
           {isConfirming ? (

@@ -167,39 +167,41 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
 
   if (loading) {
     return (
-      <div className="rounded-[var(--rm)] border border-[color:var(--bo)] [background:var(--sf1)] p-6" aria-busy="true" aria-label="Generating proposal">
-        <div style={{ display: "flex", flexDirection: "column", gap: "var(--s3)" }}>
-          {[0.85, 1, 0.72, 0.95, 0.6].map((w, i) => (
-            <div
-              key={i}
-              style={{
-                height: 13,
-                borderRadius: 4,
-                width: `${w * 100}%`,
-                background: "linear-gradient(90deg, var(--sf2) 25%, var(--sfr) 50%, var(--sf2) 75%)",
-                backgroundSize: "200% 100%",
-                animation: `dasti-shimmer 1.4s ease-in-out ${i * 0.1}s infinite`,
-              }}
-            />
-          ))}
-          <div style={{ height: "var(--s3)" }} />
-          {[0.9, 0.78, 1, 0.55].map((w, i) => (
-            <div
-              key={`b${i}`}
-              style={{
-                height: 13,
-                borderRadius: 4,
-                width: `${w * 100}%`,
-                background: "linear-gradient(90deg, var(--sf2) 25%, var(--sfr) 50%, var(--sf2) 75%)",
-                backgroundSize: "200% 100%",
-                animation: `dasti-shimmer 1.4s ease-in-out ${(i + 5) * 0.1}s infinite`,
-              }}
-            />
-          ))}
+      <div className="dasti-proposal-sheet" aria-busy="true" aria-label="Generating proposal">
+        <div className="dasti-proposal-sheet__body">
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--s3)", width: "100%" }}>
+            {[0.85, 1, 0.72, 0.95, 0.6].map((w, i) => (
+              <div
+                key={i}
+                style={{
+                  height: 13,
+                  borderRadius: 4,
+                  width: `${w * 100}%`,
+                  background: "linear-gradient(90deg, var(--sf2) 20%, var(--sfr) 50%, var(--sf2) 80%)",
+                  backgroundSize: "200% 100%",
+                  animation: `dasti-shimmer 1.4s ease-in-out ${i * 0.1}s infinite`,
+                }}
+              />
+            ))}
+            <div style={{ height: "var(--s3)" }} />
+            {[0.9, 0.78, 1, 0.55].map((w, i) => (
+              <div
+                key={`b${i}`}
+                style={{
+                  height: 13,
+                  borderRadius: 4,
+                  width: `${w * 100}%`,
+                  background: "linear-gradient(90deg, var(--sf2) 20%, var(--sfr) 50%, var(--sf2) 80%)",
+                  backgroundSize: "200% 100%",
+                  animation: `dasti-shimmer 1.4s ease-in-out ${(i + 5) * 0.1}s infinite`,
+                }}
+              />
+            ))}
+            <p style={{ marginTop: "var(--s4)", fontSize: "var(--tx)", color: "var(--tm2)" }}>
+              Generating…
+            </p>
+          </div>
         </div>
-        <p style={{ marginTop: "var(--s4)", fontSize: "var(--tx)", color: "var(--tg2)" }}>
-          Generating…
-        </p>
       </div>
     );
   }
@@ -251,30 +253,23 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           {fallbackDisclosure}
         </div>
       ) : null}
-      <div
-        style={{
-          borderRadius: "var(--rm)",
-          border: "1px solid var(--bo)",
-          background: "var(--bg)",
-          padding: "var(--s6)",
-          minHeight: 360,
-        }}
-      >
-        {onCopy ? (
-          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "var(--s3)" }}>
-            <button
-              type="button"
-              onClick={onCopy}
-              title={copyFeedback === "copied" ? "Copied" : "Copy"}
-              aria-label={copyFeedback === "copied" ? "Copied" : "Copy"}
-              className="dasti-icon-button"
-              style={{ color: copyFeedback === "copied" ? "var(--ok)" : undefined }}
-            >
-              {copyFeedback === "copied" ? <Check size={16} strokeWidth={2} aria-hidden="true" /> : <Copy size={16} strokeWidth={1.5} aria-hidden="true" />}
-            </button>
-          </div>
-        ) : null}
+      {onCopy ? (
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <button
+            type="button"
+            onClick={onCopy}
+            title={copyFeedback === "copied" ? "Copied" : "Copy"}
+            aria-label={copyFeedback === "copied" ? "Copied" : "Copy"}
+            className="dasti-icon-button"
+            style={{ color: copyFeedback === "copied" ? "var(--ok)" : undefined }}
+          >
+            {copyFeedback === "copied" ? <Check size={16} strokeWidth={2} aria-hidden="true" /> : <Copy size={16} strokeWidth={1.5} aria-hidden="true" />}
+          </button>
+        </div>
+      ) : null}
+      <div className="dasti-proposal-sheet">
         <div
+          className="dasti-proposal-sheet__body dasti-proposal-sheet__body--readonly"
           style={{
             fontFamily: documentTypography.fontFamily,
             fontSize: documentTypography.fontSize,
@@ -283,6 +278,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
             letterSpacing: documentTypography.letterSpacing,
             color: "var(--ti)",
             maxWidth: "none",
+            height: "100%",
           }}
         >
           {isLetterLike ? (

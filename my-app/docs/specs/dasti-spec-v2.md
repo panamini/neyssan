@@ -205,6 +205,57 @@ Chaque palette définit 6 tokens : `--ac --am --ap --as --fr --op`
 
 ---
 
+## 6bis. HIÉRARCHIE DES GRANDES SURFACES
+
+Sur les écrans riches (`Compose`, `Saved`, `Library`, `Style`), garder **3 grandes surfaces neutres maximum visibles à l’écran** :
+
+1. `--bg`
+   - canvas global / fond de page
+2. `--sfr`
+   - panel shell / carte principale / surface raised
+3. `--sf1`
+   - well documentaire / zone d’écriture / surface de lecture
+
+`--sf2` ne doit pas être utilisé comme grande surface de repos.
+Il sert uniquement à :
+- hover
+- pressed
+- chips
+- focus local
+- emphase douce
+- bande de shimmer / skeleton
+
+### Règle optique
+
+Les grandes masses doivent toujours se lire immédiatement comme :
+
+- canvas
+- panel
+- document
+
+Pas comme une pile de gris quasi identiques.
+
+### Application recommandée
+
+- `Proposal Forge`
+  - page = `--bg`
+  - panneaux `Job Offer` / `Draft` = `--sfr`
+  - `Job Title`, compose well, generated draft, saved editable draft = `--sf1`
+- `Cv Forge`
+  - page = `--bg`
+  - sections/cards = `--sfr`
+  - puits internes documentaires = `--sf1` seulement si une vraie hiérarchie de lecture est nécessaire
+- `Style`
+  - page = `--bg`
+  - section cards = `--sfr`
+  - previews internes = `--sf1` si la profondeur documentaire doit être marquée
+
+### Pourquoi
+
+Au-delà de 3 grandes valeurs neutres simultanées, la charge cognitive augmente et la hiérarchie visuelle devient floue, surtout en dark mode.
+
+---
+
 ## 7. TYPOGRAPHIE — familles & usage
 
 ### Source Sans 3
@@ -226,6 +277,26 @@ Surfaces document uniquement : corps de lettre, preview CV, textarea proposalcon
 ### IBM Plex Mono
 Style typographique Expert uniquement — headers de section monospace dans les previews CV.
 - Weight : 300-500
+
+### Eyebrows / sous-titres accentés
+
+Les labels caps accentés (`JOB OFFER`, `DRAFT`, etc.) sont des **repères d’orientation**, pas une dépendance fonctionnelle.
+
+Ils sont utiles quand :
+- plusieurs panneaux coexistent
+- l’écran est split en zones sœurs
+- il faut réaffirmer rapidement la nature d’un panneau
+
+Ils deviennent optionnels si :
+- la navigation situe déjà clairement l’utilisateur
+- le placeholder ou le contenu expliquent déjà l’action
+- leur répétition crée plus de bruit que de clarté
+
+Règle :
+- petits
+- sobres
+- rares
+- jamais seuls pour expliquer le fonctionnement
 
 ---
 

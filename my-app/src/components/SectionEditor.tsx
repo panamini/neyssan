@@ -687,7 +687,7 @@ export default function SectionEditor({
       <div className="mb-4 border border-bo rounded-rm section-container">
         <div className="flex items-center justify-between p-3 [background:var(--sf1)]">
           <h3 className="text-lg font-semibold">{section.title}</h3>
-          <div className="flex items-center" style={{ gap: 2 }}>
+          <div className="dasti-icon-cluster dasti-icon-cluster--tight">
             <button
               type="button"
               onClick={(e) => {
@@ -1063,7 +1063,7 @@ export default function SectionEditor({
         {!collapsed && (
           <div className="px-3 pb-2">
             {/* Add button */}
-            <div className="flex items-center justify-end py-1.5">
+            <div className="flex items-center justify-start py-1.5">
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); handleAddSkillInline(); }}
@@ -1447,7 +1447,7 @@ export default function SectionEditor({
         {!collapsed && (
           <div className="px-3 pb-2">
             {/* Add button */}
-            <div className="flex items-center justify-end py-1.5">
+            <div className="flex items-center justify-start py-1.5">
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); handleAddLanguageInline(); }}
@@ -1881,27 +1881,27 @@ export default function SectionEditor({
         const hasMoreBullets = variant === "compact" && bulletSource.length > bulletList.length;
 
         return (
-          <div key={structuredId} className="space-y-1 py-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-sm font-medium truncate [color:var(--ti)]">{title}</div>
+          <div key={structuredId} className="py-3">
+            <div className="cv-entry-summary">
+              <div className="cv-entry-summary__main">
+                <p className="cv-entry-title cv-entry-title--truncate">{title}</p>
                 {subtitle ? (
-                  <div className="text-xs truncate [color:var(--tm2)]">{subtitle}</div>
+                  <p className="cv-entry-subtitle cv-entry-subtitle--truncate">{subtitle}</p>
                 ) : null}
               </div>
-              <div className="text-xs shrink-0 [color:var(--tm2)]">{dates}</div>
+              {dates ? <p className="cv-entry-date">{dates}</p> : null}
             </div>
             {bulletList.length > 0 ? (
-              <ul className="ml-4 space-y-1 text-xs list-disc [color:var(--ti)]">
+              <ul className="cv-entry-bullets">
                 {bulletList.map((line, bulletIdx) => (
-                  <li key={`${structuredId}-bullet-${bulletIdx}`} className="leading-snug">
+                  <li key={`${structuredId}-bullet-${bulletIdx}`}>
                     {line}
                   </li>
                 ))}
               </ul>
             ) : null}
             {hasMoreBullets ? (
-              <div className="ml-4 text-[11px] [color:var(--tm2)]">Expand to view more details.</div>
+              <p className="cv-entry-note">Expand to view more details.</p>
             ) : null}
           </div>
         );
@@ -1921,21 +1921,21 @@ export default function SectionEditor({
           : description;
 
       return (
-        <div key={structuredId} className="space-y-1 py-3">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="text-sm font-medium truncate [color:var(--ti)]">{title}</div>
+        <div key={structuredId} className="py-3">
+          <div className="cv-entry-summary">
+            <div className="cv-entry-summary__main">
+              <p className="cv-entry-title cv-entry-title--truncate">{title}</p>
               {subtitle ? (
-                <div className="text-xs truncate [color:var(--tm2)]">{subtitle}</div>
+                <p className="cv-entry-subtitle cv-entry-subtitle--truncate">{subtitle}</p>
               ) : null}
             </div>
-            <div className="text-xs shrink-0 [color:var(--tm2)]">{dates}</div>
+            {dates ? <p className="cv-entry-date">{dates}</p> : null}
           </div>
           {truncatedDescription ? (
-            <p className="ml-0 text-xs leading-snug [color:var(--ti)]">{truncatedDescription}</p>
+            <p className="cv-entry-body">{truncatedDescription}</p>
           ) : null}
           {!truncatedDescription && hasObjectDescription ? (
-            <p className="ml-0 text-xs italic [color:var(--tm2)]">Detailed description available.</p>
+            <p className="cv-entry-note">Detailed description available.</p>
           ) : null}
         </div>
       );
@@ -1945,7 +1945,7 @@ export default function SectionEditor({
       <div className="mb-4 border border-bo rounded-rm section-container">
         <div className="flex items-center justify-between p-3 [background:var(--sf1)]">
           <h3 className="text-lg font-semibold">{section.title}</h3>
-          <div className="flex items-center" style={{ gap: 2 }}>
+          <div className="dasti-icon-cluster dasti-icon-cluster--tight">
             {isV1Active ? (
               <button
                 type="button"
