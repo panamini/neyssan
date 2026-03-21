@@ -1140,6 +1140,7 @@ button::-moz-focus-inner,
 .dasti-proposal-sheet-frame {
   width: min(100%, 560px);
   max-width: 100%;
+  margin-inline: auto;
 }
 
 .dasti-proposal-sheet__header {
@@ -1261,6 +1262,10 @@ button::-moz-focus-inner,
   padding-bottom: 0;
 }
 
+.dasti-proposal-sheet__body--with-header.dasti-proposal-sheet__body--composer {
+  padding-top: 0;
+}
+
 .dasti-proposal-sheet__body--letter {
   padding-top: 0;
 }
@@ -1328,13 +1333,14 @@ button::-moz-focus-inner,
   bottom: 0;
   background: linear-gradient(
     to top,
-    color-mix(in srgb, var(--sf1) 92%, transparent) 0%,
-    color-mix(in srgb, var(--sf1) 52%, transparent) 42%,
+    color-mix(in srgb, var(--sf1) 84%, transparent) 0%,
+    color-mix(in srgb, var(--sf1) 36%, transparent) 52%,
     transparent 100%
   );
 }
 
-.dasti-proposal-sheet__body--composer::before {
+.dasti-proposal-sheet__body--composer::before,
+.dasti-proposal-sheet__body--composer::after {
   display: none;
 }
 
@@ -1384,7 +1390,7 @@ button::-moz-focus-inner,
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
-  padding-bottom: var(--s2);
+  padding-bottom: calc(var(--hs) + var(--s4));
 }
 
 .dasti-proposal-sheet__scroll--letter {
@@ -1424,13 +1430,14 @@ button::-moz-focus-inner,
   align-items: center;
   justify-content: center;
   padding: 0;
-  border-radius: 0;
+  border-radius: var(--rs);
   margin-left: auto;
   flex-shrink: 0;
   background: transparent;
   border: none;
   box-shadow: none;
   color: var(--tm2);
+  transition: background .12s var(--ez), color .12s var(--ez);
 }
 
 .dasti-proposal-submit__icon {
@@ -1438,17 +1445,23 @@ button::-moz-focus-inner,
 }
 
 .dasti-proposal-submit:hover:not(:disabled) {
+  background: var(--sf2);
   color: var(--ti);
 }
 
 .dasti-proposal-submit--busy {
-  width: var(--hb);
-  height: var(--hb);
-  min-width: var(--hb);
-  border-radius: 999px;
-  background: var(--sfr);
+  width: calc(var(--hb) + var(--s2));
+  height: calc(var(--hb) + var(--s2));
+  min-width: calc(var(--hb) + var(--s2));
+  border-radius: var(--rs);
+  background: var(--sf2);
   border: none;
   box-shadow: none;
+  color: var(--ti);
+}
+
+.dasti-proposal-submit--busy:hover:not(:disabled) {
+  background: var(--sf2);
   color: var(--ti);
 }
 
@@ -1550,6 +1563,8 @@ button::-moz-focus-inner,
   justify-content: space-between;
   gap: var(--s3);
   flex-wrap: wrap;
+  width: min(100%, 560px);
+  margin-inline: auto;
   margin-top: var(--s2);
 }
 

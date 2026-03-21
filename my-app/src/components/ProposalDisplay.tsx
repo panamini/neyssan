@@ -28,62 +28,6 @@ interface ProposalDisplayProps {
   onContentCommit?: () => void;
 }
 
-const parseMarkdown = (content: string) => {
-  const lines = content.split("\n");
-  const elements = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-
-    if (line.startsWith("# ")) {
-      elements.push(
-        <h1 key={i} className="mb-6 text-4xl font-bold">
-          {React.createElement('span', {
-            dangerouslySetInnerHTML: {
-              __html: line.substring(2).replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/\*(.*?)\*/g, "<em>$1</em>")
-            }
-          })}
-        </h1>
-      );
-    } else if (line.startsWith("## ")) {
-      elements.push(
-        <h2 key={i} className="mb-4 text-2xl font-semibold">
-          {React.createElement('span', {
-            dangerouslySetInnerHTML: {
-              __html: line.substring(3).replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/\*(.*?)\*/g, "<em>$1</em>")
-            }
-          })}
-        </h2>
-      );
-    } else if (line.trim() === "") {
-      elements.push(<div key={i} className="h-4" />);
-    } else {
-      elements.push(
-        <p
-          key={i}
-          className="mb-4"
-          style={{
-            fontFamily: "inherit",
-            fontSize: "inherit",
-            lineHeight: "inherit",
-            fontWeight: "inherit",
-            letterSpacing: "inherit",
-            color: "inherit",
-          }}
-        >
-          {React.createElement('span', {
-            dangerouslySetInnerHTML: {
-              __html: line.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/\*(.*?)\*/g, "<em>$1</em>")
-            }
-          })}
-        </p>
-      );
-    }
-  }
-
-  return <>{elements}</>;
-};
-
 function stripInlineMarkdown(text: string): string {
   return text
     .replace(/^\s{0,3}#{1,6}\s+/gm, "")
@@ -96,13 +40,10 @@ function stripInlineMarkdown(text: string): string {
 }
 
 function renderPlainLetterBody(content: string) {
-  const plainText = content
-    .split(/\n\s*\n/)
-    .map((part) => stripInlineMarkdown(part))
-    .map((part) => part.replace(/\n{3,}/g, "\n\n").trim())
-    .filter(Boolean);
-
-  const normalized = plainText.join("\n\n");
+  const normalized = content
+    .split("\n")
+    .map((line) => stripInlineMarkdown(line))
+    .join("\n");
 
   if (!normalized) {
     return (
@@ -126,6 +67,25 @@ function renderPlainLetterBody(content: string) {
       }}
     >
       {normalized}
+    </div>
+  );
+}
+
+function renderPlainPreviewBody(content: string) {
+  return (
+    <div
+      style={{
+        margin: 0,
+        fontFamily: "inherit",
+        fontSize: "inherit",
+        lineHeight: "inherit",
+        fontWeight: "inherit",
+        letterSpacing: "inherit",
+        color: "inherit",
+        whiteSpace: "pre-wrap",
+      }}
+    >
+      {content}
     </div>
   );
 }
@@ -383,7 +343,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                   height: "100%",
                   resize: "none",
                   paddingTop: isLetterLike ? "clamp(28px, 6vh, 52px)" : undefined,
-                  paddingBottom: isLetterLike ? "var(--s5)" : undefined,
+                  paddingBottom: "calc(var(--hs) + var(--s4))",
                 }}
               />
             </div>
@@ -416,13 +376,9 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                 <div className="dasti-proposal-sheet__scroll-content">
                   {isLetterLike ? <div className="dasti-proposal-letter-lead" aria-hidden /> : null}
                   {isLetterLike ? (
-                    <div className="max-w-none" style={{ paddingBottom: "var(--s5)" }}>
-                      {renderPlainLetterBody(proposalContent)}
-                    </div>
+                    <div className="max-w-none">{renderPlainLetterBody(proposalContent)}</div>
                   ) : (
-                    <div className="prose prose-lg max-w-none dark:prose-invert prose-neutral">
-                      {parseMarkdown(proposalContent)}
-                    </div>
+                    <div className="max-w-none">{renderPlainPreviewBody(proposalContent)}</div>
                   )}
                 </div>
               </div>

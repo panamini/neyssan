@@ -429,6 +429,9 @@ export function ProposalForge(): JSX.Element {
     alignItems: "start",
     justifyContent: "center",
   };
+  const stackedCardWidthStyle: React.CSSProperties = isCompactComposeLayout
+    ? { width: "min(100%, 560px)", marginInline: "auto" }
+    : { width: "100%" };
 
   return (
     <div
@@ -481,7 +484,7 @@ export function ProposalForge(): JSX.Element {
 
               {/* Left panel — .cpn : form */}
               <div style={{ display: "grid", minWidth: 0 }}>
-                <div>
+                <div style={stackedCardWidthStyle}>
                   {isLoadingHandoff ? (
                     <div style={{ paddingTop: "var(--s2)" }}>
                       <p style={{ fontSize: "var(--ts)", color: "var(--tm2)" }}>Loading imported job offer…</p>
@@ -499,7 +502,7 @@ export function ProposalForge(): JSX.Element {
 
               {/* Right panel — .opn : output */}
               <div style={{ display: "grid", minWidth: 0 }}>
-                <div>
+                <div style={stackedCardWidthStyle}>
                   <ProposalDisplay
                     proposalContent={proposalContent}
                     loading={loading}

@@ -739,7 +739,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                     />
                   </div>
                 </div>
-                <div className="dasti-proposal-sheet__body dasti-proposal-sheet__body--with-header dasti-proposal-sheet__body--composer">
+                <div className="dasti-proposal-sheet__body dasti-proposal-sheet__body--composer">
                   <textarea
                     ref={jobDescriptionRef}
                     id="jobDescription"
