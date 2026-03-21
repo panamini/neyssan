@@ -7,6 +7,7 @@ import { UserButton } from '@clerk/clerk-react';
 import { api } from '../../convex/_generated/api';
 import { useCvLibrary } from '../contexts/CvLibraryContext';
 import { normalizeAndValidateCvDocument } from '../lib/normalize-cv';
+import { formatCvDisplayTitle } from '../lib/proposal-personalization';
 import CvRenameDialog from './CvRenameDialog';
 import { useToast } from './ui/toast';
 
@@ -312,10 +313,26 @@ export const Sidebar: React.FC = () => {
           {/* CV sub-items */}
           {!sidebarCollapsed && cvs.slice(0, SB_MAX_ITEMS).map((cv) => {
             const isActive = currentCv?.id === cv.id;
+            const profileSection = Array.isArray(cv.sections)
+              ? cv.sections.find((section) => section.type === "profile")
+              : undefined;
+            const profileItem = Array.isArray(profileSection?.structuredContent)
+              ? (profileSection?.structuredContent[0] as Record<string, unknown> | undefined)
+              : undefined;
+            const displayTitle = formatCvDisplayTitle({
+              title: cv.title,
+              profileName: typeof profileItem?.name === "string" ? profileItem.name : null,
+              desiredPosition:
+                typeof profileItem?.desiredPosition === "string"
+                  ? profileItem.desiredPosition
+                  : typeof profileItem?.title === "string"
+                    ? profileItem.title
+                    : null,
+            });
             return (
               <SbDoc
                 key={cv.id}
-                title={cv.title}
+                title={displayTitle}
                 isActive={isActive}
                 dense={compactDensity}
                 onClick={() => { handleLoadCv(cv.id); void navigate('/cv'); }}

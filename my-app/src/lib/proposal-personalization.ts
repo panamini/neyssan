@@ -62,6 +62,9 @@ export interface LocalCvPickerOption {
   profileName?: string;
   desiredPosition?: string;
   email?: string;
+  phone?: string;
+  linkedin?: string;
+  website?: string;
   summarySnippet?: string;
   isActive: boolean;
 }
@@ -71,6 +74,17 @@ export interface ProposalGenerationPersonalizationPayload {
   personalizationContext?: ProposalPersonalizationContext;
   personalizationRichness?: ProposalPersonalizationRichness;
 }
+
+type CvDisplayIdentity = {
+  title?: string | null;
+  profileName?: string | null;
+  desiredPosition?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  linkedin?: string | null;
+  website?: string | null;
+  location?: string | null;
+};
 
 type LooseRecord = Record<string, unknown>;
 
@@ -114,6 +128,48 @@ function clampText(value: unknown, maxLength: number): string | undefined {
   if (!compact) return undefined;
   if (compact.length <= maxLength) return compact;
   return `${compact.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
+}
+
+function compactDisplayPart(value: unknown, maxLength = 80): string | undefined {
+  const compact = clampText(value, maxLength);
+  if (!compact) return undefined;
+  if (compact.length > 56 && /[.!?]/.test(compact)) return undefined;
+  return compact;
+}
+
+function isPlaceholderDisplayTitle(value: string | undefined): boolean {
+  if (!value) return false;
+  return /^(?:untitled cv|imported cv|draft resume|resume)$/i.test(value.trim());
+}
+
+export function formatCvDisplayTitle(identity: CvDisplayIdentity): string {
+  const desiredPosition = compactDisplayPart(identity.desiredPosition, 72);
+  const profileName = compactDisplayPart(identity.profileName, 72);
+  const fallbackTitle = compactDisplayPart(identity.title, 120);
+
+  if (desiredPosition && profileName) return `${desiredPosition} — ${profileName}`;
+  if (desiredPosition) return desiredPosition;
+  if (profileName) return profileName;
+  if (fallbackTitle && !isPlaceholderDisplayTitle(fallbackTitle)) return fallbackTitle;
+  return "Resume";
+}
+
+export function formatCvDisplaySubtitle(identity: CvDisplayIdentity): string | undefined {
+  const displayTitle = formatCvDisplayTitle(identity).toLowerCase();
+  const email = compactDisplayPart(identity.email, 96);
+  const linkedin = compactDisplayPart(identity.linkedin, 96);
+  const website = compactDisplayPart(identity.website, 96);
+  const phone = compactDisplayPart(identity.phone, 48);
+  const location = compactDisplayPart(identity.location, 80);
+
+  const candidates = [email, linkedin, website, phone, location];
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    const normalized = candidate.toLowerCase();
+    if (displayTitle.includes(normalized)) continue;
+    return candidate;
+  }
+  return undefined;
 }
 
 function dedupe(values: Array<string | undefined>): string[] {
@@ -346,10 +402,28 @@ function readProfileIdentity(doc: CvDocument): {
   return { name, desiredPosition };
 }
 
-function readProfileEmail(doc: CvDocument): string | undefined {
+function readProfileContact(doc: CvDocument): {
+  email?: string;
+  phone?: string;
+  linkedin?: string;
+  website?: string;
+} {
   const profileSection = getSectionByType(doc, "profile");
   const profileItem = asRecord(getStructuredItems(profileSection)[0]);
-  return clampText(readStringField(profileItem, "email"), 120);
+  return {
+    ...(clampText(readStringField(profileItem, "email"), 120)
+      ? { email: clampText(readStringField(profileItem, "email"), 120) }
+      : {}),
+    ...(clampText(readStringField(profileItem, "phone"), 48)
+      ? { phone: clampText(readStringField(profileItem, "phone"), 48) }
+      : {}),
+    ...(clampText(readStringField(profileItem, "linkedin"), 120)
+      ? { linkedin: clampText(readStringField(profileItem, "linkedin"), 120) }
+      : {}),
+    ...(clampText(readStringField(profileItem, "website"), 120)
+      ? { website: clampText(readStringField(profileItem, "website"), 120) }
+      : {}),
+  };
 }
 
 function readRecentExperience(
@@ -526,7 +600,11 @@ export function buildActiveCvSnapshotFromCvDocument(
   const richness = classifyPersonalizationRichness(personalizationContext);
 
   return {
-    title: clampText(doc.title, 120) ?? "Untitled CV",
+    title: formatCvDisplayTitle({
+      title: clampText(doc.title, 120),
+      profileName: personalizationContext?.name,
+      desiredPosition: personalizationContext?.desiredPosition,
+    }),
     personalizationContext: richness === "none" ? null : personalizationContext,
     ...(typeof doc.metadata?.updatedAt === "string"
       ? { updatedAt: doc.metadata.updatedAt }
@@ -622,7 +700,7 @@ export function listLocalCvPickerOptions(): LocalCvPickerOption[] {
       if (!doc) return null;
 
       const identity = readProfileIdentity(doc);
-      const email = readProfileEmail(doc);
+      const contact = readProfileContact(doc);
       const summarySnippet = readSummary(doc);
       const updatedAt =
         typeof doc.metadata?.updatedAt === "string"
@@ -635,14 +713,21 @@ export function listLocalCvPickerOptions(): LocalCvPickerOption[] {
 
       return {
         id: String(doc.id),
-        title: clampText(doc.title, 120) ?? "Untitled CV",
+        title: formatCvDisplayTitle({
+          title: clampText(doc.title, 120),
+          profileName: identity.name,
+          desiredPosition: identity.desiredPosition,
+        }),
         ...(updatedAt ? { updatedAt } : {}),
         ...(createdAt ? { createdAt } : {}),
         ...(identity.name ? { profileName: identity.name } : {}),
         ...(identity.desiredPosition
           ? { desiredPosition: identity.desiredPosition }
           : {}),
-        ...(email ? { email } : {}),
+        ...(contact.email ? { email: contact.email } : {}),
+        ...(contact.phone ? { phone: contact.phone } : {}),
+        ...(contact.linkedin ? { linkedin: contact.linkedin } : {}),
+        ...(contact.website ? { website: contact.website } : {}),
         ...(summarySnippet
           ? { summarySnippet: clampText(summarySnippet, 120) }
           : {}),
