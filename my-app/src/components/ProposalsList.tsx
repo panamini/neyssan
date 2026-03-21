@@ -133,7 +133,16 @@ export default function ProposalsList({
   const titleTextareaRef = React.useRef<HTMLTextAreaElement>(null);
   const { showToast } = useToast();
   const isCompactLibraryLayout = viewportWidth < 1180;
-  const libraryPanelPadding = isCompactLibraryLayout ? "var(--s4)" : "var(--s5)";
+  const savedContentRailStyle: React.CSSProperties = React.useMemo(
+    () => ({
+      width: "min(100%, 560px)",
+      margin: 0,
+      display: "grid",
+      gap: "var(--s4)",
+      minWidth: 0,
+    }),
+    [],
+  );
 
   React.useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -225,10 +234,11 @@ export default function ProposalsList({
   }
 
   const selDate = selected
-    ? new Date(selected._creationTime).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" })
+    ? new Date(selected._creationTime).toLocaleDateString("en-US", { day: "2-digit", month: "2-digit", year: "2-digit" })
     : "";
   const selType = selected ? typeLabel(getStoredProposalType(selected)) : "";
   const selTone = selected ? toneLabel(getStoredVoicePreset(selected)) : "";
+  const selectedFooterMeta = selected ? [selType, selTone, selDate].filter(Boolean).join(" · ") : "";
   const selectedTypography = getProposalDocumentTypography(
     selected ? getStoredVoicePreset(selected) : null,
   );
@@ -314,8 +324,8 @@ export default function ProposalsList({
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: isCompactLibraryLayout ? "minmax(0,1fr)" : "260px 1fr",
-        gap: "var(--s5)",
+        gridTemplateColumns: isCompactLibraryLayout ? "minmax(0,1fr)" : "minmax(260px, 346px) minmax(0, 1fr)",
+        gap: "var(--s3)",
         alignItems: "start",
         minWidth: 0,
       }}
@@ -324,49 +334,50 @@ export default function ProposalsList({
       <div
         className="dasti-surface-panel"
         style={{
-          padding: libraryPanelPadding,
+          padding: 0,
           gap: "var(--s4)",
-          overflow: "hidden",
+          overflow: "visible",
+          background: "transparent",
+          border: "none",
+          boxShadow: "none",
         }}
       >
         {selected ? (
           <>
-            <div style={{ display: "grid", gap: "var(--s3)", minWidth: 0 }}>
-              <div className="dasti-doc-card__header">
-                <textarea
-                  ref={titleTextareaRef}
-                  value={editTitle}
-                  rows={2}
-                  onChange={(e) => setEditTitle(e.target.value)}
-                  onBlur={() => {
-                    void handleSaveTitle();
-                    if (titleTextareaRef.current) {
-                      const ta = titleTextareaRef.current;
-                      requestAnimationFrame(() => { ta.scrollTop = 0; });
-                    }
-                  }}
-                  className="dasti-doc-card__title"
-                  style={{
-                    border: "none",
-                    background: "transparent",
-                    width: "100%",
-                    outline: "none",
-                    resize: "none",
-                    overflowWrap: "break-word",
-                    wordBreak: "break-word",
-                    overflow: "hidden",
-                    padding: 0,
-                  } as React.CSSProperties}
-                />
-                <span className="dasti-doc-card__date" style={{ whiteSpace: "nowrap", flexShrink: 0 }}>
-                  {selDate}
-                </span>
-              </div>
-
-              <div className="dasti-doc-card__meta">
-                <span>{selType}</span>
-                <span>·</span>
-                <span>{selTone}</span>
+            <div className="dasti-doc-card dasti-doc-card--library dasti-doc-card--proposal-library" style={{ cursor: "default" }}>
+              <div className="dasti-doc-card__stack">
+                <div className="dasti-doc-card__title-frame dasti-doc-card__title-frame--top">
+                  <textarea
+                    ref={titleTextareaRef}
+                    value={editTitle}
+                    rows={2}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    onBlur={() => {
+                      void handleSaveTitle();
+                      if (titleTextareaRef.current) {
+                        const ta = titleTextareaRef.current;
+                        requestAnimationFrame(() => {
+                          ta.scrollTop = 0;
+                        });
+                      }
+                    }}
+                    className="dasti-doc-card__title"
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      width: "100%",
+                      outline: "none",
+                      resize: "none",
+                      overflowWrap: "break-word",
+                      wordBreak: "break-word",
+                      overflow: "hidden",
+                      padding: 0,
+                    } as React.CSSProperties}
+                  />
+                </div>
+                <div className="dasti-doc-card__footer dasti-doc-card__footer--stamp-only">
+                  <span className="dasti-doc-card__stamp">{selectedFooterMeta}</span>
+                </div>
               </div>
             </div>
 
@@ -395,127 +406,123 @@ export default function ProposalsList({
       <div
         className="dasti-surface-panel"
         style={{
-          padding: libraryPanelPadding,
+          padding: 0,
           gap: "var(--s4)",
-          overflow: "hidden",
+          overflow: "visible",
+          background: "transparent",
+          border: "none",
+          boxShadow: "none",
         }}
       >
-        {/* Header: eyebrow + action icons */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ fontSize: "var(--tx)", fontWeight: 600, color: "var(--am)", letterSpacing: ".14em", textTransform: "uppercase" }}>
-            Draft
-          </div>
-          {selected && (
-            <div className="dasti-icon-cluster dasti-icon-cluster--tight">
-              {!isConfirmingDelete && (
-                <>
-                  {/* Copy */}
-                  <button
-                    type="button"
-                    title={copied ? "Copied!" : "Copy"}
-                    className="dasti-icon-button"
-                    style={{ color: copied ? "var(--ok)" : undefined }}
-                    onClick={() => {
-                      void navigator.clipboard.writeText(selected.content ?? "").then(() => {
-                        setCopied(true);
-                        setTimeout(() => setCopied(false), 1500);
-                      });
-                    }}
-                  >
-                    {copied ? <Check size={14} strokeWidth={1.8} aria-hidden="true" /> : <Copy size={16} strokeWidth={1.5} />}
-                  </button>
-                  {/* Regenerate */}
-                  <button
-                    type="button"
-                    title={isRegenerating === selected._id ? "Regenerating…" : "Regenerate"}
-                    className="dasti-icon-button"
-                    style={{ opacity: isRegenerating === selected._id ? 0.5 : 1 }}
-                    onClick={() => void handleRegenerate()}
-                    disabled={Boolean(isRegenerating)}
-                  >
-                    <RotateCcw size={16} strokeWidth={1.5} />
-                  </button>
-                  {/* Separator */}
-                  <div className="dasti-icon-cluster__divider" />
-                </>
-              )}
+        <div style={savedContentRailStyle}>
+          {selected ? (
+            <div className="dasti-proposal-sheet-frame" style={{ position: "relative" }}>
+              <div
+                className="dasti-icon-cluster dasti-icon-cluster--tight"
+                style={{ position: "absolute", top: "var(--s3)", right: "var(--s3)", zIndex: 2 }}
+              >
+                {!isConfirmingDelete && (
+                  <>
+                    <button
+                      type="button"
+                      title={copied ? "Copied!" : "Copy"}
+                      className="dasti-icon-button"
+                      style={{ color: copied ? "var(--ok)" : undefined }}
+                      onClick={() => {
+                        void navigator.clipboard.writeText(selected.content ?? "").then(() => {
+                          setCopied(true);
+                          setTimeout(() => setCopied(false), 1500);
+                        });
+                      }}
+                    >
+                      {copied ? <Check size={14} strokeWidth={1.8} aria-hidden="true" /> : <Copy size={16} strokeWidth={1.5} />}
+                    </button>
+                    <button
+                      type="button"
+                      title={isRegenerating === selected._id ? "Regenerating…" : "Regenerate"}
+                      className="dasti-icon-button"
+                      style={{ opacity: isRegenerating === selected._id ? 0.5 : 1 }}
+                      onClick={() => void handleRegenerate()}
+                      disabled={Boolean(isRegenerating)}
+                    >
+                      <RotateCcw size={16} strokeWidth={1.5} />
+                    </button>
+                    <div className="dasti-icon-cluster__divider" />
+                  </>
+                )}
 
-              {isConfirmingDelete ? (
-                /* Inline confirm */
-                <span className="dasti-icon-cluster">
+                {isConfirmingDelete ? (
+                  <span className="dasti-icon-cluster">
+                    <button
+                      type="button"
+                      title="Confirm delete"
+                      className="dasti-icon-button dasti-icon-button--compact dasti-icon-button--confirm"
+                      style={{ background: "var(--erb)", color: "var(--ert)" }}
+                      onMouseEnter={(e) => {
+                        const b = e.currentTarget as HTMLButtonElement;
+                        b.style.background = "var(--er)";
+                        b.style.color = "var(--op)";
+                      }}
+                      onMouseLeave={(e) => {
+                        const b = e.currentTarget as HTMLButtonElement;
+                        b.style.background = "var(--erb)";
+                        b.style.color = "var(--ert)";
+                      }}
+                      onClick={() => { void handleDelete(); setIsConfirmingDelete(false); }}
+                    >
+                      <Check size={12} strokeWidth={2.5} />
+                    </button>
+                    <button
+                      type="button"
+                      title="Cancel"
+                      className="dasti-icon-button dasti-icon-button--compact"
+                      onClick={() => setIsConfirmingDelete(false)}
+                    >
+                      <X size={12} strokeWidth={2} />
+                    </button>
+                  </span>
+                ) : (
                   <button
                     type="button"
-                    title="Confirm delete"
-                    className="dasti-icon-button dasti-icon-button--compact dasti-icon-button--confirm"
-                    style={{ background: "var(--erb)", color: "var(--ert)" }}
-                    onMouseEnter={(e) => {
-                      const b = e.currentTarget as HTMLButtonElement;
-                      b.style.background = "var(--er)";
-                      b.style.color = "var(--op)";
-                    }}
-                    onMouseLeave={(e) => {
-                      const b = e.currentTarget as HTMLButtonElement;
-                      b.style.background = "var(--erb)";
-                      b.style.color = "var(--ert)";
-                    }}
-                    onClick={() => { void handleDelete(); setIsConfirmingDelete(false); }}
+                    title="Delete"
+                    className="dasti-icon-button"
+                    onClick={() => setIsConfirmingDelete(true)}
                   >
-                    <Check size={12} strokeWidth={2.5} />
+                    <Trash size={16} strokeWidth={1.5} />
                   </button>
-                  <button
-                    type="button"
-                    title="Cancel"
-                    className="dasti-icon-button dasti-icon-button--compact"
-                    onClick={() => setIsConfirmingDelete(false)}
-                  >
-                    <X size={12} strokeWidth={2} />
-                  </button>
-                </span>
-              ) : (
-                /* Delete trigger */
-                <button
-                  type="button"
-                  title="Delete"
-                  className="dasti-icon-button"
-                  onClick={() => setIsConfirmingDelete(true)}
-                >
-                  <Trash size={16} strokeWidth={1.5} />
-                </button>
-              )}
+                )}
+              </div>
+
+              <div className="dasti-proposal-sheet">
+                <div className="dasti-proposal-sheet__body">
+                  <textarea
+                    value={editContent}
+                    onChange={(e) => setEditContent(e.target.value)}
+                    onBlur={() => void handleSaveContent()}
+                    placeholder="Content will appear here…"
+                    className="dasti-proposal-sheet__body--editable"
+                    style={{
+                      fontFamily: selectedTypography.fontFamily,
+                      fontSize: selectedTypography.fontSize,
+                      lineHeight: selectedTypography.lineHeight,
+                      fontWeight: selectedTypography.fontWeight,
+                      letterSpacing: selectedTypography.letterSpacing,
+                      color: "var(--ti)",
+                      caretColor: "var(--ti)",
+                      background: "transparent",
+                      width: "100%",
+                      outline: "none",
+                      height: "100%",
+                      resize: "none",
+                    }}
+                  />
+                </div>
+              </div>
             </div>
+          ) : (
+            <p style={{ fontSize: "var(--ts)", color: "var(--tg2)" }}>Select a draft from the left panel.</p>
           )}
         </div>
-
-        {/* .p-body */}
-        {selected ? (
-          <div className="dasti-proposal-sheet">
-            <div className="dasti-proposal-sheet__body">
-              <textarea
-                value={editContent}
-                onChange={(e) => setEditContent(e.target.value)}
-                onBlur={() => void handleSaveContent()}
-                placeholder="Content will appear here…"
-                className="dasti-proposal-sheet__body--editable"
-                style={{
-                  fontFamily: selectedTypography.fontFamily,
-                  fontSize: selectedTypography.fontSize,
-                  lineHeight: selectedTypography.lineHeight,
-                  fontWeight: selectedTypography.fontWeight,
-                  letterSpacing: selectedTypography.letterSpacing,
-                  color: "var(--ti)",
-                  caretColor: "var(--ti)",
-                  background: "transparent",
-                  width: "100%",
-                  outline: "none",
-                  height: "100%",
-                  resize: "none",
-                }}
-              />
-            </div>
-          </div>
-        ) : (
-          <p style={{ fontSize: "var(--ts)", color: "var(--tg2)" }}>Select a draft from the left panel.</p>
-        )}
       </div>
     </div>
   );

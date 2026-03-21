@@ -605,13 +605,13 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                       gap: "var(--s3)",
                       borderColor: isSelected ? "var(--bm)" : "var(--bo)",
                     }}
-                    >
-                      <div className="dasti-doc-card__stack">
-                        <div className="dasti-doc-card__header">
-                          <div className="dasti-doc-card__title-frame">
-                            <h3 className="dasti-doc-card__title">{option.title}</h3>
-                          </div>
+                  >
+                    <div className="dasti-doc-card__stack">
+                      <div className="dasti-doc-card__header">
+                        <div className="dasti-doc-card__title-frame">
+                          <h3 className="dasti-doc-card__title">{option.title}</h3>
                         </div>
+                      </div>
 
                       <div className="dasti-doc-card__meta">
                         {formatCvDisplaySubtitle({
@@ -625,66 +625,61 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                         }) || "Draft resume"}
                       </div>
 
-                      {chooserDate ? (
-                        <div className="dasti-doc-card__footer dasti-doc-card__footer--stamp-only">
-                          <div className="dasti-doc-card__stamp">{chooserDate}</div>
+                      <div className="dasti-doc-card__footer dasti-doc-card__footer--chooser">
+                        <div className="dasti-doc-card__stamp">{chooserDate ?? ""}</div>
+                        <div className="dasti-doc-card__actions">
+                          <button
+                            type="button"
+                            className={clsx(
+                              "dasti-icon-button dasti-icon-button--chooser",
+                              isSelected && "dasti-icon-button--chooser-selected",
+                            )}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (!isSelected) {
+                                setPendingCvId(option.id);
+                                return;
+                              }
+                              if (!option.isActive) {
+                                handleSelectCv(option.id);
+                                return;
+                              }
+                              handleCloseCvPicker();
+                            }}
+                            aria-label={
+                              option.isActive
+                                ? "Resume in use"
+                                : isSelected
+                                ? "Use selected resume"
+                                : "Select resume"
+                            }
+                            title={
+                              option.isActive
+                                ? "Resume in use"
+                                : isSelected
+                                ? "Use selected resume"
+                                : "Select resume"
+                            }
+                            style={{
+                              background: isSelected ? "var(--sf2)" : undefined,
+                              color: isSelected ? "var(--ti)" : undefined,
+                            }}
+                          >
+                            <Check size={20} strokeWidth={2} aria-hidden />
+                          </button>
+                          <button
+                            type="button"
+                            className="dasti-icon-button dasti-icon-button--chooser"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditCv(option.id);
+                            }}
+                            aria-label="Edit resume"
+                            title="Edit resume"
+                          >
+                            <ScrollText size={20} strokeWidth={1.5} aria-hidden />
+                          </button>
                         </div>
-                      ) : null}
-                    </div>
-
-                    <div className="dasti-doc-card__actions-rail dasti-doc-card__actions-rail--chooser">
-                      <div className="dasti-doc-card__actions">
-                        <button
-                          type="button"
-                          className={clsx(
-                            "dasti-icon-button dasti-icon-button--chooser",
-                            isSelected && "dasti-icon-button--chooser-selected",
-                          )}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (!isSelected) {
-                              setPendingCvId(option.id);
-                              return;
-                            }
-                            if (!option.isActive) {
-                              handleSelectCv(option.id);
-                              return;
-                            }
-                            handleCloseCvPicker();
-                          }}
-                          aria-label={
-                            option.isActive
-                              ? "Resume in use"
-                              : isSelected
-                              ? "Use selected resume"
-                              : "Select resume"
-                          }
-                          title={
-                            option.isActive
-                              ? "Resume in use"
-                              : isSelected
-                              ? "Use selected resume"
-                              : "Select resume"
-                          }
-                          style={{
-                            background: isSelected ? "var(--sf2)" : undefined,
-                            color: isSelected ? "var(--ti)" : undefined,
-                          }}
-                        >
-                          <Check size={20} strokeWidth={2} aria-hidden />
-                        </button>
-                        <button
-                          type="button"
-                          className="dasti-icon-button dasti-icon-button--chooser"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleEditCv(option.id);
-                          }}
-                          aria-label="Edit resume"
-                          title="Edit resume"
-                        >
-                          <ScrollText size={20} strokeWidth={1.5} aria-hidden />
-                        </button>
                       </div>
                     </div>
                   </div>
@@ -703,29 +698,23 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {/* Main inputs */}
           <div className="md:col-span-2">
-            {activeCvSource.title ? (
-              <div className="dasti-proposal-context-row" style={{ marginTop: 0, marginBottom: "var(--s2)" }}>
-                <Paperclip size={13} strokeWidth={1.5} aria-hidden />
-                <span className="dasti-proposal-context-row__text">{activeCvSource.title}</span>
-              </div>
-            ) : null}
-            <div>
-              <input
-                type="text"
-                id="jobTitle"
-                {...form.register("jobTitle")}
-                className={clsx(styles.inputElement, styles.jobField)}
-                placeholder="Enter Job Title"
-                autoComplete="off"
-              />
-              {form.formState.errors.jobTitle && (
-                <p className={styles.errorMessage}>
-                  {form.formState.errors.jobTitle.message}
-                </p>
-              )}
-            </div>
-            {/* .siw — chatbox well */}
             <div className={styles.composeWell} style={{ position: "relative" }}>
+              {activeCvSource.title ? (
+                <div className="dasti-proposal-context-row" style={{ marginTop: 0, marginBottom: 0 }}>
+                  <Paperclip size={13} strokeWidth={1.5} aria-hidden />
+                  <span className="dasti-proposal-context-row__text">{activeCvSource.title}</span>
+                </div>
+              ) : null}
+              <div>
+                <input
+                  type="text"
+                  id="jobTitle"
+                  {...form.register("jobTitle")}
+                  className={clsx(styles.inputElement, styles.jobField)}
+                  placeholder="Enter Job Title"
+                  autoComplete="off"
+                />
+              </div>
               <div className="dasti-proposal-sheet dasti-proposal-sheet--composer">
                 <div className="dasti-proposal-sheet__body">
                   <textarea
@@ -819,6 +808,11 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                 </button>
               </div>
             </div>
+            {form.formState.errors.jobTitle && (
+              <p className={styles.errorMessage}>
+                {form.formState.errors.jobTitle.message}
+              </p>
+            )}
             {(prefill?.platform || prefill?.sourceUrl) && (
               <div className="dasti-meta-row dasti-meta-row--subtle" style={{ marginTop: "var(--s2)" }}>
                 Imported from{" "}

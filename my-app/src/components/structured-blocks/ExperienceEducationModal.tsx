@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from "react";
+import React, { useState, useCallback, useEffect, useMemo, useImperativeHandle, useRef, forwardRef } from "react";
 import type { IExperienceItem, IEducationItem } from "../../types/cvDocument";
 import { v4 as uuidv4 } from "uuid";
 import { parseIsoToParts, composeIsoFromParts } from "../../lib/date-utils";
@@ -96,13 +96,29 @@ function achievementsToBulletDoc(list: string[] | undefined | null): RemirrorJSO
 }
 
 // Lightweight embedded Remirror editor used inside the Experience modal per entry
-function RichEditor({
-  initialContent,
-  onChangeDoc,
-}: {
+type RichEditorHandle = { flush: () => void };
+
+function hasNonEmptyDocText(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+  const queue: unknown[] = [value];
+  while (queue.length > 0) {
+    const node = queue.shift();
+    if (!node || typeof node !== "object") continue;
+    const rec = node as Record<string, unknown>;
+    if (typeof rec.text === "string" && rec.text.trim().length > 0) return true;
+    if (Array.isArray(rec.content)) queue.push(...rec.content);
+    if (Array.isArray(rec.items)) queue.push(...rec.items);
+  }
+  return false;
+}
+
+const RichEditor = forwardRef<RichEditorHandle, {
   initialContent: RemirrorJSON;
   onChangeDoc: (doc: RemirrorJSON) => void;
-}) {
+}>(({
+  initialContent,
+  onChangeDoc,
+}, ref) => {
   const extensions = useMemo(
     () => [
       // Core text + history
@@ -126,6 +142,19 @@ function RichEditor({
     extensions: () => extensions as any,
     content: initialContent as any,
   });
+
+  const flush = useCallback(() => {
+    try {
+      const view = (manager as any)?.view;
+      const doc: RemirrorJSON =
+        (view?.state?.doc?.toJSON?.() as RemirrorJSON | undefined) ?? ensureRemirrorDoc(undefined as any);
+      onChangeDoc(ensureRemirrorDoc(doc as any));
+    } catch {
+      /* noop */
+    }
+  }, [manager, onChangeDoc]);
+
+  useImperativeHandle(ref, () => ({ flush }), [flush]);
 
   const handleChange = useCallback(
     (param: any) => {
@@ -152,7 +181,9 @@ function RichEditor({
       </Remirror>
     </div>
   );
-}
+});
+
+RichEditor.displayName = "RichEditor";
 
 function ModalShell({
   title,
@@ -255,18 +286,36 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
     if (Array.isArray(items)) return items.map((it) => deriveUi(it));
     return [];
   });
+  const localRef = React.useRef<IExperienceItem[]>([]);
+  const editorRefs = useRef<Array<RichEditorHandle | null>>([]);
+  const responsibilitiesDocRef = useRef<Record<string, RemirrorJSON>>({});
 
   // Sync local + UI state when the modal opens or items change to avoid stale/empty selects
   useEffect(() => {
     if (open) {
       const copied = Array.isArray(items) ? (items.map((it) => ({ ...it })) as IExperienceItem[]) : [];
       setLocal(copied);
+      localRef.current = copied;
       setUiState(copied.map((it) => deriveUi(it)));
+      responsibilitiesDocRef.current = Object.fromEntries(
+        copied.map((it) => [
+          String(it.id),
+          ensureRemirrorDoc(
+            typeof it.responsibilities !== "undefined" && it.responsibilities !== null
+              ? (it.responsibilities as any)
+              : achievementsToBulletDoc(Array.isArray(it.achievements) ? it.achievements : []),
+          ),
+        ]),
+      );
     }
   }, [open, items, deriveUi]);
 
   const setField = useCallback((idx: number, key: keyof IExperienceItem, value: unknown) => {
-    setLocal((prev) => prev.map((it, i) => (i === idx ? ({ ...it, [key]: value } as IExperienceItem) : it)));
+    setLocal((prev) => {
+      const next = prev.map((it, i) => (i === idx ? ({ ...it, [key]: value } as IExperienceItem) : it));
+      localRef.current = next;
+      return next;
+    });
   }, []);
 
   const setUiField = useCallback((idx: number, patch: UiPatch) => {
@@ -339,6 +388,7 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
       }
 
       next[idx] = base as IExperienceItem;
+      localRef.current = next;
       return next;
     });
   }, [uiState]);
@@ -356,12 +406,25 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
       responsibilities: undefined,
       achievements: [],
     };
-    setLocal((prev) => [...prev, newItem]);
+    setLocal((prev) => {
+      const next = [...prev, newItem];
+      localRef.current = next;
+      return next;
+    });
     setUiState((prev) => [...prev, deriveUi(newItem)]);
+    responsibilitiesDocRef.current[String(newItem.id)] = ensureRemirrorDoc(undefined as any);
   }, [deriveUi]);
 
   const removeRow = useCallback((idx: number) => {
-    setLocal((prev) => prev.filter((_, i) => i !== idx));
+    setLocal((prev) => {
+      const removed = prev[idx];
+      const next = prev.filter((_, i) => i !== idx);
+      localRef.current = next;
+      if (removed?.id) {
+        delete responsibilitiesDocRef.current[String(removed.id)];
+      }
+      return next;
+    });
     setUiState((prev) => prev.filter((_, i) => i !== idx));
   }, []);
 
@@ -389,7 +452,18 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
       if (!Array.isArray(arr) || arr.length === 0) return;
       const mapped = mapAiExperience(arr);
       setLocal(mapped);
+      localRef.current = mapped;
       setUiState(mapped.map((it) => deriveUi(it)));
+      responsibilitiesDocRef.current = Object.fromEntries(
+        mapped.map((it) => [
+          String(it.id),
+          ensureRemirrorDoc(
+            typeof it.responsibilities !== "undefined" && it.responsibilities !== null
+              ? (it.responsibilities as any)
+              : achievementsToBulletDoc(Array.isArray(it.achievements) ? it.achievements : []),
+          ),
+        ]),
+      );
     } catch {
       // best-effort; ignore parse errors
     }
@@ -401,7 +475,34 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
       subtitle="Roles and responsibilities"
       open={open}
       onClose={onClose}
-      primaryAction={{ label: "Save all", onClick: () => onSave(local) }}
+      primaryAction={{
+        label: "Save all",
+        onClick: () => {
+          try {
+            editorRefs.current.forEach((editor) => editor?.flush?.());
+          } catch {
+            /* noop */
+          }
+          const next = localRef.current.map((item) => {
+            const doc = responsibilitiesDocRef.current[String(item.id)];
+            if (!doc) return item;
+            const normalizedDoc = ensureRemirrorDoc(doc as any);
+            if (!hasNonEmptyDocText(normalizedDoc)) {
+              return {
+                ...item,
+                responsibilities: undefined,
+              } as IExperienceItem;
+            }
+            return {
+              ...item,
+              responsibilities: normalizedDoc,
+              achievements: [],
+            } as IExperienceItem;
+          });
+          localRef.current = next;
+          onSave(next);
+        },
+      }}
       footerNote="Order follows your resume."
     >
       <div className="space-y-5">
@@ -613,6 +714,9 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
                 <div className="dasti-field-group" style={{ gridColumn: "1 / -1" }}>
                   <span className="dasti-label">Responsibilities</span>
                   <RichEditor
+                    ref={(node) => {
+                      editorRefs.current[idx] = node;
+                    }}
                     initialContent={
                       (() => {
                         const existing = (row as IExperienceItem).responsibilities as RemirrorJSON | string | undefined;
@@ -622,6 +726,7 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
                       })()
                     }
                     onChangeDoc={(doc) => {
+                      responsibilitiesDocRef.current[String(row.id)] = doc;
                       setField(idx, "responsibilities", doc);
                       setField(idx, "achievements", []);
                     }}
@@ -674,18 +779,24 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
     if (Array.isArray(items)) return items.map((it) => deriveUiEdu(it));
     return [];
   });
+  const localRef = React.useRef<IEducationItem[]>([]);
 
   // Sync local + UI state for Education on open/items change
   useEffect(() => {
     if (open) {
       const copied = Array.isArray(items) ? (items.map((it) => ({ ...it })) as IEducationItem[]) : [];
       setLocal(copied);
+      localRef.current = copied;
       setUiState(copied.map((it) => deriveUiEdu(it)));
     }
   }, [open, items, deriveUiEdu]);
 
   const setField = useCallback((idx: number, key: keyof IEducationItem, value: unknown) => {
-    setLocal((prev) => prev.map((it, i) => (i === idx ? ({ ...it, [key]: value } as IEducationItem) : it)));
+    setLocal((prev) => {
+      const next = prev.map((it, i) => (i === idx ? ({ ...it, [key]: value } as IEducationItem) : it));
+      localRef.current = next;
+      return next;
+    });
   }, []);
   
   const setUiField = useCallback((idx: number, patch: UiPatch) => {
@@ -753,6 +864,7 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
       }
 
       next[idx] = base as IEducationItem;
+      localRef.current = next;
       return next;
     });
   }, [uiState]);
@@ -769,12 +881,20 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
       grade: "",
       description: undefined,
     };
-    setLocal((prev) => [...prev, newItem]);
+    setLocal((prev) => {
+      const next = [...prev, newItem];
+      localRef.current = next;
+      return next;
+    });
     setUiState((prev) => [...prev, deriveUiEdu(newItem)]);
   }, [deriveUiEdu]);
 
   const removeRow = useCallback((idx: number) => {
-    setLocal((prev) => prev.filter((_, i) => i !== idx));
+    setLocal((prev) => {
+      const next = prev.filter((_, i) => i !== idx);
+      localRef.current = next;
+      return next;
+    });
     setUiState((prev) => prev.filter((_, i) => i !== idx));
   }, []);
 
@@ -801,6 +921,7 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
       if (!Array.isArray(arr) || arr.length === 0) return;
       const mapped = mapAiEducation(arr);
       setLocal(mapped);
+      localRef.current = mapped;
       setUiState(mapped.map((it) => deriveUiEdu(it)));
     } catch {
       // ignore parse errors
@@ -813,7 +934,7 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
       subtitle="Study and qualifications"
       open={open}
       onClose={onClose}
-      primaryAction={{ label: "Save all", onClick: () => onSave(local) }}
+      primaryAction={{ label: "Save all", onClick: () => onSave(localRef.current) }}
       footerNote="Order follows your resume."
     >
       <div className="space-y-5">

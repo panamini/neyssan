@@ -17,12 +17,33 @@ function toneLabel(voicePreset?: string): string {
   return "Balanced";
 }
 
+function shouldPreserveLeadBreak(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed) return false;
+  if (/^(dear|hello|hi|greetings)\b/i.test(trimmed)) return true;
+  return /[:,]$/.test(trimmed) && trimmed.split(/\s+/).length <= 6;
+}
+
 function buildProposalSnippet(value: unknown): string {
   if (typeof value !== "string") return "";
   const paragraphs = value
     .replace(/\r/g, "\n")
     .split(/\n\s*\n/)
-    .map((paragraph) => paragraph.replace(/\s*\n\s*/g, " ").replace(/\s+/g, " ").trim())
+    .map((paragraph, index) => {
+      const lines = paragraph
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+      if (lines.length === 0) return "";
+      if (index === 0 && lines.length > 1 && shouldPreserveLeadBreak(lines[0])) {
+        const lead = lines[0];
+        const remainder = lines.slice(1).join(" ").replace(/\s+/g, " ").trim();
+        return remainder ? `${lead}\n${remainder}` : lead;
+      }
+
+      return lines.join(" ").replace(/\s+/g, " ").trim();
+    })
     .filter(Boolean);
 
   if (paragraphs.length === 0) return "";
@@ -85,29 +106,11 @@ export function ProposalsLibrary(): JSX.Element {
           </div>
           <button
             onClick={() => void navigate("/proposal")}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "var(--s2)",
-              height: "var(--hm)",
-              padding: "0 var(--s4)",
-              borderRadius: "var(--rs)",
-              border: "1px solid var(--bm)",
-              background: "var(--sfr)",
-              color: "var(--ti)",
-              fontSize: "var(--ts)",
-              fontWeight: 500,
-              cursor: "pointer",
-              boxShadow: "var(--sha)",
-              transition: "all .12s var(--ez)",
-              fontFamily: "inherit",
-              flexShrink: 0,
-            }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--sf2)"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--sfr)"; }}
+            className="dasti-icon-button dasti-library-create-button"
+            aria-label="Create new proposal"
+            title="Create new proposal"
           >
-            <Plus size={14} />
-            New letter
+            <Plus size={20} strokeWidth={1.75} aria-hidden />
           </button>
         </div>
 

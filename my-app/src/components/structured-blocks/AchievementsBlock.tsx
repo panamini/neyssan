@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import type { CvSection } from "../../schemas/cvDocument.schema";
 import AchievementsDisplay from "../cv-display/AchievementsDisplay";
 import AchievementsModal from "./AchievementsModal";
-import { ScrollText } from "lucide-react";
+import { ChevronDown, ChevronUp, ScrollText } from "lucide-react";
 import { docToPlainText } from "../remirror-editor/utils/text";
 
 /**
@@ -108,7 +108,7 @@ export function AchievementsBlock({ section, onChange }: AchievementsBlockProps)
   return (
     <div className="mb-4 border border-bo rounded-rm section-container">
       <div className="flex items-center justify-between p-3 [background:var(--sf1)]">
-        <h3 className="text-lg font-semibold">{section.title}</h3>
+        <h3 className="cv-section-heading">{section.title}</h3>
         <div className="flex items-center" style={{ gap: 2 }}>
           <button
             type="button"
@@ -152,7 +152,7 @@ export function AchievementsBlock({ section, onChange }: AchievementsBlockProps)
         >
           {items.length === 0 ? (
             <div
-              className="[color:var(--tg2)] cursor-text"
+              className="cv-preview-empty cv-preview-text cv-preview-text--muted cursor-text"
               role="button"
               tabIndex={0}
               onClick={() => {
@@ -191,15 +191,16 @@ export function AchievementsBlock({ section, onChange }: AchievementsBlockProps)
         </div>
 
         {items.length > 2 ? (
-          <div className="flex items-center justify-between mt-3">
+          <div className="cv-disclosure-row">
             <button
               type="button"
               aria-controls={contentId}
               aria-expanded={isExpanded}
               onClick={() => setIsExpanded((v) => !v)}
-              className="px-2 py-1 text-xs rounded [background:transparent] [color:var(--tm2)] hover:[background:var(--sf2)] hover:[color:var(--ti)] focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
+              className="dasti-icon-button dasti-icon-button--compact"
+              title={isExpanded ? "Show less" : "Show more"}
             >
-              {isExpanded ? "Read less" : "Read more"}
+              {isExpanded ? <ChevronUp className="w-3.5 h-3.5" aria-hidden /> : <ChevronDown className="w-3.5 h-3.5" aria-hidden />}
             </button>
           </div>
         ) : null}

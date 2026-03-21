@@ -217,7 +217,16 @@ export default function ProfileReviewModal({ visible, parsedProfile, onClose, on
   };
 
   if (!visible) return null;
-  if (!clerkLoaded) return <div className="fixed inset-0 z-50 flex items-center justify-center"><LoadingSpinner /></div>; style={{ background: 'hsla(30,12%,11%,.32)', backdropFilter: 'blur(8px)' }}
+  if (!clerkLoaded) {
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center"
+        style={{ background: "hsla(30,12%,11%,.32)", backdropFilter: "blur(8px)" }}
+      >
+        <LoadingSpinner />
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) onClose(); }} style={{ background: 'hsla(30,12%,11%,.32)', backdropFilter: 'blur(8px)' }}>
