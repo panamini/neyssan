@@ -1347,8 +1347,17 @@ button::-moz-focus-inner,
   color: var(--ti);
 }
 
+.cv-rich-preview .ProseMirror {
+  font-family: inherit;
+  font-size: var(--tx);
+  line-height: var(--ls);
+  color: var(--ti);
+}
+
 .achievements-display .ProseMirror ul,
-.achievements-display .ProseMirror ol {
+.achievements-display .ProseMirror ol,
+.cv-rich-preview .ProseMirror ul,
+.cv-rich-preview .ProseMirror ol {
   margin: 0;
   padding-left: var(--s5);
 }
@@ -1395,11 +1404,13 @@ button::-moz-focus-inner,
   white-space: nowrap;
 }
 
-.achievements-display .ProseMirror p {
+.achievements-display .ProseMirror p,
+.cv-rich-preview .ProseMirror p {
   margin: 0 0 var(--s2);
 }
 
-.achievements-display .ProseMirror p:last-child {
+.achievements-display .ProseMirror p:last-child,
+.cv-rich-preview .ProseMirror p:last-child {
   margin-bottom: 0;
 }
 
