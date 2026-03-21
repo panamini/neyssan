@@ -15,6 +15,7 @@ import {
   HardBreakExtension,
 } from "remirror/extensions";
 import { stableStringify } from "@/utils/stableStringify";
+import { ChevronDown, ChevronUp } from "lucide-react";
 
 /**
  * SummaryBlock (v1, display-only)
@@ -210,9 +211,8 @@ export function SummaryBlock({ section, onOpenEditor }: SummaryBlockProps) {
 
   return (
     <div
-      className={isEmpty ? "py-1 cursor-text" : "py-1"}
+      className={onOpenEditor ? "py-1 cursor-text" : "py-1"}
       onClick={(e) => {
-        if (!isEmpty) return;
         try {
           const sel = typeof window !== "undefined" ? window.getSelection() : null;
           if (sel && typeof sel.toString === "function" && sel.toString().length > 0) return;
@@ -223,16 +223,15 @@ export function SummaryBlock({ section, onOpenEditor }: SummaryBlockProps) {
         onOpenEditor?.();
       }}
       onKeyDown={(e) => {
-        if (!isEmpty) return;
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           e.stopPropagation();
           onOpenEditor?.();
         }
       }}
-      role={isEmpty ? "button" : undefined}
-      tabIndex={isEmpty ? 0 : -1}
-      aria-label={isEmpty ? "Add summary. Press Enter to edit." : undefined}
+      role={onOpenEditor ? "button" : undefined}
+      tabIndex={onOpenEditor ? 0 : -1}
+      aria-label={isEmpty ? "Add summary. Press Enter to edit." : "Edit summary"}
     >
       <div
         className="text-sm [color:var(--ti)]"
@@ -259,7 +258,7 @@ export function SummaryBlock({ section, onOpenEditor }: SummaryBlockProps) {
       </div>
 
       {tooLong ? (
-        <div className="flex items-center justify-between mt-3">
+        <div className="cv-disclosure-row">
           <button
             type="button"
             id={`${regionId}-toggle`}
@@ -267,13 +266,13 @@ export function SummaryBlock({ section, onOpenEditor }: SummaryBlockProps) {
               e.stopPropagation();
               setIsExpanded((v) => !v);
             }}
-            className="px-2 py-1 text-xs rounded [background:transparent] [color:var(--tm2)] hover:[background:var(--sf2)] hover:[color:var(--ti)] focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
+            className="dasti-icon-button dasti-icon-button--compact"
             aria-controls={regionId}
             aria-label={isExpanded ? "Collapse summary" : "Expand summary"}
+            title={isExpanded ? "Show less" : "Show more"}
           >
-            {isExpanded ? "Read less" : "Read more"}
+            {isExpanded ? <ChevronUp className="w-3.5 h-3.5" aria-hidden /> : <ChevronDown className="w-3.5 h-3.5" aria-hidden />}
           </button>
-          {/* Edit happens in the Section header pencil (SummaryModal). Intentionally no inline edit here. */}
         </div>
       ) : null}
     </div>

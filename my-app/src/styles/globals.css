@@ -444,6 +444,23 @@ button::-moz-focus-inner,
   min-width: calc(var(--hs) + var(--s2));
 }
 
+.dasti-library-create-button {
+  width: calc(var(--hb) + var(--s1));
+  height: calc(var(--hb) + var(--s1));
+  min-width: calc(var(--hb) + var(--s1));
+  border-radius: var(--rm);
+}
+
+.cv-disclosure-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--s2);
+}
+
+.cv-disclosure-row--section {
+  padding-bottom: var(--s2);
+}
+
 .dasti-icon-button--danger:hover {
   background: var(--erb);
   color: var(--ert);
@@ -1120,6 +1137,42 @@ button::-moz-focus-inner,
   min-width: 0;
 }
 
+.dasti-proposal-sheet-frame {
+  width: min(100%, 560px);
+  max-width: 100%;
+}
+
+.dasti-proposal-sheet__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: var(--s5) var(--s6) 0;
+}
+
+.dasti-proposal-sheet__heading {
+  min-width: 0;
+  display: grid;
+  gap: var(--s1);
+}
+
+.dasti-proposal-sheet__title {
+  margin: 0;
+  font-family: "Fraunces", serif;
+  font-size: var(--tb);
+  line-height: 1.22;
+  font-weight: 600;
+  letter-spacing: -.015em;
+  color: var(--ti);
+}
+
+.dasti-proposal-sheet__meta {
+  margin: 0;
+  font-size: var(--tx);
+  line-height: var(--lx);
+  color: var(--tm2);
+}
+
 .dasti-proposal-sheet__body {
   width: 100%;
   min-height: 0;
@@ -1131,13 +1184,16 @@ button::-moz-focus-inner,
   min-width: 0;
 }
 
+.dasti-proposal-sheet__body--with-header {
+  padding-top: var(--s4);
+}
+
 .dasti-proposal-sheet--composer {
-  width: 100%;
+  width: min(100%, 560px);
   max-width: 100%;
-  aspect-ratio: auto;
-  height: clamp(300px, 44vh, 520px);
-  min-height: 300px;
-  max-height: min(58vh, 520px);
+  aspect-ratio: 1 / 1.41421356;
+  min-height: 420px;
+  max-height: min(72vh, 780px);
 }
 
 .dasti-proposal-sheet__body--editable {
@@ -1310,20 +1366,18 @@ button::-moz-focus-inner,
 }
 
 .dasti-doc-card--chooser {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
   align-items: stretch;
-  gap: var(--s5);
+  gap: var(--s3);
   min-height: 0;
   padding: var(--s4) var(--s5);
 }
 
-.dasti-doc-card__actions-rail--chooser {
-  position: static;
-  width: calc(var(--s7) + var(--s5));
-  min-width: calc(var(--s7) + var(--s5));
-  align-self: stretch;
-  justify-content: flex-end;
+.dasti-doc-card__footer--chooser {
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s3);
 }
 
 .dasti-doc-card__actions {
@@ -1345,16 +1399,9 @@ button::-moz-focus-inner,
 }
 
 @media (max-width: 620px) {
-  .dasti-doc-card--chooser {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .dasti-doc-card__actions-rail--chooser {
-    width: 100%;
-    min-width: 0;
-    flex-direction: row;
+  .dasti-doc-card__footer--chooser {
+    flex-wrap: wrap;
     align-items: center;
-    justify-content: space-between;
   }
 }
 
@@ -1398,6 +1445,88 @@ button::-moz-focus-inner,
   font-weight: 600;
   letter-spacing: -.01em;
   color: var(--ti);
+}
+
+.cv-section-title-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-family: "Fraunces", serif;
+  font-size: var(--tm);
+  line-height: var(--ls);
+  font-weight: 600;
+  letter-spacing: -.01em;
+  color: var(--ti);
+}
+
+.cv-section-title-input:focus {
+  outline: none;
+}
+
+.cv-section-title-input::placeholder {
+  color: var(--tg2);
+}
+
+.cv-preview-stack {
+  min-width: 0;
+  display: grid;
+  gap: var(--s1);
+}
+
+.cv-preview-text {
+  margin: 0;
+  font-size: var(--ts);
+  line-height: var(--ls);
+  color: var(--ti);
+}
+
+.cv-preview-text--muted {
+  color: var(--tm2);
+}
+
+.cv-preview-text--truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cv-preview-empty {
+  margin: 0;
+}
+
+.cv-profile-name {
+  margin: 0;
+  font-size: var(--tb);
+  line-height: var(--ls);
+  font-weight: 600;
+  color: var(--ti);
+}
+
+.cv-profile-role {
+  margin: 0;
+  font-size: var(--ts);
+  line-height: var(--ls);
+  color: var(--tg2);
+}
+
+.cv-contact-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s4);
+  margin-top: var(--s1);
+}
+
+.cv-contact-link {
+  font-size: var(--ts);
+  line-height: var(--ls);
+  color: var(--tm2);
+}
+
+.cv-contact-link:hover {
+  text-decoration: underline;
 }
 
 .cv-entry-summary {
@@ -1917,6 +2046,11 @@ textarea.dasti-field {
   background: var(--sf2);
   border-bottom: 1px solid var(--bo);
   padding: var(--s3) var(--s5);
+}
+
+.cv-section-preview {
+  min-height: var(--s8);
+  padding: var(--s4) var(--s4) var(--s3);
 }
 
 .cv-entry-stack > * + * {

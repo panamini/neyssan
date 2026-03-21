@@ -47,7 +47,7 @@
   border-radius: var(--rm);
   background: var(--sf1);
   overflow: hidden;
-  transition: background .12s var(--ez);
+  transition: background .12s var(--ez), box-shadow .12s var(--ez);
 }
 
 .composeWell:focus-within {

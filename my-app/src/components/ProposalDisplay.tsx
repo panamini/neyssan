@@ -19,6 +19,8 @@ interface ProposalDisplayProps {
   onCopy?: () => void;
   copyFeedback?: "idle" | "copied";
   voicePreset?: ProposalVoicePreset | null;
+  documentTitle?: string | null;
+  documentMeta?: string | null;
 }
 
 const parseMarkdown = (content: string) => {
@@ -159,16 +161,50 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   onCopy,
   copyFeedback = "idle",
   voicePreset = null,
+  documentTitle = null,
+  documentMeta = null,
 }) => {
   const fallbackDisclosure = getProposalGenerationFallbackDisclosureMessage(
     fallbackInfo ?? {},
   );
   const documentTypography = getProposalDocumentTypography(voicePreset);
+  const hasDocumentHeader = Boolean(
+    (documentTitle && documentTitle.trim().length > 0) ||
+      (documentMeta && documentMeta.trim().length > 0) ||
+      onCopy,
+  );
+
+  const renderDocumentHeader = () =>
+    hasDocumentHeader ? (
+      <div className="dasti-proposal-sheet__header">
+        <div className="dasti-proposal-sheet__heading">
+          {documentTitle ? (
+            <h3 className="dasti-proposal-sheet__title">{documentTitle}</h3>
+          ) : null}
+          {documentMeta ? (
+            <p className="dasti-proposal-sheet__meta">{documentMeta}</p>
+          ) : null}
+        </div>
+        {onCopy ? (
+          <button
+            type="button"
+            onClick={onCopy}
+            title={copyFeedback === "copied" ? "Copied" : "Copy"}
+            aria-label={copyFeedback === "copied" ? "Copied" : "Copy"}
+            className="dasti-icon-button"
+            style={{ color: copyFeedback === "copied" ? "var(--ok)" : undefined }}
+          >
+            {copyFeedback === "copied" ? <Check size={16} strokeWidth={2} aria-hidden="true" /> : <Copy size={16} strokeWidth={1.5} aria-hidden="true" />}
+          </button>
+        ) : null}
+      </div>
+    ) : null;
 
   if (loading) {
     return (
       <div className="dasti-proposal-sheet" aria-busy="true" aria-label="Generating proposal">
-        <div className="dasti-proposal-sheet__body">
+        {renderDocumentHeader()}
+        <div className={hasDocumentHeader ? "dasti-proposal-sheet__body dasti-proposal-sheet__body--with-header" : "dasti-proposal-sheet__body"}>
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--s3)", width: "100%" }}>
             {[0.85, 1, 0.72, 0.95, 0.6].map((w, i) => (
               <div
@@ -233,8 +269,25 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
 
   if (!proposalContent) {
     return (
-      <div className="rounded-[var(--rm)] border border-[color:var(--bo)] [background:var(--sf1)] p-6 text-center text-muted">
-        Generate a proposal to see the results here.
+      <div className="dasti-proposal-sheet">
+        {renderDocumentHeader()}
+        <div
+          className={hasDocumentHeader ? "dasti-proposal-sheet__body dasti-proposal-sheet__body--with-header" : "dasti-proposal-sheet__body"}
+          style={{ alignItems: "center", justifyContent: "center" }}
+        >
+          <p
+            style={{
+              margin: 0,
+              maxWidth: "26ch",
+              fontSize: "var(--ts)",
+              lineHeight: "var(--ls)",
+              color: "var(--tm2)",
+              textAlign: "center",
+            }}
+          >
+            Generate a proposal to see the results here.
+          </p>
+        </div>
       </div>
     );
   }
@@ -253,43 +306,32 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           {fallbackDisclosure}
         </div>
       ) : null}
-      {onCopy ? (
-        <div style={{ display: "flex", justifyContent: "flex-end" }}>
-          <button
-            type="button"
-            onClick={onCopy}
-            title={copyFeedback === "copied" ? "Copied" : "Copy"}
-            aria-label={copyFeedback === "copied" ? "Copied" : "Copy"}
-            className="dasti-icon-button"
-            style={{ color: copyFeedback === "copied" ? "var(--ok)" : undefined }}
+      <div className="dasti-proposal-sheet-frame">
+        <div className="dasti-proposal-sheet">
+          {renderDocumentHeader()}
+          <div
+            className={hasDocumentHeader ? "dasti-proposal-sheet__body dasti-proposal-sheet__body--readonly dasti-proposal-sheet__body--with-header" : "dasti-proposal-sheet__body dasti-proposal-sheet__body--readonly"}
+            style={{
+              fontFamily: documentTypography.fontFamily,
+              fontSize: documentTypography.fontSize,
+              lineHeight: documentTypography.lineHeight,
+              fontWeight: documentTypography.fontWeight,
+              letterSpacing: documentTypography.letterSpacing,
+              color: "var(--ti)",
+              maxWidth: "none",
+              height: "100%",
+            }}
           >
-            {copyFeedback === "copied" ? <Check size={16} strokeWidth={2} aria-hidden="true" /> : <Copy size={16} strokeWidth={1.5} aria-hidden="true" />}
-          </button>
-        </div>
-      ) : null}
-      <div className="dasti-proposal-sheet">
-        <div
-          className="dasti-proposal-sheet__body dasti-proposal-sheet__body--readonly"
-          style={{
-            fontFamily: documentTypography.fontFamily,
-            fontSize: documentTypography.fontSize,
-            lineHeight: documentTypography.lineHeight,
-            fontWeight: documentTypography.fontWeight,
-            letterSpacing: documentTypography.letterSpacing,
-            color: "var(--ti)",
-            maxWidth: "none",
-            height: "100%",
-          }}
-        >
-          {isLetterLike ? (
-            <div className="max-w-none">
-              {renderPlainLetterBody(proposalContent)}
-            </div>
-          ) : (
-            <div className="prose prose-lg max-w-none dark:prose-invert prose-neutral">
-              {parseMarkdown(proposalContent)}
-            </div>
-          )}
+            {isLetterLike ? (
+              <div className="max-w-none">
+                {renderPlainLetterBody(proposalContent)}
+              </div>
+            ) : (
+              <div className="prose prose-lg max-w-none dark:prose-invert prose-neutral">
+                {parseMarkdown(proposalContent)}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
