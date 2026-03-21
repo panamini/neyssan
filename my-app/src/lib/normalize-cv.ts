@@ -499,29 +499,6 @@ export function ensureRepresentativeBlocks(cv: CvDocument): CvDocument {
             if (typeof resp !== "undefined") {
               derivedContent = ensureRemirrorDoc(resp as any);
             }
-            // Append achievements[] as bullet paragraphs after responsibilities/description
-            try {
-              const achList: string[] = Array.isArray((item as any)?.achievements)
-                ? ((item as any).achievements as unknown[]).map((a) => String(a)).filter((t) => t.trim().length > 0)
-                : [];
-              if (achList.length > 0) {
-                const baseDoc: any = ensureRemirrorDoc(derivedContent as any);
-                const existingContent: any[] = Array.isArray((baseDoc as any)?.content)
-                  ? ((baseDoc as any).content as any[])
-                  : [];
-                const spacer: any[] = existingContent.length > 0 ? [{ type: "paragraph" }] : [];
-                const achParagraphs: any[] = achList.map((t) => ({
-                  type: "paragraph",
-                  content: [{ type: "text", text: `• ${t}` }],
-                }));
-                derivedContent = {
-                  ...(baseDoc as any),
-                  content: [...existingContent, ...spacer, ...achParagraphs],
-                };
-              }
-            } catch {
-              // best-effort only; if merging fails, keep responsibilities-only content
-            }
           } else if (secType === "education") {
             const desc = item?.description;
             if (typeof desc !== "undefined") derivedContent = ensureRemirrorDoc(desc as any);

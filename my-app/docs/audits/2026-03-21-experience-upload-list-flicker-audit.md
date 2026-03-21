@@ -75,3 +75,60 @@ So shimmer would only mask a renderer handoff that still exists. The actual fix 
 
 - separate rich responsibilities preview from achievements-list preview
 - or guarantee that the import pipeline never hands plain responsibilities into the achievements renderer
+
+## Implemented fix
+
+### Active code
+
+The fix keeps parsing intact and changes only the preview/render split and the initial upload section shape:
+
+- `/Volumes/video/kay/app/pouraurelien/save/implementation_UI/neyssan/my-app/src/lib/normalize-cv.ts`
+- `/Volumes/video/kay/app/pouraurelien/save/implementation_UI/neyssan/my-app/src/components/cv-editor/BlockRenderer.tsx`
+- `/Volumes/video/kay/app/pouraurelien/save/implementation_UI/neyssan/my-app/src/components/cv-display/ReadOnlyRichDoc.tsx`
+- `/Volumes/video/kay/app/pouraurelien/save/implementation_UI/neyssan/my-app/src/utils/cv/mapping-utils.ts`
+
+Current rule:
+
+- `experience.responsibilities` renders through a dedicated read-only rich-text preview
+- `experience.achievements[]` remains available on the structured item
+- top-level `achievements` section still renders through `AchievementsDisplay`
+- upload-generated `experience` and `education` sections now start with representative blocks immediately, instead of starting with `blocks: []`
+
+### Why the upload flash could still happen without this
+
+The active upload path used by `CvForge` does not come from the later library import save path first.
+
+It goes through:
+
+- `StructuredUploadButton.tsx`
+- `buildTypedSectionsFromNormalized(...)` in `mapping-utils.ts`
+- `ProfileReviewCard.tsx`
+- `reorderSections(...)` in `CvLibraryContext.tsx`
+
+Before this fix, `buildTypedSectionsFromNormalized(...)` created:
+
+- `experience.structuredContent`
+- `experience.blocks = []`
+
+That meant the first render in `SectionEditor.tsx` used the structured preview path:
+
+- larger `cv-entry-title`
+- `cv-entry-subtitle`
+- `cv-entry-bullets`
+
+Then after the document was normalized/reordered, representative blocks appeared and the same section switched to `BlockRenderer`, producing the second smaller final state.
+
+So there were actually two active causes in sequence:
+
+1. responsibilities were routed through a list-oriented preview path
+2. the uploaded section started without representative blocks, so the section switched renderer families after upload
+
+### Verification
+
+The normalization path was checked with a targeted runtime test:
+
+- `experience.achievements[]` remains attached to the experience item
+- top-level `achievements` remains attached to the dedicated `achievements` section
+- `buildTypedSectionsFromNormalized(...)` now returns an `experience` section with a linked representative block immediately
+
+So the fix narrows the change to preview routing, not to the data classification model.

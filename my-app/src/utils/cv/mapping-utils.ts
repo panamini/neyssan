@@ -5,9 +5,10 @@
  * - normalized artifacts produced by the server (preferred), or
  * - reviewer-style mapped sections (fallback).
  *
- * These helpers produce minimal typed sections that are safe to pass into
- * normalizeAndValidateCvDocument(...) which will perform schema coercion and
- * synthesize representative blocks via ensureRepresentativeBlocks.
+ * These helpers produce typed sections that are safe to pass into
+ * normalizeAndValidateCvDocument(...). Experience and education upload paths
+ * synthesize representative blocks immediately so the first render already uses
+ * the same preview family as the normalized document.
  */
 
 import { v4 as uuidv4 } from "uuid";
@@ -115,6 +116,53 @@ export interface AiDispatchSectionsParams {
 export type AiDispatchSections = (
   params: AiDispatchSectionsParams
 ) => Promise<{ sections: unknown } | unknown>;
+
+function buildExperienceRepresentativeBlocks(items: any[]) {
+  return items
+    .filter((item) => item && typeof item === "object")
+    .map((item) => {
+      const itemId = typeof item?.id === "string" ? item.id.trim() : "";
+      if (!itemId) return null;
+
+      const company = cleanToken(String(item?.company ?? ""));
+      const position = cleanToken(String(item?.position ?? ""));
+      const location = cleanToken(String(item?.location ?? ""));
+      const baseTitle = company && position ? `${position} at ${company}` : position || company || "Experience";
+      const title = location ? `${baseTitle} — ${location}` : baseTitle;
+
+      return {
+        id: uuidv4(),
+        title,
+        type: "text" as const,
+        content: ensureRemirrorDoc(item?.responsibilities as any),
+        attributes: { linkedStructuredId: itemId },
+      };
+    })
+    .filter(Boolean);
+}
+
+function buildEducationRepresentativeBlocks(items: any[]) {
+  return items
+    .filter((item) => item && typeof item === "object")
+    .map((item) => {
+      const itemId = typeof item?.id === "string" ? item.id.trim() : "";
+      if (!itemId) return null;
+
+      const institution = cleanToken(String(item?.institution ?? ""));
+      const degree = cleanToken(String(item?.degree ?? ""));
+      const field = cleanToken(String(item?.field ?? ""));
+      const baseTitle = institution || degree || field || "Education";
+
+      return {
+        id: uuidv4(),
+        title: baseTitle,
+        type: "text" as const,
+        content: ensureRemirrorDoc(item?.description as any),
+        attributes: { linkedStructuredId: itemId },
+      };
+    })
+    .filter(Boolean);
+}
 
 /**
  * Options for AI-dispatched helpers. If fallbackToHeuristics is not explicitly false,
@@ -1422,7 +1470,8 @@ function findFirstValue(keyAliases: string[], sources: object[]): string | undef
 
 /**
  * Builds typed CvSection arrays from a normalized server object.
- * This function creates structured content but does not synthesize Remirror blocks.
+ * This function creates structured content and eagerly creates representative
+ * blocks for experience/education to avoid upload-time renderer handoffs.
  */
 export function buildTypedSectionsFromNormalized(normalized: PartialNormalizedCv): CvSection[] {
   if (!normalized || typeof normalized !== "object") return [];
@@ -1515,7 +1564,7 @@ export function buildTypedSectionsFromNormalized(normalized: PartialNormalizedCv
       id: `sec-experience-${uuidv4()}`,
       title: "Experience",
       type: "experience",
-      blocks: [],
+      blocks: buildExperienceRepresentativeBlocks(expItems),
       collapsed: false,
       structuredContent: expItems,
     };
@@ -1775,7 +1824,7 @@ export function buildTypedSectionsFromNormalized(normalized: PartialNormalizedCv
       id: `sec-education-${uuidv4()}`,
       title: "Education",
       type: "education",
-      blocks: [],
+      blocks: buildEducationRepresentativeBlocks(eduItems),
       collapsed: false,
       structuredContent: eduItems,
     };
