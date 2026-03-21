@@ -89,29 +89,11 @@ export function CvsLibrary(): JSX.Element {
           </div>
           <button
             onClick={() => { createNewCv(); void navigate("/cv"); }}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "var(--s2)",
-              height: "var(--hm)",
-              padding: "0 var(--s4)",
-              borderRadius: "var(--rs)",
-              border: "1px solid var(--bm)",
-              background: "var(--sfr)",
-              color: "var(--ti)",
-              fontSize: "var(--ts)",
-              fontWeight: 500,
-              cursor: "pointer",
-              boxShadow: "var(--sha)",
-              transition: "all .12s var(--ez)",
-              fontFamily: "inherit",
-              flexShrink: 0,
-            }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--sf2)"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--sfr)"; }}
+            className="dasti-icon-button dasti-library-create-button"
+            aria-label="Create new resume"
+            title="Create new resume"
           >
-            <Plus size={14} />
-            New resume
+            <Plus size={20} strokeWidth={1.75} aria-hidden />
           </button>
         </div>
 

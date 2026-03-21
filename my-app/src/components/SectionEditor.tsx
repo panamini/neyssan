@@ -16,12 +16,14 @@ import { SkillsDrawer } from "./structured-blocks/SkillsDrawer";
 import BlockRenderer from "./cv-editor/BlockRenderer";
 import AchievementsBlock from "./structured-blocks/AchievementsBlock";
 import { useSectionFlushSubscription } from "../hooks/use-flush-subscription";
-import { ScrollText, Trash, X, Pin, PinOff, Plus, UserRound } from "lucide-react";
+import { ScrollText, Trash, X, Pin, PinOff, Plus, UserRound, ChevronDown, ChevronUp } from "lucide-react";
 import { ExperienceModal, EducationModal } from "./structured-blocks/ExperienceEducationModal";
 
 import { formatRangeFromItem } from "../lib/date-utils";
 import { splitResponsibilitiesIntoBullets } from "../utils/cv/mapping-utils";
 import { isExperienceRenderable, isEducationRenderable } from "../utils/cv/renderGuards";
+import { docToPlainText } from "./remirror-editor/utils/text";
+import { deepEqual } from "../utils/deepEqual";
 
 /**
  * Simple uid helper used for generating new block/entry ids locally.
@@ -561,7 +563,7 @@ export default function SectionEditor({
 
   // Determine whether v1 rendering should be active for this document.
   // Use the canonical runtime detector from CvLibraryContext.
-  const { isV1Active, selectedInspector, closeInspector, updateStructuredItem } = useCvLibrary();
+  const { isV1Active, selectedInspector, closeInspector, updateStructuredItem, currentCv, reorderSections } = useCvLibrary();
 
   // Dev-only runtime diagnostics: log which branch we will render for this section.
 
@@ -574,12 +576,29 @@ export default function SectionEditor({
   // Experience/Education modals (typed v1)
   const [isExperienceModalOpen, setExperienceModalOpen] = useState<boolean>(false);
   const [isEducationModalOpen, setEducationModalOpen] = useState<boolean>(false);
+  const [expandedStructuredPreviewIds, setExpandedStructuredPreviewIds] = useState<Record<string, boolean>>({});
+  const [expandedStructuredSectionIds, setExpandedStructuredSectionIds] = useState<Record<string, boolean>>({});
+  const [structuredPreviewOverride, setStructuredPreviewOverride] = useState<CvSection | null>(null);
   // Skills drawer (Phase 2 skeleton)
   const [isSkillsDrawerOpen, setSkillsDrawerOpen] = useState<boolean>(false);
   const profilePhotoInputRef = useRef<HTMLInputElement | null>(null);
   
   // (moved) The flush-related hooks and refs were moved higher up in the component
   // to resolve TypeScript declaration errors and to support the stable-ref pattern for registration.
+
+  useEffect(() => {
+    if (!structuredPreviewOverride) return;
+    if (String(structuredPreviewOverride.id) !== String(section.id)) {
+      setStructuredPreviewOverride(null);
+      return;
+    }
+    if (
+      deepEqual(structuredPreviewOverride.structuredContent, section.structuredContent) &&
+      deepEqual(structuredPreviewOverride.blocks, section.blocks)
+    ) {
+      setStructuredPreviewOverride(null);
+    }
+  }, [section, structuredPreviewOverride]);
 
   /**
    * Migrate legacy section.content -> section.blocks[0] when blocks are empty.
@@ -686,7 +705,7 @@ export default function SectionEditor({
     return (
       <div className="mb-4 border border-bo rounded-rm section-container">
         <div className="flex items-center justify-between p-3 [background:var(--sf1)]">
-          <h3 className="text-lg font-semibold">{section.title}</h3>
+          <h3 className="cv-section-heading">{section.title}</h3>
           <div className="dasti-icon-cluster dasti-icon-cluster--tight">
             <button
               type="button"
@@ -720,7 +739,7 @@ export default function SectionEditor({
 
         {collapsed && (
           <div
-            className="px-4 pb-3 cursor-text"
+            className="cv-section-preview cursor-text"
             role="button"
             tabIndex={0}
             aria-label="Edit summary"
@@ -742,7 +761,7 @@ export default function SectionEditor({
               }
             }}
           >
-            <p className="text-sm truncate [color:var(--tm2)]">
+            <p className="cv-preview-empty cv-preview-text cv-preview-text--truncate cv-preview-text--muted">
               {(() => {
                 try {
                   const sumItem = (Array.isArray(section.structuredContent) && section.structuredContent.length > 0
@@ -978,7 +997,7 @@ export default function SectionEditor({
     return (
       <div className="mb-4 border border-bo rounded-rm section-container">
         <div className="flex items-center justify-between p-3 [background:var(--sf1)]">
-          <h3 className="text-lg font-semibold">{section.title}</h3>
+          <h3 className="cv-section-heading">{section.title}</h3>
           <div className="flex items-center">
             {typeof onCollapseChange === "function" && (
               <button
@@ -999,10 +1018,10 @@ export default function SectionEditor({
         </div>
 
         {collapsed && (
-          <div className="px-4 pb-3">
+          <div className="cv-section-preview">
             <div className="flex flex-wrap gap-2">
               {items.length === 0 ? (
-                <span className="text-sm [color:var(--tg2)]">No skills yet</span>
+                <span className="cv-preview-empty cv-preview-text cv-preview-text--muted">No skills yet</span>
               ) : (
                 items.map((s) => (
                   <span
@@ -1380,7 +1399,7 @@ export default function SectionEditor({
     return (
       <div className="mb-4 border border-bo rounded-rm section-container">
         <div className="flex items-center justify-between p-3 [background:var(--sf1)]">
-          <h3 className="text-lg font-semibold">{section.title}</h3>
+          <h3 className="cv-section-heading">{section.title}</h3>
           <div className="flex items-center">
             {typeof onCollapseChange === "function" && (
               <button
@@ -1401,10 +1420,10 @@ export default function SectionEditor({
         </div>
 
         {collapsed && (
-          <div className="px-4 pb-3">
+          <div className="cv-section-preview">
             <div className="flex flex-wrap gap-2">
               {items.length === 0 ? (
-                <span className="text-sm [color:var(--tg2)]">No languages yet</span>
+                <span className="cv-preview-empty cv-preview-text cv-preview-text--muted">No languages yet</span>
               ) : (
                 items.map((lng) => (
                   <span
@@ -1605,7 +1624,7 @@ export default function SectionEditor({
     return (
       <div className="mb-4 border border-bo rounded-rm section-container">
         <div className="flex items-center justify-between p-3 [background:var(--sf1)]">
-          <h3 className="text-lg font-semibold">{section.title}</h3>
+          <h3 className="cv-section-heading">{section.title}</h3>
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -1699,16 +1718,16 @@ export default function SectionEditor({
                 </button>
               </div>
               <div className="flex-1 min-w-0">
-                <div className="flex flex-col">
-                  <div className="text-base font-semibold truncate [color:var(--ti)]">{name || "Your name"}</div>
-                  <div className="text-sm truncate [color:var(--tg2)]">{desiredPosition || "Desired position"}</div>
+                <div className="cv-preview-stack">
+                  <div className="cv-profile-name cv-preview-text--truncate">{name || "Your name"}</div>
+                  <div className="cv-profile-role cv-preview-text--truncate">{desiredPosition || "Desired position"}</div>
                 </div>
                 <div className="flex flex-wrap gap-2 mt-3">
-                  <Chip icon={<span aria-hidden className="inline-block w-2 h-2 rounded-full bg-emerald-500" />} text={email} href={email ? `mailto:${email}` : undefined} ariaLabel="Email" />
-                  <Chip icon={<span aria-hidden className="inline-block w-2 h-2 rounded-full bg-[var(--accent)]" />} text={phone} href={phone ? `tel:${phone}` : undefined} ariaLabel="Phone" />
-                  <Chip icon={<span aria-hidden className="inline-block w-2 h-2 [background:var(--ac)] rounded-full" />} text={linkedin} href={linkedin || undefined} ariaLabel="LinkedIn" />
-                  <Chip icon={<span aria-hidden className="inline-block w-2 h-2 bg-indigo-500 rounded-full" />} text={website} href={website || undefined} ariaLabel="Website" />
-                  <Chip icon={<span aria-hidden className="inline-block w-2 h-2 rounded-full bg-amber-500" />} text={location} ariaLabel="Location" />
+                  <Chip icon={<span aria-hidden className="inline-block w-2 h-2 rounded-full [background:var(--ac)]" />} text={email} href={email ? `mailto:${email}` : undefined} ariaLabel="Email" />
+                  <Chip icon={<span aria-hidden className="inline-block w-2 h-2 rounded-full [background:var(--am)]" />} text={phone} href={phone ? `tel:${phone}` : undefined} ariaLabel="Phone" />
+                  <Chip icon={<span aria-hidden className="inline-block w-2 h-2 rounded-full [background:var(--ac)]" />} text={linkedin} href={linkedin || undefined} ariaLabel="LinkedIn" />
+                  <Chip icon={<span aria-hidden className="inline-block w-2 h-2 rounded-full [background:var(--ok)]" />} text={website} href={website || undefined} ariaLabel="Website" />
+                  <Chip icon={<span aria-hidden className="inline-block w-2 h-2 rounded-full [background:var(--tm2)]" />} text={location} ariaLabel="Location" />
                 </div>
               </div>
             </div>
@@ -1818,13 +1837,32 @@ export default function SectionEditor({
       }
     }
 
-    const structuredList = Array.isArray(section.structuredContent)
-      ? (section.structuredContent as any[])
+    const structuredSection =
+      structuredPreviewOverride && String(structuredPreviewOverride.id) === String(section.id)
+        ? structuredPreviewOverride
+        : section;
+    const usingStructuredPreviewOverride =
+      Boolean(structuredPreviewOverride) && String(structuredSection.id) === String(section.id);
+
+    const structuredList = Array.isArray(structuredSection.structuredContent)
+      ? (structuredSection.structuredContent as any[])
       : [];
     const guard = sectionType === "experience" ? isExperienceRenderable : isEducationRenderable;
     const renderableStructured = structuredList.filter((item) => guard(item));
     const hasRenderableStructured = renderableStructured.length > 0;
-    const hasBlocks = Array.isArray(section.blocks) && section.blocks.length > 0;
+    const hasBlocks = Array.isArray(structuredSection.blocks) && structuredSection.blocks.length > 0;
+    const collapsedListExpanded = Boolean(expandedStructuredSectionIds[String(section.id)]);
+    const sectionCanToggleEntries = hasBlocks
+      ? structuredSection.blocks.length > 3
+      : renderableStructured.length > 3;
+    const visibleBlocks = hasBlocks
+      ? collapsedListExpanded
+        ? structuredSection.blocks
+        : structuredSection.blocks.slice(0, 3)
+      : [];
+    const collapsedVisibleStructured = collapsedListExpanded
+      ? renderableStructured
+      : renderableStructured.slice(0, 3);
 
     function openStructuredModal() {
       try {
@@ -1844,9 +1882,25 @@ export default function SectionEditor({
       }
     }
 
+    function commitStructuredSection(updatedSection: CvSection) {
+      try {
+        if (currentCv && typeof reorderSections === "function") {
+          const nextSections = (currentCv.sections ?? []).map((s) =>
+            String(s.id) === String(updatedSection.id) ? (updatedSection as CvSection) : s
+          );
+          reorderSections(nextSections as CvSection[]);
+          return;
+        }
+      } catch {
+        /* noop */
+      }
+      onChange(index, updatedSection as any);
+    }
+
     const renderStructuredPreview = (rawItem: any, idx: number, variant: "compact" | "detailed") => {
       const structuredId = String(rawItem?.id ?? idx);
       const isExp = sectionType === "experience";
+      const previewExpanded = variant === "detailed" || Boolean(expandedStructuredPreviewIds[structuredId]);
       const trim = (value: unknown) => (typeof value === "string" ? value.trim() : "");
       const dates = formatRangeFromItem(rawItem as any);
 
@@ -1857,11 +1911,18 @@ export default function SectionEditor({
         const title = position || company || "Experience entry";
         const subtitle = [company, location].filter(Boolean).join(" • ") || undefined;
 
+        const responsibilitiesText =
+          typeof rawItem?.responsibilities === "string"
+            ? rawItem.responsibilities
+            : rawItem?.responsibilities && typeof rawItem.responsibilities === "object"
+            ? docToPlainText(rawItem.responsibilities as any)
+            : undefined;
+
         const responsibilityBullets = Array.isArray(rawItem?.responsibilityBullets)
           ? (rawItem.responsibilityBullets as unknown[])
               .map((value) => (typeof value === "string" ? value.trim() : ""))
               .filter(Boolean)
-          : splitResponsibilitiesIntoBullets(typeof rawItem?.responsibilities === "string" ? rawItem.responsibilities : undefined);
+          : splitResponsibilitiesIntoBullets(responsibilitiesText);
 
         const achievements = Array.isArray(rawItem?.achievements)
           ? (rawItem.achievements as unknown[])
@@ -1876,9 +1937,9 @@ export default function SectionEditor({
           : [];
 
         const bulletSource = responsibilityBullets.length > 0 ? responsibilityBullets : achievements;
-        const bulletLimit = variant === "compact" ? 3 : bulletSource.length;
+        const bulletLimit = variant === "compact" && !previewExpanded ? 3 : bulletSource.length;
         const bulletList = bulletSource.slice(0, bulletLimit);
-        const hasMoreBullets = variant === "compact" && bulletSource.length > bulletList.length;
+        const canToggleBullets = variant === "compact" && bulletSource.length > 3;
 
         return (
           <div key={structuredId} className="py-3">
@@ -1900,8 +1961,24 @@ export default function SectionEditor({
                 ))}
               </ul>
             ) : null}
-            {hasMoreBullets ? (
-              <p className="cv-entry-note">Expand to view more details.</p>
+            {canToggleBullets ? (
+              <div className="cv-disclosure-row">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setExpandedStructuredPreviewIds((prev) => ({
+                      ...prev,
+                      [structuredId]: !prev[structuredId],
+                    }));
+                  }}
+                  className="dasti-icon-button dasti-icon-button--compact"
+                  aria-label={previewExpanded ? "Show fewer details" : "Show more details"}
+                  title={previewExpanded ? "Show less" : "Show more"}
+                >
+                  {previewExpanded ? <ChevronUp className="w-3.5 h-3.5" aria-hidden /> : <ChevronDown className="w-3.5 h-3.5" aria-hidden />}
+                </button>
+              </div>
             ) : null}
           </div>
         );
@@ -1911,14 +1988,19 @@ export default function SectionEditor({
       const degree = trim(rawItem?.degree);
       const fieldOfStudy = trim(rawItem?.fieldOfStudy);
       const descriptionRaw = rawItem?.description;
-      const description = typeof descriptionRaw === "string" ? descriptionRaw.trim() : "";
-      const hasObjectDescription = descriptionRaw && typeof descriptionRaw === "object";
+      const description =
+        typeof descriptionRaw === "string"
+          ? descriptionRaw.trim()
+          : descriptionRaw && typeof descriptionRaw === "object"
+          ? docToPlainText(descriptionRaw as any).trim()
+          : "";
       const title = degree || institution || fieldOfStudy || "Education entry";
       const subtitle = [institution, fieldOfStudy].filter(Boolean).join(" • ");
       const truncatedDescription =
-        variant === "compact" && description.length > 160
+        variant === "compact" && !previewExpanded && description.length > 160
           ? `${description.slice(0, 157).trimEnd()}…`
           : description;
+      const canToggleDescription = variant === "compact" && description.length > 160;
 
       return (
         <div key={structuredId} className="py-3">
@@ -1934,7 +2016,25 @@ export default function SectionEditor({
           {truncatedDescription ? (
             <p className="cv-entry-body">{truncatedDescription}</p>
           ) : null}
-          {!truncatedDescription && hasObjectDescription ? (
+          {canToggleDescription ? (
+            <div className="cv-disclosure-row">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setExpandedStructuredPreviewIds((prev) => ({
+                    ...prev,
+                    [structuredId]: !prev[structuredId],
+                  }));
+                }}
+                className="dasti-icon-button dasti-icon-button--compact"
+                aria-label={previewExpanded ? "Show fewer details" : "Show more details"}
+                title={previewExpanded ? "Show less" : "Show more"}
+              >
+                {previewExpanded ? <ChevronUp className="w-3.5 h-3.5" aria-hidden /> : <ChevronDown className="w-3.5 h-3.5" aria-hidden />}
+              </button>
+            </div>
+          ) : !truncatedDescription && descriptionRaw && typeof descriptionRaw === "object" ? (
             <p className="cv-entry-note">Detailed description available.</p>
           ) : null}
         </div>
@@ -1944,7 +2044,7 @@ export default function SectionEditor({
     return (
       <div className="mb-4 border border-bo rounded-rm section-container">
         <div className="flex items-center justify-between p-3 [background:var(--sf1)]">
-          <h3 className="text-lg font-semibold">{section.title}</h3>
+          <h3 className="cv-section-heading">{section.title}</h3>
           <div className="dasti-icon-cluster dasti-icon-cluster--tight">
             {isV1Active ? (
               <button
@@ -1982,7 +2082,7 @@ export default function SectionEditor({
 
         {collapsed && (
           <div
-            className="px-4 pb-3 cursor-pointer"
+            className="cv-section-preview cursor-pointer"
             role="button"
             tabIndex={0}
             aria-label={`Edit ${sectionType}`}
@@ -2000,13 +2100,55 @@ export default function SectionEditor({
             }}
           >
             {hasRenderableStructured ? (
-              <div className="cv-entry-stack">
-                {renderableStructured.map((it, i) => renderStructuredPreview(it, i, "compact"))}
-              </div>
+              <>
+                <div className="cv-entry-stack">
+                  {collapsedVisibleStructured.map((it, i) => renderStructuredPreview(it, i, "compact"))}
+                </div>
+                {sectionCanToggleEntries ? (
+                  <div className="cv-disclosure-row cv-disclosure-row--section">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setExpandedStructuredSectionIds((prev) => ({
+                          ...prev,
+                          [String(section.id)]: !prev[String(section.id)],
+                        }));
+                      }}
+                      className="dasti-icon-button dasti-icon-button--compact"
+                      aria-label={collapsedListExpanded ? `Show fewer ${sectionType} entries` : `Show more ${sectionType} entries`}
+                      title={collapsedListExpanded ? "Show less" : "Show more"}
+                    >
+                      {collapsedListExpanded ? <ChevronUp className="w-3.5 h-3.5" aria-hidden /> : <ChevronDown className="w-3.5 h-3.5" aria-hidden />}
+                    </button>
+                  </div>
+                ) : null}
+              </>
             ) : hasBlocks ? (
-              <div className="text-sm [color:var(--tg2)]">Entries stored in rich text. Expand to view.</div>
+              <>
+                <p className="cv-preview-empty cv-preview-text cv-preview-text--muted">Entries stored in rich text. Expand to view.</p>
+                {sectionCanToggleEntries ? (
+                  <div className="cv-disclosure-row cv-disclosure-row--section">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setExpandedStructuredSectionIds((prev) => ({
+                          ...prev,
+                          [String(section.id)]: !prev[String(section.id)],
+                        }));
+                      }}
+                      className="dasti-icon-button dasti-icon-button--compact"
+                      aria-label={collapsedListExpanded ? `Show fewer ${sectionType} entries` : `Show more ${sectionType} entries`}
+                      title={collapsedListExpanded ? "Show less" : "Show more"}
+                    >
+                      {collapsedListExpanded ? <ChevronUp className="w-3.5 h-3.5" aria-hidden /> : <ChevronDown className="w-3.5 h-3.5" aria-hidden />}
+                    </button>
+                  </div>
+                ) : null}
+              </>
             ) : (
-              <div className="text-sm [color:var(--tg2)]">No entries</div>
+              <p className="cv-preview-empty cv-preview-text cv-preview-text--muted">No entries</p>
             )}
           </div>
         )}
@@ -2030,25 +2172,67 @@ export default function SectionEditor({
               }
             }}
           >
-            {hasBlocks ? (
-              <div className="cv-entry-stack">
-                {section.blocks.map((block) => (
-                  <div key={String(block.id)} className="p-0">
-                    <BlockRenderer
-                      sectionId={String(section.id)}
-                      block={block as any}
-                      onDelete={() => handleDeleteBlock(String(block.id))}
-                      disableChevron={true}
+            {hasBlocks && !usingStructuredPreviewOverride ? (
+              <>
+                <div className="cv-entry-stack">
+                  {visibleBlocks.map((block) => (
+                    <div key={String(block.id)} className="p-0">
+                      <BlockRenderer
+                        sectionId={String(section.id)}
+                        block={block as any}
+                        onDelete={() => handleDeleteBlock(String(block.id))}
+                        disableChevron={true}
                     />
                   </div>
                 ))}
-              </div>
+                </div>
+                {sectionCanToggleEntries ? (
+                  <div className="cv-disclosure-row cv-disclosure-row--section">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setExpandedStructuredSectionIds((prev) => ({
+                          ...prev,
+                          [String(section.id)]: !prev[String(section.id)],
+                        }));
+                      }}
+                      className="dasti-icon-button dasti-icon-button--compact"
+                      aria-label={collapsedListExpanded ? `Show fewer ${sectionType} entries` : `Show more ${sectionType} entries`}
+                      title={collapsedListExpanded ? "Show less" : "Show more"}
+                    >
+                      {collapsedListExpanded ? <ChevronUp className="w-3.5 h-3.5" aria-hidden /> : <ChevronDown className="w-3.5 h-3.5" aria-hidden />}
+                    </button>
+                  </div>
+                ) : null}
+              </>
             ) : hasRenderableStructured ? (
-              <div className="cv-entry-stack">
-                {renderableStructured.map((it, i) => renderStructuredPreview(it, i, "detailed"))}
-              </div>
+              <>
+                <div className="cv-entry-stack">
+                  {collapsedVisibleStructured.map((it, i) => renderStructuredPreview(it, i, "detailed"))}
+                </div>
+                {sectionCanToggleEntries ? (
+                  <div className="cv-disclosure-row cv-disclosure-row--section">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setExpandedStructuredSectionIds((prev) => ({
+                          ...prev,
+                          [String(section.id)]: !prev[String(section.id)],
+                        }));
+                      }}
+                      className="dasti-icon-button dasti-icon-button--compact"
+                      aria-label={collapsedListExpanded ? `Show fewer ${sectionType} entries` : `Show more ${sectionType} entries`}
+                      title={collapsedListExpanded ? "Show less" : "Show more"}
+                    >
+                      {collapsedListExpanded ? <ChevronUp className="w-3.5 h-3.5" aria-hidden /> : <ChevronDown className="w-3.5 h-3.5" aria-hidden />}
+                    </button>
+                  </div>
+                ) : null}
+              </>
             ) : (
-              <div className="p-3 text-sm [color:var(--tg2)]">No entries</div>
+              <p className="p-3 cv-preview-empty cv-preview-text cv-preview-text--muted">No entries</p>
             )}
           </div>
         )}
@@ -2057,36 +2241,51 @@ export default function SectionEditor({
           <ExperienceModal
             open={isExperienceModalOpen}
             onClose={() => setExperienceModalOpen(false)}
-            items={(Array.isArray(section.structuredContent) ? (section.structuredContent as any) : []) as IExperienceItem[]}
+            items={(Array.isArray(structuredSection.structuredContent) ? (structuredSection.structuredContent as any) : []) as IExperienceItem[]}
             onSave={(next) => {
               try {
-                // Sync blocks with structured items by linkedStructuredId
-                const keepIds = new Set(next.map((it) => String(it.id)));
-                const existingBlocks = Array.isArray(section.blocks) ? section.blocks : [];
-                const keptBlocks = existingBlocks.filter((b: any) => {
-                  const linked = (b as any)?.attributes?.linkedStructuredId ?? (b as any)?.attributes?.linkedstructuredid;
-                  return keepIds.has(String(linked));
-                });
-                const hasBlockByLinked = (id: string) =>
-                  keptBlocks.some((b: any) => String((b as any)?.attributes?.linkedStructuredId ?? (b as any)?.attributes?.linkedstructuredid) === String(id));
+                const existingBlocks = Array.isArray(structuredSection.blocks) ? structuredSection.blocks : [];
+                const blockByLinkedId = new Map(
+                  existingBlocks
+                    .map((b: any) => [
+                      String((b as any)?.attributes?.linkedStructuredId ?? (b as any)?.attributes?.linkedstructuredid ?? ""),
+                      b,
+                    ])
+                    .filter(([id]) => id.length > 0)
+                );
 
-                const createdBlocks = next
-                  .filter((it) => it && it.id && !hasBlockByLinked(String(it.id)))
-                  .map((it) => ({
-                    id: uuidv4(),
-                    title: String(it.position || it.company || "Experience"),
+                const syncedBlocks = next.map((it) => {
+                  const linkedId = String(it.id);
+                  const existing = blockByLinkedId.get(linkedId);
+                  const title = String(it.position || it.company || "Experience");
+                  const content =
+                    typeof it.responsibilities !== "undefined" && it.responsibilities !== null
+                      ? ensureRemirrorDoc(it.responsibilities as any)
+                      : existing
+                      ? ensureRemirrorDoc((existing as any).content as any)
+                      : ensureRemirrorDoc(undefined as any);
+
+                  return {
+                    ...(existing ?? {}),
+                    id: String((existing as any)?.id ?? uuidv4()),
+                    title,
                     type: "text" as const,
-                    content: ensureRemirrorDoc(undefined as any),
-                    attributes: { linkedStructuredId: String(it.id) },
-                  }));
+                    content,
+                    attributes: {
+                      ...((existing as any)?.attributes ?? {}),
+                      linkedStructuredId: linkedId,
+                    },
+                  };
+                });
 
                 const updatedSection = {
-                  ...section,
+                  ...structuredSection,
                   structuredContent: next as any,
-                  blocks: [...keptBlocks, ...createdBlocks] as any,
+                  blocks: syncedBlocks as any,
                 } as CvSection;
 
-                onChange(index, updatedSection as any);
+                setStructuredPreviewOverride(updatedSection);
+                commitStructuredSection(updatedSection);
                 setExperienceModalOpen(false);
               } catch { /* noop */ }
             }}
@@ -2096,35 +2295,51 @@ export default function SectionEditor({
           <EducationModal
             open={isEducationModalOpen}
             onClose={() => setEducationModalOpen(false)}
-            items={(Array.isArray(section.structuredContent) ? (section.structuredContent as any) : []) as IEducationItem[]}
+            items={(Array.isArray(structuredSection.structuredContent) ? (structuredSection.structuredContent as any) : []) as IEducationItem[]}
             onSave={(next) => {
               try {
-                const keepIds = new Set(next.map((it) => String(it.id)));
-                const existingBlocks = Array.isArray(section.blocks) ? section.blocks : [];
-                const keptBlocks = existingBlocks.filter((b: any) => {
-                  const linked = (b as any)?.attributes?.linkedStructuredId ?? (b as any)?.attributes?.linkedstructuredid;
-                  return keepIds.has(String(linked));
-                });
-                const hasBlockByLinked = (id: string) =>
-                  keptBlocks.some((b: any) => String((b as any)?.attributes?.linkedStructuredId ?? (b as any)?.attributes?.linkedstructuredid) === String(id));
+                const existingBlocks = Array.isArray(structuredSection.blocks) ? structuredSection.blocks : [];
+                const blockByLinkedId = new Map(
+                  existingBlocks
+                    .map((b: any) => [
+                      String((b as any)?.attributes?.linkedStructuredId ?? (b as any)?.attributes?.linkedstructuredid ?? ""),
+                      b,
+                    ])
+                    .filter(([id]) => id.length > 0)
+                );
 
-                const createdBlocks = next
-                  .filter((it) => it && it.id && !hasBlockByLinked(String(it.id)))
-                  .map((it) => ({
-                    id: uuidv4(),
-                    title: String(it.institution || it.degree || "Education"),
+                const syncedBlocks = next.map((it) => {
+                  const linkedId = String(it.id);
+                  const existing = blockByLinkedId.get(linkedId);
+                  const title = String(it.institution || it.degree || "Education");
+                  const content =
+                    typeof it.description !== "undefined" && it.description !== null
+                      ? ensureRemirrorDoc(it.description as any)
+                      : existing
+                      ? ensureRemirrorDoc((existing as any).content as any)
+                      : ensureRemirrorDoc(undefined as any);
+
+                  return {
+                    ...(existing ?? {}),
+                    id: String((existing as any)?.id ?? uuidv4()),
+                    title,
                     type: "text" as const,
-                    content: ensureRemirrorDoc(undefined as any),
-                    attributes: { linkedStructuredId: String(it.id) },
-                  }));
+                    content,
+                    attributes: {
+                      ...((existing as any)?.attributes ?? {}),
+                      linkedStructuredId: linkedId,
+                    },
+                  };
+                });
 
                 const updatedSection = {
-                  ...section,
+                  ...structuredSection,
                   structuredContent: next as any,
-                  blocks: [...keptBlocks, ...createdBlocks] as any,
+                  blocks: syncedBlocks as any,
                 } as CvSection;
 
-                onChange(index, updatedSection as any);
+                setStructuredPreviewOverride(updatedSection);
+                commitStructuredSection(updatedSection);
                 setEducationModalOpen(false);
               } catch { /* noop */ }
             }}
@@ -2164,7 +2379,7 @@ export default function SectionEditor({
             onFocus?.(String(section.id));
           }}
           onClick={(e) => e.stopPropagation()}
-          className="flex-grow text-lg font-semibold bg-transparent focus:outline-none"
+          className="cv-section-title-input"
           placeholder="Section Title"
         />
        {typeof onCollapseChange === "function" && (
