@@ -7,6 +7,7 @@ interface ToastOptions {
   duration?: number;
   title?: string;
   description?: string;
+  icon?: React.ReactNode;
 }
 
 interface ToastItem extends ToastOptions {
@@ -125,6 +126,14 @@ function Toast({ toast, onClose }: { toast: ToastItem; onClose: () => void }) {
         toast.variant
       )}`}
     >
+      {toast.icon ? (
+        <div
+          aria-hidden="true"
+          className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full [background:var(--sf2)] [color:var(--ti)]"
+        >
+          {toast.icon}
+        </div>
+      ) : null}
       <div className="flex-1">
         <div className="flex items-center justify-between gap-2">
           <div className="font-semibold">{toast.title}</div>

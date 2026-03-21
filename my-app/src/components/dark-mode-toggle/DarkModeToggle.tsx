@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Sun, MoonStar } from "lucide-react";
+import { Sun, Moon } from "lucide-react";
 
 interface DarkModeToggleProps {
   /** When true, renders a bare 16×16 icon button (no padding, no hover bg)
@@ -53,7 +53,7 @@ const DarkModeToggle = ({ compact = false }: DarkModeToggleProps) => {
         aria-pressed={isDarkTheme}
       >
         {isDarkTheme ? (
-          <MoonStar className="w-4 h-4" aria-hidden />
+          <Moon className="w-4 h-4" aria-hidden />
         ) : (
           <Sun className="w-4 h-4" aria-hidden />
         )}
@@ -69,7 +69,7 @@ const DarkModeToggle = ({ compact = false }: DarkModeToggleProps) => {
       aria-pressed={isDarkTheme}
     >
       {isDarkTheme ? (
-        <MoonStar className="w-4 h-4 text-tg2" />
+        <Moon className="w-4 h-4 text-tg2" />
       ) : (
         <Sun className="w-4 h-4 text-tg2" />
       )}

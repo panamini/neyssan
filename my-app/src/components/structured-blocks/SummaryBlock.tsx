@@ -271,7 +271,7 @@ export function SummaryBlock({ section, onOpenEditor }: SummaryBlockProps) {
             aria-label={isExpanded ? "Collapse summary" : "Expand summary"}
             title={isExpanded ? "Show less" : "Show more"}
           >
-            {isExpanded ? <ChevronUp className="w-3.5 h-3.5" aria-hidden /> : <ChevronDown className="w-3.5 h-3.5" aria-hidden />}
+            {isExpanded ? <ChevronDown className="w-3.5 h-3.5" aria-hidden /> : <ChevronUp className="w-3.5 h-3.5" aria-hidden />}
           </button>
         </div>
       ) : null}

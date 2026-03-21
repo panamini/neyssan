@@ -35,13 +35,15 @@ import {
   getProposalGenerationUiErrorMessage,
   type ProposalGenerationFallbackInfo,
 } from "../lib/proposal-generation-ui";
-import { ArrowUp, Check, ChevronDown, Paperclip, ScrollText, Square, X } from "lucide-react";
+import { getProposalDocumentTypography } from "../lib/proposal-document-typography";
+import { Check, ChevronDown, Paperclip, ScrollText, SendHorizontal, Square, X } from "lucide-react";
 
 interface ProposalInputFormProps {
   onSubmit: (
     values: FormValues,
     proposalContent: string,
     fallbackInfo?: ProposalGenerationFallbackInfo,
+    proposalId?: string,
   ) => void;
   onStart?: (values: FormValues) => void;
   onError?: (message: string, values: FormValues, rawReason?: string | null) => void;
@@ -73,6 +75,37 @@ const TONE_OPTIONS: Array<{ id: ProposalVoicePreset; uiLabel: string; descriptio
   { id: "expert", uiLabel: "Formal", description: "More precise, structured, and authoritative." },
   { id: "engaging", uiLabel: "Warm", description: "Warmer, more lively, and still professional." },
 ];
+
+const PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY = "dasti:proposal-compose-draft:v1";
+
+function readStoredComposeDraft(): Partial<FormValues> {
+  if (typeof window === "undefined") return {};
+
+  try {
+    const raw = window.localStorage.getItem(PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY);
+    if (!raw) return {};
+
+    const parsed = JSON.parse(raw) as Partial<FormValues> | null;
+    if (!parsed || typeof parsed !== "object") return {};
+
+    return {
+      jobTitle: typeof parsed.jobTitle === "string" ? parsed.jobTitle : "",
+      jobDescription:
+        typeof parsed.jobDescription === "string" ? parsed.jobDescription : "",
+      proposalType:
+        parsed.proposalType === "freelance_proposal" ||
+        parsed.proposalType === "cover_letter"
+          ? parsed.proposalType
+          : "cover_letter",
+      voicePreset:
+        typeof parsed.voicePreset === "string"
+          ? (parsed.voicePreset as ProposalVoicePreset)
+          : DEFAULT_PROPOSAL_VOICE_PRESET,
+    };
+  } catch {
+    return {};
+  }
+}
 
 const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   onSubmit,
@@ -151,6 +184,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
       formalityLevel: "neutral",
       creativity: "medium",
       modelType: "chatgpt" as const,
+      ...readStoredComposeDraft(),
     },
   });
 
@@ -158,6 +192,28 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   const selectedModelType = form.watch("modelType");
   const selectedProposalType = form.watch("proposalType");
   const selectedVoicePreset = form.watch("voicePreset");
+
+  React.useEffect(() => {
+    const subscription = form.watch((values) => {
+      if (typeof window === "undefined") return;
+
+      try {
+        window.localStorage.setItem(
+          PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
+          JSON.stringify({
+            jobTitle: values.jobTitle ?? "",
+            jobDescription: values.jobDescription ?? "",
+            proposalType: values.proposalType ?? "cover_letter",
+            voicePreset: values.voicePreset ?? DEFAULT_PROPOSAL_VOICE_PRESET,
+          } satisfies Partial<FormValues>),
+        );
+      } catch {
+        // Ignore storage failures and keep the in-memory compose draft.
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [form]);
   const supportedVoicePresetIds = React.useMemo(
     () =>
       getSupportedProposalVoicePresetIds({
@@ -287,49 +343,16 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   }, [form, selectedProposalType]);
 
   React.useEffect(() => {
-    // Prefill removed (navigated away from handoff URL):
-    // clear any fields that still contain the prefill content so stale job
-    // description cannot survive into the next generation.
     if (!prefill?.handoffId) {
-      if (appliedPrefillRef.current !== null) {
-        const prev = appliedPrefillRef.current;
-        const currentTitle = form.getValues("jobTitle");
-        const currentDesc = form.getValues("jobDescription");
-        if (currentTitle === prev.jobTitle) {
-          form.setValue("jobTitle", "", { shouldDirty: false, shouldTouch: false, shouldValidate: false });
-        }
-        if (currentDesc === prev.jobDescription) {
-          form.setValue("jobDescription", "", { shouldDirty: false, shouldTouch: false, shouldValidate: false });
-        }
-        appliedPrefillRef.current = null;
-      }
+      appliedPrefillRef.current = null;
       return;
     }
 
     // Same handoff — already applied, nothing to do.
     if (appliedPrefillRef.current?.handoffId === prefill.handoffId) return;
 
-    const isFirstHandoff = appliedPrefillRef.current === null;
-
-    if (isFirstHandoff) {
-      // On first mount, only apply if the form is empty (user may have started typing).
-      const currentValues = form.getValues();
-      const hasUserContent =
-        form.formState.isDirty ||
-        currentValues.jobTitle.trim().length > 0 ||
-        currentValues.jobDescription.trim().length > 0;
-      if (hasUserContent) {
-        // Record the handoff as seen but don't overwrite.
-        appliedPrefillRef.current = {
-          handoffId: prefill.handoffId,
-          jobTitle: prefill.jobTitle,
-          jobDescription: prefill.jobDescription,
-        };
-        return;
-      }
-    }
-
-    // First load on empty form, OR a different handoffId arrived — always apply.
+    // Handoff content is authoritative. Browser draft restore must not block
+    // "Open in Proposal Forge" flows coming from the extension or another page.
     form.setValue("jobTitle", prefill.jobTitle, {
       shouldDirty: false,
       shouldTouch: false,
@@ -436,7 +459,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
           requestedModelType: result.requestedModelType,
           actualModelType: result.actualModelType,
           fallbackTriggerCode: result.fallbackTriggerCode,
-        });
+        }, result.proposalId);
       } else {
         const nextErrorMessage = "No proposal returned from the server.";
         setErrorMessage(nextErrorMessage);
@@ -550,6 +573,10 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
 
   const typeLabel = selectedProposalType === "cover_letter" ? "Letter" : "Proposal";
   const toneUiLabel = TONE_OPTIONS.find(t => t.id === displayedVoicePreset)?.uiLabel ?? selectedVoicePresetDefinition.label;
+  const proposalDocumentTypography = React.useMemo(
+    () => getProposalDocumentTypography(displayedVoicePreset),
+    [displayedVoicePreset],
+  );
 
   return (
       <div className={styles.container}>
@@ -699,24 +726,20 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
           {/* Main inputs */}
           <div className="md:col-span-2">
             <div className={styles.composeWell} style={{ position: "relative" }}>
-              {activeCvSource.title ? (
-                <div className="dasti-proposal-context-row" style={{ marginTop: 0, marginBottom: 0 }}>
-                  <Paperclip size={13} strokeWidth={1.5} aria-hidden />
-                  <span className="dasti-proposal-context-row__text">{activeCvSource.title}</span>
-                </div>
-              ) : null}
-              <div>
-                <input
-                  type="text"
-                  id="jobTitle"
-                  {...form.register("jobTitle")}
-                  className={clsx(styles.inputElement, styles.jobField)}
-                  placeholder="Enter Job Title"
-                  autoComplete="off"
-                />
-              </div>
               <div className="dasti-proposal-sheet dasti-proposal-sheet--composer">
-                <div className="dasti-proposal-sheet__body">
+                <div className="dasti-proposal-sheet__header dasti-proposal-sheet__header--composer">
+                  <div className="dasti-proposal-sheet__heading" style={{ width: "100%" }}>
+                    <input
+                      type="text"
+                      id="jobTitle"
+                      {...form.register("jobTitle")}
+                      className={clsx(styles.jobTitleField, "dasti-proposal-title-input")}
+                      placeholder="Enter Job Title"
+                      autoComplete="off"
+                    />
+                  </div>
+                </div>
+                <div className="dasti-proposal-sheet__body dasti-proposal-sheet__body--with-header dasti-proposal-sheet__body--composer">
                   <textarea
                     ref={jobDescriptionRef}
                     id="jobDescription"
@@ -724,11 +747,13 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                     className="dasti-proposal-sheet__body--editable"
                     style={{
                       color: "var(--ti)",
-                      fontSize: "var(--ts)",
+                      fontFamily: proposalDocumentTypography.fontFamily,
+                      fontSize: "var(--tb)",
                       lineHeight: "var(--lb)",
+                      fontWeight: proposalDocumentTypography.fontWeight,
+                      letterSpacing: proposalDocumentTypography.letterSpacing,
                       outline: "none",
                       display: "block",
-                      fontFamily: "inherit",
                       background: "transparent",
                       width: "100%",
                       height: "100%",
@@ -738,101 +763,132 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                     placeholder="Paste the job description here…"
                   />
                 </div>
-              </div>
-              {/* .cbar */}
-              <div className="dasti-proposal-toolbar">
-                <div className="dasti-proposal-cv-pill">
-                  <button
-                    type="button"
-                    onClick={handleOpenCvPicker}
-                    className="dasti-icon-button dasti-proposal-cv-pill__icon"
-                    aria-label="Choose resume"
-                    title="Choose resume"
+                {/* .cbar */}
+                <div className="dasti-proposal-toolbar dasti-proposal-toolbar--inside">
+                  <div
+                    className={
+                      activeCvSource.title
+                        ? "dasti-proposal-cv-pill dasti-proposal-cv-pill--active"
+                        : "dasti-proposal-cv-pill"
+                    }
                   >
-                    <Paperclip size={15} strokeWidth={1.5} aria-hidden />
+                    <button
+                      type="button"
+                      onClick={activeCvSource.title ? handleClearCv : handleOpenCvPicker}
+                      className="dasti-icon-button dasti-proposal-cv-pill__icon"
+                      aria-label={activeCvSource.title ? "Clear resume" : "Choose resume"}
+                      title={activeCvSource.title ? "Clear resume" : "Choose resume"}
+                    >
+                      <span className="dasti-proposal-cv-pill__glyph dasti-proposal-cv-pill__glyph--base">
+                        <Paperclip size={15} strokeWidth={1.5} aria-hidden />
+                      </span>
+                      {activeCvSource.title ? (
+                        <span className="dasti-proposal-cv-pill__glyph dasti-proposal-cv-pill__glyph--hover">
+                          <X size={15} strokeWidth={1.7} aria-hidden />
+                        </span>
+                      ) : null}
+                    </button>
+                  </div>
+                  <button
+                    ref={typeChipRef}
+                    type="button"
+                    title="Document type"
+                    onClick={(e) => { e.stopPropagation(); toggleMenu("type"); }}
+                    className="dasti-proposal-chip"
+                  >
+                    <span className="dasti-proposal-chip__label">{typeLabel}</span>
+                    <ChevronDown size={12} strokeWidth={1.5} aria-hidden="true" />
                   </button>
                   <button
+                    ref={toneChipRef}
                     type="button"
-                    onClick={handleClearCv}
-                    className="dasti-icon-button dasti-proposal-cv-pill__clear"
-                    aria-label="Clear resume"
-                    title="Clear resume"
-                    style={{ visibility: activeCvSource.title ? "visible" : "hidden" }}
+                    title="Tone"
+                    onClick={(e) => { e.stopPropagation(); toggleMenu("tone"); }}
+                    className="dasti-proposal-chip"
                   >
-                    <X size={14} strokeWidth={1.5} aria-hidden />
+                    <span className="dasti-proposal-chip__label">{toneUiLabel}</span>
+                    <ChevronDown size={12} strokeWidth={1.5} aria-hidden="true" />
+                  </button>
+                  <button
+                    type="submit"
+                    className={isGenerating ? "dasti-proposal-submit dasti-proposal-submit--busy" : "dasti-proposal-submit"}
+                    aria-busy={isGenerating}
+                    disabled={!isGenerating && watchedJobDescription.length < 10}
+                    title={isGenerating ? "Generating…" : watchedJobDescription.length < 10 ? "Minimum 10 characters required" : "Generate"}
+                    style={{
+                      cursor: (!isGenerating && watchedJobDescription.length < 10) ? "not-allowed" : "pointer",
+                      transition: "background .15s var(--ez), border-color .15s var(--ez), opacity .15s var(--ez), color .15s var(--ez)",
+                      opacity: (!isGenerating && watchedJobDescription.length < 10) ? 0.4 : 1,
+                    }}
+                  >
+                    {isGenerating ? (
+                      <Square
+                        size="1em"
+                        fill="none"
+                        strokeWidth={1.8}
+                        className="dasti-proposal-submit__icon"
+                      />
+                    ) : (
+                      <SendHorizontal
+                        size="1em"
+                        strokeWidth={1.8}
+                        className="dasti-proposal-submit__icon"
+                      />
+                    )}
                   </button>
                 </div>
-                {/* Type dropdown */}
-                <button
-                  ref={typeChipRef}
-                  type="button"
-                  title="Document type"
-                  onClick={(e) => { e.stopPropagation(); toggleMenu("type"); }}
-                  className="dasti-proposal-chip"
-                >
-                  <span className="dasti-proposal-chip__label">{typeLabel}</span>
-                  <ChevronDown size={12} strokeWidth={1.5} aria-hidden="true" />
-                </button>
-                {/* Tone dropdown */}
-                <button
-                  ref={toneChipRef}
-                  type="button"
-                  title="Tone"
-                  onClick={(e) => { e.stopPropagation(); toggleMenu("tone"); }}
-                  className="dasti-proposal-chip"
-                >
-                  <span className="dasti-proposal-chip__label">{toneUiLabel}</span>
-                  <ChevronDown size={12} strokeWidth={1.5} aria-hidden="true" />
-                </button>
-                {/* .gbtn — generate / stop */}
-                <button
-                  type="submit"
-                  className="dasti-proposal-submit"
-                  aria-busy={isGenerating}
-                  disabled={!isGenerating && watchedJobDescription.length < 10}
-                  title={isGenerating ? "Generating…" : watchedJobDescription.length < 10 ? "Minimum 10 characters required" : "Generate"}
-                  style={{
-                    background: isGenerating ? "var(--sf2)" : "var(--ac)",
-                    color: isGenerating ? "var(--ti)" : "var(--op)",
-                    border: "1px solid transparent",
-                    cursor: (!isGenerating && watchedJobDescription.length < 10) ? "not-allowed" : "pointer",
-                    transition: "background .15s var(--ez), opacity .15s var(--ez)",
-                    opacity: (!isGenerating && watchedJobDescription.length < 10) ? 0.4 : 1,
-                  }}
-                >
-                  {isGenerating ? (
-                    <Square size={16} fill="currentColor" strokeWidth={0} />
-                  ) : (
-                    <ArrowUp size={16} strokeWidth={1.5} />
-                  )}
-                </button>
               </div>
             </div>
+            {(activeCvSource.title || prefill?.platform || prefill?.sourceUrl) ? (
+              <div className="dasti-proposal-context-band">
+                {activeCvSource.title ? (
+                  <div className="dasti-proposal-context-row dasti-proposal-context-row--below">
+                    <div className="dasti-proposal-context-chip">
+                      <button
+                        type="button"
+                        onClick={handleClearCv}
+                        className="dasti-icon-button dasti-proposal-context-chip__lead"
+                        aria-label="Clear resume"
+                        title="Clear resume"
+                      >
+                        <span className="dasti-proposal-context-chip__glyph dasti-proposal-context-chip__glyph--base">
+                          <Paperclip size={13} strokeWidth={1.5} aria-hidden />
+                        </span>
+                        <span className="dasti-proposal-context-chip__glyph dasti-proposal-context-chip__glyph--hover">
+                          <X size={13} strokeWidth={1.7} aria-hidden />
+                        </span>
+                      </button>
+                      <span className="dasti-proposal-context-row__text">{activeCvSource.title}</span>
+                    </div>
+                  </div>
+                ) : null}
+                {(prefill?.platform || prefill?.sourceUrl) && (
+                  <div className="dasti-proposal-source-meta">
+                    Imported from{" "}
+                    {prefill?.platform
+                      ? capitalizeLabel(prefill.platform)
+                      : "external source"}
+                    {prefill?.sourceUrl && (
+                      <>
+                        {" · "}
+                        <a
+                          href={prefill.sourceUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="underline underline-offset-2 hover:[color:var(--tm2)]"
+                        >
+                          View source
+                        </a>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : null}
             {form.formState.errors.jobTitle && (
               <p className={styles.errorMessage}>
                 {form.formState.errors.jobTitle.message}
               </p>
-            )}
-            {(prefill?.platform || prefill?.sourceUrl) && (
-              <div className="dasti-meta-row dasti-meta-row--subtle" style={{ marginTop: "var(--s2)" }}>
-                Imported from{" "}
-                {prefill?.platform
-                  ? capitalizeLabel(prefill.platform)
-                  : "external source"}
-                {prefill?.sourceUrl && (
-                  <>
-                    {" · "}
-                    <a
-                      href={prefill.sourceUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="underline underline-offset-2 hover:[color:var(--tm2)]"
-                    >
-                      View source
-                    </a>
-                  </>
-                )}
-              </div>
             )}
             {form.formState.errors.jobDescription && (
               <p className={styles.errorMessage}>
