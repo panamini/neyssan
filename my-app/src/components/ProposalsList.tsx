@@ -91,14 +91,6 @@ function typeLabel(t: SavedProposalType): string {
   return "Message";
 }
 
-function typeBadgeStyle(type: SavedProposalType): React.CSSProperties {
-  if (type === "freelance_proposal") {
-    return { background: "var(--ap)", color: "var(--am)", border: "1px solid var(--ac)" };
-  }
-
-  return { background: "var(--sf2)", color: "var(--tm2)", border: "1px solid var(--bo)" };
-}
-
 const TONE_UI: Record<string, string> = {
   signature: "Balanced",
   expert: "Formal",
@@ -330,42 +322,17 @@ export default function ProposalsList({
     >
       {/* ── Left panel: .plib-panel — metadata ────────── */}
       <div
+        className="dasti-surface-panel"
         style={{
           padding: libraryPanelPadding,
-          borderRadius: "var(--rl)",
-          border: "1px solid var(--bo)",
-          background: "var(--sfr)",
-          boxShadow: "var(--sha)",
-          display: "grid",
           gap: "var(--s4)",
-          minWidth: 0,
           overflow: "hidden",
         }}
       >
         {selected ? (
           <>
-            <div style={{ display: "grid", gap: "var(--s2)", minWidth: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--s3)", minWidth: 0 }}>
-                <span
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 600,
-                    letterSpacing: ".08em",
-                    textTransform: "uppercase",
-                    padding: "2px 7px",
-                    borderRadius: 99,
-                    whiteSpace: "nowrap",
-                    ...typeBadgeStyle(getStoredProposalType(selected)),
-                  }}
-                >
-                  {selType}
-                </span>
-                <span style={{ fontSize: "var(--tx)", color: "var(--tg2)", whiteSpace: "nowrap", flexShrink: 0 }}>
-                  {selDate}
-                </span>
-              </div>
-
-              <div style={{ display: "grid", gap: "var(--s1)", minWidth: 0 }}>
+            <div style={{ display: "grid", gap: "var(--s3)", minWidth: 0 }}>
+              <div className="dasti-doc-card__header">
                 <textarea
                   ref={titleTextareaRef}
                   value={editTitle}
@@ -378,13 +345,8 @@ export default function ProposalsList({
                       requestAnimationFrame(() => { ta.scrollTop = 0; });
                     }
                   }}
+                  className="dasti-doc-card__title"
                   style={{
-                    fontFamily: '"Fraunces", serif',
-                    fontSize: 20,
-                    fontWeight: 600,
-                    letterSpacing: "-.02em",
-                    color: "var(--ti)",
-                    lineHeight: 1.16,
                     border: "none",
                     background: "transparent",
                     width: "100%",
@@ -394,13 +356,17 @@ export default function ProposalsList({
                     wordBreak: "break-word",
                     overflow: "hidden",
                     padding: 0,
-                    margin: 0,
                   } as React.CSSProperties}
                 />
+                <span className="dasti-doc-card__date" style={{ whiteSpace: "nowrap", flexShrink: 0 }}>
+                  {selDate}
+                </span>
+              </div>
 
-                <div style={{ fontSize: "var(--tx)", color: "var(--tm2)", lineHeight: 1.32 }}>
-                  Tone · {selTone}
-                </div>
+              <div className="dasti-doc-card__meta">
+                <span>{selType}</span>
+                <span>·</span>
+                <span>{selTone}</span>
               </div>
             </div>
 
@@ -410,7 +376,7 @@ export default function ProposalsList({
               actualModelType: selected.metadata?.actualModelType,
               fallbackTriggerCode: selected.metadata?.fallbackTriggerCode,
             }) ? (
-              <p style={{ fontSize: "var(--tx)", color: "var(--tg2)", lineHeight: 1.5 }}>
+              <p className="dasti-meta-row dasti-meta-row--subtle" style={{ lineHeight: 1.5 }}>
                 {getProposalGenerationFallbackDisclosureMessage({
                   requestedModelType: selected.metadata?.requestedModelType,
                   actualModelType: selected.metadata?.actualModelType,
@@ -427,15 +393,10 @@ export default function ProposalsList({
 
       {/* ── Right panel: .plib-panel — content ─────────── */}
       <div
+        className="dasti-surface-panel"
         style={{
           padding: libraryPanelPadding,
-          borderRadius: "var(--rl)",
-          border: "1px solid var(--bo)",
-          background: "var(--sfr)",
-          boxShadow: "var(--sha)",
-          display: "grid",
           gap: "var(--s4)",
-          minWidth: 0,
           overflow: "hidden",
         }}
       >
@@ -445,7 +406,7 @@ export default function ProposalsList({
             Draft
           </div>
           {selected && (
-            <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+            <div className="dasti-icon-cluster dasti-icon-cluster--tight">
               {!isConfirmingDelete && (
                 <>
                   {/* Copy */}
@@ -475,13 +436,13 @@ export default function ProposalsList({
                     <RotateCcw size={16} strokeWidth={1.5} />
                   </button>
                   {/* Separator */}
-                  <div style={{ width: 1, height: 16, background: "var(--bo)", margin: "0 2px" }} />
+                  <div className="dasti-icon-cluster__divider" />
                 </>
               )}
 
               {isConfirmingDelete ? (
                 /* Inline confirm */
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                <span className="dasti-icon-cluster">
                   <button
                     type="button"
                     title="Confirm delete"
@@ -527,27 +488,31 @@ export default function ProposalsList({
 
         {/* .p-body */}
         {selected ? (
-          <textarea
-            value={editContent}
-            onChange={(e) => setEditContent(e.target.value)}
-            onBlur={() => void handleSaveContent()}
-            placeholder="Content will appear here…"
-            style={{
-              fontFamily: selectedTypography.fontFamily,
-              fontSize: selectedTypography.fontSize,
-              lineHeight: selectedTypography.lineHeight,
-              fontWeight: selectedTypography.fontWeight,
-              letterSpacing: selectedTypography.letterSpacing,
-              color: "var(--tm2)",
-              border: "none",
-              background: "transparent",
-              width: "100%",
-              maxWidth: "100%",
-              outline: "none",
-              minHeight: 260,
-              resize: "vertical",
-            }}
-          />
+          <div className="dasti-proposal-sheet">
+            <div className="dasti-proposal-sheet__body">
+              <textarea
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                onBlur={() => void handleSaveContent()}
+                placeholder="Content will appear here…"
+                className="dasti-proposal-sheet__body--editable"
+                style={{
+                  fontFamily: selectedTypography.fontFamily,
+                  fontSize: selectedTypography.fontSize,
+                  lineHeight: selectedTypography.lineHeight,
+                  fontWeight: selectedTypography.fontWeight,
+                  letterSpacing: selectedTypography.letterSpacing,
+                  color: "var(--ti)",
+                  caretColor: "var(--ti)",
+                  background: "transparent",
+                  width: "100%",
+                  outline: "none",
+                  height: "100%",
+                  resize: "none",
+                }}
+              />
+            </div>
+          </div>
         ) : (
           <p style={{ fontSize: "var(--ts)", color: "var(--tg2)" }}>Select a draft from the left panel.</p>
         )}

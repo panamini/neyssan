@@ -568,6 +568,7 @@ export function remirrorJSONToSections(doc: RemirrorJSON): Section[] {
             : ensureRemirrorDoc(it.responsibilities);
 
           return {
+            ...it,
             id: itemId,
             company,
             position,
@@ -577,7 +578,6 @@ export function remirrorJSONToSections(doc: RemirrorJSON): Section[] {
             responsibilities,
             achievements,
             currentlyWorking,
-            ...it, // keep extras but do not let these override the above normalized fields
           };
         });
 
@@ -642,6 +642,7 @@ export function remirrorJSONToSections(doc: RemirrorJSON): Section[] {
             : ensureRemirrorDoc(it.description);
 
           return {
+            ...it,
             id: itemId,
             institution,
             degree,
@@ -650,7 +651,6 @@ export function remirrorJSONToSections(doc: RemirrorJSON): Section[] {
             endDate,
             grade,
             description,
-            ...it,
           };
         });
 
@@ -709,13 +709,13 @@ export function remirrorJSONToSections(doc: RemirrorJSON): Section[] {
           const summary = (typeof it?.summary === 'string' || !it?.summary) ? asRemirrorDocFromStringOrDoc(it?.summary) : ensureRemirrorDoc(it.summary);
 
           return {
+            ...it,
             id: itemId,
             name,
             email,
             linkedin,
             address,
             summary,
-            ...it,
           };
         });
 

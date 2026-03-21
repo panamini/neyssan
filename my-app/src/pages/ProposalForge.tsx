@@ -226,14 +226,8 @@ export function ProposalForge(): JSX.Element {
   };
 
   const panelCard: React.CSSProperties = {
-    borderRadius: "var(--rl)",
-    border: "1px solid var(--bo)",
-    background: "var(--sfr)",
-    boxShadow: "var(--sha)",
     padding: "var(--s5)",
-    display: "grid",
-    gap: "var(--s4)",
-    minWidth: 0,
+    gap: "var(--space-card-grid)",
   };
 
   const panelHeader: React.CSSProperties = {
@@ -264,7 +258,7 @@ export function ProposalForge(): JSX.Element {
     gridTemplateColumns: isCompactComposeLayout
       ? "minmax(0,1fr)"
       : "1fr 1fr",
-    gap: "var(--s5)",
+    gap: "var(--space-split-gap)",
     alignItems: "start",
   };
 
@@ -281,10 +275,10 @@ export function ProposalForge(): JSX.Element {
     >
       <div
         style={{
-          padding: isCompactComposeLayout ? "var(--s6) var(--s4)" : "var(--s7)",
+          padding: isCompactComposeLayout ? "var(--s6) var(--s4)" : "var(--space-page-pad)",
           display: "flex",
           flexDirection: "column",
-          gap: "var(--s5)",
+          gap: "var(--space-page-stack)",
           maxWidth: isCompactComposeLayout ? 720 : isNarrowLaptop ? 1000 : 1200,
           margin: "0 auto",
           width: "100%",
@@ -318,7 +312,7 @@ export function ProposalForge(): JSX.Element {
             <div style={phiGrid}>
 
               {/* Left panel — .cpn : form */}
-              <div style={panelCard}>
+              <div className="dasti-surface-panel dasti-surface-panel--spacious" style={panelCard}>
                 <div style={panelHeader}>
                   <div style={eyebrow}>Job Offer</div>
                 </div>
@@ -339,7 +333,7 @@ export function ProposalForge(): JSX.Element {
               </div>
 
               {/* Right panel — .opn : output */}
-              <div style={panelCard}>
+              <div className="dasti-surface-panel dasti-surface-panel--spacious" style={panelCard}>
                 <div style={panelHeader}>
                   <div style={eyebrow}>Draft</div>
                 </div>

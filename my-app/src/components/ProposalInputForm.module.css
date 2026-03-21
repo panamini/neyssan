@@ -8,7 +8,7 @@
 .inputElement {
   width: 100%;
   padding: var(--s2) var(--s3);
-  border-radius: var(--rs);
+  border-radius: var(--rm);
   font-size: var(--ts);
   color: var(--ti);
   background: var(--sf1);
@@ -39,16 +39,19 @@
 }
 
 .composeWell {
-  border: 1px solid var(--bm);
+  display: grid;
+  gap: var(--s3);
+  margin-top: var(--s3);
+  padding: var(--s3);
+  border: none;
   border-radius: var(--rm);
   background: var(--sf1);
-  margin-top: var(--s2);
-  transition: border-color .12s var(--ez), box-shadow .12s var(--ez);
+  overflow: hidden;
+  transition: background .12s var(--ez);
 }
 
 .composeWell:focus-within {
-  border-color: var(--ac);
-  box-shadow: var(--focus-shadow-soft);
+  box-shadow: none;
 }
 
 .inputElement:-webkit-autofill,

@@ -621,7 +621,10 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
                         return achievementsToBulletDoc(legacy);
                       })()
                     }
-                    onChangeDoc={(doc) => setField(idx, "responsibilities", doc)}
+                    onChangeDoc={(doc) => {
+                      setField(idx, "responsibilities", doc);
+                      setField(idx, "achievements", []);
+                    }}
                   />
                   <div className="dasti-hint">Describe scope, output, and notable outcomes.</div>
                 </div>
