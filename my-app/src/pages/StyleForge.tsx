@@ -72,10 +72,6 @@ const paletteHexPoints: Array<{ id: PaletteChoice; angle: number }> = [
 ];
 
 const sectionCardStyle: React.CSSProperties = {
-  borderRadius: "var(--rl)",
-  border: "1px solid var(--bo)",
-  background: "var(--sfr)",
-  boxShadow: "var(--sha)",
   overflow: "hidden",
 };
 
@@ -753,10 +749,10 @@ export function StyleForge(): JSX.Element {
     >
       <div
         style={{
-          padding: "var(--s7)",
+          padding: "var(--space-page-pad)",
           display: "flex",
           flexDirection: "column",
-          gap: "var(--s5)",
+          gap: "var(--space-page-stack)",
         }}
       >
         <div
@@ -765,12 +761,12 @@ export function StyleForge(): JSX.Element {
             gridTemplateColumns: isCompactStyleLayout
               ? "minmax(0, 1fr)"
               : "minmax(260px, 320px) minmax(0, 1fr)",
-            gap: "var(--s7)",
+            gap: "var(--space-split-gap-wide)",
             alignItems: "start",
           }}
         >
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--s5)" }}>
-            <section style={sectionCardStyle}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-panel-stack)" }}>
+            <section className="dasti-surface-panel" style={sectionCardStyle}>
               <div style={sectionHeaderStyle}>Layout</div>
               <div style={sectionBodyStyle}>
                 {layoutOptions.map((option) => {
@@ -783,18 +779,9 @@ export function StyleForge(): JSX.Element {
                       key={option.id}
                       type="button"
                       onClick={() => setLayoutTemplate(option.id)}
+                      className={active ? "dasti-selection-card dasti-selection-card--active" : "dasti-selection-card"}
                       style={{
-                        display: "grid",
                         gridTemplateColumns: "72px 1fr auto",
-                        alignItems: "center",
-                        gap: "var(--s3)",
-                        padding: "var(--s3)",
-                        borderRadius: "var(--rm)",
-                        border: active ? "1px solid var(--bm)" : "1px solid var(--bo)",
-                        background: active ? "var(--sf2)" : "var(--sfr)",
-                        cursor: "pointer",
-                        textAlign: "left",
-                        fontFamily: "inherit",
                       }}
                     >
                       <div
@@ -834,9 +821,9 @@ export function StyleForge(): JSX.Element {
                           </>
                         )}
                       </div>
-                      <div style={{ display: "grid", gap: 0 }}>
-                        <div style={{ fontSize: "var(--ts)", lineHeight: "var(--lx)", fontWeight: 600, color: "var(--ti)" }}>{option.name}</div>
-                        <div style={{ fontSize: "var(--tx)", lineHeight: "var(--lx)", color: "var(--tm2)" }}>{option.description}</div>
+                      <div className="dasti-selection-card__stack">
+                        <div className="dasti-selection-card__title">{option.name}</div>
+                        <div className="dasti-selection-card__subtitle">{option.description}</div>
                       </div>
                       <SelectionCheck active={active} />
                     </button>
@@ -845,7 +832,7 @@ export function StyleForge(): JSX.Element {
               </div>
             </section>
 
-            <section style={sectionCardStyle}>
+            <section className="dasti-surface-panel" style={sectionCardStyle}>
               <div style={sectionHeaderStyle}>Typography</div>
               <div style={sectionBodyStyle}>
                 {typographyOptions.map((option) => {
@@ -855,21 +842,12 @@ export function StyleForge(): JSX.Element {
                       key={option.id}
                       type="button"
                       onClick={() => setTypographyStyle(option.id)}
+                      className={active ? "dasti-selection-card dasti-selection-card--active" : "dasti-selection-card"}
                       style={{
-                        display: "grid",
                         gridTemplateColumns: "1fr auto",
-                        alignItems: "center",
-                        gap: "var(--s3)",
-                        padding: "var(--s3)",
-                        borderRadius: "var(--rm)",
-                        border: active ? "1px solid var(--bm)" : "1px solid var(--bo)",
-                        background: active ? "var(--sf2)" : "var(--sfr)",
-                        cursor: "pointer",
-                        textAlign: "left",
-                        fontFamily: "inherit",
                       }}
                     >
-                      <div style={{ display: "grid", gap: "calc(var(--s1) / 2)" }}>
+                      <div className="dasti-selection-card__stack dasti-selection-card__stack--airy">
                         <div style={{ ...option.titleStyle, color: "var(--ti)" }}>{option.name}</div>
                         <div style={{ ...option.descriptionStyle, color: "var(--tm2)" }}>{option.description}</div>
                       </div>
@@ -880,7 +858,7 @@ export function StyleForge(): JSX.Element {
               </div>
             </section>
 
-            <section style={floatingSectionCardStyle}>
+            <section className="dasti-surface-panel" style={floatingSectionCardStyle}>
               <div style={sectionHeaderStyle}>
                 <div>Colors</div>
                 <div

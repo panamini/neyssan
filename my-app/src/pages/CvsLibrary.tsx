@@ -53,10 +53,10 @@ export function CvsLibrary(): JSX.Element {
     >
       <div
         style={{
-          padding: "var(--s7)",
+          padding: "var(--space-page-pad)",
           display: "flex",
           flexDirection: "column",
-          gap: "var(--s5)",
+          gap: "var(--space-page-stack)",
           maxWidth: 1100,
           margin: "0 auto",
           width: "100%",
@@ -64,29 +64,11 @@ export function CvsLibrary(): JSX.Element {
       >
         {/* Header row */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div>
-            <div
-              style={{
-                fontSize: "var(--tx)",
-                fontWeight: 600,
-                color: "var(--am)",
-                letterSpacing: ".14em",
-                textTransform: "uppercase",
-                marginBottom: "var(--s2)",
-              }}
-            >
+          <div className="dasti-stack">
+            <div className="dasti-stack__eyebrow">
               Resume
             </div>
-            <h1
-              style={{
-                fontFamily: '"Fraunces", serif',
-                fontSize: "var(--tx2)",
-                fontWeight: 600,
-                letterSpacing: "-.01em",
-                color: "var(--ti)",
-                margin: 0,
-              }}
-            >
+            <h1 className="dasti-stack__title">
               All resumes
             </h1>
           </div>
@@ -120,18 +102,11 @@ export function CvsLibrary(): JSX.Element {
 
         {/* Empty */}
         {sorted.length === 0 && (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "var(--s4)",
-              padding: "var(--s9) 0",
-              color: "var(--tg2)",
-            }}
-          >
-            <div style={{ fontSize: "var(--ts)", fontWeight: 500 }}>No resumes yet</div>
+          <div className="dasti-empty-state">
+            <div className="dasti-empty-state__title">No resumes yet</div>
+            <p className="dasti-empty-state__subtitle">
+              Create or import a resume to start editing and personalizing it.
+            </p>
             <button
               onClick={() => { createNewCv(); void navigate("/cv"); }}
               style={{
@@ -163,7 +138,7 @@ export function CvsLibrary(): JSX.Element {
             style={{
               display: "grid",
               gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-              gap: "var(--s4)",
+              gap: "var(--space-card-grid)",
             }}
           >
             {sorted.map((cv) => {
@@ -189,122 +164,43 @@ export function CvsLibrary(): JSX.Element {
                   {/* Main card button */}
                   <button
                     onClick={() => handleOpen(cv.id)}
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "flex-start",
-                      gap: "var(--s3)",
-                      padding: "var(--s4)",
-                      borderRadius: "var(--rm)",
-                      border: "1px solid var(--bo)",
-                      background: "var(--sfr)",
-                      boxShadow: "var(--sha)",
-                      cursor: "pointer",
-                      textAlign: "left",
-                      transition: "background .12s var(--ez), border-color .12s var(--ez)",
-                      fontFamily: "inherit",
-                      width: "100%",
-                      flex: 1,
-                    }}
-                    onMouseEnter={(e) => {
-                      const el = e.currentTarget as HTMLButtonElement;
-                      el.style.background = "var(--sf2)";
-                      el.style.borderColor = "var(--bm)";
-                    }}
-                    onMouseLeave={(e) => {
-                      const el = e.currentTarget as HTMLButtonElement;
-                      el.style.background = "var(--sfr)";
-                      el.style.borderColor = "var(--bo)";
-                    }}
+                    className="dasti-doc-card"
+                    style={{ flex: 1, paddingRight: "var(--s6)" }}
                   >
-                    {/* Date */}
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", width: "100%", paddingRight: 20 }}>
-                      <span style={{ fontSize: "var(--tx)", color: "var(--tg2)" }}>{updatedAt}</span>
+                    <div className="dasti-doc-card__stack">
+                      <div className="dasti-doc-card__header">
+                        <h2 className="dasti-doc-card__title">{cv.title}</h2>
+                        <div className="dasti-doc-card__date">{updatedAt}</div>
+                      </div>
+
+                      <div className="dasti-doc-card__meta">
+                        {identityLine || "Draft resume"}
+                      </div>
+
+                      <p
+                        className={
+                          summarySnippet
+                            ? "dasti-doc-card__snippet"
+                            : "dasti-doc-card__snippet dasti-doc-card__snippet--muted"
+                        }
+                      >
+                        {summarySnippet || "Profile details will appear here once the resume is filled in."}
+                      </p>
                     </div>
-
-                    {/* Title */}
-                    <div
-                      style={{
-                        fontFamily: '"Fraunces", serif',
-                        fontSize: "var(--ts)",
-                        fontWeight: 600,
-                        lineHeight: 1.35,
-                        letterSpacing: "-.01em",
-                        color: "var(--ti)",
-                        display: "-webkit-box",
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: "vertical",
-                        overflow: "hidden",
-                        minHeight: "2.7em",
-                      }}
-                    >
-                      {cv.title}
-                    </div>
-
-                    {identityLine && (
-                      <div
-                        style={{
-                          fontSize: "var(--tx)",
-                          color: "var(--tm2)",
-                          lineHeight: "var(--lx)",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                          width: "100%",
-                        }}
-                      >
-                        {identityLine}
-                      </div>
-                    )}
-
-                    {summarySnippet && (
-                      <div
-                        style={{
-                          fontSize: "var(--tx)",
-                          color: "var(--tg2)",
-                          lineHeight: "var(--ls)",
-                          display: "-webkit-box",
-                          WebkitLineClamp: 3,
-                          WebkitBoxOrient: "vertical",
-                          overflow: "hidden",
-                        }}
-                      >
-                        {summarySnippet}
-                      </div>
-                    )}
-
-                    {!identityLine && !summarySnippet && (
-                      <div
-                        style={{
-                          fontSize: "var(--tx)",
-                          color: "var(--tm2)",
-                          lineHeight: "var(--lx)",
-                        }}
-                      >
-                        Draft resume
-                      </div>
-                    )}
                   </button>
 
                   {/* Delete — confirm overlay or X trigger */}
                   {isConfirming ? (
                     <div
+                      className="dasti-icon-confirm-tray"
                       style={{
                         position: "absolute",
                         top: 8,
                         right: 8,
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 3,
-                        background: "var(--sfr)",
-                        border: "1px solid var(--bo)",
-                        borderRadius: "var(--rs)",
-                        padding: "2px 6px 2px 8px",
-                        boxShadow: "var(--shb)",
                         zIndex: 2,
                       }}
                     >
-                      <span style={{ fontSize: "var(--tx)", color: "var(--tg2)", whiteSpace: "nowrap" }}>Delete?</span>
+                      <span className="dasti-icon-confirm-tray__label">Delete?</span>
                       <button
                         onClick={(e) => { e.stopPropagation(); handleDelete(cv.id); }}
                         title="Confirm delete"
