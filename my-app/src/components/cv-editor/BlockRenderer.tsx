@@ -3,9 +3,11 @@ import type { CvBlock, CvSection } from "../../types/cvDocument";
 import type { RemirrorJSON } from "remirror";
 import { useCvLibrary } from "../../contexts/CvLibraryContext";
 import { RichSummary } from "../cv-display/RichSummary";
+import { ReadOnlyRichDoc } from "../cv-display/ReadOnlyRichDoc";
 import { AchievementsDisplay } from "../cv-display/AchievementsDisplay";
 import RemirrorEditor from "../remirror-editor/RemirrorEditor";
 import { ensureRemirrorDoc } from "../remirror-editor/utils/conversion";
+import { docToPlainText } from "../remirror-editor/utils/text";
 import { useBlockFlushSubscription } from "../../hooks/use-flush-subscription";
 // Debug logging toggle (enable with window.__CV_EDITOR_DEBUG__ = true)
 const DEBUG_CV_EDITOR = typeof window !== "undefined" && (window as any).__CV_EDITOR_DEBUG__ === true;
@@ -432,12 +434,6 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
               </p>
             )}
             {section?.type === "experience" ? (() => {
-              // Prefer achievements from the resolved structured item when available.
-              const linkedAchievements = Array.isArray((linkedItem as any)?.achievements)
-                ? (linkedItem as any).achievements as unknown[]
-                : null;
-
-              // Defensive: if linkedItem failed to resolve, try a manual lookup using linkedStructuredId across all sections.
               const effectiveLinkedItem = linkedItem ?? (() => {
                 try {
                   if (currentCv && linkedStructuredId) {
@@ -453,48 +449,61 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
                 }
                 return null;
               })();
+              const linkedAchievements = Array.isArray((effectiveLinkedItem as any)?.achievements)
+                ? ((effectiveLinkedItem as any).achievements as unknown[]).filter(Boolean)
+                : [];
 
-              // If achievements are empty, try responsibilities from the structured item (typed modal field).
-              // This can be a Remirror JSON object, JSON string, plain string, or an array of those.
               const responsibilities = (effectiveLinkedItem as any)?.responsibilities as unknown;
-              const responsibilitiesItems = responsibilities
-                ? (Array.isArray(responsibilities) ? responsibilities : [responsibilities])
-                : null;
+              let responsibilitiesDoc: RemirrorJSON | null = null;
+              try {
+                if (typeof responsibilities !== "undefined" && responsibilities !== null) {
+                  responsibilitiesDoc = ensureRemirrorDoc(responsibilities as any);
+                }
+              } catch {
+                responsibilitiesDoc = null;
+              }
+              const responsibilitiesText = responsibilitiesDoc ? docToPlainText(responsibilitiesDoc) : "";
+              const hasResponsibilitiesPreview = responsibilitiesText.trim().length > 0;
 
-              // Fallback: if still nothing, present the block's own plainText or extracted Remirror text.
               const seedPlaceholder = "Start typing here…";
               const rawFallbackText = (block as any)?.plainText ?? extractPlainTextFromRemirror((block as any)?.content as any);
               const fallbackText = typeof rawFallbackText === "string" ? rawFallbackText : "";
               const isSeed = fallbackText.replace(/\s+/g, " ").trim() === seedPlaceholder;
-              const fallbackAchievements = fallbackText && !isSeed ? [fallbackText] as unknown[] : null;
+              const fallbackDoc = fallbackText && !isSeed ? ensureRemirrorDoc(fallbackText) : null;
 
-              const itemsToShow =
-                responsibilitiesItems
-                ?? (Array.isArray(linkedAchievements) && linkedAchievements.length > 0 ? linkedAchievements : null)
-                ?? fallbackAchievements;
-
-              // Debug snapshot
-              console.debug("[BlockRenderer] AchievementsMount", {
+              console.debug("[BlockRenderer] ExperiencePreviewMount", {
                 itemId: String((((effectiveLinkedItem as any)?.id ?? (linkedItem as any)?.id) ?? block?.id) ?? ""),
                 linkedAchievements,
-                hasResponsibilities: Boolean(responsibilities),
+                hasResponsibilitiesPreview,
                 responsibilitiesType: responsibilities === null ? "null" : typeof responsibilities,
                 fallbackText,
-                usedFallback: Boolean(!linkedAchievements && !responsibilitiesItems && fallbackAchievements),
                 isSeed,
-                itemsToShow,
                 linkedItem,
                 effectiveLinkedItem,
                 linkedStructuredId,
               });
 
-              if (Array.isArray(itemsToShow) && itemsToShow.length > 0) {
+              if (hasResponsibilitiesPreview) {
+                return (
+                  <div className="mt-2">
+                    <ReadOnlyRichDoc doc={responsibilitiesDoc ?? undefined} />
+                  </div>
+                );
+              }
+              if (Array.isArray(linkedAchievements) && linkedAchievements.length > 0) {
                 return (
                   <div className="mt-2">
                     <AchievementsDisplay
                       itemId={String((((effectiveLinkedItem as any)?.id ?? (linkedItem as any)?.id) ?? block?.id) ?? "")}
-                      items={itemsToShow}
+                      items={linkedAchievements}
                     />
+                  </div>
+                );
+              }
+              if (fallbackDoc) {
+                return (
+                  <div className="mt-2">
+                    <ReadOnlyRichDoc doc={fallbackDoc} />
                   </div>
                 );
               }
