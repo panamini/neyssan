@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Menu, FileUser, MoonStar, Plus, Pen, PenLine, PanelLeftDashed, FolderTree, SunMedium, X, Check, Trash } from 'lucide-react';
+import { Menu, FileUser, Moon, Plus, Pen, PenLine, PanelLeftDashed, FolderTree, SunMedium, X, Check, Trash } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useMutation, useQuery } from 'convex/react';
 import { useAuth, useUser } from '@clerk/clerk-react';
@@ -127,10 +127,17 @@ export const Sidebar: React.FC = () => {
     catch (e) { console.error("[Sidebar] loadCv failed", e); }
   };
 
+  const getStudioTarget = React.useCallback(() => {
+    const activeId =
+      currentCv?.id ??
+      (typeof window !== "undefined" ? window.localStorage.getItem("cvActiveId") : null);
+    return activeId ? `/cv?id=${encodeURIComponent(String(activeId))}` : "/cv";
+  }, [currentCv?.id]);
+
   const handleCreate = () => {
     try {
       createNewCv(undefined, { forceV1: true });
-      void navigate('/cv');
+      void navigate(getStudioTarget());
     }
     catch (err) { console.error("[Sidebar] createNewCv failed", err); }
   };
@@ -300,7 +307,7 @@ export const Sidebar: React.FC = () => {
           <span style={sbSec as React.CSSProperties}>Resume</span>
 
           <div
-            onClick={() => void navigate('/cv')}
+            onClick={() => void navigate(getStudioTarget())}
             className={isResume ? "sb-nav-item sb-nav-item--active" : "sb-nav-item"}
             style={navItemBase}
           >
@@ -335,7 +342,7 @@ export const Sidebar: React.FC = () => {
                 title={displayTitle}
                 isActive={isActive}
                 dense={compactDensity}
-                onClick={() => { handleLoadCv(cv.id); void navigate('/cv'); }}
+                onClick={() => { handleLoadCv(cv.id); void navigate(`/cv?id=${encodeURIComponent(String(cv.id))}`); }}
                 onRename={(e) => { e.stopPropagation(); handleRenameOpen(cv.id, cv.title); }}
                 onDelete={(e) => handleDelete(e, cv.id)}
               />
@@ -443,7 +450,7 @@ export const Sidebar: React.FC = () => {
                 aria-pressed={isDarkMode}
                 title="Dark mode"
               >
-                <MoonStar size={14} strokeWidth={1.6} />
+                <Moon size={14} strokeWidth={1.6} />
               </button>
             </div>
           )}
