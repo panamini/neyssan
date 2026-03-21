@@ -1707,14 +1707,76 @@ export function buildTypedSectionsFromNormalized(normalized: PartialNormalizedCv
 
     const window = lines.slice(idx + 1, Math.min(lines.length, idx + 50));
     const dateRe = /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+\d{4}\b\s*[–—-]\s*(?:present|current|\d{4})\b/i;
+    const monthRangeRe = /\b((?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+\d{4})\b\s*[–—-]\s*((?:present|current)|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+\d{4}|(?:19|20)\d{2})\b/i;
+    const yearRangeRe = /\b(?:19|20)\d{2}\b\s*[–—-]\s*(?:present|current|(?:19|20)\d{2})\b/i;
+    const yearRangeCaptureRe = /\b((?:19|20)\d{2})\b\s*[–—-]\s*((?:present|current)|(?:19|20)\d{2})\b/i;
+    const singleYearRe = /\b((?:19|20)\d{2})\b/;
+    const isEducationBoundary = (value: string) => {
+      if (!value) return true;
+      if (/^languages?$/i.test(value)) return true;
+      if (LANGUAGE_HEADING_PREFIX_RE.test(value)) return true;
+      if (/^[A-Z0-9 .,'-]{3,}$/.test(value) && value === value.toUpperCase()) return true;
+      return false;
+    };
+    const isInstitutionLine = (value: string) =>
+      /(university|college|institute|school|academy|lyc[ée]e|faculty|facult[ée]|campus)/i.test(value);
+    const isDegreeLine = (value: string) =>
+      DEGREE_TOKEN_RE.test(value) ||
+      /\b(major|minor|field of study|speciali[sz]ation|licence|bts|dut|classe préparatoire)\b/i.test(value);
+    const isDateLine = (value: string) => dateRe.test(value) || yearRangeRe.test(value) || MONTH_YEAR_RE.test(value);
+    const extractEducationDates = (value: string) => {
+      const raw = value.trim();
+      if (!raw) return { startDate: undefined, endDate: undefined, isCurrent: false };
+
+      const monthRange = raw.match(monthRangeRe);
+      if (monthRange) {
+        const startDate = normalizeDateToken(monthRange[1]);
+        const endToken = monthRange[2];
+        const isCurrent = /present|current/i.test(endToken);
+        return {
+          startDate,
+          endDate: isCurrent ? null : normalizeDateToken(endToken),
+          isCurrent,
+        };
+      }
+
+      const yearRange = raw.match(yearRangeCaptureRe);
+      if (yearRange) {
+        const startDate = normalizeDateToken(yearRange[1]);
+        const endToken = yearRange[2];
+        const isCurrent = /present|current/i.test(endToken);
+        return {
+          startDate,
+          endDate: isCurrent ? null : normalizeDateToken(endToken),
+          isCurrent,
+        };
+      }
+
+      const monthYear = raw.match(MONTH_YEAR_RE);
+      if (monthYear) {
+        return {
+          startDate: normalizeDateToken(monthYear[0]),
+          endDate: undefined,
+          isCurrent: false,
+        };
+      }
+
+      const yearOnly = raw.match(singleYearRe);
+      if (yearOnly) {
+        return {
+          startDate: normalizeDateToken(yearOnly[1]),
+          endDate: undefined,
+          isCurrent: false,
+        };
+      }
+
+      return { startDate: undefined, endDate: undefined, isCurrent: false };
+    };
 
     for (let i = 0; i < window.length; i++) {
       const ln = window[i]!.trim();
       if (!ln) continue;
-      if (/^languages?$/i.test(ln)) break;
-      if (LANGUAGE_HEADING_PREFIX_RE.test(ln)) break;
-      // Stop at next all-caps header
-      if (/^[A-Z0-9 .,'-]{3,}$/.test(ln) && ln === ln.toUpperCase()) break;
+      if (isEducationBoundary(ln)) break;
 
       // Pattern: "Program, Institution" or "Institution, Program"
       if (ln.includes(",")) {
@@ -1738,19 +1800,91 @@ export function buildTypedSectionsFromNormalized(normalized: PartialNormalizedCv
         }
 
         const nextLine = window[i + 1]?.trim() ?? "";
-        const dates = dateRe.test(nextLine) ? normalizeDateToken(nextLine) : undefined;
+        const dateInfo = isDateLine(nextLine) ? extractEducationDates(nextLine) : { startDate: undefined, endDate: undefined, isCurrent: false };
 
         items.push({
           id: `edu-${uuidv4()}`,
           institution,
           degree,
           fieldOfStudy: "",
-          startDate: dates,
-          endDate: /present|current/i.test(nextLine) ? null : dates,
-          isCurrent: /present|current/i.test(nextLine),
+          startDate: dateInfo.startDate,
+          endDate: dateInfo.endDate,
+          isCurrent: dateInfo.isCurrent,
           description: undefined,
           grade: "",
         });
+        if (dateInfo.startDate || dateInfo.endDate !== undefined || dateInfo.isCurrent) i += 1;
+        continue;
+      }
+
+      const nextLine = window[i + 1]?.trim() ?? "";
+      const thirdLine = window[i + 2]?.trim() ?? "";
+
+      if (isInstitutionLine(ln) && nextLine && !isEducationBoundary(nextLine)) {
+        const institution = sanitizeToken(ln);
+        const degree = isDegreeLine(nextLine) ? sanitizeToken(nextLine) : "";
+        const fieldOfStudy =
+          degree && thirdLine && !isEducationBoundary(thirdLine) && !isDateLine(thirdLine)
+            ? sanitizeToken(thirdLine)
+            : "";
+        const dateCandidate =
+          degree && fieldOfStudy
+            ? window[i + 3]?.trim() ?? ""
+            : degree
+            ? thirdLine
+            : nextLine;
+        const dateInfo = isDateLine(dateCandidate)
+          ? extractEducationDates(dateCandidate)
+          : { startDate: undefined, endDate: undefined, isCurrent: false };
+
+        items.push({
+          id: `edu-${uuidv4()}`,
+          institution,
+          degree,
+          fieldOfStudy,
+          startDate: dateInfo.startDate,
+          endDate: dateInfo.endDate,
+          isCurrent: dateInfo.isCurrent,
+          description: undefined,
+          grade: "",
+        });
+
+        if ((dateInfo.startDate || dateInfo.endDate !== undefined || dateInfo.isCurrent) && degree && fieldOfStudy) i += 3;
+        else if ((dateInfo.startDate || dateInfo.endDate !== undefined || dateInfo.isCurrent) && degree) i += 2;
+        else if (degree && fieldOfStudy) i += 2;
+        else if (degree) i += 1;
+        continue;
+      }
+
+      if (isDegreeLine(ln) && nextLine && isInstitutionLine(nextLine)) {
+        const degree = sanitizeToken(ln);
+        const institution = sanitizeToken(nextLine);
+        const fieldOfStudy =
+          thirdLine && !isEducationBoundary(thirdLine) && !isDateLine(thirdLine)
+            ? sanitizeToken(thirdLine)
+            : "";
+        const dateCandidate = fieldOfStudy ? window[i + 3]?.trim() ?? "" : thirdLine;
+        const dateInfo = isDateLine(dateCandidate)
+          ? extractEducationDates(dateCandidate)
+          : { startDate: undefined, endDate: undefined, isCurrent: false };
+
+        items.push({
+          id: `edu-${uuidv4()}`,
+          institution,
+          degree,
+          fieldOfStudy,
+          startDate: dateInfo.startDate,
+          endDate: dateInfo.endDate,
+          isCurrent: dateInfo.isCurrent,
+          description: undefined,
+          grade: "",
+        });
+
+        if ((dateInfo.startDate || dateInfo.endDate !== undefined || dateInfo.isCurrent) && fieldOfStudy) i += 3;
+        else if (dateInfo.startDate || dateInfo.endDate !== undefined || dateInfo.isCurrent) i += 2;
+        else if (fieldOfStudy) i += 2;
+        else i += 1;
+        continue;
       }
     }
     return items.filter((e) => e.institution || e.degree);
