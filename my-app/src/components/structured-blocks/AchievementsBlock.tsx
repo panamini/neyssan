@@ -200,7 +200,7 @@ export function AchievementsBlock({ section, onChange }: AchievementsBlockProps)
               className="dasti-icon-button dasti-icon-button--compact"
               title={isExpanded ? "Show less" : "Show more"}
             >
-              {isExpanded ? <ChevronUp className="w-3.5 h-3.5" aria-hidden /> : <ChevronDown className="w-3.5 h-3.5" aria-hidden />}
+              {isExpanded ? <ChevronDown className="w-3.5 h-3.5" aria-hidden /> : <ChevronUp className="w-3.5 h-3.5" aria-hidden />}
             </button>
           </div>
         ) : null}

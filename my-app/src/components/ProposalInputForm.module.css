@@ -1,5 +1,5 @@
 .container {
-  padding: var(--s5);
+  padding: 0;
   border: none;
   border-radius: var(--rm);
   background: transparent;
@@ -40,12 +40,12 @@
 
 .composeWell {
   display: grid;
-  gap: var(--s3);
-  margin-top: var(--s3);
-  padding: var(--s3);
+  gap: var(--s2);
+  margin-top: 0;
+  padding: 0;
   border: none;
   border-radius: var(--rm);
-  background: var(--sf1);
+  background: transparent;
   overflow: hidden;
   transition: background .12s var(--ez), box-shadow .12s var(--ez);
 }
@@ -71,4 +71,33 @@
   margin-top: var(--s1);
   font-size: var(--ts);
   color: var(--ert);
+}
+
+.jobTitleField {
+  width: 100%;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  color: var(--ti);
+  font-family: "Fraunces", serif;
+  font-size: var(--tm);
+  line-height: 1.16;
+  font-weight: 600;
+  letter-spacing: -.02em;
+  outline: none;
+  box-shadow: none;
+}
+
+.jobTitleField::placeholder {
+  color: var(--tm2);
+}
+
+.jobTitleField:focus,
+.jobTitleField:focus-visible {
+  background: transparent;
+  border: none;
+  box-shadow: none;
 }
