@@ -1,4 +1,5 @@
 import React from "react";
+import { useLocation } from "react-router-dom";
 import { ProfileReviewCard } from "../components/ProfileReviewCard";
 
 /**
@@ -9,6 +10,12 @@ import { ProfileReviewCard } from "../components/ProfileReviewCard";
  * Intro panel .ip : eyebrow + h2 Fraunces + description (§13 dasti-spec-v1).
  */
 export function CvForge(): JSX.Element {
+  const { search } = useLocation();
+  const requestedCvId = React.useMemo(
+    () => new URLSearchParams(search).get("id") || undefined,
+    [search],
+  );
+
   return (
     <div
       style={{
@@ -31,7 +38,7 @@ export function CvForge(): JSX.Element {
         }}
       >
         {/* Main editor / review canvas (toolbar intégrée dans ProfileReviewCard) */}
-        <ProfileReviewCard />
+        <ProfileReviewCard cvId={requestedCvId} />
       </div>
     </div>
   );

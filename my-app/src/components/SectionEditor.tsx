@@ -998,7 +998,16 @@ export default function SectionEditor({
       <div className="mb-4 border border-bo rounded-rm section-container">
         <div className="flex items-center justify-between p-3 [background:var(--sf1)]">
           <h3 className="cv-section-heading">{section.title}</h3>
-          <div className="flex items-center">
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); handleAddSkillInline(); }}
+              className="dasti-icon-button"
+              aria-label="Add skill"
+              title="Add skill"
+            >
+              <Plus size={16} strokeWidth={1.7} aria-hidden />
+            </button>
             {typeof onCollapseChange === "function" && (
               <button
                 type="button"
@@ -1081,19 +1090,6 @@ export default function SectionEditor({
 
         {!collapsed && (
           <div className="px-3 pb-2">
-            {/* Add button */}
-            <div className="flex items-center justify-start py-1.5">
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); handleAddSkillInline(); }}
-                className="dasti-icon-button dasti-icon-button--compact"
-                aria-label="Add skill"
-                title="Add skill"
-              >
-                <Plus className="h-3 w-3" aria-hidden />
-              </button>
-            </div>
-
             {skillRows.length === 0 ? (
               <div className="py-2 text-xs" style={{ color: "var(--tg2)" }}>
                 Click + to add your first skill
@@ -1400,7 +1396,16 @@ export default function SectionEditor({
       <div className="mb-4 border border-bo rounded-rm section-container">
         <div className="flex items-center justify-between p-3 [background:var(--sf1)]">
           <h3 className="cv-section-heading">{section.title}</h3>
-          <div className="flex items-center">
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); handleAddLanguageInline(); }}
+              className="dasti-icon-button"
+              aria-label="Add language"
+              title="Add language"
+            >
+              <Plus size={16} strokeWidth={1.7} aria-hidden />
+            </button>
             {typeof onCollapseChange === "function" && (
               <button
                 type="button"
@@ -1465,19 +1470,6 @@ export default function SectionEditor({
 
         {!collapsed && (
           <div className="px-3 pb-2">
-            {/* Add button */}
-            <div className="flex items-center justify-start py-1.5">
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); handleAddLanguageInline(); }}
-                className="dasti-icon-button dasti-icon-button--compact"
-                aria-label="Add language"
-                title="Add language"
-              >
-                <Plus className="h-3 w-3" aria-hidden />
-              </button>
-            </div>
-
             {languageRows.length === 0 ? (
               <div className="py-2 text-xs" style={{ color: "var(--tg2)" }}>
                 Click + to add your first language
@@ -1976,7 +1968,7 @@ export default function SectionEditor({
                   aria-label={previewExpanded ? "Show fewer details" : "Show more details"}
                   title={previewExpanded ? "Show less" : "Show more"}
                 >
-                  {previewExpanded ? <ChevronUp className="w-3.5 h-3.5" aria-hidden /> : <ChevronDown className="w-3.5 h-3.5" aria-hidden />}
+                  {previewExpanded ? <ChevronDown className="w-3.5 h-3.5" aria-hidden /> : <ChevronUp className="w-3.5 h-3.5" aria-hidden />}
                 </button>
               </div>
             ) : null}
@@ -2031,7 +2023,7 @@ export default function SectionEditor({
                 aria-label={previewExpanded ? "Show fewer details" : "Show more details"}
                 title={previewExpanded ? "Show less" : "Show more"}
               >
-                {previewExpanded ? <ChevronUp className="w-3.5 h-3.5" aria-hidden /> : <ChevronDown className="w-3.5 h-3.5" aria-hidden />}
+                {previewExpanded ? <ChevronDown className="w-3.5 h-3.5" aria-hidden /> : <ChevronUp className="w-3.5 h-3.5" aria-hidden />}
               </button>
             </div>
           ) : !truncatedDescription && descriptionRaw && typeof descriptionRaw === "object" ? (
@@ -2119,7 +2111,7 @@ export default function SectionEditor({
                       aria-label={collapsedListExpanded ? `Show fewer ${sectionType} entries` : `Show more ${sectionType} entries`}
                       title={collapsedListExpanded ? "Show less" : "Show more"}
                     >
-                      {collapsedListExpanded ? <ChevronUp className="w-3.5 h-3.5" aria-hidden /> : <ChevronDown className="w-3.5 h-3.5" aria-hidden />}
+                      {collapsedListExpanded ? <ChevronDown className="w-3.5 h-3.5" aria-hidden /> : <ChevronUp className="w-3.5 h-3.5" aria-hidden />}
                     </button>
                   </div>
                 ) : null}
@@ -2142,7 +2134,7 @@ export default function SectionEditor({
                       aria-label={collapsedListExpanded ? `Show fewer ${sectionType} entries` : `Show more ${sectionType} entries`}
                       title={collapsedListExpanded ? "Show less" : "Show more"}
                     >
-                      {collapsedListExpanded ? <ChevronUp className="w-3.5 h-3.5" aria-hidden /> : <ChevronDown className="w-3.5 h-3.5" aria-hidden />}
+                      {collapsedListExpanded ? <ChevronDown className="w-3.5 h-3.5" aria-hidden /> : <ChevronUp className="w-3.5 h-3.5" aria-hidden />}
                     </button>
                   </div>
                 ) : null}
@@ -2201,7 +2193,7 @@ export default function SectionEditor({
                       aria-label={collapsedListExpanded ? `Show fewer ${sectionType} entries` : `Show more ${sectionType} entries`}
                       title={collapsedListExpanded ? "Show less" : "Show more"}
                     >
-                      {collapsedListExpanded ? <ChevronUp className="w-3.5 h-3.5" aria-hidden /> : <ChevronDown className="w-3.5 h-3.5" aria-hidden />}
+                      {collapsedListExpanded ? <ChevronDown className="w-3.5 h-3.5" aria-hidden /> : <ChevronUp className="w-3.5 h-3.5" aria-hidden />}
                     </button>
                   </div>
                 ) : null}
@@ -2226,7 +2218,7 @@ export default function SectionEditor({
                       aria-label={collapsedListExpanded ? `Show fewer ${sectionType} entries` : `Show more ${sectionType} entries`}
                       title={collapsedListExpanded ? "Show less" : "Show more"}
                     >
-                      {collapsedListExpanded ? <ChevronUp className="w-3.5 h-3.5" aria-hidden /> : <ChevronDown className="w-3.5 h-3.5" aria-hidden />}
+                      {collapsedListExpanded ? <ChevronDown className="w-3.5 h-3.5" aria-hidden /> : <ChevronUp className="w-3.5 h-3.5" aria-hidden />}
                     </button>
                   </div>
                 ) : null}
