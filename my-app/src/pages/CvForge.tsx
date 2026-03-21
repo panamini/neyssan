@@ -21,10 +21,10 @@ export function CvForge(): JSX.Element {
     >
       <div
         style={{
-          padding: "var(--s7)",
+          padding: "var(--space-page-pad)",
           display: "flex",
           flexDirection: "column",
-          gap: "var(--s5)",
+          gap: "var(--space-panel-stack)",
           maxWidth: 960,
           margin: "0 auto",
           width: "100%",

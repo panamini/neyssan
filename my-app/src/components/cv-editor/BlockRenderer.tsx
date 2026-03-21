@@ -424,17 +424,13 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
                 : "p-3 [background:var(--sfr)] border border-bo rounded [color:var(--ti)]"
             }
           >
-            <div className="flex items-center justify-between">
-                {linkedItem && section ? (
-                    <RichSummary item={linkedItem} sectionType={section.type} />
-                ) : (
-                    <p className="text-sm [color:var(--tm2)]">
-                        {block.title || extractedPlainText.slice(0, 100) || 'Block Content'}
-                    </p>
-                )}
-
-                {/* v1: Edit button removed — editing is handled via the typed modal/inspector */}
-            </div>
+            {linkedItem && section ? (
+              <RichSummary item={linkedItem} sectionType={section.type} />
+            ) : (
+              <p className="cv-entry-body cv-entry-body--muted">
+                {block.title || extractedPlainText.slice(0, 100) || "Block Content"}
+              </p>
+            )}
             {section?.type === "experience" ? (() => {
               // Prefer achievements from the resolved structured item when available.
               const linkedAchievements = Array.isArray((linkedItem as any)?.achievements)
@@ -473,8 +469,8 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
               const fallbackAchievements = fallbackText && !isSeed ? [fallbackText] as unknown[] : null;
 
               const itemsToShow =
-                (Array.isArray(linkedAchievements) && linkedAchievements.length > 0 ? linkedAchievements : null)
-                ?? responsibilitiesItems
+                responsibilitiesItems
+                ?? (Array.isArray(linkedAchievements) && linkedAchievements.length > 0 ? linkedAchievements : null)
                 ?? fallbackAchievements;
 
               // Debug snapshot

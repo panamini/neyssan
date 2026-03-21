@@ -11,10 +11,10 @@ function typeLabel(type?: string): string {
   return "Letter";
 }
 
-function typeColor(type?: string): React.CSSProperties {
-  if (type === "freelance_proposal") return { background: "var(--ap)", color: "var(--am)", border: "1px solid var(--ac)" };
-  if (type === "application_message") return { background: "var(--sf2)", color: "var(--tm2)", border: "1px solid var(--bo)" };
-  return { background: "var(--sf2)", color: "var(--tm2)", border: "1px solid var(--bo)" };
+function toneLabel(voicePreset?: string): string {
+  if (voicePreset === "expert") return "Formal";
+  if (voicePreset === "engaging") return "Warm";
+  return "Balanced";
 }
 
 export function ProposalsLibrary(): JSX.Element {
@@ -51,10 +51,10 @@ export function ProposalsLibrary(): JSX.Element {
     >
       <div
         style={{
-          padding: "var(--s7) var(--s7)",
+          padding: "var(--space-page-pad)",
           display: "flex",
           flexDirection: "column",
-          gap: "var(--s6)",
+          gap: "var(--space-page-stack)",
           maxWidth: 1100,
           margin: "0 auto",
           width: "100%",
@@ -62,29 +62,11 @@ export function ProposalsLibrary(): JSX.Element {
       >
         {/* Header row */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div>
-            <div
-              style={{
-                fontSize: "var(--tx)",
-                fontWeight: 600,
-                color: "var(--am)",
-                letterSpacing: ".14em",
-                textTransform: "uppercase",
-                marginBottom: "var(--s2)",
-              }}
-            >
+          <div className="dasti-stack">
+            <div className="dasti-stack__eyebrow">
               Write
             </div>
-            <h1
-              style={{
-                fontFamily: '"Fraunces", serif',
-                fontSize: "var(--tx2)",
-                fontWeight: 600,
-                letterSpacing: "-.01em",
-                color: "var(--ti)",
-                margin: 0,
-              }}
-            >
+            <h1 className="dasti-stack__title">
               All letters & proposals
             </h1>
           </div>
@@ -125,19 +107,12 @@ export function ProposalsLibrary(): JSX.Element {
 
         {/* Empty */}
         {proposals !== undefined && sorted.length === 0 && (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "var(--s4)",
-              padding: "var(--s9) 0",
-              color: "var(--tg2)",
-            }}
-          >
+          <div className="dasti-empty-state">
             <FileText size={32} strokeWidth={1.2} />
-            <div style={{ fontSize: "var(--ts)", fontWeight: 500 }}>No letters or proposals yet</div>
+            <div className="dasti-empty-state__title">No letters or proposals yet</div>
+            <p className="dasti-empty-state__subtitle">
+              Generated drafts will appear here with their title, tone, and a readable excerpt.
+            </p>
             <button
               onClick={() => void navigate("/proposal")}
               style={{
@@ -169,7 +144,7 @@ export function ProposalsLibrary(): JSX.Element {
             style={{
               display: "grid",
               gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-              gap: "var(--s4)",
+              gap: "var(--space-card-grid)",
             }}
           >
             {sorted.map((p: any) => {
@@ -179,8 +154,9 @@ export function ProposalsLibrary(): JSX.Element {
                 year: "2-digit",
               });
               const label = typeLabel(p.metadata?.proposalType);
-              const badge = typeColor(p.metadata?.proposalType);
+              const tone = toneLabel(p.metadata?.voicePreset);
               const isConfirming = confirmingId === p._id;
+              const snippet = typeof p.content === "string" ? p.content.trim() : "";
 
               return (
                 <div
@@ -192,107 +168,45 @@ export function ProposalsLibrary(): JSX.Element {
                   {/* Main card button */}
                   <button
                     onClick={() => void navigate(`/proposal?view=saved&id=${encodeURIComponent(p._id)}`)}
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "flex-start",
-                      gap: "var(--s3)",
-                      padding: "var(--s4) var(--s4)",
-                      borderRadius: "var(--rm)",
-                      border: "1px solid var(--bo)",
-                      background: "var(--sfr)",
-                      boxShadow: "var(--sha)",
-                      cursor: "pointer",
-                      textAlign: "left",
-                      transition: "background .12s var(--ez), border-color .12s var(--ez)",
-                      fontFamily: "inherit",
-                      width: "100%",
-                    }}
-                    onMouseEnter={(e) => {
-                      const el = e.currentTarget as HTMLButtonElement;
-                      el.style.background = "var(--sf2)";
-                      el.style.borderColor = "var(--bm)";
-                    }}
-                    onMouseLeave={(e) => {
-                      const el = e.currentTarget as HTMLButtonElement;
-                      el.style.background = "var(--sfr)";
-                      el.style.borderColor = "var(--bo)";
-                    }}
+                    className="dasti-doc-card"
+                    style={{ paddingRight: "var(--s6)" }}
                   >
-                    {/* Badge + date */}
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", paddingRight: 20 }}>
-                      <span
-                        style={{
-                          fontSize: 10,
-                          fontWeight: 600,
-                          letterSpacing: ".08em",
-                          textTransform: "uppercase",
-                          padding: "2px 7px",
-                          borderRadius: 99,
-                          ...badge,
-                        }}
-                      >
-                        {label}
-                      </span>
-                      <span style={{ fontSize: "var(--tx)", color: "var(--tg2)" }}>{date}</span>
-                    </div>
-
-                    {/* Title */}
-                    <div
-                      style={{
-                        fontFamily: '"Fraunces", serif',
-                        fontSize: "var(--ts)",
-                        fontWeight: 600,
-                        letterSpacing: "-.01em",
-                        color: "var(--ti)",
-                        lineHeight: 1.35,
-                        display: "-webkit-box",
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: "vertical",
-                        overflow: "hidden",
-                        minHeight: "2.7em",
-                      }}
-                    >
-                      {p.title ?? "Untitled"}
-                    </div>
-
-                    {/* Snippet */}
-                    {p.content && (
-                      <div
-                        style={{
-                          fontSize: "var(--tx)",
-                          color: "var(--tm2)",
-                          lineHeight: 1.5,
-                          display: "-webkit-box",
-                          WebkitLineClamp: 3,
-                          WebkitBoxOrient: "vertical",
-                          overflow: "hidden",
-                        }}
-                      >
-                        {p.content.slice(0, 160)}
+                    <div className="dasti-doc-card__stack">
+                      <div className="dasti-doc-card__header">
+                        <h2 className="dasti-doc-card__title">{p.title ?? "Untitled"}</h2>
+                        <div className="dasti-doc-card__date">{date}</div>
                       </div>
-                    )}
+
+                      <div className="dasti-doc-card__meta">
+                        <span>{label}</span>
+                        <span>·</span>
+                        <span>{tone}</span>
+                      </div>
+
+                      <p
+                        className={
+                          snippet
+                            ? "dasti-doc-card__snippet"
+                            : "dasti-doc-card__snippet dasti-doc-card__snippet--muted"
+                        }
+                      >
+                        {snippet || "This draft is still empty."}
+                      </p>
+                    </div>
                   </button>
 
                   {/* Delete — confirm overlay or X trigger */}
                   {isConfirming ? (
                     <div
+                      className="dasti-icon-confirm-tray"
                       style={{
                         position: "absolute",
                         top: 8,
                         right: 8,
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 3,
-                        background: "var(--sfr)",
-                        border: "1px solid var(--bo)",
-                        borderRadius: "var(--rs)",
-                        padding: "2px 6px 2px 8px",
-                        boxShadow: "var(--shb)",
                         zIndex: 2,
                       }}
                     >
-                      <span style={{ fontSize: "var(--tx)", color: "var(--tg2)", whiteSpace: "nowrap" }}>Delete?</span>
+                      <span className="dasti-icon-confirm-tray__label">Delete?</span>
                       <button
                         onClick={(e) => { e.stopPropagation(); void handleDelete(p._id); }}
                         title="Confirm delete"

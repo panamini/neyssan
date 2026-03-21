@@ -1,6 +1,6 @@
 import React from 'react';
 import type { IExperienceItem, IEducationItem, SectionType } from '../../types/cvDocument';
-import { Briefcase, GraduationCap, Link } from 'lucide-react';
+import { Link } from 'lucide-react';
 import { formatRangeFromItem } from '../../lib/date-utils';
 
 interface RichSummaryProps {
@@ -28,18 +28,15 @@ export function RichSummary({ item, sectionType }: RichSummaryProps): JSX.Elemen
     }
     const range = formatRangeFromItem(exp);
     return (
-      <div className="flex items-start space-x-3">
-        <div className="flex-shrink-0">
-          <Briefcase className="cv-entry-icon" />
-        </div>
-        <div className="flex-1">
-          <p className="font-medium [color:var(--ti)]">{exp.position}</p>
-          <p className="text-sm [color:var(--tm2)]">
+      <div className="cv-entry-summary">
+        <div className="cv-entry-summary__main">
+          <p className="cv-entry-title cv-entry-title--truncate">{exp.position}</p>
+          <p className="cv-entry-subtitle cv-entry-subtitle--truncate">
             {exp.company}
-            {exp.location && <span> &middot; {exp.location}</span>}
+            {exp.location && <span> · {exp.location}</span>}
           </p>
-          {range && <p className="text-xs [color:var(--tm2)]">{range}</p>}
         </div>
+        {range ? <p className="cv-entry-date">{range}</p> : null}
       </div>
     );
   }
@@ -52,18 +49,15 @@ export function RichSummary({ item, sectionType }: RichSummaryProps): JSX.Elemen
     }
     const range = formatRangeFromItem(edu);
     return (
-      <div className="flex items-start space-x-3">
-        <div className="flex-shrink-0">
-          <GraduationCap className="cv-entry-icon" />
-        </div>
-        <div className="flex-1">
-          <p className="font-medium [color:var(--ti)]">{edu.institution}</p>
-          <p className="text-sm [color:var(--tm2)]">
-            {edu.degree}
-            {edu.fieldOfStudy && <span>, {edu.fieldOfStudy}</span>}
+      <div className="cv-entry-summary">
+        <div className="cv-entry-summary__main">
+          <p className="cv-entry-title cv-entry-title--truncate">{edu.degree || edu.institution}</p>
+          <p className="cv-entry-subtitle cv-entry-subtitle--truncate">
+            {edu.institution}
+            {edu.fieldOfStudy && <span> · {edu.fieldOfStudy}</span>}
           </p>
-          {range && <p className="text-xs [color:var(--tm2)]">{range}</p>}
         </div>
+        {range ? <p className="cv-entry-date">{range}</p> : null}
       </div>
     );
   }

@@ -191,10 +191,7 @@ export function AchievementsModal({ open, items, appendBlankOnOpen = false, onCl
         </div>
 
         <div className="p-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="text-sm [color:var(--tm2)]">
-              Add, remove, or edit achievements (bullets or short sentences)
-            </div>
+          <div className="flex items-center justify-start gap-2">
             <button
               type="button"
               onClick={handleAdd}
@@ -204,6 +201,9 @@ export function AchievementsModal({ open, items, appendBlankOnOpen = false, onCl
             >
               <Plus className="w-4 h-4" />
             </button>
+            <div className="text-sm [color:var(--tm2)]">
+              Add or refine achievement lines.
+            </div>
           </div>
 
           <div className="space-y-2">

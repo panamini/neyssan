@@ -271,7 +271,6 @@ export function SummaryModal({ open, sectionId, item, onClose }: SummaryModalPro
               </Remirror>
             </div>
 
-            <div className="dasti-hint">Keep this short, specific, and aligned with the target role.</div>
           </section>
         </div>
 

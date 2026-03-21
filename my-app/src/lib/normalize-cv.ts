@@ -9,8 +9,8 @@ import {
   CvSectionSchemaStrict,
 } from "../schemas/cvDocument.schema";
 import type { CvDocument, CvSection, CvBlock, IExperienceItem, IEducationItem, ISkillItem, ILanguageItem, IAchievementItem } from "../types/cvDocument";
+import type { RemirrorJSON } from "remirror";
 import { ensureRemirrorDoc } from "../components/remirror-editor/utils/conversion";
-import { docToPlainText } from "../components/remirror-editor/utils/text";
 import { v4 as uuidv4 } from "uuid";
 import { generateCvTemplate } from "./cv-template";
 
@@ -191,6 +191,32 @@ function normalizeBlock(b: any, bi: number): CvBlock {
 const normalizeWhitespace = (text: string | null | undefined): string =>
   String(text ?? "").replace(/\s+/g, " " ).trim();
 
+function normalizeRichField(value: unknown): RemirrorJSON | string | undefined {
+  if (Array.isArray(value)) {
+    const joined = value
+      .map((entry) => (typeof entry === "string" ? entry : ""))
+      .filter((entry) => entry.trim().length > 0)
+      .join(" ");
+    const normalized = normalizeWhitespace(joined);
+    return normalized ? ensureRemirrorDoc(normalized) : undefined;
+  }
+
+  if (typeof value === "string") {
+    const normalized = normalizeWhitespace(value);
+    return normalized ? ensureRemirrorDoc(normalized) : undefined;
+  }
+
+  if (value && typeof value === "object") {
+    try {
+      return ensureRemirrorDoc(value as RemirrorJSON);
+    } catch {
+      return undefined;
+    }
+  }
+
+  return undefined;
+}
+
 /** Normalize structured content for experience section */
 function normalizeExperienceItem(entry: any, idx: number): IExperienceItem {
   // Use epoch sentinel to satisfy strict schema while rendering blank in UI.
@@ -227,27 +253,7 @@ function normalizeExperienceItem(entry: any, idx: number): IExperienceItem {
     ? undefined
     : providedEndPrecision ?? (endIsEmptyString ? startDatePrecision : endParsed.precision);
 
-  const responsibilitiesRaw = entry?.responsibilities;
-  let responsibilities: string | null = null;
-  if (Array.isArray(responsibilitiesRaw)) {
-    const joined = responsibilitiesRaw
-      .map((value: unknown) => (typeof value === "string" ? value : ""))
-      .filter((value) => value.trim().length > 0)
-      .join(" ");
-    const normalized = normalizeWhitespace(joined);
-    responsibilities = normalized ? normalized : null;
-  } else if (typeof responsibilitiesRaw === "string") {
-    const normalized = normalizeWhitespace(responsibilitiesRaw);
-    responsibilities = normalized ? normalized : null;
-  } else if (responsibilitiesRaw && typeof responsibilitiesRaw === "object") {
-    try {
-      const docText = docToPlainText(responsibilitiesRaw as any);
-      const normalized = normalizeWhitespace(docText);
-      responsibilities = normalized ? normalized : null;
-    } catch {
-      responsibilities = null;
-    }
-  }
+  const responsibilities = normalizeRichField(entry?.responsibilities);
 
   const base = {
     id: typeof entry?.id === "string" ? entry.id : generateId("exp", idx),
@@ -261,7 +267,7 @@ function normalizeExperienceItem(entry: any, idx: number): IExperienceItem {
     // Keep back-compat flag if present
     currentlyWorking: entry?.currentlyWorking ? true : undefined,
     location: typeof entry?.location === "string" ? entry.location : "",
-    responsibilities: responsibilities ?? undefined,
+    responsibilities,
     achievements: Array.isArray(entry?.achievements) ? entry.achievements.map(String) : [],
   };
   return ExperienceItemSchema.parse(base);
@@ -303,7 +309,7 @@ function normalizeEducationItem(entry: any, idx: number): IEducationItem {
     endDatePrecision,
     isCurrent: isCurrent ? true : undefined,
     grade: typeof entry?.grade === "string" ? entry.grade : "",
-    description: entry?.description ?? undefined,
+    description: normalizeRichField(entry?.description),
   };
   return EducationItemSchema.parse(base);
 }
