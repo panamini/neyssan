@@ -17,6 +17,19 @@ function toneLabel(voicePreset?: string): string {
   return "Balanced";
 }
 
+function buildProposalSnippet(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const paragraphs = value
+    .replace(/\r/g, "\n")
+    .split(/\n\s*\n/)
+    .map((paragraph) => paragraph.replace(/\s*\n\s*/g, " ").replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+
+  if (paragraphs.length === 0) return "";
+  if (paragraphs.length === 1) return paragraphs[0];
+  return paragraphs.slice(0, 2).join("\n");
+}
+
 export function ProposalsLibrary(): JSX.Element {
   const navigate = useNavigate();
   const proposals = useQuery(api.proposalsPublic.default as any, {});
@@ -148,7 +161,7 @@ export function ProposalsLibrary(): JSX.Element {
             }}
           >
             {sorted.map((p: any) => {
-              const date = new Date(p._creationTime).toLocaleDateString("fr-FR", {
+              const date = new Date(p._creationTime).toLocaleDateString("en-US", {
                 day: "2-digit",
                 month: "2-digit",
                 year: "2-digit",
@@ -156,7 +169,7 @@ export function ProposalsLibrary(): JSX.Element {
               const label = typeLabel(p.metadata?.proposalType);
               const tone = toneLabel(p.metadata?.voicePreset);
               const isConfirming = confirmingId === p._id;
-              const snippet = typeof p.content === "string" ? p.content.trim() : "";
+              const snippet = buildProposalSnippet(p.content);
 
               return (
                 <div
@@ -168,30 +181,37 @@ export function ProposalsLibrary(): JSX.Element {
                   {/* Main card button */}
                   <button
                     onClick={() => void navigate(`/proposal?view=saved&id=${encodeURIComponent(p._id)}`)}
-                    className="dasti-doc-card"
+                    className="dasti-doc-card dasti-doc-card--library dasti-doc-card--proposal-library"
                     style={{ paddingRight: "var(--s6)" }}
                   >
                     <div className="dasti-doc-card__stack">
                       <div className="dasti-doc-card__header">
-                        <h2 className="dasti-doc-card__title">{p.title ?? "Untitled"}</h2>
-                        <div className="dasti-doc-card__date">{date}</div>
+                        <div className="dasti-doc-card__title-frame dasti-doc-card__title-frame--top">
+                          <h2 className="dasti-doc-card__title">{p.title ?? "Untitled"}</h2>
+                        </div>
                       </div>
 
-                      <div className="dasti-doc-card__meta">
-                        <span>{label}</span>
-                        <span>·</span>
-                        <span>{tone}</span>
+                      <div className="dasti-doc-card__body-band">
+                        <p
+                          className={
+                            snippet
+                              ? "dasti-doc-card__snippet dasti-doc-card__snippet--library"
+                              : "dasti-doc-card__snippet dasti-doc-card__snippet--library dasti-doc-card__snippet--muted"
+                          }
+                        >
+                          {snippet || "Draft preview appears here."}
+                        </p>
                       </div>
 
-                      <p
-                        className={
-                          snippet
-                            ? "dasti-doc-card__snippet"
-                            : "dasti-doc-card__snippet dasti-doc-card__snippet--muted"
-                        }
-                      >
-                        {snippet || "This draft is still empty."}
-                      </p>
+                      <div className="dasti-doc-card__footer dasti-doc-card__footer--stamp-only">
+                        <div className="dasti-doc-card__footer-meta">
+                          <span>{label}</span>
+                          <span>·</span>
+                          <span>{tone}</span>
+                          <span>·</span>
+                          <span className="dasti-doc-card__stamp">{date}</span>
+                        </div>
+                      </div>
                     </div>
                   </button>
 

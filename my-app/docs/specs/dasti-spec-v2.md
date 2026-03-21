@@ -254,6 +254,46 @@ Pas comme une pile de gris quasi identiques.
 
 Au-delà de 3 grandes valeurs neutres simultanées, la charge cognitive augmente et la hiérarchie visuelle devient floue, surtout en dark mode.
 
+### Formats canoniques de surface
+
+On distingue 3 familles seulement :
+
+- `document sheet` : surface documentaire principale, portrait `1 : 1.414` (racine de 2 / logique A4)
+- `document card` : carte documentaire de navigation, paysage `1.414 : 1`
+- `content section / modal` : surface éditoriale content-driven, sans ratio forcé
+
+Application :
+
+- `Proposal` generated / saved body : `document sheet`
+- `Resume Library` / `Proposal Library` / `Choose resume` : `document card`
+- `Cv Forge` section cards (`Profile`, `Summary`, `Experience`, `Education`, `Achievements`) : `content section`
+
+Règles :
+
+- une `document card` réserve toujours une zone titre sur 2 lignes, même si le titre tient sur 1 ligne
+- le ratio reste le même du minimum width au maximum width ; seule l’échelle change
+- les textes internes s’adaptent au format de la carte, pas l’inverse
+- la date, quand elle existe, vit en timbre discret bas-gauche, pas en coin haut-droit flottant
+- dans l’app, les timbres de date document utilisent le format US (`MM/DD/YY`)
+- hiérarchie interne : `titre` > `méta` > `snippet` > `timbre`
+- sur les library cards : `méta` = 1 ligne réservée ; `snippet` = 2 lignes réservées
+- le texte du titre s’ancre en bas de sa réserve, pour garder un écart stable avec la ligne suivante, même si le titre tient sur 1 ligne
+- sur les CV cards, le sous-titre suit cette priorité : `email > LinkedIn > site > téléphone > location`
+- padding library cards : `24`
+- gaps internes :
+  - `8` pour le cluster compact (`titre → sous-titre`) sur les CV cards
+  - `12` pour les séparations de rails documentaires
+
+### Ordre de travail recommandé
+
+Pour harmoniser un ensemble de cartes, l’ordre correct est :
+
+1. figer la famille de format et la hiérarchie de surface
+2. fixer les réserves structurelles (titre, méta, snippet, actions)
+3. seulement ensuite retuner la typographie interne
+
+Ne pas commencer par la typo si la géométrie n’est pas stabilisée : les retours de ligne, la densité et la hiérarchie optique changent encore.
+
 ---
 
 ## 7. TYPOGRAPHIE — familles & usage
