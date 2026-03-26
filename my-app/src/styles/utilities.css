@@ -1,0 +1,523 @@
+:root {
+  --layout-page-pad: var(--container-pad-lg);
+  --layout-page-pad-tablet: var(--container-pad-md);
+  --layout-page-pad-mobile: var(--container-pad-sm);
+  --layout-page-stack: var(--section-gap-md);
+  --layout-panel-stack: var(--section-gap-sm);
+  --layout-card-grid: var(--gap-roomy);
+  --layout-split-gap: var(--section-gap-sm);
+  --layout-split-gap-wide: var(--section-gap-lg);
+  --layout-empty-state-pad: var(--space-9);
+
+  /* Temporary compatibility for screens that still reference the old names. */
+  --space-page-pad: var(--layout-page-pad);
+  --space-page-stack: var(--layout-page-stack);
+  --space-panel-stack: var(--layout-panel-stack);
+  --space-card-grid: var(--layout-card-grid);
+  --space-split-gap: var(--layout-split-gap);
+  --space-split-gap-wide: var(--layout-split-gap-wide);
+  --space-empty-state: var(--layout-empty-state-pad);
+}
+
+.dasti-page-scroll {
+  height: 100%;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  background: var(--gradient-canvas);
+}
+
+.dasti-container {
+  width: min(calc(100% - (2 * var(--gutter-mobile))), var(--container-lg));
+  margin-inline: auto;
+  min-width: 0;
+}
+
+.container,
+.container-ds {
+  width: min(calc(100% - (2 * var(--gutter-mobile))), var(--container-lg));
+  margin-inline: auto;
+  min-width: 0;
+}
+
+.container-wide {
+  width: min(calc(100% - (2 * var(--gutter-mobile))), var(--container-xl));
+  margin-inline: auto;
+  min-width: 0;
+}
+
+.dasti-page-shell {
+  width: min(100%, var(--page-shell-max-width, var(--container-xl)));
+  margin: 0 auto;
+  box-sizing: border-box;
+  min-width: 0;
+  display: grid;
+  gap: var(--page-shell-gap, var(--layout-page-stack));
+  padding-top: var(--page-shell-pad-top, var(--space-6));
+  padding-right: var(--page-shell-pad-inline, var(--layout-page-pad));
+  padding-bottom: var(--page-shell-pad-bottom, var(--space-7));
+  padding-left: var(--page-shell-pad-inline, var(--layout-page-pad));
+}
+
+.dasti-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.dasti-page-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.dasti-flow {
+  display: grid;
+  gap: var(--flow-gap, var(--gap-default));
+  min-width: 0;
+}
+
+.dasti-flow--tight {
+  --flow-gap: var(--gap-tight);
+}
+
+.dasti-flow--spacious {
+  --flow-gap: var(--gap-roomy);
+}
+
+.stack-1 > * + * {
+  margin-top: var(--space-1);
+}
+
+.stack-2 > * + * {
+  margin-top: var(--space-2);
+}
+
+.stack-3 > * + * {
+  margin-top: var(--space-3);
+}
+
+.stack-4 > * + * {
+  margin-top: var(--space-4);
+}
+
+.stack-5 > * + * {
+  margin-top: var(--space-5);
+}
+
+.stack-6 > * + * {
+  margin-top: var(--space-6);
+}
+
+.gap-1 {
+  gap: var(--space-1);
+}
+
+.gap-2 {
+  gap: var(--space-2);
+}
+
+.gap-3 {
+  gap: var(--space-3);
+}
+
+.gap-4 {
+  gap: var(--space-4);
+}
+
+.gap-5 {
+  gap: var(--space-5);
+}
+
+.gap-6 {
+  gap: var(--space-6);
+}
+
+.dasti-cluster {
+  display: flex;
+  align-items: center;
+  gap: var(--cluster-gap, var(--gap-tight));
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.cluster-1,
+.cluster-2,
+.cluster-3,
+.cluster-4 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  min-width: 0;
+}
+
+.cluster-1 {
+  gap: var(--space-1);
+}
+
+.cluster-2 {
+  gap: var(--space-2);
+}
+
+.cluster-3 {
+  gap: var(--space-3);
+}
+
+.cluster-4 {
+  gap: var(--space-4);
+}
+
+.cluster-between {
+  justify-content: space-between;
+}
+
+.cluster-start {
+  justify-content: flex-start;
+}
+
+.cluster-end {
+  justify-content: flex-end;
+}
+
+.dasti-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-sm);
+}
+
+.dasti-toolbar__divider {
+  width: 1px;
+  height: var(--control-sm);
+  flex-shrink: 0;
+  background: var(--color-border);
+}
+
+.dasti-grid-auto {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(var(--grid-min-col, 280px), 1fr)
+  );
+  gap: var(--grid-gap, var(--layout-card-grid));
+}
+
+.grid-1,
+.grid-2,
+.grid-3,
+.grid-4,
+.grid-fit-sm,
+.grid-fit-md,
+.grid-fit-lg {
+  display: grid;
+  min-width: 0;
+  gap: var(--grid-gap, var(--gap-default));
+}
+
+.grid-1 {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.grid-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.grid-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.grid-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.grid-fit-sm {
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(var(--grid-fit-min, 180px), 1fr)
+  );
+}
+
+.grid-fit-md {
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(var(--grid-fit-min, 240px), 1fr)
+  );
+}
+
+.grid-fit-lg {
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(var(--grid-fit-min, 320px), 1fr)
+  );
+}
+
+.dasti-grid-split {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: var(--grid-columns, 1fr);
+  gap: var(--grid-gap, var(--layout-split-gap));
+  align-items: var(--grid-align, start);
+  justify-content: var(--grid-justify, stretch);
+}
+
+.section-shell {
+  display: grid;
+  gap: var(--section-gap-sm);
+  min-width: 0;
+}
+
+.scroll-region {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.inset-1 {
+  padding: var(--space-1);
+}
+
+.inset-2 {
+  padding: var(--space-2);
+}
+
+.inset-3 {
+  padding: var(--space-3);
+}
+
+.inset-4 {
+  padding: var(--space-4);
+}
+
+.inset-5 {
+  padding: var(--space-5);
+}
+
+.inset-6 {
+  padding: var(--space-6);
+}
+
+.dasti-gradient-canvas {
+  background: var(--gradient-canvas);
+}
+
+.dasti-gradient-surface {
+  background: var(--gradient-surface);
+}
+
+.dasti-gradient-stage {
+  background: var(--gradient-stage);
+}
+
+.dasti-frost {
+  background: var(--frost-surface);
+  border: 1px solid var(--frost-border);
+  box-shadow: var(--shadow-frost);
+  backdrop-filter: saturate(var(--frost-saturate)) blur(var(--frost-blur));
+  -webkit-backdrop-filter: saturate(var(--frost-saturate))
+    blur(var(--frost-blur));
+}
+
+.dasti-drop-surface {
+  display: grid;
+  gap: var(--space-3);
+  background: var(--drop-surface-bg);
+  border: 1px solid var(--drop-surface-border);
+  box-shadow: var(--shadow-frost);
+  backdrop-filter: saturate(var(--frost-saturate)) blur(var(--frost-blur));
+  -webkit-backdrop-filter: saturate(var(--frost-saturate))
+    blur(var(--frost-blur));
+}
+
+.dasti-drop-surface--active {
+  background: color-mix(
+    in srgb,
+    var(--drop-surface-bg) 84%,
+    var(--frost-bg) 16%
+  );
+  border-color: var(--color-border-contrast);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 28%, transparent),
+    var(--shadow-frost);
+}
+
+.dasti-drop-surface__zone {
+  display: grid;
+  place-items: center;
+  gap: var(--space-2);
+  min-height: 160px;
+  padding: var(--space-4);
+  border: 1px dashed
+    color-mix(in srgb, var(--drop-surface-border) 88%, transparent);
+  border-radius: calc(var(--radius-card) - 2px);
+  background: color-mix(in srgb, var(--drop-surface-bg) 68%, transparent);
+  text-align: center;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.dasti-drop-surface:hover .dasti-drop-surface__zone,
+.dasti-drop-surface--active .dasti-drop-surface__zone {
+  border-color: color-mix(in srgb, var(--color-accent) 72%, white 28%);
+  background: color-mix(
+    in srgb,
+    var(--drop-surface-bg) 74%,
+    var(--frost-bg) 26%
+  );
+  color: var(--color-text);
+}
+
+.dasti-drop-surface__icon {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  border: 1px solid
+    color-mix(in srgb, var(--drop-surface-border) 80%, transparent);
+  background: color-mix(in srgb, var(--frost-bg) 86%, transparent);
+  color: var(--color-accent-hover);
+}
+
+.dasti-drop-surface__title {
+  margin: 0;
+  font-size: var(--text-body-sm-size);
+  line-height: var(--text-body-sm-line);
+  font-weight: var(--font-label-weight);
+  color: inherit;
+}
+
+.dasti-drop-surface__meta {
+  margin: 0;
+  font-size: var(--text-caption-size);
+  line-height: var(--text-caption-line);
+  color: var(--color-text-subtle);
+}
+
+.dasti-stage-card {
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-surface);
+  background: var(--gradient-stage);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 78%, transparent),
+    var(--shadow-md);
+}
+
+.dasti-stage-card--document {
+  padding: var(--space-5) var(--space-4) var(--space-6);
+}
+
+.dasti-text-flow-1 > * + *,
+.flow-1 > * + * {
+  margin-top: var(--flow-1);
+}
+
+.dasti-text-flow-2 > * + *,
+.flow-2 > * + * {
+  margin-top: var(--flow-2);
+}
+
+.dasti-text-flow-3 > * + *,
+.flow-3 > * + * {
+  margin-top: var(--flow-3);
+}
+
+.dasti-text-flow-4 > * + *,
+.flow-4 > * + * {
+  margin-top: var(--flow-4);
+}
+
+.dasti-text-flow-5 > * + *,
+.flow-5 > * + * {
+  margin-top: var(--flow-5);
+}
+
+@media (min-width: 768px) {
+  .dasti-container {
+    width: min(calc(100% - (2 * var(--gutter-tablet))), var(--container-lg));
+  }
+
+  .container,
+  .container-ds {
+    width: min(calc(100% - (2 * var(--gutter-tablet))), var(--container-lg));
+  }
+
+  .container-wide {
+    width: min(calc(100% - (2 * var(--gutter-tablet))), var(--container-xl));
+  }
+}
+
+@media (min-width: 1024px) {
+  .dasti-container {
+    width: min(calc(100% - (2 * var(--gutter-desktop))), var(--container-xl));
+  }
+
+  .container,
+  .container-ds {
+    width: min(calc(100% - (2 * var(--gutter-desktop))), var(--container-lg));
+  }
+
+  .container-wide {
+    width: min(calc(100% - (2 * var(--gutter-desktop))), var(--container-xl));
+  }
+}
+
+@media (max-width: 1023px) {
+  .dasti-page-shell {
+    padding-right: var(
+      --page-shell-pad-inline-tablet,
+      var(--layout-page-pad-tablet)
+    );
+    padding-left: var(
+      --page-shell-pad-inline-tablet,
+      var(--layout-page-pad-tablet)
+    );
+  }
+}
+
+@media (max-width: 767px) {
+  .dasti-page-shell {
+    padding-top: var(--page-shell-pad-top-mobile, var(--space-5));
+    padding-right: var(
+      --page-shell-pad-inline-mobile,
+      var(--layout-page-pad-mobile)
+    );
+    padding-bottom: var(--page-shell-pad-bottom-mobile, var(--space-6));
+    padding-left: var(
+      --page-shell-pad-inline-mobile,
+      var(--layout-page-pad-mobile)
+    );
+  }
+
+  .dasti-stage-card--document {
+    padding: var(--space-4) var(--space-3) var(--space-5);
+  }
+}
+
+@media (max-width: 1023px) {
+  .grid-2,
+  .grid-3,
+  .grid-4 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

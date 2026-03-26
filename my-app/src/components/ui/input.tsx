@@ -38,33 +38,24 @@ export function Input(props: InputProps) {
     autoFocus,
   } = props;
 
-  // §11 dasti .field : w:100% h:hm · rs · sfr bg · bm border · ts
-  // Input uses --sfr (near-white) so it visually stands out from --sf1 card backgrounds.
-  // focus: ac border + fr ring 3px (pas de ring-offset)
-  const base =
-    "inline-flex items-center w-full rounded-rs text-ts [background:var(--sfr)] [color:var(--ti)] placeholder:[color:var(--tg2)] [transition:background-color_.12s_var(--ez),border-color_.12s_var(--ez),color_.12s_var(--ez),box-shadow_.12s_var(--ez)] focus:outline-none focus:[border-color:var(--ac)]";
-
-  const sizeMap: Record<string, string> = {
-    sm: "px-2 py-1",
-    md: "px-3 py-2",
-    lg: "px-4 py-3",
+  const sizeMap: Record<NonNullable<InputProps["size"]>, string> = {
+    sm: "dasti-field--sm",
+    md: "dasti-field--md",
+    lg: "dasti-field--lg",
   };
 
-  const variantMap: Record<string, string> = {
-    default: "border [border-color:var(--bm)]",
-    ghost:   "border border-transparent [background:transparent]",
-    error:   "border [border-color:var(--er)]",
+  const variantMap: Record<NonNullable<InputProps["variant"]>, string> = {
+    default: "",
+    ghost: "dasti-field--ghost",
+    error: "dasti-field--error",
   };
 
   const classes = clsx(
-    base,
-    // index signature safe access
-    // @ts-ignore
+    "dasti-field",
     sizeMap[size],
-    // @ts-ignore
     variantMap[variant],
     disabled && "opacity-50 cursor-not-allowed",
-    className
+    className,
   );
 
   return (

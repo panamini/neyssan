@@ -1,5 +1,5 @@
 import React from "react";
-import { Check, Copy, Pencil } from "lucide-react";
+import { Check, Copy, Pencil } from "@/lib/icons";
 import type { FormValues } from "./ProposalInputForm.schemas";
 import type { ProposalVoicePreset } from "../../convex/lib/proposals/voicePresets";
 import {
@@ -7,6 +7,7 @@ import {
   type ProposalGenerationFallbackInfo,
 } from "../lib/proposal-generation-ui";
 import { getProposalDocumentTypography } from "../lib/proposal-document-typography";
+import { useScrollEdgeFades } from "../hooks/use-scroll-edge-fades";
 
 interface ProposalDisplayProps {
   proposalContent: string | null;
@@ -26,6 +27,15 @@ interface ProposalDisplayProps {
   onPreviewInteract?: () => void;
   onContentChange?: (value: string) => void;
   onContentCommit?: () => void;
+  actions?: React.ReactNode;
+  showModeToggle?: boolean;
+  size?: "default" | "focused";
+  hideDocumentHeader?: boolean;
+  documentHeaderMode?: "full" | "actions-only" | "hidden";
+  documentTitleEditable?: boolean;
+  onDocumentTitleChange?: (value: string) => void;
+  onDocumentTitleCommit?: () => void;
+  documentTitlePlaceholder?: string;
 }
 
 function stripInlineMarkdown(text: string): string {
@@ -47,7 +57,17 @@ function renderPlainLetterBody(content: string) {
 
   if (!normalized) {
     return (
-      <div style={{ fontFamily: "inherit", fontSize: "inherit", lineHeight: "inherit", fontWeight: "inherit", letterSpacing: "inherit", color: "inherit", whiteSpace: "pre-wrap" }}>
+      <div
+        style={{
+          fontFamily: "inherit",
+          fontSize: "inherit",
+          lineHeight: "inherit",
+          fontWeight: "inherit",
+          letterSpacing: "inherit",
+          color: "inherit",
+          whiteSpace: "pre-wrap",
+        }}
+      >
         {stripInlineMarkdown(content)}
       </div>
     );
@@ -94,7 +114,10 @@ export function getDisplayedProposalText(
   content: string,
   proposalType?: FormValues["proposalType"] | null,
 ): string {
-  if (proposalType === "cover_letter" || proposalType === "application_message") {
+  if (
+    proposalType === "cover_letter" ||
+    proposalType === "application_message"
+  ) {
     return content
       .split(/\n\s*\n/)
       .map((part) => stripInlineMarkdown(part))
@@ -149,30 +172,113 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   onPreviewInteract,
   onContentChange,
   onContentCommit,
+  actions,
+  showModeToggle: allowModeToggle = true,
+  size = "default",
+  hideDocumentHeader = false,
+  documentHeaderMode = "full",
+  documentTitleEditable = false,
+  onDocumentTitleChange,
+  onDocumentTitleCommit,
+  documentTitlePlaceholder = "Proposal title",
 }) => {
   const fallbackDisclosure = getProposalGenerationFallbackDisclosureMessage(
     fallbackInfo ?? {},
   );
   const documentTypography = getProposalDocumentTypography(voicePreset);
-  const showModeToggle = Boolean(onModeChange && proposalContent && !loading && !error);
-  const hasDocumentHeader = Boolean(
-    (documentTitle && documentTitle.trim().length > 0) ||
-      (documentMeta && documentMeta.trim().length > 0) ||
-      onCopy ||
-      showModeToggle,
+  const {
+    attach: attachEditableScrollEdges,
+    showTop: showEditableScrollTop,
+    showBottom: showEditableScrollBottom,
+    update: updateEditableScrollEdges,
+  } = useScrollEdgeFades<HTMLTextAreaElement>();
+  const {
+    attach: attachPreviewScrollEdges,
+    showTop: showPreviewScrollTop,
+    showBottom: showPreviewScrollBottom,
+    update: updatePreviewScrollEdges,
+  } = useScrollEdgeFades<HTMLDivElement>();
+  const showModeToggle = Boolean(
+    allowModeToggle && onModeChange && proposalContent && !loading && !error,
   );
+  const resolvedDocumentHeaderMode = hideDocumentHeader
+    ? "hidden"
+    : documentHeaderMode;
+  const hasHeaderCopyControl = Boolean(onCopy);
+  const hasHeaderControls = Boolean(
+    actions || hasHeaderCopyControl || showModeToggle,
+  );
+  const hasHeaderText =
+    resolvedDocumentHeaderMode === "full" &&
+    Boolean(
+      (documentTitle && documentTitle.trim().length > 0) ||
+      (documentMeta && documentMeta.trim().length > 0),
+    );
+  const shouldRenderDocumentHeader =
+    resolvedDocumentHeaderMode !== "hidden" &&
+    (hasHeaderText || hasHeaderControls);
+  const isLetterLike =
+    proposalType === "cover_letter" || proposalType === "application_message";
+  const isEditable = mode === "edit" && Boolean(onContentChange);
+  const activeScrollTop = isEditable
+    ? showEditableScrollTop
+    : showPreviewScrollTop;
+  const activeScrollBottom = isEditable
+    ? showEditableScrollBottom
+    : showPreviewScrollBottom;
+
+  React.useEffect(() => {
+    updateEditableScrollEdges();
+    updatePreviewScrollEdges();
+  }, [
+    documentMeta,
+    documentTitle,
+    shouldRenderDocumentHeader,
+    isEditable,
+    proposalContent,
+    proposalType,
+    size,
+    updateEditableScrollEdges,
+    updatePreviewScrollEdges,
+  ]);
 
   const renderDocumentHeader = () =>
-    hasDocumentHeader ? (
-      <div className="dasti-proposal-sheet__header">
-        <div className="dasti-proposal-sheet__heading">
-          {documentTitle ? (
-            <h3 className="dasti-proposal-sheet__title">{documentTitle}</h3>
-          ) : null}
-          {documentMeta ? (
-            <p className="dasti-proposal-sheet__meta">{documentMeta}</p>
-          ) : null}
-        </div>
+    shouldRenderDocumentHeader ? (
+      <div
+        className={
+          resolvedDocumentHeaderMode === "actions-only"
+            ? "dasti-proposal-sheet__header dasti-proposal-sheet__header--actions-only"
+            : "dasti-proposal-sheet__header"
+        }
+      >
+        {hasHeaderText ? (
+          <div className="dasti-proposal-sheet__heading">
+            {documentTitleEditable ? (
+              <input
+                type="text"
+                value={documentTitle ?? ""}
+                onChange={(event) =>
+                  onDocumentTitleChange?.(event.target.value)
+                }
+                onBlur={() => onDocumentTitleCommit?.()}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    (event.currentTarget as HTMLInputElement).blur();
+                  }
+                }}
+                placeholder={documentTitlePlaceholder}
+                className="dasti-proposal-sheet__title-input"
+                aria-label="Proposal title"
+              />
+            ) : documentTitle ? (
+              <h3 className="dasti-proposal-sheet__title">{documentTitle}</h3>
+            ) : null}
+            {documentMeta ? (
+              <p className="dasti-proposal-sheet__meta">{documentMeta}</p>
+            ) : null}
+          </div>
+        ) : null}
         <div className="dasti-proposal-sheet__controls">
           {showModeToggle ? (
             <button
@@ -182,7 +288,9 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                   ? "dasti-icon-button dasti-proposal-mode-toggle dasti-proposal-mode-toggle--active"
                   : "dasti-icon-button dasti-proposal-mode-toggle"
               }
-              onClick={() => onModeChange?.(mode === "edit" ? "preview" : "edit")}
+              onClick={() =>
+                onModeChange?.(mode === "edit" ? "preview" : "edit")
+              }
               aria-label={mode === "edit" ? "Preview" : "Edit"}
               title={mode === "edit" ? "Preview" : "Edit"}
               aria-pressed={mode === "edit"}
@@ -190,6 +298,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
               <Pencil size={16} strokeWidth={1.7} aria-hidden="true" />
             </button>
           ) : null}
+          {actions}
           <span className="dasti-proposal-sheet__action-slot">
             {onCopy ? (
               <button
@@ -198,9 +307,15 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                 title={copyFeedback === "copied" ? "Copied" : "Copy"}
                 aria-label={copyFeedback === "copied" ? "Copied" : "Copy"}
                 className="dasti-icon-button"
-                style={{ color: copyFeedback === "copied" ? "var(--ok)" : undefined }}
+                style={{
+                  color: copyFeedback === "copied" ? "var(--ok)" : undefined,
+                }}
               >
-                {copyFeedback === "copied" ? <Check size={16} strokeWidth={2} aria-hidden="true" /> : <Copy size={16} strokeWidth={1.5} aria-hidden="true" />}
+                {copyFeedback === "copied" ? (
+                  <Check size={16} strokeWidth={2} aria-hidden="true" />
+                ) : (
+                  <Copy size={16} strokeWidth={1.5} aria-hidden="true" />
+                )}
               </button>
             ) : null}
           </span>
@@ -210,10 +325,27 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
 
   if (loading) {
     return (
-      <div className="dasti-proposal-sheet" aria-busy="true" aria-label="Generating proposal">
+      <div
+        className="dasti-proposal-sheet"
+        aria-busy="true"
+        aria-label="Generating proposal"
+      >
         {renderDocumentHeader()}
-        <div className={hasDocumentHeader ? "dasti-proposal-sheet__body dasti-proposal-sheet__body--with-header" : "dasti-proposal-sheet__body"}>
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--s3)", width: "100%" }}>
+        <div
+          className={
+            shouldRenderDocumentHeader
+              ? "dasti-proposal-sheet__body dasti-proposal-sheet__body--with-header"
+              : "dasti-proposal-sheet__body"
+          }
+        >
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "var(--s3)",
+              width: "100%",
+            }}
+          >
             {[0.85, 1, 0.72, 0.95, 0.6].map((w, i) => (
               <div
                 key={i}
@@ -221,7 +353,8 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                   height: 13,
                   borderRadius: 4,
                   width: `${w * 100}%`,
-                  background: "linear-gradient(90deg, var(--sf2) 20%, var(--sfr) 50%, var(--sf2) 80%)",
+                  background:
+                    "linear-gradient(90deg, var(--sf2) 20%, var(--sfr) 50%, var(--sf2) 80%)",
                   backgroundSize: "200% 100%",
                   animation: `dasti-shimmer 1.4s ease-in-out ${i * 0.1}s infinite`,
                 }}
@@ -235,13 +368,20 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                   height: 13,
                   borderRadius: 4,
                   width: `${w * 100}%`,
-                  background: "linear-gradient(90deg, var(--sf2) 20%, var(--sfr) 50%, var(--sf2) 80%)",
+                  background:
+                    "linear-gradient(90deg, var(--sf2) 20%, var(--sfr) 50%, var(--sf2) 80%)",
                   backgroundSize: "200% 100%",
                   animation: `dasti-shimmer 1.4s ease-in-out ${(i + 5) * 0.1}s infinite`,
                 }}
               />
             ))}
-            <p style={{ marginTop: "var(--s4)", fontSize: "var(--tx)", color: "var(--tm2)" }}>
+            <p
+              style={{
+                marginTop: "var(--s4)",
+                fontSize: "var(--tx)",
+                color: "var(--tm2)",
+              }}
+            >
               Generating…
             </p>
           </div>
@@ -255,7 +395,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       <div
         role="alert"
         aria-live="assertive"
-        className="rounded-[var(--rm)] border border-[color:var(--er)] [background:var(--erb)] p-6"
+        className="rounded-[var(--radius-card)] border border-[color:var(--er)] [background:var(--erb)] p-6"
       >
         <div className="text-sm font-medium [color:var(--ert)]">
           Proposal generation failed
@@ -280,7 +420,11 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       <div className="dasti-proposal-sheet">
         {renderDocumentHeader()}
         <div
-          className={hasDocumentHeader ? "dasti-proposal-sheet__body dasti-proposal-sheet__body--with-header" : "dasti-proposal-sheet__body"}
+          className={
+            shouldRenderDocumentHeader
+              ? "dasti-proposal-sheet__body dasti-proposal-sheet__body--with-header"
+              : "dasti-proposal-sheet__body"
+          }
           style={{ alignItems: "center", justifyContent: "center" }}
         >
           <p
@@ -300,30 +444,44 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     );
   }
 
-  const isLetterLike =
-    proposalType === "cover_letter" || proposalType === "application_message";
-
-  const isEditable = mode === "edit" && Boolean(onContentChange);
-
   return (
     <div className="grid gap-4">
       {fallbackDisclosure ? (
         <div
           role="status"
           aria-live="polite"
-          className="mb-4 rounded-md border border-[color:var(--bo)] [background:var(--as)] px-4 py-3 text-sm text-foreground"
+          className="mb-4 rounded-md border border-[color:var(--color-border)] [background:var(--as)] px-4 py-3 text-sm text-foreground"
         >
           {fallbackDisclosure}
         </div>
       ) : null}
-      <div className="dasti-proposal-sheet-frame">
-        <div className="dasti-proposal-sheet">
+      <div
+        className={
+          size === "focused"
+            ? "dasti-proposal-sheet-frame dasti-proposal-sheet-frame--focused"
+            : "dasti-proposal-sheet-frame"
+        }
+      >
+        <div
+          className={
+            size === "focused"
+              ? "dasti-proposal-sheet dasti-proposal-sheet--focused"
+              : "dasti-proposal-sheet"
+          }
+        >
           {renderDocumentHeader()}
           {isEditable ? (
             <div
-              className={hasDocumentHeader ? `dasti-proposal-sheet__body dasti-proposal-sheet__body--with-header${isLetterLike ? " dasti-proposal-sheet__body--letter" : ""}` : `dasti-proposal-sheet__body${isLetterLike ? " dasti-proposal-sheet__body--letter" : ""}`}
+              className={
+                shouldRenderDocumentHeader
+                  ? `dasti-proposal-sheet__body dasti-proposal-sheet__body--with-header${isLetterLike ? " dasti-proposal-sheet__body--letter" : ""}`
+                  : `dasti-proposal-sheet__body${isLetterLike ? " dasti-proposal-sheet__body--letter" : ""}`
+              }
+              data-scroll-top={activeScrollTop ? "true" : "false"}
+              data-scroll-bottom={activeScrollBottom ? "true" : "false"}
             >
               <textarea
+                ref={attachEditableScrollEdges}
                 value={proposalContent}
                 onChange={(event) => onContentChange?.(event.target.value)}
                 onBlur={onContentCommit}
@@ -342,14 +500,20 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                   outline: "none",
                   height: "100%",
                   resize: "none",
-                  paddingTop: isLetterLike ? "clamp(28px, 6vh, 52px)" : undefined,
-                  paddingBottom: "calc(var(--hs) + var(--s4))",
+                  paddingTop: isLetterLike
+                    ? "clamp(28px, 6vh, 52px)"
+                    : undefined,
+                  paddingBottom: "var(--proposal-sheet-content-bottom-inset)",
                 }}
               />
             </div>
           ) : (
             <div
-              className={hasDocumentHeader ? `dasti-proposal-sheet__body dasti-proposal-sheet__body--readonly dasti-proposal-sheet__body--with-header${isLetterLike ? " dasti-proposal-sheet__body--letter" : ""}` : `dasti-proposal-sheet__body dasti-proposal-sheet__body--readonly${isLetterLike ? " dasti-proposal-sheet__body--letter" : ""}`}
+              className={
+                shouldRenderDocumentHeader
+                  ? `dasti-proposal-sheet__body dasti-proposal-sheet__body--readonly dasti-proposal-sheet__body--with-header${isLetterLike ? " dasti-proposal-sheet__body--letter" : ""}`
+                  : `dasti-proposal-sheet__body dasti-proposal-sheet__body--readonly${isLetterLike ? " dasti-proposal-sheet__body--letter" : ""}`
+              }
               style={{
                 fontFamily: documentTypography.fontFamily,
                 fontSize: "var(--tb)",
@@ -372,13 +536,20 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                     ? "dasti-proposal-sheet__scroll dasti-proposal-sheet__scroll--letter"
                     : "dasti-proposal-sheet__scroll"
                 }
+                ref={attachPreviewScrollEdges}
               >
                 <div className="dasti-proposal-sheet__scroll-content">
-                  {isLetterLike ? <div className="dasti-proposal-letter-lead" aria-hidden /> : null}
                   {isLetterLike ? (
-                    <div className="max-w-none">{renderPlainLetterBody(proposalContent)}</div>
+                    <div className="dasti-proposal-letter-lead" aria-hidden />
+                  ) : null}
+                  {isLetterLike ? (
+                    <div className="max-w-none">
+                      {renderPlainLetterBody(proposalContent)}
+                    </div>
                   ) : (
-                    <div className="max-w-none">{renderPlainPreviewBody(proposalContent)}</div>
+                    <div className="max-w-none">
+                      {renderPlainPreviewBody(proposalContent)}
+                    </div>
                   )}
                 </div>
               </div>

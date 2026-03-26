@@ -3,39 +3,6 @@
    Les tokens dasti sont définis dans src/styles/globals.css
    ============================================================ */
 
-/* Custom Scrollbar Styles (global, hors composants) */
-::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--bm);
-  border-radius: var(--rp);
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--am);
-}
-
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--bm) transparent;
-}
-
-body {
-  margin: 0;
-  font-family: 'Source Sans 3', system-ui, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background-color: var(--bg);
-  color: var(--ti);
-}
-
 /* §13 Proposal text helpers — px fixes dasti */
 .proposal-h1 {
   font-size: var(--tx2); /* 32px */
@@ -52,10 +19,6 @@ body {
 .proposal-p {
   margin-bottom: var(--s2);
   line-height: var(--lb);
-}
-
-code {
-  font-family: 'IBM Plex Mono', source-code-pro, Menlo, Monaco, Consolas, monospace;
 }
 
 /* Radix Switch Styles */
@@ -84,11 +47,11 @@ code {
   cursor: not-allowed;
   opacity: 0.5;
 }
-.SwitchRoot[data-state='checked'] {
+.SwitchRoot[data-state="checked"] {
   --switch-track-background: var(--ac);
   --switch-track-border: var(--ac);
 }
-.SwitchRoot[data-state='checked'] .SwitchThumb {
+.SwitchRoot[data-state="checked"] .SwitchThumb {
   --switch-thumb-transform: translateX(24px);
 }
 
@@ -122,9 +85,17 @@ code {
 }
 
 /* Rich text editor list defaults */
-.rich-content ul { list-style: disc; padding-left: var(--s5); }
-.rich-content ol { list-style: decimal; padding-left: var(--s5); }
-.rich-content li { margin-left: var(--s1); }
+.rich-content ul {
+  list-style: disc;
+  padding-left: var(--s5);
+}
+.rich-content ol {
+  list-style: decimal;
+  padding-left: var(--s5);
+}
+.rich-content li {
+  margin-left: var(--s1);
+}
 
 /* Remirror tokens */
 :root {
@@ -145,9 +116,19 @@ code {
   margin: 0 0 var(--remirror-paragraph-margin-bottom) 0;
 }
 
-.rich-content ul { list-style: disc; padding-left: var(--remirror-list-indent); color: inherit; }
-.rich-content ol { list-style: decimal; padding-left: var(--remirror-list-indent); color: inherit; }
-.rich-content li::marker { color: var(--remirror-list-marker-color); }
+.rich-content ul {
+  list-style: disc;
+  padding-left: var(--remirror-list-indent);
+  color: inherit;
+}
+.rich-content ol {
+  list-style: decimal;
+  padding-left: var(--remirror-list-indent);
+  color: inherit;
+}
+.rich-content li::marker {
+  color: var(--remirror-list-marker-color);
+}
 
 .achievements-display--separated :is(ul, ol) > li + li {
   border-top: 1px solid var(--bo);

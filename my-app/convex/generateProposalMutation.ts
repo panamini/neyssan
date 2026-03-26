@@ -263,8 +263,7 @@ const FRENCH_SAFE_FREELANCE_FINAL_SENTENCE =
 
 const FINAL_SAVED_ALIGNMENT_TARGET_PATTERN =
   /\b(?:your\s+(?:need|needs|need\s+for|emphasis|responsibilit(?:y|ies)|goals?|mission|requirements?)|what\s+you(?:['’]re| are)\s+looking\s+for|the\s+(?:role|position|job|opportunity|requirements?|role\s+requirements|technical\s+requirements)|the\s+responsibilit(?:y|ies)(?:\s+you(?:['’]ve| have)\s+outlined)?|the\s+responsibilities\s+described|responsibilities\s+described|the\s+technical\s+and\s+collaborative\s+aspects\s+of\s+the\s+position|requirements?|responsibilit(?:y|ies)|need(?:s)?|need\s+for|opportunity)\b/i;
-const FINAL_SAVED_ALIGNMENT_SPLIT_PATTERN =
-  /\baligns?(?:\s+well)?\s+with\b/i;
+const FINAL_SAVED_ALIGNMENT_SPLIT_PATTERN = /\baligns?(?:\s+well)?\s+with\b/i;
 const FINAL_SAVED_REQUIRED_FOR_THIS_ROLE_ALIGNMENT_PATTERN =
   /\baligns?(?:\s+well)?\s+with\b[^.!?\n]{0,140}\brequired\s+for\s+this\s+role\b/i;
 const FINAL_SAVED_ALIGNMENT_CANDIDATE_SIDE_PATTERN =
@@ -579,7 +578,9 @@ class ProposalProviderTransportError extends Error {
         CONTROLLED_PROPOSAL_PROVIDER_TRANSPORT_ERROR_MESSAGE_PREFIX,
         `provider=${args.provider}`,
         `stage=${args.stage}`,
-        typeof args.statusCode === "number" ? `statusCode=${args.statusCode}` : null,
+        typeof args.statusCode === "number"
+          ? `statusCode=${args.statusCode}`
+          : null,
       ]
         .filter(Boolean)
         .join(" "),
@@ -784,9 +785,15 @@ function extractRetryAfterMsFromError(error: unknown): number | undefined {
     parseJsonRecord(getNestedRecordValue(error, "responseBody"));
   const bodyRetryAfterMs =
     parseRetryAfterMsValue(getNestedRecordValue(parsedBody, "retryAfterMs")) ??
-    parseRetryAfterMsValue(getNestedRecordValue(parsedBody, "retry_after_ms")) ??
-    parseRetryAfterSecondsOrDate(getNestedRecordValue(parsedBody, "retryAfter")) ??
-    parseRetryAfterSecondsOrDate(getNestedRecordValue(parsedBody, "retry_after"));
+    parseRetryAfterMsValue(
+      getNestedRecordValue(parsedBody, "retry_after_ms"),
+    ) ??
+    parseRetryAfterSecondsOrDate(
+      getNestedRecordValue(parsedBody, "retryAfter"),
+    ) ??
+    parseRetryAfterSecondsOrDate(
+      getNestedRecordValue(parsedBody, "retry_after"),
+    );
   if (typeof bodyRetryAfterMs === "number") return bodyRetryAfterMs;
 
   return undefined;
@@ -815,7 +822,9 @@ function isMistralRateLimitError(error: unknown): boolean {
 
   const directCode =
     getNestedRecordValue(error, "code") ?? getNestedRecordValue(error, "type");
-  return typeof directCode === "string" && /rate[_\s-]?limited/i.test(directCode);
+  return (
+    typeof directCode === "string" && /rate[_\s-]?limited/i.test(directCode)
+  );
 }
 
 function getMistralErrorSearchText(error: unknown): string {
@@ -923,8 +932,8 @@ function recordMistralDiagnosticFailure(args: {
   )
     ? "failed_busy"
     : getMistralProviderTransportError(args.error, args.stage)
-        ? "failed_transport"
-        : "failed_other";
+      ? "failed_transport"
+      : "failed_other";
   recordMistralDiagnosticCall({
     diagnostics: args.diagnostics,
     stage: args.stage,
@@ -1036,7 +1045,8 @@ const STRUCTURED_ROLLOUT_SOURCE_FACT_WARNING_PATTERNS = [
   },
   {
     code: "malformed_fragment",
-    pattern: /\b(?:which|that|who|while|because|although|though|and|but|or)\.$/i,
+    pattern:
+      /\b(?:which|that|who|while|because|although|though|and|but|or)\.$/i,
   },
   {
     code: "orphan_trait_tail",
@@ -1086,7 +1096,12 @@ export type ProposalFinalizationDebugTrace = {
   cleanedBodySelection: {
     aggressive: ProposalBodyCandidateDebugInfo;
     conservative: ProposalBodyCandidateDebugInfo;
-    selectedCandidate: "aggressive" | "conservative" | "rescued" | null;
+    selectedCandidate:
+      | "aggressive"
+      | "conservative"
+      | "rescued"
+      | "fail_open"
+      | null;
     selectedBody: string | null;
   };
   noContextLeadCleanup?: {
@@ -1213,9 +1228,7 @@ function filterApplicationMessageEvidenceItems(
         if (!compact) return [];
         return options?.splitSnippets ? splitIntoSnippets(compact) : [compact];
       })
-      .filter(
-        (item) => !isApplicationMessageRequirementStyleEvidence(item),
-      ),
+      .filter((item) => !isApplicationMessageRequirementStyleEvidence(item)),
   );
 }
 
@@ -1403,8 +1416,7 @@ const APPLICATION_MESSAGE_SIGNAL_WEAK_LEAD_PATTERN = [
   /\bwith a strong background in\b/i,
   /\bi(?:['’]m| am)\s+focused on\b/i,
 ] as const;
-const APPLICATION_MESSAGE_SIGNAL_VANITY_PATTERN =
-  /\blines?\s+of\s+code\b/i;
+const APPLICATION_MESSAGE_SIGNAL_VANITY_PATTERN = /\blines?\s+of\s+code\b/i;
 
 function normalizeApplicationMessageRankingTokens(value: string): string[] {
   return compactWhitespace(value)
@@ -1445,7 +1457,11 @@ function scoreApplicationMessageSignal(args: {
   if (APPLICATION_MESSAGE_SIGNAL_ACTION_PATTERN.test(text)) score += 12;
   if (APPLICATION_MESSAGE_SIGNAL_QUANTIFIED_PATTERN.test(text)) score += 8;
   if (APPLICATION_MESSAGE_SIGNAL_VANITY_PATTERN.test(text)) score -= 18;
-  if (APPLICATION_MESSAGE_SIGNAL_WEAK_LEAD_PATTERN.some((pattern) => pattern.test(text))) {
+  if (
+    APPLICATION_MESSAGE_SIGNAL_WEAK_LEAD_PATTERN.some((pattern) =>
+      pattern.test(text),
+    )
+  ) {
     score -= 20;
   }
   if (tokens.length < 4) score -= 6;
@@ -1463,11 +1479,9 @@ function rankApplicationMessageSignalItems(args: {
   );
   const jobTokens = new Set([
     ...jobTitleTokens,
-    ...(
-      priorityPack.priorityTokens.length > 0
-        ? priorityPack.priorityTokens
-        : normalizeApplicationMessageRankingTokens(args.jobDescription)
-    ),
+    ...(priorityPack.priorityTokens.length > 0
+      ? priorityPack.priorityTokens
+      : normalizeApplicationMessageRankingTokens(args.jobDescription)),
   ]);
 
   return args.items
@@ -1657,19 +1671,22 @@ function buildApplicationMessageCandidatePriorityBlock(args: {
         splitIntoSnippets(achievement),
       ),
       ...(context.recentExperience ?? []).flatMap((entry) =>
-        (entry.highlights ?? []).flatMap((highlight) => splitIntoSnippets(highlight)),
+        (entry.highlights ?? []).flatMap((highlight) =>
+          splitIntoSnippets(highlight),
+        ),
       ),
     ]),
     jobTitle: args.jobTitle,
     jobDescription: args.jobDescription,
   }).slice(0, 1);
 
-  const supportedScopeFromExperience = (context.recentExperience ?? []).map((entry) =>
-    compactWhitespace(
-      [entry.position, entry.company ? `at ${entry.company}` : ""]
-        .filter(Boolean)
-        .join(" "),
-    ),
+  const supportedScopeFromExperience = (context.recentExperience ?? []).map(
+    (entry) =>
+      compactWhitespace(
+        [entry.position, entry.company ? `at ${entry.company}` : ""]
+          .filter(Boolean)
+          .join(" "),
+      ),
   );
   const supportedBackgroundSnippets = context.summary
     ? splitIntoSnippets(context.summary)
@@ -1696,7 +1713,8 @@ function buildApplicationMessageCandidatePriorityBlock(args: {
       : [];
 
   const secondaryProfileSignalsSource =
-    strongestCandidateProof.length === 0 && supportedScopeOrBackground.length === 0
+    strongestCandidateProof.length === 0 &&
+    supportedScopeOrBackground.length === 0
       ? dedupe([context.desiredPosition, ...(context.topSkills ?? [])])
       : [];
   const secondaryProfileSignals = secondaryProfileSignalsSource
@@ -1956,8 +1974,11 @@ export async function buildStructuredProposalPlan(args: {
     const parsed =
       parsedResponse.choices?.[0]?.message &&
       typeof parsedResponse.choices[0].message === "object"
-        ? (parsedResponse.choices[0].message as { parsed?: ProposalPlannerResult })
-            .parsed
+        ? (
+            parsedResponse.choices[0].message as {
+              parsed?: ProposalPlannerResult;
+            }
+          ).parsed
         : undefined;
     if (parsed) {
       recordMistralDiagnosticCall({
@@ -1979,7 +2000,13 @@ export async function buildStructuredProposalPlan(args: {
     });
     throw new Error("Planner parse response did not contain parsed JSON");
   } catch (structuredError) {
-    if (!(structuredError instanceof Error && structuredError.message === "Planner parse response did not contain parsed JSON")) {
+    if (
+      !(
+        structuredError instanceof Error &&
+        structuredError.message ===
+          "Planner parse response did not contain parsed JSON"
+      )
+    ) {
       recordMistralDiagnosticFailure({
         diagnostics: args.diagnostics,
         stage: "planner_parse",
@@ -2067,9 +2094,11 @@ async function buildStructuredCoverLetterContentPlanWithMistral(args: {
     const parsed =
       parsedResponse.choices?.[0]?.message &&
       typeof parsedResponse.choices[0].message === "object"
-        ? (parsedResponse.choices[0].message as {
-            parsed?: StructuredCoverLetterContentPlan;
-          }).parsed
+        ? (
+            parsedResponse.choices[0].message as {
+              parsed?: StructuredCoverLetterContentPlan;
+            }
+          ).parsed
         : undefined;
     if (parsed) {
       recordMistralDiagnosticCall({
@@ -2089,9 +2118,17 @@ async function buildStructuredCoverLetterContentPlanWithMistral(args: {
       inputText: contentPlanPrompt,
       status: "failed_other",
     });
-    throw new Error("Structured cover letter content plan parse response did not contain parsed JSON");
+    throw new Error(
+      "Structured cover letter content plan parse response did not contain parsed JSON",
+    );
   } catch (structuredError) {
-    if (!(structuredError instanceof Error && structuredError.message === "Structured cover letter content plan parse response did not contain parsed JSON")) {
+    if (
+      !(
+        structuredError instanceof Error &&
+        structuredError.message ===
+          "Structured cover letter content plan parse response did not contain parsed JSON"
+      )
+    ) {
       recordMistralDiagnosticFailure({
         diagnostics: args.diagnostics,
         stage: "structured_plan_parse",
@@ -2351,7 +2388,9 @@ export function evaluateStructuredCoverLetterRolloutEligibility(args: {
     };
   }
 
-  const usableFacts = args.sourceFactBank.map((fact) => compactWhitespace(fact)).filter(Boolean);
+  const usableFacts = args.sourceFactBank
+    .map((fact) => compactWhitespace(fact))
+    .filter(Boolean);
   if (usableFacts.length === 0) {
     return {
       eligible: false,
@@ -2361,9 +2400,8 @@ export function evaluateStructuredCoverLetterRolloutEligibility(args: {
     };
   }
 
-  const sourceFactBankWarnings = getStructuredRolloutSourceFactBankWarnings(
-    usableFacts,
-  );
+  const sourceFactBankWarnings =
+    getStructuredRolloutSourceFactBankWarnings(usableFacts);
   if (sourceFactBankWarnings.length > 0) {
     return {
       eligible: false,
@@ -2383,7 +2421,9 @@ export function evaluateStructuredCoverLetterRolloutEligibility(args: {
 
 function mapPremiumCoverLetterEligibilityReason(
   reason:
-    | NonNullable<ReturnType<typeof evaluatePremiumCoverLetterEligibility>["reason"]>
+    | NonNullable<
+        ReturnType<typeof evaluatePremiumCoverLetterEligibility>["reason"]
+      >
     | "flag_disabled",
 ): StructuredCoverLetterRolloutFallbackReason {
   switch (reason) {
@@ -2609,7 +2649,10 @@ function getOutcomeClass(args: {
   ) {
     return "provider_transport_error";
   }
-  if (args.normalizedFailureCode !== null || args.finalOutcome === "fail_closed") {
+  if (
+    args.normalizedFailureCode !== null ||
+    args.finalOutcome === "fail_closed"
+  ) {
     return "other_controlled_failure";
   }
   if (args.finalOutcome === "not_saved") {
@@ -2642,10 +2685,11 @@ function getCounterfactualNextStructuredGate(args: {
 }):
   | Exclude<StructuredCoverLetterRolloutFallbackReason, "rollout_disabled">
   | "eligible" {
-  const counterfactualRolloutValue = resolveCounterfactualStructuredRolloutValue(
-    args.modelType,
-    args.resolvedStructuredRolloutMode,
-  );
+  const counterfactualRolloutValue =
+    resolveCounterfactualStructuredRolloutValue(
+      args.modelType,
+      args.resolvedStructuredRolloutMode,
+    );
   const counterfactualEligibility =
     evaluateStructuredCoverLetterRolloutEligibility({
       modelType: args.modelType,
@@ -2807,12 +2851,17 @@ function sanitizePlannerResultForStructuredCoverLetter(args: {
       plannerResult.transfer_mode !== "literal" ||
       plannerResult.proof_strategy !== "concrete_supported");
 
-  if (!requiresThemeTightening || plannerResult.allowed_transfer_themes.length === 0) {
+  if (
+    !requiresThemeTightening ||
+    plannerResult.allowed_transfer_themes.length === 0
+  ) {
     return plannerResult;
   }
 
   const concreteTokens = new Set(
-    extractStructuredPlannerTokens(plannerResult.allowed_concrete_facts.join(" ")),
+    extractStructuredPlannerTokens(
+      plannerResult.allowed_concrete_facts.join(" "),
+    ),
   );
   const jobTokens = new Set(
     extractStructuredPlannerTokens(`${args.jobTitle} ${args.jobDescription}`),
@@ -2894,30 +2943,50 @@ function assertStructuredCoverLetterTail(args: {
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
-  const salutation = policy.salutation ? compactWhitespace(policy.salutation) : null;
+  const salutation = policy.salutation
+    ? compactWhitespace(policy.salutation)
+    : null;
   const signOff = policy.signOff ? compactWhitespace(policy.signOff) : null;
   const candidateName = compactWhitespace(args.candidateName ?? "");
 
   if (!salutation || !signOff) {
-    throw new Error("Structured cover letter tail validation expected deterministic cover-letter boundaries.");
+    throw new Error(
+      "Structured cover letter tail validation expected deterministic cover-letter boundaries.",
+    );
   }
 
   if (compactWhitespace(nonEmptyLines[0] ?? "") !== salutation) {
-    throw new Error("Structured cover letter lost its deterministic salutation.");
+    throw new Error(
+      "Structured cover letter lost its deterministic salutation.",
+    );
   }
 
   if (candidateName) {
-    if (compactWhitespace(nonEmptyLines[nonEmptyLines.length - 1] ?? "") !== candidateName) {
-      throw new Error("Structured cover letter ended with text after the candidate name line.");
+    if (
+      compactWhitespace(nonEmptyLines[nonEmptyLines.length - 1] ?? "") !==
+      candidateName
+    ) {
+      throw new Error(
+        "Structured cover letter ended with text after the candidate name line.",
+      );
     }
-    if (compactWhitespace(nonEmptyLines[nonEmptyLines.length - 2] ?? "") !== signOff) {
-      throw new Error("Structured cover letter ended with text after the deterministic sign-off.");
+    if (
+      compactWhitespace(nonEmptyLines[nonEmptyLines.length - 2] ?? "") !==
+      signOff
+    ) {
+      throw new Error(
+        "Structured cover letter ended with text after the deterministic sign-off.",
+      );
     }
     return;
   }
 
-  if (compactWhitespace(nonEmptyLines[nonEmptyLines.length - 1] ?? "") !== signOff) {
-    throw new Error("Structured cover letter ended with text after the deterministic sign-off.");
+  if (
+    compactWhitespace(nonEmptyLines[nonEmptyLines.length - 1] ?? "") !== signOff
+  ) {
+    throw new Error(
+      "Structured cover letter ended with text after the deterministic sign-off.",
+    );
   }
 }
 
@@ -2954,9 +3023,7 @@ function appendOptionalPromptBlock(base: string, block: string): string {
   return block ? `${base}\n\n${block}` : base;
 }
 
-function formatQuotedPhraseList(
-  values: readonly string[],
-): string {
+function formatQuotedPhraseList(values: readonly string[]): string {
   return values.map((value) => `'${value}'`).join(", ");
 }
 
@@ -3071,7 +3138,10 @@ function sanitizePresetGuidanceForClaimSafety(guidance: string): string {
     )
     .replace(/\bteam contribution\b/gi, "team context")
     .replace(/\bfit explanation\b/gi, "relevance explanation")
-    .replace(/\bhow the candidate would help\b/gi, "how the candidate is interested")
+    .replace(
+      /\bhow the candidate would help\b/gi,
+      "how the candidate is interested",
+    )
     .replace(/\bauthoritative\b/gi, "disciplined");
 }
 
@@ -3558,8 +3628,9 @@ export async function attemptStructuredCoverLetterGeneration(
                 contentPlan,
                 jobTitle: args.jobTitle,
                 jobDescription: args.jobDescription,
-                failureReason:
-                  summarizeStructuredValidationError(lastBodyValidationError),
+                failureReason: summarizeStructuredValidationError(
+                  lastBodyValidationError,
+                ),
               }),
         diagnostics: args.diagnostics,
       });
@@ -3851,7 +3922,10 @@ function normalizeOutputFormat(
 }
 
 function compactParagraphSpacing(text: string): string {
-  return text.replace(/\r\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  return text
+    .replace(/\r\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function splitParagraphs(text: string): string[] {
@@ -3896,7 +3970,9 @@ function joinSentences(sentences: string[]): string {
 }
 
 function normalizeBoundaryLine(line: string): string {
-  return normalizeProposalConstraintText(line).replace(/[,:;.!?]+$/u, "").trim();
+  return normalizeProposalConstraintText(line)
+    .replace(/[,:;.!?]+$/u, "")
+    .trim();
 }
 
 function isWordCountMetaLine(line: string): boolean {
@@ -3920,7 +3996,9 @@ function isMetaOutputSentence(sentence: string): boolean {
 }
 
 function isPlaceholderSignatureLine(line: string): boolean {
-  return PLACEHOLDER_SIGNATURE_PATTERNS.some((pattern) => pattern.test(line.trim()));
+  return PLACEHOLDER_SIGNATURE_PATTERNS.some((pattern) =>
+    pattern.test(line.trim()),
+  );
 }
 
 function isSalutationLine(line: string): boolean {
@@ -4043,15 +4121,9 @@ function isApplicationMessageBoundaryLine(line: string): boolean {
   );
 }
 
-function isCandidateNameLine(
-  line: string,
-  candidateName?: string,
-): boolean {
+function isCandidateNameLine(line: string, candidateName?: string): boolean {
   if (!candidateName) return false;
-  return (
-    normalizeBoundaryLine(line) ===
-    normalizeBoundaryLine(candidateName)
-  );
+  return normalizeBoundaryLine(line) === normalizeBoundaryLine(candidateName);
 }
 
 function stripLeadingMetaOutput(text: string): string {
@@ -4093,7 +4165,9 @@ function sentenceLooksClosingTailFragment(sentence: string): boolean {
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
-  return normalized.length > 0 && normalized.every((line) => isClosingLine(line));
+  return (
+    normalized.length > 0 && normalized.every((line) => isClosingLine(line))
+  );
 }
 
 function stripStandaloneBoundaryLines(args: {
@@ -4164,8 +4238,7 @@ function isClosingDiscussionSentence(sentence: string): boolean {
   return (
     /\b(?:welcome|appreciate|value|look forward|opportunity|chance)\b/.test(
       normalized,
-    ) &&
-    /\b(?:discuss|exchange|speak|learn more)\b/.test(normalized)
+    ) && /\b(?:discuss|exchange|speak|learn more)\b/.test(normalized)
   );
 }
 
@@ -4212,8 +4285,7 @@ const LOW_VALUE_NO_CONTEXT_LEAD_PATTERNS = [
 ] as const;
 const NO_CONTEXT_SHELL_SENTENCE_PATTERN =
   /^the day-to-day work(?: itself)? is the part of the role that stands out to me most\.?$/i;
-const NO_CONTEXT_BARE_EMPHASIS_FRAGMENT_PATTERN =
-  /^the emphasis on\b/i;
+const NO_CONTEXT_BARE_EMPHASIS_FRAGMENT_PATTERN = /^the emphasis on\b/i;
 const NO_CONTEXT_ROLE_UNDERSTANDING_PATTERN =
   /\baligns?\s+with\s+my\s+understanding\s+of\b/i;
 const NO_CONTEXT_ALIGNMENT_COMMITMENT_PATTERN =
@@ -4288,8 +4360,7 @@ const COVER_LETTER_LOWERCASE_RESTART_PATTERN =
 
 const BARE_NOUN_PHRASE_TAIL_PATTERN =
   /^(?:[a-z]+(?:\s+[a-z]+){0,2})\s+(?:skills?|knowledge|expertise|experience|background|training|operations|monitoring|management)\.$/i;
-const TRUNCATED_ELLIPSIS_TAIL_PATTERN =
-  /\b[a-z]{1,8}(?:…\.{0,3}|\.{3,})$/i;
+const TRUNCATED_ELLIPSIS_TAIL_PATTERN = /\b[a-z]{1,8}(?:…\.{0,3}|\.{3,})$/i;
 
 const NUMERIC_RESIDUE_PATTERNS = [
   /^\d+\s+(?:month|months|year|years)\s+work experience\b/i,
@@ -4518,10 +4589,7 @@ function sentenceHasGroundedWorkSurfaceDetail(sentence: string): boolean {
     return false;
   }
   const factTokens = extractSentenceFactTokens(sentence);
-  return (
-    factTokens.length >= 5 &&
-    WORK_SURFACE_DETAIL_PATTERN.test(normalized)
-  );
+  return factTokens.length >= 5 && WORK_SURFACE_DETAIL_PATTERN.test(normalized);
 }
 
 function sentenceLooksSaveableWorkSurfaceSentence(sentence: string): boolean {
@@ -4593,7 +4661,9 @@ function countNoContextGroundedOperationalSentences(
 ): number {
   const groundedRoleSummaryIndices = new Set(
     sentences.flatMap((sentence, index) =>
-      sentenceLooksGroundedNoContextRoleSummarySentence(sentence) ? [index] : [],
+      sentenceLooksGroundedNoContextRoleSummarySentence(sentence)
+        ? [index]
+        : [],
     ),
   );
   const groundedSentenceIndices = new Set(
@@ -4692,7 +4762,10 @@ function sentenceLooksMalformedFragment(sentence: string): boolean {
 function sentenceLooksGenericBodyOnly(sentence: string): boolean {
   const normalized = compactWhitespace(sentence);
   if (!normalized) return true;
-  if (isMetaOutputSentence(normalized) || isClosingDiscussionSentence(normalized)) {
+  if (
+    isMetaOutputSentence(normalized) ||
+    isClosingDiscussionSentence(normalized)
+  ) {
     return true;
   }
   if (sentenceLooksWeakAdmirationOrCapability(normalized)) {
@@ -4722,13 +4795,17 @@ function sentenceLooksApplicationMessageBoilerplate(sentence: string): boolean {
   );
 }
 
-function stripStructuredApplicationMessageLabelPrefix(sentence: string): string {
+function stripStructuredApplicationMessageLabelPrefix(
+  sentence: string,
+): string {
   return compactWhitespace(
     sentence.replace(/^(?:opener|proof_line|follow_up_line):\s*/i, ""),
   );
 }
 
-function sentenceLooksApplicationMessageFollowUpOnly(sentence: string): boolean {
+function sentenceLooksApplicationMessageFollowUpOnly(
+  sentence: string,
+): boolean {
   const normalized = stripStructuredApplicationMessageLabelPrefix(sentence);
   if (!normalized) return false;
   return APPLICATION_MESSAGE_FOLLOW_UP_ONLY_PATTERNS.some((pattern) =>
@@ -4736,7 +4813,9 @@ function sentenceLooksApplicationMessageFollowUpOnly(sentence: string): boolean 
   );
 }
 
-function sentenceLooksApplicationMessageSubstantiveFact(sentence: string): boolean {
+function sentenceLooksApplicationMessageSubstantiveFact(
+  sentence: string,
+): boolean {
   const normalized = stripStructuredApplicationMessageLabelPrefix(sentence);
   if (!normalized || sentenceLooksApplicationMessageBoilerplate(normalized)) {
     return false;
@@ -4752,7 +4831,9 @@ function sentenceLooksApplicationMessageSubstantiveFact(sentence: string): boole
   );
 }
 
-function sentenceLooksApplicationMessageResumeSummary(sentence: string): boolean {
+function sentenceLooksApplicationMessageResumeSummary(
+  sentence: string,
+): boolean {
   const normalized = stripStructuredApplicationMessageLabelPrefix(sentence);
   if (!normalized) return false;
   return APPLICATION_MESSAGE_RESUME_SUMMARY_PATTERNS.some((pattern) =>
@@ -4814,7 +4895,9 @@ function sentenceLooksApplicationMessageWeakExperienceLead(
   );
 }
 
-function sentenceLooksApplicationMessageOpenerAsProof(sentence: string): boolean {
+function sentenceLooksApplicationMessageOpenerAsProof(
+  sentence: string,
+): boolean {
   const normalized = stripStructuredApplicationMessageLabelPrefix(sentence);
   if (!normalized) return false;
   return (
@@ -4830,7 +4913,9 @@ function sentenceLooksApplicationMessageOpenerAsProof(sentence: string): boolean
   );
 }
 
-function sentenceLooksApplicationMessageInvalidOpener(sentence: string): boolean {
+function sentenceLooksApplicationMessageInvalidOpener(
+  sentence: string,
+): boolean {
   const normalized = stripStructuredApplicationMessageLabelPrefix(sentence);
   if (!normalized) return true;
   return (
@@ -4910,7 +4995,10 @@ function collectApplicationMessageRejectionReasonTags(args: {
     reasons.add("requirement_echo_proof");
   }
 
-  if (proofLine && sentenceLooksApplicationMessageWeakExperienceLead(proofLine)) {
+  if (
+    proofLine &&
+    sentenceLooksApplicationMessageWeakExperienceLead(proofLine)
+  ) {
     reasons.add("previous_role_proof");
   }
 
@@ -5033,7 +5121,10 @@ function applicationMessageViolatesSemanticContract(args: {
     }
   }
 
-  if (followUpLine && sentenceLooksApplicationMessageInvalidFollowUp(followUpLine)) {
+  if (
+    followUpLine &&
+    sentenceLooksApplicationMessageInvalidFollowUp(followUpLine)
+  ) {
     return true;
   }
 
@@ -5118,7 +5209,11 @@ function sentenceLooksLowValueNoContextLead(sentence: string): boolean {
   if (!normalized || sentenceLooksNumericResidue(normalized)) {
     return false;
   }
-  if (LOW_VALUE_NO_CONTEXT_LEAD_PATTERNS.some((pattern) => pattern.test(normalized))) {
+  if (
+    LOW_VALUE_NO_CONTEXT_LEAD_PATTERNS.some((pattern) =>
+      pattern.test(normalized),
+    )
+  ) {
     return true;
   }
   if (sentenceLooksGenericBodyOnly(normalized)) {
@@ -5174,7 +5269,8 @@ function buildStandaloneNoContextSentenceFromFragment(
       ? ensureTerminalSentence(capitalizeSentenceStart(cleaned))
       : null);
 
-  return candidate && compactWhitespace(candidate) !== compactWhitespace(fragment)
+  return candidate &&
+    compactWhitespace(candidate) !== compactWhitespace(fragment)
     ? candidate
     : null;
 }
@@ -5197,12 +5293,10 @@ function buildGenericNoContextSentenceFromFragment(
   return ensureTerminalSentence(capitalizeSentenceStart(cleaned));
 }
 
-function getNoContextEarlyBodySentenceCleanup(sentence: string):
-  | {
-      mode: "remove" | "neutralize";
-      replacement: string;
-    }
-  | null {
+function getNoContextEarlyBodySentenceCleanup(sentence: string): {
+  mode: "remove" | "neutralize";
+  replacement: string;
+} | null {
   const normalized = compactWhitespace(sentence);
   if (!normalized) return null;
 
@@ -5227,7 +5321,9 @@ function getNoContextEarlyBodySentenceCleanup(sentence: string):
     );
   };
 
-  const neutralizeGroundedNoContextPrefix = (pattern: RegExp): string | null => {
+  const neutralizeGroundedNoContextPrefix = (
+    pattern: RegExp,
+  ): string | null => {
     const match = pattern.exec(normalized);
     if (!match || match.index === undefined || match.index <= 0) {
       return null;
@@ -5396,43 +5492,45 @@ function cleanProposalBodyText(args: {
         )
         .join(" ");
 
-      const cleanedSentences = splitSentences(paragraphText).filter((sentence) => {
-        const normalized = normalizeProposalConstraintText(sentence);
-        if (!normalized) return false;
-        if (isMetaOutputSentence(normalized)) return false;
-        if (sentenceLooksMalformedFragment(sentence)) return false;
-        if (sentenceLooksClosingTailFragment(sentence)) return false;
-        if (
-          args.format === "application_message" &&
-          sentenceLooksApplicationMessageBoilerplate(sentence)
-        ) {
-          return false;
-        }
-        if (
-          args.format === "cover_letter" &&
-          sentenceLooksUnsupportedRequirementLeakage(sentence)
-        ) {
-          return false;
-        }
-        const sentenceFactTokens = extractSentenceFactTokens(sentence);
-        if (args.dropDuplicateSentences && seenSentences.has(normalized)) {
-          return false;
-        }
-        if (
-          args.dropDuplicateSentences &&
-          sentenceFactTokens.length > 0 &&
-          seenFactTokenSets.some((seenTokens) =>
-            sentencesShareUnderlyingFact(sentenceFactTokens, seenTokens),
-          )
-        ) {
-          return false;
-        }
-        seenSentences.add(normalized);
-        if (sentenceFactTokens.length > 0) {
-          seenFactTokenSets.push(sentenceFactTokens);
-        }
-        return true;
-      });
+      const cleanedSentences = splitSentences(paragraphText).filter(
+        (sentence) => {
+          const normalized = normalizeProposalConstraintText(sentence);
+          if (!normalized) return false;
+          if (isMetaOutputSentence(normalized)) return false;
+          if (sentenceLooksMalformedFragment(sentence)) return false;
+          if (sentenceLooksClosingTailFragment(sentence)) return false;
+          if (
+            args.format === "application_message" &&
+            sentenceLooksApplicationMessageBoilerplate(sentence)
+          ) {
+            return false;
+          }
+          if (
+            args.format === "cover_letter" &&
+            sentenceLooksUnsupportedRequirementLeakage(sentence)
+          ) {
+            return false;
+          }
+          const sentenceFactTokens = extractSentenceFactTokens(sentence);
+          if (args.dropDuplicateSentences && seenSentences.has(normalized)) {
+            return false;
+          }
+          if (
+            args.dropDuplicateSentences &&
+            sentenceFactTokens.length > 0 &&
+            seenFactTokenSets.some((seenTokens) =>
+              sentencesShareUnderlyingFact(sentenceFactTokens, seenTokens),
+            )
+          ) {
+            return false;
+          }
+          seenSentences.add(normalized);
+          if (sentenceFactTokens.length > 0) {
+            seenFactTokenSets.push(sentenceFactTokens);
+          }
+          return true;
+        },
+      );
 
       return joinSentences(cleanedSentences);
     })
@@ -5465,12 +5563,14 @@ function hasSubstantiveBodyContent(args: {
   }
 
   if (args.format === "application_message") {
-    const violatesSemanticContract = applicationMessageViolatesSemanticContract({
-      opener: sentences[0] ?? "",
-      proofLine: sentences[1] ?? "",
-      followUpLine: sentences[2] ?? "",
-      noContextMode: Boolean(args.noContextMode),
-    });
+    const violatesSemanticContract = applicationMessageViolatesSemanticContract(
+      {
+        opener: sentences[0] ?? "",
+        proofLine: sentences[1] ?? "",
+        followUpLine: sentences[2] ?? "",
+        noContextMode: Boolean(args.noContextMode),
+      },
+    );
 
     if (
       violatesSemanticContract &&
@@ -5519,8 +5619,7 @@ const FINAL_SAVED_APPLY_THESE_SKILLS_PATTERN =
   /\bpresents?\s+an\s+opportunity\s+to\s+apply\s+these\s+skills\b/i;
 const FINAL_SAVED_MAY_APPLY_TO_THIS_POSITION_PATTERN =
   /\bmay\s+apply\s+to\s+this\s+position\b/i;
-const FINAL_SAVED_MAY_ASSIST_IN_PATTERN =
-  /\bmay\s+assist\s+in\b/i;
+const FINAL_SAVED_MAY_ASSIST_IN_PATTERN = /\bmay\s+assist\s+in\b/i;
 const COVER_LETTER_UNSUPPORTED_DURATION_CLAIM_PATTERN =
   /^i(?:['’]ve| have)\s+spent\s+years\b/i;
 const COVER_LETTER_UNSUPPORTED_AVAILABILITY_CLAIM_PATTERN =
@@ -5761,8 +5860,9 @@ function getCoverLetterSentenceDebugCounts(args: {
       saveableSentenceCount: args.saveableSentences.length,
       groundedOperationalSentenceCount:
         countNoContextGroundedOperationalSentences(args.saveableSentences),
-      groundedSupportSentenceCount:
-        countNoContextGroundedSupportSentences(args.saveableSentences),
+      groundedSupportSentenceCount: countNoContextGroundedSupportSentences(
+        args.saveableSentences,
+      ),
     };
   }
 
@@ -5808,8 +5908,7 @@ function getProposalBodyCandidateDebugInfo(args: {
     saveableSentenceCount: sentenceCounts.saveableSentenceCount,
     groundedOperationalSentenceCount:
       sentenceCounts.groundedOperationalSentenceCount,
-    groundedSupportSentenceCount:
-      sentenceCounts.groundedSupportSentenceCount,
+    groundedSupportSentenceCount: sentenceCounts.groundedSupportSentenceCount,
     isSaveable: hasSaveableBodyContent({
       body: args.candidate,
       format: args.format,
@@ -5857,19 +5956,19 @@ function buildNarrowCvBackedGroundedRescueBodyCandidate(
     return null;
   }
 
-  const groundedOperationalSentences = getGroundedOperationalCoverLetterSentences(
-    {
+  const groundedOperationalSentences =
+    getGroundedOperationalCoverLetterSentences({
       sentences: saveableSentences,
       noContextMode: false,
-    },
-  );
+    });
   if (groundedOperationalSentences.length < 2) {
     return null;
   }
 
-  const candidateBackedGroundedSentenceCount = groundedOperationalSentences.filter(
-    sentenceLooksCandidateBackedCvGroundedSentence,
-  ).length;
+  const candidateBackedGroundedSentenceCount =
+    groundedOperationalSentences.filter(
+      sentenceLooksCandidateBackedCvGroundedSentence,
+    ).length;
   if (candidateBackedGroundedSentenceCount < 2) {
     return null;
   }
@@ -5923,7 +6022,9 @@ function sentenceLooksModestNoContextRoleWorkContextSentence(
   );
 }
 
-function getNarrowNoContextGroundedFinalizationSentences(body: string): string[] {
+function getNarrowNoContextGroundedFinalizationSentences(
+  body: string,
+): string[] {
   return splitParagraphs(body)
     .flatMap((paragraph) => splitSentences(paragraph))
     .map((sentence) => normalizeNoContextSentenceForSaveability(sentence))
@@ -5947,7 +6048,8 @@ function getNarrowNoContextGroundedFinalizationSentences(body: string): string[]
 }
 
 function hasNarrowNoContextGroundedFinalizationContent(body: string): boolean {
-  const groundedSentences = getNarrowNoContextGroundedFinalizationSentences(body);
+  const groundedSentences =
+    getNarrowNoContextGroundedFinalizationSentences(body);
   if (groundedSentences.length < 2) {
     return false;
   }
@@ -5981,7 +6083,6 @@ function buildRawCvBackedGroundedRescueBodyFromContent(args: {
   const withoutBoundaries = stripStandaloneBoundaryLines({
     content: extracted,
     candidateName: args.candidateName,
-    format: args.format,
   });
   const withoutMeta = stripLeadingMetaOutput(withoutBoundaries);
   const disciplineNormalized = normalizeCoverLetterBodyDiscipline(withoutMeta);
@@ -6339,7 +6440,9 @@ function cleanupNoContextEarlyBodySentences(args: {
       cleanup.replacement;
     nextParagraphSentences[location.paragraphIndex] =
       nextParagraphSentences[location.paragraphIndex]!.filter(Boolean);
-    const cleanedBody = rebuildNoContextParagraphSentences(nextParagraphSentences);
+    const cleanedBody = rebuildNoContextParagraphSentences(
+      nextParagraphSentences,
+    );
     if (
       !cleanedBody ||
       (!hasSaveableBodyContent({
@@ -6356,7 +6459,11 @@ function cleanupNoContextEarlyBodySentences(args: {
       continue;
     }
 
-    paragraphSentences.splice(0, paragraphSentences.length, ...nextParagraphSentences);
+    paragraphSentences.splice(
+      0,
+      paragraphSentences.length,
+      ...nextParagraphSentences,
+    );
     if (cleanup.mode === "remove") {
       removedSentences.push(location.sentence);
     } else {
@@ -6520,6 +6627,78 @@ function buildProposalBodyCandidate(args: {
   return stripTrailingClosingDiscussion(cleanedAfterBridgeRemoval);
 }
 
+function buildFailOpenCoverLetterBodyCandidateFromContent(args: {
+  content: string;
+  outputLanguage: ProposalOutputLanguage;
+  candidateName?: string;
+}): string {
+  const extracted = extractFinalProposalContent({
+    content: args.content,
+    format: "cover_letter",
+    outputLanguage: args.outputLanguage,
+    candidateName: args.candidateName,
+  });
+  const withoutBoundaries = stripStandaloneBoundaryLines({
+    content: extracted,
+    candidateName: args.candidateName,
+  });
+  const withoutMeta = stripLeadingMetaOutput(withoutBoundaries);
+  const paragraphs = splitParagraphs(withoutMeta)
+    .map((paragraph) =>
+      joinSentences(
+        splitSentences(paragraph)
+          .map((sentence) => normalizeCoverLetterSentenceDiscipline(sentence))
+          .map((sentence) => compactWhitespace(sentence))
+          .filter(Boolean)
+          .filter(
+            (sentence) =>
+              !isMetaOutputSentence(sentence) &&
+              !isSalutationLine(sentence) &&
+              !isClosingLine(sentence),
+          )
+          .map((sentence) => ensureTerminalSentence(sentence)),
+      ),
+    )
+    .filter(Boolean);
+
+  const candidate = stripTrailingClosingDiscussion(paragraphs.join("\n\n"));
+  if (candidate) {
+    return candidate;
+  }
+
+  return stripTrailingClosingDiscussion(compactWhitespace(withoutMeta));
+}
+
+function buildFailOpenCoverLetterOutput(args: {
+  content: string;
+  outputLanguage: ProposalOutputLanguage;
+  candidateName?: string;
+  voicePreset: ProposalVoicePreset;
+  noContextMode: boolean;
+}): string | null {
+  const body = buildFailOpenCoverLetterBodyCandidateFromContent({
+    content: args.content,
+    outputLanguage: args.outputLanguage,
+    candidateName: args.candidateName,
+  });
+  if (!body) {
+    return null;
+  }
+
+  try {
+    return applyDeterministicProposalBoundaries({
+      body,
+      format: "cover_letter",
+      outputLanguage: args.outputLanguage,
+      candidateName: args.candidateName,
+      voicePreset: args.voicePreset,
+      noContextMode: args.noContextMode,
+    });
+  } catch {
+    return body;
+  }
+}
+
 function selectProposalBodyCandidateOrThrow(args: {
   content: string;
   format: OutputFormat;
@@ -6572,10 +6751,7 @@ function selectProposalBodyCandidateOrThrow(args: {
     };
   }
 
-  if (
-    aggressiveCandidate &&
-    aggressiveInfo.isSaveable
-  ) {
+  if (aggressiveCandidate && aggressiveInfo.isSaveable) {
     if (args.debugTrace) {
       args.debugTrace.cleanedBodySelection.selectedCandidate = "aggressive";
       args.debugTrace.cleanedBodySelection.selectedBody = aggressiveCandidate;
@@ -6583,10 +6759,7 @@ function selectProposalBodyCandidateOrThrow(args: {
     return aggressiveCandidate;
   }
 
-  if (
-    conservativeCandidate &&
-    conservativeInfo.isSaveable
-  ) {
+  if (conservativeCandidate && conservativeInfo.isSaveable) {
     if (args.debugTrace) {
       args.debugTrace.cleanedBodySelection.selectedCandidate = "conservative";
       args.debugTrace.cleanedBodySelection.selectedBody = conservativeCandidate;
@@ -6610,6 +6783,19 @@ function selectProposalBodyCandidateOrThrow(args: {
         args.debugTrace.cleanedBodySelection.selectedBody = rescuedCandidate;
       }
       return rescuedCandidate;
+    }
+
+    const failOpenCandidate = buildFailOpenCoverLetterBodyCandidateFromContent({
+      content: args.content,
+      outputLanguage: args.outputLanguage,
+      candidateName: args.candidateName,
+    });
+    if (failOpenCandidate) {
+      if (args.debugTrace) {
+        args.debugTrace.cleanedBodySelection.selectedCandidate = "fail_open";
+        args.debugTrace.cleanedBodySelection.selectedBody = failOpenCandidate;
+      }
+      return failOpenCandidate;
     }
   }
 
@@ -6706,7 +6892,10 @@ function assertSavedOutputHasSubstantiveBody(args: {
         passed: false,
       };
     }
-    markProposalFinalizationFailure(args.debugTrace, "substantive_body_assertion");
+    markProposalFinalizationFailure(
+      args.debugTrace,
+      "substantive_body_assertion",
+    );
     throw new ProposalFinalizationError(
       `Final saved output for ${args.format} does not contain substantive body content.`,
     );
@@ -6897,7 +7086,9 @@ function buildStandaloneCoverLetterGroundedSentenceFromFragment(
 
   const groundedCandidates = [
     (() => {
-      const match = cleaned.match(/^The\s+(?:combination|mix|blend)\s+of\s+(.+)$/i);
+      const match = cleaned.match(
+        /^The\s+(?:combination|mix|blend)\s+of\s+(.+)$/i,
+      );
       if (!match) return null;
       return `The role involves ${match[1]}`;
     })(),
@@ -6963,12 +7154,10 @@ function extractCandidateFragmentFromAlignmentSentence(
   const right = compactWhitespace(match[2]);
   if (!left || !right) return null;
 
-  const leftIsCandidate = FINAL_SAVED_ALIGNMENT_CANDIDATE_SIDE_PATTERN.test(
-    left,
-  );
-  const rightIsCandidate = FINAL_SAVED_ALIGNMENT_CANDIDATE_SIDE_PATTERN.test(
-    right,
-  );
+  const leftIsCandidate =
+    FINAL_SAVED_ALIGNMENT_CANDIDATE_SIDE_PATTERN.test(left);
+  const rightIsCandidate =
+    FINAL_SAVED_ALIGNMENT_CANDIDATE_SIDE_PATTERN.test(right);
 
   if (
     leftIsCandidate &&
@@ -7049,7 +7238,8 @@ function isFinalSavedOutputSoftBridgeSentence(sentence: string): boolean {
   if (hasFinalSavedOutputAlignmentBridge(normalized)) return true;
   if (FINAL_SAVED_COULD_TEAM_VALUE_PATTERN.test(normalized)) return true;
   if (FINAL_SAVED_APPLY_THESE_SKILLS_PATTERN.test(normalized)) return true;
-  if (FINAL_SAVED_MAY_APPLY_TO_THIS_POSITION_PATTERN.test(normalized)) return true;
+  if (FINAL_SAVED_MAY_APPLY_TO_THIS_POSITION_PATTERN.test(normalized))
+    return true;
   if (FINAL_SAVED_MAY_ASSIST_IN_PATTERN.test(normalized)) return true;
   if (sentenceLooksUnsupportedRequirementLeakage(normalized)) return true;
   return false;
@@ -7352,8 +7542,10 @@ export function applyFinalSavedOutputBridgeGuard(args: {
           continue;
         }
 
-        const neutralizedSentence =
-          neutralizeFinalSavedOutputBridgeSentence(sentence, args.format);
+        const neutralizedSentence = neutralizeFinalSavedOutputBridgeSentence(
+          sentence,
+          args.format,
+        );
         if (neutralizedSentence) {
           filteredSentences.push(neutralizedSentence);
           previousSentenceRemoved = false;
@@ -7445,7 +7637,9 @@ function tryRescueStructuredApplicationMessage(args: {
     !args.opener ||
     sentenceLooksApplicationMessageInvalidOpener(args.opener) ||
     (args.noContextMode &&
-      (sentenceLooksApplicationMessageNoContextAbstractAttraction(args.opener) ||
+      (sentenceLooksApplicationMessageNoContextAbstractAttraction(
+        args.opener,
+      ) ||
         sentenceLooksApplicationMessageNoContextUnsupportedExperienceClaim(
           args.opener,
         )));
@@ -7566,10 +7760,7 @@ export function finalizeProposalForSave(args: {
   acceptanceMode?: ProposalBodyAcceptanceMode;
   debugTrace?: ProposalFinalizationDebugTrace;
 }): string {
-  if (
-    args.format !== "cover_letter" &&
-    args.format !== "application_message"
-  ) {
+  if (args.format !== "cover_letter" && args.format !== "application_message") {
     return args.content;
   }
 
@@ -7602,12 +7793,12 @@ export function finalizeProposalForSave(args: {
     args.format === "application_message"
       ? normalizeApplicationMessageBodyForRendering(selectedBody)
       : args.format === "cover_letter" && args.noContextMode
-      ? cleanupNoContextEarlyBodySentences({
-          body: selectedBody,
-          acceptanceMode,
-          debugTrace: args.debugTrace,
-        })
-      : selectedBody;
+        ? cleanupNoContextEarlyBodySentences({
+            body: selectedBody,
+            acceptanceMode,
+            debugTrace: args.debugTrace,
+          })
+        : selectedBody;
 
   try {
     const rendered = applyDeterministicProposalBoundaries({
@@ -7657,7 +7848,7 @@ export function finalizeProposalForPersistence(args: {
       acceptanceMode,
       debugTrace: args.debugTrace,
     });
-  const guardedFreelanceBody = applyFinalSavedOutputBridgeGuard({
+    const guardedFreelanceBody = applyFinalSavedOutputBridgeGuard({
       content: cleanedFreelanceBody,
       format: args.format,
       outputLanguage: args.outputLanguage,
@@ -7700,6 +7891,7 @@ export function finalizeProposalForPersistence(args: {
     format: args.format,
     outputLanguage: args.outputLanguage,
   });
+  let usedFailOpenPersistenceFallback = false;
   if (args.format === "cover_letter") {
     const guardedBody = sanitizeGeneratedProposalBody({
       content: guarded,
@@ -7756,7 +7948,97 @@ export function finalizeProposalForPersistence(args: {
         });
       }
     }
+
+    const guardedBodyAfterRescue = sanitizeGeneratedProposalBody({
+      content: guarded,
+      format: args.format,
+      outputLanguage: args.outputLanguage,
+      candidateName: args.candidateName,
+    });
+    if (
+      !hasSaveableBodyContent({
+        body: guardedBodyAfterRescue,
+        format: args.format,
+        noContextMode: args.noContextMode,
+        acceptanceMode,
+      })
+    ) {
+      const failOpenOutput =
+        buildFailOpenCoverLetterOutput({
+          content: guarded,
+          outputLanguage: args.outputLanguage,
+          candidateName: args.candidateName,
+          voicePreset: args.voicePreset,
+          noContextMode: args.noContextMode,
+        }) ??
+        buildFailOpenCoverLetterOutput({
+          content: finalized,
+          outputLanguage: args.outputLanguage,
+          candidateName: args.candidateName,
+          voicePreset: args.voicePreset,
+          noContextMode: args.noContextMode,
+        });
+      if (failOpenOutput) {
+        guarded = failOpenOutput;
+        usedFailOpenPersistenceFallback = true;
+      }
+    }
   }
+
+  if (args.format === "cover_letter" && !usedFailOpenPersistenceFallback) {
+    try {
+      assertFinalBridgeCleanupDidNotCollapseCoverLetterBody({
+        before: finalized,
+        after: guarded,
+        format: args.format,
+        outputLanguage: args.outputLanguage,
+        candidateName: args.candidateName,
+        noContextMode: args.noContextMode,
+        debugTrace: args.debugTrace,
+      });
+      assertSavedOutputHasSubstantiveBody({
+        content: guarded,
+        format: args.format,
+        outputLanguage: args.outputLanguage,
+        candidateName: args.candidateName,
+        noContextMode: args.noContextMode,
+        acceptanceMode,
+        debugTrace: args.debugTrace,
+      });
+    } catch (error) {
+      const failOpenOutput =
+        buildFailOpenCoverLetterOutput({
+          content: guarded,
+          outputLanguage: args.outputLanguage,
+          candidateName: args.candidateName,
+          voicePreset: args.voicePreset,
+          noContextMode: args.noContextMode,
+        }) ??
+        buildFailOpenCoverLetterOutput({
+          content: finalized,
+          outputLanguage: args.outputLanguage,
+          candidateName: args.candidateName,
+          voicePreset: args.voicePreset,
+          noContextMode: args.noContextMode,
+        });
+      if (!failOpenOutput) {
+        throw error;
+      }
+      guarded = failOpenOutput;
+      usedFailOpenPersistenceFallback = true;
+    }
+  } else if (args.format !== "cover_letter") {
+    assertSavedOutputHasSubstantiveBody({
+      content: guarded,
+      format: args.format,
+      outputLanguage: args.outputLanguage,
+      candidateName: args.candidateName,
+      noContextMode: args.noContextMode,
+      acceptanceMode,
+      debugTrace: args.debugTrace,
+    });
+  }
+
   if (args.debugTrace) {
     const cleanupDiagnostics = getFinalSavedOutputBridgeCleanupDebugInfo({
       before: finalized,
@@ -7774,24 +8056,6 @@ export function finalizeProposalForPersistence(args: {
         cleanupDiagnostics.removedLastGroundedSentence,
     };
   }
-  assertFinalBridgeCleanupDidNotCollapseCoverLetterBody({
-    before: finalized,
-    after: guarded,
-    format: args.format,
-    outputLanguage: args.outputLanguage,
-    candidateName: args.candidateName,
-    noContextMode: args.noContextMode,
-    debugTrace: args.debugTrace,
-  });
-  assertSavedOutputHasSubstantiveBody({
-    content: guarded,
-    format: args.format,
-    outputLanguage: args.outputLanguage,
-    candidateName: args.candidateName,
-    noContextMode: args.noContextMode,
-    acceptanceMode,
-    debugTrace: args.debugTrace,
-  });
   if (args.debugTrace) {
     args.debugTrace.finalOutput = guarded;
   }
@@ -7840,8 +8104,7 @@ export function inspectProposalFinalization(args: {
       debugTrace: trace,
     });
   } catch (error) {
-    trace.errorMessage =
-      error instanceof Error ? error.message : String(error);
+    trace.errorMessage = error instanceof Error ? error.message : String(error);
   }
 
   if (
@@ -7943,9 +8206,8 @@ export function buildInlineMistralPrompt(
     format === "application_message"
       ? buildApplicationMessageEmployerPriorityBlock(args.jobDescription)
       : "";
-  const safePresetGuidance = sanitizePresetGuidanceForClaimSafety(
-    presetGuidance,
-  );
+  const safePresetGuidance =
+    sanitizePresetGuidanceForClaimSafety(presetGuidance);
   const applicationMessageWriterBrief =
     format === "application_message"
       ? buildApplicationMessageWriterBriefBlock({
@@ -8333,8 +8595,7 @@ export async function handleGenerateProposal(
         (userProfile as ProfileFallbackDoc | null)?.proposalVoicePreset,
       proposalType: args.proposalType,
       modelType: requestedModelType,
-    }) ??
-    DEFAULT_PROPOSAL_VOICE_PRESET;
+    }) ?? DEFAULT_PROPOSAL_VOICE_PRESET;
   const voicePresetDefinition =
     getProposalVoicePresetDefinition(resolvedVoicePreset);
   const effectiveTone = resolveEffectiveProposalTone({
@@ -8400,7 +8661,9 @@ export async function handleGenerateProposal(
     personalizationBlock,
     effectivePromptRichness,
     noContextPromptBlock,
-    plannerResult ? buildProposalWriterPlanBlock(plannerResult, outputFormat) : "",
+    plannerResult
+      ? buildProposalWriterPlanBlock(plannerResult, outputFormat)
+      : "",
   );
   const enrichedJobDescription = appendOptionalPromptBlock(
     args.jobDescription,
@@ -8443,17 +8706,17 @@ export async function handleGenerateProposal(
   const shouldBypassPlannerForNoContextLegacyCoverLetter =
     outputFormat === "cover_letter" &&
     !structuredRolloutEligibility.eligible &&
-    structuredRolloutEligibility.fallbackReason ===
-      "missing_candidate_context";
+    structuredRolloutEligibility.fallbackReason === "missing_candidate_context";
   const shouldBypassPlannerForCvBackedLegacyCoverLetter =
     outputFormat === "cover_letter" &&
     hasCandidateContext &&
     structuredRolloutEligibility.eligible;
   const structuredCoverLetterEnabled = structuredRolloutEligibility.eligible;
-  const structuredCoverLetterGateEnabled = isStructuredMistralCoverLetterEnabled({
-    modelType: requestedModelType,
-    outputFormat,
-  });
+  const structuredCoverLetterGateEnabled =
+    isStructuredMistralCoverLetterEnabled({
+      modelType: requestedModelType,
+      outputFormat,
+    });
   const normalizedSourceJobDescription = compactWhitespace(args.jobDescription);
   const proposalMetadataBase = {
     platform: "web",
@@ -8469,15 +8732,13 @@ export async function handleGenerateProposal(
   let proposalContent: string;
   let structuredPersistencePayload: StructuredCoverLetterAttemptResult | null =
     null;
-  let premiumPersistencePayload:
-    | {
-        content: string;
-        sections: Array<{
-          type: "text";
-          content: string;
-        }>;
-      }
-    | null = null;
+  let premiumPersistencePayload: {
+    content: string;
+    sections: Array<{
+      type: "text";
+      content: string;
+    }>;
+  } | null = null;
   let actualModelType: ProposalModelType = requestedModelType;
   let hasAttemptedFallback = false;
   let usedFallback = false;
@@ -8486,12 +8747,12 @@ export async function handleGenerateProposal(
     outputFormat === "application_message"
       ? "application-message inline path"
       : shouldBypassPlannerForCvBackedLegacyCoverLetter
-      ? "legacy-only path after planner bypass"
-      : requestedModelType === "chatgpt" &&
-          outputFormat === "cover_letter" &&
-          coverLetterPrimaryPathEligibility.eligible
-        ? "premium fail-closed to legacy fallback"
-      : "legacy-only path";
+        ? "legacy-only path after planner bypass"
+        : requestedModelType === "chatgpt" &&
+            outputFormat === "cover_letter" &&
+            coverLetterPrimaryPathEligibility.eligible
+          ? "premium fail-closed to legacy fallback"
+          : "legacy-only path";
   const routingTrace: ProposalRoutingTrace = {
     plannedPath: coverLetterPrimaryPathEligibility.plannedPath,
     executedPath: "legacy",
@@ -8516,7 +8777,8 @@ export async function handleGenerateProposal(
   ): void => {
     if (
       mistralDiagnosticsLogged ||
-      (!isMistralModel(requestedModelType) && mistralDiagnostics.calls.length === 0)
+      (!isMistralModel(requestedModelType) &&
+        mistralDiagnostics.calls.length === 0)
     ) {
       return;
     }
@@ -8576,9 +8838,10 @@ export async function handleGenerateProposal(
   };
 
   let proposalId: string;
-  let lastFinalizationTraceArgs:
-    | Omit<ProposalFinalizationTraceCaptureArgs, "attemptedPath">
-    | null = null;
+  let lastFinalizationTraceArgs: Omit<
+    ProposalFinalizationTraceCaptureArgs,
+    "attemptedPath"
+  > | null = null;
 
   // Development stub: when DEV_STUB env var is set, return a placeholder proposal
   // This allows frontend testing without LLM API keys.
@@ -8693,7 +8956,9 @@ export async function handleGenerateProposal(
             if (estimatedTokens > tokenLimit) {
               jobDescription = jobDescription.slice(
                 0,
-                Math.floor((jobDescription.length * tokenLimit) / estimatedTokens),
+                Math.floor(
+                  (jobDescription.length * tokenLimit) / estimatedTokens,
+                ),
               );
               console.warn(
                 `Job description truncated due to token limit. Original tokens: ${estimatedTokens}, New length: ${jobDescription.length}`,
@@ -8716,247 +8981,210 @@ export async function handleGenerateProposal(
             const proposal = await proposalService.generateCreativeProposal({
               jobTitle: effectiveJobTitle,
               jobDescription: enrichedJobDescription,
-              creativeDirection: effectivePersonalization?.desiredPosition ?? "",
+              creativeDirection:
+                effectivePersonalization?.desiredPosition ?? "",
             });
             proposalContent = proposal.content;
           }
         }
       } else if (
-      actualModelType === "mistral-large-latest" ||
-      actualModelType === "mistral-small-latest"
-    ) {
-      const mistralKey = process.env.MISTRAL_API_KEY;
-      if (!mistralKey) {
-        throw new ConvexError("Mistral API key is not configured");
-      }
-      if (
-        !shouldBypassPlannerForNoContextLegacyCoverLetter &&
-        !shouldBypassPlannerForCvBackedLegacyCoverLetter
+        actualModelType === "mistral-large-latest" ||
+        actualModelType === "mistral-small-latest"
       ) {
-        try {
-          plannerResult = normalizeProposalPlannerResult({
-            rawPlan: await buildStructuredProposalPlan({
-              mistralKey,
-              modelType: actualModelType,
-              prompt: plannerPrompt,
-              diagnostics: mistralDiagnostics,
-            }),
-            voicePreset: resolvedVoicePreset,
-            contextMode: plannerContextMode,
-            sourceFactBank,
-            outputLanguage: plannerOutputLanguage,
-            jobTitle: effectiveJobTitle,
-            jobDescription: args.jobDescription,
-          });
-          prompt = buildInlineMistralPrompt(
-            {
-              ...args,
-              jobTitle: effectiveJobTitle,
-            },
-            effectiveTone,
-            voicePresetDefinition.guidance,
-            outputFormat,
-            outputLanguage,
-            personalizationBlock,
-            effectivePromptRichness,
-            noContextPromptBlock,
-            buildProposalWriterPlanBlock(plannerResult, outputFormat),
-          );
-        } catch (plannerError) {
-          if (isProposalProviderBusyError(plannerError)) {
-            markProviderBusyFailure();
-            throw plannerError;
-          }
-          console.warn("Proposal planner failed; continuing with base prompt:", plannerError);
-          if (structuredCoverLetterEnabled) {
-            attemptedGenerationPath =
-              "structured fail-closed to legacy fallback";
-            routingTrace.fallbackReason = "structured_plan_parse_fail";
-            routingTrace.validatorOutcome = "structured_failed";
-          }
+        const mistralKey = process.env.MISTRAL_API_KEY;
+        if (!mistralKey) {
+          throw new ConvexError("Mistral API key is not configured");
         }
-      }
-      const model = new ChatMistralAI({
-        apiKey: mistralKey,
-        modelName: actualModelType,
-      });
-      let structuredFallbackReason: StructuredCoverLetterFallbackReason | null =
-        null;
-      if (!shouldBypassPlannerForCvBackedLegacyCoverLetter) {
-        try {
-          structuredPersistencePayload =
-            await attemptStructuredCoverLetterGeneration(
-              {
-                gateEnabled: structuredCoverLetterEnabled,
+        if (
+          !shouldBypassPlannerForNoContextLegacyCoverLetter &&
+          !shouldBypassPlannerForCvBackedLegacyCoverLetter
+        ) {
+          try {
+            plannerResult = normalizeProposalPlannerResult({
+              rawPlan: await buildStructuredProposalPlan({
                 mistralKey,
                 modelType: actualModelType,
-                plannerResult,
-                outputFormat,
-                outputLanguage,
-                candidateName,
-                voicePreset: resolvedVoicePreset,
-                jobTitle: effectiveJobTitle,
-                jobDescription: args.jobDescription,
+                prompt: plannerPrompt,
                 diagnostics: mistralDiagnostics,
-              },
+              }),
+              voicePreset: resolvedVoicePreset,
+              contextMode: plannerContextMode,
+              sourceFactBank,
+              outputLanguage: plannerOutputLanguage,
+              jobTitle: effectiveJobTitle,
+              jobDescription: args.jobDescription,
+            });
+            prompt = buildInlineMistralPrompt(
               {
-                onFallbackReason: (reason) => {
-                  structuredFallbackReason = reason;
-                },
+                ...args,
+                jobTitle: effectiveJobTitle,
               },
+              effectiveTone,
+              voicePresetDefinition.guidance,
+              outputFormat,
+              outputLanguage,
+              personalizationBlock,
+              effectivePromptRichness,
+              noContextPromptBlock,
+              buildProposalWriterPlanBlock(plannerResult, outputFormat),
             );
-        } catch (error) {
-          if (isProposalProviderBusyError(error)) {
-            markProviderBusyFailure();
+          } catch (plannerError) {
+            if (isProposalProviderBusyError(plannerError)) {
+              markProviderBusyFailure();
+              throw plannerError;
+            }
+            console.warn(
+              "Proposal planner failed; continuing with base prompt:",
+              plannerError,
+            );
+            if (structuredCoverLetterEnabled) {
+              attemptedGenerationPath =
+                "structured fail-closed to legacy fallback";
+              routingTrace.fallbackReason = "structured_plan_parse_fail";
+              routingTrace.validatorOutcome = "structured_failed";
+            }
           }
-          throw error;
         }
-      }
-
-      if (structuredPersistencePayload) {
-        attemptedGenerationPath =
-          structuredPersistencePayload.generationPath === "structured_repaired_success"
-            ? "structured repaired success"
-            : "structured success";
-        routingTrace.executedPath = "structured";
-        routingTrace.fallbackReason = "not_applicable";
-        routingTrace.validatorOutcome =
-          structuredPersistencePayload.generationPath ===
-          "structured_repaired_success"
-            ? "structured_repaired_success"
-            : "structured_success";
-        proposalContent = structuredPersistencePayload.content;
-        residualVerifierWarningTag =
-          structuredPersistencePayload.residualVerifierWarningTag;
-      } else {
-        if (shouldBypassPlannerForCvBackedLegacyCoverLetter) {
-          attemptedGenerationPath = "legacy-only path after planner bypass";
-          routingTrace.fallbackReason = "planner_dependency_bypassed";
-        } else if (
-          outputFormat === "cover_letter" &&
-          structuredCoverLetterEnabled
-        ) {
-          attemptedGenerationPath =
-            "structured fail-closed to legacy fallback";
-          routingTrace.fallbackReason =
-            structuredFallbackReason ?? routingTrace.fallbackReason;
-          if (routingTrace.validatorOutcome === "not_run") {
-            routingTrace.validatorOutcome = "structured_failed";
-          }
-        } else if (
-          outputFormat === "cover_letter" &&
-          structuredCoverLetterGateEnabled &&
-          routingTrace.fallbackReason === "not_applicable"
-        ) {
-          routingTrace.fallbackReason = structuredRolloutEligibility.fallbackReason;
-        }
-        routingTrace.executedPath = "legacy";
-        assertStructuredCoverLetterRoutingConsistency({
-          plannedPath: routingTrace.plannedPath,
-          executedPath: routingTrace.executedPath,
-          attemptedGenerationPath,
-          fallbackReason: routingTrace.fallbackReason,
+        const model = new ChatMistralAI({
+          apiKey: mistralKey,
+          modelName: actualModelType,
         });
-        let response;
-        try {
-          response = await model.invoke([new HumanMessage(prompt)]);
-        } catch (error) {
-          recordMistralDiagnosticFailure({
+        let structuredFallbackReason: StructuredCoverLetterFallbackReason | null =
+          null;
+        if (!shouldBypassPlannerForCvBackedLegacyCoverLetter) {
+          try {
+            structuredPersistencePayload =
+              await attemptStructuredCoverLetterGeneration(
+                {
+                  gateEnabled: structuredCoverLetterEnabled,
+                  mistralKey,
+                  modelType: actualModelType,
+                  plannerResult,
+                  outputFormat,
+                  outputLanguage,
+                  candidateName,
+                  voicePreset: resolvedVoicePreset,
+                  jobTitle: effectiveJobTitle,
+                  jobDescription: args.jobDescription,
+                  diagnostics: mistralDiagnostics,
+                },
+                {
+                  onFallbackReason: (reason) => {
+                    structuredFallbackReason = reason;
+                  },
+                },
+              );
+          } catch (error) {
+            if (isProposalProviderBusyError(error)) {
+              markProviderBusyFailure();
+            }
+            throw error;
+          }
+        }
+
+        if (structuredPersistencePayload) {
+          attemptedGenerationPath =
+            structuredPersistencePayload.generationPath ===
+            "structured_repaired_success"
+              ? "structured repaired success"
+              : "structured success";
+          routingTrace.executedPath = "structured";
+          routingTrace.fallbackReason = "not_applicable";
+          routingTrace.validatorOutcome =
+            structuredPersistencePayload.generationPath ===
+            "structured_repaired_success"
+              ? "structured_repaired_success"
+              : "structured_success";
+          proposalContent = structuredPersistencePayload.content;
+          residualVerifierWarningTag =
+            structuredPersistencePayload.residualVerifierWarningTag;
+        } else {
+          if (shouldBypassPlannerForCvBackedLegacyCoverLetter) {
+            attemptedGenerationPath = "legacy-only path after planner bypass";
+            routingTrace.fallbackReason = "planner_dependency_bypassed";
+          } else if (
+            outputFormat === "cover_letter" &&
+            structuredCoverLetterEnabled
+          ) {
+            attemptedGenerationPath =
+              "structured fail-closed to legacy fallback";
+            routingTrace.fallbackReason =
+              structuredFallbackReason ?? routingTrace.fallbackReason;
+            if (routingTrace.validatorOutcome === "not_run") {
+              routingTrace.validatorOutcome = "structured_failed";
+            }
+          } else if (
+            outputFormat === "cover_letter" &&
+            structuredCoverLetterGateEnabled &&
+            routingTrace.fallbackReason === "not_applicable"
+          ) {
+            routingTrace.fallbackReason =
+              structuredRolloutEligibility.fallbackReason;
+          }
+          routingTrace.executedPath = "legacy";
+          assertStructuredCoverLetterRoutingConsistency({
+            plannedPath: routingTrace.plannedPath,
+            executedPath: routingTrace.executedPath,
+            attemptedGenerationPath,
+            fallbackReason: routingTrace.fallbackReason,
+          });
+          let response;
+          try {
+            response = await model.invoke([new HumanMessage(prompt)]);
+          } catch (error) {
+            recordMistralDiagnosticFailure({
+              diagnostics: mistralDiagnostics,
+              stage: "legacy_generation",
+              modelType: actualModelType,
+              inputText: prompt,
+              error,
+            });
+            const providerBusyError = getMistralProviderBusyError(
+              error,
+              "legacy_generation",
+            );
+            if (providerBusyError) {
+              markProviderBusyFailure();
+              throw providerBusyError;
+            }
+            const providerTransportError = getMistralProviderTransportError(
+              error,
+              "legacy_generation",
+            );
+            if (providerTransportError) {
+              throw providerTransportError;
+            }
+            throw error;
+          }
+          proposalContent =
+            extractTextFromChatMessageContent(response.content) ?? "";
+          recordMistralDiagnosticCall({
             diagnostics: mistralDiagnostics,
             stage: "legacy_generation",
             modelType: actualModelType,
             inputText: prompt,
-            error,
+            outputText: proposalContent,
+            status: "success",
           });
-          const providerBusyError = getMistralProviderBusyError(
-            error,
-            "legacy_generation",
-          );
-          if (providerBusyError) {
-            markProviderBusyFailure();
-            throw providerBusyError;
-          }
-          const providerTransportError = getMistralProviderTransportError(
-            error,
-            "legacy_generation",
-          );
-          if (providerTransportError) {
-            throw providerTransportError;
-          }
-          throw error;
-        }
-        proposalContent =
-          extractTextFromChatMessageContent(response.content) ?? "";
-        recordMistralDiagnosticCall({
-          diagnostics: mistralDiagnostics,
-          stage: "legacy_generation",
-          modelType: actualModelType,
-          inputText: prompt,
-          outputText: proposalContent,
-          status: "success",
-        });
 
-        if (plannerResult) {
-          lastFinalizationTraceArgs = {
-            content: proposalContent,
-            format: outputFormat,
-            outputLanguage,
-            candidateName,
-            voicePreset: resolvedVoicePreset,
-            noContextMode: plannerResult.context_mode === "none",
-          };
-          let verifiedContent = finalizeProposalForSave({
-            content: proposalContent,
-            format: outputFormat,
-            outputLanguage,
-            candidateName,
-            voicePreset: resolvedVoicePreset,
-            noContextMode: plannerResult.context_mode === "none",
-          });
-          let verificationResult = analyzeProposalDraft({
-            content: verifiedContent,
-            plan: plannerResult,
-            format: outputFormat,
-            outputLanguage,
-            candidateName,
-            jobTitle: effectiveJobTitle,
-            jobDescription: args.jobDescription,
-          });
-          let verificationIssues = verificationResult.issues;
-
-          if (
-            verificationIssues.length > 0 &&
-            verificationResult.flaggedSentences.length > 0
-          ) {
-            const repairedDraft = await repairProposalDraftBySentence({
-              mistralKey,
-              modelType: actualModelType,
-              content: verifiedContent,
-              plan: plannerResult,
-              format: outputFormat,
-              outputLanguage,
-              candidateName,
-              flaggedSentences: verificationResult.flaggedSentences,
-              diagnostics: mistralDiagnostics,
-            });
-
+          if (plannerResult) {
             lastFinalizationTraceArgs = {
-              content: repairedDraft,
+              content: proposalContent,
               format: outputFormat,
               outputLanguage,
               candidateName,
               voicePreset: resolvedVoicePreset,
               noContextMode: plannerResult.context_mode === "none",
             };
-            verifiedContent = finalizeProposalForSave({
-              content: repairedDraft,
+            let verifiedContent = finalizeProposalForSave({
+              content: proposalContent,
               format: outputFormat,
               outputLanguage,
               candidateName,
               voicePreset: resolvedVoicePreset,
               noContextMode: plannerResult.context_mode === "none",
             });
-            verificationResult = analyzeProposalDraft({
+            let verificationResult = analyzeProposalDraft({
               content: verifiedContent,
               plan: plannerResult,
               format: outputFormat,
@@ -8965,83 +9193,126 @@ export async function handleGenerateProposal(
               jobTitle: effectiveJobTitle,
               jobDescription: args.jobDescription,
             });
-            verificationIssues = verificationResult.issues;
-          }
+            let verificationIssues = verificationResult.issues;
 
-          if (verificationIssues.length > 0) {
-            residualVerifierWarningTag = "warning:verifier_post_repair";
-            routingTrace.validatorOutcome = "legacy_verified_warning";
-            console.warn(
-              "Generated proposal still has verifier findings after repair; saving repaired draft without hard-fail.",
-              {
-                jobTitle: effectiveJobTitle,
+            if (
+              verificationIssues.length > 0 &&
+              verificationResult.flaggedSentences.length > 0
+            ) {
+              const repairedDraft = await repairProposalDraftBySentence({
+                mistralKey,
                 modelType: actualModelType,
-                issueCodes: verificationIssues.map((issue) => issue.code),
-                issueMessages: verificationIssues.map(
-                  (issue) => issue.message,
-                ),
-              },
-            );
-          } else {
-            routingTrace.validatorOutcome = "legacy_verified_clean";
-          }
+                content: verifiedContent,
+                plan: plannerResult,
+                format: outputFormat,
+                outputLanguage,
+                candidateName,
+                flaggedSentences: verificationResult.flaggedSentences,
+                diagnostics: mistralDiagnostics,
+              });
 
-          proposalContent = verifiedContent;
+              lastFinalizationTraceArgs = {
+                content: repairedDraft,
+                format: outputFormat,
+                outputLanguage,
+                candidateName,
+                voicePreset: resolvedVoicePreset,
+                noContextMode: plannerResult.context_mode === "none",
+              };
+              verifiedContent = finalizeProposalForSave({
+                content: repairedDraft,
+                format: outputFormat,
+                outputLanguage,
+                candidateName,
+                voicePreset: resolvedVoicePreset,
+                noContextMode: plannerResult.context_mode === "none",
+              });
+              verificationResult = analyzeProposalDraft({
+                content: verifiedContent,
+                plan: plannerResult,
+                format: outputFormat,
+                outputLanguage,
+                candidateName,
+                jobTitle: effectiveJobTitle,
+                jobDescription: args.jobDescription,
+              });
+              verificationIssues = verificationResult.issues;
+            }
+
+            if (verificationIssues.length > 0) {
+              residualVerifierWarningTag = "warning:verifier_post_repair";
+              routingTrace.validatorOutcome = "legacy_verified_warning";
+              console.warn(
+                "Generated proposal still has verifier findings after repair; saving repaired draft without hard-fail.",
+                {
+                  jobTitle: effectiveJobTitle,
+                  modelType: actualModelType,
+                  issueCodes: verificationIssues.map((issue) => issue.code),
+                  issueMessages: verificationIssues.map(
+                    (issue) => issue.message,
+                  ),
+                },
+              );
+            } else {
+              routingTrace.validatorOutcome = "legacy_verified_clean";
+            }
+
+            proposalContent = verifiedContent;
+          }
         }
-      }
-    } else if (actualModelType === "mistral-agent") {
-      const mistralKey = process.env.MISTRAL_API_KEY;
-      if (!mistralKey) {
-        throw new ConvexError("Mistral API key is not configured");
-      }
-      const mistralAgentId = process.env.MISTRAL_AGENT_ID;
-      if (!mistralAgentId) {
-        throw new ConvexError("Mistral agent ID is not configured");
-      }
-      const client = new Mistral({ apiKey: mistralKey });
-      const agentPrompt = prompt;
-      let agentResponse;
-      try {
-        agentResponse = await client.agents.complete({
-          agentId: mistralAgentId,
-          messages: [{ role: "user", content: agentPrompt }],
-        });
-      } catch (error) {
+      } else if (actualModelType === "mistral-agent") {
+        const mistralKey = process.env.MISTRAL_API_KEY;
+        if (!mistralKey) {
+          throw new ConvexError("Mistral API key is not configured");
+        }
+        const mistralAgentId = process.env.MISTRAL_AGENT_ID;
+        if (!mistralAgentId) {
+          throw new ConvexError("Mistral agent ID is not configured");
+        }
+        const client = new Mistral({ apiKey: mistralKey });
+        const agentPrompt = prompt;
+        let agentResponse;
+        try {
+          agentResponse = await client.agents.complete({
+            agentId: mistralAgentId,
+            messages: [{ role: "user", content: agentPrompt }],
+          });
+        } catch (error) {
+          recordMistralDiagnosticCall({
+            diagnostics: mistralDiagnostics,
+            stage: "agent_generation",
+            modelType: actualModelType,
+            inputText: agentPrompt,
+            status: "failed_other",
+          });
+          throw error;
+        }
+        if (
+          !agentResponse.choices ||
+          agentResponse.choices.length === 0 ||
+          typeof agentResponse.choices[0].message.content !== "string"
+        ) {
+          recordMistralDiagnosticCall({
+            diagnostics: mistralDiagnostics,
+            stage: "agent_generation",
+            modelType: actualModelType,
+            inputText: agentPrompt,
+            status: "failed_other",
+          });
+          throw new ConvexError("Invalid or empty response from Mistral agent");
+        }
+        proposalContent = agentResponse.choices[0].message.content;
         recordMistralDiagnosticCall({
           diagnostics: mistralDiagnostics,
           stage: "agent_generation",
           modelType: actualModelType,
           inputText: agentPrompt,
-          status: "failed_other",
+          outputText: proposalContent,
+          status: "success",
         });
-        throw error;
+      } else {
+        throw new ConvexError("Invalid model type selected");
       }
-      if (
-        !agentResponse.choices ||
-        agentResponse.choices.length === 0 ||
-        typeof agentResponse.choices[0].message.content !== "string"
-      ) {
-        recordMistralDiagnosticCall({
-          diagnostics: mistralDiagnostics,
-          stage: "agent_generation",
-          modelType: actualModelType,
-          inputText: agentPrompt,
-          status: "failed_other",
-        });
-        throw new ConvexError("Invalid or empty response from Mistral agent");
-      }
-      proposalContent = agentResponse.choices[0].message.content;
-      recordMistralDiagnosticCall({
-        diagnostics: mistralDiagnostics,
-        stage: "agent_generation",
-        modelType: actualModelType,
-        inputText: agentPrompt,
-        outputText: proposalContent,
-        status: "success",
-      });
-    } else {
-      throw new ConvexError("Invalid model type selected");
-    }
 
       if (structuredPersistencePayload) {
         routingTrace.saveOutcome = "structured_saved";
@@ -9112,110 +9383,266 @@ export async function handleGenerateProposal(
         return { proposalId, proposalContent, ...getExecutionProvenance() };
       }
 
-    const noContextPersistenceMode =
-      plannerResult?.context_mode === "none" || plannerContextMode === "none";
-    lastFinalizationTraceArgs = {
-      content: proposalContent,
-      format: outputFormat,
-      outputLanguage,
-      candidateName,
-      voicePreset: resolvedVoicePreset,
-      noContextMode: noContextPersistenceMode,
-    };
-    proposalContent = finalizeProposalForPersistence({
-      content: proposalContent,
-      format: outputFormat,
-      outputLanguage,
-      candidateName,
-      voicePreset: resolvedVoicePreset,
-      noContextMode: noContextPersistenceMode,
-    });
+      const noContextPersistenceMode =
+        plannerResult?.context_mode === "none" || plannerContextMode === "none";
+      lastFinalizationTraceArgs = {
+        content: proposalContent,
+        format: outputFormat,
+        outputLanguage,
+        candidateName,
+        voicePreset: resolvedVoicePreset,
+        noContextMode: noContextPersistenceMode,
+      };
+      proposalContent = finalizeProposalForPersistence({
+        content: proposalContent,
+        format: outputFormat,
+        outputLanguage,
+        candidateName,
+        voicePreset: resolvedVoicePreset,
+        noContextMode: noContextPersistenceMode,
+      });
 
-    // Attempt a tolerant post-processing step: parse plain-text LLM output
-    // into the structured Proposal schema. Only parse failures should fall
-    // back to raw persistence; storage failures must surface as persistence
-    // failures instead of retrying the same invalid payload unchanged.
-    let parsed:
-      | Awaited<ReturnType<typeof parseProposalContent>>
-      | null = null;
-    try {
-      parsed = await parseProposalContent(proposalContent);
-      if (!parsed?.content) {
-        throw new Error("Parsed proposal missing content");
-      }
-    } catch (parseErr) {
-      console.warn("Tolerant parse failed, using raw content:", parseErr);
-    }
-
-    if (parsed?.content) {
-      // Use parsed content and sections when available.
-      proposalContent = parsed.content;
-
-      // Normalize sections to the expected literal union type for Convex.
-      const sectionsForDb: {
-        type: "text" | "code" | "image";
-        content: string;
-      }[] = (parsed.sections ?? []).map((s: any) => ({
-        type: "text" as const,
-        content: String(s.content ?? ""),
-      }));
-
-      // Normalize metrics to the small metrics shape used by the DB.
-      // We map `duration` -> `score` and `success` -> `confidence` (heuristic).
-      const metricsForDb: { score?: number; confidence?: number } = {};
-      if (parsed.metrics) {
-        if (typeof (parsed.metrics as any).duration === "number") {
-          metricsForDb.score = (parsed.metrics as any).duration;
-        }
-        if (typeof (parsed.metrics as any).success === "boolean") {
-          metricsForDb.confidence = (parsed.metrics as any).success ? 1 : 0;
-        }
-      }
-
-      routingTrace.saveOutcome = "legacy_saved_parsed";
+      // Attempt a tolerant post-processing step: parse plain-text LLM output
+      // into the structured Proposal schema. Only parse failures should fall
+      // back to raw persistence; storage failures must surface as persistence
+      // failures instead of retrying the same invalid payload unchanged.
+      let parsed: Awaited<ReturnType<typeof parseProposalContent>> | null =
+        null;
       try {
-        proposalId = await ctx.runMutation(internal.proposals.storeProposal, {
-          userId: userProfile._id,
-          title: resolveStoredProposalTitle({
-            jobTitle: effectiveJobTitle,
-            parsedTitle: parsed.title,
-            format: outputFormat,
-          }),
-          content: proposalContent,
-          status: "pending",
-          version: 1,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          sections:
-            sectionsForDb.length > 0
-              ? sectionsForDb
-              : [{ type: "text", content: proposalContent }],
-          metrics: metricsForDb,
-          metadata: buildProposalRoutingMetadata({
-            base: proposalMetadataBase,
-            jobId: "N/A",
-            routing: routingTrace,
-            provenance: getExecutionProvenance(),
-            tags: [
-              `model:${actualModelType}`,
-              "parsed",
-              toGenerationPathTag(attemptedGenerationPath),
-              ...(residualVerifierWarningTag
-                ? [residualVerifierWarningTag]
-                : []),
-            ],
-          }),
+        parsed = await parseProposalContent(proposalContent);
+        if (!parsed?.content) {
+          throw new Error("Parsed proposal missing content");
+        }
+      } catch (parseErr) {
+        console.warn("Tolerant parse failed, using raw content:", parseErr);
+      }
+
+      if (parsed?.content) {
+        // Use parsed content and sections when available.
+        proposalContent = parsed.content;
+
+        // Normalize sections to the expected literal union type for Convex.
+        const sectionsForDb: {
+          type: "text" | "code" | "image";
+          content: string;
+        }[] = (parsed.sections ?? []).map((s: any) => ({
+          type: "text" as const,
+          content: String(s.content ?? ""),
+        }));
+
+        // Normalize metrics to the small metrics shape used by the DB.
+        // We map `duration` -> `score` and `success` -> `confidence` (heuristic).
+        const metricsForDb: { score?: number; confidence?: number } = {};
+        if (parsed.metrics) {
+          if (typeof (parsed.metrics as any).duration === "number") {
+            metricsForDb.score = (parsed.metrics as any).duration;
+          }
+          if (typeof (parsed.metrics as any).success === "boolean") {
+            metricsForDb.confidence = (parsed.metrics as any).success ? 1 : 0;
+          }
+        }
+
+        routingTrace.saveOutcome = "legacy_saved_parsed";
+        try {
+          proposalId = await ctx.runMutation(internal.proposals.storeProposal, {
+            userId: userProfile._id,
+            title: resolveStoredProposalTitle({
+              jobTitle: effectiveJobTitle,
+              parsedTitle: parsed.title,
+              format: outputFormat,
+            }),
+            content: proposalContent,
+            status: "pending",
+            version: 1,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            sections:
+              sectionsForDb.length > 0
+                ? sectionsForDb
+                : [{ type: "text", content: proposalContent }],
+            metrics: metricsForDb,
+            metadata: buildProposalRoutingMetadata({
+              base: proposalMetadataBase,
+              jobId: "N/A",
+              routing: routingTrace,
+              provenance: getExecutionProvenance(),
+              tags: [
+                `model:${actualModelType}`,
+                "parsed",
+                toGenerationPathTag(attemptedGenerationPath),
+                ...(residualVerifierWarningTag
+                  ? [residualVerifierWarningTag]
+                  : []),
+              ],
+            }),
+          });
+        } catch (persistenceErr) {
+          console.error("Parsed proposal persistence failed:", persistenceErr);
+          throw persistenceErr;
+        }
+      } else {
+        routingTrace.saveOutcome = "legacy_saved_raw";
+        try {
+          proposalId = await ctx.runMutation(internal.proposals.storeProposal, {
+            userId: userProfile._id,
+            title: defaultStoredTitle,
+            content: proposalContent,
+            status: "pending",
+            version: 1,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            sections: [{ type: "text", content: proposalContent }],
+            metrics: {},
+            metadata: buildProposalRoutingMetadata({
+              base: proposalMetadataBase,
+              jobId: "N/A",
+              routing: routingTrace,
+              provenance: getExecutionProvenance(),
+              tags: [
+                `model:${actualModelType}`,
+                toGenerationPathTag(attemptedGenerationPath),
+                ...(residualVerifierWarningTag
+                  ? [residualVerifierWarningTag]
+                  : []),
+              ],
+            }),
+          });
+        } catch (persistenceErr) {
+          console.error("Raw proposal persistence failed:", persistenceErr);
+          throw persistenceErr;
+        }
+      }
+
+      emitCoverLetterRoutingTelemetry();
+      emitMistralDiagnosticsSummary("success");
+      return { proposalId, proposalContent, ...getExecutionProvenance() };
+    } catch (error: any) {
+      if (isProposalProviderBusyError(error)) {
+        markProviderBusyFailure();
+        routingFailureStage = error.stage;
+        routingNormalizedFailureCode = CONTROLLED_PROPOSAL_PROVIDER_BUSY_CODE;
+        if (
+          canAttemptProposalFallback({
+            requestedModelType,
+            outputFormat,
+            normalizedFailureCode: routingNormalizedFailureCode,
+            failureStage: routingFailureStage,
+            hasAttemptedFallback,
+          })
+        ) {
+          fallbackTriggerCode = routingNormalizedFailureCode;
+          usedFallback = true;
+          hasAttemptedFallback = true;
+          logProposalFallbackActivation({
+            requestedModelType,
+            fallbackModelType: "chatgpt",
+            triggerCode: routingNormalizedFailureCode,
+            triggerStage: routingFailureStage,
+            hasCv: plannerContextMode !== "none",
+            attemptedPath: attemptedGenerationPath,
+          });
+          actualModelType = "chatgpt";
+          routingNormalizedFailureCode = null;
+          continue;
+        }
+        emitCoverLetterRoutingTelemetry("not_saved", routingFailureStage);
+        emitMistralDiagnosticsSummary("failure");
+        throw coerceProposalProviderBusyToConvexError(error);
+      }
+      if (isProposalProviderTransportError(error)) {
+        routingFailureStage = error.stage;
+        routingNormalizedFailureCode =
+          CONTROLLED_PROPOSAL_PROVIDER_TRANSPORT_ERROR_CODE;
+        if (
+          canAttemptProposalFallback({
+            requestedModelType,
+            outputFormat,
+            normalizedFailureCode: routingNormalizedFailureCode,
+            failureStage: routingFailureStage,
+            hasAttemptedFallback,
+          })
+        ) {
+          fallbackTriggerCode = routingNormalizedFailureCode;
+          usedFallback = true;
+          hasAttemptedFallback = true;
+          logProposalFallbackActivation({
+            requestedModelType,
+            fallbackModelType: "chatgpt",
+            triggerCode: routingNormalizedFailureCode,
+            triggerStage: routingFailureStage,
+            hasCv: plannerContextMode !== "none",
+            attemptedPath: attemptedGenerationPath,
+          });
+          actualModelType = "chatgpt";
+          routingNormalizedFailureCode = null;
+          continue;
+        }
+        emitCoverLetterRoutingTelemetry("not_saved", routingFailureStage);
+        emitMistralDiagnosticsSummary("failure");
+        throw coerceProposalProviderTransportToConvexError(error);
+      }
+      if (error?.name === "ProposalFinalizationError") {
+        routingTrace.saveOutcome = "fail_closed";
+        routingNormalizedFailureCode =
+          CONTROLLED_PROPOSAL_FINALIZATION_FAILURE_TELEMETRY_CODE;
+        if (lastFinalizationTraceArgs) {
+          const trace = logProposalFinalizationTrace({
+            ...lastFinalizationTraceArgs,
+            attemptedPath: attemptedGenerationPath,
+          });
+          routingFailureStage = trace.failureStage ?? null;
+        }
+        emitCoverLetterRoutingTelemetry("fail_closed");
+        throw coerceProposalFinalizationFailureToConvexError({
+          error,
+          attemptedPath: attemptedGenerationPath,
         });
-      } catch (persistenceErr) {
-        console.error(
-          "Parsed proposal persistence failed:",
-          persistenceErr,
-        );
-        throw persistenceErr;
       }
-    } else {
-      routingTrace.saveOutcome = "legacy_saved_raw";
-      try {
+      if (error.name === "ProposalParsingError" && error.rawContent) {
+        console.warn("Using raw content due to parsing error:", error.message);
+        try {
+          lastFinalizationTraceArgs = {
+            content: error.rawContent,
+            format: outputFormat,
+            outputLanguage,
+            candidateName,
+            voicePreset: resolvedVoicePreset,
+            noContextMode:
+              plannerResult?.context_mode === "none" ||
+              plannerContextMode === "none",
+          };
+          proposalContent = finalizeProposalForPersistence({
+            content: error.rawContent,
+            format: outputFormat,
+            outputLanguage,
+            candidateName,
+            voicePreset: resolvedVoicePreset,
+            noContextMode:
+              plannerResult?.context_mode === "none" ||
+              plannerContextMode === "none",
+          });
+        } catch (finalizationError: any) {
+          if (finalizationError?.name === "ProposalFinalizationError") {
+            routingTrace.saveOutcome = "fail_closed";
+            routingNormalizedFailureCode =
+              CONTROLLED_PROPOSAL_FINALIZATION_FAILURE_TELEMETRY_CODE;
+            if (lastFinalizationTraceArgs) {
+              const trace = logProposalFinalizationTrace({
+                ...lastFinalizationTraceArgs,
+                attemptedPath: attemptedGenerationPath,
+              });
+              routingFailureStage = trace.failureStage ?? null;
+            }
+            emitCoverLetterRoutingTelemetry("fail_closed");
+            throw coerceProposalFinalizationFailureToConvexError({
+              error: finalizationError,
+              attemptedPath: attemptedGenerationPath,
+            });
+          }
+          throw finalizationError;
+        }
+
+        routingTrace.saveOutcome = "legacy_saved_after_parse_error";
         proposalId = await ctx.runMutation(internal.proposals.storeProposal, {
           userId: userProfile._id,
           title: defaultStoredTitle,
@@ -9233,6 +9660,7 @@ export async function handleGenerateProposal(
             provenance: getExecutionProvenance(),
             tags: [
               `model:${actualModelType}`,
+              "parsing_error",
               toGenerationPathTag(attemptedGenerationPath),
               ...(residualVerifierWarningTag
                 ? [residualVerifierWarningTag]
@@ -9240,175 +9668,16 @@ export async function handleGenerateProposal(
             ],
           }),
         });
-      } catch (persistenceErr) {
-        console.error("Raw proposal persistence failed:", persistenceErr);
-        throw persistenceErr;
-      }
-    }
 
-    emitCoverLetterRoutingTelemetry();
-    emitMistralDiagnosticsSummary("success");
-    return { proposalId, proposalContent, ...getExecutionProvenance() };
-  } catch (error: any) {
-    if (isProposalProviderBusyError(error)) {
-      markProviderBusyFailure();
-      routingFailureStage = error.stage;
-      routingNormalizedFailureCode = CONTROLLED_PROPOSAL_PROVIDER_BUSY_CODE;
-      if (
-        canAttemptProposalFallback({
-          requestedModelType,
-          outputFormat,
-          normalizedFailureCode: routingNormalizedFailureCode,
-          failureStage: routingFailureStage,
-          hasAttemptedFallback,
-        })
-      ) {
-        fallbackTriggerCode = routingNormalizedFailureCode;
-        usedFallback = true;
-        hasAttemptedFallback = true;
-        logProposalFallbackActivation({
-          requestedModelType,
-          fallbackModelType: "chatgpt",
-          triggerCode: routingNormalizedFailureCode,
-          triggerStage: routingFailureStage,
-          hasCv: plannerContextMode !== "none",
-          attemptedPath: attemptedGenerationPath,
-        });
-        actualModelType = "chatgpt";
-        routingNormalizedFailureCode = null;
-        continue;
+        emitCoverLetterRoutingTelemetry();
+        emitMistralDiagnosticsSummary("success");
+        return { proposalId, proposalContent, ...getExecutionProvenance() };
       }
-      emitCoverLetterRoutingTelemetry("not_saved", routingFailureStage);
+      emitCoverLetterRoutingTelemetry("not_saved");
       emitMistralDiagnosticsSummary("failure");
-      throw coerceProposalProviderBusyToConvexError(error);
+      throw error;
     }
-    if (isProposalProviderTransportError(error)) {
-      routingFailureStage = error.stage;
-      routingNormalizedFailureCode =
-        CONTROLLED_PROPOSAL_PROVIDER_TRANSPORT_ERROR_CODE;
-      if (
-        canAttemptProposalFallback({
-          requestedModelType,
-          outputFormat,
-          normalizedFailureCode: routingNormalizedFailureCode,
-          failureStage: routingFailureStage,
-          hasAttemptedFallback,
-        })
-      ) {
-        fallbackTriggerCode = routingNormalizedFailureCode;
-        usedFallback = true;
-        hasAttemptedFallback = true;
-        logProposalFallbackActivation({
-          requestedModelType,
-          fallbackModelType: "chatgpt",
-          triggerCode: routingNormalizedFailureCode,
-          triggerStage: routingFailureStage,
-          hasCv: plannerContextMode !== "none",
-          attemptedPath: attemptedGenerationPath,
-        });
-        actualModelType = "chatgpt";
-        routingNormalizedFailureCode = null;
-        continue;
-      }
-      emitCoverLetterRoutingTelemetry("not_saved", routingFailureStage);
-      emitMistralDiagnosticsSummary("failure");
-      throw coerceProposalProviderTransportToConvexError(error);
-    }
-    if (error?.name === "ProposalFinalizationError") {
-      routingTrace.saveOutcome = "fail_closed";
-      routingNormalizedFailureCode =
-        CONTROLLED_PROPOSAL_FINALIZATION_FAILURE_TELEMETRY_CODE;
-      if (lastFinalizationTraceArgs) {
-        const trace = logProposalFinalizationTrace({
-          ...lastFinalizationTraceArgs,
-          attemptedPath: attemptedGenerationPath,
-        });
-        routingFailureStage = trace.failureStage ?? null;
-      }
-      emitCoverLetterRoutingTelemetry("fail_closed");
-      throw coerceProposalFinalizationFailureToConvexError({
-        error,
-        attemptedPath: attemptedGenerationPath,
-      });
-    }
-    if (error.name === "ProposalParsingError" && error.rawContent) {
-      console.warn("Using raw content due to parsing error:", error.message);
-      try {
-        lastFinalizationTraceArgs = {
-          content: error.rawContent,
-          format: outputFormat,
-          outputLanguage,
-          candidateName,
-          voicePreset: resolvedVoicePreset,
-          noContextMode:
-            plannerResult?.context_mode === "none" ||
-            plannerContextMode === "none",
-        };
-        proposalContent = finalizeProposalForPersistence({
-          content: error.rawContent,
-          format: outputFormat,
-          outputLanguage,
-          candidateName,
-          voicePreset: resolvedVoicePreset,
-          noContextMode:
-            plannerResult?.context_mode === "none" ||
-            plannerContextMode === "none",
-        });
-      } catch (finalizationError: any) {
-        if (finalizationError?.name === "ProposalFinalizationError") {
-          routingTrace.saveOutcome = "fail_closed";
-          routingNormalizedFailureCode =
-            CONTROLLED_PROPOSAL_FINALIZATION_FAILURE_TELEMETRY_CODE;
-          if (lastFinalizationTraceArgs) {
-            const trace = logProposalFinalizationTrace({
-              ...lastFinalizationTraceArgs,
-              attemptedPath: attemptedGenerationPath,
-            });
-            routingFailureStage = trace.failureStage ?? null;
-          }
-          emitCoverLetterRoutingTelemetry("fail_closed");
-          throw coerceProposalFinalizationFailureToConvexError({
-            error: finalizationError,
-            attemptedPath: attemptedGenerationPath,
-          });
-        }
-        throw finalizationError;
-      }
-
-      routingTrace.saveOutcome = "legacy_saved_after_parse_error";
-      proposalId = await ctx.runMutation(internal.proposals.storeProposal, {
-        userId: userProfile._id,
-        title: defaultStoredTitle,
-        content: proposalContent,
-        status: "pending",
-        version: 1,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        sections: [{ type: "text", content: proposalContent }],
-        metrics: {},
-        metadata: buildProposalRoutingMetadata({
-          base: proposalMetadataBase,
-          jobId: "N/A",
-          routing: routingTrace,
-          provenance: getExecutionProvenance(),
-          tags: [
-            `model:${actualModelType}`,
-            "parsing_error",
-            toGenerationPathTag(attemptedGenerationPath),
-            ...(residualVerifierWarningTag ? [residualVerifierWarningTag] : []),
-          ],
-        }),
-      });
-
-      emitCoverLetterRoutingTelemetry();
-      emitMistralDiagnosticsSummary("success");
-      return { proposalId, proposalContent, ...getExecutionProvenance() };
-    }
-    emitCoverLetterRoutingTelemetry("not_saved");
-    emitMistralDiagnosticsSummary("failure");
-    throw error;
   }
-}
 }
 
 export default action({

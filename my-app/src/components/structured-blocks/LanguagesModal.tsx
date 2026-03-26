@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { ILanguageItem, Level } from "../../types/cvDocument";
-import { X, Plus } from "lucide-react";
+import { X, Plus } from "@/lib/icons";
 import { Button } from "../ui/button";
+import { useCloseOnEscape } from "../../hooks/use-close-on-escape";
+import { BodyPortal } from "@/components/ui/body-portal";
 
 interface LanguagesModalProps {
   open: boolean;
@@ -10,16 +12,29 @@ interface LanguagesModalProps {
   onSave: (next: ILanguageItem[]) => void;
 }
 
-const LEVELS: Level[] = ["Beginner", "Elementary", "Intermediate", "Advanced", "Fluent"];
+const LEVELS: Level[] = [
+  "Beginner",
+  "Elementary",
+  "Intermediate",
+  "Advanced",
+  "Fluent",
+];
 
 function newLanguage(): ILanguageItem {
   const id = `lang-${Math.random().toString(36).slice(2, 10)}`;
   return { id, name: "", level: "Intermediate" };
 }
 
-export function LanguagesModal({ open, items, onClose, onSave }: LanguagesModalProps) {
+export function LanguagesModal({
+  open,
+  items,
+  onClose,
+  onSave,
+}: LanguagesModalProps) {
   const [rows, setRows] = useState<ILanguageItem[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+
+  useCloseOnEscape({ open, onClose, disabled: isSaving });
 
   // Seed rows only when the modal opens or when the real items content changes.
   // Prevents resetting the input on each parent render (which caused single-character typing).
@@ -38,7 +53,12 @@ export function LanguagesModal({ open, items, onClose, onSave }: LanguagesModalP
   }, [open, items]);
 
   const canSave = useMemo(() => {
-    return rows.every((r) => typeof r.name === "string" && r.name.trim().length > 0 && LEVELS.includes(r.level));
+    return rows.every(
+      (r) =>
+        typeof r.name === "string" &&
+        r.name.trim().length > 0 &&
+        LEVELS.includes(r.level),
+    );
   }, [rows]);
 
   if (!open) return null;
@@ -69,113 +89,166 @@ export function LanguagesModal({ open, items, onClose, onSave }: LanguagesModalP
   }
 
   return (
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4" onMouseDownCapture={(e) => e.stopPropagation()}>
-      <div className="absolute inset-0" onClick={() => (isSaving ? null : onClose())}  style={{ background: 'hsla(30,12%,11%,.32)', backdropFilter: 'blur(8px)' }} />
+    <BodyPortal>
       <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Edit languages"
-        className="relative w-full max-w-2xl [background:var(--sfr)] border border-[color:var(--bm)] [border-radius:var(--rl)] [box-shadow:var(--shc)] overflow-auto max-h-[90vh]"
-        onClick={(e) => e.stopPropagation()}
+        className="fixed inset-0 z-[10000] flex items-center justify-center p-4"
+        onMouseDownCapture={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-bo">
-          <h2 className="text-lg font-semibold">Edit languages</h2>
-          <button
-            type="button"
-            onClick={() => (isSaving ? null : onClose())}
-            aria-label="Close"
-            className="dasti-modal-close disabled:opacity-50"
-            disabled={isSaving}
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="p-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="text-sm [color:var(--tm2)]">Add, remove, or edit languages and proficiency</div>
-            <Button
-              type="button"
-              onClick={handleAdd}
-              variant="ghost"
-              size="sm"
-              ariaLabel="Add language"
-              className="gap-1"
-            >
-              <Plus className="w-4 h-4" />
-              Add
-            </Button>
-          </div>
-
-          <div className="space-y-2">
-            {rows.length === 0 ? (
-              <div className="px-3 py-2 text-sm rounded [color:var(--tg2)] [background:var(--sf1)]">No languages yet. Add your first language.</div>
-            ) : (
-              rows.map((row, idx) => (
-                <div key={row.id ?? `row-${idx}`} className="group flex items-center gap-2">
-                  {/* Level dots — LEFT */}
-                  <div className="flex items-center gap-1.5 flex-shrink-0" role="group" aria-label="Language level" style={{ width: 88 }}>
-                    {(["Beginner", "Intermediate", "Fluent"] as Level[]).map((lvl, di) => {
-                      const activeIdx = ["Beginner", "Intermediate", "Fluent"].indexOf(row.level as string);
-                      const filled = di <= activeIdx;
-                      return (
-                        <button
-                          key={lvl}
-                          type="button"
-                          title={lvl}
-                          aria-label={lvl}
-                          onClick={() => updateRow(idx, { level: lvl })}
-                          style={{
-                            width: 10, height: 10, borderRadius: "50%", padding: 0,
-                            cursor: "pointer", flexShrink: 0, border: "1.5px solid",
-                            borderColor: filled ? "var(--ac)" : "var(--bo)",
-                            background: filled ? "var(--ac)" : "transparent",
-                          }}
-                        />
-                      );
-                    })}
-                    <span style={{ fontSize: 10, color: "var(--tg2)", whiteSpace: "nowrap" }}>
-                      {({ Beginner: "Beginner", Intermediate: "Mid", Fluent: "Fluent" } as Record<string, string>)[row.level as string] ?? String(row.level ?? "")}
-                    </span>
-                  </div>
-                  {/* Name input — CENTER (flex-1) */}
-                  <label className="sr-only" htmlFor={`language-name-${idx}`}>Language name</label>
-                  <input
-                    id={`language-name-${idx}`}
-                    className="flex-1 min-w-0 px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
-                    placeholder="Language name"
-                    value={row.name ?? ""}
-                    onChange={(e) => updateRow(idx, { name: e.target.value })}
-                  />
-                  {/* Delete — RIGHT */}
-                  <button
-                    type="button"
-                    onClick={() => handleRemove(idx)}
-                    className="dasti-modal-close flex-shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
-                    aria-label={`Remove ${row.name || "language"}`}
-                    title={`Remove ${row.name || "language"}`}
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-
-          <div className="flex items-center justify-end gap-2">
+        <div
+          className="absolute inset-0"
+          onClick={() => (isSaving ? null : onClose())}
+          style={{
+            background: "hsla(30,12%,11%,.32)",
+            backdropFilter: "blur(8px)",
+          }}
+        />
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Edit languages"
+          className="dasti-modal"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between px-4 py-3 border-b [border-color:var(--color-border)]">
+            <h2 className="text-lg font-semibold">Edit languages</h2>
             <button
               type="button"
-              onClick={() => void handleSave()}
-              className="px-3 py-2 rounded [background:var(--ac)] [color:var(--op)] hover:brightness-110 disabled:opacity-50 focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
-              disabled={isSaving || !canSave}
-              aria-busy={isSaving}
+              onClick={() => (isSaving ? null : onClose())}
+              aria-label="Close"
+              className="dasti-modal-close disabled:opacity-50"
+              disabled={isSaving}
             >
-              Save
+              <X className="w-5 h-5" />
             </button>
+          </div>
+
+          <div className="p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="text-sm [color:var(--tm2)]">
+                Add, remove, or edit languages and proficiency
+              </div>
+              <Button
+                type="button"
+                onClick={handleAdd}
+                variant="ghost"
+                size="sm"
+                ariaLabel="Add language"
+                className="gap-1"
+              >
+                <Plus className="w-4 h-4" />
+                Add
+              </Button>
+            </div>
+
+            <div className="space-y-2">
+              {rows.length === 0 ? (
+                <div className="px-3 py-2 text-sm rounded [color:var(--tg2)] [background:var(--sf1)]">
+                  No languages yet. Add your first language.
+                </div>
+              ) : (
+                rows.map((row, idx) => (
+                  <div
+                    key={row.id ?? `row-${idx}`}
+                    className="group flex items-center gap-2"
+                  >
+                    {/* Level dots — LEFT */}
+                    <div
+                      className="flex items-center gap-1.5 flex-shrink-0"
+                      role="group"
+                      aria-label="Language level"
+                      style={{ width: 88 }}
+                    >
+                      {(["Beginner", "Intermediate", "Fluent"] as Level[]).map(
+                        (lvl, di) => {
+                          const activeIdx = [
+                            "Beginner",
+                            "Intermediate",
+                            "Fluent",
+                          ].indexOf(row.level as string);
+                          const filled = di <= activeIdx;
+                          return (
+                            <button
+                              key={lvl}
+                              type="button"
+                              title={lvl}
+                              aria-label={lvl}
+                              onClick={() => updateRow(idx, { level: lvl })}
+                              style={{
+                                width: 10,
+                                height: 10,
+                                borderRadius: "50%",
+                                padding: 0,
+                                cursor: "pointer",
+                                flexShrink: 0,
+                                border: "1.5px solid",
+                                borderColor: filled
+                                  ? "var(--ac)"
+                                  : "var(--color-border-strong)",
+                                background: filled
+                                  ? "var(--ac)"
+                                  : "transparent",
+                              }}
+                            />
+                          );
+                        },
+                      )}
+                      <span
+                        style={{
+                          fontSize: 10,
+                          color: "var(--tg2)",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {(
+                          {
+                            Beginner: "Beginner",
+                            Intermediate: "Mid",
+                            Fluent: "Fluent",
+                          } as Record<string, string>
+                        )[row.level as string] ?? String(row.level ?? "")}
+                      </span>
+                    </div>
+                    {/* Name input — CENTER (flex-1) */}
+                    <label className="sr-only" htmlFor={`language-name-${idx}`}>
+                      Language name
+                    </label>
+                    <input
+                      id={`language-name-${idx}`}
+                      className="flex-1 min-w-0 px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                      placeholder="Language name"
+                      value={row.name ?? ""}
+                      onChange={(e) => updateRow(idx, { name: e.target.value })}
+                    />
+                    {/* Delete — RIGHT */}
+                    <button
+                      type="button"
+                      onClick={() => handleRemove(idx)}
+                      className="dasti-modal-close flex-shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
+                      aria-label={`Remove ${row.name || "language"}`}
+                      title={`Remove ${row.name || "language"}`}
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => void handleSave()}
+                disabled={isSaving || !canSave}
+                ariaLabel="Save languages"
+              >
+                Save
+              </Button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </BodyPortal>
   );
 }
 

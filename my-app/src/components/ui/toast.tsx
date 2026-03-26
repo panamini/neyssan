@@ -1,9 +1,23 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import clsx from "clsx";
 
 interface ToastOptions {
-  variant?: "info" | "success" | "error" | "warning";
+  variant?:
+    | "info"
+    | "success"
+    | "error"
+    | "warning"
+    | "neutral"
+    | "destructive";
   duration?: number;
   title?: string;
   description?: string;
@@ -42,6 +56,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       description: opts.description,
       variant: opts.variant ?? "info",
       duration: opts.duration ?? 4000,
+      icon: opts.icon,
     };
     // Only show one toast at a time (clear existing toasts first)
     setToasts(() => [item]);
@@ -86,9 +101,15 @@ export function useToast(): ToastContextValue {
   return ctx;
 }
 
-function ToastContainer({ toasts, onRemove }: { toasts: ToastItem[]; onRemove: (id: string) => void }) {
+function ToastContainer({
+  toasts,
+  onRemove,
+}: {
+  toasts: ToastItem[];
+  onRemove: (id: string) => void;
+}) {
   return (
-    <div className="fixed z-50 flex flex-col items-end gap-2 bottom-4 right-4">
+    <div className="dasti-toast-region">
       {toasts.map((t) => (
         <Toast key={t.id} toast={t} onClose={() => onRemove(t.id)} />
       ))}
@@ -98,14 +119,19 @@ function ToastContainer({ toasts, onRemove }: { toasts: ToastItem[]; onRemove: (
 
 function variantClasses(variant?: ToastOptions["variant"]) {
   switch (variant) {
+    case "neutral":
+      return "dasti-toast dasti-toast--neutral";
+    case "info":
+      return "dasti-toast dasti-toast--info";
     case "success":
-      return "bg-accent text-background border-[color:var(--bo)]";
+      return "dasti-toast dasti-toast--success";
+    case "destructive":
     case "error":
-      return "bg-accent text-background border-[color:var(--bo)]";
+      return "dasti-toast dasti-toast--danger";
     case "warning":
-      return "bg-accent text-background border-[color:var(--bo)]";
+      return "dasti-toast dasti-toast--warning";
     default:
-      return "bg-surface text-foreground border-[color:var(--bo)]";
+      return "dasti-toast dasti-toast--neutral";
   }
 }
 
@@ -122,26 +148,27 @@ function Toast({ toast, onClose }: { toast: ToastItem; onClose: () => void }) {
     <div
       role="status"
       aria-live="polite"
-      className={`max-w-md w-full flex items-start gap-3 p-3 border rounded-md shadow ${variantClasses(
-        toast.variant
-      )}`}
+      className={clsx(variantClasses(toast.variant))}
     >
       {toast.icon ? (
-        <div
-          aria-hidden="true"
-          className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full [background:var(--sf2)] [color:var(--ti)]"
-        >
+        <div aria-hidden="true" className="dasti-toast__icon">
           {toast.icon}
         </div>
       ) : null}
-      <div className="flex-1">
-        <div className="flex items-center justify-between gap-2">
-          <div className="font-semibold">{toast.title}</div>
-          <button aria-label="Dismiss toast" onClick={onClose} className="p-1 rounded focus:outline-none focus:[box-shadow:0_0_0_3px_var(--fr)]">
-            <span className="text-sm">×</span>
+      <div className="dasti-toast__body">
+        <div className="dasti-toast__head">
+          <div className="dasti-toast__title">{toast.title}</div>
+          <button
+            aria-label="Dismiss toast"
+            onClick={onClose}
+            className="dasti-toast__close"
+          >
+            <span className="dasti-toast__close-glyph">×</span>
           </button>
         </div>
-        {toast.description && <div className="mt-1 text-sm text-muted">{toast.description}</div>}
+        {toast.description && (
+          <div className="dasti-toast__description">{toast.description}</div>
+        )}
       </div>
     </div>
   );

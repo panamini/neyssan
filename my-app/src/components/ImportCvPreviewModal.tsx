@@ -2,7 +2,7 @@ import React, { useEffect, useCallback, useState, useRef } from "react";
 import type { CvDocument } from "../schemas/cvDocument.schema";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import { Button } from "./ui/button";
-import { X, FileText, Loader2 } from "lucide-react";
+import { X, FileText, Loader2 } from "@/lib/icons";
 
 interface Props {
   isOpen: boolean;
@@ -43,7 +43,8 @@ export function ImportCvPreviewModal(props: Props): JSX.Element | null {
   // Escape key to close + focus management
   useEffect(() => {
     if (!isOpen) return undefined;
-    previouslyFocusedRef.current = document && (window.document.activeElement as HTMLElement);
+    previouslyFocusedRef.current =
+      document && (window.document.activeElement as HTMLElement);
     // focus the modal container for keyboard users
     setTimeout(() => {
       modalRef.current?.focus();
@@ -91,10 +92,17 @@ export function ImportCvPreviewModal(props: Props): JSX.Element | null {
       tabIndex={-1}
       className="fixed inset-0 z-50 flex items-center justify-center"
     >
-      <div className="fixed inset-0" onClick={onClose}  style={{ background: 'hsla(30,12%,11%,.32)', backdropFilter: 'blur(8px)' }} />
+      <div
+        className="fixed inset-0"
+        onClick={onClose}
+        style={{
+          background: "hsla(30,12%,11%,.32)",
+          backdropFilter: "blur(8px)",
+        }}
+      />
       <div
         ref={modalRef}
-        className="relative w-full max-w-2xl mx-4 overflow-hidden rounded-rl [box-shadow:var(--shc)] [background:var(--sfr)]"
+        className="relative w-full max-w-2xl mx-4 overflow-hidden [border-radius:var(--radius-surface)] [box-shadow:var(--shc)] [background:var(--sfr)]"
         tabIndex={0}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b">
@@ -115,19 +123,27 @@ export function ImportCvPreviewModal(props: Props): JSX.Element | null {
 
         <div className="max-h-[60vh] overflow-y-auto p-4 space-y-4">
           {document.sections.length === 0 && (
-            <div className="text-sm text-muted-foreground">No sections found in this import.</div>
+            <div className="text-sm text-muted-foreground">
+              No sections found in this import.
+            </div>
           )}
 
           {document.sections.map((s) => (
             <div key={s.id} className="p-3 border rounded bg-muted/5">
               <div className="flex items-center justify-between">
-                <div className="text-sm font-medium">{s.title || "Untitled section"}</div>
-                <div className="text-xs text-muted-foreground">{(s.blocks ?? []).length} blocks</div>
+                <div className="text-sm font-medium">
+                  {s.title || "Untitled section"}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {(s.blocks ?? []).length} blocks
+                </div>
               </div>
               <div className="mt-2 space-y-2">
                 {(s.blocks ?? []).slice(0, 3).map((b) => (
                   <div key={b.id} className="p-2 rounded bg-background">
-                    <div className="text-xs font-medium truncate">{(b as any).title ?? "Block"}</div>
+                    <div className="text-xs font-medium truncate">
+                      {(b as any).title ?? "Block"}
+                    </div>
                     <div className="mt-1 text-xs truncate text-muted-foreground">
                       {(b as any).plainText ??
                         (typeof (b as any).content === "string"
@@ -137,7 +153,9 @@ export function ImportCvPreviewModal(props: Props): JSX.Element | null {
                   </div>
                 ))}
                 {(s.blocks ?? []).length > 3 && (
-                  <div className="text-xs text-muted-foreground">+{(s.blocks ?? []).length - 3} more</div>
+                  <div className="text-xs text-muted-foreground">
+                    +{(s.blocks ?? []).length - 3} more
+                  </div>
                 )}
               </div>
             </div>
@@ -149,7 +167,11 @@ export function ImportCvPreviewModal(props: Props): JSX.Element | null {
           <Button variant="secondary" onClick={onClose} disabled={isReplacing}>
             Cancel
           </Button>
-          <Button onClick={handleReplace} disabled={isReplacing} className="ml-2">
+          <Button
+            onClick={handleReplace}
+            disabled={isReplacing}
+            className="ml-2"
+          >
             {isReplacing ? (
               <span className="inline-flex items-center gap-2">
                 <Loader2 className="w-4 h-4 animate-spin" aria-hidden />

@@ -13,6 +13,7 @@
  * - React hook factory for use in components
  */
 
+import { useCallback, useEffect, useRef } from "react";
 import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { convexClient } from "../lib/convex-client";
@@ -181,7 +182,7 @@ export class ConvexStorageAdapter {
 
 export function useConvexStorageAdapter(): ConvexStorageAdapter {
   const patchMutation = useMutation(api.profiles.patch) as unknown as (args: { profileId: string; patch: any }) => Promise<any>;
-  const loadFn = async (_profileId: string): Promise<CvDocument | null> => {
+  const loadFn = useCallback(async (_profileId: string): Promise<CvDocument | null> => {
     try {
       const prof = await convexClient.query(api.profilesPublic.get);
       if (!prof) return null;
@@ -193,8 +194,27 @@ export function useConvexStorageAdapter(): ConvexStorageAdapter {
     } catch {
       return null;
     }
-  };
-  return new ConvexStorageAdapter(patchMutation, loadFn);
+  }, []);
+  const patchMutationRef = useRef(patchMutation);
+  const loadFnRef = useRef(loadFn);
+  const adapterRef = useRef<ConvexStorageAdapter | null>(null);
+
+  useEffect(() => {
+    patchMutationRef.current = patchMutation;
+  }, [patchMutation]);
+
+  useEffect(() => {
+    loadFnRef.current = loadFn;
+  }, [loadFn]);
+
+  if (!adapterRef.current) {
+    adapterRef.current = new ConvexStorageAdapter(
+      (args) => patchMutationRef.current(args),
+      (profileId) => loadFnRef.current(profileId),
+    );
+  }
+
+  return adapterRef.current;
 }
 
 /* -------------------- Local/Memory Utilities -------------------- */

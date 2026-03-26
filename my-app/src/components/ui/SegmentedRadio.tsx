@@ -1,4 +1,5 @@
 import React from "react";
+import clsx from "clsx";
 
 export interface ISegmentedOption<T extends string> {
   value: T;
@@ -40,7 +41,7 @@ export function SegmentedRadio<T extends string>({
 }: ISegmentedRadioProps<T>): JSX.Element {
   const currentIndex = Math.max(
     0,
-    options.findIndex((o) => o.value === value)
+    options.findIndex((o) => o.value === value),
   );
 
   function move(delta: number) {
@@ -69,7 +70,8 @@ export function SegmentedRadio<T extends string>({
         break;
       case "End":
         e.preventDefault();
-        if (options[options.length - 1]) onChange(options[options.length - 1].value);
+        if (options[options.length - 1])
+          onChange(options[options.length - 1].value);
         break;
       case " ":
       case "Enter":
@@ -86,17 +88,17 @@ export function SegmentedRadio<T extends string>({
       role="radiogroup"
       aria-disabled={disabled || undefined}
       onKeyDown={handleKeyDown}
-      className={[
-        "inline-flex flex-wrap items-center gap-1 rounded-md p-1",
-        "[background:var(--sf2)] border border-[color:var(--bo)]",
-        disabled ? "opacity-60 cursor-not-allowed" : "",
-        className ?? "",
-      ].join(" ")}
+      className={clsx(
+        "dasti-segmented-control",
+        disabled && "opacity-60 cursor-not-allowed",
+        className,
+      )}
       {...aria}
     >
       {options.map((opt, idx) => {
         const isChecked = opt.value === value;
-        const tabIndex = isChecked || currentIndex === -1 && idx === 0 ? 0 : -1;
+        const tabIndex =
+          isChecked || (currentIndex === -1 && idx === 0) ? 0 : -1;
         // Derive a stable input-like name for SR friendliness (not a real input)
         const srName = name ?? id ?? "segmented-radio";
         return (
@@ -111,13 +113,10 @@ export function SegmentedRadio<T extends string>({
             onClick={() => {
               if (!disabled) onChange(opt.value);
             }}
-            className={[
-              "px-2.5 py-1 text-xs sm:text-sm rounded-md [transition:background_.12s_var(--ez),color_.12s_var(--ez),border-color_.12s_var(--ez)]",
-              "focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]",
-              isChecked
-                ? "[background:var(--ac)] [color:var(--op)]"
-                : "[background:var(--sfr)] border [border-color:var(--bm)] [color:var(--ti)] hover:[background:var(--sf2)]",
-            ].join(" ")}
+            className={clsx(
+              "dasti-segmented-control__button",
+              isChecked && "dasti-segmented-control__button--active",
+            )}
             data-segment-name={srName}
           >
             {opt.label}

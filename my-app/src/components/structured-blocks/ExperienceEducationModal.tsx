@@ -1,4 +1,12 @@
-import React, { useState, useCallback, useEffect, useMemo, useImperativeHandle, useRef, forwardRef } from "react";
+import React, {
+  useState,
+  useCallback,
+  useEffect,
+  useMemo,
+  useImperativeHandle,
+  useRef,
+  forwardRef,
+} from "react";
 import type { IExperienceItem, IEducationItem } from "../../types/cvDocument";
 import { v4 as uuidv4 } from "uuid";
 import { parseIsoToParts, composeIsoFromParts } from "../../lib/date-utils";
@@ -18,8 +26,10 @@ import {
 import type { RemirrorJSON } from "remirror";
 import { ensureRemirrorDoc } from "../remirror-editor/utils/conversion";
 import { EditorToolbar } from "../remirror-editor/components/EditorToolbar";
-import { Trash, X } from "lucide-react";
+import { Trash, X } from "@/lib/icons";
 import { Button } from "../ui/button";
+import { useCloseOnEscape } from "../../hooks/use-close-on-escape";
+import { BodyPortal } from "@/components/ui/body-portal";
 
 type UiPatch = Partial<{
   startYear: string;
@@ -72,9 +82,59 @@ function getYearOptions(): number[] {
   return years;
 }
 
+function normalizeMonthYearDateFields<
+  T extends {
+    startDate?: string;
+    endDate?: string | null;
+    startDatePrecision?: "year" | "month" | "day";
+    endDatePrecision?: "year" | "month" | "day";
+    isCurrent?: boolean;
+    currentlyWorking?: boolean;
+  },
+>(item: T): T {
+  const startParts = parseIsoToParts(item.startDate);
+  const endParts = parseIsoToParts(item.endDate ?? undefined);
+  const startPrecision = startParts.month
+    ? "month"
+    : startParts.year
+      ? "year"
+      : undefined;
+  const endPrecision = endParts.month
+    ? "month"
+    : endParts.year
+      ? "year"
+      : undefined;
+  const startComposed = composeIsoFromParts({
+    year: startParts.year,
+    month: startParts.month,
+    precision: startPrecision,
+  });
+  const endComposed = composeIsoFromParts({
+    year: endParts.year,
+    month: endParts.month,
+    precision: endPrecision,
+  });
+
+  return {
+    ...item,
+    startDate: startComposed.iso,
+    startDatePrecision: startComposed.precision,
+    endDate:
+      item.isCurrent || item.currentlyWorking ? null : endComposed.iso ?? null,
+    endDatePrecision:
+      item.isCurrent || item.currentlyWorking
+        ? undefined
+        : endComposed.precision,
+  };
+}
+
 // Build a bullet list Remirror doc from an achievements[] array (legacy migration)
-function achievementsToBulletDoc(list: string[] | undefined | null): RemirrorJSON {
-  const items = Array.isArray(list) ? list.map((s) => String(s ?? "").trim()).filter(Boolean) : [];
+function achievementsToBulletDoc(
+  list: string[] | undefined | null,
+): RemirrorJSON {
+  const items = Array.isArray(list)
+    ? list.map((s) => String(s ?? "").trim()).filter(Boolean)
+    : [];
   if (items.length === 0) return ensureRemirrorDoc(undefined as any);
   return {
     type: "doc",
@@ -112,13 +172,13 @@ function hasNonEmptyDocText(value: unknown): boolean {
   return false;
 }
 
-const RichEditor = forwardRef<RichEditorHandle, {
-  initialContent: RemirrorJSON;
-  onChangeDoc: (doc: RemirrorJSON) => void;
-}>(({
-  initialContent,
-  onChangeDoc,
-}, ref) => {
+const RichEditor = forwardRef<
+  RichEditorHandle,
+  {
+    initialContent: RemirrorJSON;
+    onChangeDoc: (doc: RemirrorJSON) => void;
+  }
+>(({ initialContent, onChangeDoc }, ref) => {
   const extensions = useMemo(
     () => [
       // Core text + history
@@ -134,7 +194,7 @@ const RichEditor = forwardRef<RichEditorHandle, {
       new OrderedListExtension({}),
       new ListItemExtension({}),
     ],
-    []
+    [],
   );
 
   // Initialize with provided content; keep internal state stable
@@ -147,7 +207,8 @@ const RichEditor = forwardRef<RichEditorHandle, {
     try {
       const view = (manager as any)?.view;
       const doc: RemirrorJSON =
-        (view?.state?.doc?.toJSON?.() as RemirrorJSON | undefined) ?? ensureRemirrorDoc(undefined as any);
+        (view?.state?.doc?.toJSON?.() as RemirrorJSON | undefined) ??
+        ensureRemirrorDoc(undefined as any);
       onChangeDoc(ensureRemirrorDoc(doc as any));
     } catch {
       /* noop */
@@ -162,18 +223,23 @@ const RichEditor = forwardRef<RichEditorHandle, {
         onChange(param);
         const view = (manager as any)?.view;
         const doc: RemirrorJSON =
-          (view?.state?.doc?.toJSON?.() as RemirrorJSON | undefined) ?? ensureRemirrorDoc(undefined as any);
+          (view?.state?.doc?.toJSON?.() as RemirrorJSON | undefined) ??
+          ensureRemirrorDoc(undefined as any);
         onChangeDoc(ensureRemirrorDoc(doc as any));
       } catch {
         /* noop */
       }
     },
-    [manager, onChange, onChangeDoc]
+    [manager, onChange, onChangeDoc],
   );
 
   return (
     <div className="dasti-rich">
-      <Remirror manager={manager} initialContent={state} onChange={handleChange}>
+      <Remirror
+        manager={manager}
+        initialContent={state}
+        onChange={handleChange}
+      >
         <div className="rich-content">
           <EditorToolbar position="top" />
           <EditorComponent />
@@ -202,55 +268,71 @@ function ModalShell({
   primaryAction?: { label: string; onClick: () => void; disabled?: boolean };
   footerNote?: string;
 }) {
+  useCloseOnEscape({ open, onClose });
+
   if (!open) return null;
   return (
-    <div
-      className="fixed inset-0 z-[10000] flex items-center justify-center p-4"
-      onMouseDownCapture={(e) => e.stopPropagation()}
-      onPointerDownCapture={(e) => e.stopPropagation()}
-    >
+    <BodyPortal>
       <div
-        className="absolute inset-0"
-        onClick={onClose}
-        aria-hidden
-        style={{ background: "hsla(30,12%,11%,.32)", backdropFilter: "blur(8px) saturate(1.2)" }}
-      />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        className="dasti-modal"
-        onClick={(e) => e.stopPropagation()}
+        className="fixed inset-0 z-[10000] flex items-center justify-center p-4"
+        onMouseDownCapture={(e) => e.stopPropagation()}
+        onPointerDownCapture={(e) => e.stopPropagation()}
       >
-        <div className="dasti-modal-header">
-          <div className="dasti-modal-heading">
-            <h2 className="dasti-modal-title">{title}</h2>
-            {subtitle ? <p className="dasti-modal-subtitle">{subtitle}</p> : null}
+        <div
+          className="absolute inset-0"
+          onClick={onClose}
+          aria-hidden
+          style={{
+            background: "hsla(30,12%,11%,.32)",
+            backdropFilter: "blur(8px) saturate(1.2)",
+          }}
+        />
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={title}
+          className="dasti-modal"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="dasti-modal-header">
+            <div className="dasti-modal-heading">
+              <h2 className="dasti-modal-title">{title}</h2>
+              {subtitle ? (
+                <p className="dasti-modal-subtitle">{subtitle}</p>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="dasti-modal-close"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="dasti-modal-close"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
 
-        <div className="dasti-modal-body">{children}</div>
+          <div className="dasti-modal-body">{children}</div>
 
-        <div className="dasti-modal-footer">
-          <div className="dasti-modal-footer-note">{footerNote ?? "Applied to the active resume."}</div>
-          <div className="dasti-modal-actions">
-            {primaryAction ? (
-              <Button type="button" variant="primary" onClick={primaryAction.onClick} disabled={primaryAction.disabled}>
-                {primaryAction.label}
-              </Button>
-            ) : null}
+          <div className="dasti-modal-footer">
+            <div className="dasti-modal-footer-note">
+              {footerNote ?? "Applied to the active resume."}
+            </div>
+            <div className="dasti-modal-actions">
+              {primaryAction ? (
+                <Button
+                  type="button"
+                  variant="primary"
+                  onClick={primaryAction.onClick}
+                  disabled={primaryAction.disabled}
+                >
+                  {primaryAction.label}
+                </Button>
+              ) : null}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </BodyPortal>
   );
 }
 
@@ -259,7 +341,12 @@ function ModalShell({
  * - Edits a list of Experience entries with precision-aware dates and Present toggle
  * - Minimal v1: company, position, location, dates, achievements (simple textarea)
  */
-export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModalProps) {
+export function ExperienceModal({
+  open,
+  onClose,
+  items,
+  onSave,
+}: ExperienceModalProps) {
   const [local, setLocal] = useState<IExperienceItem[]>(() => {
     if (Array.isArray(items)) return items.map((it) => ({ ...it }));
     return [];
@@ -272,13 +359,13 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
     return {
       startYear: sp.year ?? "",
       startMonth: sp.month ?? "",
-      startDay: it.startDatePrecision === "day" ? (sp.day ?? "") : "",
+      startDay: "",
       endYear: ep.year ?? "",
       endMonth: ep.month ?? "",
-      endDay: it.endDatePrecision === "day" ? (ep.day ?? "") : "",
+      endDay: "",
       isCurrent: Boolean(it.isCurrent || it.currentlyWorking),
-      startShowDay: it.startDatePrecision === "day",
-      endShowDay: it.endDatePrecision === "day",
+      startShowDay: false,
+      endShowDay: false,
     };
   }, []);
 
@@ -293,7 +380,9 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
   // Sync local + UI state when the modal opens or items change to avoid stale/empty selects
   useEffect(() => {
     if (open) {
-      const copied = Array.isArray(items) ? (items.map((it) => ({ ...it })) as IExperienceItem[]) : [];
+      const copied = Array.isArray(items)
+        ? (items.map((it) => ({ ...it })) as IExperienceItem[])
+        : [];
       setLocal(copied);
       localRef.current = copied;
       setUiState(copied.map((it) => deriveUi(it)));
@@ -301,104 +390,114 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
         copied.map((it) => [
           String(it.id),
           ensureRemirrorDoc(
-            typeof it.responsibilities !== "undefined" && it.responsibilities !== null
+            typeof it.responsibilities !== "undefined" &&
+              it.responsibilities !== null
               ? (it.responsibilities as any)
-              : achievementsToBulletDoc(Array.isArray(it.achievements) ? it.achievements : []),
+              : achievementsToBulletDoc(
+                  Array.isArray(it.achievements) ? it.achievements : [],
+                ),
           ),
         ]),
       );
     }
   }, [open, items, deriveUi]);
 
-  const setField = useCallback((idx: number, key: keyof IExperienceItem, value: unknown) => {
-    setLocal((prev) => {
-      const next = prev.map((it, i) => (i === idx ? ({ ...it, [key]: value } as IExperienceItem) : it));
-      localRef.current = next;
-      return next;
-    });
-  }, []);
+  const setField = useCallback(
+    (idx: number, key: keyof IExperienceItem, value: unknown) => {
+      setLocal((prev) => {
+        const next = prev.map((it, i) =>
+          i === idx ? ({ ...it, [key]: value } as IExperienceItem) : it,
+        );
+        localRef.current = next;
+        return next;
+      });
+    },
+    [],
+  );
 
-  const setUiField = useCallback((idx: number, patch: UiPatch) => {
-    // Update UI state first to keep dropdowns stable even if ISO can't be composed yet
-    const currentUi: UiState = uiState[idx] ?? {
-      startYear: "", startMonth: "", startDay: "",
-      endYear: "", endMonth: "", endDay: "",
-      startShowDay: false, endShowDay: false, isCurrent: false,
-    };
-    const merged: UiState = { ...currentUi, ...patch };
+  const setUiField = useCallback(
+    (idx: number, patch: UiPatch) => {
+      // Update UI state first to keep dropdowns stable even if ISO can't be composed yet
+      const currentUi: UiState = uiState[idx] ?? {
+        startYear: "",
+        startMonth: "",
+        startDay: "",
+        endYear: "",
+        endMonth: "",
+        endDay: "",
+        startShowDay: false,
+        endShowDay: false,
+        isCurrent: false,
+      };
+      const merged: UiState = { ...currentUi, ...patch };
 
-    setUiState((prev) => {
-      const nu = [...prev];
-      nu[idx] = merged;
-      return nu;
-    });
-
-    // Apply to model by composing back into ISO + precision fields
-    setLocal((prev) => {
-      const next = [...prev];
-      const base = next[idx] ?? {};
-
-      // start: persist intended precision even if iso can't be composed yet
-      const intendedStartPrecision: "year" | "month" | "day" | undefined =
-        merged.startShowDay ? "day" : merged.startMonth ? "month" : merged.startYear ? "year" : undefined;
-
-      (base as IExperienceItem).startDatePrecision = intendedStartPrecision;
-
-      const startComposed = composeIsoFromParts({
-        year: String(merged.startYear ?? "").trim() || undefined,
-        month: String(merged.startMonth ?? "").trim() || undefined,
-        day: String(merged.startDay ?? "").trim() || undefined,
-        precision: intendedStartPrecision,
+      setUiState((prev) => {
+        const nu = [...prev];
+        nu[idx] = merged;
+        return nu;
       });
 
-      // Only update startDate when we have the parts needed for the chosen precision.
-      const wantsDayButMissing = intendedStartPrecision === "day" && !(String(merged.startDay ?? "").trim());
-      if (!wantsDayButMissing) {
-        if (startComposed.iso) {
-          (base as IExperienceItem).startDate = startComposed.iso;
-        }
-      }
+      // Apply to model by composing back into ISO + precision fields
+      setLocal((prev) => {
+        const next = [...prev];
+        const base = next[idx] ?? {};
 
-      // end with Present
-      const isCurrent = Boolean(merged.isCurrent);
-      if (isCurrent) {
-        (base as IExperienceItem).isCurrent = true;
-        (base as IExperienceItem).currentlyWorking = true;
-        (base as IExperienceItem).endDate = null;
-        (base as IExperienceItem).endDatePrecision = undefined;
-      } else {
-        const intendedEndPrecision: "year" | "month" | "day" | undefined =
-          merged.endShowDay ? "day" : merged.endMonth ? "month" : merged.endYear ? "year" : undefined;
+        // start: persist intended precision even if iso can't be composed yet
+        const intendedStartPrecision: "year" | "month" | undefined =
+          merged.startMonth ? "month" : merged.startYear ? "year" : undefined;
 
-        (base as IExperienceItem).isCurrent = undefined;
-        (base as IExperienceItem).currentlyWorking = undefined;
-        (base as IExperienceItem).endDatePrecision = intendedEndPrecision;
+        (base as IExperienceItem).startDatePrecision = intendedStartPrecision;
 
-        const endComposed = composeIsoFromParts({
-          year: String(merged.endYear ?? "").trim() || undefined,
-          month: String(merged.endMonth ?? "").trim() || undefined,
-          day: String(merged.endDay ?? "").trim() || undefined,
-          precision: intendedEndPrecision,
+        const startComposed = composeIsoFromParts({
+          year: String(merged.startYear ?? "").trim() || undefined,
+          month: String(merged.startMonth ?? "").trim() || undefined,
+          precision: intendedStartPrecision,
         });
 
-        const endWantsDayButMissing = intendedEndPrecision === "day" && !(String(merged.endDay ?? "").trim());
-        if (!endWantsDayButMissing) {
+        if (startComposed.iso) {
+          (base as IExperienceItem).startDate = startComposed.iso;
+        } else {
+          (base as IExperienceItem).startDate = "";
+        }
+
+        // end with Present
+        const isCurrent = Boolean(merged.isCurrent);
+        if (isCurrent) {
+          (base as IExperienceItem).isCurrent = true;
+          (base as IExperienceItem).currentlyWorking = true;
+          (base as IExperienceItem).endDate = null;
+          (base as IExperienceItem).endDatePrecision = undefined;
+        } else {
+          const intendedEndPrecision: "year" | "month" | undefined =
+            merged.endMonth ? "month" : merged.endYear ? "year" : undefined;
+
+          (base as IExperienceItem).isCurrent = undefined;
+          (base as IExperienceItem).currentlyWorking = undefined;
+          (base as IExperienceItem).endDatePrecision = intendedEndPrecision;
+
+          const endComposed = composeIsoFromParts({
+            year: String(merged.endYear ?? "").trim() || undefined,
+            month: String(merged.endMonth ?? "").trim() || undefined,
+            precision: intendedEndPrecision,
+          });
+
           (base as IExperienceItem).endDate = endComposed.iso ?? null;
         }
-      }
 
-      next[idx] = base as IExperienceItem;
-      localRef.current = next;
-      return next;
-    });
-  }, [uiState]);
+        next[idx] = base as IExperienceItem;
+        localRef.current = next;
+        return next;
+      });
+    },
+    [uiState],
+  );
 
   const addRow = useCallback(() => {
     const newItem: IExperienceItem = {
       id: uuidv4(),
       company: "",
       position: "",
-      startDate: new Date(Date.UTC(1970, 0, 1, 0, 0, 0)).toISOString(),
+      startDate: "",
       endDate: null,
       isCurrent: false,
       currentlyWorking: false,
@@ -412,7 +511,9 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
       return next;
     });
     setUiState((prev) => [...prev, deriveUi(newItem)]);
-    responsibilitiesDocRef.current[String(newItem.id)] = ensureRemirrorDoc(undefined as any);
+    responsibilitiesDocRef.current[String(newItem.id)] = ensureRemirrorDoc(
+      undefined as any,
+    );
   }, [deriveUi]);
 
   const removeRow = useCallback((idx: number) => {
@@ -434,21 +535,33 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
       let text = "";
       try {
         // Try clipboard first (user can copy JSON payload from AI output)
-        if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.readText) {
+        if (
+          typeof navigator !== "undefined" &&
+          navigator.clipboard &&
+          navigator.clipboard.readText
+        ) {
           text = await navigator.clipboard.readText();
         }
       } catch {
         /* clipboard not available */
       }
       if (!text) {
-        const promptText = typeof window !== "undefined"
-          ? window.prompt("Paste AI JSON for experience (array or { experience: [...] }):", "")
-          : null;
+        const promptText =
+          typeof window !== "undefined"
+            ? window.prompt(
+                "Paste AI JSON for experience (array or { experience: [...] }):",
+                "",
+              )
+            : null;
         if (!promptText) return;
         text = promptText;
       }
       const j = JSON.parse(text) as unknown;
-      const arr = Array.isArray(j) ? j : (Array.isArray((j as any)?.experience) ? (j as any).experience : []);
+      const arr = Array.isArray(j)
+        ? j
+        : Array.isArray((j as any)?.experience)
+          ? (j as any).experience
+          : [];
       if (!Array.isArray(arr) || arr.length === 0) return;
       const mapped = mapAiExperience(arr);
       setLocal(mapped);
@@ -458,9 +571,12 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
         mapped.map((it) => [
           String(it.id),
           ensureRemirrorDoc(
-            typeof it.responsibilities !== "undefined" && it.responsibilities !== null
+            typeof it.responsibilities !== "undefined" &&
+              it.responsibilities !== null
               ? (it.responsibilities as any)
-              : achievementsToBulletDoc(Array.isArray(it.achievements) ? it.achievements : []),
+              : achievementsToBulletDoc(
+                  Array.isArray(it.achievements) ? it.achievements : [],
+                ),
           ),
         ]),
       );
@@ -476,14 +592,15 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
       open={open}
       onClose={onClose}
       primaryAction={{
-        label: "Save all",
+        label: "Save",
         onClick: () => {
           try {
             editorRefs.current.forEach((editor) => editor?.flush?.());
           } catch {
             /* noop */
           }
-          const next = localRef.current.map((item) => {
+          const next = localRef.current.map((rawItem) => {
+            const item = normalizeMonthYearDateFields(rawItem);
             const doc = responsibilitiesDocRef.current[String(item.id)];
             if (!doc) return item;
             const normalizedDoc = ensureRemirrorDoc(doc as any);
@@ -514,9 +631,15 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
 
         {local.map((row, idx) => {
           const ui = uiState[idx] ?? {
-            startYear: "", startMonth: "", startDay: "",
-            endYear: "", endMonth: "", endDay: "",
-            startShowDay: false, endShowDay: false, isCurrent: false,
+            startYear: "",
+            startMonth: "",
+            startDay: "",
+            endYear: "",
+            endMonth: "",
+            endDay: "",
+            startShowDay: false,
+            endShowDay: false,
+            isCurrent: false,
           };
           return (
             <section key={String(row.id ?? idx)} className="dasti-zone">
@@ -551,7 +674,10 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
                   />
                 </label>
 
-                <label className="dasti-field-group" style={{ gridColumn: "1 / -1" }}>
+                <label
+                  className="dasti-field-group"
+                  style={{ gridColumn: "1 / -1" }}
+                >
                   <span className="dasti-label">Location</span>
                   <input
                     value={row.location ?? ""}
@@ -563,11 +689,19 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
 
                 <div className="dasti-field-group">
                   <span className="dasti-label">Start date</span>
-                  <div style={{ display: "grid", gridTemplateColumns: ui.startShowDay ? "1fr 1fr 1fr" : "1fr 1fr auto", gap: "var(--s2)" }}>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "var(--s2)",
+                    }}
+                  >
                     <select
                       className="dasti-select"
                       value={ui.startMonth}
-                      onChange={(e) => setUiField(idx, { startMonth: e.target.value })}
+                      onChange={(e) =>
+                        setUiField(idx, { startMonth: e.target.value })
+                      }
                     >
                       <option value="">Month</option>
                       <option value="01">Jan</option>
@@ -586,7 +720,9 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
                     <select
                       className="dasti-select"
                       value={ui.startYear}
-                      onChange={(e) => setUiField(idx, { startYear: e.target.value })}
+                      onChange={(e) =>
+                        setUiField(idx, { startYear: e.target.value })
+                      }
                     >
                       <option value="">Year</option>
                       {getYearOptions().map((y) => (
@@ -595,47 +731,25 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
                         </option>
                       ))}
                     </select>
-                    {ui.startShowDay ? (
-                      <input
-                        type="number"
-                        min={1}
-                        max={31}
-                        className="dasti-field"
-                        value={ui.startDay}
-                        onChange={(e) => setUiField(idx, { startDay: e.target.value })}
-                        placeholder="Day"
-                      />
-                    ) : (
-                      <button
-                        type="button"
-                        className="text-left text-xs [color:var(--tm2)] hover:[color:var(--ti)]"
-                        onClick={() => setUiField(idx, { startShowDay: true })}
-                      >
-                        Add day
-                      </button>
-                    )}
                   </div>
-                  {ui.startShowDay && (
-                    <div>
-                      <button
-                        type="button"
-                        className="text-xs [color:var(--tg2)] hover:[color:var(--ti)]"
-                        onClick={() => setUiField(idx, { startShowDay: false, startDay: "" })}
-                      >
-                        Remove day
-                      </button>
-                    </div>
-                  )}
                 </div>
 
                 <div className="dasti-field-group">
                   <span className="dasti-label">End date</span>
-                  <div style={{ display: "grid", gridTemplateColumns: ui.endShowDay ? "1fr 1fr 1fr" : "1fr 1fr auto", gap: "var(--s2)" }}>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "var(--s2)",
+                    }}
+                  >
                     <select
                       className="dasti-select"
                       value={ui.endMonth}
                       disabled={ui.isCurrent}
-                      onChange={(e) => setUiField(idx, { endMonth: e.target.value })}
+                      onChange={(e) =>
+                        setUiField(idx, { endMonth: e.target.value })
+                      }
                     >
                       <option value="">Month</option>
                       <option value="01">Jan</option>
@@ -655,7 +769,9 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
                       className="dasti-select"
                       value={ui.endYear}
                       disabled={ui.isCurrent}
-                      onChange={(e) => setUiField(idx, { endYear: e.target.value })}
+                      onChange={(e) =>
+                        setUiField(idx, { endYear: e.target.value })
+                      }
                     >
                       <option value="">Year</option>
                       {getYearOptions().map((y) => (
@@ -664,74 +780,60 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
                         </option>
                       ))}
                     </select>
-                    {ui.endShowDay ? (
-                      <input
-                        type="number"
-                        min={1}
-                        max={31}
-                        className="dasti-field"
-                        value={ui.endDay}
-                        disabled={ui.isCurrent}
-                        onChange={(e) => setUiField(idx, { endDay: e.target.value })}
-                        placeholder="Day"
-                      />
-                    ) : (
-                      <button
-                        type="button"
-                        className="text-left text-xs [color:var(--tm2)] hover:[color:var(--ti)] disabled:opacity-50"
-                        disabled={ui.isCurrent}
-                        onClick={() => setUiField(idx, { endShowDay: true })}
-                      >
-                        Add day
-                      </button>
-                    )}
                   </div>
-                  {ui.endShowDay && !ui.isCurrent && (
-                    <div>
-                      <button
-                        type="button"
-                        className="text-xs [color:var(--tg2)] hover:[color:var(--ti)]"
-                        onClick={() => setUiField(idx, { endShowDay: false, endDay: "" })}
-                      >
-                        Remove day
-                      </button>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2" style={{ marginTop: "var(--s2)" }}>
+                  <div
+                    className="flex items-center gap-2"
+                    style={{ marginTop: "var(--s2)" }}
+                  >
                     <input
                       id={`exp-present-${idx}`}
                       type="checkbox"
                       className="h-4 w-4 accent-[var(--primary)]"
                       checked={ui.isCurrent}
-                      onChange={(e) => setUiField(idx, { isCurrent: e.target.checked, endYear: "", endMonth: "", endDay: "", endShowDay: false })}
+                      onChange={(e) =>
+                        setUiField(idx, {
+                          isCurrent: e.target.checked,
+                          endYear: "",
+                          endMonth: "",
+                        })
+                      }
                     />
-                    <label htmlFor={`exp-present-${idx}`} className="dasti-hint">
+                    <label
+                      htmlFor={`exp-present-${idx}`}
+                      className="dasti-hint"
+                    >
                       Current role
                     </label>
                   </div>
                 </div>
 
-                <div className="dasti-field-group" style={{ gridColumn: "1 / -1" }}>
+                <div
+                  className="dasti-field-group"
+                  style={{ gridColumn: "1 / -1" }}
+                >
                   <span className="dasti-label">Responsibilities</span>
                   <RichEditor
                     ref={(node) => {
                       editorRefs.current[idx] = node;
                     }}
-                    initialContent={
-                      (() => {
-                        const existing = (row as IExperienceItem).responsibilities as RemirrorJSON | string | undefined;
-                        if (existing) return ensureRemirrorDoc(existing as any);
-                        const legacy = Array.isArray(row.achievements) ? row.achievements : [];
-                        return achievementsToBulletDoc(legacy);
-                      })()
-                    }
+                    initialContent={(() => {
+                      const existing = (row as IExperienceItem)
+                        .responsibilities as RemirrorJSON | string | undefined;
+                      if (existing) return ensureRemirrorDoc(existing as any);
+                      const legacy = Array.isArray(row.achievements)
+                        ? row.achievements
+                        : [];
+                      return achievementsToBulletDoc(legacy);
+                    })()}
                     onChangeDoc={(doc) => {
                       responsibilitiesDocRef.current[String(row.id)] = doc;
                       setField(idx, "responsibilities", doc);
                       setField(idx, "achievements", []);
                     }}
                   />
-                  <div className="dasti-hint">Describe scope, output, and notable outcomes.</div>
+                  <div className="dasti-hint">
+                    Describe scope, output, and notable outcomes.
+                  </div>
                 </div>
               </div>
             </section>
@@ -753,7 +855,12 @@ export function ExperienceModal({ open, onClose, items, onSave }: ExperienceModa
  * - Edits a list of Education entries with precision-aware dates and Present toggle
  * - Minimal v1: institution, degree, fieldOfStudy, grade, dates
  */
-export function EducationModal({ open, onClose, items, onSave }: EducationModalProps) {
+export function EducationModal({
+  open,
+  onClose,
+  items,
+  onSave,
+}: EducationModalProps) {
   const [local, setLocal] = useState<IEducationItem[]>(() => {
     if (Array.isArray(items)) return items.map((it) => ({ ...it }));
     return [];
@@ -765,13 +872,13 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
     return {
       startYear: sp.year ?? "",
       startMonth: sp.month ?? "",
-      startDay: it.startDatePrecision === "day" ? (sp.day ?? "") : "",
+      startDay: "",
       endYear: ep.year ?? "",
       endMonth: ep.month ?? "",
-      endDay: it.endDatePrecision === "day" ? (ep.day ?? "") : "",
+      endDay: "",
       isCurrent: Boolean(it.isCurrent),
-      startShowDay: it.startDatePrecision === "day",
-      endShowDay: it.endDatePrecision === "day",
+      startShowDay: false,
+      endShowDay: false,
     };
   }, []);
 
@@ -784,90 +891,98 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
   // Sync local + UI state for Education on open/items change
   useEffect(() => {
     if (open) {
-      const copied = Array.isArray(items) ? (items.map((it) => ({ ...it })) as IEducationItem[]) : [];
+      const copied = Array.isArray(items)
+        ? (items.map((it) => ({ ...it })) as IEducationItem[])
+        : [];
       setLocal(copied);
       localRef.current = copied;
       setUiState(copied.map((it) => deriveUiEdu(it)));
     }
   }, [open, items, deriveUiEdu]);
 
-  const setField = useCallback((idx: number, key: keyof IEducationItem, value: unknown) => {
-    setLocal((prev) => {
-      const next = prev.map((it, i) => (i === idx ? ({ ...it, [key]: value } as IEducationItem) : it));
-      localRef.current = next;
-      return next;
-    });
-  }, []);
-  
-  const setUiField = useCallback((idx: number, patch: UiPatch) => {
-    // Keep UI responsive and stable first
-    const currentUi: UiState = uiState[idx] ?? {
-      startYear: "", startMonth: "", startDay: "",
-      endYear: "", endMonth: "", endDay: "",
-      startShowDay: false, endShowDay: false, isCurrent: false,
-    };
-    const merged: UiState = { ...currentUi, ...patch };
+  const setField = useCallback(
+    (idx: number, key: keyof IEducationItem, value: unknown) => {
+      setLocal((prev) => {
+        const next = prev.map((it, i) =>
+          i === idx ? ({ ...it, [key]: value } as IEducationItem) : it,
+        );
+        localRef.current = next;
+        return next;
+      });
+    },
+    [],
+  );
 
-    setUiState((prev) => {
-      const nu = [...prev];
-      nu[idx] = merged;
-      return nu;
-    });
+  const setUiField = useCallback(
+    (idx: number, patch: UiPatch) => {
+      // Keep UI responsive and stable first
+      const currentUi: UiState = uiState[idx] ?? {
+        startYear: "",
+        startMonth: "",
+        startDay: "",
+        endYear: "",
+        endMonth: "",
+        endDay: "",
+        startShowDay: false,
+        endShowDay: false,
+        isCurrent: false,
+      };
+      const merged: UiState = { ...currentUi, ...patch };
 
-    // Then apply to the underlying model (local)
-    setLocal((prev) => {
-      const next = [...prev];
-      const base = next[idx] ?? {};
-
-      // start: persist intended precision even if a full ISO isn't available yet
-      const intendedStartPrecision: "year" | "month" | "day" | undefined =
-        merged.startShowDay ? "day" : merged.startMonth ? "month" : merged.startYear ? "year" : undefined;
-
-      (base as IEducationItem).startDatePrecision = intendedStartPrecision;
-
-      const startComposed = composeIsoFromParts({
-        year: String(merged.startYear ?? "").trim() || undefined,
-        month: String(merged.startMonth ?? "").trim() || undefined,
-        day: String(merged.startDay ?? "").trim() || undefined,
-        precision: intendedStartPrecision,
+      setUiState((prev) => {
+        const nu = [...prev];
+        nu[idx] = merged;
+        return nu;
       });
 
-      const wantsDayButMissing = intendedStartPrecision === "day" && !(String(merged.startDay ?? "").trim());
-      if (!wantsDayButMissing) {
-        (base as IEducationItem).startDate = startComposed.iso ?? undefined;
-      }
+      // Then apply to the underlying model (local)
+      setLocal((prev) => {
+        const next = [...prev];
+        const base = next[idx] ?? {};
 
-      // end with Present
-      const isCurrent = Boolean(merged.isCurrent);
-      if (isCurrent) {
-        (base as IEducationItem).isCurrent = true;
-        (base as IEducationItem).endDate = null;
-        (base as IEducationItem).endDatePrecision = undefined;
-      } else {
-        const intendedEndPrecision: "year" | "month" | "day" | undefined =
-          merged.endShowDay ? "day" : merged.endMonth ? "month" : merged.endYear ? "year" : undefined;
+        // start: persist intended precision even if a full ISO isn't available yet
+        const intendedStartPrecision: "year" | "month" | undefined =
+          merged.startMonth ? "month" : merged.startYear ? "year" : undefined;
 
-        (base as IEducationItem).isCurrent = undefined;
-        (base as IEducationItem).endDatePrecision = intendedEndPrecision;
+        (base as IEducationItem).startDatePrecision = intendedStartPrecision;
 
-        const endComposed = composeIsoFromParts({
-          year: String(merged.endYear ?? "").trim() || undefined,
-          month: String(merged.endMonth ?? "").trim() || undefined,
-          day: String(merged.endDay ?? "").trim() || undefined,
-          precision: intendedEndPrecision,
+        const startComposed = composeIsoFromParts({
+          year: String(merged.startYear ?? "").trim() || undefined,
+          month: String(merged.startMonth ?? "").trim() || undefined,
+          precision: intendedStartPrecision,
         });
 
-        const endWantsDayButMissing = intendedEndPrecision === "day" && !(String(merged.endDay ?? "").trim());
-        if (!endWantsDayButMissing) {
+        (base as IEducationItem).startDate = startComposed.iso ?? undefined;
+
+        // end with Present
+        const isCurrent = Boolean(merged.isCurrent);
+        if (isCurrent) {
+          (base as IEducationItem).isCurrent = true;
+          (base as IEducationItem).endDate = null;
+          (base as IEducationItem).endDatePrecision = undefined;
+        } else {
+          const intendedEndPrecision: "year" | "month" | undefined =
+            merged.endMonth ? "month" : merged.endYear ? "year" : undefined;
+
+          (base as IEducationItem).isCurrent = undefined;
+          (base as IEducationItem).endDatePrecision = intendedEndPrecision;
+
+          const endComposed = composeIsoFromParts({
+            year: String(merged.endYear ?? "").trim() || undefined,
+            month: String(merged.endMonth ?? "").trim() || undefined,
+            precision: intendedEndPrecision,
+          });
+
           (base as IEducationItem).endDate = endComposed.iso ?? undefined;
         }
-      }
 
-      next[idx] = base as IEducationItem;
-      localRef.current = next;
-      return next;
-    });
-  }, [uiState]);
+        next[idx] = base as IEducationItem;
+        localRef.current = next;
+        return next;
+      });
+    },
+    [uiState],
+  );
 
   const addRow = useCallback(() => {
     const newItem: IEducationItem = {
@@ -903,21 +1018,33 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
     try {
       let text = "";
       try {
-        if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.readText) {
+        if (
+          typeof navigator !== "undefined" &&
+          navigator.clipboard &&
+          navigator.clipboard.readText
+        ) {
           text = await navigator.clipboard.readText();
         }
       } catch {
         /* clipboard not available */
       }
       if (!text) {
-        const promptText = typeof window !== "undefined"
-          ? window.prompt("Paste AI JSON for education (array or { education: [...] }):", "")
-          : null;
+        const promptText =
+          typeof window !== "undefined"
+            ? window.prompt(
+                "Paste AI JSON for education (array or { education: [...] }):",
+                "",
+              )
+            : null;
         if (!promptText) return;
         text = promptText;
       }
       const j = JSON.parse(text) as unknown;
-      const arr = Array.isArray(j) ? j : (Array.isArray((j as any)?.education) ? (j as any).education : []);
+      const arr = Array.isArray(j)
+        ? j
+        : Array.isArray((j as any)?.education)
+          ? (j as any).education
+          : [];
       if (!Array.isArray(arr) || arr.length === 0) return;
       const mapped = mapAiEducation(arr);
       setLocal(mapped);
@@ -934,7 +1061,13 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
       subtitle="Study and qualifications"
       open={open}
       onClose={onClose}
-      primaryAction={{ label: "Save all", onClick: () => onSave(localRef.current) }}
+      primaryAction={{
+        label: "Save all",
+        onClick: () =>
+          onSave(
+            localRef.current.map((item) => normalizeMonthYearDateFields(item)),
+          ),
+      }}
       footerNote="Order follows your resume."
     >
       <div className="space-y-5">
@@ -946,9 +1079,15 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
 
         {local.map((row, idx) => {
           const ui = uiState[idx] ?? {
-            startYear: "", startMonth: "", startDay: "",
-            endYear: "", endMonth: "", endDay: "",
-            startShowDay: false, endShowDay: false, isCurrent: false,
+            startYear: "",
+            startMonth: "",
+            startDay: "",
+            endYear: "",
+            endMonth: "",
+            endDay: "",
+            startShowDay: false,
+            endShowDay: false,
+            isCurrent: false,
           };
           return (
             <section key={String(row.id ?? idx)} className="dasti-zone">
@@ -969,7 +1108,9 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
                   <span className="dasti-label">Institution</span>
                   <input
                     value={row.institution}
-                    onChange={(e) => setField(idx, "institution", e.target.value)}
+                    onChange={(e) =>
+                      setField(idx, "institution", e.target.value)
+                    }
                     className="dasti-field"
                   />
                 </label>
@@ -987,7 +1128,9 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
                   <span className="dasti-label">Field of study</span>
                   <input
                     value={row.fieldOfStudy ?? ""}
-                    onChange={(e) => setField(idx, "fieldOfStudy", e.target.value)}
+                    onChange={(e) =>
+                      setField(idx, "fieldOfStudy", e.target.value)
+                    }
                     className="dasti-field"
                   />
                 </label>
@@ -1003,11 +1146,19 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
 
                 <div className="dasti-field-group">
                   <span className="dasti-label">Start date</span>
-                  <div style={{ display: "grid", gridTemplateColumns: ui.startShowDay ? "1fr 1fr 1fr" : "1fr 1fr auto", gap: "var(--s2)" }}>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "var(--s2)",
+                    }}
+                  >
                     <select
                       className="dasti-select"
                       value={ui.startMonth}
-                      onChange={(e) => setUiField(idx, { startMonth: e.target.value })}
+                      onChange={(e) =>
+                        setUiField(idx, { startMonth: e.target.value })
+                      }
                     >
                       <option value="">Month</option>
                       <option value="01">Jan</option>
@@ -1026,7 +1177,9 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
                     <select
                       className="dasti-select"
                       value={ui.startYear}
-                      onChange={(e) => setUiField(idx, { startYear: e.target.value })}
+                      onChange={(e) =>
+                        setUiField(idx, { startYear: e.target.value })
+                      }
                     >
                       <option value="">Year</option>
                       {getYearOptions().map((y) => (
@@ -1035,45 +1188,25 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
                         </option>
                       ))}
                     </select>
-                    {ui.startShowDay ? (
-                      <input
-                        type="number"
-                        min={1}
-                        max={31}
-                        className="dasti-field"
-                        value={ui.startDay}
-                        onChange={(e) => setUiField(idx, { startDay: e.target.value })}
-                        placeholder="Day"
-                      />
-                    ) : (
-                      <button
-                        type="button"
-                        className="text-left text-xs [color:var(--tm2)] hover:[color:var(--ti)]"
-                        onClick={() => setUiField(idx, { startShowDay: true })}
-                      >
-                        Add day
-                      </button>
-                    )}
                   </div>
-                  {ui.startShowDay ? (
-                    <button
-                      type="button"
-                      className="w-fit text-xs [color:var(--tg2)] hover:[color:var(--ti)]"
-                      onClick={() => setUiField(idx, { startShowDay: false, startDay: "" })}
-                    >
-                      Remove day
-                    </button>
-                  ) : null}
                 </div>
 
                 <div className="dasti-field-group">
                   <span className="dasti-label">End date</span>
-                  <div style={{ display: "grid", gridTemplateColumns: ui.endShowDay ? "1fr 1fr 1fr" : "1fr 1fr auto", gap: "var(--s2)" }}>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "var(--s2)",
+                    }}
+                  >
                     <select
                       className="dasti-select"
                       value={ui.endMonth}
                       disabled={ui.isCurrent}
-                      onChange={(e) => setUiField(idx, { endMonth: e.target.value })}
+                      onChange={(e) =>
+                        setUiField(idx, { endMonth: e.target.value })
+                      }
                     >
                       <option value="">Month</option>
                       <option value="01">Jan</option>
@@ -1093,7 +1226,9 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
                       className="dasti-select"
                       value={ui.endYear}
                       disabled={ui.isCurrent}
-                      onChange={(e) => setUiField(idx, { endYear: e.target.value })}
+                      onChange={(e) =>
+                        setUiField(idx, { endYear: e.target.value })
+                      }
                     >
                       <option value="">Year</option>
                       {getYearOptions().map((y) => (
@@ -1102,46 +1237,28 @@ export function EducationModal({ open, onClose, items, onSave }: EducationModalP
                         </option>
                       ))}
                     </select>
-                    {ui.endShowDay ? (
-                      <input
-                        type="number"
-                        min={1}
-                        max={31}
-                        className="dasti-field"
-                        value={ui.endDay}
-                        disabled={ui.isCurrent}
-                        onChange={(e) => setUiField(idx, { endDay: e.target.value })}
-                        placeholder="Day"
-                      />
-                    ) : (
-                      <button
-                        type="button"
-                        className="text-left text-xs [color:var(--tm2)] hover:[color:var(--ti)] disabled:opacity-50"
-                        disabled={ui.isCurrent}
-                        onClick={() => setUiField(idx, { endShowDay: true })}
-                      >
-                        Add day
-                      </button>
-                    )}
                   </div>
-                  {ui.endShowDay && !ui.isCurrent ? (
-                    <button
-                      type="button"
-                      className="w-fit text-xs [color:var(--tg2)] hover:[color:var(--ti)]"
-                      onClick={() => setUiField(idx, { endShowDay: false, endDay: "" })}
-                    >
-                      Remove day
-                    </button>
-                  ) : null}
-                  <div className="flex items-center gap-2" style={{ marginTop: "var(--s2)" }}>
+                  <div
+                    className="flex items-center gap-2"
+                    style={{ marginTop: "var(--s2)" }}
+                  >
                     <input
                       id={`edu-present-${idx}`}
                       type="checkbox"
                       className="h-4 w-4 accent-[var(--primary)]"
                       checked={ui.isCurrent}
-                      onChange={(e) => setUiField(idx, { isCurrent: e.target.checked, endYear: "", endMonth: "", endDay: "", endShowDay: false })}
+                      onChange={(e) =>
+                        setUiField(idx, {
+                          isCurrent: e.target.checked,
+                          endYear: "",
+                          endMonth: "",
+                        })
+                      }
                     />
-                    <label htmlFor={`edu-present-${idx}`} className="dasti-hint">
+                    <label
+                      htmlFor={`edu-present-${idx}`}
+                      className="dasti-hint"
+                    >
                       Current study
                     </label>
                   </div>

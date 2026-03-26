@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import type { CvSection } from "../../schemas/cvDocument.schema";
 import AchievementsDisplay from "../cv-display/AchievementsDisplay";
 import AchievementsModal from "./AchievementsModal";
-import { ChevronDown, ChevronUp, ScrollText } from "lucide-react";
+import { ChevronDown, ChevronUp, Pencil, X } from "@/lib/icons";
 import { docToPlainText } from "../remirror-editor/utils/text";
 
 /**
@@ -22,9 +22,14 @@ interface AchievementsBlockProps {
   section: CvSection;
   onChange: (updatedSection: CvSection) => void;
   onContentChange?: (sectionId: string, json: unknown) => void;
+  onDeleteSection?: () => void;
 }
 
-export function AchievementsBlock({ section, onChange }: AchievementsBlockProps) {
+export function AchievementsBlock({
+  section,
+  onChange,
+  onDeleteSection,
+}: AchievementsBlockProps) {
   const items = useMemo(() => {
     const normalizedItems: Array<{ id: string; text: string }> = [];
     const seenTexts = new Set<string>();
@@ -36,9 +41,10 @@ export function AchievementsBlock({ section, onChange }: AchievementsBlockProps)
       if (seenTexts.has(dedupeKey)) return;
       seenTexts.add(dedupeKey);
       normalizedItems.push({
-        id: typeof rawId === "string" && rawId.trim().length > 0
-          ? rawId
-          : `ach-${Math.random().toString(36).slice(2, 8)}`,
+        id:
+          typeof rawId === "string" && rawId.trim().length > 0
+            ? rawId
+            : `ach-${Math.random().toString(36).slice(2, 8)}`,
         text,
       });
     };
@@ -68,13 +74,18 @@ export function AchievementsBlock({ section, onChange }: AchievementsBlockProps)
             }
           }
 
-          if (!blockText && typeof (block as any)?.title === "string" && !/^Achievement\s+\d+$/i.test(String((block as any).title))) {
+          if (
+            !blockText &&
+            typeof (block as any)?.title === "string" &&
+            !/^Achievement\s+\d+$/i.test(String((block as any).title))
+          ) {
             blockText = String((block as any).title);
           }
 
           pushItem(
             blockText,
-            (block as any)?.attributes?.linkedStructuredId ?? (block as any)?.id,
+            (block as any)?.attributes?.linkedStructuredId ??
+              (block as any)?.id,
           );
         });
       }
@@ -89,13 +100,26 @@ export function AchievementsBlock({ section, onChange }: AchievementsBlockProps)
   const [isModalOpen, setIsModalOpen] = useState(false);
   // When true and list is empty, seed the modal with a blank row and focus it.
   const [seedOnOpen, setSeedOnOpen] = useState(false);
-  const contentId = useMemo(() => `ach-content-${String(section.id)}`, [section.id]);
+  const contentId = useMemo(
+    () => `ach-content-${String(section.id)}`,
+    [section.id],
+  );
 
   function handleSave(next: Array<{ id?: string; text: string }>) {
     try {
-      const sanitized = next.map((r, idx) => ({ id: String(r.id ?? `ach-${Math.random().toString(36).slice(2, 8)}-${idx}`), text: String(r.text ?? "").trim() }))
+      const sanitized = next
+        .map((r, idx) => ({
+          id: String(
+            r.id ?? `ach-${Math.random().toString(36).slice(2, 8)}-${idx}`,
+          ),
+          text: String(r.text ?? "").trim(),
+        }))
         .filter((r) => r.text.length > 0);
-      const updatedSection = { ...section, structuredContent: sanitized as any, blocks: [] as any };
+      const updatedSection = {
+        ...section,
+        structuredContent: sanitized as any,
+        blocks: [] as any,
+      };
       onChange(updatedSection as CvSection);
     } finally {
       setIsModalOpen(false);
@@ -106,8 +130,22 @@ export function AchievementsBlock({ section, onChange }: AchievementsBlockProps)
   // Collapsed preview handled by AchievementsDisplay via maxItems prop
 
   return (
-    <div className="mb-4 border border-bo rounded-rm section-container">
-      <div className="flex items-center justify-between p-3 [background:var(--sf1)]">
+    <div className="mb-4 border [border-color:var(--color-border)] [border-radius:var(--radius-card)] section-container section-container--dismissable">
+      {onDeleteSection ? (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDeleteSection();
+          }}
+          className="dasti-section-dismiss-pill"
+          aria-label="Delete achievements section"
+          title="Delete achievements section"
+        >
+          <X className="w-3.5 h-3.5" strokeWidth={2.1} aria-hidden />
+        </button>
+      ) : null}
+      <div className="section-container-header flex items-center justify-between">
         <h3 className="cv-section-heading">{section.title}</h3>
         <div className="flex items-center" style={{ gap: 2 }}>
           <button
@@ -117,16 +155,16 @@ export function AchievementsBlock({ section, onChange }: AchievementsBlockProps)
               setSeedOnOpen(false);
               setIsModalOpen(true);
             }}
-            className="dasti-icon-button"
+            className="dasti-icon-button cv-section-edit-trigger"
             aria-label="Edit achievements"
             title="Edit achievements"
           >
-            <ScrollText className="w-4 h-4" strokeWidth={1.5} aria-hidden />
+            <Pencil className="w-4 h-4" strokeWidth={1.5} aria-hidden />
           </button>
         </div>
       </div>
 
-      <div className="p-4">
+      <div className="cv-section-body">
         <div
           id={contentId}
           role="region"
@@ -152,7 +190,7 @@ export function AchievementsBlock({ section, onChange }: AchievementsBlockProps)
         >
           {items.length === 0 ? (
             <div
-              className="cv-preview-empty cv-preview-text cv-preview-text--muted cursor-text"
+              className="cv-preview-empty cv-preview-text cv-preview-text--muted cursor-pointer"
               role="button"
               tabIndex={0}
               onClick={() => {
@@ -160,9 +198,13 @@ export function AchievementsBlock({ section, onChange }: AchievementsBlockProps)
                 setIsModalOpen(true);
                 setTimeout(() => {
                   try {
-                    const el = document.getElementById("achievement-text-0") as HTMLInputElement | null;
+                    const el = document.getElementById(
+                      "achievement-text-0",
+                    ) as HTMLInputElement | null;
                     el?.focus();
-                  } catch { /* noop */ }
+                  } catch {
+                    /* noop */
+                  }
                 }, 60);
               }}
               onKeyDown={(e) => {
@@ -172,9 +214,13 @@ export function AchievementsBlock({ section, onChange }: AchievementsBlockProps)
                   setIsModalOpen(true);
                   setTimeout(() => {
                     try {
-                      const el = document.getElementById("achievement-text-0") as HTMLInputElement | null;
+                      const el = document.getElementById(
+                        "achievement-text-0",
+                      ) as HTMLInputElement | null;
                       el?.focus();
-                    } catch { /* noop */ }
+                    } catch {
+                      /* noop */
+                    }
                   }, 60);
                 }
               }}
@@ -184,9 +230,18 @@ export function AchievementsBlock({ section, onChange }: AchievementsBlockProps)
               No achievements yet — click to start typing
             </div>
           ) : isExpanded ? (
-            <AchievementsDisplay itemId={String(section.id)} items={items} separatedItems={true} />
+            <AchievementsDisplay
+              itemId={String(section.id)}
+              items={items}
+              separatedItems={true}
+            />
           ) : (
-            <AchievementsDisplay itemId={String(section.id)} items={items} maxItems={2} separatedItems={true} />
+            <AchievementsDisplay
+              itemId={String(section.id)}
+              items={items}
+              maxItems={2}
+              separatedItems={true}
+            />
           )}
         </div>
 
@@ -200,7 +255,11 @@ export function AchievementsBlock({ section, onChange }: AchievementsBlockProps)
               className="dasti-icon-button dasti-icon-button--compact"
               title={isExpanded ? "Show less" : "Show more"}
             >
-              {isExpanded ? <ChevronDown className="w-3.5 h-3.5" aria-hidden /> : <ChevronUp className="w-3.5 h-3.5" aria-hidden />}
+              {isExpanded ? (
+                <ChevronDown className="w-3.5 h-3.5" aria-hidden />
+              ) : (
+                <ChevronUp className="w-3.5 h-3.5" aria-hidden />
+              )}
             </button>
           </div>
         ) : null}

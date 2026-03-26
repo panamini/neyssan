@@ -47,22 +47,21 @@ export function CVDocumentReviewer({
 }: CVDocumentReviewerProps) {
   const visibleSections = useMemo(
     () => sections.filter((s) => !s.dismissed),
-    [sections]
+    [sections],
   );
-
 
   const handleDismiss = useCallback(
     (id: string) => {
       if (onDismiss) onDismiss(id);
     },
-    [onDismiss]
+    [onDismiss],
   );
 
   const handleUndo = useCallback(
     (id: string) => {
       if (onUndo) onUndo(id);
     },
-    [onUndo]
+    [onUndo],
   );
 
   return (
@@ -71,7 +70,7 @@ export function CVDocumentReviewer({
       aria-label="CV Document Reviewer"
     >
       <header
-        className="flex items-center justify-between px-4 py-3 border-b border-[color:var(--bo)] [background:var(--sfr)]"
+        className="flex items-center justify-between px-4 py-3 border-b border-[color:var(--color-border)] [background:var(--sfr)]"
         style={{ height: "var(--header-height)" }}
       >
         <h2 className="text-lg font-semibold" aria-hidden>
@@ -96,11 +95,11 @@ export function CVDocumentReviewer({
           <article
             key={section.id}
             role="listitem"
-            className="mb-6 rounded-md border border-[color:var(--bo)] [background:var(--sfr)]"
+            className="mb-6 rounded-md border border-[color:var(--color-border)] [background:var(--sfr)]"
             aria-hidden={section.dismissed ? "true" : "false"}
           >
             <div
-              className="sticky top-0 z-10 flex items-center justify-between gap-4 px-4 py-2 [background:var(--sfr)] border-b border-[color:var(--bo)]"
+              className="sticky top-0 z-10 flex items-center justify-between gap-4 px-4 py-2 [background:var(--sfr)] border-b border-[color:var(--color-border)]"
               style={{ backdropFilter: "blur(2px)" }}
             >
               <h3 className="text-sm font-medium">{section.title}</h3>
@@ -118,7 +117,7 @@ export function CVDocumentReviewer({
 
                 {section.dismissed && (
                   <button
-                    className="px-2 py-1 rounded-md [color:var(--ti)] [background:var(--sfr)] border border-[color:var(--bo)] hover:[background:var(--as)] focus:outline-none focus:[box-shadow:0_0_0_3px_var(--fr)]"
+                    className="px-2 py-1 rounded-md [color:var(--ti)] [background:var(--sfr)] border border-[color:var(--color-border)] hover:[background:var(--as)] focus:outline-none focus:[box-shadow:0_0_0_3px_var(--fr)]"
                     aria-label={`Undo dismiss for ${section.title}`}
                     onClick={() => handleUndo(section.id)}
                   >
@@ -129,17 +128,39 @@ export function CVDocumentReviewer({
             </div>
 
             <div className="p-4">
-              <div className="max-w-full text-sm" aria-label={`${section.title} content`}>
+              <div
+                className="max-w-full text-sm"
+                aria-label={`${section.title} content`}
+              >
                 {onEdit ? (
                   <div
                     contentEditable
                     suppressContentEditableWarning
-                    onInput={(e) => onEdit(section.id, String((e.currentTarget as HTMLElement).textContent ?? ""))}
-                    onBlur={(e) => onEdit(section.id, String((e.currentTarget as HTMLElement).textContent ?? ""))}
+                    onInput={(e) =>
+                      onEdit(
+                        section.id,
+                        String(
+                          (e.currentTarget as HTMLElement).textContent ?? "",
+                        ),
+                      )
+                    }
+                    onBlur={(e) =>
+                      onEdit(
+                        section.id,
+                        String(
+                          (e.currentTarget as HTMLElement).textContent ?? "",
+                        ),
+                      )
+                    }
                     className="min-h-[48px] w-full whitespace-pre-wrap focus:outline-none"
                     role="textbox"
                     aria-label={`Edit ${section.title}`}
-                    dangerouslySetInnerHTML={{ __html: String(section.content ?? "").replace(/\n/g, "<br/>") }}
+                    dangerouslySetInnerHTML={{
+                      __html: String(section.content ?? "").replace(
+                        /\n/g,
+                        "<br/>",
+                      ),
+                    }}
                   />
                 ) : (
                   section.content.split("\n").map((line, idx) => (

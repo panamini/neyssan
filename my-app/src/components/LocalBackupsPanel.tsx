@@ -122,7 +122,7 @@ export function LocalBackupsPanel(): JSX.Element {
         <div
           role="dialog"
           aria-label="Local backups"
-          className="absolute right-0 z-40 w-[320px] mt-2 p-3 bg-background border rounded-md [box-shadow:var(--shc)] border-bo"
+          className="absolute right-0 z-40 w-[320px] mt-2 p-3 bg-background border rounded-md [box-shadow:var(--shc)] [border-color:var(--color-border)]"
         >
           <div className="flex items-center justify-between mb-2">
             <div className="text-sm font-medium">Local Backups</div>

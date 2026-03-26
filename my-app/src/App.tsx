@@ -25,10 +25,10 @@ function Topbar() {
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        padding: "0 var(--s7)",
-        borderBottom: "1px solid var(--bo)",
-        background: "var(--bg)",
-        boxShadow: "0 1px 0 var(--bo), 0 2px 16px hsla(30,20%,8%,.06)",
+        padding: "0 clamp(var(--space-3), 4vw, var(--space-7))",
+        borderBottom: "1px solid var(--color-border)",
+        background: "var(--color-canvas)",
+        boxShadow: "0 1px 0 var(--color-border), var(--shadow-sm)",
         position: "relative",
         zIndex: 5,
       }}
@@ -36,10 +36,10 @@ function Topbar() {
       {/* Left — wordmark only */}
       <span
         style={{
-          fontFamily: '"Fraunces", serif',
+          fontFamily: "var(--font-heading-family)",
           fontSize: "var(--tm)",
-          fontWeight: 600,
-          letterSpacing: "-.02em",
+          fontWeight: "var(--font-heading-weight)",
+          letterSpacing: "var(--tracking-display)",
           color: "var(--ti)",
         }}
       >
@@ -50,24 +50,7 @@ function Topbar() {
       <div style={{ display: "flex", alignItems: "center", gap: "var(--s2)" }}>
         <Unauthenticated>
           <SignInButton mode="modal">
-            <button
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                height: "var(--hs)",
-                padding: "0 var(--s3)",
-                borderRadius: "var(--rs)",
-                border: "1px solid var(--bm)",
-                background: "var(--sfr)",
-                color: "var(--ti)",
-                fontSize: "var(--ts)",
-                fontWeight: 500,
-                cursor: "pointer",
-                boxShadow: "var(--sha)",
-                transition: "all .12s var(--ez)",
-                fontFamily: "inherit",
-              }}
-            >
+            <button className="dasti-button dasti-button--secondary dasti-button--sm">
               Sign in
             </button>
           </SignInButton>
@@ -108,7 +91,15 @@ function AppShell(): JSX.Element {
         <Sidebar />
 
         {/* .page-area — flex:1, flex-col */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+            minWidth: 0,
+          }}
+        >
           <ConvexStatusBanner />
           <Topbar />
 
