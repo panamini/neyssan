@@ -223,7 +223,7 @@ export function SectionDisplay({ section }: SectionDisplayProps): JSX.Element {
       <div className="flex items-center justify-between">
         <h2
           id={`section-title-${section.id}`}
-          className="flex-1 pb-1 mb-3 text-xl font-semibold border-b-2 [color:var(--tm2)] border-bo"
+          className="flex-1 pb-1 mb-3 text-xl font-semibold border-b-2 [color:var(--tm2)] [border-color:var(--color-border)]"
         >
           {section.title}
         </h2>

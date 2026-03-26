@@ -1,12 +1,15 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, X, Check } from "lucide-react";
+import { Plus, X, Check } from "@/lib/icons";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import {
   buildActiveCvSnapshotFromCvDocument,
   formatCvDisplaySubtitle,
 } from "../lib/proposal-personalization";
+import { formatUiDate } from "../lib/ui-date";
 import type { CvDocument, IProfileItem } from "../types/cvDocument";
+
+const CV_LIBRARY_PAGE_SIZE = 12;
 
 function readProfileContact(cv: CvDocument): {
   email?: string;
@@ -22,11 +25,21 @@ function readProfileContact(cv: CvDocument): {
     ? (profileSection?.structuredContent[0] as IProfileItem | undefined)
     : undefined;
   return {
-    ...(String(profileItem?.email ?? "").trim() ? { email: String(profileItem?.email ?? "").trim() } : {}),
-    ...(String(profileItem?.phone ?? "").trim() ? { phone: String(profileItem?.phone ?? "").trim() } : {}),
-    ...(String(profileItem?.linkedin ?? "").trim() ? { linkedin: String(profileItem?.linkedin ?? "").trim() } : {}),
-    ...(String(profileItem?.website ?? "").trim() ? { website: String(profileItem?.website ?? "").trim() } : {}),
-    ...(String(profileItem?.location ?? "").trim() ? { location: String(profileItem?.location ?? "").trim() } : {}),
+    ...(String(profileItem?.email ?? "").trim()
+      ? { email: String(profileItem?.email ?? "").trim() }
+      : {}),
+    ...(String(profileItem?.phone ?? "").trim()
+      ? { phone: String(profileItem?.phone ?? "").trim() }
+      : {}),
+    ...(String(profileItem?.linkedin ?? "").trim()
+      ? { linkedin: String(profileItem?.linkedin ?? "").trim() }
+      : {}),
+    ...(String(profileItem?.website ?? "").trim()
+      ? { website: String(profileItem?.website ?? "").trim() }
+      : {}),
+    ...(String(profileItem?.location ?? "").trim()
+      ? { location: String(profileItem?.location ?? "").trim() }
+      : {}),
   };
 }
 
@@ -34,16 +47,54 @@ export function CvsLibrary(): JSX.Element {
   const navigate = useNavigate();
   const { cvs, loadCv, createNewCv, deleteCv } = useCvLibrary();
   const [confirmingId, setConfirmingId] = React.useState<string | null>(null);
+  const [visibleCvCount, setVisibleCvCount] =
+    React.useState(CV_LIBRARY_PAGE_SIZE);
+  const loadMoreSentinelRef = React.useRef<HTMLDivElement | null>(null);
 
   const sorted = React.useMemo(
     () =>
       [...cvs].sort((a, b) => {
-        const aTime = new Date(a.metadata?.updatedAt ?? a.metadata?.createdAt ?? 0).getTime();
-        const bTime = new Date(b.metadata?.updatedAt ?? b.metadata?.createdAt ?? 0).getTime();
+        const aTime = new Date(
+          a.metadata?.updatedAt ?? a.metadata?.createdAt ?? 0,
+        ).getTime();
+        const bTime = new Date(
+          b.metadata?.updatedAt ?? b.metadata?.createdAt ?? 0,
+        ).getTime();
         return bTime - aTime;
       }),
     [cvs],
   );
+  const visibleCvs = React.useMemo(
+    () => sorted.slice(0, visibleCvCount),
+    [sorted, visibleCvCount],
+  );
+  const hasMoreCvs = sorted.length > visibleCvCount;
+
+  React.useEffect(() => {
+    setVisibleCvCount(CV_LIBRARY_PAGE_SIZE);
+  }, [sorted.length]);
+
+  React.useEffect(() => {
+    if (!hasMoreCvs) return;
+    const target = loadMoreSentinelRef.current;
+    if (!target || typeof IntersectionObserver === "undefined") return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (!entry?.isIntersecting) return;
+        setVisibleCvCount((current) =>
+          Math.min(current + CV_LIBRARY_PAGE_SIZE, sorted.length),
+        );
+      },
+      {
+        rootMargin: "320px 0px",
+      },
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [hasMoreCvs, sorted.length]);
 
   function handleOpen(id: string) {
     loadCv(id);
@@ -56,48 +107,36 @@ export function CvsLibrary(): JSX.Element {
   }
 
   return (
-    <div
-      style={{
-        height: "100%",
-        overflowY: "auto",
-        overflowX: "hidden",
-        overscrollBehaviorY: "contain",
-        background: "var(--bg)",
-        minWidth: 0,
-      }}
-    >
+    <div className="dasti-page-scroll">
       <div
-        style={{
-          padding: "var(--space-page-pad)",
-          display: "flex",
-          flexDirection: "column",
-          gap: "var(--space-page-stack)",
-          maxWidth: 1100,
-          margin: "0 auto",
-          width: "100%",
-        }}
+        className="dasti-page-shell"
+        style={
+          {
+            "--page-shell-max-width": "1100px",
+            "--page-shell-gap": "var(--layout-page-stack)",
+          } as React.CSSProperties
+        }
       >
-        {/* Header row */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div className="dasti-page-header">
           <div className="dasti-stack">
-            <div className="dasti-stack__eyebrow">
-              Resume
-            </div>
-            <h1 className="dasti-stack__title">
-              All resumes
-            </h1>
+            <div className="dasti-stack__eyebrow">Resume</div>
+            <h1 className="dasti-stack__title">All resumes</h1>
           </div>
-          <button
-            onClick={() => { createNewCv(); void navigate("/cv"); }}
-            className="dasti-icon-button dasti-library-create-button"
-            aria-label="Create new resume"
-            title="Create new resume"
-          >
-            <Plus size={20} strokeWidth={1.75} aria-hidden />
-          </button>
+          <div className="dasti-page-actions">
+            <button
+              onClick={() => {
+                createNewCv();
+                void navigate("/cv");
+              }}
+              className="dasti-icon-button dasti-library-create-button"
+              aria-label="Create new resume"
+              title="Create new resume"
+            >
+              <Plus size={20} strokeWidth={1.75} aria-hidden />
+            </button>
+          </div>
         </div>
 
-        {/* Empty */}
         {sorted.length === 0 && (
           <div className="dasti-empty-state">
             <div className="dasti-empty-state__title">No resumes yet</div>
@@ -105,23 +144,11 @@ export function CvsLibrary(): JSX.Element {
               Create or import a resume to start editing and personalizing it.
             </p>
             <button
-              onClick={() => { createNewCv(); void navigate("/cv"); }}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "var(--s2)",
-                height: "var(--hm)",
-                padding: "0 var(--s4)",
-                borderRadius: "var(--rs)",
-                border: "1px solid var(--ac)",
-                background: "var(--ac)",
-                color: "#fff",
-                fontSize: "var(--ts)",
-                fontWeight: 500,
-                cursor: "pointer",
-                transition: "all .12s var(--ez)",
-                fontFamily: "inherit",
+              onClick={() => {
+                createNewCv();
+                void navigate("/cv");
               }}
+              className="dasti-button dasti-button--primary dasti-button--pill"
             >
               <Plus size={14} />
               Create your first resume
@@ -129,25 +156,25 @@ export function CvsLibrary(): JSX.Element {
           </div>
         )}
 
-        {/* Grid */}
         {sorted.length > 0 && (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-              gap: "var(--space-card-grid)",
-            }}
-          >
-            {sorted.map((cv) => {
-              const updatedAt = new Date(
-                cv.metadata?.updatedAt ?? cv.metadata?.createdAt ?? Date.now(),
-              ).toLocaleDateString("en-US", { day: "2-digit", month: "2-digit", year: "2-digit" });
+          <div className="dasti-grid-auto">
+            {visibleCvs.map((cv) => {
+              const updatedAt =
+                formatUiDate(
+                  cv.metadata?.updatedAt ??
+                    cv.metadata?.createdAt ??
+                    Date.now(),
+                ) ?? "";
               const snapshot = buildActiveCvSnapshotFromCvDocument(cv);
               const personalization = snapshot.personalizationContext;
               const profileName = String(personalization?.name ?? "").trim();
-              const position = String(personalization?.desiredPosition ?? "").trim();
+              const position = String(
+                personalization?.desiredPosition ?? "",
+              ).trim();
               const contact = readProfileContact(cv);
-              const summarySnippet = String(personalization?.summary ?? "").trim();
+              const summarySnippet = String(
+                personalization?.summary ?? "",
+              ).trim();
               const cardTitle = snapshot.title;
               const identityLine = formatCvDisplaySubtitle({
                 title: String(cv.title ?? ""),
@@ -165,8 +192,14 @@ export function CvsLibrary(): JSX.Element {
                 <div
                   key={cv.id}
                   className="card-group"
-                  style={{ position: "relative", display: "flex", flexDirection: "column" }}
-                  onMouseLeave={() => { if (isConfirming) setConfirmingId(null); }}
+                  style={{
+                    position: "relative",
+                    display: "flex",
+                    flexDirection: "column",
+                  }}
+                  onMouseLeave={() => {
+                    if (isConfirming) setConfirmingId(null);
+                  }}
                 >
                   {/* Main card button */}
                   <button
@@ -214,63 +247,39 @@ export function CvsLibrary(): JSX.Element {
                         zIndex: 2,
                       }}
                     >
-                      <span className="dasti-icon-confirm-tray__label">Delete?</span>
+                      <span className="dasti-icon-confirm-tray__label">
+                        Delete?
+                      </span>
                       <button
-                        onClick={(e) => { e.stopPropagation(); handleDelete(cv.id); }}
-                        title="Confirm delete"
-                        style={{
-                          display: "inline-flex", alignItems: "center", justifyContent: "center",
-                          width: 22, height: 22, border: "1px solid transparent", borderRadius: "var(--rx)",
-                          background: "var(--erb)", cursor: "pointer", color: "var(--ert)", fontFamily: "inherit",
-                          transition: "all .1s var(--ez)",
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(cv.id);
                         }}
-                        onMouseEnter={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "var(--er)"; b.style.color = "var(--op)"; b.style.borderColor = "transparent"; }}
-                        onMouseLeave={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "var(--erb)"; b.style.color = "var(--ert)"; b.style.borderColor = "transparent"; }}
+                        title="Confirm delete"
+                        className="dasti-icon-button dasti-icon-button--compact dasti-icon-button--confirm"
                       >
                         <Check size={11} />
                       </button>
                       <button
-                        onClick={(e) => { e.stopPropagation(); setConfirmingId(null); }}
-                        title="Cancel"
-                        style={{
-                          display: "inline-flex", alignItems: "center", justifyContent: "center",
-                          width: 22, height: 22, border: "1px solid transparent", borderRadius: "var(--rx)",
-                          background: "transparent", cursor: "pointer", color: "var(--tg2)", fontFamily: "inherit",
-                          transition: "all .1s var(--ez)",
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setConfirmingId(null);
                         }}
-                        onMouseEnter={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "var(--sf2)"; b.style.color = "var(--ti)"; }}
-                        onMouseLeave={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.color = "var(--tg2)"; }}
+                        title="Cancel"
+                        className="dasti-icon-button dasti-icon-button--compact"
                       >
                         <X size={11} />
                       </button>
                     </div>
                   ) : (
                     <button
-                      onClick={(e) => { e.stopPropagation(); setConfirmingId(cv.id); }}
-                      className="card-delete-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setConfirmingId(cv.id);
+                      }}
+                      className="dasti-card-delete-button"
                       title="Delete"
                       aria-label="Delete"
-                      style={{
-                        position: "absolute",
-                        top: 8,
-                        right: 8,
-                        zIndex: 1,
-                        width: 24,
-                        height: 24,
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        borderRadius: "var(--rs)",
-                        border: "1px solid transparent",
-                        background: "transparent",
-                        color: "var(--tg2)",
-                        cursor: "pointer",
-                        padding: 0,
-                        fontFamily: "inherit",
-                        transition: "background .1s var(--ez), color .1s var(--ez)",
-                      }}
-                      onMouseEnter={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "var(--erb)"; b.style.color = "var(--ert)"; }}
-                      onMouseLeave={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.color = "var(--tg2)"; }}
                     >
                       <X size={13} />
                     </button>
@@ -278,6 +287,13 @@ export function CvsLibrary(): JSX.Element {
                 </div>
               );
             })}
+            {hasMoreCvs ? (
+              <div
+                ref={loadMoreSentinelRef}
+                aria-hidden="true"
+                style={{ height: 1, gridColumn: "1 / -1" }}
+              />
+            ) : null}
           </div>
         )}
       </div>

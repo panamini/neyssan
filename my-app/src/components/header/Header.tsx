@@ -1,8 +1,7 @@
-
 import React from "react";
 import DarkModeToggle from "../dark-mode-toggle/DarkModeToggle";
 import { Button } from "../ui/button";
-import { Plus } from "lucide-react";
+import { Plus } from "@/lib/icons";
 import { useCvLibrary } from "../../contexts/CvLibraryContext";
 import { isV1SectionsEnabled } from "../../lib/flags";
 
@@ -20,10 +19,17 @@ const Header: React.FC = () => {
   };
 
   return (
-    <header className="p-4 [background:var(--sfr)] [color:var(--ti)] border-b border-bo" style={{ height: 'var(--hdr)', display: 'flex', alignItems: 'center' }}>
+    <header
+      className="p-4 [background:var(--sfr)] [color:var(--ti)] border-b [border-color:var(--color-border)]"
+      style={{ height: "var(--hdr)", display: "flex", alignItems: "center" }}
+    >
       <nav className="flex items-center justify-between max-w-6xl mx-auto">
         <div className="flex items-center space-x-3">
-          <a href="/" className="text-lg font-semibold" onClick={(e) => navigate(e, "/")}>
+          <a
+            href="/"
+            className="text-lg font-semibold"
+            onClick={(e) => navigate(e, "/")}
+          >
             Neyssan
           </a>
           <div className="ml-2">
@@ -46,7 +52,9 @@ const Header: React.FC = () => {
             title={v1 ? "Create new CV (v1 sections)" : "Create new CV"}
           >
             <Plus className="w-4 h-4" />
-            <span className="hidden sm:inline">{v1 ? "New CV (v1)" : "New CV"}</span>
+            <span className="hidden sm:inline">
+              {v1 ? "New CV (v1)" : "New CV"}
+            </span>
             <span className="sm:hidden">New</span>
           </Button>
         </div>

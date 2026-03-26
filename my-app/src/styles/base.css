@@ -1,0 +1,263 @@
+/* ============================================================
+   TAILWIND RING RESET
+   Neutralise --tw-ring-offset-color:#fff et --tw-ring-color:rgb(59 130 246/.5)
+   que Tailwind injecte globalement. Notre focus ring dasti via box-shadow reste intact.
+   ============================================================ */
+*,
+*::before,
+*::after {
+  --tw-ring-offset-color: transparent !important;
+  --tw-ring-color: transparent !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+}
+
+/* ============================================================
+   BASE ELEMENT STYLING
+   ============================================================ */
+html,
+body,
+#root {
+  height: 100%;
+  background: var(--bg);
+  color: var(--ti);
+  font-family: var(--font-body-family);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: var(--lb);
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior: none;
+}
+
+html,
+body {
+  overflow: hidden;
+}
+
+body {
+  margin: 0;
+}
+
+a {
+  color: var(--ac);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+code {
+  font-family: var(--font-mono-family);
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-accent-pale) 72%, transparent);
+  color: var(--color-text);
+}
+
+/* ============================================================
+   SCROLLBAR TOKENS
+   ============================================================ */
+:root {
+  --scroll-track-width: 5px;
+  --scroll-thumb-min-height: 12px;
+  --scroll-gap: 2px;
+  --card-height: 480px;
+}
+
+.cv-reviewer {
+  --card-height: 480px;
+  padding-right: var(--scroll-gap);
+  min-height: 0;
+  box-sizing: border-box;
+}
+
+.custom-scrollbar,
+.overflow-auto.custom-scrollbar,
+.flex-1.custom-scrollbar,
+.cv-reviewer.custom-scrollbar {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* WebKit */
+.custom-scrollbar::-webkit-scrollbar,
+.overflow-auto.custom-scrollbar::-webkit-scrollbar,
+.flex-1.custom-scrollbar::-webkit-scrollbar,
+.cv-reviewer.custom-scrollbar::-webkit-scrollbar {
+  width: var(--scroll-track-width, 5px);
+  height: var(--scroll-track-width, 5px);
+}
+
+.custom-scrollbar::-webkit-scrollbar-track,
+.overflow-auto.custom-scrollbar::-webkit-scrollbar-track,
+.flex-1.custom-scrollbar::-webkit-scrollbar-track,
+.cv-reviewer.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb,
+.overflow-auto.custom-scrollbar::-webkit-scrollbar-thumb,
+.flex-1.custom-scrollbar::-webkit-scrollbar-thumb,
+.cv-reviewer.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  min-height: var(--scroll-thumb-min-height, 12px);
+  border: 1px solid var(--color-border);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover,
+.overflow-auto.custom-scrollbar::-webkit-scrollbar-thumb:hover,
+.flex-1.custom-scrollbar::-webkit-scrollbar-thumb:hover,
+.cv-reviewer.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--am);
+}
+
+/* Firefox */
+.custom-scrollbar,
+.overflow-auto.custom-scrollbar,
+.flex-1.custom-scrollbar,
+.cv-reviewer.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
+  -ms-overflow-style: auto;
+  padding-right: var(--scroll-gap);
+}
+
+/* ============================================================
+   ACCESSIBILITY — FOCUS RING
+   ============================================================ */
+:focus {
+  outline: none;
+}
+:focus-visible {
+  box-shadow: var(--focus-shadow-soft);
+  border-radius: var(--radius-inline);
+}
+
+button,
+[type="button"],
+[type="submit"],
+[type="reset"],
+[role="button"],
+input,
+textarea,
+select {
+  transition:
+    box-shadow 0.12s var(--ez),
+    border-color 0.12s var(--ez),
+    color 0.12s var(--ez);
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+[type="button"],
+[type="submit"],
+[type="reset"] {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+}
+
+button::-moz-focus-inner,
+[type="button"]::-moz-focus-inner,
+[type="submit"]::-moz-focus-inner,
+[type="reset"]::-moz-focus-inner {
+  border: 0;
+  padding: 0;
+}
+
+:where(
+    button,
+    [type="button"],
+    [type="submit"],
+    [type="reset"],
+    [role="button"],
+    a,
+    input,
+    textarea,
+    select
+  ):focus-visible {
+  box-shadow: var(--focus-shadow-soft) !important;
+}
+
+:where(input, textarea, select):focus {
+  box-shadow: var(--focus-shadow-soft) !important;
+}
+
+/* ============================================================
+   QUILL READONLY PREVIEW
+   ============================================================ */
+.ql-editor-readonly {
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  line-height: var(--lb);
+  color: var(--ti);
+  font-family: inherit;
+}
+
+.ql-editor-readonly h1,
+.ql-editor-readonly h2,
+.ql-editor-readonly h3 {
+  margin-top: var(--s2);
+  margin-bottom: var(--s2);
+  color: var(--ti);
+  font-weight: 600;
+}
+
+.ql-editor-readonly ul,
+.ql-editor-readonly ol {
+  padding-left: var(--s5);
+  margin: var(--s2) 0;
+}
+
+.ql-editor-readonly a {
+  color: var(--ac);
+  text-decoration: underline;
+}
+
+.prose.ql-editor-readonly img,
+.ql-editor-readonly img {
+  max-width: 100%;
+  height: auto;
+}
+
+@media (max-width: 640px) {
+  .ql-editor-readonly {
+    font-size: var(--ts);
+  }
+}
+
+/* ============================================================
+   REMIRROR EDITOR
+   ============================================================ */
+.remirror-editor-container {
+  position: relative;
+}
+
+.remirror-editor-container .cursor-text.z-40,
+.remirror-editor-container > .cursor-text.z-40 {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  padding: var(--s3);
+  color: var(--tg2);
+  background: transparent;
+  display: flex;
+  align-items: flex-start;
+  pointer-events: auto;
+  cursor: text;
+}
+
+.remirror-editor-container .prose {
+  margin: 0;
+  padding: 0;
+}
+
+/* Fix: ProseMirror inherits surface bg → no white flash on dark→light switch */
+.ProseMirror {
+  background: transparent !important;
+  color: inherit;
+}
+.remirror-editor-wrapper,
+.remirror-editor {
+  background: transparent;
+}

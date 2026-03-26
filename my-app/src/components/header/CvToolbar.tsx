@@ -1,5 +1,5 @@
 import React from "react";
-import { Plus, Upload, ScanLine } from "lucide-react";
+import { Plus, Upload, ScanLine } from "@/lib/icons";
 
 export interface CvToolbarProps {
   className?: string;
@@ -13,7 +13,7 @@ export interface CvToolbarProps {
 export function CvToolbar({ className = "" }: CvToolbarProps): JSX.Element {
   return (
     <div
-      className={`w-full rounded-md border border-[color:var(--bo)] [background:var(--sfr)] [box-shadow:var(--sha)] px-3 py-2 flex items-center gap-2 ${className}`}
+      className={`w-full rounded-md border border-[color:var(--color-border)] [background:var(--sfr)] [box-shadow:var(--sha)] px-3 py-2 flex items-center gap-2 ${className}`}
       role="toolbar"
       aria-label="CV section actions"
     >
@@ -22,8 +22,8 @@ export function CvToolbar({ className = "" }: CvToolbarProps): JSX.Element {
         style={{
           height: "var(--hs)",
           padding: "0 var(--s3)",
-          borderRadius: "var(--rs)",
-          border: "1px solid var(--bm)",
+          borderRadius: "var(--radius-control)",
+          border: "1px solid var(--color-border-strong)",
           background: "var(--sfr)",
           color: "var(--ti)",
           fontSize: "var(--ts)",
@@ -35,7 +35,9 @@ export function CvToolbar({ className = "" }: CvToolbarProps): JSX.Element {
         defaultValue=""
         aria-label="Select section to add"
       >
-        <option value="" disabled>Add section…</option>
+        <option value="" disabled>
+          Add section…
+        </option>
         <option value="experience">Experience</option>
         <option value="education">Education</option>
         <option value="skills">Skills</option>
@@ -45,10 +47,7 @@ export function CvToolbar({ className = "" }: CvToolbarProps): JSX.Element {
       </select>
 
       {/* Add button */}
-      <button
-        type="button"
-        className="ctb-btn ctb-btn--primary"
-      >
+      <button type="button" className="ctb-btn ctb-btn--primary">
         <Plus size={14} />
         Add
       </button>
@@ -57,19 +56,13 @@ export function CvToolbar({ className = "" }: CvToolbarProps): JSX.Element {
       <div style={{ flex: 1 }} />
 
       {/* Upload button */}
-      <button
-        type="button"
-        className="ctb-btn ctb-btn--ghost"
-      >
+      <button type="button" className="ctb-btn ctb-btn--ghost">
         <Upload size={14} />
         Upload
       </button>
 
       {/* Scanned PDF button */}
-      <button
-        type="button"
-        className="ctb-btn ctb-btn--ghost"
-      >
+      <button type="button" className="ctb-btn ctb-btn--ghost">
         <ScanLine size={14} />
         Scanned PDF
       </button>

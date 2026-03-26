@@ -31,12 +31,19 @@ const proposalCreativityChoice = v.union(
 export default mutation({
   args: {
     id: v.id("proposals"),
-    content: v.string(),
-    sections: v.array(
-      v.object({
-        type: v.union(v.literal("text"), v.literal("code"), v.literal("image")),
-        content: v.string(),
-      }),
+    title: v.optional(v.string()),
+    content: v.optional(v.string()),
+    sections: v.optional(
+      v.array(
+        v.object({
+          type: v.union(
+            v.literal("text"),
+            v.literal("code"),
+            v.literal("image"),
+          ),
+          content: v.string(),
+        }),
+      ),
     ),
     status: v.optional(v.string()),
     metadata: v.optional(
@@ -77,14 +84,64 @@ export default mutation({
     if (proposal.userId !== user._id)
       throw new Error("Not authorized to update this proposal");
 
-    await ctx.db.patch(args.id, {
-      content: args.content,
-      sections: args.sections,
-      status: args.status ?? proposal.status,
-      metadata: args.metadata ?? proposal.metadata,
+    const hasTitlePatch = typeof args.title === "string";
+    const hasContentPatch = typeof args.content === "string";
+    const hasSectionsPatch = Array.isArray(args.sections);
+    const hasStatusPatch = typeof args.status === "string";
+    const hasMetadataPatch = typeof args.metadata === "object";
+
+    if (
+      !hasTitlePatch &&
+      !hasContentPatch &&
+      !hasSectionsPatch &&
+      !hasStatusPatch &&
+      !hasMetadataPatch
+    ) {
+      throw new Error("No proposal fields were provided to update.");
+    }
+
+    const patch: {
+      title?: string;
+      content?: string;
+      sections?: Array<{ type: "text" | "code" | "image"; content: string }>;
+      status?: string;
+      metadata?: typeof proposal.metadata;
+      updatedAt: number;
+      version: number;
+    } = {
       updatedAt: Date.now(),
       version: (proposal.version ?? 1) + 1,
-    });
+    };
+
+    if (hasTitlePatch) {
+      patch.title = args.title!.trim() || proposal.title;
+    }
+
+    if (hasContentPatch) {
+      patch.content = args.content!;
+    }
+
+    if (hasSectionsPatch) {
+      patch.sections = args.sections as Array<{
+        type: "text" | "code" | "image";
+        content: string;
+      }>;
+    } else if (hasContentPatch) {
+      patch.sections = [{ type: "text", content: args.content! }];
+    }
+
+    if (hasStatusPatch) {
+      patch.status = args.status;
+    }
+
+    if (hasMetadataPatch) {
+      patch.metadata = {
+        ...proposal.metadata,
+        ...args.metadata,
+      };
+    }
+
+    await ctx.db.patch(args.id, patch);
 
     return { success: true };
   },

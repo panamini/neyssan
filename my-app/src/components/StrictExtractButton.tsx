@@ -2,7 +2,7 @@ import React, { useCallback, useMemo, useState } from "react";
 import * as convexReact from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Button } from "./ui/button";
-import { Wand2, Loader2 } from "lucide-react";
+import { Wand2, Loader2 } from "@/lib/icons";
 import type { CvSection } from "../types/cvDocument";
 import { applyStrictContactToSections } from "../utils/cv/mapping-utils";
 import type { StrictContact } from "../utils/cv/mapping-utils";
@@ -66,43 +66,94 @@ function pickStrictProfileShape(input: unknown): StrictProfileMinimal | null {
   if (isObject((input as any).profile)) {
     const p = (input as any).profile as Record<string, unknown>;
     return {
-      name: (typeof p.name === "string" || p.name === null) ? (p.name as string | null) : null,
-      email: (typeof p.email === "string" || p.email === null) ? (p.email as string | null) : null,
-      phone: (typeof p.phone === "string" || p.phone === null) ? (p.phone as string | null) : null,
-      location: (typeof p.location === "string" || p.location === null) ? (p.location as string | null) : null,
-      desiredPosition: (typeof p.desiredPosition === "string" || p.desiredPosition === null) ? (p.desiredPosition as string | null) : undefined,
+      name:
+        typeof p.name === "string" || p.name === null
+          ? (p.name as string | null)
+          : null,
+      email:
+        typeof p.email === "string" || p.email === null
+          ? (p.email as string | null)
+          : null,
+      phone:
+        typeof p.phone === "string" || p.phone === null
+          ? (p.phone as string | null)
+          : null,
+      location:
+        typeof p.location === "string" || p.location === null
+          ? (p.location as string | null)
+          : null,
+      desiredPosition:
+        typeof p.desiredPosition === "string" || p.desiredPosition === null
+          ? (p.desiredPosition as string | null)
+          : undefined,
     };
   }
   // Case B: strict-only shape is the profile itself at root
   const root = input as Record<string, unknown>;
   const hasSlots =
-    ("name" in root || "email" in root || "phone" in root || "location" in root) &&
-    (typeof root.name === "string" || root.name === null || typeof root.email === "string" || root.email === null);
+    ("name" in root ||
+      "email" in root ||
+      "phone" in root ||
+      "location" in root) &&
+    (typeof root.name === "string" ||
+      root.name === null ||
+      typeof root.email === "string" ||
+      root.email === null);
   if (hasSlots) {
     return {
-      name: (typeof root.name === "string" || root.name === null) ? (root.name as string | null) : null,
-      email: (typeof root.email === "string" || root.email === null) ? (root.email as string | null) : null,
-      phone: (typeof root.phone === "string" || root.phone === null) ? (root.phone as string | null) : null,
-      location: (typeof root.location === "string" || root.location === null) ? (root.location as string | null) : null,
-      desiredPosition: (typeof root.desiredPosition === "string" || root.desiredPosition === null) ? (root.desiredPosition as string | null) : undefined,
+      name:
+        typeof root.name === "string" || root.name === null
+          ? (root.name as string | null)
+          : null,
+      email:
+        typeof root.email === "string" || root.email === null
+          ? (root.email as string | null)
+          : null,
+      phone:
+        typeof root.phone === "string" || root.phone === null
+          ? (root.phone as string | null)
+          : null,
+      location:
+        typeof root.location === "string" || root.location === null
+          ? (root.location as string | null)
+          : null,
+      desiredPosition:
+        typeof root.desiredPosition === "string" ||
+        root.desiredPosition === null
+          ? (root.desiredPosition as string | null)
+          : undefined,
     };
   }
   return null;
 }
 
 export function StrictExtractButton(props: StrictExtractButtonProps) {
-  const { getRawText, sections, onApplyToSections, onResult, className, label, size = "md", disabled } = props;
+  const {
+    getRawText,
+    sections,
+    onApplyToSections,
+    onResult,
+    className,
+    label,
+    size = "md",
+    disabled,
+  } = props;
   const [isLoading, setIsLoading] = useState(false);
   const { getToken } = useAuth();
 
   // Prefer richer with-spans action; provide strict-only fallback
   // These dynamic lookups mirror existing patterns in the codebase to tolerate missing exports in dev.
   const extractWithSpans = (convexReact as any).useAction
-    ? (convexReact as any).useAction((api as any)["actions/extractProfileStrictWithSpans"]?.extractProfileStrictWithSpans)
+    ? (convexReact as any).useAction(
+        (api as any)["actions/extractProfileStrictWithSpans"]
+          ?.extractProfileStrictWithSpans,
+      )
     : undefined;
 
   const extractStrictOnly = (convexReact as any).useAction
-    ? (convexReact as any).useAction((api as any)["actions/extractProfileStrict"]?.extractProfileStrict)
+    ? (convexReact as any).useAction(
+        (api as any)["actions/extractProfileStrict"]?.extractProfileStrict,
+      )
     : undefined;
 
   // Round button sizing using Tailwind while keeping shadcn/ui Button semantics
@@ -118,14 +169,18 @@ export function StrictExtractButton(props: StrictExtractButtonProps) {
     }
   }, [size]);
 
-  const hasAction = typeof extractWithSpans === "function" || typeof extractStrictOnly === "function";
+  const hasAction =
+    typeof extractWithSpans === "function" ||
+    typeof extractStrictOnly === "function";
 
   const handleClick = useCallback(async () => {
     if (isLoading) return;
     setIsLoading(true);
     try {
       // Resolve rawText from prop
-      const raw = await (typeof getRawText === "function" ? getRawText() : getRawText);
+      const raw = await (typeof getRawText === "function"
+        ? getRawText()
+        : getRawText);
       if (!raw || typeof raw !== "string" || raw.trim().length === 0) {
         setIsLoading(false);
         return;
@@ -160,17 +215,28 @@ export function StrictExtractButton(props: StrictExtractButtonProps) {
       if (!payload) {
         try {
           const CONVEX_URL = (import.meta as any)?.env?.VITE_CONVEX_URL ?? "";
-          const CONVEX_SITE_URL: string = typeof CONVEX_URL === "string" ? CONVEX_URL.replace(".cloud", ".site") : "";
+          const CONVEX_SITE_URL: string =
+            typeof CONVEX_URL === "string"
+              ? CONVEX_URL.replace(".cloud", ".site")
+              : "";
           if (CONVEX_SITE_URL) {
-            const token = typeof getToken === "function" ? await getToken({ template: "convex" }) : null;
-            const headers: Record<string, string> = { "Content-Type": "application/json" };
+            const token =
+              typeof getToken === "function"
+                ? await getToken({ template: "convex" })
+                : null;
+            const headers: Record<string, string> = {
+              "Content-Type": "application/json",
+            };
             if (token) headers.Authorization = `Bearer ${token}`;
             // Prefer with-spans endpoint if the project exposes matching HTTP handlers
-            const res = await fetch(`${CONVEX_SITE_URL}/extract-profile-strict-with-spans`, {
-              method: "POST",
-              headers,
-              body: JSON.stringify({ rawText: String(raw) }),
-            }).catch(async () => {
+            const res = await fetch(
+              `${CONVEX_SITE_URL}/extract-profile-strict-with-spans`,
+              {
+                method: "POST",
+                headers,
+                body: JSON.stringify({ rawText: String(raw) }),
+              },
+            ).catch(async () => {
               // fallback endpoint name
               return fetch(`${CONVEX_SITE_URL}/extract-profile-strict`, {
                 method: "POST",
@@ -212,7 +278,16 @@ export function StrictExtractButton(props: StrictExtractButtonProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [getRawText, isLoading, extractWithSpans, extractStrictOnly, sections, onApplyToSections, onResult, getToken]);
+  }, [
+    getRawText,
+    isLoading,
+    extractWithSpans,
+    extractStrictOnly,
+    sections,
+    onApplyToSections,
+    onResult,
+    getToken,
+  ]);
 
   const aria = label ?? "Strict Extract";
 

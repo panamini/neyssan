@@ -423,7 +423,7 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
             className={
               isStructuredSection
                 ? "py-3 [color:var(--ti)]"
-                : "p-3 [background:var(--sfr)] border border-bo rounded [color:var(--ti)]"
+                : "p-3 [background:var(--sfr)] border [border-color:var(--color-border)] rounded [color:var(--ti)]"
             }
           >
             {linkedItem && section ? (

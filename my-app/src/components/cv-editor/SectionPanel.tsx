@@ -83,7 +83,7 @@ export function SectionPanel({
   }, [section, onSectionChange]);
 
   return (
-    <div className="p-3 my-2 border border-bo rounded [background:var(--sf1)]">
+    <div className="p-3 my-2 border [border-color:var(--color-border)] rounded [background:var(--sf1)]">
       <div className="flex items-center justify-between">
         <div>
           <div className="font-bold">{section.title}</div>

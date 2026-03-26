@@ -1,7 +1,10 @@
 import React, { useMemo, useState } from "react";
 import type { CvSection } from "../../schemas/cvDocument.schema";
 import type { RemirrorJSON } from "remirror";
-import { docToPlainText, getFirstParagraphText } from "../remirror-editor/utils/text";
+import {
+  docToPlainText,
+  getFirstParagraphText,
+} from "../remirror-editor/utils/text";
 import { Remirror, useRemirror, EditorComponent } from "@remirror/react";
 import {
   BoldExtension,
@@ -15,7 +18,7 @@ import {
   HardBreakExtension,
 } from "remirror/extensions";
 import { stableStringify } from "@/utils/stableStringify";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp } from "@/lib/icons";
 
 /**
  * SummaryBlock (v1, display-only)
@@ -53,15 +56,15 @@ function ReadOnlySummary({ doc }: ReadOnlySummaryProps) {
       new OrderedListExtension({}),
       new ListItemExtension({}),
     ],
-    []
+    [],
   );
 
   const initialDoc: RemirrorJSON = useMemo<RemirrorJSON>(
     () =>
-      (doc && typeof doc === "object"
+      doc && typeof doc === "object"
         ? (doc as RemirrorJSON)
-        : ({ type: "doc", content: [] } as RemirrorJSON)),
-    [doc]
+        : ({ type: "doc", content: [] } as RemirrorJSON),
+    [doc],
   );
 
   const { manager, state } = useRemirror({
@@ -79,15 +82,18 @@ function ReadOnlySummary({ doc }: ReadOnlySummaryProps) {
 export function SummaryBlock({ section, onOpenEditor }: SummaryBlockProps) {
   const summaryDoc: RemirrorJSON | undefined = useMemo(() => {
     try {
-      const first = Array.isArray(section.structuredContent) && section.structuredContent.length > 0
-        ? (section.structuredContent[0] as unknown as { summary?: RemirrorJSON })
-        : null;
+      const first =
+        Array.isArray(section.structuredContent) &&
+        section.structuredContent.length > 0
+          ? (section.structuredContent[0] as unknown as {
+              summary?: RemirrorJSON;
+            })
+          : null;
       return (first?.summary as RemirrorJSON | undefined) ?? undefined;
     } catch {
       return undefined;
     }
   }, [section.structuredContent]);
-
 
   // Read-only collapsed/expanded via Remirror for visual parity (like Achievements)
   const fullText = useMemo(() => docToPlainText(summaryDoc), [summaryDoc]);
@@ -101,7 +107,10 @@ export function SummaryBlock({ section, onOpenEditor }: SummaryBlockProps) {
       if (Array.isArray(c)) {
         if (c.length > 2) return true;
         const first = c[0];
-        if (first && (first.type === "bulletList" || first.type === "orderedList")) {
+        if (
+          first &&
+          (first.type === "bulletList" || first.type === "orderedList")
+        ) {
           const li = first.content;
           if (Array.isArray(li) && li.length > 2) return true;
         }
@@ -122,9 +131,15 @@ export function SummaryBlock({ section, onOpenEditor }: SummaryBlockProps) {
     if (nodes.length === 0) return fallback;
 
     const first = nodes[0];
-    if ((first?.type === "bulletList" || first?.type === "orderedList") && Array.isArray(first?.content)) {
+    if (
+      (first?.type === "bulletList" || first?.type === "orderedList") &&
+      Array.isArray(first?.content)
+    ) {
       const firstTwo = first.content.slice(0, 2);
-      return { type: "doc", content: [{ ...first, content: firstTwo }] } as RemirrorJSON;
+      return {
+        type: "doc",
+        content: [{ ...first, content: firstTwo }],
+      } as RemirrorJSON;
     }
 
     const keep = nodes.slice(0, 2);
@@ -133,7 +148,12 @@ export function SummaryBlock({ section, onOpenEditor }: SummaryBlockProps) {
       keep.length === 1 &&
       keep[0]?.type === "paragraph" &&
       Array.isArray(keep[0]?.content) &&
-      keep[0].content.some((n: any) => n?.type === "text" && typeof n?.text === "string" && n.text.length > 200)
+      keep[0].content.some(
+        (n: any) =>
+          n?.type === "text" &&
+          typeof n?.text === "string" &&
+          n.text.length > 200,
+      )
     ) {
       let remaining = 200;
       const newContent: any[] = [];
@@ -144,7 +164,8 @@ export function SummaryBlock({ section, onOpenEditor }: SummaryBlockProps) {
             newContent.push(n);
             remaining -= n.text.length;
           } else {
-            const truncated = n.text.slice(0, Math.max(0, remaining)).trimEnd() + "…";
+            const truncated =
+              n.text.slice(0, Math.max(0, remaining)).trimEnd() + "…";
             newContent.push({ ...n, text: truncated });
             remaining = 0;
             break;
@@ -183,12 +204,12 @@ export function SummaryBlock({ section, onOpenEditor }: SummaryBlockProps) {
   // force a truncated paragraph to guarantee visible change on toggle.
   const rawCollapsedDoc = useMemo<RemirrorJSON>(
     () => buildCollapsedDocFromDoc(summaryDoc),
-    [summaryDoc]
+    [summaryDoc],
   );
   const collapsedDoc = useMemo<RemirrorJSON>(() => {
     if (!tooLong) return rawCollapsedDoc;
     if (docsDeepEqual(rawCollapsedDoc, summaryDoc)) {
-      const t = (fullText || "");
+      const t = fullText || "";
       const cut = t.length > 200 ? `${t.slice(0, 200).trim()}…` : t;
       return buildParagraphDoc(cut);
     }
@@ -201,7 +222,11 @@ export function SummaryBlock({ section, onOpenEditor }: SummaryBlockProps) {
     try {
       const t = String(fullText || "").trim();
       if (t.length === 0) return true;
-      const norm = t.toLowerCase().replace(/\s+/g, " ").replace(/[.…!]/g, "").trim();
+      const norm = t
+        .toLowerCase()
+        .replace(/\s+/g, " ")
+        .replace(/[.…!]/g, "")
+        .trim();
       // Treat seeded placeholder content as empty so the block opens the modal.
       return norm === "start typing here" || norm === "start typing";
     } catch {
@@ -211,11 +236,17 @@ export function SummaryBlock({ section, onOpenEditor }: SummaryBlockProps) {
 
   return (
     <div
-      className={onOpenEditor ? "py-1 cursor-text" : "py-1"}
+      className={onOpenEditor ? "py-1 cursor-pointer" : "py-1"}
       onClick={(e) => {
         try {
-          const sel = typeof window !== "undefined" ? window.getSelection() : null;
-          if (sel && typeof sel.toString === "function" && sel.toString().length > 0) return;
+          const sel =
+            typeof window !== "undefined" ? window.getSelection() : null;
+          if (
+            sel &&
+            typeof sel.toString === "function" &&
+            sel.toString().length > 0
+          )
+            return;
         } catch {
           /* noop */
         }
@@ -231,7 +262,9 @@ export function SummaryBlock({ section, onOpenEditor }: SummaryBlockProps) {
       }}
       role={onOpenEditor ? "button" : undefined}
       tabIndex={onOpenEditor ? 0 : -1}
-      aria-label={isEmpty ? "Add summary. Press Enter to edit." : "Edit summary"}
+      aria-label={
+        isEmpty ? "Add summary. Press Enter to edit." : "Edit summary"
+      }
     >
       <div
         className="text-sm [color:var(--ti)]"
@@ -242,16 +275,24 @@ export function SummaryBlock({ section, onOpenEditor }: SummaryBlockProps) {
       >
         {isExpanded ? (
           summaryDoc && !isEmpty ? (
-            <div className="rich-content" key={`summary-expanded-${stableStringify(summaryDoc)}`}>
+            <div
+              className="rich-content"
+              key={`summary-expanded-${stableStringify(summaryDoc)}`}
+            >
               <ReadOnlySummary doc={summaryDoc} />
             </div>
           ) : (
-            <p className="text-sm italic [color:var(--tg2)]">Start typing here</p>
+            <p className="text-sm italic [color:var(--tg2)]">
+              Start typing here
+            </p>
           )
         ) : isEmpty ? (
           <p className="text-sm italic [color:var(--tg2)]">Start typing here</p>
         ) : (
-          <div className="rich-content" key={`summary-collapsed-${stableStringify(collapsedDoc)}`}>
+          <div
+            className="rich-content"
+            key={`summary-collapsed-${stableStringify(collapsedDoc)}`}
+          >
             <ReadOnlySummary doc={collapsedDoc} />
           </div>
         )}
@@ -271,7 +312,11 @@ export function SummaryBlock({ section, onOpenEditor }: SummaryBlockProps) {
             aria-label={isExpanded ? "Collapse summary" : "Expand summary"}
             title={isExpanded ? "Show less" : "Show more"}
           >
-            {isExpanded ? <ChevronDown className="w-3.5 h-3.5" aria-hidden /> : <ChevronUp className="w-3.5 h-3.5" aria-hidden />}
+            {isExpanded ? (
+              <ChevronDown className="w-3.5 h-3.5" aria-hidden />
+            ) : (
+              <ChevronUp className="w-3.5 h-3.5" aria-hidden />
+            )}
           </button>
         </div>
       ) : null}

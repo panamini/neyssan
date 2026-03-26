@@ -2,7 +2,9 @@
 
 import React from "react";
 import clsx from "clsx";
-import { X } from "lucide-react";
+import { X } from "@/lib/icons";
+import { useCloseOnEscape } from "@/hooks/use-close-on-escape";
+import { BodyPortal } from "@/components/ui/body-portal";
 
 export interface DialogProps {
   open: boolean;
@@ -12,48 +14,60 @@ export interface DialogProps {
   className?: string;
 }
 
-export function Dialog({ open, onClose, title, children, className }: DialogProps) {
+export function Dialog({
+  open,
+  onClose,
+  title,
+  children,
+  className,
+}: DialogProps) {
+  useCloseOnEscape({ open, onClose });
+
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
-      <div
-        className="fixed inset-0 backdrop-blur-[8px] saturate-120"
-        style={{ background: 'hsla(30,12%,11%,.32)' }}
-        onClick={onClose}
-        aria-hidden="true"
-      />
-      <div className={clsx(
-        "relative isolate [background:var(--sfr)] border border-bm rounded-rl [box-shadow:var(--shc)] max-w-dlg w-full overflow-hidden",
-        className
-      )}>
-        {title && (
-          <div
-            className="flex items-start justify-between gap-4 px-6 py-5 border-b border-bo"
-            style={{
-              background: "var(--frost-bg)",
-              backdropFilter: "blur(12px) saturate(1.4)",
-              WebkitBackdropFilter: "blur(12px) saturate(1.4)",
-            }}
-          >
-            <div className="min-w-0">
-              <h2 className="font-['Fraunces'] text-[var(--tm)] font-semibold leading-[var(--ll)] text-foreground">
-                {title}
-              </h2>
-            </div>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Close"
-              className="inline-flex h-[var(--hs)] min-w-[var(--hs)] items-center justify-center rounded-[var(--rs)] border border-transparent bg-transparent px-2 [color:var(--tm2)] transition-colors hover:[background:var(--sf2)] hover:[color:var(--ti)]"
+    <BodyPortal>
+      <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
+        <div
+          className="fixed inset-0 backdrop-blur-[8px] saturate-120"
+          style={{ background: "hsla(30,12%,11%,.32)" }}
+          onClick={onClose}
+          aria-hidden="true"
+        />
+        <div
+          className={clsx(
+            "relative isolate [background:var(--sfr)] border [border-color:var(--color-border)] [border-radius:var(--radius-surface)] [box-shadow:var(--shc)] w-full overflow-hidden [max-width:var(--modal-max-width)]",
+            className,
+          )}
+        >
+          {title && (
+            <div
+              className="flex items-start justify-between gap-4 border-b px-6 py-5 [border-color:var(--color-border)]"
+              style={{
+                background: "var(--frost-bg)",
+                backdropFilter: "blur(12px) saturate(1.4)",
+                WebkitBackdropFilter: "blur(12px) saturate(1.4)",
+              }}
             >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-        )}
-        {children}
+              <div className="min-w-0">
+                <h2 className="font-['Fraunces'] text-[var(--tm)] font-semibold leading-[var(--ll)] text-foreground">
+                  {title}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close"
+                className="inline-flex h-[var(--hs)] min-w-[var(--hs)] items-center justify-center border border-transparent bg-transparent px-2 [border-radius:var(--radius-control)] [color:var(--tm2)] transition-colors hover:[background:var(--sf2)] hover:[color:var(--ti)]"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          )}
+          {children}
+        </div>
       </div>
-    </div>
+    </BodyPortal>
   );
 }
 
@@ -77,7 +91,12 @@ export interface DialogActionsProps {
 
 export function DialogActions({ children, className }: DialogActionsProps) {
   return (
-    <div className={clsx("px-6 py-4 border-t border-bo flex gap-3 justify-end", className)}>
+    <div
+      className={clsx(
+        "flex justify-end gap-3 border-t px-6 py-4 [border-color:var(--color-border)]",
+        className,
+      )}
+    >
       {children}
     </div>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { Trash } from "lucide-react";
+import { Trash } from "@/lib/icons";
 import { Button } from "./ui/button";
 import LoadingSpinner from "./LoadingSpinner";
 import { Input } from "./ui/input";
@@ -47,13 +47,24 @@ export function jsonToHumanList(jsonString: string): string {
     if (!Array.isArray(parsed)) return String(jsonString);
     return parsed
       .map((item: any) => {
-        const title = item.title || item.degree || item.company || item.institution || item.name || "";
-        const details = [item.company || item.institution || "", item.startDate || "", item.endDate || ""]
+        const title =
+          item.title ||
+          item.degree ||
+          item.company ||
+          item.institution ||
+          item.name ||
+          "";
+        const details = [
+          item.company || item.institution || "",
+          item.startDate || "",
+          item.endDate || "",
+        ]
           .filter(Boolean)
           .join(" • ");
         let human = title ? `• ${title}` : `•`;
         if (details) human += `\n  ${details}`;
-        if (item.description) human += `\n  ${String(item.description).replace(/\n/g, "\n  ")}`;
+        if (item.description)
+          human += `\n  ${String(item.description).replace(/\n/g, "\n  ")}`;
         // If no structured fields present, but the object is a string or has no known keys,
         // stringify the object as a fallback description.
         if (!title && !details && !item.description) {
@@ -69,13 +80,21 @@ export function jsonToHumanList(jsonString: string): string {
 
 export function humanListToJson(text: string): any[] {
   // Split on blank lines to get items
-  const items = String(text || "").split(/\n\s*\n/).map(s => s.trim()).filter(Boolean);
+  const items = String(text || "")
+    .split(/\n\s*\n/)
+    .map((s) => s.trim())
+    .filter(Boolean);
   if (items.length === 0) return [];
-  return items.map(item => {
+  return items.map((item) => {
     // If item starts with a bullet, remove it and unindent
-    const normalized = item.replace(/^\s*[\-\*\•]\s*/, "").replace(/\n\s{2}/g, "\n");
+    const normalized = item
+      .replace(/^\s*[\-\*\•]\s*/, "")
+      .replace(/\n\s{2}/g, "\n");
     // Heuristic: first line may be title, subsequent lines are details/description.
-    const lines = normalized.split(/\n/).map(l => l.trim()).filter(Boolean);
+    const lines = normalized
+      .split(/\n/)
+      .map((l) => l.trim())
+      .filter(Boolean);
     if (lines.length === 1) {
       return { description: lines[0] };
     }
@@ -126,7 +145,11 @@ export function RefinementField({
     try {
       if (displayMode === "chips") {
         // normalize chips into comma-separated string and propagate immediately
-        const normalized = localText.split(",").map(s => s.trim()).filter(Boolean).join(", ");
+        const normalized = localText
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .join(", ");
         onChange(normalized);
         // ensure localText reflects the normalized value so preview is stable
         setLocalText(normalized);
@@ -162,10 +185,13 @@ export function RefinementField({
                 if (isEditing) applyEdit();
                 else setIsEditing(true);
               }}
-              ariaLabel={isEditing ? `Show preview for ${label}` : `Edit ${label}`}
+              ariaLabel={
+                isEditing ? `Show preview for ${label}` : `Edit ${label}`
+              }
               className="px-2 py-1 text-xs rounded text-muted bg-surface-muted"
             >
-              {isEditing ? "Preview" : "Edit"}</Button>
+              {isEditing ? "Preview" : "Edit"}
+            </Button>
           )}
           <button
             aria-label={`Clear ${label}`}
@@ -214,22 +240,19 @@ export function RefinementField({
               <textarea
                 aria-label={`${label} edit`}
                 value={localText}
-                onChange={e => setLocalText(e.target.value)}
+                onChange={(e) => setLocalText(e.target.value)}
                 rows={6}
-                className="w-full p-2 font-sans text-sm [color:var(--ti)] border border-bo rounded-md [background:var(--sf1)] focus:outline-none focus:[box-shadow:0_0_0_3px_var(--fr)]"
+                className="w-full p-2 font-sans text-sm [color:var(--ti)] border [border-color:var(--color-border)] rounded-md [background:var(--sf1)] focus:outline-none focus:[box-shadow:0_0_0_3px_var(--fr)]"
               />
             )
           ) : displayMode === "chips" ? (
             <div className="flex flex-wrap gap-2">
               {String(value || "")
                 .split(",")
-                .map(s => s.trim())
+                .map((s) => s.trim())
                 .filter(Boolean)
                 .map((chip, idx) => (
-                  <span
-                    key={idx}
-                    className="chip"
-                  >
+                  <span key={idx} className="chip">
                     {chip}
                   </span>
                 ))}
@@ -243,7 +266,7 @@ export function RefinementField({
               {String(value ?? "")}
             </div>
           )}
-      </Card>
+        </Card>
 
         {/* Right: Suggestion */}
         <Card className="relative flex-1 bg-background">
@@ -265,10 +288,7 @@ export function RefinementField({
                       .map((s) => s.trim())
                       .filter(Boolean)
                       .map((chip, idx) => (
-                        <span
-                          key={idx}
-                          className="chip"
-                        >
+                        <span key={idx} className="chip">
                           {chip}
                         </span>
                       ))}
@@ -283,7 +303,7 @@ export function RefinementField({
                   No suggestion
                 </div>
               )}
- 
+
               <div className="absolute flex flex-col gap-2 top-2 right-2">
                 <Button
                   ariaLabel={`Accept suggestion for ${label}`}
@@ -291,14 +311,18 @@ export function RefinementField({
                   onClick={onAccept}
                   disabled={!suggestion}
                   className="px-2 py-1 text-sm rounded-md text-background bg-surface hover:opacity-95 focus:outline-none focus:[box-shadow:0_0_0_3px_var(--fr)]"
-                >Accept</Button>
+                >
+                  Accept
+                </Button>
                 <Button
                   ariaLabel={`Discard suggestion for ${label}`}
                   title="Discard suggestion"
                   onClick={onDiscard}
                   disabled={!suggestion}
                   className="px-2 py-1 text-sm rounded-md bg-surface-muted hover:opacity-95 focus:outline-none"
-                >Discard</Button>
+                >
+                  Discard
+                </Button>
                 {onUndo && (
                   <Button
                     ariaLabel={`Undo last applied suggestion for ${label}`}
@@ -320,19 +344,22 @@ export function RefinementField({
         <div className="flex justify-end gap-2 mt-2">
           <Button
             type="button"
-            onClick={() =>{
+            onClick={() => {
               // cancel: revert local text to the computed initialHuman
               setLocalText(initialHuman);
               setIsEditing(false);
             }}
             className="px-3 py-1 text-sm rounded-md bg-surface-muted"
           >
-            Cancel</Button>
+            Cancel
+          </Button>
           <Button
             type="button"
             onClick={applyEdit}
             className="px-3 py-1 text-sm rounded-md text-background bg-accent hover:opacity-95 focus:outline-none focus:[box-shadow:0_0_0_3px_var(--fr)]"
-          >Save</Button>
+          >
+            Save
+          </Button>
         </div>
       )}
     </div>

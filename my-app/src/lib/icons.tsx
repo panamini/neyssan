@@ -1,0 +1,157 @@
+import React from "react";
+import {
+  ArrowsClockwise as PhArrowsClockwise,
+  ArrowsOutSimple as PhArrowsOutSimple,
+  ArrowDown as PhArrowDown,
+  ArrowSquareOut as PhArrowSquareOut,
+  ArrowUp as PhArrowUp,
+  Camera as PhCamera,
+  CaretDown as PhCaretDown,
+  CaretUp as PhCaretUp,
+  Check as PhCheck,
+  CornersIn as PhCornersIn,
+  Copy as PhCopy,
+  DotsSixVertical as PhDotsSixVertical,
+  FileImage as PhFileImage,
+  FilePdf as PhFilePdf,
+  FileText as PhFileText,
+  FloppyDisk as PhFloppyDisk,
+  IdentificationCard as PhIdentificationCard,
+  Layout as PhLayout,
+  Link as PhLink,
+  ListBullets as PhListBullets,
+  MagicWand as PhMagicWand,
+  Moon as PhMoon,
+  PaperPlaneTilt as PhPaperPlaneTilt,
+  Paperclip as PhPaperclip,
+  Palette as PhPalette,
+  Pen as PhPen,
+  PencilSimple as PhPencilSimple,
+  PencilSimpleLine as PhPencilSimpleLine,
+  Plus as PhPlus,
+  PushPin as PhPushPin,
+  PushPinSlash as PhPushPinSlash,
+  Rows as PhRows,
+  Scan as PhScan,
+  Scroll as PhScroll,
+  SidebarSimple as PhSidebarSimple,
+  SpinnerGap as PhSpinnerGap,
+  ImagesSquare as PhImagesSquare,
+  SquaresFour as PhSquaresFour,
+  Square as PhSquare,
+  Star as PhStar,
+  Sun as PhSun,
+  SunDim as PhSunDim,
+  TextB as PhTextB,
+  TextItalic as PhTextItalic,
+  TextUnderline as PhTextUnderline,
+  Trash as PhTrash,
+  TreeView as PhTreeView,
+  Upload as PhUpload,
+  User as PhUser,
+  UserCircle as PhUserCircle,
+  BracketsSquare as PhBracketsSquare,
+  X as PhX,
+  type IconProps as PhosphorIconProps,
+} from "@phosphor-icons/react";
+
+type CompatIconProps = PhosphorIconProps & {
+  strokeWidth?: number;
+};
+
+type CompatIcon = React.ForwardRefExoticComponent<
+  CompatIconProps & React.RefAttributes<SVGSVGElement>
+>;
+
+function resolveWeight(
+  strokeWidth?: number,
+): NonNullable<PhosphorIconProps["weight"]> {
+  if (typeof strokeWidth !== "number") {
+    return "regular";
+  }
+  if (strokeWidth >= 2.2) {
+    return "bold";
+  }
+  if (strokeWidth >= 1.8) {
+    return "regular";
+  }
+  return "light";
+}
+
+function withCompat(
+  Component: React.ComponentType<PhosphorIconProps>,
+  defaultWeight: NonNullable<PhosphorIconProps["weight"]> = "regular",
+): CompatIcon {
+  const Wrapped = React.forwardRef<SVGSVGElement, CompatIconProps>(
+    ({ strokeWidth, weight, ...props }, ref) => (
+      <Component
+        ref={ref}
+        {...props}
+        weight={weight ?? resolveWeight(strokeWidth) ?? defaultWeight}
+      />
+    ),
+  );
+
+  Wrapped.displayName =
+    Component.displayName ?? Component.name ?? "PhosphorCompatIcon";
+
+  return Wrapped;
+}
+
+export type { CompatIconProps as IconProps };
+
+export const ArrowDown = withCompat(PhArrowDown);
+export const ArrowSquareOut = withCompat(PhArrowSquareOut);
+export const ArrowUp = withCompat(PhArrowUp);
+export const ArrowsOutSimple = withCompat(PhArrowsOutSimple);
+export const Bold = withCompat(PhTextB);
+export const Camera = withCompat(PhCamera);
+export const CaretDownIcon = withCompat(PhCaretDown);
+export const CaretUpIcon = withCompat(PhCaretUp);
+export const Check = withCompat(PhCheck);
+export const ChevronDown = withCompat(PhCaretDown);
+export const ChevronUp = withCompat(PhCaretUp);
+export const Copy = withCompat(PhCopy);
+export const CornersIn = withCompat(PhCornersIn);
+export const FileImage = withCompat(PhFileImage);
+export const FilePdf = withCompat(PhFilePdf);
+export const FileText = withCompat(PhFileText);
+export const FileUser = withCompat(PhIdentificationCard);
+export const ReadCvLogo = withCompat(PhIdentificationCard);
+export const FloppyDisk = withCompat(PhFloppyDisk);
+export const FolderTree = withCompat(PhTreeView);
+export const GripHorizontal = withCompat(PhDotsSixVertical);
+export const Italic = withCompat(PhTextItalic);
+export const Layout = withCompat(PhLayout);
+export const Link = withCompat(PhLink);
+export const List = withCompat(PhListBullets);
+export const Loader2 = withCompat(PhSpinnerGap, "bold");
+export const Menu = withCompat(PhRows);
+export const Moon = withCompat(PhMoon);
+export const Paperclip = withCompat(PhPaperclip);
+export const Palette = withCompat(PhPalette);
+export const PanelLeftDashed = withCompat(PhSidebarSimple);
+export const Pen = withCompat(PhPen);
+export const PenLine = withCompat(PhPencilSimpleLine);
+export const Pencil = withCompat(PhPencilSimple);
+export const Pin = withCompat(PhPushPin);
+export const PinOff = withCompat(PhPushPinSlash);
+export const Plus = withCompat(PhPlus);
+export const RotateCcw = withCompat(PhArrowsClockwise);
+export const ScanLine = withCompat(PhScan);
+export const ScrollText = withCompat(PhScroll);
+export const SendHorizontal = withCompat(PhPaperPlaneTilt);
+export const Square = withCompat(PhSquare);
+export const ImagesSquare = withCompat(PhImagesSquare);
+export const SquaresFour = withCompat(PhSquaresFour);
+export const Star = withCompat(PhStar);
+export const Sun = withCompat(PhSun);
+export const SunMedium = withCompat(PhSunDim);
+export const Trash = withCompat(PhTrash);
+export const Underline = withCompat(PhTextUnderline);
+export const Upload = withCompat(PhUpload);
+export const User = withCompat(PhUser);
+export const UserRound = withCompat(PhUserCircle);
+export const Wand2 = withCompat(PhMagicWand);
+export const BracketsSquare = withCompat(PhBracketsSquare);
+export const X = withCompat(PhX);
