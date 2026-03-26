@@ -929,6 +929,13 @@ export function VerbatiStyleWorkspace(): JSX.Element {
           data={previewData}
           stylePreset={previewStylePreset}
           compareLayouts={compareLayouts}
+          onSelectComparisonLayout={(layout) => {
+            queueStylePreset((previous) => ({
+              ...previous,
+              layout,
+            }));
+            setCompareLayouts(false);
+          }}
         />
       </div>
     </section>
