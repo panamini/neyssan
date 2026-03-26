@@ -10,6 +10,7 @@ type ResumePageProps = {
   data: ResumeData;
   mode?: ResumePageMode;
   comparisonVariantIds?: ResumeLayoutVariantId[];
+  onSelectVariantId?: ((variantId: ResumeLayoutVariantId) => void) | undefined;
   fitToken?: string;
 };
 
@@ -3757,6 +3758,7 @@ export default function ResumePage({
   mode = "comparison",
   comparisonVariantIds,
   fitToken,
+  onSelectVariantId,
 }: ResumePageProps) {
   const isComparisonMode = mode === "comparison" || mode === "comparisonAll";
   const [expandedComparison, setExpandedComparison] = React.useState(false);
@@ -3820,7 +3822,13 @@ export default function ResumePage({
             fitToken={`${fitToken ?? ""}:${variant.id}`}
             onActivateComparison={
               isComparisonMode && !expandedComparisonView
-                ? () => setExpandedComparison(true)
+                ? () => {
+                    if (onSelectVariantId) {
+                      onSelectVariantId(variant.id);
+                      return;
+                    }
+                    setExpandedComparison(true);
+                  }
                 : undefined
             }
             data={data}
