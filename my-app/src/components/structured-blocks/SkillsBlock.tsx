@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Trash, ArrowUp, ArrowDown, Plus } from "lucide-react";
+import { Trash, ArrowUp, ArrowDown, Plus } from "@/lib/icons";
 import type { CvSection } from "../../schemas/cvDocument.schema";
 
 /**
@@ -13,9 +13,16 @@ import type { CvSection } from "../../schemas/cvDocument.schema";
  * - Keyboard add via Enter on input
  * - Buttons are labeled and keyboard-focusable
  */
-export function SkillsBlock({ section, onChange }: { section: CvSection; onChange: (updatedSection: CvSection) => void }) {
+export function SkillsBlock({
+  section,
+  onChange,
+}: {
+  section: CvSection;
+  onChange: (updatedSection: CvSection) => void;
+}) {
   const initialSkills = useMemo(() => {
-    if (Array.isArray(section.structuredContent)) return section.structuredContent as string[];
+    if (Array.isArray(section.structuredContent))
+      return section.structuredContent as string[];
     // Try to coerce from blocks or empty array
     try {
       if (Array.isArray(section.blocks) && section.blocks.length > 0) {
@@ -24,10 +31,15 @@ export function SkillsBlock({ section, onChange }: { section: CvSection; onChang
         const content = Array.isArray(doc.content) ? doc.content : [];
         const text = content
           .map((n: any) =>
-            Array.isArray(n.content) ? n.content.map((t: any) => t.text ?? "").join("") : n.text ?? ""
+            Array.isArray(n.content)
+              ? n.content.map((t: any) => t.text ?? "").join("")
+              : n.text ?? "",
           )
           .join("\n");
-        return text.split(/\n/).map((s: string) => s.trim()).filter(Boolean);
+        return text
+          .split(/\n/)
+          .map((s: string) => s.trim())
+          .filter(Boolean);
       }
     } catch {
       // fallback
@@ -88,14 +100,16 @@ export function SkillsBlock({ section, onChange }: { section: CvSection; onChang
   }
 
   return (
-    <div className="p-3 [background:var(--sfr)] border border-bo rounded">
-      <label className="block text-sm font-medium [color:var(--tm2)]">Skills</label>
+    <div className="p-3 [background:var(--sfr)] border [border-color:var(--color-border)] rounded">
+      <label className="block text-sm font-medium [color:var(--tm2)]">
+        Skills
+      </label>
 
       <div className="flex flex-wrap gap-2 mt-3">
         {skills.map((s, idx) => (
           <div
             key={`${s}-${idx}`}
-            className="flex items-center px-2 py-1 space-x-2 text-sm [background:var(--sf2)] border border-bo rounded"
+            className="flex items-center px-2 py-1 space-x-2 text-sm [background:var(--sf2)] border [border-color:var(--color-border)] rounded"
             role="group"
             aria-label={`Skill ${s}`}
           >
@@ -147,7 +161,7 @@ export function SkillsBlock({ section, onChange }: { section: CvSection; onChang
               handleAdd(input);
             }
           }}
-          className="flex-grow px-2 py-1 bg-transparent border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+          className="flex-grow px-2 py-1 bg-transparent border [border-color:var(--color-border-strong)] [border-radius:var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
         />
         <button
           type="button"

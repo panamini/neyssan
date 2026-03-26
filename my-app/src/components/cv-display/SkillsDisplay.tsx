@@ -22,7 +22,11 @@ function toBucket(raw: ISkillItem["bucket"] | undefined): Bucket {
 }
 
 function groupByBucket(items: ISkillItem[]) {
-  const out: Record<Bucket, ISkillItem[]> = { core: [], secondary: [], familiar: [] };
+  const out: Record<Bucket, ISkillItem[]> = {
+    core: [],
+    secondary: [],
+    familiar: [],
+  };
   for (const it of items) {
     out[toBucket(it.bucket)].push(it);
   }
@@ -55,25 +59,29 @@ export function SkillsDisplay({
             <div key={bucket} className="space-y-1">
               {showHeadings ? (
                 <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-semibold">
-                    {LABELS[bucket]}
-                  </h3>
+                  <h3 className="text-sm font-semibold">{LABELS[bucket]}</h3>
                   <span className="text-xs text-muted">({list.length})</span>
                 </div>
               ) : null}
 
-              <ul className="flex flex-wrap gap-2" aria-label={`${LABELS[bucket]} skills`}>
+              <ul
+                className="flex flex-wrap gap-2"
+                aria-label={`${LABELS[bucket]} skills`}
+              >
                 {list.map((it) => {
                   const name = String(it.name ?? "").trim() || "Untitled";
                   // Hide default Intermediate level badge; show only when non-default
-                  const isDefaultLevel = String(it.level ?? "Intermediate") === "Intermediate";
+                  const isDefaultLevel =
+                    String(it.level ?? "Intermediate") === "Intermediate";
                   const lvl = isDefaultLevel ? undefined : levelLabel(it.level);
                   return (
                     <li key={String(it.id ?? name)}>
                       <span
                         className={[
-                          "inline-flex items-center gap-1 rounded-full border border-[color:var(--bo)]",
-                          compact ? "px-2 py-0.5 text-xs" : "px-2.5 py-1 text-xs sm:text-sm",
+                          "inline-flex items-center gap-1 rounded-full border border-[color:var(--color-border)]",
+                          compact
+                            ? "px-2 py-0.5 text-xs"
+                            : "px-2.5 py-1 text-xs sm:text-sm",
                           "bg-background",
                         ].join(" ")}
                         aria-label={lvl ? `${name}, ${lvl}` : name}

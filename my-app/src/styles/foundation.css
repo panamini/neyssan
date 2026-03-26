@@ -1,0 +1,599 @@
+/* ============================================================
+   DASTI v1 — DESIGN TOKENS
+   Source de vérité : my-app/docs/specs/dasti-spec-v2.md § 1–11
+   ============================================================ */
+
+/* --- Palette accent Sauge (défaut) -------------------------
+   Surcharger via classe body.pal-* pour les autres palettes  */
+:root {
+  color-scheme: light;
+  --ac: hsl(155, 22%, 30%); /* accent solid */
+  --am: hsl(155, 24%, 44%); /* accent mid */
+  --ap: hsl(155, 22%, 92%); /* accent pale */
+  --as: hsl(155, 18%, 88%); /* accent soft */
+  --fr: hsl(155, 22%, 56%); /* focus ring */
+  --op: hsl(40, 20%, 99%); /* on-primary */
+}
+.dark {
+  --ac: hsl(155, 28%, 62%);
+  --am: hsl(155, 28%, 72%);
+  --ap: hsl(155, 20%, 18%);
+  --as: hsl(155, 18%, 22%);
+  --fr: hsl(155, 28%, 78%);
+  --op: hsl(80, 5%, 7%);
+}
+
+/* --- Tokens universels (indépendants du thème) ------------- */
+:root {
+  --space-0: 0px;
+
+  /* §1 Spacing série canonique 4·8·12·16·24·32·40·64·80 */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+  --s7: 40px;
+  --s8: 64px;
+  --s9: 80px;
+  --space-1: var(--s1);
+  --space-2: var(--s2);
+  --space-3: var(--s3);
+  --space-4: var(--s4);
+  --space-5: var(--s5);
+  --space-6: var(--s6);
+  --space-7: var(--s7);
+  --space-8: var(--s8);
+  --space-9: var(--s9);
+  --gap-tight: var(--space-2);
+  --gap-default: var(--space-3);
+  --gap-roomy: var(--space-4);
+  --section-gap-sm: var(--space-5);
+  --section-gap-md: var(--space-6);
+  --section-gap-lg: var(--space-7);
+  --container-pad-sm: var(--space-4);
+  --container-pad-md: var(--space-5);
+  --container-pad-lg: var(--space-6);
+  --flow-1: 0.375em;
+  --flow-2: 0.5em;
+  --flow-3: 0.75em;
+  --flow-4: 1em;
+  --flow-5: 1.5em;
+
+  /* §2 Type scale √2 depuis 12px */
+  --tx: 12px;
+  --ts: 14px;
+  --tb: 16px;
+  --tm: 20px;
+  --tl: 26px;
+  --tx2: 32px;
+  --font-size-1: var(--tx);
+  --font-size-2: var(--ts);
+  --font-size-3: var(--tb);
+  --font-size-4: var(--tm);
+  --font-size-5: var(--tl);
+  --font-size-6: var(--tx2);
+
+  /* §2 Line-heights */
+  --lx: 16px;
+  --ls: 20px;
+  --lb: 24px;
+  --ll: 30px;
+  --lx2: 40px;
+  --line-1: var(--lx);
+  --line-2: var(--ls);
+  --line-3: var(--lb);
+  --line-4: var(--ll);
+  --line-5: var(--lx2);
+  --text-caption-size: var(--font-size-1);
+  --text-caption-line: var(--line-1);
+  --text-overline-size: var(--font-size-1);
+  --text-overline-line: var(--line-1);
+  --text-body-sm-size: var(--font-size-2);
+  --text-body-sm-line: var(--line-2);
+  --text-body-size: var(--font-size-3);
+  --text-body-line: var(--line-3);
+  --text-label-size: var(--font-size-2);
+  --text-label-line: var(--line-2);
+  --text-title-size: var(--font-size-4);
+  --text-title-line: var(--line-4);
+  --text-display-size: var(--font-size-6);
+  --text-display-line: var(--line-5);
+
+  /* Typography families and weights */
+  --font-heading-family: "Fraunces", serif;
+  --font-body-family: "Source Sans 3", system-ui, sans-serif;
+  --font-mono-family: "IBM Plex Mono", source-code-pro, Menlo, Monaco, Consolas,
+    monospace;
+  --font-heading-weight: 600;
+  --font-body-weight: 400;
+  --font-label-weight: 600;
+  --font-strong-weight: 600;
+  --tracking-display: -0.02em;
+  --tracking-tight: -0.01em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.14em;
+
+  /* §3 Radius — canonical authoring scale */
+  --radius-1: 8px;
+  --radius-2: 12px;
+  --radius-3: 16px;
+  --radius-4: 20px;
+  --radius-pill: 999px;
+  --radius-inline: var(--radius-1);
+  --radius-control: var(--radius-2);
+  --radius-card: var(--radius-3);
+  --radius-surface: var(--radius-4);
+
+  /* §4 Hauteurs interactives */
+  --hs: 32px;
+  --hm: 40px;
+  --hb: 44px;
+  --hdr: 54px;
+  --control-sm: var(--hs);
+  --control-md: var(--hm);
+  --control-lg: var(--hb);
+  --header-height: var(--hdr);
+
+  /* §10 Transitions */
+  --ez: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --ezb: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --duration-fast: 120ms;
+  --duration-normal: 180ms;
+  --duration-slow: 240ms;
+  --ease-standard: var(--ez);
+  --ease-emphasis: var(--ezb);
+
+  /* Layering + containers */
+  --z-base: 0;
+  --z-sticky: 100;
+  --z-popover: 400;
+  --z-modal: 800;
+  --z-toast: 900;
+  --z-tooltip: 1000;
+  --container-xs: 480px;
+  --container-sm: 640px;
+  --container-md: 768px;
+  --container-lg: 1024px;
+  --container-xl: 1280px;
+  --gutter-mobile: 16px;
+  --gutter-tablet: 24px;
+  --gutter-desktop: 32px;
+  --document-sheet-inline-size: 560px;
+  --document-sheet-ratio: 1 / 1.41421356;
+  --document-sheet-min-block: 420px;
+  --document-sheet-max-block: min(72vh, 780px);
+  --proposal-sheet-margin-inline-inner: var(--s2);
+  --proposal-sheet-margin-block-start: var(--s3);
+  --proposal-sheet-margin-inline-outer: var(--s4);
+  --proposal-sheet-margin-block-end: var(--s6);
+  --proposal-sheet-content-bottom-inset: var(--proposal-sheet-margin-block-end);
+  --proposal-sheet-edge-fade-height: 26px;
+  --proposal-sheet-top-fade: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--sf1) 94%, transparent) 0%,
+    color-mix(in srgb, var(--sf1) 78%, transparent) 44%,
+    transparent 100%
+  );
+  --proposal-sheet-bottom-fade: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--sf1) 88%, transparent) 0%,
+    color-mix(in srgb, var(--sf1) 44%, transparent) 54%,
+    transparent 100%
+  );
+  --proposal-sheet-bottom-shadow: 0 -14px 22px -22px
+    color-mix(in srgb, var(--shadow-color) 90%, transparent);
+
+  /* App shell sidebar */
+  --app-sidebar-width-expanded: 256px;
+  --app-sidebar-width-compact: 240px;
+  --app-sidebar-width-collapsed: 52px;
+  --app-sidebar-width-collapsed-mobile: 40px;
+  --card-rail-sm: 544px;
+  --card-rail-md: 608px;
+  --card-rail-lg: 672px;
+  --cv-editor-shell-max-width: 736px;
+  --app-sidebar-header-height: var(--header-height);
+  --app-sidebar-inline-pad: var(--space-2);
+  --app-sidebar-item-height: 36px;
+  --app-sidebar-item-height-compact: 34px;
+  --app-sidebar-action-height: 30px;
+  --app-sidebar-action-height-compact: 28px;
+  --app-sidebar-icon-size: 16px;
+  --app-sidebar-label-size: var(--text-body-size);
+  --app-sidebar-section-size: 11px;
+  --app-sidebar-section-tracking: 0.12em;
+  --app-sidebar-section-pad: var(--space-4) var(--space-2) var(--space-3);
+  --app-sidebar-section-pad-compact: var(--space-3) var(--space-2)
+    var(--space-2);
+  --app-sidebar-doc-indent: 38px;
+  --app-sidebar-doc-indent-compact: 32px;
+  --app-sidebar-view-indent: 40px;
+  --app-sidebar-view-indent-compact: 34px;
+  --app-sidebar-label-max: 208px;
+  --app-sidebar-label-max-compact: 184px;
+  --sidebar-hover-bg: var(--sf2);
+  --sidebar-active-bg: var(--sfr);
+  --sidebar-hover-ink: var(--ti);
+  --sidebar-active-ink: var(--ti);
+  --sidebar-active-stripe: var(--ac);
+  --section-header-surface: var(--sf1);
+  --section-dismiss-surface: var(--section-header-surface);
+  --section-dismiss-border: color-mix(
+    in srgb,
+    var(--color-border) 82%,
+    transparent 18%
+  );
+  --section-dismiss-ink: var(--tg2);
+  --section-dismiss-surface-hover: color-mix(
+    in srgb,
+    var(--color-surface-2) 78%,
+    var(--section-header-surface) 22%
+  );
+  --section-dismiss-border-hover: color-mix(
+    in srgb,
+    var(--color-border-strong) 74%,
+    transparent 26%
+  );
+  --section-dismiss-ink-hover: var(--tm2);
+  --section-hover-surface: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--sfr) 94%, white 6%) 0%,
+    color-mix(in srgb, var(--sf1) 97%, white 3%) 100%
+  );
+  --section-hover-border: color-mix(
+    in srgb,
+    var(--color-border-contrast) 78%,
+    var(--ac) 22%
+  );
+  --section-hover-shadow: 0 14px 24px -24px color-mix(in srgb, var(
+            --shadow-color
+          )
+          78%, transparent),
+    0 1px 0 color-mix(in srgb, white 48%, transparent);
+  --section-hover-lift: -1px;
+  --drop-surface-bg: var(--frost-surface);
+  --drop-surface-border: var(--frost-border);
+}
+
+/* --- §6 Mode Light — Papier Lin --------------------------- */
+:root {
+  --bg: hsl(38, 16%, 95%);
+  --sf1: hsl(38, 12%, 93%);
+  --sf2: hsl(36, 14%, 88%);
+  --sfr: hsl(40, 20%, 99%);
+  --ti: hsl(30, 12%, 11%);
+  --tm2: hsl(30, 8%, 42%);
+  --tg2: hsl(30, 6%, 62%);
+  --border-soft: hsla(30, 10%, 12%, 0.07);
+  --border-field: hsla(30, 10%, 12%, 0.11);
+  --border-strong: hsla(30, 10%, 12%, 0.16);
+
+  /* §6 Sémantiques light — désaturées, analogiques */
+  --ok: hsl(152, 20%, 28%);
+  --okb: hsl(152, 16%, 92%);
+  --okt: hsl(152, 20%, 22%);
+  --er: hsl(4, 26%, 34%);
+  --erb: hsl(4, 22%, 92%);
+  --ert: hsl(4, 26%, 28%);
+  --wa: hsl(34, 36%, 32%);
+  --wab: hsl(34, 30%, 92%);
+  --wat: hsl(34, 36%, 26%);
+
+  /* §9 Ombres light */
+  --sha: 0 1px 2px hsla(30, 20%, 8%, 0.04), 0 6px 16px hsla(30, 20%, 8%, 0.045);
+  --shb: 0 2px 6px hsla(30, 20%, 8%, 0.05), 0 12px 28px hsla(30, 20%, 8%, 0.07);
+  --shc: 0 6px 18px hsla(30, 20%, 8%, 0.06), 0 24px 52px hsla(30, 20%, 8%, 0.1);
+  --shadow-frost: 0 10px 32px hsla(30, 20%, 8%, 0.08);
+
+  /* Subtle gradients */
+  --gradient-canvas: radial-gradient(
+      circle at 6% 0%,
+      hsla(24, 36%, 88%, 0.34) 0%,
+      transparent 34%
+    ),
+    radial-gradient(
+      circle at 92% 10%,
+      hsla(92, 14%, 82%, 0.15) 0%,
+      transparent 30%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--bg) 90%, white 10%) 0%,
+      color-mix(in srgb, var(--bg) 88%, var(--sf1) 12%) 100%
+    );
+  --gradient-sidebar: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--sf1) 90%, white 10%) 0%,
+    color-mix(in srgb, var(--sf1) 95%, hsl(32, 22%, 90%) 5%) 100%
+  );
+  --gradient-surface: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--sfr) 84%, white 16%) 0%,
+    color-mix(in srgb, var(--sf1) 92%, hsl(28, 22%, 91%) 8%) 100%
+  );
+  --gradient-stage: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--sfr) 78%, white 22%),
+    color-mix(in srgb, var(--sf1) 88%, hsl(86, 12%, 88%) 12%)
+  );
+
+  /* Frost */
+  --frost-bg: hsla(40, 20%, 99%, 0.84);
+  --frost-surface: hsla(40, 20%, 99%, 0.72);
+  --frost-border: hsla(30, 10%, 12%, 0.09);
+  --frost-blur: 18px;
+  --frost-saturate: 140%;
+  --sidebar-hover-bg: color-mix(in srgb, var(--sf2) 72%, var(--sfr) 28%);
+  --sidebar-active-bg: linear-gradient(
+    180deg,
+    color-mix(in srgb, white 78%, var(--sf1) 22%) 0%,
+    color-mix(in srgb, var(--sfr) 86%, hsl(92, 16%, 84%) 14%) 100%
+  );
+  --sidebar-hover-ink: var(--ti);
+  --sidebar-active-ink: var(--ti);
+  --sidebar-active-stripe: color-mix(in srgb, var(--ac) 76%, var(--ti) 24%);
+  --drop-surface-bg: hsla(38, 26%, 98%, 0.78);
+  --drop-surface-border: hsla(30, 14%, 16%, 0.1);
+  --section-hover-surface: var(--gradient-surface);
+  --section-hover-border: var(--color-border-contrast);
+  --section-hover-shadow: var(--shadow-sm);
+  --section-hover-lift: -1px;
+}
+
+/* --- §6 Mode Dark — Graphite Kaki Tellurique -------------- */
+.dark {
+  color-scheme: dark;
+  --bg: hsl(80, 5%, 7%);
+  --sf1: hsl(80, 5%, 11%);
+  --sf2: hsl(78, 5%, 16%);
+  --sfr: hsl(75, 5%, 19%);
+  --ti: hsl(46, 12%, 86%);
+  --tm2: hsl(44, 8%, 60%);
+  --tg2: hsl(42, 6%, 38%);
+  --border-soft: hsla(46, 12%, 86%, 0.1);
+  --border-field: hsla(46, 12%, 86%, 0.16);
+  --border-strong: hsla(46, 12%, 86%, 0.22);
+
+  /* §6 Sémantiques dark — sat ≤26% Itten */
+  --ok: hsl(152, 22%, 56%);
+  --okb: hsl(152, 13%, 13%);
+  --okt: hsl(152, 22%, 70%);
+  --er: hsl(4, 24%, 56%);
+  --erb: hsl(4, 15%, 13%);
+  --ert: hsl(4, 24%, 70%);
+  --wa: hsl(36, 26%, 58%);
+  --wab: hsl(36, 13%, 13%);
+  --wat: hsl(36, 26%, 72%);
+
+  /* §9 Ombres dark */
+  --sha: 0 1px 2px hsla(0, 0%, 0%, 0.24), 0 8px 18px hsla(0, 0%, 0%, 0.22);
+  --shb: 0 2px 8px hsla(0, 0%, 0%, 0.28), 0 14px 30px hsla(0, 0%, 0%, 0.3);
+  --shc: 0 8px 22px hsla(0, 0%, 0%, 0.34), 0 28px 56px hsla(0, 0%, 0%, 0.36);
+  --shadow-frost: 0 14px 34px hsla(0, 0%, 0%, 0.32);
+
+  /* Subtle gradients */
+  --gradient-canvas: radial-gradient(
+      circle at 4% 0%,
+      hsla(38, 28%, 78%, 0.08) 0%,
+      transparent 34%
+    ),
+    radial-gradient(
+      circle at 88% 12%,
+      hsla(92, 10%, 52%, 0.05) 0%,
+      transparent 32%
+    ),
+    linear-gradient(
+      180deg,
+      hsl(72, 4%, 7%) 0%,
+      color-mix(in srgb, var(--bg) 90%, hsl(46, 10%, 16%) 10%) 100%
+    );
+  --gradient-sidebar: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--sf1) 94%, hsl(48, 12%, 22%) 6%) 0%,
+    color-mix(in srgb, var(--sf1) 96%, hsl(82, 8%, 14%) 4%) 100%
+  );
+  --gradient-surface: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--sfr) 88%, hsl(42, 10%, 24%) 12%) 0%,
+    color-mix(in srgb, var(--sf1) 92%, hsl(68, 8%, 12%) 8%) 100%
+  );
+  --gradient-stage: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--sfr) 82%, hsl(40, 12%, 24%) 18%),
+    color-mix(in srgb, var(--sf1) 92%, hsl(78, 8%, 14%) 8%)
+  );
+
+  /* Frost */
+  --frost-bg: hsla(75, 5%, 19%, 0.82);
+  --frost-surface: hsla(75, 5%, 19%, 0.7);
+  --frost-border: hsla(46, 12%, 86%, 0.12);
+  --frost-blur: 18px;
+  --frost-saturate: 130%;
+  --sidebar-hover-bg: linear-gradient(
+    180deg,
+    hsla(46, 12%, 76%, 0.045) 0%,
+    hsla(80, 5%, 17%, 0.96) 100%
+  );
+  --sidebar-active-bg: linear-gradient(
+    180deg,
+    hsla(42, 18%, 80%, 0.08) 0%,
+    hsla(74, 6%, 17%, 0.98) 100%
+  );
+  --sidebar-hover-ink: hsl(46, 14%, 90%);
+  --sidebar-active-ink: hsl(46, 16%, 94%);
+  --sidebar-active-stripe: color-mix(
+    in srgb,
+    hsl(46, 18%, 82%) 56%,
+    var(--ac) 44%
+  );
+  --drop-surface-bg: hsla(44, 10%, 18%, 0.6);
+  --drop-surface-border: hsla(46, 14%, 86%, 0.14);
+  --section-hover-surface: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--sfr) 96%, white 4%) 0%,
+    color-mix(in srgb, var(--sf1) 98%, white 2%) 100%
+  );
+  --section-hover-border: color-mix(
+    in srgb,
+    var(--color-border-strong) 74%,
+    white 26%
+  );
+  --section-hover-shadow: 0 16px 28px -26px hsla(0, 0%, 0%, 0.68),
+    inset 0 1px 0 color-mix(in srgb, white 6%, transparent);
+  --section-hover-lift: -1px;
+}
+
+/* ============================================================
+   SEMANTIC COLOR API
+   Readable aliases are the intended source of truth for new work.
+   Short dasti tokens remain for compatibility during migration.
+   ============================================================ */
+:root {
+  --color-canvas: var(--bg);
+  --color-surface: var(--sf1);
+  --color-surface-2: var(--sf2);
+  --color-surface-raised: var(--sfr);
+  --color-text: var(--ti);
+  --color-text-muted: var(--tm2);
+  --color-text-subtle: var(--tg2);
+  --color-border: var(--border-soft);
+  --color-border-strong: var(--border-field);
+  --color-border-contrast: var(--border-strong);
+  --color-accent: var(--ac);
+  --color-accent-hover: var(--am);
+  --color-accent-soft: var(--as);
+  --color-accent-pale: var(--ap);
+  --color-focus: var(--fr);
+  --color-on-accent: var(--op);
+  --color-success: var(--ok);
+  --color-danger: var(--er);
+  --color-warning: var(--wa);
+  --color-success-soft: var(--okb);
+  --color-success-ink: var(--okt);
+  --color-danger-soft: var(--erb);
+  --color-danger-ink: var(--ert);
+  --color-warning-soft: var(--wab);
+  --color-warning-ink: var(--wat);
+  --color-neutral-soft: var(--color-surface);
+  --color-neutral-ink: var(--color-text-muted);
+  --color-info-soft: color-mix(
+    in srgb,
+    var(--color-accent-pale) 48%,
+    var(--color-surface-raised)
+  );
+  --color-info-ink: var(--color-text);
+}
+
+/* ============================================================
+   TEMPORARY COMPATIBILITY ALIASES
+   These keep legacy Tailwind and app-level tokens working while
+   the readable aliases above become the source of truth.
+   ============================================================ */
+:root {
+  /* Legacy radius aliases — compatibility only. */
+  --rx: var(--radius-inline);
+  --rs: var(--radius-control);
+  --rm: var(--radius-card);
+  --rl: var(--radius-surface);
+  --rp: var(--radius-pill);
+  --bo: var(--border-soft);
+  --bm: var(--border-field);
+
+  --background: var(--sfr); /* raised surface — canvas direct = var(--bg) */
+  --foreground: var(--ti);
+  --primary: var(--ac); /* accent sauge — boutons action */
+  --muted: var(--tm2);
+  --accent: var(--ac);
+  --hover: var(--am);
+  --job-field-bg: var(--sf1);
+  --text-muted: var(--tm2);
+  --dark-text: var(--ti);
+  --text-hover: var(--ti);
+  --input-bg-dark: var(--sf1);
+
+  --success: var(--ok);
+  --danger: var(--er);
+  --warning: var(--wa);
+  --on-primary: var(--op);
+  --on-success: var(--op);
+  --on-danger: var(--op);
+  --on-warning: var(--op);
+  --on-accent: var(--op);
+
+  --shadow-color: hsla(30, 20%, 8%, 0.08);
+  --focus-ring: 3px;
+
+  /* Heights compat */
+  --header-height: var(--hdr);
+  --footer-height: var(--hs);
+  --btn-height-base: var(--hm);
+  --btn-height-primary: var(--hb);
+  --btn-height-tertiary: var(--hs);
+  --input-base-height: var(--hm);
+  --textarea-base-height: calc(var(--hm) * 3);
+
+  /* Layout — deprecated compatibility only. Do not use for new work. */
+  --main-width: 61.8%;
+  --sidebar-width: 38.2%;
+
+  /* Modal / toast */
+  --modal-max-width: 720px;
+  --modal-padding: var(--s5);
+  --card-padding: var(--s4);
+  --card-radius: var(--radius-card);
+  --toast-max-width: 360px;
+  --toast-region-gap: var(--space-2);
+  --toast-region-inset-block: var(--space-4);
+  --toast-region-inset-inline: var(--space-4);
+  --toast-gap: var(--space-3);
+  --toast-padding-block: var(--space-3);
+  --toast-padding-inline: var(--space-4);
+  --toast-head-gap: var(--space-2);
+  --toast-body-gap: var(--space-1);
+  --toast-font-family: var(--font-body-family);
+  --toast-title-size: var(--text-body-sm-size);
+  --toast-title-line: var(--text-body-sm-line);
+  --toast-title-weight: var(--font-label-weight);
+  --toast-title-tracking: var(--tracking-normal);
+  --toast-description-size: var(--text-caption-size);
+  --toast-description-line: var(--text-caption-line);
+  --toast-description-weight: var(--font-body-weight);
+  --toast-description-tracking: var(--tracking-normal);
+  --toast-close-size: calc(var(--control-sm) - var(--space-2));
+  --toast-close-glyph-size: var(--text-body-sm-size);
+  --toast-height: calc(var(--hm) + var(--s2));
+  --pill-height: var(--hs);
+}
+
+/* ============================================================
+   ALIAS NEYSSAN v3 → dasti  (§15 table de nomenclature)
+   ============================================================ */
+:root {
+  --canvas: var(--bg);
+  --surface-1: var(--sf1);
+  --surface-2: var(--sf2);
+  --surface-raised: var(--sfr);
+  --text-strong: var(--ti);
+  --text-ghost: var(--tg2);
+  --border-mid: var(--border-field);
+  --accent-solid: var(--ac);
+  --accent-mid: var(--am);
+  --accent-pale: var(--ap);
+  --accent-soft: var(--as);
+  --focus-ring-color: var(--fr);
+  --on-primary-v3: var(--op);
+  --shadow-sm: var(--sha);
+  --shadow-md: var(--shb);
+  --shadow-lg: var(--shc);
+  --height-sm: var(--hs);
+  --height-md: var(--hm);
+  --height-lg: var(--hb);
+  --radius-sm: var(--radius-control);
+  --radius-md: var(--radius-card);
+  --radius-lg: var(--radius-surface);
+  --ease: var(--ez);
+  --ease-bounce: var(--ezb);
+  --focus-shadow-soft: 0 0 0 2px color-mix(in srgb, var(--fr) 58%, transparent);
+}

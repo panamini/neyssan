@@ -237,14 +237,14 @@ export default function ProfileEditorUnified() {
 
       <div className="mb-4">
         {missingFields.length > 0 && (
-          <div className="p-2 mb-4 text-sm border rounded text-muted bg-surface-muted border-[color:var(--bo)]">
+          <div className="p-2 mb-4 text-sm border rounded text-muted bg-surface-muted [border-color:var(--color-border)]">
             Missing required fields: <strong>{missingFields.join(", ")}</strong>. You can still save, but consider adding them.
           </div>
         )}
       </div>
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <Card className="p-2 border rounded-md bg-background border-[color:var(--bo)]">
+        <Card className="p-2 border rounded-md bg-background [border-color:var(--color-border)]">
           <h2 className="mb-2 text-lg font-medium">Canonical profile (Convex)</h2>
           <div className="mb-2 text-sm text-muted">This view reads the canonical profile from Convex. All authoritative writes are performed by the backend.</div>
           <pre className="p-2 overflow-auto text-sm border rounded-md bg-background h-72">
@@ -252,7 +252,7 @@ export default function ProfileEditorUnified() {
           </pre>
 
           <div className="flex gap-2 mt-3">
-            <label className="px-3 py-2 border rounded-md cursor-pointer bg-background border-[color:var(--bo)]">
+            <label className="px-3 py-2 border rounded-md cursor-pointer bg-background [border-color:var(--color-border)]">
               Upload CV
               <input
                 type="file"
@@ -320,7 +320,7 @@ export default function ProfileEditorUnified() {
           </div>
         </Card>
 
-        <Card className="p-2 border rounded-md bg-background border-[color:var(--bo)]">
+        <Card className="p-2 border rounded-md bg-background [border-color:var(--color-border)]">
           <h2 className="mb-2 text-lg font-medium">Edit (manual)</h2>
           <div className="mb-2 text-sm text-muted">Manual edits should call backend endpoints to keep pdf-ingest as authoritative writer.</div>
 

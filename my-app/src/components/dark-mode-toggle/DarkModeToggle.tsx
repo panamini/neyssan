@@ -1,7 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { Sun, Moon } from "lucide-react";
+import { Sun, Moon } from "@/lib/icons";
+import clsx from "clsx";
 
 interface DarkModeToggleProps {
   /** When true, renders a bare 16×16 icon button (no padding, no hover bg)
@@ -12,6 +13,9 @@ interface DarkModeToggleProps {
 const DarkModeToggle = ({ compact = false }: DarkModeToggleProps) => {
   // Initialize state from localStorage, then system preference
   const [isDarkTheme, setIsDarkTheme] = React.useState(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
     const storedTheme = localStorage.getItem("theme");
     if (storedTheme === "dark") {
       return true;
@@ -48,9 +52,11 @@ const DarkModeToggle = ({ compact = false }: DarkModeToggleProps) => {
     return (
       <button
         onClick={onThemeChange}
-        className="w-4 h-4 p-0 flex items-center justify-center bg-transparent border-0 cursor-pointer focus:outline-none"
-        style={{ color: "var(--tg2)" }}
+        className="dasti-icon-button dasti-icon-button--compact dasti-icon-button--bare"
         aria-pressed={isDarkTheme}
+        aria-label={
+          isDarkTheme ? "Switch to light mode" : "Switch to dark mode"
+        }
       >
         {isDarkTheme ? (
           <Moon className="w-4 h-4" aria-hidden />
@@ -65,13 +71,23 @@ const DarkModeToggle = ({ compact = false }: DarkModeToggleProps) => {
   return (
     <button
       onClick={onThemeChange}
-      className="p-2 rounded-rs focus:outline-none hover:[background:var(--sf2)] [transition:all_.12s_var(--ez)]"
+      className={clsx(
+        "dasti-theme-switch",
+        isDarkTheme && "dasti-theme-switch--dark",
+      )}
       aria-pressed={isDarkTheme}
+      aria-label={isDarkTheme ? "Switch to light mode" : "Switch to dark mode"}
     >
+      <span className="dasti-theme-switch__rail" aria-hidden="true">
+        <span className="dasti-theme-switch__thumb" />
+      </span>
+      <span className="dasti-theme-switch__label">
+        {isDarkTheme ? "Dark" : "Light"}
+      </span>
       {isDarkTheme ? (
-        <Moon className="w-4 h-4 text-tg2" />
+        <Moon className="dasti-theme-switch__glyph" aria-hidden />
       ) : (
-        <Sun className="w-4 h-4 text-tg2" />
+        <Sun className="dasti-theme-switch__glyph" aria-hidden />
       )}
       <span className="sr-only">Toggle Dark Mode</span>
     </button>

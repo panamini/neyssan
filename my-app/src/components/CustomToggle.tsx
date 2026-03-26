@@ -2,7 +2,7 @@ import React, { ReactNode } from "react";
 import { Button } from "./ui/button";
 import styles from "./CustomToggle.module.css";
 import clsx from "clsx";
-import { Star } from "lucide-react";
+import { Star } from "@/lib/icons";
 
 interface CustomToggleProps {
   options: { value: string; label: ReactNode }[];
@@ -21,7 +21,9 @@ const CustomToggle: React.FC<CustomToggleProps> = ({
 }) => {
   const handleClick = () => {
     if (isModelToggle) {
-      const currentIndex = options.findIndex((option) => option.value === value);
+      const currentIndex = options.findIndex(
+        (option) => option.value === value,
+      );
       const nextIndex = (currentIndex + 1) % options.length;
       onChange(options[nextIndex].value);
     }
@@ -33,12 +35,14 @@ const CustomToggle: React.FC<CustomToggleProps> = ({
         type="button"
         className={clsx(styles.toggleButton, styles.modelToggle)}
         onClick={handleClick}
-      >{options.find((option) => option.value === value)?.label || "Select..."}</Button>
+      >
+        {options.find((option) => option.value === value)?.label || "Select..."}
+      </Button>
     );
   }
 
-    if (isCreativityToggle) {
-        const numStars = options.findIndex((option) => option.value === value) + 1;
+  if (isCreativityToggle) {
+    const numStars = options.findIndex((option) => option.value === value) + 1;
     return (
       <div className={styles.toggleGroup}>
         {[...Array(3)].map((_, index) => (
@@ -73,11 +77,12 @@ const CustomToggle: React.FC<CustomToggleProps> = ({
           type="button"
           className={clsx(
             styles.toggleButton,
-            option.value === value ? styles.active : styles.inactive
+            option.value === value ? styles.active : styles.inactive,
           )}
-          onClick={() =>onChange(option.value)}
+          onClick={() => onChange(option.value)}
         >
-          {option.label}</Button>
+          {option.label}
+        </Button>
       ))}
     </div>
   );

@@ -41,8 +41,8 @@ export function CvDocumentDisplay(): JSX.Element | null {
   }
 
   return (
-    <div className="p-4 [background:var(--sfr)] rounded-rm [box-shadow:var(--sha)] sm:p-6">
-      <h1 className="pb-2 mb-6 text-3xl font-bold border-b [color:var(--ti)] border-bo">
+    <div className="p-4 [background:var(--sfr)] [border-radius:var(--radius-card)] [box-shadow:var(--sha)] sm:p-6">
+      <h1 className="pb-2 mb-6 text-3xl font-bold border-b [color:var(--ti)] [border-color:var(--color-border)]">
         {currentCv.title}
       </h1>
       <div className="space-y-8">

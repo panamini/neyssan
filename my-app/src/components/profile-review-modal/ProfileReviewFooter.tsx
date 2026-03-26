@@ -37,7 +37,7 @@ export function ProfileReviewFooter({
   onUndo,
 }: ProfileReviewFooterProps) {
   return (
-    <div className="flex items-center justify-between pt-4 mt-6 border-t border-bo">
+    <div className="flex items-center justify-between pt-4 mt-6 border-t [border-color:var(--color-border)]">
       <div className="flex gap-2">
         <CVLoader
           onFileParsed={(parsed) => onFileParsed(parsed)}
