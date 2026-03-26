@@ -1,14 +1,32 @@
 import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useConvexAuth, useMutation, useQuery } from "convex/react";
-import { Pencil } from "lucide-react";
+import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
+import {
+  ArrowsOutSimple,
+  Check,
+  CornersIn,
+  FloppyDisk,
+  RotateCcw,
+  Trash,
+  X,
+} from "@/lib/icons";
 import ProposalInputForm from "../components/ProposalInputForm";
-import ProposalDisplay, { fallbackCopyText, getDisplayedProposalText } from "../components/ProposalDisplay";
+import ProposalDisplay, {
+  fallbackCopyText,
+  getDisplayedProposalText,
+} from "../components/ProposalDisplay";
 import ProposalsList from "../components/ProposalsList";
 import { useToast } from "../components/ui/toast";
 import type { FormValues } from "../components/ProposalInputForm.schemas";
 import { api } from "../../convex/_generated/api";
-import type { ProposalGenerationFallbackInfo } from "../lib/proposal-generation-ui";
+import {
+  buildAppProposalPersonalizationPayload,
+  getActiveLocalPersonalizationSource,
+} from "../lib/proposal-personalization";
+import {
+  getProposalGenerationUiErrorMessage,
+  type ProposalGenerationFallbackInfo,
+} from "../lib/proposal-generation-ui";
 
 type ProposalForgePrefill = {
   handoffId: string;
@@ -30,6 +48,11 @@ type StoredProposalOutputDraft = {
   proposalOutputMode: "preview" | "edit";
 };
 
+type GenerateProposalResult = {
+  proposalId: string;
+  proposalContent: string;
+} & Required<ProposalGenerationFallbackInfo>;
+
 const PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY = "dasti:proposal-output-draft:v1";
 
 function readStoredProposalOutputDraft(): StoredProposalOutputDraft | null {
@@ -43,7 +66,9 @@ function readStoredProposalOutputDraft(): StoredProposalOutputDraft | null {
 
     return {
       proposalContent:
-        typeof parsed.proposalContent === "string" ? parsed.proposalContent : null,
+        typeof parsed.proposalContent === "string"
+          ? parsed.proposalContent
+          : null,
       proposalType:
         parsed.proposalType === "cover_letter" ||
         parsed.proposalType === "application_message" ||
@@ -66,7 +91,8 @@ function readStoredProposalOutputDraft(): StoredProposalOutputDraft | null {
         typeof parsed.generatedProposalId === "string"
           ? parsed.generatedProposalId
           : null,
-      proposalOutputMode: parsed.proposalOutputMode === "edit" ? "edit" : "preview",
+      proposalOutputMode:
+        parsed.proposalOutputMode === "edit" ? "edit" : "preview",
     };
   } catch {
     return null;
@@ -85,7 +111,10 @@ export function ProposalForge(): JSX.Element {
   const { search } = useLocation();
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const storedOutputDraft = React.useMemo(() => readStoredProposalOutputDraft(), []);
+  const storedOutputDraft = React.useMemo(
+    () => readStoredProposalOutputDraft(),
+    [],
+  );
   const [viewportWidth, setViewportWidth] = React.useState(() =>
     typeof window === "undefined" ? 1440 : window.innerWidth,
   );
@@ -101,39 +130,63 @@ export function ProposalForge(): JSX.Element {
     () => new URLSearchParams(search).get("id"),
     [search],
   );
-  const { isLoading: isConvexAuthLoading, isAuthenticated: isConvexAuthenticated } = useConvexAuth();
-  const updateProposal = useMutation((api as any).updateProposalPublic?.default);
+  const {
+    isLoading: isConvexAuthLoading,
+    isAuthenticated: isConvexAuthenticated,
+  } = useConvexAuth();
+  const generateProposalAction = useAction(
+    api.functions.generateProposal as any,
+  );
+  const updateProposal = useMutation(
+    (api as any).updateProposalPublic?.default,
+  );
+  const deleteProposal = useMutation(
+    (api as any).deleteProposalPublic?.default,
+  );
   const [proposalContent, setProposalContent] = React.useState<string | null>(
     storedOutputDraft?.proposalContent ?? null,
   );
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [errorDetail, setErrorDetail] = React.useState<string | null>(null);
-  const [proposalType, setProposalType] = React.useState<FormValues["proposalType"] | null>(
-    storedOutputDraft?.proposalType ?? null,
+  const [proposalType, setProposalType] = React.useState<
+    FormValues["proposalType"] | null
+  >(storedOutputDraft?.proposalType ?? null);
+  const [proposalVoicePreset, setProposalVoicePreset] = React.useState<
+    FormValues["voicePreset"] | null
+  >(storedOutputDraft?.proposalVoicePreset ?? null);
+  const [proposalDocumentTitle, setProposalDocumentTitle] =
+    React.useState<string>(storedOutputDraft?.proposalDocumentTitle ?? "");
+  const [proposalDocumentMeta, setProposalDocumentMeta] =
+    React.useState<string>(storedOutputDraft?.proposalDocumentMeta ?? "");
+  const [fallbackInfo, setFallbackInfo] =
+    React.useState<ProposalGenerationFallbackInfo | null>(null);
+  const [generatedProposalId, setGeneratedProposalId] = React.useState<
+    string | null
+  >(storedOutputDraft?.generatedProposalId ?? null);
+  const [proposalOutputMode, setProposalOutputMode] = React.useState<
+    "preview" | "edit"
+  >(storedOutputDraft?.proposalOutputMode ?? "preview");
+  const [isSavingGeneratedProposal, setIsSavingGeneratedProposal] =
+    React.useState(false);
+  const [isSavingOutputToLibrary, setIsSavingOutputToLibrary] =
+    React.useState(false);
+  const [lastProposalRequest, setLastProposalRequest] =
+    React.useState<FormValues | null>(null);
+  const [isRegeneratingGeneratedProposal, setIsRegeneratingGeneratedProposal] =
+    React.useState(false);
+  const [isConfirmingGeneratedDelete, setIsConfirmingGeneratedDelete] =
+    React.useState(false);
+  const [isOutputFocused, setIsOutputFocused] = React.useState(false);
+  const [copyFeedback, setCopyFeedback] = React.useState<"idle" | "copied">(
+    "idle",
   );
-  const [proposalVoicePreset, setProposalVoicePreset] = React.useState<FormValues["voicePreset"] | null>(
-    storedOutputDraft?.proposalVoicePreset ?? null,
-  );
-  const [proposalDocumentTitle, setProposalDocumentTitle] = React.useState<string>(
-    storedOutputDraft?.proposalDocumentTitle ?? "",
-  );
-  const [proposalDocumentMeta, setProposalDocumentMeta] = React.useState<string>(
-    storedOutputDraft?.proposalDocumentMeta ?? "",
-  );
-  const [fallbackInfo, setFallbackInfo] = React.useState<ProposalGenerationFallbackInfo | null>(null);
-  const [generatedProposalId, setGeneratedProposalId] = React.useState<string | null>(
-    storedOutputDraft?.generatedProposalId ?? null,
-  );
-  const [proposalOutputMode, setProposalOutputMode] = React.useState<"preview" | "edit">(
-    storedOutputDraft?.proposalOutputMode ?? "preview",
-  );
-  const [isSavingGeneratedProposal, setIsSavingGeneratedProposal] = React.useState(false);
-  const [copyFeedback, setCopyFeedback] = React.useState<"idle" | "copied">("idle");
   const copyFeedbackTimeoutRef = React.useRef<number | null>(null);
-  const previewHintToastRef = React.useRef(0);
   const lastSavedProposalContentRef = React.useRef<string | null>(
     storedOutputDraft?.proposalContent ?? null,
+  );
+  const lastSavedProposalTitleRef = React.useRef<string>(
+    storedOutputDraft?.proposalDocumentTitle ?? "",
   );
 
   const handoffRecord = useQuery(
@@ -154,32 +207,49 @@ export function ProposalForge(): JSX.Element {
 
   /* ── Handlers (logique métier intacte) ────────────────────── */
 
-  const formatProposalTypeLabel = React.useCallback((type: FormValues["proposalType"]) => {
-    if (type === "cover_letter") return "Letter";
-    if (type === "application_message") return "Message";
-    return "Proposal";
-  }, []);
+  const formatProposalTypeLabel = React.useCallback(
+    (type: FormValues["proposalType"]) => {
+      if (type === "cover_letter") return "Letter";
+      if (type === "application_message") return "Message";
+      return "Proposal";
+    },
+    [],
+  );
 
-  const formatProposalToneLabel = React.useCallback((preset: FormValues["voicePreset"]) => {
-    if (preset === "signature") return "Balanced";
-    if (preset === "expert") return "Formal";
-    if (preset === "engaging") return "Warm";
-    return preset;
-  }, []);
+  const formatProposalToneLabel = React.useCallback(
+    (preset: FormValues["voicePreset"]) => {
+      if (preset === "signature") return "Balanced";
+      if (preset === "expert") return "Formal";
+      if (preset === "engaging") return "Warm";
+      return preset;
+    },
+    [],
+  );
 
-  const handleProposalStart = React.useCallback((values: FormValues) => {
-    setLoading(true);
-    setProposalType(values.proposalType);
-    setProposalVoicePreset(values.voicePreset);
-    setProposalDocumentTitle(values.jobTitle.trim() || formatProposalTypeLabel(values.proposalType));
-    setProposalDocumentMeta([formatProposalTypeLabel(values.proposalType), formatProposalToneLabel(values.voicePreset)].join(" · "));
-    setProposalContent(null);
-    setGeneratedProposalId(null);
-    setProposalOutputMode("preview");
-    setError(null);
-    setErrorDetail(null);
-    setFallbackInfo(null);
-  }, [formatProposalToneLabel, formatProposalTypeLabel]);
+  const handleProposalStart = React.useCallback(
+    (values: FormValues) => {
+      setLastProposalRequest(values);
+      setLoading(true);
+      setProposalType(values.proposalType);
+      setProposalVoicePreset(values.voicePreset);
+      setProposalDocumentTitle(
+        values.jobTitle.trim() || formatProposalTypeLabel(values.proposalType),
+      );
+      setProposalDocumentMeta(
+        [
+          formatProposalTypeLabel(values.proposalType),
+          formatProposalToneLabel(values.voicePreset),
+        ].join(" · "),
+      );
+      setProposalContent(null);
+      setGeneratedProposalId(null);
+      setProposalOutputMode("preview");
+      setError(null);
+      setErrorDetail(null);
+      setFallbackInfo(null);
+    },
+    [formatProposalToneLabel, formatProposalTypeLabel],
+  );
 
   const handleProposalSubmit = React.useCallback(
     (
@@ -188,14 +258,25 @@ export function ProposalForge(): JSX.Element {
       nextFallbackInfo?: ProposalGenerationFallbackInfo,
       nextProposalId?: string,
     ) => {
+      setLastProposalRequest(values);
       setProposalType(values.proposalType);
       setProposalVoicePreset(values.voicePreset);
-      setProposalDocumentTitle(values.jobTitle.trim() || formatProposalTypeLabel(values.proposalType));
-      setProposalDocumentMeta([formatProposalTypeLabel(values.proposalType), formatProposalToneLabel(values.voicePreset)].join(" · "));
+      setProposalDocumentTitle(
+        values.jobTitle.trim() || formatProposalTypeLabel(values.proposalType),
+      );
+      setProposalDocumentMeta(
+        [
+          formatProposalTypeLabel(values.proposalType),
+          formatProposalToneLabel(values.voicePreset),
+        ].join(" · "),
+      );
       setProposalContent(proposal);
       setGeneratedProposalId(nextProposalId ?? null);
       setProposalOutputMode("preview");
       lastSavedProposalContentRef.current = proposal;
+      lastSavedProposalTitleRef.current =
+        values.jobTitle.trim() || formatProposalTypeLabel(values.proposalType);
+      setIsConfirmingGeneratedDelete(false);
       setError(null);
       setFallbackInfo(nextFallbackInfo ?? null);
       setLoading(false);
@@ -205,14 +286,23 @@ export function ProposalForge(): JSX.Element {
 
   const handleProposalError = React.useCallback(
     (message: string, values: FormValues, rawReason?: string | null) => {
+      setLastProposalRequest(values);
       setLoading(false);
       setProposalType(values.proposalType);
       setProposalVoicePreset(values.voicePreset);
-      setProposalDocumentTitle(values.jobTitle.trim() || formatProposalTypeLabel(values.proposalType));
-      setProposalDocumentMeta([formatProposalTypeLabel(values.proposalType), formatProposalToneLabel(values.voicePreset)].join(" · "));
+      setProposalDocumentTitle(
+        values.jobTitle.trim() || formatProposalTypeLabel(values.proposalType),
+      );
+      setProposalDocumentMeta(
+        [
+          formatProposalTypeLabel(values.proposalType),
+          formatProposalToneLabel(values.voicePreset),
+        ].join(" · "),
+      );
       setProposalContent(null);
       setGeneratedProposalId(null);
       setProposalOutputMode("preview");
+      setIsConfirmingGeneratedDelete(false);
       setError(message);
       setErrorDetail(rawReason ?? null);
       setFallbackInfo(null);
@@ -220,24 +310,48 @@ export function ProposalForge(): JSX.Element {
     [formatProposalToneLabel, formatProposalTypeLabel],
   );
 
-  const handleProposalContentChange = React.useCallback((nextContent: string) => {
-    setProposalContent(nextContent);
-  }, []);
+  const handleProposalContentChange = React.useCallback(
+    (nextContent: string) => {
+      setProposalContent(nextContent);
+    },
+    [],
+  );
 
-  const handleProposalContentCommit = React.useCallback(async () => {
-    if (!generatedProposalId || !proposalContent || isSavingGeneratedProposal) return;
-    const trimmed = proposalContent.trim();
+  const handleProposalDocumentCommit = React.useCallback(async () => {
+    if (!generatedProposalId || isSavingGeneratedProposal) return;
+    const trimmed = proposalContent?.trim() ?? "";
+    const normalizedTitle =
+      proposalDocumentTitle.trim() ||
+      (proposalType
+        ? formatProposalTypeLabel(proposalType)
+        : "Generated proposal");
     const lastSavedTrimmed = lastSavedProposalContentRef.current?.trim() ?? "";
-    if (!trimmed || trimmed === lastSavedTrimmed) return;
+    const lastSavedTitle = lastSavedProposalTitleRef.current.trim();
+    const titleChanged = normalizedTitle !== lastSavedTitle;
+    const contentChanged = Boolean(trimmed) && trimmed !== lastSavedTrimmed;
+    if (!titleChanged && !contentChanged) return;
+    if (!trimmed && !titleChanged) return;
+
+    if (proposalDocumentTitle !== normalizedTitle) {
+      setProposalDocumentTitle(normalizedTitle);
+    }
 
     setIsSavingGeneratedProposal(true);
     try {
       await updateProposal({
         id: generatedProposalId,
-        content: trimmed,
-        sections: [{ type: "text", content: trimmed }],
+        title: normalizedTitle,
+        ...(trimmed
+          ? {
+              content: trimmed,
+              sections: [{ type: "text", content: trimmed }],
+            }
+          : {}),
       });
-      lastSavedProposalContentRef.current = trimmed;
+      if (trimmed) {
+        lastSavedProposalContentRef.current = trimmed;
+      }
+      lastSavedProposalTitleRef.current = normalizedTitle;
     } catch (saveError) {
       console.error("Failed to persist generated proposal edits:", saveError);
       const errorMessage =
@@ -255,12 +369,22 @@ export function ProposalForge(): JSX.Element {
       }
       showToast("Draft update failed", {
         variant: "error",
-        description: "The proposal text changed locally but could not be saved.",
+        description:
+          "The proposal text changed locally but could not be saved.",
       });
     } finally {
       setIsSavingGeneratedProposal(false);
     }
-  }, [generatedProposalId, isSavingGeneratedProposal, proposalContent, showToast, updateProposal]);
+  }, [
+    generatedProposalId,
+    isSavingGeneratedProposal,
+    proposalContent,
+    proposalDocumentTitle,
+    proposalType,
+    formatProposalTypeLabel,
+    showToast,
+    updateProposal,
+  ]);
 
   React.useEffect(() => {
     return () => {
@@ -345,7 +469,10 @@ export function ProposalForge(): JSX.Element {
   const handleCopyOutput = React.useCallback(async () => {
     if (!proposalContent) return;
 
-    const displayedProposalText = getDisplayedProposalText(proposalContent, proposalType);
+    const displayedProposalText = getDisplayedProposalText(
+      proposalContent,
+      proposalType,
+    );
 
     try {
       if (navigator.clipboard?.writeText) {
@@ -372,137 +499,258 @@ export function ProposalForge(): JSX.Element {
     }
   }, [proposalContent, proposalType, showToast]);
 
-  const handlePreviewInteract = React.useCallback(() => {
-    const now = Date.now();
-    if (now - previewHintToastRef.current < 1600) return;
-    previewHintToastRef.current = now;
-    showToast("Preview mode", {
-      variant: "info",
-      description: "Click the pen to edit this proposal.",
-      icon: <Pencil size={16} strokeWidth={1.7} />,
-      duration: 2200,
-    });
-  }, [showToast]);
+  const handleRegenerateOutput = React.useCallback(async () => {
+    if (!lastProposalRequest || isRegeneratingGeneratedProposal) {
+      return;
+    }
 
-  const [hoveredTab, setHoveredTab] = React.useState<ProposalForgeView | null>(null);
+    const currentActiveCvSource = getActiveLocalPersonalizationSource();
+    const hasCandidateContext = Boolean(
+      currentActiveCvSource.personalizationContext,
+    );
+
+    try {
+      setIsRegeneratingGeneratedProposal(true);
+      setLoading(true);
+      setError(null);
+      setErrorDetail(null);
+      setFallbackInfo(null);
+
+      const result = await (
+        generateProposalAction as unknown as (
+          input: FormValues &
+            ReturnType<typeof buildAppProposalPersonalizationPayload>,
+        ) => Promise<GenerateProposalResult | null>
+      )({
+        ...lastProposalRequest,
+        ...buildAppProposalPersonalizationPayload(currentActiveCvSource),
+      });
+
+      if (!result) {
+        const nextErrorMessage = "No proposal returned from the server.";
+        handleProposalError(nextErrorMessage, lastProposalRequest);
+        return;
+      }
+
+      try {
+        await updateProposal({
+          id: result.proposalId,
+          content: result.proposalContent,
+          sections: [{ type: "text", content: result.proposalContent }],
+          status: "draft",
+        });
+      } catch (saveErr) {
+        console.warn("Failed to update regenerated proposal status:", saveErr);
+      }
+
+      handleProposalSubmit(
+        lastProposalRequest,
+        result.proposalContent,
+        {
+          requestedModelType: result.requestedModelType,
+          actualModelType: result.actualModelType,
+          fallbackTriggerCode: result.fallbackTriggerCode,
+        },
+        result.proposalId,
+      );
+      showToast("Proposal regenerated", { variant: "success" });
+    } catch (regenerateError) {
+      const nextErrorMessage = getProposalGenerationUiErrorMessage({
+        error: regenerateError,
+        proposalType: lastProposalRequest.proposalType,
+        hasCandidateContext,
+      });
+      const rawReason =
+        regenerateError instanceof Error ? regenerateError.message : null;
+      handleProposalError(nextErrorMessage, lastProposalRequest, rawReason);
+      showToast("Regeneration failed", {
+        variant: "error",
+        description: nextErrorMessage,
+      });
+    } finally {
+      setLoading(false);
+      setIsRegeneratingGeneratedProposal(false);
+    }
+  }, [
+    generateProposalAction,
+    handleProposalError,
+    handleProposalSubmit,
+    isRegeneratingGeneratedProposal,
+    lastProposalRequest,
+    showToast,
+    updateProposal,
+  ]);
+
+  const handleDeleteOutput = React.useCallback(async () => {
+    if (!generatedProposalId) return;
+
+    try {
+      await deleteProposal({ id: generatedProposalId });
+      setProposalContent(null);
+      setProposalType(null);
+      setProposalVoicePreset(null);
+      setProposalDocumentTitle("");
+      setProposalDocumentMeta("");
+      setGeneratedProposalId(null);
+      setFallbackInfo(null);
+      setError(null);
+      setErrorDetail(null);
+      setIsConfirmingGeneratedDelete(false);
+      lastSavedProposalContentRef.current = null;
+      showToast("Proposal deleted", { variant: "success" });
+    } catch (deleteError) {
+      console.error("Failed to delete proposal draft:", deleteError);
+      showToast("Delete failed", {
+        variant: "error",
+        description: "The generated proposal could not be removed.",
+      });
+    }
+  }, [deleteProposal, generatedProposalId, showToast]);
+
+  const handleSaveOutputToLibrary = React.useCallback(async () => {
+    if (
+      !generatedProposalId ||
+      !proposalContent ||
+      isSavingOutputToLibrary ||
+      isSavingGeneratedProposal
+    ) {
+      return;
+    }
+
+    const trimmed = proposalContent.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    setIsSavingOutputToLibrary(true);
+    try {
+      await updateProposal({
+        id: generatedProposalId,
+        title:
+          proposalDocumentTitle.trim() ||
+          (proposalType
+            ? formatProposalTypeLabel(proposalType)
+            : "Generated proposal"),
+        content: trimmed,
+        sections: [{ type: "text", content: trimmed }],
+        status: "saved",
+      });
+      lastSavedProposalContentRef.current = trimmed;
+      lastSavedProposalTitleRef.current =
+        proposalDocumentTitle.trim() ||
+        (proposalType
+          ? formatProposalTypeLabel(proposalType)
+          : "Generated proposal");
+      showToast("Saved to library", {
+        variant: "success",
+        description: "This proposal draft is now stored in Proposal Library.",
+      });
+    } catch (saveError) {
+      console.error("Failed to save proposal draft to library:", saveError);
+      showToast("Save failed", {
+        variant: "error",
+        description: "The proposal could not be saved to the library.",
+      });
+    } finally {
+      setIsSavingOutputToLibrary(false);
+    }
+  }, [
+    generatedProposalId,
+    isSavingGeneratedProposal,
+    isSavingOutputToLibrary,
+    proposalContent,
+    proposalDocumentTitle,
+    proposalType,
+    formatProposalTypeLabel,
+    showToast,
+    updateProposal,
+  ]);
 
   const activeView = requestedView;
   const isComposeView = activeView === "compose";
   const isSavedView = activeView === "saved";
   const isCompactComposeLayout = viewportWidth < 1240;
   const isNarrowLaptop = viewportWidth < 1360;
+  const isComposeFocusLayout = isComposeView && isOutputFocused;
   const isLoadingHandoff =
     Boolean(handoffId) &&
-    (isConvexAuthLoading || (isConvexAuthenticated && handoffRecord === undefined));
+    (isConvexAuthLoading ||
+      (isConvexAuthenticated && handoffRecord === undefined));
 
-  /* ── Tab underline style — §13 dasti-spec-v1 ─────────────── */
-  const tabStyle = (view: ProposalForgeView): React.CSSProperties => {
-    const isActive = activeView === view;
-    const isHovered = !isActive && hoveredTab === view;
-    return {
-      display: "inline-flex",
-      alignItems: "center",
-      height: "var(--hs)",
-      padding: "0 var(--s3)",
-      borderRadius: "var(--rs) var(--rs) 0 0",
-      border: "none",
-      borderBottom: `2px solid ${isActive ? "var(--ac)" : "transparent"}`,
-      marginBottom: -1,
-      background: isHovered ? "var(--sf2)" : "transparent",
-      fontSize: "var(--ts)",
-      fontWeight: isActive ? 600 : 500,
-      color: isActive ? "var(--ti)" : "var(--tm2)",
-      cursor: "pointer",
-      transition: "all .12s var(--ez)",
-      fontFamily: "inherit",
-      outline: "none",
-    };
-  };
-
-  /* ── φ grid — §13 dasti-spec-v1 ──────────────────────────── */
-  const phiGrid: React.CSSProperties = {
-    display: "grid",
-    gridTemplateColumns: isCompactComposeLayout
-      ? "minmax(0,1fr)"
-      : "repeat(2, minmax(0, 560px))",
-    gap: "var(--space-card-grid)",
-    alignItems: "start",
-    justifyContent: "center",
-  };
   const stackedCardWidthStyle: React.CSSProperties = isCompactComposeLayout
     ? { width: "min(100%, 560px)", marginInline: "auto" }
     : { width: "100%" };
+  const focusedOutputWidthStyle: React.CSSProperties = {
+    width: "100%",
+  };
 
   return (
     <div
+      className="dasti-page-scroll"
       style={{
-        height: "100%",
-        overflowY: "auto",
-        overflowX: "hidden",
-        overscrollBehaviorY: "contain",
-        background: "var(--bg)",
         minWidth: 0,
       }}
     >
       <div
-        style={{
-          padding: isCompactComposeLayout ? "var(--s6) var(--s4)" : "var(--space-page-pad)",
-          display: "flex",
-          flexDirection: "column",
-          gap: "var(--space-page-stack)",
-          maxWidth: isCompactComposeLayout ? 720 : isNarrowLaptop ? 1000 : 1200,
-          margin: "0 auto",
-          width: "100%",
-        }}
+        className="dasti-page-shell"
+        style={
+          {
+            "--page-shell-max-width": isComposeFocusLayout
+              ? "calc(100vw - (var(--space-6) * 2))"
+              : isCompactComposeLayout
+                ? "720px"
+                : isNarrowLaptop
+                  ? "1000px"
+                  : "1200px",
+            "--page-shell-gap": "var(--layout-page-stack)",
+          } as React.CSSProperties
+        }
       >
-        {/* Tab toggle — underline style §13 */}
-        <div style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--bo)" }}>
-          <button
-            type="button"
-            style={tabStyle("compose")}
-            onClick={() => updateProposalRoute("compose")}
-            onMouseEnter={() => setHoveredTab("compose")}
-            onMouseLeave={() => setHoveredTab(null)}
-          >
-            Compose
-          </button>
-          <button
-            type="button"
-            style={tabStyle("saved")}
-            onClick={() => updateProposalRoute("saved", selectedProposalId)}
-            onMouseEnter={() => setHoveredTab("saved")}
-            onMouseLeave={() => setHoveredTab(null)}
-          >
-            Saved
-          </button>
-        </div>
-
-        {/* ── COMPOSE VIEW — φ grid ──────────────────────────── */}
         {isComposeView ? (
           <section aria-hidden={false}>
-            <div style={phiGrid}>
-
-              {/* Left panel — .cpn : form */}
-              <div style={{ display: "grid", minWidth: 0 }}>
-                <div style={stackedCardWidthStyle}>
-                  {isLoadingHandoff ? (
-                    <div style={{ paddingTop: "var(--s2)" }}>
-                      <p style={{ fontSize: "var(--ts)", color: "var(--tm2)" }}>Loading imported job offer…</p>
-                    </div>
-                  ) : (
-                    <ProposalInputForm
-                      onStart={handleProposalStart}
-                      onSubmit={handleProposalSubmit}
-                      onError={handleProposalError}
-                      prefill={prefill}
-                    />
-                  )}
+            <div
+              className="dasti-grid-split"
+              style={
+                {
+                  "--grid-columns":
+                    isCompactComposeLayout || isComposeFocusLayout
+                      ? "minmax(0, 1fr)"
+                      : "repeat(2, minmax(0, 560px))",
+                  "--grid-gap": "var(--layout-card-grid)",
+                  "--grid-align": "start",
+                  "--grid-justify": "center",
+                } as React.CSSProperties
+              }
+            >
+              {!isComposeFocusLayout ? (
+                <div className="dasti-flow">
+                  <div style={stackedCardWidthStyle}>
+                    {isLoadingHandoff ? (
+                      <div style={{ paddingTop: "var(--s2)" }}>
+                        <p className="dasti-hint">
+                          Loading imported job offer…
+                        </p>
+                      </div>
+                    ) : (
+                      <ProposalInputForm
+                        onStart={handleProposalStart}
+                        onSubmit={handleProposalSubmit}
+                        onError={handleProposalError}
+                        prefill={prefill}
+                      />
+                    )}
+                  </div>
                 </div>
-              </div>
+              ) : null}
 
-              {/* Right panel — .opn : output */}
-              <div style={{ display: "grid", minWidth: 0 }}>
-                <div style={stackedCardWidthStyle}>
+              <div className="dasti-flow">
+                <div
+                  style={
+                    isComposeFocusLayout
+                      ? focusedOutputWidthStyle
+                      : stackedCardWidthStyle
+                  }
+                >
                   <ProposalDisplay
                     proposalContent={proposalContent}
                     loading={loading}
@@ -510,24 +758,123 @@ export function ProposalForge(): JSX.Element {
                     errorDetail={errorDetail}
                     proposalType={proposalType}
                     voicePreset={proposalVoicePreset}
-                    documentTitle={proposalDocumentTitle}
-                    documentMeta={proposalDocumentMeta}
                     fallbackInfo={fallbackInfo}
+                    documentTitle={
+                      proposalDocumentTitle || "Generated proposal"
+                    }
+                    documentMeta={proposalDocumentMeta || "Compose output"}
                     mode={proposalOutputMode}
                     onModeChange={setProposalOutputMode}
-                    onPreviewInteract={handlePreviewInteract}
+                    onPreviewInteract={() => setProposalOutputMode("edit")}
+                    showModeToggle={false}
+                    size={isComposeFocusLayout ? "focused" : "default"}
+                    documentHeaderMode="actions-only"
+                    onCopy={() => {
+                      void handleCopyOutput();
+                    }}
+                    copyFeedback={copyFeedback}
                     onContentChange={handleProposalContentChange}
                     onContentCommit={() => {
-                      void handleProposalContentCommit();
+                      void handleProposalDocumentCommit();
                     }}
-                    onCopy={
-                      proposalContent && !loading && !error
-                        ? () => {
-                            void handleCopyOutput();
-                          }
-                        : undefined
+                    actions={
+                      proposalContent && !loading && !error ? (
+                        <span className="dasti-icon-cluster dasti-icon-cluster--tight">
+                          <button
+                            type="button"
+                            title={
+                              isOutputFocused
+                                ? "Return to split view"
+                                : "Focus the output"
+                            }
+                            className="dasti-icon-button"
+                            onClick={() =>
+                              setIsOutputFocused((value) => !value)
+                            }
+                          >
+                            {isOutputFocused ? (
+                              <CornersIn size={16} strokeWidth={1.7} />
+                            ) : (
+                              <ArrowsOutSimple size={16} strokeWidth={1.7} />
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            title={
+                              isSavingOutputToLibrary
+                                ? "Saving…"
+                                : "Save to library"
+                            }
+                            className="dasti-icon-button"
+                            onClick={() => {
+                              void handleSaveOutputToLibrary();
+                            }}
+                            disabled={isSavingOutputToLibrary}
+                            style={{
+                              opacity: isSavingOutputToLibrary ? 0.55 : 1,
+                            }}
+                          >
+                            <FloppyDisk size={16} strokeWidth={1.7} />
+                          </button>
+                          <button
+                            type="button"
+                            title={
+                              isRegeneratingGeneratedProposal
+                                ? "Regenerating…"
+                                : "Regenerate"
+                            }
+                            className="dasti-icon-button"
+                            style={{
+                              opacity: isRegeneratingGeneratedProposal
+                                ? 0.5
+                                : 1,
+                            }}
+                            onClick={() => {
+                              void handleRegenerateOutput();
+                            }}
+                            disabled={isRegeneratingGeneratedProposal}
+                          >
+                            <RotateCcw size={16} strokeWidth={1.5} />
+                          </button>
+                          <div className="dasti-icon-cluster__divider" />
+                          {isConfirmingGeneratedDelete ? (
+                            <button
+                              type="button"
+                              title="Confirm delete"
+                              className="dasti-icon-button dasti-icon-button--confirm"
+                              onClick={() => {
+                                void handleDeleteOutput();
+                              }}
+                            >
+                              <Check size={14} strokeWidth={2.5} />
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="dasti-icon-button"
+                              title="Delete"
+                              onClick={() =>
+                                setIsConfirmingGeneratedDelete(true)
+                              }
+                            >
+                              <Trash size={16} strokeWidth={1.5} />
+                            </button>
+                          )}
+                          {isConfirmingGeneratedDelete ? (
+                            <button
+                              type="button"
+                              className="dasti-icon-button"
+                              title="Cancel delete"
+                              onClick={() =>
+                                setIsConfirmingGeneratedDelete(false)
+                              }
+                            >
+                              <X size={16} strokeWidth={1.8} />
+                            </button>
+                          ) : null}
+                        </span>
+                      ) : undefined
                     }
-                    copyFeedback={copyFeedback}
                   />
                 </div>
               </div>
@@ -535,16 +882,16 @@ export function ProposalForge(): JSX.Element {
           </section>
         ) : null}
 
-        {/* ── LIBRARY VIEW — .plib grid (260px 1fr) ──────────── */}
         {isSavedView ? (
           <section aria-hidden={false}>
             <ProposalsList
               selectedProposalId={selectedProposalId}
-              onSelectedProposalIdChange={(id) => updateProposalRoute("saved", id)}
+              onSelectedProposalIdChange={(id) =>
+                updateProposalRoute("saved", id)
+              }
             />
           </section>
         ) : null}
-
       </div>
     </div>
   );
