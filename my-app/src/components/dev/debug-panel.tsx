@@ -156,9 +156,9 @@ export function DebugPanel() {
   return (
     <div
       aria-hidden="false"
-      className="fixed left-4 top-4 z-[9999] w-[min(720px,95vw)] max-h-[70vh] overflow-hidden rounded-md [box-shadow:var(--shc)] [background:var(--sfr)] border border-bo"
+      className="fixed left-4 top-4 z-[9999] w-[min(720px,95vw)] max-h-[70vh] overflow-hidden rounded-md [box-shadow:var(--shc)] [background:var(--sfr)] border [border-color:var(--color-border)]"
     >
-      <div className="flex items-center justify-between px-3 py-2 border-b border-bo">
+      <div className="flex items-center justify-between px-3 py-2 border-b [border-color:var(--color-border)]">
         <div className="flex items-center gap-3">
           <div className="text-sm font-medium">CV Editor Debug Panel</div>
           <div className="text-xs text-neutral-500">Logs (live)</div>

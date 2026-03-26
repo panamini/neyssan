@@ -1,15 +1,25 @@
 "use client";
 
 import React, { useRef, useEffect } from "react";
-import { Loader2 } from "lucide-react";
-import { useCvParser, RefinedContent, IReviewerSection } from "../hooks/useCvParser";
+import { Loader2 } from "@/lib/icons";
+import {
+  useCvParser,
+  RefinedContent,
+  IReviewerSection,
+} from "../hooks/useCvParser";
 import { Button } from "./ui/button";
 
 interface UploadCvButtonProps {
   // Optional: interim suggestions + sections (legacy UI can still consume it if desired)
-  onFileParsed?: (suggestions: RefinedContent, mappedSections: IReviewerSection[]) => void;
+  onFileParsed?: (
+    suggestions: RefinedContent,
+    mappedSections: IReviewerSection[],
+  ) => void;
   // New optional callback to receive the raw normalized payload (with source)
-  onNormalizedParsed?: (normalized: unknown, source?: "client" | "server" | null) => void;
+  onNormalizedParsed?: (
+    normalized: unknown,
+    source?: "client" | "server" | null,
+  ) => void;
   className?: string;
   // Optional: allow callers to provide an external parser instance (parseFile) and state.
   // When provided, the component becomes a thin file input that delegates parsing to the caller.
@@ -55,7 +65,8 @@ export function UploadCvButton({
   const isParsing = externalIsParsing ?? internal?.isParsing ?? false;
   const isRefining = externalIsRefining ?? internal?.isRefining ?? false;
   const suggestions = externalSuggestions ?? internal?.suggestions ?? null;
-  const mappedSections = externalMappedSections ?? internal?.mappedSections ?? [];
+  const mappedSections =
+    externalMappedSections ?? internal?.mappedSections ?? [];
   const error = externalError ?? internal?.error ?? null;
   const jobId = externalJobId ?? internal?.jobId ?? null;
   const isPolling = externalIsPolling ?? internal?.isPolling ?? false;
@@ -76,7 +87,9 @@ export function UploadCvButton({
       // parseFile surfaces errors via hook.error; swallow here to avoid uncaught rejections
     } finally {
       // allow re-uploading the same file by clearing the input
-      try { e.currentTarget.value = ""; } catch {}
+      try {
+        e.currentTarget.value = "";
+      } catch {}
     }
   }
 
@@ -94,7 +107,11 @@ export function UploadCvButton({
 
     // Forward server-normalized payload only (block preview until server normalized)
     try {
-      if (typeof onNormalizedParsed === "function" && lastNormalized && lastNormalizedSource === "server") {
+      if (
+        typeof onNormalizedParsed === "function" &&
+        lastNormalized &&
+        lastNormalizedSource === "server"
+      ) {
         onNormalizedParsed(lastNormalized, lastNormalizedSource);
       }
     } catch {
@@ -103,7 +120,13 @@ export function UploadCvButton({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [suggestions, mappedSections, lastNormalized, lastNormalizedSource]);
 
-  const label = error ? "Error" : isRefining ? "Refining..." : isParsing ? "Parsing..." : "Upload CV";
+  const label = error
+    ? "Error"
+    : isRefining
+      ? "Refining..."
+      : isParsing
+        ? "Parsing..."
+        : "Upload CV";
 
   return (
     <div className={className}>

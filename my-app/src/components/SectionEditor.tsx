@@ -1,10 +1,26 @@
 import { v4 as uuidv4 } from "uuid";
-import React, { forwardRef, useEffect, useImperativeHandle, useRef, useMemo, useState, useCallback } from "react";
+import React, {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useMemo,
+  useState,
+  useCallback,
+} from "react";
 import { Remirror, useRemirror, EditorComponent } from "@remirror/react";
-import { BoldExtension, ItalicExtension, UnderlineExtension, ParagraphExtension } from "remirror/extensions";
+import {
+  BoldExtension,
+  ItalicExtension,
+  UnderlineExtension,
+  ParagraphExtension,
+} from "remirror/extensions";
 import { TextSelection } from "prosemirror-state";
 import { EditorToolbar } from "./remirror-editor/components/EditorToolbar";
-import { ensureRemirrorDoc, remirrorDocToSection } from "./remirror-editor/utils/conversion";
+import {
+  ensureRemirrorDoc,
+  remirrorDocToSection,
+} from "./remirror-editor/utils/conversion";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import { makeExperienceItem, makeEducationItem } from "../lib/cv-template";
 import { SummaryBlock } from "./structured-blocks/SummaryBlock";
@@ -16,12 +32,28 @@ import { SkillsDrawer } from "./structured-blocks/SkillsDrawer";
 import BlockRenderer from "./cv-editor/BlockRenderer";
 import AchievementsBlock from "./structured-blocks/AchievementsBlock";
 import { useSectionFlushSubscription } from "../hooks/use-flush-subscription";
-import { ScrollText, Trash, X, Pin, PinOff, Plus, UserRound, ChevronDown, ChevronUp } from "lucide-react";
-import { ExperienceModal, EducationModal } from "./structured-blocks/ExperienceEducationModal";
+import {
+  Pencil,
+  Trash,
+  X,
+  Pin,
+  PinOff,
+  Plus,
+  User,
+  ChevronDown,
+  ChevronUp,
+} from "@/lib/icons";
+import {
+  ExperienceModal,
+  EducationModal,
+} from "./structured-blocks/ExperienceEducationModal";
 
 import { formatRangeFromItem } from "../lib/date-utils";
 import { splitResponsibilitiesIntoBullets } from "../utils/cv/mapping-utils";
-import { isExperienceRenderable, isEducationRenderable } from "../utils/cv/renderGuards";
+import {
+  isExperienceRenderable,
+  isEducationRenderable,
+} from "../utils/cv/renderGuards";
 import { docToPlainText } from "./remirror-editor/utils/text";
 import { deepEqual } from "../utils/deepEqual";
 
@@ -30,8 +62,17 @@ import { deepEqual } from "../utils/deepEqual";
  * Matches the lightweight uid pattern used elsewhere in the project.
  */
 
-import type { RemirrorJSON } from 'remirror';
-import type { CvSection, IExperienceItem, IEducationItem, IProfileItem, ISummaryItem, ISkillItem, ILanguageItem, Level } from '../types/cvDocument';
+import type { RemirrorJSON } from "remirror";
+import type {
+  CvSection,
+  IExperienceItem,
+  IEducationItem,
+  IProfileItem,
+  ISummaryItem,
+  ISkillItem,
+  ILanguageItem,
+  Level,
+} from "../types/cvDocument";
 
 const SKILL_DOT_LEVELS: Array<{ value: Level; label: string }> = [
   { value: "Beginner", label: "Beginner" },
@@ -79,9 +120,9 @@ function LevelDots({
     display: "block",
     width: 10,
     height: 10,
-    borderRadius: "var(--rp)",
+    borderRadius: "var(--radius-pill)",
     border: "1px solid",
-    borderColor: filled ? "var(--ac)" : "var(--bm)",
+    borderColor: filled ? "var(--ac)" : "var(--color-border-strong)",
     background: filled ? "var(--ac)" : "transparent",
     flexShrink: 0,
     pointerEvents: "none",
@@ -89,7 +130,11 @@ function LevelDots({
 
   return (
     <div className="inline-flex items-center gap-2 min-w-0">
-      <div className="flex items-center gap-0" role={readOnly ? undefined : "group"} aria-label={ariaLabel}>
+      <div
+        className="flex items-center gap-0"
+        role={readOnly ? undefined : "group"}
+        aria-label={ariaLabel}
+      >
         {levels.map((level, index) => {
           const filled = index <= activeIndex;
 
@@ -98,7 +143,14 @@ function LevelDots({
               <span
                 key={level.label}
                 aria-hidden
-                style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 16, height: 16, flexShrink: 0 }}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 16,
+                  height: 16,
+                  flexShrink: 0,
+                }}
               >
                 <span style={dotStyle(filled)} />
               </span>
@@ -134,7 +186,14 @@ function LevelDots({
           );
         })}
       </div>
-      <span style={{ fontSize: "var(--tx)", color: "var(--tm2)", whiteSpace: "nowrap", lineHeight: "var(--lx)" }}>
+      <span
+        style={{
+          fontSize: "var(--tx)",
+          color: "var(--tm2)",
+          whiteSpace: "nowrap",
+          lineHeight: "var(--lx)",
+        }}
+      >
         {activeLabel}
       </span>
     </div>
@@ -160,7 +219,10 @@ interface SectionEditorProps {
 /**
  * Small ErrorBoundary to render fallback when Remirror fails.
  */
-class ErrorBoundary extends React.Component<{ fallback: React.ReactNode; children: React.ReactNode }, { hasError: boolean }> {
+class ErrorBoundary extends React.Component<
+  { fallback: React.ReactNode; children: React.ReactNode },
+  { hasError: boolean }
+> {
   constructor(props: { fallback: React.ReactNode; children: React.ReactNode }) {
     super(props);
     this.state = { hasError: false };
@@ -187,79 +249,93 @@ const createExtensions = () => [
 
 type EntryRemirrorHandle = { flush: () => void };
 
-const EntryRemirror = forwardRef<EntryRemirrorHandle, { initialContent?: RemirrorJSON | undefined; onPersist?: (json: RemirrorJSON) => void }>(
-  ({ initialContent, onPersist }, ref) => {
-    const extensions = useMemo(() => createExtensions(), []);
-    const initial = useRef<RemirrorJSON>(ensureRemirrorDoc(initialContent as any)).current;
-  
-    const { manager: localManager, state: localState, onChange: localOnChange } = useRemirror({
-      extensions: () => extensions as any,
-      content: initial as any,
-      onError: () => initial as any,
-    });
-  
-    // removed unused mountedRef used for previous mount-guard logic
-  
-    // Keep a ref to the underlying prosemirror view so we can flush imperatively.
-    const viewRef = useRef<any>(null);
-    useEffect(() => {
-      viewRef.current = (localManager as any)?.view;
-    }, [localManager]);
-  
-    const flush = useCallback(() => {
+const EntryRemirror = forwardRef<
+  EntryRemirrorHandle,
+  {
+    initialContent?: RemirrorJSON | undefined;
+    onPersist?: (json: RemirrorJSON) => void;
+  }
+>(({ initialContent, onPersist }, ref) => {
+  const extensions = useMemo(() => createExtensions(), []);
+  const initial = useRef<RemirrorJSON>(
+    ensureRemirrorDoc(initialContent as any),
+  ).current;
+
+  const {
+    manager: localManager,
+    state: localState,
+    onChange: localOnChange,
+  } = useRemirror({
+    extensions: () => extensions as any,
+    content: initial as any,
+    onError: () => initial as any,
+  });
+
+  // removed unused mountedRef used for previous mount-guard logic
+
+  // Keep a ref to the underlying prosemirror view so we can flush imperatively.
+  const viewRef = useRef<any>(null);
+  useEffect(() => {
+    viewRef.current = (localManager as any)?.view;
+  }, [localManager]);
+
+  const flush = useCallback(() => {
+    try {
+      const view = viewRef.current;
+      const json = view?.state?.doc?.toJSON?.() as RemirrorJSON | undefined;
+      if (json && typeof onPersist === "function") {
+        onPersist(json);
+      }
+    } catch {
+      /* noop */
+    }
+  }, [onPersist]);
+
+  // Expose flush via imperative handle so parents can call it before structural changes.
+  useImperativeHandle(ref, () => ({ flush }), [flush]);
+
+  // Persist on editor blur (focusout) to avoid keystroke-level persistence — still supported.
+  useEffect(() => {
+    const viewDom = (localManager as any)?.view?.dom as HTMLElement | undefined;
+    if (!viewDom) return;
+    const handleFocusOut = () => {
       try {
-        const view = viewRef.current;
-        const json = view?.state?.doc?.toJSON?.() as RemirrorJSON | undefined;
-        if (json && typeof onPersist === "function") {
-          onPersist(json);
-        }
+        flush();
       } catch {
         /* noop */
       }
-    }, [onPersist]);
-  
-    // Expose flush via imperative handle so parents can call it before structural changes.
-    useImperativeHandle(ref, () => ({ flush }), [flush]);
-  
-    // Persist on editor blur (focusout) to avoid keystroke-level persistence — still supported.
-    useEffect(() => {
-      const viewDom = (localManager as any)?.view?.dom as HTMLElement | undefined;
-      if (!viewDom) return;
-      const handleFocusOut = () => {
-        try {
-          flush();
-        } catch {
-          /* noop */
-        }
-      };
-      viewDom.addEventListener("focusout", handleFocusOut);
-      return () => {
-        try {
-          viewDom.removeEventListener("focusout", handleFocusOut);
-        } catch {
-          /* noop */
-        }
-      };
-    }, [localManager, flush]);
-  
-    const handleChange = useCallback(
-      (param: any) => {
-        localOnChange(param);
-        // Intentionally avoid calling onPersist on every keystroke.
-      },
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      [localOnChange]
-    );
-  
-    return (
-      <div className="p-2 [background:var(--sfr)] border border-bo rounded">
-        <Remirror manager={localManager} initialContent={localState} onChange={handleChange}>
-          <EditorComponent />
-        </Remirror>
-      </div>
-    );
-  }
-);
+    };
+    viewDom.addEventListener("focusout", handleFocusOut);
+    return () => {
+      try {
+        viewDom.removeEventListener("focusout", handleFocusOut);
+      } catch {
+        /* noop */
+      }
+    };
+  }, [localManager, flush]);
+
+  const handleChange = useCallback(
+    (param: any) => {
+      localOnChange(param);
+      // Intentionally avoid calling onPersist on every keystroke.
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [localOnChange],
+  );
+
+  return (
+    <div className="p-2 [background:var(--sfr)] border [border-color:var(--color-border)] rounded">
+      <Remirror
+        manager={localManager}
+        initialContent={localState}
+        onChange={handleChange}
+      >
+        <EditorComponent />
+      </Remirror>
+    </div>
+  );
+});
 
 /**
  * Controlled SectionEditor that renders Remirror and emits changes up to parent.
@@ -282,9 +358,15 @@ export default function SectionEditor({
   // Add logging to track re-renders (debug gated)
   useEffect(() => {
     try {
-      if (typeof window !== "undefined" && (window as any).__CV_EDITOR_DEBUG__ === true) {
+      if (
+        typeof window !== "undefined" &&
+        (window as any).__CV_EDITOR_DEBUG__ === true
+      ) {
         // eslint-disable-next-line no-console
-        console.log("[SectionEditor] render", { sectionId: section.id, title: section.title });
+        console.log("[SectionEditor] render", {
+          sectionId: section.id,
+          title: section.title,
+        });
       }
     } catch {
       /* noop */
@@ -294,29 +376,55 @@ export default function SectionEditor({
   // Mount/unmount diagnostics with stable mount id to correlate with register/unregister churn
   const mountIdRef = useRef<string>(uuidv4());
   useEffect(() => {
-    if (typeof window !== "undefined" && (window as any).__CV_EDITOR_DEBUG__ === true) {
+    if (
+      typeof window !== "undefined" &&
+      (window as any).__CV_EDITOR_DEBUG__ === true
+    ) {
       // eslint-disable-next-line no-console
-      console.debug("[SectionEditor] mount", { mountId: mountIdRef.current, sectionId: section.id });
+      console.debug("[SectionEditor] mount", {
+        mountId: mountIdRef.current,
+        sectionId: section.id,
+      });
     }
     return () => {
-      if (typeof window !== "undefined" && (window as any).__CV_EDITOR_DEBUG__ === true) {
+      if (
+        typeof window !== "undefined" &&
+        (window as any).__CV_EDITOR_DEBUG__ === true
+      ) {
         // eslint-disable-next-line no-console
-        console.debug("[SectionEditor] unmount", { mountId: mountIdRef.current, sectionId: section.id });
+        console.debug("[SectionEditor] unmount", {
+          mountId: mountIdRef.current,
+          sectionId: section.id,
+        });
       }
     };
-  // we intentionally leave deps empty to log physical mount/unmounts only
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // we intentionally leave deps empty to log physical mount/unmounts only
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const extensions = useMemo(() => createExtensions(), []);
-  const titleInputId = useMemo(() => `section-title-${section.id}`, [section.id]);
+  const titleInputId = useMemo(
+    () => `section-title-${section.id}`,
+    [section.id],
+  );
   const titleInputRef = useRef<HTMLInputElement | null>(null);
 
   // Initialize safe JSON content once at mount to avoid remounts stomping caret.
-  const initialContentRef = useRef<RemirrorJSON>(ensureRemirrorDoc((section as any).content as any));
+  const initialContentRef = useRef<RemirrorJSON>(
+    ensureRemirrorDoc((section as any).content as any),
+  );
   function sanitizeRemirrorDoc(doc: RemirrorJSON | undefined): RemirrorJSON {
-    if (!doc || typeof doc !== "object" || !Array.isArray((doc as any).content)) {
-      return { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: " " }] }] } as RemirrorJSON;
+    if (
+      !doc ||
+      typeof doc !== "object" ||
+      !Array.isArray((doc as any).content)
+    ) {
+      return {
+        type: "doc",
+        content: [
+          { type: "paragraph", content: [{ type: "text", text: " " }] },
+        ],
+      } as RemirrorJSON;
     }
     function sanitizeNode(node: any): any {
       if (!node || typeof node !== "object") return node;
@@ -328,20 +436,31 @@ export default function SectionEditor({
       if (Array.isArray(node.content)) {
         cloned.content = node.content.map(sanitizeNode).filter(Boolean);
         if (cloned.content.length === 0 && typeof cloned.type === "string") {
-          if (cloned.type === "paragraph" || cloned.type === "heading") cloned.content = [{ type: "text", text: " " }];
+          if (cloned.type === "paragraph" || cloned.type === "heading")
+            cloned.content = [{ type: "text", text: " " }];
         }
       }
       return cloned;
     }
     try {
-      return { ...doc, content: (doc as any).content.map(sanitizeNode) } as RemirrorJSON;
+      return {
+        ...doc,
+        content: (doc as any).content.map(sanitizeNode),
+      } as RemirrorJSON;
     } catch {
-      return { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: " " }] }] } as RemirrorJSON;
+      return {
+        type: "doc",
+        content: [
+          { type: "paragraph", content: [{ type: "text", text: " " }] },
+        ],
+      } as RemirrorJSON;
     }
   }
 
   // Extract plain text from a Remirror JSON document (single-line preview)
-  function extractPlainTextLocal(json: RemirrorJSON | undefined | null): string {
+  function extractPlainTextLocal(
+    json: RemirrorJSON | undefined | null,
+  ): string {
     if (!json || typeof json !== "object") return "";
     try {
       const parts: string[] = [];
@@ -358,9 +477,15 @@ export default function SectionEditor({
     }
   }
 
-  const safeContent = useRef<RemirrorJSON>(sanitizeRemirrorDoc(initialContentRef.current)).current;
+  const safeContent = useRef<RemirrorJSON>(
+    sanitizeRemirrorDoc(initialContentRef.current),
+  ).current;
 
-  const { manager, state, onChange: remirrorOnChange } = useRemirror({
+  const {
+    manager,
+    state,
+    onChange: remirrorOnChange,
+  } = useRemirror({
     extensions: () => extensions as any,
     content: safeContent as any,
     onError: (err: unknown) => {
@@ -381,7 +506,7 @@ export default function SectionEditor({
   // briefly when we call onTitleChange to avoid a race where the parent updates cause
   // section.title to be read as empty before the update completes.
   const flushGuardRef = useRef<boolean>(false);
-  
+
   useEffect(() => {
     // If we are in the middle of an intentional flush, skip syncing to avoid stomping the local buffer.
     if (flushGuardRef.current) return;
@@ -393,9 +518,16 @@ export default function SectionEditor({
     }
     setLocalTitle(section.title ?? "");
     // Only log when debug mode is enabled to reduce console spam
-    if (typeof window !== "undefined" && (window as any).__CV_EDITOR_DEBUG__ === true) {
+    if (
+      typeof window !== "undefined" &&
+      (window as any).__CV_EDITOR_DEBUG__ === true
+    ) {
       // eslint-disable-next-line no-console
-      console.log("[SectionEditor] section.title changed", section.title, collapsed);
+      console.log(
+        "[SectionEditor] section.title changed",
+        section.title,
+        collapsed,
+      );
     }
   }, [section.title, collapsed]);
 
@@ -410,7 +542,6 @@ export default function SectionEditor({
    * Many callers request a flush rapidly; scheduleFlushPendingEdits
    * prevents repeated immediate calls and reduces CPU/log churn.
    */
-
 
   /**
    * Flush all nested EntryRemirror editors without scheduling a global flush.
@@ -445,7 +576,15 @@ export default function SectionEditor({
     } catch {
       /* noop */
     }
-  }, [manager, onContentChange, onTitleChange, section.id, section.title, localTitle, flushAllNestedEditors]);
+  }, [
+    manager,
+    onContentChange,
+    onTitleChange,
+    section.id,
+    section.title,
+    localTitle,
+    flushAllNestedEditors,
+  ]);
   useSectionFlushSubscription({
     sectionId: String(section.id),
     onFlush: onSectionFlush,
@@ -473,7 +612,7 @@ export default function SectionEditor({
         /* noop */
       }
     },
-    [remirrorOnChange, embedded, onContentChange, manager, section?.id]
+    [remirrorOnChange, embedded, onContentChange, manager, section?.id],
   );
 
   const focusEditorAtEnd = useCallback(() => {
@@ -482,7 +621,12 @@ export default function SectionEditor({
       // If the section title input currently has focus, do not steal focus for the editor.
       try {
         const titleEl = titleInputRef.current;
-        if (titleEl && typeof document !== "undefined" && document.activeElement === titleEl) return;
+        if (
+          titleEl &&
+          typeof document !== "undefined" &&
+          document.activeElement === titleEl
+        )
+          return;
       } catch {
         /* ignore focus detection failures */
       }
@@ -530,10 +674,14 @@ export default function SectionEditor({
       // If the editor currently has focus, prefer local state (do not stomp the caret)
       if (view.hasFocus && view.hasFocus()) return;
       // Build a normalized Remirror doc from incoming content
-      const externalDoc = sanitizeRemirrorDoc(ensureRemirrorDoc((section as any).content as any));
+      const externalDoc = sanitizeRemirrorDoc(
+        ensureRemirrorDoc((section as any).content as any),
+      );
       // Create a new EditorState via manager and update the view atomically
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const newState = (manager as any).createState ? (manager as any).createState({ content: externalDoc as any }) : undefined;
+      const newState = (manager as any).createState
+        ? (manager as any).createState({ content: externalDoc as any })
+        : undefined;
       if (newState && typeof view.updateState === "function") {
         view.updateState(newState);
       }
@@ -541,7 +689,7 @@ export default function SectionEditor({
       // eslint-disable-next-line no-console
       console.debug("[SectionEditor] sync external content failed", err);
     }
-  // Depend only on the section's content (use any-cast to avoid TS error on CvSection type)
+    // Depend only on the section's content (use any-cast to avoid TS error on CvSection type)
   }, [(section as any).content, manager]);
 
   // No local title buffer — parent is authoritative. titleInputRef remains for focus checks if needed.
@@ -553,17 +701,37 @@ export default function SectionEditor({
   // instead of the generic Remirror editor. This provides UI-ready inputs for company/position/dates/achievements.
   const structured = section.structuredContent;
   let sectionType = String(section.type);
-    // Backwards-compat: treat legacy text section titled "achievements" as an achievements section
-    try {
-      if (sectionType === "text" && typeof section.title === "string" && section.title.trim().toLowerCase() === "achievements")
-        sectionType = "achievements";
-    } catch {
-      /* noop */
-    }
+  // Backwards-compat: treat legacy text section titled "achievements" as an achievements section
+  try {
+    if (
+      sectionType === "text" &&
+      typeof section.title === "string" &&
+      section.title.trim().toLowerCase() === "achievements"
+    )
+      sectionType = "achievements";
+  } catch {
+    /* noop */
+  }
 
   // Determine whether v1 rendering should be active for this document.
   // Use the canonical runtime detector from CvLibraryContext.
-  const { isV1Active, selectedInspector, closeInspector, updateStructuredItem, currentCv, reorderSections } = useCvLibrary();
+  const {
+    isV1Active,
+    selectedInspector,
+    closeInspector,
+    updateStructuredItem,
+    currentCv,
+    reorderSections,
+  } = useCvLibrary();
+
+  const handleRemoveSection = useCallback(() => {
+    if (!currentCv || typeof reorderSections !== "function") return;
+    const nextSections = (currentCv.sections ?? []).filter(
+      (candidate) => String(candidate.id) !== String(section.id),
+    );
+    closeInspector?.();
+    reorderSections(nextSections as CvSection[]);
+  }, [closeInspector, currentCv, reorderSections, section.id]);
 
   // Dev-only runtime diagnostics: log which branch we will render for this section.
 
@@ -574,15 +742,22 @@ export default function SectionEditor({
   // Skills modal editor
   const [isSkillsModalOpen, setSkillsModalOpen] = useState<boolean>(false);
   // Experience/Education modals (typed v1)
-  const [isExperienceModalOpen, setExperienceModalOpen] = useState<boolean>(false);
-  const [isEducationModalOpen, setEducationModalOpen] = useState<boolean>(false);
-  const [expandedStructuredPreviewIds, setExpandedStructuredPreviewIds] = useState<Record<string, boolean>>({});
-  const [expandedStructuredSectionIds, setExpandedStructuredSectionIds] = useState<Record<string, boolean>>({});
-  const [structuredPreviewOverride, setStructuredPreviewOverride] = useState<CvSection | null>(null);
+  const [isExperienceModalOpen, setExperienceModalOpen] =
+    useState<boolean>(false);
+  const [isEducationModalOpen, setEducationModalOpen] =
+    useState<boolean>(false);
+  const [expandedStructuredPreviewIds, setExpandedStructuredPreviewIds] =
+    useState<Record<string, boolean>>({});
+  const [expandedStructuredSectionIds, setExpandedStructuredSectionIds] =
+    useState<Record<string, boolean>>({});
+  const [structuredPreviewOverride, setStructuredPreviewOverride] =
+    useState<CvSection | null>(null);
   // Skills drawer (Phase 2 skeleton)
   const [isSkillsDrawerOpen, setSkillsDrawerOpen] = useState<boolean>(false);
+  const [isProfilePhotoDragActive, setIsProfilePhotoDragActive] =
+    useState<boolean>(false);
   const profilePhotoInputRef = useRef<HTMLInputElement | null>(null);
-  
+
   // (moved) The flush-related hooks and refs were moved higher up in the component
   // to resolve TypeScript declaration errors and to support the stable-ref pattern for registration.
 
@@ -593,7 +768,10 @@ export default function SectionEditor({
       return;
     }
     if (
-      deepEqual(structuredPreviewOverride.structuredContent, section.structuredContent) &&
+      deepEqual(
+        structuredPreviewOverride.structuredContent,
+        section.structuredContent,
+      ) &&
       deepEqual(structuredPreviewOverride.blocks, section.blocks)
     ) {
       setStructuredPreviewOverride(null);
@@ -628,17 +806,20 @@ export default function SectionEditor({
       }
       const newBlock = {
         id: uuidv4(),
-        title: 'New block',
-        type: 'text' as const,
-        content: ensureRemirrorDoc(''),
+        title: "New block",
+        type: "text" as const,
+        content: ensureRemirrorDoc(""),
       };
-      const nextBlocks = [...(Array.isArray(section.blocks) ? section.blocks : []), newBlock];
+      const nextBlocks = [
+        ...(Array.isArray(section.blocks) ? section.blocks : []),
+        newBlock,
+      ];
       const updatedSection = { ...section, blocks: nextBlocks as any };
       onChange(index, updatedSection as any);
     } catch {
       /* noop */
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [section, index, onChange, flushAllNestedEditors]);
 
   /**
@@ -646,52 +827,76 @@ export default function SectionEditor({
    * If the block links to a structured item (attributes.linkedStructuredId),
    * remove the structured item and all blocks linked to it (consistent with existing behavior).
    */
-  const handleDeleteBlock = useCallback(async (blockId: string) => {
-    try {
+  const handleDeleteBlock = useCallback(
+    async (blockId: string) => {
       try {
-        await new Promise<void>((resolve) => {
-          try {
-            flushAllNestedEditors();
-            queueMicrotask(() => resolve());
-          } catch {
-            resolve();
+        try {
+          await new Promise<void>((resolve) => {
+            try {
+              flushAllNestedEditors();
+              queueMicrotask(() => resolve());
+            } catch {
+              resolve();
+            }
+          });
+        } catch {
+          /* noop */
+        }
+        const target = Array.isArray(section.blocks)
+          ? section.blocks.find((b: any) => String(b.id) === String(blockId))
+          : null;
+        const linkedId =
+          (target as any)?.attributes?.linkedStructuredId ??
+          (target as any)?.attributes?.linkedstructuredid;
+        const nextBlocks = (
+          Array.isArray(section.blocks) ? section.blocks : []
+        ).filter((b: any) => {
+          if (linkedId) {
+            const linked =
+              (b as any).attributes?.linkedStructuredId ??
+              (b as any).attributes?.linkedstructuredid;
+            return String(linked) !== String(linkedId);
           }
+          return String(b.id) !== String(blockId);
         });
+        const nextStructured =
+          linkedId && Array.isArray(section.structuredContent)
+            ? (section.structuredContent as any[]).filter(
+                (it) => String(it.id) !== String(linkedId),
+              )
+            : section.structuredContent;
+        const updatedSection = {
+          ...section,
+          blocks: nextBlocks as any,
+          structuredContent: nextStructured as any,
+        };
+        onChange(index, updatedSection as any);
       } catch {
         /* noop */
       }
-      const target = Array.isArray(section.blocks) ? section.blocks.find((b: any) => String(b.id) === String(blockId)) : null;
-      const linkedId = (target as any)?.attributes?.linkedStructuredId ?? (target as any)?.attributes?.linkedstructuredid;
-      const nextBlocks = (Array.isArray(section.blocks) ? section.blocks : []).filter((b: any) => {
-        if (linkedId) {
-          const linked = (b as any).attributes?.linkedStructuredId ?? (b as any).attributes?.linkedstructuredid;
-          return String(linked) !== String(linkedId);
-        }
-        return String(b.id) !== String(blockId);
-      });
-      const nextStructured = linkedId && Array.isArray(section.structuredContent)
-        ? (section.structuredContent as any[]).filter((it) => String(it.id) !== String(linkedId))
-        : section.structuredContent;
-      const updatedSection = { ...section, blocks: nextBlocks as any, structuredContent: nextStructured as any };
-      onChange(index, updatedSection as any);
-    } catch {
-      /* noop */
-    }
-  }, [section, index, onChange, flushAllNestedEditors]);
-  
+    },
+    [section, index, onChange, flushAllNestedEditors],
+  );
+
   if (sectionType === "summary") {
     // Always render the structured SummaryBlock UI and ignore any legacy blocks.
     // Persist changes via context-level structured update to avoid relying on parent onChange.
     function handleSummaryPersist(updatedSection: CvSection) {
       try {
-        const scFirst = Array.isArray(updatedSection.structuredContent) ? (updatedSection.structuredContent as any[])[0] : null;
+        const scFirst = Array.isArray(updatedSection.structuredContent)
+          ? (updatedSection.structuredContent as any[])[0]
+          : null;
         const itemId = String(scFirst?.id ?? `sum-${String(section.id)}-0`);
         // Patch all summary-related fields through structured update
-        const { name, email, linkedin, address, summary, ...rest } = (scFirst ?? {}) as Record<string, any>;
+        const { name, email, linkedin, address, summary, ...rest } = (scFirst ??
+          {}) as Record<string, any>;
         const patch: Record<string, any> = { name, email, linkedin, address };
         if (typeof onContentChange === "function" && updatedSection.id) {
           try {
-            onContentChange(String(updatedSection.id), ensureRemirrorDoc(summary as any));
+            onContentChange(
+              String(updatedSection.id),
+              ensureRemirrorDoc(summary as any),
+            );
           } catch {
             /* noop */
           }
@@ -703,8 +908,8 @@ export default function SectionEditor({
     }
 
     return (
-      <div className="mb-4 border border-bo rounded-rm section-container">
-        <div className="flex items-center justify-between p-3 [background:var(--sf1)]">
+      <div className="mb-4 border [border-color:var(--color-border)] [border-radius:var(--radius-card)] section-container">
+        <div className="section-container-header flex items-center justify-between">
           <h3 className="cv-section-heading">{section.title}</h3>
           <div className="dasti-icon-cluster dasti-icon-cluster--tight">
             <button
@@ -713,11 +918,11 @@ export default function SectionEditor({
                 e.stopPropagation();
                 setSummaryModalOpen(true);
               }}
-              className="dasti-icon-button"
+              className="dasti-icon-button cv-section-edit-trigger"
               aria-label="Edit summary"
               title="Edit summary"
             >
-              <ScrollText className="w-4 h-4" strokeWidth={1.5} aria-hidden />
+              <Pencil className="w-4 h-4" strokeWidth={1.5} aria-hidden />
             </button>
             {typeof onCollapseChange === "function" && (
               <button
@@ -739,15 +944,21 @@ export default function SectionEditor({
 
         {collapsed && (
           <div
-            className="cv-section-preview cursor-text"
+            className="cv-section-preview cursor-pointer"
             role="button"
             tabIndex={0}
             aria-label="Edit summary"
             onClick={(e) => {
               e.stopPropagation();
               try {
-                const sel = typeof window !== "undefined" ? window.getSelection() : null;
-                if (sel && typeof sel.toString === "function" && sel.toString().length > 0) return;
+                const sel =
+                  typeof window !== "undefined" ? window.getSelection() : null;
+                if (
+                  sel &&
+                  typeof sel.toString === "function" &&
+                  sel.toString().length > 0
+                )
+                  return;
               } catch {
                 /* noop */
               }
@@ -764,10 +975,14 @@ export default function SectionEditor({
             <p className="cv-preview-empty cv-preview-text cv-preview-text--truncate cv-preview-text--muted">
               {(() => {
                 try {
-                  const sumItem = (Array.isArray(section.structuredContent) && section.structuredContent.length > 0
-                    ? (section.structuredContent[0] as ISummaryItem)
-                    : null);
-                  const doc = ensureRemirrorDoc((sumItem as any)?.summary as any);
+                  const sumItem =
+                    Array.isArray(section.structuredContent) &&
+                    section.structuredContent.length > 0
+                      ? (section.structuredContent[0] as ISummaryItem)
+                      : null;
+                  const doc = ensureRemirrorDoc(
+                    (sumItem as any)?.summary as any,
+                  );
                   const txt = extractPlainTextLocal(doc);
                   return txt || "Start typing here";
                 } catch {
@@ -781,7 +996,7 @@ export default function SectionEditor({
         )}
 
         {!collapsed && (
-          <div className="p-4 space-y-4">
+          <div className="cv-section-body cv-section-body--stack">
             <SummaryBlock
               section={section as any}
               onChange={(updatedSection) => {
@@ -800,7 +1015,12 @@ export default function SectionEditor({
           <SummaryModal
             open={isSummaryModalOpen}
             sectionId={String(section.id)}
-            item={(Array.isArray(section.structuredContent) && section.structuredContent.length > 0 ? (section.structuredContent[0] as ISummaryItem) : null)}
+            item={
+              Array.isArray(section.structuredContent) &&
+              section.structuredContent.length > 0
+                ? (section.structuredContent[0] as ISummaryItem)
+                : null
+            }
             onClose={() => setSummaryModalOpen(false)}
           />
         ) : null}
@@ -815,12 +1035,20 @@ export default function SectionEditor({
       if (!Array.isArray(section.structuredContent)) return [];
       return (section.structuredContent as any[]).map((it, idx) => {
         if (typeof it === "string") {
-          return { id: `sk-${idx}-${String(section.id)}`, name: String(it), level: "Intermediate" };
+          return {
+            id: `sk-${idx}-${String(section.id)}`,
+            name: String(it),
+            level: "Intermediate",
+          };
         }
         const o = it as Partial<ISkillItem>;
         const name = typeof o.name === "string" ? o.name : "";
         const level = (o.level as ISkillItem["level"]) ?? "Intermediate";
-        return { id: String(o.id ?? `sk-${idx}-${String(section.id)}`), name, level };
+        return {
+          id: String(o.id ?? `sk-${idx}-${String(section.id)}`),
+          name,
+          level,
+        };
       });
     }, [section.structuredContent, section.id]);
 
@@ -849,7 +1077,10 @@ export default function SectionEditor({
         const sanitized = next
           .map((r) => ({ ...r, name: String(r.name ?? "").trim() }))
           .filter((r) => r.name.length > 0);
-        const updatedSection = { ...section, structuredContent: sanitized as any };
+        const updatedSection = {
+          ...section,
+          structuredContent: sanitized as any,
+        };
         onChange(index, updatedSection as any);
         if (tickId) {
           setSavedTick(tickId);
@@ -878,7 +1109,9 @@ export default function SectionEditor({
     }
 
     function handleNameChangeInline(idx: number, name: string) {
-      setSkillRows((prev) => prev.map((r, i) => (i === idx ? { ...r, name } : r)));
+      setSkillRows((prev) =>
+        prev.map((r, i) => (i === idx ? { ...r, name } : r)),
+      );
     }
 
     function handleNameBlurInline(idx: number) {
@@ -890,7 +1123,10 @@ export default function SectionEditor({
       persistRows(skillRows, String(row.id ?? idx));
     }
 
-    function handleNameKeyDownInline(e: React.KeyboardEvent<HTMLInputElement>, idx: number) {
+    function handleNameKeyDownInline(
+      e: React.KeyboardEvent<HTMLInputElement>,
+      idx: number,
+    ) {
       if (e.key === "Enter") {
         e.preventDefault();
         const row = skillRows[idx];
@@ -904,16 +1140,17 @@ export default function SectionEditor({
     }
 
     function handleLevelChangeInline(idx: number, lvl: Level) {
-      setSkillRows((prev) => {
-        const next = prev.map((r, i) => (i === idx ? { ...r, level: lvl } : r));
-        const row = next[idx];
-        // If the skill name is still empty, do not persist on level change to avoid
-        // unintentionally removing the draft row (persist requires a name).
-        if (String(row?.name ?? "").trim().length === 0) return next;
-        // Persist immediately on level change when the row has a name.
+      const next = skillRows.map((r, i) =>
+        i === idx ? { ...r, level: lvl } : r,
+      );
+      const row = next[idx];
+      setSkillRows(next);
+      // If the skill name is still empty, do not persist on level change to avoid
+      // unintentionally removing the draft row (persist requires a name).
+      if (String(row?.name ?? "").trim().length === 0) return;
+      window.setTimeout(() => {
         persistRows(next, String(row?.id ?? idx));
-        return next;
-      });
+      }, 0);
     }
 
     const LEVEL_PRIORITY: Record<Level, number> = {
@@ -962,7 +1199,9 @@ export default function SectionEditor({
 
     function handlePinToCoreInline(skillId: string) {
       try {
-        const idx = skillRows.findIndex((r) => String(r.id) === String(skillId));
+        const idx = skillRows.findIndex(
+          (r) => String(r.id) === String(skillId),
+        );
         if (idx < 0) return;
         const row = skillRows[idx];
         // If the row is an empty draft (no name yet), avoid pinning/removing it.
@@ -978,16 +1217,25 @@ export default function SectionEditor({
     }
     function handleRemoveSkill(skillId: string): void {
       try {
-        const sc = Array.isArray(section.structuredContent) ? section.structuredContent : [];
+        const sc = Array.isArray(section.structuredContent)
+          ? section.structuredContent
+          : [];
         if (sc.length === 0) return;
         let nextStructured: any[];
         if (typeof sc[0] === "string") {
-          const idx = items.findIndex((it) => String(it.id) === String(skillId));
+          const idx = items.findIndex(
+            (it) => String(it.id) === String(skillId),
+          );
           nextStructured = (sc as any[]).filter((_, i) => i !== idx);
         } else {
-          nextStructured = (sc as any[]).filter((it) => String((it as any).id ?? "") !== String(skillId));
+          nextStructured = (sc as any[]).filter(
+            (it) => String((it as any).id ?? "") !== String(skillId),
+          );
         }
-        const updatedSection = { ...section, structuredContent: nextStructured as any };
+        const updatedSection = {
+          ...section,
+          structuredContent: nextStructured as any,
+        };
         onChange(index, updatedSection as any);
       } catch {
         /* noop */
@@ -995,14 +1243,17 @@ export default function SectionEditor({
     }
 
     return (
-      <div className="mb-4 border border-bo rounded-rm section-container">
-        <div className="flex items-center justify-between p-3 [background:var(--sf1)]">
+      <div className="mb-4 section-container">
+        <div className="section-container-header flex items-center justify-between">
           <h3 className="cv-section-heading">{section.title}</h3>
           <div className="flex items-center gap-1">
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); handleAddSkillInline(); }}
-              className="dasti-icon-button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleAddSkillInline();
+              }}
+              className="dasti-icon-button cv-section-edit-trigger"
               aria-label="Add skill"
               title="Add skill"
             >
@@ -1030,7 +1281,9 @@ export default function SectionEditor({
           <div className="cv-section-preview">
             <div className="flex flex-wrap gap-2">
               {items.length === 0 ? (
-                <span className="cv-preview-empty cv-preview-text cv-preview-text--muted">No skills yet</span>
+                <span className="cv-preview-empty cv-preview-text cv-preview-text--muted">
+                  No skills yet
+                </span>
               ) : (
                 items.map((s) => (
                   <span
@@ -1038,7 +1291,9 @@ export default function SectionEditor({
                     className="card-group inline-flex items-center gap-2 px-2.5 py-1 text-xs rounded-full [background:var(--sf2)] [color:var(--tm2)]"
                     aria-label={`${s.name} ${s.level}`}
                   >
-                    <span className="font-medium [color:var(--ti)]">{s.name}</span>
+                    <span className="font-medium [color:var(--ti)]">
+                      {s.name}
+                    </span>
                     <LevelDots
                       value={s.level}
                       levels={SKILL_DOT_LEVELS}
@@ -1095,7 +1350,7 @@ export default function SectionEditor({
                 Click + to add your first skill
               </div>
             ) : (
-              <div className="divide-y divide-[color:var(--bo)]">
+              <div className="divide-y divide-[color:var(--color-border)]">
                 {skillRows.map((row, idx) => (
                   <div
                     key={row.id ?? `row-${idx}`}
@@ -1106,7 +1361,12 @@ export default function SectionEditor({
                     }}
                   >
                     <div className="min-w-0">
-                      <label className="sr-only" htmlFor={`skill-name-inline-${idx}`}>Skill name</label>
+                      <label
+                        className="sr-only"
+                        htmlFor={`skill-name-inline-${idx}`}
+                      >
+                        Skill name
+                      </label>
                       <input
                         id={`skill-name-inline-${idx}`}
                         className="w-full min-w-0 bg-transparent border-0 text-sm font-medium focus:outline-none"
@@ -1116,14 +1376,14 @@ export default function SectionEditor({
                         }}
                         placeholder="Skill name"
                         value={row.name ?? ""}
-                        onChange={(e) => handleNameChangeInline(idx, e.target.value)}
+                        onChange={(e) =>
+                          handleNameChangeInline(idx, e.target.value)
+                        }
                         onBlur={() => handleNameBlurInline(idx)}
                         onKeyDown={(e) => handleNameKeyDownInline(e, idx)}
                       />
                     </div>
-                    <div
-                      className="min-w-0"
-                    >
+                    <div className="min-w-0">
                       <LevelDots
                         value={row.level}
                         levels={SKILL_DOT_LEVELS}
@@ -1132,25 +1392,32 @@ export default function SectionEditor({
                         ariaLabel={`Skill level for ${row.name || `row ${idx + 1}`}`}
                       />
                     </div>
-                    <div
-                      className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
-                    >
+                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
                       <button
                         type="button"
-                        onClick={() => handlePinToCoreInline(String(row.id ?? idx))}
+                        onClick={() =>
+                          handlePinToCoreInline(String(row.id ?? idx))
+                        }
                         className="dasti-icon-button dasti-icon-button--compact"
-                        aria-label={idx === 0 ? `${row.name || "skill"} is pinned to top` : `Pin ${row.name || "skill"} to top`}
+                        aria-label={
+                          idx === 0
+                            ? `${row.name || "skill"} is pinned to top`
+                            : `Pin ${row.name || "skill"} to top`
+                        }
                         title={idx === 0 ? "Pinned to top" : "Pin to top"}
                         style={idx === 0 ? { color: "var(--ac)" } : undefined}
                       >
-                        {idx === 0
-                          ? <PinOff className="w-3 h-3" aria-hidden />
-                          : <Pin className="w-3 h-3" aria-hidden />
-                        }
+                        {idx === 0 ? (
+                          <PinOff className="w-3 h-3" aria-hidden />
+                        ) : (
+                          <Pin className="w-3 h-3" aria-hidden />
+                        )}
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleRemoveSkillInline(String(row.id ?? idx))}
+                        onClick={() =>
+                          handleRemoveSkillInline(String(row.id ?? idx))
+                        }
                         className="dasti-icon-button dasti-icon-button--compact"
                         aria-label={`Remove ${row.name || "skill"}`}
                         title="Remove skill"
@@ -1186,7 +1453,10 @@ export default function SectionEditor({
           onClose={() => setSkillsModalOpen(false)}
           onSave={(next) => {
             try {
-              const updatedSection = { ...section, structuredContent: next as any };
+              const updatedSection = {
+                ...section,
+                structuredContent: next as any,
+              };
               onChange(index, updatedSection as any);
             } catch {
               /* noop */
@@ -1199,7 +1469,10 @@ export default function SectionEditor({
           onClose={() => setSkillsDrawerOpen(false)}
           onApply={(next) => {
             try {
-              const updatedSection = { ...section, structuredContent: next as any };
+              const updatedSection = {
+                ...section,
+                structuredContent: next as any,
+              };
               onChange(index, updatedSection as any);
             } catch {
               /* noop */
@@ -1217,15 +1490,23 @@ export default function SectionEditor({
       if (!Array.isArray(section.structuredContent)) return [];
       return (section.structuredContent as any[]).map((it, idx) => {
         if (typeof it === "string") {
-          return { id: `lang-${idx}-${String(section.id)}`, name: String(it), level: "Intermediate" };
+          return {
+            id: `lang-${idx}-${String(section.id)}`,
+            name: String(it),
+            level: "Intermediate",
+          };
         }
         const o = it as Partial<ILanguageItem>;
         const name = typeof o.name === "string" ? o.name : "";
         const level = (o.level as ILanguageItem["level"]) ?? "Intermediate";
-        return { id: String(o.id ?? `lang-${idx}-${String(section.id)}`), name, level };
+        return {
+          id: String(o.id ?? `lang-${idx}-${String(section.id)}`),
+          name,
+          level,
+        };
       });
     }, [section.structuredContent, section.id]);
- 
+
     // Inline-first editing for Languages (parity with Skills but without buckets/pinning/sort)
     const [languageRows, setLanguageRows] = useState<ILanguageItem[]>([]);
     const lastLanguagesSeedRef = useRef<string | null>(null);
@@ -1242,8 +1523,15 @@ export default function SectionEditor({
         if (lastLanguagesSeedRef.current === nextStr) return;
         // If user is currently focused inside a language input, skip reseeding to avoid stomping edits.
         try {
-          const active = typeof document !== "undefined" ? (document.activeElement as HTMLElement | null) : null;
-          if (active && active.id && active.id.startsWith("language-name-inline-")) {
+          const active =
+            typeof document !== "undefined"
+              ? (document.activeElement as HTMLElement | null)
+              : null;
+          if (
+            active &&
+            active.id &&
+            active.id.startsWith("language-name-inline-")
+          ) {
             return;
           }
         } catch {
@@ -1253,14 +1541,21 @@ export default function SectionEditor({
 
         // Parse server items and merge any local draft rows that contain non-empty names
         const parsed = JSON.parse(nextStr) as ILanguageItem[];
-        const localDrafts = (languageRowsRef.current ?? []).filter((r) => String(r.name ?? "").trim().length > 0);
+        const localDrafts = (languageRowsRef.current ?? []).filter(
+          (r) => String(r.name ?? "").trim().length > 0,
+        );
 
         const merged: ILanguageItem[] = [...parsed];
         for (const d of localDrafts) {
           const exists = merged.some(
             (p) =>
               String(p.id ?? "") === String(d.id ?? "") ||
-              (String(p.name ?? "").trim().toLowerCase() === String(d.name ?? "").trim().toLowerCase())
+              String(p.name ?? "")
+                .trim()
+                .toLowerCase() ===
+                String(d.name ?? "")
+                  .trim()
+                  .toLowerCase(),
           );
           if (!exists) merged.push(d);
         }
@@ -1270,19 +1565,22 @@ export default function SectionEditor({
         setLanguageRows(items);
       }
     }, [items]);
- 
+
     function newLanguageRow(): ILanguageItem {
       const id = `lang-${uuidv4()}`;
       return { id, name: "", level: "Intermediate" };
     }
- 
+
     const [savedTick, setSavedTick] = useState<string | null>(null);
     function persistLanguageRows(next: ILanguageItem[], tickId?: string) {
       try {
         const sanitized = next
           .map((r) => ({ ...r, name: String(r.name ?? "").trim() }))
           .filter((r) => r.name.length > 0);
-        const updatedSection = { ...section, structuredContent: sanitized as any };
+        const updatedSection = {
+          ...section,
+          structuredContent: sanitized as any,
+        };
         onChange(index, updatedSection as any);
         if (tickId) {
           setSavedTick(tickId);
@@ -1292,25 +1590,29 @@ export default function SectionEditor({
         /* noop */
       }
     }
- 
+
     function handleAddLanguageInline() {
       setLanguageRows((prev) => [...prev, newLanguageRow()]);
     }
- 
+
     function handleRemoveLanguageInline(langId: string) {
       try {
-        const next = languageRows.filter((r) => String(r.id) !== String(langId));
+        const next = languageRows.filter(
+          (r) => String(r.id) !== String(langId),
+        );
         setLanguageRows(next);
         persistLanguageRows(next, langId);
       } catch {
         /* noop */
       }
     }
- 
+
     function handleNameChangeLanguage(idx: number, name: string) {
-      setLanguageRows((prev) => prev.map((r, i) => (i === idx ? { ...r, name } : r)));
+      setLanguageRows((prev) =>
+        prev.map((r, i) => (i === idx ? { ...r, name } : r)),
+      );
     }
- 
+
     function handleNameBlurLanguage(idx: number) {
       const row = languageRows[idx];
       if (!row) return;
@@ -1319,8 +1621,11 @@ export default function SectionEditor({
       if (name.length === 0) return;
       persistLanguageRows(languageRows, String(row.id ?? idx));
     }
- 
-    function handleNameKeyDownLanguage(e: React.KeyboardEvent<HTMLInputElement>, idx: number) {
+
+    function handleNameKeyDownLanguage(
+      e: React.KeyboardEvent<HTMLInputElement>,
+      idx: number,
+    ) {
       if (e.key === "Enter") {
         e.preventDefault();
         const row = languageRows[idx];
@@ -1332,75 +1637,94 @@ export default function SectionEditor({
         (e.target as HTMLInputElement).blur();
       }
     }
- 
+
     function handleLevelChangeLanguage(idx: number, lvl: Level) {
-      // Update local row immediately.
-      setLanguageRows((prev) => {
-        const next = prev.map((r, i) => (i === idx ? { ...r, level: lvl } : r));
-        const row = next[idx];
-        // If the row has a non-empty name we can persist; otherwise try to read the latest
-        // value from the DOM input to avoid losing a freshly-typed name when user clicks level.
-        const currentName = String(row?.name ?? "").trim();
-        if (currentName.length === 0) {
-          try {
-            const input = typeof document !== "undefined" ? (document.getElementById(`language-name-inline-${idx}`) as HTMLInputElement | null) : null;
-            const domVal = input?.value ?? "";
-            if (domVal.trim().length > 0) {
-              next[idx] = { ...next[idx], name: domVal.trim() };
-              // Persist now (deferred slightly to let React settle)
-              setTimeout(() => {
-                try {
-                  persistLanguageRows(next, String(next[idx].id ?? idx));
-                } catch {
-                  /* noop */
-                }
-              }, 30);
-            }
-          } catch {
-            /* noop */
+      const next = languageRows.map((r, i) =>
+        i === idx ? { ...r, level: lvl } : r,
+      );
+      const row = next[idx];
+      setLanguageRows(next);
+
+      // If the row has a non-empty name we can persist; otherwise try to read the latest
+      // value from the DOM input to avoid losing a freshly-typed name when user clicks level.
+      const currentName = String(row?.name ?? "").trim();
+      if (currentName.length === 0) {
+        try {
+          const input =
+            typeof document !== "undefined"
+              ? (document.getElementById(
+                  `language-name-inline-${idx}`,
+                ) as HTMLInputElement | null)
+              : null;
+          const domVal = input?.value ?? "";
+          if (domVal.trim().length > 0) {
+            next[idx] = { ...next[idx], name: domVal.trim() };
+            window.setTimeout(() => {
+              persistLanguageRows(next, String(next[idx].id ?? idx));
+            }, 30);
           }
-          return next;
+        } catch {
+          /* noop */
         }
-        // Row already has a name; persist after a short delay to allow any pending input handlers to finish.
-        setTimeout(() => {
-          try {
-            persistLanguageRows(next, String(row?.id ?? idx));
-          } catch {
-            /* noop */
-          }
-        }, 30);
-        return next;
-      });
+        return;
+      }
+
+      // Row already has a name; persist after a short delay to allow any pending input handlers to finish.
+      window.setTimeout(() => {
+        persistLanguageRows(next, String(row?.id ?? idx));
+      }, 30);
     }
- 
+
     // Collapsed view remove handler (chip remove)
     function handleRemoveLanguage(langId: string): void {
       try {
-        const sc = Array.isArray(section.structuredContent) ? section.structuredContent : [];
+        const sc = Array.isArray(section.structuredContent)
+          ? section.structuredContent
+          : [];
         if (sc.length === 0) return;
         let nextStructured: any[];
         if (typeof sc[0] === "string") {
           const idx = items.findIndex((it) => String(it.id) === String(langId));
           nextStructured = (sc as any[]).filter((_, i) => i !== idx);
         } else {
-          nextStructured = (sc as any[]).filter((it) => String((it as any).id ?? "") !== String(langId));
+          nextStructured = (sc as any[]).filter(
+            (it) => String((it as any).id ?? "") !== String(langId),
+          );
         }
-        const updatedSection = { ...section, structuredContent: nextStructured as any };
+        const updatedSection = {
+          ...section,
+          structuredContent: nextStructured as any,
+        };
         onChange(index, updatedSection as any);
       } catch {
         /* noop */
       }
     }
- 
+
     return (
-      <div className="mb-4 border border-bo rounded-rm section-container">
-        <div className="flex items-center justify-between p-3 [background:var(--sf1)]">
+      <div className="mb-4 section-container section-container--dismissable">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleRemoveSection();
+          }}
+          className="dasti-section-dismiss-pill"
+          aria-label="Delete language section"
+          title="Delete language section"
+        >
+          <X size={13} strokeWidth={2.1} aria-hidden />
+        </button>
+        <div className="section-container-header flex items-center justify-between">
           <h3 className="cv-section-heading">{section.title}</h3>
           <div className="flex items-center gap-1">
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); handleAddLanguageInline(); }}
-              className="dasti-icon-button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleAddLanguageInline();
+              }}
+              className="dasti-icon-button cv-section-edit-trigger"
               aria-label="Add language"
               title="Add language"
             >
@@ -1428,7 +1752,9 @@ export default function SectionEditor({
           <div className="cv-section-preview">
             <div className="flex flex-wrap gap-2">
               {items.length === 0 ? (
-                <span className="cv-preview-empty cv-preview-text cv-preview-text--muted">No languages yet</span>
+                <span className="cv-preview-empty cv-preview-text cv-preview-text--muted">
+                  No languages yet
+                </span>
               ) : (
                 items.map((lng) => (
                   <span
@@ -1436,7 +1762,9 @@ export default function SectionEditor({
                     className="card-group inline-flex items-center gap-2 px-2.5 py-1 text-xs rounded-full [background:var(--sf2)] [color:var(--tm2)]"
                     aria-label={`${lng.name} ${lng.level}`}
                   >
-                    <span className="font-medium [color:var(--ti)]">{lng.name}</span>
+                    <span className="font-medium [color:var(--ti)]">
+                      {lng.name}
+                    </span>
                     <LevelDots
                       value={lng.level}
                       levels={LANGUAGE_DOT_LEVELS}
@@ -1475,7 +1803,7 @@ export default function SectionEditor({
                 Click + to add your first language
               </div>
             ) : (
-              <div className="divide-y divide-[color:var(--bo)]">
+              <div className="divide-y divide-[color:var(--color-border)]">
                 {languageRows.map((row, idx) => (
                   <div
                     key={row.id ?? `row-${idx}`}
@@ -1486,7 +1814,12 @@ export default function SectionEditor({
                     }}
                   >
                     <div className="min-w-0">
-                      <label className="sr-only" htmlFor={`language-name-inline-${idx}`}>Language name</label>
+                      <label
+                        className="sr-only"
+                        htmlFor={`language-name-inline-${idx}`}
+                      >
+                        Language name
+                      </label>
                       <input
                         id={`language-name-inline-${idx}`}
                         className="w-full min-w-0 bg-transparent border-0 text-sm font-medium focus:outline-none"
@@ -1496,14 +1829,14 @@ export default function SectionEditor({
                         }}
                         placeholder="Language name"
                         value={row.name ?? ""}
-                        onChange={(e) => handleNameChangeLanguage(idx, e.target.value)}
+                        onChange={(e) =>
+                          handleNameChangeLanguage(idx, e.target.value)
+                        }
                         onBlur={() => handleNameBlurLanguage(idx)}
                         onKeyDown={(e) => handleNameKeyDownLanguage(e, idx)}
                       />
                     </div>
-                    <div
-                      className="min-w-0"
-                    >
+                    <div className="min-w-0">
                       <LevelDots
                         value={row.level}
                         levels={LANGUAGE_DOT_LEVELS}
@@ -1512,12 +1845,12 @@ export default function SectionEditor({
                         ariaLabel={`Language level for ${row.name || `row ${idx + 1}`}`}
                       />
                     </div>
-                    <div
-                      className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
-                    >
+                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
                       <button
                         type="button"
-                        onClick={() => handleRemoveLanguageInline(String(row.id ?? idx))}
+                        onClick={() =>
+                          handleRemoveLanguageInline(String(row.id ?? idx))
+                        }
                         className="dasti-icon-button dasti-icon-button--compact"
                         aria-label={`Remove ${row.name || "language"}`}
                         title="Remove language"
@@ -1548,6 +1881,7 @@ export default function SectionEditor({
               /* noop */
             }
           }}
+          onDeleteSection={handleRemoveSection}
         />
       </div>
     );
@@ -1555,7 +1889,9 @@ export default function SectionEditor({
 
   // Structured "profile" section: collapsed card + ProfileModal (no Remirror)
   if (sectionType === "profile") {
-    const item = (Array.isArray(structured) && structured.length > 0 ? structured[0] : null) as IProfileItem | null;
+    const item = (
+      Array.isArray(structured) && structured.length > 0 ? structured[0] : null
+    ) as IProfileItem | null;
     const itemId = String(item?.id ?? "");
     const name = String(item?.name ?? "");
     const desiredPosition = String(item?.desiredPosition ?? "");
@@ -1574,22 +1910,41 @@ export default function SectionEditor({
       setProfileModalOpen(true);
     }
 
-    function handleProfilePhotoChange(event: React.ChangeEvent<HTMLInputElement>) {
-      const file = event.target.files?.[0] ?? null;
-      event.target.value = "";
-
+    function handleProfilePhotoFile(file: File) {
       if (!file || !itemId) return;
-
+      if (!file.type.startsWith("image/")) return;
       const reader = new FileReader();
       reader.onload = () => {
-        const nextPhotoUrl = typeof reader.result === "string" ? reader.result : "";
+        const nextPhotoUrl =
+          typeof reader.result === "string" ? reader.result : "";
         if (!nextPhotoUrl) return;
-        updateStructuredItem(String(section.id), itemId, { photoUrl: nextPhotoUrl });
+        updateStructuredItem(String(section.id), itemId, {
+          photoUrl: nextPhotoUrl,
+        });
       };
       reader.readAsDataURL(file);
     }
 
-    function Chip({ icon, text, href, ariaLabel }: { icon: React.ReactNode; text: string; href?: string; ariaLabel: string }) {
+    function handleProfilePhotoChange(
+      event: React.ChangeEvent<HTMLInputElement>,
+    ) {
+      const file = event.target.files?.[0] ?? null;
+      event.target.value = "";
+      if (!file) return;
+      handleProfilePhotoFile(file);
+    }
+
+    function Chip({
+      icon,
+      text,
+      href,
+      ariaLabel,
+    }: {
+      icon: React.ReactNode;
+      text: string;
+      href?: string;
+      ariaLabel: string;
+    }) {
       if (!text) return null;
       const content = (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full [background:var(--sf2)] [color:var(--tm2)]">
@@ -1614,8 +1969,8 @@ export default function SectionEditor({
     }
 
     return (
-      <div className="mb-4 border border-bo rounded-rm section-container">
-        <div className="flex items-center justify-between p-3 [background:var(--sf1)]">
+      <div className="mb-4 border [border-color:var(--color-border)] [border-radius:var(--radius-card)] section-container">
+        <div className="section-container-header flex items-center justify-between">
           <h3 className="cv-section-heading">{section.title}</h3>
           <div className="flex items-center gap-2">
             <button
@@ -1624,11 +1979,11 @@ export default function SectionEditor({
                 e.stopPropagation();
                 openProfileModal();
               }}
-              className="dasti-icon-button"
+              className="dasti-icon-button cv-section-edit-trigger"
               aria-label="Edit profile"
               title="Edit profile"
             >
-              <ScrollText className="w-4 h-4" strokeWidth={1.5} aria-hidden />
+              <Pencil className="w-4 h-4" strokeWidth={1.5} aria-hidden />
             </button>
             {typeof onCollapseChange === "function" && (
               <button
@@ -1650,20 +2005,28 @@ export default function SectionEditor({
 
         {!collapsed && (
           <div
-            className="p-4 cursor-pointer"
+            className="cv-section-body cursor-pointer"
             role="button"
             tabIndex={0}
             aria-label="Edit profile"
             onClick={(e) => {
               const target = e.target as HTMLElement | null;
-              if (target && target !== e.currentTarget && target.closest("a, button, input, textarea, select")) {
+              if (
+                target &&
+                target !== e.currentTarget &&
+                target.closest("a, button, input, textarea, select")
+              ) {
                 return;
               }
               openProfileModal();
             }}
             onKeyDown={(e) => {
               const target = e.target as HTMLElement | null;
-              if (target && target !== e.currentTarget && target.closest("a, button, input, textarea, select")) {
+              if (
+                target &&
+                target !== e.currentTarget &&
+                target.closest("a, button, input, textarea, select")
+              ) {
                 return;
               }
               if (e.key === "Enter" || e.key === " ") {
@@ -1689,37 +2052,135 @@ export default function SectionEditor({
                     e.stopPropagation();
                     openProfilePhotoPicker();
                   }}
-                  className="relative flex items-center justify-center overflow-hidden text-sm font-semibold border rounded-rm focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
+                  onDragEnter={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setIsProfilePhotoDragActive(true);
+                  }}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    event.dataTransfer.dropEffect = "copy";
+                    setIsProfilePhotoDragActive(true);
+                  }}
+                  onDragLeave={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (
+                      !event.currentTarget.contains(
+                        event.relatedTarget as Node | null,
+                      )
+                    ) {
+                      setIsProfilePhotoDragActive(false);
+                    }
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setIsProfilePhotoDragActive(false);
+                    const file = event.dataTransfer.files?.[0] ?? null;
+                    if (file) {
+                      handleProfilePhotoFile(file);
+                    }
+                  }}
+                  className={`cv-photo-upload-trigger${isProfilePhotoDragActive ? " cv-photo-upload-trigger--drag" : ""} relative flex items-center justify-center overflow-hidden text-sm font-semibold border [border-radius:var(--radius-card)] focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]`}
                   style={{
                     width: "var(--s8)",
                     height: "calc(var(--s8) + var(--s4))",
-                    background: "var(--sf2)",
-                    borderColor: "var(--bo)",
-                    color: "var(--ti)",
-                    cursor: "pointer",
                   }}
-                  aria-label={photoUrl ? "Change profile photo" : "Upload profile photo"}
-                  title={photoUrl ? "Change profile photo" : "Upload profile photo"}
+                  aria-label={
+                    photoUrl ? "Change profile photo" : "Upload profile photo"
+                  }
+                  title={
+                    photoUrl ? "Change profile photo" : "Upload profile photo"
+                  }
                 >
                   {photoUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={photoUrl} alt={name ? `${name} portrait` : "Profile portrait"} className="object-cover w-full h-full" />
+                    <img
+                      src={photoUrl}
+                      alt={name ? `${name} portrait` : "Profile portrait"}
+                      className="object-cover w-full h-full"
+                    />
                   ) : (
-                    <UserRound aria-hidden strokeWidth={1.75} className="[color:var(--tm2)]" style={{ width: "var(--s7)", height: "var(--s7)" }} />
+                    <span className="cv-photo-upload-trigger__empty">
+                      <User
+                        aria-hidden
+                        strokeWidth={1.75}
+                        className="cv-photo-upload-trigger__avatar"
+                        style={{ width: "var(--s7)", height: "var(--s7)" }}
+                      />
+                    </span>
                   )}
+                  <span className="cv-photo-upload-trigger__badge">
+                    <span>{photoUrl ? "Replace" : "Drop photo"}</span>
+                  </span>
                 </button>
               </div>
               <div className="flex-1 min-w-0">
                 <div className="cv-preview-stack">
-                  <div className="cv-profile-name cv-preview-text--truncate">{name || "Your name"}</div>
-                  <div className="cv-profile-role cv-preview-text--truncate">{desiredPosition || "Desired position"}</div>
+                  <div className="cv-profile-name cv-preview-text--truncate">
+                    {name || "Your name"}
+                  </div>
+                  <div className="cv-profile-role cv-preview-text--truncate">
+                    {desiredPosition || "Desired position"}
+                  </div>
                 </div>
                 <div className="flex flex-wrap gap-2 mt-3">
-                  <Chip icon={<span aria-hidden className="inline-block w-2 h-2 rounded-full [background:var(--ac)]" />} text={email} href={email ? `mailto:${email}` : undefined} ariaLabel="Email" />
-                  <Chip icon={<span aria-hidden className="inline-block w-2 h-2 rounded-full [background:var(--am)]" />} text={phone} href={phone ? `tel:${phone}` : undefined} ariaLabel="Phone" />
-                  <Chip icon={<span aria-hidden className="inline-block w-2 h-2 rounded-full [background:var(--ac)]" />} text={linkedin} href={linkedin || undefined} ariaLabel="LinkedIn" />
-                  <Chip icon={<span aria-hidden className="inline-block w-2 h-2 rounded-full [background:var(--ok)]" />} text={website} href={website || undefined} ariaLabel="Website" />
-                  <Chip icon={<span aria-hidden className="inline-block w-2 h-2 rounded-full [background:var(--tm2)]" />} text={location} ariaLabel="Location" />
+                  <Chip
+                    icon={
+                      <span
+                        aria-hidden
+                        className="inline-block w-2 h-2 rounded-full [background:var(--ac)]"
+                      />
+                    }
+                    text={email}
+                    href={email ? `mailto:${email}` : undefined}
+                    ariaLabel="Email"
+                  />
+                  <Chip
+                    icon={
+                      <span
+                        aria-hidden
+                        className="inline-block w-2 h-2 rounded-full [background:var(--am)]"
+                      />
+                    }
+                    text={phone}
+                    href={phone ? `tel:${phone}` : undefined}
+                    ariaLabel="Phone"
+                  />
+                  <Chip
+                    icon={
+                      <span
+                        aria-hidden
+                        className="inline-block w-2 h-2 rounded-full [background:var(--ac)]"
+                      />
+                    }
+                    text={linkedin}
+                    href={linkedin || undefined}
+                    ariaLabel="LinkedIn"
+                  />
+                  <Chip
+                    icon={
+                      <span
+                        aria-hidden
+                        className="inline-block w-2 h-2 rounded-full [background:var(--ok)]"
+                      />
+                    }
+                    text={website}
+                    href={website || undefined}
+                    ariaLabel="Website"
+                  />
+                  <Chip
+                    icon={
+                      <span
+                        aria-hidden
+                        className="inline-block w-2 h-2 rounded-full [background:var(--tm2)]"
+                      />
+                    }
+                    text={location}
+                    ariaLabel="Location"
+                  />
                 </div>
               </div>
             </div>
@@ -1736,7 +2197,10 @@ export default function SectionEditor({
     );
   }
 
-  if (Array.isArray(structured) && (sectionType === "experience" || sectionType === "education")) {
+  if (
+    Array.isArray(structured) &&
+    (sectionType === "experience" || sectionType === "education")
+  ) {
     // Use block-based rendering (compact cards + inspector) for typed structured sections.
     // This delegates detailed editing to BlockRenderer + SelectedBlockInspector which rely on
     // blocks with attributes.linkedStructuredId.
@@ -1756,15 +2220,20 @@ export default function SectionEditor({
         } catch {
           /* noop */
         }
-        const newEntry = sectionType === "experience"
-          ? makeExperienceItem()
-          : makeEducationItem();
- 
-        const nextStructured = Array.isArray(section.structuredContent) ? [...(section.structuredContent as any), newEntry] : [newEntry];
+        const newEntry =
+          sectionType === "experience"
+            ? makeExperienceItem()
+            : makeEducationItem();
+
+        const nextStructured = Array.isArray(section.structuredContent)
+          ? [...(section.structuredContent as any), newEntry]
+          : [newEntry];
         const titleBase =
           sectionType === "experience"
-            ? String((newEntry as IExperienceItem).company ?? "") || `Experience`
-            : String((newEntry as IEducationItem).institution ?? "") || `Education`;
+            ? String((newEntry as IExperienceItem).company ?? "") ||
+              `Experience`
+            : String((newEntry as IEducationItem).institution ?? "") ||
+              `Education`;
         const newBlock = {
           id: uuidv4(),
           title: titleBase,
@@ -1772,9 +2241,16 @@ export default function SectionEditor({
           content: ensureRemirrorDoc(undefined as any),
           attributes: { linkedStructuredId: (newEntry as any).id },
         };
- 
-        const nextBlocks = [...(Array.isArray(section.blocks) ? section.blocks : []), newBlock];
-        const updatedSection = { ...section, structuredContent: nextStructured as any, blocks: nextBlocks as any };
+
+        const nextBlocks = [
+          ...(Array.isArray(section.blocks) ? section.blocks : []),
+          newBlock,
+        ];
+        const updatedSection = {
+          ...section,
+          structuredContent: nextStructured as any,
+          blocks: nextBlocks as any,
+        };
         onChange(index, updatedSection as any);
       } catch {
         /* noop */
@@ -1800,29 +2276,45 @@ export default function SectionEditor({
         } catch {
           /* noop */
         }
- 
+
         if (sectionType === "achievements") {
           // structuredContent is string[]
           const nextStructured = Array.isArray(section.structuredContent)
             ? (section.structuredContent as any[]).filter((_, i) => i !== idx)
             : [];
           // Remove the corresponding representative block at the same index if present
-          const nextBlocks = (Array.isArray(section.blocks) ? section.blocks : []).filter((_, i) => i !== idx);
-          const updatedSection = { ...section, structuredContent: nextStructured as any, blocks: nextBlocks as any };
+          const nextBlocks = (
+            Array.isArray(section.blocks) ? section.blocks : []
+          ).filter((_, i) => i !== idx);
+          const updatedSection = {
+            ...section,
+            structuredContent: nextStructured as any,
+            blocks: nextBlocks as any,
+          };
           onChange(index, updatedSection as any);
           return;
         }
- 
+
         // For object-structured entries (experience/education), item is expected to be an object with `id`
         const itemId = String(item?.id ?? "");
         const nextStructured = Array.isArray(section.structuredContent)
-          ? (section.structuredContent as any[]).filter((it) => String(it.id) !== itemId)
+          ? (section.structuredContent as any[]).filter(
+              (it) => String(it.id) !== itemId,
+            )
           : [];
-        const nextBlocks = (Array.isArray(section.blocks) ? section.blocks : []).filter((b: any) => {
-          const linked = (b as any).attributes?.linkedStructuredId ?? (b as any).attributes?.linkedstructuredid;
+        const nextBlocks = (
+          Array.isArray(section.blocks) ? section.blocks : []
+        ).filter((b: any) => {
+          const linked =
+            (b as any).attributes?.linkedStructuredId ??
+            (b as any).attributes?.linkedstructuredid;
           return String(linked) !== itemId;
         });
-        const updatedSection = { ...section, structuredContent: nextStructured as any, blocks: nextBlocks as any };
+        const updatedSection = {
+          ...section,
+          structuredContent: nextStructured as any,
+          blocks: nextBlocks as any,
+        };
         onChange(index, updatedSection as any);
       } catch {
         /* noop */
@@ -1830,20 +2322,29 @@ export default function SectionEditor({
     }
 
     const structuredSection =
-      structuredPreviewOverride && String(structuredPreviewOverride.id) === String(section.id)
+      structuredPreviewOverride &&
+      String(structuredPreviewOverride.id) === String(section.id)
         ? structuredPreviewOverride
         : section;
     const usingStructuredPreviewOverride =
-      Boolean(structuredPreviewOverride) && String(structuredSection.id) === String(section.id);
+      Boolean(structuredPreviewOverride) &&
+      String(structuredSection.id) === String(section.id);
 
     const structuredList = Array.isArray(structuredSection.structuredContent)
       ? (structuredSection.structuredContent as any[])
       : [];
-    const guard = sectionType === "experience" ? isExperienceRenderable : isEducationRenderable;
+    const guard =
+      sectionType === "experience"
+        ? isExperienceRenderable
+        : isEducationRenderable;
     const renderableStructured = structuredList.filter((item) => guard(item));
     const hasRenderableStructured = renderableStructured.length > 0;
-    const hasBlocks = Array.isArray(structuredSection.blocks) && structuredSection.blocks.length > 0;
-    const collapsedListExpanded = Boolean(expandedStructuredSectionIds[String(section.id)]);
+    const hasBlocks =
+      Array.isArray(structuredSection.blocks) &&
+      structuredSection.blocks.length > 0;
+    const collapsedListExpanded = Boolean(
+      expandedStructuredSectionIds[String(section.id)],
+    );
     const sectionCanToggleEntries = hasBlocks
       ? structuredSection.blocks.length > 3
       : renderableStructured.length > 3;
@@ -1867,8 +2368,13 @@ export default function SectionEditor({
 
     function hasActiveSelection() {
       try {
-        const selection = typeof window !== "undefined" ? window.getSelection() : null;
-        return Boolean(selection && typeof selection.toString === "function" && selection.toString().length > 0);
+        const selection =
+          typeof window !== "undefined" ? window.getSelection() : null;
+        return Boolean(
+          selection &&
+            typeof selection.toString === "function" &&
+            selection.toString().length > 0,
+        );
       } catch {
         return false;
       }
@@ -1878,7 +2384,9 @@ export default function SectionEditor({
       try {
         if (currentCv && typeof reorderSections === "function") {
           const nextSections = (currentCv.sections ?? []).map((s) =>
-            String(s.id) === String(updatedSection.id) ? (updatedSection as CvSection) : s
+            String(s.id) === String(updatedSection.id)
+              ? (updatedSection as CvSection)
+              : s,
           );
           reorderSections(nextSections as CvSection[]);
           return;
@@ -1889,11 +2397,18 @@ export default function SectionEditor({
       onChange(index, updatedSection as any);
     }
 
-    const renderStructuredPreview = (rawItem: any, idx: number, variant: "compact" | "detailed") => {
+    const renderStructuredPreview = (
+      rawItem: any,
+      idx: number,
+      variant: "compact" | "detailed",
+    ) => {
       const structuredId = String(rawItem?.id ?? idx);
       const isExp = sectionType === "experience";
-      const previewExpanded = variant === "detailed" || Boolean(expandedStructuredPreviewIds[structuredId]);
-      const trim = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+      const previewExpanded =
+        variant === "detailed" ||
+        Boolean(expandedStructuredPreviewIds[structuredId]);
+      const trim = (value: unknown) =>
+        typeof value === "string" ? value.trim() : "";
       const dates = formatRangeFromItem(rawItem as any);
 
       if (isExp) {
@@ -1901,16 +2416,20 @@ export default function SectionEditor({
         const position = trim(rawItem?.position);
         const location = trim(rawItem?.location);
         const title = position || company || "Experience entry";
-        const subtitle = [company, location].filter(Boolean).join(" • ") || undefined;
+        const subtitle =
+          [company, location].filter(Boolean).join(" • ") || undefined;
 
         const responsibilitiesText =
           typeof rawItem?.responsibilities === "string"
             ? rawItem.responsibilities
-            : rawItem?.responsibilities && typeof rawItem.responsibilities === "object"
-            ? docToPlainText(rawItem.responsibilities as any)
-            : undefined;
+            : rawItem?.responsibilities &&
+                typeof rawItem.responsibilities === "object"
+              ? docToPlainText(rawItem.responsibilities as any)
+              : undefined;
 
-        const responsibilityBullets = Array.isArray(rawItem?.responsibilityBullets)
+        const responsibilityBullets = Array.isArray(
+          rawItem?.responsibilityBullets,
+        )
           ? (rawItem.responsibilityBullets as unknown[])
               .map((value) => (typeof value === "string" ? value.trim() : ""))
               .filter(Boolean)
@@ -1922,24 +2441,33 @@ export default function SectionEditor({
                 typeof value === "string"
                   ? value.trim()
                   : typeof (value as any)?.text === "string"
-                  ? (value as any).text.trim()
-                  : ""
+                    ? (value as any).text.trim()
+                    : "",
               )
               .filter(Boolean)
           : [];
 
-        const bulletSource = responsibilityBullets.length > 0 ? responsibilityBullets : achievements;
-        const bulletLimit = variant === "compact" && !previewExpanded ? 3 : bulletSource.length;
+        const bulletSource =
+          responsibilityBullets.length > 0
+            ? responsibilityBullets
+            : achievements;
+        const bulletLimit =
+          variant === "compact" && !previewExpanded ? 3 : bulletSource.length;
         const bulletList = bulletSource.slice(0, bulletLimit);
-        const canToggleBullets = variant === "compact" && bulletSource.length > 3;
+        const canToggleBullets =
+          variant === "compact" && bulletSource.length > 3;
 
         return (
           <div key={structuredId} className="py-3">
             <div className="cv-entry-summary">
               <div className="cv-entry-summary__main">
-                <p className="cv-entry-title cv-entry-title--truncate">{title}</p>
+                <p className="cv-entry-title cv-entry-title--truncate">
+                  {title}
+                </p>
                 {subtitle ? (
-                  <p className="cv-entry-subtitle cv-entry-subtitle--truncate">{subtitle}</p>
+                  <p className="cv-entry-subtitle cv-entry-subtitle--truncate">
+                    {subtitle}
+                  </p>
                 ) : null}
               </div>
               {dates ? <p className="cv-entry-date">{dates}</p> : null}
@@ -1947,9 +2475,7 @@ export default function SectionEditor({
             {bulletList.length > 0 ? (
               <ul className="cv-entry-bullets">
                 {bulletList.map((line, bulletIdx) => (
-                  <li key={`${structuredId}-bullet-${bulletIdx}`}>
-                    {line}
-                  </li>
+                  <li key={`${structuredId}-bullet-${bulletIdx}`}>{line}</li>
                 ))}
               </ul>
             ) : null}
@@ -1965,10 +2491,16 @@ export default function SectionEditor({
                     }));
                   }}
                   className="dasti-icon-button dasti-icon-button--compact"
-                  aria-label={previewExpanded ? "Show fewer details" : "Show more details"}
+                  aria-label={
+                    previewExpanded ? "Show fewer details" : "Show more details"
+                  }
                   title={previewExpanded ? "Show less" : "Show more"}
                 >
-                  {previewExpanded ? <ChevronDown className="w-3.5 h-3.5" aria-hidden /> : <ChevronUp className="w-3.5 h-3.5" aria-hidden />}
+                  {previewExpanded ? (
+                    <ChevronDown className="w-3.5 h-3.5" aria-hidden />
+                  ) : (
+                    <ChevronUp className="w-3.5 h-3.5" aria-hidden />
+                  )}
                 </button>
               </div>
             ) : null}
@@ -1984,15 +2516,16 @@ export default function SectionEditor({
         typeof descriptionRaw === "string"
           ? descriptionRaw.trim()
           : descriptionRaw && typeof descriptionRaw === "object"
-          ? docToPlainText(descriptionRaw as any).trim()
-          : "";
+            ? docToPlainText(descriptionRaw as any).trim()
+            : "";
       const title = degree || institution || fieldOfStudy || "Education entry";
       const subtitle = [institution, fieldOfStudy].filter(Boolean).join(" • ");
       const truncatedDescription =
         variant === "compact" && !previewExpanded && description.length > 160
           ? `${description.slice(0, 157).trimEnd()}…`
           : description;
-      const canToggleDescription = variant === "compact" && description.length > 160;
+      const canToggleDescription =
+        variant === "compact" && description.length > 160;
 
       return (
         <div key={structuredId} className="py-3">
@@ -2000,7 +2533,9 @@ export default function SectionEditor({
             <div className="cv-entry-summary__main">
               <p className="cv-entry-title cv-entry-title--truncate">{title}</p>
               {subtitle ? (
-                <p className="cv-entry-subtitle cv-entry-subtitle--truncate">{subtitle}</p>
+                <p className="cv-entry-subtitle cv-entry-subtitle--truncate">
+                  {subtitle}
+                </p>
               ) : null}
             </div>
             {dates ? <p className="cv-entry-date">{dates}</p> : null}
@@ -2020,13 +2555,21 @@ export default function SectionEditor({
                   }));
                 }}
                 className="dasti-icon-button dasti-icon-button--compact"
-                aria-label={previewExpanded ? "Show fewer details" : "Show more details"}
+                aria-label={
+                  previewExpanded ? "Show fewer details" : "Show more details"
+                }
                 title={previewExpanded ? "Show less" : "Show more"}
               >
-                {previewExpanded ? <ChevronDown className="w-3.5 h-3.5" aria-hidden /> : <ChevronUp className="w-3.5 h-3.5" aria-hidden />}
+                {previewExpanded ? (
+                  <ChevronDown className="w-3.5 h-3.5" aria-hidden />
+                ) : (
+                  <ChevronUp className="w-3.5 h-3.5" aria-hidden />
+                )}
               </button>
             </div>
-          ) : !truncatedDescription && descriptionRaw && typeof descriptionRaw === "object" ? (
+          ) : !truncatedDescription &&
+            descriptionRaw &&
+            typeof descriptionRaw === "object" ? (
             <p className="cv-entry-note">Detailed description available.</p>
           ) : null}
         </div>
@@ -2034,8 +2577,8 @@ export default function SectionEditor({
     };
 
     return (
-      <div className="mb-4 border border-bo rounded-rm section-container">
-        <div className="flex items-center justify-between p-3 [background:var(--sf1)]">
+      <div className="mb-4 border [border-color:var(--color-border)] [border-radius:var(--radius-card)] section-container">
+        <div className="section-container-header flex items-center justify-between">
           <h3 className="cv-section-heading">{section.title}</h3>
           <div className="dasti-icon-cluster dasti-icon-cluster--tight">
             {isV1Active ? (
@@ -2045,11 +2588,11 @@ export default function SectionEditor({
                   e.stopPropagation();
                   openStructuredModal();
                 }}
-                className="dasti-icon-button"
+                className="dasti-icon-button cv-section-edit-trigger"
                 aria-label={`Edit ${sectionType}`}
                 title={`Edit ${sectionType}`}
               >
-                <ScrollText className="w-4 h-4" strokeWidth={1.5} aria-hidden />
+                <Pencil className="w-4 h-4" strokeWidth={1.5} aria-hidden />
               </button>
             ) : null}
             {typeof onCollapseChange === "function" && (
@@ -2069,8 +2612,6 @@ export default function SectionEditor({
             )}
           </div>
         </div>
-        
-        
 
         {collapsed && (
           <div
@@ -2094,7 +2635,9 @@ export default function SectionEditor({
             {hasRenderableStructured ? (
               <>
                 <div className="cv-entry-stack">
-                  {collapsedVisibleStructured.map((it, i) => renderStructuredPreview(it, i, "compact"))}
+                  {collapsedVisibleStructured.map((it, i) =>
+                    renderStructuredPreview(it, i, "compact"),
+                  )}
                 </div>
                 {sectionCanToggleEntries ? (
                   <div className="cv-disclosure-row cv-disclosure-row--section">
@@ -2108,17 +2651,27 @@ export default function SectionEditor({
                         }));
                       }}
                       className="dasti-icon-button dasti-icon-button--compact"
-                      aria-label={collapsedListExpanded ? `Show fewer ${sectionType} entries` : `Show more ${sectionType} entries`}
+                      aria-label={
+                        collapsedListExpanded
+                          ? `Show fewer ${sectionType} entries`
+                          : `Show more ${sectionType} entries`
+                      }
                       title={collapsedListExpanded ? "Show less" : "Show more"}
                     >
-                      {collapsedListExpanded ? <ChevronDown className="w-3.5 h-3.5" aria-hidden /> : <ChevronUp className="w-3.5 h-3.5" aria-hidden />}
+                      {collapsedListExpanded ? (
+                        <ChevronDown className="w-3.5 h-3.5" aria-hidden />
+                      ) : (
+                        <ChevronUp className="w-3.5 h-3.5" aria-hidden />
+                      )}
                     </button>
                   </div>
                 ) : null}
               </>
             ) : hasBlocks ? (
               <>
-                <p className="cv-preview-empty cv-preview-text cv-preview-text--muted">Entries stored in rich text. Expand to view.</p>
+                <p className="cv-preview-empty cv-preview-text cv-preview-text--muted">
+                  Entries stored in rich text. Expand to view.
+                </p>
                 {sectionCanToggleEntries ? (
                   <div className="cv-disclosure-row cv-disclosure-row--section">
                     <button
@@ -2131,23 +2684,33 @@ export default function SectionEditor({
                         }));
                       }}
                       className="dasti-icon-button dasti-icon-button--compact"
-                      aria-label={collapsedListExpanded ? `Show fewer ${sectionType} entries` : `Show more ${sectionType} entries`}
+                      aria-label={
+                        collapsedListExpanded
+                          ? `Show fewer ${sectionType} entries`
+                          : `Show more ${sectionType} entries`
+                      }
                       title={collapsedListExpanded ? "Show less" : "Show more"}
                     >
-                      {collapsedListExpanded ? <ChevronDown className="w-3.5 h-3.5" aria-hidden /> : <ChevronUp className="w-3.5 h-3.5" aria-hidden />}
+                      {collapsedListExpanded ? (
+                        <ChevronDown className="w-3.5 h-3.5" aria-hidden />
+                      ) : (
+                        <ChevronUp className="w-3.5 h-3.5" aria-hidden />
+                      )}
                     </button>
                   </div>
                 ) : null}
               </>
             ) : (
-              <p className="cv-preview-empty cv-preview-text cv-preview-text--muted">No entries</p>
+              <p className="cv-preview-empty cv-preview-text cv-preview-text--muted">
+                No entries
+              </p>
             )}
           </div>
         )}
 
         {!collapsed && (
           <div
-            className="p-4 space-y-4 cursor-pointer"
+            className="cv-section-body cv-section-body--stack cursor-pointer"
             role="button"
             tabIndex={0}
             aria-label={`Edit ${sectionType}`}
@@ -2174,9 +2737,9 @@ export default function SectionEditor({
                         block={block as any}
                         onDelete={() => handleDeleteBlock(String(block.id))}
                         disableChevron={true}
-                    />
-                  </div>
-                ))}
+                      />
+                    </div>
+                  ))}
                 </div>
                 {sectionCanToggleEntries ? (
                   <div className="cv-disclosure-row cv-disclosure-row--section">
@@ -2190,10 +2753,18 @@ export default function SectionEditor({
                         }));
                       }}
                       className="dasti-icon-button dasti-icon-button--compact"
-                      aria-label={collapsedListExpanded ? `Show fewer ${sectionType} entries` : `Show more ${sectionType} entries`}
+                      aria-label={
+                        collapsedListExpanded
+                          ? `Show fewer ${sectionType} entries`
+                          : `Show more ${sectionType} entries`
+                      }
                       title={collapsedListExpanded ? "Show less" : "Show more"}
                     >
-                      {collapsedListExpanded ? <ChevronDown className="w-3.5 h-3.5" aria-hidden /> : <ChevronUp className="w-3.5 h-3.5" aria-hidden />}
+                      {collapsedListExpanded ? (
+                        <ChevronDown className="w-3.5 h-3.5" aria-hidden />
+                      ) : (
+                        <ChevronUp className="w-3.5 h-3.5" aria-hidden />
+                      )}
                     </button>
                   </div>
                 ) : null}
@@ -2201,7 +2772,9 @@ export default function SectionEditor({
             ) : hasRenderableStructured ? (
               <>
                 <div className="cv-entry-stack">
-                  {collapsedVisibleStructured.map((it, i) => renderStructuredPreview(it, i, "detailed"))}
+                  {collapsedVisibleStructured.map((it, i) =>
+                    renderStructuredPreview(it, i, "detailed"),
+                  )}
                 </div>
                 {sectionCanToggleEntries ? (
                   <div className="cv-disclosure-row cv-disclosure-row--section">
@@ -2215,16 +2788,26 @@ export default function SectionEditor({
                         }));
                       }}
                       className="dasti-icon-button dasti-icon-button--compact"
-                      aria-label={collapsedListExpanded ? `Show fewer ${sectionType} entries` : `Show more ${sectionType} entries`}
+                      aria-label={
+                        collapsedListExpanded
+                          ? `Show fewer ${sectionType} entries`
+                          : `Show more ${sectionType} entries`
+                      }
                       title={collapsedListExpanded ? "Show less" : "Show more"}
                     >
-                      {collapsedListExpanded ? <ChevronDown className="w-3.5 h-3.5" aria-hidden /> : <ChevronUp className="w-3.5 h-3.5" aria-hidden />}
+                      {collapsedListExpanded ? (
+                        <ChevronDown className="w-3.5 h-3.5" aria-hidden />
+                      ) : (
+                        <ChevronUp className="w-3.5 h-3.5" aria-hidden />
+                      )}
                     </button>
                   </div>
                 ) : null}
               </>
             ) : (
-              <p className="p-3 cv-preview-empty cv-preview-text cv-preview-text--muted">No entries</p>
+              <p className="p-3 cv-preview-empty cv-preview-text cv-preview-text--muted">
+                No entries
+              </p>
             )}
           </div>
         )}
@@ -2233,29 +2816,41 @@ export default function SectionEditor({
           <ExperienceModal
             open={isExperienceModalOpen}
             onClose={() => setExperienceModalOpen(false)}
-            items={(Array.isArray(structuredSection.structuredContent) ? (structuredSection.structuredContent as any) : []) as IExperienceItem[]}
+            items={
+              (Array.isArray(structuredSection.structuredContent)
+                ? (structuredSection.structuredContent as any)
+                : []) as IExperienceItem[]
+            }
             onSave={(next) => {
               try {
-                const existingBlocks = Array.isArray(structuredSection.blocks) ? structuredSection.blocks : [];
-                const blockByLinkedId = new Map(
-                  existingBlocks
-                    .map((b: any) => [
-                      String((b as any)?.attributes?.linkedStructuredId ?? (b as any)?.attributes?.linkedstructuredid ?? ""),
-                      b,
-                    ])
-                    .filter(([id]) => id.length > 0)
-                );
+                const existingBlocks = Array.isArray(structuredSection.blocks)
+                  ? structuredSection.blocks
+                  : [];
+                const linkedEntries = existingBlocks
+                  .map((b: any): [string, any] => [
+                    String(
+                      (b as any)?.attributes?.linkedStructuredId ??
+                        (b as any)?.attributes?.linkedstructuredid ??
+                        "",
+                    ),
+                    b,
+                  ])
+                  .filter(([id]) => id.length > 0);
+                const blockByLinkedId = new Map<string, any>(linkedEntries);
 
                 const syncedBlocks = next.map((it) => {
                   const linkedId = String(it.id);
                   const existing = blockByLinkedId.get(linkedId);
-                  const title = String(it.position || it.company || "Experience");
+                  const title = String(
+                    it.position || it.company || "Experience",
+                  );
                   const content =
-                    typeof it.responsibilities !== "undefined" && it.responsibilities !== null
+                    typeof it.responsibilities !== "undefined" &&
+                    it.responsibilities !== null
                       ? ensureRemirrorDoc(it.responsibilities as any)
                       : existing
-                      ? ensureRemirrorDoc((existing as any).content as any)
-                      : ensureRemirrorDoc(undefined as any);
+                        ? ensureRemirrorDoc((existing as any).content as any)
+                        : ensureRemirrorDoc(undefined as any);
 
                   return {
                     ...(existing ?? {}),
@@ -2279,7 +2874,9 @@ export default function SectionEditor({
                 setStructuredPreviewOverride(updatedSection);
                 commitStructuredSection(updatedSection);
                 setExperienceModalOpen(false);
-              } catch { /* noop */ }
+              } catch {
+                /* noop */
+              }
             }}
           />
         ) : null}
@@ -2287,29 +2884,41 @@ export default function SectionEditor({
           <EducationModal
             open={isEducationModalOpen}
             onClose={() => setEducationModalOpen(false)}
-            items={(Array.isArray(structuredSection.structuredContent) ? (structuredSection.structuredContent as any) : []) as IEducationItem[]}
+            items={
+              (Array.isArray(structuredSection.structuredContent)
+                ? (structuredSection.structuredContent as any)
+                : []) as IEducationItem[]
+            }
             onSave={(next) => {
               try {
-                const existingBlocks = Array.isArray(structuredSection.blocks) ? structuredSection.blocks : [];
-                const blockByLinkedId = new Map(
-                  existingBlocks
-                    .map((b: any) => [
-                      String((b as any)?.attributes?.linkedStructuredId ?? (b as any)?.attributes?.linkedstructuredid ?? ""),
-                      b,
-                    ])
-                    .filter(([id]) => id.length > 0)
-                );
+                const existingBlocks = Array.isArray(structuredSection.blocks)
+                  ? structuredSection.blocks
+                  : [];
+                const linkedEntries = existingBlocks
+                  .map((b: any): [string, any] => [
+                    String(
+                      (b as any)?.attributes?.linkedStructuredId ??
+                        (b as any)?.attributes?.linkedstructuredid ??
+                        "",
+                    ),
+                    b,
+                  ])
+                  .filter(([id]) => id.length > 0);
+                const blockByLinkedId = new Map<string, any>(linkedEntries);
 
                 const syncedBlocks = next.map((it) => {
                   const linkedId = String(it.id);
                   const existing = blockByLinkedId.get(linkedId);
-                  const title = String(it.institution || it.degree || "Education");
+                  const title = String(
+                    it.institution || it.degree || "Education",
+                  );
                   const content =
-                    typeof it.description !== "undefined" && it.description !== null
+                    typeof it.description !== "undefined" &&
+                    it.description !== null
                       ? ensureRemirrorDoc(it.description as any)
                       : existing
-                      ? ensureRemirrorDoc((existing as any).content as any)
-                      : ensureRemirrorDoc(undefined as any);
+                        ? ensureRemirrorDoc((existing as any).content as any)
+                        : ensureRemirrorDoc(undefined as any);
 
                   return {
                     ...(existing ?? {}),
@@ -2333,7 +2942,9 @@ export default function SectionEditor({
                 setStructuredPreviewOverride(updatedSection);
                 commitStructuredSection(updatedSection);
                 setEducationModalOpen(false);
-              } catch { /* noop */ }
+              } catch {
+                /* noop */
+              }
             }}
           />
         ) : null}
@@ -2342,8 +2953,8 @@ export default function SectionEditor({
   }
 
   return (
-    <div className="mb-4 border border-bo rounded-rm section-container">
-      <div className="flex items-center justify-between p-3 [background:var(--sf1)]">
+    <div className="mb-4 border [border-color:var(--color-border)] [border-radius:var(--radius-card)] section-container">
+      <div className="section-container-header flex items-center justify-between">
         <label htmlFor={titleInputId} className="sr-only">
           Section title
         </label>
@@ -2359,7 +2970,8 @@ export default function SectionEditor({
           onBlur={() => {
             try {
               // Emit final title to parent
-              if (localTitle !== section.title) onTitleChange?.(String(section.id), localTitle);
+              if (localTitle !== section.title)
+                onTitleChange?.(String(section.id), localTitle);
             } catch {
               /* noop */
             }
@@ -2374,94 +2986,111 @@ export default function SectionEditor({
           className="cv-section-title-input"
           placeholder="Section Title"
         />
-       {typeof onCollapseChange === "function" && (
-         <button
-           type="button"
-           onClick={(e) => {
-             e.stopPropagation();
-             if (typeof window !== "undefined" && (window as any).__CV_EDITOR_DEBUG__ === true) {
-               // eslint-disable-next-line no-console
-               console.log("[SectionEditor] onCollapseChange clicked");
-             }
-             try {
-               // Protect against racing with the local title buffer.
-               // Use a brief flushGuard to prevent the syncing effect from overwriting the buffer.
-               flushGuardRef.current = true;
-               // Flush nested EntryRemirror editors first to ensure their buffered content is persisted.
-               try {
-                 remirrorRefs.current.forEach((r: { flush?: () => void } | null) => {
-                   try {
-                     r?.flush?.();
-                   } catch {
-                     /* noop */
-                   }
-                 });
-               } catch {
-                 /* noop */
-               }
-               // Persist title first (synchronous) to avoid it being cleared by deferred content updates.
-               try {
-                 if (localTitle !== section.title) onTitleChange?.(String(section.id), localTitle);
-               } catch {
-                 /* noop */
-               }
-               // Persist content asynchronously to avoid nested synchronous updates during Remirror lifecycle.
-               try {
-                 const view = (manager as any)?.view;
-                 if (view) {
-                   const docJson = view.state.doc.toJSON();
-                   setTimeout(() => {
-                     try {
-                       onContentChange?.(String(section.id), docJson);
-                     } catch {
-                       /* noop */
-                     }
-                   }, 0);
-                 } else {
-                   const fallbackHtml = (() => {
-                     try {
-                       if (section && typeof (section as any).content === "object" && (section as any).content !== null) {
-                         const sec = remirrorDocToSection(ensureRemirrorDoc((section as any).content as any), String(section.id), section.title ?? "");
-                         return String((sec as any)?.content ?? "") || "";
-                       }
-                       return String((section as any).content ?? "") || "";
-                     } catch {
-                       return String((section as any).content ?? "") || "";
-                     }
-                   })();
-                   const doc = ensureRemirrorDoc(fallbackHtml ?? "");
-                   setTimeout(() => {
-                     try {
-                       onContentChange?.(String(section.id), doc);
-                     } catch {
-                       /* noop */
-                     }
-                   }, 0);
-                 }
-               } catch (err) {
-                 // eslint-disable-next-line no-console
-                 console.warn("[SectionEditor] deferredContentFlush failed", err);
-               }
-             } catch (err) {
-               // eslint-disable-next-line no-console
-               console.warn("[SectionEditor] flushBeforeCollapse failed", err);
-             } finally {
-               // Release the guard on the next macrotask so the syncing effect can run again.
-               setTimeout(() => {
-                 flushGuardRef.current = false;
-               }, 0);
-             }
-             onCollapseChange();
-           }}
-           aria-expanded={!collapsed}
-           aria-label={collapsed ? "Expand section" : "Collapse section"}
-           className="p-1 ml-2 rounded focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
-         >
-           <span className="[color:var(--tg2)]" aria-hidden>
-               {collapsed ? "▶" : "▼"}
-             </span>
-         </button>
-       )}
+        {typeof onCollapseChange === "function" && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (
+                typeof window !== "undefined" &&
+                (window as any).__CV_EDITOR_DEBUG__ === true
+              ) {
+                // eslint-disable-next-line no-console
+                console.log("[SectionEditor] onCollapseChange clicked");
+              }
+              try {
+                // Protect against racing with the local title buffer.
+                // Use a brief flushGuard to prevent the syncing effect from overwriting the buffer.
+                flushGuardRef.current = true;
+                // Flush nested EntryRemirror editors first to ensure their buffered content is persisted.
+                try {
+                  remirrorRefs.current.forEach(
+                    (r: { flush?: () => void } | null) => {
+                      try {
+                        r?.flush?.();
+                      } catch {
+                        /* noop */
+                      }
+                    },
+                  );
+                } catch {
+                  /* noop */
+                }
+                // Persist title first (synchronous) to avoid it being cleared by deferred content updates.
+                try {
+                  if (localTitle !== section.title)
+                    onTitleChange?.(String(section.id), localTitle);
+                } catch {
+                  /* noop */
+                }
+                // Persist content asynchronously to avoid nested synchronous updates during Remirror lifecycle.
+                try {
+                  const view = (manager as any)?.view;
+                  if (view) {
+                    const docJson = view.state.doc.toJSON();
+                    setTimeout(() => {
+                      try {
+                        onContentChange?.(String(section.id), docJson);
+                      } catch {
+                        /* noop */
+                      }
+                    }, 0);
+                  } else {
+                    const fallbackHtml = (() => {
+                      try {
+                        if (
+                          section &&
+                          typeof (section as any).content === "object" &&
+                          (section as any).content !== null
+                        ) {
+                          const sec = remirrorDocToSection(
+                            ensureRemirrorDoc((section as any).content as any),
+                            String(section.id),
+                            section.title ?? "",
+                          );
+                          return String((sec as any)?.content ?? "") || "";
+                        }
+                        return String((section as any).content ?? "") || "";
+                      } catch {
+                        return String((section as any).content ?? "") || "";
+                      }
+                    })();
+                    const doc = ensureRemirrorDoc(fallbackHtml ?? "");
+                    setTimeout(() => {
+                      try {
+                        onContentChange?.(String(section.id), doc);
+                      } catch {
+                        /* noop */
+                      }
+                    }, 0);
+                  }
+                } catch (err) {
+                  // eslint-disable-next-line no-console
+                  console.warn(
+                    "[SectionEditor] deferredContentFlush failed",
+                    err,
+                  );
+                }
+              } catch (err) {
+                // eslint-disable-next-line no-console
+                console.warn("[SectionEditor] flushBeforeCollapse failed", err);
+              } finally {
+                // Release the guard on the next macrotask so the syncing effect can run again.
+                setTimeout(() => {
+                  flushGuardRef.current = false;
+                }, 0);
+              }
+              onCollapseChange();
+            }}
+            aria-expanded={!collapsed}
+            aria-label={collapsed ? "Expand section" : "Collapse section"}
+            className="p-1 ml-2 rounded focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
+          >
+            <span className="[color:var(--tg2)]" aria-hidden>
+              {collapsed ? "▶" : "▼"}
+            </span>
+          </button>
+        )}
       </div>
 
       {!collapsed && (
@@ -2471,7 +3100,11 @@ export default function SectionEditor({
             if (remirrorViewAvailable) focusEditorAtEnd();
           }}
         >
-          <Remirror manager={manager} initialContent={state} onChange={handleRemirrorChange}>
+          <Remirror
+            manager={manager}
+            initialContent={state}
+            onChange={handleRemirrorChange}
+          >
             <div className="mb-2">
               <EditorToolbar />
             </div>
@@ -2481,7 +3114,9 @@ export default function SectionEditor({
                 <div
                   role="textbox"
                   aria-live="polite"
-                  aria-label={localTitle ? `${localTitle} editor` : "Section editor"}
+                  aria-label={
+                    localTitle ? `${localTitle} editor` : "Section editor"
+                  }
                   tabIndex={0}
                   contentEditable
                   suppressContentEditableWarning
@@ -2491,7 +3126,9 @@ export default function SectionEditor({
                   onBlur={() => {
                     try {
                       const view = (manager as any)?.view;
-                      const json = view?.state?.doc?.toJSON?.() as RemirrorJSON | undefined;
+                      const json = view?.state?.doc?.toJSON?.() as
+                        | RemirrorJSON
+                        | undefined;
                       if (json) {
                         // Emit atomic updates only — content and title separately.
                         onContentChange?.(String(section.id), json);
@@ -2500,8 +3137,18 @@ export default function SectionEditor({
                         // Fallback: compute fallback HTML from section.content and convert to RemirrorJSON
                         const fallbackHtml = (() => {
                           try {
-                            if (section && typeof (section as any).content === "object" && (section as any).content !== null) {
-                              const sec = remirrorDocToSection(ensureRemirrorDoc((section as any).content as any), String(section.id), section.title ?? "");
+                            if (
+                              section &&
+                              typeof (section as any).content === "object" &&
+                              (section as any).content !== null
+                            ) {
+                              const sec = remirrorDocToSection(
+                                ensureRemirrorDoc(
+                                  (section as any).content as any,
+                                ),
+                                String(section.id),
+                                section.title ?? "",
+                              );
                               return String((sec as any)?.content ?? "") || "";
                             }
                             return String((section as any).content ?? "") || "";
@@ -2518,7 +3165,7 @@ export default function SectionEditor({
                     }
                     onBlur?.(String(section.id));
                   }}
-                  className="min-h-[80px] p-3 border border-dashed border-bo rounded prose max-w-none [background:var(--sfr)] [color:var(--ti)]"
+                  className="min-h-[80px] p-3 border border-dashed [border-color:var(--color-border)] rounded prose max-w-none [background:var(--sfr)] [color:var(--ti)]"
                 />
               }
             >

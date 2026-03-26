@@ -56,7 +56,7 @@ export function BlockEditor({
   };
 
   return (
-    <div className="p-3 [background:var(--sfr)] border border-bo rounded [box-shadow:var(--sha)]">
+    <div className="p-3 [background:var(--sfr)] border [border-color:var(--color-border)] rounded [box-shadow:var(--sha)]">
       <div className="flex items-center justify-between">
         <div>
           <div className="text-sm font-semibold [color:var(--ti)]">{block.title}</div>
@@ -76,7 +76,7 @@ export function BlockEditor({
 
       {isEditing && (
         <div className="mt-3">
-          <div className="p-2 border border-bo rounded [background:var(--sf1)]">
+          <div className="p-2 border [border-color:var(--color-border)] rounded [background:var(--sf1)]">
             <RemirrorEditor
               sections={[fakeSection as any]}
               onSectionContentChange={(secId: string, json: any) => {

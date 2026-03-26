@@ -12,12 +12,7 @@ export interface CardProps {
 export function Card({ children, className, as = "div" }: CardProps) {
   const Tag = as as React.ElementType;
   return (
-    <Tag
-      className={clsx(
-        "rounded-rm [background:var(--sfr)] border border-bo [box-shadow:var(--sha)] p-4",
-        className
-      )}
-    >
+    <Tag className={clsx("dasti-card dasti-card--md", className)}>
       {children}
     </Tag>
   );
@@ -33,25 +28,20 @@ export interface CardHeaderProps {
   display?: boolean;
 }
 
-export function CardHeader({ children, className, display = false }: CardHeaderProps) {
-  if (display) {
-    return (
-      <div
-        className={clsx("text-ti", className)}
-        style={{
-          fontFamily: '"Fraunces", serif',
-          fontSize: "var(--tl)",
-          fontWeight: 600,
-          letterSpacing: "-.01em",
-          color: "var(--ti)",
-        }}
-      >
-        {children}
-      </div>
-    );
-  }
+export function CardHeader({
+  children,
+  className,
+  display = false,
+}: CardHeaderProps) {
   return (
-    <div className={clsx("mb-2 font-semibold text-foreground", className)}>
+    <div
+      className={clsx(
+        display
+          ? "dasti-card__title dasti-card__title--display"
+          : "dasti-card__header dasti-card__title",
+        className,
+      )}
+    >
       {children}
     </div>
   );
@@ -63,5 +53,7 @@ export interface CardContentProps {
 }
 
 export function CardContent({ children, className }: CardContentProps) {
-  return <div className={clsx("text-foreground text-sm", className)}>{children}</div>;
+  return (
+    <div className={clsx("dasti-card__content", className)}>{children}</div>
+  );
 }

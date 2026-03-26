@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
-import { ChevronDown, FileText, GripHorizontal, Plus } from "lucide-react";
+import { Check, ChevronDown, FileText, GripHorizontal, X } from "@/lib/icons";
+import { useNavigate } from "react-router-dom";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import SectionComponent from "./cv-editor/Section";
 import SelectedBlockInspector from "./SelectedBlockInspector";
@@ -20,7 +21,6 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { generateCvTemplate, generateCvTemplateV1 } from "../lib/cv-template";
-import AddSectionBottomSheet from "./AddSectionBottomSheet";
 import { isV1SectionsEnabled } from "../lib/flags";
 import StructuredUploadButton from "./StructuredUploadButton";
 import CvRenameDialog from "./CvRenameDialog";
@@ -42,13 +42,16 @@ interface Props {
  * - Exposes typed section creation controls for the mounted /cv user workflow
  */
 export function ProfileReviewCard({ cvId, profile }: Props) {
+  const navigate = useNavigate();
   const {
     currentCv,
+    currentCvId,
     loadCv,
     isLoading,
     isDirty,
     reorderSections,
     addSection,
+    createNewCv,
     closeInspector,
     renameCv,
     isV1Active,
@@ -56,19 +59,34 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
 
   // Use document-driven runtime detector primarily; fall back to env flag
   const v1Enabled = isV1Active || isV1SectionsEnabled();
+  const requestedCvIdRef = useRef<string | null>(null);
+  const addSectionMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (!cvId) return;
+    if (!cvId) {
+      requestedCvIdRef.current = null;
+      return;
+    }
+
+    const targetId = String(cvId);
+    if (currentCvId === targetId) {
+      requestedCvIdRef.current = targetId;
+      return;
+    }
+    if (requestedCvIdRef.current === targetId) return;
+
+    requestedCvIdRef.current = targetId;
     try {
-      const immediate = loadCv(cvId);
+      const immediate = loadCv(targetId);
       if (!immediate) {
         // Background refresh will update state when ready
       }
     } catch (err) {
+      requestedCvIdRef.current = null;
       // eslint-disable-next-line no-console
       console.error("[ProfileReviewCard] loadCv failed for id", cvId, err);
     }
-  }, [cvId, loadCv]);
+  }, [currentCvId, cvId, loadCv]);
 
   const sections: CvSection[] = (currentCv?.sections ?? []) as CvSection[];
   const hasMeaningfulAchievementsSection = useMemo(() => {
@@ -102,15 +120,16 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
 
     return sections.some((section) => {
       if (String(section.type ?? "") !== "achievements") return false;
-      const structuredText = extractLooseText((section as any).structuredContent);
+      const structuredText = extractLooseText(
+        (section as any).structuredContent,
+      );
       if (structuredText) return true;
       const blockText = extractLooseText((section as any).blocks);
       return Boolean(blockText);
     });
   }, [sections]);
-  const addableSectionOptions = useMemo(() => {
-    const existingTypes = new Set(sections.map((section) => String(section.type ?? "")));
-    const options = v1Enabled
+  const sectionCatalog = useMemo(() => {
+    return v1Enabled
       ? [
           { value: "achievements", label: "Achievements" },
           { value: "languages", label: "Languages" },
@@ -126,16 +145,38 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
           { value: "certifications", label: "Certifications" },
           { value: "contact", label: "Contact" },
         ];
-    return options.filter((option) => !existingTypes.has(option.value));
-  }, [sections, v1Enabled, hasMeaningfulAchievementsSection]);
+  }, [v1Enabled, hasMeaningfulAchievementsSection]);
+  const addableSectionOptions = useMemo(() => {
+    const existingTypes = new Set(
+      sections.map((section) => String(section.type ?? "")),
+    );
+    return sectionCatalog.filter((option) => !existingTypes.has(option.value));
+  }, [sectionCatalog, sections]);
+  const removableAddedSectionTypes = useMemo(() => {
+    const existingTypes = new Set(
+      sections.map((section) => String(section.type ?? "")),
+    );
+    return sectionCatalog
+      .map((option) => option.value)
+      .filter((value) => existingTypes.has(value));
+  }, [sectionCatalog, sections]);
 
   React.useEffect(() => {
-    if (typeof window !== "undefined" && (window as any).__CV_EDITOR_DEBUG__ === true) {
+    if (
+      typeof window !== "undefined" &&
+      (window as any).__CV_EDITOR_DEBUG__ === true
+    ) {
       try {
         // eslint-disable-next-line no-console
         console.debug(
           "[ProfileReviewCard] sections snapshot",
-          sections.map((section) => ({ type: section.type, blocks: section.blocks?.length ?? 0, items: Array.isArray((section as any)?.structuredContent) ? (section as any).structuredContent.length : null }))
+          sections.map((section) => ({
+            type: section.type,
+            blocks: section.blocks?.length ?? 0,
+            items: Array.isArray((section as any)?.structuredContent)
+              ? (section as any).structuredContent.length
+              : null,
+          })),
         );
       } catch {
         /* noop */
@@ -143,16 +184,17 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
     }
   }, [sections]);
   const sensors = useSensors(useSensor(PointerSensor));
-  const DEBUG_CV_EDITOR = typeof window !== "undefined" && (window as any).__CV_EDITOR_DEBUG__ === true;
+  const DEBUG_CV_EDITOR =
+    typeof window !== "undefined" &&
+    (window as any).__CV_EDITOR_DEBUG__ === true;
   // TEMPORARILY DISABLE DnD GLOBALLY to stabilize inspector flow. Re-enable after DnD refactor.
   const DISABLE_DND_FOR_DEBUG = true;
 
-  // Local debug UI state
-  // Selected type when adding a new section (desktop dropdown). Empty string => no selection.
-  const [selectedNewSectionType, setSelectedNewSectionType] = useState<string>("");
-  // Mobile bottom-sheet open state
-  const [isBottomSheetOpen, setIsBottomSheetOpen] = useState<boolean>(false);
+  const [recentlyAddedSectionType, setRecentlyAddedSectionType] =
+    useState<string>("");
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState<boolean>(false);
+  const [isAddSectionMenuOpen, setIsAddSectionMenuOpen] =
+    useState<boolean>(false);
 
   // Simple in-component toast notifications for debugging (no external deps)
   const [toasts, setToasts] = useState<{ id: string; message: string }[]>([]);
@@ -164,18 +206,34 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
   }
 
   React.useEffect(() => {
-    if (!selectedNewSectionType) return;
-    const stillAvailable = addableSectionOptions.some((option) => option.value === selectedNewSectionType);
-    if (!stillAvailable) {
-      setSelectedNewSectionType("");
-    }
-  }, [addableSectionOptions, selectedNewSectionType]);
+    if (!recentlyAddedSectionType) return;
+    const timeoutId = window.setTimeout(() => {
+      setRecentlyAddedSectionType("");
+    }, 1100);
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [recentlyAddedSectionType]);
 
   React.useEffect(() => {
     if (!currentCv) {
       setIsRenameDialogOpen(false);
     }
   }, [currentCv]);
+
+  React.useEffect(() => {
+    if (!isAddSectionMenuOpen) return undefined;
+
+    const handleDocumentClick = (event: MouseEvent) => {
+      if (addSectionMenuRef.current?.contains(event.target as Node)) return;
+      setIsAddSectionMenuOpen(false);
+    };
+
+    document.addEventListener("mousedown", handleDocumentClick);
+    return () => {
+      document.removeEventListener("mousedown", handleDocumentClick);
+    };
+  }, [isAddSectionMenuOpen]);
 
   /**
    * Replace an updated section into the current document via context.
@@ -184,7 +242,7 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
   function updateSectionInDoc(updated: CvSection) {
     try {
       const updatedList = sections.map((s) =>
-        String(s.id) === String(updated.id) ? (updated as CvSection) : s
+        String(s.id) === String(updated.id) ? (updated as CvSection) : s,
       );
       reorderSections(updatedList as any);
     } catch {
@@ -196,12 +254,21 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
    * Sortable wrapper for individual sections.
    * Uses useSortable to provide drag handle props and style transforms.
    */
-  function SortableSection({ section, index }: { section: CvSection; index: number }) {
-    const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
-      id: section.id,
-    } as any);
+  function SortableSection({
+    section,
+    index,
+  }: {
+    section: CvSection;
+    index: number;
+  }) {
+    const { attributes, listeners, setNodeRef, transform, transition } =
+      useSortable({
+        id: section.id,
+      } as any);
     const style: React.CSSProperties = {
-      transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+      transform: transform
+        ? `translate3d(${transform.x}px, ${transform.y}px, 0)`
+        : undefined,
       transition,
     };
     return (
@@ -217,7 +284,7 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
             <GripHorizontal size={16} strokeWidth={2} aria-hidden />
           </button>
         </div>
- 
+
         <SectionComponent
           section={section}
           index={index}
@@ -262,8 +329,18 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
       }
 
       // Prevent duplicates for typed singleton sections
-      const typedSingletons = new Set(["profile", "summary", "experience", "education", "skills", "languages", "achievements"]);
-      const existingTypes = new Set((currentCv?.sections ?? sections).map((s) => String((s as any).type)));
+      const typedSingletons = new Set([
+        "profile",
+        "summary",
+        "experience",
+        "education",
+        "skills",
+        "languages",
+        "achievements",
+      ]);
+      const existingTypes = new Set(
+        (currentCv?.sections ?? sections).map((s) => String((s as any).type)),
+      );
       if (typedSingletons.has(type) && existingTypes.has(type)) {
         pushToast(`Section "${type}" already exists`);
         return;
@@ -275,30 +352,53 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
         // If the user explicitly requested a typed v1 section, force the v1 template
         // regardless of env flag. This ensures Add Section always creates a v1-shaped
         // section when the user picks a v1 type from the UI.
-        const typedV1Set = new Set(["profile", "summary", "experience", "achievements", "education", "skills", "languages"]);
+        const typedV1Set = new Set([
+          "profile",
+          "summary",
+          "experience",
+          "achievements",
+          "education",
+          "skills",
+          "languages",
+        ]);
         const optionalV1SectionSet = new Set(["achievements", "languages"]);
         const forceV1ForType = typedV1Set.has(String(type));
         const tmpl = forceV1ForType
           ? generateCvTemplateV1()
-          : (v1Enabled ? generateCvTemplateV1() : generateCvTemplate());
+          : v1Enabled
+            ? generateCvTemplateV1()
+            : generateCvTemplate();
 
         // Dev log to aid QA: which template we picked and why
         if (process.env.NODE_ENV !== "production") {
           try {
             // eslint-disable-next-line no-console
-            console.debug("[ProfileReviewCard] handleAddSection templateChoice", {
-              requestedType: type,
-              forceV1ForType,
-              v1Enabled,
-              chosenTemplate: forceV1ForType ? "generateCvTemplateV1" : (v1Enabled ? "generateCvTemplateV1" : "generateCvTemplate"),
-            });
+            console.debug(
+              "[ProfileReviewCard] handleAddSection templateChoice",
+              {
+                requestedType: type,
+                forceV1ForType,
+                v1Enabled,
+                chosenTemplate: forceV1ForType
+                  ? "generateCvTemplateV1"
+                  : v1Enabled
+                    ? "generateCvTemplateV1"
+                    : "generateCvTemplate",
+              },
+            );
           } catch {}
         }
 
         let matched = tmpl.sections.find((s) => s.type === (type as any));
-        if (!matched && forceV1ForType && optionalV1SectionSet.has(String(type))) {
+        if (
+          !matched &&
+          forceV1ForType &&
+          optionalV1SectionSet.has(String(type))
+        ) {
           const optionalTemplate = generateCvTemplate();
-          matched = optionalTemplate.sections.find((s) => s.type === (type as any));
+          matched = optionalTemplate.sections.find(
+            (s) => s.type === (type as any),
+          );
         }
         if (!matched) {
           pushToast(`Section type "${type}" is not available`);
@@ -324,8 +424,11 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
         "skills",
         "languages",
       ] as const;
-      const preferredOrderIndex = new Map(
-        preferredSectionOrder.map((sectionType, index) => [sectionType, index] as const)
+      const preferredOrderIndex = new Map<string, number>(
+        preferredSectionOrder.map((sectionType, index): [string, number] => [
+          sectionType,
+          index,
+        ]),
       );
 
       const existingSections = (currentCv?.sections ?? sections) as CvSection[];
@@ -336,8 +439,10 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
           .sort((a, b) => {
             const aType = String(a.section.type ?? "");
             const bType = String(b.section.type ?? "");
-            const aRank = preferredOrderIndex.get(aType) ?? Number.MAX_SAFE_INTEGER;
-            const bRank = preferredOrderIndex.get(bType) ?? Number.MAX_SAFE_INTEGER;
+            const aRank =
+              preferredOrderIndex.get(aType) ?? Number.MAX_SAFE_INTEGER;
+            const bRank =
+              preferredOrderIndex.get(bType) ?? Number.MAX_SAFE_INTEGER;
             if (aRank !== bRank) return aRank - bRank;
             return a.index - b.index;
           })
@@ -348,13 +453,37 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
         addSection(newSection);
       }
       pushToast("Section added");
-      // Clear the "new section type" selection after insertion (desktop UX).
-      setSelectedNewSectionType("");
+      setRecentlyAddedSectionType(type);
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error("[ProfileReviewCard] addSection failed", err);
       pushToast("Failed to add section");
     }
+  }
+
+  function handleClearAddedSections() {
+    const removableTypes = new Set(removableAddedSectionTypes);
+    if (removableTypes.size === 0) {
+      pushToast("No added sections to remove");
+      return;
+    }
+
+    const nextSections = sections.filter(
+      (section) => !removableTypes.has(String(section.type ?? "")),
+    );
+
+    if (nextSections.length === sections.length) {
+      pushToast("No added sections to remove");
+      return;
+    }
+
+    if (nextSections.length === 0) {
+      pushToast("Core sections must remain in the CV");
+      return;
+    }
+
+    reorderSections(nextSections as any);
+    pushToast("Added sections removed");
   }
 
   return (
@@ -363,12 +492,15 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
       <SelectedBlockInspector onClose={closeInspector} />
 
       {/* Toast container (debug) */}
-      <div aria-live="polite" className="fixed z-50 flex flex-col gap-2 top-4 right-4">
+      <div
+        aria-live="polite"
+        className="fixed z-50 flex flex-col gap-2 top-4 right-4"
+      >
         {toasts.map((t) => (
           <div
             key={t.id}
             role="status"
-            className="px-3 py-2 text-ts [background:var(--sfr)] border rounded-rs [box-shadow:var(--sha)] border-bo"
+            className="px-3 py-2 text-ts [background:var(--sfr)] border [border-radius:var(--radius-control)] [box-shadow:var(--sha)] [border-color:var(--color-border)]"
           >
             {t.message}
           </div>
@@ -377,27 +509,68 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
 
       {/* Toolbar is rendered below the title only when a CV is loaded — see the !isLoading && currentCv block */}
 
-      {/* Add Section Bottom Sheet (mobile) */}
-      <AddSectionBottomSheet
-        isOpen={isBottomSheetOpen}
-        onClose={() => setIsBottomSheetOpen(false)}
-        onSelect={(type) => handleAddSection(type)}
-      />
-
       {isLoading && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "var(--s4)" }}>
+        <div
+          style={{ display: "flex", flexDirection: "column", gap: "var(--s4)" }}
+        >
           {/* Title row shimmer */}
-          <div className="shimmer-line" style={{ height: 24, width: "55%", borderRadius: "var(--rs)" }} />
+          <div
+            className="shimmer-line"
+            style={{
+              height: 24,
+              width: "55%",
+              borderRadius: "var(--radius-inline)",
+            }}
+          />
           {/* Toolbar shimmer */}
-          <div className="shimmer-line" style={{ height: 36, width: "100%", borderRadius: "var(--rs)" }} />
+          <div
+            className="shimmer-line"
+            style={{
+              height: 36,
+              width: "100%",
+              borderRadius: "var(--radius-inline)",
+            }}
+          />
           {/* Section cards shimmer */}
           {[0.9, 0.75, 0.85].map((w, i) => (
-            <div key={i} style={{ borderRadius: "var(--rm)", border: "1px solid var(--bo)", overflow: "hidden" }}>
-              <div className="shimmer-line" style={{ height: 48, width: "100%", borderRadius: 0 }} />
-              <div style={{ padding: "var(--s4)", display: "flex", flexDirection: "column", gap: "var(--s3)" }}>
-                <div className="shimmer-line" style={{ height: 12, width: `${Math.round(w * 100)}%` }} />
-                <div className="shimmer-line" style={{ height: 12, width: `${Math.round((w - 0.2) * 100)}%` }} />
-                <div className="shimmer-line" style={{ height: 12, width: `${Math.round((w - 0.1) * 100)}%` }} />
+            <div
+              key={i}
+              style={{
+                borderRadius: "var(--radius-card)",
+                border: "1px solid var(--color-border)",
+                overflow: "hidden",
+              }}
+            >
+              <div
+                className="shimmer-line"
+                style={{ height: 48, width: "100%", borderRadius: 0 }}
+              />
+              <div
+                style={{
+                  padding: "var(--s4)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "var(--s3)",
+                }}
+              >
+                <div
+                  className="shimmer-line"
+                  style={{ height: 12, width: `${Math.round(w * 100)}%` }}
+                />
+                <div
+                  className="shimmer-line"
+                  style={{
+                    height: 12,
+                    width: `${Math.round((w - 0.2) * 100)}%`,
+                  }}
+                />
+                <div
+                  className="shimmer-line"
+                  style={{
+                    height: 12,
+                    width: `${Math.round((w - 0.1) * 100)}%`,
+                  }}
+                />
               </div>
             </div>
           ))}
@@ -413,8 +586,8 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
             justifyContent: "center",
             gap: "var(--s4)",
             padding: "var(--s9) var(--s5)",
-            borderRadius: "var(--rm)",
-            border: "1px solid var(--bo)",
+            borderRadius: "var(--radius-surface)",
+            border: "1px solid var(--color-border)",
             background: "var(--sfr)",
             boxShadow: "var(--sha)",
             textAlign: "center",
@@ -425,8 +598,8 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
             style={{
               width: 48,
               height: 48,
-              borderRadius: "var(--rm)",
-              border: "1px solid var(--bo)",
+              borderRadius: "var(--radius-card)",
+              border: "1px solid var(--color-border)",
               background: "var(--sf2)",
               display: "flex",
               alignItems: "center",
@@ -450,9 +623,40 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
             >
               Your resume space is ready
             </h2>
-            <p style={{ fontSize: "var(--ts)", color: "var(--tg2)", lineHeight: "var(--ls)", margin: 0 }}>
-              Select a resume from the sidebar, or create a new one to get started.
+            <p
+              style={{
+                fontSize: "var(--ts)",
+                color: "var(--tg2)",
+                lineHeight: "var(--ls)",
+                margin: 0,
+              }}
+            >
+              Select a resume from the sidebar, or create a new one to get
+              started.
             </p>
+          </div>
+          <div
+            style={{
+              display: "flex",
+              gap: "var(--s2)",
+              flexWrap: "wrap",
+              justifyContent: "center",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => createNewCv(undefined, { forceV1: true })}
+              className="dasti-button dasti-button--primary dasti-button--pill"
+            >
+              Create new CV
+            </button>
+            <button
+              type="button"
+              onClick={() => void navigate("/cvs")}
+              className="dasti-button dasti-button--secondary dasti-button--pill"
+            >
+              Open library
+            </button>
           </div>
         </div>
       )}
@@ -475,83 +679,137 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
             </span>
           </div>
 
-          {/* ── Unified toolbar: Add section + Import ───────── */}
           <div
-            className="mb-4"
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              alignItems: "center",
-              gap: "var(--s2)",
-              padding: "var(--s2) var(--s3)",
-              borderRadius: "var(--rs)",
-              border: "1px solid var(--bo)",
-              background: "var(--sfr)",
-              boxShadow: "var(--sha)",
-            }}
+            className="mb-4 dasti-cluster"
+            style={
+              {
+                "--cluster-gap": "var(--space-2)",
+                alignItems: "center",
+              } as React.CSSProperties
+            }
           >
             {addableSectionOptions.length > 0 ? (
-              <>
-                <div className="relative" style={{ flex: "0 0 auto" }}>
-                  <select
-                    aria-label="Add section type"
-                    className="appearance-none border [border-color:var(--bm)] [border-radius:var(--rs)] [background:var(--sfr)] [color:var(--ti)] text-ts focus:[border-color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none pl-3 pr-8 cursor-pointer min-w-[140px]"
-                    style={{ height: "var(--hs)", fontFamily: "inherit" }}
-                    value={selectedNewSectionType}
-                    onChange={(e) => setSelectedNewSectionType(e.target.value)}
-                  >
-                    <option value="">Add section</option>
-                    {addableSectionOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown
-                    className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 [color:var(--tg2)]"
+              <div
+                ref={addSectionMenuRef}
+                className="dasti-import-dropdown"
+                style={{ flex: "0 0 auto" }}
+              >
+                <button
+                  type="button"
+                  aria-label="Add section"
+                  className="dasti-select dasti-select--sm dasti-add-section-trigger"
+                  onClick={() => setIsAddSectionMenuOpen((current) => !current)}
+                >
+                  <span
+                    className="dasti-add-section-trigger__spacer"
                     aria-hidden
                   />
-                </div>
-
-                <button
-                  type="button"
-                  className="dasti-icon-button disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={() => handleAddSection(selectedNewSectionType || undefined)}
-                  disabled={!selectedNewSectionType}
-                  aria-label="Add selected section"
-                  title="Add section"
-                >
-                  <Plus className="h-4 w-4" aria-hidden />
+                  <span className="dasti-add-section-trigger__label">
+                    Add section
+                  </span>
+                  <span className="dasti-add-section-trigger__icon">
+                    {isAddSectionMenuOpen ? (
+                      <X className="h-4 w-4 [color:var(--ti)]" aria-hidden />
+                    ) : recentlyAddedSectionType ? (
+                      <Check
+                        className="h-4 w-4 [color:var(--color-accent)]"
+                        aria-hidden
+                      />
+                    ) : (
+                      <ChevronDown
+                        className="h-4 w-4 [color:var(--tg2)]"
+                        aria-hidden
+                      />
+                    )}
+                  </span>
                 </button>
-
-                {/* Mobile bottom sheet trigger */}
-                <button
-                  type="button"
-                  className="block px-2 border font-medium [transition:all_.12s_var(--ez)] text-ts rounded-[var(--rs)] [background:var(--sfr)] [border-color:var(--bm)] [color:var(--ti)] [box-shadow:var(--sha)] hover:[background:var(--sf2)] sm:hidden"
-                  style={{ height: "var(--hs)", fontFamily: "inherit" }}
-                  onClick={() => setIsBottomSheetOpen(true)}
-                  aria-label="Add section (mobile)"
-                >
-                  Add
-                </button>
-              </>
+                {isAddSectionMenuOpen ? (
+                  <div className="dasti-import-dropdown__menu dasti-add-section-menu">
+                    {addableSectionOptions.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className="dasti-menu-option dasti-menu-option--section"
+                        onClick={() => {
+                          handleAddSection(option.value);
+                          setIsAddSectionMenuOpen(false);
+                        }}
+                      >
+                        <div className="dasti-menu-option__row">
+                          <div className="dasti-menu-option__copy">
+                            <div className="dasti-menu-option__title">
+                              {option.label}
+                            </div>
+                            {option.value === "achievements" ||
+                            option.value === "languages" ? null : (
+                              <div className="dasti-menu-option__description">
+                                Add {option.label.toLowerCase()} to this resume.
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : removableAddedSectionTypes.length > 0 ? (
+              <button
+                type="button"
+                className="dasti-add-section-state dasti-add-section-state--resettable"
+                onClick={handleClearAddedSections}
+                aria-label="Delete added sections"
+                title="Delete added sections"
+              >
+                <span className="dasti-add-section-state__copy">
+                  <span className="dasti-add-section-state__label dasti-add-section-state__label--default">
+                    All sections added
+                  </span>
+                  <span className="dasti-add-section-state__label dasti-add-section-state__label--hover">
+                    Delete added sections
+                  </span>
+                </span>
+                <span className="dasti-add-section-state__icon">
+                  <span className="dasti-add-section-state__icon-layer dasti-add-section-state__icon-layer--base">
+                    <Check size={14} strokeWidth={2.1} aria-hidden />
+                  </span>
+                  <span className="dasti-add-section-state__icon-layer dasti-add-section-state__icon-layer--hover">
+                    <X size={13} strokeWidth={2.1} aria-hidden />
+                  </span>
+                </span>
+              </button>
             ) : (
-              <span className="text-xs [color:var(--tg2)]">All sections added.</span>
+              <span className="text-xs [color:var(--tg2)]">
+                All sections added.
+              </span>
             )}
-
-            {/* Divider */}
-            <div style={{ width: 1, height: "var(--hs)", background: "var(--bo)", flexShrink: 0 }} />
 
             {/* Import dropdown */}
             <StructuredUploadButton
               contextKey={currentCv?.id ?? ""}
-              sections={sections as unknown as import("../types/cvDocument").CvSection[]}
+              sections={
+                sections as unknown as import("../types/cvDocument").CvSection[]
+              }
               onApplyToSections={(updated) => {
-                try { reorderSections(updated as any); } catch { /* noop */ }
+                try {
+                  reorderSections(updated as any);
+                } catch {
+                  /* noop */
+                }
               }}
               onResult={(payload) => {
-                if (typeof window !== "undefined" && (window as any).__CV_EDITOR_DEBUG__ === true) {
-                  try { console.debug("[ProfileReviewCard] structured payload", payload); } catch { /* noop */ }
+                if (
+                  typeof window !== "undefined" &&
+                  (window as any).__CV_EDITOR_DEBUG__ === true
+                ) {
+                  try {
+                    console.debug(
+                      "[ProfileReviewCard] structured payload",
+                      payload,
+                    );
+                  } catch {
+                    /* noop */
+                  }
                 }
               }}
               renderAs="dropdown"
@@ -582,8 +840,8 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
                   alignItems: "center",
                   gap: "var(--s3)",
                   padding: "var(--s7) var(--s5)",
-                  borderRadius: "var(--rm)",
-                  border: "1px solid var(--bo)",
+                  borderRadius: "var(--radius-card)",
+                  border: "1px solid var(--color-border)",
                   background: "var(--sfr)",
                   boxShadow: "var(--sha)",
                   textAlign: "center",
@@ -591,12 +849,17 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
                 }}
               >
                 <FileText size={24} strokeWidth={1.3} />
-                <span style={{ fontSize: "var(--ts)", fontWeight: 500 }}>No sections yet — add one below</span>
+                <span style={{ fontSize: "var(--ts)", fontWeight: 500 }}>
+                  No sections yet — add one below
+                </span>
               </div>
             ) : DISABLE_DND_FOR_DEBUG ? (
               <>
                 {/* Debug: render without DnD to avoid mount/unmount churn and isolate click issues */}
-                {DEBUG_CV_EDITOR && console.debug("[ProfileReviewCard] DnD disabled in debug mode")}
+                {DEBUG_CV_EDITOR &&
+                  console.debug(
+                    "[ProfileReviewCard] DnD disabled in debug mode",
+                  )}
                 {sections.map((section, idx) => (
                   <div key={String(section.id ?? "")} className="mb-6">
                     <SectionComponent
@@ -614,10 +877,21 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
                 ))}
               </>
             ) : (
-              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                <SortableContext items={sections.map((s) => String(s.id ?? ""))} strategy={verticalListSortingStrategy}>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={sections.map((s) => String(s.id ?? ""))}
+                  strategy={verticalListSortingStrategy}
+                >
                   {sections.map((section, idx) => (
-                    <SortableSection key={String(section.id ?? "")} section={section} index={idx} />
+                    <SortableSection
+                      key={String(section.id ?? "")}
+                      section={section}
+                      index={idx}
+                    />
                   ))}
                 </SortableContext>
               </DndContext>

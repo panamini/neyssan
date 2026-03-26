@@ -9,7 +9,7 @@
 }
 
 .toggleButton {
-  @apply p-2 rounded-rs;
+  @apply p-2 [border-radius:var(--radius-control)];
   transition: all .12s var(--ez);
   color: var(--tm2);
   background-color: var(--bg);
@@ -44,7 +44,7 @@
 }
 
 .modelToggle {
-  @apply p-2 rounded-rs;
+  @apply p-2 [border-radius:var(--radius-control)];
   transition: all .12s var(--ez);
   color: var(--tm2);
   background-color: var(--bg);

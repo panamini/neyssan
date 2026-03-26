@@ -24,7 +24,7 @@ export function LanguagesDisplay({
   }
 
   const itemBase =
-    "flex items-center justify-between rounded border border-bo [background:var(--sfr)]";
+    "flex items-center justify-between rounded border [border-color:var(--color-border)] [background:var(--sfr)]";
   const itemPadding = compact ? "px-2 py-1" : "px-3 py-2";
   const itemText = compact ? "text-sm" : "text-base";
 

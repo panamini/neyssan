@@ -16,7 +16,7 @@ export function SuggestionBlock({ title, suggestion, onApply, onDiscard }: Sugge
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <label className="block mb-1 text-sm font-medium text-muted">{title}</label>
-          <pre className="p-2 overflow-auto text-sm whitespace-pre-wrap border border-bo rounded-md [background:var(--sf1)]">
+          <pre className="p-2 overflow-auto text-sm whitespace-pre-wrap border [border-color:var(--color-border)] rounded-md [background:var(--sf1)]">
             {suggestion}
           </pre>
         </div>

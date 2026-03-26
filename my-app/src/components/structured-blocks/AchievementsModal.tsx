@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { IAchievementItem } from "../../types/cvDocument";
-import { X, Plus, Check } from "lucide-react";
+import { X, Plus, Check } from "@/lib/icons";
 import { Button } from "../ui/button";
+import { useCloseOnEscape } from "../../hooks/use-close-on-escape";
+import { BodyPortal } from "@/components/ui/body-portal";
 
 interface AchievementsModalProps {
   open: boolean;
@@ -16,18 +18,27 @@ function newAchievement(): IAchievementItem {
   return { id, text: "" };
 }
 
-export function AchievementsModal({ open, items, appendBlankOnOpen = false, onClose, onSave }: AchievementsModalProps) {
+export function AchievementsModal({
+  open,
+  items,
+  appendBlankOnOpen = false,
+  onClose,
+  onSave,
+}: AchievementsModalProps) {
   const [rows, setRows] = useState<IAchievementItem[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [savedTick, setSavedTick] = useState<string | null>(null);
   const [isClearConfirming, setIsClearConfirming] = useState(false);
+
+  useCloseOnEscape({ open, onClose, disabled: isSaving });
 
   // Focus restore: remember the element that opened the modal and restore focus to it on close
   const openerRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
     if (open) {
       try {
-        openerRef.current = (document.activeElement as HTMLElement | null) ?? null;
+        openerRef.current =
+          (document.activeElement as HTMLElement | null) ?? null;
       } catch {
         openerRef.current = null;
       }
@@ -46,11 +57,16 @@ export function AchievementsModal({ open, items, appendBlankOnOpen = false, onCl
   useEffect(() => {
     if (!open) return;
     try {
-      const nextSeedKey = JSON.stringify({ items: items ?? [], appendBlankOnOpen });
+      const nextSeedKey = JSON.stringify({
+        items: items ?? [],
+        appendBlankOnOpen,
+      });
       if (lastSeedRef.current === nextSeedKey) return;
       lastSeedRef.current = nextSeedKey;
 
-      const baseRows = JSON.parse(JSON.stringify(items ?? [])) as IAchievementItem[];
+      const baseRows = JSON.parse(
+        JSON.stringify(items ?? []),
+      ) as IAchievementItem[];
       const nextRows = baseRows.length > 0 ? baseRows : [newAchievement()];
       let focusIndex = baseRows.length > 0 ? -1 : 0;
 
@@ -64,7 +80,9 @@ export function AchievementsModal({ open, items, appendBlankOnOpen = false, onCl
       if (focusIndex >= 0) {
         window.setTimeout(() => {
           try {
-            const el = document.getElementById(`achievement-text-${focusIndex}`) as HTMLInputElement | null;
+            const el = document.getElementById(
+              `achievement-text-${focusIndex}`,
+            ) as HTMLInputElement | null;
             el?.focus();
           } catch {
             /* noop */
@@ -72,7 +90,8 @@ export function AchievementsModal({ open, items, appendBlankOnOpen = false, onCl
         }, 50);
       }
     } catch {
-      const fallbackRows = items && items.length > 0 ? [...items] : [newAchievement()];
+      const fallbackRows =
+        items && items.length > 0 ? [...items] : [newAchievement()];
       if (appendBlankOnOpen) {
         fallbackRows.push(newAchievement());
       }
@@ -80,16 +99,22 @@ export function AchievementsModal({ open, items, appendBlankOnOpen = false, onCl
     }
   }, [open, items, appendBlankOnOpen]);
 
-
   if (!open) return null;
 
-  function updateRow(idx: number, patch: Partial<IAchievementItem>, tick?: boolean) {
+  function updateRow(
+    idx: number,
+    patch: Partial<IAchievementItem>,
+    tick?: boolean,
+  ) {
     setRows((prev) => {
       const next = prev.map((r, i) => (i === idx ? { ...r, ...patch } : r));
       if (tick) {
         const id = String(next[idx]?.id ?? idx);
         setSavedTick(id);
-        window.setTimeout(() => setSavedTick((s) => (s === id ? null : s)), 1000);
+        window.setTimeout(
+          () => setSavedTick((s) => (s === id ? null : s)),
+          1000,
+        );
       }
       return next;
     });
@@ -101,7 +126,9 @@ export function AchievementsModal({ open, items, appendBlankOnOpen = false, onCl
       // Focus the newly created input after React renders it.
       setTimeout(() => {
         try {
-          const el = document.getElementById(`achievement-text-${next.length - 1}`) as HTMLInputElement | null;
+          const el = document.getElementById(
+            `achievement-text-${next.length - 1}`,
+          ) as HTMLInputElement | null;
           el?.focus();
         } catch {
           /* noop */
@@ -117,7 +144,9 @@ export function AchievementsModal({ open, items, appendBlankOnOpen = false, onCl
       if (next.length === 0) {
         window.setTimeout(() => {
           try {
-            const el = document.getElementById("achievement-text-0") as HTMLInputElement | null;
+            const el = document.getElementById(
+              "achievement-text-0",
+            ) as HTMLInputElement | null;
             el?.focus();
           } catch {
             /* noop */
@@ -160,144 +189,172 @@ export function AchievementsModal({ open, items, appendBlankOnOpen = false, onCl
   }
 
   return (
-    <div
-      className="fixed inset-0 z-[10000] flex items-center justify-center p-4"
-      onMouseDownCapture={(e) => e.stopPropagation()}
-    >
+    <BodyPortal>
       <div
-        className="absolute inset-0 backdrop-blur-[8px]"
-        onClick={() => (isSaving ? null : onClose())}
-        aria-hidden
-        style={{ background: 'hsla(30,12%,11%,.32)', backdropFilter: 'blur(8px)' }}
-      />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Edit achievements"
-        className="relative w-full max-w-2xl [background:var(--sfr)] border border-[color:var(--bm)] [border-radius:var(--rl)] [box-shadow:var(--shc)] overflow-auto max-h-[90vh]"
-        onClick={(e) => e.stopPropagation()}
+        className="fixed inset-0 z-[10000] flex items-center justify-center p-4"
+        onMouseDownCapture={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-bo">
-          <h2 className="text-lg font-semibold">Edit achievements</h2>
-          <button
-            type="button"
-            onClick={() => (isSaving ? null : onClose())}
-            aria-label="Close"
-            className="dasti-modal-close disabled:opacity-50"
-            disabled={isSaving}
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="p-4 space-y-4">
-          <div className="flex items-center justify-start gap-2">
+        <div
+          className="absolute inset-0 backdrop-blur-[8px]"
+          onClick={() => (isSaving ? null : onClose())}
+          aria-hidden
+          style={{
+            background: "hsla(30,12%,11%,.32)",
+            backdropFilter: "blur(8px)",
+          }}
+        />
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Edit achievements"
+          className="dasti-modal"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between px-4 py-3 border-b [border-color:var(--color-border)]">
+            <h2 className="text-lg font-semibold">Edit achievements</h2>
             <button
               type="button"
-              onClick={handleAdd}
-              className="dasti-modal-close"
-              aria-label="Add achievement"
-              title="Add achievement"
+              onClick={() => (isSaving ? null : onClose())}
+              aria-label="Close"
+              className="dasti-modal-close disabled:opacity-50"
+              disabled={isSaving}
             >
-              <Plus className="w-4 h-4" />
+              <X className="w-5 h-5" />
             </button>
-            <div className="text-sm [color:var(--tm2)]">
-              Add or refine achievement lines.
-            </div>
           </div>
 
-          <div className="space-y-2">
-            {rows.length === 0 ? (
-              <div className="px-3 py-2 text-sm rounded [color:var(--tg2)] [background:var(--sf1)]">
-                No achievements yet. Add your first item.
+          <div className="p-4 space-y-4">
+            <div className="flex items-center justify-start gap-2">
+              <button
+                type="button"
+                onClick={handleAdd}
+                className="dasti-modal-close"
+                aria-label="Add achievement"
+                title="Add achievement"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+              <div className="text-sm [color:var(--tm2)]">
+                Add or refine achievement lines.
               </div>
-            ) : (
-              rows.map((row, idx) => (
-                <div
-                  key={row.id ?? `row-${idx}`}
-                  className="group grid items-start gap-2"
-                  style={{ gridTemplateColumns: "minmax(0, 1fr) var(--hs)" }}
-                >
-                  <div className="min-w-0">
-                    <label className="text-xs sr-only [color:var(--tg2)]" htmlFor={`achievement-text-${idx}`}>
-                      Achievement text
-                    </label>
-                    <input
-                      id={`achievement-text-${idx}`}
-                      className="w-full px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--bm)] rounded-[var(--rs)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
-                      placeholder="e.g., Increased conversion rate by 15% in Q2"
-                      value={row.text ?? ""}
-                      onChange={(e) => updateRow(idx, { text: e.target.value })}
-                      onBlur={() => updateRow(idx, {}, true)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          updateRow(idx, {}, true);
-                          const next = document.getElementById(`achievement-text-${idx + 1}`) as HTMLInputElement | null;
-                          next?.focus();
+            </div>
+
+            <div className="space-y-2">
+              {rows.length === 0 ? (
+                <div className="px-3 py-2 text-sm rounded [color:var(--tg2)] [background:var(--sf1)]">
+                  No achievements yet. Add your first item.
+                </div>
+              ) : (
+                rows.map((row, idx) => (
+                  <div
+                    key={row.id ?? `row-${idx}`}
+                    className="group grid items-start gap-2"
+                    style={{ gridTemplateColumns: "minmax(0, 1fr) var(--hs)" }}
+                  >
+                    <div className="min-w-0">
+                      <label
+                        className="text-xs sr-only [color:var(--tg2)]"
+                        htmlFor={`achievement-text-${idx}`}
+                      >
+                        Achievement text
+                      </label>
+                      <input
+                        id={`achievement-text-${idx}`}
+                        className="w-full px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                        placeholder="e.g., Increased conversion rate by 15% in Q2"
+                        value={row.text ?? ""}
+                        onChange={(e) =>
+                          updateRow(idx, { text: e.target.value })
                         }
-                      }}
-                    />
-                    <div
-                      className={[
-                        "flex items-center gap-1 mt-1 text-xs transition-opacity",
-                        savedTick && String(savedTick) === String(row.id ?? idx) ? "opacity-100" : "opacity-0",
-                      ].join(" ")}
-                      aria-live="polite"
-                    >
-                      <Check className="w-3 h-3" /> Saved
+                        onBlur={() => updateRow(idx, {}, true)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            updateRow(idx, {}, true);
+                            const next = document.getElementById(
+                              `achievement-text-${idx + 1}`,
+                            ) as HTMLInputElement | null;
+                            next?.focus();
+                          }
+                        }}
+                      />
+                      <div
+                        className={[
+                          "flex items-center gap-1 mt-1 text-xs transition-opacity",
+                          savedTick &&
+                          String(savedTick) === String(row.id ?? idx)
+                            ? "opacity-100"
+                            : "opacity-0",
+                        ].join(" ")}
+                        aria-live="polite"
+                      >
+                        <Check className="w-3 h-3" /> Saved
+                      </div>
+                    </div>
+                    <div className="flex items-start justify-end">
+                      <button
+                        type="button"
+                        onClick={() => handleRemove(idx)}
+                        className="dasti-modal-close opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
+                        aria-label={`Remove achievement ${idx + 1}`}
+                        title={`Remove achievement ${idx + 1}`}
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
-                  <div className="flex items-start justify-end">
-                    <button
-                      type="button"
-                      onClick={() => handleRemove(idx)}
-                      className="dasti-modal-close opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
-                      aria-label={`Remove achievement ${idx + 1}`}
-                      title={`Remove achievement ${idx + 1}`}
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+                ))
+              )}
+            </div>
 
-          <div className="flex items-center justify-end gap-2">
-            {isClearConfirming ? (
-              <span className="sb-doc-confirm" style={{ gap: "var(--s2)" }}>
-                <span className="sb-doc-confirm__label" style={{ fontSize: "var(--tx)" }}>Clear all?</span>
-                <button type="button" className="sb-doc-confirm__yes" onClick={handleClear}>
-                  Clear
-                </button>
-                <button type="button" className="sb-doc-confirm__no" onClick={() => setIsClearConfirming(false)}>
-                  Cancel
-                </button>
-              </span>
-            ) : (
+            <div className="flex items-center justify-end gap-2">
+              {isClearConfirming ? (
+                <span className="sb-doc-confirm" style={{ gap: "var(--s2)" }}>
+                  <span
+                    className="sb-doc-confirm__label"
+                    style={{ fontSize: "var(--tx)" }}
+                  >
+                    Clear all?
+                  </span>
+                  <button
+                    type="button"
+                    className="sb-doc-confirm__yes"
+                    onClick={handleClear}
+                  >
+                    Clear
+                  </button>
+                  <button
+                    type="button"
+                    className="sb-doc-confirm__no"
+                    onClick={() => setIsClearConfirming(false)}
+                  >
+                    Cancel
+                  </button>
+                </span>
+              ) : (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setIsClearConfirming(true)}
+                  disabled={isSaving}
+                >
+                  Clear all
+                </Button>
+              )}
               <Button
                 type="button"
-                variant="secondary"
-                onClick={() => setIsClearConfirming(true)}
+                variant="primary"
+                onClick={() => void handleSave()}
                 disabled={isSaving}
+                ariaLabel="Save achievements"
               >
-                Clear all
+                Save
               </Button>
-            )}
-            <button
-              type="button"
-              onClick={() => void handleSave()}
-              className="px-3 py-2 rounded [background:var(--ac)] [color:var(--op)] hover:brightness-110 disabled:opacity-50 focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
-              disabled={isSaving}
-              aria-busy={isSaving}
-            >
-              Save
-            </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </BodyPortal>
   );
 }
 

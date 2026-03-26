@@ -14,10 +14,9 @@ const {
 } = vi.hoisted(() => ({
   mockGenerateProposalAction: vi.fn(),
   mockMutation: vi.fn(),
-  mockMutationHookFn: Object.assign(
-    (...args: any[]) => mockMutation(...args),
-    { withOptimisticUpdate: () => {} },
-  ),
+  mockMutationHookFn: Object.assign((...args: any[]) => mockMutation(...args), {
+    withOptimisticUpdate: () => {},
+  }),
   mockQuery: vi.fn(),
   mockGetActiveLocalPersonalizationSource: vi.fn(),
   mockBuildAppProposalPersonalizationPayload: vi.fn(),
@@ -230,9 +229,12 @@ vi.mock("../../../convex/lib/proposals/voicePresets", () => {
     proposalType?: string | null;
     modelType?: string | null;
   }) =>
-    getSupportedProposalVoicePresetIds({ proposalType, modelType }).includes(
-      preset,
-    );
+    (
+      getSupportedProposalVoicePresetIds({
+        proposalType,
+        modelType,
+      }) as readonly string[]
+    ).includes(preset);
 
   return {
     DEFAULT_PROPOSAL_VOICE_PRESET: "signature",
@@ -250,8 +252,8 @@ vi.mock("../../lib/proposal-generation-ui", () => ({
     error?.data?.code === "proposal_generation_provider_busy"
       ? "Proposal generation is temporarily busy because the model provider is rate limited. Please wait a moment and try again."
       : error?.data?.code === "proposal_generation_provider_transport_error"
-      ? "Proposal generation is temporarily unavailable because the model provider request could not be completed. Please try again."
-      : "Failed to generate proposal. Please try again.",
+        ? "Proposal generation is temporarily unavailable because the model provider request could not be completed. Please try again."
+        : "Failed to generate proposal. Please try again.",
 }));
 
 vi.mock("../CustomToggle", () => ({
@@ -283,7 +285,9 @@ vi.mock("../ProposalInputForm.module.css", () => ({
 }));
 
 vi.mock("../ui/button", () => ({
-  Button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  Button: ({ children, ...props }: any) => (
+    <button {...props}>{children}</button>
+  ),
 }));
 
 vi.mock("../ui/dialog", () => ({
@@ -332,8 +336,9 @@ describe("ProposalInputForm provider-busy handling", () => {
     );
 
     const jobTitleInput = screen.getByPlaceholderText("Enter Job Title");
-    const jobDescriptionInput =
-      screen.getByPlaceholderText("Paste Job Description");
+    const jobDescriptionInput = screen.getByPlaceholderText(
+      "Paste Job Description",
+    );
     const submitButton = container.querySelector(
       'button[type="submit"]',
     ) as HTMLButtonElement | null;
@@ -424,8 +429,9 @@ describe("ProposalInputForm provider-busy handling", () => {
     );
 
     const jobTitleInput = screen.getByPlaceholderText("Enter Job Title");
-    const jobDescriptionInput =
-      screen.getByPlaceholderText("Paste Job Description");
+    const jobDescriptionInput = screen.getByPlaceholderText(
+      "Paste Job Description",
+    );
     const submitButton = container.querySelector(
       'button[type="submit"]',
     ) as HTMLButtonElement | null;
@@ -499,8 +505,9 @@ describe("ProposalInputForm provider-busy handling", () => {
     );
 
     const jobTitleInput = screen.getByPlaceholderText("Enter Job Title");
-    const jobDescriptionInput =
-      screen.getByPlaceholderText("Paste Job Description");
+    const jobDescriptionInput = screen.getByPlaceholderText(
+      "Paste Job Description",
+    );
     const submitButton = container.querySelector(
       'button[type="submit"]',
     ) as HTMLButtonElement | null;
@@ -565,9 +572,13 @@ describe("ProposalInputForm provider-busy handling", () => {
   it("shows only the premium-supported presets for ChatGPT cover letters", () => {
     render(<ProposalInputForm onSubmit={vi.fn()} onError={vi.fn()} />);
 
-    expect(screen.getByRole("button", { name: "Signature" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Signature" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Expert" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Engaging" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Engaging" }),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Storyteller" }),
     ).not.toBeInTheDocument();
@@ -604,9 +615,13 @@ describe("ProposalInputForm provider-busy handling", () => {
       ).not.toBeInTheDocument();
     });
 
-    expect(screen.getByRole("button", { name: "Signature" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Signature" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Expert" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Engaging" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Engaging" }),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Storyteller" }),
     ).not.toBeInTheDocument();

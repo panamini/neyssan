@@ -154,7 +154,7 @@ export default function ProfileForm() {
   };
 
   return (
-    <div className="w-full max-w-4xl p-3 mb-4 border-2 border-[color:var(--bo)]" data-testid="profile-ingestion-card">
+    <div className="w-full max-w-4xl p-3 mb-4 border-2 [border-color:var(--color-border)]" data-testid="profile-ingestion-card">
       <ProfileReviewModal
         visible={showReviewModal}
         parsedProfile={parsedProfile}

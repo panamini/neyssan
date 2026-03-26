@@ -17,10 +17,12 @@ import type { ISummaryItem } from "../../types/cvDocument";
 import { ensureRemirrorDoc } from "../remirror-editor/utils/conversion";
 import { EditorToolbar } from "../remirror-editor/components/EditorToolbar";
 import { useCvLibrary } from "../../contexts/CvLibraryContext";
-import { X } from "lucide-react";
+import { X } from "@/lib/icons";
 import { TextSelection } from "prosemirror-state";
 import { docToPlainText } from "../remirror-editor/utils/text";
 import { Button } from "../ui/button";
+import { useCloseOnEscape } from "../../hooks/use-close-on-escape";
+import { BodyPortal } from "@/components/ui/body-portal";
 
 interface SummaryModalProps {
   open: boolean;
@@ -29,15 +31,26 @@ interface SummaryModalProps {
   onClose: () => void;
 }
 
-export function SummaryModal({ open, sectionId, item, onClose }: SummaryModalProps) {
+export function SummaryModal({
+  open,
+  sectionId,
+  item,
+  onClose,
+}: SummaryModalProps) {
   const { updateStructuredItem } = useCvLibrary();
   const [isSaving, setIsSaving] = useState(false);
   const [isClearConfirming, setIsClearConfirming] = useState(false);
 
+  useCloseOnEscape({ open, onClose, disabled: isSaving });
+
   // Initialize Remirror doc once when opened
   // Treat UI placeholder docs as empty so clicking "Start typing here" opens a blank editor.
   function normalizePlaceholder(s: string): string {
-    return s.toLowerCase().replace(/\s+/g, " ").replace(/[.,…!?:\-]/g, "").trim();
+    return s
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .replace(/[.,…!?:\-]/g, "")
+      .trim();
   }
   const PLACEHOLDER_BASES = ["start typing here", "start typing"] as const;
   function isPlaceholderString(s: string): boolean {
@@ -84,10 +97,14 @@ export function SummaryModal({ open, sectionId, item, onClose }: SummaryModalPro
   function deepSanitize(raw: unknown): RemirrorJSON {
     const doc = ensureRemirrorDoc(raw as any);
     try {
-      const content = Array.isArray((doc as any).content) ? (doc as any).content : [];
+      const content = Array.isArray((doc as any).content)
+        ? (doc as any).content
+        : [];
       const filtered = content.filter((node: any) => {
         try {
-          const txt = String(getNodePlainText(node) || "").replace(/\s+/g, " ").trim();
+          const txt = String(getNodePlainText(node) || "")
+            .replace(/\s+/g, " ")
+            .trim();
           return !isPlaceholderString(txt);
         } catch {
           return true;
@@ -129,7 +146,7 @@ export function SummaryModal({ open, sectionId, item, onClose }: SummaryModalPro
       // Use Remirror's built-in placeholder extension so placeholder text is never editable content.
       new PlaceholderExtension({ placeholder: "Start typing here..." }),
     ],
-    []
+    [],
   );
   const { manager, state, onChange } = useRemirror({
     extensions: () => extensions as any,
@@ -145,7 +162,7 @@ export function SummaryModal({ open, sectionId, item, onClose }: SummaryModalPro
     (param: unknown) => {
       baseOnChange(param as any);
     },
-    [baseOnChange]
+    [baseOnChange],
   );
 
   // Keep hook order stable across renders; effect is a no-op when closed.
@@ -208,7 +225,8 @@ export function SummaryModal({ open, sectionId, item, onClose }: SummaryModalPro
     setIsSaving(true);
     try {
       const view = (manager as any)?.view;
-      const rawDoc: RemirrorJSON = view?.state?.doc?.toJSON?.() ?? ensureRemirrorDoc(undefined as any);
+      const rawDoc: RemirrorJSON =
+        view?.state?.doc?.toJSON?.() ?? ensureRemirrorDoc(undefined as any);
       const doc: RemirrorJSON = sanitizeDocForPersist(rawDoc);
       updateStructuredItem(String(sectionId), itemId, { summary: doc });
     } finally {
@@ -224,82 +242,123 @@ export function SummaryModal({ open, sectionId, item, onClose }: SummaryModalPro
       return;
     }
 
-    updateStructuredItem(String(sectionId), itemId, { summary: ensureRemirrorDoc(undefined as any) });
+    updateStructuredItem(String(sectionId), itemId, {
+      summary: ensureRemirrorDoc(undefined as any),
+    });
     setIsClearConfirming(false);
     onClose();
   }
 
   return (
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4" onMouseDownCapture={(e) => e.stopPropagation()}>
+    <BodyPortal>
       <div
-        className="absolute inset-0"
-        onClick={() => (isSaving ? null : onClose())}
-        style={{ background: "hsla(30,12%,11%,.32)", backdropFilter: "blur(8px) saturate(1.2)" }}
-      />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Edit summary"
-        className="dasti-modal"
-        onClick={(e) => e.stopPropagation()}
+        className="fixed inset-0 z-[10000] flex items-center justify-center p-4"
+        onMouseDownCapture={(e) => e.stopPropagation()}
       >
-        <div className="dasti-modal-header">
-          <div className="dasti-modal-heading">
-            <h2 className="dasti-modal-title">Edit summary</h2>
-            <p className="dasti-modal-subtitle">Profile narrative and positioning</p>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => (isSaving ? null : onClose())}
-            aria-label="Close"
-            className="dasti-modal-close"
-            disabled={isSaving}
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="dasti-modal-body">
-          <section className="dasti-zone">
-            <div className="dasti-rich">
-              <Remirror manager={manager} initialContent={state} onChange={handleChange}>
-                <div className="rich-content">
-                  <EditorToolbar position="top" />
-                  <EditorComponent />
-                </div>
-              </Remirror>
+        <div
+          className="absolute inset-0"
+          onClick={() => (isSaving ? null : onClose())}
+          style={{
+            background: "hsla(30,12%,11%,.32)",
+            backdropFilter: "blur(8px) saturate(1.2)",
+          }}
+        />
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Edit summary"
+          className="dasti-modal"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="dasti-modal-header">
+            <div className="dasti-modal-heading">
+              <h2 className="dasti-modal-title">Edit summary</h2>
+              <p className="dasti-modal-subtitle">
+                Profile narrative and positioning
+              </p>
             </div>
 
-          </section>
-        </div>
+            <button
+              type="button"
+              onClick={() => (isSaving ? null : onClose())}
+              aria-label="Close"
+              className="dasti-modal-close"
+              disabled={isSaving}
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
 
-        <div className="dasti-modal-footer">
-          <div className="dasti-modal-footer-note">Used in your resume header and exports.</div>
+          <div className="dasti-modal-body">
+            <section className="dasti-zone">
+              <div className="dasti-rich">
+                <Remirror
+                  manager={manager}
+                  initialContent={state}
+                  onChange={handleChange}
+                >
+                  <div className="rich-content">
+                    <EditorToolbar position="top" />
+                    <EditorComponent />
+                  </div>
+                </Remirror>
+              </div>
+            </section>
+          </div>
 
-          <div className="dasti-modal-actions">
-            {isClearConfirming ? (
-              <span className="sb-doc-confirm" style={{ gap: "var(--s2)" }}>
-                <span className="sb-doc-confirm__label" style={{ fontSize: "var(--tx)" }}>Clear?</span>
-                <button type="button" className="sb-doc-confirm__yes" onClick={handleClear}>
+          <div className="dasti-modal-footer">
+            <div className="dasti-modal-footer-note">
+              Used in your resume header and exports.
+            </div>
+
+            <div className="dasti-modal-actions">
+              {isClearConfirming ? (
+                <span className="sb-doc-confirm" style={{ gap: "var(--s2)" }}>
+                  <span
+                    className="sb-doc-confirm__label"
+                    style={{ fontSize: "var(--tx)" }}
+                  >
+                    Clear?
+                  </span>
+                  <button
+                    type="button"
+                    className="sb-doc-confirm__yes"
+                    onClick={handleClear}
+                  >
+                    Clear
+                  </button>
+                  <button
+                    type="button"
+                    className="sb-doc-confirm__no"
+                    onClick={() => setIsClearConfirming(false)}
+                  >
+                    Cancel
+                  </button>
+                </span>
+              ) : (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setIsClearConfirming(true)}
+                  disabled={isSaving}
+                >
                   Clear
-                </button>
-                <button type="button" className="sb-doc-confirm__no" onClick={() => setIsClearConfirming(false)}>
-                  Cancel
-                </button>
-              </span>
-            ) : (
-              <Button type="button" variant="secondary" onClick={() => setIsClearConfirming(true)} disabled={isSaving}>
-                Clear
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => void handleSave()}
+                disabled={isSaving}
+                ariaLabel="Save summary"
+              >
+                Save
               </Button>
-            )}
-            <Button type="button" variant="primary" onClick={() => void handleSave()} disabled={isSaving} ariaLabel="Save summary">
-              Save
-            </Button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </BodyPortal>
   );
 }
 

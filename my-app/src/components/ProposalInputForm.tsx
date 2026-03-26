@@ -36,7 +36,18 @@ import {
   type ProposalGenerationFallbackInfo,
 } from "../lib/proposal-generation-ui";
 import { getProposalDocumentTypography } from "../lib/proposal-document-typography";
-import { Check, ChevronDown, Paperclip, ScrollText, SendHorizontal, Square, X } from "lucide-react";
+import { formatUiDate } from "../lib/ui-date";
+import { useScrollEdgeFades } from "../hooks/use-scroll-edge-fades";
+import {
+  Check,
+  ChevronDown,
+  FolderTree,
+  Paperclip,
+  Pencil,
+  SendHorizontal,
+  Square,
+  X,
+} from "@/lib/icons";
 
 interface ProposalInputFormProps {
   onSubmit: (
@@ -46,7 +57,11 @@ interface ProposalInputFormProps {
     proposalId?: string,
   ) => void;
   onStart?: (values: FormValues) => void;
-  onError?: (message: string, values: FormValues, rawReason?: string | null) => void;
+  onError?: (
+    message: string,
+    values: FormValues,
+    rawReason?: string | null,
+  ) => void;
   prefill?: {
     handoffId: string;
     jobTitle: string;
@@ -70,10 +85,26 @@ const VISIBLE_PROPOSAL_TYPE_OPTIONS = [
   { value: "freelance_proposal", label: "Freelance Proposal" },
 ] as const;
 
-const TONE_OPTIONS: Array<{ id: ProposalVoicePreset; uiLabel: string; description: string }> = [
-  { id: "signature", uiLabel: "Balanced", description: "Balanced, natural, and credible." },
-  { id: "expert", uiLabel: "Formal", description: "More precise, structured, and authoritative." },
-  { id: "engaging", uiLabel: "Warm", description: "Warmer, more lively, and still professional." },
+const TONE_OPTIONS: Array<{
+  id: ProposalVoicePreset;
+  uiLabel: string;
+  description: string;
+}> = [
+  {
+    id: "signature",
+    uiLabel: "Balanced",
+    description: "Balanced, natural, and credible.",
+  },
+  {
+    id: "expert",
+    uiLabel: "Formal",
+    description: "More precise, structured, and authoritative.",
+  },
+  {
+    id: "engaging",
+    uiLabel: "Warm",
+    description: "Warmer, more lively, and still professional.",
+  },
 ];
 
 const PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY = "dasti:proposal-compose-draft:v1";
@@ -107,6 +138,17 @@ function readStoredComposeDraft(): Partial<FormValues> {
   }
 }
 
+function formatToolbarResumeLabel(value: string | null | undefined): string {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) {
+    return "Pick a resume";
+  }
+  if (normalized.length <= 13) {
+    return normalized;
+  }
+  return `${normalized.slice(0, 12).trimEnd()}…`;
+}
+
 const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   onSubmit,
   onStart,
@@ -133,6 +175,12 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   const [cvOptions, setCvOptions] = React.useState<LocalCvPickerOption[]>(() =>
     listLocalCvPickerOptions(),
   );
+  const {
+    attach: attachComposeScrollEdges,
+    showTop: showComposeScrollTop,
+    showBottom: showComposeScrollBottom,
+    update: updateComposeScrollEdges,
+  } = useScrollEdgeFades<HTMLTextAreaElement>();
   const appliedPrefillRef = React.useRef<{
     handoffId: string;
     jobTitle: string;
@@ -194,6 +242,10 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   const selectedVoicePreset = form.watch("voicePreset");
 
   React.useEffect(() => {
+    updateComposeScrollEdges();
+  }, [updateComposeScrollEdges, watchedJobDescription]);
+
+  React.useEffect(() => {
     const subscription = form.watch((values) => {
       if (typeof window === "undefined") return;
 
@@ -231,10 +283,11 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
       }),
     [selectedModelType, selectedProposalType],
   );
-  const displayedVoicePreset =
-    !isPresetSupportedForSelectedMode(selectedVoicePreset)
-      ? DEFAULT_PROPOSAL_VOICE_PRESET
-      : selectedVoicePreset;
+  const displayedVoicePreset = !isPresetSupportedForSelectedMode(
+    selectedVoicePreset,
+  )
+    ? DEFAULT_PROPOSAL_VOICE_PRESET
+    : selectedVoicePreset;
   const availableVoicePresets = React.useMemo(
     () =>
       PROPOSAL_VOICE_PRESET_DEFINITIONS.filter((preset) =>
@@ -245,6 +298,20 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   const selectedVoicePresetDefinition = React.useMemo(
     () => getProposalVoicePresetDefinition(displayedVoicePreset),
     [displayedVoicePreset],
+  );
+  const activeCvOption = React.useMemo(
+    () => cvOptions.find((option) => option.isActive) ?? null,
+    [cvOptions],
+  );
+  const hasAttachedCv = Boolean(
+    activeCvOption?.id || activeCvSource.personalizationContext,
+  );
+  const activeCvTitle = hasAttachedCv
+    ? activeCvOption?.title ?? activeCvSource.title
+    : null;
+  const pendingCvOption = React.useMemo(
+    () => cvOptions.find((option) => option.id === pendingCvId) ?? null,
+    [cvOptions, pendingCvId],
   );
 
   const applyVoicePresetDefaults = React.useCallback(
@@ -413,10 +480,16 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
       console.debug("[ProposalInputForm] Audit A — active CV context", {
         cvTitle: currentActiveCvSource.title,
         hasCv: hasCandidateContext,
-        topSkills: currentActiveCvSource.personalizationContext?.topSkills ?? null,
-        recentExperience: currentActiveCvSource.personalizationContext?.recentExperience ?? null,
-        standoutAchievements: currentActiveCvSource.personalizationContext?.standoutAchievements ?? null,
-        desiredPosition: currentActiveCvSource.personalizationContext?.desiredPosition ?? null,
+        topSkills:
+          currentActiveCvSource.personalizationContext?.topSkills ?? null,
+        recentExperience:
+          currentActiveCvSource.personalizationContext?.recentExperience ??
+          null,
+        standoutAchievements:
+          currentActiveCvSource.personalizationContext?.standoutAchievements ??
+          null,
+        desiredPosition:
+          currentActiveCvSource.personalizationContext?.desiredPosition ?? null,
       });
       console.debug("[ProposalInputForm] Audit B — job values", {
         jobTitle: values.jobTitle,
@@ -455,11 +528,16 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
           console.warn("Failed to update generated proposal status:", saveErr);
         }
 
-        onSubmit(values, result.proposalContent, {
-          requestedModelType: result.requestedModelType,
-          actualModelType: result.actualModelType,
-          fallbackTriggerCode: result.fallbackTriggerCode,
-        }, result.proposalId);
+        onSubmit(
+          values,
+          result.proposalContent,
+          {
+            requestedModelType: result.requestedModelType,
+            actualModelType: result.actualModelType,
+            fallbackTriggerCode: result.fallbackTriggerCode,
+          },
+          result.proposalId,
+        );
       } else {
         const nextErrorMessage = "No proposal returned from the server.";
         setErrorMessage(nextErrorMessage);
@@ -537,32 +615,46 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
     });
   }
 
-  function handleEditCv(id: string) {
+  function handleOpenCvInForge(id: string) {
     setActiveLocalCvId(id);
     refreshActiveCvState();
     setPendingCvId(id);
     setIsCvPickerOpen(false);
     syncSelectedCvToSharedActiveSnapshot(id);
-    window.history.pushState({}, "", "/cv");
+    window.history.pushState({}, "", `/cv?id=${encodeURIComponent(id)}`);
     window.dispatchEvent(new PopStateEvent("popstate"));
+  }
+
+  function handleConfirmPendingCv() {
+    if (!pendingCvId) return;
+    handleSelectCv(pendingCvId);
   }
 
   /* ── Cbar state (Type + Tone dropdowns) ─────────────────── */
   const [openMenu, setOpenMenu] = React.useState<"type" | "tone" | null>(null);
-  const [menuPos, setMenuPos] = React.useState<{ left: number; bottom: number }>({ left: 0, bottom: 0 });
+  const [menuPos, setMenuPos] = React.useState<{
+    left: number;
+    bottom: number;
+  }>({ left: 0, bottom: 0 });
   const typeChipRef = React.useRef<HTMLButtonElement>(null);
   const toneChipRef = React.useRef<HTMLButtonElement>(null);
-  const jobDescriptionRef = React.useRef<HTMLTextAreaElement>(null);
+  const jobDescriptionRef = React.useRef<HTMLTextAreaElement | null>(null);
 
-  const toggleMenu = React.useCallback((which: "type" | "tone") => {
-    const ref = which === "type" ? typeChipRef : toneChipRef;
-    if (openMenu === which) { setOpenMenu(null); return; }
-    if (ref.current) {
-      const r = ref.current.getBoundingClientRect();
-      setMenuPos({ left: r.left, bottom: window.innerHeight - r.top + 4 });
-    }
-    setOpenMenu(which);
-  }, [openMenu]);
+  const toggleMenu = React.useCallback(
+    (which: "type" | "tone") => {
+      const ref = which === "type" ? typeChipRef : toneChipRef;
+      if (openMenu === which) {
+        setOpenMenu(null);
+        return;
+      }
+      if (ref.current) {
+        const r = ref.current.getBoundingClientRect();
+        setMenuPos({ left: r.left, bottom: window.innerHeight - r.top + 4 });
+      }
+      setOpenMenu(which);
+    },
+    [openMenu],
+  );
 
   React.useEffect(() => {
     if (!openMenu) return;
@@ -571,72 +663,69 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
     return () => document.removeEventListener("click", close);
   }, [openMenu]);
 
-  const typeLabel = selectedProposalType === "cover_letter" ? "Letter" : "Proposal";
-  const toneUiLabel = TONE_OPTIONS.find(t => t.id === displayedVoicePreset)?.uiLabel ?? selectedVoicePresetDefinition.label;
+  const typeLabel =
+    selectedProposalType === "cover_letter" ? "Letter" : "Proposal";
+  const toneUiLabel =
+    TONE_OPTIONS.find((t) => t.id === displayedVoicePreset)?.uiLabel ??
+    selectedVoicePresetDefinition.label;
   const proposalDocumentTypography = React.useMemo(
     () => getProposalDocumentTypography(displayedVoicePreset),
     [displayedVoicePreset],
   );
+  const { ref: jobDescriptionFieldRef, ...jobDescriptionFieldProps } =
+    form.register("jobDescription");
 
   return (
-      <div className={styles.container}>
+    <div className={styles.container}>
       <Dialog
         open={isCvPickerOpen}
         onClose={handleCloseCvPicker}
         title="Choose resume"
-        className="max-w-2xl"
       >
         <DialogContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
             Select the resume Proposal Forge should use for personalization.
           </p>
           {cvOptions.length === 0 ? (
-            <div className="rounded-[var(--rm)] border border-[color:var(--bo)] [background:var(--sf2)] px-4 py-4 text-sm text-muted-foreground">
+            <div className="border px-4 py-4 text-sm text-muted-foreground [background:var(--sf2)] [border-color:var(--color-border)] [border-radius:var(--radius-card)]">
               No local resumes found yet. Create or import one in Resume.
             </div>
           ) : (
             <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-                gap: "var(--space-card-grid)",
-                maxHeight: "50vh",
-                overflowY: "auto",
-              }}
+              className="dasti-grid-auto"
+              style={
+                {
+                  "--grid-min-col": "280px",
+                  "--grid-gap": "var(--layout-card-grid)",
+                  maxHeight: "50vh",
+                  overflowY: "auto",
+                } as React.CSSProperties
+              }
             >
               {cvOptions.map((option) => {
-                const isSelected = pendingCvId === option.id || (pendingCvId === null && option.isActive);
-                const chooserDateSource = option.updatedAt ?? option.createdAt ?? null;
-                const chooserDate = chooserDateSource
-                  ? new Date(chooserDateSource).toLocaleDateString("en-US", {
-                      day: "2-digit",
-                      month: "2-digit",
-                      year: "2-digit",
-                    })
-                  : null;
+                const isSelected =
+                  pendingCvId === option.id ||
+                  (pendingCvId === null && option.isActive);
+                const chooserDateSource =
+                  option.updatedAt ?? option.createdAt ?? null;
+                const chooserDate = formatUiDate(chooserDateSource);
                 return (
-                  <div
+                  <button
                     key={option.id}
-                    className={clsx("dasti-doc-card dasti-doc-card--library dasti-doc-card--chooser dasti-doc-card--cv-library", isSelected && "dasti-doc-card--selected")}
-                    role="button"
-                    tabIndex={0}
+                    type="button"
+                    className={clsx(
+                      "dasti-doc-card dasti-doc-card--library dasti-doc-card--chooser dasti-doc-card--cv-library",
+                      isSelected && "dasti-doc-card--selected",
+                    )}
                     aria-pressed={isSelected}
                     onClick={() => setPendingCvId(option.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        setPendingCvId(option.id);
-                      }
-                    }}
-                    style={{
-                      gap: "var(--s3)",
-                      borderColor: isSelected ? "var(--bm)" : "var(--bo)",
-                    }}
                   >
                     <div className="dasti-doc-card__stack">
                       <div className="dasti-doc-card__header">
                         <div className="dasti-doc-card__title-frame">
-                          <h3 className="dasti-doc-card__title">{option.title}</h3>
+                          <h3 className="dasti-doc-card__title">
+                            {option.title}
+                          </h3>
                         </div>
                       </div>
 
@@ -653,67 +742,49 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                       </div>
 
                       <div className="dasti-doc-card__footer dasti-doc-card__footer--chooser">
-                        <div className="dasti-doc-card__stamp">{chooserDate ?? ""}</div>
-                        <div className="dasti-doc-card__actions">
-                          <button
-                            type="button"
-                            className={clsx(
-                              "dasti-icon-button dasti-icon-button--chooser",
-                              isSelected && "dasti-icon-button--chooser-selected",
-                            )}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (!isSelected) {
-                                setPendingCvId(option.id);
-                                return;
-                              }
-                              if (!option.isActive) {
-                                handleSelectCv(option.id);
-                                return;
-                              }
-                              handleCloseCvPicker();
-                            }}
-                            aria-label={
-                              option.isActive
-                                ? "Resume in use"
-                                : isSelected
-                                ? "Use selected resume"
-                                : "Select resume"
-                            }
-                            title={
-                              option.isActive
-                                ? "Resume in use"
-                                : isSelected
-                                ? "Use selected resume"
-                                : "Select resume"
-                            }
-                            style={{
-                              background: isSelected ? "var(--sf2)" : undefined,
-                              color: isSelected ? "var(--ti)" : undefined,
-                            }}
-                          >
-                            <Check size={20} strokeWidth={2} aria-hidden />
-                          </button>
-                          <button
-                            type="button"
-                            className="dasti-icon-button dasti-icon-button--chooser"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleEditCv(option.id);
-                            }}
-                            aria-label="Edit resume"
-                            title="Edit resume"
-                          >
-                            <ScrollText size={20} strokeWidth={1.5} aria-hidden />
-                          </button>
+                        <div className="dasti-doc-card__stamp">
+                          {chooserDate ?? ""}
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>
           )}
+          <div
+            className="dasti-cluster"
+            style={
+              {
+                "--cluster-gap": "var(--space-2)",
+                justifyContent: "flex-end",
+                paddingTop: "var(--space-2)",
+              } as React.CSSProperties
+            }
+          >
+            <button
+              type="button"
+              className="dasti-button dasti-button--secondary dasti-button--sm"
+              onClick={() => {
+                if (pendingCvOption) {
+                  handleOpenCvInForge(pendingCvOption.id);
+                }
+              }}
+              disabled={!pendingCvOption}
+            >
+              <Pencil size={15} strokeWidth={1.6} aria-hidden />
+              <span>Edit</span>
+            </button>
+            <button
+              type="button"
+              className="dasti-button dasti-button--accent dasti-button--sm"
+              onClick={handleConfirmPendingCv}
+              disabled={!pendingCvId}
+            >
+              <Check size={16} strokeWidth={1.9} aria-hidden />
+              <span>Confirm</span>
+            </button>
+          </div>
         </DialogContent>
       </Dialog>
       <form
@@ -725,25 +796,44 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {/* Main inputs */}
           <div className="md:col-span-2">
-            <div className={styles.composeWell} style={{ position: "relative" }}>
+            <div
+              className={styles.composeWell}
+              style={{ position: "relative" }}
+            >
               <div className="dasti-proposal-sheet dasti-proposal-sheet--composer">
                 <div className="dasti-proposal-sheet__header dasti-proposal-sheet__header--composer">
-                  <div className="dasti-proposal-sheet__heading" style={{ width: "100%" }}>
+                  <div
+                    className="dasti-proposal-sheet__heading"
+                    style={{ width: "100%" }}
+                  >
                     <input
                       type="text"
                       id="jobTitle"
                       {...form.register("jobTitle")}
-                      className={clsx(styles.jobTitleField, "dasti-proposal-title-input")}
+                      className={clsx(
+                        styles.jobTitleField,
+                        "dasti-proposal-title-input",
+                      )}
                       placeholder="Enter Job Title"
                       autoComplete="off"
                     />
                   </div>
                 </div>
-                <div className="dasti-proposal-sheet__body dasti-proposal-sheet__body--composer">
+                <div
+                  className="dasti-proposal-sheet__body dasti-proposal-sheet__body--composer"
+                  data-scroll-top={showComposeScrollTop ? "true" : "false"}
+                  data-scroll-bottom={
+                    showComposeScrollBottom ? "true" : "false"
+                  }
+                >
                   <textarea
-                    ref={jobDescriptionRef}
+                    ref={(node) => {
+                      jobDescriptionRef.current = node;
+                      jobDescriptionFieldRef(node);
+                      attachComposeScrollEdges(node);
+                    }}
                     id="jobDescription"
-                    {...form.register("jobDescription")}
+                    {...jobDescriptionFieldProps}
                     className="dasti-proposal-sheet__body--editable"
                     style={{
                       color: "var(--ti)",
@@ -767,58 +857,117 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                 <div className="dasti-proposal-toolbar dasti-proposal-toolbar--inside">
                   <div
                     className={
-                      activeCvSource.title
-                        ? "dasti-proposal-cv-pill dasti-proposal-cv-pill--active"
-                        : "dasti-proposal-cv-pill"
+                      activeCvTitle
+                        ? "dasti-proposal-chip-shell dasti-proposal-chip-shell--clearable"
+                        : "dasti-proposal-chip-shell"
                     }
                   >
                     <button
                       type="button"
-                      onClick={activeCvSource.title ? handleClearCv : handleOpenCvPicker}
-                      className="dasti-icon-button dasti-proposal-cv-pill__icon"
-                      aria-label={activeCvSource.title ? "Clear resume" : "Choose resume"}
-                      title={activeCvSource.title ? "Clear resume" : "Choose resume"}
+                      onClick={handleOpenCvPicker}
+                      className={
+                        activeCvTitle
+                          ? "dasti-proposal-chip dasti-proposal-chip--resume dasti-proposal-chip--active"
+                          : "dasti-proposal-chip dasti-proposal-chip--resume dasti-proposal-chip--resume-empty"
+                      }
+                      aria-label="Choose resume"
+                      title={
+                        activeCvTitle ?? "Pick a resume for personalization"
+                      }
                     >
-                      <span className="dasti-proposal-cv-pill__glyph dasti-proposal-cv-pill__glyph--base">
-                        <Paperclip size={15} strokeWidth={1.5} aria-hidden />
+                      <span className="dasti-proposal-chip__icon-wrap">
+                        {activeCvTitle ? (
+                          <Paperclip size={15} strokeWidth={1.5} aria-hidden />
+                        ) : (
+                          <FolderTree size={15} strokeWidth={1.5} aria-hidden />
+                        )}
                       </span>
-                      {activeCvSource.title ? (
-                        <span className="dasti-proposal-cv-pill__glyph dasti-proposal-cv-pill__glyph--hover">
-                          <X size={15} strokeWidth={1.7} aria-hidden />
-                        </span>
-                      ) : null}
+                      <span className="dasti-proposal-chip__label dasti-proposal-chip__label--resume">
+                        {formatToolbarResumeLabel(activeCvTitle)}
+                      </span>
                     </button>
+                    {activeCvTitle ? (
+                      <button
+                        type="button"
+                        className="dasti-proposal-chip__clear"
+                        aria-label="Remove resume"
+                        title="Remove resume"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleClearCv();
+                        }}
+                      >
+                        <X size={13} strokeWidth={1.9} aria-hidden />
+                      </button>
+                    ) : null}
                   </div>
                   <button
                     ref={typeChipRef}
                     type="button"
                     title="Document type"
-                    onClick={(e) => { e.stopPropagation(); toggleMenu("type"); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleMenu("type");
+                    }}
                     className="dasti-proposal-chip"
                   >
-                    <span className="dasti-proposal-chip__label">{typeLabel}</span>
-                    <ChevronDown size={12} strokeWidth={1.5} aria-hidden="true" />
+                    <span className="dasti-proposal-chip__label">
+                      {typeLabel}
+                    </span>
+                    <ChevronDown
+                      size={12}
+                      strokeWidth={1.5}
+                      aria-hidden="true"
+                    />
                   </button>
                   <button
                     ref={toneChipRef}
                     type="button"
                     title="Tone"
-                    onClick={(e) => { e.stopPropagation(); toggleMenu("tone"); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleMenu("tone");
+                    }}
                     className="dasti-proposal-chip"
                   >
-                    <span className="dasti-proposal-chip__label">{toneUiLabel}</span>
-                    <ChevronDown size={12} strokeWidth={1.5} aria-hidden="true" />
+                    <span className="dasti-proposal-chip__label">
+                      {toneUiLabel}
+                    </span>
+                    <ChevronDown
+                      size={12}
+                      strokeWidth={1.5}
+                      aria-hidden="true"
+                    />
                   </button>
                   <button
                     type="submit"
-                    className={isGenerating ? "dasti-proposal-submit dasti-proposal-submit--busy" : "dasti-proposal-submit"}
+                    className={
+                      isGenerating
+                        ? "dasti-proposal-submit dasti-proposal-submit--busy"
+                        : "dasti-proposal-submit"
+                    }
                     aria-busy={isGenerating}
-                    disabled={!isGenerating && watchedJobDescription.length < 10}
-                    title={isGenerating ? "Generating…" : watchedJobDescription.length < 10 ? "Minimum 10 characters required" : "Generate"}
+                    disabled={
+                      !isGenerating && watchedJobDescription.length < 10
+                    }
+                    title={
+                      isGenerating
+                        ? "Generating…"
+                        : watchedJobDescription.length < 10
+                          ? "Minimum 10 characters required"
+                          : "Generate"
+                    }
                     style={{
-                      cursor: (!isGenerating && watchedJobDescription.length < 10) ? "not-allowed" : "pointer",
-                      transition: "background .15s var(--ez), border-color .15s var(--ez), opacity .15s var(--ez), color .15s var(--ez)",
-                      opacity: (!isGenerating && watchedJobDescription.length < 10) ? 0.4 : 1,
+                      cursor:
+                        !isGenerating && watchedJobDescription.length < 10
+                          ? "not-allowed"
+                          : "pointer",
+                      transition:
+                        "background .15s var(--ez), border-color .15s var(--ez), opacity .15s var(--ez), color .15s var(--ez)",
+                      opacity:
+                        !isGenerating && watchedJobDescription.length < 10
+                          ? 0.4
+                          : 1,
                     }}
                   >
                     {isGenerating ? (
@@ -839,29 +988,8 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                 </div>
               </div>
             </div>
-            {(activeCvSource.title || prefill?.platform || prefill?.sourceUrl) ? (
+            {prefill?.platform || prefill?.sourceUrl ? (
               <div className="dasti-proposal-context-band">
-                {activeCvSource.title ? (
-                  <div className="dasti-proposal-context-row dasti-proposal-context-row--below">
-                    <div className="dasti-proposal-context-chip">
-                      <button
-                        type="button"
-                        onClick={handleClearCv}
-                        className="dasti-icon-button dasti-proposal-context-chip__lead"
-                        aria-label="Clear resume"
-                        title="Clear resume"
-                      >
-                        <span className="dasti-proposal-context-chip__glyph dasti-proposal-context-chip__glyph--base">
-                          <Paperclip size={13} strokeWidth={1.5} aria-hidden />
-                        </span>
-                        <span className="dasti-proposal-context-chip__glyph dasti-proposal-context-chip__glyph--hover">
-                          <X size={13} strokeWidth={1.7} aria-hidden />
-                        </span>
-                      </button>
-                      <span className="dasti-proposal-context-row__text">{activeCvSource.title}</span>
-                    </div>
-                  </div>
-                ) : null}
                 {(prefill?.platform || prefill?.sourceUrl) && (
                   <div className="dasti-proposal-source-meta">
                     Imported from{" "}
@@ -896,10 +1024,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
               </p>
             )}
             {errorMessage && (
-              <p
-                role="alert"
-                className={styles.errorMessage}
-              >
+              <p role="alert" className={styles.errorMessage}>
                 {errorMessage}
               </p>
             )}
@@ -907,53 +1032,86 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
         </div>
       </form>
       {/* Portal dropdowns for cbar */}
-      {openMenu !== null && createPortal(
-        <div
-          onClick={(e) => e.stopPropagation()}
-          style={{
-            position: "fixed",
-            zIndex: 900,
-            minWidth: 220,
-            background: "var(--sfr)",
-            border: "1px solid var(--bm)",
-            borderRadius: "var(--rm)",
-            boxShadow: "var(--shc)",
-            padding: "var(--s1)",
-            left: menuPos.left,
-            bottom: menuPos.bottom,
-            top: "auto",
-          }}
-        >
-          {openMenu === "type" && (
-            <>
-              {([
-                { value: "cover_letter", label: "Letter", desc: "Cover letter for a job application" },
-                { value: "freelance_proposal", label: "Proposal", desc: "Freelance proposal for a project" },
-              ] as const).filter((opt) => opt.value !== selectedProposalType).map((opt) => (
-                <div
-                  key={opt.value}
-                  onClick={() => { form.setValue("proposalType", opt.value, { shouldDirty: true, shouldValidate: true }); setOpenMenu(null); }}
-                  className="dasti-menu-option"
-                >
-                  <div className="dasti-menu-option__title">{opt.label}</div>
-                  <div className="dasti-menu-option__description">{opt.desc}</div>
-                </div>
-              ))}
-            </>
-          )}
-          {openMenu === "tone" && TONE_OPTIONS.filter((opt) => opt.id !== displayedVoicePreset).map((opt) => (
-            <div
-              key={opt.id}
-              onClick={() => { handleVoicePresetChange(opt.id); setOpenMenu(null); }}
-              className="dasti-menu-option"
-            >
-              <div className="dasti-menu-option__title">{opt.uiLabel}</div>
-              <div className="dasti-menu-option__description">{opt.description}</div>
-            </div>
-          ))}
-        </div>,
-        document.body
-      )}
+      {openMenu !== null &&
+        createPortal(
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: "fixed",
+              zIndex: 900,
+              minWidth: 220,
+              background: "var(--sfr)",
+              border: "1px solid var(--color-border)",
+              borderRadius: "var(--radius-card)",
+              boxShadow: "var(--shc)",
+              padding: "var(--s1)",
+              left: menuPos.left,
+              bottom: menuPos.bottom,
+              top: "auto",
+            }}
+          >
+            {openMenu === "type" && (
+              <>
+                {(
+                  [
+                    {
+                      value: "cover_letter",
+                      label: "Letter",
+                      desc: "Cover letter for a job application",
+                    },
+                    {
+                      value: "freelance_proposal",
+                      label: "Proposal",
+                      desc: "Freelance proposal for a project",
+                    },
+                  ] as const
+                )
+                  .filter((opt) => opt.value !== selectedProposalType)
+                  .map((opt) => (
+                    <div
+                      key={opt.value}
+                      onClick={() => {
+                        form.setValue("proposalType", opt.value, {
+                          shouldDirty: true,
+                          shouldValidate: true,
+                        });
+                        setOpenMenu(null);
+                      }}
+                      className="dasti-menu-option"
+                    >
+                      <div className="dasti-menu-option__title">
+                        {opt.label}
+                      </div>
+                      <div className="dasti-menu-option__description">
+                        {opt.desc}
+                      </div>
+                    </div>
+                  ))}
+              </>
+            )}
+            {openMenu === "tone" &&
+              TONE_OPTIONS.filter((opt) => opt.id !== displayedVoicePreset).map(
+                (opt) => (
+                  <div
+                    key={opt.id}
+                    onClick={() => {
+                      handleVoicePresetChange(opt.id);
+                      setOpenMenu(null);
+                    }}
+                    className="dasti-menu-option"
+                  >
+                    <div className="dasti-menu-option__title">
+                      {opt.uiLabel}
+                    </div>
+                    <div className="dasti-menu-option__description">
+                      {opt.description}
+                    </div>
+                  </div>
+                ),
+              )}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 };

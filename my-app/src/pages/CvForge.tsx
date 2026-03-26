@@ -1,6 +1,7 @@
 import React from "react";
 import { useLocation } from "react-router-dom";
 import { ProfileReviewCard } from "../components/ProfileReviewCard";
+import { VerbatiCvPreviewPanel } from "../features/verbati/VerbatiCvPreviewPanel";
 
 /**
  * CvForge — page Resume
@@ -18,27 +19,24 @@ export function CvForge(): JSX.Element {
 
   return (
     <div
+      className="dasti-page-scroll"
       style={{
-        height: "100%",
-        overflowY: "auto",
-        overflowX: "hidden",
-        overscrollBehaviorY: "contain",
-        background: "var(--bg)",
+        minWidth: 0,
       }}
     >
       <div
-        style={{
-          padding: "var(--space-page-pad)",
-          display: "flex",
-          flexDirection: "column",
-          gap: "var(--space-panel-stack)",
-          maxWidth: 960,
-          margin: "0 auto",
-          width: "100%",
-        }}
+        className="dasti-page-shell"
+        style={
+          {
+            "--page-shell-max-width": "var(--cv-editor-shell-max-width)",
+            "--page-shell-gap": "var(--layout-panel-stack)",
+            "--page-shell-pad-inline-mobile": "var(--space-3)",
+          } as React.CSSProperties
+        }
       >
         {/* Main editor / review canvas (toolbar intégrée dans ProfileReviewCard) */}
         <ProfileReviewCard cvId={requestedCvId} />
+        <VerbatiCvPreviewPanel />
       </div>
     </div>
   );
