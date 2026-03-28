@@ -103,7 +103,7 @@ export const get = query({
   handler: async (ctx): Promise<UserProfile> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
-      throw new Error("Not authenticated");
+      return null;
     }
     const user = await ctx.db
       .query("users")

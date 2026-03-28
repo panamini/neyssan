@@ -53,4 +53,5 @@ export type ResumeLayoutVariantId =
   | "signalgrid"
   | "studiopop"
   | "softribbon"
-  | "slateprofile";
+  | "slateprofile"
+  | "quire";

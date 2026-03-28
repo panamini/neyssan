@@ -14,7 +14,7 @@ import {
   Trash,
 } from "@/lib/icons";
 import { useNavigate, useLocation } from "react-router-dom";
-import { useMutation, useQuery } from "convex/react";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useAuth, useUser } from "@clerk/clerk-react";
 import { UserButton } from "@clerk/clerk-react";
 import { api } from "../../convex/_generated/api";
@@ -146,9 +146,13 @@ export const Sidebar: React.FC = () => {
 
   /* ── Proposals query ────────────────────────────────────── */
   const { isLoaded, isSignedIn } = useAuth();
+  const {
+    isAuthenticated: isConvexAuthenticated,
+    isLoading: isConvexAuthLoading,
+  } = useConvexAuth();
   const proposals = useQuery(
     api.proposalsPublic.default as any,
-    isLoaded && isSignedIn ? {} : "skip",
+    isLoaded && isSignedIn && isConvexAuthenticated ? {} : "skip",
   ) as
     | Array<{
         _id: string;
@@ -162,6 +166,15 @@ export const Sidebar: React.FC = () => {
   );
   const updateProposal = useMutation(
     (api as any).updateProposalPublic?.default,
+  );
+  const showConvexAuthRequiredToast = React.useCallback(
+    (actionLabel: string) => {
+      showToast("Sign in required", {
+        variant: "warning",
+        description: `${actionLabel} is unavailable until proposal data is authenticated.`,
+      });
+    },
+    [showToast],
   );
 
   /* ── Handlers ────────────────────────────────────────────── */
@@ -224,6 +237,10 @@ export const Sidebar: React.FC = () => {
     title: string,
   ) => {
     e.stopPropagation();
+    if (!isConvexAuthenticated || isConvexAuthLoading) {
+      showConvexAuthRequiredToast("Delete");
+      return;
+    }
     try {
       await deleteProposal({ id });
       if (selectedProposalId === id) void navigate("/proposal?view=saved");
@@ -245,6 +262,10 @@ export const Sidebar: React.FC = () => {
 
   const handleProposalRenameSave = async (nextTitle: string) => {
     if (!proposalRenameTarget) return;
+    if (!isConvexAuthenticated || isConvexAuthLoading) {
+      showConvexAuthRequiredToast("Rename");
+      return;
+    }
     try {
       await updateProposal({ id: proposalRenameTarget.id, title: nextTitle });
       setProposalRenameTarget(null);
