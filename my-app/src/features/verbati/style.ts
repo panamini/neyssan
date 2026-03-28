@@ -1,5 +1,6 @@
 import type React from "react";
 import type { CvDocument } from "../../types/cvDocument";
+import type { ProposalTemplateId } from "../../../convex/lib/proposals/renderTemplates";
 import type { ResumeLayoutVariantId } from "./resume/resume.types";
 import type {
   VerbatiLayoutPreset,
@@ -58,6 +59,12 @@ export const VERBATI_LAYOUT_OPTIONS: LayoutOption[] = [
     description:
       "A stricter 17/18 modular resume with a narrow signal rail and a clearer information ladder.",
   },
+  {
+    id: "quire",
+    name: "Quire",
+    description:
+      "Fraunces italic roles, monospace dates, and prose skills — pure typographic hierarchy.",
+  },
 ];
 
 export const VERBATI_TYPOGRAPHY_OPTIONS: TypographyOption[] = [
@@ -104,6 +111,7 @@ export const VERBATI_LAYOUT_TO_RENDERER: Record<
   "playful-photo": "studiopop",
   "soft-ribbon": "softribbon",
   "slate-column": "slateprofile",
+  quire: "quire",
 };
 
 const NEUTRAL_THEME = {
@@ -191,6 +199,20 @@ function getTypographyOption(
 
 const DEFAULT_VERBATI_ACCENT = VERBATI_PALETTE_OPTIONS[0].accentHex;
 
+export const VERBATI_LAYOUT_TO_PROPOSAL_TEMPLATE: Record<
+  VerbatiLayoutPreset,
+  ProposalTemplateId
+> = {
+  swiss: "swiss_margin",
+  "two-column": "two_column_rail",
+  editorial: "editorial_wide",
+  modernist: "modernist_signal",
+  "playful-photo": "editorial_wide",
+  "soft-ribbon": "two_column_rail",
+  "slate-column": "modernist_signal",
+  quire: "quire_margin",
+};
+
 export function getLayoutLabel(preset: VerbatiLayoutPreset): string {
   return (
     VERBATI_LAYOUT_OPTIONS.find((option) => option.id === preset)?.name ??
@@ -204,30 +226,40 @@ export function getVerbatiStyleFromCv(
   const candidate = (doc?.metadata as Record<string, unknown> | undefined)
     ?.verbatiStyle as Partial<VerbatiStylePreset> | undefined;
 
+  return resolveVerbatiStyle(candidate);
+}
+
+export function resolveVerbatiStyle(
+  candidate: Partial<VerbatiStylePreset> | null | undefined,
+): VerbatiStylePreset {
+  const safeCandidate = candidate ?? {};
+
   const paletteOption =
-    candidate?.palette &&
-    (candidate.palette === "custom" ||
-      VERBATI_PALETTE_OPTIONS.some((option) => option.id === candidate.palette))
-      ? candidate.palette
+    safeCandidate.palette &&
+    (safeCandidate.palette === "custom" ||
+      VERBATI_PALETTE_OPTIONS.some(
+        (option) => option.id === safeCandidate.palette,
+      ))
+      ? safeCandidate.palette
       : DEFAULT_VERBATI_STYLE.palette;
 
   const layout =
-    candidate?.layout &&
-    VERBATI_LAYOUT_OPTIONS.some((option) => option.id === candidate.layout)
-      ? candidate.layout
+    safeCandidate.layout &&
+    VERBATI_LAYOUT_OPTIONS.some((option) => option.id === safeCandidate.layout)
+      ? safeCandidate.layout
       : DEFAULT_VERBATI_STYLE.layout;
 
   const typography =
-    candidate?.typography &&
+    safeCandidate.typography &&
     VERBATI_TYPOGRAPHY_OPTIONS.some(
-      (option) => option.id === candidate.typography,
+      (option) => option.id === safeCandidate.typography,
     )
-      ? candidate.typography
+      ? safeCandidate.typography
       : DEFAULT_VERBATI_STYLE.typography;
 
   const accentHex =
     paletteOption === "custom"
-      ? normalizeHexColor(candidate?.accentHex)
+      ? normalizeHexColor(safeCandidate.accentHex)
       : undefined;
 
   return {
@@ -249,6 +281,28 @@ export function resolveVerbatiAccentHex(style: VerbatiStylePreset): string {
   );
 }
 
+export function getVerbatiTypographyFamilies(style: VerbatiStylePreset): {
+  headingFamily: string;
+  bodyFamily: string;
+} {
+  const typography = getTypographyOption(style.typography);
+
+  return {
+    headingFamily: typography.headingFamily,
+    bodyFamily: typography.bodyFamily,
+  };
+}
+
+export function getProposalTwinTemplateId(
+  style: VerbatiStylePreset | null | undefined,
+): ProposalTemplateId {
+  const resolvedStyle = style
+    ? resolveVerbatiStyle(style)
+    : DEFAULT_VERBATI_STYLE;
+
+  return VERBATI_LAYOUT_TO_PROPOSAL_TEMPLATE[resolvedStyle.layout];
+}
+
 export function buildVerbatiThemeVars(
   style: VerbatiStylePreset,
 ): React.CSSProperties {
@@ -265,6 +319,7 @@ export function buildVerbatiThemeVars(
     mixHex(NEUTRAL_THEME.text, accent, 0.14),
     0.3,
   );
+  const documentAccent = mixHex(NEUTRAL_THEME.text, accent, 0.62);
   const typography = getTypographyOption(style.typography);
 
   return {
@@ -285,7 +340,21 @@ export function buildVerbatiThemeVars(
     "--color-accent-hover": accentHover,
     "--color-accent-pressed": accentPressed,
     "--color-accent-soft": accentSoft,
+    "--proposal-document-paper": NEUTRAL_THEME.surfaceRaised,
+    "--proposal-document-ink": NEUTRAL_THEME.text,
+    "--proposal-document-meta-ink": NEUTRAL_THEME.textMuted,
+    "--proposal-document-accent-ink": documentAccent,
     "--color-on-accent": "#fffaf4",
+    "--bg": canvas,
+    "--sf1": NEUTRAL_THEME.surface,
+    "--sf2": surfaceMuted,
+    "--sfr": NEUTRAL_THEME.surfaceRaised,
+    "--ti": NEUTRAL_THEME.text,
+    "--tm2": NEUTRAL_THEME.textMuted,
+    "--tg2": NEUTRAL_THEME.textSubtle,
+    "--border-soft": border,
+    "--border-field": borderStrong,
+    "--border-strong": borderContrast,
     "--ac": accent,
     "--ah": accentHover,
     "--ap": accentSoft,
@@ -307,6 +376,24 @@ export function serializeVerbatiStyle(
         ? normalizeHexColor(style.accentHex)
         : undefined,
   };
+}
+
+export function buildVerbatiProposalDocumentVars(
+  style: VerbatiStylePreset,
+): React.CSSProperties {
+  const accent = resolveVerbatiAccentHex(style);
+  const documentAccent = mixHex(NEUTRAL_THEME.text, accent, 0.62);
+  const typography = getTypographyOption(style.typography);
+
+  return {
+    "--font-heading-family": typography.headingFamily,
+    "--font-body-family": typography.bodyFamily,
+    "--font-editorial-family": typography.headingFamily,
+    "--proposal-document-paper": NEUTRAL_THEME.surfaceRaised,
+    "--proposal-document-ink": NEUTRAL_THEME.text,
+    "--proposal-document-meta-ink": NEUTRAL_THEME.textMuted,
+    "--proposal-document-accent-ink": documentAccent,
+  } as React.CSSProperties;
 }
 
 export function stylesEqual(

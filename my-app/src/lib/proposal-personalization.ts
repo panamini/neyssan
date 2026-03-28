@@ -665,6 +665,24 @@ export function getActiveLocalPersonalizationSource(): {
   };
 }
 
+export function getProposalApplicantIdentity(source: {
+  personalizationContext: ProposalPersonalizationContext | null;
+}): {
+  name: string | null;
+  role: string | null;
+} {
+  const context = source.personalizationContext;
+
+  return {
+    name: compactDisplayPart(context?.name, 72) ?? null,
+    role:
+      compactDisplayPart(
+        context?.desiredPosition ?? context?.recentExperience?.[0]?.position,
+        88,
+      ) ?? null,
+  };
+}
+
 export function buildAppProposalPersonalizationPayload(source: {
   personalizationContext: ProposalPersonalizationContext | null;
   richness?: ProposalPersonalizationRichness;

@@ -2,9 +2,7 @@ import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import {
-  ArrowsOutSimple,
   Check,
-  CornersIn,
   FloppyDisk,
   RotateCcw,
   Trash,
@@ -17,16 +15,30 @@ import ProposalDisplay, {
 } from "../components/ProposalDisplay";
 import ProposalsList from "../components/ProposalsList";
 import { useToast } from "../components/ui/toast";
+import { useCvLibrary } from "../contexts/CvLibraryContext";
 import type { FormValues } from "../components/ProposalInputForm.schemas";
 import { api } from "../../convex/_generated/api";
 import {
   buildAppProposalPersonalizationPayload,
+  getProposalApplicantIdentity,
   getActiveLocalPersonalizationSource,
 } from "../lib/proposal-personalization";
 import {
   getProposalGenerationUiErrorMessage,
   type ProposalGenerationFallbackInfo,
 } from "../lib/proposal-generation-ui";
+import {
+  readStoredProposalOutputDraft,
+  type StoredProposalOutputDraft,
+  PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,
+  PROPOSAL_OUTPUT_DRAFT_UPDATED_EVENT,
+} from "../lib/proposal-output-draft";
+import type { ProposalTemplateId } from "../../convex/lib/proposals/renderTemplates";
+import {
+  getProposalTwinTemplateId,
+  getVerbatiStyleFromCv,
+  serializeVerbatiStyle,
+} from "../features/verbati/style";
 
 type ProposalForgePrefill = {
   handoffId: string;
@@ -38,66 +50,10 @@ type ProposalForgePrefill = {
 
 type ProposalForgeView = "compose" | "saved";
 
-type StoredProposalOutputDraft = {
-  proposalContent: string | null;
-  proposalType: FormValues["proposalType"] | null;
-  proposalVoicePreset: FormValues["voicePreset"] | null;
-  proposalDocumentTitle: string;
-  proposalDocumentMeta: string;
-  generatedProposalId: string | null;
-  proposalOutputMode: "preview" | "edit";
-};
-
 type GenerateProposalResult = {
   proposalId: string;
   proposalContent: string;
 } & Required<ProposalGenerationFallbackInfo>;
-
-const PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY = "dasti:proposal-output-draft:v1";
-
-function readStoredProposalOutputDraft(): StoredProposalOutputDraft | null {
-  if (typeof window === "undefined") return null;
-
-  try {
-    const raw = window.localStorage.getItem(PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<StoredProposalOutputDraft> | null;
-    if (!parsed || typeof parsed !== "object") return null;
-
-    return {
-      proposalContent:
-        typeof parsed.proposalContent === "string"
-          ? parsed.proposalContent
-          : null,
-      proposalType:
-        parsed.proposalType === "cover_letter" ||
-        parsed.proposalType === "application_message" ||
-        parsed.proposalType === "freelance_proposal"
-          ? parsed.proposalType
-          : null,
-      proposalVoicePreset:
-        typeof parsed.proposalVoicePreset === "string"
-          ? (parsed.proposalVoicePreset as FormValues["voicePreset"])
-          : null,
-      proposalDocumentTitle:
-        typeof parsed.proposalDocumentTitle === "string"
-          ? parsed.proposalDocumentTitle
-          : "",
-      proposalDocumentMeta:
-        typeof parsed.proposalDocumentMeta === "string"
-          ? parsed.proposalDocumentMeta
-          : "",
-      generatedProposalId:
-        typeof parsed.generatedProposalId === "string"
-          ? parsed.generatedProposalId
-          : null,
-      proposalOutputMode:
-        parsed.proposalOutputMode === "edit" ? "edit" : "preview",
-    };
-  } catch {
-    return null;
-  }
-}
 
 /**
  * ProposalForge — page Write
@@ -111,8 +67,24 @@ export function ProposalForge(): JSX.Element {
   const { search } = useLocation();
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const { currentCv } = useCvLibrary();
   const storedOutputDraft = React.useMemo(
     () => readStoredProposalOutputDraft(),
+    [],
+  );
+  const currentProposalStylePreset = React.useMemo(
+    () =>
+      currentCv
+        ? getVerbatiStyleFromCv(currentCv)
+        : storedOutputDraft?.proposalVerbatiStyle ?? null,
+    [currentCv, storedOutputDraft?.proposalVerbatiStyle],
+  );
+  const fallbackProposalTemplateId = React.useMemo(
+    () => getProposalTwinTemplateId(currentProposalStylePreset),
+    [currentProposalStylePreset],
+  );
+  const initialApplicantIdentity = React.useMemo(
+    () => getProposalApplicantIdentity(getActiveLocalPersonalizationSource()),
     [],
   );
   const [viewportWidth, setViewportWidth] = React.useState(() =>
@@ -140,6 +112,10 @@ export function ProposalForge(): JSX.Element {
   const updateProposal = useMutation(
     (api as any).updateProposalPublic?.default,
   );
+  const currentProposalSettings = useQuery(
+    api.proposalSettings.getCurrent,
+    isConvexAuthenticated ? {} : "skip",
+  );
   const deleteProposal = useMutation(
     (api as any).deleteProposalPublic?.default,
   );
@@ -155,6 +131,18 @@ export function ProposalForge(): JSX.Element {
   const [proposalVoicePreset, setProposalVoicePreset] = React.useState<
     FormValues["voicePreset"] | null
   >(storedOutputDraft?.proposalVoicePreset ?? null);
+  const [proposalTemplateId, setProposalTemplateId] =
+    React.useState<ProposalTemplateId | null>(
+      storedOutputDraft?.proposalTemplateId ?? fallbackProposalTemplateId,
+    );
+  const [proposalApplicantName, setProposalApplicantName] =
+    React.useState<string>(
+      storedOutputDraft?.proposalApplicantName || initialApplicantIdentity.name || "",
+    );
+  const [proposalApplicantRole, setProposalApplicantRole] =
+    React.useState<string>(
+      storedOutputDraft?.proposalApplicantRole || initialApplicantIdentity.role || "",
+    );
   const [proposalDocumentTitle, setProposalDocumentTitle] =
     React.useState<string>(storedOutputDraft?.proposalDocumentTitle ?? "");
   const [proposalDocumentMeta, setProposalDocumentMeta] =
@@ -166,7 +154,7 @@ export function ProposalForge(): JSX.Element {
   >(storedOutputDraft?.generatedProposalId ?? null);
   const [proposalOutputMode, setProposalOutputMode] = React.useState<
     "preview" | "edit"
-  >(storedOutputDraft?.proposalOutputMode ?? "preview");
+  >("preview");
   const [isSavingGeneratedProposal, setIsSavingGeneratedProposal] =
     React.useState(false);
   const [isSavingOutputToLibrary, setIsSavingOutputToLibrary] =
@@ -177,7 +165,6 @@ export function ProposalForge(): JSX.Element {
     React.useState(false);
   const [isConfirmingGeneratedDelete, setIsConfirmingGeneratedDelete] =
     React.useState(false);
-  const [isOutputFocused, setIsOutputFocused] = React.useState(false);
   const [copyFeedback, setCopyFeedback] = React.useState<"idle" | "copied">(
     "idle",
   );
@@ -187,6 +174,19 @@ export function ProposalForge(): JSX.Element {
   );
   const lastSavedProposalTitleRef = React.useRef<string>(
     storedOutputDraft?.proposalDocumentTitle ?? "",
+  );
+  const lastStampedTemplateTokenRef = React.useRef<string | null>(null);
+  const canPersistProposalState =
+    isConvexAuthenticated && !isConvexAuthLoading;
+
+  const showConvexAuthRequiredToast = React.useCallback(
+    (actionLabel: string) => {
+      showToast("Sign in required", {
+        variant: "warning",
+        description: `${actionLabel} is unavailable until the proposal workspace is authenticated.`,
+      });
+    },
+    [showToast],
   );
 
   const handoffRecord = useQuery(
@@ -204,6 +204,38 @@ export function ProposalForge(): JSX.Element {
       platform: handoffRecord.platform,
     };
   }, [handoffRecord]);
+
+  React.useEffect(() => {
+    if (!currentProposalSettings?.templateId) {
+      return;
+    }
+
+    setProposalTemplateId(currentProposalSettings.templateId);
+  }, [currentProposalSettings?.templateId]);
+
+  const proposalRenderMetadata = React.useMemo(() => {
+    const nextMetadata: {
+      templateId?: ProposalTemplateId;
+      verbatiStyle?: ReturnType<typeof serializeVerbatiStyle>;
+    } = {};
+
+    const resolvedTemplateId =
+      proposalTemplateId ?? currentProposalSettings?.templateId ?? fallbackProposalTemplateId;
+    if (resolvedTemplateId) {
+      nextMetadata.templateId = resolvedTemplateId;
+    }
+
+    if (currentProposalStylePreset) {
+      nextMetadata.verbatiStyle = serializeVerbatiStyle(currentProposalStylePreset);
+    }
+
+    return Object.keys(nextMetadata).length > 0 ? nextMetadata : undefined;
+  }, [
+    currentProposalSettings?.templateId,
+    currentProposalStylePreset,
+    fallbackProposalTemplateId,
+    proposalTemplateId,
+  ]);
 
   /* ── Handlers (logique métier intacte) ────────────────────── */
 
@@ -228,10 +260,15 @@ export function ProposalForge(): JSX.Element {
 
   const handleProposalStart = React.useCallback(
     (values: FormValues) => {
+      const applicantIdentity = getProposalApplicantIdentity(
+        getActiveLocalPersonalizationSource(),
+      );
       setLastProposalRequest(values);
       setLoading(true);
       setProposalType(values.proposalType);
       setProposalVoicePreset(values.voicePreset);
+      setProposalApplicantName(applicantIdentity.name ?? "");
+      setProposalApplicantRole(applicantIdentity.role ?? "");
       setProposalDocumentTitle(
         values.jobTitle.trim() || formatProposalTypeLabel(values.proposalType),
       );
@@ -258,9 +295,14 @@ export function ProposalForge(): JSX.Element {
       nextFallbackInfo?: ProposalGenerationFallbackInfo,
       nextProposalId?: string,
     ) => {
+      const applicantIdentity = getProposalApplicantIdentity(
+        getActiveLocalPersonalizationSource(),
+      );
       setLastProposalRequest(values);
       setProposalType(values.proposalType);
       setProposalVoicePreset(values.voicePreset);
+      setProposalApplicantName(applicantIdentity.name ?? "");
+      setProposalApplicantRole(applicantIdentity.role ?? "");
       setProposalDocumentTitle(
         values.jobTitle.trim() || formatProposalTypeLabel(values.proposalType),
       );
@@ -286,10 +328,15 @@ export function ProposalForge(): JSX.Element {
 
   const handleProposalError = React.useCallback(
     (message: string, values: FormValues, rawReason?: string | null) => {
+      const applicantIdentity = getProposalApplicantIdentity(
+        getActiveLocalPersonalizationSource(),
+      );
       setLastProposalRequest(values);
       setLoading(false);
       setProposalType(values.proposalType);
       setProposalVoicePreset(values.voicePreset);
+      setProposalApplicantName(applicantIdentity.name ?? "");
+      setProposalApplicantRole(applicantIdentity.role ?? "");
       setProposalDocumentTitle(
         values.jobTitle.trim() || formatProposalTypeLabel(values.proposalType),
       );
@@ -318,7 +365,12 @@ export function ProposalForge(): JSX.Element {
   );
 
   const handleProposalDocumentCommit = React.useCallback(async () => {
-    if (!generatedProposalId || isSavingGeneratedProposal) return;
+    if (
+      !generatedProposalId ||
+      isSavingGeneratedProposal ||
+      !canPersistProposalState
+    )
+      return;
     const trimmed = proposalContent?.trim() ?? "";
     const normalizedTitle =
       proposalDocumentTitle.trim() ||
@@ -341,6 +393,7 @@ export function ProposalForge(): JSX.Element {
       await updateProposal({
         id: generatedProposalId,
         title: normalizedTitle,
+        metadata: proposalRenderMetadata,
         ...(trimmed
           ? {
               content: trimmed,
@@ -378,8 +431,10 @@ export function ProposalForge(): JSX.Element {
   }, [
     generatedProposalId,
     isSavingGeneratedProposal,
+    canPersistProposalState,
     proposalContent,
     proposalDocumentTitle,
+    proposalRenderMetadata,
     proposalType,
     formatProposalTypeLabel,
     showToast,
@@ -416,6 +471,7 @@ export function ProposalForge(): JSX.Element {
 
     if (!hasDraft) {
       window.localStorage.removeItem(PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY);
+      window.dispatchEvent(new Event(PROPOSAL_OUTPUT_DRAFT_UPDATED_EVENT));
       return;
     }
 
@@ -426,23 +482,63 @@ export function ProposalForge(): JSX.Element {
           proposalContent,
           proposalType,
           proposalVoicePreset,
+          proposalTemplateId,
+          proposalVerbatiStyle: currentProposalStylePreset
+            ? serializeVerbatiStyle(currentProposalStylePreset)
+            : null,
+          proposalApplicantName,
+          proposalApplicantRole,
           proposalDocumentTitle,
           proposalDocumentMeta,
           generatedProposalId,
-          proposalOutputMode,
+          proposalOutputMode: "preview",
         } satisfies StoredProposalOutputDraft),
       );
+      window.dispatchEvent(new Event(PROPOSAL_OUTPUT_DRAFT_UPDATED_EVENT));
     } catch {
       // Ignore browser storage failures; keep in-memory output intact.
     }
   }, [
     generatedProposalId,
     proposalContent,
+    proposalApplicantName,
+    proposalApplicantRole,
     proposalDocumentMeta,
     proposalDocumentTitle,
-    proposalOutputMode,
+    currentProposalStylePreset,
+    proposalTemplateId,
     proposalType,
     proposalVoicePreset,
+  ]);
+
+  React.useEffect(() => {
+    if (
+      !generatedProposalId ||
+      !proposalRenderMetadata ||
+      !canPersistProposalState
+    ) {
+      return;
+    }
+
+    const nextToken = `${generatedProposalId}:${JSON.stringify(proposalRenderMetadata)}`;
+    if (lastStampedTemplateTokenRef.current === nextToken) {
+      return;
+    }
+
+    lastStampedTemplateTokenRef.current = nextToken;
+
+    void updateProposal({
+      id: generatedProposalId,
+      metadata: proposalRenderMetadata,
+    }).catch((error) => {
+      console.warn("Failed to persist proposal template metadata:", error);
+      lastStampedTemplateTokenRef.current = null;
+    });
+  }, [
+    canPersistProposalState,
+    generatedProposalId,
+    proposalRenderMetadata,
+    updateProposal,
   ]);
 
   const updateProposalRoute = React.useCallback(
@@ -533,12 +629,15 @@ export function ProposalForge(): JSX.Element {
       }
 
       try {
-        await updateProposal({
-          id: result.proposalId,
-          content: result.proposalContent,
-          sections: [{ type: "text", content: result.proposalContent }],
-          status: "draft",
-        });
+        if (canPersistProposalState) {
+          await updateProposal({
+            id: result.proposalId,
+            content: result.proposalContent,
+            sections: [{ type: "text", content: result.proposalContent }],
+            status: "draft",
+            metadata: proposalRenderMetadata,
+          });
+        }
       } catch (saveErr) {
         console.warn("Failed to update regenerated proposal status:", saveErr);
       }
@@ -575,20 +674,31 @@ export function ProposalForge(): JSX.Element {
     generateProposalAction,
     handleProposalError,
     handleProposalSubmit,
+    canPersistProposalState,
     isRegeneratingGeneratedProposal,
     lastProposalRequest,
+    proposalRenderMetadata,
     showToast,
     updateProposal,
   ]);
 
   const handleDeleteOutput = React.useCallback(async () => {
     if (!generatedProposalId) return;
+    if (!canPersistProposalState) {
+      showConvexAuthRequiredToast("Delete");
+      return;
+    }
 
     try {
       await deleteProposal({ id: generatedProposalId });
       setProposalContent(null);
       setProposalType(null);
       setProposalVoicePreset(null);
+      setProposalTemplateId(
+        currentProposalSettings?.templateId ?? fallbackProposalTemplateId,
+      );
+      setProposalApplicantName("");
+      setProposalApplicantRole("");
       setProposalDocumentTitle("");
       setProposalDocumentMeta("");
       setGeneratedProposalId(null);
@@ -597,6 +707,7 @@ export function ProposalForge(): JSX.Element {
       setErrorDetail(null);
       setIsConfirmingGeneratedDelete(false);
       lastSavedProposalContentRef.current = null;
+      lastStampedTemplateTokenRef.current = null;
       showToast("Proposal deleted", { variant: "success" });
     } catch (deleteError) {
       console.error("Failed to delete proposal draft:", deleteError);
@@ -605,7 +716,15 @@ export function ProposalForge(): JSX.Element {
         description: "The generated proposal could not be removed.",
       });
     }
-  }, [deleteProposal, generatedProposalId, showToast]);
+  }, [
+    fallbackProposalTemplateId,
+    currentProposalSettings?.templateId,
+    canPersistProposalState,
+    deleteProposal,
+    generatedProposalId,
+    showConvexAuthRequiredToast,
+    showToast,
+  ]);
 
   const handleSaveOutputToLibrary = React.useCallback(async () => {
     if (
@@ -614,6 +733,10 @@ export function ProposalForge(): JSX.Element {
       isSavingOutputToLibrary ||
       isSavingGeneratedProposal
     ) {
+      return;
+    }
+    if (!canPersistProposalState) {
+      showConvexAuthRequiredToast("Save");
       return;
     }
 
@@ -634,6 +757,7 @@ export function ProposalForge(): JSX.Element {
         content: trimmed,
         sections: [{ type: "text", content: trimmed }],
         status: "saved",
+        metadata: proposalRenderMetadata,
       });
       lastSavedProposalContentRef.current = trimmed;
       lastSavedProposalTitleRef.current =
@@ -656,12 +780,15 @@ export function ProposalForge(): JSX.Element {
     }
   }, [
     generatedProposalId,
+    canPersistProposalState,
     isSavingGeneratedProposal,
     isSavingOutputToLibrary,
     proposalContent,
     proposalDocumentTitle,
+    proposalRenderMetadata,
     proposalType,
     formatProposalTypeLabel,
+    showConvexAuthRequiredToast,
     showToast,
     updateProposal,
   ]);
@@ -671,19 +798,14 @@ export function ProposalForge(): JSX.Element {
   const isSavedView = activeView === "saved";
   const isCompactComposeLayout = viewportWidth < 1240;
   const isNarrowLaptop = viewportWidth < 1360;
-  const isComposeFocusLayout = isComposeView && isOutputFocused;
   const isLoadingHandoff =
     Boolean(handoffId) &&
     (isConvexAuthLoading ||
       (isConvexAuthenticated && handoffRecord === undefined));
 
   const stackedCardWidthStyle: React.CSSProperties = isCompactComposeLayout
-    ? { width: "min(100%, 560px)", marginInline: "auto" }
-    : { width: "100%" };
-  const focusedOutputWidthStyle: React.CSSProperties = {
-    width: "100%",
-  };
-
+    ? { width: "min(100%, 560px)", marginInline: "auto", minWidth: 0 }
+    : { width: "100%", minWidth: 0 };
   return (
     <div
       className="dasti-page-scroll"
@@ -695,13 +817,11 @@ export function ProposalForge(): JSX.Element {
         className="dasti-page-shell"
         style={
           {
-            "--page-shell-max-width": isComposeFocusLayout
-              ? "calc(100vw - (var(--space-6) * 2))"
-              : isCompactComposeLayout
-                ? "720px"
-                : isNarrowLaptop
-                  ? "1000px"
-                  : "1200px",
+            "--page-shell-max-width": isCompactComposeLayout
+              ? "720px"
+              : isNarrowLaptop
+                ? "1000px"
+                : "1200px",
             "--page-shell-gap": "var(--layout-page-stack)",
           } as React.CSSProperties
         }
@@ -713,7 +833,7 @@ export function ProposalForge(): JSX.Element {
               style={
                 {
                   "--grid-columns":
-                    isCompactComposeLayout || isComposeFocusLayout
+                    isCompactComposeLayout
                       ? "minmax(0, 1fr)"
                       : "repeat(2, minmax(0, 560px))",
                   "--grid-gap": "var(--layout-card-grid)",
@@ -722,35 +842,27 @@ export function ProposalForge(): JSX.Element {
                 } as React.CSSProperties
               }
             >
-              {!isComposeFocusLayout ? (
-                <div className="dasti-flow">
-                  <div style={stackedCardWidthStyle}>
-                    {isLoadingHandoff ? (
-                      <div style={{ paddingTop: "var(--s2)" }}>
-                        <p className="dasti-hint">
-                          Loading imported job offer…
-                        </p>
-                      </div>
-                    ) : (
-                      <ProposalInputForm
-                        onStart={handleProposalStart}
-                        onSubmit={handleProposalSubmit}
-                        onError={handleProposalError}
-                        prefill={prefill}
-                      />
-                    )}
-                  </div>
+              <div className="dasti-flow">
+                <div style={stackedCardWidthStyle}>
+                  {isLoadingHandoff ? (
+                    <div style={{ paddingTop: "var(--s2)" }}>
+                      <p className="dasti-hint">
+                        Loading imported job offer…
+                      </p>
+                    </div>
+                  ) : (
+                    <ProposalInputForm
+                      onStart={handleProposalStart}
+                      onSubmit={handleProposalSubmit}
+                      onError={handleProposalError}
+                      prefill={prefill}
+                    />
+                  )}
                 </div>
-              ) : null}
+              </div>
 
               <div className="dasti-flow">
-                <div
-                  style={
-                    isComposeFocusLayout
-                      ? focusedOutputWidthStyle
-                      : stackedCardWidthStyle
-                  }
-                >
+                <div style={stackedCardWidthStyle}>
                   <ProposalDisplay
                     proposalContent={proposalContent}
                     loading={loading}
@@ -758,6 +870,14 @@ export function ProposalForge(): JSX.Element {
                     errorDetail={errorDetail}
                     proposalType={proposalType}
                     voicePreset={proposalVoicePreset}
+                    templateId={
+                      proposalRenderMetadata?.templateId ??
+                      proposalTemplateId ??
+                      fallbackProposalTemplateId
+                    }
+                    stylePreset={currentProposalStylePreset}
+                    railTitle={proposalApplicantName || null}
+                    railMeta={proposalApplicantRole || null}
                     fallbackInfo={fallbackInfo}
                     documentTitle={
                       proposalDocumentTitle || "Generated proposal"
@@ -765,9 +885,11 @@ export function ProposalForge(): JSX.Element {
                     documentMeta={proposalDocumentMeta || "Compose output"}
                     mode={proposalOutputMode}
                     onModeChange={setProposalOutputMode}
-                    onPreviewInteract={() => setProposalOutputMode("edit")}
-                    showModeToggle={false}
-                    size={isComposeFocusLayout ? "focused" : "default"}
+                    showModeToggle
+                    showZoomControls
+                    zoomStorageKey={null}
+                    previewAnchor="body"
+                    size="default"
                     documentHeaderMode="actions-only"
                     onCopy={() => {
                       void handleCopyOutput();
@@ -780,24 +902,6 @@ export function ProposalForge(): JSX.Element {
                     actions={
                       proposalContent && !loading && !error ? (
                         <span className="dasti-icon-cluster dasti-icon-cluster--tight">
-                          <button
-                            type="button"
-                            title={
-                              isOutputFocused
-                                ? "Return to split view"
-                                : "Focus the output"
-                            }
-                            className="dasti-icon-button"
-                            onClick={() =>
-                              setIsOutputFocused((value) => !value)
-                            }
-                          >
-                            {isOutputFocused ? (
-                              <CornersIn size={16} strokeWidth={1.7} />
-                            ) : (
-                              <ArrowsOutSimple size={16} strokeWidth={1.7} />
-                            )}
-                          </button>
                           <button
                             type="button"
                             title={
@@ -820,8 +924,8 @@ export function ProposalForge(): JSX.Element {
                             type="button"
                             title={
                               isRegeneratingGeneratedProposal
-                                ? "Regenerating…"
-                                : "Regenerate"
+                                ? "Refreshing…"
+                                : "Refresh"
                             }
                             className="dasti-icon-button"
                             style={{

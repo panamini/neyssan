@@ -813,6 +813,95 @@ slateprofile: {
     projectPaddingAdjust: "-0.06mm",
   },
 },
-    
+
+quire: {
+  id: "quire",
+  label: "Quire",
+  title: "Typographic editorial résumé",
+  subtitle: "Prose skills, monospace dates, italic serif roles — pure typographic hierarchy without decorative structure",
+  chips: ["Editorial", "Typographic", "A4"],
+
+  margins: {
+    top: "22mm",
+    right: "28mm",
+    bottom: "38mm",
+    left: "20mm",
+  },
+
+  columns: {
+    sidebar: "57mm",
+    gutter: "0mm",
+    main: "105mm",
+  },
+
+  liveArea: {
+    width: "162mm",
+    height: "237mm",
+  },
+
+  header: {
+    rowGap: "3.5mm",
+    bottomPadding: "5.5mm",
+    summaryMaxWidth: "115mm",
+    titleMarginTop: "1.5mm",
+  },
+
+  body: {
+    rowGap: "7mm",
+    sidebarRightPadding: "0mm",
+    mainLeftPadding: "0mm",
+  },
+
+  sidebarSection: {
+    marginBottom: "5.5mm",
+    titleMarginBottom: "2mm",
+    titlePaddingBottom: "1.2mm",
+    contentGap: "1.6mm",
+  },
+
+  mainSection: {
+    marginBottom: "5.5mm",
+    headingGap: "2.8mm",
+    headingMarginBottom: "2.4mm",
+  },
+
+  experience: {
+    dateColumn: "19mm",
+    columnGap: "4mm",
+    itemGap: "5mm",
+    orgMarginBottom: "1.2mm",
+    bulletsPaddingLeft: "3.6mm",
+    bulletsGap: "1.2mm",
+  },
+
+  projects: {
+    cardGap: "3.2mm",
+    cardPadding: "3mm",
+    cardBackground: "surface",
+  },
+
+  education: {
+    itemGap: "2mm",
+  },
+
+  skills: {
+    gap: "1.8mm",
+    paddingInline: "0mm",
+    paddingBlock: "0mm",
+  },
+
+  density: {
+    displaySizeAdjust: "-0.55mm",
+    titleSizeAdjust: "-0.1mm",
+    bodySizeAdjust: "-0.05mm",
+    bodySmSizeAdjust: "-0.08mm",
+    sectionGapAdjust: "-0.2mm",
+    headingMarginAdjust: "0mm",
+    bulletGapAdjust: "-0.05mm",
+    projectGapAdjust: "-0.1mm",
+    projectPaddingAdjust: "-0.05mm",
+  },
+},
+
   } satisfies Record<ResumeLayoutVariantId, ResumeVariantSpec>,
 } as const;

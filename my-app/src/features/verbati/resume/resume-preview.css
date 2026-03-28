@@ -62,8 +62,8 @@
 }
 
 .resume-preview-shell--single {
-  width: min(100%, calc(210mm + 22mm));
-  padding: clamp(8mm, 2vw, 11mm) clamp(5mm, 1.4vw, 7mm) clamp(11mm, 2.6vw, 14mm);
+  width: 100%;
+  padding: 0;
 }
 
 .resume-preview-shell--comparison {
@@ -147,26 +147,29 @@
 
 .resume-page-stage {
   position: relative;
-  width: 100%;
+  width: max(100%, var(--preview-stage-width, 100%));
+  min-width: 100%;
   height: var(--preview-stage-height);
+  display: grid;
+  place-items: center;
 }
 
 .resume-page-stage .resume-page {
-  position: absolute;
-  top: 0;
-  left: 50%;
-  transform: translateX(-50%) scale(var(--preview-scale, 1));
-  transform-origin: top center;
+  position: relative;
+  flex: 0 0 auto;
+  transform: scale(var(--preview-scale, 1));
+  transform-origin: top left;
 }
 
 .resume-page-frame {
-  width: 100%;
+  width: max(100%, var(--preview-stage-width, 100%));
+  min-width: 100%;
   display: grid;
   gap: 3.6mm;
   justify-items: center;
   align-content: start;
-  padding: clamp(4mm, 1.5vw, 6mm);
-  border-radius: clamp(5mm, 1.4vw, 7mm);
+  padding: var(--document-viewer-bleed-block) var(--document-viewer-bleed-inline);
+  border-radius: var(--document-viewer-radius);
   background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--color-surface) 58%, var(--color-canvas) 42%),
@@ -180,8 +183,22 @@
 }
 
 .theme-resume-calm--single .resume-page-frame {
-  padding: clamp(6mm, 1.6vw, 7.5mm) clamp(4.5mm, 1vw, 5.5mm)
-    clamp(8.5mm, 2vw, 10mm);
+  padding: 0;
+}
+
+.dasti-doc-viewport--resume .resume-preview-shell--single {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+.dasti-doc-viewport--resume .resume-page-frame {
+  gap: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .resume-page-frame--clickable,
@@ -1050,7 +1067,9 @@
   }
 
   .resume-page-stage {
+    width: auto !important;
     height: auto !important;
+    display: block;
   }
 
   .resume-page:last-child {
@@ -1520,6 +1539,155 @@
   --fit-onecol-bottom-space-adjust: -12mm;
   --fit-content-scale: 0.86;
 }
+
+/* ─── QUIRE ───────────────────────────────────────────────────────────────── */
+
+/* Section heading: short accent rule mark before text via ::before */
+.resume-page--quire .main-heading {
+  display: flex;
+  align-items: center;
+  gap: 2.4mm;
+  white-space: nowrap;
+}
+
+.resume-page--quire .main-heading::before {
+  content: "";
+  display: block;
+  width: 5mm;
+  min-width: 5mm;
+  height: 0.28mm;
+  background: var(--color-accent);
+  flex-shrink: 0;
+}
+
+/* Hide the trailing rule — the pre-mark replaces it */
+.resume-page--quire .main-heading-rule {
+  display: none;
+}
+
+/* Title: uppercase tracked body sans — reads like a department label */
+.resume-page--quire .title {
+  font-family: var(--font-body-family);
+  font-size: calc(var(--text-body-sm-size) + var(--auto-body-sm-size-adjust));
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+/* Name: lighter weight, tighter tracking — literary, not shouted */
+.resume-page--quire .name {
+  font-weight: 500;
+  letter-spacing: -0.042em;
+}
+
+/* Contact line above name: small, subtle, inline */
+.quire-contact-line {
+  margin: 0;
+  font-size: calc(var(--text-caption-size) + 0.15mm);
+  line-height: 1.3;
+  color: var(--color-text-subtle);
+  letter-spacing: 0.008em;
+}
+
+/* Sidebar titles: remove bottom border, use left mark via ::before */
+.resume-page--quire .sidebar-title {
+  border-bottom: none;
+  padding-bottom: 0;
+  padding-left: 3.8mm;
+  position: relative;
+}
+
+.resume-page--quire .sidebar-title::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1.8mm;
+  height: 0.28mm;
+  background: var(--color-accent);
+}
+
+/* Sidebar content: thin separator takes over from the title border */
+.resume-page--quire .sidebar-content {
+  padding-top: 1.6mm;
+  border-top: 0.24mm solid color-mix(in srgb, var(--color-border) 88%, transparent);
+}
+
+/* Skills as flowing prose — no pill chips */
+.quire-skills-prose {
+  margin: 0;
+  font-size: calc(2.54mm + var(--auto-body-sm-size-adjust));
+  line-height: 1.58;
+  color: var(--color-text-muted);
+  font-weight: 400;
+  text-wrap: pretty;
+  letter-spacing: -0.002em;
+}
+
+/* Experience date: monospace, light — reads like a page-margin note */
+.resume-page--quire .experience-period {
+  font-family: "SFMono-Regular", "IBM Plex Mono", Menlo, monospace;
+  font-size: calc(2.12mm + var(--auto-body-sm-size-adjust));
+  letter-spacing: 0.04em;
+  color: var(--color-text-subtle);
+  font-weight: 400;
+  padding-top: 0.6mm;
+}
+
+/* Role title: Fraunces italic — the key signature of this template */
+.resume-page--quire .entry-title {
+  font-style: italic;
+  font-weight: 500;
+  letter-spacing: -0.026em;
+  font-size: calc(3.5mm + var(--auto-title-size-adjust));
+}
+
+/* Company / org: quieter tint */
+.resume-page--quire .entry-subtitle {
+  color: color-mix(in srgb, var(--color-accent) 64%, var(--color-text-muted) 36%);
+}
+
+/* Project cards: top rule only, no background, no radius */
+.resume-page--quire .project-card {
+  background: transparent;
+  border: none;
+  border-top: 0.26mm solid color-mix(in srgb, var(--color-border) 92%, transparent);
+  border-radius: 0;
+  padding-top: calc(var(--project-padding) + var(--auto-project-padding-adjust));
+  padding-left: 0;
+  padding-right: 0;
+  padding-bottom: 0;
+}
+
+/* Project title: same italic serif as roles */
+.resume-page--quire .project-card .entry-title {
+  font-size: calc(3.1mm + var(--auto-title-size-adjust));
+}
+
+/* Education period: monospace, matching dates */
+.resume-page--quire .education-period {
+  font-family: "SFMono-Regular", "IBM Plex Mono", Menlo, monospace;
+  font-size: calc(2.12mm + var(--auto-body-sm-size-adjust));
+  letter-spacing: 0.04em;
+  font-weight: 400;
+}
+
+/* Bullet marker: precise dot */
+.resume-page--quire .bullet-list li::before {
+  width: 1mm;
+  height: 1mm;
+  top: 1.55mm;
+  background: color-mix(in srgb, var(--color-accent) 70%, transparent);
+}
+
+/* Eyebrow: hidden — the contact line takes its place */
+.resume-page--quire .eyebrow {
+  display: none;
+}
+
+/* ─── end QUIRE ───────────────────────────────────────────────────────────── */
 
 @media (max-width: 1040px) {
   .resume-preview-grid--comparison.resume-preview-grid--compact {
