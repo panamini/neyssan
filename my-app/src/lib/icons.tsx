@@ -12,12 +12,14 @@ import {
   CornersIn as PhCornersIn,
   Copy as PhCopy,
   DotsSixVertical as PhDotsSixVertical,
+  Eye as PhEye,
   FileImage as PhFileImage,
   FilePdf as PhFilePdf,
   FileText as PhFileText,
   FloppyDisk as PhFloppyDisk,
   IdentificationCard as PhIdentificationCard,
   Layout as PhLayout,
+  Lightning as PhLightning,
   Link as PhLink,
   ListBullets as PhListBullets,
   MagicWand as PhMagicWand,
@@ -28,6 +30,7 @@ import {
   Pen as PhPen,
   PencilSimple as PhPencilSimple,
   PencilSimpleLine as PhPencilSimpleLine,
+  Minus as PhMinus,
   Plus as PhPlus,
   PushPin as PhPushPin,
   PushPinSlash as PhPushPinSlash,
@@ -113,6 +116,7 @@ export const ChevronDown = withCompat(PhCaretDown);
 export const ChevronUp = withCompat(PhCaretUp);
 export const Copy = withCompat(PhCopy);
 export const CornersIn = withCompat(PhCornersIn);
+export const Eye = withCompat(PhEye);
 export const FileImage = withCompat(PhFileImage);
 export const FilePdf = withCompat(PhFilePdf);
 export const FileText = withCompat(PhFileText);
@@ -123,10 +127,12 @@ export const FolderTree = withCompat(PhTreeView);
 export const GripHorizontal = withCompat(PhDotsSixVertical);
 export const Italic = withCompat(PhTextItalic);
 export const Layout = withCompat(PhLayout);
+export const Lightning = withCompat(PhLightning);
 export const Link = withCompat(PhLink);
 export const List = withCompat(PhListBullets);
 export const Loader2 = withCompat(PhSpinnerGap, "bold");
 export const Menu = withCompat(PhRows);
+export const Minus = withCompat(PhMinus);
 export const Moon = withCompat(PhMoon);
 export const Paperclip = withCompat(PhPaperclip);
 export const Palette = withCompat(PhPalette);

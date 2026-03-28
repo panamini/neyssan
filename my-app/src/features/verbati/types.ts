@@ -7,7 +7,8 @@ export type VerbatiLayoutPreset =
   | "modernist"
   | "playful-photo"
   | "soft-ribbon"
-  | "slate-column";
+  | "slate-column"
+  | "quire";
 export type VerbatiTypographyPreset = "signature" | "engaging" | "expert";
 export type VerbatiPalettePreset =
   | "sauge"
