@@ -10,7 +10,7 @@ import { Dialog, DialogContent } from "./ui/dialog";
 
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
-import { useAction, useMutation, useQuery } from "convex/react";
+import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { formSchema, FormValues } from "./ProposalInputForm.schemas";
 import {
   DEFAULT_PROPOSAL_VOICE_PRESET,
@@ -42,9 +42,9 @@ import {
   Check,
   ChevronDown,
   FolderTree,
+  Lightning,
   Paperclip,
   Pencil,
-  SendHorizontal,
   Square,
   X,
 } from "@/lib/icons";
@@ -155,12 +155,19 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   onError,
   prefill = null,
 }) => {
+  const {
+    isAuthenticated: isConvexAuthenticated,
+    isLoading: isConvexAuthLoading,
+  } = useConvexAuth();
   const generateProposalAction = useAction(api.functions.generateProposal);
   const setSharedActiveCvSnapshot = useMutation(
     api.activeCvSnapshots.setCurrent,
   );
   const updateGeneratedProposal = useMutation(api.updateProposalPublic.default);
-  const currentProposalSettings = useQuery(api.proposalSettings.getCurrent, {});
+  const currentProposalSettings = useQuery(
+    api.proposalSettings.getCurrent,
+    isConvexAuthenticated ? {} : "skip",
+  );
   const setCurrentVoicePreset = useMutation(api.proposalSettings.setCurrent);
   const [isGenerating, setIsGenerating] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
@@ -188,6 +195,8 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   } | null>(null);
   const appliedSavedVoicePresetRef = React.useRef(false);
   const lastSharedSnapshotSyncStateRef = React.useRef<string | null>(null);
+  const canPersistProposalWorkspaceState =
+    isConvexAuthenticated && !isConvexAuthLoading;
 
   const refreshActiveCvState = React.useCallback(() => {
     setActiveCvSource(getActiveLocalPersonalizationSource());
@@ -199,6 +208,10 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   }, [refreshActiveCvState]);
 
   React.useEffect(() => {
+    if (!canPersistProposalWorkspaceState) {
+      return;
+    }
+
     if (activeCvSource.title !== null) {
       lastSharedSnapshotSyncStateRef.current = activeCvSource.title;
       return;
@@ -220,7 +233,11 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
           err,
         );
       });
-  }, [activeCvSource.title, setSharedActiveCvSnapshot]);
+  }, [
+    activeCvSource.title,
+    canPersistProposalWorkspaceState,
+    setSharedActiveCvSnapshot,
+  ]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -451,6 +468,13 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
 
     setVoicePresetSaveError(null);
 
+    if (!canPersistProposalWorkspaceState) {
+      setVoicePresetSaveError(
+        "Preset applied locally. Sign in to save the app default.",
+      );
+      return;
+    }
+
     void setCurrentVoicePreset({ voicePreset: preset })
       .then(() => {
         setVoicePresetSaveError(null);
@@ -518,12 +542,14 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
         // The generation action already stores the proposal. Mark that row as a
         // draft instead of inserting a second saved-history entry from the client.
         try {
-          await updateGeneratedProposal({
-            id: result.proposalId,
-            content: result.proposalContent,
-            sections: [{ type: "text", content: result.proposalContent }],
-            status: "draft",
-          });
+          if (canPersistProposalWorkspaceState) {
+            await updateGeneratedProposal({
+              id: result.proposalId,
+              content: result.proposalContent,
+              sections: [{ type: "text", content: result.proposalContent }],
+              status: "draft",
+            });
+          }
         } catch (saveErr) {
           console.warn("Failed to update generated proposal status:", saveErr);
         }
@@ -582,6 +608,10 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
         return;
       }
 
+      if (!canPersistProposalWorkspaceState) {
+        return;
+      }
+
       void setSharedActiveCvSnapshot({ snapshot }).catch((err) => {
         console.warn(
           "[ProposalInputForm] Shared active CV snapshot sync failed",
@@ -589,7 +619,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
         );
       });
     },
-    [setSharedActiveCvSnapshot],
+    [canPersistProposalWorkspaceState, setSharedActiveCvSnapshot],
   );
 
   function handleSelectCv(id: string) {
@@ -607,6 +637,9 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
     setActiveCvSource({ title: null, personalizationContext: null });
     setCvOptions(listLocalCvPickerOptions());
     lastSharedSnapshotSyncStateRef.current = "none";
+    if (!canPersistProposalWorkspaceState) {
+      return;
+    }
     void setSharedActiveCvSnapshot({ snapshot: null }).catch((err) => {
       console.warn(
         "[ProposalInputForm] Shared active CV snapshot clear failed",
@@ -973,12 +1006,12 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                     {isGenerating ? (
                       <Square
                         size="1em"
-                        fill="none"
+                        weight="fill"
                         strokeWidth={1.8}
                         className="dasti-proposal-submit__icon"
                       />
                     ) : (
-                      <SendHorizontal
+                      <Lightning
                         size="1em"
                         strokeWidth={1.8}
                         className="dasti-proposal-submit__icon"
