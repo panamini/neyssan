@@ -350,13 +350,13 @@ describe("ProposalInputForm provider-busy handling", () => {
 
     const jobTitleInput = screen.getByPlaceholderText("Enter Job Title");
     const jobDescriptionInput = screen.getByPlaceholderText(
-      "Paste Job Description",
+      "Paste the job description here…",
     );
     const submitButton = container.querySelector(
       'button[type="submit"]',
     ) as HTMLButtonElement | null;
 
-    expect(screen.getByText(/Resume:/i)).toHaveTextContent("Resume: none");
+    expect(screen.getByRole("button", { name: "Choose resume" })).toBeVisible();
     expect(submitButton).not.toBeNull();
 
     fireEvent.change(jobTitleInput, {
@@ -399,6 +399,7 @@ describe("ProposalInputForm provider-busy handling", () => {
         proposalType: "cover_letter",
         jobTitle: "Operations Associate",
       }),
+      expect.stringContaining("proposal_generation_provider_busy"),
     );
     expect(mockBuildAppProposalPersonalizationPayload).toHaveBeenCalledWith({
       title: null,
@@ -443,7 +444,7 @@ describe("ProposalInputForm provider-busy handling", () => {
 
     const jobTitleInput = screen.getByPlaceholderText("Enter Job Title");
     const jobDescriptionInput = screen.getByPlaceholderText(
-      "Paste Job Description",
+      "Paste the job description here…",
     );
     const submitButton = container.querySelector(
       'button[type="submit"]',
@@ -491,6 +492,7 @@ describe("ProposalInputForm provider-busy handling", () => {
         proposalType: "cover_letter",
         jobTitle: "Operations Associate",
       }),
+      expect.stringContaining("proposal_generation_provider_transport_error"),
     );
     expect(
       consoleErrorSpy.mock.calls.some((call) =>
@@ -519,7 +521,7 @@ describe("ProposalInputForm provider-busy handling", () => {
 
     const jobTitleInput = screen.getByPlaceholderText("Enter Job Title");
     const jobDescriptionInput = screen.getByPlaceholderText(
-      "Paste Job Description",
+      "Paste the job description here…",
     );
     const submitButton = container.querySelector(
       'button[type="submit"]',
@@ -551,6 +553,7 @@ describe("ProposalInputForm provider-busy handling", () => {
           actualModelType: "chatgpt",
           fallbackTriggerCode: "proposal_generation_provider_busy",
         },
+        "proposal_123",
       );
     });
 
@@ -561,13 +564,14 @@ describe("ProposalInputForm provider-busy handling", () => {
     });
   });
 
-  it("hides removed proposal and model options while keeping ChatGPT selected by default", () => {
+  it("keeps the compose controls compact while hiding removed model and proposal options", () => {
     render(<ProposalInputForm onSubmit={vi.fn()} onError={vi.fn()} />);
 
-    expect(screen.getByRole("button", { name: "ChatGPT" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    expect(screen.getByRole("button", { name: "Letter" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Balanced" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "ChatGPT" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Mistral Small" }),
     ).not.toBeInTheDocument();
@@ -582,65 +586,87 @@ describe("ProposalInputForm provider-busy handling", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("shows only the premium-supported presets for ChatGPT cover letters", () => {
+  it("shows only the supported tone options for cover letters", async () => {
     render(<ProposalInputForm onSubmit={vi.fn()} onError={vi.fn()} />);
 
+    expect(screen.getByRole("button", { name: "Balanced" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTitle("Tone"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Formal")).toBeInTheDocument();
+    });
+
     expect(
-      screen.getByRole("button", { name: "Signature" }),
+      screen.getByText("Formal"),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Expert" })).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Engaging" }),
+      screen.getByText("Warm"),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Storyteller" }),
+      screen.queryByText("Storyteller"),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Signature" })).toHaveAttribute(
-      "variant",
-      "primary",
-    );
+    expect(
+      screen.queryByText("Direct"),
+    ).not.toBeInTheDocument();
   });
 
-  it("falls back to signature when an unsupported saved preset enters premium cover-letter mode", async () => {
+  it("falls back to the balanced tone when an unsupported saved preset enters cover-letter mode", async () => {
     mockQuery.mockReturnValue({ voicePreset: "direct" });
 
     render(<ProposalInputForm onSubmit={vi.fn()} onError={vi.fn()} />);
 
-    expect(screen.getByRole("button", { name: "Signature" })).toHaveAttribute(
-      "variant",
-      "primary",
-    );
+    expect(screen.getByRole("button", { name: "Balanced" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTitle("Tone"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Formal")).toBeInTheDocument();
+    });
+
     expect(
-      screen.queryByRole("button", { name: "Storyteller" }),
+      screen.queryByText("Direct"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Storyteller"),
     ).not.toBeInTheDocument();
   });
 
-  it("shows only the supported chatgpt freelance presets and falls back to signature from legacy saved presets", async () => {
+  it("shows only the supported tone options for proposals and falls back to balanced from legacy saved presets", async () => {
     mockQuery.mockReturnValue({ voicePreset: "direct" });
 
     render(<ProposalInputForm onSubmit={vi.fn()} onError={vi.fn()} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Freelance Proposal" }));
+    fireEvent.click(screen.getByTitle("Document type"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Proposal")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText("Proposal"));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Proposal" })).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole("button", { name: "Balanced" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTitle("Tone"));
 
     await waitFor(() => {
       expect(
-        screen.queryByRole("button", { name: "Direct" }),
+        screen.queryByText("Direct"),
       ).not.toBeInTheDocument();
     });
 
     expect(
-      screen.getByRole("button", { name: "Signature" }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Expert" })).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Engaging" }),
+      screen.getByText("Formal"),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Storyteller" }),
+      screen.getByText("Warm"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Storyteller"),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Signature" })).toHaveAttribute(
-      "variant",
-      "primary",
-    );
   });
 });
