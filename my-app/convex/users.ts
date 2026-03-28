@@ -6,6 +6,7 @@ import {
 } from "./_generated/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
+import type { ProposalTemplateId } from "./lib/proposals/renderTemplates";
 
 export type UserProfile = {
   _id: Id<"userProfiles">;
@@ -28,6 +29,7 @@ export type UserProfile = {
     | "direct"
     | "engaging"
     | "storyteller";
+  proposalTemplateId?: ProposalTemplateId;
 };
 
 export const createOrUpdateUser = internalMutation({

@@ -1,4 +1,5 @@
 import type { Doc, Id } from "../_generated/dataModel";
+import type { ProposalTemplateId } from "../lib/proposals/renderTemplates";
 
 export interface UserDoc extends Doc<"users"> {
   clerkId: string;
@@ -40,6 +41,13 @@ export interface ProposalDoc extends Doc<"proposals"> {
       | "storyteller";
     formalityLevel?: "informal" | "neutral" | "formal";
     creativity?: "low" | "medium" | "high";
+    templateId?: ProposalTemplateId;
+    verbatiStyle?: {
+      layout: string;
+      typography: string;
+      palette: string;
+      accentHex?: string;
+    };
     proposalType?:
       | "cover_letter"
       | "application_message"
@@ -66,6 +74,7 @@ export interface UserProfileDoc extends Doc<"userProfiles"> {
     | "direct"
     | "engaging"
     | "storyteller";
+  proposalTemplateId?: ProposalTemplateId;
 }
 
 export interface RateLimitDoc extends Doc<"rateLimits"> {

@@ -132,3 +132,10 @@ my-app/convex/_generated/
 
 # --- Vite / vitest -----------------------------------------------
 my-app/src/__tests__/**/__snapshots__/
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/

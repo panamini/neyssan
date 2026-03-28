@@ -1,8 +1,14 @@
 import type { ProposalVoicePreset } from "../../convex/lib/proposals/voicePresets";
+import {
+  DEFAULT_VERBATI_STYLE,
+  getVerbatiTypographyFamilies,
+  resolveVerbatiStyle,
+} from "../features/verbati/style";
+import type { VerbatiStylePreset } from "../features/verbati/types";
 
 export type ProposalDocumentTypography = {
   fontFamily: string;
-  fontSize: number;
+  fontSize: string;
   lineHeight: number;
   fontWeight: number;
   letterSpacing?: string;
@@ -10,31 +16,47 @@ export type ProposalDocumentTypography = {
 
 export function getProposalDocumentTypography(
   voicePreset?: ProposalVoicePreset | null,
+  stylePreset?: VerbatiStylePreset | null,
 ): ProposalDocumentTypography {
-  if (voicePreset === "engaging") {
-    return {
-      fontFamily: '"Fraunces", serif',
-      fontSize: 14.75,
-      lineHeight: 1.9,
-      fontWeight: 300,
-      letterSpacing: "-0.005em",
-    };
-  }
+  const resolvedStyle = stylePreset
+    ? resolveVerbatiStyle(stylePreset)
+    : DEFAULT_VERBATI_STYLE;
+  const typographyFamilies = getVerbatiTypographyFamilies(resolvedStyle);
 
   if (voicePreset === "expert") {
     return {
-      fontFamily: '"IBM Plex Mono", monospace',
-      fontSize: 12.5,
-      lineHeight: 1.78,
+      fontFamily: typographyFamilies.bodyFamily,
+      fontSize: "calc(var(--proposal-inline-mm) * 3.62)",
+      lineHeight: 1.6,
       fontWeight: 400,
-      letterSpacing: "0.01em",
+      letterSpacing: "0.003em",
+    };
+  }
+
+  if (voicePreset === "direct") {
+    return {
+      fontFamily: typographyFamilies.bodyFamily,
+      fontSize: "calc(var(--proposal-inline-mm) * 3.7)",
+      lineHeight: 1.58,
+      fontWeight: 400,
+      letterSpacing: "0.002em",
+    };
+  }
+
+  if (voicePreset === "engaging" || voicePreset === "storyteller") {
+    return {
+      fontFamily: typographyFamilies.bodyFamily,
+      fontSize: "calc(var(--proposal-inline-mm) * 3.88)",
+      lineHeight: 1.64,
+      fontWeight: 400,
+      letterSpacing: "-0.002em",
     };
   }
 
   return {
-    fontFamily: '"Source Serif 4", serif',
-    fontSize: 15,
-    lineHeight: 1.82,
+    fontFamily: typographyFamilies.bodyFamily,
+    fontSize: "calc(var(--proposal-inline-mm) * 3.79)",
+    lineHeight: 1.62,
     fontWeight: 400,
     letterSpacing: "0em",
   };
