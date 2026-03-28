@@ -8,11 +8,12 @@ import {
   Trash,
   X,
 } from "@/lib/icons";
-import { useQuery, useMutation, useAction } from "convex/react";
+import { useQuery, useMutation, useAction, useConvexAuth } from "convex/react";
 import { useAuth } from "@clerk/clerk-react";
 import { api } from "../../convex/_generated/api";
 import { useToast } from "./ui/toast";
 import ProposalDisplay from "./ProposalDisplay";
+import { useCvLibrary } from "../contexts/CvLibraryContext";
 import {
   buildAppProposalPersonalizationPayload,
   getActiveLocalPersonalizationSource,
@@ -25,7 +26,17 @@ import {
   type ProposalFormalityLevel,
   type ProposalVoicePreset,
 } from "../../convex/lib/proposals/voicePresets";
+import {
+  type ProposalTemplateId,
+} from "../../convex/lib/proposals/renderTemplates";
 import { formatUiDate } from "../lib/ui-date";
+import {
+  resolveProposalStoredText,
+  type StoredProposalTextSection,
+} from "../lib/proposal-output-draft";
+import { getVerbatiStyleFromCv } from "../features/verbati/style";
+import type { VerbatiStylePreset } from "../features/verbati/types";
+import { resolveProposalRenderState } from "../lib/proposal-render-state";
 
 type SavedProposalType =
   | "cover_letter"
@@ -37,6 +48,10 @@ type SavedProposalRecord = {
   _creationTime: number;
   title?: string;
   content?: string;
+  sections?: Array<{
+    type?: string;
+    content?: string;
+  }>;
   metadata?: {
     sourceJobDescription?: string;
     proposalType?: SavedProposalType;
@@ -46,6 +61,8 @@ type SavedProposalRecord = {
     voicePreset?: ProposalVoicePreset;
     formalityLevel?: ProposalFormalityLevel;
     creativity?: ProposalCreativityLevel;
+    templateId?: ProposalTemplateId;
+    verbatiStyle?: Partial<VerbatiStylePreset>;
   };
 };
 
@@ -153,6 +170,39 @@ function getStoredVoicePreset(
   return proposal.metadata?.voicePreset ?? DEFAULT_PROPOSAL_VOICE_PRESET;
 }
 
+function getStoredProposalRenderInput(proposal: SavedProposalRecord): {
+  storedTemplateId?: ProposalTemplateId;
+  storedStylePreset?: Partial<VerbatiStylePreset>;
+} {
+  return {
+    storedTemplateId: proposal.metadata?.templateId,
+    storedStylePreset: proposal.metadata?.verbatiStyle,
+  };
+}
+
+function getProposalDisplayText(proposal: SavedProposalRecord | null): string {
+  if (!proposal) return "";
+
+  const normalizedSections: StoredProposalTextSection[] | undefined =
+    proposal.sections?.flatMap((section) => {
+      if (
+        (section.type === "text" ||
+          section.type === "code" ||
+          section.type === "image") &&
+        typeof section.content === "string"
+      ) {
+        return [{ type: section.type, content: section.content }];
+      }
+
+      return [];
+    });
+
+  return resolveProposalStoredText({
+    content: proposal.content,
+    sections: normalizedSections,
+  });
+}
+
 function typeLabel(t: SavedProposalType): string {
   if (t === "cover_letter") return "Letter";
   if (t === "freelance_proposal") return "Proposal";
@@ -231,9 +281,14 @@ export default function ProposalsList({
   onSelectedProposalIdChange,
 }: ProposalsListProps) {
   const { isLoaded, isSignedIn } = useAuth();
+  const {
+    isAuthenticated: isConvexAuthenticated,
+    isLoading: isConvexAuthLoading,
+  } = useConvexAuth();
+  const { currentCv } = useCvLibrary();
   const proposals = useQuery(
     api.proposalsPublic.default as any,
-    isLoaded && isSignedIn ? {} : "skip",
+    isLoaded && isSignedIn && isConvexAuthenticated ? {} : "skip",
   ) as SavedProposalRecord[] | undefined;
   const deleteProposal = useMutation(
     (api as any).deleteProposalPublic?.default,
@@ -255,6 +310,9 @@ export default function ProposalsList({
     null,
   );
   const [isUpdating, setIsUpdating] = React.useState<string | null>(null);
+  const [selectedOutputMode, setSelectedOutputMode] = React.useState<
+    "preview" | "edit"
+  >("preview");
   const [copied, setCopied] = React.useState(false);
   const [isConfirmingDelete, setIsConfirmingDelete] = React.useState(false);
   const [savedViewMode, setSavedViewMode] =
@@ -270,6 +328,19 @@ export default function ProposalsList({
     React.useState(false);
   const [isSelectionPending, startSelectionTransition] = React.useTransition();
   const { showToast } = useToast();
+  const activeCvStylePreset = React.useMemo(
+    () => (currentCv ? getVerbatiStyleFromCv(currentCv) : null),
+    [currentCv],
+  );
+  const showConvexAuthRequiredToast = React.useCallback(
+    (actionLabel: string) => {
+      showToast("Sign in required", {
+        variant: "warning",
+        description: `${actionLabel} is unavailable until saved proposals are authenticated.`,
+      });
+    },
+    [showToast],
+  );
   const loadMoreSentinelRef = React.useRef<HTMLDivElement | null>(null);
   const gestureSurfaceRef = React.useRef<HTMLDivElement | null>(null);
   const selectedCardRef = React.useRef<HTMLDivElement | null>(null);
@@ -280,7 +351,8 @@ export default function ProposalsList({
     (proposal: SavedProposalRecord | null, syncSelection: boolean) => {
       setSelectedId(proposal?._id ?? null);
       setEditTitle(proposal?.title ?? "");
-      setEditContent(proposal?.content ?? "");
+      setEditContent(getProposalDisplayText(proposal));
+      setSelectedOutputMode("preview");
       setIsConfirmingDelete(false);
       setCopied(false);
       if (syncSelection) {
@@ -344,7 +416,13 @@ export default function ProposalsList({
   };
 
   React.useEffect(() => {
-    if (proposals && !localProposals) setLocalProposals(proposals);
+    if (!proposals) {
+      return;
+    }
+
+    if (localProposals === null || localProposals.length === 0) {
+      setLocalProposals(proposals);
+    }
   }, [localProposals, proposals]);
 
   React.useEffect(() => {
@@ -384,6 +462,21 @@ export default function ProposalsList({
 
   const displayList = localProposals ?? proposals ?? [];
   const selected = displayList.find((p) => p._id === selectedId) ?? null;
+  const resolveSavedProposalRenderState = React.useCallback(
+    (proposal: SavedProposalRecord | null) => {
+      if (!proposal) return null;
+
+      return resolveProposalRenderState({
+        ...getStoredProposalRenderInput(proposal),
+        activeCvStylePreset,
+      });
+    },
+    [activeCvStylePreset],
+  );
+  const selectedRenderState = React.useMemo(
+    () => resolveSavedProposalRenderState(selected),
+    [resolveSavedProposalRenderState, selected],
+  );
   const proposalStack = React.useMemo(() => {
     if (!selected) return [];
     return [
@@ -574,7 +667,7 @@ export default function ProposalsList({
     };
   }, [isMobileSavedViewport]);
 
-  if (!isLoaded || !isSignedIn) {
+  if (!isLoaded || isConvexAuthLoading) {
     return (
       <div
         style={{
@@ -583,7 +676,20 @@ export default function ProposalsList({
           fontSize: "var(--ts)",
         }}
       >
-        {!isLoaded ? "Loading…" : "Sign in to view saved proposals."}
+        Loading…
+      </div>
+    );
+  }
+  if (!isSignedIn || !isConvexAuthenticated) {
+    return (
+      <div
+        style={{
+          padding: "var(--s5)",
+          color: "var(--tg2)",
+          fontSize: "var(--ts)",
+        }}
+      >
+        Sign in to view saved proposals.
       </div>
     );
   }
@@ -615,7 +721,11 @@ export default function ProposalsList({
   }
 
   async function handleSaveDocument() {
-    if (!selected || isUpdating) return;
+    if (!selected || !selectedRenderState || isUpdating) return;
+    if (!isConvexAuthenticated) {
+      showConvexAuthRequiredToast("Save");
+      return;
+    }
     const trimmed = editContent.trim();
     const normalizedTitle =
       editTitle.trim() || selected.title || "Saved proposal";
@@ -633,11 +743,20 @@ export default function ProposalsList({
               sections: [{ type: "text", content: trimmed }],
             }
           : {}),
+        metadata: {
+          templateId: selectedRenderState.templateId,
+          verbatiStyle: selectedRenderState.stylePreset,
+        },
       });
       setEditTitle(normalizedTitle);
       applyLocalUpdate(selected._id, {
         title: normalizedTitle,
         ...(contentChanged ? { content: trimmed } : {}),
+        metadata: {
+          ...(selected.metadata ?? {}),
+          templateId: selectedRenderState.templateId,
+          verbatiStyle: selectedRenderState.stylePreset,
+        },
       });
     } catch (err) {
       console.error("Update failed:", err);
@@ -648,7 +767,11 @@ export default function ProposalsList({
   }
 
   async function handleRegenerate() {
-    if (!selected || isRegenerating) return;
+    if (!selected || !selectedRenderState || isRegenerating) return;
+    if (!isConvexAuthenticated) {
+      showConvexAuthRequiredToast("Regenerate");
+      return;
+    }
     setIsRegenerating(selected._id);
     try {
       const activeCvSource = getActiveLocalPersonalizationSource();
@@ -687,6 +810,10 @@ export default function ProposalsList({
         content: res.proposalContent,
         sections: [{ type: "text", content: res.proposalContent }],
         status: "saved",
+        metadata: {
+          templateId: selectedRenderState.templateId,
+          verbatiStyle: selectedRenderState.stylePreset,
+        },
       });
       const regeneratedRecord: SavedProposalRecord = {
         _id: String(res.proposalId),
@@ -698,6 +825,8 @@ export default function ProposalsList({
           sourceJobDescription,
           proposalType,
           voicePreset,
+          templateId: selectedRenderState.templateId,
+          verbatiStyle: selectedRenderState.stylePreset,
           requestedModelType: res.requestedModelType,
           actualModelType: res.actualModelType,
           fallbackTriggerCode: res.fallbackTriggerCode,
@@ -719,6 +848,10 @@ export default function ProposalsList({
 
   async function handleDelete() {
     if (!selected) return;
+    if (!isConvexAuthenticated) {
+      showConvexAuthRequiredToast("Delete");
+      return;
+    }
     try {
       await deleteProposal({ id: selected._id });
       removeLocalProposal(selected._id);
@@ -884,18 +1017,23 @@ export default function ProposalsList({
                   error={null}
                   proposalType={getStoredProposalType(selected)}
                   voicePreset={getStoredVoicePreset(selected)}
+                  templateId={selectedRenderState?.templateId ?? null}
+                  stylePreset={selectedRenderState?.stylePreset ?? null}
                   fallbackInfo={buildFallbackInfo(selected)}
                   documentTitle={selectedHeaderTitle || "Saved proposal"}
                   documentMeta={selectedHeaderMeta}
-                  documentTitleEditable
+                  documentTitleEditable={selectedOutputMode === "edit"}
                   onDocumentTitleChange={setEditTitle}
                   onDocumentTitleCommit={() => {
                     void handleSaveDocument();
                   }}
                   documentTitlePlaceholder="Saved proposal"
-                  mode="edit"
-                  showModeToggle={false}
-                  size={isOutputFocused ? "focused" : "default"}
+                  mode={selectedOutputMode}
+                  onModeChange={setSelectedOutputMode}
+                  showModeToggle
+                  showZoomControls
+                  zoomStorageKey={null}
+                  size="default"
                   onCopy={() => {
                     void navigator.clipboard.writeText(editContent).then(() => {
                       setCopied(true);
@@ -912,25 +1050,9 @@ export default function ProposalsList({
                       <button
                         type="button"
                         title={
-                          isOutputFocused
-                            ? "Return to card stack"
-                            : "Focus proposal"
-                        }
-                        className="dasti-icon-button"
-                        onClick={toggleFocusView}
-                      >
-                        {isOutputFocused ? (
-                          <CornersIn size={16} strokeWidth={1.7} />
-                        ) : (
-                          <ArrowsOutSimple size={16} strokeWidth={1.7} />
-                        )}
-                      </button>
-                      <button
-                        type="button"
-                        title={
                           isRegenerating === selected._id
-                            ? "Regenerating…"
-                            : "Regenerate"
+                            ? "Refreshing…"
+                            : "Refresh"
                         }
                         className="dasti-icon-button"
                         style={{
@@ -996,42 +1118,50 @@ export default function ProposalsList({
               </div>
 
               {!isOutputFocused
-                ? visibleSecondaryProposals.map((proposal) => (
-                    <div
-                      key={proposal._id}
-                      className="dasti-proposal-library-card dasti-proposal-library-card--secondary"
-                      role="button"
-                      tabIndex={0}
-                      aria-label={`Open saved proposal ${proposal.title ?? ""}`}
-                      onClick={() => handleSelectProposal(proposal, true)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          handleSelectProposal(proposal, true);
-                        }
-                      }}
-                    >
-                      <ProposalDisplay
-                        proposalContent={proposal.content ?? ""}
-                        loading={false}
-                        error={null}
-                        proposalType={getStoredProposalType(proposal)}
-                        voicePreset={getStoredVoicePreset(proposal)}
-                        documentTitle={
-                          (proposal.title || "").trim() || "Saved proposal"
-                        }
-                        documentMeta={
-                          buildProposalMeta(proposal) || "Saved proposal"
-                        }
-                        mode="preview"
-                        showModeToggle={false}
-                        hideDocumentHeader
-                        onPreviewInteract={() =>
-                          handleSelectProposal(proposal, true)
-                        }
-                      />
-                    </div>
-                  ))
+                ? visibleSecondaryProposals.map((proposal) => {
+                    const proposalRenderState =
+                      resolveSavedProposalRenderState(proposal);
+
+                    return (
+                      <div
+                        key={proposal._id}
+                        className="dasti-proposal-library-card dasti-proposal-library-card--secondary"
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Open saved proposal ${proposal.title ?? ""}`}
+                        onClick={() => handleSelectProposal(proposal, true)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            handleSelectProposal(proposal, true);
+                          }
+                        }}
+                      >
+                        <ProposalDisplay
+                          proposalContent={getProposalDisplayText(proposal)}
+                          loading={false}
+                          error={null}
+                          proposalType={getStoredProposalType(proposal)}
+                          voicePreset={getStoredVoicePreset(proposal)}
+                          templateId={proposalRenderState?.templateId ?? null}
+                          stylePreset={proposalRenderState?.stylePreset ?? null}
+                          documentTitle={
+                            (proposal.title || "").trim() || "Saved proposal"
+                          }
+                          documentMeta={
+                            buildProposalMeta(proposal) || "Saved proposal"
+                          }
+                          mode="preview"
+                          showModeToggle={false}
+                          hideDocumentHeader
+                          previewAnchor="body"
+                          onPreviewInteract={() =>
+                            handleSelectProposal(proposal, true)
+                          }
+                        />
+                      </div>
+                    );
+                  })
                 : null}
             </>
           )

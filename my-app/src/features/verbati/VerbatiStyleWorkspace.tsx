@@ -33,6 +33,23 @@ import {
   mapCvDocumentToResumeData,
 } from "./cvDocumentToResumeData";
 import { formatUiDate } from "../../lib/ui-date";
+import { VerbatiProposalWorkspace } from "./VerbatiProposalWorkspace";
+
+type StyleForgeRenderMode = "resume" | "proposal";
+
+const STYLE_FORGE_RENDER_MODE_STORAGE_KEY = "dasti:style-forge-render-mode:v1";
+
+function readStoredStyleForgeRenderMode(): StyleForgeRenderMode {
+  if (typeof window === "undefined") {
+    return "resume";
+  }
+
+  const storedValue = window.localStorage.getItem(
+    STYLE_FORGE_RENDER_MODE_STORAGE_KEY,
+  );
+
+  return storedValue === "proposal" ? "proposal" : "resume";
+}
 
 function useResponsiveWorkspaceBreakpoint(): boolean {
   const [isNarrow, setIsNarrow] = React.useState(() =>
@@ -147,6 +164,9 @@ export function VerbatiStyleWorkspace(): JSX.Element {
 
   const [stylePreset, setStylePreset] =
     React.useState<VerbatiStylePreset>(persistedStyle);
+  const [renderMode, setRenderMode] = React.useState<StyleForgeRenderMode>(() =>
+    readStoredStyleForgeRenderMode(),
+  );
   const [previewSource, setPreviewSource] =
     React.useState<VerbatiPreviewSource>(hasActiveResume ? "active" : "sample");
   const [compareLayouts, setCompareLayouts] = React.useState(false);
@@ -207,6 +227,17 @@ export function VerbatiStyleWorkspace(): JSX.Element {
     lastBreakpointRef.current = isNarrow;
     setShowPresetPanels(!isNarrow);
   }, [isNarrow]);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(
+      STYLE_FORGE_RENDER_MODE_STORAGE_KEY,
+      renderMode,
+    );
+  }, [renderMode]);
 
   React.useEffect(() => {
     if (lastInitializedCvIdRef.current === currentCvId) {
@@ -743,6 +774,33 @@ export function VerbatiStyleWorkspace(): JSX.Element {
     </aside>
   );
 
+  const renderModeSwitch = (
+    <div
+      style={{
+        display: "inline-flex",
+        gap: "var(--s2)",
+        flexWrap: "wrap",
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => setRenderMode("resume")}
+        style={topbarButtonStyle(renderMode === "resume")}
+        aria-pressed={renderMode === "resume"}
+      >
+        Resume render
+      </button>
+      <button
+        type="button"
+        onClick={() => setRenderMode("proposal")}
+        style={topbarButtonStyle(renderMode === "proposal")}
+        aria-pressed={renderMode === "proposal"}
+      >
+        Proposal render
+      </button>
+    </div>
+  );
+
   const previewColumn = (
     <section
       className="dasti-flow"
@@ -801,6 +859,7 @@ export function VerbatiStyleWorkspace(): JSX.Element {
           </div>
 
           <div className="dasti-page-actions">
+            {renderModeSwitch}
             <div
               className={
                 isLoadedCvPreview
@@ -1076,58 +1135,70 @@ export function VerbatiStyleWorkspace(): JSX.Element {
         </Dialog>
 
         {!showActiveCvOption ? (
-          <div
-            style={{
-              borderRadius: "var(--radius-card)",
-              border:
-                "1px solid color-mix(in srgb, var(--wa) 20%, transparent)",
-              background: "var(--wab)",
-              color: "var(--wat)",
-              padding: "var(--s3) var(--s4)",
-              lineHeight: 1.6,
-            }}
-          >
-            {currentCv
-              ? "The active CV exists but it still lacks enough identity or section content for a faithful render, so StyleForge is showing the sample document."
-              : "No active CV is loaded yet. StyleForge is showing the sample document until a CV is opened or created."}
-          </div>
+          renderMode === "resume" ? (
+            <div
+              style={{
+                borderRadius: "var(--radius-card)",
+                border:
+                  "1px solid color-mix(in srgb, var(--wa) 20%, transparent)",
+                background: "var(--wab)",
+                color: "var(--wat)",
+                padding: "var(--s3) var(--s4)",
+                lineHeight: 1.6,
+              }}
+            >
+              {currentCv
+                ? "The active CV exists but it still lacks enough identity or section content for a faithful render, so StyleForge is showing the sample document."
+                : "No active CV is loaded yet. StyleForge is showing the sample document until a CV is opened or created."}
+            </div>
+          ) : null
         ) : null}
 
-        <div
-          className="dasti-grid-split"
-          style={
-            {
-              "--grid-columns": isNarrow ? "1fr" : "360px minmax(0, 1fr)",
-              "--grid-gap": "var(--layout-split-gap)",
-              "--grid-align": "start",
-            } as React.CSSProperties
-          }
-        >
-          {isNarrow ? (
-            <>
-              {previewColumn}
-              {showPresetPanels ? controlsColumn : null}
-            </>
-          ) : (
-            <>
-              {controlsColumn}
-              {previewColumn}
-            </>
-          )}
-        </div>
+        {renderMode === "resume" ? (
+          <>
+            <div
+              className="dasti-grid-split"
+              style={
+                {
+                  "--grid-columns": isNarrow ? "1fr" : "360px minmax(0, 1fr)",
+                  "--grid-gap": "var(--layout-split-gap)",
+                  "--grid-align": "start",
+                } as React.CSSProperties
+              }
+            >
+              {isNarrow ? (
+                <>
+                  {previewColumn}
+                  {showPresetPanels ? controlsColumn : null}
+                </>
+              ) : (
+                <>
+                  {controlsColumn}
+                  {previewColumn}
+                </>
+              )}
+            </div>
 
-        {isLoading ? (
-          <div
-            style={{
-              fontSize: "var(--tx)",
-              color: "var(--tm2)",
-              textAlign: "right",
-              paddingBottom: "var(--s5)",
-            }}
-          >
-            Loading CV library…
-          </div>
-        ) : null}
+            {isLoading ? (
+              <div
+                style={{
+                  fontSize: "var(--tx)",
+                  color: "var(--tm2)",
+                  textAlign: "right",
+                  paddingBottom: "var(--s5)",
+                }}
+              >
+                Loading CV library…
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <VerbatiProposalWorkspace
+            isNarrow={isNarrow}
+            stylePreset={previewStylePreset}
+            renderModeSwitch={renderModeSwitch}
+          />
+        )}
       </div>
     </div>
   );
