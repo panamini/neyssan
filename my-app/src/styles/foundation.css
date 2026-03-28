@@ -164,6 +164,68 @@
   --document-sheet-ratio: 1 / 1.41421356;
   --document-sheet-min-block: 420px;
   --document-sheet-max-block: min(72vh, 780px);
+  --document-shell-padding-inline: 14px;
+  --document-shell-padding-block: 14px;
+  --document-rail-gap: 12px;
+  --document-stage-radius: clamp(12px, 1.5vw, 18px);
+  --document-stage-halo: 0 0 0 1px
+      color-mix(in srgb, var(--color-border) 54%, transparent),
+    0 16px 36px color-mix(in srgb, var(--color-text) 7%, transparent);
+  --document-viewer-bleed-inline: clamp(16px, 1.8vw, 24px);
+  --document-viewer-bleed-block: clamp(18px, 2.1vw, 28px);
+  --document-viewer-radius: clamp(18px, 2vw, 24px);
+  --document-viewer-frame-surface: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-surface) 58%, var(--color-canvas) 42%),
+    color-mix(in srgb, var(--color-canvas) 82%, var(--color-surface-muted) 18%)
+  );
+  --document-viewer-frame-border: color-mix(
+    in srgb,
+    var(--color-border) 76%,
+    transparent
+  );
+  --document-viewer-frame-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.78),
+    0 16px 36px color-mix(in srgb, var(--color-text) 4%, transparent);
+  --document-viewer-shell-inline-size: min(
+    var(--card-rail-md),
+    calc(
+      var(--document-sheet-inline-size) +
+        (var(--document-shell-padding-inline) * 2) +
+        2px
+    )
+  );
+  --document-viewer-shell-min-block: calc(
+    var(--document-sheet-min-block) + (var(--document-viewer-bleed-block) * 2)
+  );
+  --document-viewer-shell-max-block: calc(
+    var(--document-sheet-max-block) + (var(--document-viewer-bleed-block) * 2)
+  );
+  --proposal-page-width-mm: 210;
+  --proposal-page-height-mm: 297;
+  --proposal-inline-mm: calc(100% / var(--proposal-page-width-mm));
+  --proposal-block-mm: calc(100% / var(--proposal-page-height-mm));
+  --proposal-grid-step-a-inline: calc(var(--proposal-inline-mm) * 17);
+  --proposal-grid-step-b-inline: calc(var(--proposal-inline-mm) * 18);
+  --proposal-grid-half-step-inline: calc(var(--proposal-inline-mm) * 8.5);
+  --proposal-grid-step-a-block: calc(var(--proposal-block-mm) * 17);
+  --proposal-grid-step-b-block: calc(var(--proposal-block-mm) * 18);
+  --proposal-grid-half-step-block: calc(var(--proposal-block-mm) * 8.5);
+  --proposal-template-left-zone-mm: 52;
+  --proposal-template-top-offset-mm: 35;
+  --proposal-template-body-start-mm: 95.5;
+  --proposal-template-bottom-margin-mm: 18;
+  --proposal-template-right-margin-mm: 18;
+  --proposal-document-reading-measure-min: 40ch;
+  --proposal-document-reading-measure-max: 64ch;
+  --proposal-document-title-scale: 7.1;
+  --proposal-document-paper: var(--color-canvas);
+  --proposal-document-ink: var(--color-text);
+  --proposal-document-meta-ink: var(--color-text-muted);
+  --proposal-document-accent-ink: color-mix(
+    in srgb,
+    var(--color-accent) 78%,
+    var(--color-text) 22%
+  );
   --proposal-sheet-margin-inline-inner: var(--s2);
   --proposal-sheet-margin-block-start: var(--s3);
   --proposal-sheet-margin-inline-outer: var(--s4);
@@ -172,14 +234,14 @@
   --proposal-sheet-edge-fade-height: 26px;
   --proposal-sheet-top-fade: linear-gradient(
     to bottom,
-    color-mix(in srgb, var(--sf1) 94%, transparent) 0%,
-    color-mix(in srgb, var(--sf1) 78%, transparent) 44%,
+    color-mix(in srgb, var(--document-viewer-frame-surface) 96%, transparent) 0%,
+    color-mix(in srgb, var(--document-viewer-frame-surface) 78%, transparent) 44%,
     transparent 100%
   );
   --proposal-sheet-bottom-fade: linear-gradient(
     to top,
-    color-mix(in srgb, var(--sf1) 88%, transparent) 0%,
-    color-mix(in srgb, var(--sf1) 44%, transparent) 54%,
+    color-mix(in srgb, var(--document-viewer-frame-surface) 92%, transparent) 0%,
+    color-mix(in srgb, var(--document-viewer-frame-surface) 42%, transparent) 54%,
     transparent 100%
   );
   --proposal-sheet-bottom-shadow: 0 -14px 22px -22px
@@ -443,6 +505,23 @@
   --section-hover-shadow: 0 16px 28px -26px hsla(0, 0%, 0%, 0.68),
     inset 0 1px 0 color-mix(in srgb, white 6%, transparent);
   --section-hover-lift: -1px;
+  --document-viewer-frame-surface: color-mix(
+    in srgb,
+    var(--sf1) 90%,
+    var(--bg) 10%
+  );
+  --document-viewer-frame-border: var(--border-field);
+  --document-viewer-frame-shadow: inset 0 1px 0
+      color-mix(in srgb, white 5%, transparent),
+    0 14px 26px -24px hsla(0, 0%, 0%, 0.8);
+  --proposal-document-paper: var(--color-surface-raised);
+  --proposal-document-ink: var(--color-text);
+  --proposal-document-meta-ink: var(--color-text-muted);
+  --proposal-document-accent-ink: color-mix(
+    in srgb,
+    var(--color-accent) 62%,
+    var(--color-text) 38%
+  );
 }
 
 /* ============================================================

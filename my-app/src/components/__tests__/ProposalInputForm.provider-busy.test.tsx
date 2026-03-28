@@ -94,7 +94,16 @@ vi.mock("react-hook-form", () => {
           onBlur: () => {},
           ref: () => {},
         }),
-        watch: (name: string) => values[name] ?? "",
+        watch: (name?: string | ((values: Record<string, unknown>) => void)) => {
+          if (typeof name === "function") {
+            name(values);
+            return {
+              unsubscribe: () => {},
+            };
+          }
+
+          return name ? values[name] ?? "" : values;
+        },
         setValue,
         getValues: (name?: string) => (name ? values[name] : values),
         handleSubmit:
@@ -118,6 +127,10 @@ vi.mock("../ProposalInputForm.schemas", () => ({
 }));
 
 vi.mock("convex/react", () => ({
+  useConvexAuth: () => ({
+    isLoading: false,
+    isAuthenticated: true,
+  }),
   useAction: () => mockGenerateProposalAction,
   useMutation: () => mockMutationHookFn,
   useQuery: (...args: any[]) => mockQuery(...args),

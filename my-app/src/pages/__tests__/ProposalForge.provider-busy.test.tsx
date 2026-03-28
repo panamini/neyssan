@@ -1,6 +1,7 @@
 import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { MemoryRouter } from "react-router-dom";
 import { ProposalForge } from "../ProposalForge";
 
 vi.mock("convex/react", () => ({
@@ -9,11 +10,17 @@ vi.mock("convex/react", () => ({
     isAuthenticated: true,
   }),
   useQuery: () => null,
+  useMutation: () => vi.fn().mockResolvedValue(undefined),
+  useAction: () => vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock("../../../convex/_generated/api", () => ({
   api: {
+    functions: { generateProposal: "functions.generateProposal" },
     proposalHandoffs: { get: "proposalHandoffs.get" },
+    proposalSettings: { getCurrent: "proposalSettings.getCurrent" },
+    updateProposalPublic: { default: "updateProposalPublic.default" },
+    deleteProposalPublic: { default: "deleteProposalPublic.default" },
   },
 }));
 
@@ -105,7 +112,11 @@ vi.mock("../../components/ProposalsList", () => ({
 
 describe("ProposalForge controlled failure integration", () => {
   it("shows a visible provider-busy failure state in the result panel and clears stale proposal content", () => {
-    render(<ProposalForge />);
+    render(
+      <MemoryRouter>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
 
     expect(
       screen.getByText("Generate a proposal to see the results here."),
@@ -138,7 +149,11 @@ describe("ProposalForge controlled failure integration", () => {
   });
 
   it("shows a visible transport failure state in the result panel", () => {
-    render(<ProposalForge />);
+    render(
+      <MemoryRouter>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
 
     fireEvent.click(
       screen.getByRole("button", { name: "Trigger transport error" }),
@@ -156,7 +171,11 @@ describe("ProposalForge controlled failure integration", () => {
   });
 
   it("shows a single successful-result fallback disclosure in the result panel", () => {
-    render(<ProposalForge />);
+    render(
+      <MemoryRouter>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
 
     fireEvent.click(
       screen.getByRole("button", { name: "Trigger fallback success" }),
