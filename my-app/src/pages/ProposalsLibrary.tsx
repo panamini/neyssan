@@ -1,6 +1,7 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useConvexAuth } from "convex/react";
+import { useAuth } from "@clerk/clerk-react";
 import { api } from "../../convex/_generated/api";
 import { FileText, Plus, X, Check } from "@/lib/icons";
 import { formatUiDate } from "../lib/ui-date";
@@ -58,7 +59,15 @@ function buildProposalSnippet(value: unknown): string {
 
 export function ProposalsLibrary(): JSX.Element {
   const navigate = useNavigate();
-  const proposals = useQuery(api.proposalsPublic.default as any, {});
+  const { isLoaded, isSignedIn } = useAuth();
+  const {
+    isAuthenticated: isConvexAuthenticated,
+    isLoading: isConvexAuthLoading,
+  } = useConvexAuth();
+  const proposals = useQuery(
+    api.proposalsPublic.default as any,
+    isLoaded && isSignedIn && isConvexAuthenticated ? {} : "skip",
+  );
   const deleteProposal = useMutation(
     (api as any).deleteProposalPublic?.default,
   );
@@ -72,6 +81,10 @@ export function ProposalsLibrary(): JSX.Element {
   }, [proposals]);
 
   async function handleDelete(id: string) {
+    if (!isConvexAuthenticated || isConvexAuthLoading) {
+      setConfirmingId(null);
+      return;
+    }
     try {
       await deleteProposal({ id });
     } catch {
@@ -80,6 +93,12 @@ export function ProposalsLibrary(): JSX.Element {
       setConfirmingId(null);
     }
   }
+
+  const authStatusMessage = !isLoaded || isConvexAuthLoading
+    ? "Loading…"
+    : !isSignedIn || !isConvexAuthenticated
+      ? "Sign in to view saved proposals."
+      : null;
 
   return (
     <div className="dasti-page-scroll">
@@ -109,13 +128,13 @@ export function ProposalsLibrary(): JSX.Element {
           </div>
         </div>
 
-        {proposals === undefined && (
+        {authStatusMessage && (
           <div className="dasti-hint" style={{ padding: "var(--space-5) 0" }}>
-            Loading…
+            {authStatusMessage}
           </div>
         )}
 
-        {proposals !== undefined && sorted.length === 0 && (
+        {!authStatusMessage && proposals !== undefined && sorted.length === 0 && (
           <div className="dasti-empty-state">
             <FileText size={32} strokeWidth={1.2} />
             <div className="dasti-empty-state__title">
@@ -135,7 +154,7 @@ export function ProposalsLibrary(): JSX.Element {
           </div>
         )}
 
-        {sorted.length > 0 && (
+        {!authStatusMessage && sorted.length > 0 && (
           <div className="dasti-grid-auto">
             {sorted.map((p: any) => {
               const date = formatUiDate(p._creationTime) ?? "";

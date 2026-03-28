@@ -3,6 +3,11 @@ import "./resume-preview.css";
 
 import { resumeLayoutSpec } from "./resume-layout.spec";
 import type { ResumeData, ResumeLayoutVariantId } from "./resume.types";
+import type { DocumentStageLayout } from "../../../hooks/use-document-stage-layout";
+import {
+  A4_PAGE_HEIGHT_PX,
+  A4_PAGE_WIDTH_PX,
+} from "../../../lib/document-stage";
 
 type ResumePageMode = "comparison" | "comparisonAll" | ResumeLayoutVariantId;
 
@@ -10,8 +15,10 @@ type ResumePageProps = {
   data: ResumeData;
   mode?: ResumePageMode;
   comparisonVariantIds?: ResumeLayoutVariantId[];
-  onSelectVariantId?: ((variantId: ResumeLayoutVariantId) => void) | undefined;
   fitToken?: string;
+  onSelectVariantId?: ((variantId: ResumeLayoutVariantId) => void) | undefined;
+  userZoom?: number;
+  stageLayout?: DocumentStageLayout;
 };
 
 type ResumeVariant =
@@ -34,10 +41,12 @@ type ContactItemView = ResumeData["contact"][number] & {
 type AutoFitLevel = "0" | "1" | "2" | "3" | "4";
 const AUTO_FIT_LEVELS: AutoFitLevel[] = ["0", "1", "2", "3", "4"];
 
-const MM_TO_PX = 96 / 25.4;
-const PAGE_WIDTH_PX = 210 * MM_TO_PX;
-const PAGE_HEIGHT_PX = 297 * MM_TO_PX;
 const COMPACT_COMPARISON_BREAKPOINT = 1040;
+
+const ResumeUserZoomContext = React.createContext(1);
+const ResumeStageLayoutContext = React.createContext<DocumentStageLayout | null>(
+  null,
+);
 
 type ComparisonCardCopy = {
   typography: string;
@@ -84,23 +93,45 @@ function useCompactComparison(isComparison: boolean) {
 }
 
 function usePreviewScale() {
+  const sharedStageLayout = React.useContext(ResumeStageLayoutContext);
+  const userZoom = React.useContext(ResumeUserZoomContext);
   const stageRef = React.useRef<HTMLDivElement | null>(null);
   const [scale, setScale] = React.useState(1);
 
   React.useLayoutEffect(() => {
+    if (sharedStageLayout) {
+      return undefined;
+    }
+
     const stage = stageRef.current;
     if (!stage) return;
+    const measureTarget =
+      stage.closest<HTMLDivElement>(".dasti-doc-viewport--resume") ??
+      stage.parentElement;
 
     const applyScale = () => {
-      const availableWidth = stage.clientWidth;
+      const measurementNode = measureTarget ?? stage;
+      const styles = window.getComputedStyle(measurementNode);
+      const availableWidth =
+        measurementNode.clientWidth -
+        Number.parseFloat(styles.paddingLeft || "0") -
+        Number.parseFloat(styles.paddingRight || "0");
       if (!availableWidth) return;
 
-      const nextScale = Math.min(1, availableWidth / PAGE_WIDTH_PX);
+      // Fit = fill the available WIDTH. A4 at fill-width is always taller
+      // than the viewer shell, so including height in Math.min would always
+      // pick the height constraint and leave the page narrower than the
+      // viewport with large dark frames on both sides.
+      const fitScale = Math.min(
+        1,
+        availableWidth / A4_PAGE_WIDTH_PX,
+      );
+      const nextScale = fitScale * userZoom;
       setScale(nextScale > 0 ? nextScale : 1);
     };
 
     const resizeObserver = new ResizeObserver(applyScale);
-    resizeObserver.observe(stage);
+    resizeObserver.observe(measureTarget ?? stage);
     window.addEventListener("resize", applyScale);
     applyScale();
 
@@ -108,13 +139,18 @@ function usePreviewScale() {
       resizeObserver.disconnect();
       window.removeEventListener("resize", applyScale);
     };
-  }, []);
+  }, [sharedStageLayout, userZoom]);
+
+  const resolvedScale = sharedStageLayout
+    ? sharedStageLayout.pageWidth / A4_PAGE_WIDTH_PX
+    : scale;
 
   return {
     stageRef,
     stageStyle: {
-      "--preview-scale": scale,
-      "--preview-stage-height": `${PAGE_HEIGHT_PX * scale}px`,
+      "--preview-scale": resolvedScale,
+      "--preview-stage-width": `${A4_PAGE_WIDTH_PX * resolvedScale}px`,
+      "--preview-stage-height": `${A4_PAGE_HEIGHT_PX * resolvedScale}px`,
     } as React.CSSProperties,
   };
 }
@@ -538,6 +574,13 @@ function getComparisonCardCopy(variant: ResumeVariant): ComparisonCardCopy {
         color:
           "Soft paper field with calmer accent contrast for long-form reading.",
       };
+    case "quire":
+      return {
+        typography:
+          "Fraunces italic roles, monospace dates, and prose skills — typographic hierarchy without decorative noise.",
+        color:
+          "Warm paper surface with accent reduced to section marks and title label only.",
+      };
     default:
       return {
         typography:
@@ -669,6 +712,7 @@ function PreviewFrame({
       className={`resume-page-frame ${
         isInteractive ? "resume-page-frame--clickable" : ""
       }`}
+      style={stageStyle}
       role={isInteractive ? "button" : undefined}
       tabIndex={isInteractive ? 0 : undefined}
       aria-label={
@@ -692,6 +736,526 @@ function PreviewFrame({
         {children}
       </div>
     </div>
+  );
+}
+
+const QUIRE_SIDEBAR_WIDTH = "57mm";
+const QUIRE_SIDEBAR_BG =
+  "color-mix(in srgb, var(--color-accent) 18%, #1a1a1a 82%)";
+const QUIRE_SIDEBAR_RULE = "rgba(255,255,255,0.18)";
+const QUIRE_SIDEBAR_LABEL_COLOR = "rgba(255,255,255,0.46)";
+const QUIRE_SIDEBAR_TEXT_PRIMARY = "#ffffff";
+const QUIRE_SIDEBAR_TEXT_SECONDARY = "rgba(255,255,255,0.62)";
+const QUIRE_SIDEBAR_ACCENT =
+  "color-mix(in srgb, var(--color-accent-soft) 80%, white 20%)";
+const QUIRE_MAIN_SECTION_HEADING: React.CSSProperties = {
+  margin: 0,
+  fontSize: "2.3mm",
+  fontWeight: 700,
+  textTransform: "uppercase" as const,
+  letterSpacing: "0.24em",
+  color: "var(--color-accent)",
+  paddingBottom: "1.5mm",
+  borderBottom:
+    "0.26mm solid color-mix(in srgb, var(--color-border-strong) 58%, transparent)",
+  marginBottom: "2.8mm",
+};
+const QUIRE_SIDEBAR_SECTION_HEADING: React.CSSProperties = {
+  margin: "0 0 1.6mm",
+  fontSize: "2mm",
+  fontWeight: 700,
+  textTransform: "uppercase" as const,
+  letterSpacing: "0.28em",
+  color: QUIRE_SIDEBAR_LABEL_COLOR,
+  paddingBottom: "1.3mm",
+  borderBottom: `0.2mm solid ${QUIRE_SIDEBAR_RULE}`,
+};
+
+function QuirePage({
+  variant,
+  data,
+  comparisonLabel,
+  compactComparison,
+  onActivateComparison,
+  fitToken,
+}: {
+  variant: ResumeVariant;
+  data: ResumeData;
+  comparisonLabel?: string;
+  compactComparison?: boolean;
+  onActivateComparison?: (() => void) | undefined;
+  fitToken?: string;
+}) {
+  const pageVars = buildPageVars(variant);
+  const { pageRef, innerRef } = useAutoFitPage(fitToken);
+
+  const email = findLabeledValue(data.contact, ["email"]);
+  const phone = findLabeledValue(data.contact, ["phone"]);
+  const location =
+    findLabeledValue(data.metadata, ["location", "city", "based"]) ??
+    findLabeledValue(data.contact, ["location", "city"]);
+  const web = findLabeledValue(data.contact, ["web", "portfolio", "site"]);
+  const headerContact = uniqueRows(
+    [
+      phone ? { label: "phone", value: phone } : null,
+      location ? { label: "location", value: location } : null,
+      email ? { label: "email", value: email } : null,
+      web ? { label: "web", value: web } : null,
+    ],
+  );
+
+  return (
+    <PreviewFrame
+      variant={variant}
+      comparisonLabel={comparisonLabel}
+      compactComparison={compactComparison}
+      onActivateComparison={onActivateComparison}
+    >
+      <article
+        ref={pageRef}
+        className={`resume-page resume-page--${variant.id}`}
+        style={{
+          ...pageVars,
+          background: "var(--color-surface)",
+          border: "0.36mm solid rgba(0,0,0,0.15)",
+          overflow: "hidden",
+          fontFamily: "var(--font-body-family)",
+          borderRadius: "var(--page-radius)",
+        }}
+        aria-label={variant.label}
+      >
+        {/* Full-height dark sidebar strip */}
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            bottom: 0,
+            width: QUIRE_SIDEBAR_WIDTH,
+            background: QUIRE_SIDEBAR_BG,
+            pointerEvents: "none",
+          }}
+        />
+
+        <div
+          ref={innerRef}
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "grid",
+            gridTemplateRows: "auto 1fr",
+          }}
+        >
+          {/* ── HEADER ── */}
+          <header
+            style={{
+              display: "grid",
+              gridTemplateColumns: `${QUIRE_SIDEBAR_WIDTH} 1fr`,
+            }}
+          >
+            {/* Name + title on dark */}
+            <div style={{ padding: "13mm 8mm 8mm 12mm" }}>
+              <h1
+                style={{
+                  margin: 0,
+                  fontFamily: "var(--font-body-family)",
+                  fontSize: "11mm",
+                  lineHeight: 0.94,
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.07em",
+                  color: QUIRE_SIDEBAR_TEXT_PRIMARY,
+                }}
+              >
+                {data.name}
+              </h1>
+              <p
+                style={{
+                  margin: "2.8mm 0 0",
+                  fontSize: "2.8mm",
+                  lineHeight: 1.15,
+                  fontWeight: 600,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.2em",
+                  color: QUIRE_SIDEBAR_ACCENT,
+                }}
+              >
+                {data.title}
+              </p>
+            </div>
+
+            {/* Contact right-aligned on light */}
+            <div
+              style={{
+                padding: "13mm 13mm 8mm 10mm",
+                display: "grid",
+                gap: "1.4mm",
+                justifyItems: "end",
+                alignContent: "start",
+                borderBottom:
+                  "0.28mm solid color-mix(in srgb, var(--color-border-strong) 52%, transparent)",
+              }}
+            >
+              {headerContact.map((item) => (
+                <p
+                  key={item.label}
+                  style={{
+                    margin: 0,
+                    fontSize: "2.62mm",
+                    lineHeight: 1.3,
+                    color: "var(--color-text-muted)",
+                    textAlign: "right",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    maxWidth: "100%",
+                  }}
+                >
+                  {item.value}
+                </p>
+              ))}
+              {data.summary && (
+                <p
+                  style={{
+                    margin: "1.8mm 0 0",
+                    fontSize: "2.52mm",
+                    lineHeight: 1.5,
+                    color: "var(--color-text-muted)",
+                    textAlign: "right",
+                    maxWidth: "88mm",
+                    textWrap: "pretty",
+                  }}
+                >
+                  {data.summary}
+                </p>
+              )}
+            </div>
+          </header>
+
+          {/* ── BODY ── */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: `${QUIRE_SIDEBAR_WIDTH} 1fr`,
+              overflow: "hidden",
+              minHeight: 0,
+            }}
+          >
+            {/* LEFT SIDEBAR */}
+            <aside
+              style={{
+                padding: "6mm 8mm 13mm 12mm",
+                display: "grid",
+                gap: "5mm",
+                alignContent: "start",
+                overflow: "hidden",
+                minWidth: 0,
+              }}
+            >
+              {/* Education */}
+              <section>
+                <h2 style={QUIRE_SIDEBAR_SECTION_HEADING}>Education</h2>
+                <div style={{ display: "grid", gap: "3mm" }}>
+                  {data.education.map((item) => (
+                    <div
+                      key={`${item.school}-${item.degree}`}
+                      style={{ display: "grid", gap: "0.4mm" }}
+                    >
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: "2.1mm",
+                          color: QUIRE_SIDEBAR_ACCENT,
+                          fontWeight: 700,
+                          letterSpacing: "0.08em",
+                          fontFamily:
+                            "SFMono-Regular, IBM Plex Mono, Menlo, monospace",
+                        }}
+                      >
+                        {item.period}
+                      </p>
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: "2.65mm",
+                          color: QUIRE_SIDEBAR_TEXT_PRIMARY,
+                          fontWeight: 600,
+                          lineHeight: 1.22,
+                        }}
+                      >
+                        {item.degree}
+                      </p>
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: "2.3mm",
+                          color: QUIRE_SIDEBAR_TEXT_SECONDARY,
+                          lineHeight: 1.3,
+                        }}
+                      >
+                        {item.school}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              {/* Skills */}
+              <section>
+                <h2 style={QUIRE_SIDEBAR_SECTION_HEADING}>Skills</h2>
+                <ul
+                  style={{
+                    margin: 0,
+                    padding: 0,
+                    listStyle: "none",
+                    display: "grid",
+                    gap: "0.82mm",
+                  }}
+                >
+                  {data.skills.map((skill) => (
+                    <li
+                      key={skill}
+                      style={{
+                        position: "relative",
+                        paddingLeft: "2.8mm",
+                        fontSize: "2.54mm",
+                        color: "rgba(255,255,255,0.76)",
+                        lineHeight: 1.3,
+                      }}
+                    >
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          position: "absolute",
+                          left: 0,
+                          top: "1.3mm",
+                          width: "0.9mm",
+                          height: "0.9mm",
+                          borderRadius: "50%",
+                          background: QUIRE_SIDEBAR_ACCENT,
+                        }}
+                      />
+                      {skill}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+
+              {/* Languages */}
+              {data.languages.length > 0 && (
+                <section>
+                  <h2 style={QUIRE_SIDEBAR_SECTION_HEADING}>Languages</h2>
+                  <div style={{ display: "grid", gap: "1.8mm" }}>
+                    {data.languages.map((lang) => (
+                      <div key={lang.name} style={{ display: "grid", gap: "0.22mm" }}>
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: "2.62mm",
+                            color: QUIRE_SIDEBAR_TEXT_PRIMARY,
+                            fontWeight: 600,
+                          }}
+                        >
+                          {lang.name}
+                        </p>
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: "2.22mm",
+                            color: QUIRE_SIDEBAR_TEXT_SECONDARY,
+                          }}
+                        >
+                          {lang.level}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+            </aside>
+
+            {/* RIGHT MAIN */}
+            <main
+              style={{
+                padding: "6mm 13mm 13mm 10mm",
+                display: "grid",
+                gap: "4.6mm",
+                alignContent: "start",
+                overflow: "hidden",
+                minWidth: 0,
+              }}
+            >
+              {/* Experience */}
+              <section>
+                <h2 style={QUIRE_MAIN_SECTION_HEADING}>Experience</h2>
+                <div style={{ display: "grid", gap: "3.6mm" }}>
+                  {data.experience.map((item) => (
+                    <article
+                      key={`${item.company}-${item.role}`}
+                      style={{
+                        display: "grid",
+                        gap: "0.5mm",
+                        paddingTop: "2.5mm",
+                        borderTop:
+                          "0.2mm solid color-mix(in srgb, var(--color-border) 78%, transparent)",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "baseline",
+                          gap: "4mm",
+                        }}
+                      >
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: "3.1mm",
+                            fontWeight: 700,
+                            color: "var(--color-text)",
+                            lineHeight: 1.1,
+                            textTransform: "uppercase",
+                            letterSpacing: "0.04em",
+                          }}
+                        >
+                          {item.company}
+                        </p>
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: "2.2mm",
+                            color: "var(--color-text-subtle)",
+                            lineHeight: 1.2,
+                            flexShrink: 0,
+                            fontFamily:
+                              "SFMono-Regular, IBM Plex Mono, Menlo, monospace",
+                            letterSpacing: "0.04em",
+                          }}
+                        >
+                          {item.period}
+                        </p>
+                      </div>
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: "2.82mm",
+                          fontStyle: "italic",
+                          color:
+                            "color-mix(in srgb, var(--color-accent) 72%, var(--color-text) 28%)",
+                          lineHeight: 1.24,
+                          fontFamily: "var(--font-heading-family)",
+                        }}
+                      >
+                        {item.role}
+                        {item.location ? (
+                          <span
+                            style={{
+                              fontStyle: "normal",
+                              color: "var(--color-text-muted)",
+                              fontSize: "2.54mm",
+                            }}
+                          >
+                            {" · "}
+                            {item.location}
+                          </span>
+                        ) : null}
+                      </p>
+                      <ul
+                        style={{
+                          margin: "1.3mm 0 0",
+                          padding: 0,
+                          paddingLeft: "3.4mm",
+                          display: "grid",
+                          gap: "0.78mm",
+                          listStyle: "disc",
+                        }}
+                      >
+                        {item.bullets.map((bullet) => (
+                          <li
+                            key={bullet}
+                            style={{
+                              fontSize: "2.5mm",
+                              lineHeight: 1.46,
+                              color: "var(--color-text-muted)",
+                              letterSpacing: "-0.003em",
+                            }}
+                          >
+                            {bullet}
+                          </li>
+                        ))}
+                      </ul>
+                    </article>
+                  ))}
+                </div>
+              </section>
+
+              {/* Projects */}
+              {data.projects.length > 0 && (
+                <section>
+                  <h2 style={QUIRE_MAIN_SECTION_HEADING}>Selected Projects</h2>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                      gap: "2.2mm",
+                    }}
+                  >
+                    {data.projects.map((project) => (
+                      <article
+                        key={project.name}
+                        style={{
+                          display: "grid",
+                          gap: "0.5mm",
+                          paddingTop: "2.2mm",
+                          borderTop:
+                            "0.24mm solid color-mix(in srgb, var(--color-border) 82%, transparent)",
+                        }}
+                      >
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: "2.75mm",
+                            fontWeight: 700,
+                            color: "var(--color-text)",
+                            lineHeight: 1.2,
+                            fontFamily: "var(--font-heading-family)",
+                            fontStyle: "italic",
+                          }}
+                        >
+                          {project.name}
+                        </p>
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: "2.3mm",
+                            color: "var(--color-accent)",
+                            lineHeight: 1.2,
+                          }}
+                        >
+                          {project.meta}
+                        </p>
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: "2.38mm",
+                            lineHeight: 1.44,
+                            color: "var(--color-text-muted)",
+                          }}
+                        >
+                          {project.description}
+                        </p>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              )}
+            </main>
+          </div>
+        </div>
+      </article>
+    </PreviewFrame>
   );
 }
 
@@ -1125,8 +1689,8 @@ function SwissMinimaPage({
                     lineHeight: 1.35,
                   }}
                 >
-                  {topContact.map((item) => (
-                    <span key={item}>{item}</span>
+                  {topContact.map((item, index) => (
+                    <span key={`${item}-${index}`}>{item}</span>
                   ))}
                 </div>
               ) : null}
@@ -1208,9 +1772,9 @@ function SwissMinimaPage({
               </p>
             </div>
 
-            {data.experience.slice(0, 3).map((item) => (
+            {data.experience.slice(0, 3).map((item, index) => (
               <article
-                key={`${item.company}-${item.role}`}
+                key={`${item.company}-${item.role}-${item.period}-${index}`}
                 style={{
                   display: "grid",
                   gridTemplateColumns: "minmax(0, 1fr) 39mm",
@@ -1256,8 +1820,8 @@ function SwissMinimaPage({
                       lineHeight: 1.44,
                     }}
                   >
-                    {item.bullets.slice(0, 3).map((bullet) => (
-                      <li key={bullet}>{bullet}</li>
+                    {item.bullets.slice(0, 3).map((bullet, bulletIndex) => (
+                      <li key={`${bullet}-${bulletIndex}`}>{bullet}</li>
                     ))}
                   </ul>
                 </div>
@@ -1335,8 +1899,8 @@ function SwissMinimaPage({
                   lineHeight: 1.38,
                 }}
               >
-                {supportAchievements.map((item) => (
-                  <li key={item}>{item}</li>
+                {supportAchievements.map((item, index) => (
+                  <li key={`${item}-${index}`}>{item}</li>
                 ))}
               </ul>
             </div>
@@ -1605,9 +2169,9 @@ function EditorialMagazinePage({
                   />
                 </div>
                 <div style={{ display: "grid", gap: "4.2mm" }}>
-                  {data.experience.slice(0, 3).map((item) => (
+                  {data.experience.slice(0, 3).map((item, index) => (
                     <article
-                      key={`${item.company}-${item.role}`}
+                      key={`${item.company}-${item.role}-${item.period}-${index}`}
                       style={{
                         display: "grid",
                         gap: "1.6mm",
@@ -1691,8 +2255,8 @@ function EditorialMagazinePage({
                           lineHeight: 1.48,
                         }}
                       >
-                        {item.bullets.slice(0, 3).map((bullet) => (
-                          <li key={bullet}>{bullet}</li>
+                        {item.bullets.slice(0, 3).map((bullet, bulletIndex) => (
+                          <li key={`${bullet}-${bulletIndex}`}>{bullet}</li>
                         ))}
                       </ul>
                     </article>
@@ -1733,9 +2297,9 @@ function EditorialMagazinePage({
                   />
                 </div>
                 <div style={{ display: "grid", gap: "3.2mm" }}>
-                  {data.projects.slice(0, 2).map((project) => (
+                  {data.projects.slice(0, 2).map((project, index) => (
                     <article
-                      key={project.name}
+                      key={`${project.name}-${project.meta}-${index}`}
                       style={{
                         padding: "3mm 0 0",
                         borderTop: "0.24mm solid rgba(32, 27, 22, 0.12)",
@@ -3741,6 +4305,19 @@ function ResumeVariantPage({
     );
   }
 
+  if (variant.id === "quire") {
+    return (
+      <QuirePage
+        variant={variant}
+        data={data}
+        comparisonLabel={comparisonLabel}
+        compactComparison={compactComparison}
+        onActivateComparison={onActivateComparison}
+        fitToken={fitToken}
+      />
+    );
+  }
+
   return (
     <ClassicResumePage
       variant={variant}
@@ -3759,6 +4336,8 @@ export default function ResumePage({
   comparisonVariantIds,
   fitToken,
   onSelectVariantId,
+  userZoom = 1,
+  stageLayout,
 }: ResumePageProps) {
   const isComparisonMode = mode === "comparison" || mode === "comparisonAll";
   const [expandedComparison, setExpandedComparison] = React.useState(false);
@@ -3789,52 +4368,56 @@ export default function ResumePage({
   );
 
   return (
-    <div
-      className={`resume-preview-shell ${
-        isComparisonMode ? "resume-preview-shell--comparison" : ""
-      } ${!isComparisonMode ? "resume-preview-shell--single" : ""}`}
-    >
-      {expandedComparisonView ? (
-        <div className="resume-preview-bar">
-          <button
-            type="button"
-            className="resume-preview-back"
-            onClick={() => setExpandedComparison(false)}
-          >
-            Back to overview
-          </button>
-        </div>
-      ) : null}
+    <ResumeStageLayoutContext.Provider value={stageLayout ?? null}>
+      <ResumeUserZoomContext.Provider value={userZoom}>
+        <div
+          className={`resume-preview-shell ${
+            isComparisonMode ? "resume-preview-shell--comparison" : ""
+          } ${!isComparisonMode ? "resume-preview-shell--single" : ""}`}
+        >
+          {expandedComparisonView ? (
+            <div className="resume-preview-bar">
+              <button
+                type="button"
+                className="resume-preview-back"
+                onClick={() => setExpandedComparison(false)}
+              >
+                Back to overview
+              </button>
+            </div>
+          ) : null}
 
-      <div
-        className={`resume-preview-grid ${
-          isComparisonMode ? "resume-preview-grid--comparison" : ""
-        } ${compactComparison ? "resume-preview-grid--compact" : ""} ${
-          expandedComparisonView ? "resume-preview-grid--expanded" : ""
-        }`}
-      >
-        {variants.map((variant) => (
-          <ResumeVariantPage
-            key={variant.id}
-            variant={variant}
-            comparisonLabel={isComparisonMode ? variant.label : undefined}
-            compactComparison={compactComparison}
-            fitToken={`${fitToken ?? ""}:${variant.id}`}
-            onActivateComparison={
-              isComparisonMode && !expandedComparisonView
-                ? () => {
-                    if (onSelectVariantId) {
-                      onSelectVariantId(variant.id);
-                      return;
-                    }
-                    setExpandedComparison(true);
-                  }
-                : undefined
-            }
-            data={data}
-          />
-        ))}
-      </div>
-    </div>
+          <div
+            className={`resume-preview-grid ${
+              isComparisonMode ? "resume-preview-grid--comparison" : ""
+            } ${compactComparison ? "resume-preview-grid--compact" : ""} ${
+              expandedComparisonView ? "resume-preview-grid--expanded" : ""
+            }`}
+          >
+            {variants.map((variant) => (
+              <ResumeVariantPage
+                key={variant.id}
+                variant={variant}
+                comparisonLabel={isComparisonMode ? variant.label : undefined}
+                compactComparison={compactComparison}
+                fitToken={`${fitToken ?? ""}:${variant.id}`}
+                onActivateComparison={
+                  isComparisonMode && !expandedComparisonView
+                    ? () => {
+                        if (onSelectVariantId) {
+                          onSelectVariantId(variant.id);
+                          return;
+                        }
+                        setExpandedComparison(true);
+                      }
+                    : undefined
+                }
+                data={data}
+              />
+            ))}
+          </div>
+        </div>
+      </ResumeUserZoomContext.Provider>
+    </ResumeStageLayoutContext.Provider>
   );
 }

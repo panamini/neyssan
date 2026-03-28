@@ -8,7 +8,17 @@
     "dev:frontend": "cd my-app && npm run dev:frontend",
     "dev:backend": "cd my-app && npm run dev:backend",
     "test": "cd my-app && npm test",
+    "pw:install": "npx playwright install chromium firefox webkit",
+    "pw:test": "npx playwright test --project=chromium",
+    "pw:test:headed": "npx playwright test --project=chromium --headed",
+    "pw:test:bundled": "PLAYWRIGHT_FORCE_BUNDLED_CHROMIUM=1 npx playwright test --project=chromium",
+    "pw:test:canary": "PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH='/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary' npx playwright test --project=chromium",
     "parser": "TAIL_LOGS=0 ./scripts/start-dev.sh --service-only",
     "parser:rebuild": "TAIL_LOGS=0 FORCE_REBUILD=true ./scripts/start-dev.sh --service-only --rebuild"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@testdino/playwright": "^1.0.11",
+    "@types/node": "^25.5.0"
   }
 }
