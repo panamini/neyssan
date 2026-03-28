@@ -1,5 +1,6 @@
 import { internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
+import { PROPOSAL_TEMPLATE_IDS } from "./lib/proposals/renderTemplates";
 
 const proposalVoicePresetChoice = v.union(
   v.literal("signature"),
@@ -20,6 +21,17 @@ const proposalCreativityChoice = v.union(
   v.literal("medium"),
   v.literal("high"),
 );
+
+const proposalTemplateChoice = v.union(
+  ...PROPOSAL_TEMPLATE_IDS.map((templateId) => v.literal(templateId)),
+);
+
+const proposalVerbatiStyleChoice = v.object({
+  layout: v.string(),
+  typography: v.string(),
+  palette: v.string(),
+  accentHex: v.optional(v.string()),
+});
 
 export const storeProposal = internalMutation({
   args: {
@@ -56,6 +68,8 @@ export const storeProposal = internalMutation({
       voicePreset: v.optional(proposalVoicePresetChoice),
       formalityLevel: v.optional(proposalFormalityLevelChoice),
       creativity: v.optional(proposalCreativityChoice),
+      templateId: v.optional(proposalTemplateChoice),
+      verbatiStyle: v.optional(proposalVerbatiStyleChoice),
       proposalType: v.optional(
         v.union(
           v.literal("cover_letter"),
@@ -120,6 +134,8 @@ export const updateProposal = internalMutation({
       voicePreset: v.optional(proposalVoicePresetChoice),
       formalityLevel: v.optional(proposalFormalityLevelChoice),
       creativity: v.optional(proposalCreativityChoice),
+      templateId: v.optional(proposalTemplateChoice),
+      verbatiStyle: v.optional(proposalVerbatiStyleChoice),
       proposalType: v.optional(
         v.union(
           v.literal("cover_letter"),
