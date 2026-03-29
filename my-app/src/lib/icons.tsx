@@ -2,6 +2,8 @@ import React from "react";
 import {
   ArrowsClockwise as PhArrowsClockwise,
   ArrowsOutSimple as PhArrowsOutSimple,
+  ArrowLeft as PhArrowLeft,
+  ArrowRight as PhArrowRight,
   ArrowDown as PhArrowDown,
   ArrowSquareOut as PhArrowSquareOut,
   ArrowUp as PhArrowUp,
@@ -13,6 +15,7 @@ import {
   Copy as PhCopy,
   DotsSixVertical as PhDotsSixVertical,
   Eye as PhEye,
+  Eyedropper as PhEyedropper,
   FileImage as PhFileImage,
   FilePdf as PhFilePdf,
   FileText as PhFileText,
@@ -24,10 +27,12 @@ import {
   ListBullets as PhListBullets,
   MagicWand as PhMagicWand,
   Moon as PhMoon,
+  MagnifyingGlass as PhMagnifyingGlass,
   PaperPlaneTilt as PhPaperPlaneTilt,
   Paperclip as PhPaperclip,
   Palette as PhPalette,
   Pen as PhPen,
+  PenNib as PhPenNib,
   PencilSimple as PhPencilSimple,
   PencilSimpleLine as PhPencilSimpleLine,
   Minus as PhMinus,
@@ -45,6 +50,7 @@ import {
   Star as PhStar,
   Sun as PhSun,
   SunDim as PhSunDim,
+  Sunglasses as PhSunglasses,
   TextB as PhTextB,
   TextItalic as PhTextItalic,
   TextUnderline as PhTextUnderline,
@@ -54,6 +60,7 @@ import {
   User as PhUser,
   UserCircle as PhUserCircle,
   BracketsSquare as PhBracketsSquare,
+  Gear as PhGear,
   X as PhX,
   type IconProps as PhosphorIconProps,
 } from "@phosphor-icons/react";
@@ -103,6 +110,8 @@ function withCompat(
 
 export type { CompatIconProps as IconProps };
 
+export const ArrowLeft = withCompat(PhArrowLeft);
+export const ArrowRight = withCompat(PhArrowRight);
 export const ArrowDown = withCompat(PhArrowDown);
 export const ArrowSquareOut = withCompat(PhArrowSquareOut);
 export const ArrowUp = withCompat(PhArrowUp);
@@ -117,6 +126,7 @@ export const ChevronUp = withCompat(PhCaretUp);
 export const Copy = withCompat(PhCopy);
 export const CornersIn = withCompat(PhCornersIn);
 export const Eye = withCompat(PhEye);
+export const EyeDropper = withCompat(PhEyedropper);
 export const FileImage = withCompat(PhFileImage);
 export const FilePdf = withCompat(PhFilePdf);
 export const FileText = withCompat(PhFileText);
@@ -131,6 +141,7 @@ export const Lightning = withCompat(PhLightning);
 export const Link = withCompat(PhLink);
 export const List = withCompat(PhListBullets);
 export const Loader2 = withCompat(PhSpinnerGap, "bold");
+export const MagnifyingGlass = withCompat(PhMagnifyingGlass);
 export const Menu = withCompat(PhRows);
 export const Minus = withCompat(PhMinus);
 export const Moon = withCompat(PhMoon);
@@ -138,6 +149,7 @@ export const Paperclip = withCompat(PhPaperclip);
 export const Palette = withCompat(PhPalette);
 export const PanelLeftDashed = withCompat(PhSidebarSimple);
 export const Pen = withCompat(PhPen);
+export const PenNib = withCompat(PhPenNib);
 export const PenLine = withCompat(PhPencilSimpleLine);
 export const Pencil = withCompat(PhPencilSimple);
 export const Pin = withCompat(PhPushPin);
@@ -153,6 +165,7 @@ export const SquaresFour = withCompat(PhSquaresFour);
 export const Star = withCompat(PhStar);
 export const Sun = withCompat(PhSun);
 export const SunMedium = withCompat(PhSunDim);
+export const Sunglasses = withCompat(PhSunglasses);
 export const Trash = withCompat(PhTrash);
 export const Underline = withCompat(PhTextUnderline);
 export const Upload = withCompat(PhUpload);
@@ -160,4 +173,52 @@ export const User = withCompat(PhUser);
 export const UserRound = withCompat(PhUserCircle);
 export const Wand2 = withCompat(PhMagicWand);
 export const BracketsSquare = withCompat(PhBracketsSquare);
+export const Gear = withCompat(PhGear);
 export const X = withCompat(PhX);
+
+export const ColorWheel = React.forwardRef<SVGSVGElement, CompatIconProps>(
+  ({ size = 16, ...props }, ref) => {
+    const clipPathId = React.useId();
+
+    return (
+      <svg
+        ref={ref}
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        {...props}
+      >
+        <defs>
+          <clipPath id={clipPathId}>
+            <circle cx="12" cy="12" r="10" />
+          </clipPath>
+        </defs>
+        <g clipPath={`url(#${clipPathId})`}>
+          <path d="M12 12V2A10 10 0 0 1 20.66 7L12 12Z" fill="#F41422" />
+          <path d="M12 12L20.66 7A10 10 0 0 1 20.66 17L12 12Z" fill="#FF9C1A" />
+          <path d="M12 12L20.66 17A10 10 0 0 1 12 22V12Z" fill="#FFEF16" />
+          <path d="M12 12V22A10 10 0 0 1 3.34 17L12 12Z" fill="#96CE3A" />
+          <path d="M12 12L3.34 17A10 10 0 0 1 3.34 7L12 12Z" fill="#1976B8" />
+          <path d="M12 12L3.34 7A10 10 0 0 1 12 2V12Z" fill="#6C379C" />
+          <path
+            d="M12 2V22M3.34 7L20.66 17M20.66 7L3.34 17"
+            stroke="rgba(255,255,255,0.34)"
+            strokeWidth="0.7"
+            strokeLinecap="round"
+          />
+        </g>
+        <circle
+          cx="12"
+          cy="12"
+          r="10"
+          stroke="rgba(24, 24, 24, 0.18)"
+          strokeWidth="0.9"
+        />
+      </svg>
+    );
+  },
+);
+
+ColorWheel.displayName = "ColorWheel";

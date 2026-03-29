@@ -1,30 +1,38 @@
-import React, { useEffect, useRef, useState } from "react";
+import React from "react";
 import clsx from "clsx";
+import type { FunctionReference } from "convex/server";
+import type { Id } from "../../convex/_generated/dataModel";
 import {
-  Menu,
-  FileUser,
-  Moon,
-  Plus,
-  Pencil,
-  Palette,
-  FolderTree,
-  SunMedium,
-  X,
   Check,
+  FileText,
+  FileUser,
+  Gear,
+  Menu,
+  Moon,
+  SunMedium,
   Trash,
+  X,
 } from "@/lib/icons";
-import { useNavigate, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
-import { useAuth, useUser } from "@clerk/clerk-react";
-import { UserButton } from "@clerk/clerk-react";
+import { useAuth, useUser, UserButton } from "@clerk/clerk-react";
 import { api } from "../../convex/_generated/api";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
-import { normalizeAndValidateCvDocument } from "../lib/normalize-cv";
 import { formatCvDisplayTitle } from "../lib/proposal-personalization";
-import CvRenameDialog from "./CvRenameDialog";
-import { useToast } from "./ui/toast";
+import {
+  PROPOSAL_OUTPUT_DRAFT_UPDATED_EVENT,
+  readStoredProposalOutputDraft,
+} from "../lib/proposal-output-draft";
+import {
+  PROPOSAL_COMPOSE_DRAFT_UPDATED_EVENT,
+  clearStoredProposalWorkspaceState,
+  createProposalWorkspaceResetState,
+  readStoredProposalComposeDraft,
+  startFreshProposalWorkspace,
+} from "../lib/proposal-workspace-state";
 
-/** Inline dark-mode hook — reads localStorage + system preference, writes both. */
+const MAX_RECENT_ITEMS = 3;
+
 function useDarkMode(): [boolean, () => void] {
   const [isDark, setIsDark] = React.useState(() => {
     try {
@@ -37,40 +45,28 @@ function useDarkMode(): [boolean, () => void] {
     }
   });
 
-  /* Sync DOM class with state on mount — prevents two-click issue when
-     localStorage and documentElement.classList are out of sync on load. */
   React.useEffect(() => {
     document.documentElement.classList.toggle("dark", isDark);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // intentionally runs once at mount only
+  }, [isDark]);
 
   const toggle = React.useCallback(() => {
-    setIsDark((prev) => {
-      const next = !prev;
+    setIsDark((current) => {
+      const next = !current;
+
       try {
         localStorage.setItem("theme", next ? "dark" : "light");
         document.documentElement.classList.toggle("dark", next);
       } catch {
         /* noop */
       }
+
       return next;
     });
   }, []);
+
   return [isDark, toggle];
 }
 
-/**
- * Sidebar — dasti v1
- *
- * Layout : 256px expanded / 52px collapsed (CSS transition .22s).
- * Active state : CSS classes only — .sb-nav-item + .sb-nav-item--active.
- *   bg = var(--sf2) (one step above sidebar --sf1, works light+dark alike)
- *   left accent stripe = box-shadow inset 2px (no border, no layout shift)
- */
-
-const SB_MAX_ITEMS = 5;
-
-/* Shared appearance for Clerk UserButton — dasti tokens */
 const clerkAppearance = {
   elements: {
     avatarBox: {
@@ -89,703 +85,1090 @@ const clerkAppearance = {
     },
   },
   variables: {
-    colorPrimary: "hsl(155,22%,30%)" /* --ac light */,
+    colorPrimary: "hsl(155,22%,30%)",
     borderRadius: "var(--radius-control)",
   },
 } as const;
 
+type ProposalRecord = {
+  _id: Id<"proposals">;
+  _creationTime: number;
+  title?: string;
+  updatedAt?: number;
+};
+
+type SidebarDoc = {
+  key: string;
+  rawTitle: string;
+  onOpen: () => void;
+};
+
+type SidebarListItem = {
+  key: string;
+  title: string;
+  href: string;
+  onFollow?: () => void;
+  onDelete?: () => void | Promise<void>;
+  isActive?: boolean;
+};
+
+type SidebarWorkspaceItem = {
+  key: string;
+  kind: "Resume" | "Proposal";
+  title: string;
+  href: string;
+  onFollow?: () => void;
+  onDelete?: () => void | Promise<void>;
+};
+
+function normalizeLabel(value: unknown): string {
+  return typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
+}
+
+function toTimestamp(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return 0;
+}
+
+function isGenericResumeTitle(value: string): boolean {
+  return /^(?:resume|draft resume|imported cv|untitled cv(?:\s+\d+)?|untitled resume(?:\s+\d+)?)$/i.test(
+    value,
+  );
+}
+
+function isGenericProposalTitle(value: string): boolean {
+  return /^(?:proposal|generated proposal|untitled proposal(?:\s+\d+)?|untitled|letter|message)$/i.test(
+    value,
+  );
+}
+
+function resolveDocumentTitles(
+  entries: Array<Pick<SidebarDoc, "key" | "rawTitle">>,
+  baseLabel: "Resume" | "Proposal",
+  isGenericTitle: (value: string) => boolean,
+): Map<string, string> {
+  const titles = new Map<string, string>();
+  let untitledCount = 0;
+
+  for (const entry of entries) {
+    const normalized = normalizeLabel(entry.rawTitle);
+    if (normalized && !isGenericTitle(normalized)) {
+      titles.set(entry.key, normalized);
+      continue;
+    }
+
+    untitledCount += 1;
+    titles.set(
+      entry.key,
+      untitledCount === 1
+        ? `Untitled ${baseLabel}`
+        : `Untitled ${baseLabel} ${untitledCount}`,
+    );
+  }
+
+  return titles;
+}
+
+function SidebarDocumentSection({
+  sectionLabel,
+  hasDocuments,
+  createLabel,
+  allLabel,
+  allCount,
+  items,
+  onCreate,
+  allHref,
+}: {
+  sectionLabel: string;
+  hasDocuments: boolean;
+  createLabel: string;
+  allLabel: string;
+  allCount: number;
+  items: SidebarListItem[];
+  onCreate: () => void;
+  allHref: string;
+}) {
+  const [confirmingDeleteKey, setConfirmingDeleteKey] = React.useState<
+    string | null
+  >(null);
+
+  return (
+    <section className="sb-section" aria-label={sectionLabel}>
+      <div className="sb-section__title">{sectionLabel}</div>
+
+      {hasDocuments ? (
+        <>
+          <button
+            type="button"
+            className="sb-section__action"
+            onClick={onCreate}
+          >
+            {`+ ${createLabel}`}
+          </button>
+
+          {items.length > 0 ? (
+            <ul className="sb-section__list" role="list">
+              {items.map((item) => (
+                <li key={item.key}>
+                  <div className="sb-section__document-row card-group">
+                    <Link
+                      to={item.href}
+                      className={clsx(
+                        "sb-section__document",
+                        item.isActive && "sb-section__document--active",
+                      )}
+                      onClick={item.onFollow}
+                      aria-current={item.isActive ? "page" : undefined}
+                    >
+                      {item.title}
+                    </Link>
+                    {item.onDelete ? (
+                      <div
+                        className="sb-item-actions"
+                        aria-label={`Delete ${item.title}`}
+                      >
+                        {confirmingDeleteKey === item.key ? (
+                          <>
+                            <button
+                              type="button"
+                              className="sb-item-action sb-item-action--confirm"
+                              title={`Confirm delete ${item.title}`}
+                              aria-label={`Confirm delete ${item.title}`}
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                void Promise.resolve(item.onDelete?.())
+                                  .catch(() => undefined)
+                                  .finally(() => {
+                                    setConfirmingDeleteKey(null);
+                                  });
+                              }}
+                            >
+                              <Check size={12} strokeWidth={2.4} aria-hidden="true" />
+                            </button>
+                            <button
+                              type="button"
+                              className="sb-item-action"
+                              title={`Cancel delete ${item.title}`}
+                              aria-label={`Cancel delete ${item.title}`}
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                setConfirmingDeleteKey(null);
+                              }}
+                            >
+                              <X size={12} strokeWidth={2} aria-hidden="true" />
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            className="sb-item-action card-delete-btn"
+                            title={`Delete ${item.title}`}
+                            aria-label={`Delete ${item.title}`}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              setConfirmingDeleteKey(item.key);
+                            }}
+                          >
+                            <Trash size={12} strokeWidth={1.8} aria-hidden="true" />
+                          </button>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
+          <Link
+            to={allHref}
+            className="sb-section__all-link"
+          >
+            {`All ${allLabel.toLowerCase()} (${allCount}) →`}
+          </Link>
+        </>
+      ) : (
+        <button
+          type="button"
+          className="sb-section__action"
+          onClick={onCreate}
+        >
+          {`+ ${createLabel}`}
+        </button>
+      )}
+    </section>
+  );
+}
+
+function SidebarWorkspaceSection({
+  primaryItem,
+  secondaryItem,
+}: {
+  primaryItem: SidebarWorkspaceItem | null;
+  secondaryItem: SidebarWorkspaceItem | null;
+}) {
+  const [confirmingDeleteKey, setConfirmingDeleteKey] = React.useState<
+    string | null
+  >(null);
+
+  if (!primaryItem && !secondaryItem) {
+    return null;
+  }
+
+  return (
+    <section className="sb-section sb-section--workspace" aria-label="Workspace">
+      <div className="sb-section__title">Workspace</div>
+      {primaryItem ? (
+        <div className="sb-workspace-card-shell card-group">
+          <Link
+            to={primaryItem.href}
+            className="sb-workspace-card sb-workspace-card--primary"
+            onClick={primaryItem.onFollow}
+          >
+            <span className="sb-workspace-card__eyebrow">
+              {`Editing ${primaryItem.kind.toLowerCase()}`}
+            </span>
+            <span className="sb-workspace-card__title">{primaryItem.title}</span>
+          </Link>
+          {primaryItem.onDelete ? (
+            <div
+              className="sb-item-actions"
+              aria-label={`Delete ${primaryItem.title}`}
+            >
+              {confirmingDeleteKey === primaryItem.key ? (
+                <>
+                  <button
+                    type="button"
+                    className="sb-item-action sb-item-action--confirm"
+                    title={`Confirm delete ${primaryItem.title}`}
+                    aria-label={`Confirm delete ${primaryItem.title}`}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      void Promise.resolve(primaryItem.onDelete?.())
+                        .catch(() => undefined)
+                        .finally(() => {
+                          setConfirmingDeleteKey(null);
+                        });
+                    }}
+                  >
+                    <Check size={12} strokeWidth={2.4} aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    className="sb-item-action"
+                    title={`Cancel delete ${primaryItem.title}`}
+                    aria-label={`Cancel delete ${primaryItem.title}`}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setConfirmingDeleteKey(null);
+                    }}
+                  >
+                    <X size={12} strokeWidth={2} aria-hidden="true" />
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="sb-item-action card-delete-btn"
+                  title={`Delete ${primaryItem.title}`}
+                  aria-label={`Delete ${primaryItem.title}`}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setConfirmingDeleteKey(primaryItem.key);
+                  }}
+                >
+                  <Trash size={12} strokeWidth={1.8} aria-hidden="true" />
+                </button>
+              )}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      {secondaryItem ? (
+        <div className="sb-workspace-card-shell card-group">
+          <Link
+            to={secondaryItem.href}
+            className="sb-workspace-card sb-workspace-card--secondary"
+            onClick={secondaryItem.onFollow}
+          >
+            <span className="sb-workspace-card__eyebrow">
+              {`${secondaryItem.kind} in progress`}
+            </span>
+            <span className="sb-workspace-card__title">{secondaryItem.title}</span>
+          </Link>
+          {secondaryItem.onDelete ? (
+            <div
+              className="sb-item-actions"
+              aria-label={`Delete ${secondaryItem.title}`}
+            >
+              {confirmingDeleteKey === secondaryItem.key ? (
+                <>
+                  <button
+                    type="button"
+                    className="sb-item-action sb-item-action--confirm"
+                    title={`Confirm delete ${secondaryItem.title}`}
+                    aria-label={`Confirm delete ${secondaryItem.title}`}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      void Promise.resolve(secondaryItem.onDelete?.())
+                        .catch(() => undefined)
+                        .finally(() => {
+                          setConfirmingDeleteKey(null);
+                        });
+                    }}
+                  >
+                    <Check size={12} strokeWidth={2.4} aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    className="sb-item-action"
+                    title={`Cancel delete ${secondaryItem.title}`}
+                    aria-label={`Cancel delete ${secondaryItem.title}`}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setConfirmingDeleteKey(null);
+                    }}
+                  >
+                    <X size={12} strokeWidth={2} aria-hidden="true" />
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="sb-item-action card-delete-btn"
+                  title={`Delete ${secondaryItem.title}`}
+                  aria-label={`Delete ${secondaryItem.title}`}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setConfirmingDeleteKey(secondaryItem.key);
+                  }}
+                >
+                  <Trash size={12} strokeWidth={1.8} aria-hidden="true" />
+                </button>
+              )}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function SidebarRailButton({
+  label,
+  icon,
+  active,
+  onClick,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={clsx("sb-rail-button", active && "sb-rail-button--active")}
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+    >
+      {icon}
+    </button>
+  );
+}
+
+function SidebarRailLink({
+  label,
+  icon,
+  active,
+  href,
+  onFollow,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  active: boolean;
+  href: string;
+  onFollow?: () => void;
+}) {
+  return (
+    <Link
+      to={href}
+      className={clsx("sb-rail-button", active && "sb-rail-button--active")}
+      onClick={onFollow}
+      title={label}
+      aria-label={label}
+    >
+      {icon}
+    </Link>
+  );
+}
+
 export const Sidebar: React.FC = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { pathname, search } = location;
   const [isDarkMode, toggleDarkMode] = useDarkMode();
   const { user } = useUser();
-  const [collapsed, setCollapsed] = useState(false);
-  const [viewportWidth, setViewportWidth] = useState(() =>
+  const { isLoaded, isSignedIn } = useAuth();
+  const {
+    isAuthenticated: isConvexAuthenticated,
+    isLoading: isConvexAuthLoading,
+  } = useConvexAuth();
+  const { cvs, currentCv, loadCv, createNewCv, deleteCv } = useCvLibrary();
+  const [collapsed, setCollapsed] = React.useState(false);
+  const [viewportWidth, setViewportWidth] = React.useState(() =>
     typeof window === "undefined" ? 1440 : window.innerWidth,
   );
-  const [renameTarget, setRenameTarget] = useState<{
-    id: string;
-    title: string;
-  } | null>(null);
-  const [proposalRenameTarget, setProposalRenameTarget] = useState<{
-    id: string;
-    title: string;
-  } | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement | null>(null);
-  const { cvs, currentCv, loadCv, createNewCv, importCv, deleteCv, renameCv } =
-    useCvLibrary();
-  const navigate = useNavigate();
-  const { pathname, search } = useLocation();
-  const { showToast } = useToast();
-  const params = new URLSearchParams(search);
-  const proposalView = params.get("view");
-  const selectedProposalId = params.get("id");
-  const matchesRoute = React.useCallback(
-    (base: string) => pathname === base || pathname.startsWith(`${base}/`),
-    [pathname],
+  const [proposalOutputDraft, setProposalOutputDraft] = React.useState(() =>
+    readStoredProposalOutputDraft(),
   );
-  const isCvForge = matchesRoute("/cv");
-  const isProposalForge = matchesRoute("/proposal");
-  const isStyle = matchesRoute("/style");
-  const selectedCvId = isCvForge ? params.get("id") : null;
-  const hasSelectedCv = Boolean(selectedCvId);
-  const hasSelectedProposal =
-    isProposalForge && proposalView === "saved" && Boolean(selectedProposalId);
-  const studioTopActive = isCvForge && !hasSelectedCv;
-  const composeTopActive =
-    isProposalForge && !hasSelectedProposal && proposalView !== "saved";
-  const forcedCollapsed = viewportWidth < 768;
-  const sidebarCollapsed = collapsed || forcedCollapsed;
-  const compactDensity = viewportWidth < 1360;
+  const [proposalComposeDraft, setProposalComposeDraft] = React.useState(() =>
+    readStoredProposalComposeDraft(),
+  );
+  const proposalsQueryReference = React.useMemo(
+    () =>
+      (api as unknown as {
+        proposalsPublic: {
+          default: FunctionReference<
+            "query",
+            "public",
+            Record<string, never>,
+            ProposalRecord[]
+          >;
+        };
+      }).proposalsPublic.default,
+    [],
+  );
+  const proposalCountQueryReference = React.useMemo(
+    () =>
+      (api as unknown as {
+        proposalsCountPublic: {
+          default: FunctionReference<
+            "query",
+            "public",
+            Record<string, never>,
+            number
+          >;
+        };
+      }).proposalsCountPublic.default,
+    [],
+  );
 
-  useEffect(() => {
+  const params = React.useMemo(() => new URLSearchParams(search), [search]);
+  const proposalView = params.get("id")
+    ? "saved"
+    : params.get("view");
+  const selectedProposalId = params.get("id");
+  const selectedResumeId = params.get("id");
+
+  React.useEffect(() => {
     if (typeof window === "undefined") return undefined;
     const handleResize = () => setViewportWidth(window.innerWidth);
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  /* ── Proposals query ────────────────────────────────────── */
-  const { isLoaded, isSignedIn } = useAuth();
-  const {
-    isAuthenticated: isConvexAuthenticated,
-    isLoading: isConvexAuthLoading,
-  } = useConvexAuth();
+  React.useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const refreshDraft = () => {
+      setProposalOutputDraft(readStoredProposalOutputDraft());
+    };
+
+    window.addEventListener(
+      PROPOSAL_OUTPUT_DRAFT_UPDATED_EVENT,
+      refreshDraft,
+    );
+    return () =>
+      window.removeEventListener(
+        PROPOSAL_OUTPUT_DRAFT_UPDATED_EVENT,
+        refreshDraft,
+      );
+  }, []);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const refreshComposeDraft = () => {
+      setProposalComposeDraft(readStoredProposalComposeDraft());
+    };
+
+    window.addEventListener(
+      PROPOSAL_COMPOSE_DRAFT_UPDATED_EVENT,
+      refreshComposeDraft,
+    );
+    return () =>
+      window.removeEventListener(
+        PROPOSAL_COMPOSE_DRAFT_UPDATED_EVENT,
+        refreshComposeDraft,
+      );
+  }, []);
+
   const proposals = useQuery(
-    api.proposalsPublic.default as any,
+    proposalsQueryReference,
     isLoaded && isSignedIn && isConvexAuthenticated ? {} : "skip",
-  ) as
-    | Array<{
-        _id: string;
-        _creationTime: number;
-        title?: string;
-        metadata?: { proposalType?: string };
-      }>
-    | undefined;
-  const deleteProposal = useMutation(
-    (api as any).deleteProposalPublic?.default,
   );
-  const updateProposal = useMutation(
-    (api as any).updateProposalPublic?.default,
+
+  const proposalCount = useQuery(
+    proposalCountQueryReference,
+    isLoaded && isSignedIn && isConvexAuthenticated ? {} : "skip",
   );
-  const showConvexAuthRequiredToast = React.useCallback(
-    (actionLabel: string) => {
-      showToast("Sign in required", {
-        variant: "warning",
-        description: `${actionLabel} is unavailable until proposal data is authenticated.`,
+  const deleteProposal = useMutation(api.deleteProposalPublic.default);
+
+  const matchesRoute = React.useCallback(
+    (base: string) => pathname === base || pathname.startsWith(`${base}/`),
+    [pathname],
+  );
+
+  const forcedCollapsed = viewportWidth < 768;
+  const sidebarCollapsed = collapsed || forcedCollapsed;
+  const isResumeRoute = matchesRoute("/cv");
+  const isResumeLibraryRoute = matchesRoute("/cvs");
+  const isProposalRoute =
+    matchesRoute("/proposal-next") || matchesRoute("/proposal");
+  const isProposalLibraryRoute = matchesRoute("/proposals");
+
+  const handleCreateProposal = React.useCallback(() => {
+    startFreshProposalWorkspace();
+    void navigate("/proposal", {
+      state: createProposalWorkspaceResetState(),
+    });
+  }, [navigate]);
+
+  const handleDeleteProposalWorkspace = React.useCallback(async () => {
+    const generatedProposalId = proposalOutputDraft?.generatedProposalId ?? null;
+
+    if (generatedProposalId && isConvexAuthenticated) {
+      await deleteProposal({ id: generatedProposalId });
+    }
+
+    clearStoredProposalWorkspaceState();
+
+    if (isProposalRoute) {
+      void navigate("/proposal", {
+        state: createProposalWorkspaceResetState(),
+      });
+    }
+  }, [
+    deleteProposal,
+    isConvexAuthenticated,
+    isProposalRoute,
+    navigate,
+    proposalOutputDraft?.generatedProposalId,
+  ]);
+
+  const handleDeleteSavedProposal = React.useCallback(
+    async (proposalId: Id<"proposals">) => {
+      await deleteProposal({ id: proposalId });
+
+      if (
+        proposalOutputDraft?.generatedProposalId &&
+        String(proposalOutputDraft.generatedProposalId) === String(proposalId)
+      ) {
+        clearStoredProposalWorkspaceState();
+      }
+
+      if (
+        selectedProposalId === String(proposalId) &&
+        isProposalRoute &&
+        proposalView === "saved"
+      ) {
+        void navigate("/proposal");
+      }
+    },
+    [
+      deleteProposal,
+      isProposalRoute,
+      navigate,
+      proposalView,
+      proposalOutputDraft?.generatedProposalId,
+      selectedProposalId,
+    ],
+  );
+
+  const handleDeleteResume = React.useCallback(
+    (resumeId: string) => {
+      deleteCv(resumeId);
+
+      if (String(currentCv?.id ?? "") === resumeId && isResumeRoute) {
+        void navigate("/cv");
+      }
+    },
+    [currentCv?.id, deleteCv, isResumeRoute, navigate],
+  );
+
+  const queueResumeLoad = React.useCallback(
+    (resumeId: string) => {
+      const targetId = String(resumeId);
+      if (typeof window === "undefined") {
+        loadCv(targetId);
+        return;
+      }
+
+      window.requestAnimationFrame(() => {
+        loadCv(targetId);
       });
     },
-    [showToast],
+    [loadCv],
   );
 
-  /* ── Handlers ────────────────────────────────────────────── */
+  const resumeDocs = React.useMemo(() => {
+    const docMap = new Map<string, (typeof cvs)[number]>();
 
-  const handleLoadCv = (id: string) => {
-    try {
-      loadCv(id);
-    } catch (e) {
-      console.error("[Sidebar] loadCv failed", e);
+    for (const cv of cvs) {
+      docMap.set(String(cv.id), cv);
     }
-  };
 
-  const getStudioTarget = React.useCallback(() => {
-    const activeId =
-      currentCv?.id ??
-      (typeof window !== "undefined"
-        ? window.localStorage.getItem("cvActiveId")
-        : null);
-    return activeId ? `/cv?id=${encodeURIComponent(String(activeId))}` : "/cv";
-  }, [currentCv?.id]);
-
-  const handleCreate = () => {
-    try {
-      createNewCv(undefined, { forceV1: true });
-      void navigate(getStudioTarget());
-    } catch (err) {
-      console.error("[Sidebar] createNewCv failed", err);
+    if (currentCv) {
+      docMap.set(String(currentCv.id), currentCv);
     }
-  };
 
-  const handleRenameOpen = (id: string, title: string) => {
-    setError(null);
-    setRenameTarget({ id, title });
-  };
+    return [...docMap.values()]
+      .sort((left, right) => {
+        const rightTime = toTimestamp(
+          right.metadata?.updatedAt ?? right.metadata?.createdAt,
+        );
+        const leftTime = toTimestamp(
+          left.metadata?.updatedAt ?? left.metadata?.createdAt,
+        );
+        return rightTime - leftTime;
+      })
+      .map((cv) => {
+        const profileSection = Array.isArray(cv.sections)
+          ? cv.sections.find((section) => section.type === "profile")
+          : undefined;
+        const profileItem = Array.isArray(profileSection?.structuredContent)
+          ? (profileSection.structuredContent[0] as
+              | Record<string, unknown>
+              | undefined)
+          : undefined;
 
-  const handleRenameSave = (nextTitle: string) => {
-    if (!renameTarget) return;
-    try {
-      renameCv(renameTarget.id, nextTitle);
-      setRenameTarget(null);
-    } catch (err) {
-      console.error("[Sidebar] renameCv failed", err);
-      setError("Failed to rename CV");
-    }
-  };
+        return {
+          key: String(cv.id),
+          rawTitle: formatCvDisplayTitle({
+            title: cv.title,
+            profileName:
+              typeof profileItem?.name === "string" ? profileItem.name : null,
+            desiredPosition:
+              typeof profileItem?.desiredPosition === "string"
+                ? profileItem.desiredPosition
+                : typeof profileItem?.title === "string"
+                ? profileItem.title
+                  : null,
+          }),
+          onOpen: () => {
+            queueResumeLoad(String(cv.id));
+          },
+        } satisfies SidebarDoc;
+      });
+  }, [cvs, currentCv, queueResumeLoad]);
 
-  const handleDelete = (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    try {
-      deleteCv(id);
-    } catch (err) {
-      console.error("[Sidebar] deleteCv failed", err);
-      setError("Failed to delete CV");
-    }
-  };
+  const resumeTitles = React.useMemo(
+    () => resolveDocumentTitles(resumeDocs, "Resume", isGenericResumeTitle),
+    [resumeDocs],
+  );
 
-  const handleDeleteProposal = async (
-    e: React.MouseEvent,
-    id: string,
-    title: string,
-  ) => {
-    e.stopPropagation();
-    if (!isConvexAuthenticated || isConvexAuthLoading) {
-      showConvexAuthRequiredToast("Delete");
-      return;
-    }
-    try {
-      await deleteProposal({ id });
-      if (selectedProposalId === id) void navigate("/proposal?view=saved");
-      showToast("Proposal deleted", { variant: "success" });
-    } catch (err) {
-      console.error("[Sidebar] deleteProposal failed", err);
-      showToast("Failed to delete proposal", { variant: "error" });
-    }
-  };
+  const activeResumeKey =
+    isResumeRoute && selectedResumeId
+      ? String(selectedResumeId)
+      : currentCv
+        ? String(currentCv.id)
+        : null;
+  const activeResumeTitle = activeResumeKey
+    ? resumeTitles.get(activeResumeKey) ?? "Untitled Resume"
+    : null;
+  const activeResumeHref = activeResumeKey
+    ? `/cv?id=${encodeURIComponent(activeResumeKey)}`
+    : "/cv";
+  const recentResumeItems = React.useMemo(
+    () =>
+      resumeDocs
+        .filter((doc) => doc.key !== activeResumeKey)
+        .slice(0, MAX_RECENT_ITEMS)
+        .map((doc) => ({
+          key: doc.key,
+          title: resumeTitles.get(doc.key) ?? "Untitled Resume",
+          href: `/cv?id=${encodeURIComponent(doc.key)}`,
+          onFollow: doc.onOpen,
+          onDelete: () => handleDeleteResume(doc.key),
+          isActive: isResumeRoute && activeResumeKey === doc.key,
+        })),
+    [
+      activeResumeKey,
+      handleDeleteResume,
+      isResumeRoute,
+      resumeDocs,
+      resumeTitles,
+    ],
+  );
 
-  const handleRenameProposal = (
-    e: React.MouseEvent,
-    id: string,
-    title: string,
-  ) => {
-    e.stopPropagation();
-    setProposalRenameTarget({ id, title });
-  };
+  const sortedProposals = React.useMemo(
+    () =>
+      [...(proposals ?? [])].sort((left, right) => {
+        const rightTime = toTimestamp(right.updatedAt ?? right._creationTime);
+        const leftTime = toTimestamp(left.updatedAt ?? left._creationTime);
+        return rightTime - leftTime;
+      }),
+    [proposals],
+  );
 
-  const handleProposalRenameSave = async (nextTitle: string) => {
-    if (!proposalRenameTarget) return;
-    if (!isConvexAuthenticated || isConvexAuthLoading) {
-      showConvexAuthRequiredToast("Rename");
-      return;
+  const proposalDocs = React.useMemo(
+    () =>
+      sortedProposals.map((proposal) => ({
+        proposalId: proposal._id,
+        key: String(proposal._id),
+        rawTitle: normalizeLabel(proposal.title),
+      })),
+    [sortedProposals],
+  );
+
+  const isProposalSavedView =
+    isProposalRoute && proposalView === "saved" && Boolean(selectedProposalId);
+  const composeJobTitle = normalizeLabel(proposalComposeDraft?.jobTitle);
+  const hasStoredProposalComposeDraft = proposalComposeDraft !== null;
+  const outputDraftTitle = normalizeLabel(proposalOutputDraft?.proposalDocumentTitle);
+  const outputDraftContent = normalizeLabel(proposalOutputDraft?.proposalContent);
+  const hasStoredProposalDraft = Boolean(
+    outputDraftTitle ||
+      outputDraftContent ||
+      proposalOutputDraft?.generatedProposalId,
+  );
+
+  const hasEditableProposalDraft =
+    hasStoredProposalDraft || hasStoredProposalComposeDraft;
+  const highlightedSavedProposalKey =
+    isProposalSavedView && selectedProposalId ? selectedProposalId : null;
+  const activeGeneratedProposalKey =
+    hasEditableProposalDraft && proposalOutputDraft?.generatedProposalId
+      ? String(proposalOutputDraft.generatedProposalId)
+      : null;
+
+  let activeProposalKey: string | null = null;
+  let activeProposalRawTitle = "";
+  let activeProposalHref = "/proposal";
+
+  if (hasEditableProposalDraft) {
+    activeProposalKey = "__draft__";
+    activeProposalRawTitle = outputDraftTitle || composeJobTitle;
+  } else if (isProposalSavedView && selectedProposalId) {
+    activeProposalKey = selectedProposalId;
+    activeProposalRawTitle =
+      normalizeLabel(
+        proposalDocs.find((proposal) => proposal.key === selectedProposalId)
+          ?.rawTitle,
+      ) || "";
+    activeProposalHref = `/proposal?id=${encodeURIComponent(
+      selectedProposalId,
+    )}`;
+  }
+
+  const proposalDocsForTitles = React.useMemo(() => {
+    const docs = proposalDocs.map(({ key, rawTitle }) => ({ key, rawTitle }));
+    if (activeProposalKey && !docs.some((doc) => doc.key === activeProposalKey)) {
+      docs.unshift({
+        key: activeProposalKey,
+        rawTitle: activeProposalRawTitle,
+      });
     }
-    try {
-      await updateProposal({ id: proposalRenameTarget.id, title: nextTitle });
-      setProposalRenameTarget(null);
-      showToast("Proposal renamed", { variant: "success" });
-    } catch (err) {
-      console.error("[Sidebar] renameProposal failed", err);
-      showToast("Failed to rename proposal", { variant: "error" });
+    return docs;
+  }, [activeProposalKey, activeProposalRawTitle, proposalDocs]);
+
+  const proposalTitles = React.useMemo(
+    () =>
+      resolveDocumentTitles(
+        proposalDocsForTitles,
+        "Proposal",
+        isGenericProposalTitle,
+      ),
+    [proposalDocsForTitles],
+  );
+
+  const activeProposalTitle = activeProposalKey
+    ? proposalTitles.get(activeProposalKey) ?? "Untitled Proposal"
+    : null;
+
+  const recentProposalItems = React.useMemo(
+    () =>
+      proposalDocs
+        .filter(
+          (doc) =>
+            doc.key !== activeProposalKey && doc.key !== activeGeneratedProposalKey,
+        )
+        .slice(0, MAX_RECENT_ITEMS)
+        .map((doc) => ({
+          key: doc.key,
+          title: proposalTitles.get(doc.key) ?? "Untitled Proposal",
+          href: `/proposal?id=${encodeURIComponent(doc.key)}`,
+          onDelete: () => handleDeleteSavedProposal(doc.proposalId),
+          isActive: highlightedSavedProposalKey === doc.key,
+        })),
+    [
+      activeProposalKey,
+      activeGeneratedProposalKey,
+      handleDeleteSavedProposal,
+      highlightedSavedProposalKey,
+      proposalDocs,
+      proposalTitles,
+    ],
+  );
+
+  const proposalTotalCount =
+    proposalCount ?? proposalDocs.length;
+
+  const proposalWorkspaceItem = React.useMemo<SidebarWorkspaceItem | null>(
+    () =>
+      hasEditableProposalDraft && activeProposalTitle
+        ? {
+            key: "__proposal_draft__",
+            kind: "Proposal",
+            title: activeProposalTitle,
+            href: "/proposal",
+            onDelete: () => {
+              void handleDeleteProposalWorkspace();
+            },
+          }
+        : null,
+    [activeProposalTitle, handleDeleteProposalWorkspace, hasEditableProposalDraft],
+  );
+  const resumeWorkspaceItem = React.useMemo<SidebarWorkspaceItem | null>(
+    () =>
+      activeResumeKey && activeResumeTitle
+        ? {
+            key: activeResumeKey,
+            kind: "Resume",
+            title: activeResumeTitle,
+            href: activeResumeHref,
+            onFollow: () => {
+              queueResumeLoad(activeResumeKey);
+            },
+            onDelete: () => handleDeleteResume(activeResumeKey),
+          }
+        : null,
+    [
+      activeResumeHref,
+      activeResumeKey,
+      activeResumeTitle,
+      handleDeleteResume,
+      queueResumeLoad,
+    ],
+  );
+
+  const primaryWorkspaceItem = React.useMemo<SidebarWorkspaceItem | null>(() => {
+    if (isResumeRoute) {
+      return resumeWorkspaceItem ?? proposalWorkspaceItem;
     }
-  };
+    if (isProposalRoute) {
+      return proposalWorkspaceItem ?? resumeWorkspaceItem;
+    }
+    return proposalWorkspaceItem ?? resumeWorkspaceItem;
+  }, [isProposalRoute, isResumeRoute, proposalWorkspaceItem, resumeWorkspaceItem]);
+
+  const secondaryWorkspaceItem = React.useMemo<SidebarWorkspaceItem | null>(() => {
+    if (!primaryWorkspaceItem) {
+      return null;
+    }
+
+    if (primaryWorkspaceItem.kind === "Proposal") {
+      return resumeWorkspaceItem &&
+        resumeWorkspaceItem.key !== primaryWorkspaceItem.key
+        ? resumeWorkspaceItem
+        : null;
+    }
+
+    return proposalWorkspaceItem &&
+      proposalWorkspaceItem.key !== primaryWorkspaceItem.key
+      ? proposalWorkspaceItem
+      : null;
+  }, [primaryWorkspaceItem, proposalWorkspaceItem, resumeWorkspaceItem]);
+
+  const handleCreateResume = React.useCallback(() => {
+    createNewCv(undefined, { forceV1: true });
+    void navigate("/cv");
+  }, [createNewCv, navigate]);
+
+  const hasResumeDocuments = resumeDocs.length > 0;
+  const hasProposalDocuments =
+    proposalTotalCount > 0 || Boolean(activeProposalKey);
 
   return (
-    <>
-      <div
-        className={clsx(
-          "sb",
-          compactDensity && "sb--compact",
-          forcedCollapsed && "sb--forced-collapsed",
-          sidebarCollapsed && "sb--collapsed",
-        )}
-      >
-        {/* ── Top bar — hamburger only ─────────────────────── */}
-        <div className="sb__top">
-          <button
-            className={
-              forcedCollapsed
-                ? "sb-toggle"
-                : sidebarCollapsed
-                  ? "sb-toggle sb-toggle--expand"
-                  : "sb-toggle sb-toggle--collapse"
+    <aside
+      className={clsx(
+        "sb",
+        collapsed && "sb--collapsed",
+        forcedCollapsed && "sb--forced-collapsed",
+      )}
+    >
+      <div className="sb__top">
+        <button
+          type="button"
+          className={clsx(
+            "sb-toggle",
+            sidebarCollapsed ? "sb-toggle--expand" : "sb-toggle--collapse",
+          )}
+          onClick={() => {
+            if (!forcedCollapsed) {
+              setCollapsed((current) => !current);
             }
-            onClick={() => {
-              if (!forcedCollapsed) setCollapsed((c) => !c);
-            }}
-            title={
-              forcedCollapsed
-                ? "Auto-collapses on narrow screens"
-                : collapsed
-                  ? "Expand sidebar"
-                  : "Collapse sidebar"
-            }
-          >
-            <Menu size={16} strokeWidth={1.5} />
-          </button>
-        </div>
+          }}
+          title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          <Menu size={16} strokeWidth={1.5} aria-hidden="true" />
+        </button>
+      </div>
 
-        {/* ── Nav ─────────────────────────────────────────── */}
-        <nav className="sb__nav">
-          {/* RESUME section */}
-          <span
-            className={clsx(
-              "sb__section-label",
-              sidebarCollapsed && "sb__section-label--hidden",
-            )}
-          >
-            Resume
-          </span>
-
-          <div
-            onClick={() => void navigate("/cv")}
-            className={clsx(
-              "sb-nav-item",
-              studioTopActive && "sb-nav-item--active",
-            )}
-          >
-            <div className="sb-nav-icon">
-              <FileUser size={15} strokeWidth={1.5} />
-            </div>
-            <span
-              className={clsx(
-                "sb-nav-label",
-                studioTopActive && "sb-nav-label--active",
-                sidebarCollapsed && "sb-nav-label--hidden",
-              )}
-            >
-              Studio
-            </span>
-          </div>
-
-          {/* CV sub-items */}
-          {!sidebarCollapsed &&
-            cvs.slice(0, SB_MAX_ITEMS).map((cv) => {
-              const isActive = isCvForge && selectedCvId === cv.id;
-              const profileSection = Array.isArray(cv.sections)
-                ? cv.sections.find((section) => section.type === "profile")
-                : undefined;
-              const profileItem = Array.isArray(
-                profileSection?.structuredContent,
-              )
-                ? (profileSection?.structuredContent[0] as
-                    | Record<string, unknown>
-                    | undefined)
-                : undefined;
-              const displayTitle = formatCvDisplayTitle({
-                title: cv.title,
-                profileName:
-                  typeof profileItem?.name === "string"
-                    ? profileItem.name
-                    : null,
-                desiredPosition:
-                  typeof profileItem?.desiredPosition === "string"
-                    ? profileItem.desiredPosition
-                    : typeof profileItem?.title === "string"
-                      ? profileItem.title
-                      : null,
-              });
-              return (
-                <SbDoc
-                  key={cv.id}
-                  title={displayTitle}
-                  isActive={isActive}
-                  dense={compactDensity}
-                  onClick={() => {
-                    handleLoadCv(cv.id);
-                    void navigate(
-                      `/cv?id=${encodeURIComponent(String(cv.id))}`,
-                    );
-                  }}
-                  onRename={(e) => {
-                    e.stopPropagation();
-                    handleRenameOpen(cv.id, cv.title);
-                  }}
-                  onDelete={(e) => handleDelete(e, cv.id)}
-                />
-              );
-            })}
-
-          {!sidebarCollapsed && cvs.length > SB_MAX_ITEMS && (
-            <SbViewAll
-              label={`View all (${cvs.length})`}
-              dense={compactDensity}
-              onClick={() => void navigate("/cvs")}
-            />
-          )}
-
-          {!sidebarCollapsed && (
-            <SbNewAction
-              label="New resume"
-              dense={compactDensity}
-              onClick={handleCreate}
-            />
-          )}
-
-          {/* WRITE section */}
-          <span
-            className={clsx(
-              "sb__section-label",
-              sidebarCollapsed && "sb__section-label--hidden",
-            )}
-          >
-            Proposal
-          </span>
-
-          <div
-            onClick={() => void navigate("/proposal")}
-            className={clsx(
-              "sb-nav-item",
-              composeTopActive && "sb-nav-item--active",
-            )}
-          >
-            <div className="sb-nav-icon">
-              <Pencil size={15} strokeWidth={1.5} />
-            </div>
-            <span
-              className={clsx(
-                "sb-nav-label",
-                composeTopActive && "sb-nav-label--active",
-                sidebarCollapsed && "sb-nav-label--hidden",
-              )}
-            >
-              Compose
-            </span>
-          </div>
-
-          {/* Proposal sub-items */}
-          {!sidebarCollapsed &&
-            isSignedIn &&
-            proposals &&
-            proposals.slice(0, SB_MAX_ITEMS).map((p) => {
-              const isActive =
-                isProposalForge &&
-                proposalView === "saved" &&
-                selectedProposalId === p._id;
-              return (
-                <SbDoc
-                  key={p._id}
-                  title={p.title ?? "Untitled"}
-                  isActive={isActive}
-                  dense={compactDensity}
-                  onClick={() =>
-                    void navigate(
-                      `/proposal?view=saved&id=${encodeURIComponent(p._id)}`,
-                    )
-                  }
-                  onRename={(e) => {
-                    void handleRenameProposal(e, p._id, p.title ?? "Untitled");
-                  }}
-                  onDelete={(e) => {
-                    void handleDeleteProposal(e, p._id, p.title ?? "Untitled");
-                  }}
-                />
-              );
-            })}
-
-          {!sidebarCollapsed &&
-            proposals &&
-            proposals.length > SB_MAX_ITEMS && (
-              <SbViewAll
-                label={`View all (${proposals.length})`}
-                dense={compactDensity}
-                onClick={() => void navigate("/proposals")}
-              />
-            )}
-
-          {!sidebarCollapsed && (
-            <SbNewAction
-              label="New letter"
-              dense={compactDensity}
-              onClick={() => void navigate("/proposal")}
-            />
-          )}
-
-          {/* DESIGN section */}
-          <span
-            className={clsx(
-              "sb__section-label",
-              sidebarCollapsed && "sb__section-label--hidden",
-            )}
-          >
-            Design
-          </span>
-
-          <div
-            onClick={() => void navigate("/style")}
-            className={clsx("sb-nav-item", isStyle && "sb-nav-item--active")}
-          >
-            <div className="sb-nav-icon">
-              <Palette size={16} strokeWidth={1.5} />
-            </div>
-            <span
-              className={clsx(
-                "sb-nav-label",
-                isStyle && "sb-nav-label--active",
-                sidebarCollapsed && "sb-nav-label--hidden",
-              )}
-            >
-              Design
-            </span>
-          </div>
-
-          {/* Error display */}
-          {error && !sidebarCollapsed && (
-            <div
-              style={{
-                padding: "var(--s2)",
-                fontSize: "var(--tx)",
-                color: "var(--ert)",
+      {sidebarCollapsed ? (
+        <nav className="sb__nav sb__nav--rail" aria-label="Primary sidebar">
+          {hasResumeDocuments ? (
+            <SidebarRailLink
+              label="Resumes"
+              icon={
+                <FileUser size={16} strokeWidth={1.5} aria-hidden="true" />
+              }
+              active={isResumeRoute || isResumeLibraryRoute}
+              href={activeResumeHref}
+              onFollow={() => {
+                if (activeResumeKey) {
+                  queueResumeLoad(activeResumeKey);
+                }
               }}
-            >
-              {error}
-            </div>
+            />
+          ) : (
+            <SidebarRailButton
+              label="Resumes"
+              icon={
+                <FileUser size={16} strokeWidth={1.5} aria-hidden="true" />
+              }
+              active={isResumeRoute || isResumeLibraryRoute}
+              onClick={handleCreateResume}
+            />
+          )}
+          {hasProposalDocuments ? (
+            <SidebarRailLink
+              label="Proposals"
+              icon={
+                <FileText size={16} strokeWidth={1.5} aria-hidden="true" />
+              }
+              active={isProposalRoute || isProposalLibraryRoute}
+              href={activeProposalHref}
+            />
+          ) : (
+            <SidebarRailButton
+              label="Proposals"
+              icon={
+                <FileText size={16} strokeWidth={1.5} aria-hidden="true" />
+              }
+              active={isProposalRoute || isProposalLibraryRoute}
+              onClick={handleCreateProposal}
+            />
           )}
         </nav>
+      ) : (
+        <nav className="sb__nav sb__nav--stack" aria-label="Primary sidebar">
+          <SidebarWorkspaceSection
+            primaryItem={primaryWorkspaceItem}
+            secondaryItem={secondaryWorkspaceItem}
+          />
 
-        {/* ── Footer — avatar only ─────────────────────────── */}
-        <div
-          className={
-            sidebarCollapsed ? "sb-footer sb-footer--collapsed" : "sb-footer"
-          }
-        >
-          <div style={{ flexShrink: 0, display: "flex", alignItems: "center" }}>
-            <UserButton afterSignOutUrl="/" appearance={clerkAppearance} />
+          <SidebarDocumentSection
+            sectionLabel="Resumes"
+            hasDocuments={hasResumeDocuments}
+            createLabel="New Resume"
+            allLabel="Resumes"
+            allCount={resumeDocs.length}
+            items={recentResumeItems}
+            onCreate={handleCreateResume}
+            allHref="/cvs"
+          />
+
+          <SidebarDocumentSection
+            sectionLabel="Proposals"
+            hasDocuments={hasProposalDocuments}
+            createLabel="New Proposal"
+            allLabel="Proposals"
+            allCount={proposalTotalCount}
+            items={recentProposalItems}
+            onCreate={handleCreateProposal}
+            allHref="/proposals"
+          />
+        </nav>
+      )}
+
+      <div
+        className={clsx(
+          "sb-footer",
+          sidebarCollapsed && "sb-footer--collapsed",
+        )}
+      >
+        <UserButton afterSignOutUrl="/" appearance={clerkAppearance} />
+        {!sidebarCollapsed ? (
+          <div className="sb-footer__account">
+            <div className="sb-footer__title">
+              {user?.firstName ?? user?.username ?? "Account"}
+            </div>
+            <div className="sb-footer__subtitle">
+              {isConvexAuthLoading
+                ? "Loading"
+                : isSignedIn
+                  ? "Workspace"
+                  : "Guest"}
+            </div>
           </div>
-          {!sidebarCollapsed && (
-            <div className="sb-footer__account">
-              <div className="sb-footer__title">
-                {user?.firstName ?? user?.username ?? "Account"}
-              </div>
-              <div className="sb-footer__subtitle">free</div>
-            </div>
-          )}
-          {!sidebarCollapsed && (
-            <div className="sb-theme-toggle">
-              <button
-                type="button"
-                className="sb-theme-toggle__single"
-                onClick={toggleDarkMode}
-                aria-pressed={isDarkMode}
-                aria-label={
-                  isDarkMode ? "Switch to light mode" : "Switch to dark mode"
-                }
-                title={
-                  isDarkMode ? "Switch to light mode" : "Switch to dark mode"
-                }
-              >
-                {isDarkMode ? (
-                  <SunMedium size={14} strokeWidth={1.6} />
-                ) : (
-                  <Moon size={14} strokeWidth={1.6} />
-                )}
-              </button>
-            </div>
-          )}
+        ) : null}
+        <div className="sb-footer__tools">
+          <Link
+            to="/settings"
+            className={clsx(
+              "sb-footer__tool-btn",
+              matchesRoute("/settings") && "sb-footer__tool-btn--active",
+            )}
+            title="Settings"
+            aria-label="Settings"
+          >
+            <Gear size={14} strokeWidth={1.6} aria-hidden="true" />
+          </Link>
+          <div className="sb-theme-toggle">
+            <button
+              type="button"
+              className="sb-theme-toggle__single"
+              onClick={toggleDarkMode}
+              aria-pressed={isDarkMode}
+              aria-label={
+                isDarkMode ? "Switch to light mode" : "Switch to dark mode"
+              }
+              title={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              {isDarkMode ? (
+                <SunMedium size={14} strokeWidth={1.6} aria-hidden="true" />
+              ) : (
+                <Moon size={14} strokeWidth={1.6} aria-hidden="true" />
+              )}
+            </button>
+          </div>
         </div>
       </div>
-
-      {/* ── Rename dialogs ───────────────────────────────── */}
-      <CvRenameDialog
-        open={renameTarget !== null}
-        currentTitle={renameTarget?.title ?? ""}
-        onClose={() => setRenameTarget(null)}
-        onSave={handleRenameSave}
-      />
-      <CvRenameDialog
-        open={proposalRenameTarget !== null}
-        currentTitle={proposalRenameTarget?.title ?? ""}
-        title="Rename proposal"
-        placeholder="Proposal title"
-        onClose={() => setProposalRenameTarget(null)}
-        onSave={(nextTitle) => {
-          void handleProposalRenameSave(nextTitle);
-        }}
-      />
-
-      {/* Hidden file input for JSON import */}
-      <input
-        ref={fileRef}
-        type="file"
-        accept="application/json,text/json"
-        className="hidden"
-        onChange={(e) => {
-          void (async () => {
-            setError(null);
-            const file = e.target.files?.[0];
-            if (!file) return;
-            try {
-              const text = await file.text();
-              const parsed: unknown = JSON.parse(text);
-              const norm = normalizeAndValidateCvDocument(parsed, file.name);
-              if (!norm.success) {
-                setError(norm.errors.join("; "));
-                return;
-              }
-              await importCv(norm.document);
-            } catch (err: unknown) {
-              setError(
-                err instanceof Error ? err.message : "Failed to import file",
-              );
-            } finally {
-              if (fileRef.current) fileRef.current.value = "";
-            }
-          })();
-        }}
-      />
-    </>
+    </aside>
   );
 };
-
-/* ─────────────────────────────────────────────────────────────
-   SbNewAction — "+ New …" row
-   ───────────────────────────────────────────────────────────── */
-
-function SbNewAction({
-  label,
-  dense,
-  onClick,
-}: {
-  label: string;
-  dense: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={clsx("sb-new-action", dense && "sb-new-action--dense")}
-    >
-      <Plus size={14} style={{ flexShrink: 0 }} />
-      <span style={{ whiteSpace: "nowrap" }}>{label}</span>
-    </button>
-  );
-}
-
-/* ─────────────────────────────────────────────────────────────
-   SbViewAll — "View all (N) →" link
-   ───────────────────────────────────────────────────────────── */
-
-function SbViewAll({
-  label,
-  dense,
-  onClick,
-}: {
-  label: string;
-  dense: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={clsx("sb-view-all", dense && "sb-view-all--dense")}
-    >
-      <FolderTree size={13} strokeWidth={1.6} style={{ flexShrink: 0 }} />
-      <span style={{ whiteSpace: "nowrap" }}>{label} →</span>
-    </button>
-  );
-}
-
-/* ─────────────────────────────────────────────────────────────
-   SbDoc — document sub-item
-   ───────────────────────────────────────────────────────────── */
-
-interface SbDocProps {
-  title: string;
-  isActive: boolean;
-  dense?: boolean;
-  onClick: () => void;
-  onRename: (e: React.MouseEvent) => void;
-  onDelete: (e: React.MouseEvent) => void;
-  hideActions?: boolean;
-  hideRenameAction?: boolean;
-}
-
-function SbDoc({
-  title,
-  isActive,
-  dense = false,
-  onClick,
-  onRename,
-  onDelete,
-  hideActions,
-  hideRenameAction,
-}: SbDocProps) {
-  const [hovered, setHovered] = useState(false);
-  const [isConfirming, setIsConfirming] = useState(false);
-
-  return (
-    <div
-      onClick={isConfirming ? undefined : onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => {
-        setHovered(false);
-        setIsConfirming(false);
-      }}
-      className={clsx(
-        "sb-doc",
-        dense && "sb-doc--dense",
-        isActive && "sb-doc--active",
-      )}
-      style={{ cursor: isConfirming ? "default" : "pointer" }}
-    >
-      <div className="sb-doc__row">
-        <div
-          className={clsx("sb-doc__title", isActive && "sb-doc__title--active")}
-        >
-          {title}
-        </div>
-
-        {!hideActions && (
-          <div
-            className={clsx(
-              "sb-doc__actions-mask",
-              (hovered || isConfirming) && "sb-doc__actions-mask--visible",
-            )}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {isConfirming ? (
-              <>
-                <button
-                  title="Confirm delete"
-                  className="sb-doc__action sb-doc__action--confirm"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete(e);
-                    setIsConfirming(false);
-                  }}
-                >
-                  <Check size={10} strokeWidth={2.5} />
-                </button>
-                <button
-                  title="Cancel"
-                  className="sb-doc__action sb-doc__action--cancel"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsConfirming(false);
-                  }}
-                >
-                  <X size={10} strokeWidth={2} />
-                </button>
-              </>
-            ) : (
-              <>
-                {!hideRenameAction ? (
-                  <button
-                    onClick={onRename}
-                    title="Rename"
-                    className="sb-doc__action"
-                  >
-                    <Pencil size={10} strokeWidth={1.75} />
-                  </button>
-                ) : (
-                  <span
-                    className="sb-doc__action sb-doc__action--ghost"
-                    aria-hidden
-                  />
-                )}
-                <button
-                  title="Delete"
-                  className="sb-doc__action"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsConfirming(true);
-                  }}
-                >
-                  <Trash size={10} strokeWidth={1.75} />
-                </button>
-              </>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 export default Sidebar;

@@ -55,6 +55,8 @@
   --container-pad-sm: var(--space-4);
   --container-pad-md: var(--space-5);
   --container-pad-lg: var(--space-6);
+  --anchored-surface-gap: 2px;
+  --toolbar-attached-surface-gap: 2px;
   --flow-1: 0.375em;
   --flow-2: 0.5em;
   --flow-3: 0.75em;
@@ -169,8 +171,8 @@
   --document-rail-gap: 12px;
   --document-stage-radius: clamp(12px, 1.5vw, 18px);
   --document-stage-halo: 0 0 0 1px
-      color-mix(in srgb, var(--color-border) 54%, transparent),
-    0 16px 36px color-mix(in srgb, var(--color-text) 7%, transparent);
+      color-mix(in srgb, var(--color-border) 52%, transparent),
+    0 10px 24px color-mix(in srgb, var(--color-text) 4.2%, transparent);
   --document-viewer-bleed-inline: clamp(16px, 1.8vw, 24px);
   --document-viewer-bleed-block: clamp(18px, 2.1vw, 28px);
   --document-viewer-radius: clamp(18px, 2vw, 24px);
@@ -184,8 +186,8 @@
     var(--color-border) 76%,
     transparent
   );
-  --document-viewer-frame-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.78),
-    0 16px 36px color-mix(in srgb, var(--color-text) 4%, transparent);
+  --document-viewer-frame-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.76),
+    0 10px 24px color-mix(in srgb, var(--color-text) 2.8%, transparent);
   --document-viewer-shell-inline-size: min(
     var(--card-rail-md),
     calc(
@@ -218,7 +220,8 @@
   --proposal-document-reading-measure-min: 40ch;
   --proposal-document-reading-measure-max: 64ch;
   --proposal-document-title-scale: 7.1;
-  --proposal-document-paper: var(--color-canvas);
+  --paper: #faf9f5;
+  --proposal-document-paper: var(--paper);
   --proposal-document-ink: var(--color-text);
   --proposal-document-meta-ink: var(--color-text-muted);
   --proposal-document-accent-ink: color-mix(
@@ -252,6 +255,7 @@
   --app-sidebar-width-compact: 240px;
   --app-sidebar-width-collapsed: 52px;
   --app-sidebar-width-collapsed-mobile: 40px;
+  --card-rail-xs: 176px;
   --card-rail-sm: 544px;
   --card-rail-md: 608px;
   --card-rail-lg: 672px;
@@ -263,7 +267,7 @@
   --app-sidebar-action-height: 30px;
   --app-sidebar-action-height-compact: 28px;
   --app-sidebar-icon-size: 16px;
-  --app-sidebar-label-size: var(--text-body-size);
+  --app-sidebar-label-size: var(--text-label-size);
   --app-sidebar-section-size: 11px;
   --app-sidebar-section-tracking: 0.12em;
   --app-sidebar-section-pad: var(--space-4) var(--space-2) var(--space-3);
@@ -279,7 +283,11 @@
   --sidebar-active-bg: var(--sfr);
   --sidebar-hover-ink: var(--ti);
   --sidebar-active-ink: var(--ti);
-  --sidebar-active-stripe: var(--ac);
+  --sidebar-active-stripe: color-mix(
+    in srgb,
+    var(--color-border-contrast) 78%,
+    transparent
+  );
   --section-header-surface: var(--sf1);
   --section-dismiss-surface: var(--section-header-surface);
   --section-dismiss-border: color-mix(
@@ -344,10 +352,14 @@
   --wat: hsl(34, 36%, 26%);
 
   /* §9 Ombres light */
-  --sha: 0 1px 2px hsla(30, 20%, 8%, 0.04), 0 6px 16px hsla(30, 20%, 8%, 0.045);
-  --shb: 0 2px 6px hsla(30, 20%, 8%, 0.05), 0 12px 28px hsla(30, 20%, 8%, 0.07);
-  --shc: 0 6px 18px hsla(30, 20%, 8%, 0.06), 0 24px 52px hsla(30, 20%, 8%, 0.1);
-  --shadow-frost: 0 10px 32px hsla(30, 20%, 8%, 0.08);
+  --sha: 0 1px 2px hsla(30, 20%, 8%, 0.03),
+    0 5px 12px hsla(30, 20%, 8%, 0.028);
+  --shb: 0 2px 5px hsla(30, 20%, 8%, 0.04),
+    0 8px 20px hsla(30, 20%, 8%, 0.048);
+  --shc: 0 6px 16px hsla(30, 20%, 8%, 0.055),
+    0 22px 46px hsla(30, 20%, 8%, 0.085);
+  --shadow-frost: 0 8px 20px -18px hsla(30, 20%, 8%, 0.22),
+    0 2px 5px -4px hsla(30, 20%, 8%, 0.07);
 
   /* Subtle gradients */
   --gradient-canvas: radial-gradient(
@@ -390,12 +402,16 @@
   --sidebar-hover-bg: color-mix(in srgb, var(--sf2) 72%, var(--sfr) 28%);
   --sidebar-active-bg: linear-gradient(
     180deg,
-    color-mix(in srgb, white 78%, var(--sf1) 22%) 0%,
-    color-mix(in srgb, var(--sfr) 86%, hsl(92, 16%, 84%) 14%) 100%
+    color-mix(in srgb, white 76%, var(--sf1) 24%) 0%,
+    color-mix(in srgb, var(--sfr) 90%, var(--sf1) 10%) 100%
   );
   --sidebar-hover-ink: var(--ti);
   --sidebar-active-ink: var(--ti);
-  --sidebar-active-stripe: color-mix(in srgb, var(--ac) 76%, var(--ti) 24%);
+  --sidebar-active-stripe: color-mix(
+    in srgb,
+    var(--color-border-contrast) 80%,
+    transparent
+  );
   --drop-surface-bg: hsla(38, 26%, 98%, 0.78);
   --drop-surface-border: hsla(30, 14%, 16%, 0.1);
   --section-hover-surface: var(--gradient-surface);
@@ -480,15 +496,15 @@
   );
   --sidebar-active-bg: linear-gradient(
     180deg,
-    hsla(42, 18%, 80%, 0.08) 0%,
-    hsla(74, 6%, 17%, 0.98) 100%
+    hsla(42, 18%, 80%, 0.06) 0%,
+    hsla(74, 6%, 16%, 0.98) 100%
   );
   --sidebar-hover-ink: hsl(46, 14%, 90%);
   --sidebar-active-ink: hsl(46, 16%, 94%);
   --sidebar-active-stripe: color-mix(
     in srgb,
-    hsl(46, 18%, 82%) 56%,
-    var(--ac) 44%
+    hsl(46, 18%, 82%) 62%,
+    transparent
   );
   --drop-surface-bg: hsla(44, 10%, 18%, 0.6);
   --drop-surface-border: hsla(46, 14%, 86%, 0.14);
@@ -514,7 +530,8 @@
   --document-viewer-frame-shadow: inset 0 1px 0
       color-mix(in srgb, white 5%, transparent),
     0 14px 26px -24px hsla(0, 0%, 0%, 0.8);
-  --proposal-document-paper: var(--color-surface-raised);
+  --paper: #faf9f5;
+  --proposal-document-paper: var(--paper);
   --proposal-document-ink: var(--color-text);
   --proposal-document-meta-ink: var(--color-text-muted);
   --proposal-document-accent-ink: color-mix(
