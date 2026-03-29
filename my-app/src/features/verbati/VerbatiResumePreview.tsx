@@ -1,5 +1,12 @@
 import React from "react";
-import { Minus, Plus } from "@/lib/icons";
+import {
+  ArrowLeft,
+  ArrowRight,
+  CornersIn,
+  MagnifyingGlass,
+  Minus,
+  Plus,
+} from "@/lib/icons";
 import { useDocumentPan } from "../../hooks/use-document-pan";
 import { useDocumentStageLayout } from "../../hooks/use-document-stage-layout";
 import { useDocumentViewportCentering } from "../../hooks/use-document-viewport-centering";
@@ -18,6 +25,17 @@ type VerbatiResumePreviewProps = {
   data: ResumeData;
   stylePreset: VerbatiStylePreset;
   compareLayouts?: boolean;
+  hostMode?: "panel" | "workspace";
+  railLeadControl?: React.ReactNode;
+  railStartAddon?: React.ReactNode;
+  panelNavigation?:
+    | {
+        onPrevious: () => void;
+        onNext: () => void;
+        previousLabel: string;
+        nextLabel: string;
+      }
+    | null;
   onSelectComparisonLayout?: ((layout: VerbatiLayoutPreset) => void) | undefined;
 };
 
@@ -39,6 +57,10 @@ export function VerbatiResumePreview({
   data,
   stylePreset,
   compareLayouts = false,
+  hostMode = "panel",
+  railLeadControl = null,
+  railStartAddon = null,
+  panelNavigation = null,
   onSelectComparisonLayout,
 }: VerbatiResumePreviewProps): JSX.Element {
   const themeVars = React.useMemo(
@@ -51,16 +73,21 @@ export function VerbatiResumePreview({
   );
   const [zoomIndex, setZoomIndex] = React.useState(1);
   const [fitRequestCount, setFitRequestCount] = React.useState(0);
+  const [isZoomMenuOpen, setIsZoomMenuOpen] = React.useState(false);
   const stageMeasureRef = React.useRef<HTMLDivElement | null>(null);
-  const userZoom = DOCUMENT_ZOOM_STEPS[zoomIndex];
+  const zoomMenuRef = React.useRef<HTMLDivElement | null>(null);
+  const isWorkspaceMode = hostMode === "workspace";
+  const userZoom = isWorkspaceMode ? DOCUMENT_ZOOM_STEPS[zoomIndex] : 1;
   const stageLayout = useDocumentStageLayout({
     enabled: !compareLayouts,
     measurementRef: stageMeasureRef,
     zoomLevel: userZoom,
+    fitMode: isWorkspaceMode ? "contain" : "width",
+    fillAvailableOnZoom: isWorkspaceMode,
   });
   const stageMode = stageLayout.isFit ? "fit" : "overflow";
   const { attachViewport, viewportPanProps } = useDocumentPan({
-    enabled: !compareLayouts && userZoom > 1,
+    enabled: !compareLayouts && isWorkspaceMode && userZoom > 1,
   });
   const { attachViewport: attachCenterViewport } = useDocumentViewportCentering({
     enabled: !compareLayouts,
@@ -74,6 +101,32 @@ export function VerbatiResumePreview({
     },
     [attachCenterViewport, attachViewport],
   );
+  React.useEffect(() => {
+    if (!isWorkspaceMode || !isZoomMenuOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (target && !zoomMenuRef.current?.contains(target)) {
+        setIsZoomMenuOpen(false);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsZoomMenuOpen(false);
+      }
+    };
+
+    window.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("keydown", handleEscape);
+
+    return () => {
+      window.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [isWorkspaceMode, isZoomMenuOpen]);
 
   if (compareLayouts) {
     const comparisonVariantIds = comparisonLayouts.map(
@@ -108,8 +161,37 @@ export function VerbatiResumePreview({
 
   const fitToken = `${stylePreset.layout}:${stylePreset.typography}:${accentToken}:single:${data.name}:${data.title}:${data.summary.length}:${data.experience.length}:${data.education.length}:${data.skills.length}:${data.languages.length}:${data.projects.length}:${data.achievements?.length ?? 0}`;
 
-  const zoomControls = (
-    <div className="dasti-doc-zoom-bar" data-no-pan="true">
+  const popoverZoomControls = (
+    <div
+      ref={zoomMenuRef}
+      className={
+        isZoomMenuOpen
+          ? "dasti-doc-zoom-menu dasti-doc-zoom-menu--open"
+          : "dasti-doc-zoom-menu"
+      }
+      data-no-pan="true"
+    >
+      <button
+        type="button"
+        className={
+          zoomIndex === 1
+            ? "dasti-doc-zoom-fit dasti-doc-zoom-trigger"
+            : "dasti-doc-zoom-fit dasti-doc-zoom-trigger dasti-doc-zoom-trigger--active"
+        }
+        onClick={() => setIsZoomMenuOpen((current) => !current)}
+        aria-label="Open zoom controls"
+        title="Open zoom controls"
+        aria-expanded={isZoomMenuOpen}
+        aria-haspopup="dialog"
+      >
+        <MagnifyingGlass size={14} strokeWidth={1.8} aria-hidden="true" />
+      </button>
+      <div
+        className="dasti-doc-zoom-bar dasti-doc-zoom-bar--popover"
+        data-no-pan="true"
+        role="dialog"
+        aria-label="Zoom controls"
+      >
         <button
           type="button"
           className={
@@ -120,11 +202,12 @@ export function VerbatiResumePreview({
           onClick={() => {
             setZoomIndex(1);
             setFitRequestCount((count) => count + 1);
+            setIsZoomMenuOpen(false);
           }}
           aria-label="Fit page"
           title="Fit page"
         >
-          Fit
+          <CornersIn size={14} strokeWidth={1.8} aria-hidden="true" />
         </button>
         <button
           type="button"
@@ -151,54 +234,141 @@ export function VerbatiResumePreview({
           <Plus size={14} strokeWidth={1.7} aria-hidden="true" />
         </button>
       </div>
+    </div>
   );
 
+  const railStartControls =
+    isWorkspaceMode &&
+    (railLeadControl || railStartAddon || popoverZoomControls) ? (
+      <div className="dasti-proposal-rail-cluster" data-no-pan="true">
+        {railLeadControl}
+        {railLeadControl && popoverZoomControls ? (
+          <div className="dasti-icon-cluster__divider dasti-proposal-rail-cluster__divider" />
+        ) : null}
+        {popoverZoomControls}
+        {railStartAddon ? (
+          <>
+            {railLeadControl || popoverZoomControls ? (
+              <div className="dasti-icon-cluster__divider dasti-proposal-rail-cluster__divider" />
+            ) : null}
+            {railStartAddon}
+          </>
+        ) : null}
+      </div>
+    ) : railLeadControl || railStartAddon ? (
+      <div data-no-pan="true">
+        {railLeadControl}
+        {railStartAddon}
+      </div>
+    ) : null;
+
+  const documentStage = (
+    <div className="dasti-document-stage-chassis" ref={stageMeasureRef}>
+      <div
+        key={fitToken}
+        ref={attachResumeViewport}
+        className={[
+          "dasti-doc-viewport",
+          "dasti-doc-viewport--resume",
+          !isWorkspaceMode ? "dasti-doc-viewport--resume-panel" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        data-stage-mode={stageMode}
+        data-document-stage="true"
+        style={{
+          width: `${stageLayout.stageWidth}px`,
+          height: `${stageLayout.stageHeight}px`,
+        }}
+        {...viewportPanProps}
+      >
+        <div
+          className="dasti-document-stage__canvas"
+          data-document-page="true"
+          style={{
+            width: `${stageLayout.pageWidth}px`,
+            height: `${stageLayout.pageHeight}px`,
+          }}
+        >
+          <ResumePage
+            data={data}
+            mode={VERBATI_LAYOUT_TO_RENDERER[stylePreset.layout]}
+            fitToken={fitToken}
+            userZoom={userZoom}
+            stageLayout={stageLayout}
+          />
+        </div>
+      </div>
+    </div>
+  );
+
+  if (!isWorkspaceMode) {
+    return (
+      <div className="dasti-doc-viewer-shell dasti-doc-viewer-shell--resume-panel">
+        <div className="dasti-resume-mini-preview theme-resume-calm theme-resume-calm--single" style={themeVars}>
+          {documentStage}
+          {panelNavigation ? (
+            <div className="dasti-resume-mini-preview__nav" data-no-pan="true">
+              <button
+                type="button"
+                className="dasti-resume-mini-preview__nav-button dasti-resume-mini-preview__nav-button--prev"
+                onClick={panelNavigation.onPrevious}
+                aria-label={panelNavigation.previousLabel}
+                title={panelNavigation.previousLabel}
+              >
+                <ArrowLeft size={16} strokeWidth={1.8} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                className="dasti-resume-mini-preview__nav-button dasti-resume-mini-preview__nav-button--next"
+                onClick={panelNavigation.onNext}
+                aria-label={panelNavigation.nextLabel}
+                title={panelNavigation.nextLabel}
+              >
+                <ArrowRight size={16} strokeWidth={1.8} aria-hidden="true" />
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="dasti-doc-viewer-shell">
-      <div className="dasti-proposal-sheet-frame">
+    <div
+      className={[
+        "dasti-doc-viewer-shell",
+        "dasti-doc-viewer-shell--resume-workspace",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      <div
+        className="dasti-document-rail dasti-document-rail--resume-workspace"
+        data-no-pan="true"
+      >
+        <div className="dasti-document-rail__section dasti-document-rail__section--start">
+          {railStartControls}
+        </div>
+        <div className="dasti-document-rail__section dasti-document-rail__section--center" />
+        <div className="dasti-document-rail__section dasti-document-rail__section--end" />
+      </div>
+      <div
+        className={[
+          "dasti-proposal-sheet-frame",
+          hostMode === "workspace"
+            ? "dasti-proposal-sheet-frame--resume-workspace"
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      >
         <div
           className="dasti-proposal-sheet dasti-document-shell theme-resume-calm theme-resume-calm--single"
           style={themeVars}
         >
-          <div className="dasti-document-rail" data-no-pan="true">
-            <div className="dasti-document-rail__section dasti-document-rail__section--start" />
-            <div className="dasti-document-rail__section dasti-document-rail__section--center">
-              {zoomControls}
-            </div>
-            <div className="dasti-document-rail__section dasti-document-rail__section--end" />
-          </div>
           <div className="dasti-proposal-sheet__body dasti-proposal-sheet__body--document-viewer">
-            <div className="dasti-document-stage-chassis" ref={stageMeasureRef}>
-              <div
-                key={fitToken}
-                ref={attachResumeViewport}
-                className="dasti-doc-viewport dasti-doc-viewport--resume"
-                data-stage-mode={stageMode}
-                data-document-stage="true"
-                style={{
-                  width: `${stageLayout.stageWidth}px`,
-                  height: `${stageLayout.stageHeight}px`,
-                }}
-                {...viewportPanProps}
-              >
-                <div
-                  className="dasti-document-stage__canvas"
-                  data-document-page="true"
-                  style={{
-                    width: `${stageLayout.pageWidth}px`,
-                    height: `${stageLayout.pageHeight}px`,
-                  }}
-                >
-                  <ResumePage
-                    data={data}
-                    mode={VERBATI_LAYOUT_TO_RENDERER[stylePreset.layout]}
-                    fitToken={fitToken}
-                    userZoom={userZoom}
-                    stageLayout={stageLayout}
-                  />
-                </div>
-              </div>
-            </div>
+            {documentStage}
           </div>
         </div>
       </div>

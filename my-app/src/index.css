@@ -136,6 +136,21 @@
   padding-top: var(--s3);
 }
 
+.achievements-display--editorial :is(ul, ol) {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+}
+
+.achievements-display--editorial :is(ul, ol) > li {
+  margin: 0;
+  padding: 0;
+}
+
+.achievements-display--editorial .ProseMirror p {
+  margin: 0;
+}
+
 .rich-content .remirror-placeholder {
   color: var(--tg2);
   opacity: 0.85;

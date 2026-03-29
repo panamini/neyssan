@@ -130,7 +130,7 @@ export function AchievementsBlock({
   // Collapsed preview handled by AchievementsDisplay via maxItems prop
 
   return (
-    <div className="mb-4 border [border-color:var(--color-border)] [border-radius:var(--radius-card)] section-container section-container--dismissable">
+    <div className="mb-4 border [border-color:var(--color-border)] [border-radius:var(--radius-card)] section-container section-container--dismissable section-container--achievements">
       {onDeleteSection ? (
         <button
           type="button"
@@ -166,28 +166,37 @@ export function AchievementsBlock({
 
       <div className="cv-section-body">
         <div
-          id={contentId}
-          role="region"
-          aria-expanded={isExpanded}
-          className="text-sm [color:var(--ti)]"
-          onClick={() => {
-            if (items.length === 0) return;
-            setSeedOnOpen(false);
-            setIsModalOpen(true);
-          }}
-          onKeyDown={(e) => {
-            if (items.length === 0) return;
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
+          className={[
+            "cv-achievements-surface",
+            "cv-achievements-surface--editable",
+            items.length === 0 ? "cv-achievements-surface--empty" : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+        >
+          <div
+            id={contentId}
+            role="region"
+            aria-expanded={isExpanded}
+            className="text-sm [color:var(--ti)]"
+            onClick={() => {
+              if (items.length === 0) return;
               setSeedOnOpen(false);
               setIsModalOpen(true);
-            }
-          }}
-          tabIndex={items.length > 0 ? 0 : -1}
-          aria-label={items.length > 0 ? "Edit achievements" : undefined}
-          title={items.length > 0 ? "Click to edit achievements" : undefined}
-          style={{ cursor: items.length > 0 ? "pointer" : "default" }}
-        >
+            }}
+            onKeyDown={(e) => {
+              if (items.length === 0) return;
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setSeedOnOpen(false);
+                setIsModalOpen(true);
+              }
+            }}
+            tabIndex={items.length > 0 ? 0 : -1}
+            aria-label={items.length > 0 ? "Edit achievements" : undefined}
+            title={items.length > 0 ? "Click to edit achievements" : undefined}
+            style={{ cursor: items.length > 0 ? "pointer" : "default" }}
+          >
           {items.length === 0 ? (
             <div
               className="cv-preview-empty cv-preview-text cv-preview-text--muted cursor-pointer"
@@ -234,6 +243,7 @@ export function AchievementsBlock({
               itemId={String(section.id)}
               items={items}
               separatedItems={true}
+              className="achievements-display--editorial"
             />
           ) : (
             <AchievementsDisplay
@@ -241,8 +251,10 @@ export function AchievementsBlock({
               items={items}
               maxItems={2}
               separatedItems={true}
+              className="achievements-display--editorial"
             />
           )}
+        </div>
         </div>
 
         {items.length > 2 ? (

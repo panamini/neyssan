@@ -8,13 +8,17 @@ type UseDocumentStageLayoutOptions = {
   enabled?: boolean;
   measurementRef: React.RefObject<HTMLElement | null>;
   zoomLevel?: number;
+  fitMode?: "width" | "contain";
+  fillAvailableOnZoom?: boolean;
   pageWidthPx?: number;
   pageHeightPx?: number;
   initialAvailableWidthPx?: number;
+  initialAvailableHeightPx?: number;
 };
 
 type StageMeasurement = {
   availableWidth: number;
+  availableHeight: number;
 };
 
 export type DocumentStageLayout = {
@@ -36,12 +40,16 @@ export function useDocumentStageLayout({
   enabled = true,
   measurementRef,
   zoomLevel = 1,
+  fitMode = "width",
+  fillAvailableOnZoom = false,
   pageWidthPx = A4_PAGE_WIDTH_PX,
   pageHeightPx = A4_PAGE_HEIGHT_PX,
   initialAvailableWidthPx = 560,
+  initialAvailableHeightPx = pageHeightPx,
 }: UseDocumentStageLayoutOptions) {
   const [measurement, setMeasurement] = React.useState<StageMeasurement>({
     availableWidth: initialAvailableWidthPx,
+    availableHeight: initialAvailableHeightPx,
   });
 
   React.useLayoutEffect(() => {
@@ -60,14 +68,19 @@ export function useDocumentStageLayout({
         node.clientWidth -
         Number.parseFloat(styles.paddingLeft || "0") -
         Number.parseFloat(styles.paddingRight || "0");
+      const availableHeight =
+        node.clientHeight -
+        Number.parseFloat(styles.paddingTop || "0") -
+        Number.parseFloat(styles.paddingBottom || "0");
 
-      if (availableWidth <= 0) {
+      if (availableWidth <= 0 || availableHeight <= 0) {
         return;
       }
 
       setMeasurement((current) =>
-        Math.abs(current.availableWidth - availableWidth) > 0.5
-          ? { availableWidth }
+        Math.abs(current.availableWidth - availableWidth) > 0.5 ||
+        Math.abs(current.availableHeight - availableHeight) > 0.5
+          ? { availableWidth, availableHeight }
           : current,
       );
     };
@@ -87,11 +100,28 @@ export function useDocumentStageLayout({
     };
   }, [enabled, measurementRef]);
 
+  const widthFitScale = measurement.availableWidth / pageWidthPx;
+  const heightFitScale = measurement.availableHeight / pageHeightPx;
   const fitScale = enabled
-    ? Math.min(1, measurement.availableWidth / pageWidthPx)
+    ? Math.min(
+        1,
+        fitMode === "contain"
+          ? Math.min(widthFitScale, heightFitScale)
+          : widthFitScale,
+      )
     : 1;
-  const stageWidth = roundPx(pageWidthPx * fitScale);
-  const stageHeight = roundPx(pageHeightPx * fitScale);
+  const usesFilledOverflowStage =
+    enabled && fillAvailableOnZoom && zoomLevel > 1 + 0.001;
+  const stageWidth = roundPx(
+    usesFilledOverflowStage
+      ? measurement.availableWidth
+      : pageWidthPx * fitScale,
+  );
+  const stageHeight = roundPx(
+    usesFilledOverflowStage
+      ? measurement.availableHeight
+      : pageHeightPx * fitScale,
+  );
   const pageWidth = roundPx(stageWidth * zoomLevel);
   const pageHeight = roundPx(stageHeight * zoomLevel);
   const overflowX = pageWidth > stageWidth + 1;
