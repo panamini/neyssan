@@ -118,7 +118,7 @@ const NEUTRAL_THEME = {
   canvas: "#f7f4ee",
   surface: "#fffefa",
   surfaceMuted: "#f6f2eb",
-  surfaceRaised: "#ffffff",
+  paper: "#faf9f5",
   text: "#1d1914",
   textMuted: "#655c50",
   textSubtle: "#8a8174",
@@ -313,6 +313,7 @@ export function buildVerbatiThemeVars(
   const accentMuted = mixHex(NEUTRAL_THEME.surface, accent, 0.18);
   const canvas = mixHex(NEUTRAL_THEME.canvas, accent, 0.012);
   const surfaceMuted = mixHex(NEUTRAL_THEME.surfaceMuted, accent, 0.022);
+  const surfaceRaised = mixHex(NEUTRAL_THEME.surface, NEUTRAL_THEME.canvas, 0.6);
   const border = withAlpha(mixHex(NEUTRAL_THEME.text, accent, 0.06), 0.13);
   const borderStrong = withAlpha(mixHex(NEUTRAL_THEME.text, accent, 0.1), 0.22);
   const borderContrast = withAlpha(
@@ -329,7 +330,7 @@ export function buildVerbatiThemeVars(
     "--color-canvas": canvas,
     "--color-surface": NEUTRAL_THEME.surface,
     "--color-surface-muted": surfaceMuted,
-    "--color-surface-raised": NEUTRAL_THEME.surfaceRaised,
+    "--color-surface-raised": surfaceRaised,
     "--color-text": NEUTRAL_THEME.text,
     "--color-text-muted": NEUTRAL_THEME.textMuted,
     "--color-text-subtle": NEUTRAL_THEME.textSubtle,
@@ -340,7 +341,8 @@ export function buildVerbatiThemeVars(
     "--color-accent-hover": accentHover,
     "--color-accent-pressed": accentPressed,
     "--color-accent-soft": accentSoft,
-    "--proposal-document-paper": NEUTRAL_THEME.surfaceRaised,
+    "--paper": NEUTRAL_THEME.paper,
+    "--proposal-document-paper": "var(--paper)",
     "--proposal-document-ink": NEUTRAL_THEME.text,
     "--proposal-document-meta-ink": NEUTRAL_THEME.textMuted,
     "--proposal-document-accent-ink": documentAccent,
@@ -348,7 +350,7 @@ export function buildVerbatiThemeVars(
     "--bg": canvas,
     "--sf1": NEUTRAL_THEME.surface,
     "--sf2": surfaceMuted,
-    "--sfr": NEUTRAL_THEME.surfaceRaised,
+    "--sfr": surfaceRaised,
     "--ti": NEUTRAL_THEME.text,
     "--tm2": NEUTRAL_THEME.textMuted,
     "--tg2": NEUTRAL_THEME.textSubtle,
@@ -389,7 +391,8 @@ export function buildVerbatiProposalDocumentVars(
     "--font-heading-family": typography.headingFamily,
     "--font-body-family": typography.bodyFamily,
     "--font-editorial-family": typography.headingFamily,
-    "--proposal-document-paper": NEUTRAL_THEME.surfaceRaised,
+    "--paper": NEUTRAL_THEME.paper,
+    "--proposal-document-paper": "var(--paper)",
     "--proposal-document-ink": NEUTRAL_THEME.text,
     "--proposal-document-meta-ink": NEUTRAL_THEME.textMuted,
     "--proposal-document-accent-ink": documentAccent,
