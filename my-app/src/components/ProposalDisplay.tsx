@@ -1,11 +1,25 @@
 import React from "react";
-import { Check, Copy, Eye, Minus, Pencil, Plus } from "@/lib/icons";
+import { useAction } from "convex/react";
+import {
+  Check,
+  Copy,
+  CornersIn,
+  Eye,
+  MagnifyingGlass,
+  Minus,
+  Pencil,
+  Plus,
+} from "@/lib/icons";
 import type { FormValues } from "./ProposalInputForm.schemas";
 import type { ProposalVoicePreset } from "../../convex/lib/proposals/voicePresets";
+import { api } from "../../convex/_generated/api";
 import {
   getProposalGenerationFallbackDisclosureMessage,
   type ProposalGenerationFallbackInfo,
 } from "../lib/proposal-generation-ui";
+import FloatingAiToolbar, {
+  type InlineAiActionId,
+} from "./FloatingAiToolbar";
 import { getProposalDocumentTypography } from "../lib/proposal-document-typography";
 import { useScrollEdgeFades } from "../hooks/use-scroll-edge-fades";
 import { useDocumentPan } from "../hooks/use-document-pan";
@@ -23,11 +37,14 @@ import {
   A4_PAGE_WIDTH_PX,
   DOCUMENT_ZOOM_STEPS,
 } from "../lib/document-stage";
+import { getTextareaSelectionState } from "../lib/editor-ai-selection";
+import { resolveProposalCharacterLimitSelection } from "../../convex/lib/proposals/generationControls";
 
 interface ProposalDisplayProps {
   proposalContent: string | null;
   loading: boolean;
   error: string | null;
+  statusMessage?: string | null;
   /** Raw backend error message — shown as dev-only diagnostic block */
   errorDetail?: string | null;
   proposalType?: FormValues["proposalType"] | null;
@@ -47,6 +64,7 @@ interface ProposalDisplayProps {
   onContentChange?: (value: string) => void;
   onContentCommit?: () => void;
   actions?: React.ReactNode;
+  railStartAddon?: React.ReactNode;
   showModeToggle?: boolean;
   size?: "default" | "focused";
   previewAnchor?: "top" | "body";
@@ -58,6 +76,8 @@ interface ProposalDisplayProps {
   onDocumentTitleChange?: (value: string) => void;
   onDocumentTitleCommit?: () => void;
   documentTitlePlaceholder?: string;
+  characterLimit?: number | null;
+  characterLimitAdvisory?: boolean;
 }
 
 function stripInlineMarkdown(text: string): string {
@@ -132,6 +152,42 @@ function renderPlainPreviewBody(content: string) {
   );
 }
 
+function getCharacterCountTone(args: {
+  count: number;
+  limit: number | null;
+  advisory?: boolean;
+}): "default" | "warning" | "danger" {
+  if (args.advisory) {
+    return "default";
+  }
+
+  if (args.limit === null) {
+    return "default";
+  }
+
+  if (args.count > args.limit) {
+    return "danger";
+  }
+
+  if (args.count >= Math.floor(args.limit * 0.9)) {
+    return "warning";
+  }
+
+  return "default";
+}
+
+function formatCharacterCountLabel(args: {
+  count: number;
+  limit: number | null;
+  advisory?: boolean;
+}): string {
+  if (args.limit === null) {
+    return `${args.count.toLocaleString()} chars`;
+  }
+
+  return `${args.count.toLocaleString()} / ${args.advisory ? "~" : ""}${args.limit.toLocaleString()}`;
+}
+
 export function getDisplayedProposalText(
   content: string,
   proposalType?: FormValues["proposalType"] | null,
@@ -201,6 +257,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   proposalContent,
   loading,
   error,
+  statusMessage = null,
   errorDetail = null,
   proposalType,
   fallbackInfo = null,
@@ -219,6 +276,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   onContentChange,
   onContentCommit,
   actions,
+  railStartAddon,
   showModeToggle: allowModeToggle = true,
   size = "default",
   previewAnchor = "top",
@@ -230,6 +288,8 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   onDocumentTitleChange,
   onDocumentTitleCommit,
   documentTitlePlaceholder = "Proposal title",
+  characterLimit,
+  characterLimitAdvisory = false,
 }) => {
   const resolvedRenderState = React.useMemo(
     () =>
@@ -248,6 +308,32 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     voicePreset,
     resolvedStylePreset,
   );
+  const transformEditorSelectionAction = useAction(
+    (api.functions as any).transformEditorSelection,
+  );
+  const displayedProposalText = React.useMemo(
+    () =>
+      proposalContent
+        ? getDisplayedProposalText(proposalContent, proposalType)
+        : "",
+    [proposalContent, proposalType],
+  );
+  const resolvedCharacterLimitSelection = React.useMemo(() => {
+    if (characterLimit !== undefined || characterLimitAdvisory) {
+      return {
+        value: characterLimit ?? null,
+        advisory: characterLimitAdvisory,
+      };
+    }
+
+    return resolveProposalCharacterLimitSelection({});
+  }, [characterLimit, characterLimitAdvisory]);
+  const proposalCharacterCount = displayedProposalText.length;
+  const characterCountTone = getCharacterCountTone({
+    count: proposalCharacterCount,
+    limit: resolvedCharacterLimitSelection.value,
+    advisory: resolvedCharacterLimitSelection.advisory,
+  });
   const proposalDocumentThemeVars = React.useMemo(
     () => buildVerbatiProposalDocumentVars(resolvedStylePreset),
     [resolvedStylePreset],
@@ -256,8 +342,22 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   const [zoomIndex, setZoomIndex] = React.useState(() =>
     readProposalZoomIndex(zoomStorageKey),
   );
+  const [isZoomMenuOpen, setIsZoomMenuOpen] = React.useState(false);
+  const [documentPageCount, setDocumentPageCount] = React.useState(1);
   const [fitRequestCount, setFitRequestCount] = React.useState(0);
+  const [isApplyingInlineAi, setIsApplyingInlineAi] = React.useState(false);
+  const [pendingInlineAiActionId, setPendingInlineAiActionId] =
+    React.useState<InlineAiActionId | null>(null);
+  const [textareaSelectionState, setTextareaSelectionState] = React.useState<{
+    text: string;
+    anchor: { left: number; top: number };
+    start: number;
+    end: number;
+  } | null>(null);
   const zoomLevel = DOCUMENT_ZOOM_STEPS[zoomIndex];
+  const editableTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const selectionDebounceRef = React.useRef<number | null>(null);
+  const zoomMenuRef = React.useRef<HTMLDivElement | null>(null);
 
   const {
     attach: attachEditableScrollEdges,
@@ -322,6 +422,20 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           "--document-page-height": `${stageLayout.pageHeight}px`,
         } as React.CSSProperties)
       : undefined;
+  const documentPageGapPx =
+    usesDocumentRenderer && !isEditable
+      ? Math.max(
+          12,
+          Math.round(24 * (stageLayout.pageWidth / A4_PAGE_WIDTH_PX)),
+        )
+      : 0;
+  const renderedDocumentHeight =
+    usesDocumentRenderer && !isEditable
+      ? stageLayout.pageHeight * Math.max(1, documentPageCount) +
+        documentPageGapPx * Math.max(0, documentPageCount - 1)
+      : stageLayout.pageHeight;
+  const isMultiPagePreview =
+    usesDocumentRenderer && !isEditable && documentPageCount > 1;
   const resolveBodyClassName = React.useCallback(
     ({
       isReadonly = false,
@@ -377,6 +491,132 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     setFitRequestCount((count) => count + 1);
   }, [zoomStorageKey]);
 
+  React.useEffect(() => {
+    if (!isZoomMenuOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (target && !zoomMenuRef.current?.contains(target)) {
+        setIsZoomMenuOpen(false);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsZoomMenuOpen(false);
+      }
+    };
+
+    window.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("keydown", handleEscape);
+
+    return () => {
+      window.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [isZoomMenuOpen]);
+
+  React.useEffect(() => {
+    return () => {
+      if (selectionDebounceRef.current !== null) {
+        window.clearTimeout(selectionDebounceRef.current);
+      }
+    };
+  }, []);
+
+  React.useEffect(() => {
+    if (!isEditable) {
+      setTextareaSelectionState(null);
+    }
+  }, [isEditable]);
+
+  React.useEffect(() => {
+    if (isEditable) {
+      setIsZoomMenuOpen(false);
+    }
+  }, [isEditable]);
+
+  React.useEffect(() => {
+    if (!proposalContent || isEditable || !usesDocumentRenderer) {
+      setDocumentPageCount(1);
+    }
+  }, [isEditable, proposalContent, usesDocumentRenderer]);
+
+  const scheduleTextareaSelectionCheck = React.useCallback(() => {
+    if (selectionDebounceRef.current !== null) {
+      window.clearTimeout(selectionDebounceRef.current);
+    }
+
+    selectionDebounceRef.current = window.setTimeout(() => {
+      selectionDebounceRef.current = null;
+      const nextSelection = getTextareaSelectionState(editableTextareaRef.current);
+      setTextareaSelectionState(nextSelection);
+    }, 90);
+  }, []);
+
+  React.useEffect(() => {
+    if (!isEditable) {
+      return undefined;
+    }
+
+    const handleSelectionChange = () => {
+      scheduleTextareaSelectionCheck();
+    };
+
+    document.addEventListener("selectionchange", handleSelectionChange);
+    return () => {
+      document.removeEventListener("selectionchange", handleSelectionChange);
+    };
+  }, [isEditable, scheduleTextareaSelectionCheck]);
+
+  const handleRunInlineAiAction = React.useCallback(
+    async (actionId: InlineAiActionId, instruction: string) => {
+      if (!textareaSelectionState || !proposalContent) return;
+
+      try {
+        setPendingInlineAiActionId(actionId);
+        setIsApplyingInlineAi(true);
+        const result = await transformEditorSelectionAction({
+          mode: actionId,
+          instruction,
+          selectedText: textareaSelectionState.text,
+        });
+        const replacementText =
+          typeof result?.text === "string" ? result.text : "";
+        if (!replacementText.trim()) {
+          return;
+        }
+
+        const nextContent =
+          proposalContent.slice(0, textareaSelectionState.start) +
+          replacementText +
+          proposalContent.slice(textareaSelectionState.end);
+        onContentChange?.(nextContent);
+        setTextareaSelectionState(null);
+
+        window.setTimeout(() => {
+          const textarea = editableTextareaRef.current;
+          if (!textarea) return;
+          const selectionEnd =
+            textareaSelectionState.start + replacementText.length;
+          textarea.focus();
+          textarea.setSelectionRange(selectionEnd, selectionEnd);
+        }, 0);
+      } finally {
+        setIsApplyingInlineAi(false);
+        setPendingInlineAiActionId(null);
+      }
+    },
+    [
+      onContentChange,
+      proposalContent,
+      textareaSelectionState,
+      transformEditorSelectionAction,
+    ],
+  );
+
   const attachPreviewScrollContainer = React.useCallback(
     (node: HTMLDivElement | null) => {
       attachPreviewScrollEdges(node);
@@ -392,7 +632,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     layoutKey: `${effectiveZoomLevel}:${stageLayout.stageWidth}:${stageLayout.stageHeight}:${resolvedTemplateId}:${proposalContent?.length ?? 0}:${mode}:${previewAnchor}`,
     recenterKey: fitRequestCount,
     defaultCenterX: 0.5,
-    defaultCenterY: previewAnchor === "body" ? 0.46 : 0.5,
+    defaultCenterY: previewAnchor === "body" ? 0.46 : 0,
     onSync: updatePreviewScrollEdges,
   });
   const attachPreviewViewport = React.useCallback(
@@ -405,54 +645,71 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   );
 
   const modeToggleControl = showModeToggle ? (
-    <div
-      className="dasti-proposal-view-toggle"
-      role="group"
-      aria-label="Proposal output mode"
+    <button
+      type="button"
+      className={
+        mode === "edit"
+          ? "dasti-icon-button dasti-proposal-mode-toggle dasti-proposal-mode-toggle--active"
+          : "dasti-icon-button dasti-proposal-mode-toggle"
+      }
+      onClick={() => onModeChange?.(mode === "preview" ? "edit" : "preview")}
+      aria-pressed={mode === "edit"}
+      aria-label={
+        mode === "preview" ? "Switch to edit mode" : "Switch to preview mode"
+      }
+      data-toolbar-tooltip={
+        mode === "preview" ? "Switch to edit" : "Switch to preview"
+      }
       data-no-pan="true"
     >
-      <button
-        type="button"
-        className={
-          mode === "preview"
-            ? "dasti-proposal-view-toggle__button dasti-proposal-view-toggle__button--active"
-            : "dasti-proposal-view-toggle__button"
-        }
-        onClick={() => onModeChange?.("preview")}
-        aria-pressed={mode === "preview"}
-        aria-label="Rendered"
-        title="Rendered"
-      >
+      {mode === "preview" ? (
         <Eye size={14} strokeWidth={1.8} aria-hidden="true" />
-      </button>
-      <button
-        type="button"
-        className={
-          mode === "edit"
-            ? "dasti-proposal-view-toggle__button dasti-proposal-view-toggle__button--active"
-            : "dasti-proposal-view-toggle__button"
-        }
-        onClick={() => onModeChange?.("edit")}
-        aria-pressed={mode === "edit"}
-        aria-label="Editable"
-        title="Editable"
-      >
+      ) : (
         <Pencil size={14} strokeWidth={1.8} aria-hidden="true" />
-      </button>
-    </div>
+      )}
+    </button>
   ) : null;
 
-  const actionControls = actions || onCopy ? (
+  const characterCountBadge =
+    proposalContent && !loading && !error && isEditable ? (
+      <span
+        className={(() => {
+          if (resolvedCharacterLimitSelection.advisory) {
+            return "dasti-pill dasti-proposal-character-badge dasti-proposal-character-badge--advisory";
+          }
+          if (characterCountTone === "danger") return "dasti-pill dasti-pill--danger";
+          if (characterCountTone === "warning") return "dasti-pill dasti-pill--warning";
+          return "dasti-pill dasti-proposal-character-badge";
+        })()}
+        title={
+          resolvedCharacterLimitSelection.advisory
+            ? "Approximate platform target. Treat this as a friendly guide, not a confirmed hard cap."
+            : resolvedCharacterLimitSelection.value !== null
+              ? "Current draft length versus the selected limit."
+              : "Current draft character count."
+        }
+      >
+        {formatCharacterCountLabel({
+          count: proposalCharacterCount,
+          limit: resolvedCharacterLimitSelection.value,
+          advisory: resolvedCharacterLimitSelection.advisory,
+        })}
+      </span>
+    ) : null;
+
+  const shouldShowCopyButton = Boolean(onCopy && proposalContent && !loading && !error);
+
+  const actionControls = actions || shouldShowCopyButton ? (
     <div className="dasti-proposal-sheet__controls" data-no-pan="true">
       {actions}
       <span className="dasti-proposal-sheet__action-slot">
-        {onCopy ? (
+        {shouldShowCopyButton ? (
           <button
             type="button"
             onClick={onCopy}
-            title={copyFeedback === "copied" ? "Copied" : "Copy"}
             aria-label={copyFeedback === "copied" ? "Copied" : "Copy"}
             className="dasti-icon-button"
+            data-toolbar-tooltip={copyFeedback === "copied" ? "Copied" : "Copy"}
             style={{
               color: copyFeedback === "copied" ? "var(--ok)" : undefined,
             }}
@@ -469,69 +726,118 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   ) : null;
 
   const renderZoomControls = (className: string) =>
-    showZoomControls && Boolean(proposalContent) && !loading && !error && usesDocumentRenderer ? (
+    showZoomControls &&
+    Boolean(proposalContent) &&
+    !loading &&
+    !error &&
+      usesDocumentRenderer &&
+      !isEditable ? (
       <div
+        ref={zoomMenuRef}
         className={className}
         data-no-pan="true"
       >
         <button
           type="button"
           className={
-            isEditable || zoomIndex === 1
-              ? "dasti-doc-zoom-fit dasti-doc-zoom-fit--active"
-              : "dasti-doc-zoom-fit"
+            zoomIndex === 1
+              ? "dasti-doc-zoom-fit dasti-doc-zoom-trigger"
+              : "dasti-doc-zoom-fit dasti-doc-zoom-trigger dasti-doc-zoom-trigger--active"
           }
-          onClick={() => {
-            if (isEditable) {
-              return;
+          onClick={() => setIsZoomMenuOpen((current) => !current)}
+          aria-label="Open zoom controls"
+          data-toolbar-tooltip="Zoom"
+          aria-expanded={isZoomMenuOpen}
+          aria-haspopup="dialog"
+        >
+          <MagnifyingGlass size={14} strokeWidth={1.8} aria-hidden="true" />
+        </button>
+        <div
+          className="dasti-doc-zoom-bar dasti-doc-zoom-bar--popover"
+          data-no-pan="true"
+          role="dialog"
+          aria-label="Zoom controls"
+        >
+          <button
+            type="button"
+            className={
+              isEditable || zoomIndex === 1
+                ? "dasti-doc-zoom-fit dasti-doc-zoom-fit--active"
+                : "dasti-doc-zoom-fit"
             }
-            setZoomIndex(1);
-            setFitRequestCount((count) => count + 1);
-          }}
-          aria-label="Fit page"
-          title="Fit page"
-          disabled={isEditable}
-        >
-          Fit
-        </button>
-        <button
-          type="button"
-          className="dasti-icon-button"
-          onClick={() => setZoomIndex((i) => Math.max(0, i - 1))}
-          disabled={isEditable || zoomIndex === 0}
-          aria-label="Zoom out"
-          title="Zoom out"
-        >
-          <Minus size={14} strokeWidth={1.7} aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          className="dasti-icon-button"
-          onClick={() =>
-            setZoomIndex((i) =>
-              Math.min(DOCUMENT_ZOOM_STEPS.length - 1, i + 1),
-            )
-          }
-          disabled={
-            isEditable || zoomIndex === DOCUMENT_ZOOM_STEPS.length - 1
-          }
-          aria-label="Zoom in"
-          title="Zoom in"
-        >
-          <Plus size={14} strokeWidth={1.7} aria-hidden="true" />
-        </button>
+            onClick={() => {
+              if (isEditable) {
+                return;
+              }
+              setZoomIndex(1);
+              setFitRequestCount((count) => count + 1);
+            }}
+            aria-label="Fit page"
+            data-toolbar-tooltip="Fit page"
+            disabled={isEditable}
+          >
+            <CornersIn size={14} strokeWidth={1.8} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            className="dasti-icon-button"
+            onClick={() => setZoomIndex((i) => Math.max(0, i - 1))}
+            disabled={isEditable || zoomIndex === 0}
+            aria-label="Zoom out"
+            data-toolbar-tooltip="Zoom out"
+          >
+            <Minus size={14} strokeWidth={1.7} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            className="dasti-icon-button"
+            onClick={() =>
+              setZoomIndex((i) =>
+                Math.min(DOCUMENT_ZOOM_STEPS.length - 1, i + 1),
+              )
+            }
+            disabled={
+              isEditable || zoomIndex === DOCUMENT_ZOOM_STEPS.length - 1
+            }
+            aria-label="Zoom in"
+            data-toolbar-tooltip="Zoom in"
+          >
+            <Plus size={14} strokeWidth={1.7} aria-hidden="true" />
+          </button>
+        </div>
       </div>
     ) : null;
 
-  const zoomControls = renderZoomControls("dasti-doc-zoom-bar");
+  const zoomControls = renderZoomControls(
+    isZoomMenuOpen ? "dasti-doc-zoom-menu dasti-doc-zoom-menu--open" : "dasti-doc-zoom-menu",
+  );
+  const railStartControls =
+    modeToggleControl || zoomControls || railStartAddon ? (
+      <div className="dasti-proposal-rail-cluster" data-no-pan="true">
+        {modeToggleControl}
+        {modeToggleControl && zoomControls ? (
+          <div
+            className="dasti-icon-cluster__divider dasti-proposal-rail-cluster__divider"
+          />
+        ) : null}
+        {zoomControls}
+        {railStartAddon ? (
+          <>
+            {modeToggleControl || zoomControls ? (
+              <div className="dasti-icon-cluster__divider dasti-proposal-rail-cluster__divider" />
+            ) : null}
+            {railStartAddon}
+          </>
+        ) : null}
+      </div>
+    ) : null;
   const floatingRail =
-    modeToggleControl || zoomControls || actionControls ? (
+    railStartControls || actionControls ? (
       <div className="dasti-document-rail" data-no-pan="true">
         <div className="dasti-document-rail__section dasti-document-rail__section--start">
-          {modeToggleControl}
+          {railStartControls}
         </div>
         <div className="dasti-document-rail__section dasti-document-rail__section--center">
-          {zoomControls}
         </div>
         <div className="dasti-document-rail__section dasti-document-rail__section--end">
           {actionControls}
@@ -580,22 +886,37 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         {...(!isEditable ? viewportPanProps : {})}
       >
         <div
-          className="dasti-proposal-sheet__preview-page-positioner"
+          className={[
+            "dasti-proposal-sheet__preview-page-positioner",
+            isMultiPagePreview
+              ? "dasti-proposal-sheet__preview-page-positioner--stacked"
+              : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
           style={{
             width: `${stageLayout.pageWidth}px`,
-            height: `${stageLayout.pageHeight}px`,
+            height: `${renderedDocumentHeight}px`,
           }}
         >
           <div
             className={
               isEditable
                 ? "dasti-proposal-sheet__preview-page dasti-proposal-sheet__preview-page--editable"
-                : "dasti-proposal-sheet__preview-page"
+                : [
+                    "dasti-proposal-sheet__preview-page",
+                    isMultiPagePreview
+                      ? "dasti-proposal-sheet__preview-page--stacked"
+                      : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")
             }
             data-document-page="true"
             style={{
               width: `${stageLayout.pageWidth}px`,
-              height: `${stageLayout.pageHeight}px`,
+              height: `${isEditable ? stageLayout.pageHeight : renderedDocumentHeight}px`,
+              aspectRatio: isMultiPagePreview ? "auto" : undefined,
             }}
             onClick={() => {
               if (!isEditable && mode === "preview") {
@@ -607,10 +928,23 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
               <div className="dasti-proposal-editor-page">
                 <div className="dasti-proposal-editor-page__inner">
                   <textarea
-                    ref={attachEditableScrollEdges}
+                    ref={(node) => {
+                      editableTextareaRef.current = node;
+                      attachEditableScrollEdges(node);
+                    }}
                     value={proposalContent ?? ""}
                     onChange={(event) => onContentChange?.(event.target.value)}
-                    onBlur={onContentCommit}
+                    onBlur={() => {
+                      setTextareaSelectionState(null);
+                      onContentCommit?.();
+                    }}
+                    onSelect={scheduleTextareaSelectionCheck}
+                    onMouseUp={scheduleTextareaSelectionCheck}
+                    onKeyUp={scheduleTextareaSelectionCheck}
+                    onScroll={() => {
+                      updateEditableScrollEdges();
+                      scheduleTextareaSelectionCheck();
+                    }}
                     placeholder="Content will appear here…"
                     className="dasti-proposal-sheet__body--editable"
                     style={{
@@ -643,6 +977,8 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                 documentMeta={documentMeta}
                 documentTypography={documentTypography}
                 pageWidth={stageLayout.pageWidth}
+                pageGapPx={documentPageGapPx}
+                onPageCountChange={setDocumentPageCount}
               />
             )}
           </div>
@@ -705,6 +1041,27 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
             Generating…
           </p>
         </div>
+      </div>
+    );
+  } else if (statusMessage) {
+    sheetBody = (
+      <div
+        className={resolveBodyClassName()}
+        style={{ alignItems: "center", justifyContent: "center" }}
+      >
+        <p
+          aria-live="polite"
+          style={{
+            margin: 0,
+            maxWidth: "26ch",
+            fontSize: "var(--ts)",
+            lineHeight: "var(--ls)",
+            color: "var(--tm2)",
+            textAlign: "center",
+          }}
+        >
+          {statusMessage}
+        </p>
       </div>
     );
   } else if (error) {
@@ -771,10 +1128,19 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         data-scroll-bottom={activeScrollBottom ? "true" : "false"}
       >
         <textarea
-          ref={attachEditableScrollEdges}
+          ref={(node) => {
+            editableTextareaRef.current = node;
+            attachEditableScrollEdges(node);
+          }}
           value={proposalContent}
           onChange={(event) => onContentChange?.(event.target.value)}
-          onBlur={onContentCommit}
+          onBlur={() => {
+            setTextareaSelectionState(null);
+            onContentCommit?.();
+          }}
+          onSelect={scheduleTextareaSelectionCheck}
+          onMouseUp={scheduleTextareaSelectionCheck}
+          onKeyUp={scheduleTextareaSelectionCheck}
           placeholder="Content will appear here…"
           className="dasti-proposal-sheet__body--editable"
           style={{
@@ -867,27 +1233,44 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       ) : null}
       {documentCaption}
       <div className="dasti-doc-viewer-shell">
-        <div
-          className={
-            size === "focused"
-              ? "dasti-proposal-sheet-frame dasti-proposal-sheet-frame--focused"
-              : "dasti-proposal-sheet-frame"
-          }
-          style={proposalDocumentThemeVars}
-        >
+        {isEditable && textareaSelectionState ? (
+          <FloatingAiToolbar
+            open
+            anchor={textareaSelectionState.anchor}
+            isLoading={isApplyingInlineAi}
+            pendingActionId={pendingInlineAiActionId}
+            onClose={() => setTextareaSelectionState(null)}
+            onRunAction={handleRunInlineAiAction}
+          />
+        ) : null}
+        <div className="dasti-doc-viewer-shell__surface">
           <div
             className={
               size === "focused"
-                ? "dasti-proposal-sheet dasti-proposal-sheet--focused dasti-document-shell"
-                : "dasti-proposal-sheet dasti-document-shell"
+                ? "dasti-proposal-sheet-frame dasti-proposal-sheet-frame--focused"
+                : "dasti-proposal-sheet-frame"
             }
-            style={stageLayoutVars}
-            aria-busy={loading || undefined}
-            aria-label={loading ? "Generating proposal" : undefined}
+            style={proposalDocumentThemeVars}
           >
-            {floatingRail}
-            {sheetBody}
+            <div
+              className={
+                size === "focused"
+                  ? "dasti-proposal-sheet dasti-proposal-sheet--focused dasti-document-shell"
+                  : "dasti-proposal-sheet dasti-document-shell"
+              }
+              style={stageLayoutVars}
+              aria-busy={loading || undefined}
+              aria-label={loading ? "Generating proposal" : undefined}
+            >
+              {floatingRail}
+              {sheetBody}
+            </div>
           </div>
+          {characterCountBadge ? (
+            <div className="dasti-proposal-character-badge-wrap">
+              {characterCountBadge}
+            </div>
+          ) : null}
         </div>
       </div>
     </div>
