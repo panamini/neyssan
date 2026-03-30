@@ -886,14 +886,26 @@ export const Sidebar: React.FC = () => {
 
   const isProposalSavedView =
     isProposalRoute && proposalView === "saved" && Boolean(selectedProposalId);
-  const composeJobTitle = normalizeLabel(proposalComposeDraft?.jobTitle);
-  const hasStoredProposalComposeDraft = proposalComposeDraft !== null;
-  const outputDraftTitle = normalizeLabel(proposalOutputDraft?.proposalDocumentTitle);
-  const outputDraftContent = normalizeLabel(proposalOutputDraft?.proposalContent);
+  const effectiveProposalOutputDraft =
+    typeof window === "undefined"
+      ? proposalOutputDraft
+      : readStoredProposalOutputDraft();
+  const effectiveProposalComposeDraft =
+    typeof window === "undefined"
+      ? proposalComposeDraft
+      : readStoredProposalComposeDraft();
+  const composeJobTitle = normalizeLabel(effectiveProposalComposeDraft?.jobTitle);
+  const hasStoredProposalComposeDraft = effectiveProposalComposeDraft !== null;
+  const outputDraftTitle = normalizeLabel(
+    effectiveProposalOutputDraft?.proposalDocumentTitle,
+  );
+  const outputDraftContent = normalizeLabel(
+    effectiveProposalOutputDraft?.proposalContent,
+  );
   const hasStoredProposalDraft = Boolean(
     outputDraftTitle ||
       outputDraftContent ||
-      proposalOutputDraft?.generatedProposalId,
+      effectiveProposalOutputDraft?.generatedProposalId,
   );
 
   const hasEditableProposalDraft =
@@ -901,8 +913,8 @@ export const Sidebar: React.FC = () => {
   const highlightedSavedProposalKey =
     isProposalSavedView && selectedProposalId ? selectedProposalId : null;
   const activeGeneratedProposalKey =
-    hasEditableProposalDraft && proposalOutputDraft?.generatedProposalId
-      ? String(proposalOutputDraft.generatedProposalId)
+    hasEditableProposalDraft && effectiveProposalOutputDraft?.generatedProposalId
+      ? String(effectiveProposalOutputDraft.generatedProposalId)
       : null;
 
   let activeProposalKey: string | null = null;
