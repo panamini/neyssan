@@ -497,6 +497,18 @@ function SidebarRailButton({
   );
 }
 
+function refreshProposalWorkspaceDraftState(input: {
+  setProposalOutputDraft: React.Dispatch<
+    React.SetStateAction<ReturnType<typeof readStoredProposalOutputDraft>>
+  >;
+  setProposalComposeDraft: React.Dispatch<
+    React.SetStateAction<ReturnType<typeof readStoredProposalComposeDraft>>
+  >;
+}): void {
+  input.setProposalOutputDraft(readStoredProposalOutputDraft());
+  input.setProposalComposeDraft(readStoredProposalComposeDraft());
+}
+
 function SidebarRailLink({
   label,
   icon,
@@ -592,25 +604,47 @@ export const Sidebar: React.FC = () => {
     if (typeof window === "undefined") return undefined;
 
     const refreshDraft = () => {
-      setProposalOutputDraft(readStoredProposalOutputDraft());
+      refreshProposalWorkspaceDraftState({
+        setProposalOutputDraft,
+        setProposalComposeDraft,
+      });
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshDraft();
+      }
     };
 
+    window.addEventListener("storage", refreshDraft);
     window.addEventListener(
       PROPOSAL_OUTPUT_DRAFT_UPDATED_EVENT,
       refreshDraft,
     );
+    window.addEventListener("focus", refreshDraft);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     return () =>
-      window.removeEventListener(
-        PROPOSAL_OUTPUT_DRAFT_UPDATED_EVENT,
-        refreshDraft,
-      );
+      {
+        window.removeEventListener("storage", refreshDraft);
+        window.removeEventListener(
+          PROPOSAL_OUTPUT_DRAFT_UPDATED_EVENT,
+          refreshDraft,
+        );
+        window.removeEventListener("focus", refreshDraft);
+        document.removeEventListener(
+          "visibilitychange",
+          handleVisibilityChange,
+        );
+      };
   }, []);
 
   React.useEffect(() => {
     if (typeof window === "undefined") return undefined;
 
     const refreshComposeDraft = () => {
-      setProposalComposeDraft(readStoredProposalComposeDraft());
+      refreshProposalWorkspaceDraftState({
+        setProposalOutputDraft,
+        setProposalComposeDraft,
+      });
     };
 
     window.addEventListener(
@@ -653,6 +687,14 @@ export const Sidebar: React.FC = () => {
     void navigate("/proposal", {
       state: createProposalWorkspaceResetState(),
     });
+  }, [navigate]);
+
+  const handleOpenProposalWorkspace = React.useCallback(() => {
+    refreshProposalWorkspaceDraftState({
+      setProposalOutputDraft,
+      setProposalComposeDraft,
+    });
+    void navigate("/proposal");
   }, [navigate]);
 
   const handleDeleteProposalWorkspace = React.useCallback(async () => {
@@ -1079,7 +1121,7 @@ export const Sidebar: React.FC = () => {
                 <FileText size={16} strokeWidth={1.5} aria-hidden="true" />
               }
               active={isProposalRoute || isProposalLibraryRoute}
-              onClick={handleCreateProposal}
+              onClick={handleOpenProposalWorkspace}
             />
           )}
         </nav>
