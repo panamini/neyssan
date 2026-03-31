@@ -2,9 +2,11 @@ import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import {
+  ArrowLeft,
   Check,
   ChevronDown,
   ChevronUp,
+  Copy,
   FloppyDisk,
   RotateCcw,
   Trash,
@@ -39,14 +41,13 @@ import {
   readStoredProposalOutputDraft,
   resolveProposalStoredText,
   type StoredProposalOutputDraft,
-  PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,
-  PROPOSAL_OUTPUT_DRAFT_UPDATED_EVENT,
   writeStoredProposalOutputDraft,
 } from "../lib/proposal-output-draft";
 import {
   readProposalWorkspaceResetToken,
   readStoredProposalComposeDraft,
   writeStoredProposalComposeDraft,
+  type StoredProposalComposeDraft,
 } from "../lib/proposal-workspace-state";
 import { readStoredSavedProposalFixtures } from "../lib/proposal-saved-fixtures";
 import type { ProposalTemplateId } from "../../convex/lib/proposals/renderTemplates";
@@ -423,6 +424,14 @@ export function ProposalForge(): JSX.Element {
   const [isSaveDialogOpen, setIsSaveDialogOpen] = React.useState(false);
   const [lastProposalRequest, setLastProposalRequest] =
     React.useState<FormValues | null>(null);
+  const [outputSourceComposeDraft, setOutputSourceComposeDraft] =
+    React.useState<StoredProposalComposeDraft | null>(
+      storedOutputDraft?.sourceComposeDraft ?? null,
+    );
+  const [composeDraftInitialSeed, setComposeDraftInitialSeed] =
+    React.useState<StoredProposalComposeDraft | null>(
+      storedOutputDraft?.sourceComposeDraft ?? null,
+    );
   const draftCharacterLimitMode =
     lastProposalRequest?.characterLimitMode ??
     storedOutputDraft?.characterLimitMode ??
@@ -446,6 +455,7 @@ export function ProposalForge(): JSX.Element {
     React.useState<FormValues["voicePreset"] | null>(() => {
       const storedComposeDraft = readStoredProposalComposeDraft();
       return (
+        storedOutputDraft?.sourceComposeDraft?.voicePreset ??
         storedComposeDraft?.voicePreset ??
         storedOutputDraft?.proposalVoicePreset ??
         null
@@ -455,6 +465,7 @@ export function ProposalForge(): JSX.Element {
   const hasCompletedInitialRenderRef = React.useRef(false);
   const appliedSavedToolbarVoicePresetRef = React.useRef(false);
   const pendingComposeBriefFocusRef = React.useRef(false);
+  const syncedStoredOutputSourceComposeRef = React.useRef(false);
 
   React.useEffect(() => {
     hasCompletedInitialRenderRef.current = true;
@@ -524,6 +535,48 @@ export function ProposalForge(): JSX.Element {
   }, [handoffRecord]);
 
   const consumedHandoffIdRef = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    if (requestedView !== "compose" || !prefill?.handoffId) {
+      return;
+    }
+
+    const existingComposeDraft = readStoredProposalComposeDraft() ?? {};
+    writeStoredProposalComposeDraft({
+      ...existingComposeDraft,
+      jobTitle: prefill.jobTitle,
+      jobDescription: prefill.jobDescription,
+    });
+  }, [
+    prefill?.handoffId,
+    prefill?.jobDescription,
+    prefill?.jobTitle,
+    requestedView,
+  ]);
+
+  React.useEffect(() => {
+    if (syncedStoredOutputSourceComposeRef.current) {
+      return;
+    }
+    if (
+      requestedView !== "compose" ||
+      prefill?.handoffId ||
+      !storedOutputDraft?.sourceComposeDraft
+    ) {
+      return;
+    }
+
+    syncedStoredOutputSourceComposeRef.current = true;
+    writeStoredProposalComposeDraft(storedOutputDraft.sourceComposeDraft);
+    setComposeDraftInitialSeed(storedOutputDraft.sourceComposeDraft);
+    setComposeToolbarVoicePreset(
+      storedOutputDraft.sourceComposeDraft.voicePreset ?? null,
+    );
+  }, [
+    prefill?.handoffId,
+    requestedView,
+    storedOutputDraft?.sourceComposeDraft,
+  ]);
 
   React.useEffect(() => {
     if (requestedView !== "compose" || !prefill?.handoffId) {
@@ -998,6 +1051,8 @@ export function ProposalForge(): JSX.Element {
     setFallbackInfo(null);
     setGeneratedProposalId(null);
     setProposalOutputMode("preview");
+    setOutputSourceComposeDraft(null);
+    setComposeDraftInitialSeed(null);
     setIsSavingGeneratedProposal(false);
     setIsSavingOutputToLibrary(false);
     setLastProposalRequest(null);
@@ -1062,19 +1117,26 @@ export function ProposalForge(): JSX.Element {
     );
   }, []);
 
+  const buildStoredProposalComposeDraftSnapshot = React.useCallback(
+    (values: FormValues): StoredProposalComposeDraft => ({
+      jobTitle: values.jobTitle,
+      jobDescription: values.jobDescription,
+      proposalType: values.proposalType,
+      voicePreset: values.voicePreset ?? null,
+      toneTuning: values.toneTuning ?? null,
+      characterLimitMode: values.characterLimitMode ?? null,
+      characterLimitValue: values.characterLimitValue ?? null,
+    }),
+    [],
+  );
+
   const persistProposalComposeDraftSnapshot = React.useCallback(
     (values: FormValues) => {
-      writeStoredProposalComposeDraft({
-        jobTitle: values.jobTitle,
-        jobDescription: values.jobDescription,
-        proposalType: values.proposalType,
-        voicePreset: values.voicePreset ?? null,
-        toneTuning: values.toneTuning ?? null,
-        characterLimitMode: values.characterLimitMode ?? null,
-        characterLimitValue: values.characterLimitValue ?? null,
-      });
+      writeStoredProposalComposeDraft(
+        buildStoredProposalComposeDraftSnapshot(values),
+      );
     },
-    [],
+    [buildStoredProposalComposeDraftSnapshot],
   );
 
   const handleProposalFormValuesChange = React.useCallback(
@@ -1258,13 +1320,17 @@ export function ProposalForge(): JSX.Element {
         getActiveLocalPersonalizationSource(),
       );
       const resolvedVoicePreset = resolveProposalVoicePreset(values);
+      const submittedComposeDraft =
+        buildStoredProposalComposeDraftSnapshot(values);
       const nextDocumentTitle =
         values.jobTitle.trim() || formatProposalTypeLabel(values.proposalType);
       const nextDocumentMeta = [
         formatProposalTypeLabel(values.proposalType),
         formatProposalToneLabel(resolvedVoicePreset),
       ].join(" · ");
-      persistProposalComposeDraftSnapshot(values);
+      writeStoredProposalComposeDraft(submittedComposeDraft);
+      setOutputSourceComposeDraft(submittedComposeDraft);
+      setComposeDraftInitialSeed(submittedComposeDraft);
       writeStoredProposalOutputDraft({
         proposalContent: proposal,
         proposalType: values.proposalType,
@@ -1290,6 +1356,7 @@ export function ProposalForge(): JSX.Element {
         proposalDocumentTitleManual: false,
         characterLimitMode: values.characterLimitMode ?? null,
         characterLimitValue: values.characterLimitValue ?? null,
+        sourceComposeDraft: submittedComposeDraft,
       });
       setLastProposalRequest(values);
       setProposalType(values.proposalType);
@@ -1302,7 +1369,7 @@ export function ProposalForge(): JSX.Element {
       setGeneratedProposalId(nextProposalId ?? null);
       setProposalOutputMode("preview");
       setIsComposePanelVisible(true);
-      setIsBriefExpanded(true);
+      setIsBriefExpanded(false);
       lastSavedProposalContentRef.current = proposal;
       lastSavedProposalTitleRef.current = nextDocumentTitle;
       setIsConfirmingGeneratedDelete(false);
@@ -1315,9 +1382,9 @@ export function ProposalForge(): JSX.Element {
       effectiveProposalStylePresetWithPalette,
       effectiveProposalTemplateId,
       fallbackProposalTemplateId,
+      buildStoredProposalComposeDraftSnapshot,
       formatProposalToneLabel,
       formatProposalTypeLabel,
-      persistProposalComposeDraftSnapshot,
       proposalCustomAccentHex,
       proposalPaletteOverride,
       proposalTemplateBundleId,
@@ -1378,6 +1445,7 @@ export function ProposalForge(): JSX.Element {
     setProposalContent(null);
     setGeneratedProposalId(null);
     setProposalOutputMode("preview");
+    setOutputSourceComposeDraft(null);
     setIsComposePanelVisible(true);
     setIsBriefExpanded(true);
     setError(null);
@@ -1545,8 +1613,7 @@ export function ProposalForge(): JSX.Element {
 
     if (!hasDraft) {
       if (hasCompletedInitialRenderRef.current) {
-        window.localStorage.removeItem(PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY);
-        window.dispatchEvent(new Event(PROPOSAL_OUTPUT_DRAFT_UPDATED_EVENT));
+        writeStoredProposalOutputDraft(null);
       }
       return;
     }
@@ -1555,38 +1622,35 @@ export function ProposalForge(): JSX.Element {
       return;
     }
 
-    try {
-      window.localStorage.setItem(
-        PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,
-        JSON.stringify({
-          proposalContent,
-          proposalType,
-          proposalVoicePreset,
-          proposalTemplateId: effectiveProposalTemplateId,
-          proposalVerbatiStyle: effectiveProposalStylePresetWithPalette
-            ? serializeVerbatiStyle(effectiveProposalStylePresetWithPalette)
-            : null,
-          proposalStyleLinkMode: resolvedStyleLinkMode,
-          proposalStyleChoice,
-          proposalApplicantName,
-          proposalApplicantRole,
-          proposalDocumentTitle,
-          proposalDocumentMeta,
-          generatedProposalId,
-          proposalOutputMode,
-          paletteOverride: proposalPaletteOverride,
-          customAccentHex: proposalCustomAccentHex,
-          templateBundleId: proposalTemplateBundleId,
-          characterLimitMode: draftCharacterLimitMode,
-          characterLimitValue: draftCharacterLimitValue,
-        } satisfies StoredProposalOutputDraft),
-      );
-      window.dispatchEvent(new Event(PROPOSAL_OUTPUT_DRAFT_UPDATED_EVENT));
-    } catch {
-      // Ignore browser storage failures; keep in-memory output intact.
-    }
+    writeStoredProposalOutputDraft({
+      proposalContent,
+      proposalType,
+      proposalVoicePreset,
+      proposalTemplateId: effectiveProposalTemplateId,
+      proposalVerbatiStyle: effectiveProposalStylePresetWithPalette
+        ? serializeVerbatiStyle(effectiveProposalStylePresetWithPalette)
+        : null,
+      proposalStyleLinkMode: resolvedStyleLinkMode,
+      proposalStyleChoice,
+      proposalApplicantName,
+      proposalApplicantRole,
+      proposalDocumentTitle,
+      proposalDocumentMeta,
+      generatedProposalId,
+      proposalOutputMode,
+      paletteOverride: proposalPaletteOverride,
+      customAccentHex: proposalCustomAccentHex,
+      templateBundleId: proposalTemplateBundleId,
+      typographyOverride: null,
+      layoutOverride: null,
+      proposalDocumentTitleManual: false,
+      characterLimitMode: draftCharacterLimitMode,
+      characterLimitValue: draftCharacterLimitValue,
+      sourceComposeDraft: outputSourceComposeDraft,
+    });
   }, [
     generatedProposalId,
+    outputSourceComposeDraft,
     proposalContent,
     proposalApplicantName,
     proposalApplicantRole,
@@ -1775,7 +1839,9 @@ export function ProposalForge(): JSX.Element {
 
     if (typeof window !== "undefined") {
       try {
-        const composeDraft: Record<string, unknown> = {
+        const existingComposeDraft = readStoredProposalComposeDraft() ?? {};
+        const composeDraft: StoredProposalComposeDraft = {
+          ...existingComposeDraft,
           jobTitle: restoredJobTitle,
           proposalType: savedProposalType ?? "cover_letter",
         };
@@ -1789,6 +1855,8 @@ export function ProposalForge(): JSX.Element {
         }
 
         writeStoredProposalComposeDraft(composeDraft);
+        setOutputSourceComposeDraft(composeDraft);
+        setComposeDraftInitialSeed(composeDraft);
       } catch {
         // Ignore storage failures and continue with the in-memory draft.
       }
@@ -1973,6 +2041,7 @@ export function ProposalForge(): JSX.Element {
       setProposalDocumentMeta("");
       setGeneratedProposalId(null);
       setProposalOutputMode("preview");
+      setOutputSourceComposeDraft(null);
       setFallbackInfo(null);
       setError(null);
       setStatusMessage(null);
@@ -2134,7 +2203,7 @@ export function ProposalForge(): JSX.Element {
     ? { width: "min(100%, 560px)", marginInline: "auto", minWidth: 0 }
     : { width: "100%", minWidth: 0 };
   const proposalToolbarWidthStyle: React.CSSProperties = {
-    width: "min(100%, 560px)",
+    width: "min(100%, 480px)",
     minWidth: 0,
   };
   const proposalWorkbenchFrameStyle: React.CSSProperties = {
@@ -2144,8 +2213,8 @@ export function ProposalForge(): JSX.Element {
       : shouldCenterOutputStage
         ? "860px"
         : isNarrowLaptop
-          ? "1000px"
-          : "1200px",
+          ? "1060px"
+          : "1160px",
     marginInline: "auto",
     minWidth: 0,
   };
@@ -2159,13 +2228,14 @@ export function ProposalForge(): JSX.Element {
   );
   const briefJobDescription =
     lastProposalRequest?.jobDescription?.trim() ||
+    prefill?.jobDescription?.trim() ||
     (typeof window !== "undefined"
       ? readStoredProposalComposeDraft()?.jobDescription?.trim() || ""
       : "");
   const hasBriefContent = Boolean(briefJobDescription);
   const showComposePanel = isComposePanelVisible && !isSavedView;
   const showBriefCard =
-    Boolean(proposalContent) && hasBriefContent && !isBriefExpanded && showComposePanel;
+    Boolean(proposalContent) && !isBriefExpanded && showComposePanel;
   const shouldShowCollapsedComposeToolbar =
     !isComposePanelVisible && !isSavedView && !isCompactComposeLayout;
   const focusComposeBrief = React.useCallback(() => {
@@ -2292,21 +2362,29 @@ export function ProposalForge(): JSX.Element {
           <section aria-hidden={false}>
             <div className="dasti-workbench-top-left-slot dasti-workbench-top-left-slot--proposal">
               <div className="dasti-cv-workbench-bar">
-                <div className="dasti-proposal-saved-view-toolbar">
+                <div
+                  className="dasti-proposal-saved-view-toolbar"
+                  role="group"
+                  aria-label="Saved proposal actions"
+                >
                   <button
                     type="button"
-                    className="dasti-button dasti-button--secondary dasti-button--sm"
+                    className="dasti-icon-button"
+                    data-toolbar-tooltip="Back to draft"
                     onClick={handleReturnToDraft}
+                    aria-label="Back to draft"
                   >
-                    Back to draft
+                    <ArrowLeft size={16} strokeWidth={1.7} />
                   </button>
                   <button
                     type="button"
-                    className="dasti-button dasti-button--secondary dasti-button--sm"
+                    className="dasti-icon-button"
+                    data-toolbar-tooltip="Duplicate to draft"
                     onClick={handleCopySavedProposalToDraft}
                     disabled={!openedSavedProposal || !savedProposalContent}
+                    aria-label="Duplicate to draft"
                   >
-                    Duplicate to draft
+                    <Copy size={16} strokeWidth={1.7} />
                   </button>
                 </div>
               </div>
@@ -2328,7 +2406,6 @@ export function ProposalForge(): JSX.Element {
                 >
                   <div
                     className="dasti-forge-compose-toolbar-slot"
-                    style={proposalToolbarWidthStyle}
                     data-testid="proposal-workbench-toolbar-slot"
                   >
                     {proposalWorkbenchToolbar}
@@ -2345,7 +2422,7 @@ export function ProposalForge(): JSX.Element {
                     "--grid-columns": isCompactComposeLayout
                       ? "minmax(0, 1fr)"
                       : showComposePanel
-                        ? "repeat(2, minmax(0, 560px))"
+                        ? "minmax(0, 480px) minmax(0, 640px)"
                         : "minmax(0, 0px) minmax(0, 1fr)",
                     "--grid-gap": showComposePanel
                       ? "var(--layout-card-grid)"
@@ -2404,6 +2481,7 @@ export function ProposalForge(): JSX.Element {
                         suppressCvPicker
                         externalVoicePreset={composeToolbarVoicePreset}
                         headerLabel={null}
+                        initialComposeDraft={composeDraftInitialSeed}
                         headerAction={
                           hasBriefContent ? (
                             <button

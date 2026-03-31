@@ -24,11 +24,17 @@ import type {
   VerbatiTypographyPreset,
 } from "../features/verbati/types";
 import type { ProposalCharacterLimitMode } from "../../convex/lib/proposals/generationControls";
+import type { StoredProposalComposeDraft } from "./proposal-workspace-state";
 
 export const PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY =
   "dasti:proposal-output-draft:v1";
+export const PROPOSAL_OUTPUT_DRAFT_SESSION_STORAGE_KEY =
+  "dasti:proposal-output-draft:session:v1";
 export const PROPOSAL_OUTPUT_DRAFT_UPDATED_EVENT =
   "dasti:proposal-output-draft-updated";
+
+let preferSessionStorageForProposalOutputDraft = false;
+let hasWarnedSessionFallbackForProposalOutputDraft = false;
 
 export type StoredProposalOutputDraft = {
   proposalContent: string | null;
@@ -55,6 +61,7 @@ export type StoredProposalOutputDraft = {
   proposalDocumentTitleManual: boolean;
   characterLimitMode: ProposalCharacterLimitMode | null;
   characterLimitValue: number | null;
+  sourceComposeDraft?: StoredProposalComposeDraft | null;
 };
 
 export type StoredProposalTextSection = {
@@ -82,11 +89,99 @@ export function resolveProposalStoredText(input: {
   return sectionText;
 }
 
+function normalizeStoredProposalComposeDraft(
+  value: unknown,
+): StoredProposalComposeDraft | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const parsed = value as Partial<StoredProposalComposeDraft>;
+
+  return {
+    ...(typeof parsed.jobTitle === "string" ? { jobTitle: parsed.jobTitle } : null),
+    ...(typeof parsed.jobDescription === "string"
+      ? { jobDescription: parsed.jobDescription }
+      : null),
+    ...(typeof parsed.proposalType === "string"
+      ? { proposalType: parsed.proposalType }
+      : null),
+    ...(typeof parsed.voicePreset === "string"
+      ? { voicePreset: parsed.voicePreset }
+      : null),
+    ...(typeof parsed.toneTuning === "string" || parsed.toneTuning === null
+      ? { toneTuning: parsed.toneTuning ?? null }
+      : null),
+    ...(typeof parsed.characterLimitMode === "string"
+      ? { characterLimitMode: parsed.characterLimitMode }
+      : null),
+    ...(typeof parsed.characterLimitValue === "number" &&
+    Number.isFinite(parsed.characterLimitValue)
+      ? { characterLimitValue: parsed.characterLimitValue }
+      : parsed.characterLimitValue === null
+        ? { characterLimitValue: null }
+        : null),
+  };
+}
+
+function readProposalOutputDraftRaw(): string | null {
+  if (typeof window === "undefined") return null;
+
+  if (preferSessionStorageForProposalOutputDraft) {
+    try {
+      const sessionRaw = window.sessionStorage.getItem(
+        PROPOSAL_OUTPUT_DRAFT_SESSION_STORAGE_KEY,
+      );
+      if (sessionRaw) {
+        return sessionRaw;
+      }
+    } catch {
+      // Best-effort.
+    }
+  }
+
+  try {
+    const localRaw = window.localStorage.getItem(PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY);
+    if (localRaw) {
+      return localRaw;
+    }
+  } catch {
+    // Best-effort.
+  }
+
+  try {
+    return window.sessionStorage.getItem(
+      PROPOSAL_OUTPUT_DRAFT_SESSION_STORAGE_KEY,
+    );
+  } catch {
+    return null;
+  }
+}
+
+function removeStoredProposalOutputDraftRaw(): void {
+  if (typeof window === "undefined") return;
+
+  preferSessionStorageForProposalOutputDraft = false;
+  hasWarnedSessionFallbackForProposalOutputDraft = false;
+
+  try {
+    window.localStorage.removeItem(PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY);
+  } catch {
+    // Best-effort.
+  }
+
+  try {
+    window.sessionStorage.removeItem(PROPOSAL_OUTPUT_DRAFT_SESSION_STORAGE_KEY);
+  } catch {
+    // Best-effort.
+  }
+}
+
 export function readStoredProposalOutputDraft(): StoredProposalOutputDraft | null {
   if (typeof window === "undefined") return null;
 
   try {
-    const raw = window.localStorage.getItem(PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY);
+    const raw = readProposalOutputDraftRaw();
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<StoredProposalOutputDraft> | null;
     if (!parsed || typeof parsed !== "object") return null;
@@ -187,10 +282,115 @@ export function readStoredProposalOutputDraft(): StoredProposalOutputDraft | nul
         Number.isFinite(parsed.characterLimitValue)
           ? parsed.characterLimitValue
           : null,
+      sourceComposeDraft: normalizeStoredProposalComposeDraft(
+        parsed.sourceComposeDraft,
+      ),
     };
   } catch {
     return null;
   }
+}
+
+function buildSanitizedStoredProposalOutputDraft(
+  draft: StoredProposalOutputDraft,
+): StoredProposalOutputDraft {
+  return {
+    proposalContent:
+      typeof draft.proposalContent === "string" ? draft.proposalContent : null,
+    proposalType:
+      draft.proposalType === "cover_letter" ||
+      draft.proposalType === "application_message" ||
+      draft.proposalType === "freelance_proposal"
+        ? draft.proposalType
+        : null,
+    proposalVoicePreset:
+      typeof draft.proposalVoicePreset === "string"
+        ? draft.proposalVoicePreset
+        : null,
+    proposalTemplateId:
+      typeof draft.proposalTemplateId === "string"
+        ? resolveProposalTemplateId(draft.proposalTemplateId)
+        : null,
+    proposalVerbatiStyle:
+      draft.proposalVerbatiStyle &&
+      typeof draft.proposalVerbatiStyle === "object"
+        ? serializeVerbatiStyle(
+            resolveVerbatiStyle(
+              draft.proposalVerbatiStyle as Partial<VerbatiStylePreset>,
+            ),
+          )
+        : null,
+    proposalStyleLinkMode:
+      draft.proposalStyleLinkMode === "proposal_local"
+        ? "proposal_local"
+        : "inherit_cv",
+    proposalStyleChoice: resolveProposalStyleChoice(draft.proposalStyleChoice),
+    proposalApplicantName:
+      typeof draft.proposalApplicantName === "string"
+        ? draft.proposalApplicantName
+        : "",
+    proposalApplicantRole:
+      typeof draft.proposalApplicantRole === "string"
+        ? draft.proposalApplicantRole
+        : "",
+    proposalDocumentTitle:
+      typeof draft.proposalDocumentTitle === "string"
+        ? draft.proposalDocumentTitle
+        : "",
+    proposalDocumentMeta:
+      typeof draft.proposalDocumentMeta === "string"
+        ? draft.proposalDocumentMeta
+        : "",
+    generatedProposalId:
+      typeof draft.generatedProposalId === "string"
+        ? draft.generatedProposalId
+        : null,
+    proposalOutputMode: draft.proposalOutputMode === "edit" ? "edit" : "preview",
+    paletteOverride:
+      draft.paletteOverride === "sauge" ||
+      draft.paletteOverride === "ocre" ||
+      draft.paletteOverride === "pierre" ||
+      draft.paletteOverride === "bordeaux" ||
+      draft.paletteOverride === "encre"
+        ? draft.paletteOverride
+        : null,
+    customAccentHex:
+      typeof draft.customAccentHex === "string" &&
+      /^#[0-9a-fA-F]{6}$/.test(draft.customAccentHex)
+        ? draft.customAccentHex
+        : null,
+    templateBundleId: resolveProposalTemplateBundleId(draft.templateBundleId),
+    typographyOverride:
+      draft.typographyOverride === "signature" ||
+      draft.typographyOverride === "engaging" ||
+      draft.typographyOverride === "expert"
+        ? draft.typographyOverride
+        : null,
+    layoutOverride:
+      draft.layoutOverride === "swiss" ||
+      draft.layoutOverride === "editorial" ||
+      draft.layoutOverride === "modernist"
+        ? draft.layoutOverride
+        : null,
+    proposalDocumentTitleManual: draft.proposalDocumentTitleManual === true,
+    characterLimitMode:
+      draft.characterLimitMode === "none" ||
+      draft.characterLimitMode === "linkedin_note_200" ||
+      draft.characterLimitMode === "linkedin_inmail_2000" ||
+      draft.characterLimitMode === "indeed_cover_letter_4000" ||
+      draft.characterLimitMode === "upwork_proposal_advisory" ||
+      draft.characterLimitMode === "custom"
+        ? draft.characterLimitMode
+        : null,
+    characterLimitValue:
+      typeof draft.characterLimitValue === "number" &&
+      Number.isFinite(draft.characterLimitValue)
+        ? draft.characterLimitValue
+        : null,
+    sourceComposeDraft: normalizeStoredProposalComposeDraft(
+      draft.sourceComposeDraft,
+    ),
+  };
 }
 
 export function writeStoredProposalOutputDraft(
@@ -198,17 +398,103 @@ export function writeStoredProposalOutputDraft(
 ): void {
   if (typeof window === "undefined") return;
 
+  let nextRaw: string | null = null;
+  let fallbackRaw: string | null = null;
+
   try {
+    if (draft) {
+      nextRaw = JSON.stringify(draft);
+    }
+  } catch (error) {
+    console.warn(
+      "[proposal-output-draft] Failed to serialize full output draft, retrying with a sanitized payload.",
+      error,
+    );
+  }
+
+  try {
+    if (draft) {
+      fallbackRaw = JSON.stringify(buildSanitizedStoredProposalOutputDraft(draft));
+      if (nextRaw === null) {
+        nextRaw = fallbackRaw;
+      }
+    }
+  } catch (error) {
+    console.warn(
+      "[proposal-output-draft] Failed to serialize sanitized output draft.",
+      error,
+    );
+    return;
+  }
+
+  try {
+    const currentRaw = readProposalOutputDraftRaw();
+
+    if (currentRaw === nextRaw) {
+      return;
+    }
+
     if (!draft) {
-      window.localStorage.removeItem(PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY);
+      removeStoredProposalOutputDraftRaw();
+    } else if (preferSessionStorageForProposalOutputDraft) {
+      window.sessionStorage.setItem(
+        PROPOSAL_OUTPUT_DRAFT_SESSION_STORAGE_KEY,
+        fallbackRaw ?? nextRaw,
+      );
     } else {
       window.localStorage.setItem(
         PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,
-        JSON.stringify(draft),
+        nextRaw,
       );
+      preferSessionStorageForProposalOutputDraft = false;
+      hasWarnedSessionFallbackForProposalOutputDraft = false;
+      try {
+        window.sessionStorage.removeItem(
+          PROPOSAL_OUTPUT_DRAFT_SESSION_STORAGE_KEY,
+        );
+      } catch {
+        // Best-effort.
+      }
     }
-  } catch {
-    // Storage full or blocked — keep in-memory state intact.
+  } catch (error) {
+    try {
+      const currentSessionRaw = window.sessionStorage.getItem(
+        PROPOSAL_OUTPUT_DRAFT_SESSION_STORAGE_KEY,
+      );
+      const sessionPayload = fallbackRaw ?? nextRaw;
+
+      if (!draft || sessionPayload === null) {
+        console.warn(
+          "[proposal-output-draft] Failed to persist output draft.",
+          error,
+        );
+        return;
+      }
+
+      if (currentSessionRaw === sessionPayload) {
+        return;
+      }
+
+      window.sessionStorage.setItem(
+        PROPOSAL_OUTPUT_DRAFT_SESSION_STORAGE_KEY,
+        sessionPayload,
+      );
+
+      preferSessionStorageForProposalOutputDraft = true;
+      if (!hasWarnedSessionFallbackForProposalOutputDraft) {
+        console.warn(
+          "[proposal-output-draft] Fell back to sessionStorage after localStorage persistence failed.",
+          error,
+        );
+        hasWarnedSessionFallbackForProposalOutputDraft = true;
+      }
+    } catch (fallbackError) {
+      console.warn(
+        "[proposal-output-draft] Failed to persist output draft.",
+        fallbackError,
+      );
+      return;
+    }
   }
 
   window.dispatchEvent(new Event(PROPOSAL_OUTPUT_DRAFT_UPDATED_EVENT));

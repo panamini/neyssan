@@ -56,9 +56,9 @@ import {
   X,
 } from "@/lib/icons";
 import {
-  PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
-  PROPOSAL_COMPOSE_DRAFT_UPDATED_EVENT,
   readStoredProposalComposeDraft,
+  writeStoredProposalComposeDraft,
+  type StoredProposalComposeDraft,
 } from "../lib/proposal-workspace-state";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 
@@ -94,10 +94,13 @@ interface ProposalInputFormProps {
   /** When true, the tone chip and tone menu in the command bar are hidden.
    *  Used by /proposal-next where tone lives in the left compose toolbar. */
   suppressToneControls?: boolean;
+  /** Optional external tone source used by workspace-level toolbars. */
+  externalVoicePreset?: FormValues["voicePreset"] | null;
   onActiveCvChange?: (cvId: string | null) => void;
   headerLabel?: string | null;
   headerAction?: React.ReactNode;
   jobDescriptionPlaceholder?: string;
+  initialComposeDraft?: StoredProposalComposeDraft | null;
 }
 
 type GenerateProposalPayload = ProposalGenerationRequestPayload;
@@ -161,8 +164,10 @@ function resolveVisibleVoicePreset(
   return preset && VISIBLE_TONE_OPTION_IDS.has(preset) ? preset : undefined;
 }
 
-function readStoredComposeDraft(): Partial<FormValues> {
-  const parsed = readStoredProposalComposeDraft();
+function readStoredComposeDraft(
+  initialComposeDraft?: StoredProposalComposeDraft | null,
+): Partial<FormValues> {
+  const parsed = initialComposeDraft ?? readStoredProposalComposeDraft();
   if (!parsed) return {};
 
   return {
@@ -323,10 +328,12 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   cvPickerOpen,
   onCvPickerOpenChange,
   suppressToneControls = false,
+  externalVoicePreset,
   onActiveCvChange,
   headerLabel = null,
   headerAction = null,
   jobDescriptionPlaceholder = "Paste or write the job offer here…",
+  initialComposeDraft = null,
 }) => {
   const navigate = useNavigate();
   const hasHeaderLabel = Boolean(headerLabel);
@@ -550,7 +557,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
       characterLimitMode: DEFAULT_COMPOSE_CHARACTER_LIMIT_MODE,
       characterLimitValue: DEFAULT_COMPOSE_CHARACTER_LIMIT_VALUE,
       modelType: "chatgpt" as const,
-      ...readStoredComposeDraft(),
+      ...readStoredComposeDraft(initialComposeDraft),
     },
   });
 
@@ -565,28 +572,18 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
 
   React.useEffect(() => {
     const subscription = form.watch((values) => {
-      if (typeof window === "undefined") return;
-
       const normalizedValues = normalizeProposalFormValues(values);
 
-      try {
-        const storedDraft: Partial<FormValues> = {
+      if (!onValuesChange) {
+        writeStoredProposalComposeDraft({
           jobTitle: normalizedValues.jobTitle,
           jobDescription: normalizedValues.jobDescription,
           proposalType: normalizedValues.proposalType,
-        };
-
-        if (normalizedValues.voicePreset) {
-          storedDraft.voicePreset = normalizedValues.voicePreset;
-        }
-
-        window.localStorage.setItem(
-          PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
-          JSON.stringify(storedDraft),
-        );
-        window.dispatchEvent(new Event(PROPOSAL_COMPOSE_DRAFT_UPDATED_EVENT));
-      } catch {
-        // Ignore storage failures and keep the in-memory compose draft.
+          voicePreset: normalizedValues.voicePreset ?? undefined,
+          toneTuning: normalizedValues.toneTuning ?? null,
+          characterLimitMode: normalizedValues.characterLimitMode ?? null,
+          characterLimitValue: normalizedValues.characterLimitValue ?? null,
+        });
       }
 
       onValuesChange?.(normalizedValues);
@@ -691,6 +688,22 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
     form.formState.dirtyFields.voicePreset,
     savedVoicePreset,
   ]);
+
+  React.useEffect(() => {
+    if (externalVoicePreset === undefined) {
+      return;
+    }
+
+    const currentFormPreset = form.getValues("voicePreset") ?? null;
+    if (currentFormPreset === externalVoicePreset) {
+      return;
+    }
+
+    applyVoicePresetSelection(externalVoicePreset, {
+      shouldDirty: false,
+      shouldTouch: false,
+    });
+  }, [applyVoicePresetSelection, externalVoicePreset, form]);
 
   React.useEffect(() => {
     if (!selectedVoicePreset) {
@@ -894,21 +907,6 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
         return;
       }
       if (result) {
-        // The generation action already stores the proposal. Mark that row as a
-        // draft instead of inserting a second saved-history entry from the client.
-        try {
-          if (canPersistProposalWorkspaceState) {
-            await updateGeneratedProposal({
-              id: result.proposalId,
-              content: result.proposalContent,
-              sections: [{ type: "text", content: result.proposalContent }],
-              status: "draft",
-            });
-          }
-        } catch (saveErr) {
-          console.warn("Failed to update generated proposal status:", saveErr);
-        }
-
         onSubmit(
           normalizedValues,
           result.proposalContent,
@@ -920,6 +918,19 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
           result.proposalId,
         );
         shouldNotifySubmitAnimationCompleteRef.current = true;
+
+        // The generation action already stores the proposal. Mark that row as a
+        // draft instead of inserting a second saved-history entry from the client.
+        if (canPersistProposalWorkspaceState) {
+          void updateGeneratedProposal({
+            id: result.proposalId,
+            content: result.proposalContent,
+            sections: [{ type: "text", content: result.proposalContent }],
+            status: "draft",
+          }).catch((saveErr) => {
+            console.warn("Failed to update generated proposal status:", saveErr);
+          });
+        }
       } else {
         const nextErrorMessage = "No proposal returned from the server.";
         setErrorMessage(nextErrorMessage);
