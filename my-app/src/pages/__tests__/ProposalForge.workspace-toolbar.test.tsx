@@ -1,9 +1,8 @@
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { render } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
-import { ProposalForgeNext } from "../ProposalForgeNext";
+import { ProposalForge } from "../ProposalForge";
 
 const proposalDisplaySpy = vi.fn();
 
@@ -30,13 +29,6 @@ vi.mock("../../../convex/_generated/api", () => ({
   },
 }));
 
-vi.mock("../../contexts/CvLibraryContext", () => ({
-  useCvLibrary: () => ({
-    currentCv: null,
-    loadCv: vi.fn(),
-  }),
-}));
-
 vi.mock("../../components/ui/toast", () => ({
   useToast: () => ({
     showToast: vi.fn(),
@@ -56,7 +48,11 @@ vi.mock("../../components/ProposalDisplay", () => ({
   getDisplayedProposalText: (value: string) => value,
 }));
 
-describe("ProposalForgeNext workbench toolbar placement", () => {
+vi.mock("../../components/ProposalsList", () => ({
+  default: () => <div>Saved proposals</div>,
+}));
+
+describe("ProposalForge workbench layout", () => {
   beforeEach(() => {
     proposalDisplaySpy.mockClear();
     window.localStorage.clear();
@@ -65,7 +61,7 @@ describe("ProposalForgeNext workbench toolbar placement", () => {
   it("anchors the live proposal workspace preview to the top of the document stage", () => {
     render(
       <MemoryRouter initialEntries={["/proposal"]}>
-        <ProposalForgeNext />
+        <ProposalForge />
       </MemoryRouter>,
     );
 
@@ -74,103 +70,42 @@ describe("ProposalForgeNext workbench toolbar placement", () => {
     expect(lastCall).toMatchObject({ previewAnchor: "top" });
   });
 
-  it("keeps the expanded and collapsed toolbar states in the same page-shell top-left slot", async () => {
-    const user = userEvent.setup();
-    Object.defineProperty(window, "innerWidth", {
-      configurable: true,
-      value: 1400,
-      writable: true,
-    });
-
-    const { container } = render(
-      <MemoryRouter initialEntries={["/proposal"]}>
-        <ProposalForgeNext />
-      </MemoryRouter>,
-    );
-
-    const outputShell = container.querySelector(
-      ".dasti-proposal-output-shell--next",
-    );
-    expect(outputShell).toBeTruthy();
-
-    const pageShellSlot = container.querySelector(
-      ".dasti-page-shell > .dasti-cv-workbench-bar .dasti-forge-compose-toolbar-slot",
-    );
-    expect(pageShellSlot).toBeTruthy();
-    expect(pageShellSlot?.querySelector(".dasti-compose-toolbar")).toBeTruthy();
-    expect(
-      pageShellSlot?.querySelector(".dasti-compose-toolbar--anchored"),
-    ).toBeNull();
-    expect(
-      container.querySelector(
-        ".dasti-forge-left-col .dasti-forge-compose-toolbar-slot",
-      ),
-    ).toBeNull();
-    expect(
-      outputShell?.querySelector(
-        ".dasti-forge-compose-toolbar-slot",
-      ),
-    ).toBeNull();
-
-    await user.click(
-      screen.getByRole("button", { name: "Hide compose panel" }),
-    );
-
-    await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: "Show compose panel" }),
-      ).toBeInTheDocument(),
-    );
-
-    const collapsedPageShellSlot = container.querySelector(
-      ".dasti-page-shell > .dasti-cv-workbench-bar .dasti-forge-compose-toolbar-slot",
-    );
-
-    expect(
-      collapsedPageShellSlot?.querySelector(".dasti-compose-toolbar--collapsed"),
-    ).toBeTruthy();
-    expect(
-      collapsedPageShellSlot?.querySelector(".dasti-compose-toolbar--anchored"),
-    ).toBeNull();
-    expect(
-      outputShell?.querySelector(
-        ".dasti-forge-compose-toolbar-slot",
-      ),
-    ).toBeNull();
-  });
-
-  it("keeps the proposal page-shell anchor width stable on compact layouts", () => {
+  it("keeps the compact compose and output cards constrained inside the active page shell", () => {
     Object.defineProperty(window, "innerWidth", {
       configurable: true,
       value: 700,
       writable: true,
     });
+    window.dispatchEvent(new Event("resize"));
 
     const { container } = render(
       <MemoryRouter initialEntries={["/proposal"]}>
-        <ProposalForgeNext />
+        <ProposalForge />
       </MemoryRouter>,
     );
 
     const pageShell = container.querySelector(".dasti-page-shell") as
       | HTMLElement
       | null;
-    const pageShellSlot = container.querySelector(
-      ".dasti-page-shell > .dasti-cv-workbench-bar .dasti-forge-compose-toolbar-slot",
-    );
+    const gridSplit = container.querySelector(".dasti-grid-split") as
+      | HTMLElement
+      | null;
+    const composeShell = container.querySelector(
+      ".dasti-proposal-style-source-bar",
+    )?.parentElement as HTMLElement | null;
+    const outputShell = container.querySelector(
+      ".dasti-proposal-output-shell",
+    ) as HTMLElement | null;
 
     expect(pageShell).toBeTruthy();
     expect(
       pageShell?.style.getPropertyValue("--page-shell-max-width"),
-    ).toBe("100%");
-    expect(pageShellSlot).toBeTruthy();
+    ).toBe("720px");
+    expect(gridSplit).toBeTruthy();
     expect(
-      pageShellSlot?.querySelector(".dasti-compose-toolbar--collapsed"),
-    ).toBeNull();
-    expect(
-      (pageShellSlot as HTMLElement | null)?.style.getPropertyValue(
-        "--proposal-compose-toolbar-max-inline-size",
-      ),
-    ).toBe("560px");
+      gridSplit?.style.getPropertyValue("--grid-columns"),
+    ).toBe("minmax(0, 1fr)");
+    expect(composeShell?.style.width).toBe("min(100%, 560px)");
+    expect(outputShell?.style.width).toBe("min(100%, 560px)");
   });
 });
