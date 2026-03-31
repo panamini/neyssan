@@ -50,6 +50,19 @@ type StructuredPayload = {
   diagnostics?: unknown;
 };
 
+function readEmptyReasonFromDiagnostics(diagnostics: unknown): string | null {
+  if (!diagnostics || typeof diagnostics !== "object") return null;
+  const record = diagnostics as Record<string, unknown>;
+  const candidate =
+    typeof record.empty_reason === "string"
+      ? record.empty_reason
+      : typeof record.error === "string"
+        ? record.error
+        : null;
+  const trimmed = candidate?.trim();
+  return trimmed ? trimmed : null;
+}
+
 const MAX_BYTES = 5 * 1024 * 1024;
 const DEFAULT_ACCEPT = ".pdf,.txt";
 const OCR_ACCEPT = ".pdf,.png,.jpg,.jpeg";
@@ -90,6 +103,7 @@ export function StructuredUploadButton({
     null,
   );
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [emptyReason, setEmptyReason] = useState<string | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const { showToast } = useToast();
   const mountedRef = useRef(true);
@@ -192,6 +206,7 @@ export function StructuredUploadButton({
     setStatus("idle");
     setActiveMode(null);
     setErrorMsg(null);
+    setEmptyReason(null);
     setIsMenuOpen(false);
     droppedFileRef.current = null;
     if (inputRef.current) {
@@ -218,6 +233,7 @@ export function StructuredUploadButton({
     (mode: "default" | "mistral") => {
       if (disabled || isBusy) return;
       setErrorMsg(null);
+      setEmptyReason(null);
       setPendingMode(mode);
       setIsMenuOpen(false);
       pickerRef.current = { mode, scopeKey: scopeKeyRef.current };
@@ -303,6 +319,7 @@ export function StructuredUploadButton({
       setStatus("reading");
       setActiveMode(requestedMode);
       setErrorMsg(null);
+      setEmptyReason(null);
 
       try {
         if (typeof structuredAction !== "function") {
@@ -399,6 +416,9 @@ export function StructuredUploadButton({
 
         const payload: StructuredPayload = await invokeWithRetry();
         if (!isCurrentRequest()) return;
+        const diagnosticsEmptyReason = readEmptyReasonFromDiagnostics(
+          payload?.diagnostics,
+        );
 
         if (typeof onResult === "function") {
           try {
@@ -423,7 +443,6 @@ export function StructuredUploadButton({
               desiredPosition: strict.desiredPosition ?? null,
             });
           }
-
           if (typeof onApplyToSections === "function" && merged.length > 0) {
             try {
               onApplyToSections(merged);
@@ -433,10 +452,25 @@ export function StructuredUploadButton({
           }
         }
         if (!isCurrentRequest()) return;
-        try {
-          showToast("Structured extraction completed", { variant: "success" });
-        } catch {
-          /* noop */
+        if (diagnosticsEmptyReason) {
+          setEmptyReason(diagnosticsEmptyReason);
+          try {
+            showToast(
+              `Parser returned empty result: ${diagnosticsEmptyReason}`,
+              { variant: "warning" },
+            );
+          } catch {
+            /* noop */
+          }
+        } else {
+          setEmptyReason(null);
+          try {
+            showToast("Structured extraction completed", {
+              variant: "success",
+            });
+          } catch {
+            /* noop */
+          }
         }
       } catch (err: any) {
         if (!isCurrentRequest()) return;
@@ -460,6 +494,7 @@ export function StructuredUploadButton({
           toastMessage = `Upload failed — ${err.message}`;
         }
         setErrorMsg(toastMessage);
+        setEmptyReason(null);
         const requestId =
           err?.requestId ?? errorData?.requestId ?? err?.context?.requestId;
         if (requestId) {
@@ -517,6 +552,7 @@ export function StructuredUploadButton({
       if (!file || disabled || isBusy) return;
       pickerRef.current = null;
       setIsDropTargeted(false);
+      setEmptyReason(null);
       if (renderAs === "dropdown") {
         droppedFileRef.current = file;
         setErrorMsg(null);
@@ -689,6 +725,11 @@ export function StructuredUploadButton({
             {errorMsg}
           </span>
         )}
+        {emptyReason ? (
+          <div className="dasti-import-empty-reason" role="status" aria-live="polite">
+            Empty reason: {emptyReason}
+          </div>
+        ) : null}
       </>
     );
   }
@@ -741,6 +782,11 @@ export function StructuredUploadButton({
           <span role="status" aria-live="polite" className="sr-only">
             {errorMsg}
           </span>
+        ) : null}
+        {emptyReason ? (
+          <div className="dasti-import-empty-reason" role="status" aria-live="polite">
+            Empty reason: {emptyReason}
+          </div>
         ) : null}
       </div>
     </>

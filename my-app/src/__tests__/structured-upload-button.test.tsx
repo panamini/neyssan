@@ -1,6 +1,7 @@
-import { render, fireEvent, waitFor } from "@testing-library/react";
+import { render, fireEvent, screen, waitFor } from "@testing-library/react";
 import React from "react";
 import { vi, describe, it, expect, beforeEach } from "vitest";
+import userEvent from "@testing-library/user-event";
 
 import StructuredUploadButton from "../components/StructuredUploadButton";
 
@@ -38,9 +39,18 @@ describe("StructuredUploadButton", () => {
   beforeEach(() => {
     structuredActionMock.mockReset();
     toastMock.mockReset();
+    Object.defineProperty(File.prototype, "text", {
+      configurable: true,
+      value: vi.fn().mockResolvedValue("John Doe"),
+    });
+    Object.defineProperty(File.prototype, "arrayBuffer", {
+      configurable: true,
+      value: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
+    });
   });
 
   it("calls structured upload action and surfaces sections", async () => {
+    const user = userEvent.setup();
     structuredActionMock.mockResolvedValue({
       normalized: {
         summary: "Summary text",
@@ -67,12 +77,48 @@ describe("StructuredUploadButton", () => {
     const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
     const file = new File(["John Doe"], "resume.txt", { type: "text/plain" });
 
+    await user.click(screen.getByRole("button", { name: "Upload CV" }));
     fireEvent.change(fileInput, { target: { files: [file] } });
 
     await waitFor(() => expect(structuredActionMock).toHaveBeenCalledTimes(1));
-    expect(structuredActionMock.mock.calls[0][0]).toEqual({ rawText: "John Doe", mode: "text" });
+    expect(structuredActionMock.mock.calls[0][0]).toEqual({
+      rawText: "John Doe",
+      mode: "text",
+      useMistral: false,
+    });
 
     await waitFor(() => expect(onApply).toHaveBeenCalled());
     expect(toastMock).toHaveBeenCalled();
+  });
+
+  it("calls OCR import when the scanned route is selected", async () => {
+    const user = userEvent.setup();
+    structuredActionMock.mockResolvedValue({
+      normalized: {
+        summary: "Scanned import",
+        experience: [],
+        education: [],
+        skillsText: "",
+        languagesText: "",
+        achievements: [],
+      },
+      strict: null,
+    });
+
+    const { container } = render(<StructuredUploadButton />);
+
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(["scan"], "scan.png", { type: "image/png" });
+
+    await user.click(screen.getByRole("button", { name: "Scanned PDF / Image" }));
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    await waitFor(() => expect(structuredActionMock).toHaveBeenCalledTimes(1));
+    expect(structuredActionMock.mock.calls[0][0]).toMatchObject({
+      fileName: "scan.png",
+      mimeType: "image/png",
+      mode: "auto",
+      useMistral: true,
+    });
   });
 });
