@@ -23,11 +23,11 @@ type ProposalArtifactInspectorProps = {
 
 function InspectorTooltip({
   title,
-  description,
+  description = null,
   className,
 }: {
   title: string;
-  description: string;
+  description?: string | null;
   className?: string;
 }): JSX.Element {
   return (
@@ -41,7 +41,7 @@ function InspectorTooltip({
       aria-hidden="true"
     >
       <strong>{title}</strong>
-      <span>{description}</span>
+      {description ? <span>{description}</span> : null}
     </span>
   );
 }
@@ -85,6 +85,8 @@ export function ProposalArtifactInspector({
   variant = "rail",
 }: ProposalArtifactInspectorProps): JSX.Element {
   const rootRef = React.useRef<HTMLDivElement>(null);
+  const colorGroupRef = React.useRef<HTMLDivElement>(null);
+  const colorDrawerRef = React.useRef<HTMLDivElement>(null);
   const [isStyleDrawerOpen, setIsStyleDrawerOpen] = React.useState(false);
   const [isColorPickerOpen, setIsColorPickerOpen] = React.useState(false);
   const [isColorDrawerOpen, setIsColorDrawerOpen] = React.useState(false);
@@ -106,6 +108,9 @@ export function ProposalArtifactInspector({
     const handlePointerDown = (event: MouseEvent) => {
       const target = event.target as Node | null;
       if (target && !rootRef.current?.contains(target)) {
+        if (isColorPickerOpen && isColorDrawerOpen) {
+          return;
+        }
         setIsStyleDrawerOpen(false);
         setIsColorDrawerOpen(false);
       }
@@ -113,6 +118,9 @@ export function ProposalArtifactInspector({
 
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        if (isColorPickerOpen && isColorDrawerOpen) {
+          return;
+        }
         setIsStyleDrawerOpen(false);
         setIsColorDrawerOpen(false);
       }
@@ -124,7 +132,7 @@ export function ProposalArtifactInspector({
       window.removeEventListener("mousedown", handlePointerDown);
       window.removeEventListener("keydown", handleEscape);
     };
-  }, [isColorDrawerOpen, isStyleDrawerOpen]);
+  }, [isColorDrawerOpen, isColorPickerOpen, isStyleDrawerOpen]);
 
   const rootClass = [
     "dasti-artifact-inspector",
@@ -182,7 +190,6 @@ export function ProposalArtifactInspector({
             <InspectorTooltip
               className="dasti-artifact-inspector__tooltip--trigger"
               title="Style"
-              description="Open layout styles."
             />
           ) : null}
         </button>
@@ -237,6 +244,7 @@ export function ProposalArtifactInspector({
       </div>
 
       <div
+        ref={colorGroupRef}
         className="dasti-artifact-inspector__group dasti-artifact-inspector__group--color"
         role="group"
         aria-label="Color"
@@ -262,6 +270,7 @@ export function ProposalArtifactInspector({
               setIsColorPickerOpen((current) => !current);
               return;
             }
+
             setIsColorPickerOpen(false);
             setIsColorDrawerOpen((current) => !current);
           }}
@@ -289,14 +298,14 @@ export function ProposalArtifactInspector({
           {!hasOpenDrawer ? (
             <InspectorTooltip
               className="dasti-artifact-inspector__tooltip--trigger"
-              title="Color"
-              description="Palettes and custom accent."
+              title="Colors"
             />
           ) : null}
         </button>
 
         {isColorDrawerOpen ? (
           <div
+            ref={colorDrawerRef}
             className="dasti-artifact-inspector__palette-drawer dasti-proposal-chrome-drawer dasti-proposal-chrome-drawer--stack"
             role="dialog"
             aria-label="Color options"
@@ -322,7 +331,6 @@ export function ProposalArtifactInspector({
                       );
                       setIsColorDrawerOpen(false);
                     }}
-                    title={pal.label}
                     aria-label={pal.label}
                     style={{ "--swatch-color": pal.color } as React.CSSProperties}
                   />
@@ -341,10 +349,9 @@ export function ProposalArtifactInspector({
                   .join(" ")}
                 aria-pressed={customAccentHex !== null}
                 onClick={() => {
-                  setIsColorDrawerOpen(false);
+                  setIsColorDrawerOpen(true);
                   setIsColorPickerOpen(true);
                 }}
-                title={customAccentHex ?? "Custom accent color"}
                 aria-label="Custom accent color"
                 style={
                   customAccentHex
@@ -354,7 +361,7 @@ export function ProposalArtifactInspector({
               >
                 {!customAccentHex ? (
                   <ColorWheel
-                    size={18}
+                    size={16}
                     className="dasti-artifact-inspector__swatch-wheel"
                     aria-hidden="true"
                   />
@@ -369,8 +376,17 @@ export function ProposalArtifactInspector({
         currentHex={customAccentHex}
         onHexChange={onCustomAccentHexChange}
         anchorRef={colorPickerAnchorRef}
+        surfaceAnchorRef={isColorDrawerOpen ? colorDrawerRef : colorGroupRef}
+        horizontalAlign="start"
         isOpen={isColorPickerOpen}
         onClose={() => setIsColorPickerOpen(false)}
+        onClear={
+          customAccentHex !== null
+            ? () => {
+                onCustomAccentHexChange(null);
+              }
+            : undefined
+        }
       />
     </div>
   );
