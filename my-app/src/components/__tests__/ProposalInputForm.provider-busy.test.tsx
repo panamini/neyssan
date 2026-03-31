@@ -532,6 +532,54 @@ describe("ProposalInputForm provider-busy handling", () => {
     expect(mockLoadCv).toHaveBeenCalledWith("cv-1");
   });
 
+  it("keeps imported handoff values in the form after the prefill prop is cleared", async () => {
+    function HandoffPrefillHarness(): JSX.Element {
+      const [prefill, setPrefill] = React.useState<{
+        handoffId: string;
+        jobTitle: string;
+        jobDescription: string;
+      } | null>({
+        handoffId: "handoff_1",
+        jobTitle: "Imported Operations Lead",
+        jobDescription:
+          "Coordinate recurring operations, document handoffs, and keep teams aligned.",
+      });
+
+      return (
+        <div>
+          <button type="button" onClick={() => setPrefill(null)}>
+            Clear handoff
+          </button>
+          <ProposalInputForm onSubmit={vi.fn()} prefill={prefill} />
+        </div>
+      );
+    }
+
+    render(<HandoffPrefillHarness />);
+
+    await waitFor(() =>
+      expect(
+        screen.getByPlaceholderText("Enter Job Title"),
+      ).toHaveValue("Imported Operations Lead"),
+    );
+    expect(
+      screen.getByPlaceholderText("Paste or write the job offer here…"),
+    ).toHaveValue(
+      "Coordinate recurring operations, document handoffs, and keep teams aligned.",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear handoff" }));
+
+    expect(screen.getByPlaceholderText("Enter Job Title")).toHaveValue(
+      "Imported Operations Lead",
+    );
+    expect(
+      screen.getByPlaceholderText("Paste or write the job offer here…"),
+    ).toHaveValue(
+      "Coordinate recurring operations, document handoffs, and keep teams aligned.",
+    );
+  });
+
   it("does not clear the active CV id just because Proposal Forge cannot resolve it immediately", () => {
     window.localStorage.setItem("cvActiveId", "cv_alpha");
     mockGetActiveLocalPersonalizationSource.mockReturnValue({

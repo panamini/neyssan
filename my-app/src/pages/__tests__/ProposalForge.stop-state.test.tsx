@@ -2,7 +2,7 @@ import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
-import { ProposalForgeNext } from "../ProposalForgeNext";
+import { ProposalForge } from "../ProposalForge";
 
 vi.mock("convex/react", () => ({
   useConvexAuth: () => ({
@@ -104,11 +104,11 @@ vi.mock("../../components/ProposalDisplay", () => ({
   getDisplayedProposalText: (value: string) => value,
 }));
 
-describe("ProposalForgeNext stop state", () => {
+describe("ProposalForge stop state", () => {
   it("clears loading and shows a stopped message when the compose form stops generation", () => {
     render(
       <MemoryRouter initialEntries={["/proposal"]}>
-        <ProposalForgeNext />
+        <ProposalForge />
       </MemoryRouter>,
     );
 
