@@ -158,7 +158,7 @@ describe("ProposalForge saved view", () => {
     );
 
     expect(screen.getByRole("button", { name: "Back to draft" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Copy to draft" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Duplicate to draft" })).toBeInTheDocument();
     expect(screen.getByTestId("saved-proposals-list")).toHaveTextContent(
       "proposal_beta",
     );
@@ -172,7 +172,7 @@ describe("ProposalForge saved view", () => {
     );
 
     expect(screen.getByRole("button", { name: "Back to draft" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Copy to draft" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Duplicate to draft" })).toBeInTheDocument();
     expect(screen.getByTestId("saved-proposals-list")).toHaveTextContent(
       "proposal_beta",
     );
@@ -240,7 +240,7 @@ describe("ProposalForge saved view", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Copy to draft" }));
+    fireEvent.click(screen.getByRole("button", { name: "Duplicate to draft" }));
 
     expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
       "Saved proposal beta",

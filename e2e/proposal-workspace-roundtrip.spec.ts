@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 const APP_URL = process.env.PLAYWRIGHT_APP_URL ?? "http://127.0.0.1:4173";
+const LOCAL_SAVED_PROPOSALS_FIXTURE_KEY = "dasti:proposal-saved-fixtures:v1";
 
 const resumeAlpha = {
   id: "cv_alpha",
@@ -52,7 +53,27 @@ const resumeBeta = {
   ],
 };
 
+const savedProposalFixture = {
+  _id: "proposal_saved_fixture",
+  _creationTime: 1710000001000,
+  title: "Saved operations proposal",
+  content: "Dear team,\n\nSaved proposal content.\n\nBest,",
+  status: "saved",
+  updatedAt: 1710000001000,
+  createdAt: 1710000001000,
+  sections: [{ type: "text", content: "Saved proposal content." }],
+  metadata: {
+    proposalType: "cover_letter",
+    voicePreset: "signature",
+    requestedVoicePreset: "signature",
+    sourceJobDescription:
+      "Lead recurring operations and keep cross-team communication on track.",
+  },
+};
+
 test.describe("Proposal workspace roundtrip", () => {
+  test.describe.configure({ mode: "serial" });
+
   test.beforeEach(async ({ page }) => {
     await page.addInitScript((seed) => {
       window.localStorage.clear();
@@ -101,10 +122,15 @@ test.describe("Proposal workspace roundtrip", () => {
         seed.proposalAttachedCvId,
       );
       window.localStorage.setItem("cvActiveId", seed.activeCvId);
+      window.localStorage.setItem(
+        "dasti:proposal-saved-fixtures:v1",
+        JSON.stringify(seed.savedProposals),
+      );
     }, {
       documents: [resumeAlpha, resumeBeta],
       proposalAttachedCvId: resumeAlpha.id,
       activeCvId: resumeAlpha.id,
+      savedProposals: [savedProposalFixture],
     });
   });
 
@@ -137,12 +163,12 @@ test.describe("Proposal workspace roundtrip", () => {
         name: /Operations Associate Proposal/i,
       }),
     ).toBeVisible();
-    await page
-      .getByRole("link", {
-        name: /Operations Associate Proposal/i,
-      })
-      .click();
-    await expect(page).toHaveURL(/\/proposal(?:\?.*)?$/);
+    await Promise.all([
+      page.waitForURL(/\/proposal(?:\?.*)?$/),
+      page.getByRole("link", {
+        name: /Proposal in progress Operations Associate Proposal/i,
+      }).click(),
+    ]);
     await expect(page.getByText("Freshly generated proposal body.").first()).toBeVisible();
     await expect(
       page.getByRole("link", {
@@ -187,13 +213,12 @@ test.describe("Proposal workspace roundtrip", () => {
       () => window.localStorage.getItem("cvActiveId") === "cv_beta",
     );
 
-    await page
-      .getByRole("link", {
-        name: /Operations Associate Proposal/i,
-      })
-      .click();
-
-    await expect(page).toHaveURL(/\/proposal(?:\?.*)?$/);
+    await Promise.all([
+      page.waitForURL(/\/proposal(?:\?.*)?$/),
+      page.getByRole("link", {
+        name: /Proposal in progress Operations Associate Proposal/i,
+      }).click(),
+    ]);
     await expect(page.getByText("Freshly generated proposal body.").first()).toBeVisible();
     await expect(
       page.getByRole("link", {
@@ -219,7 +244,11 @@ test.describe("Proposal workspace roundtrip", () => {
   }) => {
     await page.goto(`${APP_URL}/proposal`);
 
-    await page.getByRole("button", { name: "Choose resume" }).click();
+    await page
+      .getByRole("button", {
+        name: /Attached CV Operations Associate — Alex Martin/i,
+      })
+      .click();
     await page
       .getByRole("button", {
         name: /Operations Associate — Alex Martin.*Draft resume/i,
@@ -245,6 +274,55 @@ test.describe("Proposal workspace roundtrip", () => {
     await expect(page.locator("#jobTitle")).toHaveValue("Operations Associate");
     await expect(page.locator("#jobDescription")).toHaveValue(
       "Support recurring processes and coordinate communication.",
+    );
+  });
+
+  test("keeps the saved proposal roundtrip coherent after copying it back to the live draft", async ({
+    page,
+  }) => {
+    await page.goto(
+      `${APP_URL}/proposal?view=saved&id=${savedProposalFixture._id}`,
+    );
+
+    await expect(
+      page.getByRole("button", { name: "Back to draft" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Saved operations proposal" }),
+    ).toBeVisible();
+    await expect(page.getByText("Sign in to view saved proposals.")).toBeVisible();
+
+    await page.getByRole("button", { name: "Duplicate to draft" }).click();
+
+    await expect(page).toHaveURL(/\/proposal(?:\?.*)?$/);
+    await expect(
+      page.getByText("Saved proposal content.").first(),
+    ).toBeVisible();
+    await expect(page.locator("#jobTitle")).toHaveValue(
+      "Saved operations proposal",
+    );
+    await expect(page.locator("#jobDescription")).toHaveValue(
+      "Lead recurring operations and keep cross-team communication on track.",
+    );
+
+    await page
+      .getByRole("link", {
+        name: /Operations Associate — Alex Martin/i,
+      })
+      .click();
+    await expect(page).toHaveURL(/\/cv\?id=cv_alpha$/);
+
+    await Promise.all([
+      page.waitForURL(/\/proposal(?:\?.*)?$/),
+      page.getByRole("link", {
+        name: /Proposal in progress Saved operations proposal/i,
+      }).click(),
+    ]);
+    await expect(
+      page.getByText("Saved proposal content.").first(),
+    ).toBeVisible();
+    await expect(page.locator("#jobTitle")).toHaveValue(
+      "Saved operations proposal",
     );
   });
 });
