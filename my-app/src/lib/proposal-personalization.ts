@@ -4,6 +4,12 @@ import type { CvDocument, CvSection } from "../types/cvDocument";
 const LOCAL_DOC_PREFIXES = ["cv:", "cv-doc:"];
 const LOCAL_LIBRARY_KEYS = ["cvDocuments", "cvLibrary"];
 const ACTIVE_CV_STORAGE_KEY = "cvActiveId";
+export const PROPOSAL_ATTACHED_CV_STORAGE_KEY =
+  "dasti:proposal-attached-cv-id:v1";
+export const PROPOSAL_ATTACHED_CV_UPDATED_EVENT =
+  "dasti:proposal-attached-cv-updated";
+const PROPOSAL_ATTACHED_CV_MIGRATION_KEY =
+  "dasti:proposal-attached-cv-migrated:v1";
 const MAX_SUMMARY_LENGTH = 240;
 const MAX_SKILLS = 8;
 const MAX_RECENT_EXPERIENCE = 3;
@@ -116,6 +122,64 @@ function hasLocalStorage(): boolean {
   } catch {
     return false;
   }
+}
+
+function markProposalAttachedCvMigrationComplete(): void {
+  if (!hasLocalStorage()) return;
+
+  try {
+    window.localStorage.setItem(PROPOSAL_ATTACHED_CV_MIGRATION_KEY, "1");
+  } catch {
+    /* best-effort */
+  }
+}
+
+function dispatchProposalAttachedCvUpdated(): void {
+  if (!hasLocalStorage()) return;
+
+  try {
+    window.dispatchEvent(new Event(PROPOSAL_ATTACHED_CV_UPDATED_EVENT));
+  } catch {
+    /* best-effort */
+  }
+}
+
+function readStoredProposalAttachedCvId(): string {
+  if (!hasLocalStorage()) {
+    return "";
+  }
+
+  const storedAttachedCvId = compactWhitespace(
+    window.localStorage.getItem(PROPOSAL_ATTACHED_CV_STORAGE_KEY) ?? "",
+  );
+  if (storedAttachedCvId) {
+    return storedAttachedCvId;
+  }
+
+  const hasMigrated =
+    window.localStorage.getItem(PROPOSAL_ATTACHED_CV_MIGRATION_KEY) === "1";
+  if (hasMigrated) {
+    return "";
+  }
+
+  const legacyActiveCvId = compactWhitespace(
+    window.localStorage.getItem(ACTIVE_CV_STORAGE_KEY) ?? "",
+  );
+  markProposalAttachedCvMigrationComplete();
+  if (!legacyActiveCvId) {
+    return "";
+  }
+
+  try {
+    window.localStorage.setItem(
+      PROPOSAL_ATTACHED_CV_STORAGE_KEY,
+      legacyActiveCvId,
+    );
+  } catch {
+    /* best-effort */
+  }
+
+  return legacyActiveCvId;
 }
 
 function compactWhitespace(value: string): string {
@@ -635,9 +699,7 @@ export function getActiveLocalPersonalizationSource(): {
     return { title: null, personalizationContext: null };
   }
 
-  const activeCvId = compactWhitespace(
-    window.localStorage.getItem(ACTIVE_CV_STORAGE_KEY) ?? "",
-  );
+  const activeCvId = readStoredProposalAttachedCvId();
   if (!activeCvId) {
     return { title: null, personalizationContext: null };
   }
@@ -699,9 +761,7 @@ export function buildAppProposalPersonalizationPayload(source: {
 export function listLocalCvPickerOptions(): LocalCvPickerOption[] {
   if (!hasLocalStorage()) return [];
 
-  const activeCvId = compactWhitespace(
-    window.localStorage.getItem(ACTIVE_CV_STORAGE_KEY) ?? "",
-  );
+  const activeCvId = readStoredProposalAttachedCvId();
   const libraryDocs = getLibraryDocuments();
   const candidateIds = new Set<string>();
 
@@ -763,14 +823,53 @@ export function listLocalCvPickerOptions(): LocalCvPickerOption[] {
   return options;
 }
 
-export function setActiveLocalCvId(id: string): void {
+export function getProposalAttachedCvId(): string | null {
+  const activeCvId = readStoredProposalAttachedCvId();
+  return activeCvId || null;
+}
+
+export function getProposalAttachedCvLocalDocument(): CvDocument | null {
+  const attachedCvId = getProposalAttachedCvId();
+  if (!attachedCvId) {
+    return null;
+  }
+
+  const libraryDoc =
+    getLibraryDocuments().find((doc) => String(doc.id) === attachedCvId) ?? null;
+
+  return getStoredDocumentById(attachedCvId) ?? libraryDoc;
+}
+
+export function setProposalAttachedCvId(id: string): void {
   if (!hasLocalStorage()) return;
   const nextId = compactWhitespace(id);
   if (!nextId) return;
-  window.localStorage.setItem(ACTIVE_CV_STORAGE_KEY, nextId);
+  markProposalAttachedCvMigrationComplete();
+  try {
+    window.localStorage.setItem(PROPOSAL_ATTACHED_CV_STORAGE_KEY, nextId);
+  } catch {
+    /* best-effort */
+  }
+
+  dispatchProposalAttachedCvUpdated();
+}
+
+export function clearProposalAttachedCvId(): void {
+  if (!hasLocalStorage()) return;
+  markProposalAttachedCvMigrationComplete();
+  try {
+    window.localStorage.removeItem(PROPOSAL_ATTACHED_CV_STORAGE_KEY);
+  } catch {
+    /* best-effort */
+  }
+
+  dispatchProposalAttachedCvUpdated();
+}
+
+export function setActiveLocalCvId(id: string): void {
+  setProposalAttachedCvId(id);
 }
 
 export function clearActiveLocalCvId(): void {
-  if (!hasLocalStorage()) return;
-  window.localStorage.removeItem(ACTIVE_CV_STORAGE_KEY);
+  clearProposalAttachedCvId();
 }

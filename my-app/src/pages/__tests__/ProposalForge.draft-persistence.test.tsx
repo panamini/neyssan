@@ -2,15 +2,15 @@ import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
-import { ProposalForgeNext } from "../ProposalForgeNext";
+import { ProposalForge } from "../ProposalForge";
 import {
   readStoredProposalOutputDraft,
   writeStoredProposalOutputDraft,
 } from "../../lib/proposal-output-draft";
 import {
   PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
-  PROPOSAL_COMPOSE_DRAFT_UPDATED_EVENT,
 } from "../../lib/proposal-workspace-state";
+import { PROPOSAL_ATTACHED_CV_STORAGE_KEY } from "../../lib/proposal-personalization";
 
 vi.mock("convex/react", () => ({
   useConvexAuth: () => ({
@@ -37,7 +37,9 @@ vi.mock("../../../convex/_generated/api", () => ({
 
 vi.mock("../../contexts/CvLibraryContext", () => ({
   useCvLibrary: () => ({
+    cvs: [],
     currentCv: null,
+    currentCvId: null,
     loadCv: vi.fn(),
   }),
 }));
@@ -93,18 +95,6 @@ vi.mock("../../components/ProposalInputForm", () => ({
               characterLimitValue: null,
               modelType: "chatgpt",
             };
-            window.localStorage.setItem(
-              PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
-              JSON.stringify({
-                jobTitle: values.jobTitle,
-                jobDescription: values.jobDescription,
-                proposalType: values.proposalType,
-                voicePreset: values.voicePreset,
-                characterLimitMode: values.characterLimitMode,
-                characterLimitValue: values.characterLimitValue,
-              }),
-            );
-            window.dispatchEvent(new Event(PROPOSAL_COMPOSE_DRAFT_UPDATED_EVENT));
             onValuesChange?.(values);
             onSubmit?.(
               values,
@@ -148,16 +138,19 @@ function MockResumePage(): JSX.Element {
   );
 }
 
-describe("ProposalForgeNext draft persistence", () => {
+describe("ProposalForge draft persistence", () => {
   beforeEach(() => {
     window.localStorage.clear();
   });
 
   it("restores the generated draft after leaving the proposal workspace immediately", () => {
+    window.localStorage.setItem(PROPOSAL_ATTACHED_CV_STORAGE_KEY, "cv_alpha");
+    window.localStorage.setItem("cvActiveId", "cv_beta");
+
     render(
       <MemoryRouter initialEntries={["/proposal"]}>
         <Routes>
-          <Route path="/proposal" element={<ProposalForgeNext />} />
+          <Route path="/proposal" element={<ProposalForge />} />
           <Route path="/cv" element={<MockResumePage />} />
         </Routes>
       </MemoryRouter>,
@@ -191,6 +184,10 @@ describe("ProposalForgeNext draft persistence", () => {
     expect(screen.getByTestId("compose-job-description")).toHaveTextContent(
       "Support recurring processes and coordinate communication.",
     );
+    expect(window.localStorage.getItem(PROPOSAL_ATTACHED_CV_STORAGE_KEY)).toBe(
+      "cv_alpha",
+    );
+    expect(window.localStorage.getItem("cvActiveId")).toBe("cv_beta");
   });
 
   it("restores stored compose input and editable workspace state on plain proposal re-entry", () => {
@@ -231,7 +228,7 @@ describe("ProposalForgeNext draft persistence", () => {
 
     render(
       <MemoryRouter initialEntries={["/proposal"]}>
-        <ProposalForgeNext />
+        <ProposalForge />
       </MemoryRouter>,
     );
 

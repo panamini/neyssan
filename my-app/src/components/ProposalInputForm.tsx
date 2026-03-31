@@ -6,6 +6,7 @@ import styles from "./ProposalInputForm.module.css";
 import { zodResolver } from "@hookform/resolvers/zod";
 import clsx from "clsx";
 import { createPortal } from "react-dom";
+import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent } from "./ui/dialog";
 
 import { api } from "../../convex/_generated/api";
@@ -15,11 +16,15 @@ import { formSchema, FormValues } from "./ProposalInputForm.schemas";
 import {
   DEFAULT_PROPOSAL_VOICE_PRESET,
   getProposalVoicePresetDefinition,
-  getSupportedProposalVoicePresetIds,
   isProposalVoicePresetSupportedForMode,
-  PROPOSAL_VOICE_PRESET_DEFINITIONS,
+  resolveProposalVoicePreset,
   type ProposalVoicePreset,
 } from "../../convex/lib/proposals/voicePresets";
+import {
+  DEFAULT_PROPOSAL_CHARACTER_LIMIT_MODE,
+  DEFAULT_PROPOSAL_CHARACTER_LIMIT_VALUE,
+  sanitizeProposalCharacterLimit,
+} from "../../convex/lib/proposals/generationControls";
 import {
   buildAppProposalPersonalizationPayload,
   clearActiveLocalCvId,
@@ -29,39 +34,50 @@ import {
   listLocalCvPickerOptions,
   setActiveLocalCvId,
   type LocalCvPickerOption,
-  type ProposalGenerationPersonalizationPayload,
 } from "../lib/proposal-personalization";
 import {
   getProposalGenerationUiErrorMessage,
   type ProposalGenerationFallbackInfo,
 } from "../lib/proposal-generation-ui";
+import {
+  buildProposalGenerationRequest,
+  type ProposalGenerationRequestPayload,
+} from "../lib/proposal-generation-request";
 import { getProposalDocumentTypography } from "../lib/proposal-document-typography";
 import { formatUiDate } from "../lib/ui-date";
 import { useScrollEdgeFades } from "../hooks/use-scroll-edge-fades";
+import { getVoicePresetDisplayLabel } from "../lib/proposal-voice-label";
 import {
   Check,
   ChevronDown,
   FolderTree,
-  Lightning,
   Paperclip,
   Pencil,
-  Square,
   X,
 } from "@/lib/icons";
+import {
+  PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
+  PROPOSAL_COMPOSE_DRAFT_UPDATED_EVENT,
+  readStoredProposalComposeDraft,
+} from "../lib/proposal-workspace-state";
+import { useCvLibrary } from "../contexts/CvLibraryContext";
 
 interface ProposalInputFormProps {
   onSubmit: (
     values: FormValues,
     proposalContent: string,
     fallbackInfo?: ProposalGenerationFallbackInfo,
-    proposalId?: string,
+    proposalId?: Id<"proposals">,
   ) => void;
   onStart?: (values: FormValues) => void;
+  onStop?: () => void;
   onError?: (
     message: string,
     values: FormValues,
     rawReason?: string | null,
   ) => void;
+  onSubmitAnimationComplete?: () => void;
+  onValuesChange?: (values: FormValues) => void;
   prefill?: {
     handoffId: string;
     jobTitle: string;
@@ -69,15 +85,32 @@ interface ProposalInputFormProps {
     sourceUrl?: string;
     platform?: string;
   } | null;
+  cvPickerRequestKey?: number;
+  /** When true, the visible CV picker chip is hidden while the dialog logic stays mounted. */
+  suppressCvPicker?: boolean;
+  /** Optional controlled state for the CV chooser dialog. */
+  cvPickerOpen?: boolean;
+  onCvPickerOpenChange?: (open: boolean) => void;
+  /** When true, the tone chip and tone menu in the command bar are hidden.
+   *  Used by /proposal-next where tone lives in the left compose toolbar. */
+  suppressToneControls?: boolean;
+  onActiveCvChange?: (cvId: string | null) => void;
+  headerLabel?: string | null;
+  headerAction?: React.ReactNode;
+  jobDescriptionPlaceholder?: string;
 }
 
-type GenerateProposalPayload = FormValues &
-  ProposalGenerationPersonalizationPayload;
+type GenerateProposalPayload = ProposalGenerationRequestPayload;
 
 type GenerateProposalResult = {
   proposalId: Id<"proposals">;
   proposalContent: string;
 } & Required<ProposalGenerationFallbackInfo>;
+
+const DEFAULT_COMPOSE_CHARACTER_LIMIT_MODE =
+  DEFAULT_PROPOSAL_CHARACTER_LIMIT_MODE;
+const DEFAULT_COMPOSE_CHARACTER_LIMIT_VALUE =
+  DEFAULT_PROPOSAL_CHARACTER_LIMIT_VALUE;
 
 const VISIBLE_MODEL_OPTIONS = [{ value: "chatgpt", label: "ChatGPT" }] as const;
 const VISIBLE_PROPOSAL_TYPE_OPTIONS = [
@@ -92,50 +125,92 @@ const TONE_OPTIONS: Array<{
 }> = [
   {
     id: "signature",
-    uiLabel: "Balanced",
+    uiLabel: getVoicePresetDisplayLabel("signature"),
     description: "Balanced, natural, and credible.",
   },
   {
     id: "expert",
-    uiLabel: "Formal",
+    uiLabel: getVoicePresetDisplayLabel("expert"),
     description: "More precise, structured, and authoritative.",
   },
   {
     id: "engaging",
-    uiLabel: "Warm",
+    uiLabel: getVoicePresetDisplayLabel("engaging"),
     description: "Warmer, more lively, and still professional.",
   },
 ];
 
-const PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY = "dasti:proposal-compose-draft:v1";
+const AUTO_TONE_OPTION = {
+  id: null,
+  uiLabel: getVoicePresetDisplayLabel(null),
+  description: "Adapt the tone to the client and context.",
+} as const;
+
+const VISIBLE_TONE_OPTION_IDS = new Set<ProposalVoicePreset>(
+  TONE_OPTIONS.map((option) => option.id),
+);
+
+function resolveVisibleVoicePreset(
+  value: unknown,
+): ProposalVoicePreset | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const preset = resolveProposalVoicePreset(value);
+  return preset && VISIBLE_TONE_OPTION_IDS.has(preset) ? preset : undefined;
+}
 
 function readStoredComposeDraft(): Partial<FormValues> {
-  if (typeof window === "undefined") return {};
+  const parsed = readStoredProposalComposeDraft();
+  if (!parsed) return {};
 
-  try {
-    const raw = window.localStorage.getItem(PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY);
-    if (!raw) return {};
+  return {
+    jobTitle: typeof parsed.jobTitle === "string" ? parsed.jobTitle : "",
+    jobDescription:
+      typeof parsed.jobDescription === "string" ? parsed.jobDescription : "",
+    proposalType:
+      parsed.proposalType === "freelance_proposal" ||
+      parsed.proposalType === "cover_letter"
+        ? parsed.proposalType
+        : "cover_letter",
+    voicePreset: resolveVisibleVoicePreset(parsed.voicePreset),
+    toneTuning: null,
+    characterLimitMode: DEFAULT_COMPOSE_CHARACTER_LIMIT_MODE,
+    characterLimitValue: DEFAULT_COMPOSE_CHARACTER_LIMIT_VALUE,
+  };
+}
 
-    const parsed = JSON.parse(raw) as Partial<FormValues> | null;
-    if (!parsed || typeof parsed !== "object") return {};
+function normalizeProposalFormValues(values: Partial<FormValues>): FormValues {
+  const voicePreset = resolveVisibleVoicePreset(values.voicePreset);
+  const voicePresetDefinition = voicePreset
+    ? getProposalVoicePresetDefinition(voicePreset)
+    : null;
 
-    return {
-      jobTitle: typeof parsed.jobTitle === "string" ? parsed.jobTitle : "",
-      jobDescription:
-        typeof parsed.jobDescription === "string" ? parsed.jobDescription : "",
-      proposalType:
-        parsed.proposalType === "freelance_proposal" ||
-        parsed.proposalType === "cover_letter"
-          ? parsed.proposalType
-          : "cover_letter",
-      voicePreset:
-        typeof parsed.voicePreset === "string"
-          ? (parsed.voicePreset as ProposalVoicePreset)
-          : DEFAULT_PROPOSAL_VOICE_PRESET,
-    };
-  } catch {
-    return {};
-  }
+  return {
+    jobTitle: typeof values.jobTitle === "string" ? values.jobTitle : "",
+    jobDescription:
+      typeof values.jobDescription === "string" ? values.jobDescription : "",
+    proposalType:
+      values.proposalType === "freelance_proposal" ||
+      values.proposalType === "cover_letter"
+        ? values.proposalType
+        : "cover_letter",
+    voicePreset,
+    formalityLevel: voicePresetDefinition?.formalityLevel,
+    creativity: voicePresetDefinition?.creativity,
+    toneTuning: null,
+    characterLimitMode: DEFAULT_COMPOSE_CHARACTER_LIMIT_MODE,
+    characterLimitValue:
+      sanitizeProposalCharacterLimit(values.characterLimitValue) ??
+      DEFAULT_COMPOSE_CHARACTER_LIMIT_VALUE,
+    modelType:
+      values.modelType === "mistral-small-latest" ||
+      values.modelType === "mistral-large-latest" ||
+      values.modelType === "mistral-agent"
+        ? values.modelType
+        : "chatgpt",
+  };
 }
 
 function formatToolbarResumeLabel(value: string | null | undefined): string {
@@ -149,12 +224,114 @@ function formatToolbarResumeLabel(value: string | null | undefined): string {
   return `${normalized.slice(0, 12).trimEnd()}…`;
 }
 
+type ProposalGenerateButtonVisualState =
+  | "idle"
+  | "loading-hiding"
+  | "loading-spinning"
+  | "loading-revealing-stop"
+  | "loading-stop"
+  | "stop-undrawing"
+  | "stop-revealing"
+  | "finishing-hiding"
+  | "finishing-spinning"
+  | "finishing-revealing";
+
+const PROPOSAL_GENERATE_BUTTON_TIMINGS = {
+  loadingHideMs: 0,
+  stopRevealDelayMs: 1800,
+  stopRevealMs: 1080,
+  stopHoldMs: 220,
+  stopUndrawMs: 880,
+  stopRedrawMs: 1080,
+} as const;
+
+const PROPOSAL_GENERATE_FLOW_PATH =
+  "M 37 92 C 57 67, 82 52, 111 52 C 134 52, 152 59, 166 73 C 178 86, 185 104, 185 124 C 186 145, 179 165, 166 181 C 153 197, 134 208, 109 208 C 87 208, 71 200, 64 185 C 57 170, 60 151, 73 137 C 87 122, 107 113, 133 112 C 173 111, 211 127, 241 159";
+const PROPOSAL_GENERATE_SQUARE_PATH =
+  "M 84 74 H 172 Q 184 74, 184 86 V 170 Q 184 182, 172 182 H 96 Q 84 182, 84 170 V 86 Q 84 74, 96 74";
+
+function ProposalGenerateButtonGlyph({
+  state,
+}: {
+  state: ProposalGenerateButtonVisualState;
+}) {
+  return (
+    <svg
+      className="dasti-proposal-submit__glyph"
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 256 256"
+      fill="none"
+      aria-hidden="true"
+      data-state={state}
+    >
+      <path
+        className="dasti-proposal-submit__scribble"
+        pathLength={100}
+        d={PROPOSAL_GENERATE_FLOW_PATH}
+      />
+      <path
+        className="dasti-proposal-submit__spinner"
+        pathLength={100}
+        d={PROPOSAL_GENERATE_FLOW_PATH}
+      />
+      <path
+        className="dasti-proposal-submit__square"
+        pathLength={100}
+        d={PROPOSAL_GENERATE_SQUARE_PATH}
+      />
+    </svg>
+  );
+}
+
+function getProposalGenerateButtonVisualClass(
+  state: ProposalGenerateButtonVisualState,
+): string {
+  switch (state) {
+    case "idle":
+      return "is-idle";
+    case "loading-hiding":
+    case "loading-spinning":
+      return "is-spinning";
+    case "loading-revealing-stop":
+      return "is-revealing";
+    case "loading-stop":
+      return "is-done";
+    case "stop-undrawing":
+      return "is-back-undrawing";
+    case "stop-revealing":
+      return "is-back-revealing";
+    case "finishing-hiding":
+    case "finishing-spinning":
+      return "is-finishing-spinning";
+    case "finishing-revealing":
+      return "is-finishing-revealing";
+    default:
+      return "is-idle";
+  }
+}
+
 const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   onSubmit,
   onStart,
+  onStop,
   onError,
+  onSubmitAnimationComplete,
+  onValuesChange,
   prefill = null,
+  cvPickerRequestKey = 0,
+  suppressCvPicker = false,
+  cvPickerOpen,
+  onCvPickerOpenChange,
+  suppressToneControls = false,
+  onActiveCvChange,
+  headerLabel = null,
+  headerAction = null,
+  jobDescriptionPlaceholder = "Paste or write the job offer here…",
 }) => {
+  const navigate = useNavigate();
+  const hasHeaderLabel = Boolean(headerLabel);
+  const hasHeaderAction = Boolean(headerAction);
+  const headerActionOnly = hasHeaderAction && !hasHeaderLabel;
   const {
     isAuthenticated: isConvexAuthenticated,
     isLoading: isConvexAuthLoading,
@@ -164,16 +341,22 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
     api.activeCvSnapshots.setCurrent,
   );
   const updateGeneratedProposal = useMutation(api.updateProposalPublic.default);
+  const requestProposalGenerationCancel = useMutation(
+    (api.jobs as any).requestProposalGenerationCancel,
+  );
   const currentProposalSettings = useQuery(
     api.proposalSettings.getCurrent,
     isConvexAuthenticated ? {} : "skip",
-  );
+  ) as
+    | {
+        voicePreset: ProposalVoicePreset;
+        savedVoicePreset?: ProposalVoicePreset | null;
+      }
+    | undefined;
   const setCurrentVoicePreset = useMutation(api.proposalSettings.setCurrent);
   const [isGenerating, setIsGenerating] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
-  const [voicePresetSaveError, setVoicePresetSaveError] = React.useState<
-    string | null
-  >(null);
+  const [, setVoicePresetSaveError] = React.useState<string | null>(null);
   const [activeCvSource, setActiveCvSource] = React.useState(() =>
     getActiveLocalPersonalizationSource(),
   );
@@ -182,6 +365,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   const [cvOptions, setCvOptions] = React.useState<LocalCvPickerOption[]>(() =>
     listLocalCvPickerOptions(),
   );
+  const { loadCv } = useCvLibrary();
   const {
     attach: attachComposeScrollEdges,
     showTop: showComposeScrollTop,
@@ -193,19 +377,152 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
     jobTitle: string;
     jobDescription: string;
   } | null>(null);
+  const [generateButtonState, setGenerateButtonState] =
+    React.useState<ProposalGenerateButtonVisualState>("idle");
+  const generateButtonStateRef =
+    React.useRef<ProposalGenerateButtonVisualState>("idle");
+  const [isStopRequested, setIsStopRequested] = React.useState(false);
   const appliedSavedVoicePresetRef = React.useRef(false);
   const lastSharedSnapshotSyncStateRef = React.useRef<string | null>(null);
+  const generateButtonTimersRef = React.useRef<number[]>([]);
+  const submitAnimationCompleteTimerRef = React.useRef<number | null>(null);
+  const activeGenerateRunIdRef = React.useRef(0);
+  const activeGenerationClientRunIdRef = React.useRef<string | null>(null);
+  const stopRequestedRunIdRef = React.useRef<number | null>(null);
+  const shouldNotifySubmitAnimationCompleteRef = React.useRef(false);
+  const shouldPlayGenerateButtonReverseRef = React.useRef(false);
   const canPersistProposalWorkspaceState =
     isConvexAuthenticated && !isConvexAuthLoading;
+  const isCvPickerControlled = typeof cvPickerOpen === "boolean";
+  const resolvedCvPickerOpen = isCvPickerControlled
+    ? cvPickerOpen
+    : isCvPickerOpen;
+
+  const setCvPickerOpen = React.useCallback(
+    (open: boolean) => {
+      if (!isCvPickerControlled) {
+        setIsCvPickerOpen(open);
+      }
+      onCvPickerOpenChange?.(open);
+    },
+    [isCvPickerControlled, onCvPickerOpenChange],
+  );
 
   const refreshActiveCvState = React.useCallback(() => {
     setActiveCvSource(getActiveLocalPersonalizationSource());
     setCvOptions(listLocalCvPickerOptions());
   }, []);
 
+  const clearGenerateButtonTimers = React.useCallback(() => {
+    for (const timerId of generateButtonTimersRef.current) {
+      window.clearTimeout(timerId);
+    }
+    generateButtonTimersRef.current = [];
+    if (submitAnimationCompleteTimerRef.current !== null) {
+      window.clearTimeout(submitAnimationCompleteTimerRef.current);
+      submitAnimationCompleteTimerRef.current = null;
+    }
+  }, []);
+
+  const notifySubmitAnimationComplete = React.useCallback(() => {
+    if (!shouldNotifySubmitAnimationCompleteRef.current) {
+      return;
+    }
+    shouldNotifySubmitAnimationCompleteRef.current = false;
+    onSubmitAnimationComplete?.();
+  }, [onSubmitAnimationComplete]);
+
+  const scheduleGenerateButtonState = React.useCallback(
+    (nextState: ProposalGenerateButtonVisualState, delayMs: number) => {
+      const timerId = window.setTimeout(() => {
+        setGenerateButtonState(nextState);
+        generateButtonTimersRef.current =
+          generateButtonTimersRef.current.filter((value) => value !== timerId);
+      }, delayMs);
+
+      generateButtonTimersRef.current.push(timerId);
+    },
+    [],
+  );
+
+  const startGenerateButtonSequence = React.useCallback(() => {
+    clearGenerateButtonTimers();
+    shouldPlayGenerateButtonReverseRef.current = false;
+    setGenerateButtonState("loading-hiding");
+    scheduleGenerateButtonState(
+      "loading-spinning",
+      PROPOSAL_GENERATE_BUTTON_TIMINGS.loadingHideMs,
+    );
+    scheduleGenerateButtonState(
+      "loading-revealing-stop",
+      PROPOSAL_GENERATE_BUTTON_TIMINGS.loadingHideMs +
+        PROPOSAL_GENERATE_BUTTON_TIMINGS.stopRevealDelayMs,
+    );
+    scheduleGenerateButtonState(
+      "loading-stop",
+      PROPOSAL_GENERATE_BUTTON_TIMINGS.loadingHideMs +
+        PROPOSAL_GENERATE_BUTTON_TIMINGS.stopRevealDelayMs +
+        PROPOSAL_GENERATE_BUTTON_TIMINGS.stopRevealMs,
+    );
+  }, [clearGenerateButtonTimers, scheduleGenerateButtonState]);
+
+  const playGenerateButtonReverseSequence = React.useCallback(() => {
+    clearGenerateButtonTimers();
+    shouldPlayGenerateButtonReverseRef.current = false;
+    setGenerateButtonState("loading-stop");
+    scheduleGenerateButtonState(
+      "stop-undrawing",
+      PROPOSAL_GENERATE_BUTTON_TIMINGS.stopHoldMs,
+    );
+    scheduleGenerateButtonState(
+      "stop-revealing",
+      PROPOSAL_GENERATE_BUTTON_TIMINGS.stopHoldMs +
+        PROPOSAL_GENERATE_BUTTON_TIMINGS.stopUndrawMs,
+    );
+    scheduleGenerateButtonState(
+      "idle",
+      PROPOSAL_GENERATE_BUTTON_TIMINGS.stopHoldMs +
+        PROPOSAL_GENERATE_BUTTON_TIMINGS.stopUndrawMs +
+        PROPOSAL_GENERATE_BUTTON_TIMINGS.stopRedrawMs,
+    );
+  }, [clearGenerateButtonTimers, scheduleGenerateButtonState]);
+
+  const requestGenerateButtonReverseSequence = React.useCallback(() => {
+    if (generateButtonStateRef.current === "loading-stop") {
+      if (shouldNotifySubmitAnimationCompleteRef.current) {
+        notifySubmitAnimationComplete();
+      }
+      playGenerateButtonReverseSequence();
+      return;
+    }
+    shouldPlayGenerateButtonReverseRef.current = true;
+  }, [notifySubmitAnimationComplete, playGenerateButtonReverseSequence]);
+
+  React.useEffect(() => {
+    generateButtonStateRef.current = generateButtonState;
+    if (generateButtonState === "loading-stop") {
+      if (shouldNotifySubmitAnimationCompleteRef.current) {
+        notifySubmitAnimationComplete();
+      }
+      if (shouldPlayGenerateButtonReverseRef.current) {
+        playGenerateButtonReverseSequence();
+      }
+    }
+  }, [
+    generateButtonState,
+    notifySubmitAnimationComplete,
+    playGenerateButtonReverseSequence,
+  ]);
+
   React.useEffect(() => {
     refreshActiveCvState();
   }, [refreshActiveCvState]);
+
+  React.useEffect(() => {
+    return () => {
+      clearGenerateButtonTimers();
+    };
+  }, [clearGenerateButtonTimers]);
 
   React.useEffect(() => {
     if (!canPersistProposalWorkspaceState) {
@@ -214,29 +531,10 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
 
     if (activeCvSource.title !== null) {
       lastSharedSnapshotSyncStateRef.current = activeCvSource.title;
-      return;
     }
-
-    clearActiveLocalCvId();
-
-    if (lastSharedSnapshotSyncStateRef.current === "none") {
-      return;
-    }
-
-    void setSharedActiveCvSnapshot({ snapshot: null })
-      .then(() => {
-        lastSharedSnapshotSyncStateRef.current = "none";
-      })
-      .catch((err) => {
-        console.warn(
-          "[ProposalInputForm] Shared active CV snapshot clear failed",
-          err,
-        );
-      });
   }, [
     activeCvSource.title,
     canPersistProposalWorkspaceState,
-    setSharedActiveCvSnapshot,
   ]);
 
   const form = useForm<FormValues>({
@@ -245,9 +543,12 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
       jobTitle: "",
       jobDescription: "",
       proposalType: "cover_letter" as const,
-      voicePreset: DEFAULT_PROPOSAL_VOICE_PRESET,
-      formalityLevel: "neutral",
-      creativity: "medium",
+      voicePreset: undefined,
+      formalityLevel: undefined,
+      creativity: undefined,
+      toneTuning: null,
+      characterLimitMode: DEFAULT_COMPOSE_CHARACTER_LIMIT_MODE,
+      characterLimitValue: DEFAULT_COMPOSE_CHARACTER_LIMIT_VALUE,
       modelType: "chatgpt" as const,
       ...readStoredComposeDraft(),
     },
@@ -266,31 +567,33 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
     const subscription = form.watch((values) => {
       if (typeof window === "undefined") return;
 
+      const normalizedValues = normalizeProposalFormValues(values);
+
       try {
+        const storedDraft: Partial<FormValues> = {
+          jobTitle: normalizedValues.jobTitle,
+          jobDescription: normalizedValues.jobDescription,
+          proposalType: normalizedValues.proposalType,
+        };
+
+        if (normalizedValues.voicePreset) {
+          storedDraft.voicePreset = normalizedValues.voicePreset;
+        }
+
         window.localStorage.setItem(
           PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
-          JSON.stringify({
-            jobTitle: values.jobTitle ?? "",
-            jobDescription: values.jobDescription ?? "",
-            proposalType: values.proposalType ?? "cover_letter",
-            voicePreset: values.voicePreset ?? DEFAULT_PROPOSAL_VOICE_PRESET,
-          } satisfies Partial<FormValues>),
+          JSON.stringify(storedDraft),
         );
+        window.dispatchEvent(new Event(PROPOSAL_COMPOSE_DRAFT_UPDATED_EVENT));
       } catch {
         // Ignore storage failures and keep the in-memory compose draft.
       }
+
+      onValuesChange?.(normalizedValues);
     });
 
     return () => subscription.unsubscribe();
-  }, [form]);
-  const supportedVoicePresetIds = React.useMemo(
-    () =>
-      getSupportedProposalVoicePresetIds({
-        proposalType: selectedProposalType,
-        modelType: selectedModelType,
-      }),
-    [selectedModelType, selectedProposalType],
-  );
+  }, [form, onValuesChange]);
   const isPresetSupportedForSelectedMode = React.useCallback(
     (preset: ProposalVoicePreset) =>
       isProposalVoicePresetSupportedForMode({
@@ -300,18 +603,20 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
       }),
     [selectedModelType, selectedProposalType],
   );
-  const displayedVoicePreset = !isPresetSupportedForSelectedMode(
-    selectedVoicePreset,
-  )
-    ? DEFAULT_PROPOSAL_VOICE_PRESET
-    : selectedVoicePreset;
-  const availableVoicePresets = React.useMemo(
-    () =>
-      PROPOSAL_VOICE_PRESET_DEFINITIONS.filter((preset) =>
-        supportedVoicePresetIds.includes(preset.id),
-      ),
-    [supportedVoicePresetIds],
+  const savedVoicePreset = resolveVisibleVoicePreset(
+    currentProposalSettings?.savedVoicePreset,
   );
+  const selectedVisibleVoicePreset =
+    selectedVoicePreset &&
+    isPresetSupportedForSelectedMode(selectedVoicePreset) &&
+    VISIBLE_TONE_OPTION_IDS.has(selectedVoicePreset)
+      ? selectedVoicePreset
+      : undefined;
+  const displayedVoicePreset =
+    selectedVisibleVoicePreset ??
+    (savedVoicePreset && isPresetSupportedForSelectedMode(savedVoicePreset)
+      ? savedVoicePreset
+      : DEFAULT_PROPOSAL_VOICE_PRESET);
   const selectedVoicePresetDefinition = React.useMemo(
     () => getProposalVoicePresetDefinition(displayedVoicePreset),
     [displayedVoicePreset],
@@ -331,21 +636,28 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
     [cvOptions, pendingCvId],
   );
 
-  const applyVoicePresetDefaults = React.useCallback(
+  const applyVoicePresetSelection = React.useCallback(
     (
-      preset: ProposalVoicePreset,
+      preset: ProposalVoicePreset | null,
       options?: {
         shouldDirty?: boolean;
         shouldTouch?: boolean;
       },
     ) => {
-      const presetDefinition = getProposalVoicePresetDefinition(preset);
       const fieldOptions = {
         shouldDirty: options?.shouldDirty ?? true,
         shouldTouch: options?.shouldTouch ?? false,
         shouldValidate: true,
       };
 
+      if (!preset) {
+        form.setValue("voicePreset", undefined, fieldOptions);
+        form.setValue("formalityLevel", undefined, fieldOptions);
+        form.setValue("creativity", undefined, fieldOptions);
+        return;
+      }
+
+      const presetDefinition = getProposalVoicePresetDefinition(preset);
       form.setValue("voicePreset", preset, fieldOptions);
       form.setValue(
         "formalityLevel",
@@ -358,7 +670,6 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   );
 
   React.useEffect(() => {
-    const savedVoicePreset = currentProposalSettings?.voicePreset;
     if (!savedVoicePreset || appliedSavedVoicePresetRef.current) return;
 
     const hasTouchedToneControls =
@@ -368,30 +679,34 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
 
     if (hasTouchedToneControls) return;
 
-    applyVoicePresetDefaults(savedVoicePreset, {
+    applyVoicePresetSelection(savedVoicePreset, {
       shouldDirty: false,
       shouldTouch: false,
     });
     appliedSavedVoicePresetRef.current = true;
   }, [
-    applyVoicePresetDefaults,
-    currentProposalSettings?.voicePreset,
+    applyVoicePresetSelection,
     form.formState.dirtyFields.creativity,
     form.formState.dirtyFields.formalityLevel,
     form.formState.dirtyFields.voicePreset,
+    savedVoicePreset,
   ]);
 
   React.useEffect(() => {
+    if (!selectedVoicePreset) {
+      return;
+    }
+
     if (isPresetSupportedForSelectedMode(selectedVoicePreset)) {
       return;
     }
 
-    applyVoicePresetDefaults(DEFAULT_PROPOSAL_VOICE_PRESET, {
+    applyVoicePresetSelection(DEFAULT_PROPOSAL_VOICE_PRESET, {
       shouldDirty: false,
       shouldTouch: false,
     });
   }, [
-    applyVoicePresetDefaults,
+    applyVoicePresetSelection,
     isPresetSupportedForSelectedMode,
     selectedVoicePreset,
   ]);
@@ -454,15 +769,15 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
     };
   }, [form, prefill]);
 
-  function handleVoicePresetChange(preset: ProposalVoicePreset) {
-    const currentFormPreset = form.getValues("voicePreset");
+  function handleVoicePresetChange(preset: ProposalVoicePreset | null) {
+    const currentFormPreset = form.getValues("voicePreset") ?? null;
     appliedSavedVoicePresetRef.current = true;
 
     if (preset !== currentFormPreset) {
-      applyVoicePresetDefaults(preset);
+      applyVoicePresetSelection(preset);
     }
 
-    if (currentProposalSettings?.voicePreset === preset) {
+    if ((currentProposalSettings?.savedVoicePreset ?? null) === preset) {
       return;
     }
 
@@ -495,6 +810,12 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
       return;
     }
 
+    const runId = activeGenerateRunIdRef.current + 1;
+    const clientRunId = crypto.randomUUID();
+    activeGenerateRunIdRef.current = runId;
+    activeGenerationClientRunIdRef.current = clientRunId;
+    stopRequestedRunIdRef.current = null;
+
     const currentActiveCvSource = getActiveLocalPersonalizationSource();
     const hasCandidateContext = Boolean(
       currentActiveCvSource.personalizationContext,
@@ -523,21 +844,55 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
       });
     }
 
-    try {
-      setIsGenerating(true);
-      setErrorMessage(null);
-      onStart?.(values);
+    const normalizedValues = normalizeProposalFormValues(values);
 
-      const payload: GenerateProposalPayload = {
-        ...values,
-        ...buildAppProposalPersonalizationPayload(currentActiveCvSource),
+    try {
+      shouldNotifySubmitAnimationCompleteRef.current = false;
+      setIsGenerating(true);
+      setIsStopRequested(false);
+      startGenerateButtonSequence();
+      setErrorMessage(null);
+      onStart?.(normalizedValues);
+
+      const payload = {
+        ...buildProposalGenerationRequest(
+          normalizedValues,
+          buildAppProposalPersonalizationPayload(currentActiveCvSource),
+        ),
+        clientRunId,
       };
 
-      const result = await (
-        generateProposalAction as unknown as (
-          input: GenerateProposalPayload,
-        ) => Promise<GenerateProposalResult | null>
-      )(payload);
+      const runGenerateProposal = generateProposalAction as unknown as (
+        input: GenerateProposalPayload,
+      ) => Promise<GenerateProposalResult | null>;
+
+      let result: GenerateProposalResult | null;
+
+      try {
+        result = await runGenerateProposal(payload);
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        const validatorRejectedClientRunId =
+          errorMessage.includes("ArgumentValidationError") &&
+          errorMessage.includes("extra field `clientRunId`");
+
+        if (!validatorRejectedClientRunId) {
+          throw error;
+        }
+
+        console.warn(
+          "[ProposalInputForm] generateProposal rejected clientRunId, retrying without cancellation metadata",
+        );
+        if (activeGenerationClientRunIdRef.current === clientRunId) {
+          activeGenerationClientRunIdRef.current = null;
+        }
+        const { clientRunId: _clientRunId, ...legacyPayload } = payload;
+        result = await runGenerateProposal(legacyPayload);
+      }
+      if (stopRequestedRunIdRef.current === runId) {
+        return;
+      }
       if (result) {
         // The generation action already stores the proposal. Mark that row as a
         // draft instead of inserting a second saved-history entry from the client.
@@ -555,7 +910,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
         }
 
         onSubmit(
-          values,
+          normalizedValues,
           result.proposalContent,
           {
             requestedModelType: result.requestedModelType,
@@ -564,13 +919,17 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
           },
           result.proposalId,
         );
+        shouldNotifySubmitAnimationCompleteRef.current = true;
       } else {
         const nextErrorMessage = "No proposal returned from the server.";
         setErrorMessage(nextErrorMessage);
-        onError?.(nextErrorMessage, values);
+        onError?.(nextErrorMessage, normalizedValues);
       }
     } catch (error: unknown) {
       console.error("Error generating proposal:", error);
+      if (stopRequestedRunIdRef.current === runId) {
+        return;
+      }
       const nextErrorMessage = getProposalGenerationUiErrorMessage({
         error,
         proposalType: values.proposalType,
@@ -578,8 +937,27 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
       });
       const rawReason = error instanceof Error ? error.message : null;
       setErrorMessage(nextErrorMessage);
-      onError?.(nextErrorMessage, values, rawReason);
+      onError?.(nextErrorMessage, normalizedValues, rawReason);
+      shouldNotifySubmitAnimationCompleteRef.current = false;
     } finally {
+      const stoppedRunId = stopRequestedRunIdRef.current;
+      if (stoppedRunId !== runId) {
+        if (shouldNotifySubmitAnimationCompleteRef.current) {
+          requestGenerateButtonReverseSequence();
+        } else {
+          requestGenerateButtonReverseSequence();
+        }
+      }
+      if (activeGenerateRunIdRef.current === runId) {
+        activeGenerateRunIdRef.current = 0;
+      }
+      if (activeGenerationClientRunIdRef.current === clientRunId) {
+        activeGenerationClientRunIdRef.current = null;
+      }
+      if (stoppedRunId === runId) {
+        stopRequestedRunIdRef.current = null;
+      }
+      setIsStopRequested(false);
       setIsGenerating(false);
     }
   }
@@ -589,11 +967,19 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
     setActiveCvSource(getActiveLocalPersonalizationSource());
     setCvOptions(nextOptions);
     setPendingCvId(nextOptions.find((option) => option.isActive)?.id ?? null);
-    setIsCvPickerOpen(true);
+    setCvPickerOpen(true);
   }
 
+  React.useEffect(() => {
+    if (cvPickerRequestKey <= 0) {
+      return;
+    }
+
+    handleOpenCvPicker();
+  }, [cvPickerRequestKey]);
+
   function handleCloseCvPicker() {
-    setIsCvPickerOpen(false);
+    setCvPickerOpen(false);
     setPendingCvId(null);
   }
 
@@ -626,20 +1012,23 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
     setActiveLocalCvId(id);
     refreshActiveCvState();
     setPendingCvId(id);
-    setIsCvPickerOpen(false);
+    setCvPickerOpen(false);
     syncSelectedCvToSharedActiveSnapshot(id);
+    onActiveCvChange?.(id);
   }
 
   function handleClearCv() {
     clearActiveLocalCvId();
-    setIsCvPickerOpen(false);
+    setCvPickerOpen(false);
     setPendingCvId(null);
     setActiveCvSource({ title: null, personalizationContext: null });
     setCvOptions(listLocalCvPickerOptions());
     lastSharedSnapshotSyncStateRef.current = "none";
     if (!canPersistProposalWorkspaceState) {
+      onActiveCvChange?.(null);
       return;
     }
+    onActiveCvChange?.(null);
     void setSharedActiveCvSnapshot({ snapshot: null }).catch((err) => {
       console.warn(
         "[ProposalInputForm] Shared active CV snapshot clear failed",
@@ -650,12 +1039,19 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
 
   function handleOpenCvInForge(id: string) {
     setActiveLocalCvId(id);
+    loadCv(id);
     refreshActiveCvState();
     setPendingCvId(id);
-    setIsCvPickerOpen(false);
+    setCvPickerOpen(false);
     syncSelectedCvToSharedActiveSnapshot(id);
-    window.history.pushState({}, "", `/cv?id=${encodeURIComponent(id)}`);
-    window.dispatchEvent(new PopStateEvent("popstate"));
+    onActiveCvChange?.(id);
+    if (typeof window !== "undefined") {
+      window.requestAnimationFrame(() => {
+        void navigate(`/cv?id=${encodeURIComponent(id)}`);
+      });
+      return;
+    }
+    void navigate(`/cv?id=${encodeURIComponent(id)}`);
   }
 
   function handleConfirmPendingCv() {
@@ -698,9 +1094,22 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
 
   const typeLabel =
     selectedProposalType === "cover_letter" ? "Letter" : "Proposal";
-  const toneUiLabel =
-    TONE_OPTIONS.find((t) => t.id === displayedVoicePreset)?.uiLabel ??
-    selectedVoicePresetDefinition.label;
+  const toneUiLabel = selectedVisibleVoicePreset
+    ? TONE_OPTIONS.find((t) => t.id === selectedVisibleVoicePreset)?.uiLabel ??
+      selectedVoicePresetDefinition.label
+    : AUTO_TONE_OPTION.uiLabel;
+  const canStopGeneration =
+    isGenerating && !isStopRequested && generateButtonState === "loading-stop";
+  const generateButtonLabel = canStopGeneration
+    ? "Stop generating"
+    : isStopRequested
+      ? "Stopping"
+      : isGenerating
+        ? "Generating"
+        : "Generate";
+  const generateButtonVisualClass =
+    getProposalGenerateButtonVisualClass(generateButtonState);
+  const canSubmitGeneration = !isGenerating && generateButtonState === "idle";
   const proposalDocumentTypography = React.useMemo(
     () => getProposalDocumentTypography(displayedVoicePreset),
     [displayedVoicePreset],
@@ -708,10 +1117,41 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   const { ref: jobDescriptionFieldRef, ...jobDescriptionFieldProps } =
     form.register("jobDescription");
 
+  const handleGenerateButtonClick = React.useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      if (!isGenerating || !canStopGeneration) {
+        return;
+      }
+
+      event.preventDefault();
+      stopRequestedRunIdRef.current = activeGenerateRunIdRef.current;
+      setIsStopRequested(true);
+      setIsGenerating(false);
+      const clientRunId = activeGenerationClientRunIdRef.current;
+      if (clientRunId) {
+        void requestProposalGenerationCancel({ clientRunId }).catch((error) => {
+          console.warn(
+            "[ProposalInputForm] Failed to request proposal cancellation",
+            error,
+          );
+        });
+      }
+      onStop?.();
+      requestGenerateButtonReverseSequence();
+    },
+    [
+      canStopGeneration,
+      isGenerating,
+      onStop,
+      requestProposalGenerationCancel,
+      requestGenerateButtonReverseSequence,
+    ],
+  );
+
   return (
     <div className={styles.container}>
       <Dialog
-        open={isCvPickerOpen}
+        open={resolvedCvPickerOpen}
         onClose={handleCloseCvPicker}
         title="Choose resume"
       >
@@ -774,7 +1214,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                         }) || "Draft resume"}
                       </div>
 
-                      <div className="dasti-doc-card__footer dasti-doc-card__footer--chooser">
+                      <div className="dasti-doc-card__footer dasti-doc-card__footer--chooser dasti-doc-card__footer--stamp-only">
                         <div className="dasti-doc-card__stamp">
                           {chooserDate ?? ""}
                         </div>
@@ -795,6 +1235,16 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
               } as React.CSSProperties
             }
           >
+            {activeCvSource.title ? (
+              <button
+                type="button"
+                className="dasti-button dasti-button--secondary dasti-button--sm"
+                onClick={handleClearCv}
+              >
+                <X size={14} strokeWidth={1.8} aria-hidden />
+                <span>Remove</span>
+              </button>
+            ) : null}
             <button
               type="button"
               className="dasti-button dasti-button--secondary dasti-button--sm"
@@ -835,21 +1285,49 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
             >
               <div className="dasti-proposal-sheet dasti-proposal-sheet--composer">
                 <div className="dasti-proposal-sheet__header dasti-proposal-sheet__header--composer">
-                  <div
-                    className="dasti-proposal-sheet__heading"
-                    style={{ width: "100%" }}
-                  >
-                    <input
-                      type="text"
-                      id="jobTitle"
-                      {...form.register("jobTitle")}
-                      className={clsx(
-                        styles.jobTitleField,
-                        "dasti-proposal-title-input",
-                      )}
-                      placeholder="Enter Job Title"
-                      autoComplete="off"
-                    />
+                  <div className="dasti-proposal-sheet__heading dasti-proposal-sheet__heading--full">
+                    {hasHeaderLabel ||
+                    (hasHeaderAction && !headerActionOnly) ? (
+                      <div className="dasti-proposal-compose-shell__header-row">
+                        {hasHeaderLabel ? (
+                          <p className="dasti-proposal-compose-shell__status-heading">
+                            {headerLabel}
+                          </p>
+                        ) : (
+                          <span />
+                        )}
+                        {headerAction}
+                      </div>
+                    ) : null}
+                    {headerActionOnly ? (
+                      <div className="dasti-proposal-compose-shell__header-row dasti-proposal-compose-shell__header-row--title">
+                        <input
+                          type="text"
+                          id="jobTitle"
+                          {...form.register("jobTitle")}
+                          className={clsx(
+                            styles.jobTitleField,
+                            "dasti-proposal-title-input",
+                            "dasti-proposal-title-input--with-header-action",
+                          )}
+                          placeholder="Enter Job Title"
+                          autoComplete="off"
+                        />
+                        {headerAction}
+                      </div>
+                    ) : (
+                      <input
+                        type="text"
+                        id="jobTitle"
+                        {...form.register("jobTitle")}
+                        className={clsx(
+                          styles.jobTitleField,
+                          "dasti-proposal-title-input",
+                        )}
+                        placeholder="Enter Job Title"
+                        autoComplete="off"
+                      />
+                    )}
                   </div>
                 </div>
                 <div
@@ -882,67 +1360,77 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                       height: "100%",
                       resize: "none",
                       overflowY: "auto",
+                      caretColor: "var(--ti)",
                     }}
-                    placeholder="Paste the job description here…"
+                    placeholder={jobDescriptionPlaceholder}
                   />
                 </div>
                 {/* .cbar */}
                 <div className="dasti-proposal-toolbar dasti-proposal-toolbar--inside">
-                  <div
-                    className={
-                      activeCvTitle
-                        ? "dasti-proposal-chip-shell dasti-proposal-chip-shell--clearable"
-                        : "dasti-proposal-chip-shell"
-                    }
-                  >
-                    <button
-                      type="button"
-                      onClick={handleOpenCvPicker}
+                  {!suppressCvPicker ? (
+                    <div
                       className={
                         activeCvTitle
-                          ? "dasti-proposal-chip dasti-proposal-chip--resume dasti-proposal-chip--active"
-                          : "dasti-proposal-chip dasti-proposal-chip--resume dasti-proposal-chip--resume-empty"
-                      }
-                      aria-label="Choose resume"
-                      title={
-                        activeCvTitle ?? "Pick a resume for personalization"
+                          ? "dasti-proposal-chip-shell dasti-proposal-chip-shell--clearable"
+                          : "dasti-proposal-chip-shell"
                       }
                     >
-                      <span className="dasti-proposal-chip__icon-wrap">
-                        {activeCvTitle ? (
-                          <Paperclip size={15} strokeWidth={1.5} aria-hidden />
-                        ) : (
-                          <FolderTree size={15} strokeWidth={1.5} aria-hidden />
-                        )}
-                      </span>
-                      <span className="dasti-proposal-chip__label dasti-proposal-chip__label--resume">
-                        {formatToolbarResumeLabel(activeCvTitle)}
-                      </span>
-                    </button>
-                    {activeCvTitle ? (
                       <button
                         type="button"
-                        className="dasti-proposal-chip__clear"
-                        aria-label="Remove resume"
-                        title="Remove resume"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          handleClearCv();
-                        }}
+                        onClick={handleOpenCvPicker}
+                        className={
+                          activeCvTitle
+                            ? "dasti-proposal-chip dasti-proposal-chip--resume dasti-proposal-chip--active dasti-toolbar-tooltip-trigger--above"
+                            : "dasti-proposal-chip dasti-proposal-chip--resume dasti-proposal-chip--resume-empty dasti-toolbar-tooltip-trigger--above"
+                        }
+                        aria-label="Choose resume"
+                        data-toolbar-tooltip="Resume"
                       >
-                        <X size={13} strokeWidth={1.9} aria-hidden />
+                        <span className="dasti-proposal-chip__icon-wrap">
+                          {activeCvTitle ? (
+                            <Paperclip
+                              size={15}
+                              strokeWidth={1.5}
+                              aria-hidden
+                            />
+                          ) : (
+                            <FolderTree
+                              size={15}
+                              strokeWidth={1.5}
+                              aria-hidden
+                            />
+                          )}
+                        </span>
+                        <span className="dasti-proposal-chip__label dasti-proposal-chip__label--resume">
+                          {formatToolbarResumeLabel(activeCvTitle)}
+                        </span>
                       </button>
-                    ) : null}
-                  </div>
+                      {activeCvTitle ? (
+                        <button
+                          type="button"
+                          className="dasti-proposal-chip__clear dasti-toolbar-tooltip-trigger--above"
+                          aria-label="Remove resume"
+                          data-toolbar-tooltip="Remove"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleClearCv();
+                          }}
+                        >
+                          <X size={13} strokeWidth={1.9} aria-hidden />
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
                   <button
                     ref={typeChipRef}
                     type="button"
-                    title="Document type"
+                    aria-label="Document type"
+                    data-toolbar-tooltip="Type"
                     onClick={(e) => {
                       e.stopPropagation();
                       toggleMenu("type");
                     }}
-                    className="dasti-proposal-chip"
+                    className="dasti-proposal-chip dasti-toolbar-tooltip-trigger--above"
                   >
                     <span className="dasti-proposal-chip__label">
                       {typeLabel}
@@ -953,70 +1441,81 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                       aria-hidden="true"
                     />
                   </button>
+                  {!suppressToneControls && (
+                    <button
+                      ref={toneChipRef}
+                      type="button"
+                      aria-label="Tone"
+                      data-toolbar-tooltip="Tone"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleMenu("tone");
+                      }}
+                      className={
+                        selectedVisibleVoicePreset
+                          ? "dasti-proposal-chip dasti-proposal-chip--active dasti-toolbar-tooltip-trigger--above"
+                          : "dasti-proposal-chip dasti-toolbar-tooltip-trigger--above"
+                      }
+                    >
+                      <span className="dasti-proposal-chip__label">
+                        {toneUiLabel}
+                      </span>
+                      <ChevronDown
+                        size={12}
+                        strokeWidth={1.5}
+                        aria-hidden="true"
+                      />
+                    </button>
+                  )}
                   <button
-                    ref={toneChipRef}
-                    type="button"
-                    title="Tone"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleMenu("tone");
-                    }}
-                    className="dasti-proposal-chip"
-                  >
-                    <span className="dasti-proposal-chip__label">
-                      {toneUiLabel}
-                    </span>
-                    <ChevronDown
-                      size={12}
-                      strokeWidth={1.5}
-                      aria-hidden="true"
-                    />
-                  </button>
-                  <button
-                    type="submit"
-                    className={
-                      isGenerating
-                        ? "dasti-proposal-submit dasti-proposal-submit--busy"
-                        : "dasti-proposal-submit"
-                    }
+                    type={canSubmitGeneration ? "submit" : "button"}
+                    className={clsx(
+                      "dasti-proposal-submit",
+                      "dasti-proposal-submit-token",
+                      "dasti-proposal-submit--pop",
+                      "dasti-toolbar-tooltip-trigger--above",
+                      generateButtonVisualClass,
+                      isGenerating && "dasti-proposal-submit--busy",
+                      canStopGeneration && "dasti-proposal-submit--stop-ready",
+                      isStopRequested && "dasti-proposal-submit--stopping",
+                    )}
                     aria-busy={isGenerating}
                     disabled={
-                      !isGenerating && watchedJobDescription.length < 10
+                      watchedJobDescription.length < 10 ||
+                      (isGenerating && !canStopGeneration)
                     }
-                    title={
-                      isGenerating
-                        ? "Generating…"
-                        : watchedJobDescription.length < 10
-                          ? "Minimum 10 characters required"
-                          : "Generate"
-                    }
+                    aria-label={generateButtonLabel}
+                    data-toolbar-tooltip={generateButtonLabel}
+                    onClick={handleGenerateButtonClick}
                     style={{
+                      ["--dasti-proposal-submit-button-size" as string]: "52px",
+                      ["--dasti-proposal-submit-radius" as string]: "16px",
+                      ["--dasti-proposal-submit-icon-size" as string]: "28px",
+                      ["--dasti-proposal-submit-stroke-width" as string]: "2",
+                      ["--dasti-proposal-submit-phase-gap" as string]: "140ms",
+                      ["--dasti-proposal-submit-spinner-duration" as string]:
+                        "1450ms",
+                      ["--dasti-proposal-submit-draw-duration" as string]:
+                        "1080ms",
                       cursor:
-                        !isGenerating && watchedJobDescription.length < 10
+                        watchedJobDescription.length < 10 ||
+                        (isGenerating && !canStopGeneration)
                           ? "not-allowed"
                           : "pointer",
                       transition:
                         "background .15s var(--ez), border-color .15s var(--ez), opacity .15s var(--ez), color .15s var(--ez)",
                       opacity:
-                        !isGenerating && watchedJobDescription.length < 10
+                        watchedJobDescription.length < 10
                           ? 0.4
-                          : 1,
+                          : isGenerating && !canStopGeneration
+                            ? 0.84
+                            : 1,
                     }}
                   >
-                    {isGenerating ? (
-                      <Square
-                        size="1em"
-                        weight="fill"
-                        strokeWidth={1.8}
-                        className="dasti-proposal-submit__icon"
-                      />
-                    ) : (
-                      <Lightning
-                        size="1em"
-                        strokeWidth={1.8}
-                        className="dasti-proposal-submit__icon"
-                      />
-                    )}
+                    <ProposalGenerateButtonGlyph state={generateButtonState} />
+                    <span className="sr-only" aria-live="polite" role="status">
+                      {generateButtonLabel}
+                    </span>
                   </button>
                 </div>
               </div>
@@ -1122,26 +1621,51 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                   ))}
               </>
             )}
-            {openMenu === "tone" &&
-              TONE_OPTIONS.filter((opt) => opt.id !== displayedVoicePreset).map(
-                (opt) => (
-                  <div
-                    key={opt.id}
-                    onClick={() => {
-                      handleVoicePresetChange(opt.id);
-                      setOpenMenu(null);
-                    }}
-                    className="dasti-menu-option"
-                  >
-                    <div className="dasti-menu-option__title">
-                      {opt.uiLabel}
-                    </div>
-                    <div className="dasti-menu-option__description">
-                      {opt.description}
-                    </div>
-                  </div>
-                ),
-              )}
+            {!suppressToneControls && openMenu === "tone" ? (
+              <div style={{ display: "grid", gap: "var(--s1)" }}>
+                {[AUTO_TONE_OPTION, ...TONE_OPTIONS].map((opt) => {
+                  const isSelected =
+                    opt.id === null
+                      ? !selectedVisibleVoicePreset
+                      : selectedVisibleVoicePreset === opt.id;
+
+                  return (
+                    <button
+                      key={opt.id ?? "auto"}
+                      type="button"
+                      onClick={() => {
+                        handleVoicePresetChange(opt.id);
+                        setOpenMenu(null);
+                      }}
+                      className={clsx(
+                        "dasti-menu-option dasti-menu-option--tone",
+                        isSelected && "dasti-menu-option--selected",
+                      )}
+                      aria-pressed={isSelected}
+                    >
+                      <div className="dasti-menu-option__row dasti-menu-option__row--between">
+                        <div className="dasti-menu-option__copy">
+                          <div className="dasti-menu-option__title">
+                            {opt.uiLabel}
+                          </div>
+                          <div className="dasti-menu-option__description">
+                            {opt.description}
+                          </div>
+                        </div>
+                        {isSelected ? (
+                          <span
+                            className="dasti-menu-option__check"
+                            aria-hidden
+                          >
+                            <Check size={15} strokeWidth={1.8} />
+                          </span>
+                        ) : null}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
           </div>,
           document.body,
         )}

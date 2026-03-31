@@ -10,6 +10,7 @@ import { CvsLibrary } from "./pages/CvsLibrary";
 import { ProposalForge } from "./pages/ProposalForge";
 import { ProposalsLibrary } from "./pages/ProposalsLibrary";
 import { StyleForge } from "./pages/StyleForge";
+import { SettingsPage } from "./pages/SettingsPage";
 import { Sidebar } from "./components/Sidebar";
 import { CvLibraryProvider } from "./contexts/CvLibraryContext";
 
@@ -109,8 +110,10 @@ function AppShell(): JSX.Element {
               <Route path="/cv" element={<CvForge />} />
               <Route path="/cvs" element={<CvsLibrary />} />
               <Route path="/proposal" element={<ProposalForge />} />
+              <Route path="/proposal-next" element={<Navigate to="/proposal" replace />} />
               <Route path="/proposals" element={<ProposalsLibrary />} />
               <Route path="/style" element={<StyleForge />} />
+              <Route path="/settings" element={<SettingsPage />} />
               <Route path="/" element={<Navigate to="/cv" replace />} />
               <Route path="*" element={<Navigate to="/cv" replace />} />
             </Routes>
