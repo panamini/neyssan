@@ -3,8 +3,14 @@ import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useConvexAuth } from "convex/react";
 import { useAuth } from "@clerk/clerk-react";
 import { api } from "../../convex/_generated/api";
+import type { Id } from "../../convex/_generated/dataModel";
 import { FileText, Plus, X, Check } from "@/lib/icons";
 import { formatUiDate } from "../lib/ui-date";
+import {
+  createProposalWorkspaceResetState,
+  startFreshProposalWorkspace,
+} from "../lib/proposal-workspace-state";
+import { getVoicePresetDisplayLabel } from "../lib/proposal-voice-label";
 
 function typeLabel(type?: string): string {
   if (type === "cover_letter") return "Letter";
@@ -14,9 +20,15 @@ function typeLabel(type?: string): string {
 }
 
 function toneLabel(voicePreset?: string): string {
-  if (voicePreset === "expert") return "Formal";
-  if (voicePreset === "engaging") return "Warm";
-  return "Balanced";
+  return getVoicePresetDisplayLabel(
+    voicePreset === "signature" ||
+      voicePreset === "expert" ||
+      voicePreset === "engaging" ||
+      voicePreset === "direct" ||
+      voicePreset === "storyteller"
+      ? voicePreset
+      : undefined,
+  );
 }
 
 function shouldPreserveLeadBreak(line: string): boolean {
@@ -65,22 +77,28 @@ export function ProposalsLibrary(): JSX.Element {
     isLoading: isConvexAuthLoading,
   } = useConvexAuth();
   const proposals = useQuery(
-    api.proposalsPublic.default as any,
+    api.proposalsPublic.default,
     isLoaded && isSignedIn && isConvexAuthenticated ? {} : "skip",
   );
-  const deleteProposal = useMutation(
-    (api as any).deleteProposalPublic?.default,
-  );
-  const [confirmingId, setConfirmingId] = React.useState<string | null>(null);
+  const deleteProposal = useMutation(api.deleteProposalPublic.default);
+  const [confirmingId, setConfirmingId] =
+    React.useState<Id<"proposals"> | null>(null);
+
+  const handleCreateProposal = React.useCallback(() => {
+    startFreshProposalWorkspace();
+    void navigate("/proposal", {
+      state: createProposalWorkspaceResetState(),
+    });
+  }, [navigate]);
 
   const sorted = React.useMemo(() => {
     if (!proposals) return [];
-    return [...proposals].sort(
-      (a: any, b: any) => b._creationTime - a._creationTime,
-    );
+    return [...proposals]
+      .filter((proposal) => proposal.status === "saved")
+      .sort((a, b) => b._creationTime - a._creationTime);
   }, [proposals]);
 
-  async function handleDelete(id: string) {
+  async function handleDelete(id: Id<"proposals">) {
     if (!isConvexAuthenticated || isConvexAuthLoading) {
       setConfirmingId(null);
       return;
@@ -118,7 +136,7 @@ export function ProposalsLibrary(): JSX.Element {
           </div>
           <div className="dasti-page-actions">
             <button
-              onClick={() => void navigate("/proposal")}
+              onClick={handleCreateProposal}
               className="dasti-icon-button dasti-library-create-button"
               aria-label="Create new proposal"
               title="Create new proposal"
@@ -145,7 +163,7 @@ export function ProposalsLibrary(): JSX.Element {
               readable excerpt.
             </p>
             <button
-              onClick={() => void navigate("/proposal")}
+              onClick={handleCreateProposal}
               className="dasti-button dasti-button--primary dasti-button--pill"
             >
               <Plus size={14} />
@@ -156,7 +174,7 @@ export function ProposalsLibrary(): JSX.Element {
 
         {!authStatusMessage && sorted.length > 0 && (
           <div className="dasti-grid-auto">
-            {sorted.map((p: any) => {
+            {sorted.map((p) => {
               const date = formatUiDate(p._creationTime) ?? "";
               const label = typeLabel(p.metadata?.proposalType);
               const tone = toneLabel(p.metadata?.voicePreset);
@@ -172,13 +190,13 @@ export function ProposalsLibrary(): JSX.Element {
                     if (isConfirming) setConfirmingId(null);
                   }}
                 >
-                  {/* Main card button */}
                   <button
-                    onClick={() =>
-                      void navigate(
-                        `/proposal?view=saved&id=${encodeURIComponent(p._id)}`,
-                      )
-                    }
+                    onClick={() => {
+                      const params = new URLSearchParams();
+                      params.set("view", "saved");
+                      params.set("id", String(p._id));
+                      void navigate(`/proposal?${params.toString()}`);
+                    }}
                     className="dasti-doc-card dasti-doc-card--library dasti-doc-card--proposal-library"
                     style={{ paddingRight: "var(--s6)" }}
                   >
@@ -251,17 +269,22 @@ export function ProposalsLibrary(): JSX.Element {
                       </button>
                     </div>
                   ) : (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setConfirmingId(p._id);
-                      }}
-                      className="dasti-card-delete-button"
-                      title="Delete"
-                      aria-label="Delete"
+                    <div
+                      className="dasti-library-card-actions"
+                      onClick={(event) => event.stopPropagation()}
                     >
-                      <X size={13} />
-                    </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setConfirmingId(p._id);
+                        }}
+                        className="dasti-card-delete-button"
+                        title="Delete"
+                        aria-label="Delete"
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
                   )}
                 </div>
               );

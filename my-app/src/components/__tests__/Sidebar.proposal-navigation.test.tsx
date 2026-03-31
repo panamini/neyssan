@@ -11,6 +11,16 @@ import {
   PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
   readStoredProposalComposeDraft,
 } from "../../lib/proposal-workspace-state";
+import { PROPOSAL_ATTACHED_CV_STORAGE_KEY } from "../../lib/proposal-personalization";
+
+const mockCvLibraryState = {
+  cvs: [] as Array<{ id: string; title: string; sections: unknown[] }>,
+  currentCv: null as { id: string; title: string; sections: unknown[] } | null,
+  currentCvId: null as string | null,
+  loadCv: vi.fn(),
+  createNewCv: vi.fn(),
+  deleteCv: vi.fn(),
+};
 
 vi.mock("convex/react", () => ({
   useConvexAuth: () => ({
@@ -19,10 +29,25 @@ vi.mock("convex/react", () => ({
   }),
   useQuery: (reference: string) => {
     if (reference === "proposalsPublic.default") {
-      return [];
+      return [
+        {
+          _id: "proposal_draft",
+          _creationTime: 1711000000000,
+          title: "Server draft proposal",
+          updatedAt: 1711000000000,
+          status: "draft",
+        },
+        {
+          _id: "proposal_saved",
+          _creationTime: 1710000000000,
+          title: "Saved proposal beta",
+          updatedAt: 1710000000000,
+          status: "saved",
+        },
+      ];
     }
     if (reference === "proposalsCountPublic.default") {
-      return 0;
+      return 1;
     }
     return null;
   },
@@ -52,13 +77,7 @@ vi.mock("@clerk/clerk-react", () => ({
 }));
 
 vi.mock("../../contexts/CvLibraryContext", () => ({
-  useCvLibrary: () => ({
-    cvs: [],
-    currentCv: null,
-    loadCv: vi.fn(),
-    createNewCv: vi.fn(),
-    deleteCv: vi.fn(),
-  }),
+  useCvLibrary: () => mockCvLibraryState,
 }));
 
 function CvRoute(): JSX.Element {
@@ -136,10 +155,18 @@ describe("Sidebar proposal navigation", () => {
   beforeEach(() => {
     window.localStorage.clear();
     setViewportWidth(1280);
+    mockCvLibraryState.cvs = [];
+    mockCvLibraryState.currentCv = null;
+    mockCvLibraryState.currentCvId = null;
+    mockCvLibraryState.loadCv.mockReset();
+    mockCvLibraryState.createNewCv.mockReset();
+    mockCvLibraryState.deleteCv.mockReset();
   });
 
   it("does not clear stored proposal draft when the collapsed proposals control re-enters the workspace", () => {
     setViewportWidth(640);
+    window.localStorage.setItem("cvActiveId", "cv_beta");
+    window.localStorage.setItem(PROPOSAL_ATTACHED_CV_STORAGE_KEY, "cv_alpha");
 
     render(
       <MemoryRouter initialEntries={["/cv"]}>
@@ -153,7 +180,7 @@ describe("Sidebar proposal navigation", () => {
 
     writeProposalDraftToStorage();
 
-    fireEvent.click(screen.getByRole("button", { name: "Proposals" }));
+    fireEvent.click(screen.getByRole("link", { name: "Proposals" }));
 
     expect(screen.getByTestId("proposal-compose-title")).toHaveTextContent(
       "Operations Associate",
@@ -166,6 +193,10 @@ describe("Sidebar proposal navigation", () => {
     expect(screen.getByTestId("proposal-output-content")).toHaveTextContent(
       "Freshly generated proposal body.",
     );
+    expect(window.localStorage.getItem(PROPOSAL_ATTACHED_CV_STORAGE_KEY)).toBe(
+      "cv_alpha",
+    );
+    expect(window.localStorage.getItem("cvActiveId")).toBe("cv_beta");
   });
 
   it("refreshes proposal workspace draft state when the window regains focus", async () => {
@@ -193,5 +224,65 @@ describe("Sidebar proposal navigation", () => {
         screen.getByText("Operations Associate Proposal"),
       ).toBeInTheDocument();
     });
+  });
+
+  it("keeps the resume workspace item visible from currentCvId while proposal stays active", () => {
+    mockCvLibraryState.cvs = [
+      {
+        id: "cv_alpha",
+        title: "Alex Martin Resume",
+        sections: [],
+      },
+    ];
+    mockCvLibraryState.currentCvId = "cv_alpha";
+    writeProposalDraftToStorage();
+
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <Sidebar />
+        <Routes>
+          <Route path="/cv" element={<CvRoute />} />
+          <Route path="/proposal" element={<ProposalRouteProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("Operations Associate Proposal")).toBeInTheDocument();
+    expect(screen.getByText("Alex Martin Resume")).toBeInTheDocument();
+  });
+
+  it("uses the canonical saved proposal href in the sidebar list", () => {
+    render(
+      <MemoryRouter initialEntries={["/cv"]}>
+        <Sidebar />
+        <Routes>
+          <Route path="/cv" element={<CvRoute />} />
+          <Route path="/proposal" element={<ProposalRouteProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("Saved proposal beta").closest("a")).toHaveAttribute(
+      "href",
+      "/proposal?view=saved&id=proposal_saved",
+    );
+  });
+
+  it("keeps draft proposals out of the saved proposal list", () => {
+    writeProposalDraftToStorage();
+
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <Sidebar />
+        <Routes>
+          <Route path="/cv" element={<CvRoute />} />
+          <Route path="/proposal" element={<ProposalRouteProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("Operations Associate Proposal")).toBeInTheDocument();
+    expect(screen.getByText("Saved proposal beta")).toBeInTheDocument();
+    expect(screen.queryByText("Server draft proposal")).not.toBeInTheDocument();
   });
 });

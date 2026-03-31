@@ -94,6 +94,7 @@ type ProposalRecord = {
   _id: Id<"proposals">;
   _creationTime: number;
   title?: string;
+  status?: string;
   updatedAt?: number;
 };
 
@@ -509,6 +510,13 @@ function refreshProposalWorkspaceDraftState(input: {
   input.setProposalComposeDraft(readStoredProposalComposeDraft());
 }
 
+function buildSavedProposalHref(proposalId: string): string {
+  const params = new URLSearchParams();
+  params.set("view", "saved");
+  params.set("id", proposalId);
+  return `/proposal?${params.toString()}`;
+}
+
 function SidebarRailLink({
   label,
   icon,
@@ -546,7 +554,8 @@ export const Sidebar: React.FC = () => {
     isAuthenticated: isConvexAuthenticated,
     isLoading: isConvexAuthLoading,
   } = useConvexAuth();
-  const { cvs, currentCv, loadCv, createNewCv, deleteCv } = useCvLibrary();
+  const { cvs, currentCv, currentCvId, loadCv, createNewCv, deleteCv } =
+    useCvLibrary();
   const [collapsed, setCollapsed] = React.useState(false);
   const [viewportWidth, setViewportWidth] = React.useState(() =>
     typeof window === "undefined" ? 1440 : window.innerWidth,
@@ -587,9 +596,10 @@ export const Sidebar: React.FC = () => {
   );
 
   const params = React.useMemo(() => new URLSearchParams(search), [search]);
-  const proposalView = params.get("id")
-    ? "saved"
-    : params.get("view");
+  const proposalView =
+    params.get("view") === "saved" || Boolean(params.get("id"))
+      ? "saved"
+      : null;
   const selectedProposalId = params.get("id");
   const selectedResumeId = params.get("id");
 
@@ -833,9 +843,11 @@ export const Sidebar: React.FC = () => {
   const activeResumeKey =
     isResumeRoute && selectedResumeId
       ? String(selectedResumeId)
-      : currentCv
-        ? String(currentCv.id)
-        : null;
+      : currentCvId
+        ? String(currentCvId)
+        : currentCv
+          ? String(currentCv.id)
+          : null;
   const activeResumeTitle = activeResumeKey
     ? resumeTitles.get(activeResumeKey) ?? "Untitled Resume"
     : null;
@@ -866,11 +878,13 @@ export const Sidebar: React.FC = () => {
 
   const sortedProposals = React.useMemo(
     () =>
-      [...(proposals ?? [])].sort((left, right) => {
-        const rightTime = toTimestamp(right.updatedAt ?? right._creationTime);
-        const leftTime = toTimestamp(left.updatedAt ?? left._creationTime);
-        return rightTime - leftTime;
-      }),
+      [...(proposals ?? [])]
+        .filter((proposal) => proposal.status === "saved")
+        .sort((left, right) => {
+          const rightTime = toTimestamp(right.updatedAt ?? right._creationTime);
+          const leftTime = toTimestamp(left.updatedAt ?? left._creationTime);
+          return rightTime - leftTime;
+        }),
     [proposals],
   );
 
@@ -931,9 +945,7 @@ export const Sidebar: React.FC = () => {
         proposalDocs.find((proposal) => proposal.key === selectedProposalId)
           ?.rawTitle,
       ) || "";
-    activeProposalHref = `/proposal?id=${encodeURIComponent(
-      selectedProposalId,
-    )}`;
+    activeProposalHref = buildSavedProposalHref(selectedProposalId);
   }
 
   const proposalDocsForTitles = React.useMemo(() => {
@@ -972,7 +984,7 @@ export const Sidebar: React.FC = () => {
         .map((doc) => ({
           key: doc.key,
           title: proposalTitles.get(doc.key) ?? "Untitled Proposal",
-          href: `/proposal?id=${encodeURIComponent(doc.key)}`,
+          href: buildSavedProposalHref(doc.key),
           onDelete: () => handleDeleteSavedProposal(doc.proposalId),
           isActive: highlightedSavedProposalKey === doc.key,
         })),
@@ -997,12 +1009,18 @@ export const Sidebar: React.FC = () => {
             kind: "Proposal",
             title: activeProposalTitle,
             href: "/proposal",
+            onFollow: handleOpenProposalWorkspace,
             onDelete: () => {
               void handleDeleteProposalWorkspace();
             },
           }
         : null,
-    [activeProposalTitle, handleDeleteProposalWorkspace, hasEditableProposalDraft],
+    [
+      activeProposalTitle,
+      handleDeleteProposalWorkspace,
+      handleOpenProposalWorkspace,
+      hasEditableProposalDraft,
+    ],
   );
   const resumeWorkspaceItem = React.useMemo<SidebarWorkspaceItem | null>(
     () =>

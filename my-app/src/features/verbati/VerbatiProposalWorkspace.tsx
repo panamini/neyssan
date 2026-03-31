@@ -1,6 +1,13 @@
 import React from "react";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
-import { ArrowSquareOut, Check, Pencil, ScrollText, X } from "@/lib/icons";
+import {
+  ArrowSquareOut,
+  Check,
+  Pencil,
+  ScrollText,
+  SquaresFour,
+  X,
+} from "@/lib/icons";
 import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent } from "../../components/ui/dialog";
 import ProposalDisplay from "../../components/ProposalDisplay";
@@ -27,6 +34,7 @@ import {
 } from "../../lib/proposal-output-draft";
 import { resolveProposalRenderState } from "../../lib/proposal-render-state";
 import { formatUiDate } from "../../lib/ui-date";
+import { getVoicePresetDisplayLabel } from "../../lib/proposal-voice-label";
 import type { VerbatiStylePreset } from "./types";
 
 const STYLE_FORGE_PROPOSAL_PREVIEW_ID_STORAGE_KEY =
@@ -36,6 +44,7 @@ const LIVE_PROPOSAL_PREVIEW_ID = "__live__";
 type SavedProposalPreview = {
   _id: string;
   _creationTime: number;
+  status?: string;
   title?: string;
   content?: string;
   sections?: Array<{
@@ -75,27 +84,6 @@ function cardButtonStyle(active: boolean): React.CSSProperties {
     minHeight: 120,
     transition:
       "border-color .14s var(--ez), box-shadow .14s var(--ez), transform .14s var(--ez)",
-  };
-}
-
-function topbarButtonStyle(active: boolean): React.CSSProperties {
-  return {
-    height: "var(--hs)",
-    padding: "0 var(--s3)",
-    borderRadius: "var(--radius-control)",
-    border: active
-      ? "1px solid color-mix(in srgb, var(--color-text) 18%, var(--color-border-strong) 82%)"
-      : "1px solid var(--color-border-strong)",
-    background: active
-      ? "color-mix(in srgb, var(--color-surface-muted) 86%, var(--color-text) 14%)"
-      : "var(--sfr)",
-    color: active ? "var(--color-text)" : "var(--tm2)",
-    fontWeight: 600,
-    fontFamily: "inherit",
-    cursor: "pointer",
-    boxShadow: active
-      ? "inset 0 1px 0 color-mix(in srgb, white 10%, transparent), inset 0 0 0 1px color-mix(in srgb, black 10%, transparent)"
-      : "none",
   };
 }
 
@@ -146,11 +134,15 @@ function formatPreviewMeta(args: {
         ? "Message"
         : "Letter";
   const toneLabel =
-    args.voicePreset === "expert"
-      ? "Formal"
-      : args.voicePreset === "engaging"
-        ? "Warm"
-        : "Balanced";
+    getVoicePresetDisplayLabel(
+      args.voicePreset === "signature" ||
+        args.voicePreset === "expert" ||
+        args.voicePreset === "engaging" ||
+        args.voicePreset === "direct" ||
+        args.voicePreset === "storyteller"
+        ? args.voicePreset
+        : undefined,
+    );
 
   return [typeLabel, toneLabel, formatUiDate(args.createdAt ?? null)]
     .filter(Boolean)
@@ -240,13 +232,20 @@ export function VerbatiProposalWorkspace({
   }, [isNarrow]);
 
   const latestSavedProposal = React.useMemo(
-    () => (savedProposals && savedProposals.length > 0 ? savedProposals[0] : null),
+    () => {
+      const filteredSavedProposals = (savedProposals ?? []).filter(
+        (proposal) => proposal.status === "saved",
+      );
+      return filteredSavedProposals.length > 0 ? filteredSavedProposals[0] : null;
+    },
     [savedProposals],
   );
   const sortedSavedProposals = React.useMemo(
     () =>
       savedProposals
-        ? [...savedProposals].sort((left, right) => right._creationTime - left._creationTime)
+        ? [...savedProposals]
+            .filter((proposal) => proposal.status === "saved")
+            .sort((left, right) => right._creationTime - left._creationTime)
         : [],
     [savedProposals],
   );
@@ -407,7 +406,10 @@ export function VerbatiProposalWorkspace({
 
   const handleOpenSelectedProposal = React.useCallback(() => {
     if (pendingPreviewProposalId) {
-      navigate(`/proposal?view=saved&id=${encodeURIComponent(pendingPreviewProposalId)}`);
+      const params = new URLSearchParams();
+      params.set("view", "saved");
+      params.set("id", pendingPreviewProposalId);
+      navigate(`/proposal?${params.toString()}`);
       setIsProposalPickerOpen(false);
       return;
     }
@@ -770,10 +772,8 @@ export function VerbatiProposalWorkspace({
                     ? "Return to live proposal preview"
                     : "Choose proposal preview"
                 }
-                title={
-                  isLoadedProposalPreview
-                    ? "Return to live proposal preview"
-                    : "Choose proposal preview"
+                data-toolbar-tooltip={
+                  isLoadedProposalPreview ? "Close" : "Preview"
                 }
               >
                 <span
@@ -795,7 +795,8 @@ export function VerbatiProposalWorkspace({
                 type="button"
                 onClick={handleOpenProposalPicker}
                 className="styleforge-active-cv-control__body"
-                title={activeProposalControlLabel ?? "Choose proposal"}
+                aria-label={activeProposalControlLabel ?? "Choose proposal"}
+                data-toolbar-tooltip="Proposal"
               >
                 <span className="dasti-proposal-chip__label dasti-proposal-chip__label--resume">
                   {formatActiveProposalLabel(activeProposalControlLabel)}
@@ -803,13 +804,35 @@ export function VerbatiProposalWorkspace({
               </button>
             </div>
             {isNarrow ? (
-              <button
-                type="button"
-                onClick={() => setShowTemplatePanels((value) => !value)}
-                style={topbarButtonStyle(showTemplatePanels)}
+              <div
+                className="styleforge-preview-toolbar"
+                role="group"
+                aria-label="Proposal preview tools"
               >
-                {showTemplatePanels ? "Hide templates" : "Open templates"}
-              </button>
+                <button
+                  type="button"
+                  className={[
+                    "styleforge-preview-toolbar__button",
+                    showTemplatePanels
+                      ? "styleforge-preview-toolbar__button--active"
+                      : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  onClick={() => setShowTemplatePanels((value) => !value)}
+                  aria-label={
+                    showTemplatePanels
+                      ? "Hide template controls"
+                      : "Show template controls"
+                  }
+                  data-toolbar-tooltip={
+                    showTemplatePanels ? "Hide" : "Templates"
+                  }
+                  aria-pressed={showTemplatePanels}
+                >
+                  <SquaresFour size={16} strokeWidth={1.7} aria-hidden="true" />
+                </button>
+              </div>
             ) : null}
             <button
               type="button"
