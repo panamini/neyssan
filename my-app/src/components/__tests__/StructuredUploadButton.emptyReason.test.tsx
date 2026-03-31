@@ -1,16 +1,18 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, fireEvent, screen, waitFor } from "@testing-library/react";
 import React from "react";
+import userEvent from "@testing-library/user-event";
 import StructuredUploadButton from "../StructuredUploadButton";
 
 const mockAction = vi.fn();
 
-vi.mock("../../convex/_generated/api", () => ({
+vi.mock("../../../convex/_generated/api", () => ({
   api: { actions: { structuredUpload: { structuredUpload: "structuredUploadAction" } } },
 }));
 
 vi.mock("convex/react", () => ({
-  useAction: () => mockAction,
+  useAction: (ref: unknown) =>
+    ref === "structuredUploadAction" ? mockAction : undefined,
 }));
 
 const showToast = vi.fn();
@@ -18,8 +20,8 @@ vi.mock("../ui/toast", () => ({
   useToast: () => ({ showToast }),
 }));
 
-vi.mock("../utils/cv/mapping-utils", () => ({
-  buildTypedSectionsFromNormalized: vi.fn(() => [{ id: "sec1", title: "Experience", type: "experience", blocks: [] }]),
+vi.mock("../../utils/cv/mapping-utils", () => ({
+  buildTypedSectionsFromNormalized: vi.fn(() => []),
   applyStrictContactToSections: vi.fn((sections) => sections),
   engineHintFromDiagnostics: vi.fn(() => null),
 }));
@@ -37,6 +39,7 @@ describe("StructuredUploadButton empty preview", () => {
   });
 
   it("surfaces empty_reason instead of Pdf Bytes placeholder", async () => {
+    const user = userEvent.setup();
     mockAction.mockResolvedValue({
       normalized: {
         summary: { text: "Pdf Bytes=123" },
@@ -51,6 +54,7 @@ describe("StructuredUploadButton empty preview", () => {
     const input = container.querySelector('input[type="file"]') as HTMLInputElement;
     const file = new File(["dummy"], "resume.pdf", { type: "application/pdf" });
 
+    await user.click(screen.getByRole("button", { name: "Upload CV" }));
     fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => {
