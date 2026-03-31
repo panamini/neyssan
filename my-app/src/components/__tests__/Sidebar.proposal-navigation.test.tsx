@@ -285,4 +285,49 @@ describe("Sidebar proposal navigation", () => {
     expect(screen.getByText("Saved proposal beta")).toBeInTheDocument();
     expect(screen.queryByText("Server draft proposal")).not.toBeInTheDocument();
   });
+
+  it("shows the just-saved proposal in the saved list immediately when the saved route opens", () => {
+    writeProposalDraftToStorage();
+
+    const { container } = render(
+      <MemoryRouter initialEntries={["/proposal?view=saved&id=proposal_new"]}>
+        <Sidebar />
+        <Routes>
+          <Route path="/cv" element={<CvRoute />} />
+          <Route path="/proposal" element={<ProposalRouteProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const savedLink = container.querySelector(
+      'a[href="/proposal?view=saved&id=proposal_new"]',
+    );
+
+    expect(savedLink).not.toBeNull();
+    expect(savedLink).toHaveTextContent("Operations Associate Proposal");
+  });
+
+  it("labels the active editing section as Current", () => {
+    mockCvLibraryState.currentCv = {
+      id: "cv_alpha",
+      title: "Alex Martin Resume",
+      sections: [],
+    };
+    mockCvLibraryState.currentCvId = "cv_alpha";
+    writeProposalDraftToStorage();
+
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <Sidebar />
+        <Routes>
+          <Route path="/cv" element={<CvRoute />} />
+          <Route path="/proposal" element={<ProposalRouteProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("Current")).toBeInTheDocument();
+    expect(screen.getByText("Proposal")).toBeInTheDocument();
+    expect(screen.getByText("Resume")).toBeInTheDocument();
+  });
 });

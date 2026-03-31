@@ -41,9 +41,12 @@ import {
 } from "../../convex/lib/proposals/renderTemplates";
 import { formatUiDate } from "../lib/ui-date";
 import {
+  readStoredProposalOutputDraft,
   resolveProposalStoredText,
   type StoredProposalTextSection,
 } from "../lib/proposal-output-draft";
+import { readStoredProposalComposeDraft } from "../lib/proposal-workspace-state";
+import { readStoredSavedProposalFixtures } from "../lib/proposal-saved-fixtures";
 import { getVerbatiStyleFromCv } from "../features/verbati/style";
 import type { VerbatiStylePreset } from "../features/verbati/types";
 import { resolveProposalRenderState } from "../lib/proposal-render-state";
@@ -401,9 +404,70 @@ export default function ProposalsList({
     api.proposalsPublic.default as any,
     isLoaded && isSignedIn && isConvexAuthenticated ? {} : "skip",
   ) as SavedProposalRecord[] | undefined;
+  const fallbackProposals = React.useMemo(
+    () =>
+      !isLoaded || !isSignedIn || !isConvexAuthenticated
+        ? readStoredSavedProposalFixtures()
+        : [],
+    [isConvexAuthenticated, isLoaded, isSignedIn],
+  );
+  const optimisticSavedProposal = React.useMemo<SavedProposalRecord | null>(() => {
+    if (!selectedProposalId) {
+      return null;
+    }
+
+    const outputDraft = readStoredProposalOutputDraft();
+    if (
+      !outputDraft?.generatedProposalId ||
+      String(outputDraft.generatedProposalId) !== String(selectedProposalId)
+    ) {
+      return null;
+    }
+
+    const trimmedContent = outputDraft.proposalContent?.trim() ?? "";
+    if (!trimmedContent) {
+      return null;
+    }
+
+    const composeDraft = readStoredProposalComposeDraft();
+    const optimisticTimestamp = Date.now();
+    return {
+      _id: selectedProposalId,
+      _creationTime: optimisticTimestamp,
+      title: outputDraft.proposalDocumentTitle?.trim() || "Saved proposal",
+      content: trimmedContent,
+      status: "saved",
+      updatedAt: optimisticTimestamp,
+      createdAt: optimisticTimestamp,
+      sections: [{ type: "text", content: trimmedContent }],
+      metadata: {
+        sourceJobDescription:
+          composeDraft?.jobDescription?.trim() || undefined,
+        proposalType: outputDraft.proposalType ?? undefined,
+        voicePreset: outputDraft.proposalVoicePreset ?? undefined,
+      },
+    };
+  }, [selectedProposalId]);
   const savedProposals = React.useMemo(
-    () => (proposals ?? []).filter((proposal) => proposal.status === "saved"),
-    [proposals],
+    () => {
+      const mergedProposals = new Map<string, SavedProposalRecord>();
+
+      for (const proposal of proposals ?? fallbackProposals) {
+        mergedProposals.set(String(proposal._id), proposal);
+      }
+
+      if (optimisticSavedProposal) {
+        mergedProposals.set(
+          String(optimisticSavedProposal._id),
+          optimisticSavedProposal,
+        );
+      }
+
+      return [...mergedProposals.values()].filter(
+        (proposal) => proposal.status === "saved",
+      );
+    },
+    [fallbackProposals, optimisticSavedProposal, proposals],
   );
   const deleteProposal = useMutation(
     (api as any).deleteProposalPublic?.default,
@@ -431,7 +495,9 @@ export default function ProposalsList({
   const [copied, setCopied] = React.useState(false);
   const [isConfirmingDelete, setIsConfirmingDelete] = React.useState(false);
   const [savedViewMode, setSavedViewMode] =
-    React.useState<SavedProposalViewMode>("stack");
+    React.useState<SavedProposalViewMode>(() =>
+      selectedProposalId ? "focused" : "stack",
+    );
   const [visibleSecondaryCount, setVisibleSecondaryCount] = React.useState(
     SECONDARY_PROPOSAL_PAGE_SIZE,
   );
@@ -876,6 +942,11 @@ export default function ProposalsList({
       setSavedViewMode("stack");
     }
   }, [isMobileSavedViewport, savedViewMode]);
+
+  React.useEffect(() => {
+    if (isMobileSavedViewport || !selectedProposalId) return;
+    setSavedViewMode("focused");
+  }, [isMobileSavedViewport, selectedProposalId]);
 
   React.useEffect(() => {
     if (!isMobileSavedViewport) return;

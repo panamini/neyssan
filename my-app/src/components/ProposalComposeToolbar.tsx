@@ -2,6 +2,7 @@ import React from "react";
 import {
   Feather,
   FileUser,
+  Paperclip,
   PanelLeftDashed,
   PenNib,
   Sunglasses,
@@ -160,6 +161,14 @@ export function ProposalComposeToolbar({
     },
     [onChange],
   );
+  const handleClearCv = React.useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      onClearCv?.();
+    },
+    [onClearCv],
+  );
   const hasCollapseControl = Boolean(onCollapseCompose);
 
   return (
@@ -306,7 +315,7 @@ export function ProposalComposeToolbar({
                   <button
                     type="button"
                     className="dasti-compose-toolbar__cv-remove"
-                    onClick={onClearCv}
+                    onClick={handleClearCv}
                     aria-label="Remove CV"
                     data-toolbar-tooltip="Remove CV"
                     disabled={disabled}
@@ -349,7 +358,11 @@ export function ProposalComposeToolbar({
                 disabled={disabled}
               >
                 <span className="dasti-compose-toolbar__cv-icon" aria-hidden="true">
-                  <FileUser size={15} strokeWidth={1.7} />
+                  {cvTitle ? (
+                    <FileUser size={15} strokeWidth={1.7} />
+                  ) : (
+                    <Paperclip size={15} strokeWidth={1.7} />
+                  )}
                 </span>
                 <span className="dasti-compose-toolbar__cv-copy">
                   {cvTitle ?? "Attach CV"}

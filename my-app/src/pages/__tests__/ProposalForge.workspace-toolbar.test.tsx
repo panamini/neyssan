@@ -1,10 +1,12 @@
 import React from "react";
-import { render } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { ProposalForge } from "../ProposalForge";
 
 const proposalDisplaySpy = vi.fn();
+const proposalInputFormSpy = vi.fn();
+const proposalComposeToolbarSpy = vi.fn();
 
 vi.mock("convex/react", () => ({
   useConvexAuth: () => ({
@@ -36,7 +38,45 @@ vi.mock("../../components/ui/toast", () => ({
 }));
 
 vi.mock("../../components/ProposalInputForm", () => ({
-  default: () => <div>Mock compose shell</div>,
+  default: (props: Record<string, unknown>) => {
+    proposalInputFormSpy(props);
+    return <div data-testid="proposal-input-form">Mock compose shell</div>;
+  },
+}));
+
+vi.mock("../../components/ProposalComposeToolbar", () => ({
+  ProposalComposeToolbar: (props: Record<string, any>) => {
+    proposalComposeToolbarSpy(props);
+    return (
+      <div
+        data-testid="proposal-compose-toolbar"
+        data-collapsed={props.collapsed ? "true" : "false"}
+      >
+        <button
+          type="button"
+          onClick={() => props.onChange?.("expert")}
+        >
+          Set toolbar tone
+        </button>
+        <button
+          type="button"
+          onClick={() => props.onToggleCvPicker?.()}
+        >
+          Toggle toolbar CV picker
+        </button>
+        {props.onCollapseCompose ? (
+          <button type="button" onClick={() => props.onCollapseCompose?.()}>
+            Collapse compose
+          </button>
+        ) : null}
+        {props.onRestoreCompose ? (
+          <button type="button" onClick={() => props.onRestoreCompose?.()}>
+            Restore compose
+          </button>
+        ) : null}
+      </div>
+    );
+  },
 }));
 
 vi.mock("../../components/ProposalDisplay", () => ({
@@ -55,7 +95,15 @@ vi.mock("../../components/ProposalsList", () => ({
 describe("ProposalForge workbench layout", () => {
   beforeEach(() => {
     proposalDisplaySpy.mockClear();
+    proposalInputFormSpy.mockClear();
+    proposalComposeToolbarSpy.mockClear();
     window.localStorage.clear();
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 1440,
+      writable: true,
+    });
+    window.dispatchEvent(new Event("resize"));
   });
 
   it("anchors the live proposal workspace preview to the top of the document stage", () => {
@@ -68,6 +116,94 @@ describe("ProposalForge workbench layout", () => {
     const lastCall =
       proposalDisplaySpy.mock.calls[proposalDisplaySpy.mock.calls.length - 1]?.[0];
     expect(lastCall).toMatchObject({ previewAnchor: "top" });
+  });
+
+  it("routes the live workbench toolbar through the compose form's external CV and tone controls", () => {
+    const { container } = render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId("proposal-compose-toolbar")).toBeInTheDocument();
+
+    let lastInputCall =
+      proposalInputFormSpy.mock.calls[proposalInputFormSpy.mock.calls.length - 1]?.[0];
+    expect(lastInputCall).toMatchObject({
+      suppressToneControls: true,
+      suppressCvPicker: true,
+      cvPickerOpen: false,
+      externalVoicePreset: null,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Set toolbar tone" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Toggle toolbar CV picker" }),
+    );
+
+    lastInputCall =
+      proposalInputFormSpy.mock.calls[proposalInputFormSpy.mock.calls.length - 1]?.[0];
+    expect(lastInputCall).toMatchObject({
+      cvPickerOpen: true,
+      externalVoicePreset: "expert",
+    });
+    const toolbarSlot = container.querySelector(
+      '[data-testid="proposal-workbench-toolbar-slot"]',
+    ) as HTMLElement | null;
+    expect(toolbarSlot?.style.width).toBe("min(100%, 560px)");
+    expect(screen.queryByRole("button", { name: /pick cv/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Balanced" })).not.toBeInTheDocument();
+  });
+
+  it("restores the donor desktop collapse and restore controls for the compose column", () => {
+    const { container } = render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    const composeShell = screen.getByTestId("proposal-input-form");
+    expect(composeShell.parentElement).not.toHaveStyle({ display: "none" });
+
+    let lastToolbarCall =
+      proposalComposeToolbarSpy.mock.calls[
+        proposalComposeToolbarSpy.mock.calls.length - 1
+      ]?.[0];
+    expect(lastToolbarCall.onCollapseCompose).toEqual(expect.any(Function));
+    expect(lastToolbarCall.collapsed).not.toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Collapse compose" }));
+
+    lastToolbarCall =
+      proposalComposeToolbarSpy.mock.calls[
+        proposalComposeToolbarSpy.mock.calls.length - 1
+      ]?.[0];
+    expect(lastToolbarCall).toMatchObject({ collapsed: true });
+    expect(lastToolbarCall.onRestoreCompose).toEqual(expect.any(Function));
+    expect(composeShell.parentElement).toHaveStyle({ display: "none" });
+    const gridSplitAfterCollapse = container.querySelector(
+      ".dasti-grid-split",
+    ) as HTMLElement | null;
+    const workbenchFrameAfterCollapse = container.querySelector(
+      ".dasti-flow",
+    ) as HTMLElement | null;
+    expect(
+      gridSplitAfterCollapse?.style.getPropertyValue("--grid-justify"),
+    ).toBe("center");
+    expect(workbenchFrameAfterCollapse?.style.maxWidth).toBe("860px");
+
+    fireEvent.click(screen.getByRole("button", { name: "Restore compose" }));
+
+    lastToolbarCall =
+      proposalComposeToolbarSpy.mock.calls[
+        proposalComposeToolbarSpy.mock.calls.length - 1
+      ]?.[0];
+    expect(lastToolbarCall.collapsed).not.toBe(true);
+    expect(lastToolbarCall.onCollapseCompose).toEqual(expect.any(Function));
+    expect(composeShell.parentElement).not.toHaveStyle({ display: "none" });
+    expect(
+      container.querySelector(".dasti-cv-workbench-bar--proposal-workspace"),
+    ).toBeTruthy();
   });
 
   it("keeps the compact compose and output cards constrained inside the active page shell", () => {
@@ -87,12 +223,14 @@ describe("ProposalForge workbench layout", () => {
     const pageShell = container.querySelector(".dasti-page-shell") as
       | HTMLElement
       | null;
+    const workbenchFrame = container.querySelector(".dasti-flow") as
+      | HTMLElement
+      | null;
     const gridSplit = container.querySelector(".dasti-grid-split") as
       | HTMLElement
       | null;
-    const composeShell = container.querySelector(
-      ".dasti-proposal-style-source-bar",
-    )?.parentElement as HTMLElement | null;
+    const composeShell = screen.getByTestId("proposal-input-form").parentElement
+      ?.parentElement as HTMLElement | null;
     const outputShell = container.querySelector(
       ".dasti-proposal-output-shell",
     ) as HTMLElement | null;
@@ -100,7 +238,8 @@ describe("ProposalForge workbench layout", () => {
     expect(pageShell).toBeTruthy();
     expect(
       pageShell?.style.getPropertyValue("--page-shell-max-width"),
-    ).toBe("720px");
+    ).toBe("100%");
+    expect(workbenchFrame?.style.maxWidth).toBe("560px");
     expect(gridSplit).toBeTruthy();
     expect(
       gridSplit?.style.getPropertyValue("--grid-columns"),
