@@ -2,10 +2,16 @@ import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import {
+  BracketsSquare,
   Check,
+  ChevronDown,
   FloppyDisk,
   RotateCcw,
+  ScrollText,
+  SquaresFour,
+  Sun,
   Trash,
+  Wand2,
   X,
 } from "@/lib/icons";
 import ProposalInputForm from "../components/ProposalInputForm";
@@ -15,13 +21,15 @@ import ProposalDisplay, {
 } from "../components/ProposalDisplay";
 import ProposalsList from "../components/ProposalsList";
 import { useToast } from "../components/ui/toast";
-import { useCvLibrary } from "../contexts/CvLibraryContext";
 import type { FormValues } from "../components/ProposalInputForm.schemas";
 import { api } from "../../convex/_generated/api";
 import {
   buildAppProposalPersonalizationPayload,
   getProposalApplicantIdentity,
   getActiveLocalPersonalizationSource,
+  getProposalAttachedCvLocalDocument,
+  listLocalCvPickerOptions,
+  PROPOSAL_ATTACHED_CV_UPDATED_EVENT,
 } from "../lib/proposal-personalization";
 import {
   getProposalGenerationUiErrorMessage,
@@ -29,16 +37,49 @@ import {
 } from "../lib/proposal-generation-ui";
 import {
   readStoredProposalOutputDraft,
+  resolveProposalStoredText,
   type StoredProposalOutputDraft,
   PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,
   PROPOSAL_OUTPUT_DRAFT_UPDATED_EVENT,
+  writeStoredProposalOutputDraft,
 } from "../lib/proposal-output-draft";
+import {
+  readProposalWorkspaceResetToken,
+  writeStoredProposalComposeDraft,
+} from "../lib/proposal-workspace-state";
 import type { ProposalTemplateId } from "../../convex/lib/proposals/renderTemplates";
 import {
   getProposalTwinTemplateId,
   getVerbatiStyleFromCv,
+  resolveVerbatiStyle,
   serializeVerbatiStyle,
+  stylesEqual,
 } from "../features/verbati/style";
+import {
+  PROPOSAL_CHARACTER_LIMIT_TOAST_THRESHOLDS,
+  resolveProposalCharacterLimitSelection,
+} from "../../convex/lib/proposals/generationControls";
+import type { Id } from "../../convex/_generated/dataModel";
+import { DEFAULT_PROPOSAL_VOICE_PRESET } from "../../convex/lib/proposals/voicePresets";
+import { selectAutoTone } from "../../convex/lib/proposals/autoToneSelector";
+import {
+  resolveProposalStyleLinkMode,
+  type ProposalStyleLinkMode,
+} from "../lib/proposal-style-link";
+import { resolveProposalRenderState } from "../lib/proposal-render-state";
+import { formatUiDate } from "../lib/ui-date";
+import {
+  resolveProposalStyleChoice,
+  resolveProposalStyleChoiceFromRenderState,
+  resolveProposalStyleRenderState,
+  type ProposalStyleChoice,
+} from "../lib/proposal-style-choice";
+import {
+  applyProposalVoiceSelection,
+  buildProposalGenerationRequest,
+  type ProposalGenerationRequestPayload,
+} from "../lib/proposal-generation-request";
+import { getVoicePresetDisplayLabel } from "../lib/proposal-voice-label";
 
 type ProposalForgePrefill = {
   handoffId: string;
@@ -50,10 +91,288 @@ type ProposalForgePrefill = {
 
 type ProposalForgeView = "compose" | "saved";
 
+type ProposalDocumentMetadata = {
+  sourceJobDescription?: string;
+  proposalType?: FormValues["proposalType"];
+  voicePreset?: FormValues["voicePreset"];
+  requestedVoicePreset?: FormValues["voicePreset"] | null;
+  resolvedVoicePreset?: FormValues["voicePreset"];
+  autoToneDecisionVersion?: "v1";
+  autoToneReason?: string;
+  formalityLevel?: FormValues["formalityLevel"];
+  creativity?: FormValues["creativity"];
+  templateId?: ProposalTemplateId;
+  verbatiStyle?: ReturnType<typeof serializeVerbatiStyle>;
+  styleLinkMode?: ProposalStyleLinkMode;
+  styleChoice?: ProposalStyleChoice;
+  characterLimitMode?: FormValues["characterLimitMode"];
+  characterLimitValue?: number | null;
+};
+
+type SavedProposalRecord = {
+  _id: Id<"proposals">;
+  _creationTime: number;
+  title: string;
+  content: string;
+  status: string;
+  updatedAt: number;
+  createdAt: number;
+  sections: Array<{
+    type: "text" | "code" | "image";
+    content: string;
+  }>;
+  metadata?: ProposalDocumentMetadata;
+};
+
+function readAttachedCvSelection(): {
+  id: string | null;
+  title: string | null;
+} {
+  const activeOption =
+    listLocalCvPickerOptions().find((option) => option.isActive) ?? null;
+  const activeSource = getActiveLocalPersonalizationSource();
+
+  return {
+    id: activeOption?.id ?? null,
+    title: activeOption?.title ?? activeSource.title ?? null,
+  };
+}
+
+const PROPOSAL_WORKBENCH_VOICE_OPTIONS: Array<{
+  id: FormValues["voicePreset"] | null;
+  label: string;
+  description: string;
+}> = [
+  {
+    id: null,
+    label: "Auto",
+    description: "Adapts the tone to the client and context.",
+  },
+  {
+    id: "signature",
+    label: getVoicePresetDisplayLabel("signature"),
+    description: "Balanced, natural, and credible.",
+  },
+  {
+    id: "expert",
+    label: getVoicePresetDisplayLabel("expert"),
+    description: "More precise, structured, and authoritative.",
+  },
+  {
+    id: "engaging",
+    label: getVoicePresetDisplayLabel("engaging"),
+    description: "Warmer, more lively, and still professional.",
+  },
+];
+
+const PROPOSAL_STYLE_OPTIONS: Array<{
+  id: ProposalStyleChoice;
+  label: string;
+  description: string;
+  Icon: typeof Wand2;
+}> = [
+  {
+    id: "auto",
+    label: "Auto",
+    description: "AI matches the look to the role.",
+    Icon: Wand2,
+  },
+  {
+    id: "formal",
+    label: "Formal",
+    description: "Sharper structure and quieter authority.",
+    Icon: ScrollText,
+  },
+  {
+    id: "warm",
+    label: "Warm",
+    description: "Friendlier, more human, and more expressive.",
+    Icon: Sun,
+  },
+  {
+    id: "technical",
+    label: "Technical",
+    description: "Denser signal and a more precise grid.",
+    Icon: BracketsSquare,
+  },
+  {
+    id: "balanced",
+    label: "Balanced",
+    description: "Calm default for broad professional roles.",
+    Icon: SquaresFour,
+  },
+];
+
 type GenerateProposalResult = {
-  proposalId: string;
+  proposalId: Id<"proposals">;
   proposalContent: string;
 } & Required<ProposalGenerationFallbackInfo>;
+
+type GenerateProposalPayload = ProposalGenerationRequestPayload;
+
+/**
+ * Compact popover anchored to the Regenerate button.
+ * Lets the user pick a voice for the run before firing — keeps voice and
+ * regenerate together without adding noise to the main toolbar.
+ */
+function RegenerateMenu({
+  isRegenerating,
+  disabled,
+  currentVoicePreset,
+  onRegenerate,
+}: {
+  isRegenerating: boolean;
+  disabled: boolean;
+  currentVoicePreset: FormValues["voicePreset"] | null;
+  onRegenerate: (voiceOverride: FormValues["voicePreset"] | null) => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [selectedVoice, setSelectedVoice] = React.useState<
+    FormValues["voicePreset"] | null
+  >(currentVoicePreset);
+  const menuRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (open) {
+      setSelectedVoice(currentVoicePreset);
+    }
+  }, [open, currentVoicePreset]);
+
+  React.useEffect(() => {
+    if (!open) return undefined;
+
+    const handleOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [open]);
+
+  return (
+    <div ref={menuRef} style={{ position: "relative" }}>
+      <button
+        type="button"
+        className="dasti-button dasti-button--secondary dasti-button--sm dasti-regenerate-trigger"
+        disabled={disabled || isRegenerating}
+        onClick={() => setOpen((o) => !o)}
+        data-toolbar-tooltip={
+          isRegenerating ? "Refreshing…" : open ? "Voice" : "Regenerate"
+        }
+        aria-expanded={open}
+        aria-haspopup="true"
+      >
+        <RotateCcw size={13} strokeWidth={1.6} aria-hidden="true" />
+        <span>
+          {isRegenerating ? "Refreshing…" : open ? "Voice" : "Regenerate"}
+        </span>
+        <ChevronDown size={12} strokeWidth={1.8} aria-hidden="true" />
+      </button>
+      {open ? (
+        <div
+          className="dasti-regenerate-menu"
+          role="dialog"
+          aria-label="Regenerate options"
+        >
+          <div className="dasti-regenerate-menu__header">
+            <div className="dasti-label">Voice</div>
+            <div className="dasti-hint">
+              Choose the tone for the next regenerate.
+            </div>
+          </div>
+          <div
+            className="dasti-regenerate-menu__options"
+            role="group"
+            aria-label="Voice preset"
+          >
+            {PROPOSAL_WORKBENCH_VOICE_OPTIONS.map((option) => {
+              const active = selectedVoice === option.id;
+              return (
+                <button
+                  key={option.label}
+                  type="button"
+                  className={
+                    active
+                      ? "dasti-regenerate-option dasti-regenerate-option--active"
+                      : "dasti-regenerate-option"
+                  }
+                  aria-label={option.label}
+                  aria-pressed={active}
+                  onClick={() => setSelectedVoice(option.id)}
+                >
+                  <span className="dasti-regenerate-option__copy">
+                    <span className="dasti-regenerate-option__title">
+                      {option.label}
+                    </span>
+                    <span className="dasti-regenerate-option__description">
+                      {option.description}
+                    </span>
+                  </span>
+                  {active ? (
+                    <span className="dasti-regenerate-option__check">
+                      <Check size={14} strokeWidth={2.2} aria-hidden="true" />
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            className="dasti-button dasti-button--primary dasti-button--sm dasti-regenerate-menu__confirm"
+            disabled={isRegenerating}
+            onClick={() => {
+              setOpen(false);
+              onRegenerate(selectedVoice);
+            }}
+          >
+            {isRegenerating ? "Refreshing…" : "Regenerate"}
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function shouldPreserveLeadBreak(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed) return false;
+  if (/^(dear|hello|hi|greetings)\b/i.test(trimmed)) return true;
+  return /[:,]$/.test(trimmed) && trimmed.split(/\s+/).length <= 6;
+}
+
+function buildProposalSnippet(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const paragraphs = value
+    .replace(/\r/g, "\n")
+    .split(/\n\s*\n/)
+    .map((paragraph, index) => {
+      const lines = paragraph
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+      if (lines.length === 0) return "";
+      if (
+        index === 0 &&
+        lines.length > 1 &&
+        shouldPreserveLeadBreak(lines[0])
+      ) {
+        const lead = lines[0];
+        const remainder = lines.slice(1).join(" ").replace(/\s+/g, " ").trim();
+        return remainder ? `${lead}\n${remainder}` : lead;
+      }
+
+      return lines.join(" ").replace(/\s+/g, " ").trim();
+    })
+    .filter(Boolean);
+
+  if (paragraphs.length === 0) return "";
+  if (paragraphs.length === 1) return paragraphs[0];
+  return paragraphs.slice(0, 2).join("\n");
+}
 
 /**
  * ProposalForge — page Write
@@ -64,24 +383,40 @@ type GenerateProposalResult = {
  * Logique métier : intacte.
  */
 export function ProposalForge(): JSX.Element {
-  const { search } = useLocation();
+  const location = useLocation();
+  const { search } = location;
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const { currentCv } = useCvLibrary();
   const storedOutputDraft = React.useMemo(
     () => readStoredProposalOutputDraft(),
     [],
   );
-  const currentProposalStylePreset = React.useMemo(
-    () =>
-      currentCv
-        ? getVerbatiStyleFromCv(currentCv)
-        : storedOutputDraft?.proposalVerbatiStyle ?? null,
-    [currentCv, storedOutputDraft?.proposalVerbatiStyle],
+  const [attachedCvId, setAttachedCvId] = React.useState<string | null>(
+    () => readAttachedCvSelection().id,
   );
+  const [attachedCvTitle, setAttachedCvTitle] = React.useState<string | null>(
+    () => readAttachedCvSelection().title,
+  );
+  const activeCvProposalStylePreset = React.useMemo(() => {
+    if (!attachedCvId) {
+      return null;
+    }
+
+    const attachedCvDocument = getProposalAttachedCvLocalDocument();
+    if (!attachedCvDocument) {
+      return null;
+    }
+
+    return getVerbatiStyleFromCv(attachedCvDocument);
+  }, [attachedCvId]);
   const fallbackProposalTemplateId = React.useMemo(
-    () => getProposalTwinTemplateId(currentProposalStylePreset),
-    [currentProposalStylePreset],
+    () =>
+      getProposalTwinTemplateId(
+        storedOutputDraft?.proposalVerbatiStyle ??
+          activeCvProposalStylePreset ??
+          undefined,
+      ),
+    [activeCvProposalStylePreset, storedOutputDraft?.proposalVerbatiStyle],
   );
   const initialApplicantIdentity = React.useMemo(
     () => getProposalApplicantIdentity(getActiveLocalPersonalizationSource()),
@@ -90,35 +425,103 @@ export function ProposalForge(): JSX.Element {
   const [viewportWidth, setViewportWidth] = React.useState(() =>
     typeof window === "undefined" ? 1440 : window.innerWidth,
   );
+  const refreshAttachedCvSelection = React.useCallback(() => {
+    const nextAttachedSelection = readAttachedCvSelection();
+    setAttachedCvId(nextAttachedSelection.id);
+    setAttachedCvTitle(nextAttachedSelection.title);
+  }, []);
+
+  React.useEffect(() => {
+    refreshAttachedCvSelection();
+  }, [refreshAttachedCvSelection]);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const handleAttachedCvRefresh = () => {
+      refreshAttachedCvSelection();
+    };
+
+    window.addEventListener(
+      PROPOSAL_ATTACHED_CV_UPDATED_EVENT,
+      handleAttachedCvRefresh,
+    );
+    window.addEventListener("storage", handleAttachedCvRefresh);
+    window.addEventListener("focus", handleAttachedCvRefresh);
+
+    return () => {
+      window.removeEventListener(
+        PROPOSAL_ATTACHED_CV_UPDATED_EVENT,
+        handleAttachedCvRefresh,
+      );
+      window.removeEventListener("storage", handleAttachedCvRefresh);
+      window.removeEventListener("focus", handleAttachedCvRefresh);
+    };
+  }, [refreshAttachedCvSelection]);
+
+  const handleAttachedCvChange = React.useCallback(
+    (_nextId: string | null) => {
+      refreshAttachedCvSelection();
+    },
+    [refreshAttachedCvSelection],
+  );
+
   const handoffId = React.useMemo(
     () => new URLSearchParams(search).get("handoffId"),
     [search],
   );
-  const requestedView = React.useMemo<ProposalForgeView>(() => {
-    const view = new URLSearchParams(search).get("view");
-    return view === "saved" ? "saved" : "compose";
-  }, [search]);
   const selectedProposalId = React.useMemo(
     () => new URLSearchParams(search).get("id"),
     [search],
+  );
+  const requestedView = React.useMemo<ProposalForgeView>(() => {
+    const params = new URLSearchParams(search);
+    const view = params.get("view");
+    return view === "saved" || Boolean(params.get("id"))
+      ? "saved"
+      : "compose";
+  }, [search]);
+  const proposalWorkspaceResetToken = React.useMemo(
+    () => readProposalWorkspaceResetToken(location.state as unknown),
+    [location.state],
   );
   const {
     isLoading: isConvexAuthLoading,
     isAuthenticated: isConvexAuthenticated,
   } = useConvexAuth();
-  const generateProposalAction = useAction(
-    api.functions.generateProposal as any,
-  );
-  const updateProposal = useMutation(
-    (api as any).updateProposalPublic?.default,
-  );
+  const generateProposalAction = useAction(api.functions.generateProposal);
+  const updateProposal = useMutation(api.updateProposalPublic.default);
   const currentProposalSettings = useQuery(
     api.proposalSettings.getCurrent,
     isConvexAuthenticated ? {} : "skip",
   );
-  const deleteProposal = useMutation(
-    (api as any).deleteProposalPublic?.default,
+  const savedProposals = useQuery(
+    api.proposalsPublic.default as any,
+    isConvexAuthenticated ? {} : "skip",
+  ) as SavedProposalRecord[] | undefined;
+  const sortedSavedProposals = React.useMemo(
+    () =>
+      savedProposals
+        ? [...savedProposals]
+            .filter((proposal) => proposal.status === "saved")
+            .sort(
+            (left, right) => right._creationTime - left._creationTime,
+            )
+        : [],
+    [savedProposals],
   );
+  const openedSavedProposal = React.useMemo(
+    () =>
+      selectedProposalId
+        ? sortedSavedProposals.find(
+            (proposal) => proposal._id === selectedProposalId,
+          ) ?? null
+        : null,
+    [selectedProposalId, sortedSavedProposals],
+  );
+  const deleteProposal = useMutation(api.deleteProposalPublic.default);
   const [proposalContent, setProposalContent] = React.useState<string | null>(
     storedOutputDraft?.proposalContent ?? null,
   );
@@ -135,13 +538,42 @@ export function ProposalForge(): JSX.Element {
     React.useState<ProposalTemplateId | null>(
       storedOutputDraft?.proposalTemplateId ?? fallbackProposalTemplateId,
     );
+  const [proposalStyleLinkMode, setProposalStyleLinkMode] =
+    React.useState<ProposalStyleLinkMode>(() =>
+      resolveProposalStyleLinkMode(
+        storedOutputDraft?.proposalStyleLinkMode ??
+          (activeCvProposalStylePreset ? "inherit_cv" : "proposal_local"),
+      ),
+    );
+  const [proposalStyleChoice, setProposalStyleChoice] =
+    React.useState<ProposalStyleChoice>(() =>
+      resolveProposalStyleChoice(
+        storedOutputDraft?.proposalStyleChoice ??
+          resolveProposalStyleChoiceFromRenderState({
+            templateId:
+              storedOutputDraft?.proposalTemplateId ??
+              fallbackProposalTemplateId,
+            stylePreset:
+              storedOutputDraft?.proposalVerbatiStyle ??
+              activeCvProposalStylePreset,
+          }) ??
+          (activeCvProposalStylePreset ? "auto" : "balanced"),
+      ),
+    );
+  const [proposalStylePreset, setProposalStylePreset] = React.useState(
+    storedOutputDraft?.proposalVerbatiStyle ?? activeCvProposalStylePreset,
+  );
   const [proposalApplicantName, setProposalApplicantName] =
     React.useState<string>(
-      storedOutputDraft?.proposalApplicantName || initialApplicantIdentity.name || "",
+      storedOutputDraft?.proposalApplicantName ||
+        initialApplicantIdentity.name ||
+        "",
     );
   const [proposalApplicantRole, setProposalApplicantRole] =
     React.useState<string>(
-      storedOutputDraft?.proposalApplicantRole || initialApplicantIdentity.role || "",
+      storedOutputDraft?.proposalApplicantRole ||
+        initialApplicantIdentity.role ||
+        "",
     );
   const [proposalDocumentTitle, setProposalDocumentTitle] =
     React.useState<string>(storedOutputDraft?.proposalDocumentTitle ?? "");
@@ -149,18 +581,27 @@ export function ProposalForge(): JSX.Element {
     React.useState<string>(storedOutputDraft?.proposalDocumentMeta ?? "");
   const [fallbackInfo, setFallbackInfo] =
     React.useState<ProposalGenerationFallbackInfo | null>(null);
-  const [generatedProposalId, setGeneratedProposalId] = React.useState<
-    string | null
-  >(storedOutputDraft?.generatedProposalId ?? null);
+  const [generatedProposalId, setGeneratedProposalId] =
+    React.useState<Id<"proposals"> | null>(
+      storedOutputDraft?.generatedProposalId ?? null,
+    );
   const [proposalOutputMode, setProposalOutputMode] = React.useState<
     "preview" | "edit"
-  >("preview");
+  >(storedOutputDraft?.proposalOutputMode ?? "preview");
   const [isSavingGeneratedProposal, setIsSavingGeneratedProposal] =
     React.useState(false);
   const [isSavingOutputToLibrary, setIsSavingOutputToLibrary] =
     React.useState(false);
   const [lastProposalRequest, setLastProposalRequest] =
     React.useState<FormValues | null>(null);
+  const draftCharacterLimitMode =
+    lastProposalRequest?.characterLimitMode ??
+    storedOutputDraft?.characterLimitMode ??
+    null;
+  const draftCharacterLimitValue =
+    lastProposalRequest?.characterLimitValue ??
+    storedOutputDraft?.characterLimitValue ??
+    null;
   const [isRegeneratingGeneratedProposal, setIsRegeneratingGeneratedProposal] =
     React.useState(false);
   const [isConfirmingGeneratedDelete, setIsConfirmingGeneratedDelete] =
@@ -168,7 +609,42 @@ export function ProposalForge(): JSX.Element {
   const [copyFeedback, setCopyFeedback] = React.useState<"idle" | "copied">(
     "idle",
   );
+  const [composeFormInstanceKey, setComposeFormInstanceKey] = React.useState(0);
+  const [cvPickerRequestKey, setCvPickerRequestKey] = React.useState(0);
+  const hasCompletedInitialRenderRef = React.useRef(false);
+
+  React.useEffect(() => {
+    hasCompletedInitialRenderRef.current = true;
+  }, []);
+  const [savedProposalContent, setSavedProposalContent] = React.useState<
+    string | null
+  >(null);
+  const [savedProposalType, setSavedProposalType] = React.useState<
+    FormValues["proposalType"] | null
+  >(null);
+  const [savedProposalVoicePreset, setSavedProposalVoicePreset] =
+    React.useState<FormValues["voicePreset"] | null>(null);
+  const [savedProposalTemplateId, setSavedProposalTemplateId] =
+    React.useState<ProposalTemplateId | null>(null);
+  const [savedProposalStyleLinkMode, setSavedProposalStyleLinkMode] =
+    React.useState<ProposalStyleLinkMode>("proposal_local");
+  const [savedProposalStylePreset, setSavedProposalStylePreset] =
+    React.useState(activeCvProposalStylePreset);
+  const [savedProposalDocumentTitle, setSavedProposalDocumentTitle] =
+    React.useState("");
+  const [savedProposalDocumentMeta, setSavedProposalDocumentMeta] =
+    React.useState("");
+  const [savedProposalOutputMode, setSavedProposalOutputMode] = React.useState<
+    "preview" | "edit"
+  >("preview");
+  const [isSavingSavedProposal, setIsSavingSavedProposal] =
+    React.useState(false);
+  const [savedCopyFeedback, setSavedCopyFeedback] = React.useState<
+    "idle" | "copied"
+  >("idle");
   const copyFeedbackTimeoutRef = React.useRef<number | null>(null);
+  const savedCopyFeedbackTimeoutRef = React.useRef<number | null>(null);
+  const lastCharacterLimitToastIdRef = React.useRef<string | null>(null);
   const lastSavedProposalContentRef = React.useRef<string | null>(
     storedOutputDraft?.proposalContent ?? null,
   );
@@ -176,8 +652,7 @@ export function ProposalForge(): JSX.Element {
     storedOutputDraft?.proposalDocumentTitle ?? "",
   );
   const lastStampedTemplateTokenRef = React.useRef<string | null>(null);
-  const canPersistProposalState =
-    isConvexAuthenticated && !isConvexAuthLoading;
+  const canPersistProposalState = isConvexAuthenticated && !isConvexAuthLoading;
 
   const showConvexAuthRequiredToast = React.useCallback(
     (actionLabel: string) => {
@@ -210,32 +685,290 @@ export function ProposalForge(): JSX.Element {
       return;
     }
 
-    setProposalTemplateId(currentProposalSettings.templateId);
+    setProposalTemplateId(
+      (currentTemplateId) =>
+        currentTemplateId ?? currentProposalSettings.templateId,
+    );
   }, [currentProposalSettings?.templateId]);
 
-  const proposalRenderMetadata = React.useMemo(() => {
-    const nextMetadata: {
-      templateId?: ProposalTemplateId;
-      verbatiStyle?: ReturnType<typeof serializeVerbatiStyle>;
-    } = {};
+  React.useEffect(() => {
+    if (
+      proposalStyleLinkMode === "inherit_cv" &&
+      !activeCvProposalStylePreset
+    ) {
+      setProposalStyleLinkMode("proposal_local");
+      if (!proposalStylePreset) {
+        setProposalStylePreset(resolveVerbatiStyle(undefined));
+      }
+      return;
+    }
+
+    if (
+      !activeCvProposalStylePreset ||
+      proposalStyleLinkMode !== "inherit_cv"
+    ) {
+      return;
+    }
+
+    setProposalStylePreset(activeCvProposalStylePreset);
+    setProposalTemplateId(
+      getProposalTwinTemplateId(activeCvProposalStylePreset),
+    );
+  }, [activeCvProposalStylePreset, proposalStyleLinkMode, proposalStylePreset]);
+
+  const resolvedProposalLocalStyle = React.useMemo(
+    () =>
+      resolveProposalStyleRenderState({
+        choice: proposalStyleChoice,
+        jobTitle: lastProposalRequest?.jobTitle ?? proposalDocumentTitle,
+        jobDescription: lastProposalRequest?.jobDescription,
+      }),
+    [
+      lastProposalRequest?.jobDescription,
+      lastProposalRequest?.jobTitle,
+      proposalDocumentTitle,
+      proposalStyleChoice,
+    ],
+  );
+
+  const resolvedStyleLinkMode =
+    proposalStyleLinkMode === "inherit_cv" && activeCvProposalStylePreset
+      ? "inherit_cv"
+      : "proposal_local";
+
+  React.useEffect(() => {
+    if (resolvedStyleLinkMode !== "proposal_local") {
+      return;
+    }
+
+    setProposalStylePreset((current) =>
+      current && stylesEqual(current, resolvedProposalLocalStyle.stylePreset)
+        ? current
+        : resolvedProposalLocalStyle.stylePreset,
+    );
+    setProposalTemplateId((current) =>
+      current === resolvedProposalLocalStyle.templateId
+        ? current
+        : resolvedProposalLocalStyle.templateId,
+    );
+  }, [
+    resolvedProposalLocalStyle.stylePreset,
+    resolvedProposalLocalStyle.templateId,
+    resolvedStyleLinkMode,
+  ]);
+
+  const effectiveProposalStylePreset = React.useMemo(
+    () =>
+      resolvedStyleLinkMode === "inherit_cv" && activeCvProposalStylePreset
+        ? activeCvProposalStylePreset
+        : resolveVerbatiStyle(proposalStylePreset ?? undefined),
+    [activeCvProposalStylePreset, proposalStylePreset, resolvedStyleLinkMode],
+  );
+  const effectiveProposalTemplateId = React.useMemo(
+    () =>
+      resolvedStyleLinkMode === "inherit_cv" && activeCvProposalStylePreset
+        ? getProposalTwinTemplateId(activeCvProposalStylePreset)
+        : proposalTemplateId ??
+          getProposalTwinTemplateId(effectiveProposalStylePreset),
+    [
+      activeCvProposalStylePreset,
+      effectiveProposalStylePreset,
+      proposalTemplateId,
+      resolvedStyleLinkMode,
+    ],
+  );
+
+  const proposalRenderMetadata = React.useMemo<
+    ProposalDocumentMetadata | undefined
+  >(() => {
+    const nextMetadata: ProposalDocumentMetadata = {};
 
     const resolvedTemplateId =
-      proposalTemplateId ?? currentProposalSettings?.templateId ?? fallbackProposalTemplateId;
+      effectiveProposalTemplateId ??
+      currentProposalSettings?.templateId ??
+      fallbackProposalTemplateId;
     if (resolvedTemplateId) {
       nextMetadata.templateId = resolvedTemplateId;
     }
 
-    if (currentProposalStylePreset) {
-      nextMetadata.verbatiStyle = serializeVerbatiStyle(currentProposalStylePreset);
+    nextMetadata.verbatiStyle = serializeVerbatiStyle(
+      effectiveProposalStylePreset,
+    );
+    nextMetadata.styleLinkMode = resolvedStyleLinkMode;
+    nextMetadata.styleChoice = proposalStyleChoice;
+    if (draftCharacterLimitMode) {
+      nextMetadata.characterLimitMode = draftCharacterLimitMode;
+      nextMetadata.characterLimitValue = draftCharacterLimitValue;
     }
 
     return Object.keys(nextMetadata).length > 0 ? nextMetadata : undefined;
   }, [
     currentProposalSettings?.templateId,
-    currentProposalStylePreset,
+    draftCharacterLimitMode,
+    draftCharacterLimitValue,
+    effectiveProposalStylePreset,
+    effectiveProposalTemplateId,
     fallbackProposalTemplateId,
-    proposalTemplateId,
+    proposalStyleChoice,
+    resolvedStyleLinkMode,
   ]);
+  const resolvedSavedProposalStyleLinkMode =
+    savedProposalStyleLinkMode === "inherit_cv" && activeCvProposalStylePreset
+      ? "inherit_cv"
+      : "proposal_local";
+  const effectiveSavedProposalStylePreset = React.useMemo(
+    () =>
+      resolvedSavedProposalStyleLinkMode === "inherit_cv" &&
+      activeCvProposalStylePreset
+        ? activeCvProposalStylePreset
+        : resolveVerbatiStyle(savedProposalStylePreset ?? undefined),
+    [
+      activeCvProposalStylePreset,
+      resolvedSavedProposalStyleLinkMode,
+      savedProposalStylePreset,
+    ],
+  );
+  const effectiveSavedProposalTemplateId = React.useMemo(
+    () =>
+      resolvedSavedProposalStyleLinkMode === "inherit_cv" &&
+      activeCvProposalStylePreset
+        ? getProposalTwinTemplateId(activeCvProposalStylePreset)
+        : savedProposalTemplateId ??
+          getProposalTwinTemplateId(effectiveSavedProposalStylePreset),
+    [
+      activeCvProposalStylePreset,
+      effectiveSavedProposalStylePreset,
+      resolvedSavedProposalStyleLinkMode,
+      savedProposalTemplateId,
+    ],
+  );
+  const savedProposalRenderMetadata = React.useMemo<
+    ProposalDocumentMetadata | undefined
+  >(() => {
+    if (!openedSavedProposal) {
+      return undefined;
+    }
+
+    return {
+      ...openedSavedProposal.metadata,
+      proposalType:
+        savedProposalType ??
+        openedSavedProposal.metadata?.proposalType ??
+        undefined,
+      voicePreset:
+        savedProposalVoicePreset ??
+        openedSavedProposal.metadata?.resolvedVoicePreset ??
+        openedSavedProposal.metadata?.voicePreset ??
+        undefined,
+      templateId: effectiveSavedProposalTemplateId,
+      verbatiStyle: serializeVerbatiStyle(effectiveSavedProposalStylePreset),
+      styleLinkMode: resolvedSavedProposalStyleLinkMode,
+      styleChoice:
+        openedSavedProposal.metadata?.styleChoice ??
+        resolveProposalStyleChoiceFromRenderState({
+          templateId: effectiveSavedProposalTemplateId,
+          stylePreset: effectiveSavedProposalStylePreset,
+        }) ??
+        undefined,
+    };
+  }, [
+    effectiveSavedProposalStylePreset,
+    effectiveSavedProposalTemplateId,
+    openedSavedProposal,
+    resolvedSavedProposalStyleLinkMode,
+    savedProposalType,
+    savedProposalVoicePreset,
+  ]);
+
+  const persistOpenedSavedProposal = React.useCallback(
+    async (patch: {
+      content?: string;
+      title?: string;
+      metadata?: SavedProposalRecord["metadata"];
+    }) => {
+      if (!openedSavedProposal) {
+        return;
+      }
+      if (!canPersistProposalState) {
+        showConvexAuthRequiredToast("Save");
+        return;
+      }
+
+      await updateProposal({
+        id: openedSavedProposal._id,
+        ...(typeof patch.title === "string" ? { title: patch.title } : {}),
+        ...(typeof patch.content === "string"
+          ? {
+              content: patch.content,
+              sections: [{ type: "text", content: patch.content }],
+            }
+          : {}),
+        ...(patch.metadata ? { metadata: patch.metadata } : {}),
+      });
+    },
+    [
+      canPersistProposalState,
+      openedSavedProposal,
+      showConvexAuthRequiredToast,
+      updateProposal,
+    ],
+  );
+
+  const resetProposalWorkspace = React.useCallback(() => {
+    if (copyFeedbackTimeoutRef.current !== null) {
+      window.clearTimeout(copyFeedbackTimeoutRef.current);
+      copyFeedbackTimeoutRef.current = null;
+    }
+
+    const nextStyleLinkMode = activeCvProposalStylePreset
+      ? "inherit_cv"
+      : "proposal_local";
+    const nextStylePreset =
+      activeCvProposalStylePreset ?? resolveVerbatiStyle(undefined);
+    const nextTemplateId = getProposalTwinTemplateId(nextStylePreset);
+    const nextStyleChoice = activeCvProposalStylePreset ? "auto" : "balanced";
+
+    setProposalContent(null);
+    setLoading(false);
+    setError(null);
+    setErrorDetail(null);
+    setProposalType(null);
+    setProposalVoicePreset(null);
+    setProposalTemplateId(nextTemplateId);
+    setProposalStyleLinkMode(nextStyleLinkMode);
+    setProposalStyleChoice(nextStyleChoice);
+    setProposalStylePreset(nextStylePreset);
+    setProposalApplicantName(initialApplicantIdentity.name || "");
+    setProposalApplicantRole(initialApplicantIdentity.role || "");
+    setProposalDocumentTitle("");
+    setProposalDocumentMeta("");
+    setFallbackInfo(null);
+    setGeneratedProposalId(null);
+    setProposalOutputMode("preview");
+    setIsSavingGeneratedProposal(false);
+    setIsSavingOutputToLibrary(false);
+    setLastProposalRequest(null);
+    setIsRegeneratingGeneratedProposal(false);
+    setIsConfirmingGeneratedDelete(false);
+    setCopyFeedback("idle");
+    lastSavedProposalContentRef.current = null;
+    lastSavedProposalTitleRef.current = "";
+    lastStampedTemplateTokenRef.current = null;
+  }, [
+    activeCvProposalStylePreset,
+    initialApplicantIdentity.name,
+    initialApplicantIdentity.role,
+  ]);
+
+  React.useEffect(() => {
+    if (!proposalWorkspaceResetToken) {
+      return;
+    }
+
+    setComposeFormInstanceKey((currentKey) => currentKey + 1);
+    resetProposalWorkspace();
+    void navigate("/proposal", { replace: true });
+  }, [navigate, proposalWorkspaceResetToken, resetProposalWorkspace]);
 
   /* ── Handlers (logique métier intacte) ────────────────────── */
 
@@ -249,11 +982,127 @@ export function ProposalForge(): JSX.Element {
   );
 
   const formatProposalToneLabel = React.useCallback(
-    (preset: FormValues["voicePreset"]) => {
-      if (preset === "signature") return "Balanced";
-      if (preset === "expert") return "Formal";
-      if (preset === "engaging") return "Warm";
-      return preset;
+    (preset: FormValues["voicePreset"] | null | undefined) => {
+      return getVoicePresetDisplayLabel(preset);
+    },
+    [],
+  );
+
+  const resolveProposalVoicePreset = React.useCallback((values: FormValues) => {
+    if (values.voicePreset) {
+      return values.voicePreset;
+    }
+
+    const activeLocalPersonalization = getActiveLocalPersonalizationSource();
+    return (
+      selectAutoTone({
+        jobTitle: values.jobTitle,
+        jobDescription: values.jobDescription,
+        personalizationContext:
+          activeLocalPersonalization.personalizationContext,
+        personalizationRichness: activeLocalPersonalization.richness,
+      }).preset ?? DEFAULT_PROPOSAL_VOICE_PRESET
+    );
+  }, []);
+
+  const persistProposalComposeDraftSnapshot = React.useCallback(
+    (values: FormValues) => {
+      writeStoredProposalComposeDraft({
+        jobTitle: values.jobTitle,
+        jobDescription: values.jobDescription,
+        proposalType: values.proposalType,
+        voicePreset: values.voicePreset ?? null,
+        toneTuning: values.toneTuning ?? null,
+        characterLimitMode: values.characterLimitMode ?? null,
+        characterLimitValue: values.characterLimitValue ?? null,
+      });
+    },
+    [],
+  );
+
+  const handleProposalFormValuesChange = React.useCallback(
+    (values: FormValues) => {
+      persistProposalComposeDraftSnapshot(values);
+      setLastProposalRequest(values);
+    },
+    [persistProposalComposeDraftSnapshot],
+  );
+
+  React.useEffect(() => {
+    if (!openedSavedProposal) {
+      setSavedProposalContent(null);
+      setSavedProposalType(null);
+      setSavedProposalVoicePreset(null);
+      setSavedProposalTemplateId(null);
+      setSavedProposalStyleLinkMode("proposal_local");
+      setSavedProposalStylePreset(activeCvProposalStylePreset);
+      setSavedProposalDocumentTitle("");
+      setSavedProposalDocumentMeta("");
+      setSavedProposalOutputMode("preview");
+      return;
+    }
+
+    const storedRenderState = resolveProposalRenderState({
+      storedTemplateId: openedSavedProposal.metadata?.templateId,
+      storedStylePreset: openedSavedProposal.metadata?.verbatiStyle,
+      activeCvStylePreset: activeCvProposalStylePreset,
+    });
+    const nextVoicePreset =
+      openedSavedProposal.metadata?.resolvedVoicePreset ??
+      openedSavedProposal.metadata?.voicePreset ??
+      DEFAULT_PROPOSAL_VOICE_PRESET;
+    const nextProposalType = openedSavedProposal.metadata?.proposalType ?? null;
+
+    setSavedProposalContent(
+      resolveProposalStoredText({
+        content: openedSavedProposal.content,
+        sections: openedSavedProposal.sections,
+      }),
+    );
+    setSavedProposalType(nextProposalType);
+    setSavedProposalVoicePreset(nextVoicePreset);
+    setSavedProposalTemplateId(storedRenderState.templateId);
+    setSavedProposalStylePreset(storedRenderState.stylePreset);
+    setSavedProposalStyleLinkMode(
+      resolveProposalStyleLinkMode(openedSavedProposal.metadata?.styleLinkMode),
+    );
+    setSavedProposalDocumentTitle(
+      openedSavedProposal.title || "Saved proposal",
+    );
+    setSavedProposalDocumentMeta(
+      [
+        nextProposalType
+          ? formatProposalTypeLabel(nextProposalType)
+          : "Proposal",
+        formatProposalToneLabel(nextVoicePreset),
+      ].join(" · "),
+    );
+    setSavedProposalOutputMode("preview");
+  }, [
+    activeCvProposalStylePreset,
+    formatProposalToneLabel,
+    formatProposalTypeLabel,
+    openedSavedProposal,
+  ]);
+
+  const handleOpenCvPicker = React.useCallback(() => {
+    setCvPickerRequestKey((currentKey) => currentKey + 1);
+  }, []);
+
+  const handleProposalStyleLinkModeChange = React.useCallback(
+    (nextMode: ProposalStyleLinkMode) => {
+      if (nextMode === "inherit_cv" && !activeCvProposalStylePreset) {
+        return;
+      }
+      setProposalStyleLinkMode(nextMode);
+    },
+    [activeCvProposalStylePreset],
+  );
+
+  const handleProposalStyleChoiceChange = React.useCallback(
+    (nextChoice: ProposalStyleChoice) => {
+      setProposalStyleChoice(nextChoice);
+      setProposalStyleLinkMode("proposal_local");
     },
     [],
   );
@@ -263,10 +1112,11 @@ export function ProposalForge(): JSX.Element {
       const applicantIdentity = getProposalApplicantIdentity(
         getActiveLocalPersonalizationSource(),
       );
+      const resolvedVoicePreset = resolveProposalVoicePreset(values);
       setLastProposalRequest(values);
       setLoading(true);
       setProposalType(values.proposalType);
-      setProposalVoicePreset(values.voicePreset);
+      setProposalVoicePreset(resolvedVoicePreset);
       setProposalApplicantName(applicantIdentity.name ?? "");
       setProposalApplicantRole(applicantIdentity.role ?? "");
       setProposalDocumentTitle(
@@ -275,7 +1125,7 @@ export function ProposalForge(): JSX.Element {
       setProposalDocumentMeta(
         [
           formatProposalTypeLabel(values.proposalType),
-          formatProposalToneLabel(values.voicePreset),
+          formatProposalToneLabel(resolvedVoicePreset),
         ].join(" · "),
       );
       setProposalContent(null);
@@ -285,7 +1135,11 @@ export function ProposalForge(): JSX.Element {
       setErrorDetail(null);
       setFallbackInfo(null);
     },
-    [formatProposalToneLabel, formatProposalTypeLabel],
+    [
+      formatProposalToneLabel,
+      formatProposalTypeLabel,
+      resolveProposalVoicePreset,
+    ],
   );
 
   const handleProposalSubmit = React.useCallback(
@@ -293,37 +1147,73 @@ export function ProposalForge(): JSX.Element {
       values: FormValues,
       proposal: string,
       nextFallbackInfo?: ProposalGenerationFallbackInfo,
-      nextProposalId?: string,
+      nextProposalId?: Id<"proposals">,
     ) => {
       const applicantIdentity = getProposalApplicantIdentity(
         getActiveLocalPersonalizationSource(),
       );
+      const resolvedVoicePreset = resolveProposalVoicePreset(values);
+      const nextDocumentTitle =
+        values.jobTitle.trim() || formatProposalTypeLabel(values.proposalType);
+      const nextDocumentMeta = [
+        formatProposalTypeLabel(values.proposalType),
+        formatProposalToneLabel(resolvedVoicePreset),
+      ].join(" · ");
+      persistProposalComposeDraftSnapshot(values);
+      writeStoredProposalOutputDraft({
+        proposalContent: proposal,
+        proposalType: values.proposalType,
+        proposalVoicePreset: resolvedVoicePreset,
+        proposalTemplateId:
+          effectiveProposalTemplateId ?? fallbackProposalTemplateId,
+        proposalVerbatiStyle: serializeVerbatiStyle(
+          effectiveProposalStylePreset,
+        ),
+        proposalStyleLinkMode: resolvedStyleLinkMode,
+        proposalStyleChoice,
+        proposalApplicantName: applicantIdentity.name ?? "",
+        proposalApplicantRole: applicantIdentity.role ?? "",
+        proposalDocumentTitle: nextDocumentTitle,
+        proposalDocumentMeta: nextDocumentMeta,
+        generatedProposalId: nextProposalId ?? null,
+        proposalOutputMode: "preview",
+        paletteOverride: null,
+        customAccentHex: null,
+        templateBundleId: null,
+        typographyOverride: null,
+        layoutOverride: null,
+        proposalDocumentTitleManual: false,
+        characterLimitMode: values.characterLimitMode ?? null,
+        characterLimitValue: values.characterLimitValue ?? null,
+      });
       setLastProposalRequest(values);
       setProposalType(values.proposalType);
-      setProposalVoicePreset(values.voicePreset);
+      setProposalVoicePreset(resolvedVoicePreset);
       setProposalApplicantName(applicantIdentity.name ?? "");
       setProposalApplicantRole(applicantIdentity.role ?? "");
-      setProposalDocumentTitle(
-        values.jobTitle.trim() || formatProposalTypeLabel(values.proposalType),
-      );
-      setProposalDocumentMeta(
-        [
-          formatProposalTypeLabel(values.proposalType),
-          formatProposalToneLabel(values.voicePreset),
-        ].join(" · "),
-      );
+      setProposalDocumentTitle(nextDocumentTitle);
+      setProposalDocumentMeta(nextDocumentMeta);
       setProposalContent(proposal);
       setGeneratedProposalId(nextProposalId ?? null);
       setProposalOutputMode("preview");
       lastSavedProposalContentRef.current = proposal;
-      lastSavedProposalTitleRef.current =
-        values.jobTitle.trim() || formatProposalTypeLabel(values.proposalType);
+      lastSavedProposalTitleRef.current = nextDocumentTitle;
       setIsConfirmingGeneratedDelete(false);
       setError(null);
       setFallbackInfo(nextFallbackInfo ?? null);
       setLoading(false);
     },
-    [formatProposalToneLabel, formatProposalTypeLabel],
+    [
+      effectiveProposalStylePreset,
+      effectiveProposalTemplateId,
+      fallbackProposalTemplateId,
+      formatProposalToneLabel,
+      formatProposalTypeLabel,
+      persistProposalComposeDraftSnapshot,
+      proposalStyleChoice,
+      resolvedStyleLinkMode,
+      resolveProposalVoicePreset,
+    ],
   );
 
   const handleProposalError = React.useCallback(
@@ -331,10 +1221,11 @@ export function ProposalForge(): JSX.Element {
       const applicantIdentity = getProposalApplicantIdentity(
         getActiveLocalPersonalizationSource(),
       );
+      const resolvedVoicePreset = resolveProposalVoicePreset(values);
       setLastProposalRequest(values);
       setLoading(false);
       setProposalType(values.proposalType);
-      setProposalVoicePreset(values.voicePreset);
+      setProposalVoicePreset(resolvedVoicePreset);
       setProposalApplicantName(applicantIdentity.name ?? "");
       setProposalApplicantRole(applicantIdentity.role ?? "");
       setProposalDocumentTitle(
@@ -343,7 +1234,7 @@ export function ProposalForge(): JSX.Element {
       setProposalDocumentMeta(
         [
           formatProposalTypeLabel(values.proposalType),
-          formatProposalToneLabel(values.voicePreset),
+          formatProposalToneLabel(resolvedVoicePreset),
         ].join(" · "),
       );
       setProposalContent(null);
@@ -354,7 +1245,11 @@ export function ProposalForge(): JSX.Element {
       setErrorDetail(rawReason ?? null);
       setFallbackInfo(null);
     },
-    [formatProposalToneLabel, formatProposalTypeLabel],
+    [
+      formatProposalToneLabel,
+      formatProposalTypeLabel,
+      resolveProposalVoicePreset,
+    ],
   );
 
   const handleProposalContentChange = React.useCallback(
@@ -440,11 +1335,60 @@ export function ProposalForge(): JSX.Element {
     showToast,
     updateProposal,
   ]);
+  const handleSavedProposalContentChange = React.useCallback(
+    (nextContent: string) => {
+      setSavedProposalContent(nextContent);
+    },
+    [],
+  );
+
+  const handleSavedProposalDocumentCommit = React.useCallback(async () => {
+    if (!openedSavedProposal || isSavingSavedProposal) {
+      return;
+    }
+
+    const trimmed = savedProposalContent?.trim() ?? "";
+    if (!trimmed) {
+      return;
+    }
+
+    setIsSavingSavedProposal(true);
+    try {
+      await persistOpenedSavedProposal({
+        title: savedProposalDocumentTitle.trim() || openedSavedProposal.title,
+        content: trimmed,
+        metadata: savedProposalRenderMetadata,
+      });
+      showToast("Saved proposal updated", {
+        variant: "success",
+        description: "Edits were applied to the saved proposal.",
+      });
+    } catch (error) {
+      console.error("Failed to persist saved proposal edits:", error);
+      showToast("Saved proposal update failed", {
+        variant: "error",
+        description: "The saved proposal could not be updated.",
+      });
+    } finally {
+      setIsSavingSavedProposal(false);
+    }
+  }, [
+    isSavingSavedProposal,
+    openedSavedProposal,
+    persistOpenedSavedProposal,
+    savedProposalContent,
+    savedProposalDocumentTitle,
+    savedProposalRenderMetadata,
+    showToast,
+  ]);
 
   React.useEffect(() => {
     return () => {
       if (copyFeedbackTimeoutRef.current !== null) {
         window.clearTimeout(copyFeedbackTimeoutRef.current);
+      }
+      if (savedCopyFeedbackTimeoutRef.current !== null) {
+        window.clearTimeout(savedCopyFeedbackTimeoutRef.current);
       }
     };
   }, []);
@@ -468,10 +1412,18 @@ export function ProposalForge(): JSX.Element {
       Boolean(proposalDocumentTitle) ||
       Boolean(proposalDocumentMeta) ||
       Boolean(generatedProposalId);
+    const hasPersistableOutput =
+      proposalContent !== null || Boolean(generatedProposalId);
 
     if (!hasDraft) {
-      window.localStorage.removeItem(PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY);
-      window.dispatchEvent(new Event(PROPOSAL_OUTPUT_DRAFT_UPDATED_EVENT));
+      if (hasCompletedInitialRenderRef.current) {
+        window.localStorage.removeItem(PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY);
+        window.dispatchEvent(new Event(PROPOSAL_OUTPUT_DRAFT_UPDATED_EVENT));
+      }
+      return;
+    }
+
+    if (!hasPersistableOutput) {
       return;
     }
 
@@ -483,15 +1435,19 @@ export function ProposalForge(): JSX.Element {
           proposalType,
           proposalVoicePreset,
           proposalTemplateId,
-          proposalVerbatiStyle: currentProposalStylePreset
-            ? serializeVerbatiStyle(currentProposalStylePreset)
+          proposalVerbatiStyle: proposalStylePreset
+            ? serializeVerbatiStyle(proposalStylePreset)
             : null,
+          proposalStyleLinkMode: resolvedStyleLinkMode,
+          proposalStyleChoice,
           proposalApplicantName,
           proposalApplicantRole,
           proposalDocumentTitle,
           proposalDocumentMeta,
           generatedProposalId,
-          proposalOutputMode: "preview",
+          proposalOutputMode,
+          characterLimitMode: draftCharacterLimitMode,
+          characterLimitValue: draftCharacterLimitValue,
         } satisfies StoredProposalOutputDraft),
       );
       window.dispatchEvent(new Event(PROPOSAL_OUTPUT_DRAFT_UPDATED_EVENT));
@@ -505,11 +1461,47 @@ export function ProposalForge(): JSX.Element {
     proposalApplicantRole,
     proposalDocumentMeta,
     proposalDocumentTitle,
-    currentProposalStylePreset,
+    proposalOutputMode,
+    proposalStyleChoice,
+    proposalStylePreset,
+    resolvedStyleLinkMode,
+    draftCharacterLimitMode,
+    draftCharacterLimitValue,
     proposalTemplateId,
     proposalType,
     proposalVoicePreset,
   ]);
+
+  React.useEffect(() => {
+    if (!proposalContent) {
+      lastCharacterLimitToastIdRef.current = null;
+      return;
+    }
+
+    const displayedCount = getDisplayedProposalText(
+      proposalContent,
+      proposalType,
+    ).length;
+    const nextThreshold =
+      [...PROPOSAL_CHARACTER_LIMIT_TOAST_THRESHOLDS]
+        .reverse()
+        .find((threshold) => displayedCount >= threshold.limit) ?? null;
+
+    if (!nextThreshold) {
+      lastCharacterLimitToastIdRef.current = null;
+      return;
+    }
+
+    if (lastCharacterLimitToastIdRef.current === nextThreshold.id) {
+      return;
+    }
+
+    lastCharacterLimitToastIdRef.current = nextThreshold.id;
+    showToast(nextThreshold.title, {
+      variant: nextThreshold.advisory ? "warning" : "neutral",
+      description: nextThreshold.description,
+    });
+  }, [proposalContent, proposalType, showToast]);
 
   React.useEffect(() => {
     if (
@@ -546,7 +1538,6 @@ export function ProposalForge(): JSX.Element {
       const params = new URLSearchParams(search);
       if (view === "saved") {
         params.set("view", "saved");
-        params.delete("handoffId");
         if (nextProposalId) {
           params.set("id", nextProposalId);
         } else {
@@ -563,11 +1554,17 @@ export function ProposalForge(): JSX.Element {
   );
 
   const handleCopyOutput = React.useCallback(async () => {
-    if (!proposalContent) return;
+    const activeContent = openedSavedProposal
+      ? savedProposalContent
+      : proposalContent;
+    const activeProposalType = openedSavedProposal
+      ? savedProposalType
+      : proposalType;
+    if (!activeContent) return;
 
     const displayedProposalText = getDisplayedProposalText(
-      proposalContent,
-      proposalType,
+      activeContent,
+      activeProposalType,
     );
 
     try {
@@ -577,14 +1574,25 @@ export function ProposalForge(): JSX.Element {
         throw new Error("Clipboard unavailable");
       }
 
-      setCopyFeedback("copied");
-      if (copyFeedbackTimeoutRef.current !== null) {
-        window.clearTimeout(copyFeedbackTimeoutRef.current);
+      if (openedSavedProposal) {
+        setSavedCopyFeedback("copied");
+        if (savedCopyFeedbackTimeoutRef.current !== null) {
+          window.clearTimeout(savedCopyFeedbackTimeoutRef.current);
+        }
+        savedCopyFeedbackTimeoutRef.current = window.setTimeout(() => {
+          setSavedCopyFeedback("idle");
+          savedCopyFeedbackTimeoutRef.current = null;
+        }, 2000);
+      } else {
+        setCopyFeedback("copied");
+        if (copyFeedbackTimeoutRef.current !== null) {
+          window.clearTimeout(copyFeedbackTimeoutRef.current);
+        }
+        copyFeedbackTimeoutRef.current = window.setTimeout(() => {
+          setCopyFeedback("idle");
+          copyFeedbackTimeoutRef.current = null;
+        }, 2000);
       }
-      copyFeedbackTimeoutRef.current = window.setTimeout(() => {
-        setCopyFeedback("idle");
-        copyFeedbackTimeoutRef.current = null;
-      }, 2000);
       showToast("Proposal copied", { variant: "success" });
     } catch (copyError) {
       console.warn("Failed to copy proposal:", copyError);
@@ -593,94 +1601,316 @@ export function ProposalForge(): JSX.Element {
         description: "Clipboard access was unavailable.",
       });
     }
-  }, [proposalContent, proposalType, showToast]);
+  }, [
+    openedSavedProposal,
+    proposalContent,
+    proposalType,
+    savedProposalContent,
+    savedProposalType,
+    showToast,
+  ]);
 
-  const handleRegenerateOutput = React.useCallback(async () => {
-    if (!lastProposalRequest || isRegeneratingGeneratedProposal) {
+  const handleCopySavedProposalToDraft = React.useCallback(() => {
+    if (!openedSavedProposal || !savedProposalContent) {
       return;
     }
 
-    const currentActiveCvSource = getActiveLocalPersonalizationSource();
-    const hasCandidateContext = Boolean(
-      currentActiveCvSource.personalizationContext,
+    const restoredSourceJobDescription =
+      openedSavedProposal.metadata?.sourceJobDescription?.trim() ?? "";
+    const restoredJobTitle =
+      savedProposalDocumentTitle.trim() ||
+      openedSavedProposal.title.trim() ||
+      "Saved proposal";
+    const restoredRequestedVoicePreset =
+      openedSavedProposal.metadata?.requestedVoicePreset ??
+      savedProposalVoicePreset;
+
+    if (typeof window !== "undefined") {
+      try {
+        const composeDraft: Record<string, unknown> = {
+          jobTitle: restoredJobTitle,
+          proposalType: savedProposalType ?? "cover_letter",
+        };
+
+        if (restoredSourceJobDescription) {
+          composeDraft.jobDescription = restoredSourceJobDescription;
+        }
+
+        if (restoredRequestedVoicePreset) {
+          composeDraft.voicePreset = restoredRequestedVoicePreset;
+        }
+
+        writeStoredProposalComposeDraft(composeDraft);
+      } catch {
+        // Ignore storage failures and continue with the in-memory draft.
+      }
+    }
+
+    setProposalContent(savedProposalContent);
+    setProposalType(savedProposalType);
+    setProposalVoicePreset(savedProposalVoicePreset);
+    setProposalTemplateId(effectiveSavedProposalTemplateId);
+    setProposalStyleLinkMode(resolvedSavedProposalStyleLinkMode);
+    setProposalStyleChoice(
+      resolveProposalStyleChoice(
+        openedSavedProposal.metadata?.styleChoice ??
+          resolveProposalStyleChoiceFromRenderState({
+            templateId: effectiveSavedProposalTemplateId,
+            stylePreset: effectiveSavedProposalStylePreset,
+          }) ??
+          "auto",
+      ),
     );
+    setProposalStylePreset(effectiveSavedProposalStylePreset);
+    setProposalDocumentTitle(savedProposalDocumentTitle);
+    setProposalDocumentMeta(savedProposalDocumentMeta);
+    setGeneratedProposalId(null);
+    setProposalOutputMode(savedProposalOutputMode);
+    setLastProposalRequest(null);
+    setComposeFormInstanceKey((currentKey) => currentKey + 1);
+    setFallbackInfo(null);
+    setError(null);
+    setErrorDetail(null);
+    showToast("Copied to live draft", {
+      variant: "success",
+      description: restoredSourceJobDescription
+        ? "The saved proposal and its source brief are now back in the live draft."
+        : "The saved proposal is back in the live draft. Review the brief in Compose before regenerating.",
+    });
+    updateProposalRoute("compose");
+  }, [
+    effectiveSavedProposalStylePreset,
+    effectiveSavedProposalTemplateId,
+    openedSavedProposal,
+    resolvedSavedProposalStyleLinkMode,
+    savedProposalContent,
+    savedProposalDocumentMeta,
+    savedProposalDocumentTitle,
+    savedProposalOutputMode,
+    savedProposalType,
+    savedProposalVoicePreset,
+    showToast,
+    updateProposalRoute,
+  ]);
 
-    try {
-      setIsRegeneratingGeneratedProposal(true);
-      setLoading(true);
-      setError(null);
-      setErrorDetail(null);
-      setFallbackInfo(null);
+  function ProposalStyleSourceBar({
+    currentCvTitle,
+    canLinkToCv,
+    linkMode,
+    onPickCv,
+    onLinkModeChange,
+  }: {
+    currentCvTitle: string | null;
+    canLinkToCv: boolean;
+    linkMode: ProposalStyleLinkMode;
+    onPickCv: () => void;
+    onLinkModeChange: (mode: ProposalStyleLinkMode) => void;
+  }) {
+    return (
+      <section
+        className="dasti-proposal-style-source-bar"
+        aria-label="Proposal source controls"
+      >
+        <button
+          type="button"
+          className="dasti-button dasti-button--secondary dasti-button--sm dasti-button--pill"
+          onClick={onPickCv}
+          title={
+            currentCvTitle
+              ? `Open CV picker. Current: ${currentCvTitle}`
+              : "Pick a CV"
+          }
+        >
+          {currentCvTitle ? `CV: ${currentCvTitle}` : "Pick CV"}
+        </button>
 
-      const result = await (
-        generateProposalAction as unknown as (
-          input: FormValues &
-            ReturnType<typeof buildAppProposalPersonalizationPayload>,
-        ) => Promise<GenerateProposalResult | null>
-      )({
-        ...lastProposalRequest,
-        ...buildAppProposalPersonalizationPayload(currentActiveCvSource),
-      });
+        {canLinkToCv ? (
+          <div
+            className="dasti-proposal-style-source"
+            role="group"
+            aria-label="Style source"
+          >
+            <button
+              type="button"
+              className={
+                linkMode === "proposal_local"
+                  ? "dasti-proposal-style-source__button dasti-proposal-style-source__button--active"
+                  : "dasti-proposal-style-source__button"
+              }
+              aria-pressed={linkMode === "proposal_local"}
+              onClick={() => onLinkModeChange("proposal_local")}
+            >
+              Local
+            </button>
+            <button
+              type="button"
+              className={
+                linkMode === "inherit_cv"
+                  ? "dasti-proposal-style-source__button dasti-proposal-style-source__button--active"
+                  : "dasti-proposal-style-source__button"
+              }
+              aria-pressed={linkMode === "inherit_cv"}
+              onClick={() => onLinkModeChange("inherit_cv")}
+            >
+              Linked
+            </button>
+          </div>
+        ) : null}
+      </section>
+    );
+  }
 
-      if (!result) {
-        const nextErrorMessage = "No proposal returned from the server.";
-        handleProposalError(nextErrorMessage, lastProposalRequest);
+  function ProposalStyleRail({
+    linkMode,
+    styleChoice,
+    autoAppliedLabel,
+    onStyleChoiceChange,
+  }: {
+    linkMode: ProposalStyleLinkMode;
+    styleChoice: ProposalStyleChoice;
+    autoAppliedLabel: string;
+    onStyleChoiceChange: (choice: ProposalStyleChoice) => void;
+  }) {
+    if (linkMode !== "proposal_local") {
+      return null;
+    }
+
+    return (
+      <div
+        className="dasti-proposal-style-rail"
+        role="group"
+        aria-label="Proposal style"
+      >
+        {PROPOSAL_STYLE_OPTIONS.map((option) => {
+          const active = styleChoice === option.id;
+          const description =
+            option.id === "auto"
+              ? `${option.description} Now picking ${autoAppliedLabel.toLowerCase()}.`
+              : option.description;
+
+          return (
+            <button
+              key={option.id}
+              type="button"
+              className={
+                active
+                  ? "dasti-proposal-style-rail__button dasti-proposal-style-rail__button--active"
+                  : "dasti-proposal-style-rail__button"
+              }
+              aria-label={option.label}
+              aria-pressed={active}
+              title={description}
+              onClick={() => onStyleChoiceChange(option.id)}
+            >
+              <span className="dasti-proposal-style-rail__icon">
+                <option.Icon size={16} strokeWidth={1.8} aria-hidden="true" />
+              </span>
+              <span className="dasti-proposal-style-rail__label">
+                {option.label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
+  const handleRegenerateOutput = React.useCallback(
+    async (voiceOverride?: FormValues["voicePreset"] | null) => {
+      if (!lastProposalRequest || isRegeneratingGeneratedProposal) {
         return;
       }
 
-      try {
-        if (canPersistProposalState) {
-          await updateProposal({
-            id: result.proposalId,
-            content: result.proposalContent,
-            sections: [{ type: "text", content: result.proposalContent }],
-            status: "draft",
-            metadata: proposalRenderMetadata,
-          });
-        }
-      } catch (saveErr) {
-        console.warn("Failed to update regenerated proposal status:", saveErr);
-      }
-
-      handleProposalSubmit(
-        lastProposalRequest,
-        result.proposalContent,
-        {
-          requestedModelType: result.requestedModelType,
-          actualModelType: result.actualModelType,
-          fallbackTriggerCode: result.fallbackTriggerCode,
-        },
-        result.proposalId,
+      const currentActiveCvSource = getActiveLocalPersonalizationSource();
+      const hasCandidateContext = Boolean(
+        currentActiveCvSource.personalizationContext,
       );
-      showToast("Proposal regenerated", { variant: "success" });
-    } catch (regenerateError) {
-      const nextErrorMessage = getProposalGenerationUiErrorMessage({
-        error: regenerateError,
-        proposalType: lastProposalRequest.proposalType,
-        hasCandidateContext,
-      });
-      const rawReason =
-        regenerateError instanceof Error ? regenerateError.message : null;
-      handleProposalError(nextErrorMessage, lastProposalRequest, rawReason);
-      showToast("Regeneration failed", {
-        variant: "error",
-        description: nextErrorMessage,
-      });
-    } finally {
-      setLoading(false);
-      setIsRegeneratingGeneratedProposal(false);
-    }
-  }, [
-    generateProposalAction,
-    handleProposalError,
-    handleProposalSubmit,
-    canPersistProposalState,
-    isRegeneratingGeneratedProposal,
-    lastProposalRequest,
-    proposalRenderMetadata,
-    showToast,
-    updateProposal,
-  ]);
+      const requestWithVoice = applyProposalVoiceSelection(
+        lastProposalRequest,
+        voiceOverride,
+      );
+      const requestPayload = buildProposalGenerationRequest(
+        requestWithVoice,
+        buildAppProposalPersonalizationPayload(currentActiveCvSource),
+      );
+
+      try {
+        setIsRegeneratingGeneratedProposal(true);
+        setLoading(true);
+        setError(null);
+        setErrorDetail(null);
+        setFallbackInfo(null);
+
+        const result = await (
+          generateProposalAction as unknown as (
+            input: GenerateProposalPayload,
+          ) => Promise<GenerateProposalResult | null>
+        )(requestPayload);
+
+        if (!result) {
+          const nextErrorMessage = "No proposal returned from the server.";
+          handleProposalError(nextErrorMessage, requestWithVoice);
+          return;
+        }
+
+        try {
+          if (canPersistProposalState) {
+            await updateProposal({
+              id: result.proposalId,
+              content: result.proposalContent,
+              sections: [{ type: "text", content: result.proposalContent }],
+              status: "draft",
+              metadata: proposalRenderMetadata,
+            });
+          }
+        } catch (saveErr) {
+          console.warn(
+            "Failed to update regenerated proposal status:",
+            saveErr,
+          );
+        }
+
+        handleProposalSubmit(
+          requestWithVoice,
+          result.proposalContent,
+          {
+            requestedModelType: result.requestedModelType,
+            actualModelType: result.actualModelType,
+            fallbackTriggerCode: result.fallbackTriggerCode,
+          },
+          result.proposalId,
+        );
+        showToast("Proposal regenerated", { variant: "success" });
+      } catch (regenerateError) {
+        const nextErrorMessage = getProposalGenerationUiErrorMessage({
+          error: regenerateError,
+          proposalType: requestWithVoice.proposalType,
+          hasCandidateContext,
+        });
+        const rawReason =
+          regenerateError instanceof Error ? regenerateError.message : null;
+        handleProposalError(nextErrorMessage, requestWithVoice, rawReason);
+        showToast("Regeneration failed", {
+          variant: "error",
+          description: nextErrorMessage,
+        });
+      } finally {
+        setLoading(false);
+        setIsRegeneratingGeneratedProposal(false);
+      }
+    },
+    [
+      generateProposalAction,
+      handleProposalError,
+      handleProposalSubmit,
+      canPersistProposalState,
+      isRegeneratingGeneratedProposal,
+      lastProposalRequest,
+      proposalRenderMetadata,
+      showToast,
+      updateProposal,
+    ],
+  );
 
   const handleDeleteOutput = React.useCallback(async () => {
     if (!generatedProposalId) return;
@@ -695,13 +1925,18 @@ export function ProposalForge(): JSX.Element {
       setProposalType(null);
       setProposalVoicePreset(null);
       setProposalTemplateId(
-        currentProposalSettings?.templateId ?? fallbackProposalTemplateId,
+        getProposalTwinTemplateId(effectiveProposalStylePreset),
+      );
+      setProposalStylePreset(effectiveProposalStylePreset);
+      setProposalStyleLinkMode(
+        activeCvProposalStylePreset ? "inherit_cv" : "proposal_local",
       );
       setProposalApplicantName("");
       setProposalApplicantRole("");
       setProposalDocumentTitle("");
       setProposalDocumentMeta("");
       setGeneratedProposalId(null);
+      setProposalOutputMode("preview");
       setFallbackInfo(null);
       setError(null);
       setErrorDetail(null);
@@ -717,10 +1952,10 @@ export function ProposalForge(): JSX.Element {
       });
     }
   }, [
-    fallbackProposalTemplateId,
-    currentProposalSettings?.templateId,
+    activeCvProposalStylePreset,
     canPersistProposalState,
     deleteProposal,
+    effectiveProposalStylePreset,
     generatedProposalId,
     showConvexAuthRequiredToast,
     showToast,
@@ -793,9 +2028,7 @@ export function ProposalForge(): JSX.Element {
     updateProposal,
   ]);
 
-  const activeView = requestedView;
-  const isComposeView = activeView === "compose";
-  const isSavedView = activeView === "saved";
+  const isSavedView = requestedView === "saved";
   const isCompactComposeLayout = viewportWidth < 1240;
   const isNarrowLaptop = viewportWidth < 1360;
   const isLoadingHandoff =
@@ -806,6 +2039,27 @@ export function ProposalForge(): JSX.Element {
   const stackedCardWidthStyle: React.CSSProperties = isCompactComposeLayout
     ? { width: "min(100%, 560px)", marginInline: "auto", minWidth: 0 }
     : { width: "100%", minWidth: 0 };
+  const activeCharacterLimitSelection = React.useMemo(
+    () =>
+      resolveProposalCharacterLimitSelection({
+        mode: draftCharacterLimitMode,
+        value: draftCharacterLimitValue,
+      }),
+    [draftCharacterLimitMode, draftCharacterLimitValue],
+  );
+  const autoAppliedStyleLabel =
+    resolvedProposalLocalStyle.appliedChoice.charAt(0).toUpperCase() +
+    resolvedProposalLocalStyle.appliedChoice.slice(1);
+  const composeStyleControls = (
+    <ProposalStyleSourceBar
+      currentCvTitle={attachedCvTitle}
+      canLinkToCv={Boolean(attachedCvId)}
+      linkMode={resolvedStyleLinkMode}
+      onPickCv={handleOpenCvPicker}
+      onLinkModeChange={handleProposalStyleLinkModeChange}
+    />
+  );
+
   return (
     <div
       className="dasti-page-scroll"
@@ -817,25 +2071,102 @@ export function ProposalForge(): JSX.Element {
         className="dasti-page-shell"
         style={
           {
-            "--page-shell-max-width": isCompactComposeLayout
-              ? "720px"
-              : isNarrowLaptop
-                ? "1000px"
-                : "1200px",
+            "--page-shell-max-width": isSavedView
+              ? isCompactComposeLayout
+                ? "860px"
+                : isNarrowLaptop
+                  ? "1180px"
+                  : "1380px"
+              : isCompactComposeLayout
+                ? "720px"
+                : isNarrowLaptop
+                  ? "1000px"
+                  : "1200px",
             "--page-shell-gap": "var(--layout-page-stack)",
           } as React.CSSProperties
         }
       >
-        {isComposeView ? (
+        {isSavedView ? (
+          <section aria-hidden={false}>
+            <div
+              className="dasti-flow"
+              style={{
+                width: "100%",
+                maxWidth: "min(100%, 1380px)",
+                marginInline: "auto",
+                marginBottom: "var(--layout-panel-stack)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "var(--space-3)",
+                  flexWrap: "wrap",
+                }}
+              >
+                <div>
+                  <p
+                    className="dasti-hint"
+                    style={{ margin: 0, marginBottom: "var(--space-1)" }}
+                  >
+                    Saved proposal
+                  </p>
+                  <h2
+                    style={{
+                      margin: 0,
+                      fontFamily: "var(--font-heading-family)",
+                      fontSize: "var(--tl)",
+                      fontWeight: "var(--font-heading-weight)",
+                      color: "var(--ti)",
+                    }}
+                  >
+                    {openedSavedProposal?.title?.trim() || "Saved proposal"}
+                  </h2>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "var(--space-2)",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <button
+                    type="button"
+                    className="dasti-button dasti-button--secondary dasti-button--sm"
+                    onClick={() => updateProposalRoute("compose")}
+                  >
+                    Back to draft
+                  </button>
+                  <button
+                    type="button"
+                    className="dasti-button dasti-button--secondary dasti-button--sm"
+                    onClick={handleCopySavedProposalToDraft}
+                    disabled={!openedSavedProposal || !savedProposalContent}
+                  >
+                    Copy to draft
+                  </button>
+                </div>
+              </div>
+            </div>
+            <ProposalsList
+              selectedProposalId={selectedProposalId}
+              onSelectedProposalIdChange={(id) =>
+                updateProposalRoute("saved", id)
+              }
+            />
+          </section>
+        ) : (
           <section aria-hidden={false}>
             <div
               className="dasti-grid-split"
               style={
                 {
-                  "--grid-columns":
-                    isCompactComposeLayout
-                      ? "minmax(0, 1fr)"
-                      : "repeat(2, minmax(0, 560px))",
+                  "--grid-columns": isCompactComposeLayout
+                    ? "minmax(0, 1fr)"
+                    : "repeat(2, minmax(0, 560px))",
                   "--grid-gap": "var(--layout-card-grid)",
                   "--grid-align": "start",
                   "--grid-justify": "center",
@@ -844,25 +2175,37 @@ export function ProposalForge(): JSX.Element {
             >
               <div className="dasti-flow">
                 <div style={stackedCardWidthStyle}>
+                  {composeStyleControls}
                   {isLoadingHandoff ? (
                     <div style={{ paddingTop: "var(--s2)" }}>
-                      <p className="dasti-hint">
-                        Loading imported job offer…
-                      </p>
+                      <p className="dasti-hint">Loading imported job offer…</p>
                     </div>
                   ) : (
                     <ProposalInputForm
+                      key={composeFormInstanceKey}
                       onStart={handleProposalStart}
                       onSubmit={handleProposalSubmit}
                       onError={handleProposalError}
+                      onValuesChange={handleProposalFormValuesChange}
+                      onActiveCvChange={handleAttachedCvChange}
                       prefill={prefill}
+                      cvPickerRequestKey={cvPickerRequestKey}
                     />
                   )}
                 </div>
               </div>
 
               <div className="dasti-flow">
-                <div style={stackedCardWidthStyle}>
+                <div
+                  style={stackedCardWidthStyle}
+                  className="dasti-proposal-output-shell"
+                >
+                  <ProposalStyleRail
+                    linkMode={resolvedStyleLinkMode}
+                    styleChoice={proposalStyleChoice}
+                    autoAppliedLabel={autoAppliedStyleLabel}
+                    onStyleChoiceChange={handleProposalStyleChoiceChange}
+                  />
                   <ProposalDisplay
                     proposalContent={proposalContent}
                     loading={loading}
@@ -872,10 +2215,10 @@ export function ProposalForge(): JSX.Element {
                     voicePreset={proposalVoicePreset}
                     templateId={
                       proposalRenderMetadata?.templateId ??
-                      proposalTemplateId ??
+                      effectiveProposalTemplateId ??
                       fallbackProposalTemplateId
                     }
-                    stylePreset={currentProposalStylePreset}
+                    stylePreset={effectiveProposalStylePreset}
                     railTitle={proposalApplicantName || null}
                     railMeta={proposalApplicantRole || null}
                     fallbackInfo={fallbackInfo}
@@ -885,6 +2228,10 @@ export function ProposalForge(): JSX.Element {
                     documentMeta={proposalDocumentMeta || "Compose output"}
                     mode={proposalOutputMode}
                     onModeChange={setProposalOutputMode}
+                    characterLimit={activeCharacterLimitSelection.value}
+                    characterLimitAdvisory={
+                      activeCharacterLimitSelection.advisory
+                    }
                     showModeToggle
                     showZoomControls
                     zoomStorageKey={null}
@@ -904,12 +2251,11 @@ export function ProposalForge(): JSX.Element {
                         <span className="dasti-icon-cluster dasti-icon-cluster--tight">
                           <button
                             type="button"
-                            title={
-                              isSavingOutputToLibrary
-                                ? "Saving…"
-                                : "Save to library"
-                            }
                             className="dasti-icon-button"
+                            aria-label="Save proposal to library"
+                            data-toolbar-tooltip={
+                              isSavingOutputToLibrary ? "Saving" : "Save"
+                            }
                             onClick={() => {
                               void handleSaveOutputToLibrary();
                             }}
@@ -920,32 +2266,26 @@ export function ProposalForge(): JSX.Element {
                           >
                             <FloppyDisk size={16} strokeWidth={1.7} />
                           </button>
-                          <button
-                            type="button"
-                            title={
-                              isRegeneratingGeneratedProposal
-                                ? "Refreshing…"
-                                : "Refresh"
+                          <RegenerateMenu
+                            isRegenerating={isRegeneratingGeneratedProposal}
+                            disabled={
+                              !proposalContent ||
+                              loading ||
+                              !lastProposalRequest
                             }
-                            className="dasti-icon-button"
-                            style={{
-                              opacity: isRegeneratingGeneratedProposal
-                                ? 0.5
-                                : 1,
+                            currentVoicePreset={
+                              lastProposalRequest?.voicePreset ?? null
+                            }
+                            onRegenerate={(voiceOverride) => {
+                              void handleRegenerateOutput(voiceOverride);
                             }}
-                            onClick={() => {
-                              void handleRegenerateOutput();
-                            }}
-                            disabled={isRegeneratingGeneratedProposal}
-                          >
-                            <RotateCcw size={16} strokeWidth={1.5} />
-                          </button>
+                          />
                           <div className="dasti-icon-cluster__divider" />
                           {isConfirmingGeneratedDelete ? (
                             <button
                               type="button"
-                              title="Confirm delete"
                               className="dasti-icon-button dasti-icon-button--confirm"
+                              data-toolbar-tooltip="Confirm delete"
                               onClick={() => {
                                 void handleDeleteOutput();
                               }}
@@ -956,7 +2296,7 @@ export function ProposalForge(): JSX.Element {
                             <button
                               type="button"
                               className="dasti-icon-button"
-                              title="Delete"
+                              data-toolbar-tooltip="Delete"
                               onClick={() =>
                                 setIsConfirmingGeneratedDelete(true)
                               }
@@ -968,7 +2308,7 @@ export function ProposalForge(): JSX.Element {
                             <button
                               type="button"
                               className="dasti-icon-button"
-                              title="Cancel delete"
+                              data-toolbar-tooltip="Cancel"
                               onClick={() =>
                                 setIsConfirmingGeneratedDelete(false)
                               }
@@ -984,18 +2324,7 @@ export function ProposalForge(): JSX.Element {
               </div>
             </div>
           </section>
-        ) : null}
-
-        {isSavedView ? (
-          <section aria-hidden={false}>
-            <ProposalsList
-              selectedProposalId={selectedProposalId}
-              onSelectedProposalIdChange={(id) =>
-                updateProposalRoute("saved", id)
-              }
-            />
-          </section>
-        ) : null}
+        )}
       </div>
     </div>
   );
