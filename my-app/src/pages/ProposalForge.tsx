@@ -15,6 +15,8 @@ import {
   X,
 } from "@/lib/icons";
 import ProposalInputForm from "../components/ProposalInputForm";
+import { ProposalComposeToolbar } from "../components/ProposalComposeToolbar";
+import ProposalSaveDialog from "../components/ProposalSaveDialog";
 import ProposalDisplay, {
   fallbackCopyText,
   getDisplayedProposalText,
@@ -45,8 +47,10 @@ import {
 } from "../lib/proposal-output-draft";
 import {
   readProposalWorkspaceResetToken,
+  readStoredProposalComposeDraft,
   writeStoredProposalComposeDraft,
 } from "../lib/proposal-workspace-state";
+import { readStoredSavedProposalFixtures } from "../lib/proposal-saved-fixtures";
 import type { ProposalTemplateId } from "../../convex/lib/proposals/renderTemplates";
 import {
   getProposalTwinTemplateId,
@@ -493,6 +497,9 @@ export function ProposalForge(): JSX.Element {
   } = useConvexAuth();
   const generateProposalAction = useAction(api.functions.generateProposal);
   const updateProposal = useMutation(api.updateProposalPublic.default);
+  const createProposal = useMutation(
+    (api as any).createProposalPublic?.default ?? "createProposalPublic.default",
+  );
   const currentProposalSettings = useQuery(
     api.proposalSettings.getCurrent,
     isConvexAuthenticated ? {} : "skip",
@@ -501,25 +508,9 @@ export function ProposalForge(): JSX.Element {
     api.proposalsPublic.default as any,
     isConvexAuthenticated ? {} : "skip",
   ) as SavedProposalRecord[] | undefined;
-  const sortedSavedProposals = React.useMemo(
-    () =>
-      savedProposals
-        ? [...savedProposals]
-            .filter((proposal) => proposal.status === "saved")
-            .sort(
-            (left, right) => right._creationTime - left._creationTime,
-            )
-        : [],
-    [savedProposals],
-  );
-  const openedSavedProposal = React.useMemo(
-    () =>
-      selectedProposalId
-        ? sortedSavedProposals.find(
-            (proposal) => proposal._id === selectedProposalId,
-          ) ?? null
-        : null,
-    [selectedProposalId, sortedSavedProposals],
+  const fallbackSavedProposals = React.useMemo(
+    () => (!isConvexAuthenticated ? readStoredSavedProposalFixtures() : []),
+    [isConvexAuthenticated],
   );
   const deleteProposal = useMutation(api.deleteProposalPublic.default);
   const [proposalContent, setProposalContent] = React.useState<string | null>(
@@ -593,6 +584,7 @@ export function ProposalForge(): JSX.Element {
     React.useState(false);
   const [isSavingOutputToLibrary, setIsSavingOutputToLibrary] =
     React.useState(false);
+  const [isSaveDialogOpen, setIsSaveDialogOpen] = React.useState(false);
   const [lastProposalRequest, setLastProposalRequest] =
     React.useState<FormValues | null>(null);
   const draftCharacterLimitMode =
@@ -611,8 +603,19 @@ export function ProposalForge(): JSX.Element {
     "idle",
   );
   const [composeFormInstanceKey, setComposeFormInstanceKey] = React.useState(0);
+  const [isCvPickerOpen, setIsCvPickerOpen] = React.useState(false);
+  const [composeToolbarVoicePreset, setComposeToolbarVoicePreset] =
+    React.useState<FormValues["voicePreset"] | null>(() => {
+      const storedComposeDraft = readStoredProposalComposeDraft();
+      return (
+        storedComposeDraft?.voicePreset ??
+        storedOutputDraft?.proposalVoicePreset ??
+        null
+      );
+    });
   const [cvPickerRequestKey, setCvPickerRequestKey] = React.useState(0);
   const hasCompletedInitialRenderRef = React.useRef(false);
+  const appliedSavedToolbarVoicePresetRef = React.useRef(false);
 
   React.useEffect(() => {
     hasCompletedInitialRenderRef.current = true;
@@ -715,6 +718,22 @@ export function ProposalForge(): JSX.Element {
         currentTemplateId ?? currentProposalSettings.templateId,
     );
   }, [currentProposalSettings?.templateId]);
+
+  React.useEffect(() => {
+    if (appliedSavedToolbarVoicePresetRef.current) {
+      return;
+    }
+    if (composeToolbarVoicePreset !== null) {
+      appliedSavedToolbarVoicePresetRef.current = true;
+      return;
+    }
+    if (currentProposalSettings === undefined) {
+      return;
+    }
+
+    setComposeToolbarVoicePreset(currentProposalSettings?.savedVoicePreset ?? null);
+    appliedSavedToolbarVoicePresetRef.current = true;
+  }, [composeToolbarVoicePreset, currentProposalSettings]);
 
   React.useEffect(() => {
     if (
@@ -837,6 +856,117 @@ export function ProposalForge(): JSX.Element {
     proposalStyleChoice,
     resolvedStyleLinkMode,
   ]);
+  const proposalPersistenceMetadata = React.useMemo<
+    ProposalDocumentMetadata | undefined
+  >(() => {
+    const nextMetadata: ProposalDocumentMetadata = {
+      ...(proposalRenderMetadata ?? {}),
+    };
+
+    if (proposalType) {
+      nextMetadata.proposalType = proposalType;
+    }
+    if (proposalVoicePreset) {
+      nextMetadata.voicePreset = proposalVoicePreset;
+      nextMetadata.resolvedVoicePreset = proposalVoicePreset;
+    }
+    if (lastProposalRequest?.voicePreset !== undefined) {
+      nextMetadata.requestedVoicePreset = lastProposalRequest.voicePreset ?? null;
+    }
+
+    const storedComposeDraft =
+      typeof window === "undefined" ? null : readStoredProposalComposeDraft();
+    const sourceJobDescription =
+      lastProposalRequest?.jobDescription?.trim() ||
+      storedComposeDraft?.jobDescription?.trim() ||
+      "";
+    if (sourceJobDescription) {
+      nextMetadata.sourceJobDescription = sourceJobDescription;
+    }
+    if (lastProposalRequest?.formalityLevel) {
+      nextMetadata.formalityLevel = lastProposalRequest.formalityLevel;
+    }
+    if (lastProposalRequest?.creativity) {
+      nextMetadata.creativity = lastProposalRequest.creativity;
+    }
+
+    return Object.keys(nextMetadata).length > 0 ? nextMetadata : undefined;
+  }, [
+    lastProposalRequest?.creativity,
+    lastProposalRequest?.formalityLevel,
+    lastProposalRequest?.jobDescription,
+    lastProposalRequest?.voicePreset,
+    proposalRenderMetadata,
+    proposalType,
+    proposalVoicePreset,
+  ]);
+  const optimisticSavedDraftProposal = React.useMemo<SavedProposalRecord | null>(
+    () => {
+      if (
+        !selectedProposalId ||
+        !generatedProposalId ||
+        String(generatedProposalId) !== String(selectedProposalId)
+      ) {
+        return null;
+      }
+
+      const trimmedContent = proposalContent?.trim() ?? "";
+      if (!trimmedContent) {
+        return null;
+      }
+
+      const optimisticTimestamp = Date.now();
+      return {
+        _id: generatedProposalId,
+        _creationTime: optimisticTimestamp,
+        title: proposalDocumentTitle.trim() || "Generated proposal",
+        content: trimmedContent,
+        status: "saved",
+        updatedAt: optimisticTimestamp,
+        createdAt: optimisticTimestamp,
+        sections: [{ type: "text", content: trimmedContent }],
+        metadata: proposalPersistenceMetadata,
+      };
+    },
+    [
+      generatedProposalId,
+      proposalContent,
+      proposalDocumentTitle,
+      proposalPersistenceMetadata,
+      selectedProposalId,
+    ],
+  );
+  const sortedSavedProposals = React.useMemo(() => {
+    const mergedProposals = new Map<string, SavedProposalRecord>();
+
+    for (const proposal of savedProposals ?? fallbackSavedProposals) {
+      mergedProposals.set(String(proposal._id), proposal);
+    }
+
+    if (optimisticSavedDraftProposal) {
+      mergedProposals.set(
+        String(optimisticSavedDraftProposal._id),
+        optimisticSavedDraftProposal,
+      );
+    }
+
+    return [...mergedProposals.values()]
+      .filter((proposal) => proposal.status === "saved")
+      .sort((left, right) => right._creationTime - left._creationTime);
+  }, [
+    fallbackSavedProposals,
+    optimisticSavedDraftProposal,
+    savedProposals,
+  ]);
+  const openedSavedProposal = React.useMemo(
+    () =>
+      selectedProposalId
+        ? sortedSavedProposals.find(
+            (proposal) => String(proposal._id) === String(selectedProposalId),
+          ) ?? null
+        : null,
+    [selectedProposalId, sortedSavedProposals],
+  );
   const resolvedSavedProposalStyleLinkMode =
     savedProposalStyleLinkMode === "inherit_cv" && activeCvProposalStylePreset
       ? "inherit_cv"
@@ -959,6 +1089,7 @@ export function ProposalForge(): JSX.Element {
     setErrorDetail(null);
     setProposalType(null);
     setProposalVoicePreset(null);
+    setComposeToolbarVoicePreset(currentProposalSettings?.savedVoicePreset ?? null);
     setProposalTemplateId(nextTemplateId);
     setProposalStyleLinkMode(nextStyleLinkMode);
     setProposalStyleChoice(nextStyleChoice);
@@ -975,12 +1106,14 @@ export function ProposalForge(): JSX.Element {
     setLastProposalRequest(null);
     setIsRegeneratingGeneratedProposal(false);
     setIsConfirmingGeneratedDelete(false);
+    setIsCvPickerOpen(false);
     setCopyFeedback("idle");
     lastSavedProposalContentRef.current = null;
     lastSavedProposalTitleRef.current = "";
     lastStampedTemplateTokenRef.current = null;
   }, [
     activeCvProposalStylePreset,
+    currentProposalSettings?.savedVoicePreset,
     initialApplicantIdentity.name,
     initialApplicantIdentity.role,
   ]);
@@ -1049,6 +1182,7 @@ export function ProposalForge(): JSX.Element {
     (values: FormValues) => {
       persistProposalComposeDraftSnapshot(values);
       setLastProposalRequest(values);
+      setComposeToolbarVoicePreset(values.voicePreset ?? null);
     },
     [persistProposalComposeDraftSnapshot],
   );
@@ -1111,8 +1245,20 @@ export function ProposalForge(): JSX.Element {
   ]);
 
   const handleOpenCvPicker = React.useCallback(() => {
+    setIsCvPickerOpen(true);
     setCvPickerRequestKey((currentKey) => currentKey + 1);
   }, []);
+
+  const handleToolbarCvPickerToggle = React.useCallback(() => {
+    setIsCvPickerOpen((current) => !current);
+  }, []);
+
+  const handleToolbarVoicePresetChange = React.useCallback(
+    (preset: FormValues["voicePreset"] | null) => {
+      setComposeToolbarVoicePreset(preset);
+    },
+    [],
+  );
 
   const handleProposalStyleLinkModeChange = React.useCallback(
     (nextMode: ProposalStyleLinkMode) => {
@@ -1328,7 +1474,7 @@ export function ProposalForge(): JSX.Element {
       await updateProposal({
         id: generatedProposalId,
         title: normalizedTitle,
-        metadata: proposalRenderMetadata,
+        metadata: proposalPersistenceMetadata,
         ...(trimmed
           ? {
               content: trimmed,
@@ -1369,7 +1515,7 @@ export function ProposalForge(): JSX.Element {
     canPersistProposalState,
     proposalContent,
     proposalDocumentTitle,
-    proposalRenderMetadata,
+    proposalPersistenceMetadata,
     proposalType,
     formatProposalTypeLabel,
     showToast,
@@ -1546,13 +1692,15 @@ export function ProposalForge(): JSX.Element {
   React.useEffect(() => {
     if (
       !generatedProposalId ||
-      !proposalRenderMetadata ||
+      !proposalPersistenceMetadata ||
       !canPersistProposalState
     ) {
       return;
     }
 
-    const nextToken = `${generatedProposalId}:${JSON.stringify(proposalRenderMetadata)}`;
+    const nextToken = `${generatedProposalId}:${JSON.stringify(
+      proposalPersistenceMetadata,
+    )}`;
     if (lastStampedTemplateTokenRef.current === nextToken) {
       return;
     }
@@ -1561,7 +1709,7 @@ export function ProposalForge(): JSX.Element {
 
     void updateProposal({
       id: generatedProposalId,
-      metadata: proposalRenderMetadata,
+      metadata: proposalPersistenceMetadata,
     }).catch((error) => {
       console.warn("Failed to persist proposal template metadata:", error);
       lastStampedTemplateTokenRef.current = null;
@@ -1569,7 +1717,7 @@ export function ProposalForge(): JSX.Element {
   }, [
     canPersistProposalState,
     generatedProposalId,
-    proposalRenderMetadata,
+    proposalPersistenceMetadata,
     updateProposal,
   ]);
 
@@ -1690,6 +1838,7 @@ export function ProposalForge(): JSX.Element {
     setProposalContent(savedProposalContent);
     setProposalType(savedProposalType);
     setProposalVoicePreset(savedProposalVoicePreset);
+    setComposeToolbarVoicePreset(restoredRequestedVoicePreset ?? null);
     setProposalTemplateId(effectiveSavedProposalTemplateId);
     setProposalStyleLinkMode(resolvedSavedProposalStyleLinkMode);
     setProposalStyleChoice(
@@ -1709,6 +1858,7 @@ export function ProposalForge(): JSX.Element {
     setProposalOutputMode(savedProposalOutputMode);
     setLastProposalRequest(null);
     setComposeFormInstanceKey((currentKey) => currentKey + 1);
+    setIsCvPickerOpen(false);
     setFallbackInfo(null);
     setError(null);
     setStatusMessage(null);
@@ -1716,8 +1866,8 @@ export function ProposalForge(): JSX.Element {
     showToast("Copied to live draft", {
       variant: "success",
       description: restoredSourceJobDescription
-        ? "The saved proposal and its source brief are now back in the live draft."
-        : "The saved proposal is back in the live draft. Review the brief in Compose before regenerating.",
+        ? "A detached draft copy is ready with the saved proposal and its source brief."
+        : "A detached draft copy is ready. Review the brief in Compose before regenerating.",
     });
     updateProposalRoute("compose");
   }, [
@@ -2005,9 +2155,39 @@ export function ProposalForge(): JSX.Element {
     showToast,
   ]);
 
-  const handleSaveOutputToLibrary = React.useCallback(async () => {
+  const saveDialogTitle = React.useMemo(
+    () =>
+      proposalDocumentTitle.trim() ||
+      (proposalType
+        ? formatProposalTypeLabel(proposalType)
+        : "Generated proposal"),
+    [formatProposalTypeLabel, proposalDocumentTitle, proposalType],
+  );
+
+  const handleOpenSaveDialog = React.useCallback(() => {
     if (
-      !generatedProposalId ||
+      !proposalContent ||
+      isSavingOutputToLibrary ||
+      isSavingGeneratedProposal
+    ) {
+      return;
+    }
+    if (!canPersistProposalState) {
+      showConvexAuthRequiredToast("Save");
+      return;
+    }
+
+    setIsSaveDialogOpen(true);
+  }, [
+    canPersistProposalState,
+    isSavingGeneratedProposal,
+    isSavingOutputToLibrary,
+    proposalContent,
+    showConvexAuthRequiredToast,
+  ]);
+
+  const handleSaveOutputToLibrary = React.useCallback(async (requestedTitle: string) => {
+    if (
       !proposalContent ||
       isSavingOutputToLibrary ||
       isSavingGeneratedProposal
@@ -2024,29 +2204,52 @@ export function ProposalForge(): JSX.Element {
       return;
     }
 
+    const normalizedTitle =
+      requestedTitle.trim() ||
+      proposalDocumentTitle.trim() ||
+      (proposalType
+        ? formatProposalTypeLabel(proposalType)
+        : "Generated proposal");
+
     setIsSavingOutputToLibrary(true);
     try {
-      await updateProposal({
-        id: generatedProposalId,
-        title:
-          proposalDocumentTitle.trim() ||
-          (proposalType
-            ? formatProposalTypeLabel(proposalType)
-            : "Generated proposal"),
-        content: trimmed,
-        sections: [{ type: "text", content: trimmed }],
-        status: "saved",
-        metadata: proposalRenderMetadata,
-      });
+      const persistedProposalId =
+        generatedProposalId ??
+        (await createProposal({
+          title: normalizedTitle,
+          content: trimmed,
+          sections: [{ type: "text", content: trimmed }],
+          status: "saved",
+          metadata: proposalPersistenceMetadata,
+        }));
+
+      if (generatedProposalId) {
+        await updateProposal({
+          id: generatedProposalId,
+          title: normalizedTitle,
+          content: trimmed,
+          sections: [{ type: "text", content: trimmed }],
+          status: "saved",
+          metadata: proposalPersistenceMetadata,
+        });
+      } else {
+        setGeneratedProposalId(persistedProposalId);
+      }
+
+      setProposalDocumentTitle(normalizedTitle);
       lastSavedProposalContentRef.current = trimmed;
-      lastSavedProposalTitleRef.current =
-        proposalDocumentTitle.trim() ||
-        (proposalType
-          ? formatProposalTypeLabel(proposalType)
-          : "Generated proposal");
+      lastSavedProposalTitleRef.current = normalizedTitle;
+      setIsSaveDialogOpen(false);
+      const params = new URLSearchParams(search);
+      params.delete("handoffId");
+      params.set("view", "saved");
+      params.set("id", String(persistedProposalId));
+      const nextSearch = params.toString();
+      void navigate(nextSearch ? `/proposal?${nextSearch}` : "/proposal");
       showToast("Saved to library", {
         variant: "success",
-        description: "This proposal draft is now stored in Proposal Library.",
+        description:
+          "This proposal is now in Proposal Library. Open the saved copy there or duplicate it back into draft when you want a new variation.",
       });
     } catch (saveError) {
       console.error("Failed to save proposal draft to library:", saveError);
@@ -2058,18 +2261,21 @@ export function ProposalForge(): JSX.Element {
       setIsSavingOutputToLibrary(false);
     }
   }, [
-    generatedProposalId,
     canPersistProposalState,
+    createProposal,
     isSavingGeneratedProposal,
     isSavingOutputToLibrary,
     proposalContent,
     proposalDocumentTitle,
-    proposalRenderMetadata,
+    proposalPersistenceMetadata,
     proposalType,
     formatProposalTypeLabel,
+    generatedProposalId,
     showConvexAuthRequiredToast,
     showToast,
     updateProposal,
+    navigate,
+    search,
   ]);
 
   const isSavedView = requestedView === "saved";
@@ -2103,6 +2309,19 @@ export function ProposalForge(): JSX.Element {
       onLinkModeChange={handleProposalStyleLinkModeChange}
     />
   );
+  const proposalWorkbenchToolbar = !isSavedView ? (
+    <ProposalComposeToolbar
+      value={composeToolbarVoicePreset}
+      resolvedValue={proposalVoicePreset ?? null}
+      onChange={handleToolbarVoicePresetChange}
+      onToggleCvPicker={handleToolbarCvPickerToggle}
+      onClearCv={() => handleAttachedCvChange(null)}
+      cvTitle={attachedCvTitle}
+      isCvPickerOpen={isCvPickerOpen}
+      disabled={loading || isLoadingHandoff}
+      compact={isCompactComposeLayout}
+    />
+  ) : null;
 
   return (
     <div
@@ -2130,6 +2349,21 @@ export function ProposalForge(): JSX.Element {
           } as React.CSSProperties
         }
       >
+        {proposalWorkbenchToolbar ? (
+          <div className="dasti-cv-workbench-bar">
+            <div
+              className="dasti-forge-compose-toolbar-slot"
+              style={
+                {
+                  "--proposal-compose-toolbar-max-inline-size":
+                    isCompactComposeLayout ? "560px" : "480px",
+                } as React.CSSProperties
+              }
+            >
+              {proposalWorkbenchToolbar}
+            </div>
+          </div>
+        ) : null}
         {isSavedView ? (
           <section aria-hidden={false}>
             <div
@@ -2190,7 +2424,7 @@ export function ProposalForge(): JSX.Element {
                     onClick={handleCopySavedProposalToDraft}
                     disabled={!openedSavedProposal || !savedProposalContent}
                   >
-                    Copy to draft
+                    Duplicate to draft
                   </button>
                 </div>
               </div>
@@ -2234,7 +2468,12 @@ export function ProposalForge(): JSX.Element {
                       onValuesChange={handleProposalFormValuesChange}
                       onActiveCvChange={handleAttachedCvChange}
                       prefill={prefill}
+                      cvPickerOpen={isCvPickerOpen}
+                      onCvPickerOpenChange={setIsCvPickerOpen}
                       cvPickerRequestKey={cvPickerRequestKey}
+                      suppressToneControls
+                      suppressCvPicker
+                      externalVoicePreset={composeToolbarVoicePreset}
                     />
                   )}
                 </div>
@@ -2303,7 +2542,7 @@ export function ProposalForge(): JSX.Element {
                               isSavingOutputToLibrary ? "Saving" : "Save"
                             }
                             onClick={() => {
-                              void handleSaveOutputToLibrary();
+                              handleOpenSaveDialog();
                             }}
                             disabled={isSavingOutputToLibrary}
                             style={{
@@ -2372,6 +2611,14 @@ export function ProposalForge(): JSX.Element {
           </section>
         )}
       </div>
+      <ProposalSaveDialog
+        open={isSaveDialogOpen}
+        currentTitle={saveDialogTitle}
+        onClose={() => setIsSaveDialogOpen(false)}
+        onSave={(nextTitle) => {
+          void handleSaveOutputToLibrary(nextTitle);
+        }}
+      />
     </div>
   );
 }

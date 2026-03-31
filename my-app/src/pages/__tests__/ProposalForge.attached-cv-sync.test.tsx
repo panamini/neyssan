@@ -111,7 +111,7 @@ vi.mock("../../components/ProposalInputForm", () => ({
           onActiveCvChange?.("cv_alpha");
         }}
       >
-        Attach CV
+        Attach CV from form
       </button>
       <button
         type="button"
@@ -120,7 +120,7 @@ vi.mock("../../components/ProposalInputForm", () => ({
           onActiveCvChange?.(null);
         }}
       >
-        Remove CV
+        Remove CV from form
       </button>
     </div>
   ),
@@ -152,7 +152,7 @@ describe("ProposalForge attached CV sync", () => {
 
     expect(screen.getByRole("button", { name: "Pick CV" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Attach CV" }));
+    fireEvent.click(screen.getByRole("button", { name: "Attach CV from form" }));
 
     expect(
       screen.getByRole("button", {
@@ -166,7 +166,7 @@ describe("ProposalForge attached CV sync", () => {
     );
     expect(mockLoadCv).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Remove CV" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove CV from form" }));
 
     expect(screen.getByRole("button", { name: "Pick CV" })).toBeInTheDocument();
   });
