@@ -4,14 +4,33 @@ Date: 2026-03-31
 
 ## Goal
 
-Keep the active `ProposalForge` runtime stable and keep saved proposal surfaces strictly separated from live proposal workspace state.
+Keep the restored `ProposalForge` runtime stable, keep Proposal/Resume state boundaries clean, and only continue UI migration after persistence remains green.
 
 ## Current Status
 
-- `/proposal` is confirmed to route to `ProposalForge`
+- `/proposal` routes to `ProposalForge`
 - `/proposal-next` is not the active runtime path
-- local browser verification passes for the storage-backed Proposal -> Resume -> Proposal roundtrip
-- saved proposal surfaces now filter to `status === "saved"` on both the server and the client
+- Proposal -> Resume -> Proposal manual retest is green
+- Proposal attach/remove CV now uses a Proposal-owned state boundary
+- output draft persistence no longer:
+  - disappears on initial mount
+  - overwrites a valid generated draft with metadata-only null-content state
+
+## Checklist Status
+
+### Green
+
+- generate -> resume -> proposal persistence
+- proposal-attached CV survives resume detours
+- output draft survives resume detours
+- compose draft survives resume detours
+- saved proposal -> back to draft remains coherent
+- save button above output does not clear live draft
+
+### Still required before broader migration
+
+- keep real-browser regression coverage stable in an environment where Chromium launches reliably
+- add a short follow-up cleanup/decision note once the next UI migration batch starts
 
 ## Immediate Acceptance Criteria
 
@@ -19,99 +38,76 @@ The following must remain true:
 
 1. Proposal workspace entry points land on `/proposal`
 2. Saved proposal entry points land on `/proposal?view=saved&id=...`
-3. Draft rows do not appear in saved proposal surfaces
+3. Proposal-attached CV remains independent from Resume `cvActiveId`
 4. `dasti:proposal-compose-draft:v1` survives resume detours unless the user explicitly resets or deletes the workspace
 5. `dasti:proposal-output-draft:v1` survives resume detours unless the user explicitly resets or deletes the workspace
-6. `cvActiveId` is cleared only by explicit user action
+6. valid generated output is never replaced in storage by metadata-only null-content state
 
-## Recovery Sequence
+## Protected Invariants
 
-### Phase 1. Signed-in manual retest
+Do not break these again:
 
-Re-run the exact manual path in a signed-in environment:
+- Proposal attach must not call Resume `loadCv()`
+- Proposal page must not depend on Resume `currentCv` for attached-CV styling behavior
+- output draft persistence must not write transient generation-start/error states as if they were real output drafts
+- runtime ownership stays with `ProposalForge` during the next migration steps
 
-1. Generate a proposal
-2. Switch to Resume workspace
-3. Switch back to Proposal workspace
-4. Confirm:
-   - job title still present
-   - job description still present
-   - generated proposal output still present
-   - resume workspace item still present
+## Next Work: Resume UI Migration Safely
 
-### Phase 2. Deploy parity check
+Now that persistence is green, the next work can resume, but with scope control.
 
-If the deployed app still behaves differently from local code:
+### Allowed next steps
 
-1. Inspect the live response for `api.proposalsPublic.default`
-2. Confirm the payload excludes `status: "draft"` rows
-3. Confirm the proposal count surface also reflects saved rows only
+- backport safe presentational pieces from `ProposalForgeNext` into `ProposalForge`
+- continue toolbar/chrome/layout polish only if it does not alter route/state ownership
+- extract pure presentational components where that reduces page complexity without changing state semantics
 
-If draft rows still appear remotely, the deployed backend is behind the local code.
+### Not allowed in the next pass
 
-### Phase 3. Storage inspection if the manual roundtrip still fails
+- switching `/proposal` back to `ProposalForgeNext`
+- reintroducing shared Proposal/Resume CV identity
+- broad route/state rewrites while the restored runtime is working
 
-At each hop, inspect:
+## Recommended Migration Order
 
-- `localStorage["dasti:proposal-compose-draft:v1"]`
-- `localStorage["dasti:proposal-output-draft:v1"]`
-- `localStorage["cvActiveId"]`
-- current URL and query params
-
-Capture values:
-
-1. immediately after generation
-2. immediately after clicking Resume workspace
-3. immediately after returning to Proposal workspace
-
-### Phase 4. Re-check explicit reset paths only
-
-If state disappears, confirm whether the user accidentally went through one of these explicit reset flows:
-
-- create new proposal
-- delete live proposal workspace
-- delete the saved proposal whose id matches the live draft id
-- any navigation carrying `proposalWorkspaceResetToken`
-
-### Phase 5. Keep ProposalForgeNext out of the critical path
-
-Do not treat `ProposalForgeNext` as an active bug target unless routing changes again.
-
-Safe work:
-
-- saved/workspace route guards
-- storage persistence
-- saved proposal filtering
-- sidebar/library/Verbati entry-point consistency
-
-Unsafe work until the manual signed-in retest is green:
-
-- page-level refactors that move `/proposal` back to `ProposalForgeNext`
-- broad saved-view/live-draft state rewrites
-- cross-page migration work that changes route ownership again
+1. Keep `ProposalForge` as live runtime
+2. Treat `ProposalForgeNext` as donor/reference only
+3. Backport UI pieces one by one:
+   - toolbar visuals
+   - inspector/presentational panels
+   - shell polish
+4. Re-run the proposal persistence suite after each migration slice
 
 ## Regression Suite To Keep Running
 
 ### Vitest
 
-- `convex/__tests__/proposalsPublic.test.ts`
-- `convex/__tests__/proposalsCountPublic.test.ts`
+- `src/lib/__tests__/proposal-personalization.test.ts`
+- `src/components/__tests__/ProposalInputForm.provider-busy.test.tsx`
 - `src/components/__tests__/Sidebar.proposal-navigation.test.tsx`
+- `src/pages/__tests__/ProposalForge.attached-cv-sync.test.tsx`
 - `src/pages/__tests__/ProposalForge.draft-persistence.test.tsx`
-- `src/pages/__tests__/ProposalForge.saved-view.test.tsx`
+- `src/pages/__tests__/ProposalForge.output-draft-guard.test.tsx`
 - `src/pages/__tests__/ProposalForge.save-to-library.test.tsx`
-- `src/__tests__/App.proposal-route.contract.test.ts`
+- `src/pages/__tests__/ProposalForge.saved-view.test.tsx`
 
 ### Browser
 
 - `e2e/proposal-workspace-roundtrip.spec.ts`
 
-## Definition Of Done
+## Definition Of Done For The Persistence Fix
 
 Done means:
 
-1. signed-in manual generate -> resume -> proposal keeps compose input and output
-2. signed-in manual saved proposal -> draft/workspace path is coherent
-3. saved proposal surfaces never show draft rows
-4. the focused Vitest suite stays green
-5. the browser roundtrip spec stays green
+1. manual generate -> resume -> proposal keeps compose input and output
+2. proposal-attached CV stays correct across the same roundtrip
+3. saved proposal -> live draft remains coherent
+4. the focused persistence suite stays green
+
+## Definition Of Done For The Next UI Migration Phase
+
+Done means:
+
+1. the visual migration slice lands inside `ProposalForge`
+2. the persistence suite still stays green after the slice
+3. no route/runtime ownership changes are introduced
