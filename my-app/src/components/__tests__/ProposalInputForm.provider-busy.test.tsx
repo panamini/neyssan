@@ -1,15 +1,27 @@
 import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import ProposalInputForm from "../ProposalInputForm";
 
 const {
   mockGenerateProposalAction,
   mockMutation,
   mockMutationHookFn,
+  mockNavigate,
   mockQuery,
   mockGetActiveLocalPersonalizationSource,
   mockBuildAppProposalPersonalizationPayload,
+  mockClearActiveLocalCvId,
+  mockGetLocalActiveCvSnapshotById,
+  mockListLocalCvPickerOptions,
+  mockLoadCv,
+  mockSetActiveLocalCvId,
   mockGeneratedApiModule,
 } = vi.hoisted(() => ({
   mockGenerateProposalAction: vi.fn(),
@@ -17,12 +29,21 @@ const {
   mockMutationHookFn: Object.assign((...args: any[]) => mockMutation(...args), {
     withOptimisticUpdate: () => {},
   }),
+  mockNavigate: vi.fn(),
   mockQuery: vi.fn(),
   mockGetActiveLocalPersonalizationSource: vi.fn(),
   mockBuildAppProposalPersonalizationPayload: vi.fn(),
+  mockClearActiveLocalCvId: vi.fn(),
+  mockGetLocalActiveCvSnapshotById: vi.fn(() => null),
+  mockListLocalCvPickerOptions: vi.fn(() => []),
+  mockLoadCv: vi.fn(() => true),
+  mockSetActiveLocalCvId: vi.fn(),
   mockGeneratedApiModule: {
     api: {
       functions: { generateProposal: "generateProposalAction" },
+      jobs: {
+        requestProposalGenerationCancel: "jobs.requestProposalGenerationCancel",
+      },
       activeCvSnapshots: { setCurrent: "activeCvSnapshots.setCurrent" },
       updateProposalPublic: { default: "updateProposalPublic.default" },
       proposalSettings: {
@@ -42,6 +63,10 @@ vi.mock("clsx", () => ({
     values.filter(Boolean).join(" "),
 }));
 
+vi.mock("react-router-dom", () => ({
+  useNavigate: () => mockNavigate,
+}));
+
 vi.mock("lucide-react", () => ({
   ArrowUp: () => <span>ArrowUp</span>,
   Loader2: () => <span>Loader2</span>,
@@ -57,6 +82,18 @@ vi.mock("react-hook-form", () => {
       const [dirtyFields, setDirtyFields] = React.useState<
         Record<string, boolean>
       >({});
+      const valuesRef = React.useRef(values);
+      const dirtyFieldsRef = React.useRef(dirtyFields);
+      const subscribersRef = React.useRef(
+        new Set<(values: Record<string, unknown>) => void>(),
+      );
+
+      valuesRef.current = values;
+      dirtyFieldsRef.current = dirtyFields;
+
+      React.useEffect(() => {
+        subscribersRef.current.forEach((callback) => callback(values));
+      }, [values]);
 
       const setValue = (
         name: string,
@@ -76,48 +113,60 @@ vi.mock("react-hook-form", () => {
         }));
       };
 
-      return {
-        register: (name: string) => ({
-          name,
-          value: values[name] ?? "",
-          onChange: (event: { target?: { value?: unknown } }) => {
-            const nextValue = event?.target?.value ?? "";
-            setValues((current: Record<string, unknown>) => ({
-              ...current,
-              [name]: nextValue,
-            }));
-            setDirtyFields((current) => ({
-              ...current,
-              [name]: true,
-            }));
-          },
-          onBlur: () => {},
-          ref: () => {},
-        }),
-        watch: (name?: string | ((values: Record<string, unknown>) => void)) => {
-          if (typeof name === "function") {
-            name(values);
-            return {
-              unsubscribe: () => {},
-            };
-          }
+      return React.useMemo(
+        () => ({
+          register: (name: string) => ({
+            name,
+            value: valuesRef.current[name] ?? "",
+            onChange: (event: { target?: { value?: unknown } }) => {
+              const nextValue = event?.target?.value ?? "";
+              setValues((current: Record<string, unknown>) => ({
+                ...current,
+                [name]: nextValue,
+              }));
+              setDirtyFields((current) => ({
+                ...current,
+                [name]: true,
+              }));
+            },
+            onBlur: () => {},
+            ref: () => {},
+          }),
+          watch: (
+            name?: string | ((values: Record<string, unknown>) => void),
+          ) => {
+            if (typeof name === "function") {
+              subscribersRef.current.add(name);
+              return {
+                unsubscribe: () => subscribersRef.current.delete(name),
+              };
+            }
 
-          return name ? values[name] ?? "" : values;
-        },
-        setValue,
-        getValues: (name?: string) => (name ? values[name] : values),
-        handleSubmit:
-          (callback: (values: Record<string, unknown>) => unknown) =>
-          async (event?: { preventDefault?: () => void }) => {
-            event?.preventDefault?.();
-            await callback(values);
+            return name ? valuesRef.current[name] ?? "" : valuesRef.current;
           },
-        formState: {
-          errors: {},
-          isDirty: Object.keys(dirtyFields).length > 0,
-          dirtyFields,
-        },
-      };
+          setValue,
+          getValues: (name?: string) =>
+            name ? valuesRef.current[name] : valuesRef.current,
+          handleSubmit:
+            (callback: (values: Record<string, unknown>) => unknown) =>
+            async (event?: { preventDefault?: () => void }) => {
+              event?.preventDefault?.();
+              await callback(valuesRef.current);
+            },
+          formState: {
+            get errors() {
+              return {};
+            },
+            get isDirty() {
+              return Object.keys(dirtyFieldsRef.current).length > 0;
+            },
+            get dirtyFields() {
+              return dirtyFieldsRef.current;
+            },
+          },
+        }),
+        [],
+      );
     },
   };
 });
@@ -148,12 +197,22 @@ vi.mock("convex/server", () => {
 vi.mock("../../lib/proposal-personalization", () => ({
   buildAppProposalPersonalizationPayload: (...args: any[]) =>
     mockBuildAppProposalPersonalizationPayload(...args),
-  clearActiveLocalCvId: vi.fn(),
+  clearActiveLocalCvId: (...args: any[]) => mockClearActiveLocalCvId(...args),
+  formatCvDisplaySubtitle: ({ title }: { title?: string | null }) =>
+    title ?? "",
   getActiveLocalPersonalizationSource: () =>
     mockGetActiveLocalPersonalizationSource(),
-  getLocalActiveCvSnapshotById: vi.fn(() => null),
-  listLocalCvPickerOptions: vi.fn(() => []),
-  setActiveLocalCvId: vi.fn(),
+  getLocalActiveCvSnapshotById: (...args: any[]) =>
+    mockGetLocalActiveCvSnapshotById(...args),
+  listLocalCvPickerOptions: (...args: any[]) =>
+    mockListLocalCvPickerOptions(...args),
+  setActiveLocalCvId: (...args: any[]) => mockSetActiveLocalCvId(...args),
+}));
+
+vi.mock("../../contexts/CvLibraryContext", () => ({
+  useCvLibrary: () => ({
+    loadCv: mockLoadCv,
+  }),
 }));
 
 vi.mock("../../../convex/lib/proposals/voicePresets", () => {
@@ -252,6 +311,8 @@ vi.mock("../../../convex/lib/proposals/voicePresets", () => {
   return {
     DEFAULT_PROPOSAL_VOICE_PRESET: "signature",
     PROPOSAL_VOICE_PRESET_DEFINITIONS: definitions,
+    resolveProposalVoicePreset: (value: string | null | undefined) =>
+      definitions.find((definition) => definition.id === value)?.id,
     getSupportedProposalVoicePresetIds,
     isProposalVoicePresetSupportedForMode,
     getProposalVoicePresetDefinition: (preset: string) =>
@@ -311,6 +372,7 @@ vi.mock("../ui/dialog", () => ({
 
 describe("ProposalInputForm provider-busy handling", () => {
   beforeEach(() => {
+    mockNavigate.mockReset();
     mockGenerateProposalAction.mockReset();
     mockMutation.mockReset().mockResolvedValue(undefined);
     mockQuery.mockReset().mockReturnValue(undefined);
@@ -319,6 +381,12 @@ describe("ProposalInputForm provider-busy handling", () => {
       personalizationContext: null,
     });
     mockBuildAppProposalPersonalizationPayload.mockReset().mockReturnValue({});
+    mockClearActiveLocalCvId.mockReset();
+    mockGetLocalActiveCvSnapshotById.mockReset().mockReturnValue(null);
+    mockListLocalCvPickerOptions.mockReset().mockReturnValue([]);
+    mockLoadCv.mockReset().mockReturnValue(true);
+    mockSetActiveLocalCvId.mockReset();
+    window.localStorage.clear();
   });
 
   it("shows the friendly provider-busy message and unlocks the form for a no-CV legacy-generation rejection", async () => {
@@ -350,7 +418,7 @@ describe("ProposalInputForm provider-busy handling", () => {
 
     const jobTitleInput = screen.getByPlaceholderText("Enter Job Title");
     const jobDescriptionInput = screen.getByPlaceholderText(
-      "Paste the job description here…",
+      "Paste or write the job offer here…",
     );
     const submitButton = container.querySelector(
       'button[type="submit"]',
@@ -414,6 +482,69 @@ describe("ProposalInputForm provider-busy handling", () => {
     consoleErrorSpy.mockRestore();
   });
 
+  it("attaches the selected CV without loading it into the resume workspace", async () => {
+    mockListLocalCvPickerOptions.mockReturnValue([
+      {
+        id: "cv-1",
+        title: "Ada Lovelace",
+        isActive: false,
+      },
+    ]);
+    mockGetLocalActiveCvSnapshotById.mockReturnValue({
+      title: "Ada Lovelace",
+      personalizationContext: null,
+    });
+
+    render(<ProposalInputForm onSubmit={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Choose resume" }));
+
+    const option = await screen.findByRole("button", { name: /Ada Lovelace/i });
+    fireEvent.click(option);
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+
+    expect(mockSetActiveLocalCvId).toHaveBeenCalledWith("cv-1");
+    expect(mockLoadCv).not.toHaveBeenCalled();
+  });
+
+  it("still loads the selected CV when explicitly opening it in the resume workspace", async () => {
+    mockListLocalCvPickerOptions.mockReturnValue([
+      {
+        id: "cv-1",
+        title: "Ada Lovelace",
+        isActive: false,
+      },
+    ]);
+    mockGetLocalActiveCvSnapshotById.mockReturnValue({
+      title: "Ada Lovelace",
+      personalizationContext: null,
+    });
+
+    render(<ProposalInputForm onSubmit={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Choose resume" }));
+
+    const option = await screen.findByRole("button", { name: /Ada Lovelace/i });
+    fireEvent.click(option);
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+
+    expect(mockSetActiveLocalCvId).toHaveBeenCalledWith("cv-1");
+    expect(mockLoadCv).toHaveBeenCalledWith("cv-1");
+  });
+
+  it("does not clear the active CV id just because Proposal Forge cannot resolve it immediately", () => {
+    window.localStorage.setItem("cvActiveId", "cv_alpha");
+    mockGetActiveLocalPersonalizationSource.mockReturnValue({
+      title: null,
+      personalizationContext: null,
+    });
+
+    render(<ProposalInputForm />);
+
+    expect(mockClearActiveLocalCvId).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem("cvActiveId")).toBe("cv_alpha");
+  });
+
   it("shows the friendly transport-error message and unlocks the form for a controlled legacy-generation rejection", async () => {
     const transportError = Object.assign(
       new Error(
@@ -444,7 +575,7 @@ describe("ProposalInputForm provider-busy handling", () => {
 
     const jobTitleInput = screen.getByPlaceholderText("Enter Job Title");
     const jobDescriptionInput = screen.getByPlaceholderText(
-      "Paste the job description here…",
+      "Paste or write the job offer here…",
     );
     const submitButton = container.querySelector(
       'button[type="submit"]',
@@ -521,7 +652,7 @@ describe("ProposalInputForm provider-busy handling", () => {
 
     const jobTitleInput = screen.getByPlaceholderText("Enter Job Title");
     const jobDescriptionInput = screen.getByPlaceholderText(
-      "Paste the job description here…",
+      "Paste or write the job offer here…",
     );
     const submitButton = container.querySelector(
       'button[type="submit"]',
@@ -564,11 +695,88 @@ describe("ProposalInputForm provider-busy handling", () => {
     });
   });
 
+  it("reveals the square before stop and ignores the async result after stopping", async () => {
+    vi.useFakeTimers();
+    const onSubmit = vi.fn();
+    const onStop = vi.fn();
+    let resolveGeneration:
+      | ((value: {
+          proposalId: string;
+          proposalContent: string;
+          requestedModelType: string;
+          actualModelType: string;
+          fallbackTriggerCode: null;
+        }) => void)
+      | null = null;
+
+    mockGenerateProposalAction.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveGeneration = resolve;
+        }),
+    );
+
+    const { container } = render(
+      <ProposalInputForm onSubmit={onSubmit} onStop={onStop} />,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText("Enter Job Title"), {
+      target: { value: "Operations Associate" },
+    });
+    fireEvent.change(
+      screen.getByPlaceholderText("Paste or write the job offer here…"),
+      {
+        target: {
+          value:
+            "Support recurring processes, update internal records, and coordinate communication across teams.",
+        },
+      },
+    );
+
+    fireEvent.click(container.querySelector('button[type="submit"]')!);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2880);
+    });
+
+    const stopButton = screen.getByRole("button", { name: "Stop generating" });
+    fireEvent.click(stopButton);
+
+    expect(onStop).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByRole("button", { name: "Stopping" }),
+    ).toBeInTheDocument();
+
+    await act(async () => {
+      resolveGeneration?.({
+        proposalId: "proposal_stopped",
+        proposalContent: "Ignored content",
+        requestedModelType: "chatgpt",
+        actualModelType: "chatgpt",
+        fallbackTriggerCode: null,
+      });
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2300);
+    });
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("button", { name: "Generate" }),
+    ).toBeInTheDocument();
+    vi.useRealTimers();
+  });
+
   it("keeps the compose controls compact while hiding removed model and proposal options", () => {
     render(<ProposalInputForm onSubmit={vi.fn()} onError={vi.fn()} />);
 
-    expect(screen.getByRole("button", { name: "Letter" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Balanced" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Document type" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Letter")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tone" })).toBeInTheDocument();
+    expect(screen.getByText("Auto")).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "ChatGPT" }),
     ).not.toBeInTheDocument();
@@ -589,55 +797,55 @@ describe("ProposalInputForm provider-busy handling", () => {
   it("shows only the supported tone options for cover letters", async () => {
     render(<ProposalInputForm onSubmit={vi.fn()} onError={vi.fn()} />);
 
-    expect(screen.getByRole("button", { name: "Balanced" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tone" })).toBeInTheDocument();
+    expect(screen.getByText("Auto")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByTitle("Tone"));
+    fireEvent.click(screen.getByRole("button", { name: "Tone" }));
 
     await waitFor(() => {
-      expect(screen.getByText("Formal")).toBeInTheDocument();
+      expect(screen.getAllByText("Auto")).toHaveLength(2);
     });
 
-    expect(
-      screen.getByText("Formal"),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("Warm"),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByText("Storyteller"),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByText("Direct"),
-    ).not.toBeInTheDocument();
+    expect(screen.getByText("Natural")).toBeInTheDocument();
+    expect(screen.getByText("Formal")).toBeInTheDocument();
+    expect(screen.getByText("Warm")).toBeInTheDocument();
+    expect(screen.queryByText("Storyteller")).not.toBeInTheDocument();
+    expect(screen.queryByText("Direct")).not.toBeInTheDocument();
   });
 
-  it("falls back to the balanced tone when an unsupported saved preset enters cover-letter mode", async () => {
-    mockQuery.mockReturnValue({ voicePreset: "direct" });
+  it("falls back to Auto while hiding unsupported saved tones in cover-letter mode", async () => {
+    mockQuery.mockReturnValue({
+      voicePreset: "direct",
+      savedVoicePreset: "direct",
+      templateId: "editorial_wide",
+    });
 
     render(<ProposalInputForm onSubmit={vi.fn()} onError={vi.fn()} />);
 
-    expect(screen.getByRole("button", { name: "Balanced" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tone" })).toBeInTheDocument();
+    expect(screen.getByText("Auto")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByTitle("Tone"));
+    fireEvent.click(screen.getByRole("button", { name: "Tone" }));
 
     await waitFor(() => {
+      expect(screen.getByText("Natural")).toBeInTheDocument();
       expect(screen.getByText("Formal")).toBeInTheDocument();
     });
 
-    expect(
-      screen.queryByText("Direct"),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByText("Storyteller"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Direct")).not.toBeInTheDocument();
+    expect(screen.queryByText("Storyteller")).not.toBeInTheDocument();
   });
 
-  it("shows only the supported tone options for proposals and falls back to balanced from legacy saved presets", async () => {
-    mockQuery.mockReturnValue({ voicePreset: "direct" });
+  it("shows only the supported tone options for proposals and falls back to Auto from legacy saved presets", async () => {
+    mockQuery.mockReturnValue({
+      voicePreset: "direct",
+      savedVoicePreset: "direct",
+      templateId: "editorial_wide",
+    });
 
     render(<ProposalInputForm onSubmit={vi.fn()} onError={vi.fn()} />);
 
-    fireEvent.click(screen.getByTitle("Document type"));
+    fireEvent.click(screen.getByRole("button", { name: "Document type" }));
 
     await waitFor(() => {
       expect(screen.getByText("Proposal")).toBeInTheDocument();
@@ -646,27 +854,200 @@ describe("ProposalInputForm provider-busy handling", () => {
     fireEvent.click(screen.getByText("Proposal"));
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Proposal" })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Document type" }),
+      ).toBeInTheDocument();
+      expect(screen.getByText("Proposal")).toBeInTheDocument();
     });
 
-    expect(screen.getByRole("button", { name: "Balanced" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tone" })).toBeInTheDocument();
+    expect(screen.getByText("Auto")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByTitle("Tone"));
+    fireEvent.click(screen.getByRole("button", { name: "Tone" }));
 
     await waitFor(() => {
-      expect(
-        screen.queryByText("Direct"),
-      ).not.toBeInTheDocument();
+      expect(screen.getByText("Natural")).toBeInTheDocument();
+      expect(screen.queryByText("Direct")).not.toBeInTheDocument();
     });
 
+    expect(screen.getByText("Formal")).toBeInTheDocument();
+    expect(screen.getByText("Warm")).toBeInTheDocument();
+    expect(screen.queryByText("Storyteller")).not.toBeInTheDocument();
+  });
+
+  it("sends a null auto-tone sentinel while omitting explicit tone fields", async () => {
+    mockGenerateProposalAction.mockResolvedValue({
+      proposalId: "proposal_auto",
+      proposalContent: "Hello hiring team,\n\nI would love to contribute.",
+      requestedModelType: "chatgpt",
+      actualModelType: "chatgpt",
+      fallbackTriggerCode: null,
+    });
+
+    const { container } = render(<ProposalInputForm onSubmit={vi.fn()} />);
+
+    fireEvent.change(screen.getByPlaceholderText("Enter Job Title"), {
+      target: { value: "Operations Associate" },
+    });
+    fireEvent.change(
+      screen.getByPlaceholderText("Paste or write the job offer here…"),
+      {
+        target: {
+          value:
+            "Support recurring processes, update internal records, and coordinate communication across teams.",
+        },
+      },
+    );
+
+    fireEvent.click(container.querySelector('button[type="submit"]')!);
+
+    await waitFor(() => {
+      expect(mockGenerateProposalAction).toHaveBeenCalledTimes(1);
+    });
+
+    const payload = mockGenerateProposalAction.mock.calls[0][0];
+    expect(payload).toHaveProperty("voicePreset", null);
+    expect(payload).not.toHaveProperty("formalityLevel");
+    expect(payload).not.toHaveProperty("creativity");
+    expect(payload).not.toHaveProperty("toneTuning");
+    expect(payload).toMatchObject({
+      characterLimitMode: "custom",
+      characterLimitValue: 1500,
+    });
+  });
+
+  it("reuses the saved explicit preset when the user has one", async () => {
+    mockQuery.mockReturnValue({
+      voicePreset: "expert",
+      savedVoicePreset: "expert",
+      templateId: "editorial_wide",
+    });
+    mockGenerateProposalAction.mockResolvedValue({
+      proposalId: "proposal_saved_preset",
+      proposalContent: "Hello hiring team,\n\nI would love to contribute.",
+      requestedModelType: "chatgpt",
+      actualModelType: "chatgpt",
+      fallbackTriggerCode: null,
+    });
+
+    const { container } = render(<ProposalInputForm onSubmit={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Formal")).toBeVisible();
+    });
+
+    fireEvent.change(screen.getByPlaceholderText("Enter Job Title"), {
+      target: { value: "Operations Associate" },
+    });
+    fireEvent.change(
+      screen.getByPlaceholderText("Paste or write the job offer here…"),
+      {
+        target: {
+          value:
+            "Support recurring processes, update internal records, and coordinate communication across teams.",
+        },
+      },
+    );
+
+    fireEvent.click(container.querySelector('button[type="submit"]')!);
+
+    await waitFor(() => {
+      expect(mockGenerateProposalAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          voicePreset: "expert",
+          formalityLevel: "formal",
+          creativity: "low",
+        }),
+      );
+    });
+  });
+
+  it("rehydrates a legacy draft with toneTuning null without sending it to Convex", async () => {
+    window.localStorage.setItem(
+      "dasti:proposal-compose-draft:v1",
+      JSON.stringify({
+        jobTitle: "Operations Associate",
+        jobDescription:
+          "Support recurring processes, update internal records, and coordinate communication across teams.",
+        proposalType: "cover_letter",
+        toneTuning: null,
+      }),
+    );
+    mockGenerateProposalAction.mockResolvedValue({
+      proposalId: "proposal_legacy_draft",
+      proposalContent: "Hello hiring team,\n\nI would love to contribute.",
+      requestedModelType: "chatgpt",
+      actualModelType: "chatgpt",
+      fallbackTriggerCode: null,
+    });
+
+    const { container } = render(<ProposalInputForm onSubmit={vi.fn()} />);
+
+    fireEvent.click(container.querySelector('button[type="submit"]')!);
+
+    await waitFor(() => {
+      expect(mockGenerateProposalAction).toHaveBeenCalledTimes(1);
+    });
+
+    expect(mockGenerateProposalAction.mock.calls[0][0]).not.toHaveProperty(
+      "toneTuning",
+    );
+  });
+
+  it("retries without clientRunId when the backend validator is one revision behind", async () => {
+    const validatorError = new Error(
+      "ArgumentValidationError: Object contains extra field `clientRunId` that is not in the validator.",
+    );
+    const onSubmit = vi.fn();
+
+    mockGenerateProposalAction
+      .mockRejectedValueOnce(validatorError)
+      .mockResolvedValueOnce({
+        proposalId: "proposal_validator_retry",
+        proposalContent: "Hello hiring team,\n\nI would love to contribute.",
+        requestedModelType: "chatgpt",
+        actualModelType: "chatgpt",
+        fallbackTriggerCode: null,
+      });
+
+    const { container } = render(<ProposalInputForm onSubmit={onSubmit} />);
+
+    fireEvent.change(screen.getByPlaceholderText("Enter Job Title"), {
+      target: { value: "Operations Associate" },
+    });
+    fireEvent.change(
+      screen.getByPlaceholderText("Paste or write the job offer here…"),
+      {
+        target: {
+          value:
+            "Support recurring processes, update internal records, and coordinate communication across teams.",
+        },
+      },
+    );
+
+    fireEvent.click(container.querySelector('button[type="submit"]')!);
+
+    await waitFor(() => {
+      expect(mockGenerateProposalAction).toHaveBeenCalledTimes(2);
+    });
+
+    expect(mockGenerateProposalAction.mock.calls[0][0]).toHaveProperty(
+      "clientRunId",
+    );
+    expect(mockGenerateProposalAction.mock.calls[1][0]).not.toHaveProperty(
+      "clientRunId",
+    );
+
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("keeps the compose toolbar focused on resume, type, and tone controls only", () => {
+    render(<ProposalInputForm onSubmit={vi.fn()} />);
+
     expect(
-      screen.getByText("Formal"),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("Warm"),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByText("Storyteller"),
+      screen.queryByRole("button", { name: /Character limit/i }),
     ).not.toBeInTheDocument();
   });
 });

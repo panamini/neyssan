@@ -3,9 +3,14 @@ import {
   ArrowsOutSimple,
   Check,
   CornersIn,
+  Feather,
+  PenLine,
+  PenNib,
   RotateCcw,
+  Sunglasses,
   SquaresFour,
   Trash,
+  Wand2,
   X,
 } from "@/lib/icons";
 import { useQuery, useMutation, useAction, useConvexAuth } from "convex/react";
@@ -13,6 +18,7 @@ import { useAuth } from "@clerk/clerk-react";
 import { api } from "../../convex/_generated/api";
 import { useToast } from "./ui/toast";
 import ProposalDisplay from "./ProposalDisplay";
+import { ProposalArtifactInspector } from "./ProposalArtifactInspector";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import {
   buildAppProposalPersonalizationPayload,
@@ -27,6 +33,10 @@ import {
   type ProposalVoicePreset,
 } from "../../convex/lib/proposals/voicePresets";
 import {
+  resolveProposalCharacterLimitSelection,
+  type ProposalCharacterLimitMode,
+} from "../../convex/lib/proposals/generationControls";
+import {
   type ProposalTemplateId,
 } from "../../convex/lib/proposals/renderTemplates";
 import { formatUiDate } from "../lib/ui-date";
@@ -37,6 +47,12 @@ import {
 import { getVerbatiStyleFromCv } from "../features/verbati/style";
 import type { VerbatiStylePreset } from "../features/verbati/types";
 import { resolveProposalRenderState } from "../lib/proposal-render-state";
+import { getVoicePresetDisplayLabel } from "../lib/proposal-voice-label";
+import {
+  getProposalTemplateBundleDefinition,
+  type ProposalTemplateBundleId,
+} from "../lib/proposal-template-bundles";
+import type { ProposalPaletteId } from "../lib/proposal-style-display";
 
 type SavedProposalType =
   | "cover_letter"
@@ -46,6 +62,7 @@ type SavedProposalType =
 type SavedProposalRecord = {
   _id: string;
   _creationTime: number;
+  status?: string;
   title?: string;
   content?: string;
   sections?: Array<{
@@ -63,6 +80,9 @@ type SavedProposalRecord = {
     creativity?: ProposalCreativityLevel;
     templateId?: ProposalTemplateId;
     verbatiStyle?: Partial<VerbatiStylePreset>;
+    templateBundleId?: ProposalTemplateBundleId;
+    characterLimitMode?: ProposalCharacterLimitMode;
+    characterLimitValue?: number | null;
   };
 };
 
@@ -80,7 +100,104 @@ type RegeneratePayload = {
     | "mistral-small-latest"
     | "mistral-large-latest"
     | "mistral-agent";
+  characterLimitMode?: ProposalCharacterLimitMode;
+  characterLimitValue?: number | null;
 } & ProposalGenerationPersonalizationPayload;
+
+const SAVED_PROPOSAL_TONE_OPTIONS: ReadonlyArray<{
+  id: ProposalVoicePreset;
+  label: string;
+  description: string;
+  Icon: typeof Wand2;
+}> = [
+  {
+    id: "signature",
+    label: getVoicePresetDisplayLabel("signature"),
+    description: "Calm and direct.",
+    Icon: Feather,
+  },
+  {
+    id: "expert",
+    label: getVoicePresetDisplayLabel("expert"),
+    description: "Precise and authoritative.",
+    Icon: PenNib,
+  },
+  {
+    id: "engaging",
+    label: getVoicePresetDisplayLabel("engaging"),
+    description: "Friendly and more human.",
+    Icon: Sunglasses,
+  },
+] as const;
+
+function normalizeSavedBundleId(
+  value: ProposalTemplateBundleId | null | undefined,
+): ProposalTemplateBundleId | null {
+  if (!value) return null;
+  if (value === "grid_mono" || value === "swiss_mono") return "grid_mono";
+  if (value === "magazine_editorial" || value === "magazine_serif") {
+    return "magazine_editorial";
+  }
+  return "swiss_serif";
+}
+
+function isProposalPaletteId(value: unknown): value is ProposalPaletteId {
+  return (
+    value === "sauge" ||
+    value === "ocre" ||
+    value === "pierre" ||
+    value === "bordeaux" ||
+    value === "encre"
+  );
+}
+
+function normalizeAccentHex(value: unknown): string | null {
+  return typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value)
+    ? value.toUpperCase()
+    : null;
+}
+
+function resolveSavedAppearanceState(proposal: SavedProposalRecord | null): {
+  bundleId: ProposalTemplateBundleId | null;
+  paletteOverride: ProposalPaletteId | null;
+  customAccentHex: string | null;
+} {
+  if (!proposal) {
+    return {
+      bundleId: null,
+      paletteOverride: null,
+      customAccentHex: null,
+    };
+  }
+
+  const storedStyle = proposal.metadata?.verbatiStyle ?? null;
+  const derivedBundleId =
+    normalizeSavedBundleId(proposal.metadata?.templateBundleId) ??
+    (storedStyle?.layout === "editorial"
+      ? "magazine_editorial"
+      : storedStyle?.layout === "modernist"
+        ? "grid_mono"
+        : "swiss_serif");
+  const customAccentHex =
+    storedStyle?.palette === "custom"
+      ? normalizeAccentHex(storedStyle.accentHex)
+      : null;
+  const storedPalette = isProposalPaletteId(storedStyle?.palette)
+    ? storedStyle.palette
+    : null;
+  const bundleDefaultPalette = derivedBundleId
+    ? getProposalTemplateBundleDefinition(derivedBundleId).stylePreset.palette
+    : null;
+
+  return {
+    bundleId: derivedBundleId,
+    paletteOverride:
+      customAccentHex || !storedPalette || storedPalette === bundleDefaultPalette
+        ? null
+        : storedPalette,
+    customAccentHex,
+  };
+}
 
 function inferSavedProposalType(
   content: string | undefined,
@@ -209,18 +326,12 @@ function typeLabel(t: SavedProposalType): string {
   return "Message";
 }
 
-const TONE_UI: Record<string, string> = {
-  signature: "Balanced",
-  expert: "Formal",
-  engaging: "Warm",
-};
-
 const MOBILE_SAVED_PROPOSAL_MEDIA_QUERY = "(max-width: 820px)";
 const PINCH_OVERVIEW_THRESHOLD = 0.88;
 const PINCH_DETAIL_THRESHOLD = 1.12;
 
 function toneLabel(preset: ProposalVoicePreset): string {
-  return TONE_UI[preset] ?? preset;
+  return getVoicePresetDisplayLabel(preset);
 }
 
 function buildProposalMeta(proposal: SavedProposalRecord | null): string {
@@ -290,6 +401,10 @@ export default function ProposalsList({
     api.proposalsPublic.default as any,
     isLoaded && isSignedIn && isConvexAuthenticated ? {} : "skip",
   ) as SavedProposalRecord[] | undefined;
+  const savedProposals = React.useMemo(
+    () => (proposals ?? []).filter((proposal) => proposal.status === "saved"),
+    [proposals],
+  );
   const deleteProposal = useMutation(
     (api as any).deleteProposalPublic?.default,
   );
@@ -326,6 +441,14 @@ export default function ProposalsList({
   const [selectionRevealToken, setSelectionRevealToken] = React.useState(0);
   const [isSelectedCardSpotlit, setIsSelectedCardSpotlit] =
     React.useState(false);
+  const [selectedStyleBundleId, setSelectedStyleBundleId] =
+    React.useState<ProposalTemplateBundleId | null>(null);
+  const [selectedPaletteOverride, setSelectedPaletteOverride] =
+    React.useState<ProposalPaletteId | null>(null);
+  const [selectedCustomAccentHex, setSelectedCustomAccentHex] =
+    React.useState<string | null>(null);
+  const [isRegenerateToneMenuOpen, setIsRegenerateToneMenuOpen] =
+    React.useState(false);
   const [isSelectionPending, startSelectionTransition] = React.useTransition();
   const { showToast } = useToast();
   const activeCvStylePreset = React.useMemo(
@@ -344,6 +467,7 @@ export default function ProposalsList({
   const loadMoreSentinelRef = React.useRef<HTMLDivElement | null>(null);
   const gestureSurfaceRef = React.useRef<HTMLDivElement | null>(null);
   const selectedCardRef = React.useRef<HTMLDivElement | null>(null);
+  const regenerateToneMenuRef = React.useRef<HTMLSpanElement | null>(null);
   const shouldRevealSelectedCardRef = React.useRef(false);
   const spotlightTimeoutRef = React.useRef<number | null>(null);
 
@@ -421,12 +545,12 @@ export default function ProposalsList({
     }
 
     if (localProposals === null || localProposals.length === 0) {
-      setLocalProposals(proposals);
+      setLocalProposals(savedProposals);
     }
-  }, [localProposals, proposals]);
+  }, [localProposals, proposals, savedProposals]);
 
   React.useEffect(() => {
-    const list = localProposals ?? proposals;
+    const list = localProposals ?? savedProposals;
     if (!list || list.length === 0) return;
 
     if (selectedProposalId) {
@@ -453,14 +577,14 @@ export default function ProposalsList({
   }, [
     handleSelectProposal,
     localProposals,
-    proposals,
+    savedProposals,
     selectedId,
     selectedProposalId,
     selectProposal,
     onSelectedProposalIdChange,
   ]);
 
-  const displayList = localProposals ?? proposals ?? [];
+  const displayList = localProposals ?? savedProposals;
   const selected = displayList.find((p) => p._id === selectedId) ?? null;
   const resolveSavedProposalRenderState = React.useCallback(
     (proposal: SavedProposalRecord | null) => {
@@ -473,9 +597,58 @@ export default function ProposalsList({
     },
     [activeCvStylePreset],
   );
-  const selectedRenderState = React.useMemo(
-    () => resolveSavedProposalRenderState(selected),
-    [resolveSavedProposalRenderState, selected],
+  const selectedStoredAppearance = React.useMemo(
+    () => resolveSavedAppearanceState(selected),
+    [selected],
+  );
+  const selectedBaseStylePreset = React.useMemo(() => {
+    if (!selected) return null;
+    if (selectedStyleBundleId) {
+      return getProposalTemplateBundleDefinition(selectedStyleBundleId).stylePreset;
+    }
+    return selected.metadata?.verbatiStyle ?? activeCvStylePreset ?? null;
+  }, [activeCvStylePreset, selected, selectedStyleBundleId]);
+  const selectedEffectiveStylePreset = React.useMemo(() => {
+    if (!selectedBaseStylePreset) return null;
+    if (selectedCustomAccentHex) {
+      return {
+        ...selectedBaseStylePreset,
+        palette: "custom" as const,
+        accentHex: selectedCustomAccentHex,
+      };
+    }
+    if (selectedPaletteOverride) {
+      return {
+        ...selectedBaseStylePreset,
+        palette: selectedPaletteOverride,
+        accentHex: undefined,
+      };
+    }
+    return selectedBaseStylePreset;
+  }, [
+    selectedBaseStylePreset,
+    selectedCustomAccentHex,
+    selectedPaletteOverride,
+  ]);
+  const selectedRenderState = React.useMemo(() => {
+    if (!selected) return null;
+    return resolveProposalRenderState({
+      preferredStylePreset:
+        selectedEffectiveStylePreset ??
+        selected.metadata?.verbatiStyle ??
+        undefined,
+      storedStylePreset: selected.metadata?.verbatiStyle,
+      storedTemplateId: selected.metadata?.templateId,
+      activeCvStylePreset,
+    });
+  }, [activeCvStylePreset, selected, selectedEffectiveStylePreset]);
+  const selectedCharacterLimitSelection = React.useMemo(
+    () =>
+      resolveProposalCharacterLimitSelection({
+        mode: selected?.metadata?.characterLimitMode,
+        value: selected?.metadata?.characterLimitValue,
+      }),
+    [selected?.metadata?.characterLimitMode, selected?.metadata?.characterLimitValue],
   );
   const proposalStack = React.useMemo(() => {
     if (!selected) return [];
@@ -498,6 +671,13 @@ export default function ProposalsList({
   const isLibraryOverview = savedViewMode === "library";
   const isMainCardLoading = isSwitchingProposal || isSelectionPending;
 
+  React.useEffect(() => {
+    setSelectedStyleBundleId(selectedStoredAppearance.bundleId);
+    setSelectedPaletteOverride(selectedStoredAppearance.paletteOverride);
+    setSelectedCustomAccentHex(selectedStoredAppearance.customAccentHex);
+    setIsRegenerateToneMenuOpen(false);
+  }, [selected?._id, selectedStoredAppearance]);
+
   const toggleFocusView = React.useCallback(() => {
     setSavedViewMode((current) =>
       current === "focused" ? "stack" : "focused",
@@ -509,6 +689,95 @@ export default function ProposalsList({
       current === "library" ? "stack" : "library",
     );
   }, []);
+
+  React.useEffect(() => {
+    if (!isRegenerateToneMenuOpen) return undefined;
+
+    const handleOutside = (event: MouseEvent) => {
+      if (
+        regenerateToneMenuRef.current &&
+        !regenerateToneMenuRef.current.contains(event.target as Node)
+      ) {
+        setIsRegenerateToneMenuOpen(false);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsRegenerateToneMenuOpen(false);
+      }
+    };
+
+    window.addEventListener("mousedown", handleOutside);
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      window.removeEventListener("mousedown", handleOutside);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [isRegenerateToneMenuOpen]);
+
+  React.useEffect(() => {
+    if (
+      !selected ||
+      !selectedRenderState ||
+      !isConvexAuthenticated ||
+      isUpdating !== null
+    ) {
+      return undefined;
+    }
+
+    const appearanceChanged =
+      selectedStyleBundleId !== selectedStoredAppearance.bundleId ||
+      selectedPaletteOverride !== selectedStoredAppearance.paletteOverride ||
+      selectedCustomAccentHex !== selectedStoredAppearance.customAccentHex;
+
+    if (!appearanceChanged) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(async () => {
+      setIsUpdating(selected._id);
+      try {
+        const nextMetadata: NonNullable<SavedProposalRecord["metadata"]> = {
+          ...(selected.metadata ?? {}),
+          templateId: selectedRenderState.templateId,
+          verbatiStyle: selectedRenderState.stylePreset,
+        };
+        if (selectedStyleBundleId) {
+          nextMetadata.templateBundleId = selectedStyleBundleId;
+        } else {
+          delete nextMetadata.templateBundleId;
+        }
+
+        await updateProposal({
+          id: selected._id,
+          metadata: nextMetadata,
+        });
+
+        applyLocalUpdate(selected._id, {
+          metadata: nextMetadata,
+        });
+      } catch (error) {
+        console.error("Saved proposal appearance update failed:", error);
+      } finally {
+        setIsUpdating(null);
+      }
+    }, 240);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    isConvexAuthenticated,
+    isUpdating,
+    selected,
+    selectedCustomAccentHex,
+    selectedPaletteOverride,
+    selectedRenderState,
+    selectedStoredAppearance.bundleId,
+    selectedStoredAppearance.customAccentHex,
+    selectedStoredAppearance.paletteOverride,
+    selectedStyleBundleId,
+    updateProposal,
+  ]);
 
   React.useEffect(() => {
     if (!isSwitchingProposal) return;
@@ -734,6 +1003,16 @@ export default function ProposalsList({
     if (!titleChanged && !contentChanged) return;
     setIsUpdating(selected._id);
     try {
+      const nextMetadata: NonNullable<SavedProposalRecord["metadata"]> = {
+        ...(selected.metadata ?? {}),
+        templateId: selectedRenderState.templateId,
+        verbatiStyle: selectedRenderState.stylePreset,
+      };
+      if (selectedStyleBundleId) {
+        nextMetadata.templateBundleId = selectedStyleBundleId;
+      } else {
+        delete nextMetadata.templateBundleId;
+      }
       await updateProposal({
         id: selected._id,
         title: normalizedTitle,
@@ -743,20 +1022,13 @@ export default function ProposalsList({
               sections: [{ type: "text", content: trimmed }],
             }
           : {}),
-        metadata: {
-          templateId: selectedRenderState.templateId,
-          verbatiStyle: selectedRenderState.stylePreset,
-        },
+        metadata: nextMetadata,
       });
       setEditTitle(normalizedTitle);
       applyLocalUpdate(selected._id, {
         title: normalizedTitle,
         ...(contentChanged ? { content: trimmed } : {}),
-        metadata: {
-          ...(selected.metadata ?? {}),
-          templateId: selectedRenderState.templateId,
-          verbatiStyle: selectedRenderState.stylePreset,
-        },
+        metadata: nextMetadata,
       });
     } catch (err) {
       console.error("Update failed:", err);
@@ -766,7 +1038,7 @@ export default function ProposalsList({
     }
   }
 
-  async function handleRegenerate() {
+  async function handleRegenerate(nextVoicePreset?: ProposalVoicePreset) {
     if (!selected || !selectedRenderState || isRegenerating) return;
     if (!isConvexAuthenticated) {
       showConvexAuthRequiredToast("Regenerate");
@@ -783,13 +1055,15 @@ export default function ProposalsList({
         return;
       }
       const proposalType = getStoredProposalType(selected);
-      const voicePreset = getStoredVoicePreset(selected);
+      const voicePreset = nextVoicePreset ?? getStoredVoicePreset(selected);
       const jobTitle = resolveRegenerateJobTitle(selected.title, proposalType);
       const payload: RegeneratePayload = {
         jobTitle,
         jobDescription: sourceJobDescription,
         proposalType,
         voicePreset,
+        characterLimitMode: selected.metadata?.characterLimitMode,
+        characterLimitValue: selected.metadata?.characterLimitValue ?? null,
         ...(selected.metadata?.formalityLevel
           ? { formalityLevel: selected.metadata.formalityLevel }
           : {}),
@@ -804,36 +1078,40 @@ export default function ProposalsList({
         showToast("Regeneration returned no content", { variant: "warning" });
         return;
       }
+      const nextMetadata: NonNullable<SavedProposalRecord["metadata"]> = {
+        ...(selected.metadata ?? {}),
+        sourceJobDescription,
+        proposalType,
+        voicePreset,
+        templateId: selectedRenderState.templateId,
+        verbatiStyle: selectedRenderState.stylePreset,
+        requestedModelType: res.requestedModelType,
+        actualModelType: res.actualModelType,
+        fallbackTriggerCode: res.fallbackTriggerCode,
+      };
+      if (selectedStyleBundleId) {
+        nextMetadata.templateBundleId = selectedStyleBundleId;
+      } else {
+        delete nextMetadata.templateBundleId;
+      }
       await updateProposal({
         id: res.proposalId,
         title: jobTitle,
         content: res.proposalContent,
         sections: [{ type: "text", content: res.proposalContent }],
         status: "saved",
-        metadata: {
-          templateId: selectedRenderState.templateId,
-          verbatiStyle: selectedRenderState.stylePreset,
-        },
+        metadata: nextMetadata,
       });
       const regeneratedRecord: SavedProposalRecord = {
         _id: String(res.proposalId),
         _creationTime: Date.now(),
         title: jobTitle,
         content: res.proposalContent,
-        metadata: {
-          ...(selected.metadata ?? {}),
-          sourceJobDescription,
-          proposalType,
-          voicePreset,
-          templateId: selectedRenderState.templateId,
-          verbatiStyle: selectedRenderState.stylePreset,
-          requestedModelType: res.requestedModelType,
-          actualModelType: res.actualModelType,
-          fallbackTriggerCode: res.fallbackTriggerCode,
-        },
+        metadata: nextMetadata,
       };
       upsertLocalProposal(regeneratedRecord);
       selectProposal(regeneratedRecord, true);
+      setIsRegenerateToneMenuOpen(false);
       showToast("Proposal regenerated", {
         variant: "success",
         description: "A refreshed saved version is now in Proposal Library.",
@@ -894,12 +1172,12 @@ export default function ProposalsList({
           <div className="dasti-proposal-library-mobile-controls">
             <button
               type="button"
-              title={
+              aria-label={
                 isLibraryOverview
                   ? "Return to proposal stack"
                   : "Open proposal library overview"
               }
-              aria-label={
+              data-toolbar-tooltip={
                 isLibraryOverview
                   ? "Return to proposal stack"
                   : "Open proposal library overview"
@@ -916,12 +1194,12 @@ export default function ProposalsList({
             </button>
             <button
               type="button"
-              title={
+              aria-label={
                 isOutputFocused
                   ? "Return to card stack"
                   : "Focus selected proposal"
               }
-              aria-label={
+              data-toolbar-tooltip={
                 isOutputFocused
                   ? "Return to card stack"
                   : "Focus selected proposal"
@@ -1019,6 +1297,8 @@ export default function ProposalsList({
                   voicePreset={getStoredVoicePreset(selected)}
                   templateId={selectedRenderState?.templateId ?? null}
                   stylePreset={selectedRenderState?.stylePreset ?? null}
+                  characterLimit={selectedCharacterLimitSelection.value}
+                  characterLimitAdvisory={selectedCharacterLimitSelection.advisory}
                   fallbackInfo={buildFallbackInfo(selected)}
                   documentTitle={selectedHeaderTitle || "Saved proposal"}
                   documentMeta={selectedHeaderMeta}
@@ -1034,6 +1314,34 @@ export default function ProposalsList({
                   showZoomControls
                   zoomStorageKey={null}
                   size="default"
+                  documentHeaderMode="actions-only"
+                  railStartAddon={
+                    selectedRenderState ? (
+                      <ProposalArtifactInspector
+                        variant="header"
+                        styleBundleId={selectedStyleBundleId}
+                        onStyleBundleChange={setSelectedStyleBundleId}
+                        paletteOverride={selectedPaletteOverride}
+                        onPaletteOverrideChange={(value) => {
+                          setSelectedCustomAccentHex(null);
+                          setSelectedPaletteOverride(value);
+                        }}
+                        customAccentHex={selectedCustomAccentHex}
+                        onCustomAccentHexChange={(hex) => {
+                          setSelectedCustomAccentHex(hex);
+                          if (hex !== null) {
+                            setSelectedPaletteOverride(null);
+                          }
+                        }}
+                        resolvedPaletteId={
+                          selectedRenderState.stylePreset.palette === "custom"
+                            ? null
+                            : selectedRenderState.stylePreset.palette
+                        }
+                        hasGenerated
+                      />
+                    ) : null
+                  }
                   onCopy={() => {
                     void navigator.clipboard.writeText(editContent).then(() => {
                       setCopied(true);
@@ -1047,28 +1355,76 @@ export default function ProposalsList({
                   }}
                   actions={
                     <span className="dasti-icon-cluster dasti-icon-cluster--tight">
-                      <button
-                        type="button"
-                        title={
-                          isRegenerating === selected._id
-                            ? "Refreshing…"
-                            : "Refresh"
-                        }
-                        className="dasti-icon-button"
-                        style={{
-                          opacity: isRegenerating === selected._id ? 0.5 : 1,
-                        }}
-                        onClick={() => void handleRegenerate()}
-                        disabled={Boolean(isRegenerating)}
+                      <span
+                        ref={regenerateToneMenuRef}
+                        className="dasti-proposal-regenerate-drawer"
                       >
-                        <RotateCcw size={16} strokeWidth={1.5} />
-                      </button>
+                        <button
+                          type="button"
+                          className="dasti-icon-button dasti-toolbar-tooltip-trigger--above"
+                          data-toolbar-tooltip={
+                            isRegenerating === selected._id
+                              ? "Regenerating"
+                              : "Regenerate"
+                          }
+                          style={{
+                            opacity: isRegenerating === selected._id ? 0.5 : 1,
+                          }}
+                          onClick={() =>
+                            setIsRegenerateToneMenuOpen((open) => !open)
+                          }
+                          aria-expanded={isRegenerateToneMenuOpen}
+                          aria-haspopup="dialog"
+                          disabled={Boolean(isRegenerating)}
+                        >
+                          <RotateCcw size={16} strokeWidth={1.5} />
+                        </button>
+                        {isRegenerateToneMenuOpen ? (
+                          <div
+                            className="dasti-proposal-regenerate-drawer__menu dasti-proposal-chrome-drawer dasti-proposal-chrome-drawer--stack"
+                            role="dialog"
+                            aria-label="Choose tone for regenerate"
+                          >
+                            {SAVED_PROPOSAL_TONE_OPTIONS.map((option) => {
+                              const active =
+                                option.id === getStoredVoicePreset(selected);
+                              return (
+                                <button
+                                  key={option.id}
+                                  type="button"
+                                  className={[
+                                    "dasti-proposal-regenerate-drawer__option",
+                                    active
+                                      ? "dasti-proposal-regenerate-drawer__option--active"
+                                      : "",
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" ")}
+                                  aria-label={option.label}
+                                  data-toolbar-tooltip={option.label}
+                                  onClick={() => {
+                                    setIsRegenerateToneMenuOpen(false);
+                                    void handleRegenerate(option.id);
+                                  }}
+                                  disabled={Boolean(isRegenerating)}
+                                >
+                                  <option.Icon
+                                    size={15}
+                                    strokeWidth={1.7}
+                                    aria-hidden="true"
+                                  />
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+                      </span>
                       <div className="dasti-icon-cluster__divider" />
                       {!isConfirmingDelete ? (
                         <button
                           type="button"
-                          title="Delete"
                           className="dasti-icon-button"
+                          data-toolbar-tooltip="Delete"
                           onClick={() => setIsConfirmingDelete(true)}
                         >
                           <Trash size={16} strokeWidth={1.5} />
@@ -1077,8 +1433,8 @@ export default function ProposalsList({
                         <span className="dasti-icon-cluster">
                           <button
                             type="button"
-                            title="Confirm delete"
                             className="dasti-icon-button dasti-icon-button--compact dasti-icon-button--confirm"
+                            data-toolbar-tooltip="Confirm delete"
                             style={{
                               background: "var(--erb)",
                               color: "var(--ert)",
@@ -1104,8 +1460,8 @@ export default function ProposalsList({
                           </button>
                           <button
                             type="button"
-                            title="Cancel"
                             className="dasti-icon-button dasti-icon-button--compact"
+                            data-toolbar-tooltip="Cancel"
                             onClick={() => setIsConfirmingDelete(false)}
                           >
                             <X size={12} strokeWidth={2} />
