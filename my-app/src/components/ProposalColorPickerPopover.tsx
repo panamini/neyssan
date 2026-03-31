@@ -1,12 +1,16 @@
 import React from "react";
 import { createPortal } from "react-dom";
+import { X } from "@/lib/icons";
 
 type ProposalColorPickerPopoverProps = {
   currentHex: string | null;
   onHexChange: (hex: string) => void;
   anchorRef: React.RefObject<HTMLElement | null>;
+  surfaceAnchorRef?: React.RefObject<HTMLElement | null>;
+  horizontalAlign?: "center" | "start";
   isOpen: boolean;
   onClose: () => void;
+  onClear?: () => void;
 };
 
 const COLOR_POPOVER_ESTIMATED_SIZE = 176;
@@ -27,6 +31,12 @@ function normalizeHex(value: string): string | null {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+function isConnectedElement(
+  element: HTMLElement | null | undefined,
+): element is HTMLElement {
+  return Boolean(element && element.isConnected);
 }
 
 function readAttachedSurfaceGap(surface: HTMLElement | null): number {
@@ -139,12 +149,16 @@ export function ProposalColorPickerPopover({
   currentHex,
   onHexChange,
   anchorRef,
+  surfaceAnchorRef,
+  horizontalAlign = "center",
   isOpen,
   onClose,
+  onClear,
 }: ProposalColorPickerPopoverProps): JSX.Element | null {
   const popoverRef = React.useRef<HTMLDivElement>(null);
   const fieldRef = React.useRef<HTMLDivElement>(null);
   const hueRef = React.useRef<HTMLDivElement>(null);
+  const lastSurfaceAnchorRef = React.useRef<HTMLElement | null>(null);
   const [position, setPosition] = React.useState({ top: 0, left: 0 });
   const [dragTarget, setDragTarget] = React.useState<"field" | "hue" | null>(
     null,
@@ -152,34 +166,92 @@ export function ProposalColorPickerPopover({
 
   React.useLayoutEffect(() => {
     if (!isOpen) return;
+
+    const resolveSurfaceAnchor = (anchor: HTMLElement): HTMLElement => {
+      const explicitSurface = surfaceAnchorRef?.current;
+      if (isConnectedElement(explicitSurface)) {
+        lastSurfaceAnchorRef.current = explicitSurface;
+        return explicitSurface;
+      }
+
+      const rememberedSurface = lastSurfaceAnchorRef.current;
+      if (isConnectedElement(rememberedSurface)) {
+        return rememberedSurface;
+      }
+
+      const attachedSurface = getAttachedSurface(anchor);
+      if (isConnectedElement(attachedSurface)) {
+        lastSurfaceAnchorRef.current = attachedSurface;
+        return attachedSurface;
+      }
+
+      lastSurfaceAnchorRef.current = anchor;
+      return anchor;
+    };
+
     const updatePosition = () => {
       const anchor = anchorRef.current;
       if (!anchor) return;
       const anchorRect = anchor.getBoundingClientRect();
-      const attachedSurface = getAttachedSurface(anchor);
-      const surfaceRect =
-        attachedSurface?.getBoundingClientRect() ?? anchorRect;
+      const attachedSurface = resolveSurfaceAnchor(anchor);
+      const surfaceRect = attachedSurface.getBoundingClientRect();
       const anchoredGap = readAttachedSurfaceGap(attachedSurface);
       const popoverWidth =
         popoverRef.current?.offsetWidth ?? COLOR_POPOVER_ESTIMATED_SIZE;
       const centeredLeft =
         anchorRect.left + anchorRect.width / 2 - popoverWidth / 2;
+      const startLeft = surfaceRect.left;
       const maxLeft =
         window.innerWidth - popoverWidth - COLOR_POPOVER_VIEWPORT_GUTTER;
       setPosition({
-        top: surfaceRect.bottom + anchoredGap,
-        left: clamp(centeredLeft, COLOR_POPOVER_VIEWPORT_GUTTER, maxLeft),
+        top: surfaceRect.bottom + Math.max(anchoredGap, 2),
+        left: clamp(
+          horizontalAlign === "start" ? startLeft : centeredLeft,
+          COLOR_POPOVER_VIEWPORT_GUTTER,
+          maxLeft,
+        ),
       });
     };
 
     updatePosition();
+
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(updatePosition)
+        : null;
+    const anchor = anchorRef.current;
+    const surface = anchor ? resolveSurfaceAnchor(anchor) : null;
+
+    if (anchor && resizeObserver) {
+      resizeObserver.observe(anchor);
+    }
+    if (surface && resizeObserver && surface !== anchor) {
+      resizeObserver.observe(surface);
+    }
+    if (popoverRef.current && resizeObserver) {
+      resizeObserver.observe(popoverRef.current);
+    }
+
+    const htmlObserver =
+      typeof MutationObserver !== "undefined"
+        ? new MutationObserver(updatePosition)
+        : null;
+    if (htmlObserver && typeof document !== "undefined") {
+      htmlObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ["class", "style"],
+      });
+    }
+
     window.addEventListener("resize", updatePosition);
     window.addEventListener("scroll", updatePosition, true);
     return () => {
+      resizeObserver?.disconnect();
+      htmlObserver?.disconnect();
       window.removeEventListener("resize", updatePosition);
       window.removeEventListener("scroll", updatePosition, true);
     };
-  }, [anchorRef, isOpen]);
+  }, [anchorRef, horizontalAlign, isOpen, surfaceAnchorRef]);
 
   React.useEffect(() => {
     if (!isOpen) return;
@@ -234,11 +306,11 @@ export function ProposalColorPickerPopover({
   );
 
   const commitHueSelection = React.useCallback(
-    (clientX: number) => {
+    (clientY: number) => {
       const hueTrack = hueRef.current;
       if (!hueTrack) return;
       const rect = hueTrack.getBoundingClientRect();
-      const hue = clamp((clientX - rect.left) / rect.width, 0, 1) * 360;
+      const hue = clamp((clientY - rect.top) / rect.height, 0, 1) * 360;
       commitHsvSelection(hue, previewHsv.s, previewHsv.v);
     },
     [commitHsvSelection, previewHsv.s, previewHsv.v],
@@ -260,68 +332,7 @@ export function ProposalColorPickerPopover({
       role="dialog"
       aria-label="Custom accent color"
     >
-      <div
-        ref={fieldRef}
-        className="dasti-color-popover__field"
-        role="group"
-        aria-label="Accent color field"
-        tabIndex={0}
-        style={
-          {
-            "--marker-x": `${previewHsv.s * 100}%`,
-            "--marker-y": `${(1 - previewHsv.v) * 100}%`,
-            "--marker-color": previewHex,
-          } as React.CSSProperties
-        }
-        onPointerDown={(event) => {
-          event.preventDefault();
-          setDragTarget("field");
-          fieldRef.current?.setPointerCapture?.(event.pointerId);
-          commitFieldSelection(event.clientX, event.clientY);
-        }}
-        onPointerMove={(event) => {
-          if (dragTarget !== "field") return;
-          commitFieldSelection(event.clientX, event.clientY);
-        }}
-        onPointerUp={(event) => {
-          setDragTarget(null);
-          fieldRef.current?.releasePointerCapture?.(event.pointerId);
-        }}
-        onPointerCancel={(event) => {
-          setDragTarget(null);
-          fieldRef.current?.releasePointerCapture?.(event.pointerId);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "ArrowRight") {
-            event.preventDefault();
-            commitHsvSelection(previewHsv.h, previewHsv.s + 0.03, previewHsv.v);
-          } else if (event.key === "ArrowLeft") {
-            event.preventDefault();
-            commitHsvSelection(previewHsv.h, previewHsv.s - 0.03, previewHsv.v);
-          } else if (event.key === "ArrowUp") {
-            event.preventDefault();
-            commitHsvSelection(previewHsv.h, previewHsv.s, previewHsv.v + 0.03);
-          } else if (event.key === "ArrowDown") {
-            event.preventDefault();
-            commitHsvSelection(previewHsv.h, previewHsv.s, previewHsv.v - 0.03);
-          }
-        }}
-      >
-        <span className="dasti-color-popover__field-fill" aria-hidden="true">
-          <span
-            className="dasti-color-popover__field-layer dasti-color-popover__field-layer--light"
-          />
-          <span
-            className="dasti-color-popover__field-layer dasti-color-popover__field-layer--shade"
-          />
-        </span>
-        <span
-          className="dasti-color-popover__field-marker"
-          aria-hidden="true"
-        />
-      </div>
-
-      <div className="dasti-color-popover__footer">
+      <div className="dasti-color-popover__body">
         <div
           ref={hueRef}
           className="dasti-color-popover__hue"
@@ -333,18 +344,18 @@ export function ProposalColorPickerPopover({
           tabIndex={0}
           style={
             {
-              "--hue-marker-x": `${(previewHsv.h / 360) * 100}%`,
+              "--hue-marker-y": `${(previewHsv.h / 360) * 100}%`,
             } as React.CSSProperties
           }
           onPointerDown={(event) => {
             event.preventDefault();
             setDragTarget("hue");
             hueRef.current?.setPointerCapture?.(event.pointerId);
-            commitHueSelection(event.clientX);
+            commitHueSelection(event.clientY);
           }}
           onPointerMove={(event) => {
             if (dragTarget !== "hue") return;
-            commitHueSelection(event.clientX);
+            commitHueSelection(event.clientY);
           }}
           onPointerUp={(event) => {
             setDragTarget(null);
@@ -355,10 +366,10 @@ export function ProposalColorPickerPopover({
             hueRef.current?.releasePointerCapture?.(event.pointerId);
           }}
           onKeyDown={(event) => {
-            if (event.key === "ArrowRight" || event.key === "ArrowUp") {
+            if (event.key === "ArrowRight" || event.key === "ArrowDown") {
               event.preventDefault();
               commitHsvSelection(previewHsv.h + 6, previewHsv.s, previewHsv.v);
-            } else if (event.key === "ArrowLeft" || event.key === "ArrowDown") {
+            } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
               event.preventDefault();
               commitHsvSelection(previewHsv.h - 6, previewHsv.s, previewHsv.v);
             }
@@ -366,7 +377,83 @@ export function ProposalColorPickerPopover({
         >
           <span className="dasti-color-popover__hue-marker" aria-hidden="true" />
         </div>
+        <div
+          ref={fieldRef}
+          className="dasti-color-popover__field"
+          role="group"
+          aria-label="Accent color field"
+          tabIndex={0}
+          style={
+            {
+              "--marker-x": `${previewHsv.s * 100}%`,
+              "--marker-y": `${(1 - previewHsv.v) * 100}%`,
+              "--marker-color": previewHex,
+            } as React.CSSProperties
+          }
+          onPointerDown={(event) => {
+            event.preventDefault();
+            setDragTarget("field");
+            fieldRef.current?.setPointerCapture?.(event.pointerId);
+            commitFieldSelection(event.clientX, event.clientY);
+          }}
+          onPointerMove={(event) => {
+            if (dragTarget !== "field") return;
+            commitFieldSelection(event.clientX, event.clientY);
+          }}
+          onPointerUp={(event) => {
+            setDragTarget(null);
+            fieldRef.current?.releasePointerCapture?.(event.pointerId);
+          }}
+          onPointerCancel={(event) => {
+            setDragTarget(null);
+            fieldRef.current?.releasePointerCapture?.(event.pointerId);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowRight") {
+              event.preventDefault();
+              commitHsvSelection(previewHsv.h, previewHsv.s + 0.03, previewHsv.v);
+            } else if (event.key === "ArrowLeft") {
+              event.preventDefault();
+              commitHsvSelection(previewHsv.h, previewHsv.s - 0.03, previewHsv.v);
+            } else if (event.key === "ArrowUp") {
+              event.preventDefault();
+              commitHsvSelection(previewHsv.h, previewHsv.s, previewHsv.v + 0.03);
+            } else if (event.key === "ArrowDown") {
+              event.preventDefault();
+              commitHsvSelection(previewHsv.h, previewHsv.s, previewHsv.v - 0.03);
+            }
+          }}
+        >
+          <span className="dasti-color-popover__field-fill" aria-hidden="true">
+            <span
+              className="dasti-color-popover__field-layer dasti-color-popover__field-layer--light"
+            />
+            <span
+              className="dasti-color-popover__field-layer dasti-color-popover__field-layer--shade"
+            />
+          </span>
+          <span
+            className="dasti-color-popover__field-marker"
+            aria-hidden="true"
+          />
+        </div>
       </div>
+      {onClear ? (
+        <div className="dasti-color-popover__footer">
+          <button
+            type="button"
+            className="dasti-color-popover__dismiss"
+            aria-label="Clear custom accent"
+            data-toolbar-tooltip="Clear"
+            onClick={() => {
+              onClear();
+              onClose();
+            }}
+          >
+            <X size={12} aria-hidden="true" />
+          </button>
+        </div>
+      ) : null}
     </div>,
     document.body,
   );
