@@ -16,6 +16,8 @@ import {
 } from "@/lib/icons";
 import ProposalInputForm from "../components/ProposalInputForm";
 import { ProposalComposeToolbar } from "../components/ProposalComposeToolbar";
+import { ProposalArtifactInspector } from "../components/ProposalArtifactInspector";
+import { ProposalBriefCard } from "../components/ProposalBriefCard";
 import ProposalSaveDialog from "../components/ProposalSaveDialog";
 import ProposalDisplay, {
   fallbackCopyText,
@@ -84,6 +86,12 @@ import {
   type ProposalGenerationRequestPayload,
 } from "../lib/proposal-generation-request";
 import { getVoicePresetDisplayLabel } from "../lib/proposal-voice-label";
+import type { ProposalPaletteId } from "../lib/proposal-style-display";
+import {
+  findProposalTemplateBundleIdByStylePreset,
+  getProposalTemplateBundleDefinition,
+  type ProposalTemplateBundleId,
+} from "../lib/proposal-template-bundles";
 
 type ProposalForgePrefill = {
   handoffId: string;
@@ -109,6 +117,7 @@ type ProposalDocumentMetadata = {
   verbatiStyle?: ReturnType<typeof serializeVerbatiStyle>;
   styleLinkMode?: ProposalStyleLinkMode;
   styleChoice?: ProposalStyleChoice;
+  templateBundleId?: ProposalTemplateBundleId;
   characterLimitMode?: FormValues["characterLimitMode"];
   characterLimitValue?: number | null;
 };
@@ -140,6 +149,16 @@ function readAttachedCvSelection(): {
     id: activeOption?.id ?? null,
     title: activeOption?.title ?? activeSource.title ?? null,
   };
+}
+
+function isProposalPaletteId(value: unknown): value is ProposalPaletteId {
+  return (
+    value === "sauge" ||
+    value === "ocre" ||
+    value === "pierre" ||
+    value === "bordeaux" ||
+    value === "encre"
+  );
 }
 
 const PROPOSAL_WORKBENCH_VOICE_OPTIONS: Array<{
@@ -555,6 +574,18 @@ export function ProposalForge(): JSX.Element {
   const [proposalStylePreset, setProposalStylePreset] = React.useState(
     storedOutputDraft?.proposalVerbatiStyle ?? activeCvProposalStylePreset,
   );
+  const [proposalTemplateBundleId, setProposalTemplateBundleId] =
+    React.useState<ProposalTemplateBundleId | null>(
+      storedOutputDraft?.templateBundleId ?? null,
+    );
+  const [proposalPaletteOverride, setProposalPaletteOverride] =
+    React.useState<ProposalPaletteId | null>(
+      storedOutputDraft?.customAccentHex
+        ? null
+        : storedOutputDraft?.paletteOverride ?? null,
+    );
+  const [proposalCustomAccentHex, setProposalCustomAccentHex] =
+    React.useState<string | null>(storedOutputDraft?.customAccentHex ?? null);
   const [proposalApplicantName, setProposalApplicantName] =
     React.useState<string>(
       storedOutputDraft?.proposalApplicantName ||
@@ -780,8 +811,30 @@ export function ProposalForge(): JSX.Element {
       ? "inherit_cv"
       : "proposal_local";
 
+  const selectedProposalBundleDefinition = React.useMemo(
+    () =>
+      proposalTemplateBundleId
+        ? getProposalTemplateBundleDefinition(proposalTemplateBundleId)
+        : null,
+    [proposalTemplateBundleId],
+  );
+
   React.useEffect(() => {
     if (resolvedStyleLinkMode !== "proposal_local") {
+      return;
+    }
+
+    if (selectedProposalBundleDefinition) {
+      setProposalStylePreset((current) =>
+        current && stylesEqual(current, selectedProposalBundleDefinition.stylePreset)
+          ? current
+          : selectedProposalBundleDefinition.stylePreset,
+      );
+      setProposalTemplateId((current) =>
+        current === selectedProposalBundleDefinition.templateId
+          ? current
+          : selectedProposalBundleDefinition.templateId,
+      );
       return;
     }
 
@@ -799,6 +852,7 @@ export function ProposalForge(): JSX.Element {
     resolvedProposalLocalStyle.stylePreset,
     resolvedProposalLocalStyle.templateId,
     resolvedStyleLinkMode,
+    selectedProposalBundleDefinition,
   ]);
 
   const effectiveProposalStylePreset = React.useMemo(
@@ -807,6 +861,31 @@ export function ProposalForge(): JSX.Element {
         ? activeCvProposalStylePreset
         : resolveVerbatiStyle(proposalStylePreset ?? undefined),
     [activeCvProposalStylePreset, proposalStylePreset, resolvedStyleLinkMode],
+  );
+  const effectiveProposalStylePresetWithPalette = React.useMemo(
+    () => {
+      if (proposalCustomAccentHex) {
+        return resolveVerbatiStyle({
+          ...effectiveProposalStylePreset,
+          palette: "custom",
+          accentHex: proposalCustomAccentHex,
+        });
+      }
+
+      if (proposalPaletteOverride) {
+        return resolveVerbatiStyle({
+          ...effectiveProposalStylePreset,
+          palette: proposalPaletteOverride,
+        });
+      }
+
+      return effectiveProposalStylePreset;
+    },
+    [
+      effectiveProposalStylePreset,
+      proposalCustomAccentHex,
+      proposalPaletteOverride,
+    ],
   );
   const effectiveProposalTemplateId = React.useMemo(
     () =>
@@ -820,6 +899,12 @@ export function ProposalForge(): JSX.Element {
       proposalTemplateId,
       resolvedStyleLinkMode,
     ],
+  );
+  const selectedStyleBundleId = React.useMemo(
+    () =>
+      proposalTemplateBundleId ??
+      findProposalTemplateBundleIdByStylePreset(effectiveProposalStylePreset),
+    [effectiveProposalStylePreset, proposalTemplateBundleId],
   );
 
   const proposalRenderMetadata = React.useMemo<
@@ -836,10 +921,13 @@ export function ProposalForge(): JSX.Element {
     }
 
     nextMetadata.verbatiStyle = serializeVerbatiStyle(
-      effectiveProposalStylePreset,
+      effectiveProposalStylePresetWithPalette,
     );
     nextMetadata.styleLinkMode = resolvedStyleLinkMode;
     nextMetadata.styleChoice = proposalStyleChoice;
+    if (proposalTemplateBundleId) {
+      nextMetadata.templateBundleId = proposalTemplateBundleId;
+    }
     if (draftCharacterLimitMode) {
       nextMetadata.characterLimitMode = draftCharacterLimitMode;
       nextMetadata.characterLimitValue = draftCharacterLimitValue;
@@ -850,9 +938,10 @@ export function ProposalForge(): JSX.Element {
     currentProposalSettings?.templateId,
     draftCharacterLimitMode,
     draftCharacterLimitValue,
-    effectiveProposalStylePreset,
+    effectiveProposalStylePresetWithPalette,
     effectiveProposalTemplateId,
     fallbackProposalTemplateId,
+    proposalTemplateBundleId,
     proposalStyleChoice,
     resolvedStyleLinkMode,
   ]);
@@ -1272,8 +1361,50 @@ export function ProposalForge(): JSX.Element {
 
   const handleProposalStyleChoiceChange = React.useCallback(
     (nextChoice: ProposalStyleChoice) => {
+      setProposalTemplateBundleId(null);
       setProposalStyleChoice(nextChoice);
       setProposalStyleLinkMode("proposal_local");
+    },
+    [],
+  );
+
+  const handleTemplateBundleChange = React.useCallback(
+    (nextBundleId: ProposalTemplateBundleId | null) => {
+      setProposalTemplateBundleId(nextBundleId);
+      setProposalStyleLinkMode("proposal_local");
+
+      if (nextBundleId) {
+        const nextBundleDefinition =
+          getProposalTemplateBundleDefinition(nextBundleId);
+        setProposalStyleChoice(
+          resolveProposalStyleChoiceFromRenderState({
+            templateId: nextBundleDefinition.templateId,
+            stylePreset: nextBundleDefinition.stylePreset,
+          }) ?? "auto",
+        );
+      }
+    },
+    [],
+  );
+
+  const handlePaletteOverrideChange = React.useCallback(
+    (nextPalette: ProposalPaletteId | null) => {
+      setProposalStyleLinkMode("proposal_local");
+      setProposalPaletteOverride(nextPalette);
+      if (nextPalette) {
+        setProposalCustomAccentHex(null);
+      }
+    },
+    [],
+  );
+
+  const handleCustomAccentHexChange = React.useCallback(
+    (nextHex: string | null) => {
+      setProposalStyleLinkMode("proposal_local");
+      setProposalCustomAccentHex(nextHex);
+      if (nextHex) {
+        setProposalPaletteOverride(null);
+      }
     },
     [],
   );
@@ -1339,7 +1470,7 @@ export function ProposalForge(): JSX.Element {
         proposalTemplateId:
           effectiveProposalTemplateId ?? fallbackProposalTemplateId,
         proposalVerbatiStyle: serializeVerbatiStyle(
-          effectiveProposalStylePreset,
+          effectiveProposalStylePresetWithPalette,
         ),
         proposalStyleLinkMode: resolvedStyleLinkMode,
         proposalStyleChoice,
@@ -1349,9 +1480,9 @@ export function ProposalForge(): JSX.Element {
         proposalDocumentMeta: nextDocumentMeta,
         generatedProposalId: nextProposalId ?? null,
         proposalOutputMode: "preview",
-        paletteOverride: null,
-        customAccentHex: null,
-        templateBundleId: null,
+        paletteOverride: proposalPaletteOverride,
+        customAccentHex: proposalCustomAccentHex,
+        templateBundleId: proposalTemplateBundleId,
         typographyOverride: null,
         layoutOverride: null,
         proposalDocumentTitleManual: false,
@@ -1377,12 +1508,15 @@ export function ProposalForge(): JSX.Element {
       setLoading(false);
     },
     [
-      effectiveProposalStylePreset,
+      effectiveProposalStylePresetWithPalette,
       effectiveProposalTemplateId,
       fallbackProposalTemplateId,
       formatProposalToneLabel,
       formatProposalTypeLabel,
       persistProposalComposeDraftSnapshot,
+      proposalCustomAccentHex,
+      proposalPaletteOverride,
+      proposalTemplateBundleId,
       proposalStyleChoice,
       resolvedStyleLinkMode,
       resolveProposalVoicePreset,
@@ -1620,9 +1754,9 @@ export function ProposalForge(): JSX.Element {
           proposalContent,
           proposalType,
           proposalVoicePreset,
-          proposalTemplateId,
-          proposalVerbatiStyle: proposalStylePreset
-            ? serializeVerbatiStyle(proposalStylePreset)
+          proposalTemplateId: effectiveProposalTemplateId,
+          proposalVerbatiStyle: effectiveProposalStylePresetWithPalette
+            ? serializeVerbatiStyle(effectiveProposalStylePresetWithPalette)
             : null,
           proposalStyleLinkMode: resolvedStyleLinkMode,
           proposalStyleChoice,
@@ -1632,6 +1766,9 @@ export function ProposalForge(): JSX.Element {
           proposalDocumentMeta,
           generatedProposalId,
           proposalOutputMode,
+          paletteOverride: proposalPaletteOverride,
+          customAccentHex: proposalCustomAccentHex,
+          templateBundleId: proposalTemplateBundleId,
           characterLimitMode: draftCharacterLimitMode,
           characterLimitValue: draftCharacterLimitValue,
         } satisfies StoredProposalOutputDraft),
@@ -1649,11 +1786,14 @@ export function ProposalForge(): JSX.Element {
     proposalDocumentTitle,
     proposalOutputMode,
     proposalStyleChoice,
-    proposalStylePreset,
+    effectiveProposalStylePresetWithPalette,
+    proposalCustomAccentHex,
+    proposalPaletteOverride,
+    proposalTemplateBundleId,
     resolvedStyleLinkMode,
     draftCharacterLimitMode,
     draftCharacterLimitValue,
-    proposalTemplateId,
+    effectiveProposalTemplateId,
     proposalType,
     proposalVoicePreset,
   ]);
@@ -1813,6 +1953,17 @@ export function ProposalForge(): JSX.Element {
     const restoredRequestedVoicePreset =
       openedSavedProposal.metadata?.requestedVoicePreset ??
       savedProposalVoicePreset;
+    const restoredCustomAccentHex =
+      effectiveSavedProposalStylePreset.palette === "custom"
+        ? effectiveSavedProposalStylePreset.accentHex ?? null
+        : null;
+    const restoredPaletteOverride =
+      restoredCustomAccentHex === null &&
+      isProposalPaletteId(effectiveSavedProposalStylePreset.palette)
+        ? effectiveSavedProposalStylePreset.palette
+        : null;
+    const restoredTemplateBundleId =
+      findProposalTemplateBundleIdByStylePreset(effectiveSavedProposalStylePreset);
 
     if (typeof window !== "undefined") {
       try {
@@ -1852,6 +2003,9 @@ export function ProposalForge(): JSX.Element {
       ),
     );
     setProposalStylePreset(effectiveSavedProposalStylePreset);
+    setProposalTemplateBundleId(restoredTemplateBundleId);
+    setProposalPaletteOverride(restoredPaletteOverride);
+    setProposalCustomAccentHex(restoredCustomAccentHex);
     setProposalDocumentTitle(savedProposalDocumentTitle);
     setProposalDocumentMeta(savedProposalDocumentMeta);
     setGeneratedProposalId(null);
@@ -2300,6 +2454,19 @@ export function ProposalForge(): JSX.Element {
   const autoAppliedStyleLabel =
     resolvedProposalLocalStyle.appliedChoice.charAt(0).toUpperCase() +
     resolvedProposalLocalStyle.appliedChoice.slice(1);
+  const briefJobTitle =
+    lastProposalRequest?.jobTitle?.trim() ||
+    (typeof window !== "undefined"
+      ? readStoredProposalComposeDraft()?.jobTitle?.trim() || ""
+      : "");
+  const briefJobDescription =
+    lastProposalRequest?.jobDescription?.trim() ||
+    (typeof window !== "undefined"
+      ? readStoredProposalComposeDraft()?.jobDescription?.trim() || ""
+      : "");
+  const showBriefCard = Boolean(proposalContent) && Boolean(
+    briefJobTitle || briefJobDescription,
+  );
   const composeStyleControls = (
     <ProposalStyleSourceBar
       currentCvTitle={attachedCvTitle}
@@ -2309,6 +2476,24 @@ export function ProposalForge(): JSX.Element {
       onLinkModeChange={handleProposalStyleLinkModeChange}
     />
   );
+  const handleFocusComposeBrief = React.useCallback(() => {
+    const jobDescriptionField =
+      typeof document !== "undefined"
+        ? (document.getElementById("jobDescription") as
+            | HTMLTextAreaElement
+            | null)
+        : null;
+    if (jobDescriptionField) {
+      jobDescriptionField.focus();
+      return;
+    }
+
+    const jobTitleField =
+      typeof document !== "undefined"
+        ? (document.getElementById("jobTitle") as HTMLInputElement | null)
+        : null;
+    jobTitleField?.focus();
+  }, []);
   const proposalWorkbenchToolbar = !isSavedView ? (
     <ProposalComposeToolbar
       value={composeToolbarVoicePreset}
@@ -2454,6 +2639,16 @@ export function ProposalForge(): JSX.Element {
               <div className="dasti-flow">
                 <div style={stackedCardWidthStyle}>
                   {composeStyleControls}
+                  {showBriefCard ? (
+                    <ProposalBriefCard
+                      documentTitle={
+                        proposalDocumentTitle || "Generated proposal"
+                      }
+                      jobTitle={briefJobTitle}
+                      jobDescription={briefJobDescription}
+                      onToggleBrief={handleFocusComposeBrief}
+                    />
+                  ) : null}
                   {isLoadingHandoff ? (
                     <div style={{ paddingTop: "var(--s2)" }}>
                       <p className="dasti-hint">Loading imported job offer…</p>
@@ -2503,7 +2698,7 @@ export function ProposalForge(): JSX.Element {
                       effectiveProposalTemplateId ??
                       fallbackProposalTemplateId
                     }
-                    stylePreset={effectiveProposalStylePreset}
+                    stylePreset={effectiveProposalStylePresetWithPalette}
                     railTitle={proposalApplicantName || null}
                     railMeta={proposalApplicantRole || null}
                     fallbackInfo={fallbackInfo}
@@ -2523,6 +2718,26 @@ export function ProposalForge(): JSX.Element {
                     previewAnchor="top"
                     size="default"
                     documentHeaderMode="actions-only"
+                    railStartAddon={
+                      proposalContent ? (
+                        <ProposalArtifactInspector
+                          variant="header"
+                          styleBundleId={selectedStyleBundleId}
+                          onStyleBundleChange={handleTemplateBundleChange}
+                          paletteOverride={proposalPaletteOverride}
+                          onPaletteOverrideChange={handlePaletteOverrideChange}
+                          customAccentHex={proposalCustomAccentHex}
+                          onCustomAccentHexChange={handleCustomAccentHexChange}
+                          resolvedPaletteId={
+                            effectiveProposalStylePresetWithPalette.palette ===
+                            "custom"
+                              ? null
+                              : effectiveProposalStylePresetWithPalette.palette
+                          }
+                          hasGenerated={Boolean(proposalContent)}
+                        />
+                      ) : null
+                    }
                     onCopy={() => {
                       void handleCopyOutput();
                     }}

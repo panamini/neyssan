@@ -688,8 +688,7 @@ export const Sidebar: React.FC = () => {
   const sidebarCollapsed = collapsed || forcedCollapsed;
   const isResumeRoute = matchesRoute("/cv");
   const isResumeLibraryRoute = matchesRoute("/cvs");
-  const isProposalRoute =
-    matchesRoute("/proposal-next") || matchesRoute("/proposal");
+  const isProposalRoute = matchesRoute("/proposal");
   const isProposalLibraryRoute = matchesRoute("/proposals");
 
   const handleCreateProposal = React.useCallback(() => {
