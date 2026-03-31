@@ -1208,6 +1208,112 @@ export default function ProposalsList({
   const selectedHeaderMeta = selected
     ? buildProposalMeta(selected) || "Saved proposal"
     : "";
+  const selectedActionCluster = selected ? (
+    <span className="dasti-icon-cluster dasti-icon-cluster--tight">
+      <span
+        ref={regenerateToneMenuRef}
+        className="dasti-proposal-regenerate-drawer"
+      >
+        <button
+          type="button"
+          className="dasti-icon-button dasti-toolbar-tooltip-trigger--above"
+          data-toolbar-tooltip={
+            isRegenerating === selected._id ? "Regenerating" : "Regenerate"
+          }
+          style={{
+            opacity: isRegenerating === selected._id ? 0.5 : 1,
+          }}
+          onClick={() => setIsRegenerateToneMenuOpen((open) => !open)}
+          aria-expanded={isRegenerateToneMenuOpen}
+          aria-haspopup="dialog"
+          disabled={Boolean(isRegenerating)}
+        >
+          <RotateCcw size={16} strokeWidth={1.5} />
+        </button>
+        {isRegenerateToneMenuOpen ? (
+          <div
+            className="dasti-proposal-regenerate-drawer__menu dasti-proposal-chrome-drawer dasti-proposal-chrome-drawer--stack"
+            role="dialog"
+            aria-label="Choose tone for regenerate"
+          >
+            {SAVED_PROPOSAL_TONE_OPTIONS.map((option) => {
+              const active = option.id === getStoredVoicePreset(selected);
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  className={[
+                    "dasti-proposal-regenerate-drawer__option",
+                    active
+                      ? "dasti-proposal-regenerate-drawer__option--active"
+                      : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  aria-label={option.label}
+                  data-toolbar-tooltip={option.label}
+                  onClick={() => {
+                    setIsRegenerateToneMenuOpen(false);
+                    void handleRegenerate(option.id);
+                  }}
+                  disabled={Boolean(isRegenerating)}
+                >
+                  <option.Icon size={15} strokeWidth={1.7} aria-hidden="true" />
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+      </span>
+      <div className="dasti-icon-cluster__divider" />
+      {!isConfirmingDelete ? (
+        <button
+          type="button"
+          className="dasti-icon-button"
+          data-toolbar-tooltip="Delete"
+          onClick={() => setIsConfirmingDelete(true)}
+        >
+          <Trash size={16} strokeWidth={1.5} />
+        </button>
+      ) : (
+        <span className="dasti-icon-cluster">
+          <button
+            type="button"
+            className="dasti-icon-button dasti-icon-button--compact dasti-icon-button--confirm"
+            data-toolbar-tooltip="Confirm delete"
+            style={{
+              background: "var(--erb)",
+              color: "var(--ert)",
+            }}
+            onMouseEnter={(e) => {
+              const button = e.currentTarget as HTMLButtonElement;
+              button.style.background = "var(--er)";
+              button.style.color = "var(--op)";
+            }}
+            onMouseLeave={(e) => {
+              const button = e.currentTarget as HTMLButtonElement;
+              button.style.background = "var(--erb)";
+              button.style.color = "var(--ert)";
+            }}
+            onClick={() => {
+              void handleDelete();
+              setIsConfirmingDelete(false);
+            }}
+          >
+            <Check size={12} strokeWidth={2.5} />
+          </button>
+          <button
+            type="button"
+            className="dasti-icon-button dasti-icon-button--compact"
+            data-toolbar-tooltip="Cancel"
+            onClick={() => setIsConfirmingDelete(false)}
+          >
+            <X size={12} strokeWidth={2} />
+          </button>
+        </span>
+      )}
+    </span>
+  ) : null;
 
   return (
     <div
@@ -1380,31 +1486,37 @@ export default function ProposalsList({
                   size="default"
                   documentHeaderMode="actions-only"
                   railStartAddon={
-                    selectedRenderState ? (
-                      <ProposalArtifactInspector
-                        variant="header"
-                        styleBundleId={selectedStyleBundleId}
-                        onStyleBundleChange={setSelectedStyleBundleId}
-                        paletteOverride={selectedPaletteOverride}
-                        onPaletteOverrideChange={(value) => {
-                          setSelectedCustomAccentHex(null);
-                          setSelectedPaletteOverride(value);
-                        }}
-                        customAccentHex={selectedCustomAccentHex}
-                        onCustomAccentHexChange={(hex) => {
-                          setSelectedCustomAccentHex(hex);
-                          if (hex !== null) {
-                            setSelectedPaletteOverride(null);
+                    <>
+                      {selectedActionCluster}
+                      {selectedActionCluster && selectedRenderState ? (
+                        <div className="dasti-icon-cluster__divider dasti-proposal-rail-cluster__divider" />
+                      ) : null}
+                      {selectedRenderState ? (
+                        <ProposalArtifactInspector
+                          variant="header"
+                          styleBundleId={selectedStyleBundleId}
+                          onStyleBundleChange={setSelectedStyleBundleId}
+                          paletteOverride={selectedPaletteOverride}
+                          onPaletteOverrideChange={(value) => {
+                            setSelectedCustomAccentHex(null);
+                            setSelectedPaletteOverride(value);
+                          }}
+                          customAccentHex={selectedCustomAccentHex}
+                          onCustomAccentHexChange={(hex) => {
+                            setSelectedCustomAccentHex(hex);
+                            if (hex !== null) {
+                              setSelectedPaletteOverride(null);
+                            }
+                          }}
+                          resolvedPaletteId={
+                            selectedRenderState.stylePreset.palette === "custom"
+                              ? null
+                              : selectedRenderState.stylePreset.palette
                           }
-                        }}
-                        resolvedPaletteId={
-                          selectedRenderState.stylePreset.palette === "custom"
-                            ? null
-                            : selectedRenderState.stylePreset.palette
-                        }
-                        hasGenerated
-                      />
-                    ) : null
+                          hasGenerated
+                        />
+                      ) : null}
+                    </>
                   }
                   onCopy={() => {
                     void navigator.clipboard.writeText(editContent).then(() => {
@@ -1417,123 +1529,7 @@ export default function ProposalsList({
                   onContentCommit={() => {
                     void handleSaveDocument();
                   }}
-                  actions={
-                    <span className="dasti-icon-cluster dasti-icon-cluster--tight">
-                      <span
-                        ref={regenerateToneMenuRef}
-                        className="dasti-proposal-regenerate-drawer"
-                      >
-                        <button
-                          type="button"
-                          className="dasti-icon-button dasti-toolbar-tooltip-trigger--above"
-                          data-toolbar-tooltip={
-                            isRegenerating === selected._id
-                              ? "Regenerating"
-                              : "Regenerate"
-                          }
-                          style={{
-                            opacity: isRegenerating === selected._id ? 0.5 : 1,
-                          }}
-                          onClick={() =>
-                            setIsRegenerateToneMenuOpen((open) => !open)
-                          }
-                          aria-expanded={isRegenerateToneMenuOpen}
-                          aria-haspopup="dialog"
-                          disabled={Boolean(isRegenerating)}
-                        >
-                          <RotateCcw size={16} strokeWidth={1.5} />
-                        </button>
-                        {isRegenerateToneMenuOpen ? (
-                          <div
-                            className="dasti-proposal-regenerate-drawer__menu dasti-proposal-chrome-drawer dasti-proposal-chrome-drawer--stack"
-                            role="dialog"
-                            aria-label="Choose tone for regenerate"
-                          >
-                            {SAVED_PROPOSAL_TONE_OPTIONS.map((option) => {
-                              const active =
-                                option.id === getStoredVoicePreset(selected);
-                              return (
-                                <button
-                                  key={option.id}
-                                  type="button"
-                                  className={[
-                                    "dasti-proposal-regenerate-drawer__option",
-                                    active
-                                      ? "dasti-proposal-regenerate-drawer__option--active"
-                                      : "",
-                                  ]
-                                    .filter(Boolean)
-                                    .join(" ")}
-                                  aria-label={option.label}
-                                  data-toolbar-tooltip={option.label}
-                                  onClick={() => {
-                                    setIsRegenerateToneMenuOpen(false);
-                                    void handleRegenerate(option.id);
-                                  }}
-                                  disabled={Boolean(isRegenerating)}
-                                >
-                                  <option.Icon
-                                    size={15}
-                                    strokeWidth={1.7}
-                                    aria-hidden="true"
-                                  />
-                                </button>
-                              );
-                            })}
-                          </div>
-                        ) : null}
-                      </span>
-                      <div className="dasti-icon-cluster__divider" />
-                      {!isConfirmingDelete ? (
-                        <button
-                          type="button"
-                          className="dasti-icon-button"
-                          data-toolbar-tooltip="Delete"
-                          onClick={() => setIsConfirmingDelete(true)}
-                        >
-                          <Trash size={16} strokeWidth={1.5} />
-                        </button>
-                      ) : (
-                        <span className="dasti-icon-cluster">
-                          <button
-                            type="button"
-                            className="dasti-icon-button dasti-icon-button--compact dasti-icon-button--confirm"
-                            data-toolbar-tooltip="Confirm delete"
-                            style={{
-                              background: "var(--erb)",
-                              color: "var(--ert)",
-                            }}
-                            onMouseEnter={(e) => {
-                              const button =
-                                e.currentTarget as HTMLButtonElement;
-                              button.style.background = "var(--er)";
-                              button.style.color = "var(--op)";
-                            }}
-                            onMouseLeave={(e) => {
-                              const button =
-                                e.currentTarget as HTMLButtonElement;
-                              button.style.background = "var(--erb)";
-                              button.style.color = "var(--ert)";
-                            }}
-                            onClick={() => {
-                              void handleDelete();
-                              setIsConfirmingDelete(false);
-                            }}
-                          >
-                            <Check size={12} strokeWidth={2.5} />
-                          </button>
-                          <button
-                            type="button"
-                            className="dasti-icon-button dasti-icon-button--compact"
-                            data-toolbar-tooltip="Cancel"
-                            onClick={() => setIsConfirmingDelete(false)}
-                          >
-                            <X size={12} strokeWidth={2} />
-                          </button>
-                        </span>
-                      )}
-                    </span>
-                  }
+                  actions={null}
                 />
               </div>
 
