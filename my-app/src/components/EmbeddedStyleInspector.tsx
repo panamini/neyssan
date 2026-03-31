@@ -4,7 +4,6 @@ import type { ProposalTemplateId } from "../../convex/lib/proposals/renderTempla
 import type { VerbatiStyleBundleId } from "../../convex/lib/proposals/styleSuggestions";
 import { ProposalColorPickerPopover } from "./ProposalColorPickerPopover";
 import {
-  getLayoutLabel,
   resolveVerbatiAccentHex,
   VERBATI_LAYOUT_OPTIONS,
   VERBATI_PALETTE_OPTIONS,
@@ -114,6 +113,8 @@ export function EmbeddedStyleInspector({
   isApplyingCommand = false,
 }: EmbeddedStyleInspectorProps): JSX.Element {
   const rootRef = React.useRef<HTMLDivElement>(null);
+  const colorGroupRef = React.useRef<HTMLDivElement>(null);
+  const colorDrawerRef = React.useRef<HTMLDivElement>(null);
   const colorButtonRef = React.useRef<HTMLButtonElement>(null);
   const promptInputId = React.useId();
   const [activeDrawer, setActiveDrawer] = React.useState<DrawerId | null>(null);
@@ -132,14 +133,23 @@ export function EmbeddedStyleInspector({
     () => resolveVerbatiAccentHex(stylePreset),
     [stylePreset],
   );
-  const activePaletteOption = React.useMemo(
-    () =>
-      stylePreset.palette === "custom"
-        ? null
-        : VERBATI_PALETTE_OPTIONS.find((option) => option.id === stylePreset.palette) ??
-          null,
-    [stylePreset.palette],
-  );
+  const customClearPalette = React.useMemo<Exclude<VerbatiPalettePreset, "custom">>(() => {
+    if (stylePreset.palette !== "custom") {
+      return stylePreset.palette;
+    }
+
+    const fallbackPalette = (
+      activeBundleId
+        ? getVerbatiStyleBundleDefinition(activeBundleId).stylePreset.palette
+        : VERBATI_STYLE_BUNDLE_DEFINITIONS[0].stylePreset.palette
+    ) as VerbatiPalettePreset;
+
+    return (
+      fallbackPalette === "custom"
+        ? VERBATI_STYLE_BUNDLE_DEFINITIONS[0].stylePreset.palette
+        : fallbackPalette
+    ) as Exclude<VerbatiPalettePreset, "custom">;
+  }, [activeBundleId, stylePreset.palette]);
   const activeTypographyOption = React.useMemo(
     () =>
       VERBATI_TYPOGRAPHY_OPTIONS.find(
@@ -157,12 +167,18 @@ export function EmbeddedStyleInspector({
     const handlePointerDown = (event: MouseEvent) => {
       const target = event.target as Node | null;
       if (target && !rootRef.current?.contains(target)) {
+        if (isColorPickerOpen && activeDrawer === "color") {
+          return;
+        }
         setActiveDrawer(null);
       }
     };
 
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        if (isColorPickerOpen && activeDrawer === "color") {
+          return;
+        }
         setActiveDrawer(null);
       }
     };
@@ -174,7 +190,7 @@ export function EmbeddedStyleInspector({
       window.removeEventListener("mousedown", handlePointerDown);
       window.removeEventListener("keydown", handleEscape);
     };
-  }, [activeDrawer]);
+  }, [activeDrawer, isColorPickerOpen]);
 
   React.useEffect(() => {
     if (!confirmation) return undefined;
@@ -199,14 +215,9 @@ export function EmbeddedStyleInspector({
 
   const handleColorTrigger = React.useCallback(() => {
     if (readOnly) return;
-    setActiveDrawer(null);
-    if (stylePreset.palette === "custom") {
-      setIsColorPickerOpen((current) => !current);
-      return;
-    }
     setIsColorPickerOpen(false);
     setActiveDrawer((current) => (current === "color" ? null : "color"));
-  }, [readOnly, stylePreset.palette]);
+  }, [readOnly]);
 
   const handleApplyCommand = React.useCallback(async () => {
     const normalizedCommand = command.trim();
@@ -279,11 +290,6 @@ export function EmbeddedStyleInspector({
                 <InspectorTooltip
                   className="dasti-artifact-inspector__tooltip--trigger"
                   title="Text"
-                  description={
-                    isTitleOnlyCopy
-                      ? null
-                      : `${activeTypographyOption.name} lettering.`
-                  }
                 />
               ) : null}
             </button>
@@ -366,11 +372,6 @@ export function EmbeddedStyleInspector({
                 <InspectorTooltip
                   className="dasti-artifact-inspector__tooltip--trigger"
                   title="Layout"
-                  description={
-                    isTitleOnlyCopy
-                      ? null
-                      : `${getLayoutLabel(stylePreset.layout)} layout.`
-                  }
                 />
               ) : null}
             </button>
@@ -451,13 +452,6 @@ export function EmbeddedStyleInspector({
                 <InspectorTooltip
                   className="dasti-artifact-inspector__tooltip--trigger"
                   title="Style"
-                  description={
-                    isTitleOnlyCopy
-                      ? null
-                      : activeBundleId
-                        ? `${getVerbatiStyleBundleDefinition(activeBundleId).label} preset.`
-                        : "Open shared resume presets."
-                  }
                 />
               ) : null}
             </button>
@@ -558,9 +552,6 @@ export function EmbeddedStyleInspector({
                 <InspectorTooltip
                   className="dasti-artifact-inspector__tooltip--trigger"
                   title="Refine"
-                  description={
-                    isTitleOnlyCopy ? null : "Layout and typography controls."
-                  }
                 />
               ) : null}
             </button>
@@ -673,6 +664,7 @@ export function EmbeddedStyleInspector({
       )}
 
       <div
+        ref={colorGroupRef}
         className="dasti-artifact-inspector__group dasti-artifact-inspector__group--color"
         role="group"
         aria-label="Color"
@@ -714,20 +706,14 @@ export function EmbeddedStyleInspector({
           {!hasOpenDrawer ? (
             <InspectorTooltip
               className="dasti-artifact-inspector__tooltip--trigger"
-              title="Color"
-              description={
-                isTitleOnlyCopy
-                  ? null
-                  : stylePreset.palette === "custom"
-                    ? "Custom accent picker."
-                    : `${activePaletteOption?.name ?? "Palette"} accents.`
-              }
+              title="Colors"
             />
           ) : null}
         </button>
 
         {activeDrawer === "color" ? (
           <div
+            ref={colorDrawerRef}
             className="dasti-resume-style-inspector__drawer dasti-resume-style-inspector__drawer--palette dasti-proposal-chrome-drawer dasti-proposal-chrome-drawer--stack"
             role="dialog"
             aria-label="Palette options"
@@ -747,7 +733,6 @@ export function EmbeddedStyleInspector({
                         : "dasti-artifact-inspector__swatch"
                     }
                     aria-pressed={active}
-                    title={option.name}
                     aria-label={`Use ${option.name}`}
                     onClick={() => {
                       onSelectPalette(option.id);
@@ -778,14 +763,9 @@ export function EmbeddedStyleInspector({
                     .filter(Boolean)
                     .join(" ")}
                   aria-pressed={stylePreset.palette === "custom"}
-                  title={
-                    stylePreset.palette === "custom"
-                      ? activeAccentHex
-                      : "Custom accent"
-                  }
                   aria-label="Choose a custom accent"
                   onClick={() => {
-                    setActiveDrawer(null);
+                    setActiveDrawer("color");
                     setIsColorPickerOpen(true);
                   }}
                   disabled={readOnly}
@@ -797,7 +777,7 @@ export function EmbeddedStyleInspector({
                 >
                   {stylePreset.palette !== "custom" ? (
                     <ColorWheel
-                      size={18}
+                      size={16}
                       className="dasti-artifact-inspector__swatch-wheel"
                       aria-hidden="true"
                     />
@@ -840,12 +820,9 @@ export function EmbeddedStyleInspector({
             </span>
             <span className="dasti-artifact-inspector__label">Prompt</span>
             {!hasOpenDrawer ? (
-              <InspectorTooltip
+            <InspectorTooltip
               className="dasti-artifact-inspector__tooltip--trigger"
               title="Prompt"
-              description={
-                isTitleOnlyCopy ? null : "Describe the look in plain language."
-              }
             />
           ) : null}
         </button>
@@ -918,8 +895,17 @@ export function EmbeddedStyleInspector({
           onSelectCustomAccent?.(hex);
         }}
         anchorRef={colorButtonRef}
+        surfaceAnchorRef={activeDrawer === "color" ? colorDrawerRef : colorGroupRef}
+        horizontalAlign="start"
         isOpen={Boolean(onSelectCustomAccent) && isColorPickerOpen}
         onClose={() => setIsColorPickerOpen(false)}
+        onClear={
+          stylePreset.palette === "custom"
+            ? () => {
+                onSelectPalette(customClearPalette);
+              }
+            : undefined
+        }
       />
     </div>
   );
