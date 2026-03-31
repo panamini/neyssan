@@ -3,6 +3,13 @@ import { render, waitFor, cleanup, act } from '@testing-library/react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { CvLibraryProvider, useCvLibrary } from '../CvLibraryContext';
 
+vi.mock('@clerk/clerk-react', () => ({
+  useAuth: () => ({
+    isLoaded: false,
+    isSignedIn: false,
+  }),
+}));
+
 vi.mock('uuid', () => {
   return {
     v4: () => {
@@ -57,6 +64,7 @@ describe('CvLibraryContext', () => {
   afterEach(() => {
     cleanup();
     vi.useRealTimers();
+    window.history.pushState({}, '', '/');
     // restore localStorage to avoid polluting other tests (if any)
     delete (window as any).localStorage;
   });
@@ -162,6 +170,50 @@ describe('CvLibraryContext', () => {
     // loadCv sets currentCvId synchronously
     await waitFor(() => expect(ctx.currentCvId).toBe(firstId));
     expect(ctx.currentCv.id).toBe(firstId);
+  });
+
+  it('prefers the requested /cv route id over stale active storage during hydration', async () => {
+    const now = new Date().toISOString();
+    const alpha = {
+      id: 'cv_alpha',
+      title: 'Alpha CV',
+      metadata: {
+        createdAt: now,
+        updatedAt: now,
+        version: 1,
+      },
+      sections: [],
+    };
+    const beta = {
+      id: 'cv_beta',
+      title: 'Beta CV',
+      metadata: {
+        createdAt: now,
+        updatedAt: now,
+        version: 1,
+      },
+      sections: [],
+    };
+
+    mockLocalStorage.setItem('cvDocuments', JSON.stringify([alpha, beta]));
+    mockLocalStorage.setItem('cv:cv_alpha', JSON.stringify(alpha));
+    mockLocalStorage.setItem('cv:cv_beta', JSON.stringify(beta));
+    mockLocalStorage.setItem('cvActiveId', 'cv_alpha');
+    window.history.pushState({}, '', '/cv?id=cv_beta');
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(ctx).toBeDefined());
+    await waitFor(() => expect(ctx.currentCvId).toBe('cv_beta'));
+    await waitFor(() =>
+      expect(mockLocalStorage.getItem('cvActiveId')).toBe('cv_beta')
+    );
+    expect(ctx.currentCv?.title).toBe('Beta CV');
   });
 
   it('auto-persists when dirty and loadCv switches immediately', async () => {

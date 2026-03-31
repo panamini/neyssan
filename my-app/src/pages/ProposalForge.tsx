@@ -527,6 +527,7 @@ export function ProposalForge(): JSX.Element {
   );
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = React.useState<string | null>(null);
   const [errorDetail, setErrorDetail] = React.useState<string | null>(null);
   const [proposalType, setProposalType] = React.useState<
     FormValues["proposalType"] | null
@@ -679,6 +680,30 @@ export function ProposalForge(): JSX.Element {
       platform: handoffRecord.platform,
     };
   }, [handoffRecord]);
+
+  const consumedHandoffIdRef = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    if (requestedView !== "compose" || !prefill?.handoffId) {
+      return;
+    }
+
+    if (consumedHandoffIdRef.current === prefill.handoffId) {
+      return;
+    }
+
+    const params = new URLSearchParams(search);
+    if (params.get("handoffId") !== prefill.handoffId) {
+      return;
+    }
+
+    consumedHandoffIdRef.current = prefill.handoffId;
+    params.delete("handoffId");
+    const nextSearch = params.toString();
+    void navigate(nextSearch ? `/proposal?${nextSearch}` : "/proposal", {
+      replace: true,
+    });
+  }, [navigate, prefill?.handoffId, requestedView, search]);
 
   React.useEffect(() => {
     if (!currentProposalSettings?.templateId) {
@@ -1131,6 +1156,7 @@ export function ProposalForge(): JSX.Element {
       setProposalContent(null);
       setGeneratedProposalId(null);
       setProposalOutputMode("preview");
+      setStatusMessage(null);
       setError(null);
       setErrorDetail(null);
       setFallbackInfo(null);
@@ -1199,6 +1225,7 @@ export function ProposalForge(): JSX.Element {
       lastSavedProposalContentRef.current = proposal;
       lastSavedProposalTitleRef.current = nextDocumentTitle;
       setIsConfirmingGeneratedDelete(false);
+      setStatusMessage(null);
       setError(null);
       setFallbackInfo(nextFallbackInfo ?? null);
       setLoading(false);
@@ -1242,6 +1269,7 @@ export function ProposalForge(): JSX.Element {
       setProposalOutputMode("preview");
       setIsConfirmingGeneratedDelete(false);
       setError(message);
+      setStatusMessage(null);
       setErrorDetail(rawReason ?? null);
       setFallbackInfo(null);
     },
@@ -1258,6 +1286,18 @@ export function ProposalForge(): JSX.Element {
     },
     [],
   );
+
+  const handleProposalStop = React.useCallback(() => {
+    setLoading(false);
+    setProposalContent(null);
+    setGeneratedProposalId(null);
+    setProposalOutputMode("preview");
+    setError(null);
+    setStatusMessage("Generation stopped.");
+    setErrorDetail(null);
+    setFallbackInfo(null);
+    setIsConfirmingGeneratedDelete(false);
+  }, []);
 
   const handleProposalDocumentCommit = React.useCallback(async () => {
     if (
@@ -1536,6 +1576,7 @@ export function ProposalForge(): JSX.Element {
   const updateProposalRoute = React.useCallback(
     (view: ProposalForgeView, nextProposalId: string | null = null) => {
       const params = new URLSearchParams(search);
+      params.delete("handoffId");
       if (view === "saved") {
         params.set("view", "saved");
         if (nextProposalId) {
@@ -1670,6 +1711,7 @@ export function ProposalForge(): JSX.Element {
     setComposeFormInstanceKey((currentKey) => currentKey + 1);
     setFallbackInfo(null);
     setError(null);
+    setStatusMessage(null);
     setErrorDetail(null);
     showToast("Copied to live draft", {
       variant: "success",
@@ -1838,6 +1880,7 @@ export function ProposalForge(): JSX.Element {
         setIsRegeneratingGeneratedProposal(true);
         setLoading(true);
         setError(null);
+        setStatusMessage(null);
         setErrorDetail(null);
         setFallbackInfo(null);
 
@@ -1939,6 +1982,7 @@ export function ProposalForge(): JSX.Element {
       setProposalOutputMode("preview");
       setFallbackInfo(null);
       setError(null);
+      setStatusMessage(null);
       setErrorDetail(null);
       setIsConfirmingGeneratedDelete(false);
       lastSavedProposalContentRef.current = null;
@@ -2184,6 +2228,7 @@ export function ProposalForge(): JSX.Element {
                     <ProposalInputForm
                       key={composeFormInstanceKey}
                       onStart={handleProposalStart}
+                      onStop={handleProposalStop}
                       onSubmit={handleProposalSubmit}
                       onError={handleProposalError}
                       onValuesChange={handleProposalFormValuesChange}
@@ -2210,6 +2255,7 @@ export function ProposalForge(): JSX.Element {
                     proposalContent={proposalContent}
                     loading={loading}
                     error={error}
+                    statusMessage={statusMessage}
                     errorDetail={errorDetail}
                     proposalType={proposalType}
                     voicePreset={proposalVoicePreset}
@@ -2235,7 +2281,7 @@ export function ProposalForge(): JSX.Element {
                     showModeToggle
                     showZoomControls
                     zoomStorageKey={null}
-                    previewAnchor="body"
+                    previewAnchor="top"
                     size="default"
                     documentHeaderMode="actions-only"
                     onCopy={() => {

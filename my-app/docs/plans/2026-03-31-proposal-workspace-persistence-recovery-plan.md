@@ -11,10 +11,12 @@ Keep the restored `ProposalForge` runtime stable, keep Proposal/Resume state bou
 - `/proposal` routes to `ProposalForge`
 - `/proposal-next` is not the active runtime path
 - Proposal -> Resume -> Proposal manual retest is green
+- real-browser regression coverage is green in Chromium via `e2e/proposal-workspace-roundtrip.spec.ts`
 - Proposal attach/remove CV now uses a Proposal-owned state boundary
 - output draft persistence no longer:
   - disappears on initial mount
   - overwrites a valid generated draft with metadata-only null-content state
+- route-driven Resume activation now wins over stale `cvActiveId` during initial `/cv?id=...` hydration
 
 ## Checklist Status
 
@@ -26,11 +28,8 @@ Keep the restored `ProposalForge` runtime stable, keep Proposal/Resume state bou
 - compose draft survives resume detours
 - saved proposal -> back to draft remains coherent
 - save button above output does not clear live draft
-
-### Still required before broader migration
-
-- keep real-browser regression coverage stable in an environment where Chromium launches reliably
-- add a short follow-up cleanup/decision note once the next UI migration batch starts
+- resume route activation stays coherent when `/cv?id=...` disagrees with stale `cvActiveId`
+- Chromium roundtrip regression suite passes
 
 ## Immediate Acceptance Criteria
 
@@ -103,6 +102,8 @@ Done means:
 2. proposal-attached CV stays correct across the same roundtrip
 3. saved proposal -> live draft remains coherent
 4. the focused persistence suite stays green
+
+Status: complete on 2026-03-31.
 
 ## Definition Of Done For The Next UI Migration Phase
 

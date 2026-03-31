@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useState, ReactNode, useCallback, useMemo } from "react";
+import { useAuth } from "@clerk/clerk-react";
 import { v4 as uuidv4 } from "uuid";
 import { useMutation } from "convex/react";
 import { useConvexStorageAdapter } from "../adapters/StorageAdapter";
@@ -122,6 +123,25 @@ const LEGACY_LOCAL_LIBRARY_KEY = "cvLibrary";
 const LOCAL_DOC_KEY_PREFIX = "cv:";
 const ACTIVE_CV_STORAGE_KEY = "cvActiveId";
 
+function readRequestedCvIdFromWindowLocation(): string | null {
+  if (typeof window === "undefined" || !window.location) {
+    return null;
+  }
+
+  try {
+    if (String(window.location.pathname ?? "") !== "/cv") {
+      return null;
+    }
+
+    const requestedId = String(
+      new URLSearchParams(window.location.search).get("id") ?? "",
+    ).trim();
+    return requestedId || null;
+  } catch {
+    return null;
+  }
+}
+
 /* Debounce default (can be overridden via TEST_DEBOUNCE_MS env var) */
 const _envDebounce =
   (typeof globalThis !== "undefined" && (globalThis as any).process?.env?.TEST_DEBOUNCE_MS) ??
@@ -242,6 +262,7 @@ function migrateLegacyIds(doc: CvDocument): CvDocument {
  * - provide saveCurrentCv which uses adapter.save(cv) with debouncing and local cache
  */
 export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const { isLoaded: isAuthLoaded, isSignedIn } = useAuth();
   const adapter = useConvexStorageAdapter();
   const setActiveCvSnapshot = useMutation(api.activeCvSnapshots.setCurrent);
 
@@ -1381,18 +1402,23 @@ const flushPendingEdits = useCallback((): void => {
         return;
       }
 
-      const activeId = String(window.localStorage.getItem(ACTIVE_CV_STORAGE_KEY) ?? "").trim();
-      if (!activeId) {
+      const activeId = String(
+        window.localStorage.getItem(ACTIVE_CV_STORAGE_KEY) ?? "",
+      ).trim();
+      const requestedRouteCvId = readRequestedCvIdFromWindowLocation();
+      const restoreId = requestedRouteCvId || activeId;
+
+      if (!restoreId) {
         hasHydratedActiveCvRef.current = true;
         return;
       }
 
-      if (currentCv && String(currentCv.id) === activeId) {
+      if (currentCv && String(currentCv.id) === restoreId) {
         hasHydratedActiveCvRef.current = true;
         return;
       }
 
-      const existing = cvs.find((doc) => String(doc.id) === activeId);
+      const existing = cvs.find((doc) => String(doc.id) === restoreId);
       if (existing) {
         let restored = existing;
         try {
@@ -1416,8 +1442,8 @@ const flushPendingEdits = useCallback((): void => {
         return;
       }
 
-      pendingActiveRestoreIdRef.current = activeId;
-      const restoredImmediately = loadCv(activeId);
+      pendingActiveRestoreIdRef.current = restoreId;
+      const restoredImmediately = loadCv(restoreId);
       if (restoredImmediately) {
         pendingActiveRestoreIdRef.current = null;
         hasHydratedActiveCvRef.current = true;
@@ -2204,6 +2230,9 @@ useEffect(() => {
 }, [currentCvId, isLoading]);
 
 useEffect(() => {
+  if (!isAuthLoaded || !isSignedIn) {
+    return;
+  }
   if (!hasHydratedActiveCvRef.current || pendingActiveRestoreIdRef.current) {
     return;
   }
@@ -2236,7 +2265,7 @@ useEffect(() => {
       activeCvSnapshotSyncTimeoutRef.current = null;
     }
   };
-}, [currentCv, isLoading, setActiveCvSnapshot]);
+}, [currentCv, isAuthLoaded, isLoading, isSignedIn, setActiveCvSnapshot]);
 
 // ------- Back-compat API shims used by legacy tests -------
 function updateCurrentCv(newState: Partial<CvDocument>): void {
