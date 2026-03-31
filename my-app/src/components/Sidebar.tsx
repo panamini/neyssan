@@ -502,8 +502,45 @@ function refreshProposalWorkspaceDraftState(input: {
     React.SetStateAction<ReturnType<typeof readStoredProposalComposeDraft>>
   >;
 }): void {
-  input.setProposalOutputDraft(readStoredProposalOutputDraft());
-  input.setProposalComposeDraft(readStoredProposalComposeDraft());
+  const nextOutputDraft = readStoredProposalOutputDraft();
+  const nextComposeDraft = readStoredProposalComposeDraft();
+
+  input.setProposalOutputDraft((currentDraft) => {
+    const currentTitle = normalizeLabel(currentDraft?.proposalDocumentTitle);
+    const nextTitle = normalizeLabel(nextOutputDraft?.proposalDocumentTitle);
+    const currentContent =
+      typeof currentDraft?.proposalContent === "string"
+        ? currentDraft.proposalContent.trim()
+        : "";
+    const nextContent =
+      typeof nextOutputDraft?.proposalContent === "string"
+        ? nextOutputDraft.proposalContent.trim()
+        : "";
+    const currentGeneratedId = String(currentDraft?.generatedProposalId ?? "");
+    const nextGeneratedId = String(nextOutputDraft?.generatedProposalId ?? "");
+
+    if (
+      currentTitle === nextTitle &&
+      currentContent === nextContent &&
+      currentGeneratedId === nextGeneratedId
+    ) {
+      return currentDraft;
+    }
+
+    return nextOutputDraft;
+  });
+  input.setProposalComposeDraft((currentDraft) => {
+    const currentTitle = normalizeLabel(currentDraft?.jobTitle);
+    const nextTitle = normalizeLabel(nextComposeDraft?.jobTitle);
+    const currentHasDraft = currentDraft !== null;
+    const nextHasDraft = nextComposeDraft !== null;
+
+    if (currentTitle === nextTitle && currentHasDraft === nextHasDraft) {
+      return currentDraft;
+    }
+
+    return nextComposeDraft;
+  });
 }
 
 function buildSavedProposalHref(proposalId: string): string {
@@ -647,9 +684,19 @@ export const Sidebar: React.FC = () => {
     if (typeof window === "undefined") return undefined;
 
     const refreshComposeDraft = () => {
-      refreshProposalWorkspaceDraftState({
-        setProposalOutputDraft,
-        setProposalComposeDraft,
+      const nextComposeDraft = readStoredProposalComposeDraft();
+
+      setProposalComposeDraft((currentDraft) => {
+        const currentTitle = normalizeLabel(currentDraft?.jobTitle);
+        const nextTitle = normalizeLabel(nextComposeDraft?.jobTitle);
+        const currentHasDraft = currentDraft !== null;
+        const nextHasDraft = nextComposeDraft !== null;
+
+        if (currentTitle === nextTitle && currentHasDraft === nextHasDraft) {
+          return currentDraft;
+        }
+
+        return nextComposeDraft;
       });
     };
 
@@ -1113,8 +1160,8 @@ export const Sidebar: React.FC = () => {
       : null;
   }, [primaryWorkspaceItem, proposalWorkspaceItem, resumeWorkspaceItem]);
 
-  const handleCreateResume = React.useCallback(() => {
-    createNewCv(undefined, { forceV1: true });
+  const handleCreateResume = React.useCallback(async () => {
+    await createNewCv(undefined, { forceV1: true });
     void navigate("/cv");
   }, [createNewCv, navigate]);
 

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { ProposalForge } from "../ProposalForge";
 import {
+  PROPOSAL_OUTPUT_DRAFT_SESSION_STORAGE_KEY,
   readStoredProposalOutputDraft,
   writeStoredProposalOutputDraft,
 } from "../../lib/proposal-output-draft";
@@ -54,6 +55,7 @@ vi.mock("../../components/ProposalInputForm", () => ({
   default: ({
     onSubmit,
     onValuesChange,
+    initialComposeDraft,
   }: {
     onSubmit?: (
       values: any,
@@ -62,11 +64,16 @@ vi.mock("../../components/ProposalInputForm", () => ({
       proposalId?: string,
     ) => void;
     onValuesChange?: (values: any) => void;
+    initialComposeDraft?: {
+      jobTitle?: string;
+      jobDescription?: string;
+    } | null;
   }) => {
     const navigate = useNavigate();
-    const storedDraft = JSON.parse(
-      window.localStorage.getItem(PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY) ?? "{}",
-    ) as {
+    const storedDraft = (initialComposeDraft ??
+      JSON.parse(
+        window.localStorage.getItem(PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY) ?? "{}",
+      )) as {
       jobTitle?: string;
       jobDescription?: string;
     };
@@ -141,6 +148,7 @@ function MockResumePage(): JSX.Element {
 describe("ProposalForge draft persistence", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    window.sessionStorage.clear();
   });
 
   it("restores the generated draft after leaving the proposal workspace immediately", () => {
@@ -240,6 +248,146 @@ describe("ProposalForge draft persistence", () => {
     );
     expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
       "Saved editable proposal.|edit",
+    );
+  });
+
+  it("prefers the generated output source brief over later unsent compose edits on plain proposal re-entry", () => {
+    window.localStorage.setItem(
+      PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
+      JSON.stringify({
+        jobTitle: "UI / UX Artist For Game Development",
+        jobDescription: "fhtfhttfhtfhtfhttfhtfhtfhtqdss",
+        proposalType: "cover_letter",
+        voicePreset: "engaging",
+        characterLimitMode: "custom",
+        characterLimitValue: 1500,
+      }),
+    );
+    writeStoredProposalOutputDraft({
+      proposalContent: "Generated proposal body.",
+      proposalType: "cover_letter",
+      proposalVoicePreset: "engaging",
+      proposalTemplateId: null,
+      proposalVerbatiStyle: null,
+      proposalStyleLinkMode: "proposal_local",
+      proposalStyleChoice: "warm",
+      proposalApplicantName: "Alex Martin",
+      proposalApplicantRole: "UI / UX Artist",
+      proposalDocumentTitle: "UI / UX Artist For Game Development",
+      proposalDocumentMeta: "Compose output",
+      generatedProposalId: "proposal_live",
+      proposalOutputMode: "preview",
+      paletteOverride: null,
+      customAccentHex: null,
+      templateBundleId: null,
+      typographyOverride: null,
+      layoutOverride: null,
+      proposalDocumentTitleManual: false,
+      characterLimitMode: "custom",
+      characterLimitValue: 1500,
+      sourceComposeDraft: {
+        jobTitle: "UI / UX Artist For Game Development",
+        jobDescription:
+          "Design tactile game interfaces, polish interaction details, and support gameplay presentation.",
+        proposalType: "cover_letter",
+        voicePreset: "engaging",
+        toneTuning: null,
+        characterLimitMode: "custom",
+        characterLimitValue: 1500,
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId("compose-job-title")).toHaveTextContent(
+      "UI / UX Artist For Game Development",
+    );
+    expect(screen.getByTestId("compose-job-description")).toHaveTextContent(
+      "Design tactile game interfaces, polish interaction details, and support gameplay presentation.",
+    );
+    expect(
+      JSON.parse(
+        window.localStorage.getItem(PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY) ?? "{}",
+      ),
+    ).toMatchObject({
+      jobTitle: "UI / UX Artist For Game Development",
+      jobDescription:
+        "Design tactile game interfaces, polish interaction details, and support gameplay presentation.",
+    });
+    expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+      "Generated proposal body.|preview",
+    );
+  });
+
+  it("restores the generated brief from the session output fallback when localStorage is full", () => {
+    window.localStorage.setItem(
+      PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
+      JSON.stringify({
+        jobTitle: "Social Media Marketing Intern",
+        jobDescription: "fhtfhttfhtfhtfhttfhtfhtfhtqdss",
+        proposalType: "cover_letter",
+        voicePreset: "engaging",
+        characterLimitMode: "custom",
+        characterLimitValue: 1500,
+      }),
+    );
+    window.sessionStorage.setItem(
+      PROPOSAL_OUTPUT_DRAFT_SESSION_STORAGE_KEY,
+      JSON.stringify({
+        proposalContent: "Generated proposal body.",
+        proposalType: "cover_letter",
+        proposalVoicePreset: "engaging",
+        proposalStyleLinkMode: "proposal_local",
+        proposalStyleChoice: "warm",
+        proposalApplicantName: "Alex Martin",
+        proposalApplicantRole: "Content Designer",
+        proposalDocumentTitle: "Social Media Marketing Intern",
+        proposalDocumentMeta: "Compose output",
+        generatedProposalId: "proposal_live",
+        proposalOutputMode: "preview",
+        proposalDocumentTitleManual: false,
+        characterLimitMode: "custom",
+        characterLimitValue: 1500,
+        sourceComposeDraft: {
+          jobTitle: "Social Media Marketing Intern",
+          jobDescription:
+            "Plan content calendars, support paid social reporting, and coordinate creative handoffs.",
+          proposalType: "cover_letter",
+          voicePreset: "engaging",
+          toneTuning: null,
+          characterLimitMode: "custom",
+          characterLimitValue: 1500,
+        },
+      }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId("compose-job-title")).toHaveTextContent(
+      "Social Media Marketing Intern",
+    );
+    expect(screen.getByTestId("compose-job-description")).toHaveTextContent(
+      "Plan content calendars, support paid social reporting, and coordinate creative handoffs.",
+    );
+    expect(
+      JSON.parse(
+        window.localStorage.getItem(PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY) ?? "{}",
+      ),
+    ).toMatchObject({
+      jobTitle: "Social Media Marketing Intern",
+      jobDescription:
+        "Plan content calendars, support paid social reporting, and coordinate creative handoffs.",
+    });
+    expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+      "Generated proposal body.|preview",
     );
   });
 });

@@ -1,8 +1,9 @@
 import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { ProposalForge } from "../ProposalForge";
+import { readStoredProposalComposeDraft } from "../../lib/proposal-workspace-state";
 
 const mockProposalInputFormSpy = vi.fn();
 
@@ -79,8 +80,21 @@ function RouteProbe(): JSX.Element {
 }
 
 describe("ProposalForge handoff continuity", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
   it("consumes imported handoff params once and strips handoffId from the live proposal route", async () => {
     mockProposalInputFormSpy.mockClear();
+    window.localStorage.setItem(
+      "dasti:proposal-compose-draft:v1",
+      JSON.stringify({
+        jobTitle: "tfhtfhtfht",
+        jobDescription: "tfhtfhtfht",
+        proposalType: "cover_letter",
+        voicePreset: "expert",
+      }),
+    );
 
     render(
       <MemoryRouter initialEntries={["/proposal?handoffId=handoff_123"]}>
@@ -113,5 +127,12 @@ describe("ProposalForge handoff continuity", () => {
           (props.prefill as { handoffId?: string }).handoffId === "handoff_123",
       ),
     ).toBe(true);
+    expect(readStoredProposalComposeDraft()).toMatchObject({
+      jobTitle: "Imported Product Ops Lead",
+      jobDescription:
+        "Own project coordination, keep handoffs clear, and maintain delivery momentum.",
+      proposalType: "cover_letter",
+      voicePreset: "expert",
+    });
   });
 });
