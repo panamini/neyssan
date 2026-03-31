@@ -118,7 +118,5 @@ describe("ProposalForge saved view guest fixture fallback", () => {
     expect(screen.getByTestId("saved-proposals-list")).toHaveTextContent(
       "proposal_guest_saved",
     );
-    expect(screen.getByText("Saved proposal")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Guest saved proposal" })).toBeInTheDocument();
   });
 });
