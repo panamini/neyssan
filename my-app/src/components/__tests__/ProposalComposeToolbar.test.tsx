@@ -105,6 +105,42 @@ describe("ProposalComposeToolbar", () => {
     ).toHaveAttribute("data-toolbar-tooltip", "Formal");
   });
 
+  it("clears the attached CV without reopening the picker and falls back to the attach state", async () => {
+    const user = userEvent.setup();
+    const handleClearCv = vi.fn();
+    const handleToggleCvPicker = vi.fn();
+
+    const { rerender } = render(
+      <ProposalComposeToolbar
+        value="expert"
+        onChange={vi.fn()}
+        onToggleCvPicker={handleToggleCvPicker}
+        onClearCv={handleClearCv}
+        cvTitle="Mohamed Ismail J."
+        isCvPickerOpen={false}
+        onCollapseCompose={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Remove CV" }));
+    expect(handleClearCv).toHaveBeenCalledTimes(1);
+    expect(handleToggleCvPicker).not.toHaveBeenCalled();
+
+    rerender(
+      <ProposalComposeToolbar
+        value="expert"
+        onChange={vi.fn()}
+        onToggleCvPicker={handleToggleCvPicker}
+        cvTitle={null}
+        isCvPickerOpen={false}
+        onCollapseCompose={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Remove CV" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Attach CV" })).toBeInTheDocument();
+  });
+
   it("marks the collapsed floating shell as a surface-anchored tooltip host", () => {
     const { container } = render(
       <ProposalComposeToolbar

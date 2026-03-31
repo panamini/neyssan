@@ -2,7 +2,9 @@ import React from "react";
 import { useLocation } from "react-router-dom";
 import { Eye, Pencil } from "@/lib/icons";
 import { ProfileReviewCard } from "../components/ProfileReviewCard";
+import { useCvLibrary } from "../contexts/CvLibraryContext";
 import { VerbatiCvPreviewPanel } from "../features/verbati/VerbatiCvPreviewPanel";
+import { useBoundVerbatiCvStyle } from "../features/verbati/useBoundVerbatiCvStyle";
 
 type CvForgeWorkspaceMode = "edit" | "preview";
 
@@ -28,16 +30,28 @@ function readStoredCvForgeWorkspaceMode(): CvForgeWorkspaceMode {
  */
 export function CvForge(): JSX.Element {
   const { search } = useLocation();
+  const { currentCv, importCv } = useCvLibrary();
   const [viewportWidth, setViewportWidth] = React.useState(() =>
     typeof window === "undefined" ? 1440 : window.innerWidth,
   );
   const [workspaceMode, setWorkspaceMode] =
-    React.useState<CvForgeWorkspaceMode>(() => readStoredCvForgeWorkspaceMode());
+    React.useState<CvForgeWorkspaceMode>(() =>
+      readStoredCvForgeWorkspaceMode(),
+    );
+  const { stylePreset, setStylePreset } = useBoundVerbatiCvStyle({
+    currentCv,
+    importCv,
+    debounceMs: 700,
+    logPrefix: "[CvForge]",
+  });
   const requestedCvId = React.useMemo(
     () => new URLSearchParams(search).get("id") || undefined,
     [search],
   );
   const isSplitCanvas = viewportWidth >= 1240;
+  const editorGridMaxWidth = isSplitCanvas
+    ? "1240px"
+    : "var(--cv-editor-shell-max-width)";
 
   React.useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -62,31 +76,41 @@ export function CvForge(): JSX.Element {
   }, [workspaceMode]);
 
   const workspaceModeToggle = (
-    <button
-      type="button"
-      className="dasti-icon-button dasti-proposal-mode-toggle"
-      aria-label={
-        workspaceMode === "preview"
-          ? "Return to resume editing"
-          : "Open resume preview"
-      }
-      title={
-        workspaceMode === "preview"
-          ? "Return to resume editing"
-          : "Open resume preview"
-      }
-      onClick={() =>
-        setWorkspaceMode((current) =>
-          current === "preview" ? "edit" : "preview",
-        )
-      }
+    <div
+      className="dasti-cv-workbench-toggle dasti-toolbar--surface-tooltips"
+      data-no-pan="true"
     >
-      {workspaceMode === "preview" ? (
-        <Pencil size={15} strokeWidth={1.7} aria-hidden="true" />
-      ) : (
-        <Eye size={15} strokeWidth={1.7} aria-hidden="true" />
-      )}
-    </button>
+      <button
+        type="button"
+        className={[
+          "dasti-cv-workbench-toggle__button",
+          workspaceMode === "edit"
+            ? "dasti-cv-workbench-toggle__button--active"
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        aria-label={
+          workspaceMode === "preview"
+            ? "Return to resume editing"
+            : "Open resume preview"
+        }
+        onClick={() =>
+          setWorkspaceMode((current) =>
+            current === "preview" ? "edit" : "preview",
+          )
+        }
+        data-toolbar-tooltip={
+          workspaceMode === "preview" ? "Switch to edit" : "Switch to preview"
+        }
+      >
+        {workspaceMode === "preview" ? (
+          <Pencil size={15} strokeWidth={1.7} aria-hidden="true" />
+        ) : (
+          <Eye size={15} strokeWidth={1.7} aria-hidden="true" />
+        )}
+      </button>
+    </div>
   );
 
   return (
@@ -100,50 +124,54 @@ export function CvForge(): JSX.Element {
         className="dasti-page-shell"
         style={
           {
-            "--page-shell-max-width":
-              workspaceMode === "preview"
-                ? "1480px"
-                : isSplitCanvas
-                  ? "1240px"
-                  : "var(--cv-editor-shell-max-width)",
+            "--page-shell-max-width": "100%",
             "--page-shell-gap": "var(--layout-panel-stack)",
             "--page-shell-pad-inline-mobile": "var(--space-3)",
           } as React.CSSProperties
         }
       >
-        {workspaceMode === "edit" ? (
-          <div className="dasti-cv-workbench-bar">
-            <div className="dasti-proposal-rail-cluster" data-no-pan="true">
-              {workspaceModeToggle}
-            </div>
-          </div>
-        ) : null}
-
         {workspaceMode === "preview" ? (
-          <VerbatiCvPreviewPanel
-            layoutMode="stacked"
-            hostMode="workspace"
-            railLeadControl={workspaceModeToggle}
-          />
-        ) : (
-          <div
-            className="dasti-grid-split"
-            style={
-              {
-                "--grid-columns": isSplitCanvas
-                  ? "minmax(0, 1fr) clamp(360px, 34vw, 420px)"
-                  : "minmax(0, 1fr)",
-                "--grid-gap": "var(--layout-card-grid)",
-                "--grid-align": "start",
-              } as React.CSSProperties
-            }
-          >
-            <ProfileReviewCard cvId={requestedCvId} />
+          <>
             <VerbatiCvPreviewPanel
-              layoutMode={isSplitCanvas ? "rail" : "stacked"}
-              hostMode="panel"
+              layoutMode="stacked"
+              hostMode="workspace"
+              railLeadControl={workspaceModeToggle}
+              stylePreset={stylePreset}
+              onStylePresetChange={setStylePreset}
             />
-          </div>
+          </>
+        ) : (
+          <>
+            <div className="dasti-cv-workbench-bar">{workspaceModeToggle}</div>
+            <div
+              style={{
+                width: "100%",
+                maxWidth: editorGridMaxWidth,
+                marginInline: "auto",
+              }}
+            >
+              <div
+                className="dasti-grid-split"
+                style={
+                  {
+                    "--grid-columns": isSplitCanvas
+                      ? "minmax(0, 1fr) clamp(360px, 34vw, 420px)"
+                      : "minmax(0, 1fr)",
+                    "--grid-gap": "var(--layout-card-grid)",
+                    "--grid-align": "start",
+                  } as React.CSSProperties
+                }
+              >
+                <ProfileReviewCard cvId={requestedCvId} />
+                <VerbatiCvPreviewPanel
+                  layoutMode={isSplitCanvas ? "rail" : "stacked"}
+                  hostMode="panel"
+                  stylePreset={stylePreset}
+                  onStylePresetChange={setStylePreset}
+                />
+              </div>
+            </div>
+          </>
         )}
       </div>
     </div>

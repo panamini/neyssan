@@ -330,8 +330,8 @@ function SidebarWorkspaceSection({
   }
 
   return (
-    <section className="sb-section sb-section--workspace" aria-label="Workspace">
-      <div className="sb-section__title">Workspace</div>
+    <section className="sb-section sb-section--workspace" aria-label="Current">
+      <div className="sb-section__title">Current</div>
       {primaryItem ? (
         <div className="sb-workspace-card-shell card-group">
           <Link
@@ -339,9 +339,7 @@ function SidebarWorkspaceSection({
             className="sb-workspace-card sb-workspace-card--primary"
             onClick={primaryItem.onFollow}
           >
-            <span className="sb-workspace-card__eyebrow">
-              {`Editing ${primaryItem.kind.toLowerCase()}`}
-            </span>
+            <span className="sb-workspace-card__eyebrow">{primaryItem.kind}</span>
             <span className="sb-workspace-card__title">{primaryItem.title}</span>
           </Link>
           {primaryItem.onDelete ? (
@@ -408,9 +406,7 @@ function SidebarWorkspaceSection({
             className="sb-workspace-card sb-workspace-card--secondary"
             onClick={secondaryItem.onFollow}
           >
-            <span className="sb-workspace-card__eyebrow">
-              {`${secondaryItem.kind} in progress`}
-            </span>
+            <span className="sb-workspace-card__eyebrow">{secondaryItem.kind}</span>
             <span className="sb-workspace-card__title">{secondaryItem.title}</span>
           </Link>
           {secondaryItem.onDelete ? (
@@ -1246,7 +1242,7 @@ export const Sidebar: React.FC = () => {
               {isConvexAuthLoading
                 ? "Loading"
                 : isSignedIn
-                  ? "Workspace"
+                  ? "Signed in"
                   : "Guest"}
             </div>
           </div>

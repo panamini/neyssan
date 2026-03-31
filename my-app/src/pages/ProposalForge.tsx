@@ -2,16 +2,12 @@ import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import {
-  BracketsSquare,
   Check,
   ChevronDown,
+  ChevronUp,
   FloppyDisk,
   RotateCcw,
-  ScrollText,
-  SquaresFour,
-  Sun,
   Trash,
-  Wand2,
   X,
 } from "@/lib/icons";
 import ProposalInputForm from "../components/ProposalInputForm";
@@ -161,203 +157,12 @@ function isProposalPaletteId(value: unknown): value is ProposalPaletteId {
   );
 }
 
-const PROPOSAL_WORKBENCH_VOICE_OPTIONS: Array<{
-  id: FormValues["voicePreset"] | null;
-  label: string;
-  description: string;
-}> = [
-  {
-    id: null,
-    label: "Auto",
-    description: "Adapts the tone to the client and context.",
-  },
-  {
-    id: "signature",
-    label: getVoicePresetDisplayLabel("signature"),
-    description: "Balanced, natural, and credible.",
-  },
-  {
-    id: "expert",
-    label: getVoicePresetDisplayLabel("expert"),
-    description: "More precise, structured, and authoritative.",
-  },
-  {
-    id: "engaging",
-    label: getVoicePresetDisplayLabel("engaging"),
-    description: "Warmer, more lively, and still professional.",
-  },
-];
-
-const PROPOSAL_STYLE_OPTIONS: Array<{
-  id: ProposalStyleChoice;
-  label: string;
-  description: string;
-  Icon: typeof Wand2;
-}> = [
-  {
-    id: "auto",
-    label: "Auto",
-    description: "AI matches the look to the role.",
-    Icon: Wand2,
-  },
-  {
-    id: "formal",
-    label: "Formal",
-    description: "Sharper structure and quieter authority.",
-    Icon: ScrollText,
-  },
-  {
-    id: "warm",
-    label: "Warm",
-    description: "Friendlier, more human, and more expressive.",
-    Icon: Sun,
-  },
-  {
-    id: "technical",
-    label: "Technical",
-    description: "Denser signal and a more precise grid.",
-    Icon: BracketsSquare,
-  },
-  {
-    id: "balanced",
-    label: "Balanced",
-    description: "Calm default for broad professional roles.",
-    Icon: SquaresFour,
-  },
-];
-
 type GenerateProposalResult = {
   proposalId: Id<"proposals">;
   proposalContent: string;
 } & Required<ProposalGenerationFallbackInfo>;
 
 type GenerateProposalPayload = ProposalGenerationRequestPayload;
-
-/**
- * Compact popover anchored to the Regenerate button.
- * Lets the user pick a voice for the run before firing — keeps voice and
- * regenerate together without adding noise to the main toolbar.
- */
-function RegenerateMenu({
-  isRegenerating,
-  disabled,
-  currentVoicePreset,
-  onRegenerate,
-}: {
-  isRegenerating: boolean;
-  disabled: boolean;
-  currentVoicePreset: FormValues["voicePreset"] | null;
-  onRegenerate: (voiceOverride: FormValues["voicePreset"] | null) => void;
-}) {
-  const [open, setOpen] = React.useState(false);
-  const [selectedVoice, setSelectedVoice] = React.useState<
-    FormValues["voicePreset"] | null
-  >(currentVoicePreset);
-  const menuRef = React.useRef<HTMLDivElement>(null);
-
-  React.useEffect(() => {
-    if (open) {
-      setSelectedVoice(currentVoicePreset);
-    }
-  }, [open, currentVoicePreset]);
-
-  React.useEffect(() => {
-    if (!open) return undefined;
-
-    const handleOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleOutside);
-    return () => document.removeEventListener("mousedown", handleOutside);
-  }, [open]);
-
-  return (
-    <div ref={menuRef} style={{ position: "relative" }}>
-      <button
-        type="button"
-        className="dasti-button dasti-button--secondary dasti-button--sm dasti-regenerate-trigger"
-        disabled={disabled || isRegenerating}
-        onClick={() => setOpen((o) => !o)}
-        data-toolbar-tooltip={
-          isRegenerating ? "Refreshing…" : open ? "Voice" : "Regenerate"
-        }
-        aria-expanded={open}
-        aria-haspopup="true"
-      >
-        <RotateCcw size={13} strokeWidth={1.6} aria-hidden="true" />
-        <span>
-          {isRegenerating ? "Refreshing…" : open ? "Voice" : "Regenerate"}
-        </span>
-        <ChevronDown size={12} strokeWidth={1.8} aria-hidden="true" />
-      </button>
-      {open ? (
-        <div
-          className="dasti-regenerate-menu"
-          role="dialog"
-          aria-label="Regenerate options"
-        >
-          <div className="dasti-regenerate-menu__header">
-            <div className="dasti-label">Voice</div>
-            <div className="dasti-hint">
-              Choose the tone for the next regenerate.
-            </div>
-          </div>
-          <div
-            className="dasti-regenerate-menu__options"
-            role="group"
-            aria-label="Voice preset"
-          >
-            {PROPOSAL_WORKBENCH_VOICE_OPTIONS.map((option) => {
-              const active = selectedVoice === option.id;
-              return (
-                <button
-                  key={option.label}
-                  type="button"
-                  className={
-                    active
-                      ? "dasti-regenerate-option dasti-regenerate-option--active"
-                      : "dasti-regenerate-option"
-                  }
-                  aria-label={option.label}
-                  aria-pressed={active}
-                  onClick={() => setSelectedVoice(option.id)}
-                >
-                  <span className="dasti-regenerate-option__copy">
-                    <span className="dasti-regenerate-option__title">
-                      {option.label}
-                    </span>
-                    <span className="dasti-regenerate-option__description">
-                      {option.description}
-                    </span>
-                  </span>
-                  {active ? (
-                    <span className="dasti-regenerate-option__check">
-                      <Check size={14} strokeWidth={2.2} aria-hidden="true" />
-                    </span>
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
-          <button
-            type="button"
-            className="dasti-button dasti-button--primary dasti-button--sm dasti-regenerate-menu__confirm"
-            disabled={isRegenerating}
-            onClick={() => {
-              setOpen(false);
-              onRegenerate(selectedVoice);
-            }}
-          >
-            {isRegenerating ? "Refreshing…" : "Regenerate"}
-          </button>
-        </div>
-      ) : null}
-    </div>
-  );
-}
 
 function shouldPreserveLeadBreak(line: string): boolean {
   const trimmed = line.trim();
@@ -635,6 +440,8 @@ export function ProposalForge(): JSX.Element {
   );
   const [composeFormInstanceKey, setComposeFormInstanceKey] = React.useState(0);
   const [isCvPickerOpen, setIsCvPickerOpen] = React.useState(false);
+  const [isComposePanelVisible, setIsComposePanelVisible] = React.useState(true);
+  const [isBriefExpanded, setIsBriefExpanded] = React.useState(true);
   const [composeToolbarVoicePreset, setComposeToolbarVoicePreset] =
     React.useState<FormValues["voicePreset"] | null>(() => {
       const storedComposeDraft = readStoredProposalComposeDraft();
@@ -647,6 +454,7 @@ export function ProposalForge(): JSX.Element {
   const [cvPickerRequestKey, setCvPickerRequestKey] = React.useState(0);
   const hasCompletedInitialRenderRef = React.useRef(false);
   const appliedSavedToolbarVoicePresetRef = React.useRef(false);
+  const pendingComposeBriefFocusRef = React.useRef(false);
 
   React.useEffect(() => {
     hasCompletedInitialRenderRef.current = true;
@@ -1196,6 +1004,8 @@ export function ProposalForge(): JSX.Element {
     setIsRegeneratingGeneratedProposal(false);
     setIsConfirmingGeneratedDelete(false);
     setIsCvPickerOpen(false);
+    setIsComposePanelVisible(true);
+    setIsBriefExpanded(true);
     setCopyFeedback("idle");
     lastSavedProposalContentRef.current = null;
     lastSavedProposalTitleRef.current = "";
@@ -1333,13 +1143,9 @@ export function ProposalForge(): JSX.Element {
     openedSavedProposal,
   ]);
 
-  const handleOpenCvPicker = React.useCallback(() => {
-    setIsCvPickerOpen(true);
-    setCvPickerRequestKey((currentKey) => currentKey + 1);
-  }, []);
-
   const handleToolbarCvPickerToggle = React.useCallback(() => {
     setIsCvPickerOpen((current) => !current);
+    setCvPickerRequestKey((currentKey) => currentKey + 1);
   }, []);
 
   const handleToolbarVoicePresetChange = React.useCallback(
@@ -1349,64 +1155,58 @@ export function ProposalForge(): JSX.Element {
     [],
   );
 
-  const handleProposalStyleLinkModeChange = React.useCallback(
-    (nextMode: ProposalStyleLinkMode) => {
-      if (nextMode === "inherit_cv" && !activeCvProposalStylePreset) {
+  const handleTemplateBundleChange = React.useCallback(
+    (nextBundleId: ProposalTemplateBundleId | null) => {
+      if (nextBundleId === null) {
+        setProposalTemplateBundleId(null);
+        setProposalPaletteOverride(null);
+        setProposalCustomAccentHex(null);
+        setProposalStyleChoice(activeCvProposalStylePreset ? "auto" : "balanced");
+        setProposalStyleLinkMode(
+          activeCvProposalStylePreset ? "inherit_cv" : "proposal_local",
+        );
         return;
       }
-      setProposalStyleLinkMode(nextMode);
+
+      setProposalTemplateBundleId(nextBundleId);
+      setProposalStyleLinkMode("proposal_local");
+
+      const nextBundleDefinition =
+        getProposalTemplateBundleDefinition(nextBundleId);
+      setProposalStyleChoice(
+        resolveProposalStyleChoiceFromRenderState({
+          templateId: nextBundleDefinition.templateId,
+          stylePreset: nextBundleDefinition.stylePreset,
+        }) ?? "auto",
+      );
     },
     [activeCvProposalStylePreset],
   );
 
-  const handleProposalStyleChoiceChange = React.useCallback(
-    (nextChoice: ProposalStyleChoice) => {
-      setProposalTemplateBundleId(null);
-      setProposalStyleChoice(nextChoice);
-      setProposalStyleLinkMode("proposal_local");
-    },
-    [],
-  );
-
-  const handleTemplateBundleChange = React.useCallback(
-    (nextBundleId: ProposalTemplateBundleId | null) => {
-      setProposalTemplateBundleId(nextBundleId);
-      setProposalStyleLinkMode("proposal_local");
-
-      if (nextBundleId) {
-        const nextBundleDefinition =
-          getProposalTemplateBundleDefinition(nextBundleId);
-        setProposalStyleChoice(
-          resolveProposalStyleChoiceFromRenderState({
-            templateId: nextBundleDefinition.templateId,
-            stylePreset: nextBundleDefinition.stylePreset,
-          }) ?? "auto",
-        );
-      }
-    },
-    [],
-  );
-
   const handlePaletteOverrideChange = React.useCallback(
     (nextPalette: ProposalPaletteId | null) => {
-      setProposalStyleLinkMode("proposal_local");
       setProposalPaletteOverride(nextPalette);
       if (nextPalette) {
+        setProposalStyleLinkMode("proposal_local");
         setProposalCustomAccentHex(null);
+      } else if (!proposalTemplateBundleId && activeCvProposalStylePreset) {
+        setProposalStyleLinkMode("inherit_cv");
       }
     },
-    [],
+    [activeCvProposalStylePreset, proposalTemplateBundleId],
   );
 
   const handleCustomAccentHexChange = React.useCallback(
     (nextHex: string | null) => {
-      setProposalStyleLinkMode("proposal_local");
       setProposalCustomAccentHex(nextHex);
       if (nextHex) {
+        setProposalStyleLinkMode("proposal_local");
         setProposalPaletteOverride(null);
+      } else if (!proposalTemplateBundleId && activeCvProposalStylePreset) {
+        setProposalStyleLinkMode("inherit_cv");
       }
     },
-    [],
+    [activeCvProposalStylePreset, proposalTemplateBundleId],
   );
 
   const handleProposalStart = React.useCallback(
@@ -1433,6 +1233,8 @@ export function ProposalForge(): JSX.Element {
       setProposalContent(null);
       setGeneratedProposalId(null);
       setProposalOutputMode("preview");
+      setIsComposePanelVisible(true);
+      setIsBriefExpanded(true);
       setStatusMessage(null);
       setError(null);
       setErrorDetail(null);
@@ -1499,6 +1301,8 @@ export function ProposalForge(): JSX.Element {
       setProposalContent(proposal);
       setGeneratedProposalId(nextProposalId ?? null);
       setProposalOutputMode("preview");
+      setIsComposePanelVisible(true);
+      setIsBriefExpanded(true);
       lastSavedProposalContentRef.current = proposal;
       lastSavedProposalTitleRef.current = nextDocumentTitle;
       setIsConfirmingGeneratedDelete(false);
@@ -1547,6 +1351,8 @@ export function ProposalForge(): JSX.Element {
       setProposalContent(null);
       setGeneratedProposalId(null);
       setProposalOutputMode("preview");
+      setIsComposePanelVisible(true);
+      setIsBriefExpanded(true);
       setIsConfirmingGeneratedDelete(false);
       setError(message);
       setStatusMessage(null);
@@ -1572,6 +1378,8 @@ export function ProposalForge(): JSX.Element {
     setProposalContent(null);
     setGeneratedProposalId(null);
     setProposalOutputMode("preview");
+    setIsComposePanelVisible(true);
+    setIsBriefExpanded(true);
     setError(null);
     setStatusMessage("Generation stopped.");
     setErrorDetail(null);
@@ -2013,6 +1821,8 @@ export function ProposalForge(): JSX.Element {
     setLastProposalRequest(null);
     setComposeFormInstanceKey((currentKey) => currentKey + 1);
     setIsCvPickerOpen(false);
+    setIsComposePanelVisible(true);
+    setIsBriefExpanded(true);
     setFallbackInfo(null);
     setError(null);
     setStatusMessage(null);
@@ -2039,128 +1849,6 @@ export function ProposalForge(): JSX.Element {
     updateProposalRoute,
   ]);
 
-  function ProposalStyleSourceBar({
-    currentCvTitle,
-    canLinkToCv,
-    linkMode,
-    onPickCv,
-    onLinkModeChange,
-  }: {
-    currentCvTitle: string | null;
-    canLinkToCv: boolean;
-    linkMode: ProposalStyleLinkMode;
-    onPickCv: () => void;
-    onLinkModeChange: (mode: ProposalStyleLinkMode) => void;
-  }) {
-    return (
-      <section
-        className="dasti-proposal-style-source-bar"
-        aria-label="Proposal source controls"
-      >
-        <button
-          type="button"
-          className="dasti-button dasti-button--secondary dasti-button--sm dasti-button--pill"
-          onClick={onPickCv}
-          title={
-            currentCvTitle
-              ? `Open CV picker. Current: ${currentCvTitle}`
-              : "Pick a CV"
-          }
-        >
-          {currentCvTitle ? `CV: ${currentCvTitle}` : "Pick CV"}
-        </button>
-
-        {canLinkToCv ? (
-          <div
-            className="dasti-proposal-style-source"
-            role="group"
-            aria-label="Style source"
-          >
-            <button
-              type="button"
-              className={
-                linkMode === "proposal_local"
-                  ? "dasti-proposal-style-source__button dasti-proposal-style-source__button--active"
-                  : "dasti-proposal-style-source__button"
-              }
-              aria-pressed={linkMode === "proposal_local"}
-              onClick={() => onLinkModeChange("proposal_local")}
-            >
-              Local
-            </button>
-            <button
-              type="button"
-              className={
-                linkMode === "inherit_cv"
-                  ? "dasti-proposal-style-source__button dasti-proposal-style-source__button--active"
-                  : "dasti-proposal-style-source__button"
-              }
-              aria-pressed={linkMode === "inherit_cv"}
-              onClick={() => onLinkModeChange("inherit_cv")}
-            >
-              Linked
-            </button>
-          </div>
-        ) : null}
-      </section>
-    );
-  }
-
-  function ProposalStyleRail({
-    linkMode,
-    styleChoice,
-    autoAppliedLabel,
-    onStyleChoiceChange,
-  }: {
-    linkMode: ProposalStyleLinkMode;
-    styleChoice: ProposalStyleChoice;
-    autoAppliedLabel: string;
-    onStyleChoiceChange: (choice: ProposalStyleChoice) => void;
-  }) {
-    if (linkMode !== "proposal_local") {
-      return null;
-    }
-
-    return (
-      <div
-        className="dasti-proposal-style-rail"
-        role="group"
-        aria-label="Proposal style"
-      >
-        {PROPOSAL_STYLE_OPTIONS.map((option) => {
-          const active = styleChoice === option.id;
-          const description =
-            option.id === "auto"
-              ? `${option.description} Now picking ${autoAppliedLabel.toLowerCase()}.`
-              : option.description;
-
-          return (
-            <button
-              key={option.id}
-              type="button"
-              className={
-                active
-                  ? "dasti-proposal-style-rail__button dasti-proposal-style-rail__button--active"
-                  : "dasti-proposal-style-rail__button"
-              }
-              aria-label={option.label}
-              aria-pressed={active}
-              title={description}
-              onClick={() => onStyleChoiceChange(option.id)}
-            >
-              <span className="dasti-proposal-style-rail__icon">
-                <option.Icon size={16} strokeWidth={1.8} aria-hidden="true" />
-              </span>
-              <span className="dasti-proposal-style-rail__label">
-                {option.label}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    );
-  }
-
   const handleRegenerateOutput = React.useCallback(
     async (voiceOverride?: FormValues["voicePreset"] | null) => {
       if (!lastProposalRequest || isRegeneratingGeneratedProposal) {
@@ -2173,7 +1861,7 @@ export function ProposalForge(): JSX.Element {
       );
       const requestWithVoice = applyProposalVoiceSelection(
         lastProposalRequest,
-        voiceOverride,
+        voiceOverride === undefined ? composeToolbarVoicePreset : voiceOverride,
       );
       const requestPayload = buildProposalGenerationRequest(
         requestWithVoice,
@@ -2253,6 +1941,7 @@ export function ProposalForge(): JSX.Element {
       canPersistProposalState,
       isRegeneratingGeneratedProposal,
       lastProposalRequest,
+      composeToolbarVoicePreset,
       proposalRenderMetadata,
       showToast,
       updateProposal,
@@ -2435,6 +2124,7 @@ export function ProposalForge(): JSX.Element {
   const isSavedView = requestedView === "saved";
   const isCompactComposeLayout = viewportWidth < 1240;
   const isNarrowLaptop = viewportWidth < 1360;
+  const shouldCenterOutputStage = !isSavedView && !isComposePanelVisible && !isCompactComposeLayout;
   const isLoadingHandoff =
     Boolean(handoffId) &&
     (isConvexAuthLoading ||
@@ -2443,6 +2133,22 @@ export function ProposalForge(): JSX.Element {
   const stackedCardWidthStyle: React.CSSProperties = isCompactComposeLayout
     ? { width: "min(100%, 560px)", marginInline: "auto", minWidth: 0 }
     : { width: "100%", minWidth: 0 };
+  const proposalToolbarWidthStyle: React.CSSProperties = {
+    width: "min(100%, 560px)",
+    minWidth: 0,
+  };
+  const proposalWorkbenchFrameStyle: React.CSSProperties = {
+    width: "100%",
+    maxWidth: isCompactComposeLayout
+      ? "560px"
+      : shouldCenterOutputStage
+        ? "860px"
+        : isNarrowLaptop
+          ? "1000px"
+          : "1200px",
+    marginInline: "auto",
+    minWidth: 0,
+  };
   const activeCharacterLimitSelection = React.useMemo(
     () =>
       resolveProposalCharacterLimitSelection({
@@ -2451,32 +2157,18 @@ export function ProposalForge(): JSX.Element {
       }),
     [draftCharacterLimitMode, draftCharacterLimitValue],
   );
-  const autoAppliedStyleLabel =
-    resolvedProposalLocalStyle.appliedChoice.charAt(0).toUpperCase() +
-    resolvedProposalLocalStyle.appliedChoice.slice(1);
-  const briefJobTitle =
-    lastProposalRequest?.jobTitle?.trim() ||
-    (typeof window !== "undefined"
-      ? readStoredProposalComposeDraft()?.jobTitle?.trim() || ""
-      : "");
   const briefJobDescription =
     lastProposalRequest?.jobDescription?.trim() ||
     (typeof window !== "undefined"
       ? readStoredProposalComposeDraft()?.jobDescription?.trim() || ""
       : "");
-  const showBriefCard = Boolean(proposalContent) && Boolean(
-    briefJobTitle || briefJobDescription,
-  );
-  const composeStyleControls = (
-    <ProposalStyleSourceBar
-      currentCvTitle={attachedCvTitle}
-      canLinkToCv={Boolean(attachedCvId)}
-      linkMode={resolvedStyleLinkMode}
-      onPickCv={handleOpenCvPicker}
-      onLinkModeChange={handleProposalStyleLinkModeChange}
-    />
-  );
-  const handleFocusComposeBrief = React.useCallback(() => {
+  const hasBriefContent = Boolean(briefJobDescription);
+  const showComposePanel = isComposePanelVisible && !isSavedView;
+  const showBriefCard =
+    Boolean(proposalContent) && hasBriefContent && !isBriefExpanded && showComposePanel;
+  const shouldShowCollapsedComposeToolbar =
+    !isComposePanelVisible && !isSavedView && !isCompactComposeLayout;
+  const focusComposeBrief = React.useCallback(() => {
     const jobDescriptionField =
       typeof document !== "undefined"
         ? (document.getElementById("jobDescription") as
@@ -2494,7 +2186,68 @@ export function ProposalForge(): JSX.Element {
         : null;
     jobTitleField?.focus();
   }, []);
-  const proposalWorkbenchToolbar = !isSavedView ? (
+  const handleOpenComposeBrief = React.useCallback(() => {
+    pendingComposeBriefFocusRef.current = true;
+    setIsComposePanelVisible(true);
+    setIsBriefExpanded(true);
+    setIsCvPickerOpen(false);
+  }, []);
+  const handleToggleComposeBrief = React.useCallback(() => {
+    setIsBriefExpanded((current) => {
+      const next = !current;
+      pendingComposeBriefFocusRef.current = next;
+      return next;
+    });
+  }, []);
+  const handleCollapseCompose = React.useCallback(() => {
+    setIsComposePanelVisible(false);
+    setIsCvPickerOpen(false);
+  }, []);
+  const handleRestoreCompose = React.useCallback(() => {
+    setIsComposePanelVisible(true);
+  }, []);
+  const handleReturnToDraft = React.useCallback(() => {
+    setIsComposePanelVisible(true);
+    setIsBriefExpanded(true);
+    updateProposalRoute("compose");
+  }, [updateProposalRoute]);
+
+  React.useEffect(() => {
+    if (isCompactComposeLayout && !isComposePanelVisible) {
+      setIsComposePanelVisible(true);
+    }
+  }, [isCompactComposeLayout, isComposePanelVisible]);
+
+  React.useEffect(() => {
+    if (!isBriefExpanded || !pendingComposeBriefFocusRef.current) {
+      return;
+    }
+
+    pendingComposeBriefFocusRef.current = false;
+    if (typeof window !== "undefined" && window.requestAnimationFrame) {
+      window.requestAnimationFrame(() => {
+        focusComposeBrief();
+      });
+      return;
+    }
+
+    focusComposeBrief();
+  }, [focusComposeBrief, isBriefExpanded]);
+
+  const proposalWorkbenchToolbar = shouldShowCollapsedComposeToolbar ? (
+    <ProposalComposeToolbar
+      value={composeToolbarVoicePreset}
+      resolvedValue={proposalVoicePreset ?? null}
+      onChange={handleToolbarVoicePresetChange}
+      onToggleCvPicker={handleToolbarCvPickerToggle}
+      onClearCv={() => handleAttachedCvChange(null)}
+      cvTitle={attachedCvTitle}
+      isCvPickerOpen={isCvPickerOpen}
+      disabled={loading || isLoadingHandoff}
+      collapsed
+      onRestoreCompose={handleRestoreCompose}
+    />
+  ) : showComposePanel ? (
     <ProposalComposeToolbar
       value={composeToolbarVoicePreset}
       resolvedValue={proposalVoicePreset ?? null}
@@ -2505,6 +2258,7 @@ export function ProposalForge(): JSX.Element {
       isCvPickerOpen={isCvPickerOpen}
       disabled={loading || isLoadingHandoff}
       compact={isCompactComposeLayout}
+      onCollapseCompose={!isCompactComposeLayout ? handleCollapseCompose : undefined}
     />
   ) : null;
 
@@ -2525,81 +2279,24 @@ export function ProposalForge(): JSX.Element {
                 : isNarrowLaptop
                   ? "1180px"
                   : "1380px"
-              : isCompactComposeLayout
-                ? "720px"
-                : isNarrowLaptop
-                  ? "1000px"
-                  : "1200px",
-            "--page-shell-gap": "var(--layout-page-stack)",
+              : "100%",
+            "--page-shell-gap": "var(--layout-panel-stack)",
+            "--page-shell-pad-top":
+              isSavedView || shouldCenterOutputStage
+                ? "var(--space-4)"
+                : "var(--space-6)",
           } as React.CSSProperties
         }
       >
-        {proposalWorkbenchToolbar ? (
-          <div className="dasti-cv-workbench-bar">
-            <div
-              className="dasti-forge-compose-toolbar-slot"
-              style={
-                {
-                  "--proposal-compose-toolbar-max-inline-size":
-                    isCompactComposeLayout ? "560px" : "480px",
-                } as React.CSSProperties
-              }
-            >
-              {proposalWorkbenchToolbar}
-            </div>
-          </div>
-        ) : null}
         {isSavedView ? (
           <section aria-hidden={false}>
-            <div
-              className="dasti-flow"
-              style={{
-                width: "100%",
-                maxWidth: "min(100%, 1380px)",
-                marginInline: "auto",
-                marginBottom: "var(--layout-panel-stack)",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: "var(--space-3)",
-                  flexWrap: "wrap",
-                }}
-              >
-                <div>
-                  <p
-                    className="dasti-hint"
-                    style={{ margin: 0, marginBottom: "var(--space-1)" }}
-                  >
-                    Saved proposal
-                  </p>
-                  <h2
-                    style={{
-                      margin: 0,
-                      fontFamily: "var(--font-heading-family)",
-                      fontSize: "var(--tl)",
-                      fontWeight: "var(--font-heading-weight)",
-                      color: "var(--ti)",
-                    }}
-                  >
-                    {openedSavedProposal?.title?.trim() || "Saved proposal"}
-                  </h2>
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "var(--space-2)",
-                    flexWrap: "wrap",
-                  }}
-                >
+            <div className="dasti-workbench-top-left-slot dasti-workbench-top-left-slot--proposal">
+              <div className="dasti-cv-workbench-bar">
+                <div className="dasti-proposal-saved-view-toolbar">
                   <button
                     type="button"
                     className="dasti-button dasti-button--secondary dasti-button--sm"
-                    onClick={() => updateProposalRoute("compose")}
+                    onClick={handleReturnToDraft}
                   >
                     Back to draft
                   </button>
@@ -2622,55 +2319,123 @@ export function ProposalForge(): JSX.Element {
             />
           </section>
         ) : (
-          <section aria-hidden={false}>
-            <div
-              className="dasti-grid-split"
-              style={
-                {
-                  "--grid-columns": isCompactComposeLayout
-                    ? "minmax(0, 1fr)"
-                    : "repeat(2, minmax(0, 560px))",
-                  "--grid-gap": "var(--layout-card-grid)",
-                  "--grid-align": "start",
-                  "--grid-justify": "center",
-                } as React.CSSProperties
-              }
-            >
-              <div className="dasti-flow">
+          <>
+            {proposalWorkbenchToolbar ? (
+              <div className="dasti-workbench-top-left-slot dasti-workbench-top-left-slot--proposal">
+                <div
+                  className="dasti-cv-workbench-bar dasti-cv-workbench-bar--proposal-workspace"
+                  style={proposalToolbarWidthStyle}
+                >
+                  <div
+                    className="dasti-forge-compose-toolbar-slot"
+                    style={proposalToolbarWidthStyle}
+                    data-testid="proposal-workbench-toolbar-slot"
+                  >
+                    {proposalWorkbenchToolbar}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+            <div className="dasti-flow" style={proposalWorkbenchFrameStyle}>
+            <section aria-hidden={false}>
+              <div
+                className="dasti-grid-split"
+                style={
+                  {
+                    "--grid-columns": isCompactComposeLayout
+                      ? "minmax(0, 1fr)"
+                      : showComposePanel
+                        ? "repeat(2, minmax(0, 560px))"
+                        : "minmax(0, 0px) minmax(0, 1fr)",
+                    "--grid-gap": showComposePanel
+                      ? "var(--layout-card-grid)"
+                      : "0px",
+                    "--grid-align": "start",
+                    "--grid-justify": shouldCenterOutputStage ? "center" : "start",
+                  } as React.CSSProperties
+                }
+              >
+              <div
+                className={[
+                  "dasti-flow",
+                  "dasti-forge-left-col",
+                  !showComposePanel && !isCompactComposeLayout
+                    ? "dasti-forge-left-col--hidden"
+                    : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+              >
                 <div style={stackedCardWidthStyle}>
-                  {composeStyleControls}
                   {showBriefCard ? (
                     <ProposalBriefCard
                       documentTitle={
                         proposalDocumentTitle || "Generated proposal"
                       }
-                      jobTitle={briefJobTitle}
                       jobDescription={briefJobDescription}
-                      onToggleBrief={handleFocusComposeBrief}
+                      onToggleBrief={handleOpenComposeBrief}
                     />
                   ) : null}
-                  {isLoadingHandoff ? (
-                    <div style={{ paddingTop: "var(--s2)" }}>
-                      <p className="dasti-hint">Loading imported job offer…</p>
-                    </div>
-                  ) : (
-                    <ProposalInputForm
-                      key={composeFormInstanceKey}
-                      onStart={handleProposalStart}
-                      onStop={handleProposalStop}
-                      onSubmit={handleProposalSubmit}
-                      onError={handleProposalError}
-                      onValuesChange={handleProposalFormValuesChange}
-                      onActiveCvChange={handleAttachedCvChange}
-                      prefill={prefill}
-                      cvPickerOpen={isCvPickerOpen}
-                      onCvPickerOpenChange={setIsCvPickerOpen}
-                      cvPickerRequestKey={cvPickerRequestKey}
-                      suppressToneControls
-                      suppressCvPicker
-                      externalVoicePreset={composeToolbarVoicePreset}
-                    />
-                  )}
+                  <div
+                    style={
+                      showBriefCard || !showComposePanel
+                        ? { display: "none" }
+                        : undefined
+                    }
+                  >
+                    {isLoadingHandoff ? (
+                      <div style={{ paddingTop: "var(--s2)" }}>
+                        <p className="dasti-hint">Loading imported job offer…</p>
+                      </div>
+                    ) : (
+                      <ProposalInputForm
+                        key={composeFormInstanceKey}
+                        onStart={handleProposalStart}
+                        onStop={handleProposalStop}
+                        onSubmit={handleProposalSubmit}
+                        onError={handleProposalError}
+                        onValuesChange={handleProposalFormValuesChange}
+                        onActiveCvChange={handleAttachedCvChange}
+                        prefill={prefill}
+                        cvPickerOpen={isCvPickerOpen}
+                        onCvPickerOpenChange={setIsCvPickerOpen}
+                        cvPickerRequestKey={cvPickerRequestKey}
+                        suppressToneControls
+                        suppressCvPicker
+                        externalVoicePreset={composeToolbarVoicePreset}
+                        headerLabel={null}
+                        headerAction={
+                          hasBriefContent ? (
+                            <button
+                              type="button"
+                              className="dasti-proposal-compose-shell__toggle"
+                              onClick={handleToggleComposeBrief}
+                              aria-label={
+                                isBriefExpanded ? "Collapse brief" : "Edit brief"
+                              }
+                              title={
+                                isBriefExpanded ? "Collapse brief" : "Edit brief"
+                              }
+                            >
+                              {isBriefExpanded ? (
+                                <ChevronUp
+                                  size={14}
+                                  strokeWidth={1.8}
+                                  aria-hidden="true"
+                                />
+                              ) : (
+                                <ChevronDown
+                                  size={14}
+                                  strokeWidth={1.8}
+                                  aria-hidden="true"
+                                />
+                              )}
+                            </button>
+                          ) : null
+                        }
+                      />
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -2679,12 +2444,6 @@ export function ProposalForge(): JSX.Element {
                   style={stackedCardWidthStyle}
                   className="dasti-proposal-output-shell"
                 >
-                  <ProposalStyleRail
-                    linkMode={resolvedStyleLinkMode}
-                    styleChoice={proposalStyleChoice}
-                    autoAppliedLabel={autoAppliedStyleLabel}
-                    onStyleChoiceChange={handleProposalStyleChoiceChange}
-                  />
                   <ProposalDisplay
                     proposalContent={proposalContent}
                     loading={loading}
@@ -2766,20 +2525,30 @@ export function ProposalForge(): JSX.Element {
                           >
                             <FloppyDisk size={16} strokeWidth={1.7} />
                           </button>
-                          <RegenerateMenu
-                            isRegenerating={isRegeneratingGeneratedProposal}
+                          <button
+                            type="button"
+                            className="dasti-icon-button"
+                            aria-label="Regenerate proposal"
+                            data-toolbar-tooltip={
+                              isRegeneratingGeneratedProposal
+                                ? "Regenerating"
+                                : "Regenerate"
+                            }
+                            onClick={() => {
+                              void handleRegenerateOutput();
+                            }}
                             disabled={
+                              isRegeneratingGeneratedProposal ||
                               !proposalContent ||
                               loading ||
                               !lastProposalRequest
                             }
-                            currentVoicePreset={
-                              lastProposalRequest?.voicePreset ?? null
-                            }
-                            onRegenerate={(voiceOverride) => {
-                              void handleRegenerateOutput(voiceOverride);
+                            style={{
+                              opacity: isRegeneratingGeneratedProposal ? 0.55 : 1,
                             }}
-                          />
+                          >
+                            <RotateCcw size={16} strokeWidth={1.7} />
+                          </button>
                           <div className="dasti-icon-cluster__divider" />
                           {isConfirmingGeneratedDelete ? (
                             <button
@@ -2822,8 +2591,10 @@ export function ProposalForge(): JSX.Element {
                   />
                 </div>
               </div>
+              </div>
+            </section>
             </div>
-          </section>
+          </>
         )}
       </div>
       <ProposalSaveDialog
