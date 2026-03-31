@@ -495,9 +495,7 @@ export default function ProposalsList({
   const [copied, setCopied] = React.useState(false);
   const [isConfirmingDelete, setIsConfirmingDelete] = React.useState(false);
   const [savedViewMode, setSavedViewMode] =
-    React.useState<SavedProposalViewMode>(() =>
-      selectedProposalId ? "focused" : "stack",
-    );
+    React.useState<SavedProposalViewMode>("stack");
   const [visibleSecondaryCount, setVisibleSecondaryCount] = React.useState(
     SECONDARY_PROPOSAL_PAGE_SIZE,
   );
@@ -942,11 +940,6 @@ export default function ProposalsList({
       setSavedViewMode("stack");
     }
   }, [isMobileSavedViewport, savedViewMode]);
-
-  React.useEffect(() => {
-    if (isMobileSavedViewport || !selectedProposalId) return;
-    setSavedViewMode("focused");
-  }, [isMobileSavedViewport, selectedProposalId]);
 
   React.useEffect(() => {
     if (!isMobileSavedViewport) return;
