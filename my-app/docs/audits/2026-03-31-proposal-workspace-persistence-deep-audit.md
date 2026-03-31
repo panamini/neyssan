@@ -4,12 +4,19 @@ Date: 2026-03-31
 
 ## Summary
 
-I re-verified the active runtime from local code and current diff.
+This audit was updated after the final manual retest went green.
 
-- `/proposal` mounts `ProposalForge`, not `ProposalForgeNext`.
-- `/proposal-next` is a redirect back to `/proposal`.
-- The storage-backed Proposal -> Resume -> Proposal roundtrip is currently intact in the active runtime path.
-- The concrete active bug I found was different: every "saved proposal" surface was still mixing `status: "draft"` rows with `status: "saved"` rows. That made saved/open behavior inconsistent and made the save button above the generated output misleading.
+Confirmed final state:
+
+- `/proposal` mounts `ProposalForge`, not `ProposalForgeNext`
+- Proposal -> Resume -> Proposal now preserves:
+  - compose input
+  - generated output
+  - proposal-attached CV
+- the final root cause was not just storage deletion
+- the final root cause was an output-draft overwrite with a metadata-only null-content state
+
+That overwrite happened even when `dasti:proposal-compose-draft:v1` and `dasti:proposal-output-draft:v1` both survived in localStorage.
 
 ## Code Classification
 
@@ -25,234 +32,199 @@ I re-verified the active runtime from local code and current diff.
 - `my-app/src/lib/proposal-workspace-state.ts`
 - `my-app/src/lib/proposal-output-draft.ts`
 - `my-app/src/lib/proposal-personalization.ts`
-- `my-app/src/contexts/CvLibraryContext.tsx`
-- `my-app/convex/proposalsPublic.ts`
-- `my-app/convex/proposalsCountPublic.ts`
 
 ### Legacy but informative code
 
 - `my-app/src/pages/ProposalForgeNext.tsx`
 
-`ProposalForgeNext` still contains proposal workspace logic, but `App.tsx` no longer routes `/proposal` to it.
-
 ### Obsolete/dead for this runtime path
 
-- Any audit or test assumption that `/proposal` is still backed by `ProposalForgeNext`
-- Any saved/open behavior analysis that ignores the current `status` field split between live drafts and saved proposals
+- any audit assumption that `/proposal` is still served by `ProposalForgeNext`
+
+## Final Root Cause List
+
+### RC-1. Proposal and Resume CV identity were coupled
+
+Files:
+
+- `my-app/src/components/ProposalInputForm.tsx`
+- `my-app/src/pages/ProposalForge.tsx`
+- `my-app/src/lib/proposal-personalization.ts`
+
+Problem:
+
+- Proposal attach/remove CV and Resume active CV were not properly isolated
+- Proposal was still mutating Resume state through Resume-side CV loading behavior
+- Proposal page was still reading Resume `currentCv` for Proposal-attached styling behavior
+
+Fix:
+
+- Proposal-attached CV now uses `dasti:proposal-attached-cv-id:v1`
+- Proposal attach no longer loads Resume
+- Proposal page derives attached-CV behavior from Proposal-owned state
+
+### RC-2. StrictMode mount could remove the output draft too early
+
+File:
+
+- `my-app/src/pages/ProposalForge.tsx`
+
+Problem:
+
+- the page persistence effect could remove `dasti:proposal-output-draft:v1` during initial mount before real state settled
+
+Fix:
+
+- the output-draft remove branch is now gated behind an initial-render ref
+
+### RC-3. Surviving output drafts could still be overwritten with invalid null-content state
+
+File:
+
+- `my-app/src/pages/ProposalForge.tsx`
+
+Problem:
+
+- after RC-2, storage survived, but the UI could still come back empty
+- DevTools inspection showed the output key still present, but with this shape:
+  - `proposalContent: null`
+  - `generatedProposalId: null`
+  - title/meta/type/style still present
+
+That exact shape matches Proposal generation-start / error-state transitions:
+
+- `handleProposalStart()`
+- `handleProposalError()`
+
+Those states are valid in memory while generation is starting or failing, but they are not valid persisted output drafts.
+
+Fix:
+
+- Proposal output persistence now skips writing metadata-only output states
+- a draft is only rewritten when there is real output content or a generated proposal id
+- true empty/reset states still clear storage
+
+This was the final fix that made the manual path green.
 
 ## Verified Runtime Path
 
 Confirmed from local code:
 
-- `my-app/src/App.tsx:10-14`
-- `my-app/src/App.tsx:109-118`
+- `my-app/src/App.tsx`
 
 Result:
 
 - `/proposal` -> `ProposalForge`
 - `/proposal-next` -> redirect to `/proposal`
 
-The earlier audit state that treated `ProposalForgeNext` as the active runtime was stale.
+## Storage Findings
 
-## Route Entry Audit
+Final verified behavior from manual DevTools inspection:
 
-### Proposal workspace entry points
+- `dasti:proposal-compose-draft:v1` survives the Resume detour
+- `dasti:proposal-output-draft:v1` survives the Resume detour
+- after the final guard fix, the output draft also survives with real `proposalContent`
 
-- Sidebar workspace card: `my-app/src/components/Sidebar.tsx:702-708`
-- Collapsed rail proposal link uses `/proposal` when reopening the workspace
-- "Open Proposal Forge" / style-side open actions: `my-app/src/features/verbati/VerbatiProposalWorkspace.tsx:407-418`
+Important diagnostic note:
 
-All of these are workspace-entry paths and should land on `/proposal`.
+- if the key exists but `proposalContent` is `null`, Proposal is loading the right page but the stored output draft has already been corrupted by a bad overwrite path
+- this is different from a missing-route or missing-storage problem
 
-### Saved proposal entry points
+## Exact Fixes Applied
 
-- Proposal saved-view selection in `ProposalForge`: `my-app/src/pages/ProposalForge.tsx:485-507`
-- Sidebar saved proposal links: `my-app/src/components/Sidebar.tsx:879-899`
-- Proposal library cards: `my-app/src/pages/ProposalsLibrary.tsx:193-199`
-- Verbati selected proposal open action: `my-app/src/features/verbati/VerbatiProposalWorkspace.tsx:407-413`
-- Saved proposal stack selection: `my-app/src/components/ProposalsList.tsx:552-580`
+### Proposal / Resume CV boundary
 
-All of these should only operate on `status === "saved"` rows and should land on `/proposal?view=saved&id=...`.
+- `my-app/src/lib/proposal-personalization.ts`
+  - Proposal-attached CV key
+  - migration from legacy `cvActiveId`
+  - Proposal-attached CV document resolver
+  - Proposal-attached CV update event
 
-### Resume-side entry from proposal
-
-- Proposal CV picker "Edit" flow: `my-app/src/components/ProposalInputForm.tsx:1041-1055`
-
-That flow explicitly sets `cvActiveId`, loads the CV, then navigates to `/cv?id=...`.
-
-## Reset Trigger Inventory
-
-Explicit reset/clear triggers in active code:
-
-- Create new proposal from sidebar: `my-app/src/components/Sidebar.tsx:695-700`
-- Delete live proposal workspace from sidebar: `my-app/src/components/Sidebar.tsx:710-730`
-- Delete saved proposal that matches the live draft id: `my-app/src/components/Sidebar.tsx:732-759`
-- Create new proposal from proposal library: `my-app/src/pages/ProposalsLibrary.tsx:87-92`
-- Route-state reset token consumption: `my-app/src/pages/ProposalForge.tsx:943-951`
-
-I did not find an active implicit reset on normal Proposal -> Resume -> Proposal navigation.
-
-## `cvActiveId` Audit
-
-Active proposal-side behavior:
-
-- Explicit select CV: `my-app/src/components/ProposalInputForm.tsx:1011-1019`
-- Explicit clear CV: `my-app/src/components/ProposalInputForm.tsx:1021-1039`
-- Edit CV from proposal picker: `my-app/src/components/ProposalInputForm.tsx:1041-1055`
-
-I did not find any active effect that clears `cvActiveId` opportunistically. In the current active code, `cvActiveId` is cleared only by explicit user removal.
-
-## Storage Audit
-
-### Compose draft
-
-- Storage key: `dasti:proposal-compose-draft:v1`
-- Written from form changes in `ProposalInputForm`
-- Read on form mount and on sidebar/workspace refresh
-
-### Output draft
-
-- Storage key: `dasti:proposal-output-draft:v1`
-- Written synchronously on successful submit in `my-app/src/pages/ProposalForge.tsx:1128-1160`
-- Also mirrored by the page-level persistence effect
-
-### Resume identity
-
-- Storage key: `cvActiveId`
-- Set and cleared only through explicit proposal CV picker actions in active code
-
-## Exact Root Causes Found
-
-### 1. Previous audits targeted the wrong runtime
-
-Exact files:
-
-- `my-app/src/App.tsx:109-118`
-- `my-app/src/pages/ProposalForgeNext.tsx:1-120`
-
-The active runtime is `ProposalForge`. Any regression analysis centered on `ProposalForgeNext` was outdated.
-
-### 2. Saved proposal data was not actually saved-only
-
-Exact files:
-
-- `my-app/convex/proposalsPublic.ts:174-188`
-- `my-app/convex/proposalsCountPublic.ts:18-25`
-
-Before this fix, the saved proposal query/count path included draft rows. That polluted every saved/open surface.
-
-### 3. Saved surfaces were not defensively filtering by status
-
-Exact files:
-
-- `my-app/src/pages/ProposalForge.tsx:485-507`
-- `my-app/src/components/Sidebar.tsx:879-899`
-- `my-app/src/pages/ProposalsLibrary.tsx:79-99`
-- `my-app/src/components/ProposalsList.tsx:400-407`
-- `my-app/src/components/ProposalsList.tsx:542-580`
-- `my-app/src/features/verbati/VerbatiProposalWorkspace.tsx:196-250`
-
-These surfaces treated the query as inherently saved-only. Combined with the server bug above, draft rows could appear as saved proposals.
-
-This is the concrete reason:
-
-- opening a "saved" proposal could actually open a draft row
-- returning to the draft/workspace looked inconsistent
-- the save button above the generated output was misleading because draft rows already appeared in saved-library surfaces before the user saved them
-
-## Fix Applied
-
-### Server-side
-
-- `my-app/convex/proposalsPublic.ts`
-  - query narrowed to the `by_user_and_status` index
-  - added a defensive `status === "saved"` filter before projection
-- `my-app/convex/proposalsCountPublic.ts`
-  - count narrowed to saved rows only
-  - added a defensive `status === "saved"` filter before counting
-
-### Client-side
+- `my-app/src/components/ProposalInputForm.tsx`
+  - Proposal attach no longer calls Resume `loadCv()`
+  - explicit Resume-open path still loads and navigates
 
 - `my-app/src/pages/ProposalForge.tsx`
-  - saved-view hydration now filters to saved rows only
+  - Proposal-attached styling now derives from Proposal-owned attached CV
+  - removed Resume `loadCv(attachedCvId)` re-entry coupling
+  - Proposal attached-CV UI refreshes from Proposal-owned storage/event state
+
+### Output-draft persistence
+
+- `my-app/src/pages/ProposalForge.tsx`
+  - mount-time draft removal guarded against StrictMode bootstrap
+  - metadata-only null-content states no longer overwrite a valid output draft
+
+### Saved/workspace continuity
+
+- `my-app/src/pages/ProposalForge.tsx`
 - `my-app/src/components/Sidebar.tsx`
-  - sidebar recent proposal list now filters to saved rows only
 - `my-app/src/pages/ProposalsLibrary.tsx`
-  - proposal library cards now filter to saved rows only
-- `my-app/src/components/ProposalsList.tsx`
-  - saved proposal stack now filters to saved rows only
 - `my-app/src/features/verbati/VerbatiProposalWorkspace.tsx`
-  - style workspace saved proposal picker/preview now filters to saved rows only
+
+Saved-proposal and workspace entry paths were normalized during this recovery so the restored `ProposalForge` runtime remains authoritative.
 
 ## Verification
 
 ### Focused Vitest
 
-Command:
+Verified suites include:
 
-`npm test -- convex/__tests__/proposalsPublic.test.ts convex/__tests__/proposalsCountPublic.test.ts src/components/__tests__/Sidebar.proposal-navigation.test.tsx src/pages/__tests__/ProposalForge.draft-persistence.test.tsx src/pages/__tests__/ProposalForge.saved-view.test.tsx src/pages/__tests__/ProposalForge.save-to-library.test.tsx`
-
-Result:
-
-- 6 files passed
-- 15 tests passed
-
-### Route contract
-
-Command:
-
-`npm test -- src/__tests__/App.proposal-route.contract.test.ts`
-
-Result:
-
-- 1 file passed
-- 1 test passed
-
-### Real-browser runtime path
-
-Command:
-
-`PLAYWRIGHT_APP_URL=http://127.0.0.1:4173 npx playwright test e2e/proposal-workspace-roundtrip.spec.ts --project=chromium`
-
-Result:
-
-- 2 tests passed
-
-What that browser run covered:
-
-- proposal workspace visible
-- resume workspace visible
-- proposal -> resume workspace click
-- resume -> proposal workspace click
-- proposal compose/output storage survives the detour
-- proposal-side resume picker Edit flow preserves proposal state on return
-
-What it did not cover:
-
-- authenticated end-to-end Convex generation from the browser harness
-
-That generation boundary was still covered in active-code tests through `ProposalForge` submit flow:
-
+- `src/lib/__tests__/proposal-personalization.test.ts`
+- `src/components/__tests__/ProposalInputForm.provider-busy.test.tsx`
+- `src/components/__tests__/Sidebar.proposal-navigation.test.tsx`
+- `src/pages/__tests__/ProposalForge.attached-cv-sync.test.tsx`
 - `src/pages/__tests__/ProposalForge.draft-persistence.test.tsx`
+- `src/pages/__tests__/ProposalForge.output-draft-guard.test.tsx`
 - `src/pages/__tests__/ProposalForge.save-to-library.test.tsx`
+- `src/pages/__tests__/ProposalForge.saved-view.test.tsx`
 
-## Files Changed In This Audit Pass
+### Manual retest
 
-- `my-app/convex/proposalsPublic.ts`
-- `my-app/convex/proposalsCountPublic.ts`
-- `my-app/convex/__tests__/proposalsPublic.test.ts`
-- `my-app/convex/__tests__/proposalsCountPublic.test.ts`
-- `my-app/src/pages/ProposalForge.tsx`
-- `my-app/src/components/Sidebar.tsx`
-- `my-app/src/pages/ProposalsLibrary.tsx`
+Manual retest is green.
+
+Verified path:
+
+1. generate proposal
+2. click Resume workspace
+3. click back to Proposal workspace
+4. confirm compose input still visible
+5. confirm generated output still visible
+
+## Files Changed In The Final Working Fix
+
+- `my-app/src/App.tsx`
+- `my-app/src/components/ProposalInputForm.tsx`
 - `my-app/src/components/ProposalsList.tsx`
+- `my-app/src/components/Sidebar.tsx`
 - `my-app/src/features/verbati/VerbatiProposalWorkspace.tsx`
+- `my-app/src/lib/proposal-generation-request.ts`
+- `my-app/src/lib/proposal-output-draft.ts`
+- `my-app/src/lib/proposal-personalization.ts`
+- `my-app/src/lib/proposal-style-link.ts`
+- `my-app/src/lib/proposal-voice-label.ts`
+- `my-app/src/lib/proposal-workspace-state.ts`
+- `my-app/src/pages/ProposalForge.tsx`
+- `my-app/src/pages/ProposalsLibrary.tsx`
+- `my-app/src/__tests__/App.proposal-route.contract.test.ts`
+- `my-app/src/lib/__tests__/proposal-personalization.test.ts`
+- `my-app/src/components/__tests__/ProposalInputForm.provider-busy.test.tsx`
 - `my-app/src/components/__tests__/Sidebar.proposal-navigation.test.tsx`
+- `my-app/src/pages/__tests__/ProposalForge.attached-cv-sync.test.tsx`
+- `my-app/src/pages/__tests__/ProposalForge.draft-persistence.test.tsx`
+- `my-app/src/pages/__tests__/ProposalForge.output-draft-guard.test.tsx`
+- `my-app/src/pages/__tests__/ProposalForge.save-to-library.test.tsx`
+- `my-app/src/pages/__tests__/ProposalForge.saved-view.test.tsx`
+- `my-app/src/pages/__tests__/ProposalForge.stop-state.test.tsx`
+- `e2e/proposal-workspace-roundtrip.spec.ts`
 
 ## Conclusion
 
-The active runtime path is `ProposalForge`, and the storage-backed Proposal -> Resume -> Proposal roundtrip is currently working in local browser verification.
+The Proposal workspace persistence bug is fixed in the active runtime path.
 
-The concrete active regression I found and fixed was the draft-vs-saved boundary: saved proposal queries and saved proposal UIs were still treating draft rows as saved rows. That was the real source of the saved/open inconsistency and the misleading save behavior.
+The final important lesson is:
 
-If a signed-in manual generate -> resume -> proposal path still fails in the deployed app after this fix, the next suspect is deploy parity or auth-backed generation/runtime state outside the local verified route path, not `ProposalForgeNext` routing.
+- storage survival alone was not enough
+- the last regression came from persisting a non-renderable output state (`proposalContent: null`) over a valid generated draft
+
+UI migration from `ProposalForgeNext` should continue only as presentational backports into the restored `ProposalForge` runtime, not by switching runtime ownership again.
