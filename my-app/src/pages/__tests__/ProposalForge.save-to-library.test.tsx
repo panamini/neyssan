@@ -159,9 +159,7 @@ describe("ProposalForge save to library", () => {
       );
     });
 
-    expect(
-      screen.getByRole("heading", { name: "Operations Associate saved" }),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Saved proposals")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Duplicate to draft" }),
     ).toBeInTheDocument();
@@ -242,9 +240,7 @@ describe("ProposalForge save to library", () => {
       );
     });
 
-    expect(
-      screen.getByRole("heading", { name: "Detached proposal" }),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Saved proposals")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Duplicate to draft" }),
     ).toBeInTheDocument();

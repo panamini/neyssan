@@ -139,3 +139,16 @@ my-app/src/__tests__/**/__snapshots__/
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+.tmp-vitest/
+.tmp-playwright/
+.playwright-browsers/
+my-app/Docs
+!my-app/docs/
+my-app/docs/*
+!my-app/docs/audits/
+my-app/docs/audits/*
+!my-app/docs/audits/2026-03-31-proposal-reopen-lag-audit.md
+!my-app/docs/plans/
+my-app/docs/plans/*
+!my-app/docs/plans/2026-03-31-proposal-reopen-lag-recovery-plan.md
+!my-app/docs/plans/2026-04-01-proposal-storage-and-lag-plan.md
