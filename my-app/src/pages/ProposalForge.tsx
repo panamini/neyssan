@@ -2283,7 +2283,7 @@ export function ProposalForge(): JSX.Element {
             "--page-shell-gap": "var(--layout-panel-stack)",
             "--page-shell-pad-top":
               isSavedView || shouldCenterOutputStage
-                ? "var(--space-4)"
+                ? "var(--space-2)"
                 : "var(--space-6)",
           } as React.CSSProperties
         }
