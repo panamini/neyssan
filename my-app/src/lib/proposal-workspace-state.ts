@@ -1,5 +1,6 @@
 import {
   PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,
+  PROPOSAL_OUTPUT_DRAFT_SESSION_STORAGE_KEY,
   PROPOSAL_OUTPUT_DRAFT_UPDATED_EVENT,
 } from "./proposal-output-draft";
 import { clearProposalAttachedCvId } from "./proposal-personalization";
@@ -46,12 +47,21 @@ export function writeStoredProposalComposeDraft(
   if (typeof window === "undefined") return;
 
   try {
+    const nextRaw = draft ? JSON.stringify(draft) : null;
+    const currentRaw = window.localStorage.getItem(
+      PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
+    );
+
+    if (currentRaw === nextRaw) {
+      return;
+    }
+
     if (!draft) {
       window.localStorage.removeItem(PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY);
     } else {
       window.localStorage.setItem(
         PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
-        JSON.stringify(draft),
+        nextRaw,
       );
     }
   } catch {
@@ -67,6 +77,7 @@ export function clearStoredProposalWorkspaceState(): void {
   try {
     window.localStorage.removeItem(PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY);
     window.localStorage.removeItem(PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY);
+    window.sessionStorage.removeItem(PROPOSAL_OUTPUT_DRAFT_SESSION_STORAGE_KEY);
   } catch {
     /* best-effort */
   }
@@ -82,6 +93,7 @@ export function startFreshProposalWorkspace(): void {
   try {
     window.localStorage.setItem(PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY, JSON.stringify({}));
     window.localStorage.removeItem(PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY);
+    window.sessionStorage.removeItem(PROPOSAL_OUTPUT_DRAFT_SESSION_STORAGE_KEY);
   } catch {
     /* best-effort */
   }

@@ -28,6 +28,21 @@ const SAVED_PROPOSALS = [
         "Lead recurring operations and keep cross-team communication on track.",
     },
   },
+  {
+    _id: "proposal_gamma",
+    _creationTime: 1710000001000,
+    title: "Saved proposal gamma",
+    content: "Dear reader,\n\nSaved proposal without brief metadata.\n\nRegards,",
+    status: "saved",
+    updatedAt: 1710000001000,
+    createdAt: 1710000001000,
+    sections: [{ type: "text", content: "Saved proposal without brief metadata." }],
+    metadata: {
+      proposalType: "cover_letter",
+      voicePreset: "signature",
+      requestedVoicePreset: "signature",
+    },
+  },
 ] as const;
 
 vi.mock("convex/react", () => ({
@@ -256,6 +271,42 @@ describe("ProposalForge saved view", () => {
     );
     expect(screen.getByTestId("compose-job-description")).toHaveTextContent(
       "Lead recurring operations and keep cross-team communication on track.",
+    );
+  });
+
+  it("keeps the existing compose brief when the saved proposal lacks source brief metadata", () => {
+    window.localStorage.setItem(
+      PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
+      JSON.stringify({
+        jobTitle: "Marketing Specialist",
+        jobDescription: "Existing compose brief should survive saved reopen.",
+        proposalType: "cover_letter",
+        voicePreset: "signature",
+      }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/proposal?view=saved&id=proposal_gamma"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Duplicate to draft" }));
+
+    expect(screen.getByTestId("compose-job-title")).toHaveTextContent(
+      "Saved proposal gamma",
+    );
+    expect(screen.getByTestId("compose-job-description")).toHaveTextContent(
+      "Existing compose brief should survive saved reopen.",
+    );
+    expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+      "Saved proposal gamma",
+    );
+    expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+      "Saved proposal without brief metadata.",
+    );
+    expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+      "|preview",
     );
   });
 

@@ -593,6 +593,58 @@ describe("ProposalInputForm provider-busy handling", () => {
     expect(window.localStorage.getItem("cvActiveId")).toBe("cv_alpha");
   });
 
+  it("calls onSubmit without waiting for the generated-proposal status sync mutation", async () => {
+    mockGenerateProposalAction.mockResolvedValue({
+      proposalId: "proposal_123",
+      proposalContent: "Generated proposal body.",
+      requestedModelType: "chatgpt",
+      actualModelType: "chatgpt",
+      fallbackTriggerCode: null,
+    });
+    mockMutation.mockImplementation(
+      () => new Promise(() => {}),
+    );
+
+    const onSubmit = vi.fn();
+    const { container } = render(<ProposalInputForm onSubmit={onSubmit} />);
+
+    fireEvent.change(screen.getByPlaceholderText("Enter Job Title"), {
+      target: { value: "UI / UX Artist For Game Development" },
+    });
+    fireEvent.change(
+      screen.getByPlaceholderText("Paste or write the job offer here…"),
+      {
+        target: {
+          value: "Design tactile game interfaces, polish interactions, and support gameplay presentation.",
+        },
+      },
+    );
+
+    fireEvent.click(
+      container.querySelector('button[type="submit"]') as HTMLButtonElement,
+    );
+
+    await waitFor(() => {
+      expect(mockGenerateProposalAction).toHaveBeenCalledTimes(1);
+    });
+
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          jobTitle: "UI / UX Artist For Game Development",
+          proposalType: "cover_letter",
+        }),
+        "Generated proposal body.",
+        {
+          requestedModelType: "chatgpt",
+          actualModelType: "chatgpt",
+          fallbackTriggerCode: null,
+        },
+        "proposal_123",
+      );
+    });
+  });
+
   it("shows the friendly transport-error message and unlocks the form for a controlled legacy-generation rejection", async () => {
     const transportError = Object.assign(
       new Error(
@@ -983,6 +1035,49 @@ describe("ProposalInputForm provider-busy handling", () => {
     await waitFor(() => {
       expect(screen.getByText("Formal")).toBeVisible();
     });
+
+    fireEvent.change(screen.getByPlaceholderText("Enter Job Title"), {
+      target: { value: "Operations Associate" },
+    });
+    fireEvent.change(
+      screen.getByPlaceholderText("Paste or write the job offer here…"),
+      {
+        target: {
+          value:
+            "Support recurring processes, update internal records, and coordinate communication across teams.",
+        },
+      },
+    );
+
+    fireEvent.click(container.querySelector('button[type="submit"]')!);
+
+    await waitFor(() => {
+      expect(mockGenerateProposalAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          voicePreset: "expert",
+          formalityLevel: "formal",
+          creativity: "low",
+        }),
+      );
+    });
+  });
+
+  it("accepts a workspace-level external tone when the inline tone controls are suppressed", async () => {
+    mockGenerateProposalAction.mockResolvedValue({
+      proposalId: "proposal_toolbar_preset",
+      proposalContent: "Hello hiring team,\n\nI would love to contribute.",
+      requestedModelType: "chatgpt",
+      actualModelType: "chatgpt",
+      fallbackTriggerCode: null,
+    });
+
+    const { container } = render(
+      <ProposalInputForm
+        onSubmit={vi.fn()}
+        suppressToneControls
+        externalVoicePreset="expert"
+      />,
+    );
 
     fireEvent.change(screen.getByPlaceholderText("Enter Job Title"), {
       target: { value: "Operations Associate" },

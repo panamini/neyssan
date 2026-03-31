@@ -18,7 +18,7 @@ const mockCvLibraryState = {
   currentCv: null as { id: string; title: string; sections: unknown[] } | null,
   currentCvId: null as string | null,
   loadCv: vi.fn(),
-  createNewCv: vi.fn(),
+  createNewCv: vi.fn(async () => {}),
   deleteCv: vi.fn(),
 };
 
