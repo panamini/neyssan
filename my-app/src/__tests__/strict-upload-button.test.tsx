@@ -10,9 +10,7 @@ const toastMock = vi.fn();
 vi.mock("../../convex/_generated/api", () => ({
   api: {
     actions: {
-      extractProfileStrictWithSpans: {
-        extractProfileStrictWithSpans: "withSpans",
-      },
+      extractProfileStrictWithSpans: "withSpans",
     },
   },
 }))
@@ -40,6 +38,10 @@ describe("StrictUploadButton", () => {
   beforeEach(() => {
     withSpansMock.mockReset();
     toastMock.mockReset();
+    Object.defineProperty(File.prototype, "text", {
+      configurable: true,
+      value: vi.fn().mockResolvedValue("Sample"),
+    });
   });
 
   it("calls strict action and overlays sections", async () => {

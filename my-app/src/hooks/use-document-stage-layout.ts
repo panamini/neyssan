@@ -62,6 +62,8 @@ export function useDocumentStageLayout({
       return undefined;
     }
 
+    let frameId: number | null = null;
+
     const measure = () => {
       const styles = window.getComputedStyle(node);
       const availableWidth =
@@ -85,17 +87,32 @@ export function useDocumentStageLayout({
       );
     };
 
-    measure();
-    const frameId = window.requestAnimationFrame(measure);
+    const scheduleMeasure = () => {
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
 
-    const resizeObserver = new ResizeObserver(measure);
+      frameId = window.requestAnimationFrame(() => {
+        frameId = null;
+        measure();
+      });
+    };
+
+    measure();
+    scheduleMeasure();
+
+    const resizeObserver = new ResizeObserver(() => {
+      scheduleMeasure();
+    });
     resizeObserver.observe(node);
     if (node.parentElement) {
       resizeObserver.observe(node.parentElement);
     }
 
     return () => {
-      window.cancelAnimationFrame(frameId);
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
       resizeObserver.disconnect();
     };
   }, [enabled, measurementRef]);
@@ -122,8 +139,18 @@ export function useDocumentStageLayout({
       ? measurement.availableHeight
       : pageHeightPx * fitScale,
   );
-  const pageWidth = roundPx(stageWidth * zoomLevel);
-  const pageHeight = roundPx(stageHeight * zoomLevel);
+  const overflowFitScale =
+    usesFilledOverflowStage && fitMode === "contain"
+      ? Math.min(1, widthFitScale)
+      : fitScale;
+  const fittedPageWidth = pageWidthPx * overflowFitScale;
+  const fittedPageHeight = pageHeightPx * overflowFitScale;
+  const pageWidth = roundPx(
+    (usesFilledOverflowStage ? fittedPageWidth : stageWidth) * zoomLevel,
+  );
+  const pageHeight = roundPx(
+    (usesFilledOverflowStage ? fittedPageHeight : stageHeight) * zoomLevel,
+  );
   const overflowX = pageWidth > stageWidth + 1;
   const overflowY = pageHeight > stageHeight + 1;
   const isFit = Math.abs(zoomLevel - 1) < 0.001;

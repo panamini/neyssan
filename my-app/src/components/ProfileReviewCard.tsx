@@ -24,6 +24,8 @@ import { generateCvTemplate, generateCvTemplateV1 } from "../lib/cv-template";
 import { isV1SectionsEnabled } from "../lib/flags";
 import StructuredUploadButton from "./StructuredUploadButton";
 import CvRenameDialog from "./CvRenameDialog";
+import type { CvDocument } from "../types/cvDocument";
+import { deriveCvTitleFromSections } from "../lib/normalize-cv";
 
 /**
  * Props for ProfileReviewCard
@@ -52,6 +54,7 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
     reorderSections,
     addSection,
     createNewCv,
+    importCv,
     closeInspector,
     renameCv,
     isV1Active,
@@ -203,6 +206,31 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
     setToasts((s) => [...s, { id, message }]);
     // auto-dismiss
     setTimeout(() => setToasts((s) => s.filter((t) => t.id !== id)), 3500);
+  }
+
+  async function importSectionsIntoFreshCv(updated: CvSection[]) {
+    if (!Array.isArray(updated) || updated.length === 0) {
+      pushToast("No importable sections were found");
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const importedDoc: CvDocument = {
+      id: uuidv4(),
+      title: deriveCvTitleFromSections(updated as any, "Imported CV"),
+      metadata: {
+        createdAt: now,
+        updatedAt: now,
+        version: 1,
+      },
+      sections: updated as any,
+    };
+
+    try {
+      await importCv(importedDoc);
+    } catch {
+      pushToast("Failed to import CV");
+    }
   }
 
   React.useEffect(() => {
@@ -643,9 +671,18 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
               justifyContent: "center",
             }}
           >
+            <StructuredUploadButton
+              contextKey="cvforge-empty-state"
+              onApplyToSections={(updated) => {
+                void importSectionsIntoFreshCv(updated);
+              }}
+              renderAs="dropdown"
+            />
             <button
               type="button"
-              onClick={() => createNewCv(undefined, { forceV1: true })}
+              onClick={() => {
+                void createNewCv(undefined, { forceV1: true });
+              }}
               className="dasti-button dasti-button--primary dasti-button--pill"
             >
               Create new CV
