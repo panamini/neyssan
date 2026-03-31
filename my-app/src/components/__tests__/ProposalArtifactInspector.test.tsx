@@ -1,10 +1,14 @@
 import React from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProposalArtifactInspector } from "../ProposalArtifactInspector";
 
 describe("ProposalArtifactInspector", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("opens the style drawer as a downward menu and suppresses trigger tooltips while open", async () => {
     const user = userEvent.setup();
 
@@ -22,16 +26,24 @@ describe("ProposalArtifactInspector", () => {
       />,
     );
 
-    expect(screen.getByText("Open layout styles.")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Style" }),
+    ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Style" }));
 
     expect(
       screen.getByRole("dialog", { name: "Style options" }),
     ).toBeInTheDocument();
-    expect(screen.queryByText("Open layout styles.")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Style" })
+        ?.querySelector(".dasti-artifact-inspector__tooltip--trigger"),
+    ).toBeNull();
     expect(screen.getByText("Calm grid. Easy to read.")).toBeInTheDocument();
-    expect(screen.queryByText("Palettes and custom accent.")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Color" })
+        ?.querySelector(".dasti-artifact-inspector__tooltip--trigger"),
+    ).toBeNull();
   });
 
   it("reopens the custom color picker directly when a custom accent is active", async () => {
@@ -97,5 +109,74 @@ describe("ProposalArtifactInspector", () => {
       screen.queryByRole("dialog", { name: "Custom accent color" }),
     ).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Custom accent color" })).toBeInTheDocument();
+  });
+
+  it("anchors the custom picker below the color drawer surface", async () => {
+    const user = userEvent.setup();
+
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+      function mockRect() {
+        const element = this as HTMLElement;
+        if (element.getAttribute("aria-label") === "Color") {
+          return {
+            x: 480,
+            y: 80,
+            width: 34,
+            height: 34,
+            top: 80,
+            right: 514,
+            bottom: 114,
+            left: 480,
+            toJSON: () => ({}),
+          } as DOMRect;
+        }
+        if (element.getAttribute("aria-label") === "Color options") {
+          return {
+            x: 448,
+            y: 118,
+            width: 132,
+            height: 42,
+            top: 118,
+            right: 580,
+            bottom: 160,
+            left: 448,
+            toJSON: () => ({}),
+          } as DOMRect;
+        }
+        return {
+          x: 0,
+          y: 0,
+          width: 0,
+          height: 0,
+          top: 0,
+          right: 0,
+          bottom: 0,
+          left: 0,
+          toJSON: () => ({}),
+        } as DOMRect;
+      },
+    );
+    vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(164);
+
+    render(
+      <ProposalArtifactInspector
+        variant="header"
+        styleBundleId="swiss_serif"
+        onStyleBundleChange={vi.fn()}
+        paletteOverride="sauge"
+        onPaletteOverrideChange={vi.fn()}
+        customAccentHex={null}
+        onCustomAccentHexChange={vi.fn()}
+        resolvedPaletteId="sauge"
+        hasGenerated
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Color" }));
+    await user.click(screen.getByRole("button", { name: "Custom accent color" }));
+
+    const picker = screen.getByRole("dialog", { name: "Custom accent color" });
+    expect(screen.getByRole("dialog", { name: "Color options" })).toBeInTheDocument();
+    expect(picker).toHaveStyle({ left: "448px", top: "162px" });
   });
 });
