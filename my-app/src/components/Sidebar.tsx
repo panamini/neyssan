@@ -876,28 +876,6 @@ export const Sidebar: React.FC = () => {
     ],
   );
 
-  const sortedProposals = React.useMemo(
-    () =>
-      [...(proposals ?? [])]
-        .filter((proposal) => proposal.status === "saved")
-        .sort((left, right) => {
-          const rightTime = toTimestamp(right.updatedAt ?? right._creationTime);
-          const leftTime = toTimestamp(left.updatedAt ?? left._creationTime);
-          return rightTime - leftTime;
-        }),
-    [proposals],
-  );
-
-  const proposalDocs = React.useMemo(
-    () =>
-      sortedProposals.map((proposal) => ({
-        proposalId: proposal._id,
-        key: String(proposal._id),
-        rawTitle: normalizeLabel(proposal.title),
-      })),
-    [sortedProposals],
-  );
-
   const isProposalSavedView =
     isProposalRoute && proposalView === "saved" && Boolean(selectedProposalId);
   const effectiveProposalOutputDraft =
@@ -908,6 +886,71 @@ export const Sidebar: React.FC = () => {
     typeof window === "undefined"
       ? proposalComposeDraft
       : readStoredProposalComposeDraft();
+  const optimisticSavedProposal = React.useMemo<ProposalRecord | null>(() => {
+    if (!selectedProposalId || proposalView !== "saved") {
+      return null;
+    }
+
+    if (
+      !effectiveProposalOutputDraft?.generatedProposalId ||
+      String(effectiveProposalOutputDraft.generatedProposalId) !==
+        String(selectedProposalId)
+    ) {
+      return null;
+    }
+
+    const normalizedTitle =
+      normalizeLabel(effectiveProposalOutputDraft.proposalDocumentTitle) ||
+      normalizeLabel(effectiveProposalComposeDraft?.jobTitle) ||
+      "Saved proposal";
+    const optimisticTimestamp = Date.now();
+
+    return {
+      _id: selectedProposalId as Id<"proposals">,
+      _creationTime: optimisticTimestamp,
+      title: normalizedTitle,
+      updatedAt: optimisticTimestamp,
+      status: "saved",
+    };
+  }, [
+    effectiveProposalComposeDraft?.jobTitle,
+    effectiveProposalOutputDraft?.generatedProposalId,
+    effectiveProposalOutputDraft?.proposalDocumentTitle,
+    proposalView,
+    selectedProposalId,
+  ]);
+  const sortedProposals = React.useMemo(() => {
+    const mergedProposals = new Map<string, ProposalRecord>();
+
+    for (const proposal of proposals ?? []) {
+      if (proposal.status === "saved") {
+        mergedProposals.set(String(proposal._id), proposal);
+      }
+    }
+
+    if (optimisticSavedProposal) {
+      mergedProposals.set(
+        String(optimisticSavedProposal._id),
+        optimisticSavedProposal,
+      );
+    }
+
+    return [...mergedProposals.values()].sort((left, right) => {
+      const rightTime = toTimestamp(right.updatedAt ?? right._creationTime);
+      const leftTime = toTimestamp(left.updatedAt ?? left._creationTime);
+      return rightTime - leftTime;
+    });
+  }, [optimisticSavedProposal, proposals]);
+
+  const proposalDocs = React.useMemo(
+    () =>
+      sortedProposals.map((proposal) => ({
+        proposalId: proposal._id,
+        key: String(proposal._id),
+        rawTitle: normalizeLabel(proposal.title),
+      })),
+    [sortedProposals],
+  );
   const composeJobTitle = normalizeLabel(effectiveProposalComposeDraft?.jobTitle);
   const hasStoredProposalComposeDraft = effectiveProposalComposeDraft !== null;
   const outputDraftTitle = normalizeLabel(
@@ -978,7 +1021,8 @@ export const Sidebar: React.FC = () => {
       proposalDocs
         .filter(
           (doc) =>
-            doc.key !== activeProposalKey && doc.key !== activeGeneratedProposalKey,
+            doc.key !== activeProposalKey &&
+            (isProposalSavedView || doc.key !== activeGeneratedProposalKey),
         )
         .slice(0, MAX_RECENT_ITEMS)
         .map((doc) => ({
@@ -993,6 +1037,7 @@ export const Sidebar: React.FC = () => {
       activeGeneratedProposalKey,
       handleDeleteSavedProposal,
       highlightedSavedProposalKey,
+      isProposalSavedView,
       proposalDocs,
       proposalTitles,
     ],
