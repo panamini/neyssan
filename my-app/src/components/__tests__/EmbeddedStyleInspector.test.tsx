@@ -132,4 +132,70 @@ describe("EmbeddedStyleInspector", () => {
       expect(picker).toHaveStyle({ left: "430px", top: "178px" });
     });
   });
+
+  it("can render only the shared style and color controls", () => {
+    render(
+      <EmbeddedStyleInspector
+        stylePreset={{
+          layout: "swiss",
+          typography: "signature",
+          palette: "sauge",
+        }}
+        copyMode="title-only"
+        showCustomizeControl={false}
+        showPromptControl={false}
+        onSelectBundle={vi.fn()}
+        onSelectLayout={vi.fn()}
+        onSelectTypography={vi.fn()}
+        onSelectPalette={vi.fn()}
+        onSelectCustomAccent={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Open style presets" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open palette controls" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Open layout and typography controls" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Describe a look" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("uses icon-only style choices when the bundled toolbar is in title-only mode", () => {
+    render(
+      <EmbeddedStyleInspector
+        stylePreset={{
+          layout: "swiss",
+          typography: "signature",
+          palette: "sauge",
+        }}
+        copyMode="title-only"
+        showCustomizeControl={false}
+        showPromptControl={false}
+        onSelectBundle={vi.fn()}
+        onSelectLayout={vi.fn()}
+        onSelectTypography={vi.fn()}
+        onSelectPalette={vi.fn()}
+        onSelectCustomAccent={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Open style presets" }));
+
+    const styleButtons = [
+      screen.getByRole("button", { name: "Clean" }),
+      screen.getByRole("button", { name: "Soft" }),
+      screen.getByRole("button", { name: "Editorial" }),
+      screen.getByRole("button", { name: "Bold" }),
+    ];
+
+    styleButtons.forEach((button) => {
+      expect(button).toHaveClass(
+        "dasti-artifact-inspector__action",
+        "dasti-artifact-inspector__action--drawer",
+      );
+      expect(button).not.toHaveClass("dasti-proposal-chrome-option");
+    });
+  });
 });

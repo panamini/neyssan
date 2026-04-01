@@ -1,7 +1,5 @@
 import React from "react";
 import {
-  ArrowLeft,
-  ArrowRight,
   CornersIn,
   MagnifyingGlass,
   Minus,
@@ -28,14 +26,6 @@ type VerbatiResumePreviewProps = {
   hostMode?: "panel" | "workspace";
   railLeadControl?: React.ReactNode;
   railStartAddon?: React.ReactNode;
-  panelNavigation?:
-    | {
-        onPrevious: () => void;
-        onNext: () => void;
-        previousLabel: string;
-        nextLabel: string;
-      }
-    | null;
   onSelectComparisonLayout?: ((layout: VerbatiLayoutPreset) => void) | undefined;
 };
 
@@ -60,7 +50,6 @@ export function VerbatiResumePreview({
   hostMode = "panel",
   railLeadControl = null,
   railStartAddon = null,
-  panelNavigation = null,
   onSelectComparisonLayout,
 }: VerbatiResumePreviewProps): JSX.Element {
   const themeVars = React.useMemo(
@@ -93,6 +82,8 @@ export function VerbatiResumePreview({
     enabled: !compareLayouts,
     layoutKey: `${userZoom}:${stageLayout.stageWidth}:${stageLayout.stageHeight}:${stylePreset.layout}:${data.name}:${data.title}`,
     recenterKey: fitRequestCount,
+    defaultCenterX: isWorkspaceMode ? 0.5 : 0.5,
+    defaultCenterY: isWorkspaceMode ? 0.5 : 0.5,
   });
   const attachResumeViewport = React.useCallback(
     (node: HTMLDivElement | null) => {
@@ -305,30 +296,16 @@ export function VerbatiResumePreview({
   if (!isWorkspaceMode) {
     return (
       <div className="dasti-doc-viewer-shell dasti-doc-viewer-shell--resume-panel">
-        <div className="dasti-resume-mini-preview theme-resume-calm theme-resume-calm--single" style={themeVars}>
-          {documentStage}
-          {panelNavigation ? (
-            <div className="dasti-resume-mini-preview__nav" data-no-pan="true">
-              <button
-                type="button"
-                className="dasti-resume-mini-preview__nav-button dasti-resume-mini-preview__nav-button--prev"
-                onClick={panelNavigation.onPrevious}
-                aria-label={panelNavigation.previousLabel}
-                title={panelNavigation.previousLabel}
-              >
-                <ArrowLeft size={16} strokeWidth={1.8} aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                className="dasti-resume-mini-preview__nav-button dasti-resume-mini-preview__nav-button--next"
-                onClick={panelNavigation.onNext}
-                aria-label={panelNavigation.nextLabel}
-                title={panelNavigation.nextLabel}
-              >
-                <ArrowRight size={16} strokeWidth={1.8} aria-hidden="true" />
-              </button>
+        <div
+          className="dasti-resume-mini-preview theme-resume-calm theme-resume-calm--single"
+          style={themeVars}
+        >
+          {railStartControls ? (
+            <div className="dasti-resume-mini-preview__toolbar" data-no-pan="true">
+              {railStartControls}
             </div>
           ) : null}
+          {documentStage}
         </div>
       </div>
     );
@@ -375,3 +352,5 @@ export function VerbatiResumePreview({
     </div>
   );
 }
+
+export default VerbatiResumePreview;

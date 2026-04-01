@@ -52,7 +52,10 @@ describe("CvForge workspace mode", () => {
     expect(
       screen.getByText(/Preview host: panel \/ layout:/),
     ).toBeInTheDocument();
-    expect(container.querySelector(".dasti-cv-workbench-toggle")).toBeTruthy();
+    expect(
+      container.querySelector(".dasti-workbench-top-left-slot--cv"),
+    ).toBeTruthy();
+    expect(container.querySelector(".dasti-proposal-mode-toggle")).toBeTruthy();
     expect(
       screen.getByRole("button", { name: "Open resume preview" }),
     ).toHaveAttribute("data-toolbar-tooltip", "Switch to preview");
@@ -67,6 +70,9 @@ describe("CvForge workspace mode", () => {
     expect(
       screen.getByText("Preview host: workspace / layout: stacked"),
     ).toBeInTheDocument();
+    expect(
+      container.querySelector(".dasti-workbench-top-left-slot--cv"),
+    ).toBeTruthy();
     expect(
       screen.getByRole("button", { name: "Return to resume editing" }),
     ).toBeInTheDocument();

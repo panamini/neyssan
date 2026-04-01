@@ -35,26 +35,13 @@ vi.mock("../VerbatiResumePreview", () => ({
     stylePreset,
     railLeadControl,
     railStartAddon,
-    panelNavigation,
   }: {
     stylePreset: { layout: string };
     railLeadControl?: React.ReactNode;
     railStartAddon?: React.ReactNode;
-    panelNavigation?: {
-      onPrevious: () => void;
-      onNext: () => void;
-      previousLabel: string;
-      nextLabel: string;
-    } | null;
   }) => (
     <div>
       <div>Preview layout: {stylePreset.layout}</div>
-      {panelNavigation ? (
-        <div>
-          <button type="button" onClick={panelNavigation.onPrevious} aria-label={panelNavigation.previousLabel} />
-          <button type="button" onClick={panelNavigation.onNext} aria-label={panelNavigation.nextLabel} />
-        </div>
-      ) : null}
       {railLeadControl}
       {railStartAddon}
     </div>
@@ -62,33 +49,18 @@ vi.mock("../VerbatiResumePreview", () => ({
 }));
 
 describe("VerbatiCvPreviewPanel", () => {
-  it("cycles through the shared resume layouts with previous and next arrows", () => {
+  it("keeps the small live render on the selected style without layout slideshow arrows", () => {
     mockImportCv.mockClear();
 
     render(<VerbatiCvPreviewPanel />);
 
     expect(screen.getByText("Preview layout: swiss")).toBeInTheDocument();
-
-    fireEvent.click(
-      screen.getByRole("button", {
-        name: "Show next resume layout: Two Column",
-      }),
-    );
-    expect(screen.getByText("Preview layout: two-column")).toBeInTheDocument();
-
-    fireEvent.click(
-      screen.getByRole("button", {
-        name: "Show previous resume layout: Swiss Minima",
-      }),
-    );
-    expect(screen.getByText("Preview layout: swiss")).toBeInTheDocument();
-
-    fireEvent.click(
-      screen.getByRole("button", {
-        name: "Show previous resume layout: Quire",
-      }),
-    );
-    expect(screen.getByText("Preview layout: quire")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Show next resume layout:/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Show previous resume layout:/ }),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps the proposal-like appearance toolbar in workspace mode", () => {
@@ -101,37 +73,52 @@ describe("VerbatiCvPreviewPanel", () => {
       screen.getByRole("group", { name: "Resume appearance controls" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Open layout controls" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Open text styles" }),
+      screen.getByRole("button", { name: "Open style presets" }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Open palette controls" }),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", {
+        name: "Open layout and typography controls",
+      }),
+    ).not.toBeInTheDocument();
   });
 
-  it("uses simplified layout and text drawers in cv workspace preview mode", () => {
+  it("uses shared style and color drawers in cv workspace preview mode", () => {
     render(<VerbatiCvPreviewPanel hostMode="workspace" />);
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Open text styles" }),
+      screen.getByRole("button", { name: "Open style presets" }),
     );
 
-    expect(screen.getByText("Signature")).toBeInTheDocument();
-    expect(
-      screen.queryByText("Fraunces heading with a calm sans body."),
-    ).not.toBeInTheDocument();
-    expect(screen.queryByText("Clean")).not.toBeInTheDocument();
+    const styleButtons = [
+      screen.getByRole("button", { name: "Clean" }),
+      screen.getByRole("button", { name: "Soft" }),
+      screen.getByRole("button", { name: "Editorial" }),
+      screen.getByRole("button", { name: "Bold" }),
+    ];
+
+    styleButtons.forEach((button) => {
+      expect(button).toHaveClass(
+        "dasti-artifact-inspector__action",
+        "dasti-artifact-inspector__action--drawer",
+      );
+      expect(button).not.toHaveClass("dasti-proposal-chrome-option");
+    });
 
     fireEvent.click(
       screen.getByRole("button", {
-        name: "Open layout controls",
+        name: "Open palette controls",
       }),
     );
 
-    expect(screen.getByText("Two Column")).toBeInTheDocument();
-    expect(screen.queryByText("Expert")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Use Sage" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Use Ochre" }),
+    ).toBeInTheDocument();
     expect(
       screen.queryByText("Robial split layout with the accent rail sidebar."),
     ).not.toBeInTheDocument();

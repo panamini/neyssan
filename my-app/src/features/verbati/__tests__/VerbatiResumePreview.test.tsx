@@ -1,11 +1,12 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { VerbatiResumePreview } from "../VerbatiResumePreview";
 import { resumeMock } from "../resume/resume.mock";
 import { DEFAULT_VERBATI_STYLE } from "../style";
 
 const recenterViewport = vi.fn();
+const viewportCenteringSpy = vi.fn();
 
 vi.mock("../../../hooks/use-document-stage-layout", () => ({
   useDocumentStageLayout: () => ({
@@ -28,11 +29,14 @@ vi.mock("../../../hooks/use-document-pan", () => ({
 }));
 
 vi.mock("../../../hooks/use-document-viewport-centering", () => ({
-  useDocumentViewportCentering: () => ({
-    attachViewport: () => undefined,
-    recenterViewport,
-    syncViewport: () => undefined,
-  }),
+  useDocumentViewportCentering: (options: Record<string, unknown>) => {
+    viewportCenteringSpy(options);
+    return {
+      attachViewport: () => undefined,
+      recenterViewport,
+      syncViewport: () => undefined,
+    };
+  },
 }));
 
 vi.mock("../resume/ResumePage", () => ({
@@ -42,6 +46,7 @@ vi.mock("../resume/ResumePage", () => ({
 describe("VerbatiResumePreview", () => {
   beforeEach(() => {
     recenterViewport.mockClear();
+    viewportCenteringSpy.mockClear();
   });
 
   it("keeps the workspace shell on the canvas viewer classes", () => {
@@ -53,21 +58,18 @@ describe("VerbatiResumePreview", () => {
       />,
     );
 
-    expect(recenterViewport).toHaveBeenCalledTimes(1);
-
     const shell = container.querySelector(
       ".dasti-doc-viewer-shell--resume-workspace",
     );
-    const surface = container.querySelector(
-      ".dasti-doc-viewer-shell__surface--resume-workspace",
-    );
+    const rail = container.querySelector(".dasti-document-rail--resume-workspace");
 
     expect(shell).toBeTruthy();
-    expect(surface).toBeTruthy();
+    expect(rail).toBeTruthy();
     expect(shell).not.toHaveClass("dasti-doc-viewer-shell--resume-workspace-page");
-    expect(surface).not.toHaveClass(
-      "dasti-doc-viewer-shell__surface--resume-workspace-page",
-    );
+
+    const lastCall =
+      viewportCenteringSpy.mock.calls[viewportCenteringSpy.mock.calls.length - 1]?.[0];
+    expect(lastCall).toMatchObject({ defaultCenterX: 0.5, defaultCenterY: 0.5 });
   });
 
   it("renders workspace controls in the shared top-left slot before the resume surface", () => {
@@ -93,17 +95,63 @@ describe("VerbatiResumePreview", () => {
     const surface = shell?.children[1] as HTMLElement | undefined;
 
     expect(slot).toHaveClass(
-      "dasti-workbench-top-left-slot",
-      "dasti-cv-workbench-slot",
+      "dasti-document-rail",
+      "dasti-document-rail--resume-workspace",
     );
     expect(slot).toContainElement(
       screen.getByRole("button", { name: "Toggle workspace mode" }),
     );
     expect(surface).toHaveClass(
-      "dasti-doc-viewer-shell__surface--resume-workspace",
+      "dasti-proposal-sheet-frame",
+      "dasti-proposal-sheet-frame--resume-workspace",
     );
-    expect(surface).not.toHaveClass(
-      "dasti-doc-viewer-shell__surface--resume-workspace-page",
+    expect(
+      screen.getByRole("button", { name: "Open zoom controls" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "100 percent zoom" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps the restored zoom drawer centered on the full page in workspace mode", () => {
+    render(
+      <VerbatiResumePreview
+        data={resumeMock}
+        stylePreset={DEFAULT_VERBATI_STYLE}
+        hostMode="workspace"
+      />,
     );
+
+    fireEvent.click(screen.getByRole("button", { name: "Open zoom controls" }));
+    fireEvent.click(screen.getByRole("button", { name: "Fit page" }));
+
+    const lastCall =
+      viewportCenteringSpy.mock.calls[viewportCenteringSpy.mock.calls.length - 1]?.[0];
+    expect(lastCall).toMatchObject({ defaultCenterX: 0.5, defaultCenterY: 0.5 });
+  });
+
+  it("renders the edit-preview toggle in the mini render without layout slideshow arrows", () => {
+    render(
+      <VerbatiResumePreview
+        data={resumeMock}
+        stylePreset={DEFAULT_VERBATI_STYLE}
+        hostMode="panel"
+        railLeadControl={
+          <button type="button" aria-label="Open resume preview">
+            Open resume preview
+          </button>
+        }
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Open resume preview" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Show next resume layout:/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Show previous resume layout:/ }),
+    ).not.toBeInTheDocument();
   });
 });
