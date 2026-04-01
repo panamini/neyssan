@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { ProposalForge } from "../ProposalForge";
@@ -186,7 +186,7 @@ describe("ProposalForge workbench layout", () => {
       workbenchFrame?.style.getPropertyValue(
         "--proposal-workspace-output-shell-inline-size",
       ),
-    ).toBe("calc(var(--document-sheet-inline-size) + 34px)");
+    ).toBe("calc(var(--document-sheet-inline-size) - (var(--s4) * 2))");
     expect(
       gridSplit?.style.getPropertyValue("--grid-columns"),
     ).toBe("480px minmax(0, var(--proposal-workspace-output-shell-inline-size))");
@@ -293,6 +293,12 @@ describe("ProposalForge workbench layout", () => {
       gridSplitAfterCollapse?.style.getPropertyValue("--grid-justify"),
     ).toBe("center");
     expect(workbenchFrameAfterCollapse?.style.maxWidth).toBe("860px");
+    const toolbarRowAfterCollapse = container.querySelector(
+      ".dasti-workbench-top-left-slot--proposal",
+    ) as HTMLElement | null;
+    expect(toolbarRowAfterCollapse?.style.maxWidth).toBe(
+      "calc(480px + var(--proposal-workspace-output-shell-inline-size) + var(--layout-card-grid))",
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Restore compose" }));
 
@@ -408,14 +414,7 @@ describe("ProposalForge workbench layout", () => {
     ]);
   });
 
-  it("keeps collapse and restore controls available across the compact breakpoint", () => {
-    Object.defineProperty(window, "innerWidth", {
-      configurable: true,
-      value: 1000,
-      writable: true,
-    });
-    window.dispatchEvent(new Event("resize"));
-
+  it("restores the expanded compose bar once the layout leaves true desktop two-pane mode", () => {
     render(
       <MemoryRouter initialEntries={["/proposal"]}>
         <ProposalForge />
@@ -432,10 +431,28 @@ describe("ProposalForge workbench layout", () => {
 
     lastToolbarCall =
       proposalComposeToolbarSpy.mock.calls[
-        proposalComposeToolbarSpy.mock.calls.length - 1
+      proposalComposeToolbarSpy.mock.calls.length - 1
       ]?.[0];
     expect(lastToolbarCall).toMatchObject({ collapsed: true });
     expect(lastToolbarCall.onRestoreCompose).toEqual(expect.any(Function));
-    expect(screen.getByRole("button", { name: "Restore compose" })).toBeInTheDocument();
+
+    act(() => {
+      Object.defineProperty(window, "innerWidth", {
+        configurable: true,
+        value: 1000,
+        writable: true,
+      });
+      window.dispatchEvent(new Event("resize"));
+    });
+
+    lastToolbarCall =
+      proposalComposeToolbarSpy.mock.calls[
+        proposalComposeToolbarSpy.mock.calls.length - 1
+      ]?.[0];
+    expect(lastToolbarCall.collapsed).not.toBe(true);
+    expect(lastToolbarCall.onCollapseCompose).toBeUndefined();
+    expect(lastToolbarCall.onRestoreCompose).toBeUndefined();
+    expect(screen.queryByRole("button", { name: "Restore compose" })).toBeNull();
+    expect(screen.getByTestId("proposal-input-form")).toBeInTheDocument();
   });
 });
