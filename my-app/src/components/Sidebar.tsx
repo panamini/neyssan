@@ -663,6 +663,10 @@ export const Sidebar: React.FC = () => {
       PROPOSAL_OUTPUT_DRAFT_UPDATED_EVENT,
       refreshDraft,
     );
+    window.addEventListener(
+      PROPOSAL_COMPOSE_DRAFT_UPDATED_EVENT,
+      refreshDraft,
+    );
     window.addEventListener("focus", refreshDraft);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () =>
@@ -672,43 +676,16 @@ export const Sidebar: React.FC = () => {
           PROPOSAL_OUTPUT_DRAFT_UPDATED_EVENT,
           refreshDraft,
         );
+        window.removeEventListener(
+          PROPOSAL_COMPOSE_DRAFT_UPDATED_EVENT,
+          refreshDraft,
+        );
         window.removeEventListener("focus", refreshDraft);
         document.removeEventListener(
           "visibilitychange",
           handleVisibilityChange,
         );
       };
-  }, []);
-
-  React.useEffect(() => {
-    if (typeof window === "undefined") return undefined;
-
-    const refreshComposeDraft = () => {
-      const nextComposeDraft = readStoredProposalComposeDraft();
-
-      setProposalComposeDraft((currentDraft) => {
-        const currentTitle = normalizeLabel(currentDraft?.jobTitle);
-        const nextTitle = normalizeLabel(nextComposeDraft?.jobTitle);
-        const currentHasDraft = currentDraft !== null;
-        const nextHasDraft = nextComposeDraft !== null;
-
-        if (currentTitle === nextTitle && currentHasDraft === nextHasDraft) {
-          return currentDraft;
-        }
-
-        return nextComposeDraft;
-      });
-    };
-
-    window.addEventListener(
-      PROPOSAL_COMPOSE_DRAFT_UPDATED_EVENT,
-      refreshComposeDraft,
-    );
-    return () =>
-      window.removeEventListener(
-        PROPOSAL_COMPOSE_DRAFT_UPDATED_EVENT,
-        refreshComposeDraft,
-      );
   }, []);
 
   const proposals = useQuery(
@@ -819,7 +796,7 @@ export const Sidebar: React.FC = () => {
         return;
       }
 
-      window.requestAnimationFrame(() => {
+      React.startTransition(() => {
         loadCv(targetId);
       });
     },
@@ -920,14 +897,8 @@ export const Sidebar: React.FC = () => {
 
   const isProposalSavedView =
     isProposalRoute && proposalView === "saved" && Boolean(selectedProposalId);
-  const effectiveProposalOutputDraft =
-    typeof window === "undefined"
-      ? proposalOutputDraft
-      : readStoredProposalOutputDraft();
-  const effectiveProposalComposeDraft =
-    typeof window === "undefined"
-      ? proposalComposeDraft
-      : readStoredProposalComposeDraft();
+  const effectiveProposalOutputDraft = proposalOutputDraft;
+  const effectiveProposalComposeDraft = proposalComposeDraft;
   const optimisticSavedProposal = React.useMemo<ProposalRecord | null>(() => {
     if (!selectedProposalId || proposalView !== "saved") {
       return null;

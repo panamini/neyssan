@@ -29,8 +29,9 @@ import {
   buildAppProposalPersonalizationPayload,
   getProposalApplicantIdentity,
   getActiveLocalPersonalizationSource,
+  getLocalActiveCvSnapshotById,
+  getProposalAttachedCvId,
   getProposalAttachedCvLocalDocument,
-  listLocalCvPickerOptions,
   PROPOSAL_ATTACHED_CV_UPDATED_EVENT,
 } from "../lib/proposal-personalization";
 import {
@@ -138,13 +139,16 @@ function readAttachedCvSelection(): {
   id: string | null;
   title: string | null;
 } {
-  const activeOption =
-    listLocalCvPickerOptions().find((option) => option.isActive) ?? null;
-  const activeSource = getActiveLocalPersonalizationSource();
+  const attachedCvId = getProposalAttachedCvId();
+  if (!attachedCvId) {
+    return { id: null, title: null };
+  }
+
+  const attachedSnapshot = getLocalActiveCvSnapshotById(attachedCvId);
 
   return {
-    id: activeOption?.id ?? null,
-    title: activeOption?.title ?? activeSource.title ?? null,
+    id: attachedCvId,
+    title: attachedSnapshot?.title ?? null,
   };
 }
 
@@ -212,6 +216,7 @@ function buildProposalSnippet(value: unknown): string {
  * Logique métier : intacte.
  */
 export function ProposalForge(): JSX.Element {
+  const COMPOSE_DRAFT_SYNC_DELAY_MS = 180;
   const location = useLocation();
   const { search } = location;
   const navigate = useNavigate();
@@ -424,6 +429,11 @@ export function ProposalForge(): JSX.Element {
   const [isSaveDialogOpen, setIsSaveDialogOpen] = React.useState(false);
   const [lastProposalRequest, setLastProposalRequest] =
     React.useState<FormValues | null>(null);
+  const [composePreviewValues, setComposePreviewValues] =
+    React.useState<StoredProposalComposeDraft | null>(() => {
+      const storedComposeDraft = readStoredProposalComposeDraft();
+      return storedOutputDraft?.sourceComposeDraft ?? storedComposeDraft ?? null;
+    });
   const [outputSourceComposeDraft, setOutputSourceComposeDraft] =
     React.useState<StoredProposalComposeDraft | null>(
       storedOutputDraft?.sourceComposeDraft ?? null,
@@ -433,11 +443,11 @@ export function ProposalForge(): JSX.Element {
       storedOutputDraft?.sourceComposeDraft ?? null,
     );
   const draftCharacterLimitMode =
-    lastProposalRequest?.characterLimitMode ??
+    composePreviewValues?.characterLimitMode ??
     storedOutputDraft?.characterLimitMode ??
     null;
   const draftCharacterLimitValue =
-    lastProposalRequest?.characterLimitValue ??
+    composePreviewValues?.characterLimitValue ??
     storedOutputDraft?.characterLimitValue ??
     null;
   const [isRegeneratingGeneratedProposal, setIsRegeneratingGeneratedProposal] =
@@ -464,6 +474,16 @@ export function ProposalForge(): JSX.Element {
   const [cvPickerRequestKey, setCvPickerRequestKey] = React.useState(0);
   const hasCompletedInitialRenderRef = React.useRef(false);
   const appliedSavedToolbarVoicePresetRef = React.useRef(false);
+  const pendingComposeDraftSyncRef =
+    React.useRef<StoredProposalComposeDraft | null>(null);
+  const composeDraftSyncTimeoutRef = React.useRef<number | null>(null);
+  const cancelPendingComposeDraftSync = React.useCallback(() => {
+    pendingComposeDraftSyncRef.current = null;
+    if (composeDraftSyncTimeoutRef.current !== null) {
+      window.clearTimeout(composeDraftSyncTimeoutRef.current);
+      composeDraftSyncTimeoutRef.current = null;
+    }
+  }, []);
   const pendingComposeBriefFocusRef = React.useRef(false);
   const syncedStoredOutputSourceComposeRef = React.useRef(false);
 
@@ -542,11 +562,18 @@ export function ProposalForge(): JSX.Element {
     }
 
     const existingComposeDraft = readStoredProposalComposeDraft() ?? {};
-    writeStoredProposalComposeDraft({
+    const nextComposeDraft = {
       ...existingComposeDraft,
       jobTitle: prefill.jobTitle,
       jobDescription: prefill.jobDescription,
-    });
+    };
+    pendingComposeDraftSyncRef.current = null;
+    if (composeDraftSyncTimeoutRef.current !== null) {
+      window.clearTimeout(composeDraftSyncTimeoutRef.current);
+      composeDraftSyncTimeoutRef.current = null;
+    }
+    writeStoredProposalComposeDraft(nextComposeDraft);
+    setComposePreviewValues(nextComposeDraft);
   }, [
     prefill?.handoffId,
     prefill?.jobDescription,
@@ -567,7 +594,13 @@ export function ProposalForge(): JSX.Element {
     }
 
     syncedStoredOutputSourceComposeRef.current = true;
+    pendingComposeDraftSyncRef.current = null;
+    if (composeDraftSyncTimeoutRef.current !== null) {
+      window.clearTimeout(composeDraftSyncTimeoutRef.current);
+      composeDraftSyncTimeoutRef.current = null;
+    }
     writeStoredProposalComposeDraft(storedOutputDraft.sourceComposeDraft);
+    setComposePreviewValues(storedOutputDraft.sourceComposeDraft);
     setComposeDraftInitialSeed(storedOutputDraft.sourceComposeDraft);
     setComposeToolbarVoicePreset(
       storedOutputDraft.sourceComposeDraft.voicePreset ?? null,
@@ -656,12 +689,12 @@ export function ProposalForge(): JSX.Element {
     () =>
       resolveProposalStyleRenderState({
         choice: proposalStyleChoice,
-        jobTitle: lastProposalRequest?.jobTitle ?? proposalDocumentTitle,
-        jobDescription: lastProposalRequest?.jobDescription,
+        jobTitle: composePreviewValues?.jobTitle ?? proposalDocumentTitle,
+        jobDescription: composePreviewValues?.jobDescription,
       }),
     [
-      lastProposalRequest?.jobDescription,
-      lastProposalRequest?.jobTitle,
+      composePreviewValues?.jobDescription,
+      composePreviewValues?.jobTitle,
       proposalDocumentTitle,
       proposalStyleChoice,
     ],
@@ -824,11 +857,9 @@ export function ProposalForge(): JSX.Element {
       nextMetadata.requestedVoicePreset = lastProposalRequest.voicePreset ?? null;
     }
 
-    const storedComposeDraft =
-      typeof window === "undefined" ? null : readStoredProposalComposeDraft();
     const sourceJobDescription =
-      lastProposalRequest?.jobDescription?.trim() ||
-      storedComposeDraft?.jobDescription?.trim() ||
+      outputSourceComposeDraft?.jobDescription?.trim() ||
+      composePreviewValues?.jobDescription?.trim() ||
       "";
     if (sourceJobDescription) {
       nextMetadata.sourceJobDescription = sourceJobDescription;
@@ -842,10 +873,11 @@ export function ProposalForge(): JSX.Element {
 
     return Object.keys(nextMetadata).length > 0 ? nextMetadata : undefined;
   }, [
+    composePreviewValues?.jobDescription,
     lastProposalRequest?.creativity,
     lastProposalRequest?.formalityLevel,
-    lastProposalRequest?.jobDescription,
     lastProposalRequest?.voicePreset,
+    outputSourceComposeDraft?.jobDescription,
     proposalRenderMetadata,
     proposalType,
     proposalVoicePreset,
@@ -1020,6 +1052,7 @@ export function ProposalForge(): JSX.Element {
   );
 
   const resetProposalWorkspace = React.useCallback(() => {
+    cancelPendingComposeDraftSync();
     if (copyFeedbackTimeoutRef.current !== null) {
       window.clearTimeout(copyFeedbackTimeoutRef.current);
       copyFeedbackTimeoutRef.current = null;
@@ -1051,6 +1084,7 @@ export function ProposalForge(): JSX.Element {
     setFallbackInfo(null);
     setGeneratedProposalId(null);
     setProposalOutputMode("preview");
+    setComposePreviewValues(null);
     setOutputSourceComposeDraft(null);
     setComposeDraftInitialSeed(null);
     setIsSavingGeneratedProposal(false);
@@ -1067,6 +1101,7 @@ export function ProposalForge(): JSX.Element {
     lastStampedTemplateTokenRef.current = null;
   }, [
     activeCvProposalStylePreset,
+    cancelPendingComposeDraftSync,
     currentProposalSettings?.savedVoicePreset,
     initialApplicantIdentity.name,
     initialApplicantIdentity.role,
@@ -1129,24 +1164,62 @@ export function ProposalForge(): JSX.Element {
     }),
     [],
   );
-
-  const persistProposalComposeDraftSnapshot = React.useCallback(
-    (values: FormValues) => {
-      writeStoredProposalComposeDraft(
-        buildStoredProposalComposeDraftSnapshot(values),
-      );
+  const commitComposeDraftPreview = React.useCallback(
+    (draft: StoredProposalComposeDraft | null) => {
+      if (draft) {
+        writeStoredProposalComposeDraft(draft);
+      }
+      React.startTransition(() => {
+        setComposePreviewValues(draft);
+      });
     },
-    [buildStoredProposalComposeDraftSnapshot],
+    [],
+  );
+
+  const flushPendingComposeDraftSync = React.useCallback(() => {
+    const pendingDraft = pendingComposeDraftSyncRef.current;
+    cancelPendingComposeDraftSync();
+    if (!pendingDraft) {
+      return;
+    }
+    commitComposeDraftPreview(pendingDraft);
+  }, [cancelPendingComposeDraftSync, commitComposeDraftPreview]);
+
+  const scheduleComposeDraftSync = React.useCallback(
+    (values: FormValues) => {
+      const nextDraft = buildStoredProposalComposeDraftSnapshot(values);
+      pendingComposeDraftSyncRef.current = nextDraft;
+      if (composeDraftSyncTimeoutRef.current !== null) {
+        window.clearTimeout(composeDraftSyncTimeoutRef.current);
+      }
+      composeDraftSyncTimeoutRef.current = window.setTimeout(() => {
+        flushPendingComposeDraftSync();
+      }, COMPOSE_DRAFT_SYNC_DELAY_MS);
+    },
+    [
+      buildStoredProposalComposeDraftSnapshot,
+      flushPendingComposeDraftSync,
+      COMPOSE_DRAFT_SYNC_DELAY_MS,
+    ],
   );
 
   const handleProposalFormValuesChange = React.useCallback(
     (values: FormValues) => {
-      persistProposalComposeDraftSnapshot(values);
-      setLastProposalRequest(values);
+      scheduleComposeDraftSync(values);
       setComposeToolbarVoicePreset(values.voicePreset ?? null);
     },
-    [persistProposalComposeDraftSnapshot],
+    [scheduleComposeDraftSync],
   );
+
+  React.useEffect(() => {
+    return () => {
+      const pendingDraft = pendingComposeDraftSyncRef.current;
+      cancelPendingComposeDraftSync();
+      if (pendingDraft) {
+        writeStoredProposalComposeDraft(pendingDraft);
+      }
+    };
+  }, [cancelPendingComposeDraftSync]);
 
   React.useEffect(() => {
     if (!openedSavedProposal) {
@@ -1273,6 +1346,8 @@ export function ProposalForge(): JSX.Element {
 
   const handleProposalStart = React.useCallback(
     (values: FormValues) => {
+      cancelPendingComposeDraftSync();
+      setComposePreviewValues(buildStoredProposalComposeDraftSnapshot(values));
       const applicantIdentity = getProposalApplicantIdentity(
         getActiveLocalPersonalizationSource(),
       );
@@ -1303,6 +1378,8 @@ export function ProposalForge(): JSX.Element {
       setFallbackInfo(null);
     },
     [
+      buildStoredProposalComposeDraftSnapshot,
+      cancelPendingComposeDraftSync,
       formatProposalToneLabel,
       formatProposalTypeLabel,
       resolveProposalVoicePreset,
@@ -1316,6 +1393,7 @@ export function ProposalForge(): JSX.Element {
       nextFallbackInfo?: ProposalGenerationFallbackInfo,
       nextProposalId?: Id<"proposals">,
     ) => {
+      cancelPendingComposeDraftSync();
       const applicantIdentity = getProposalApplicantIdentity(
         getActiveLocalPersonalizationSource(),
       );
@@ -1329,6 +1407,7 @@ export function ProposalForge(): JSX.Element {
         formatProposalToneLabel(resolvedVoicePreset),
       ].join(" · ");
       writeStoredProposalComposeDraft(submittedComposeDraft);
+      setComposePreviewValues(submittedComposeDraft);
       setOutputSourceComposeDraft(submittedComposeDraft);
       setComposeDraftInitialSeed(submittedComposeDraft);
       writeStoredProposalOutputDraft({
@@ -1379,6 +1458,7 @@ export function ProposalForge(): JSX.Element {
       setLoading(false);
     },
     [
+      cancelPendingComposeDraftSync,
       effectiveProposalStylePresetWithPalette,
       effectiveProposalTemplateId,
       fallbackProposalTemplateId,
@@ -1396,6 +1476,8 @@ export function ProposalForge(): JSX.Element {
 
   const handleProposalError = React.useCallback(
     (message: string, values: FormValues, rawReason?: string | null) => {
+      cancelPendingComposeDraftSync();
+      setComposePreviewValues(buildStoredProposalComposeDraftSnapshot(values));
       const applicantIdentity = getProposalApplicantIdentity(
         getActiveLocalPersonalizationSource(),
       );
@@ -1427,6 +1509,8 @@ export function ProposalForge(): JSX.Element {
       setFallbackInfo(null);
     },
     [
+      buildStoredProposalComposeDraftSnapshot,
+      cancelPendingComposeDraftSync,
       formatProposalToneLabel,
       formatProposalTypeLabel,
       resolveProposalVoicePreset,
@@ -1854,7 +1938,9 @@ export function ProposalForge(): JSX.Element {
           composeDraft.voicePreset = restoredRequestedVoicePreset;
         }
 
+        cancelPendingComposeDraftSync();
         writeStoredProposalComposeDraft(composeDraft);
+        setComposePreviewValues(composeDraft);
         setOutputSourceComposeDraft(composeDraft);
         setComposeDraftInitialSeed(composeDraft);
       } catch {
@@ -1903,6 +1989,7 @@ export function ProposalForge(): JSX.Element {
     });
     updateProposalRoute("compose");
   }, [
+    cancelPendingComposeDraftSync,
     effectiveSavedProposalStylePreset,
     effectiveSavedProposalTemplateId,
     openedSavedProposal,
@@ -2025,6 +2112,7 @@ export function ProposalForge(): JSX.Element {
 
     try {
       await deleteProposal({ id: generatedProposalId });
+      cancelPendingComposeDraftSync();
       setProposalContent(null);
       setProposalType(null);
       setProposalVoicePreset(null);
@@ -2041,6 +2129,7 @@ export function ProposalForge(): JSX.Element {
       setProposalDocumentMeta("");
       setGeneratedProposalId(null);
       setProposalOutputMode("preview");
+      setComposePreviewValues(null);
       setOutputSourceComposeDraft(null);
       setFallbackInfo(null);
       setError(null);
@@ -2059,6 +2148,7 @@ export function ProposalForge(): JSX.Element {
     }
   }, [
     activeCvProposalStylePreset,
+    cancelPendingComposeDraftSync,
     canPersistProposalState,
     deleteProposal,
     effectiveProposalStylePreset,
@@ -2227,7 +2317,7 @@ export function ProposalForge(): JSX.Element {
     [draftCharacterLimitMode, draftCharacterLimitValue],
   );
   const briefJobDescription =
-    lastProposalRequest?.jobDescription?.trim() ||
+    composePreviewValues?.jobDescription?.trim() ||
     prefill?.jobDescription?.trim() ||
     (typeof window !== "undefined"
       ? readStoredProposalComposeDraft()?.jobDescription?.trim() || ""

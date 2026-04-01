@@ -1,8 +1,23 @@
 import { safeParseCvDocument } from "../schemas/cvDocument.schema";
 import type { CvDocument, CvSection } from "../types/cvDocument";
+import {
+  LEGACY_LOCAL_CV_DOC_STORAGE_KEY_PREFIX,
+  LEGACY_LOCAL_CV_LIBRARY_STORAGE_KEY,
+  LOCAL_CV_DOC_STORAGE_KEY_PREFIX,
+  LOCAL_CV_LIBRARY_STORAGE_KEY,
+} from "./cv-local-storage";
 
-const LOCAL_DOC_PREFIXES = ["cv:", "cv-doc:"];
-const LOCAL_LIBRARY_KEYS = ["cvDocuments", "cvLibrary"];
+const LOCAL_DOC_PREFIXES = [
+  LOCAL_CV_DOC_STORAGE_KEY_PREFIX,
+  LEGACY_LOCAL_CV_DOC_STORAGE_KEY_PREFIX,
+];
+const LOCAL_LIBRARY_KEYS = [
+  LOCAL_CV_LIBRARY_STORAGE_KEY,
+  LEGACY_LOCAL_CV_LIBRARY_STORAGE_KEY,
+];
+const parsedDocumentCache = new Map<string, CvDocument | null>();
+const libraryDocumentsCache = new Map<string, CvDocument[]>();
+const activeCvSnapshotCache = new Map<string, ActiveCvSnapshot>();
 const ACTIVE_CV_STORAGE_KEY = "cvActiveId";
 export const PROPOSAL_ATTACHED_CV_STORAGE_KEY =
   "dasti:proposal-attached-cv-id:v1";
@@ -382,7 +397,11 @@ function getStoredDocumentById(id: string): CvDocument | null {
   for (const prefix of LOCAL_DOC_PREFIXES) {
     const raw = window.localStorage.getItem(`${prefix}${id}`);
     if (!raw) continue;
-    const doc = parseStoredDocument(raw);
+    let doc = parsedDocumentCache.get(raw);
+    if (doc === undefined) {
+      doc = parseStoredDocument(raw);
+      parsedDocumentCache.set(raw, doc);
+    }
     if (!doc) continue;
     if (!bestMatch || getTimestamp(doc) >= getTimestamp(bestMatch)) {
       bestMatch = doc;
@@ -398,12 +417,18 @@ function getLibraryDocuments(): CvDocument[] {
   for (const key of LOCAL_LIBRARY_KEYS) {
     const raw = window.localStorage.getItem(key);
     if (!raw) continue;
+    const cached = libraryDocumentsCache.get(raw);
+    if (cached) {
+      return cached;
+    }
     try {
       const parsed = JSON.parse(raw) as unknown;
       if (!Array.isArray(parsed)) continue;
-      return parsed
+      const docs = parsed
         .map((entry) => parseStoredDocument(JSON.stringify(entry)))
         .filter((doc): doc is CvDocument => Boolean(doc));
+      libraryDocumentsCache.set(raw, docs);
+      return docs;
     } catch {
       // ignore malformed library entries and try the next key
     }
@@ -659,11 +684,22 @@ export function classifyPersonalizationRichness(
 export function buildActiveCvSnapshotFromCvDocument(
   doc: CvDocument,
 ): ActiveCvSnapshot {
+  const snapshotCacheKey = [
+    String(doc.id ?? ""),
+    String(doc.title ?? ""),
+    String(doc.metadata?.updatedAt ?? ""),
+    Array.isArray(doc.sections) ? doc.sections.length : 0,
+  ].join("::");
+  const cached = activeCvSnapshotCache.get(snapshotCacheKey);
+  if (cached) {
+    return cached;
+  }
+
   const personalizationContext =
     extractPersonalizationContextFromCvDocument(doc);
   const richness = classifyPersonalizationRichness(personalizationContext);
 
-  return {
+  const snapshot = {
     title: formatCvDisplayTitle({
       title: clampText(doc.title, 120),
       profileName: personalizationContext?.name,
@@ -674,6 +710,8 @@ export function buildActiveCvSnapshotFromCvDocument(
       ? { updatedAt: doc.metadata.updatedAt }
       : {}),
   };
+  activeCvSnapshotCache.set(snapshotCacheKey, snapshot);
+  return snapshot;
 }
 
 export function getLocalActiveCvSnapshotById(
