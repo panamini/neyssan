@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type ScrollEdgeState = {
   showTop: boolean;
@@ -30,10 +30,11 @@ export function useScrollEdgeFades<T extends HTMLElement>() {
     showTop: false,
     showBottom: false,
   });
+  const frameRef = useRef<number | null>(null);
 
-  const update = useCallback(() => {
+  const commitState = useCallback((targetNode: T | null) => {
     setState((previous) => {
-      const next = getScrollEdgeState(node);
+      const next = getScrollEdgeState(targetNode);
       if (
         previous.showTop === next.showTop &&
         previous.showBottom === next.showBottom
@@ -42,7 +43,23 @@ export function useScrollEdgeFades<T extends HTMLElement>() {
       }
       return next;
     });
-  }, [node]);
+  }, []);
+
+  const update = useCallback(() => {
+    if (typeof window === "undefined") {
+      commitState(node);
+      return;
+    }
+
+    if (frameRef.current !== null) {
+      window.cancelAnimationFrame(frameRef.current);
+    }
+
+    frameRef.current = window.requestAnimationFrame(() => {
+      frameRef.current = null;
+      commitState(node);
+    });
+  }, [commitState, node]);
 
   const attach = useCallback((nextNode: T | null) => {
     setNode(nextNode);
@@ -76,6 +93,10 @@ export function useScrollEdgeFades<T extends HTMLElement>() {
     });
 
     return () => {
+      if (frameRef.current !== null) {
+        window.cancelAnimationFrame(frameRef.current);
+        frameRef.current = null;
+      }
       window.cancelAnimationFrame(frame);
       resizeObserver?.disconnect();
       node.removeEventListener("scroll", handleScroll);

@@ -13,6 +13,7 @@ import { StyleForge } from "./pages/StyleForge";
 import { SettingsPage } from "./pages/SettingsPage";
 import { Sidebar } from "./components/Sidebar";
 import { CvLibraryProvider } from "./contexts/CvLibraryContext";
+import { installStorageDiagnostics } from "./lib/storage-diagnostics";
 
 /**
  * Topbar — h:54px (--hdr), wordmark only.
@@ -73,6 +74,14 @@ function Topbar() {
  * depuis n'importe quelle route.
  */
 function AppShell(): JSX.Element {
+  React.useEffect(() => {
+    if (!import.meta.env.DEV) {
+      return;
+    }
+
+    installStorageDiagnostics();
+  }, []);
+
   return (
     <CvLibraryProvider>
       {/* .app — flex row, h:100vh overflow:hidden */}

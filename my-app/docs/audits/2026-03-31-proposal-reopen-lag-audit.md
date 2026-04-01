@@ -292,7 +292,115 @@ Conclusion:
 
 - this is a safe optimization target because it does not change user-visible saved/compose semantics
 
-### 9. What I could not prove
+### 9. CV local-storage duplication was a proven quota-pressure source
+
+Active code before the follow-up pass:
+
+- `CvLibraryContext.tsx`
+  - persisted the CV index under both `cvDocuments` and legacy `cvLibrary`
+  - persisted full document snapshots under `cv:${id}`
+- `StorageAdapter.ts`
+  - also persisted the same full document snapshots under legacy `cv-doc:${id}`
+
+Why this matters:
+
+- the app was keeping duplicated document-scale payloads in synchronous browser storage
+- proposal-output quota failures were already proven in the browser console
+- duplicated CV cache keys increase the chance of hitting quota over time and make storage enumeration heavier
+
+Fix:
+
+- keep `cvDocuments` as the active library key and clear legacy `cvLibrary`
+- keep `cv:${id}` as the active document key and clear legacy `cv-doc:${id}`
+- migrate legacy keys on mount/read so existing browser profiles still recover
+
+Proof level:
+
+- high confidence from active code inspection
+- I did not measure exact byte totals in the user profile, so this is a proven pressure source but not a quantified one
+
+### 10. `ProposalForge` still did parent-level compose work on every change after the storage fixes
+
+Active code before the follow-up pass:
+
+- `ProposalInputForm.tsx`
+  - `form.watch(...)` still emitted the full normalized compose payload on every change
+- `ProposalForge.tsx`
+  - `handleProposalFormValuesChange(...)` persisted the compose draft and stored the full `FormValues` in parent state through `setLastProposalRequest(values)`
+  - style resolution, brief rendering, and character-limit state were derived from that parent object
+
+Why this matters:
+
+- long imported job offers were re-pushed into page-level React state on every edit
+- that forced the proposal page to rebuild render state for the live brief and style derivation far more often than needed
+- this matches the remaining lag symptom after the quota-fallback fixes, once the visible reopen bug was already gone
+
+Fix:
+
+- `ProposalForge.tsx` now keeps a lightweight `composePreviewValues` snapshot for live compose UI state
+- compose-draft persistence is batched with a short timeout instead of synchronously updating page state on every watch emission
+- submit, delete, reset, saved-copy, and handoff-restore paths explicitly flush or replace the pending compose snapshot so correctness is preserved
+
+Proof level:
+
+- proven from active code inspection that this parent-state churn existed
+- I can prove the code path is reduced now
+- I cannot yet prove from code alone that this removes all remaining browser lag
+
+### 11. Sidebar resume switching still had a separate hot path
+
+Browser evidence from the user after the earlier proposal-focused fixes:
+
+- `Sidebar.tsx:822 [Violation] 'requestAnimationFrame' handler took 604ms`
+- `Sidebar.tsx:822 [Violation] 'requestAnimationFrame' handler took 970ms`
+- `Sidebar.tsx:822 [Violation] 'requestAnimationFrame' handler took 490ms`
+
+Active code before the follow-up pass:
+
+- `Sidebar.tsx`
+  - wrapped `loadCv(targetId)` inside `window.requestAnimationFrame(...)`
+- `CvLibraryContext.tsx`
+  - `loadCv(...)` did not first reuse the already-loaded in-memory `cvs` list
+  - it proceeded into storage parsing and normalization work even when the target CV was already in memory
+- `Sidebar.tsx`
+  - also re-read proposal draft storage directly during render, even though it already maintained draft state from events
+
+Why this matters:
+
+- resume switching and workspace switching can still feel laggy even after proposal-draft storage fixes
+- the browser was explicitly attributing long frames to the sidebar callback path, not only to proposal focus
+
+Fix:
+
+- `Sidebar.tsx` now uses `React.startTransition(...)` for queued resume loads instead of `requestAnimationFrame(...)`
+- `CvLibraryContext.tsx` now checks `currentCv` and the in-memory `cvs` collection before hitting browser storage
+- `Sidebar.tsx` now relies on its maintained draft state instead of re-reading proposal draft storage during render
+
+Proof level:
+
+- proven from active code and the user browser logs that this was a real hot path
+- I can prove the code path is reduced now
+- I still cannot prove from code alone that this removes all remaining lag in the browser
+
+### 12. A real storage measurement hook is now installed in dev mode
+
+What changed:
+
+- `App.tsx` now installs a dev-only browser helper
+- `storage-diagnostics.ts` exposes `window.__DASTI_STORAGE_DIAGNOSTICS__`
+- the helper reports localStorage and sessionStorage footprint by key, sorted by size, with proposal/CV keys highlighted
+
+Why this matters:
+
+- quota pressure is proven, but exact browser key sizes were still unmeasured
+- the plan called for measured storage by key before broader persistence migration
+
+Proof level:
+
+- the helper is covered by focused tests
+- it still requires a real browser profile to produce the final measured offender list
+
+### 13. What I could not prove
 
 - I could not prove that extra remounts are the dominant lag source
 - I could not prove that route/view rebuilds are the dominant lag source
@@ -351,9 +459,18 @@ Why:
 - `my-app/src/components/ProposalInputForm.tsx`
 - `my-app/src/components/__tests__/ProposalInputForm.provider-busy.test.tsx`
 - `my-app/src/components/Sidebar.tsx`
+- `my-app/src/App.tsx`
+- `my-app/src/adapters/StorageAdapter.ts`
+- `my-app/src/contexts/CvLibraryContext.tsx`
+- `my-app/src/contexts/__tests__/CvLibraryContext.test.tsx`
+- `my-app/src/lib/cv-local-storage.ts`
+- `my-app/src/lib/storage-diagnostics.ts`
+- `my-app/src/lib/__tests__/storage-diagnostics.test.ts`
+- `my-app/src/lib/proposal-personalization.ts`
 - `my-app/src/lib/proposal-workspace-state.ts`
 - `my-app/src/lib/proposal-output-draft.ts`
 - `my-app/src/lib/__tests__/proposal-output-draft.test.ts`
+- `my-app/src/lib/__tests__/proposal-personalization.test.ts`
 - `my-app/src/pages/__tests__/ProposalForge.draft-persistence.test.tsx`
 - `my-app/src/pages/__tests__/ProposalForge.handoff-continuity.test.tsx`
 - `my-app/src/pages/__tests__/ProposalForge.saved-view.test.tsx`
@@ -376,6 +493,43 @@ Result:
 
 - 8 test files passed
 - 45 tests passed
+
+Executed from `my-app/` after the storage-reduction and parent-sync follow-up:
+
+```bash
+npx vitest run src/contexts/__tests__/CvLibraryContext.test.tsx src/lib/__tests__/proposal-personalization.test.ts src/lib/__tests__/proposal-output-draft.test.ts src/pages/__tests__/ProposalForge.draft-persistence.test.tsx src/pages/__tests__/ProposalForge.handoff-continuity.test.tsx src/components/__tests__/Sidebar.proposal-navigation.test.tsx --reporter=verbose
+```
+
+Result:
+
+- 6 test files passed
+- 35 tests passed
+
+Executed from `my-app/` after the debounced `ProposalForge` compose-sync change:
+
+```bash
+npx vitest run src/lib/__tests__/proposal-personalization.test.ts src/pages/__tests__/ProposalForge.draft-persistence.test.tsx src/pages/__tests__/ProposalForge.handoff-continuity.test.tsx src/components/__tests__/Sidebar.proposal-navigation.test.tsx src/lib/__tests__/proposal-output-draft.test.ts --reporter=verbose
+npx tsc -p tsconfig.json --noEmit --pretty false
+```
+
+Result:
+
+- 5 test files passed
+- 26 tests passed
+- TypeScript check passed
+
+Executed from `my-app/` after the sidebar resume-load and diagnostics follow-up:
+
+```bash
+npx vitest run src/lib/__tests__/storage-diagnostics.test.ts src/contexts/__tests__/CvLibraryContext.test.tsx src/components/__tests__/Sidebar.proposal-navigation.test.tsx src/lib/__tests__/proposal-personalization.test.ts src/pages/__tests__/ProposalForge.draft-persistence.test.tsx src/pages/__tests__/ProposalForge.handoff-continuity.test.tsx --reporter=verbose
+npx tsc -p tsconfig.json --noEmit --pretty false
+```
+
+Result:
+
+- 6 test files passed
+- 39 tests passed
+- TypeScript check passed
 
 ### Browser/manual
 
@@ -414,3 +568,8 @@ Result:
 - The provable lag source is duplicated draft persistence plus unnecessary sidebar invalidation on compose edits.
 - The browser console now also proves that quota pressure is a separate failure mode from the reopen regression. The targeted mitigation is session-storage fallback for the output draft, not a broader persistence rewrite.
 - The browser console also proves quota pressure was part of the lag path itself: repeated synchronous `localStorage.setItem(...)` failures on the output-draft key added blocking work on proposal open/restore. The follow-up mitigation is to stop retrying local-storage writes after the first quota failure in the same tab session and use session storage directly until reset.
+- A follow-up storage-reduction pass now removes duplicate CV cache writes under `cv-doc:` and the duplicate legacy library key `cvLibrary`, while keeping backward reads intact. This reduces quota pressure from accumulated CV cache data without changing proposal semantics.
+- A second follow-up pass now reduces active `/proposal` parent churn by batching compose-draft sync and deriving live brief/style state from a lightweight compose preview snapshot instead of the full last submitted request object.
+- A third follow-up pass now targets sidebar and resume-switch lag directly by removing `requestAnimationFrame`-based resume loading, reusing in-memory CV documents before parsing storage, and avoiding draft-storage reads during sidebar render.
+- A dev-only storage diagnostics helper now exists so the real browser footprint can be measured by key instead of inferred from quota warnings.
+- User browser logs improved on the active focus path, but the remaining `message`-handler violations are still not fully attributable from code alone, so lag is reduced but not yet proven fully solved.
