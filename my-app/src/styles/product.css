@@ -2732,6 +2732,12 @@
   justify-content: flex-start;
 }
 
+.dasti-proposal-sheet__body--document-viewer .dasti-document-stage-chassis {
+  padding: var(--document-viewer-bleed-block)
+    var(--document-viewer-bleed-inline);
+  box-sizing: border-box;
+}
+
 .dasti-proposal-sheet__body--document-viewer::before,
 .dasti-proposal-sheet__body--document-viewer::after {
   display: none;
@@ -7593,7 +7599,7 @@
 
 .dasti-color-popover {
   --dasti-color-popover-inline-size: min(
-    172px,
+    160px,
     calc(100vw - 24px)
   );
   --dasti-color-popover-field-handle-size: 16px;
