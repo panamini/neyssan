@@ -29,4 +29,16 @@ describe("resume preview workspace anchoring", () => {
     );
     expect(workspaceStageOverride).not.toContain("overflow: visible;");
   });
+
+  it("clamps embedded resume frames to the viewport width outside workspace mode", () => {
+    const embeddedFrameClamp = productCss.match(
+      /\.dasti-doc-viewer-shell:not\(.dasti-doc-viewer-shell--resume-workspace\)\s+\.dasti-doc-viewport--resume\s+\.resume-page-frame\s*\{[^}]*\}/,
+    )?.[0];
+
+    expect(embeddedFrameClamp).toContain(
+      "width: min(100%, var(--preview-stage-width, 100%));",
+    );
+    expect(embeddedFrameClamp).toContain("max-width: 100%;");
+    expect(embeddedFrameClamp).toContain("min-width: 0;");
+  });
 });
