@@ -6,11 +6,11 @@ const productCssPath = resolve(process.cwd(), "src/styles/product.css");
 const productCss = readFileSync(productCssPath, "utf8");
 
 describe("ProposalComposeToolbar CSS contracts", () => {
-  it("keeps the expanded toolbar left-anchored when the collapse control is absent", () => {
+  it("keeps the tone group right-anchored even when the collapse control is absent", () => {
     expect(productCss).toContain(
       ".dasti-compose-toolbar--no-collapse-anchor .dasti-compose-toolbar__group--tone",
     );
-    expect(productCss).toContain("margin-inline-start: 0;");
+    expect(productCss).toContain("margin-inline-start: auto;");
   });
 
   it("constrains the toolbar slot and bar to the compose shell width", () => {
