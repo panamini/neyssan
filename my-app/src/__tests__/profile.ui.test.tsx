@@ -5,10 +5,16 @@ import { createRoot } from "react-dom/client";
 
 // Mock heavy/editor deps and icons to keep tests lightweight
 vi.mock("@remirror/react", () => {
-  const Remirror = ({ children }: { children?: React.ReactNode }) => <div data-testid="remirror">{children}</div>;
+  const Remirror = ({ children }: { children?: React.ReactNode }) => (
+    <div data-testid="remirror">{children}</div>
+  );
   const EditorComponent = () => <div data-testid="editor" />;
   const useRemirror = () => ({
-    manager: { view: { state: { doc: { toJSON: () => ({ type: "doc", content: [] }) } } } },
+    manager: {
+      view: {
+        state: { doc: { toJSON: () => ({ type: "doc", content: [] }) } },
+      },
+    },
     state: { type: "doc", content: [] },
     onChange: () => {},
   });
@@ -39,9 +45,26 @@ vi.mock("lucide-react", () => {
 });
 
 // Mock internal UI not relevant for this test
-vi.mock("../components/remirror-editor/components/EditorToolbar.tsx", () => ({ EditorToolbar: () => null }));
-vi.mock("../hooks/use-flush-subscription.ts", () => ({ useSectionFlushSubscription: (_opts: unknown) => { /* noop */ } }));
-vi.mock("../components/cv-editor/BlockRenderer.tsx", () => ({ default: () => null }));
+vi.mock("../components/remirror-editor/components/EditorToolbar.tsx", () => ({
+  EditorToolbar: () => null,
+}));
+vi.mock("../hooks/use-flush-subscription.ts", () => ({
+  useSectionFlushSubscription: (_opts: unknown) => {
+    /* noop */
+  },
+}));
+vi.mock("../components/cv-editor/BlockRenderer.tsx", () => ({
+  default: () => null,
+}));
+vi.mock("../hooks/use-cv-ai-capabilities.ts", () => ({
+  useCvAiCapabilities: () => ({
+    status: "ready" as const,
+    version: "test",
+    supportedActions: [],
+    isSupported: () => false,
+    staleMessage: "",
+  }),
+}));
 
 // Mock CvLibraryContext for ProfileModal usage
 const updateStructuredItemMock = vi.fn();
@@ -59,7 +82,7 @@ vi.mock("../contexts/CvLibraryContext", async () => {
       loadCv: async () => {},
       saveCurrentCv: async () => {},
       createCvFromState: () => {},
-      createNewCv: () => {},
+      createNewCv: async () => {},
       importCv: async () => {},
       updateSectionTitle: () => {},
       updateBlockTitle: () => {},
@@ -105,7 +128,11 @@ function renderIntoDocument(node: React.ReactElement) {
 
 function queryButtonByText(text: string): HTMLButtonElement | null {
   const btns = Array.from(document.querySelectorAll("button"));
-  return (btns.find((b) => (b.textContent ?? "").trim() === text) as HTMLButtonElement) ?? null;
+  return (
+    (btns.find(
+      (b) => (b.textContent ?? "").trim() === text,
+    ) as HTMLButtonElement) ?? null
+  );
 }
 
 function queryButtonByAriaLabel(label: string): HTMLButtonElement | null {
@@ -144,7 +171,7 @@ describe("Profile section - collapsed card and modal save", () => {
         onTitleChange={() => {}}
         onContentChange={() => {}}
         collapsed={false}
-      />
+      />,
     );
 
     const bodyTxt = (document.body.textContent ?? "").replace(/\s+/g, " ");
@@ -156,7 +183,8 @@ describe("Profile section - collapsed card and modal save", () => {
     expect(bodyTxt).toContain("jane.dev");
     expect(bodyTxt).toContain("Paris, FR");
 
-    const editBtn = queryButtonByAriaLabel("Edit profile") ?? queryButtonByText("Edit");
+    const editBtn =
+      queryButtonByAriaLabel("Edit profile") ?? queryButtonByText("Edit");
     expect(editBtn).toBeTruthy();
 
     await act(async () => {
@@ -165,7 +193,9 @@ describe("Profile section - collapsed card and modal save", () => {
     });
 
     // Modal should now be present; fill in fields and save
-    const nameInput = document.getElementById("name") as HTMLInputElement | null;
+    const nameInput = document.getElementById(
+      "profile-name",
+    ) as HTMLInputElement | null;
     expect(nameInput).toBeTruthy();
     if (nameInput) {
       await act(async () => {
@@ -176,7 +206,9 @@ describe("Profile section - collapsed card and modal save", () => {
       });
     }
 
-    const desiredInput = document.getElementById("desiredPosition") as HTMLInputElement | null;
+    const desiredInput = document.getElementById(
+      "profile-desired-position",
+    ) as HTMLInputElement | null;
     expect(desiredInput).toBeTruthy();
     if (desiredInput) {
       await act(async () => {
@@ -187,7 +219,9 @@ describe("Profile section - collapsed card and modal save", () => {
       });
     }
 
-    const emailInput = document.getElementById("email") as HTMLInputElement | null;
+    const emailInput = document.getElementById(
+      "profile-email",
+    ) as HTMLInputElement | null;
     expect(emailInput).toBeTruthy();
     if (emailInput) {
       await act(async () => {
@@ -209,7 +243,12 @@ describe("Profile section - collapsed card and modal save", () => {
 
     // Ensure context was called (integration wiring)
     expect(updateStructuredItemMock).toHaveBeenCalled();
-    const [calledSectionId, calledItemId] = updateStructuredItemMock.mock.calls.at(-1) as [string, string, Partial<IProfileItem>];
+    const [calledSectionId, calledItemId] =
+      updateStructuredItemMock.mock.calls.at(-1) as [
+        string,
+        string,
+        Partial<IProfileItem>,
+      ];
     expect(calledSectionId).toBe("sec-profile");
     expect(calledItemId).toBe("p1");
 

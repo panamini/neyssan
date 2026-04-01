@@ -9,6 +9,9 @@ import { BodyPortal } from "@/components/ui/body-portal";
 interface SkillsModalProps {
   open: boolean;
   items: ISkillItem[];
+  suggestedItems?: string[];
+  onAcceptSuggestion?: (name: string) => void;
+  onDismissSuggestion?: (name: string) => void;
   onClose: () => void;
   onSave: (next: ISkillItem[]) => void;
 }
@@ -22,6 +25,9 @@ function newSkill(): ISkillItem {
 export function SkillsModal({
   open,
   items,
+  suggestedItems = [],
+  onAcceptSuggestion,
+  onDismissSuggestion,
   onClose,
   onSave,
 }: SkillsModalProps) {
@@ -67,6 +73,22 @@ export function SkillsModal({
 
   function handleRemove(idx: number) {
     setRows((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  function handleAcceptSuggestion(name: string) {
+    const cleanName = String(name ?? "").trim();
+    if (!cleanName) return;
+
+    setRows((prev) => {
+      const alreadyPresent = prev.some(
+        (row) => String(row.name ?? "").trim().toLocaleLowerCase() === cleanName.toLocaleLowerCase(),
+      );
+      if (alreadyPresent) {
+        return prev;
+      }
+      return [...prev, { ...newSkill(), name: cleanName }];
+    });
+    onAcceptSuggestion?.(cleanName);
   }
 
   async function handleSave() {
@@ -135,6 +157,47 @@ export function SkillsModal({
             </div>
 
             <div className="space-y-2">
+              {suggestedItems.length > 0 ? (
+                <div className="space-y-2">
+                  <div className="text-xs [color:var(--tg2)]">
+                    Suggested from experience
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {suggestedItems.map((skill) => (
+                      <div
+                        key={skill}
+                        className="inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-xs"
+                        style={{
+                          borderStyle: "dashed",
+                          borderColor: "var(--color-border-strong)",
+                          background: "color-mix(in srgb, var(--sf1) 88%, transparent)",
+                          color: "var(--tm2)",
+                        }}
+                      >
+                        <span style={{ color: "var(--ti)" }}>{skill}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleAcceptSuggestion(skill)}
+                          className="dasti-icon-button dasti-icon-button--compact"
+                          aria-label={`Add suggested skill ${skill}`}
+                          title={`Add ${skill}`}
+                        >
+                          <Plus className="w-3 h-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onDismissSuggestion?.(skill)}
+                          className="dasti-icon-button dasti-icon-button--compact"
+                          aria-label={`Dismiss suggested skill ${skill}`}
+                          title={`Dismiss ${skill}`}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               {rows.length === 0 ? (
                 <div className="px-3 py-2 text-sm rounded [color:var(--tg2)] [background:var(--sf1)]">
                   No skills yet. Add your first skill.

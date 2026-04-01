@@ -29,6 +29,36 @@ describe("ProposalDisplay", () => {
     expect(screen.getByRole("button", { name: "Copy" })).toBeInTheDocument();
   });
 
+  it("hides the copy button when there is no generated proposal", () => {
+    render(
+      <ProposalDisplay
+        proposalContent={null}
+        loading={false}
+        error={null}
+        proposalType="cover_letter"
+        onCopy={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Copy" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders a neutral status message when generation is stopped", () => {
+    render(
+      <ProposalDisplay
+        proposalContent={null}
+        loading={false}
+        error={null}
+        statusMessage="Generation stopped."
+      />,
+    );
+
+    expect(screen.getByText("Generation stopped.")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
   it("invokes the provided copy handler", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", {
@@ -75,7 +105,7 @@ describe("ProposalDisplay", () => {
     expect(
       document.querySelector('[data-proposal-template="quire_margin"]'),
     ).toBeTruthy();
-    expect(screen.getByText("Alex Martin")).toBeInTheDocument();
+    expect(screen.getAllByText("Alex Martin").length).toBeGreaterThan(0);
   });
 
   it("applies the linked verbati style theme to the proposal document without recoloring the shell", () => {
@@ -170,6 +200,7 @@ describe("ProposalDisplay", () => {
         error={null}
         proposalType="cover_letter"
         showZoomControls
+        onModeChange={vi.fn()}
       />,
     );
 
@@ -182,5 +213,59 @@ describe("ProposalDisplay", () => {
     expect(screen.getByRole("button", { name: "Fit page" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Zoom out" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Zoom in" })).toBeInTheDocument();
+    expect(
+      document.querySelector(
+        ".dasti-proposal-rail-cluster .dasti-doc-zoom-menu",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("hides zoom controls while the proposal is in edit mode", () => {
+    render(
+      <ProposalDisplay
+        proposalContent={
+          "Dear Hiring Manager,\n\nI built reliable editorial tooling across product and content workflows.\n\nSincerely,\nAlex Martin"
+        }
+        loading={false}
+        error={null}
+        proposalType="cover_letter"
+        showZoomControls
+        mode="edit"
+        onContentChange={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Fit page" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Zoom out" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Zoom in" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("uses a single preview or edit toggle button", () => {
+    const handleModeChange = vi.fn();
+
+    render(
+      <ProposalDisplay
+        proposalContent={"Hello hiring team,\n\nI build calm, reliable proposal copy."}
+        loading={false}
+        error={null}
+        proposalType="cover_letter"
+        mode="preview"
+        onModeChange={handleModeChange}
+      />,
+    );
+
+    const toggle = screen.getByRole("button", { name: "Switch to edit mode" });
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    expect(toggle).toHaveAttribute("data-toolbar-tooltip", "Switch to edit");
+
+    fireEvent.click(toggle);
+
+    expect(handleModeChange).toHaveBeenCalledWith("edit");
   });
 });

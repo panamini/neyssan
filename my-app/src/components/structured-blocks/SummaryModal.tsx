@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useAction } from "convex/react";
 import { Remirror, useRemirror, EditorComponent } from "@remirror/react";
 import {
   BoldExtension,
@@ -15,6 +16,7 @@ import {
 import type { RemirrorJSON } from "remirror";
 import type { ISummaryItem } from "../../types/cvDocument";
 import { ensureRemirrorDoc } from "../remirror-editor/utils/conversion";
+import { api } from "../../../convex/_generated/api";
 import { EditorToolbar } from "../remirror-editor/components/EditorToolbar";
 import { useCvLibrary } from "../../contexts/CvLibraryContext";
 import { X } from "@/lib/icons";
@@ -23,6 +25,10 @@ import { docToPlainText } from "../remirror-editor/utils/text";
 import { Button } from "../ui/button";
 import { useCloseOnEscape } from "../../hooks/use-close-on-escape";
 import { BodyPortal } from "@/components/ui/body-portal";
+import FloatingAiToolbar, {
+  type InlineAiActionId,
+} from "../FloatingAiToolbar";
+import { getDomSelectionState } from "../../lib/editor-ai-selection";
 
 interface SummaryModalProps {
   open: boolean;
@@ -38,8 +44,21 @@ export function SummaryModal({
   onClose,
 }: SummaryModalProps) {
   const { updateStructuredItem } = useCvLibrary();
+  const transformEditorSelectionAction = useAction(
+    (api.functions as any).transformEditorSelection,
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [isClearConfirming, setIsClearConfirming] = useState(false);
+  const [inlineSelectionState, setInlineSelectionState] = useState<{
+    text: string;
+    anchor: { left: number; top: number };
+    from: number;
+    to: number;
+  } | null>(null);
+  const [isApplyingInlineAi, setIsApplyingInlineAi] = useState(false);
+  const [pendingInlineAiActionId, setPendingInlineAiActionId] =
+    useState<InlineAiActionId | null>(null);
+  const selectionDebounceRef = useRef<number | null>(null);
 
   useCloseOnEscape({ open, onClose, disabled: isSaving });
 
@@ -165,6 +184,97 @@ export function SummaryModal({
     [baseOnChange],
   );
 
+  useEffect(() => {
+    if (!open) {
+      setInlineSelectionState(null);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    return () => {
+      if (selectionDebounceRef.current !== null) {
+        window.clearTimeout(selectionDebounceRef.current);
+      }
+    };
+  }, []);
+
+  const scheduleSelectionCheck = React.useCallback(() => {
+    if (selectionDebounceRef.current !== null) {
+      window.clearTimeout(selectionDebounceRef.current);
+    }
+
+    selectionDebounceRef.current = window.setTimeout(() => {
+      selectionDebounceRef.current = null;
+      const view = (manager as any)?.view;
+      const selection = view?.state?.selection;
+      const nextSelection = getDomSelectionState(view?.dom as HTMLElement | null);
+
+      if (!nextSelection || !selection || selection.empty) {
+        setInlineSelectionState(null);
+        return;
+      }
+
+      setInlineSelectionState({
+        ...nextSelection,
+        from: selection.from,
+        to: selection.to,
+      });
+    }, 90);
+  }, [manager]);
+
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+
+    const handleSelectionChange = () => {
+      scheduleSelectionCheck();
+    };
+
+    document.addEventListener("selectionchange", handleSelectionChange);
+    return () => {
+      document.removeEventListener("selectionchange", handleSelectionChange);
+    };
+  }, [open, scheduleSelectionCheck]);
+
+  const handleRunInlineAiAction = React.useCallback(
+    async (actionId: InlineAiActionId, instruction: string) => {
+      if (!inlineSelectionState) return;
+
+      const view = (manager as any)?.view;
+      if (!view) return;
+
+      try {
+        setPendingInlineAiActionId(actionId);
+        setIsApplyingInlineAi(true);
+        const result = await transformEditorSelectionAction({
+          mode: actionId,
+          instruction,
+          selectedText: inlineSelectionState.text,
+        });
+        const replacementText =
+          typeof result?.text === "string" ? result.text.trim() : "";
+
+        if (!replacementText) {
+          return;
+        }
+
+        const tr = view.state.tr.insertText(
+          replacementText,
+          inlineSelectionState.from,
+          inlineSelectionState.to,
+        );
+        view.dispatch(tr);
+        view.focus();
+        setInlineSelectionState(null);
+      } finally {
+        setIsApplyingInlineAi(false);
+        setPendingInlineAiActionId(null);
+      }
+    },
+    [inlineSelectionState, manager, transformEditorSelectionAction],
+  );
+
   // Keep hook order stable across renders; effect is a no-op when closed.
   useEffect(() => {
     if (!open) return;
@@ -255,6 +365,16 @@ export function SummaryModal({
         className="fixed inset-0 z-[10000] flex items-center justify-center p-4"
         onMouseDownCapture={(e) => e.stopPropagation()}
       >
+        {inlineSelectionState ? (
+          <FloatingAiToolbar
+            open
+            anchor={inlineSelectionState.anchor}
+            isLoading={isApplyingInlineAi}
+            pendingActionId={pendingInlineAiActionId}
+            onClose={() => setInlineSelectionState(null)}
+            onRunAction={handleRunInlineAiAction}
+          />
+        ) : null}
         <div
           className="absolute inset-0"
           onClick={() => (isSaving ? null : onClose())}
@@ -297,7 +417,11 @@ export function SummaryModal({
                   initialContent={state}
                   onChange={handleChange}
                 >
-                  <div className="rich-content">
+                  <div
+                    className="rich-content"
+                    onPointerUp={scheduleSelectionCheck}
+                    onKeyUp={scheduleSelectionCheck}
+                  >
                     <EditorToolbar position="top" />
                     <EditorComponent />
                   </div>

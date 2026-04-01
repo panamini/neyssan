@@ -1344,4 +1344,82 @@ describe("proposal provider busy handling", () => {
       infoSpy.mockRestore();
     }
   });
+
+  it("aborts an in-flight chatgpt generation when cancellation is requested", async () => {
+    vi.useFakeTimers();
+    mockGpt4Generate.mockImplementation(
+      (_prompt: string, config: { signal?: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          config.signal?.addEventListener("abort", () => {
+            const error = new Error("Aborted");
+            error.name = "AbortError";
+            reject(error);
+          });
+        }),
+    );
+    const { handleGenerateProposal } = await loadProposalModule();
+
+    let pollCount = 0;
+    const ctx = {
+      auth: {
+        getUserIdentity: vi.fn().mockResolvedValue({ subject: "user_123" }),
+      },
+      runQuery: vi.fn().mockImplementation((_ref, args) => {
+        if (args && typeof args === "object" && "jobId" in args) {
+          pollCount += 1;
+          return Promise.resolve({
+            status: pollCount >= 3 ? "cancel_requested" : "processing",
+          });
+        }
+
+        return Promise.resolve({
+          _id: "profile_123",
+          proposalVoicePreset: "direct",
+          experience: [],
+          skills: [],
+          achievements: [],
+        });
+      }),
+      runMutation: vi.fn().mockImplementation((_ref, args) => {
+        if (args?.clientRunId) {
+          return Promise.resolve("job_cancel_123");
+        }
+        if (args?.jobId && args?.status) {
+          return Promise.resolve(null);
+        }
+        if (args?.content) {
+          throw new Error("proposal should not be stored after cancellation");
+        }
+        return Promise.resolve(null);
+      }),
+    };
+
+    const generationPromise = handleGenerateProposal(ctx, {
+      clientRunId: "run_cancel_123",
+      jobTitle: "Operations Associate",
+      jobDescription:
+        "Support recurring processes, update internal records, and coordinate communication across teams.",
+      proposalType: "application_message",
+      modelType: "chatgpt",
+      voicePreset: "direct",
+      personalizationMode: "explicit_only",
+    });
+    const settledGenerationPromise = generationPromise.catch((error) => error);
+
+    await vi.advanceTimersByTimeAsync(300);
+
+    const cancellationError = await settledGenerationPromise;
+    expect(cancellationError).toMatchObject({
+      name: "ConvexError",
+      message: "Proposal generation canceled.",
+    });
+    expect(mockGpt4Generate).toHaveBeenCalledTimes(1);
+    expect(ctx.runMutation).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        content: expect.any(String),
+      }),
+    );
+    vi.useRealTimers();
+  });
 });
