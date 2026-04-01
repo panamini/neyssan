@@ -76,34 +76,36 @@ export function CvForge(): JSX.Element {
   }, [workspaceMode]);
 
   const workspaceModeToggle = (
-    <button
-      type="button"
-      className={
-        workspaceMode === "edit"
-          ? "dasti-icon-button dasti-proposal-mode-toggle dasti-proposal-mode-toggle--active"
-          : "dasti-icon-button dasti-proposal-mode-toggle"
-      }
-      aria-label={
-        workspaceMode === "preview"
-          ? "Return to resume editing"
-          : "Open resume preview"
-      }
-      onClick={() =>
-        setWorkspaceMode((current) =>
-          current === "preview" ? "edit" : "preview",
-        )
-      }
-      data-toolbar-tooltip={
-        workspaceMode === "preview" ? "Switch to edit" : "Switch to preview"
-      }
-      data-no-pan="true"
-    >
-      {workspaceMode === "preview" ? (
-        <Pencil size={15} strokeWidth={1.7} aria-hidden="true" />
-      ) : (
-        <Eye size={15} strokeWidth={1.7} aria-hidden="true" />
-      )}
-    </button>
+    <div className="dasti-cv-workbench-toggle dasti-toolbar--surface-tooltips">
+      <button
+        type="button"
+        className={
+          workspaceMode === "edit"
+            ? "dasti-icon-button dasti-proposal-mode-toggle dasti-proposal-mode-toggle--active"
+            : "dasti-icon-button dasti-proposal-mode-toggle"
+        }
+        aria-label={
+          workspaceMode === "preview"
+            ? "Return to resume editing"
+            : "Open resume preview"
+        }
+        onClick={() =>
+          setWorkspaceMode((current) =>
+            current === "preview" ? "edit" : "preview",
+          )
+        }
+        data-toolbar-tooltip={
+          workspaceMode === "preview" ? "Switch to edit" : "Switch to preview"
+        }
+        data-no-pan="true"
+      >
+        {workspaceMode === "preview" ? (
+          <Pencil size={15} strokeWidth={1.7} aria-hidden="true" />
+        ) : (
+          <Eye size={15} strokeWidth={1.7} aria-hidden="true" />
+        )}
+      </button>
+    </div>
   );
 
   return (

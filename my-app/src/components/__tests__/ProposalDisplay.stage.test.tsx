@@ -3,18 +3,22 @@ import { render } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const viewportCenteringSpy = vi.fn();
+const stageLayoutSpy = vi.fn();
 
 vi.mock("../../hooks/use-document-stage-layout", () => ({
-  useDocumentStageLayout: () => ({
-    fitScale: 1,
-    stageWidth: 794,
-    stageHeight: 1123,
-    pageWidth: 794,
-    pageHeight: 1123,
-    overflowX: false,
-    overflowY: false,
-    isFit: true,
-  }),
+  useDocumentStageLayout: (options: Record<string, unknown>) => {
+    stageLayoutSpy(options);
+    return {
+      fitScale: 1,
+      stageWidth: 794,
+      stageHeight: 1123,
+      pageWidth: 794,
+      pageHeight: 1123,
+      overflowX: false,
+      overflowY: false,
+      isFit: true,
+    };
+  },
 }));
 
 vi.mock("../../hooks/use-document-pan", () => ({
@@ -65,6 +69,7 @@ import ProposalDisplay from "../ProposalDisplay";
 describe("ProposalDisplay stage behavior", () => {
   beforeEach(() => {
     viewportCenteringSpy.mockClear();
+    stageLayoutSpy.mockClear();
   });
 
   it("top-anchors the live workspace preview path", () => {
@@ -101,6 +106,9 @@ describe("ProposalDisplay stage behavior", () => {
     expect(
       container.querySelectorAll(".dasti-proposal-document__page"),
     ).toHaveLength(1);
+    const lastCall =
+      stageLayoutSpy.mock.calls[stageLayoutSpy.mock.calls.length - 1]?.[0];
+    expect(lastCall).toMatchObject({ fitMode: "contain" });
   });
 
   it("switches multipage previews to stacked inner A4 pages without re-skinning the outer shell", () => {
@@ -125,5 +133,8 @@ describe("ProposalDisplay stage behavior", () => {
     expect(
       container.querySelectorAll(".dasti-proposal-document__page"),
     ).toHaveLength(2);
+    expect(
+      container.querySelector(".dasti-proposal-sheet__preview-stage"),
+    ).toHaveAttribute("data-stage-mode", "overflow");
   });
 });
