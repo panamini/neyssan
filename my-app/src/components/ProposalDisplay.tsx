@@ -394,6 +394,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     enabled: usesDocumentRenderer && Boolean(proposalContent),
     measurementRef: stageMeasureRef,
     zoomLevel: effectiveZoomLevel,
+    fitMode: !isEditable && usesDocumentRenderer ? "contain" : "width",
     pageWidthPx: A4_PAGE_WIDTH_PX,
     pageHeightPx: A4_PAGE_HEIGHT_PX,
   });
@@ -421,6 +422,12 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       : stageLayout.pageHeight;
   const isMultiPagePreview =
     usesDocumentRenderer && !isEditable && documentPageCount > 1;
+  const previewStageMode =
+    usesDocumentRenderer &&
+    !isEditable &&
+    renderedDocumentHeight > stageLayout.stageHeight + 1
+      ? "overflow"
+      : stageMode;
   const resolveBodyClassName = React.useCallback(
     ({
       isReadonly = false,
@@ -880,7 +887,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       <div
         className="dasti-proposal-sheet__preview-stage"
         ref={attachPreviewViewport}
-        data-stage-mode={stageMode}
+        data-stage-mode={previewStageMode}
         data-document-stage="true"
         style={{
           width: `${stageLayout.stageWidth}px`,

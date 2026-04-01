@@ -7514,6 +7514,15 @@
   margin-inline: auto;
 }
 
+.dasti-doc-viewer-shell:not(.dasti-doc-viewer-shell--resume-workspace)
+  .dasti-doc-viewport--resume
+  .resume-page-frame {
+  width: min(100%, var(--preview-stage-width, 100%));
+  min-width: 0;
+  max-width: 100%;
+  margin-inline: auto;
+}
+
 .dasti-doc-viewer-shell--resume-workspace
   .dasti-doc-viewport--resume
   .resume-preview-shell--single,
