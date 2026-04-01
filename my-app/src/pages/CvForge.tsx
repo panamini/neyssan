@@ -76,41 +76,34 @@ export function CvForge(): JSX.Element {
   }, [workspaceMode]);
 
   const workspaceModeToggle = (
-    <div
-      className="dasti-cv-workbench-toggle dasti-toolbar--surface-tooltips"
+    <button
+      type="button"
+      className={
+        workspaceMode === "edit"
+          ? "dasti-icon-button dasti-proposal-mode-toggle dasti-proposal-mode-toggle--active"
+          : "dasti-icon-button dasti-proposal-mode-toggle"
+      }
+      aria-label={
+        workspaceMode === "preview"
+          ? "Return to resume editing"
+          : "Open resume preview"
+      }
+      onClick={() =>
+        setWorkspaceMode((current) =>
+          current === "preview" ? "edit" : "preview",
+        )
+      }
+      data-toolbar-tooltip={
+        workspaceMode === "preview" ? "Switch to edit" : "Switch to preview"
+      }
       data-no-pan="true"
     >
-      <button
-        type="button"
-        className={[
-          "dasti-cv-workbench-toggle__button",
-          workspaceMode === "edit"
-            ? "dasti-cv-workbench-toggle__button--active"
-            : "",
-        ]
-          .filter(Boolean)
-          .join(" ")}
-        aria-label={
-          workspaceMode === "preview"
-            ? "Return to resume editing"
-            : "Open resume preview"
-        }
-        onClick={() =>
-          setWorkspaceMode((current) =>
-            current === "preview" ? "edit" : "preview",
-          )
-        }
-        data-toolbar-tooltip={
-          workspaceMode === "preview" ? "Switch to edit" : "Switch to preview"
-        }
-      >
-        {workspaceMode === "preview" ? (
-          <Pencil size={15} strokeWidth={1.7} aria-hidden="true" />
-        ) : (
-          <Eye size={15} strokeWidth={1.7} aria-hidden="true" />
-        )}
-      </button>
-    </div>
+      {workspaceMode === "preview" ? (
+        <Pencil size={15} strokeWidth={1.7} aria-hidden="true" />
+      ) : (
+        <Eye size={15} strokeWidth={1.7} aria-hidden="true" />
+      )}
+    </button>
   );
 
   return (
@@ -130,19 +123,22 @@ export function CvForge(): JSX.Element {
           } as React.CSSProperties
         }
       >
+        <div className="dasti-workbench-top-left-slot dasti-workbench-top-left-slot--cv">
+          <div className="dasti-cv-workbench-bar dasti-cv-workbench-bar--cv-workspace">
+            {workspaceModeToggle}
+          </div>
+        </div>
         {workspaceMode === "preview" ? (
           <>
             <VerbatiCvPreviewPanel
               layoutMode="stacked"
               hostMode="workspace"
-              railLeadControl={workspaceModeToggle}
               stylePreset={stylePreset}
               onStylePresetChange={setStylePreset}
             />
           </>
         ) : (
           <>
-            <div className="dasti-cv-workbench-bar">{workspaceModeToggle}</div>
             <div
               style={{
                 width: "100%",
@@ -163,12 +159,20 @@ export function CvForge(): JSX.Element {
                 }
               >
                 <ProfileReviewCard cvId={requestedCvId} />
-                <VerbatiCvPreviewPanel
-                  layoutMode={isSplitCanvas ? "rail" : "stacked"}
-                  hostMode="panel"
-                  stylePreset={stylePreset}
-                  onStylePresetChange={setStylePreset}
-                />
+                <div
+                  className={
+                    isSplitCanvas
+                      ? "dasti-cv-preview-panel-slot dasti-cv-preview-panel-slot--sticky"
+                      : "dasti-cv-preview-panel-slot"
+                  }
+                >
+                  <VerbatiCvPreviewPanel
+                    layoutMode={isSplitCanvas ? "rail" : "stacked"}
+                    hostMode="panel"
+                    stylePreset={stylePreset}
+                    onStylePresetChange={setStylePreset}
+                  />
+                </div>
               </div>
             </div>
           </>

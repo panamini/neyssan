@@ -199,6 +199,22 @@ describe("Sidebar proposal navigation", () => {
     expect(window.localStorage.getItem("cvActiveId")).toBe("cv_beta");
   });
 
+  it("fully removes the sidebar from layout on very narrow mobile widths", () => {
+    setViewportWidth(440);
+
+    const { container } = render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <Sidebar />
+        <Routes>
+          <Route path="/cv" element={<CvRoute />} />
+          <Route path="/proposal" element={<ProposalRouteProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(container.querySelector("aside.sb")).toBeNull();
+  });
+
   it("refreshes proposal workspace draft state when the window regains focus", async () => {
     render(
       <MemoryRouter initialEntries={["/cv"]}>

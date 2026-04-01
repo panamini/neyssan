@@ -15,12 +15,11 @@ describe("ProposalComposeToolbar CSS contracts", () => {
 
   it("constrains the toolbar slot and bar to the compose shell width", () => {
     expect(productCss).toContain(".dasti-forge-compose-toolbar-slot");
+    expect(productCss).toContain("width: 100%;");
     expect(productCss).toContain("justify-content: flex-start;");
-    expect(productCss).toContain(
-      "var(--proposal-compose-toolbar-max-inline-size, 480px)",
-    );
     expect(productCss).toContain(".dasti-compose-toolbar__bar");
-    expect(productCss).toContain("width: fit-content;");
+    expect(productCss).toContain(".dasti-forge-compose-toolbar-slot .dasti-compose-toolbar");
+    expect(productCss).toContain("max-inline-size: 100%;");
     expect(productCss).toContain("max-width: 100%;");
   });
 

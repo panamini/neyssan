@@ -61,10 +61,18 @@ vi.mock("../../components/ui/toast", () => ({
 
 vi.mock("../../lib/proposal-personalization", () => ({
   buildAppProposalPersonalizationPayload: () => ({}),
+  clearActiveLocalCvId: () => {
+    mockActiveCvId = null;
+  },
   getProposalApplicantIdentity: () => ({
     name: "Alex Martin",
     role: "Operations Associate",
   }),
+  getProposalAttachedCvId: () => mockActiveCvId,
+  getLocalActiveCvSnapshotById: (id: string) =>
+    id === "cv_alpha"
+      ? { title: "Operations Associate — Alex Martin" }
+      : null,
   getProposalAttachedCvLocalDocument: () =>
     mockActiveCvId === "cv_alpha" ? mockAttachedCv : null,
   getActiveLocalPersonalizationSource: () => ({
@@ -132,6 +140,25 @@ vi.mock("../../components/ProposalDisplay", () => ({
   getDisplayedProposalText: (value: string) => value,
 }));
 
+vi.mock("../../components/ProposalComposeToolbar", () => ({
+  ProposalComposeToolbar: ({
+    onClearCv,
+    cvTitle,
+  }: {
+    onClearCv?: () => void;
+    cvTitle?: string | null;
+  }) => (
+    <div>
+      <button type="button" aria-label={cvTitle ? `CV: ${cvTitle}` : "Pick CV"}>
+        {cvTitle ?? "Pick CV"}
+      </button>
+      <button type="button" onClick={() => onClearCv?.()}>
+        Remove CV from toolbar
+      </button>
+    </div>
+  ),
+}));
+
 vi.mock("../../components/ProposalsList", () => ({
   default: () => <div>Saved proposals</div>,
 }));
@@ -159,14 +186,25 @@ describe("ProposalForge attached CV sync", () => {
         name: /CV: Operations Associate — Alex Martin/i,
       }),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Linked" }));
-    expect(screen.getByRole("button", { name: "Linked" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
     expect(mockLoadCv).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Remove CV from form" }));
+
+    expect(screen.getByRole("button", { name: "Pick CV" })).toBeInTheDocument();
+  });
+
+  it("clears the attached CV when the workspace toolbar remove action is used", () => {
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Attach CV from form" }));
+
+    expect(screen.getByText("Operations Associate — Alex Martin")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove CV from toolbar" }));
 
     expect(screen.getByRole("button", { name: "Pick CV" })).toBeInTheDocument();
   });

@@ -81,7 +81,7 @@ describe("ProposalDisplay stage behavior", () => {
 
     const lastCall =
       viewportCenteringSpy.mock.calls[viewportCenteringSpy.mock.calls.length - 1]?.[0];
-    expect(lastCall).toMatchObject({ defaultCenterY: 0 });
+    expect(lastCall).toMatchObject({ defaultCenterX: 0, defaultCenterY: 0 });
   });
 
   it("keeps a single-page preview on the non-stacked A4 shell", () => {
