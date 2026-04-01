@@ -6162,11 +6162,13 @@
 .dasti-artifact-inspector--header .dasti-artifact-inspector__style-drawer,
 .dasti-artifact-inspector--header .dasti-artifact-inspector__palette-drawer {
   min-width: 0;
-  width: max-content;
+  width: min(160px, calc(100vw - 24px));
 }
 
 .dasti-artifact-inspector__palette-drawer .dasti-artifact-inspector__palette,
 .dasti-resume-style-inspector__drawer--palette .dasti-artifact-inspector__palette {
+  width: 100%;
+  justify-content: flex-end;
   gap: 6px;
 }
 
