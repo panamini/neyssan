@@ -1,9 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
+import { useAction } from "convex/react";
 import type { IAchievementItem } from "../../types/cvDocument";
-import { X, Plus } from "@/lib/icons";
+import { api } from "../../../convex/_generated/api";
+import { X, Plus, Loader2, Wand2 } from "@/lib/icons";
 import { Button } from "../ui/button";
+import { useToast } from "../ui/toast";
 import { useCloseOnEscape } from "../../hooks/use-close-on-escape";
 import { BodyPortal } from "@/components/ui/body-portal";
+import { useCvAiCapabilities } from "../../hooks/use-cv-ai-capabilities";
 
 interface AchievementsModalProps {
   open: boolean;
@@ -20,6 +24,46 @@ function newAchievement(): IAchievementItem {
 
 const ACHIEVEMENT_TEXTAREA_MAX_HEIGHT = 132;
 
+function AchievementAiDiffCard({
+  before,
+  after,
+  onAccept,
+  onDiscard,
+}: {
+  before: string;
+  after: string;
+  onAccept: () => void;
+  onDiscard: () => void;
+}) {
+  return (
+    <div className="dasti-achievements-modal__diff-card">
+      <div className="dasti-achievements-modal__diff-label">
+        Suggested rewrite
+      </div>
+      <div className="dasti-achievements-modal__diff-before">
+        {before.trim() || "No existing content."}
+      </div>
+      <div className="dasti-achievements-modal__diff-after">{after.trim()}</div>
+      <div className="dasti-achievements-modal__diff-actions">
+        <button
+          type="button"
+          className="dasti-button dasti-button--accent dasti-button--sm"
+          onClick={onAccept}
+        >
+          Accept
+        </button>
+        <button
+          type="button"
+          className="dasti-button dasti-button--secondary dasti-button--sm"
+          onClick={onDiscard}
+        >
+          Discard
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function AchievementsModal({
   open,
   items,
@@ -27,10 +71,19 @@ export function AchievementsModal({
   onClose,
   onSave,
 }: AchievementsModalProps) {
+  const runCvSectionAiAction = useAction(
+    (api.functions as any).runCvSectionAiAction,
+  );
+  const cvAiCapabilities = useCvAiCapabilities();
+  const { showToast } = useToast();
   const [rows, setRows] = useState<IAchievementItem[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [savedTick, setSavedTick] = useState<string | null>(null);
   const [isClearConfirming, setIsClearConfirming] = useState(false);
+  const [aiLoadingId, setAiLoadingId] = useState<string | null>(null);
+  const [aiDiffs, setAiDiffs] = useState<
+    Record<string, { before: string; after: string }>
+  >({});
   const textareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
 
   useCloseOnEscape({ open, onClose, disabled: isSaving });
@@ -52,6 +105,8 @@ export function AchievementsModal({
     if (!open) {
       lastSeedRef.current = null;
       setIsClearConfirming(false);
+      setAiLoadingId(null);
+      setAiDiffs({});
     }
   }, [open]);
 
@@ -180,6 +235,72 @@ export function AchievementsModal({
     });
   }
 
+  async function handleRunAchievementAi(idx: number) {
+    if (!cvAiCapabilities.isSupported("improve_achievement_line")) {
+      showToast("Achievement AI unavailable", {
+        variant: "warning",
+        description: cvAiCapabilities.staleMessage,
+      });
+      return;
+    }
+
+    const row = rows[idx];
+    const rowId = String(row?.id ?? "");
+    const currentText = String(row?.text ?? "").trim();
+    if (!rowId || !currentText) return;
+
+    try {
+      setAiLoadingId(rowId);
+      const result = await runCvSectionAiAction({
+        action: "improve_achievement_line",
+        existingText: currentText,
+      });
+      const nextText =
+        result?.kind === "text" && typeof result.text === "string"
+          ? result.text.trim()
+          : "";
+      if (!nextText) return;
+
+      setAiDiffs((current) => ({
+        ...current,
+        [rowId]: {
+          before: currentText,
+          after: nextText,
+        },
+      }));
+    } catch (error) {
+      console.error("[AchievementsModal] improve_achievement_line failed", error);
+      const rawMessage =
+        error instanceof Error ? error.message : String(error ?? "");
+      showToast("Achievement AI unavailable", {
+        variant: "error",
+        description: /ArgumentValidationError/i.test(rawMessage)
+          ? "The CV AI backend schema is stale. Run `npx convex codegen` or restart `npx convex dev`, then reload the page."
+          : "This achievement could not be improved right now.",
+      });
+    } finally {
+      setAiLoadingId(null);
+    }
+  }
+
+  function handleAcceptAiDiff(rowId: string) {
+    const diff = aiDiffs[rowId];
+    if (!diff) return;
+    setRows((prev) =>
+      prev.map((row) =>
+        String(row.id ?? "") === rowId ? { ...row, text: diff.after } : row,
+      ),
+    );
+    setAiDiffs((current) => {
+      const next = { ...current };
+      delete next[rowId];
+      return next;
+    });
+    window.requestAnimationFrame(() => {
+      syncTextareaHeight(rowId);
+    });
+  }
+
   async function handleSave() {
     setIsSaving(true);
     try {
@@ -263,6 +384,13 @@ export function AchievementsModal({
 
           <div className="dasti-modal-body dasti-achievements-modal__body">
             <div className="dasti-achievements-modal__list">
+              {cvAiCapabilities.status === "stale" &&
+              !cvAiCapabilities.isSupported("improve_achievement_line") ? (
+                <div className="dasti-hint" role="status">
+                  {cvAiCapabilities.staleMessage}
+                </div>
+              ) : null}
+
               {rows.map((row, idx) => {
                 const rowId = String(row.id ?? idx);
                 const rowText = String(row.text ?? "");
@@ -311,6 +439,27 @@ export function AchievementsModal({
                       <div className="dasti-achievements-modal__entry-actions">
                         <button
                           type="button"
+                          className="dasti-icon-button dasti-achievements-modal__ai-action"
+                          onClick={() => void handleRunAchievementAi(idx)}
+                          disabled={
+                            !cvAiCapabilities.isSupported(
+                              "improve_achievement_line",
+                            ) ||
+                            aiLoadingId === rowId ||
+                            rowText.trim().length === 0
+                          }
+                          aria-label="Improve achievement with AI"
+                          data-toolbar-tooltip="Improve"
+                        >
+                          {aiLoadingId === rowId ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Wand2 className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
                           onClick={() => handleRemove(idx)}
                           className="dasti-icon-button dasti-achievements-modal__remove"
                           aria-label={`Remove achievement ${idx + 1}`}
@@ -320,6 +469,21 @@ export function AchievementsModal({
                         </button>
                       </div>
                     </div>
+
+                    {aiDiffs[rowId] ? (
+                      <AchievementAiDiffCard
+                        before={aiDiffs[rowId].before}
+                        after={aiDiffs[rowId].after}
+                        onAccept={() => handleAcceptAiDiff(rowId)}
+                        onDiscard={() =>
+                          setAiDiffs((current) => {
+                            const next = { ...current };
+                            delete next[rowId];
+                            return next;
+                          })
+                        }
+                      />
+                    ) : null}
                   </article>
                 );
               })}

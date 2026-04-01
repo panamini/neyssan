@@ -6,6 +6,7 @@ import {
   Check,
   FileText,
   FileUser,
+  Gear,
   Menu,
   Moon,
   SunMedium,
@@ -1265,6 +1266,17 @@ export const Sidebar: React.FC = () => {
           </div>
         ) : null}
         <div className="sb-footer__tools">
+          <Link
+            to="/settings"
+            className={clsx(
+              "sb-footer__tool-btn",
+              matchesRoute("/settings") && "sb-footer__tool-btn--active",
+            )}
+            title="Settings"
+            aria-label="Settings"
+          >
+            <Gear size={14} strokeWidth={1.6} aria-hidden="true" />
+          </Link>
           <div className="sb-theme-toggle">
             <button
               type="button"

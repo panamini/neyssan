@@ -29,6 +29,50 @@ const proposalTemplateChoice = v.union(
   ...PROPOSAL_TEMPLATE_IDS.map((templateId) => v.literal(templateId)),
 );
 
+const proposalStyleLinkModeChoice = v.union(
+  v.literal("inherit_cv"),
+  v.literal("proposal_local"),
+);
+
+const proposalStyleChoiceChoice = v.union(
+  v.literal("auto"),
+  v.literal("formal"),
+  v.literal("warm"),
+  v.literal("technical"),
+  v.literal("balanced"),
+);
+
+const proposalTemplateBundleChoice = v.union(
+  v.literal("swiss_serif"),
+  v.literal("swiss_mono"),
+  v.literal("magazine_editorial"),
+  v.literal("magazine_serif"),
+  v.literal("grid_mono"),
+  v.literal("quire_mono"),
+);
+
+const proposalTypographyOverrideChoice = v.union(
+  v.literal("signature"),
+  v.literal("engaging"),
+  v.literal("expert"),
+);
+
+const proposalLayoutOverrideChoice = v.union(
+  v.literal("swiss"),
+  v.literal("editorial"),
+  v.literal("modernist"),
+  v.literal("quire"),
+);
+
+const proposalCharacterLimitModeChoice = v.union(
+  v.literal("none"),
+  v.literal("linkedin_note_200"),
+  v.literal("linkedin_inmail_2000"),
+  v.literal("indeed_cover_letter_4000"),
+  v.literal("upwork_proposal_advisory"),
+  v.literal("custom"),
+);
+
 const proposalVerbatiStyleChoice = v.object({
   layout: v.string(),
   typography: v.string(),
@@ -76,10 +120,29 @@ export default query({
         actualModelType: v.optional(v.string()),
         fallbackTriggerCode: v.optional(v.string()),
         voicePreset: v.optional(proposalVoicePresetChoice),
+        requestedVoicePreset: v.optional(
+          v.union(proposalVoicePresetChoice, v.null()),
+        ),
+        resolvedVoicePreset: v.optional(proposalVoicePresetChoice),
+        autoToneDecisionVersion: v.optional(v.literal("v1")),
+        autoToneReason: v.optional(v.string()),
         formalityLevel: v.optional(proposalFormalityLevelChoice),
         creativity: v.optional(proposalCreativityChoice),
         templateId: v.optional(proposalTemplateChoice),
         verbatiStyle: v.optional(proposalVerbatiStyleChoice),
+        styleLinkMode: v.optional(proposalStyleLinkModeChoice),
+        styleChoice: v.optional(proposalStyleChoiceChoice),
+        templateBundleId: v.optional(proposalTemplateBundleChoice),
+        typographyOverride: v.optional(
+          v.union(proposalTypographyOverrideChoice, v.null()),
+        ),
+        layoutOverride: v.optional(
+          v.union(proposalLayoutOverrideChoice, v.null()),
+        ),
+        characterLimitMode: v.optional(
+          v.union(proposalCharacterLimitModeChoice, v.null()),
+        ),
+        characterLimitValue: v.optional(v.union(v.number(), v.null())),
         proposalType: v.optional(
           v.union(
             v.literal("cover_letter"),
@@ -110,13 +173,19 @@ export default query({
 
     const proposals = await ctx.db
       .query("proposals")
-      .withIndex("by_user", (q) => q.eq("userId", user._id))
-      .order("desc")
-      .take(10);
+      .withIndex("by_user_and_status", (q) =>
+        q.eq("userId", user._id).eq("status", "saved"),
+      )
+      .collect();
+
+    const savedProposals = proposals
+      .filter((proposal) => proposal.status === "saved")
+      .sort((left, right) => right._creationTime - left._creationTime)
+      .slice(0, 10);
 
     // Project proposals to the exact public return shape so added storage fields
     // do not trigger ReturnsValidationError in client-facing queries.
-    return proposals.map((proposal) => ({
+    return savedProposals.map((proposal) => ({
       _id: proposal._id,
       _creationTime: proposal._creationTime,
       userId: proposal.userId,
@@ -143,6 +212,13 @@ export default query({
         actualModelType: proposal.metadata.actualModelType ?? undefined,
         fallbackTriggerCode: proposal.metadata.fallbackTriggerCode ?? undefined,
         voicePreset: proposal.metadata.voicePreset ?? undefined,
+        requestedVoicePreset:
+          proposal.metadata.requestedVoicePreset ?? undefined,
+        resolvedVoicePreset:
+          proposal.metadata.resolvedVoicePreset ?? undefined,
+        autoToneDecisionVersion:
+          proposal.metadata.autoToneDecisionVersion ?? undefined,
+        autoToneReason: proposal.metadata.autoToneReason ?? undefined,
         formalityLevel: proposal.metadata.formalityLevel ?? undefined,
         creativity: proposal.metadata.creativity ?? undefined,
         templateId: proposal.metadata.templateId
@@ -156,6 +232,15 @@ export default query({
               accentHex: proposal.metadata.verbatiStyle.accentHex ?? undefined,
             }
           : undefined,
+        styleLinkMode: proposal.metadata.styleLinkMode ?? undefined,
+        styleChoice: proposal.metadata.styleChoice ?? undefined,
+        templateBundleId: proposal.metadata.templateBundleId ?? undefined,
+        typographyOverride: proposal.metadata.typographyOverride ?? undefined,
+        layoutOverride: proposal.metadata.layoutOverride ?? undefined,
+        characterLimitMode:
+          proposal.metadata.characterLimitMode ?? undefined,
+        characterLimitValue:
+          proposal.metadata.characterLimitValue ?? undefined,
         proposalType: proposal.metadata.proposalType ?? undefined,
       },
       metrics: {

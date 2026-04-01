@@ -8,6 +8,7 @@ import React, {
   useState,
   useCallback,
 } from "react";
+import { useAction } from "convex/react";
 import { Remirror, useRemirror, EditorComponent } from "@remirror/react";
 import {
   BoldExtension,
@@ -21,7 +22,9 @@ import {
   ensureRemirrorDoc,
   remirrorDocToSection,
 } from "./remirror-editor/utils/conversion";
+import { api } from "../../convex/_generated/api";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
+import { useCvAiCapabilities } from "../hooks/use-cv-ai-capabilities";
 import { makeExperienceItem, makeEducationItem } from "../lib/cv-template";
 import { SummaryBlock } from "./structured-blocks/SummaryBlock";
 import { SkillsBlock } from "./structured-blocks/SkillsBlock";
@@ -42,11 +45,16 @@ import {
   User,
   ChevronDown,
   ChevronUp,
+  Loader2,
+  Wand2,
 } from "@/lib/icons";
 import {
   ExperienceModal,
   EducationModal,
 } from "./structured-blocks/ExperienceEducationModal";
+import FloatingAiToolbar, {
+  type InlineAiActionId,
+} from "./FloatingAiToolbar";
 
 import { formatRangeFromItem } from "../lib/date-utils";
 import { splitResponsibilitiesIntoBullets } from "../utils/cv/mapping-utils";
@@ -56,6 +64,8 @@ import {
 } from "../utils/cv/renderGuards";
 import { docToPlainText } from "./remirror-editor/utils/text";
 import { deepEqual } from "../utils/deepEqual";
+import { getDomSelectionState } from "../lib/editor-ai-selection";
+import { useToast } from "./ui/toast";
 
 /**
  * Simple uid helper used for generating new block/entry ids locally.
@@ -85,6 +95,350 @@ const LANGUAGE_DOT_LEVELS: Array<{ value: Level; label: string }> = [
   { value: "Intermediate", label: "Intermediate" },
   { value: "Fluent", label: "Advanced" },
 ];
+
+type InlineEditorSelectionState = {
+  text: string;
+  anchor: { left: number; top: number };
+  from: number;
+  to: number;
+};
+
+type SectionAiMenuState =
+  | { type: "summary" }
+  | { type: "skills" }
+  | { type: "languages" }
+  | { type: "experience"; itemId: string }
+  | null;
+
+type TextDiffState = {
+  oldText: string;
+  newText: string;
+};
+
+type ExperienceDiffState = {
+  itemId: string;
+  title: string;
+  oldItems: string[];
+  newItems: string[];
+};
+
+function plainTextFromStructuredValue(value: unknown): string {
+  if (typeof value === "string") {
+    return value.trim();
+  }
+
+  if (value && typeof value === "object") {
+    try {
+      return docToPlainText(value as any).trim();
+    } catch {
+      return "";
+    }
+  }
+
+  return "";
+}
+
+function buildBulletListDoc(items: string[]): RemirrorJSON {
+  const cleanItems = items.map((item) => item.trim()).filter(Boolean);
+
+  if (cleanItems.length === 0) {
+    return ensureRemirrorDoc(undefined as any);
+  }
+
+  return {
+    type: "doc",
+    content: [
+      {
+        type: "bulletList",
+        content: cleanItems.map((item) => ({
+          type: "listItem",
+          content: [
+            {
+              type: "paragraph",
+              content: [{ type: "text", text: item }],
+            },
+          ],
+        })),
+      },
+    ],
+  } as RemirrorJSON;
+}
+
+function getExperienceBulletLines(item: any): string[] {
+  const responsibilitiesText = plainTextFromStructuredValue(
+    item?.responsibilities,
+  );
+  const responsibilityBullets = Array.isArray(item?.responsibilityBullets)
+    ? (item.responsibilityBullets as unknown[])
+        .map((value) => (typeof value === "string" ? value.trim() : ""))
+        .filter(Boolean)
+    : splitResponsibilitiesIntoBullets(responsibilitiesText);
+  const achievements = Array.isArray(item?.achievements)
+    ? (item.achievements as unknown[])
+        .map((value) =>
+          typeof value === "string"
+            ? value.trim()
+            : typeof (value as any)?.text === "string"
+              ? (value as any).text.trim()
+              : "",
+        )
+        .filter(Boolean)
+    : [];
+
+  return responsibilityBullets.length > 0 ? responsibilityBullets : achievements;
+}
+
+function buildExperienceAiSourceText(item: any): string {
+  const bits = [
+    typeof item?.position === "string" && item.position.trim()
+      ? `Role: ${item.position.trim()}`
+      : null,
+    typeof item?.company === "string" && item.company.trim()
+      ? `Company: ${item.company.trim()}`
+      : null,
+    typeof item?.location === "string" && item.location.trim()
+      ? `Location: ${item.location.trim()}`
+      : null,
+    typeof item?.description === "string" && item.description.trim()
+      ? `Description: ${item.description.trim()}`
+      : null,
+    plainTextFromStructuredValue(item?.responsibilities)
+      ? `Responsibilities: ${plainTextFromStructuredValue(item?.responsibilities)}`
+      : null,
+  ].filter(Boolean);
+  const bullets = getExperienceBulletLines(item);
+
+  if (bullets.length > 0) {
+    bits.push(`Bullets:\n- ${bullets.join("\n- ")}`);
+  }
+
+  return bits.join("\n");
+}
+
+function normalizeSkillName(value: string): string {
+  return value.trim().toLocaleLowerCase();
+}
+
+function dedupeStringList(items: string[]): string[] {
+  const seen = new Set<string>();
+  const next: string[] = [];
+
+  for (const item of items) {
+    const clean = item.trim();
+    if (!clean) continue;
+    const key = clean.toLocaleLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    next.push(clean);
+  }
+
+  return next;
+}
+
+function formatDiffValue(value: string | string[]): string {
+  if (Array.isArray(value)) {
+    return value.map((line) => `• ${line}`).join("\n");
+  }
+
+  return value.trim();
+}
+
+function CvAiDiffCard({
+  label,
+  before,
+  after,
+  onAccept,
+  onDiscard,
+  isApplying = false,
+}: {
+  label: string;
+  before: string | string[];
+  after: string | string[];
+  onAccept: () => void;
+  onDiscard: () => void;
+  isApplying?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        margin: "0 var(--s3) var(--s3)",
+        padding: "var(--s3)",
+        borderRadius: "var(--radius-card)",
+        border: "1px solid var(--color-border)",
+        background: "var(--sfr)",
+        display: "grid",
+        gap: "var(--s2)",
+      }}
+    >
+      <p
+        style={{
+          margin: 0,
+          fontSize: "var(--tx)",
+          fontWeight: 600,
+          color: "var(--ti)",
+        }}
+      >
+        {label}
+      </p>
+      <div
+        style={{
+          margin: 0,
+          whiteSpace: "pre-wrap",
+          fontSize: "var(--tx)",
+          lineHeight: "var(--lx)",
+          color: "var(--tm2)",
+          textDecoration: "line-through",
+        }}
+      >
+        {formatDiffValue(before) || "No existing content."}
+      </div>
+      <div
+        style={{
+          margin: 0,
+          whiteSpace: "pre-wrap",
+          fontSize: "var(--tx)",
+          lineHeight: "var(--lx)",
+          color: "var(--ti)",
+        }}
+      >
+        {formatDiffValue(after)}
+      </div>
+      <div
+        style={{
+          display: "flex",
+          gap: "var(--s2)",
+          flexWrap: "wrap",
+        }}
+      >
+        <button
+          type="button"
+          className="dasti-button dasti-button--accent dasti-button--sm"
+          onClick={onAccept}
+          disabled={isApplying}
+        >
+          Accept
+        </button>
+        <button
+          type="button"
+          className="dasti-button dasti-button--secondary dasti-button--sm"
+          onClick={onDiscard}
+          disabled={isApplying}
+        >
+          Discard
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CvSuggestionRow({
+  label,
+  items,
+  isLoading,
+  hasRequested,
+  emptyLabel,
+  onAccept,
+  onDismiss,
+}: {
+  label: string;
+  items: string[];
+  isLoading: boolean;
+  hasRequested: boolean;
+  emptyLabel: string;
+  onAccept: (value: string) => void;
+  onDismiss: (value: string) => void;
+}) {
+  if (!isLoading && !hasRequested && items.length === 0) {
+    return null;
+  }
+
+  return (
+    <div
+      style={{
+        padding: "0 var(--s3) var(--s3)",
+        display: "grid",
+        gap: "var(--s2)",
+      }}
+    >
+      <div
+        style={{
+          fontSize: "var(--tx)",
+          color: "var(--tm2)",
+          lineHeight: "var(--lx)",
+        }}
+      >
+        {label}
+      </div>
+      {isLoading ? (
+        <div
+          className="dasti-pill"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "var(--s2)",
+            width: "fit-content",
+          }}
+        >
+          <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
+          <span>Generating suggestions…</span>
+        </div>
+      ) : items.length > 0 ? (
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "var(--s2)",
+          }}
+        >
+          {items.map((item) => (
+            <div
+              key={item}
+              className="dasti-pill"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "var(--s1)",
+                background:
+                  "color-mix(in srgb, var(--sf1) 88%, transparent)",
+                borderStyle: "dashed",
+              }}
+            >
+              <span style={{ color: "var(--ti)" }}>{item}</span>
+              <button
+                type="button"
+                onClick={() => onAccept(item)}
+                className="dasti-icon-button dasti-icon-button--compact"
+                aria-label={`Add suggested item ${item}`}
+                title={`Add ${item}`}
+              >
+                <Plus className="w-3 h-3" aria-hidden />
+              </button>
+              <button
+                type="button"
+                onClick={() => onDismiss(item)}
+                className="dasti-icon-button dasti-icon-button--compact"
+                aria-label={`Dismiss suggested item ${item}`}
+                title={`Dismiss ${item}`}
+              >
+                <X className="w-3 h-3" aria-hidden />
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div
+          style={{
+            fontSize: "var(--tx)",
+            color: "var(--tg2)",
+            lineHeight: "var(--lx)",
+          }}
+        >
+          {emptyLabel}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function getDotIndex(value: Level, kind: "skill" | "language"): number {
   if (kind === "skill") {
@@ -355,6 +709,8 @@ export default function SectionEditor({
   onCollapseChange,
   embedded = false,
 }: SectionEditorProps) {
+  const { showToast } = useToast();
+  const cvAiCapabilities = useCvAiCapabilities();
   // Add logging to track re-renders (debug gated)
   useEffect(() => {
     try {
@@ -408,6 +764,26 @@ export default function SectionEditor({
     [section.id],
   );
   const titleInputRef = useRef<HTMLInputElement | null>(null);
+  const showCvAiActionError = useCallback(
+    (actionLabel: string, error: unknown) => {
+      console.error(`[SectionEditor] ${actionLabel} failed`, error);
+      const rawMessage =
+        error instanceof Error ? error.message : String(error ?? "");
+      showToast("CV AI unavailable", {
+        variant: "error",
+        description: /ArgumentValidationError/i.test(rawMessage)
+          ? "The CV AI backend schema is stale. Run `npx convex codegen` or restart `npx convex dev`, then reload the page."
+          : `The ${actionLabel} action failed.`,
+      });
+    },
+    [showToast],
+  );
+  const showCvAiRefreshToast = useCallback(() => {
+    showToast("CV AI unavailable", {
+      variant: "warning",
+      description: cvAiCapabilities.staleMessage,
+    });
+  }, [cvAiCapabilities.staleMessage, showToast]);
 
   // Initialize safe JSON content once at mount to avoid remounts stomping caret.
   const initialContentRef = useRef<RemirrorJSON>(
@@ -723,6 +1099,278 @@ export default function SectionEditor({
     currentCv,
     reorderSections,
   } = useCvLibrary();
+  const transformEditorSelectionAction = useAction(
+    (api.functions as any).transformEditorSelection,
+  );
+  const runCvSectionAiAction = useAction(
+    (api.functions as any).runCvSectionAiAction,
+  );
+  const [inlineSelectionState, setInlineSelectionState] =
+    useState<InlineEditorSelectionState | null>(null);
+  const [isApplyingInlineAi, setIsApplyingInlineAi] = useState(false);
+  const [pendingInlineAiActionId, setPendingInlineAiActionId] =
+    useState<InlineAiActionId | null>(null);
+  const inlineSelectionDebounceRef = useRef<number | null>(null);
+  const [sectionAiMenu, setSectionAiMenu] = useState<SectionAiMenuState>(null);
+  const sectionAiMenuRef = useRef<HTMLDivElement | null>(null);
+  const [sectionAiLoadingKey, setSectionAiLoadingKey] = useState<string | null>(
+    null,
+  );
+  const [summaryAiDiff, setSummaryAiDiff] = useState<TextDiffState | null>(
+    null,
+  );
+  const [skillsAiSuggestions, setSkillsAiSuggestions] = useState<string[]>([]);
+  const [skillsAiExcluded, setSkillsAiExcluded] = useState<string[]>([]);
+  const [skillsAiRefillCount, setSkillsAiRefillCount] = useState(0);
+  const [skillsAiRequested, setSkillsAiRequested] = useState(false);
+  const [languagesAiSuggestions, setLanguagesAiSuggestions] = useState<
+    string[]
+  >([]);
+  const [languagesAiExcluded, setLanguagesAiExcluded] = useState<string[]>([]);
+  const [languagesAiRefillCount, setLanguagesAiRefillCount] = useState(0);
+  const [languagesAiRequested, setLanguagesAiRequested] = useState(false);
+  const [experienceAiDiff, setExperienceAiDiff] =
+    useState<ExperienceDiffState | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (inlineSelectionDebounceRef.current !== null) {
+        window.clearTimeout(inlineSelectionDebounceRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!sectionAiMenu) return undefined;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (sectionAiMenuRef.current?.contains(event.target as Node)) return;
+      setSectionAiMenu(null);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSectionAiMenu(null);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [sectionAiMenu]);
+
+  useEffect(() => {
+    setSkillsAiSuggestions([]);
+    setSkillsAiExcluded([]);
+    setSkillsAiRefillCount(0);
+    setSkillsAiRequested(false);
+    setLanguagesAiSuggestions([]);
+    setLanguagesAiExcluded([]);
+    setLanguagesAiRefillCount(0);
+    setLanguagesAiRequested(false);
+  }, [section.id]);
+
+  const scheduleInlineSelectionCheck = useCallback(() => {
+    if (inlineSelectionDebounceRef.current !== null) {
+      window.clearTimeout(inlineSelectionDebounceRef.current);
+    }
+
+    inlineSelectionDebounceRef.current = window.setTimeout(() => {
+      inlineSelectionDebounceRef.current = null;
+      const view = (manager as any)?.view;
+      const selection = view?.state?.selection;
+      const nextSelection = getDomSelectionState(view?.dom as HTMLElement | null);
+
+      if (!nextSelection || !selection || selection.empty) {
+        setInlineSelectionState(null);
+        return;
+      }
+
+      setInlineSelectionState({
+        ...nextSelection,
+        from: selection.from,
+        to: selection.to,
+      });
+    }, 90);
+  }, [manager]);
+
+  useEffect(() => {
+    const handleSelectionChange = () => {
+      scheduleInlineSelectionCheck();
+    };
+
+    document.addEventListener("selectionchange", handleSelectionChange);
+    return () => {
+      document.removeEventListener("selectionchange", handleSelectionChange);
+    };
+  }, [scheduleInlineSelectionCheck]);
+
+  const handleRunInlineAiAction = useCallback(
+    async (actionId: InlineAiActionId, instruction: string) => {
+      if (!inlineSelectionState) return;
+
+      const view = (manager as any)?.view;
+      if (!view) return;
+
+      try {
+        setPendingInlineAiActionId(actionId);
+        setIsApplyingInlineAi(true);
+        const result = await transformEditorSelectionAction({
+          mode: actionId,
+          instruction,
+          selectedText: inlineSelectionState.text,
+        });
+        const replacementText =
+          typeof result?.text === "string" ? result.text.trim() : "";
+
+        if (!replacementText) {
+          return;
+        }
+
+        const tr = view.state.tr.insertText(
+          replacementText,
+          inlineSelectionState.from,
+          inlineSelectionState.to,
+        );
+        view.dispatch(tr);
+        view.focus();
+        setInlineSelectionState(null);
+        onContentChange?.(String(section.id), view.state.doc.toJSON());
+      } finally {
+        setIsApplyingInlineAi(false);
+        setPendingInlineAiActionId(null);
+      }
+    },
+    [
+      inlineSelectionState,
+      manager,
+      onContentChange,
+      section.id,
+      transformEditorSelectionAction,
+    ],
+  );
+
+  const currentCvSkills = useMemo(() => {
+    if (!currentCv) return [] as string[];
+
+    const names = currentCv.sections.flatMap((candidate) => {
+      if (String(candidate.type) !== "skills") return [] as string[];
+      if (!Array.isArray(candidate.structuredContent)) return [] as string[];
+
+      return (candidate.structuredContent as any[])
+        .map((item) =>
+          typeof item === "string"
+            ? item.trim()
+            : typeof item?.name === "string"
+              ? item.name.trim()
+              : "",
+        )
+        .filter(Boolean);
+    });
+
+    return dedupeStringList(names);
+  }, [currentCv]);
+
+  const currentCvExperiences = useMemo(() => {
+    if (!currentCv) {
+      return [] as Array<{
+        company?: string;
+        position?: string;
+        description?: string;
+        bullets?: string[];
+      }>;
+    }
+
+    return currentCv.sections.flatMap((candidate) => {
+      if (String(candidate.type) !== "experience") return [];
+      if (!Array.isArray(candidate.structuredContent)) return [];
+
+      return (candidate.structuredContent as any[])
+        .filter((item) => isExperienceRenderable(item))
+        .map((item) => ({
+          company:
+            typeof item?.company === "string" ? item.company.trim() : undefined,
+          position:
+            typeof item?.position === "string"
+              ? item.position.trim()
+              : undefined,
+          description:
+            plainTextFromStructuredValue(item?.responsibilities) ||
+            plainTextFromStructuredValue(item?.description) ||
+            undefined,
+          bullets: getExperienceBulletLines(item),
+        }));
+    });
+  }, [currentCv]);
+
+  const currentCvEducations = useMemo(() => {
+    if (!currentCv) {
+      return [] as Array<{
+        institution?: string;
+        degree?: string;
+        fieldOfStudy?: string;
+        description?: string;
+      }>;
+    }
+
+    return currentCv.sections.flatMap((candidate) => {
+      if (String(candidate.type) !== "education") return [];
+      if (!Array.isArray(candidate.structuredContent)) return [];
+
+      return (candidate.structuredContent as any[])
+        .filter((item) => isEducationRenderable(item))
+        .map((item) => ({
+          institution:
+            typeof item?.institution === "string"
+              ? item.institution.trim()
+              : undefined,
+          degree:
+            typeof item?.degree === "string" ? item.degree.trim() : undefined,
+          fieldOfStudy:
+            typeof item?.fieldOfStudy === "string"
+              ? item.fieldOfStudy.trim()
+              : undefined,
+          description:
+            plainTextFromStructuredValue(item?.description) || undefined,
+        }));
+    });
+  }, [currentCv]);
+
+  const currentCvLanguages = useMemo(() => {
+    if (!currentCv) {
+      return [] as Array<{ name?: string; level?: string }>;
+    }
+
+    return currentCv.sections.flatMap((candidate) => {
+      if (String(candidate.type) !== "languages") return [];
+      if (!Array.isArray(candidate.structuredContent)) return [];
+
+      return (candidate.structuredContent as any[])
+        .map((item) => ({
+          name: typeof item?.name === "string" ? item.name.trim() : undefined,
+          level: typeof item?.level === "string" ? item.level.trim() : undefined,
+        }))
+        .filter((item) => item.name || item.level);
+    });
+  }, [currentCv]);
+
+  const currentCvSummaryText = useMemo(() => {
+    if (!currentCv) return "";
+
+    for (const candidate of currentCv.sections) {
+      if (String(candidate.type) !== "summary") continue;
+      if (!Array.isArray(candidate.structuredContent)) continue;
+      const first = candidate.structuredContent[0] as
+        | { summary?: unknown }
+        | undefined;
+      return plainTextFromStructuredValue(first?.summary);
+    }
+
+    return "";
+  }, [currentCv]);
 
   const handleRemoveSection = useCallback(() => {
     if (!currentCv || typeof reorderSections !== "function") return;
@@ -732,6 +1380,87 @@ export default function SectionEditor({
     closeInspector?.();
     reorderSections(nextSections as CvSection[]);
   }, [closeInspector, currentCv, reorderSections, section.id]);
+
+  const renderAiMenuTrigger = useCallback(
+    (args: {
+      menu: Exclude<SectionAiMenuState, null>;
+      isLoading: boolean;
+      title: string;
+      items: Array<{
+        label: string;
+        onClick: () => void;
+        disabled?: boolean;
+      }>;
+    }) => {
+      const isOpen =
+        sectionAiMenu?.type === args.menu.type &&
+        ("itemId" in args.menu
+          ? (sectionAiMenu as any)?.itemId === args.menu.itemId
+          : true);
+
+      return (
+        <div
+          style={{ position: "relative" }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <button
+            type="button"
+            className="dasti-icon-button cv-section-edit-trigger"
+            aria-label={args.title}
+            title={args.title}
+            onClick={(event) => {
+              event.stopPropagation();
+              setSectionAiMenu(isOpen ? null : args.menu);
+            }}
+            disabled={args.isLoading}
+          >
+            {args.isLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
+            ) : (
+              <Wand2 className="w-4 h-4" strokeWidth={1.6} aria-hidden />
+            )}
+          </button>
+
+          {isOpen ? (
+            <div
+              ref={sectionAiMenuRef}
+              style={{
+                position: "absolute",
+                top: "calc(100% + var(--s2))",
+                right: 0,
+                zIndex: 40,
+                minWidth: 220,
+                display: "grid",
+                gap: "var(--s1)",
+                padding: "var(--s2)",
+                borderRadius: "var(--rm, var(--radius-control))",
+                border: "1px solid var(--color-border)",
+                background: "var(--sfr)",
+                boxShadow: "var(--shb, var(--shc))",
+              }}
+            >
+              {args.items.map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  className="dasti-button dasti-button--secondary dasti-button--sm"
+                  style={{ justifyContent: "flex-start" }}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    item.onClick();
+                  }}
+                  disabled={args.isLoading || item.disabled}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      );
+    },
+    [sectionAiMenu],
+  );
 
   // Dev-only runtime diagnostics: log which branch we will render for this section.
 
@@ -881,6 +1610,12 @@ export default function SectionEditor({
   if (sectionType === "summary") {
     // Always render the structured SummaryBlock UI and ignore any legacy blocks.
     // Persist changes via context-level structured update to avoid relying on parent onChange.
+    const summaryItem =
+      Array.isArray(section.structuredContent) && section.structuredContent.length > 0
+        ? (section.structuredContent[0] as ISummaryItem)
+        : null;
+    const summaryText = plainTextFromStructuredValue(summaryItem?.summary);
+
     function handleSummaryPersist(updatedSection: CvSection) {
       try {
         const scFirst = Array.isArray(updatedSection.structuredContent)
@@ -888,7 +1623,7 @@ export default function SectionEditor({
           : null;
         const itemId = String(scFirst?.id ?? `sum-${String(section.id)}-0`);
         // Patch all summary-related fields through structured update
-        const { name, email, linkedin, address, summary, ...rest } = (scFirst ??
+        const { name, email, linkedin, address, summary } = (scFirst ??
           {}) as Record<string, any>;
         const patch: Record<string, any> = { name, email, linkedin, address };
         if (typeof onContentChange === "function" && updatedSection.id) {
@@ -907,11 +1642,61 @@ export default function SectionEditor({
       }
     }
 
+    async function handleRunSummaryAi(
+      action: "rewrite_summary_from_profile" | "improve_summary_text",
+    ) {
+      try {
+        setSectionAiMenu(null);
+        setSectionAiLoadingKey(`summary:${action}`);
+        const result = await runCvSectionAiAction({
+          action,
+          existingText: summaryText,
+          summary: summaryText,
+          skills: currentCvSkills,
+          experiences: currentCvExperiences,
+          educations: currentCvEducations,
+          languages: currentCvLanguages,
+        });
+
+        if (result?.kind !== "text" || typeof result?.text !== "string") {
+          return;
+        }
+
+        const nextText = result.text.trim();
+        if (!nextText) return;
+
+        setSummaryAiDiff({
+          oldText: summaryText,
+          newText: nextText,
+        });
+      } finally {
+        setSectionAiLoadingKey(null);
+      }
+    }
+
     return (
       <div className="mb-4 border [border-color:var(--color-border)] [border-radius:var(--radius-card)] section-container">
         <div className="section-container-header flex items-center justify-between">
           <h3 className="cv-section-heading">{section.title}</h3>
           <div className="dasti-icon-cluster dasti-icon-cluster--tight">
+            {renderAiMenuTrigger({
+              menu: { type: "summary" },
+              isLoading: sectionAiLoadingKey?.startsWith("summary:") ?? false,
+              title: "Summary AI actions",
+              items: [
+                {
+                  label: "Draft from full profile",
+                  onClick: () =>
+                    void handleRunSummaryAi("rewrite_summary_from_profile"),
+                },
+                {
+                  label: "Improve existing text",
+                  onClick: () =>
+                    void handleRunSummaryAi("improve_summary_text"),
+                  disabled: summaryText.length === 0,
+                },
+              ],
+            })}
             <button
               type="button"
               onClick={(e) => {
@@ -941,6 +1726,27 @@ export default function SectionEditor({
             )}
           </div>
         </div>
+
+        {summaryAiDiff ? (
+          <CvAiDiffCard
+            label="Summary suggestion"
+            before={summaryAiDiff.oldText}
+            after={summaryAiDiff.newText}
+            onAccept={() => {
+              const itemId = String(
+                summaryItem?.id ?? `sum-${String(section.id)}-0`,
+              );
+              const nextDoc = ensureRemirrorDoc(summaryAiDiff.newText);
+              updateStructuredItem(String(section.id), itemId, {
+                summary: nextDoc,
+              });
+              onContentChange?.(String(section.id), nextDoc);
+              setSummaryAiDiff(null);
+            }}
+            onDiscard={() => setSummaryAiDiff(null)}
+            isApplying={Boolean(sectionAiLoadingKey)}
+          />
+        ) : null}
 
         {collapsed && (
           <div
@@ -1012,15 +1818,10 @@ export default function SectionEditor({
         )}
 
         {isSummaryModalOpen ? (
-          <SummaryModal
+            <SummaryModal
             open={isSummaryModalOpen}
             sectionId={String(section.id)}
-            item={
-              Array.isArray(section.structuredContent) &&
-              section.structuredContent.length > 0
-                ? (section.structuredContent[0] as ISummaryItem)
-                : null
-            }
+            item={summaryItem}
             onClose={() => setSummaryModalOpen(false)}
           />
         ) : null}
@@ -1242,11 +2043,134 @@ export default function SectionEditor({
       }
     }
 
+    async function requestSkillsSuggestions(excludeItems: string[] = []) {
+      if (!cvAiCapabilities.isSupported("generate_skills_suggestions")) {
+        setSkillsAiSuggestions([]);
+        showCvAiRefreshToast();
+        return;
+      }
+
+      try {
+        setSectionAiMenu(null);
+        setSectionAiLoadingKey("skills:generate");
+        setSkillsAiRequested(true);
+        const result = await runCvSectionAiAction({
+          action: "generate_skills_suggestions",
+          experiences: currentCvExperiences,
+          educations: currentCvEducations,
+          existingItems: dedupeStringList(
+            skillRows.map((item) => String(item.name ?? "").trim()),
+          ),
+          excludeItems,
+          maxItems: 6,
+        });
+
+        if (!result || result.kind !== "list" || !Array.isArray(result.items)) {
+          setSkillsAiSuggestions([]);
+          return;
+        }
+
+        const nextItems = dedupeStringList(
+          result.items.map((item: unknown) => String(item ?? "").trim()),
+        );
+        const existingNames = new Set(
+          skillRows
+            .map((item) => normalizeSkillName(String(item.name ?? "")))
+            .filter(Boolean),
+        );
+        const nextSuggestions = nextItems.filter(
+          (item) =>
+            !existingNames.has(normalizeSkillName(item)) &&
+            !excludeItems.some(
+              (candidate) =>
+                normalizeSkillName(candidate) === normalizeSkillName(item),
+            ),
+        );
+        setSkillsAiSuggestions(nextSuggestions);
+      } catch (error) {
+        setSkillsAiSuggestions([]);
+        showCvAiActionError("skills suggestion", error);
+      } finally {
+        setSectionAiLoadingKey(null);
+      }
+    }
+
+    function appendSuggestedSkill(name: string) {
+      const cleanName = String(name ?? "").trim();
+      if (!cleanName) return;
+      const exists = skillRows.some(
+        (row) =>
+          normalizeSkillName(String(row.name ?? "")) ===
+          normalizeSkillName(cleanName),
+      );
+      if (exists) return;
+
+      const next = [
+        ...skillRows,
+        {
+          id: `sk-${uuidv4()}`,
+          name: cleanName,
+          level: "Intermediate" as Level,
+        },
+      ];
+      setSkillRows(next);
+      persistRows(next, cleanName);
+    }
+
+    function handleAcceptSkillSuggestion(name: string) {
+      const nextExcluded = dedupeStringList([...skillsAiExcluded, name]);
+      setSkillsAiExcluded(nextExcluded);
+      setSkillsAiSuggestions((current) =>
+        current.filter(
+          (candidate) =>
+            normalizeSkillName(candidate) !== normalizeSkillName(name),
+        ),
+      );
+      appendSuggestedSkill(name);
+    }
+
+    function handleDismissSkillSuggestion(name: string) {
+      const remaining = skillsAiSuggestions.filter(
+        (candidate) => normalizeSkillName(candidate) !== normalizeSkillName(name),
+      );
+      const nextExcluded = dedupeStringList([...skillsAiExcluded, name]);
+      setSkillsAiExcluded(nextExcluded);
+      setSkillsAiSuggestions(remaining);
+
+      if (remaining.length === 0 && skillsAiRefillCount < 1) {
+        setSkillsAiRefillCount(1);
+        void requestSkillsSuggestions(nextExcluded);
+      }
+    }
+
+    const canSuggestSkills = cvAiCapabilities.isSupported(
+      "generate_skills_suggestions",
+    );
+
     return (
       <div className="mb-4 section-container">
         <div className="section-container-header flex items-center justify-between">
           <h3 className="cv-section-heading">{section.title}</h3>
           <div className="flex items-center gap-1">
+            {renderAiMenuTrigger({
+              menu: { type: "skills" },
+              isLoading: sectionAiLoadingKey === "skills:generate",
+              title: "Skills AI actions",
+              items: [
+                {
+                  label: "Suggest skills",
+                  onClick: () => {
+                    setSkillsAiExcluded([]);
+                    setSkillsAiRefillCount(0);
+                    void requestSkillsSuggestions([]);
+                  },
+                  disabled:
+                    !canSuggestSkills ||
+                    currentCvExperiences.length === 0 &&
+                    currentCvEducations.length === 0,
+                },
+              ],
+            })}
             <button
               type="button"
               onClick={(e) => {
@@ -1276,6 +2200,26 @@ export default function SectionEditor({
             )}
           </div>
         </div>
+
+        {cvAiCapabilities.status === "stale" && !canSuggestSkills ? (
+          <div
+            className="dasti-hint"
+            role="status"
+            style={{ marginBottom: "var(--s2)" }}
+          >
+            {cvAiCapabilities.staleMessage}
+          </div>
+        ) : null}
+
+        <CvSuggestionRow
+          label="Suggested from experience and education"
+          items={skillsAiSuggestions}
+          isLoading={sectionAiLoadingKey === "skills:generate"}
+          hasRequested={skillsAiRequested}
+          emptyLabel="No new skill suggestions yet."
+          onAccept={handleAcceptSkillSuggestion}
+          onDismiss={handleDismissSkillSuggestion}
+        />
 
         {collapsed && (
           <div className="cv-section-preview">
@@ -1450,6 +2394,23 @@ export default function SectionEditor({
         <SkillsModal
           open={isSkillsModalOpen}
           items={items}
+          suggestedItems={skillsAiSuggestions}
+          onAcceptSuggestion={(name) => {
+            setSkillsAiSuggestions((current) =>
+              current.filter(
+                (candidate) =>
+                  normalizeSkillName(candidate) !== normalizeSkillName(name),
+              ),
+            );
+          }}
+          onDismissSuggestion={(name) => {
+            setSkillsAiSuggestions((current) =>
+              current.filter(
+                (candidate) =>
+                  normalizeSkillName(candidate) !== normalizeSkillName(name),
+              ),
+            );
+          }}
           onClose={() => setSkillsModalOpen(false)}
           onSave={(next) => {
             try {
@@ -1701,6 +2662,111 @@ export default function SectionEditor({
       }
     }
 
+    async function requestLanguageSuggestions(excludeItems: string[] = []) {
+      if (!cvAiCapabilities.isSupported("generate_language_suggestions")) {
+        setLanguagesAiSuggestions([]);
+        showCvAiRefreshToast();
+        return;
+      }
+
+      try {
+        setSectionAiMenu(null);
+        setSectionAiLoadingKey("languages:generate");
+        setLanguagesAiRequested(true);
+        const result = await runCvSectionAiAction({
+          action: "generate_language_suggestions",
+          summary: currentCvSummaryText,
+          experiences: currentCvExperiences,
+          educations: currentCvEducations,
+          existingItems: dedupeStringList(
+            languageRows.map((item) => String(item.name ?? "").trim()),
+          ),
+          excludeItems,
+          maxItems: 5,
+        });
+
+        if (!result || result.kind !== "list" || !Array.isArray(result.items)) {
+          setLanguagesAiSuggestions([]);
+          return;
+        }
+
+        const nextItems = dedupeStringList(
+          result.items.map((item: unknown) => String(item ?? "").trim()),
+        );
+        const existingNames = new Set(
+          languageRows
+            .map((item) => normalizeSkillName(String(item.name ?? "")))
+            .filter(Boolean),
+        );
+        const nextSuggestions = nextItems.filter(
+          (item) =>
+            !existingNames.has(normalizeSkillName(item)) &&
+            !excludeItems.some(
+              (candidate) =>
+                normalizeSkillName(candidate) === normalizeSkillName(item),
+            ),
+        );
+        setLanguagesAiSuggestions(nextSuggestions);
+      } catch (error) {
+        setLanguagesAiSuggestions([]);
+        showCvAiActionError("language suggestion", error);
+      } finally {
+        setSectionAiLoadingKey(null);
+      }
+    }
+
+    function appendSuggestedLanguage(name: string) {
+      const cleanName = String(name ?? "").trim();
+      if (!cleanName) return;
+      const exists = languageRows.some(
+        (row) =>
+          normalizeSkillName(String(row.name ?? "")) ===
+          normalizeSkillName(cleanName),
+      );
+      if (exists) return;
+
+      const next = [
+        ...languageRows,
+        {
+          id: `lang-${uuidv4()}`,
+          name: cleanName,
+          level: "Intermediate" as Level,
+        },
+      ];
+      setLanguageRows(next);
+      persistLanguageRows(next, cleanName);
+    }
+
+    function handleAcceptLanguageSuggestion(name: string) {
+      const nextExcluded = dedupeStringList([...languagesAiExcluded, name]);
+      setLanguagesAiExcluded(nextExcluded);
+      setLanguagesAiSuggestions((current) =>
+        current.filter(
+          (candidate) =>
+            normalizeSkillName(candidate) !== normalizeSkillName(name),
+        ),
+      );
+      appendSuggestedLanguage(name);
+    }
+
+    function handleDismissLanguageSuggestion(name: string) {
+      const remaining = languagesAiSuggestions.filter(
+        (candidate) => normalizeSkillName(candidate) !== normalizeSkillName(name),
+      );
+      const nextExcluded = dedupeStringList([...languagesAiExcluded, name]);
+      setLanguagesAiExcluded(nextExcluded);
+      setLanguagesAiSuggestions(remaining);
+
+      if (remaining.length === 0 && languagesAiRefillCount < 1) {
+        setLanguagesAiRefillCount(1);
+        void requestLanguageSuggestions(nextExcluded);
+      }
+    }
+
+    const canSuggestLanguages = cvAiCapabilities.isSupported(
+      "generate_language_suggestions",
+    );
+
     return (
       <div className="mb-4 section-container section-container--dismissable">
         <button
@@ -1718,6 +2784,26 @@ export default function SectionEditor({
         <div className="section-container-header flex items-center justify-between">
           <h3 className="cv-section-heading">{section.title}</h3>
           <div className="flex items-center gap-1">
+            {renderAiMenuTrigger({
+              menu: { type: "languages" },
+              isLoading: sectionAiLoadingKey === "languages:generate",
+              title: "Languages AI actions",
+              items: [
+                {
+                  label: "Suggest languages",
+                  onClick: () => {
+                    setLanguagesAiExcluded([]);
+                    setLanguagesAiRefillCount(0);
+                    void requestLanguageSuggestions([]);
+                  },
+                  disabled:
+                    !canSuggestLanguages ||
+                    currentCvExperiences.length === 0 &&
+                    currentCvEducations.length === 0 &&
+                    currentCvSummaryText.length === 0,
+                },
+              ],
+            })}
             <button
               type="button"
               onClick={(e) => {
@@ -1747,6 +2833,26 @@ export default function SectionEditor({
             )}
           </div>
         </div>
+
+        {cvAiCapabilities.status === "stale" && !canSuggestLanguages ? (
+          <div
+            className="dasti-hint"
+            role="status"
+            style={{ marginBottom: "var(--s2)" }}
+          >
+            {cvAiCapabilities.staleMessage}
+          </div>
+        ) : null}
+
+        <CvSuggestionRow
+          label="Suggested from profile, experience, and education"
+          items={languagesAiSuggestions}
+          isLoading={sectionAiLoadingKey === "languages:generate"}
+          hasRequested={languagesAiRequested}
+          emptyLabel="No new language suggestions yet."
+          onAccept={handleAcceptLanguageSuggestion}
+          onDismiss={handleDismissLanguageSuggestion}
+        />
 
         {collapsed && (
           <div className="cv-section-preview">
@@ -2091,9 +3197,6 @@ export default function SectionEditor({
                   aria-label={
                     photoUrl ? "Change profile photo" : "Upload profile photo"
                   }
-                  title={
-                    photoUrl ? "Change profile photo" : "Upload profile photo"
-                  }
                 >
                   {photoUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -2112,8 +3215,11 @@ export default function SectionEditor({
                       />
                     </span>
                   )}
-                  <span className="cv-photo-upload-trigger__badge">
-                    <span>{photoUrl ? "Replace" : "Drop photo"}</span>
+                  <span
+                    className="dasti-photo-upload-trigger__tooltip"
+                    aria-hidden="true"
+                  >
+                    <strong>{photoUrl ? "Replace photo" : "Drop photo"}</strong>
                   </span>
                 </button>
               </div>
@@ -2397,6 +3503,109 @@ export default function SectionEditor({
       onChange(index, updatedSection as any);
     }
 
+    async function handleRunExperienceAi(rawItem: any) {
+      const structuredId = String(rawItem?.id ?? "");
+      if (!structuredId) return;
+
+      try {
+        setSectionAiMenu(null);
+        setSectionAiLoadingKey(`experience:${structuredId}`);
+        const result = await runCvSectionAiAction({
+          action: "improve_experience_bullets",
+          existingText: buildExperienceAiSourceText(rawItem),
+        });
+
+        if (!result || result.kind !== "list" || !Array.isArray(result.items)) {
+          return;
+        }
+
+        const nextItems = dedupeStringList(
+          result.items.map((item: unknown) => String(item ?? "").trim()),
+        );
+        if (nextItems.length === 0) return;
+
+        setExperienceAiDiff({
+          itemId: structuredId,
+          title:
+            String(rawItem?.position ?? "").trim() ||
+            String(rawItem?.company ?? "").trim() ||
+            "Experience entry",
+          oldItems: getExperienceBulletLines(rawItem),
+          newItems: nextItems,
+        });
+      } finally {
+        setSectionAiLoadingKey(null);
+      }
+    }
+
+    function applyExperienceAiDiff(diff: ExperienceDiffState) {
+      const nextDoc = buildBulletListDoc(diff.newItems);
+      const nextStructured = structuredList.map((item) =>
+        String(item?.id ?? "") === diff.itemId
+          ? {
+              ...item,
+              responsibilities: nextDoc,
+              responsibilityBullets: diff.newItems,
+              achievements: [],
+            }
+          : item,
+      );
+
+      let matchedBlock = false;
+      const nextBlocks = (
+        Array.isArray(structuredSection.blocks) ? structuredSection.blocks : []
+      ).map((block: any) => {
+        const linkedId =
+          (block as any)?.attributes?.linkedStructuredId ??
+          (block as any)?.attributes?.linkedstructuredid;
+
+        if (String(linkedId) !== diff.itemId) {
+          return block;
+        }
+
+        matchedBlock = true;
+        const targetItem = nextStructured.find(
+          (candidate) => String(candidate?.id ?? "") === diff.itemId,
+        );
+        return {
+          ...block,
+          title: String(
+            targetItem?.position || targetItem?.company || "Experience",
+          ),
+          content: nextDoc,
+          attributes: {
+            ...((block as any)?.attributes ?? {}),
+            linkedStructuredId: diff.itemId,
+          },
+        };
+      });
+
+      if (!matchedBlock) {
+        const targetItem = nextStructured.find(
+          (candidate) => String(candidate?.id ?? "") === diff.itemId,
+        );
+        nextBlocks.push({
+          id: uuidv4(),
+          title: String(
+            targetItem?.position || targetItem?.company || "Experience",
+          ),
+          type: "text" as const,
+          content: nextDoc,
+          attributes: { linkedStructuredId: diff.itemId },
+        });
+      }
+
+      const updatedSection = {
+        ...structuredSection,
+        structuredContent: nextStructured as any,
+        blocks: nextBlocks as any,
+      } as CvSection;
+
+      setStructuredPreviewOverride(updatedSection);
+      commitStructuredSection(updatedSection);
+      setExperienceAiDiff(null);
+    }
+
     const renderStructuredPreview = (
       rawItem: any,
       idx: number,
@@ -2418,39 +3627,7 @@ export default function SectionEditor({
         const title = position || company || "Experience entry";
         const subtitle =
           [company, location].filter(Boolean).join(" • ") || undefined;
-
-        const responsibilitiesText =
-          typeof rawItem?.responsibilities === "string"
-            ? rawItem.responsibilities
-            : rawItem?.responsibilities &&
-                typeof rawItem.responsibilities === "object"
-              ? docToPlainText(rawItem.responsibilities as any)
-              : undefined;
-
-        const responsibilityBullets = Array.isArray(
-          rawItem?.responsibilityBullets,
-        )
-          ? (rawItem.responsibilityBullets as unknown[])
-              .map((value) => (typeof value === "string" ? value.trim() : ""))
-              .filter(Boolean)
-          : splitResponsibilitiesIntoBullets(responsibilitiesText);
-
-        const achievements = Array.isArray(rawItem?.achievements)
-          ? (rawItem.achievements as unknown[])
-              .map((value) =>
-                typeof value === "string"
-                  ? value.trim()
-                  : typeof (value as any)?.text === "string"
-                    ? (value as any).text.trim()
-                    : "",
-              )
-              .filter(Boolean)
-          : [];
-
-        const bulletSource =
-          responsibilityBullets.length > 0
-            ? responsibilityBullets
-            : achievements;
+        const bulletSource = getExperienceBulletLines(rawItem);
         const bulletLimit =
           variant === "compact" && !previewExpanded ? 3 : bulletSource.length;
         const bulletList = bulletSource.slice(0, bulletLimit);
@@ -2470,7 +3647,27 @@ export default function SectionEditor({
                   </p>
                 ) : null}
               </div>
-              {dates ? <p className="cv-entry-date">{dates}</p> : null}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "var(--s2)",
+                }}
+              >
+                {dates ? <p className="cv-entry-date">{dates}</p> : null}
+                {renderAiMenuTrigger({
+                  menu: { type: "experience", itemId: structuredId },
+                  isLoading:
+                    sectionAiLoadingKey === `experience:${structuredId}`,
+                  title: `Experience AI actions for ${title}`,
+                  items: [
+                    {
+                      label: "Improve bullet points",
+                      onClick: () => void handleRunExperienceAi(rawItem),
+                    },
+                  ],
+                })}
+              </div>
             </div>
             {bulletList.length > 0 ? (
               <ul className="cv-entry-bullets">
@@ -2478,6 +3675,16 @@ export default function SectionEditor({
                   <li key={`${structuredId}-bullet-${bulletIdx}`}>{line}</li>
                 ))}
               </ul>
+            ) : null}
+            {experienceAiDiff?.itemId === structuredId ? (
+              <CvAiDiffCard
+                label={`${experienceAiDiff.title} suggestion`}
+                before={experienceAiDiff.oldItems}
+                after={experienceAiDiff.newItems}
+                onAccept={() => applyExperienceAiDiff(experienceAiDiff)}
+                onDiscard={() => setExperienceAiDiff(null)}
+                isApplying={Boolean(sectionAiLoadingKey)}
+              />
             ) : null}
             {canToggleBullets ? (
               <div className="cv-disclosure-row">
@@ -2954,6 +4161,16 @@ export default function SectionEditor({
 
   return (
     <div className="mb-4 border [border-color:var(--color-border)] [border-radius:var(--radius-card)] section-container">
+      {inlineSelectionState ? (
+        <FloatingAiToolbar
+          open
+          anchor={inlineSelectionState.anchor}
+          isLoading={isApplyingInlineAi}
+          pendingActionId={pendingInlineAiActionId}
+          onClose={() => setInlineSelectionState(null)}
+          onRunAction={handleRunInlineAiAction}
+        />
+      ) : null}
       <div className="section-container-header flex items-center justify-between">
         <label htmlFor={titleInputId} className="sr-only">
           Section title
@@ -3099,6 +4316,8 @@ export default function SectionEditor({
           onPointerDown={() => {
             if (remirrorViewAvailable) focusEditorAtEnd();
           }}
+          onPointerUp={scheduleInlineSelectionCheck}
+          onKeyUp={scheduleInlineSelectionCheck}
         >
           <Remirror
             manager={manager}
