@@ -34,4 +34,22 @@ describe("ProposalComposeToolbar CSS contracts", () => {
       "--dasti-compose-toolbar-control-block-size: 30px;",
     );
   });
+
+  it("treats the collapsed toolbar as a full-width condensed bar with restore left and tone right", () => {
+    expect(productCss).toMatch(
+      /\.dasti-compose-toolbar__collapsed-shell\s*\{[\s\S]*display:\s*flex;[\s\S]*justify-content:\s*flex-start;[\s\S]*width:\s*100%;[\s\S]*max-width:\s*100%;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-compose-toolbar__collapsed-meta\s*\{[\s\S]*width:\s*100%;[\s\S]*min-width:\s*0;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-compose-toolbar__tone-anchor\s*\{[\s\S]*margin-inline-start:\s*auto;/,
+    );
+  });
+
+  it("keeps the proposal workspace toolbar stack above the compose shell so collapsed drawers stay clickable", () => {
+    expect(productCss).toMatch(
+      /\.dasti-workbench-top-left-slot--proposal\s*\{[\s\S]*position:\s*relative;[\s\S]*z-index:\s*26;/,
+    );
+  });
 });
