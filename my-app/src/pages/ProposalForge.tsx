@@ -27,6 +27,7 @@ import type { FormValues } from "../components/ProposalInputForm.schemas";
 import { api } from "../../convex/_generated/api";
 import {
   buildAppProposalPersonalizationPayload,
+  clearActiveLocalCvId,
   getProposalApplicantIdentity,
   getActiveLocalPersonalizationSource,
   getLocalActiveCvSnapshotById,
@@ -64,7 +65,10 @@ import {
   resolveProposalCharacterLimitSelection,
 } from "../../convex/lib/proposals/generationControls";
 import type { Id } from "../../convex/_generated/dataModel";
-import { DEFAULT_PROPOSAL_VOICE_PRESET } from "../../convex/lib/proposals/voicePresets";
+import {
+  DEFAULT_PROPOSAL_VOICE_PRESET,
+  resolveProposalVoicePreset as normalizeProposalVoicePresetId,
+} from "../../convex/lib/proposals/voicePresets";
 import { selectAutoTone } from "../../convex/lib/proposals/autoToneSelector";
 import {
   resolveProposalStyleLinkMode,
@@ -100,6 +104,50 @@ type ProposalForgePrefill = {
 } | null;
 
 type ProposalForgeView = "compose" | "saved";
+
+const COMPOSE_TOOLBAR_VISIBLE_VOICE_PRESETS = new Set<
+  NonNullable<FormValues["voicePreset"]>
+>(["signature", "expert", "engaging"]);
+
+function normalizeComposeToolbarVoicePreset(
+  value: unknown,
+): FormValues["voicePreset"] | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const preset = normalizeProposalVoicePresetId(value);
+  return preset && COMPOSE_TOOLBAR_VISIBLE_VOICE_PRESETS.has(preset)
+    ? preset
+    : null;
+}
+
+function hasOwnProperty(
+  value: unknown,
+  key: string,
+): value is Record<string, unknown> {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    Object.prototype.hasOwnProperty.call(value, key)
+  );
+}
+
+function resolveStoredComposeToolbarVoicePreset(args: {
+  sourceComposeDraft?: StoredProposalComposeDraft | null;
+  composeDraft?: StoredProposalComposeDraft | null;
+  proposalVoicePreset?: unknown;
+}): FormValues["voicePreset"] | null {
+  if (hasOwnProperty(args.sourceComposeDraft, "voicePreset")) {
+    return normalizeComposeToolbarVoicePreset(args.sourceComposeDraft.voicePreset);
+  }
+
+  if (hasOwnProperty(args.composeDraft, "voicePreset")) {
+    return normalizeComposeToolbarVoicePreset(args.composeDraft.voicePreset);
+  }
+
+  return normalizeComposeToolbarVoicePreset(args.proposalVoicePreset);
+}
 
 type ProposalDocumentMetadata = {
   sourceJobDescription?: string;
@@ -296,7 +344,10 @@ export function ProposalForge(): JSX.Element {
   }, [refreshAttachedCvSelection]);
 
   const handleAttachedCvChange = React.useCallback(
-    (_nextId: string | null) => {
+    (nextId: string | null) => {
+      if (nextId === null) {
+        clearActiveLocalCvId();
+      }
       refreshAttachedCvSelection();
     },
     [refreshAttachedCvSelection],
@@ -464,12 +515,11 @@ export function ProposalForge(): JSX.Element {
   const [composeToolbarVoicePreset, setComposeToolbarVoicePreset] =
     React.useState<FormValues["voicePreset"] | null>(() => {
       const storedComposeDraft = readStoredProposalComposeDraft();
-      return (
-        storedOutputDraft?.sourceComposeDraft?.voicePreset ??
-        storedComposeDraft?.voicePreset ??
-        storedOutputDraft?.proposalVoicePreset ??
-        null
-      );
+      return resolveStoredComposeToolbarVoicePreset({
+        sourceComposeDraft: storedOutputDraft?.sourceComposeDraft,
+        composeDraft: storedComposeDraft,
+        proposalVoicePreset: storedOutputDraft?.proposalVoicePreset,
+      });
     });
   const [cvPickerRequestKey, setCvPickerRequestKey] = React.useState(0);
   const hasCompletedInitialRenderRef = React.useRef(false);
@@ -603,7 +653,9 @@ export function ProposalForge(): JSX.Element {
     setComposePreviewValues(storedOutputDraft.sourceComposeDraft);
     setComposeDraftInitialSeed(storedOutputDraft.sourceComposeDraft);
     setComposeToolbarVoicePreset(
-      storedOutputDraft.sourceComposeDraft.voicePreset ?? null,
+      normalizeComposeToolbarVoicePreset(
+        storedOutputDraft.sourceComposeDraft.voicePreset,
+      ),
     );
   }, [
     prefill?.handoffId,
@@ -656,7 +708,9 @@ export function ProposalForge(): JSX.Element {
       return;
     }
 
-    setComposeToolbarVoicePreset(currentProposalSettings?.savedVoicePreset ?? null);
+    setComposeToolbarVoicePreset(
+      normalizeComposeToolbarVoicePreset(currentProposalSettings?.savedVoicePreset),
+    );
     appliedSavedToolbarVoicePresetRef.current = true;
   }, [composeToolbarVoicePreset, currentProposalSettings]);
 
@@ -1072,7 +1126,9 @@ export function ProposalForge(): JSX.Element {
     setErrorDetail(null);
     setProposalType(null);
     setProposalVoicePreset(null);
-    setComposeToolbarVoicePreset(currentProposalSettings?.savedVoicePreset ?? null);
+    setComposeToolbarVoicePreset(
+      normalizeComposeToolbarVoicePreset(currentProposalSettings?.savedVoicePreset),
+    );
     setProposalTemplateId(nextTemplateId);
     setProposalStyleLinkMode(nextStyleLinkMode);
     setProposalStyleChoice(nextStyleChoice);
@@ -1133,6 +1189,22 @@ export function ProposalForge(): JSX.Element {
       return getVoicePresetDisplayLabel(preset);
     },
     [],
+  );
+
+  const buildProposalToneMetaLabel = React.useCallback(
+    (
+      requestedPreset: FormValues["voicePreset"] | null | undefined,
+      resolvedPreset: FormValues["voicePreset"] | null | undefined,
+    ) => {
+      if (requestedPreset === null) {
+        return formatProposalToneLabel(null);
+      }
+      if (requestedPreset) {
+        return formatProposalToneLabel(requestedPreset);
+      }
+      return formatProposalToneLabel(resolvedPreset);
+    },
+    [formatProposalToneLabel],
   );
 
   const resolveProposalVoicePreset = React.useCallback((values: FormValues) => {
@@ -1267,12 +1339,16 @@ export function ProposalForge(): JSX.Element {
         nextProposalType
           ? formatProposalTypeLabel(nextProposalType)
           : "Proposal",
-        formatProposalToneLabel(nextVoicePreset),
+        buildProposalToneMetaLabel(
+          openedSavedProposal.metadata?.requestedVoicePreset,
+          nextVoicePreset,
+        ),
       ].join(" · "),
     );
     setSavedProposalOutputMode("preview");
   }, [
     activeCvProposalStylePreset,
+    buildProposalToneMetaLabel,
     formatProposalToneLabel,
     formatProposalTypeLabel,
     openedSavedProposal,
@@ -1364,7 +1440,7 @@ export function ProposalForge(): JSX.Element {
       setProposalDocumentMeta(
         [
           formatProposalTypeLabel(values.proposalType),
-          formatProposalToneLabel(resolvedVoicePreset),
+          buildProposalToneMetaLabel(values.voicePreset, resolvedVoicePreset),
         ].join(" · "),
       );
       setProposalContent(null);
@@ -1378,6 +1454,7 @@ export function ProposalForge(): JSX.Element {
       setFallbackInfo(null);
     },
     [
+      buildProposalToneMetaLabel,
       buildStoredProposalComposeDraftSnapshot,
       cancelPendingComposeDraftSync,
       formatProposalToneLabel,
@@ -1404,7 +1481,7 @@ export function ProposalForge(): JSX.Element {
         values.jobTitle.trim() || formatProposalTypeLabel(values.proposalType);
       const nextDocumentMeta = [
         formatProposalTypeLabel(values.proposalType),
-        formatProposalToneLabel(resolvedVoicePreset),
+        buildProposalToneMetaLabel(values.voicePreset, resolvedVoicePreset),
       ].join(" · ");
       writeStoredProposalComposeDraft(submittedComposeDraft);
       setComposePreviewValues(submittedComposeDraft);
@@ -1458,6 +1535,7 @@ export function ProposalForge(): JSX.Element {
       setLoading(false);
     },
     [
+      buildProposalToneMetaLabel,
       cancelPendingComposeDraftSync,
       effectiveProposalStylePresetWithPalette,
       effectiveProposalTemplateId,
@@ -1494,7 +1572,7 @@ export function ProposalForge(): JSX.Element {
       setProposalDocumentMeta(
         [
           formatProposalTypeLabel(values.proposalType),
-          formatProposalToneLabel(resolvedVoicePreset),
+          buildProposalToneMetaLabel(values.voicePreset, resolvedVoicePreset),
         ].join(" · "),
       );
       setProposalContent(null);
@@ -1509,6 +1587,7 @@ export function ProposalForge(): JSX.Element {
       setFallbackInfo(null);
     },
     [
+      buildProposalToneMetaLabel,
       buildStoredProposalComposeDraftSnapshot,
       cancelPendingComposeDraftSync,
       formatProposalToneLabel,
@@ -1906,9 +1985,13 @@ export function ProposalForge(): JSX.Element {
       savedProposalDocumentTitle.trim() ||
       openedSavedProposal.title.trim() ||
       "Saved proposal";
-    const restoredRequestedVoicePreset =
-      openedSavedProposal.metadata?.requestedVoicePreset ??
-      savedProposalVoicePreset;
+    const savedProposalHasRequestedVoicePreset = hasOwnProperty(
+      openedSavedProposal.metadata,
+      "requestedVoicePreset",
+    );
+    const restoredRequestedVoicePreset = savedProposalHasRequestedVoicePreset
+      ? (openedSavedProposal.metadata?.requestedVoicePreset ?? null)
+      : savedProposalVoicePreset;
     const restoredCustomAccentHex =
       effectiveSavedProposalStylePreset.palette === "custom"
         ? effectiveSavedProposalStylePreset.accentHex ?? null
@@ -1934,8 +2017,13 @@ export function ProposalForge(): JSX.Element {
           composeDraft.jobDescription = restoredSourceJobDescription;
         }
 
-        if (restoredRequestedVoicePreset) {
-          composeDraft.voicePreset = restoredRequestedVoicePreset;
+        const normalizedRestoredToolbarVoicePreset =
+          normalizeComposeToolbarVoicePreset(restoredRequestedVoicePreset);
+        if (
+          savedProposalHasRequestedVoicePreset ||
+          normalizedRestoredToolbarVoicePreset !== null
+        ) {
+          composeDraft.voicePreset = normalizedRestoredToolbarVoicePreset;
         }
 
         cancelPendingComposeDraftSync();
@@ -1951,7 +2039,9 @@ export function ProposalForge(): JSX.Element {
     setProposalContent(savedProposalContent);
     setProposalType(savedProposalType);
     setProposalVoicePreset(savedProposalVoicePreset);
-    setComposeToolbarVoicePreset(restoredRequestedVoicePreset ?? null);
+    setComposeToolbarVoicePreset(
+      normalizeComposeToolbarVoicePreset(restoredRequestedVoicePreset),
+    );
     setProposalTemplateId(effectiveSavedProposalTemplateId);
     setProposalStyleLinkMode(resolvedSavedProposalStyleLinkMode);
     setProposalStyleChoice(
@@ -2282,6 +2372,7 @@ export function ProposalForge(): JSX.Element {
 
   const isSavedView = requestedView === "saved";
   const isCompactComposeLayout = viewportWidth < 1240;
+  const canCollapseComposePanel = viewportWidth >= 768;
   const isNarrowLaptop = viewportWidth < 1360;
   const shouldCenterOutputStage = !isSavedView && !isComposePanelVisible && !isCompactComposeLayout;
   const isLoadingHandoff =
@@ -2293,7 +2384,8 @@ export function ProposalForge(): JSX.Element {
     ? { width: "min(100%, 560px)", marginInline: "auto", minWidth: 0 }
     : { width: "100%", minWidth: 0 };
   const proposalToolbarWidthStyle: React.CSSProperties = {
-    width: "min(100%, 480px)",
+    width: "100%",
+    maxWidth: isCompactComposeLayout ? "560px" : "480px",
     minWidth: 0,
   };
   const proposalWorkbenchFrameStyle: React.CSSProperties = {
@@ -2327,7 +2419,7 @@ export function ProposalForge(): JSX.Element {
   const showBriefCard =
     Boolean(proposalContent) && !isBriefExpanded && showComposePanel;
   const shouldShowCollapsedComposeToolbar =
-    !isComposePanelVisible && !isSavedView && !isCompactComposeLayout;
+    !isComposePanelVisible && !isSavedView && canCollapseComposePanel;
   const focusComposeBrief = React.useCallback(() => {
     const jobDescriptionField =
       typeof document !== "undefined"
@@ -2373,10 +2465,10 @@ export function ProposalForge(): JSX.Element {
   }, [updateProposalRoute]);
 
   React.useEffect(() => {
-    if (isCompactComposeLayout && !isComposePanelVisible) {
+    if (viewportWidth < 768 && !isComposePanelVisible) {
       setIsComposePanelVisible(true);
     }
-  }, [isCompactComposeLayout, isComposePanelVisible]);
+  }, [isComposePanelVisible, viewportWidth]);
 
   React.useEffect(() => {
     if (!isBriefExpanded || !pendingComposeBriefFocusRef.current) {
@@ -2418,7 +2510,7 @@ export function ProposalForge(): JSX.Element {
       isCvPickerOpen={isCvPickerOpen}
       disabled={loading || isLoadingHandoff}
       compact={isCompactComposeLayout}
-      onCollapseCompose={!isCompactComposeLayout ? handleCollapseCompose : undefined}
+      onCollapseCompose={canCollapseComposePanel ? handleCollapseCompose : undefined}
     />
   ) : null;
 
@@ -2679,23 +2771,6 @@ export function ProposalForge(): JSX.Element {
                           <button
                             type="button"
                             className="dasti-icon-button"
-                            aria-label="Save proposal to library"
-                            data-toolbar-tooltip={
-                              isSavingOutputToLibrary ? "Saving" : "Save"
-                            }
-                            onClick={() => {
-                              handleOpenSaveDialog();
-                            }}
-                            disabled={isSavingOutputToLibrary}
-                            style={{
-                              opacity: isSavingOutputToLibrary ? 0.55 : 1,
-                            }}
-                          >
-                            <FloppyDisk size={16} strokeWidth={1.7} />
-                          </button>
-                          <button
-                            type="button"
-                            className="dasti-icon-button"
                             aria-label="Regenerate proposal"
                             data-toolbar-tooltip={
                               isRegeneratingGeneratedProposal
@@ -2716,6 +2791,23 @@ export function ProposalForge(): JSX.Element {
                             }}
                           >
                             <RotateCcw size={16} strokeWidth={1.7} />
+                          </button>
+                          <button
+                            type="button"
+                            className="dasti-icon-button"
+                            aria-label="Save proposal to library"
+                            data-toolbar-tooltip={
+                              isSavingOutputToLibrary ? "Saving" : "Save"
+                            }
+                            onClick={() => {
+                              handleOpenSaveDialog();
+                            }}
+                            disabled={isSavingOutputToLibrary}
+                            style={{
+                              opacity: isSavingOutputToLibrary ? 0.55 : 1,
+                            }}
+                          >
+                            <FloppyDisk size={16} strokeWidth={1.7} />
                           </button>
                           <div className="dasti-icon-cluster__divider" />
                           {isConfirmingGeneratedDelete ? (

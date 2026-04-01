@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { ProposalForge } from "../ProposalForge";
@@ -41,6 +41,24 @@ const SAVED_PROPOSALS = [
       proposalType: "cover_letter",
       voicePreset: "signature",
       requestedVoicePreset: "signature",
+    },
+  },
+  {
+    _id: "proposal_auto",
+    _creationTime: 1710000002000,
+    title: "Saved proposal auto",
+    content: "Dear team,\n\nAuto tone saved proposal.\n\nBest,",
+    status: "saved",
+    updatedAt: 1710000002000,
+    createdAt: 1710000002000,
+    sections: [{ type: "text", content: "Auto tone saved proposal." }],
+    metadata: {
+      proposalType: "cover_letter",
+      voicePreset: "expert",
+      requestedVoicePreset: null,
+      resolvedVoicePreset: "expert",
+      sourceJobDescription:
+        "Coordinate operations, keep processes clean, and support team communication.",
     },
   },
 ] as const;
@@ -308,6 +326,39 @@ describe("ProposalForge saved view", () => {
     expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
       "|preview",
     );
+  });
+
+  it("preserves Auto when a saved proposal is duplicated back into the live draft", async () => {
+    render(
+      <MemoryRouter initialEntries={["/proposal?view=saved&id=proposal_auto"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Duplicate to draft" }));
+
+    expect(
+      JSON.parse(
+        window.localStorage.getItem(PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY) ?? "{}",
+      ),
+    ).toMatchObject({
+      jobTitle: "Saved proposal auto",
+      jobDescription:
+        "Coordinate operations, keep processes clean, and support team communication.",
+      proposalType: "cover_letter",
+      voicePreset: null,
+    });
+
+    await waitFor(() => {
+      expect(readStoredProposalOutputDraft()).toEqual(
+        expect.objectContaining({
+          proposalVoicePreset: "expert",
+          sourceComposeDraft: expect.objectContaining({
+            voicePreset: null,
+          }),
+        }),
+      );
+    });
   });
 
   it("keeps the restored live draft after a resume detour", () => {

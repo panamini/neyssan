@@ -162,7 +162,8 @@ export function VerbatiCvPreviewPanel({
               <EmbeddedStyleInspector
                 stylePreset={stylePreset}
                 copyMode="title-only"
-                controlMode="direct"
+                showCustomizeControl={false}
+                showPromptControl={false}
                 onSelectBundle={(bundleId) => {
                   const bundle = getVerbatiStyleBundleDefinition(bundleId);
                   setStylePreset(resolveVerbatiStyle(bundle.stylePreset));

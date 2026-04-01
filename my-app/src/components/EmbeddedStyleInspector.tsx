@@ -11,7 +11,6 @@ import {
 } from "../features/verbati/style";
 import {
   getVerbatiPaletteLabel,
-  getVerbatiStyleBundleDefinition,
   getVerbatiTypographyLabel,
   resolveVerbatiStyleBundleId,
   VERBATI_STYLE_BUNDLE_DEFINITIONS,
@@ -26,10 +25,20 @@ import type {
 type EmbeddedStyleInspectorProps = {
   stylePreset: VerbatiStylePreset;
   templateId?: ProposalTemplateId | null;
+  bundleOptions?: ReadonlyArray<{
+    id: string;
+    label: string;
+    description: string;
+    stylePreset: VerbatiStylePreset;
+    templateId?: ProposalTemplateId | null;
+  }>;
+  activeBundleIdOverride?: string | null;
   readOnly?: boolean;
   readOnlyHint?: string | null;
   copyMode?: "default" | "title-only";
   controlMode?: "bundled" | "direct";
+  showCustomizeControl?: boolean;
+  showPromptControl?: boolean;
   onSelectBundle: (bundleId: VerbatiStyleBundleId) => void;
   onSelectLayout: (layout: VerbatiLayoutPreset) => void;
   onSelectTypography: (typography: VerbatiTypographyPreset) => void;
@@ -100,10 +109,14 @@ function getLayoutBadge(layout: VerbatiLayoutPreset): string {
 export function EmbeddedStyleInspector({
   stylePreset,
   templateId = null,
+  bundleOptions,
+  activeBundleIdOverride,
   readOnly = false,
   readOnlyHint = null,
   copyMode = "default",
   controlMode = "bundled",
+  showCustomizeControl = true,
+  showPromptControl = true,
   onSelectBundle,
   onSelectLayout,
   onSelectTypography,
@@ -121,13 +134,19 @@ export function EmbeddedStyleInspector({
   const [isColorPickerOpen, setIsColorPickerOpen] = React.useState(false);
   const [command, setCommand] = React.useState("");
   const [confirmation, setConfirmation] = React.useState<string | null>(null);
+  const resolvedBundleOptions = React.useMemo(
+    () => bundleOptions ?? VERBATI_STYLE_BUNDLE_DEFINITIONS,
+    [bundleOptions],
+  );
   const activeBundleId = React.useMemo(
     () =>
-      resolveVerbatiStyleBundleId({
-        templateId,
-        stylePreset,
-      }),
-    [stylePreset, templateId],
+      activeBundleIdOverride === undefined
+        ? resolveVerbatiStyleBundleId({
+            templateId,
+            stylePreset,
+          })
+        : activeBundleIdOverride,
+    [activeBundleIdOverride, stylePreset, templateId],
   );
   const activeAccentHex = React.useMemo(
     () => resolveVerbatiAccentHex(stylePreset),
@@ -140,16 +159,18 @@ export function EmbeddedStyleInspector({
 
     const fallbackPalette = (
       activeBundleId
-        ? getVerbatiStyleBundleDefinition(activeBundleId).stylePreset.palette
-        : VERBATI_STYLE_BUNDLE_DEFINITIONS[0].stylePreset.palette
+        ? resolvedBundleOptions.find((bundle) => bundle.id === activeBundleId)
+            ?.stylePreset.palette
+        : resolvedBundleOptions[0]?.stylePreset.palette
     ) as VerbatiPalettePreset;
 
     return (
       fallbackPalette === "custom"
-        ? VERBATI_STYLE_BUNDLE_DEFINITIONS[0].stylePreset.palette
+        ? resolvedBundleOptions[0]?.stylePreset.palette ??
+            VERBATI_STYLE_BUNDLE_DEFINITIONS[0].stylePreset.palette
         : fallbackPalette
     ) as Exclude<VerbatiPalettePreset, "custom">;
-  }, [activeBundleId, stylePreset.palette]);
+  }, [activeBundleId, resolvedBundleOptions, stylePreset.palette]);
   const activeTypographyOption = React.useMemo(
     () =>
       VERBATI_TYPOGRAPHY_OPTIONS.find(
@@ -462,7 +483,7 @@ export function EmbeddedStyleInspector({
                 role="dialog"
                 aria-label="Resume style presets"
               >
-                {VERBATI_STYLE_BUNDLE_DEFINITIONS.map((bundle) => {
+                {resolvedBundleOptions.map((bundle) => {
                   const active = bundle.id === activeBundleId;
                   return (
                     <button
@@ -519,147 +540,149 @@ export function EmbeddedStyleInspector({
             ) : null}
           </div>
 
-          <div
-            className="dasti-artifact-inspector__group"
-            role="group"
-            aria-label="Customize"
-          >
-            <span className="dasti-artifact-inspector__section-label">Customize</span>
-            <button
-              type="button"
-              className={[
-                "dasti-artifact-inspector__action",
-                activeDrawer === "customize"
-                  ? "dasti-artifact-inspector__action--active"
-                  : "",
-              ]
-                .filter(Boolean)
-                .join(" ")}
-              aria-label="Open layout and typography controls"
-              aria-expanded={activeDrawer === "customize"}
-              aria-haspopup="dialog"
-              onClick={() => toggleDrawer("customize")}
-              disabled={readOnly}
+          {showCustomizeControl ? (
+            <div
+              className="dasti-artifact-inspector__group"
+              role="group"
+              aria-label="Customize"
             >
-              <span
-                className="dasti-artifact-inspector__icon dasti-artifact-inspector__icon--layout"
-                aria-hidden="true"
+              <span className="dasti-artifact-inspector__section-label">Customize</span>
+              <button
+                type="button"
+                className={[
+                  "dasti-artifact-inspector__action",
+                  activeDrawer === "customize"
+                    ? "dasti-artifact-inspector__action--active"
+                    : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                aria-label="Open layout and typography controls"
+                aria-expanded={activeDrawer === "customize"}
+                aria-haspopup="dialog"
+                onClick={() => toggleDrawer("customize")}
+                disabled={readOnly}
               >
-                {getLayoutBadge(stylePreset.layout)}
-              </span>
-              <span className="dasti-artifact-inspector__label">Refine</span>
-              {!hasOpenDrawer ? (
-                <InspectorTooltip
-                  className="dasti-artifact-inspector__tooltip--trigger"
-                  title="Refine"
-                />
+                <span
+                  className="dasti-artifact-inspector__icon dasti-artifact-inspector__icon--layout"
+                  aria-hidden="true"
+                >
+                  {getLayoutBadge(stylePreset.layout)}
+                </span>
+                <span className="dasti-artifact-inspector__label">Refine</span>
+                {!hasOpenDrawer ? (
+                  <InspectorTooltip
+                    className="dasti-artifact-inspector__tooltip--trigger"
+                    title="Refine"
+                  />
+                ) : null}
+              </button>
+
+              {activeDrawer === "customize" ? (
+                <div
+                  className="dasti-resume-style-inspector__drawer dasti-proposal-chrome-drawer dasti-proposal-chrome-drawer--stack"
+                  role="dialog"
+                  aria-label="Layout and typography controls"
+                >
+                  <div className="dasti-resume-style-inspector__drawer-section">
+                    <div className="dasti-resume-style-inspector__drawer-heading">
+                      Layout
+                    </div>
+                    <div className="dasti-resume-style-inspector__choice-list">
+                      {VERBATI_LAYOUT_OPTIONS.map((option) => {
+                        const active = option.id === stylePreset.layout;
+                        return (
+                          <button
+                            key={option.id}
+                            type="button"
+                            className={[
+                              "dasti-proposal-chrome-option",
+                              "dasti-resume-style-inspector__choice",
+                              active
+                                ? "dasti-resume-style-inspector__choice--active"
+                                : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" ")}
+                            aria-pressed={active}
+                            onClick={() => onSelectLayout(option.id)}
+                            disabled={readOnly}
+                          >
+                            <span
+                              className="dasti-proposal-chrome-option__icon dasti-artifact-inspector__icon--layout"
+                              aria-hidden="true"
+                            >
+                              {getLayoutBadge(option.id)}
+                            </span>
+                            <span className="dasti-proposal-chrome-option__copy">
+                              <span className="dasti-proposal-chrome-option__title">
+                                {option.name}
+                              </span>
+                              {!isTitleOnlyCopy ? (
+                                <span className="dasti-proposal-chrome-option__description">
+                                  {option.description}
+                                </span>
+                              ) : null}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="dasti-resume-style-inspector__drawer-section">
+                    <div className="dasti-resume-style-inspector__drawer-heading">
+                      Typography
+                    </div>
+                    <div className="dasti-resume-style-inspector__choice-list">
+                      {VERBATI_TYPOGRAPHY_OPTIONS.map((option) => {
+                        const active = option.id === stylePreset.typography;
+                        return (
+                          <button
+                            key={option.id}
+                            type="button"
+                            className={[
+                              "dasti-proposal-chrome-option",
+                              "dasti-resume-style-inspector__choice",
+                              active
+                                ? "dasti-resume-style-inspector__choice--active"
+                                : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" ")}
+                            aria-pressed={active}
+                            onClick={() => onSelectTypography(option.id)}
+                            disabled={readOnly}
+                          >
+                            <span
+                              className="dasti-proposal-chrome-option__icon dasti-artifact-inspector__icon--aa"
+                              aria-hidden="true"
+                              style={{
+                                fontFamily: option.headingFamily,
+                                fontWeight: option.id === "expert" ? 500 : 600,
+                              }}
+                            >
+                              Aa
+                            </span>
+                            <span className="dasti-proposal-chrome-option__copy">
+                              <span className="dasti-proposal-chrome-option__title">
+                                {option.name}
+                              </span>
+                              {!isTitleOnlyCopy ? (
+                                <span className="dasti-proposal-chrome-option__description">
+                                  {option.description}
+                                </span>
+                              ) : null}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
               ) : null}
-            </button>
-
-            {activeDrawer === "customize" ? (
-              <div
-                className="dasti-resume-style-inspector__drawer dasti-proposal-chrome-drawer dasti-proposal-chrome-drawer--stack"
-                role="dialog"
-                aria-label="Layout and typography controls"
-              >
-                <div className="dasti-resume-style-inspector__drawer-section">
-                  <div className="dasti-resume-style-inspector__drawer-heading">
-                    Layout
-                  </div>
-                  <div className="dasti-resume-style-inspector__choice-list">
-                    {VERBATI_LAYOUT_OPTIONS.map((option) => {
-                      const active = option.id === stylePreset.layout;
-                      return (
-                        <button
-                          key={option.id}
-                          type="button"
-                          className={[
-                            "dasti-proposal-chrome-option",
-                            "dasti-resume-style-inspector__choice",
-                            active
-                              ? "dasti-resume-style-inspector__choice--active"
-                              : "",
-                          ]
-                            .filter(Boolean)
-                            .join(" ")}
-                          aria-pressed={active}
-                          onClick={() => onSelectLayout(option.id)}
-                          disabled={readOnly}
-                        >
-                          <span
-                            className="dasti-proposal-chrome-option__icon dasti-artifact-inspector__icon--layout"
-                            aria-hidden="true"
-                          >
-                            {getLayoutBadge(option.id)}
-                          </span>
-                          <span className="dasti-proposal-chrome-option__copy">
-                            <span className="dasti-proposal-chrome-option__title">
-                              {option.name}
-                            </span>
-                            {!isTitleOnlyCopy ? (
-                              <span className="dasti-proposal-chrome-option__description">
-                                {option.description}
-                              </span>
-                            ) : null}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="dasti-resume-style-inspector__drawer-section">
-                  <div className="dasti-resume-style-inspector__drawer-heading">
-                    Typography
-                  </div>
-                  <div className="dasti-resume-style-inspector__choice-list">
-                    {VERBATI_TYPOGRAPHY_OPTIONS.map((option) => {
-                      const active = option.id === stylePreset.typography;
-                      return (
-                        <button
-                          key={option.id}
-                          type="button"
-                          className={[
-                            "dasti-proposal-chrome-option",
-                            "dasti-resume-style-inspector__choice",
-                            active
-                              ? "dasti-resume-style-inspector__choice--active"
-                              : "",
-                          ]
-                            .filter(Boolean)
-                            .join(" ")}
-                          aria-pressed={active}
-                          onClick={() => onSelectTypography(option.id)}
-                          disabled={readOnly}
-                        >
-                          <span
-                            className="dasti-proposal-chrome-option__icon dasti-artifact-inspector__icon--aa"
-                            aria-hidden="true"
-                            style={{
-                              fontFamily: option.headingFamily,
-                              fontWeight: option.id === "expert" ? 500 : 600,
-                            }}
-                          >
-                            Aa
-                          </span>
-                          <span className="dasti-proposal-chrome-option__copy">
-                            <span className="dasti-proposal-chrome-option__title">
-                              {option.name}
-                            </span>
-                            {!isTitleOnlyCopy ? (
-                              <span className="dasti-proposal-chrome-option__description">
-                                {option.description}
-                              </span>
-                            ) : null}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
         </>
       )}
 
@@ -796,7 +819,7 @@ export function EmbeddedStyleInspector({
         ) : null}
       </div>
 
-      {onApplyCommand ? (
+      {onApplyCommand && showPromptControl ? (
         <div className="dasti-artifact-inspector__group" role="group" aria-label="Prompt">
           <span className="dasti-artifact-inspector__section-label">Prompt</span>
           <button

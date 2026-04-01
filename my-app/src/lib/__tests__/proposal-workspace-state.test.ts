@@ -4,6 +4,7 @@ import {
   clearStoredProposalWorkspaceState,
   PROPOSAL_COMPOSE_DRAFT_UPDATED_EVENT,
   PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
+  readStoredProposalComposeDraft,
   startFreshProposalWorkspace,
   writeStoredProposalComposeDraft,
 } from "../proposal-workspace-state";
@@ -105,6 +106,22 @@ describe("proposal workspace state", () => {
     window.removeEventListener(
       PROPOSAL_COMPOSE_DRAFT_UPDATED_EVENT,
       handleComposeUpdate,
+    );
+  });
+
+  it("preserves an explicit auto tone sentinel in the compose draft", () => {
+    writeStoredProposalComposeDraft({
+      jobTitle: "Operations Associate",
+      proposalType: "cover_letter",
+      voicePreset: null,
+    });
+
+    expect(readStoredProposalComposeDraft()).toEqual(
+      expect.objectContaining({
+        jobTitle: "Operations Associate",
+        proposalType: "cover_letter",
+        voicePreset: null,
+      }),
     );
   });
 });
