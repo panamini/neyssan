@@ -164,23 +164,73 @@ describe("ProposalForge workbench layout", () => {
     const pageShell = container.querySelector(".dasti-page-shell") as
       | HTMLElement
       | null;
+    const toolbarRow = container.querySelector(
+      ".dasti-workbench-top-left-slot--proposal",
+    ) as HTMLElement | null;
     const workbenchFrame = container.querySelector(".dasti-flow") as
       | HTMLElement
       | null;
     const gridSplit = container.querySelector(".dasti-grid-split") as
       | HTMLElement
       | null;
+    const outputShell = container.querySelector(".dasti-proposal-output-shell") as
+      | HTMLElement
+      | null;
     expect(
       pageShell?.style.getPropertyValue("--page-shell-gap"),
     ).toBe("var(--space-2)");
-    expect(workbenchFrame?.style.maxWidth).toContain(
-      "var(--document-viewer-shell-inline-size)",
+    expect(workbenchFrame?.style.maxWidth).toBe(
+      "calc(480px + var(--proposal-workspace-output-shell-inline-size) + var(--layout-card-grid))",
     );
     expect(
+      workbenchFrame?.style.getPropertyValue(
+        "--proposal-workspace-output-shell-inline-size",
+      ),
+    ).toBe("calc(var(--document-sheet-inline-size) + 34px)");
+    expect(
       gridSplit?.style.getPropertyValue("--grid-columns"),
-    ).toBe("minmax(0, 460px) minmax(0, var(--document-viewer-shell-inline-size))");
+    ).toBe("480px minmax(0, var(--proposal-workspace-output-shell-inline-size))");
+    expect(toolbarRow?.style.maxWidth).toBe(
+      "calc(480px + var(--proposal-workspace-output-shell-inline-size) + var(--layout-card-grid))",
+    );
+    expect(outputShell?.style.width).toBe("100%");
+    expect(
+      outputShell?.style.getPropertyValue("--document-viewer-shell-inline-size"),
+    ).toBe("var(--proposal-workspace-output-shell-inline-size)");
     expect(screen.queryByRole("button", { name: /pick cv/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Balanced" })).not.toBeInTheDocument();
+  });
+
+  it("stacks the live workbench before the expanded sidebar forces the compose shell to shrink", () => {
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 1366,
+      writable: true,
+    });
+    window.dispatchEvent(new Event("resize"));
+
+    const { container } = render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    const workbenchFrame = container.querySelector(".dasti-flow") as
+      | HTMLElement
+      | null;
+    const toolbarRow = container.querySelector(
+      ".dasti-workbench-top-left-slot--proposal",
+    ) as HTMLElement | null;
+    const gridSplit = container.querySelector(".dasti-grid-split") as
+      | HTMLElement
+      | null;
+
+    expect(workbenchFrame?.style.maxWidth).toBe("560px");
+    expect(workbenchFrame?.style.marginInline).toBe("0");
+    expect(toolbarRow?.style.marginInline).toBe("0");
+    expect(
+      gridSplit?.style.getPropertyValue("--grid-columns"),
+    ).toBe("minmax(0, 1fr)");
   });
 
   it("normalizes unsupported saved toolbar tones back to auto", () => {
