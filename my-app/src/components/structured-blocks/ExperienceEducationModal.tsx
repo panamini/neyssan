@@ -7,6 +7,7 @@ import React, {
   useRef,
   forwardRef,
 } from "react";
+import { useAction } from "convex/react";
 import type { IExperienceItem, IEducationItem } from "../../types/cvDocument";
 import { v4 as uuidv4 } from "uuid";
 import { parseIsoToParts, composeIsoFromParts } from "../../lib/date-utils";
@@ -25,11 +26,18 @@ import {
 } from "remirror/extensions";
 import type { RemirrorJSON } from "remirror";
 import { ensureRemirrorDoc } from "../remirror-editor/utils/conversion";
+import { api } from "../../../convex/_generated/api";
 import { EditorToolbar } from "../remirror-editor/components/EditorToolbar";
-import { Trash, X } from "@/lib/icons";
+import { Loader2, Trash, Wand2, X } from "@/lib/icons";
 import { Button } from "../ui/button";
+import { useToast } from "../ui/toast";
 import { useCloseOnEscape } from "../../hooks/use-close-on-escape";
 import { BodyPortal } from "@/components/ui/body-portal";
+import { useCvAiCapabilities } from "../../hooks/use-cv-ai-capabilities";
+import FloatingAiToolbar, {
+  type InlineAiActionId,
+} from "../FloatingAiToolbar";
+import { getDomSelectionState } from "../../lib/editor-ai-selection";
 
 type UiPatch = Partial<{
   startYear: string;
@@ -172,6 +180,112 @@ function hasNonEmptyDocText(value: unknown): boolean {
   return false;
 }
 
+function plainTextFromValue(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (!value || typeof value !== "object") return "";
+
+  const queue: unknown[] = [value];
+  const parts: string[] = [];
+  while (queue.length > 0) {
+    const node = queue.shift();
+    if (!node || typeof node !== "object") continue;
+    const record = node as Record<string, unknown>;
+    if (typeof record.text === "string" && record.text.trim()) {
+      parts.push(record.text.trim());
+    }
+    if (Array.isArray(record.content)) queue.push(...record.content);
+    if (Array.isArray(record.items)) queue.push(...record.items);
+  }
+
+  return parts.join(" ").replace(/\s+/g, " ").trim();
+}
+
+function splitPlainTextIntoLines(text: string): string[] {
+  return text
+    .replace(/[•\u2022]/g, "\n")
+    .split(/\r?\n+/)
+    .map((line) => line.replace(/^[\-\s]+/, "").trim())
+    .filter(Boolean);
+}
+
+function formatDiffLines(value: string[]): string {
+  return value.length > 0 ? value.map((line) => `• ${line}`).join("\n") : "No existing content.";
+}
+
+function ModalAiDiffCard({
+  label,
+  before,
+  after,
+  onAccept,
+  onDiscard,
+}: {
+  label: string;
+  before: string[];
+  after: string[];
+  onAccept: () => void;
+  onDiscard: () => void;
+}) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gap: "var(--s2)",
+        padding: "var(--s3)",
+        borderRadius: "var(--radius-card)",
+        border: "1px solid var(--color-border)",
+        background: "var(--sfr)",
+      }}
+    >
+      <div
+        style={{
+          fontSize: "var(--tx)",
+          fontWeight: 600,
+          color: "var(--ti)",
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          whiteSpace: "pre-wrap",
+          fontSize: "var(--tx)",
+          lineHeight: "var(--lx)",
+          color: "var(--tm2)",
+          textDecoration: "line-through",
+        }}
+      >
+        {formatDiffLines(before)}
+      </div>
+      <div
+        style={{
+          whiteSpace: "pre-wrap",
+          fontSize: "var(--tx)",
+          lineHeight: "var(--lx)",
+          color: "var(--ti)",
+        }}
+      >
+        {formatDiffLines(after)}
+      </div>
+      <div style={{ display: "flex", gap: "var(--s2)", flexWrap: "wrap" }}>
+        <button
+          type="button"
+          className="dasti-button dasti-button--accent dasti-button--sm"
+          onClick={onAccept}
+        >
+          Accept
+        </button>
+        <button
+          type="button"
+          className="dasti-button dasti-button--secondary dasti-button--sm"
+          onClick={onDiscard}
+        >
+          Discard
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const RichEditor = forwardRef<
   RichEditorHandle,
   {
@@ -179,6 +293,9 @@ const RichEditor = forwardRef<
     onChangeDoc: (doc: RemirrorJSON) => void;
   }
 >(({ initialContent, onChangeDoc }, ref) => {
+  const transformEditorSelectionAction = useAction(
+    (api.functions as any).transformEditorSelection,
+  );
   const extensions = useMemo(
     () => [
       // Core text + history
@@ -202,6 +319,16 @@ const RichEditor = forwardRef<
     extensions: () => extensions as any,
     content: initialContent as any,
   });
+  const [inlineSelectionState, setInlineSelectionState] = useState<{
+    text: string;
+    anchor: { left: number; top: number };
+    from: number;
+    to: number;
+  } | null>(null);
+  const [isApplyingInlineAi, setIsApplyingInlineAi] = useState(false);
+  const [pendingInlineAiActionId, setPendingInlineAiActionId] =
+    useState<InlineAiActionId | null>(null);
+  const selectionDebounceRef = useRef<number | null>(null);
 
   const flush = useCallback(() => {
     try {
@@ -233,14 +360,115 @@ const RichEditor = forwardRef<
     [manager, onChange, onChangeDoc],
   );
 
+  useEffect(() => {
+    return () => {
+      if (selectionDebounceRef.current !== null) {
+        window.clearTimeout(selectionDebounceRef.current);
+      }
+    };
+  }, []);
+
+  const scheduleSelectionCheck = useCallback(() => {
+    if (selectionDebounceRef.current !== null) {
+      window.clearTimeout(selectionDebounceRef.current);
+    }
+
+    selectionDebounceRef.current = window.setTimeout(() => {
+      selectionDebounceRef.current = null;
+      const view = (manager as any)?.view;
+      const selection = view?.state?.selection;
+      const nextSelection = getDomSelectionState(view?.dom as HTMLElement | null);
+
+      if (!nextSelection || !selection || selection.empty) {
+        setInlineSelectionState(null);
+        return;
+      }
+
+      setInlineSelectionState({
+        ...nextSelection,
+        from: selection.from,
+        to: selection.to,
+      });
+    }, 90);
+  }, [manager]);
+
+  useEffect(() => {
+    const handleSelectionChange = () => {
+      scheduleSelectionCheck();
+    };
+
+    document.addEventListener("selectionchange", handleSelectionChange);
+    return () => {
+      document.removeEventListener("selectionchange", handleSelectionChange);
+    };
+  }, [scheduleSelectionCheck]);
+
+  const handleRunInlineAiAction = useCallback(
+    async (actionId: InlineAiActionId, instruction: string) => {
+      if (!inlineSelectionState) return;
+
+      const view = (manager as any)?.view;
+      if (!view) return;
+
+      try {
+        setPendingInlineAiActionId(actionId);
+        setIsApplyingInlineAi(true);
+        const result = await transformEditorSelectionAction({
+          mode: actionId,
+          instruction,
+          selectedText: inlineSelectionState.text,
+        });
+        const replacementText =
+          typeof result?.text === "string" ? result.text.trim() : "";
+
+        if (!replacementText) {
+          return;
+        }
+
+        const tr = view.state.tr.insertText(
+          replacementText,
+          inlineSelectionState.from,
+          inlineSelectionState.to,
+        );
+        view.dispatch(tr);
+        view.focus();
+        setInlineSelectionState(null);
+        onChangeDoc(ensureRemirrorDoc(view.state.doc.toJSON() as any));
+      } finally {
+        setIsApplyingInlineAi(false);
+        setPendingInlineAiActionId(null);
+      }
+    },
+    [
+      inlineSelectionState,
+      manager,
+      onChangeDoc,
+      transformEditorSelectionAction,
+    ],
+  );
+
   return (
     <div className="dasti-rich">
+      {inlineSelectionState ? (
+        <FloatingAiToolbar
+          open
+          anchor={inlineSelectionState.anchor}
+          isLoading={isApplyingInlineAi}
+          pendingActionId={pendingInlineAiActionId}
+          onClose={() => setInlineSelectionState(null)}
+          onRunAction={handleRunInlineAiAction}
+        />
+      ) : null}
       <Remirror
         manager={manager}
         initialContent={state}
         onChange={handleChange}
       >
-        <div className="rich-content">
+        <div
+          className="rich-content"
+          onPointerUp={scheduleSelectionCheck}
+          onKeyUp={scheduleSelectionCheck}
+        >
           <EditorToolbar position="top" />
           <EditorComponent />
         </div>
@@ -347,6 +575,11 @@ export function ExperienceModal({
   items,
   onSave,
 }: ExperienceModalProps) {
+  const runCvSectionAiAction = useAction(
+    (api.functions as any).runCvSectionAiAction,
+  );
+  const cvAiCapabilities = useCvAiCapabilities();
+  const { showToast } = useToast();
   const [local, setLocal] = useState<IExperienceItem[]>(() => {
     if (Array.isArray(items)) return items.map((it) => ({ ...it }));
     return [];
@@ -376,6 +609,18 @@ export function ExperienceModal({
   const localRef = React.useRef<IExperienceItem[]>([]);
   const editorRefs = useRef<Array<RichEditorHandle | null>>([]);
   const responsibilitiesDocRef = useRef<Record<string, RemirrorJSON>>({});
+  const [experienceAiLoadingId, setExperienceAiLoadingId] = useState<
+    string | null
+  >(null);
+  const [experienceAiDiffs, setExperienceAiDiffs] = useState<
+    Record<string, { before: string[]; after: string[] }>
+  >({});
+  const [editorRevisionMap, setEditorRevisionMap] = useState<
+    Record<string, number>
+  >({});
+  const canImproveResponsibilities = cvAiCapabilities.isSupported(
+    "improve_experience_responsibilities",
+  );
 
   // Sync local + UI state when the modal opens or items change to avoid stale/empty selects
   useEffect(() => {
@@ -384,6 +629,9 @@ export function ExperienceModal({
         ? (items.map((it) => ({ ...it })) as IExperienceItem[])
         : [];
       setLocal(copied);
+      setExperienceAiDiffs({});
+      setExperienceAiLoadingId(null);
+      setEditorRevisionMap({});
       localRef.current = copied;
       setUiState(copied.map((it) => deriveUi(it)));
       responsibilitiesDocRef.current = Object.fromEntries(
@@ -528,6 +776,139 @@ export function ExperienceModal({
     });
     setUiState((prev) => prev.filter((_, i) => i !== idx));
   }, []);
+
+  function getResponsibilityLines(
+    item: IExperienceItem,
+    doc: RemirrorJSON | undefined,
+  ): string[] {
+    const explicitBullets = Array.isArray(item.responsibilityBullets)
+      ? item.responsibilityBullets
+          .map((line) => String(line ?? "").trim())
+          .filter(Boolean)
+      : [];
+
+    if (explicitBullets.length > 0) {
+      return explicitBullets;
+    }
+
+    const docText = plainTextFromValue(doc ?? item.responsibilities);
+    if (docText) {
+      return splitPlainTextIntoLines(docText);
+    }
+
+    return Array.isArray(item.achievements)
+      ? item.achievements
+          .map((line) => String(line ?? "").trim())
+          .filter(Boolean)
+      : [];
+  }
+
+  function buildExperienceAiSource(
+    item: IExperienceItem,
+    doc: RemirrorJSON | undefined,
+  ): string {
+    const lines = [
+      item.position ? `Role: ${item.position}` : null,
+      item.company ? `Company: ${item.company}` : null,
+      item.location ? `Location: ${item.location}` : null,
+      item.description ? `Description: ${plainTextFromValue(item.description)}` : null,
+    ].filter(Boolean) as string[];
+    const bullets = getResponsibilityLines(item, doc);
+    if (bullets.length > 0) {
+      lines.push(`Responsibilities:\n- ${bullets.join("\n- ")}`);
+    }
+    return lines.join("\n");
+  }
+
+  async function handleRunResponsibilitiesAi(idx: number) {
+    if (!cvAiCapabilities.isSupported("improve_experience_responsibilities")) {
+      showToast("Responsibilities AI unavailable", {
+        variant: "warning",
+        description: cvAiCapabilities.staleMessage,
+      });
+      return;
+    }
+
+    const row = localRef.current[idx];
+    const rowId = String(row?.id ?? "");
+    if (!rowId) return;
+
+    try {
+      setExperienceAiLoadingId(rowId);
+      const result = await runCvSectionAiAction({
+        action: "improve_experience_responsibilities",
+        existingText: buildExperienceAiSource(
+          row,
+          responsibilitiesDocRef.current[rowId],
+        ),
+      });
+
+      if (!result || result.kind !== "list" || !Array.isArray(result.items)) {
+        return;
+      }
+
+      const nextLines = result.items
+        .map((item: unknown) => String(item ?? "").trim())
+        .filter(Boolean);
+      if (nextLines.length === 0) return;
+
+      setExperienceAiDiffs((current) => ({
+        ...current,
+        [rowId]: {
+          before: getResponsibilityLines(
+            row,
+            responsibilitiesDocRef.current[rowId],
+          ),
+          after: nextLines,
+        },
+      }));
+    } catch (error) {
+      console.error(
+        "[ExperienceModal] improve_experience_responsibilities failed",
+        error,
+      );
+      const rawMessage =
+        error instanceof Error ? error.message : String(error ?? "");
+      showToast("Responsibilities AI unavailable", {
+        variant: "error",
+        description: /ArgumentValidationError/i.test(rawMessage)
+          ? "The CV AI backend schema is stale. Run `npx convex codegen` or restart `npx convex dev`, then reload the page."
+          : "These responsibilities could not be improved right now.",
+      });
+    } finally {
+      setExperienceAiLoadingId(null);
+    }
+  }
+
+  function handleAcceptResponsibilitiesDiff(rowId: string) {
+    const diff = experienceAiDiffs[rowId];
+    if (!diff) return;
+    const nextDoc = achievementsToBulletDoc(diff.after);
+    responsibilitiesDocRef.current[rowId] = nextDoc;
+    setEditorRevisionMap((current) => ({
+      ...current,
+      [rowId]: (current[rowId] ?? 0) + 1,
+    }));
+    setLocal((prev) => {
+      const next = prev.map((item) =>
+        String(item.id ?? "") === rowId
+          ? {
+              ...item,
+              responsibilities: nextDoc,
+              responsibilityBullets: diff.after,
+              achievements: [],
+            }
+          : item,
+      );
+      localRef.current = next;
+      return next;
+    });
+    setExperienceAiDiffs((current) => {
+      const next = { ...current };
+      delete next[rowId];
+      return next;
+    });
+  }
 
   // Import from AI (clipboard/prompt) and map to typed Experience
   const importFromClipboardExp = useCallback(async () => {
@@ -811,8 +1192,44 @@ export function ExperienceModal({
                   className="dasti-field-group"
                   style={{ gridColumn: "1 / -1" }}
                 >
-                  <span className="dasti-label">Responsibilities</span>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "var(--s2)",
+                      marginBottom: "var(--s2)",
+                    }}
+                  >
+                    <span className="dasti-label" style={{ marginBottom: 0 }}>
+                      Responsibilities
+                    </span>
+                    <button
+                      type="button"
+                      className="dasti-icon-button"
+                      onClick={() => void handleRunResponsibilitiesAi(idx)}
+                      disabled={
+                        !canImproveResponsibilities ||
+                        experienceAiLoadingId === String(row.id ?? "")
+                      }
+                      aria-label="Improve responsibilities with AI"
+                      title="Improve responsibilities with AI"
+                    >
+                      {experienceAiLoadingId === String(row.id ?? "") ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Wand2 className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  </div>
+                  {cvAiCapabilities.status === "stale" &&
+                  !canImproveResponsibilities ? (
+                    <div className="dasti-hint" role="status">
+                      {cvAiCapabilities.staleMessage}
+                    </div>
+                  ) : null}
                   <RichEditor
+                    key={`${String(row.id ?? idx)}:${editorRevisionMap[String(row.id ?? "")] ?? 0}`}
                     ref={(node) => {
                       editorRefs.current[idx] = node;
                     }}
@@ -831,6 +1248,23 @@ export function ExperienceModal({
                       setField(idx, "achievements", []);
                     }}
                   />
+                  {experienceAiDiffs[String(row.id ?? "")] ? (
+                    <ModalAiDiffCard
+                      label={`Entry ${idx + 1} suggestion`}
+                      before={experienceAiDiffs[String(row.id ?? "")].before}
+                      after={experienceAiDiffs[String(row.id ?? "")].after}
+                      onAccept={() =>
+                        handleAcceptResponsibilitiesDiff(String(row.id ?? ""))
+                      }
+                      onDiscard={() =>
+                        setExperienceAiDiffs((current) => {
+                          const next = { ...current };
+                          delete next[String(row.id ?? "")];
+                          return next;
+                        })
+                      }
+                    />
+                  ) : null}
                   <div className="dasti-hint">
                     Describe scope, output, and notable outcomes.
                   </div>
@@ -1062,7 +1496,7 @@ export function EducationModal({
       open={open}
       onClose={onClose}
       primaryAction={{
-        label: "Save all",
+        label: "Save",
         onClick: () =>
           onSave(
             localRef.current.map((item) => normalizeMonthYearDateFields(item)),

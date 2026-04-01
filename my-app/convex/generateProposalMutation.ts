@@ -14,6 +14,13 @@ import {
   type EffectiveProposalTone,
 } from "./lib/proposals/effectiveTone";
 import {
+  buildProposalGenerationControlsBlock,
+  resolveProposalCharacterLimit,
+  resolveProposalToneTuning,
+  type ProposalCharacterLimitMode,
+  type ProposalToneTuning,
+} from "./lib/proposals/generationControls";
+import {
   DEFAULT_PROPOSAL_VOICE_PRESET,
   IDENTITY_BACKGROUND_HARD_STOP_RULES,
   JOB_DESCRIPTION_TO_CANDIDATE_RULES,
@@ -26,6 +33,7 @@ import {
   resolveProposalVoicePreset,
   type ProposalVoicePreset,
 } from "./lib/proposals/voicePresets";
+import { selectAutoTone } from "./lib/proposals/autoToneSelector";
 import {
   PROPOSAL_ALLOWED_CAUTIOUS_BRIDGES,
   PROPOSAL_FORBIDDEN_BRIDGES,
@@ -117,6 +125,22 @@ const proposalVoicePresetChoice = v.union(
   v.literal("storyteller"),
 );
 
+const proposalToneTuningChoice = v.union(
+  v.literal("more_human"),
+  v.literal("more_concise"),
+  v.literal("more_formal"),
+  v.literal("warmer"),
+);
+
+const proposalCharacterLimitModeChoice = v.union(
+  v.literal("none"),
+  v.literal("linkedin_note_200"),
+  v.literal("linkedin_inmail_2000"),
+  v.literal("indeed_cover_letter_4000"),
+  v.literal("upwork_proposal_advisory"),
+  v.literal("custom"),
+);
+
 export const personalizationContextValidator = v.object({
   name: v.optional(v.string()),
   summary: v.optional(v.string()),
@@ -165,15 +189,16 @@ type PersonalizationMode = "default" | "explicit_only";
 export type GenerateProposalArgs = {
   jobTitle: string;
   jobDescription: string;
+  clientRunId?: string;
   proposalType:
     | "technical"
     | "creative"
     | "cover_letter"
     | "application_message"
     | "freelance_proposal";
-  voicePreset?: ProposalVoicePreset;
-  formalityLevel?: string;
-  creativity?: string;
+  voicePreset?: ProposalVoicePreset | null;
+  formalityLevel?: string | null;
+  creativity?: string | null;
   modelType?:
     | "chatgpt"
     | "mistral-large-latest"
@@ -183,20 +208,29 @@ export type GenerateProposalArgs = {
   personalizationContext?: PersonalizationContext;
   personalizationRichness?: PersonalizationRichness;
   personalizationMode?: PersonalizationMode;
+  toneTuning?: ProposalToneTuning | null;
+  characterLimitMode?: ProposalCharacterLimitMode | null;
+  characterLimitValue?: number | null;
 };
 
 export const generateProposalArgs = {
   jobTitle: v.string(),
   jobDescription: v.string(),
+  clientRunId: v.optional(v.string()),
   proposalType: proposalTypeChoice,
-  voicePreset: v.optional(proposalVoicePresetChoice),
-  formalityLevel: v.optional(v.string()),
-  creativity: v.optional(v.string()),
+  voicePreset: v.optional(v.union(proposalVoicePresetChoice, v.null())),
+  formalityLevel: v.optional(v.union(v.string(), v.null())),
+  creativity: v.optional(v.union(v.string(), v.null())),
   modelType: v.optional(modelChoice),
   agentId: v.optional(v.string()),
   personalizationContext: v.optional(personalizationContextValidator),
   personalizationRichness: v.optional(personalizationRichnessChoice),
   personalizationMode: v.optional(personalizationModeChoice),
+  toneTuning: v.optional(v.union(proposalToneTuningChoice, v.null())),
+  characterLimitMode: v.optional(
+    v.union(proposalCharacterLimitModeChoice, v.null()),
+  ),
+  characterLimitValue: v.optional(v.union(v.number(), v.null())),
 };
 
 type ProfileFallbackDoc = {
@@ -216,6 +250,110 @@ type OutputFormat =
   | "cover_letter"
   | "application_message"
   | "freelance_proposal";
+
+const PROPOSAL_GENERATION_CANCEL_POLL_MS = 250;
+
+class ProposalGenerationCanceledError extends Error {
+  constructor() {
+    super("Proposal generation canceled.");
+    this.name = "ProposalGenerationCanceledError";
+  }
+}
+
+function isProposalGenerationCanceledError(error: unknown): boolean {
+  return (
+    error instanceof ProposalGenerationCanceledError ||
+    (error instanceof Error &&
+      (error.name === "AbortError" ||
+        error.name === "ProposalGenerationCanceledError" ||
+        error.message === "Proposal generation canceled."))
+  );
+}
+
+type ProposalGenerationCancellationContext = {
+  signal: AbortSignal;
+  ensureActive: () => Promise<void>;
+  finalize: (args: {
+    status: "finished" | "failed" | "canceled";
+    error?: string;
+  }) => Promise<void>;
+};
+
+function createProposalGenerationCancellationContext(args: {
+  ctx: any;
+  jobId: any;
+}): ProposalGenerationCancellationContext {
+  const controller = new AbortController();
+  let disposed = false;
+  let timerId: ReturnType<typeof setTimeout> | null = null;
+
+  const ensureActive = async (): Promise<void> => {
+    if (controller.signal.aborted) {
+      throw new ProposalGenerationCanceledError();
+    }
+
+    const run = await args.ctx.runQuery(
+      (internal as any).jobs.getProposalGenerationRun,
+      {
+        jobId: args.jobId,
+      },
+    );
+    if (run?.status === "cancel_requested") {
+      controller.abort(new ProposalGenerationCanceledError());
+      throw new ProposalGenerationCanceledError();
+    }
+  };
+
+  const poll = async (): Promise<void> => {
+    if (disposed || controller.signal.aborted) {
+      return;
+    }
+
+    try {
+      await ensureActive();
+    } catch (error) {
+      if (!isProposalGenerationCanceledError(error)) {
+        console.warn(
+          "[handleGenerateProposal] cancellation poll failed",
+          error,
+        );
+      }
+      return;
+    }
+
+    timerId = setTimeout(() => {
+      void poll();
+    }, PROPOSAL_GENERATION_CANCEL_POLL_MS);
+  };
+
+  void poll();
+
+  return {
+    signal: controller.signal,
+    ensureActive,
+    finalize: async ({ status, error }) => {
+      disposed = true;
+      if (timerId !== null) {
+        clearTimeout(timerId);
+      }
+      await args.ctx.runMutation(
+        (internal as any).jobs.finishProposalGenerationRun,
+        {
+          jobId: args.jobId,
+          status,
+          ...(error ? { error } : {}),
+        },
+      );
+    },
+  };
+}
+
+function buildMistralRequestOptions(signal?: AbortSignal): {
+  fetchOptions?: { signal: AbortSignal };
+} | undefined {
+  return signal ? { fetchOptions: { signal } } : undefined;
+}
+
 
 const MAX_SUMMARY_LENGTH = 240;
 const MAX_SKILLS = 8;
@@ -1962,15 +2100,19 @@ export async function buildStructuredProposalPlan(args: {
   modelType: "mistral-large-latest" | "mistral-small-latest";
   prompt: string;
   diagnostics?: MistralDiagnosticsAccumulator;
+  signal?: AbortSignal;
 }): Promise<ProposalPlannerResult> {
   const client = new Mistral({ apiKey: args.mistralKey });
   const plannerPrompt = args.prompt;
   try {
-    const parsedResponse = await client.chat.parse({
-      model: args.modelType,
-      messages: [{ role: "user", content: plannerPrompt }],
-      responseFormat: PROPOSAL_PLANNER_SCHEMA,
-    });
+    const parsedResponse = await client.chat.parse(
+      {
+        model: args.modelType,
+        messages: [{ role: "user", content: plannerPrompt }],
+        responseFormat: PROPOSAL_PLANNER_SCHEMA,
+      },
+      buildMistralRequestOptions(args.signal),
+    );
     const parsed =
       parsedResponse.choices?.[0]?.message &&
       typeof parsedResponse.choices[0].message === "object"
@@ -2000,6 +2142,9 @@ export async function buildStructuredProposalPlan(args: {
     });
     throw new Error("Planner parse response did not contain parsed JSON");
   } catch (structuredError) {
+    if (isProposalGenerationCanceledError(structuredError)) {
+      throw structuredError;
+    }
     if (
       !(
         structuredError instanceof Error &&
@@ -2036,19 +2181,25 @@ export async function buildStructuredProposalPlan(args: {
     let fallbackResponse;
     const fallbackPrompt = `${plannerPrompt}\n\nReturn JSON only.`;
     try {
-      fallbackResponse = await client.chat.complete({
-        model: args.modelType,
-        messages: [
-          {
-            role: "user",
-            content: fallbackPrompt,
+      fallbackResponse = await client.chat.complete(
+        {
+          model: args.modelType,
+          messages: [
+            {
+              role: "user",
+              content: fallbackPrompt,
+            },
+          ],
+          responseFormat: {
+            type: "json_object",
           },
-        ],
-        responseFormat: {
-          type: "json_object",
         },
-      });
+        buildMistralRequestOptions(args.signal),
+      );
     } catch (fallbackError) {
+      if (isProposalGenerationCanceledError(fallbackError)) {
+        throw fallbackError;
+      }
       recordMistralDiagnosticFailure({
         diagnostics: args.diagnostics,
         stage: "planner_json_retry",
@@ -2082,15 +2233,19 @@ async function buildStructuredCoverLetterContentPlanWithMistral(args: {
   modelType: "mistral-large-latest" | "mistral-small-latest";
   prompt: string;
   diagnostics?: MistralDiagnosticsAccumulator;
+  signal?: AbortSignal;
 }): Promise<StructuredCoverLetterContentPlan> {
   const client = new Mistral({ apiKey: args.mistralKey });
   const contentPlanPrompt = args.prompt;
   try {
-    const parsedResponse = await client.chat.parse({
-      model: args.modelType,
-      messages: [{ role: "user", content: contentPlanPrompt }],
-      responseFormat: STRUCTURED_COVER_LETTER_CONTENT_PLAN_SCHEMA,
-    });
+    const parsedResponse = await client.chat.parse(
+      {
+        model: args.modelType,
+        messages: [{ role: "user", content: contentPlanPrompt }],
+        responseFormat: STRUCTURED_COVER_LETTER_CONTENT_PLAN_SCHEMA,
+      },
+      buildMistralRequestOptions(args.signal),
+    );
     const parsed =
       parsedResponse.choices?.[0]?.message &&
       typeof parsedResponse.choices[0].message === "object"
@@ -2122,6 +2277,9 @@ async function buildStructuredCoverLetterContentPlanWithMistral(args: {
       "Structured cover letter content plan parse response did not contain parsed JSON",
     );
   } catch (structuredError) {
+    if (isProposalGenerationCanceledError(structuredError)) {
+      throw structuredError;
+    }
     if (
       !(
         structuredError instanceof Error &&
@@ -2158,19 +2316,25 @@ async function buildStructuredCoverLetterContentPlanWithMistral(args: {
     let fallbackResponse;
     const fallbackPrompt = `${contentPlanPrompt}\n\nReturn JSON only.`;
     try {
-      fallbackResponse = await client.chat.complete({
-        model: args.modelType,
-        messages: [
-          {
-            role: "user",
-            content: fallbackPrompt,
+      fallbackResponse = await client.chat.complete(
+        {
+          model: args.modelType,
+          messages: [
+            {
+              role: "user",
+              content: fallbackPrompt,
+            },
+          ],
+          responseFormat: {
+            type: "json_object",
           },
-        ],
-        responseFormat: {
-          type: "json_object",
         },
-      });
+        buildMistralRequestOptions(args.signal),
+      );
     } catch (fallbackError) {
+      if (isProposalGenerationCanceledError(fallbackError)) {
+        throw fallbackError;
+      }
       recordMistralDiagnosticFailure({
         diagnostics: args.diagnostics,
         stage: "structured_plan_json_retry",
@@ -2212,6 +2376,7 @@ async function generateStructuredCoverLetterBodyWithMistral(args: {
   modelType: "mistral-large-latest" | "mistral-small-latest";
   prompt: string;
   diagnostics?: MistralDiagnosticsAccumulator;
+  signal?: AbortSignal;
 }): Promise<string> {
   const systemPrompt =
     "Write only the body of a cover letter. Follow the required paragraph count and role order. Use only the supplied facts and themes. Do not invent experience, achievements, credentials, readiness, or target-role experience. Do not output a greeting, sign-off, signature, CTA, bullets, markdown, or meta text.";
@@ -2222,11 +2387,14 @@ async function generateStructuredCoverLetterBodyWithMistral(args: {
   });
   let response;
   try {
-    response = await model.invoke([
-      new SystemMessage(systemPrompt),
-      new HumanMessage(args.prompt),
-    ]);
+    response = await model.invoke(
+      [new SystemMessage(systemPrompt), new HumanMessage(args.prompt)],
+      { signal: args.signal } as any,
+    );
   } catch (error) {
+    if (isProposalGenerationCanceledError(error)) {
+      throw error;
+    }
     recordMistralDiagnosticFailure({
       diagnostics: args.diagnostics,
       stage: "structured_body_generation",
@@ -3248,6 +3416,7 @@ async function repairProposalDraftWithMistral(args: {
   modelType: "mistral-large-latest" | "mistral-small-latest";
   prompt: string;
   diagnostics?: MistralDiagnosticsAccumulator;
+  signal?: AbortSignal;
 }): Promise<string> {
   const model = new ChatMistralAI({
     apiKey: args.mistralKey,
@@ -3255,8 +3424,13 @@ async function repairProposalDraftWithMistral(args: {
   });
   let response;
   try {
-    response = await model.invoke([new HumanMessage(args.prompt)]);
+    response = await model.invoke([new HumanMessage(args.prompt)], {
+      signal: args.signal,
+    } as any);
   } catch (error) {
+    if (isProposalGenerationCanceledError(error)) {
+      throw error;
+    }
     recordMistralDiagnosticFailure({
       diagnostics: args.diagnostics,
       stage: "repair",
@@ -3347,6 +3521,7 @@ async function repairProposalDraftBySentence(args: {
   candidateName?: string;
   flaggedSentences: ReturnType<typeof analyzeProposalDraft>["flaggedSentences"];
   diagnostics?: MistralDiagnosticsAccumulator;
+  signal?: AbortSignal;
 }): Promise<string> {
   const repairableBody = extractProposalBodyForRepair({
     content: args.content,
@@ -3396,6 +3571,7 @@ async function repairProposalDraftBySentence(args: {
             nextSentence,
           }),
           diagnostics: args.diagnostics,
+          signal: args.signal,
         }),
         candidateName: args.candidateName,
         fallback: localReplacement,
@@ -3494,6 +3670,7 @@ type AttemptStructuredCoverLetterArgs = {
   gateEnabled: boolean;
   mistralKey: string;
   modelType: "mistral-large-latest" | "mistral-small-latest";
+  signal?: AbortSignal;
   plannerResult: ProposalPlannerResult | null;
   outputFormat: OutputFormat;
   outputLanguage: ProposalOutputLanguage;
@@ -3501,6 +3678,7 @@ type AttemptStructuredCoverLetterArgs = {
   voicePreset: ProposalVoicePreset;
   jobTitle: string;
   jobDescription: string;
+  generationControlsBlock?: string;
   diagnostics?: MistralDiagnosticsAccumulator;
 };
 
@@ -3510,18 +3688,21 @@ type AttemptStructuredCoverLetterDeps = {
     modelType: "mistral-large-latest" | "mistral-small-latest";
     prompt: string;
     diagnostics?: MistralDiagnosticsAccumulator;
+    signal?: AbortSignal;
   }) => Promise<StructuredCoverLetterContentPlan>;
   generateParagraph?: (args: {
     mistralKey: string;
     modelType: "mistral-large-latest" | "mistral-small-latest";
     prompt: string;
     diagnostics?: MistralDiagnosticsAccumulator;
+    signal?: AbortSignal;
   }) => Promise<string>;
   generateBody?: (args: {
     mistralKey: string;
     modelType: "mistral-large-latest" | "mistral-small-latest";
     prompt: string;
     diagnostics?: MistralDiagnosticsAccumulator;
+    signal?: AbortSignal;
   }) => Promise<string>;
   analyzeDraft?: typeof analyzeProposalDraft;
   repairDraft?: typeof repairProposalDraftBySentence;
@@ -3579,8 +3760,10 @@ export async function attemptStructuredCoverLetterGeneration(
         voicePreset: args.voicePreset,
         jobTitle: args.jobTitle,
         jobDescription: args.jobDescription,
+        generationControlsBlock: args.generationControlsBlock,
       }),
       diagnostics: args.diagnostics,
+      signal: args.signal,
     });
   } catch (error) {
     if (isProposalProviderBusyError(error)) {
@@ -3622,6 +3805,7 @@ export async function attemptStructuredCoverLetterGeneration(
                 contentPlan,
                 jobTitle: args.jobTitle,
                 jobDescription: args.jobDescription,
+                generationControlsBlock: args.generationControlsBlock,
               })
             : buildStructuredCoverLetterComposerRetryPrompt({
                 plannerResult,
@@ -3631,8 +3815,10 @@ export async function attemptStructuredCoverLetterGeneration(
                 failureReason: summarizeStructuredValidationError(
                   lastBodyValidationError,
                 ),
+                generationControlsBlock: args.generationControlsBlock,
               }),
         diagnostics: args.diagnostics,
+        signal: args.signal,
       });
     } catch (error) {
       if (isProposalProviderBusyError(error)) {
@@ -3720,6 +3906,7 @@ export async function attemptStructuredCoverLetterGeneration(
           candidateName: args.candidateName,
           flaggedSentences: verificationResult.flaggedSentences,
           diagnostics: args.diagnostics,
+          signal: args.signal,
         });
       } catch (error) {
         if (isProposalProviderBusyError(error)) {
@@ -8200,6 +8387,7 @@ export function buildInlineMistralPrompt(
   personalizationRichness?: PersonalizationRichness,
   noContextBlock?: string,
   plannerBlock?: string,
+  generationControlsBlock?: string,
 ): string {
   const isNoContext = Boolean(noContextBlock);
   const applicationMessageEmployerPriorityBlock =
@@ -8489,6 +8677,7 @@ export function buildInlineMistralPrompt(
       metaOutputForbiddenBlock,
       bodyOnlyConstraintBlock,
       plannerBlock,
+      generationControlsBlock,
       applicationMessageWriterBrief,
       applicationMessageEmployerPriorityBlock,
       unsupportedClaimsBlock,
@@ -8510,6 +8699,7 @@ export function buildInlineMistralPrompt(
     coverLetterCompositionPriorityBlock,
     coverLetterEvidencePriorityBlock,
     plannerBlock,
+    generationControlsBlock,
     applicationMessageEmployerPriorityBlock,
     forbiddenBridgeRuleBlock,
     noContextBlock,
@@ -8565,7 +8755,31 @@ export async function handleGenerateProposal(
     }
   }
 
+  const generationRunJobId = args.clientRunId
+    ? await ctx.runMutation((internal as any).jobs.startProposalGenerationRun, {
+        profileId: userProfile._id,
+        clientRunId: args.clientRunId,
+        requestedBy: identity.subject,
+      })
+    : null;
+  const cancellationContext = generationRunJobId
+    ? createProposalGenerationCancellationContext({
+        ctx,
+        jobId: generationRunJobId,
+      })
+    : null;
+  let generationRunFinalStatus: "finished" | "failed" | "canceled" = "failed";
+  let generationRunFinalError: string | undefined;
+
   const outputFormat = normalizeOutputFormat(args.proposalType);
+  const generationControlsBlock = buildProposalGenerationControlsBlock({
+    toneTuning: resolveProposalToneTuning(args.toneTuning),
+    characterLimitMode: args.characterLimitMode,
+    characterLimit: resolveProposalCharacterLimit({
+      mode: args.characterLimitMode,
+      value: args.characterLimitValue ?? null,
+    }),
+  });
   const explicitPersonalization = sanitizePersonalizationContext(
     args.personalizationContext,
   );
@@ -8588,11 +8802,24 @@ export async function handleGenerateProposal(
       : resolvedPersonalization;
   const requestedModelType: ProposalModelType =
     args.modelType || "mistral-small-latest";
+  const isAutoVoicePresetRequested = args.voicePreset === null;
+  let autoToneReason: string | undefined;
   const resolvedVoicePreset =
     normalizeProposalVoicePresetForMode({
       value:
-        args.voicePreset ??
-        (userProfile as ProfileFallbackDoc | null)?.proposalVoicePreset,
+        isAutoVoicePresetRequested
+          ? (() => {
+              const autoTone = selectAutoTone({
+                jobTitle: args.jobTitle,
+                jobDescription: args.jobDescription,
+                personalizationContext: resolvedPersonalization,
+                personalizationRichness: args.personalizationRichness,
+              });
+              autoToneReason = autoTone.reason;
+              return autoTone.preset;
+            })()
+          : args.voicePreset ??
+            (userProfile as ProfileFallbackDoc | null)?.proposalVoicePreset,
       proposalType: args.proposalType,
       modelType: requestedModelType,
     }) ?? DEFAULT_PROPOSAL_VOICE_PRESET;
@@ -8647,6 +8874,7 @@ export async function handleGenerateProposal(
     contextMode: plannerContextMode,
     outputLanguage: plannerOutputLanguage,
     personalizationContext: effectivePersonalization,
+    generationControlsBlock,
   });
   let plannerResult: ProposalPlannerResult | null = null;
   let prompt = buildInlineMistralPrompt(
@@ -8664,6 +8892,7 @@ export async function handleGenerateProposal(
     plannerResult
       ? buildProposalWriterPlanBlock(plannerResult, outputFormat)
       : "",
+    generationControlsBlock,
   );
   const enrichedJobDescription = appendOptionalPromptBlock(
     args.jobDescription,
@@ -8724,8 +8953,15 @@ export async function handleGenerateProposal(
       ? { sourceJobDescription: args.jobDescription }
       : {}),
     voicePreset: resolvedVoicePreset,
+    requestedVoicePreset:
+      args.voicePreset === undefined ? undefined : args.voicePreset,
+    resolvedVoicePreset,
+    autoToneDecisionVersion: isAutoVoicePresetRequested ? "v1" : undefined,
+    autoToneReason,
     formalityLevel: effectiveTone.formalityLevel,
     creativity: effectiveTone.creativity,
+    characterLimitMode: args.characterLimitMode ?? undefined,
+    characterLimitValue: args.characterLimitValue ?? undefined,
     proposalType: outputFormat,
   };
   let residualVerifierWarningTag: string | null = null;
@@ -8836,6 +9072,9 @@ export async function handleGenerateProposal(
       }
     }
   };
+  const ensureGenerationActive = async (): Promise<void> => {
+    await cancellationContext?.ensureActive();
+  };
 
   let proposalId: string;
   let lastFinalizationTraceArgs: Omit<
@@ -8843,12 +9082,14 @@ export async function handleGenerateProposal(
     "attemptedPath"
   > | null = null;
 
+  try {
   // Development stub: when DEV_STUB env var is set, return a placeholder proposal
   // This allows frontend testing without LLM API keys.
   if (process.env.DEV_STUB === "true") {
     proposalContent = `DEV STUB PROPOSAL for "${effectiveJobTitle}"\n\nJob description:\n${args.jobDescription}\n\n---\nThis is a development placeholder proposal generated because DEV_STUB=true. Replace with a real LLM response in production.`;
     routingTrace.executedPath = "legacy";
     routingTrace.saveOutcome = "legacy_saved_raw";
+    await ensureGenerationActive();
     proposalId = await ctx.runMutation(internal.proposals.storeProposal, {
       userId: userProfile._id,
       title: defaultStoredTitle,
@@ -8869,6 +9110,7 @@ export async function handleGenerateProposal(
     });
     emitCoverLetterRoutingTelemetry();
     emitMistralDiagnosticsSummary("success");
+    generationRunFinalStatus = "finished";
     return { proposalId, proposalContent, ...getExecutionProvenance() };
   }
 
@@ -8877,6 +9119,7 @@ export async function handleGenerateProposal(
     premiumPersistencePayload = null;
     residualVerifierWarningTag = null;
     try {
+      await ensureGenerationActive();
       if (actualModelType === "chatgpt") {
         const apiKey = process.env.OPENAI_API_KEY;
         if (!apiKey) {
@@ -8911,10 +9154,12 @@ export async function handleGenerateProposal(
                 jobTitle: effectiveJobTitle,
                 jobDescription: args.jobDescription,
                 candidateName,
+                generationControlsBlock,
                 writer: ({ prompt }) =>
                   generatePremiumCoverLetterBodyPartsWithOpenAI({
                     apiKey,
                     prompt,
+                    signal: cancellationContext?.signal,
                   }),
               });
           } catch (premiumError) {
@@ -8967,22 +9212,34 @@ export async function handleGenerateProposal(
 
             const proposal = await proposalService.generateTechnicalProposal({
               jobTitle: effectiveJobTitle,
-              jobDescription: jobDescription,
+              jobDescription: appendOptionalPromptBlock(
+                jobDescription,
+                generationControlsBlock,
+              ),
               requirements: expertiseFromProfile,
               expertise: expertiseFromProfile,
               tone: "technical",
               formalityLevel: effectiveTone.formalityLevel,
               creativity: effectiveTone.creativity,
+            }, {
+              signal: cancellationContext?.signal,
             });
             proposalContent = proposal.content;
           } else if (outputFormat === "application_message") {
-            proposalContent = await gpt4Adapter.generate(prompt, {});
+            proposalContent = await gpt4Adapter.generate(prompt, {
+              signal: cancellationContext?.signal,
+            });
           } else {
             const proposal = await proposalService.generateCreativeProposal({
               jobTitle: effectiveJobTitle,
-              jobDescription: enrichedJobDescription,
+              jobDescription: appendOptionalPromptBlock(
+                enrichedJobDescription,
+                generationControlsBlock,
+              ),
               creativeDirection:
                 effectivePersonalization?.desiredPosition ?? "",
+            }, {
+              signal: cancellationContext?.signal,
             });
             proposalContent = proposal.content;
           }
@@ -9006,6 +9263,7 @@ export async function handleGenerateProposal(
                 modelType: actualModelType,
                 prompt: plannerPrompt,
                 diagnostics: mistralDiagnostics,
+                signal: cancellationContext?.signal,
               }),
               voicePreset: resolvedVoicePreset,
               contextMode: plannerContextMode,
@@ -9027,6 +9285,7 @@ export async function handleGenerateProposal(
               effectivePromptRichness,
               noContextPromptBlock,
               buildProposalWriterPlanBlock(plannerResult, outputFormat),
+              generationControlsBlock,
             );
           } catch (plannerError) {
             if (isProposalProviderBusyError(plannerError)) {
@@ -9059,6 +9318,7 @@ export async function handleGenerateProposal(
                   gateEnabled: structuredCoverLetterEnabled,
                   mistralKey,
                   modelType: actualModelType,
+                  signal: cancellationContext?.signal,
                   plannerResult,
                   outputFormat,
                   outputLanguage,
@@ -9066,6 +9326,7 @@ export async function handleGenerateProposal(
                   voicePreset: resolvedVoicePreset,
                   jobTitle: effectiveJobTitle,
                   jobDescription: args.jobDescription,
+                  generationControlsBlock,
                   diagnostics: mistralDiagnostics,
                 },
                 {
@@ -9130,8 +9391,13 @@ export async function handleGenerateProposal(
           });
           let response;
           try {
-            response = await model.invoke([new HumanMessage(prompt)]);
+            response = await model.invoke([new HumanMessage(prompt)], {
+              signal: cancellationContext?.signal,
+            } as any);
           } catch (error) {
+            if (isProposalGenerationCanceledError(error)) {
+              throw error;
+            }
             recordMistralDiagnosticFailure({
               diagnostics: mistralDiagnostics,
               stage: "legacy_generation",
@@ -9209,6 +9475,7 @@ export async function handleGenerateProposal(
                 candidateName,
                 flaggedSentences: verificationResult.flaggedSentences,
                 diagnostics: mistralDiagnostics,
+                signal: cancellationContext?.signal,
               });
 
               lastFinalizationTraceArgs = {
@@ -9273,11 +9540,17 @@ export async function handleGenerateProposal(
         const agentPrompt = prompt;
         let agentResponse;
         try {
-          agentResponse = await client.agents.complete({
-            agentId: mistralAgentId,
-            messages: [{ role: "user", content: agentPrompt }],
-          });
+          agentResponse = await client.agents.complete(
+            {
+              agentId: mistralAgentId,
+              messages: [{ role: "user", content: agentPrompt }],
+            },
+            buildMistralRequestOptions(cancellationContext?.signal),
+          );
         } catch (error) {
+          if (isProposalGenerationCanceledError(error)) {
+            throw error;
+          }
           recordMistralDiagnosticCall({
             diagnostics: mistralDiagnostics,
             stage: "agent_generation",
@@ -9316,6 +9589,7 @@ export async function handleGenerateProposal(
 
       if (structuredPersistencePayload) {
         routingTrace.saveOutcome = "structured_saved";
+        await ensureGenerationActive();
         proposalId = await ctx.runMutation(internal.proposals.storeProposal, {
           userId: userProfile._id,
           title: defaultStoredTitle,
@@ -9344,6 +9618,7 @@ export async function handleGenerateProposal(
 
         emitCoverLetterRoutingTelemetry();
         emitMistralDiagnosticsSummary("success");
+        generationRunFinalStatus = "finished";
         return { proposalId, proposalContent, ...getExecutionProvenance() };
       }
 
@@ -9354,6 +9629,7 @@ export async function handleGenerateProposal(
           routingTrace.validatorOutcome = "structured_success";
         }
         routingTrace.saveOutcome = "structured_saved";
+        await ensureGenerationActive();
         proposalId = await ctx.runMutation(internal.proposals.storeProposal, {
           userId: userProfile._id,
           title: defaultStoredTitle,
@@ -9380,6 +9656,7 @@ export async function handleGenerateProposal(
 
         emitCoverLetterRoutingTelemetry();
         emitMistralDiagnosticsSummary("success");
+        generationRunFinalStatus = "finished";
         return { proposalId, proposalContent, ...getExecutionProvenance() };
       }
 
@@ -9444,6 +9721,7 @@ export async function handleGenerateProposal(
 
         routingTrace.saveOutcome = "legacy_saved_parsed";
         try {
+          await ensureGenerationActive();
           proposalId = await ctx.runMutation(internal.proposals.storeProposal, {
             userId: userProfile._id,
             title: resolveStoredProposalTitle({
@@ -9483,6 +9761,7 @@ export async function handleGenerateProposal(
       } else {
         routingTrace.saveOutcome = "legacy_saved_raw";
         try {
+          await ensureGenerationActive();
           proposalId = await ctx.runMutation(internal.proposals.storeProposal, {
             userId: userProfile._id,
             title: defaultStoredTitle,
@@ -9515,8 +9794,15 @@ export async function handleGenerateProposal(
 
       emitCoverLetterRoutingTelemetry();
       emitMistralDiagnosticsSummary("success");
+      generationRunFinalStatus = "finished";
       return { proposalId, proposalContent, ...getExecutionProvenance() };
     } catch (error: any) {
+      if (isProposalGenerationCanceledError(error)) {
+        generationRunFinalStatus = "canceled";
+        emitCoverLetterRoutingTelemetry("not_saved");
+        emitMistralDiagnosticsSummary("failure");
+        throw error;
+      }
       if (isProposalProviderBusyError(error)) {
         markProviderBusyFailure();
         routingFailureStage = error.stage;
@@ -9643,6 +9929,7 @@ export async function handleGenerateProposal(
         }
 
         routingTrace.saveOutcome = "legacy_saved_after_parse_error";
+        await ensureGenerationActive();
         proposalId = await ctx.runMutation(internal.proposals.storeProposal, {
           userId: userProfile._id,
           title: defaultStoredTitle,
@@ -9671,12 +9958,30 @@ export async function handleGenerateProposal(
 
         emitCoverLetterRoutingTelemetry();
         emitMistralDiagnosticsSummary("success");
+        generationRunFinalStatus = "finished";
         return { proposalId, proposalContent, ...getExecutionProvenance() };
       }
       emitCoverLetterRoutingTelemetry("not_saved");
       emitMistralDiagnosticsSummary("failure");
       throw error;
     }
+  }
+  } catch (error) {
+    if (isProposalGenerationCanceledError(error)) {
+      generationRunFinalStatus = "canceled";
+      generationRunFinalError = "Proposal generation canceled.";
+      throw new ConvexError("Proposal generation canceled.");
+    } else {
+      generationRunFinalStatus = "failed";
+      generationRunFinalError =
+        error instanceof Error ? error.message : String(error);
+    }
+    throw error;
+  } finally {
+    await cancellationContext?.finalize({
+      status: generationRunFinalStatus,
+      ...(generationRunFinalError ? { error: generationRunFinalError } : {}),
+    });
   }
 }
 

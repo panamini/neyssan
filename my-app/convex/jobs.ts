@@ -1,6 +1,8 @@
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalMutation, internalQuery, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
+
+const PROPOSAL_GENERATION_JOB_KIND = "proposal_generation";
 
 /**
  * Internal helpers for LLM jobs.
@@ -120,6 +122,79 @@ export const enqueue = internalMutation({
     const now = Date.now();
     await ctx.db.patch(jobId, { status: "queued", updatedAt: now });
     await ctx.scheduler.runAfter(0, internal.llm.refine, { jobId });
+    return null;
+  },
+});
+
+export const startProposalGenerationRun = internalMutation({
+  args: {
+    profileId: v.id("userProfiles"),
+    clientRunId: v.string(),
+    requestedBy: v.string(),
+  },
+  returns: v.id("llmJobs"),
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    return await ctx.db.insert("llmJobs", {
+      profileId: args.profileId,
+      placeholderId: args.clientRunId,
+      status: "processing",
+      rawText: "",
+      options: {
+        kind: PROPOSAL_GENERATION_JOB_KIND,
+      },
+      requestedBy: args.requestedBy,
+      startedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    });
+  },
+});
+
+export const getProposalGenerationRun = internalQuery({
+  args: {
+    jobId: v.id("llmJobs"),
+  },
+  returns: v.union(
+    v.null(),
+    v.object({
+      status: v.string(),
+      placeholderId: v.optional(v.string()),
+      requestedBy: v.optional(v.string()),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const job = await ctx.db.get(args.jobId);
+    if (!job || job.options?.kind !== PROPOSAL_GENERATION_JOB_KIND) {
+      return null;
+    }
+
+    return {
+      status: job.status,
+      placeholderId: job.placeholderId ?? undefined,
+      requestedBy: job.requestedBy ?? undefined,
+    };
+  },
+});
+
+export const finishProposalGenerationRun = internalMutation({
+  args: {
+    jobId: v.id("llmJobs"),
+    status: v.string(),
+    error: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const job = await ctx.db.get(args.jobId);
+    if (!job || job.options?.kind !== PROPOSAL_GENERATION_JOB_KIND) {
+      return null;
+    }
+
+    await ctx.db.patch(args.jobId, {
+      status: args.status,
+      lastError: args.error ?? job.lastError,
+      updatedAt: Date.now(),
+    });
     return null;
   },
 });
@@ -422,5 +497,57 @@ export const markJobFailed = internalMutation({
       updatedAt: args.updatedAt ?? Date.now(),
     });
     return null;
+  },
+});
+
+export const requestProposalGenerationCancel = mutation({
+  args: {
+    clientRunId: v.string(),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    const profile = await ctx.db
+      .query("userProfiles")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!profile) {
+      return false;
+    }
+
+    const candidates = await ctx.db
+      .query("llmJobs")
+      .withIndex("by_profile", (q) => q.eq("profileId", profile._id))
+      .order("desc")
+      .take(20);
+
+    const run = candidates.find(
+      (job) =>
+        job.options?.kind === PROPOSAL_GENERATION_JOB_KIND &&
+        job.placeholderId === args.clientRunId &&
+        job.requestedBy === identity.subject,
+    );
+
+    if (!run) {
+      return false;
+    }
+
+    if (
+      run.status === "finished" ||
+      run.status === "failed" ||
+      run.status === "canceled"
+    ) {
+      return true;
+    }
+
+    await ctx.db.patch(run._id, {
+      status: "cancel_requested",
+      updatedAt: Date.now(),
+    });
+    return true;
   },
 });
