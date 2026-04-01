@@ -127,6 +127,7 @@ export const Copy = withCompat(PhCopy);
 export const CornersIn = withCompat(PhCornersIn);
 export const Eye = withCompat(PhEye);
 export const EyeDropper = withCompat(PhEyedropper);
+export const Feather = withCompat(PhPenNib);
 export const FileImage = withCompat(PhFileImage);
 export const FilePdf = withCompat(PhFilePdf);
 export const FileText = withCompat(PhFileText);

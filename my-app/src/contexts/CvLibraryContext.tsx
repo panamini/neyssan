@@ -296,6 +296,61 @@ function isLibrarySummaryOnlyCv(doc: CvDocument | null): boolean {
   return Boolean((doc?.metadata as { librarySummaryOnly?: boolean } | undefined)?.librarySummaryOnly);
 }
 
+function expandLibrarySummaryOnlyCv(doc: CvDocument): CvDocument {
+  const template = generateCvTemplateV1(doc.title);
+  const metadata = doc.metadata ?? template.metadata;
+  const { librarySummaryOnly: _librarySummaryOnly, ...restMetadata } =
+    (metadata as { librarySummaryOnly?: boolean } & CvDocument["metadata"]) ??
+    template.metadata;
+
+  const existingProfileSection = Array.isArray(doc.sections)
+    ? doc.sections.find((section) => String(section.type) === "profile")
+    : undefined;
+  const existingProfileItem = Array.isArray(existingProfileSection?.structuredContent)
+    ? existingProfileSection.structuredContent[0]
+    : undefined;
+
+  const mergedSections = template.sections.map((section) => {
+    if (String(section.type) !== "profile" || !existingProfileItem) {
+      return section;
+    }
+
+    const templateProfileItem = Array.isArray(section.structuredContent)
+      ? section.structuredContent[0]
+      : undefined;
+    if (!templateProfileItem) {
+      return section;
+    }
+
+    return {
+      ...section,
+      structuredContent: [
+        {
+          ...templateProfileItem,
+          ...existingProfileItem,
+          id: (existingProfileItem as { id?: string } | undefined)?.id ?? templateProfileItem.id,
+        },
+      ],
+    } as CvSection;
+  });
+
+  return {
+    ...template,
+    id: doc.id,
+    title: doc.title,
+    metadata: {
+      ...template.metadata,
+      ...restMetadata,
+      createdAt: restMetadata.createdAt ?? template.metadata.createdAt,
+      updatedAt: restMetadata.updatedAt ?? template.metadata.updatedAt,
+      version: restMetadata.version ?? template.metadata.version,
+    },
+    sections: mergedSections,
+    tags: doc.tags ?? template.tags,
+    summary: doc.summary ?? template.summary,
+  };
+}
+
 /**
  * Context shape for the new CV library using CvDocument + ConvexStorageAdapter.
  */
@@ -1611,7 +1666,11 @@ const flushPendingEdits = useCallback((): void => {
           : cvsRef.current.find((candidate) => String(candidate.id) === targetId) ??
             null;
 
-      if (doc && !isLibrarySummaryOnlyCv(doc)) {
+      if (doc && isLibrarySummaryOnlyCv(doc)) {
+        doc = expandLibrarySummaryOnlyCv(doc);
+      }
+
+      if (doc) {
         try {
           doc = migrateLegacyIds(doc);
         } catch {
@@ -1653,6 +1712,9 @@ const flushPendingEdits = useCallback((): void => {
                 tags: Array.isArray(parsed.tags) ? parsed.tags : undefined,
                 summary: parsed.summary ?? undefined,
               } as CvDocument;
+            }
+            if (doc && isLibrarySummaryOnlyCv(doc)) {
+              doc = expandLibrarySummaryOnlyCv(doc);
             }
           }
         }
@@ -1753,6 +1815,9 @@ const flushPendingEdits = useCallback((): void => {
                       summary: parsed.summary ?? undefined,
                     } as CvDocument;
                   }
+                  if (remoteDoc && isLibrarySummaryOnlyCv(remoteDoc)) {
+                    remoteDoc = expandLibrarySummaryOnlyCv(remoteDoc);
+                  }
                   try {
                     if (remoteDoc) remoteDoc = migrateLegacyIds(remoteDoc);
                   } catch { /* noop */ }
@@ -1840,7 +1905,7 @@ const flushPendingEdits = useCallback((): void => {
       }
 
       const existing = cvs.find((doc) => String(doc.id) === restoreId);
-      if (existing) {
+      if (existing && !isLibrarySummaryOnlyCv(existing)) {
         let restored = existing;
         try {
           restored = migrateLegacyIds(existing);
