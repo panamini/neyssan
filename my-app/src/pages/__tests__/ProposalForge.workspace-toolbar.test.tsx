@@ -157,6 +157,28 @@ describe("ProposalForge workbench layout", () => {
       '[data-testid="proposal-workbench-toolbar-slot"]',
     ) as HTMLElement | null;
     expect(toolbarSlot).toBeTruthy();
+    expect(
+      toolbarSlot?.closest(".dasti-proposal-compose-column"),
+    ).toBeNull();
+    expect(toolbarSlot?.closest(".dasti-flow")).toBeNull();
+    const pageShell = container.querySelector(".dasti-page-shell") as
+      | HTMLElement
+      | null;
+    const workbenchFrame = container.querySelector(".dasti-flow") as
+      | HTMLElement
+      | null;
+    const gridSplit = container.querySelector(".dasti-grid-split") as
+      | HTMLElement
+      | null;
+    expect(
+      pageShell?.style.getPropertyValue("--page-shell-gap"),
+    ).toBe("var(--space-2)");
+    expect(workbenchFrame?.style.maxWidth).toContain(
+      "var(--document-viewer-shell-inline-size)",
+    );
+    expect(
+      gridSplit?.style.getPropertyValue("--grid-columns"),
+    ).toBe("minmax(0, 460px) minmax(0, var(--document-viewer-shell-inline-size))");
     expect(screen.queryByRole("button", { name: /pick cv/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Balanced" })).not.toBeInTheDocument();
   });
