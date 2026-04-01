@@ -834,29 +834,6 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
       currentActiveCvSource.personalizationContext,
     );
 
-    if (import.meta.env.DEV) {
-      console.debug("[ProposalInputForm] Audit A — active CV context", {
-        cvTitle: currentActiveCvSource.title,
-        hasCv: hasCandidateContext,
-        topSkills:
-          currentActiveCvSource.personalizationContext?.topSkills ?? null,
-        recentExperience:
-          currentActiveCvSource.personalizationContext?.recentExperience ??
-          null,
-        standoutAchievements:
-          currentActiveCvSource.personalizationContext?.standoutAchievements ??
-          null,
-        desiredPosition:
-          currentActiveCvSource.personalizationContext?.desiredPosition ?? null,
-      });
-      console.debug("[ProposalInputForm] Audit B — job values", {
-        jobTitle: values.jobTitle,
-        jobDescriptionLength: values.jobDescription?.length ?? 0,
-        jobDescriptionPreview: values.jobDescription?.slice(0, 200) ?? null,
-        proposalType: values.proposalType,
-      });
-    }
-
     const normalizedValues = normalizeProposalFormValues(values);
 
     try {
@@ -1056,13 +1033,9 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
     setCvPickerOpen(false);
     syncSelectedCvToSharedActiveSnapshot(id);
     onActiveCvChange?.(id);
-    if (typeof window !== "undefined") {
-      window.requestAnimationFrame(() => {
-        void navigate(`/cv?id=${encodeURIComponent(id)}`);
-      });
-      return;
-    }
-    void navigate(`/cv?id=${encodeURIComponent(id)}`);
+    React.startTransition(() => {
+      void navigate(`/cv?id=${encodeURIComponent(id)}`);
+    });
   }
 
   function handleConfirmPendingCv() {
