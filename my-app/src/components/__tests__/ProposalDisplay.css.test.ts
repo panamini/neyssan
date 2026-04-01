@@ -25,9 +25,11 @@ describe("ProposalDisplay CSS contracts", () => {
     expect(productCss).toMatch(
       /\.dasti-proposal-sheet__body--document-viewer\s+\.dasti-document-stage-chassis\s*\{[\s\S]*padding-block-start:\s*var\(--document-viewer-bleed-block\);[\s\S]*padding-inline:\s*var\(--document-viewer-bleed-inline\);[\s\S]*padding-block-end:\s*calc\(var\(--document-viewer-bleed-block\)\s*\+\s*var\(--space-2\)\);[\s\S]*box-sizing:\s*border-box;/,
     );
-    expect(productCss).toMatch(
-      /\.dasti-proposal-character-badge-wrap\s*\{[\s\S]*position:\s*absolute;[\s\S]*inset-inline-start:[\s\S]*inset-block-end:/,
-    );
+    expect(productCss).toContain(".dasti-proposal-character-badge-wrap {");
+    expect(productCss).toContain("position: absolute;");
+    expect(productCss).toContain("var(--proposal-output-stage-frame-padding, 0px)");
+    expect(productCss).toContain("var(--document-shell-padding-inline)");
+    expect(productCss).toContain("var(--document-shell-padding-block)");
   });
 
   it("prevents document spill from the focused body slot without forcing the shell to a fixed A4 block size", () => {
@@ -44,7 +46,7 @@ describe("ProposalDisplay CSS contracts", () => {
       /\.dasti-proposal-output-shell\s*\{[\s\S]*--document-shell-padding-inline:\s*8px;[\s\S]*--document-shell-padding-block:\s*8px;[\s\S]*--proposal-output-stage-frame-padding:\s*8px;[\s\S]*--proposal-output-rail-inline-inset:\s*var\(--document-shell-padding-inline\);/,
     );
     expect(productCss).toMatch(
-      /\.dasti-proposal-output-shell--workspace\s*\{[\s\S]*--document-shell-padding-inline:\s*0px;[\s\S]*--document-shell-padding-block:\s*0px;[\s\S]*--proposal-output-stage-frame-padding:\s*4px;[\s\S]*--proposal-output-rail-inline-inset:\s*4px;/,
+      /\.dasti-proposal-output-shell--workspace\s*\{[\s\S]*--document-shell-padding-inline:\s*0px;[\s\S]*--document-shell-padding-block:\s*0px;[\s\S]*--document-viewer-bleed-inline:\s*var\(--s2\);[\s\S]*--document-viewer-bleed-block:\s*var\(--s2\);[\s\S]*--proposal-output-stage-frame-padding:\s*var\(--s2\);[\s\S]*--proposal-output-rail-inline-inset:\s*var\(--s2\);/,
     );
     expect(productCss).toMatch(
       /\.dasti-proposal-output-shell\s*\{[\s\S]*--proposal-output-toolbar-lift:\s*calc\([\s\S]*var\(--document-viewer-toolbar-block-size\)\s*\+\s*var\(--space-2\)[\s\S]*\);/,
@@ -60,6 +62,22 @@ describe("ProposalDisplay CSS contracts", () => {
     );
     expect(productCss).toMatch(
       /\.dasti-proposal-output-shell[\s\S]*?\.dasti-proposal-sheet__body--document-viewer[\s\S]*?\.dasti-document-stage-chassis\s*\{[\s\S]*justify-content:\s*center;[\s\S]*padding:\s*var\(--proposal-output-stage-frame-padding\);/,
+    );
+    expect(productCss).toContain(".dasti-proposal-library-card {");
+    expect(productCss).toContain(
+      "--document-viewer-shell-inline-size: calc(",
+    );
+    expect(productCss).toContain(
+      "var(--document-sheet-inline-size) - (var(--s4) * 2)",
+    );
+    expect(productCss).toContain("--document-viewer-bleed-inline: var(--s2);");
+    expect(productCss).toContain("--document-viewer-bleed-block: var(--s2);");
+    expect(productCss).toContain(
+      ".dasti-proposal-library-card .dasti-proposal-sheet__body--document-viewer .dasti-document-stage-chassis {",
+    );
+    expect(productCss).toContain("justify-content: center;");
+    expect(productCss).toContain(
+      "padding: var(--proposal-output-stage-frame-padding);",
     );
     expect(productCss).toMatch(
       /@media \(max-width: 1439px\)\s*\{[\s\S]*\.dasti-proposal-output-shell\s*\{[\s\S]*--proposal-output-toolbar-lift:\s*0px;[\s\S]*\}[\s\S]*\.dasti-proposal-output-shell\s+\.dasti-document-rail\s*\{[\s\S]*position:\s*static;[\s\S]*margin-block-end:\s*var\(--document-rail-gap\);/,
