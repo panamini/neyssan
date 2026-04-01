@@ -71,7 +71,13 @@ describe("CvForge workspace mode", () => {
       screen.getByText("Preview host: workspace / layout: stacked"),
     ).toBeInTheDocument();
     expect(
+      container.querySelector(".dasti-cv-preview-workbench"),
+    ).toBeTruthy();
+    expect(
       container.querySelector(".dasti-workbench-top-left-slot--cv"),
+    ).toBeTruthy();
+    expect(
+      container.querySelector(".dasti-workbench-top-left-slot--cv-preview"),
     ).toBeTruthy();
     expect(
       screen.getByRole("button", { name: "Return to resume editing" }),

@@ -118,7 +118,10 @@ describe("ProposalForge workbench layout", () => {
 
     const lastCall =
       proposalDisplaySpy.mock.calls[proposalDisplaySpy.mock.calls.length - 1]?.[0];
-    expect(lastCall).toMatchObject({ previewAnchor: "top" });
+    expect(lastCall).toMatchObject({
+      previewAnchor: "top",
+      documentHeaderMode: "hidden",
+    });
   });
 
   it("routes the live workbench toolbar through the compose form's external CV and tone controls", () => {
