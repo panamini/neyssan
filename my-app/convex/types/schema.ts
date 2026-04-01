@@ -39,6 +39,21 @@ export interface ProposalDoc extends Doc<"proposals"> {
       | "direct"
       | "engaging"
       | "storyteller";
+    requestedVoicePreset?:
+      | "signature"
+      | "expert"
+      | "direct"
+      | "engaging"
+      | "storyteller"
+      | null;
+    resolvedVoicePreset?:
+      | "signature"
+      | "expert"
+      | "direct"
+      | "engaging"
+      | "storyteller";
+    autoToneDecisionVersion?: "v1";
+    autoToneReason?: string;
     formalityLevel?: "informal" | "neutral" | "formal";
     creativity?: "low" | "medium" | "high";
     templateId?: ProposalTemplateId;
@@ -48,6 +63,25 @@ export interface ProposalDoc extends Doc<"proposals"> {
       palette: string;
       accentHex?: string;
     };
+    styleChoice?: "auto" | "formal" | "warm" | "technical" | "balanced";
+    templateBundleId?:
+      | "swiss_serif"
+      | "swiss_mono"
+      | "magazine_editorial"
+      | "magazine_serif"
+      | "grid_mono"
+      | "quire_mono";
+    typographyOverride?: "signature" | "engaging" | "expert" | null;
+    layoutOverride?: "swiss" | "editorial" | "modernist" | "quire" | null;
+    characterLimitMode?:
+      | "none"
+      | "linkedin_note_200"
+      | "linkedin_inmail_2000"
+      | "indeed_cover_letter_4000"
+      | "upwork_proposal_advisory"
+      | "custom"
+      | null;
+    characterLimitValue?: number | null;
     proposalType?:
       | "cover_letter"
       | "application_message"
@@ -75,6 +109,16 @@ export interface UserProfileDoc extends Doc<"userProfiles"> {
     | "engaging"
     | "storyteller";
   proposalTemplateId?: ProposalTemplateId;
+  proposalStyleChoice?: "auto" | "formal" | "warm" | "technical" | "balanced";
+  proposalPaletteOverride?:
+    | "sauge"
+    | "ocre"
+    | "pierre"
+    | "bordeaux"
+    | "encre"
+    | null;
+  proposalAccentHex?: string | null;
+  proposalSourceMode?: "inherit_cv" | "proposal_local";
 }
 
 export interface RateLimitDoc extends Doc<"rateLimits"> {

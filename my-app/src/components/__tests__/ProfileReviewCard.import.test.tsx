@@ -82,16 +82,14 @@ describe("ProfileReviewCard import", () => {
       strict: null,
     });
 
-    const { container } = render(<ProfileReviewCard />);
+    render(<ProfileReviewCard />);
 
     expect(screen.getByRole("button", { name: "Import" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Import" }));
-    await user.click(
-      screen.getByRole("button", { name: /Import text PDF or TXT/i }),
-    );
-
-    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const input = screen.getByLabelText(
+      /Import text PDF or TXT/i,
+    ) as HTMLInputElement;
     const file = new File(["Imported CV text"], "resume.txt", {
       type: "text/plain",
     });
