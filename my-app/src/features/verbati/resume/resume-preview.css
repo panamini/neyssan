@@ -161,6 +161,15 @@
   transform-origin: top left;
 }
 
+.dasti-doc-viewer-shell--resume-workspace
+  .dasti-doc-viewport--resume
+  .resume-page-stage,
+.dasti-doc-viewer-shell--resume-workspace
+  .dasti-doc-viewport--resume
+  .resume-page-stage--embedded {
+  place-items: start;
+}
+
 .resume-page-frame {
   width: max(100%, var(--preview-stage-width, 100%));
   min-width: 100%;

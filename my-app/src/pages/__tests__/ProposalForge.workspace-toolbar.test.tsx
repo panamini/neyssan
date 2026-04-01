@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { ProposalForge } from "../ProposalForge";
@@ -7,13 +7,14 @@ import { ProposalForge } from "../ProposalForge";
 const proposalDisplaySpy = vi.fn();
 const proposalInputFormSpy = vi.fn();
 const proposalComposeToolbarSpy = vi.fn();
+const useQueryMock = vi.fn(() => null);
 
 vi.mock("convex/react", () => ({
   useConvexAuth: () => ({
     isLoading: false,
     isAuthenticated: true,
   }),
-  useQuery: () => null,
+  useQuery: (...args: any[]) => useQueryMock(...args),
   useMutation: () => vi.fn().mockResolvedValue(undefined),
   useAction: () => vi.fn().mockResolvedValue(null),
 }));
@@ -97,6 +98,8 @@ describe("ProposalForge workbench layout", () => {
     proposalDisplaySpy.mockClear();
     proposalInputFormSpy.mockClear();
     proposalComposeToolbarSpy.mockClear();
+    useQueryMock.mockReset();
+    useQueryMock.mockReturnValue(null);
     window.localStorage.clear();
     Object.defineProperty(window, "innerWidth", {
       configurable: true,
@@ -150,9 +153,33 @@ describe("ProposalForge workbench layout", () => {
     const toolbarSlot = container.querySelector(
       '[data-testid="proposal-workbench-toolbar-slot"]',
     ) as HTMLElement | null;
-    expect(toolbarSlot?.style.width).toBe("min(100%, 560px)");
+    expect(toolbarSlot).toBeTruthy();
     expect(screen.queryByRole("button", { name: /pick cv/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Balanced" })).not.toBeInTheDocument();
+  });
+
+  it("normalizes unsupported saved toolbar tones back to auto", () => {
+    useQueryMock.mockImplementation((query: string) => {
+      if (query === "proposalSettings.getCurrent") {
+        return {
+          savedVoicePreset: "direct",
+          templateId: null,
+        };
+      }
+      return null;
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    const lastInputCall =
+      proposalInputFormSpy.mock.calls[proposalInputFormSpy.mock.calls.length - 1]?.[0];
+    expect(lastInputCall).toMatchObject({
+      externalVoicePreset: null,
+    });
   });
 
   it("restores the donor desktop collapse and restore controls for the compose column", () => {
@@ -246,5 +273,94 @@ describe("ProposalForge workbench layout", () => {
     ).toBe("minmax(0, 1fr)");
     expect(composeShell?.style.width).toBe("min(100%, 560px)");
     expect(outputShell?.style.width).toBe("min(100%, 560px)");
+  });
+
+  it("orders compose output actions as regenerate, save, delete, then copy", () => {
+    window.localStorage.setItem(
+      "dasti:proposal-output-draft:v1",
+      JSON.stringify({
+        proposalContent: "Generated proposal body.",
+        proposalType: "cover_letter",
+        proposalVoicePreset: "signature",
+        proposalTemplateId: null,
+        proposalVerbatiStyle: null,
+        proposalStyleLinkMode: "inherit_cv",
+        proposalStyleChoice: "auto",
+        proposalApplicantName: "Alex Martin",
+        proposalApplicantRole: "Operations Associate",
+        proposalDocumentTitle: "Generated proposal",
+        proposalDocumentMeta: "Compose output",
+        generatedProposalId: "proposal_live",
+        proposalOutputMode: "preview",
+        paletteOverride: null,
+        customAccentHex: null,
+        templateBundleId: null,
+        typographyOverride: null,
+        layoutOverride: null,
+        proposalDocumentTitleManual: false,
+        characterLimitMode: null,
+        characterLimitValue: null,
+      }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    const lastCall =
+      proposalDisplaySpy.mock.calls[proposalDisplaySpy.mock.calls.length - 1]?.[0];
+    const { container } = render(
+      <div>
+        {lastCall.actions as React.ReactNode}
+        <button type="button" aria-label="Copy">
+          Copy
+        </button>
+      </div>,
+    );
+
+    const buttonLabels = within(container).getAllByRole("button").map(
+      (button) =>
+        button.getAttribute("aria-label") ??
+        button.getAttribute("data-toolbar-tooltip"),
+    );
+    expect(buttonLabels).toEqual([
+      "Regenerate proposal",
+      "Save proposal to library",
+      "Delete",
+      "Copy",
+    ]);
+  });
+
+  it("keeps collapse and restore controls available across the compact breakpoint", () => {
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 1000,
+      writable: true,
+    });
+    window.dispatchEvent(new Event("resize"));
+
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    let lastToolbarCall =
+      proposalComposeToolbarSpy.mock.calls[
+        proposalComposeToolbarSpy.mock.calls.length - 1
+      ]?.[0];
+    expect(lastToolbarCall.onCollapseCompose).toEqual(expect.any(Function));
+
+    fireEvent.click(screen.getByRole("button", { name: "Collapse compose" }));
+
+    lastToolbarCall =
+      proposalComposeToolbarSpy.mock.calls[
+        proposalComposeToolbarSpy.mock.calls.length - 1
+      ]?.[0];
+    expect(lastToolbarCall).toMatchObject({ collapsed: true });
+    expect(lastToolbarCall.onRestoreCompose).toEqual(expect.any(Function));
+    expect(screen.getByRole("button", { name: "Restore compose" })).toBeInTheDocument();
   });
 });

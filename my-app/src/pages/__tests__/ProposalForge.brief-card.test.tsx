@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { ProposalForge } from "../ProposalForge";
@@ -93,7 +93,7 @@ describe("ProposalForge brief card", () => {
     window.localStorage.clear();
   });
 
-  it("shows the brief summary above compose and routes the edit action back to the compose brief fields", () => {
+  it("shows the brief summary above compose and routes the edit action back to the compose brief fields", async () => {
     render(
       <MemoryRouter initialEntries={["/proposal"]}>
         <ProposalForge />
@@ -111,8 +111,10 @@ describe("ProposalForge brief card", () => {
       ).length,
     ).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByRole("button", { name: "Open compose brief" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit brief" }));
 
-    expect(document.getElementById("jobDescription")).toHaveFocus();
+    await waitFor(() => {
+      expect(document.getElementById("jobDescription")).toHaveFocus();
+    });
   });
 });

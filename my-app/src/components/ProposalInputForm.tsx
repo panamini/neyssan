@@ -667,6 +667,10 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   );
 
   React.useEffect(() => {
+    if (externalVoicePreset !== undefined) {
+      return;
+    }
+
     if (!savedVoicePreset || appliedSavedVoicePresetRef.current) return;
 
     const hasTouchedToneControls =
@@ -683,6 +687,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
     appliedSavedVoicePresetRef.current = true;
   }, [
     applyVoicePresetSelection,
+    externalVoicePreset,
     form.formState.dirtyFields.creativity,
     form.formState.dirtyFields.formalityLevel,
     form.formState.dirtyFields.voicePreset,
@@ -1094,9 +1099,9 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   const generateButtonVisualClass =
     getProposalGenerateButtonVisualClass(generateButtonState);
   const canSubmitGeneration = !isGenerating && generateButtonState === "idle";
-  const proposalDocumentTypography = React.useMemo(
-    () => getProposalDocumentTypography(displayedVoicePreset),
-    [displayedVoicePreset],
+  const composeInputTypography = React.useMemo(
+    () => getProposalDocumentTypography(null),
+    [],
   );
   const { ref: jobDescriptionFieldRef, ...jobDescriptionFieldProps } =
     form.register("jobDescription");
@@ -1332,11 +1337,11 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                     className="dasti-proposal-sheet__body--editable"
                     style={{
                       color: "var(--ti)",
-                      fontFamily: proposalDocumentTypography.fontFamily,
+                      fontFamily: composeInputTypography.fontFamily,
                       fontSize: "var(--tb)",
                       lineHeight: "var(--lb)",
-                      fontWeight: proposalDocumentTypography.fontWeight,
-                      letterSpacing: proposalDocumentTypography.letterSpacing,
+                      fontWeight: composeInputTypography.fontWeight,
+                      letterSpacing: composeInputTypography.letterSpacing,
                       outline: "none",
                       display: "block",
                       background: "transparent",

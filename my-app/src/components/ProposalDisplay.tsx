@@ -234,22 +234,7 @@ export function fallbackCopyText(text: string): boolean {
 const isDev = import.meta.env.DEV;
 const PROPOSAL_PREVIEW_ZOOM_STORAGE_KEY = "dasti:proposal-preview-zoom-index:v1";
 
-function readProposalZoomIndex(storageKey: string | null | undefined) {
-  if (typeof window === "undefined" || !storageKey) {
-    return 1;
-  }
-
-  const rawValue = window.localStorage.getItem(storageKey);
-  const parsedValue = Number.parseInt(rawValue ?? "", 10);
-
-  if (
-    Number.isInteger(parsedValue) &&
-    parsedValue >= 0 &&
-    parsedValue < DOCUMENT_ZOOM_STEPS.length
-  ) {
-    return parsedValue;
-  }
-
+function readProposalZoomIndex(_storageKey: string | null | undefined) {
   return 1;
 }
 
@@ -379,7 +364,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     ? "hidden"
     : documentHeaderMode;
   const hasDocumentCaption =
-    resolvedDocumentHeaderMode === "full" &&
+    resolvedDocumentHeaderMode !== "hidden" &&
     Boolean(
       (documentTitle && documentTitle.trim().length > 0) ||
       (documentMeta && documentMeta.trim().length > 0),
@@ -474,17 +459,6 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     updateEditableScrollEdges,
     updatePreviewScrollEdges,
   ]);
-
-  React.useEffect(() => {
-    if (typeof window === "undefined" || !showZoomControls || !zoomStorageKey) {
-      return;
-    }
-
-    window.localStorage.setItem(
-      zoomStorageKey,
-      String(zoomIndex),
-    );
-  }, [showZoomControls, zoomIndex, zoomStorageKey]);
 
   React.useEffect(() => {
     setZoomIndex(readProposalZoomIndex(zoomStorageKey));
@@ -631,7 +605,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     enabled: enablesDocumentZoom,
     layoutKey: `${effectiveZoomLevel}:${stageLayout.stageWidth}:${stageLayout.stageHeight}:${resolvedTemplateId}:${proposalContent?.length ?? 0}:${mode}:${previewAnchor}`,
     recenterKey: fitRequestCount,
-    defaultCenterX: 0.5,
+    defaultCenterX: previewAnchor === "body" ? 0.5 : 0,
     defaultCenterY: previewAnchor === "body" ? 0.46 : 0,
     onSync: updatePreviewScrollEdges,
   });
@@ -744,7 +718,9 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
               ? "dasti-doc-zoom-fit dasti-doc-zoom-trigger"
               : "dasti-doc-zoom-fit dasti-doc-zoom-trigger dasti-doc-zoom-trigger--active"
           }
-          onClick={() => setIsZoomMenuOpen((current) => !current)}
+          onClick={() => {
+            setIsZoomMenuOpen((current) => !current);
+          }}
           aria-label="Open zoom controls"
           data-toolbar-tooltip="Zoom"
           aria-expanded={isZoomMenuOpen}
@@ -871,6 +847,33 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       ) : null}
     </div>
   ) : null;
+  const inlineDocumentCaption =
+    hasDocumentCaption && documentHeaderMode === "actions-only" ? (
+      <div className="dasti-proposal-sheet__heading dasti-proposal-sheet__heading--inline">
+        {documentTitleEditable ? (
+          <input
+            type="text"
+            value={documentTitle ?? ""}
+            onChange={(event) => onDocumentTitleChange?.(event.target.value)}
+            onBlur={() => onDocumentTitleCommit?.()}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                (event.currentTarget as HTMLInputElement).blur();
+              }
+            }}
+            placeholder={documentTitlePlaceholder}
+            className="dasti-proposal-sheet__title-input"
+            aria-label="Proposal title"
+          />
+        ) : documentTitle ? (
+          <h3 className="dasti-proposal-sheet__title">{documentTitle}</h3>
+        ) : null}
+        {documentMeta ? (
+          <p className="dasti-proposal-sheet__meta">{documentMeta}</p>
+        ) : null}
+      </div>
+    ) : null;
 
   const renderDocumentStage = () => (
     <div className="dasti-document-stage-chassis" ref={stageMeasureRef}>
@@ -1231,7 +1234,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           {fallbackDisclosure}
         </div>
       ) : null}
-      {documentCaption}
+      {documentHeaderMode === "actions-only" ? null : documentCaption}
       <div className="dasti-doc-viewer-shell">
         {isEditable && textareaSelectionState ? (
           <FloatingAiToolbar
@@ -1263,6 +1266,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
               aria-label={loading ? "Generating proposal" : undefined}
             >
               {floatingRail}
+              {inlineDocumentCaption}
               {sheetBody}
             </div>
           </div>

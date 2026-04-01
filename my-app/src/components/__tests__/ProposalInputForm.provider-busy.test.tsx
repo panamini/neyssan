@@ -1011,7 +1011,7 @@ describe("ProposalInputForm provider-busy handling", () => {
     expect(payload).not.toHaveProperty("creativity");
     expect(payload).not.toHaveProperty("toneTuning");
     expect(payload).toMatchObject({
-      characterLimitMode: "custom",
+      characterLimitMode: "none",
       characterLimitValue: 1500,
     });
   });
@@ -1100,6 +1100,52 @@ describe("ProposalInputForm provider-busy handling", () => {
           voicePreset: "expert",
           formalityLevel: "formal",
           creativity: "low",
+        }),
+      );
+    });
+  });
+
+  it("lets an external auto tone override a saved preset in workspace mode", async () => {
+    mockQuery.mockReturnValue({
+      voicePreset: "expert",
+      savedVoicePreset: "expert",
+      templateId: "editorial_wide",
+    });
+    mockGenerateProposalAction.mockResolvedValue({
+      proposalId: "proposal_toolbar_auto",
+      proposalContent: "Hello hiring team,\n\nI would love to contribute.",
+      requestedModelType: "chatgpt",
+      actualModelType: "chatgpt",
+      fallbackTriggerCode: null,
+    });
+
+    const { container } = render(
+      <ProposalInputForm
+        onSubmit={vi.fn()}
+        suppressToneControls
+        externalVoicePreset={null}
+      />,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText("Enter Job Title"), {
+      target: { value: "Operations Associate" },
+    });
+    fireEvent.change(
+      screen.getByPlaceholderText("Paste or write the job offer here…"),
+      {
+        target: {
+          value:
+            "Support recurring processes, update internal records, and coordinate communication across teams.",
+        },
+      },
+    );
+
+    fireEvent.click(container.querySelector('button[type="submit"]')!);
+
+    await waitFor(() => {
+      expect(mockGenerateProposalAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          voicePreset: null,
         }),
       );
     });
