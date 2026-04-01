@@ -107,6 +107,11 @@ export function CvForge(): JSX.Element {
       </button>
     </div>
   );
+  const workspaceModeToggleShell = (
+    <div className="dasti-cv-workbench-bar dasti-cv-workbench-bar--cv-workspace">
+      {workspaceModeToggle}
+    </div>
+  );
 
   return (
     <div
@@ -121,26 +126,32 @@ export function CvForge(): JSX.Element {
           {
             "--page-shell-max-width": "100%",
             "--page-shell-gap": "var(--layout-panel-stack)",
+            "--page-shell-pad-top": "var(--space-2)",
             "--page-shell-pad-inline-mobile": "var(--space-3)",
           } as React.CSSProperties
         }
       >
-        <div className="dasti-workbench-top-left-slot dasti-workbench-top-left-slot--cv">
-          <div className="dasti-cv-workbench-bar dasti-cv-workbench-bar--cv-workspace">
-            {workspaceModeToggle}
-          </div>
-        </div>
         {workspaceMode === "preview" ? (
-          <>
-            <VerbatiCvPreviewPanel
-              layoutMode="stacked"
-              hostMode="workspace"
-              stylePreset={stylePreset}
-              onStylePresetChange={setStylePreset}
-            />
-          </>
+          <div className="dasti-cv-preview-workbench">
+            <div className="dasti-cv-preview-workbench__rail">
+              <div className="dasti-workbench-top-left-slot dasti-workbench-top-left-slot--cv dasti-workbench-top-left-slot--cv-preview">
+                {workspaceModeToggleShell}
+              </div>
+            </div>
+            <div className="dasti-cv-preview-workbench__main">
+              <VerbatiCvPreviewPanel
+                layoutMode="stacked"
+                hostMode="workspace"
+                stylePreset={stylePreset}
+                onStylePresetChange={setStylePreset}
+              />
+            </div>
+          </div>
         ) : (
           <>
+            <div className="dasti-workbench-top-left-slot dasti-workbench-top-left-slot--cv dasti-workbench-top-left-slot--cv-edit">
+              {workspaceModeToggleShell}
+            </div>
             <div
               style={{
                 width: "100%",
