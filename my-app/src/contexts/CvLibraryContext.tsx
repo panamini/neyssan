@@ -25,6 +25,13 @@ import {
   buildActiveCvSnapshotFromCvDocument,
   type ActiveCvSnapshot,
 } from "../lib/proposal-personalization";
+import {
+  getLegacyLocalCvDocumentStorageKey,
+  getLocalCvDocumentStorageKey,
+  LEGACY_LOCAL_CV_DOC_STORAGE_KEY_PREFIX,
+  LEGACY_LOCAL_CV_LIBRARY_STORAGE_KEY,
+  LOCAL_CV_LIBRARY_STORAGE_KEY,
+} from "../lib/cv-local-storage";
 
 
 /**
@@ -46,6 +53,249 @@ function applyAutoTitleIfPlaceholder(doc: CvDocument): CvDocument {
   return { ...doc, title: derived };
 }
 
+function collectTextContent(value: unknown, sink: string[]): void {
+  if (typeof value === "string") {
+    const compact = value.replace(/\s+/g, " ").trim();
+    if (compact) sink.push(compact);
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((entry) => collectTextContent(entry, sink));
+    return;
+  }
+
+  if (value && typeof value === "object") {
+    const objectValue = value as Record<string, unknown>;
+    if (typeof objectValue.text === "string") {
+      collectTextContent(objectValue.text, sink);
+      return;
+    }
+
+    Object.entries(objectValue).forEach(([key, entry]) => {
+      if (key === "type" || key === "id" || key === "attrs") {
+        return;
+      }
+      collectTextContent(entry, sink);
+    });
+  }
+}
+
+function hasTextContent(value: unknown): boolean {
+  const fragments: string[] = [];
+  collectTextContent(value, fragments);
+  return fragments.some((fragment) => fragment.length > 0);
+}
+
+function hasMeaningfulCvContent(doc: CvDocument | null): boolean {
+  if (!doc) return false;
+  if (!isPlaceholderCvTitle(doc.title)) return true;
+  if (deriveCvTitleCandidateFromSections(doc.sections)) return true;
+
+  for (const section of doc.sections ?? []) {
+    const structured = Array.isArray(section.structuredContent)
+      ? section.structuredContent
+      : [];
+
+    if (section.type === "profile") {
+      if (
+        structured.some((item) =>
+          [
+            item?.name,
+            item?.email,
+            item?.phone,
+            item?.linkedin,
+            item?.website,
+            item?.desiredPosition,
+            item?.location,
+          ].some((value) => String(value ?? "").trim().length > 0),
+        )
+      ) {
+        return true;
+      }
+    }
+
+    if (section.type === "summary") {
+      if (structured.some((item) => hasTextContent((item as any)?.summary))) {
+        return true;
+      }
+    }
+
+    if (section.type === "experience") {
+      if (
+        structured.some((item) => {
+          const experience = item as Record<string, unknown>;
+          return (
+            String(experience.company ?? "").trim().length > 0 ||
+            String(experience.position ?? "").trim().length > 0 ||
+            String(experience.location ?? "").trim().length > 0 ||
+            hasTextContent(experience.responsibilities) ||
+            (Array.isArray(experience.achievements) &&
+              experience.achievements.some((entry) => hasTextContent(entry))) ||
+            (typeof experience.startDate === "string" &&
+              experience.startDate !== "1970-01-01T00:00:00.000Z") ||
+            experience.endDate !== null ||
+            experience.isCurrent === true ||
+            experience.currentlyWorking === true
+          );
+        })
+      ) {
+        return true;
+      }
+    }
+
+    if (section.type === "education") {
+      if (
+        structured.some((item) => {
+          const education = item as Record<string, unknown>;
+          return (
+            String(education.institution ?? "").trim().length > 0 ||
+            String(education.degree ?? "").trim().length > 0 ||
+            String(education.fieldOfStudy ?? "").trim().length > 0 ||
+            String(education.grade ?? "").trim().length > 0 ||
+            hasTextContent(education.description) ||
+            Boolean(education.startDate) ||
+            Boolean(education.endDate) ||
+            education.isCurrent === true
+          );
+        })
+      ) {
+        return true;
+      }
+    }
+
+    if (section.type === "skills" || section.type === "languages") {
+      if (
+        structured.some(
+          (item) => String((item as Record<string, unknown>).name ?? "").trim().length > 0,
+        )
+      ) {
+        return true;
+      }
+    }
+
+    if (section.type === "achievements") {
+      if (structured.some((item) => hasTextContent(item))) {
+        return true;
+      }
+    }
+
+    if (Array.isArray(section.blocks)) {
+      const hasMeaningfulBlock = section.blocks.some((block) => {
+        const plainText = String(block.plainText ?? "").trim();
+        return plainText.length > 0 || hasTextContent(block.content);
+      });
+      if (hasMeaningfulBlock) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+type CvLibraryIndexEntry = {
+  id: string;
+  title: string;
+  metadata?: CvDocument["metadata"] & {
+    librarySummaryOnly?: boolean;
+  };
+  profilePreview?: Record<string, unknown> | null;
+};
+
+function buildProfilePreviewFromDocument(
+  doc: CvDocument,
+): Record<string, unknown> | null {
+  const profileSection = Array.isArray(doc.sections)
+    ? doc.sections.find((section) => section.type === "profile")
+    : null;
+  const profileItem = Array.isArray(profileSection?.structuredContent)
+    ? (profileSection.structuredContent[0] as Record<string, unknown> | undefined)
+    : undefined;
+
+  if (!profileItem) {
+    return null;
+  }
+
+  const preview = {
+    name: profileItem.name,
+    desiredPosition: profileItem.desiredPosition ?? profileItem.title,
+    email: profileItem.email,
+    linkedin: profileItem.linkedin,
+    website: profileItem.website,
+    phone: profileItem.phone,
+  };
+
+  return Object.values(preview).some((value) => String(value ?? "").trim().length > 0)
+    ? preview
+    : null;
+}
+
+function buildCvLibraryIndexEntry(doc: CvDocument): CvLibraryIndexEntry {
+  return {
+    id: String(doc.id),
+    title: String(doc.title ?? "Untitled CV"),
+    metadata: {
+      ...(doc.metadata ?? {}),
+      librarySummaryOnly: true,
+    },
+    profilePreview: buildProfilePreviewFromDocument(doc),
+  };
+}
+
+function inflateCvLibraryIndexEntry(entry: CvLibraryIndexEntry): CvDocument {
+  const now = new Date().toISOString();
+  const profilePreview = entry.profilePreview;
+  const profileSection =
+    profilePreview &&
+    Object.values(profilePreview).some((value) => String(value ?? "").trim().length > 0)
+      ? [
+          {
+            id: `profile-${entry.id}`,
+            type: "profile",
+            title: "Profile",
+            blocks: [],
+            structuredContent: [
+              {
+                id: `profile-item-${entry.id}`,
+                ...profilePreview,
+              },
+            ],
+          } as CvSection,
+        ]
+      : [];
+
+  return {
+    id: entry.id,
+    title: entry.title,
+    metadata: {
+      createdAt: entry.metadata?.createdAt ?? now,
+      updatedAt: entry.metadata?.updatedAt ?? now,
+      version: entry.metadata?.version ?? 1,
+      ...(entry.metadata ?? {}),
+      librarySummaryOnly: true,
+    } as CvDocument["metadata"],
+    sections: profileSection,
+  };
+}
+
+function isCvLibraryIndexEntry(value: unknown): value is CvLibraryIndexEntry {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const item = value as Record<string, unknown>;
+  return (
+    typeof item.id === "string" &&
+    typeof item.title === "string" &&
+    !Array.isArray(item.sections)
+  );
+}
+
+function isLibrarySummaryOnlyCv(doc: CvDocument | null): boolean {
+  return Boolean((doc?.metadata as { librarySummaryOnly?: boolean } | undefined)?.librarySummaryOnly);
+}
+
 /**
  * Context shape for the new CV library using CvDocument + ConvexStorageAdapter.
  */
@@ -63,7 +313,7 @@ export interface ICvLibraryContext {
   // Create a CV document from an ICvState snapshot (used by LocalBackupsPanel)
   createCvFromState: (state: import("../types/cv").ICvState, title?: string) => void;
   // Create a new CV from a built-in template
-  createNewCv: (title?: string, opts?: { forceV1?: boolean }) => void;
+  createNewCv: (title?: string, opts?: { forceV1?: boolean }) => Promise<void>;
   // Import a fully-normalized CvDocument (used by file import workflows).
   // This replaces the current CV with the provided document and schedules persistence.
   importCv: (doc: CvDocument) => Promise<void>;
@@ -118,9 +368,6 @@ export interface ICvLibraryContext {
 }
 
 /* Local storage keys (kept intentionally simple) */
-const LOCAL_LIBRARY_KEY = "cvDocuments";
-const LEGACY_LOCAL_LIBRARY_KEY = "cvLibrary";
-const LOCAL_DOC_KEY_PREFIX = "cv:";
 const ACTIVE_CV_STORAGE_KEY = "cvActiveId";
 
 function readRequestedCvIdFromWindowLocation(): string | null {
@@ -166,6 +413,10 @@ function safeParseDocuments(raw: string | null): CvDocument[] {
       const res = safeParseCvDocument(item);
       if (res.ok) out.push(res.value);
       else {
+        if (isCvLibraryIndexEntry(item)) {
+          out.push(inflateCvLibraryIndexEntry(item));
+          continue;
+        }
         // best-effort: attempt to coerce minimal shape if it looks similar
         if (item && typeof item === "object" && typeof item.id === "string") {
           out.push({
@@ -270,8 +521,8 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({ children 
     try {
       if (typeof window !== "undefined" && window.localStorage) {
         const raw =
-          window.localStorage.getItem(LEGACY_LOCAL_LIBRARY_KEY) ??
-          window.localStorage.getItem(LOCAL_LIBRARY_KEY);
+          window.localStorage.getItem(LOCAL_CV_LIBRARY_STORAGE_KEY) ??
+          window.localStorage.getItem(LEGACY_LOCAL_CV_LIBRARY_STORAGE_KEY);
         return safeParseDocuments(raw);
       }
     } catch {
@@ -283,6 +534,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [currentCv, setCurrentCv] = useState<CvDocument | null>(null);
   const hasHydratedActiveCvRef = useRef(false);
   const pendingActiveRestoreIdRef = useRef<string | null>(null);
+  const cvsRef = useRef<CvDocument[]>(cvs);
   const currentCvRef = useRef<CvDocument | null>(null);
   const pendingSwitchTargetRef = useRef<string | null>(null);
   const activeCvSnapshotSyncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -305,6 +557,76 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   }, [currentCv]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+
+  useEffect(() => {
+    cvsRef.current = cvs;
+  }, [cvs]);
+
+  useEffect(() => {
+    try {
+      if (typeof window === "undefined" || !window.localStorage) {
+        return;
+      }
+
+      const currentLibraryRaw = window.localStorage.getItem(
+        LOCAL_CV_LIBRARY_STORAGE_KEY,
+      );
+      const legacyLibraryRaw = window.localStorage.getItem(
+        LEGACY_LOCAL_CV_LIBRARY_STORAGE_KEY,
+      );
+
+      if (!currentLibraryRaw && legacyLibraryRaw) {
+        window.localStorage.setItem(LOCAL_CV_LIBRARY_STORAGE_KEY, legacyLibraryRaw);
+      }
+      if (legacyLibraryRaw) {
+        window.localStorage.removeItem(LEGACY_LOCAL_CV_LIBRARY_STORAGE_KEY);
+      }
+
+      const knownIds = new Set(
+        safeParseDocuments(
+          window.localStorage.getItem(LOCAL_CV_LIBRARY_STORAGE_KEY) ??
+            legacyLibraryRaw,
+        ).map((doc) => String(doc.id)),
+      );
+
+      for (const id of knownIds) {
+        const currentDocKey = getLocalCvDocumentStorageKey(id);
+        const legacyDocKey = getLegacyLocalCvDocumentStorageKey(id);
+        const currentRaw = window.localStorage.getItem(currentDocKey);
+        const legacyRaw = window.localStorage.getItem(legacyDocKey);
+
+        if (!currentRaw && legacyRaw) {
+          window.localStorage.setItem(currentDocKey, legacyRaw);
+        }
+        if (legacyRaw) {
+          window.localStorage.removeItem(legacyDocKey);
+        }
+      }
+
+      for (let index = 0; index < window.localStorage.length; index += 1) {
+        const key = window.localStorage.key(index);
+        if (!key || !key.startsWith(LEGACY_LOCAL_CV_DOC_STORAGE_KEY_PREFIX)) {
+          continue;
+        }
+
+        const id = key.slice(LEGACY_LOCAL_CV_DOC_STORAGE_KEY_PREFIX.length);
+        const currentDocKey = getLocalCvDocumentStorageKey(id);
+        const currentRaw = window.localStorage.getItem(currentDocKey);
+        const legacyRaw = window.localStorage.getItem(key);
+
+        if (!legacyRaw) {
+          continue;
+        }
+
+        if (!currentRaw) {
+          window.localStorage.setItem(currentDocKey, legacyRaw);
+        }
+        window.localStorage.removeItem(key);
+      }
+    } catch {
+      // Best-effort storage cleanup only.
+    }
+  }, []);
 
   // Top-level inspector selection — kept in context so modal stays mounted even
   // when BlockRenderer subtrees remount (prevents inspector losing local state).
@@ -407,6 +729,7 @@ function safeSetCurrentCv(next: CvDocument | null) {
    * Attempt to preserve object identity for unchanged nested objects (sections/blocks)
    * so React does not remount large subtrees unnecessarily.
    */
+  currentCvRef.current = next;
   setCurrentCv((prev) => {
     if (deepEqual(prev, next)) {
       dbg("[CvLibraryContext] safeSetCurrentCv: documents deeply equal -> reusing prev");
@@ -811,13 +1134,12 @@ const flushPendingEdits = useCallback((): void => {
   useEffect(() => {
     try {
       if (typeof window !== "undefined" && window.localStorage) {
-        const payload = JSON.stringify(cvs);
-        // Persist under new key and keep legacy key for backward compatibility in tests
+        const payload = JSON.stringify(cvs.map(buildCvLibraryIndexEntry));
         try {
-          window.localStorage.setItem(LOCAL_LIBRARY_KEY, payload);
+          window.localStorage.setItem(LOCAL_CV_LIBRARY_STORAGE_KEY, payload);
         } catch { /* best-effort */ }
         try {
-          window.localStorage.setItem(LEGACY_LOCAL_LIBRARY_KEY, payload);
+          window.localStorage.removeItem(LEGACY_LOCAL_CV_LIBRARY_STORAGE_KEY);
         } catch { /* best-effort */ }
       }
     } catch {
@@ -859,10 +1181,25 @@ const flushPendingEdits = useCallback((): void => {
             version: doc.metadata?.version ?? 1,
           } as any,
         };
-        window.localStorage.setItem(`${LOCAL_DOC_KEY_PREFIX}${doc.id}`, JSON.stringify(snapshot));
+        window.localStorage.setItem(
+          getLocalCvDocumentStorageKey(doc.id),
+          JSON.stringify(snapshot),
+        );
+        window.localStorage.removeItem(getLegacyLocalCvDocumentStorageKey(doc.id));
       }
     } catch {
       // ignore
+    }
+  }
+
+  function removeDocumentLocally(id: string) {
+    try {
+      if (typeof window !== "undefined" && window.localStorage) {
+        window.localStorage.removeItem(getLocalCvDocumentStorageKey(id));
+        window.localStorage.removeItem(getLegacyLocalCvDocumentStorageKey(id));
+      }
+    } catch {
+      /* best-effort */
     }
   }
 
@@ -886,7 +1223,7 @@ const flushPendingEdits = useCallback((): void => {
   function readCachedDocumentLocally(id: string): CvDocument | null {
     try {
       if (typeof window === "undefined" || !window.localStorage) return null;
-      const raw = window.localStorage.getItem(`${LOCAL_DOC_KEY_PREFIX}${id}`);
+      const raw = window.localStorage.getItem(getLocalCvDocumentStorageKey(id));
       if (!raw) return null;
       const parsed = JSON.parse(raw);
       const parsedRes = safeParseCvDocument(parsed);
@@ -1105,6 +1442,61 @@ const flushPendingEdits = useCallback((): void => {
     }
   }
 
+  const prepareCurrentCvForReplacement = useCallback(async (): Promise<void> => {
+    const outgoingBeforeFlush = currentCvRef.current;
+    if (!outgoingBeforeFlush) {
+      return;
+    }
+
+    try {
+      flushPendingEdits();
+    } catch {
+      /* noop */
+    }
+
+    await new Promise<void>((resolve) => {
+      window.setTimeout(() => resolve(), 0);
+    });
+
+    const latestOutgoing = currentCvRef.current ?? outgoingBeforeFlush;
+    if (!latestOutgoing) {
+      return;
+    }
+
+    if (!hasMeaningfulCvContent(latestOutgoing)) {
+      removeDocumentLocally(String(latestOutgoing.id));
+      setCvs((prev) =>
+        prev.filter((doc) => String(doc.id) !== String(latestOutgoing.id)),
+      );
+      return;
+    }
+
+    syncEditedDocumentLocally(latestOutgoing);
+    setCvs((prev) => {
+      const existingIndex = prev.findIndex(
+        (doc) => String(doc.id) === String(latestOutgoing.id),
+      );
+      if (existingIndex === -1) {
+        return [latestOutgoing, ...prev];
+      }
+
+      const next = [...prev];
+      next[existingIndex] = latestOutgoing;
+      return next;
+    });
+    cacheDocumentLocally(latestOutgoing);
+
+    const shouldPersist =
+      isDirtyRef.current ||
+      hasUnsavedContent(latestOutgoing) ||
+      Boolean(saveTimeoutRef.current) ||
+      Boolean(isSavingRef.current);
+
+    if (shouldPersist) {
+      await saveImmediately(latestOutgoing);
+    }
+  }, [flushPendingEdits]);
+
   /**
    * Create a normalized CvBlock from a loose input.
    * Ensures stable id, a human-readable title, and Remirror JSON content (placeholder when empty).
@@ -1213,12 +1605,39 @@ const flushPendingEdits = useCallback((): void => {
       // otherwise return false and perform async background attempts.
       setIsLoading(true);
       try {
-      let doc: CvDocument | null = null;
+      let doc: CvDocument | null =
+        currentCvRef.current && String(currentCvRef.current.id) === targetId
+          ? currentCvRef.current
+          : cvsRef.current.find((candidate) => String(candidate.id) === targetId) ??
+            null;
+
+      if (doc && !isLibrarySummaryOnlyCv(doc)) {
+        try {
+          doc = migrateLegacyIds(doc);
+        } catch {
+          /* noop */
+        }
+
+        const docV1 = normalizeToV1Document(doc as CvDocument);
+        const docNorm = ensureRepresentativeBlocks(docV1 as CvDocument);
+
+        safeSetCurrentCv(docNorm);
+        setCvs((prev) => {
+          const exists = prev.some((c) => c.id === docNorm.id);
+          if (exists) return prev.map((c) => (c.id === docNorm.id ? docNorm : c));
+          return [...prev, docNorm];
+        });
+        cacheDocumentLocally(docNorm);
+        lastSavedRef.current = docNorm;
+        setIsLoading(false);
+        return true;
+      }
+      doc = null;
 
       // 1) Try fast local cache first (immediate UI response)
       try {
         if (typeof window !== "undefined" && window.localStorage) {
-          const raw = window.localStorage.getItem(`${LOCAL_DOC_KEY_PREFIX}${targetId}`);
+          const raw = window.localStorage.getItem(getLocalCvDocumentStorageKey(targetId));
           if (raw) {
             const parsed = JSON.parse(raw);
             const parsedRes = safeParseCvDocument(parsed);
@@ -1315,7 +1734,9 @@ const flushPendingEdits = useCallback((): void => {
           if (!remoteDoc) {
             try {
               if (typeof window !== "undefined" && window.localStorage) {
-                const raw = window.localStorage.getItem(`${LOCAL_DOC_KEY_PREFIX}${targetId}`);
+                const raw = window.localStorage.getItem(
+                  getLocalCvDocumentStorageKey(targetId),
+                );
                 if (raw) {
                   const parsed = JSON.parse(raw);
                   const parsedRes = safeParseCvDocument(parsed);
@@ -1521,8 +1942,10 @@ const flushPendingEdits = useCallback((): void => {
    * Create a new CV from the built-in template and set it as current.
    * This function uses generateCvTemplate() to ensure a fresh document.
    */
-  function createNewCv(title?: string, opts?: { forceV1?: boolean }) {
+  const createNewCv = useCallback(async (title?: string, opts?: { forceV1?: boolean }) => {
     try {
+      await prepareCurrentCvForReplacement();
+
       // Aggressive enforcement: always create new CVs using the v1 template
       // unless explicitly opted out (forceV1 === false). This ensures newly created
       // documents are v1-shaped and avoid legacy UI being shown for new docs.
@@ -1607,7 +2030,7 @@ const flushPendingEdits = useCallback((): void => {
       // eslint-disable-next-line no-console
       console.error("[CvLibraryContext] createNewCv failed", err);
     }
-  }
+  }, [prepareCurrentCvForReplacement]);
 
   /**
    * Import a fully-normalized CvDocument (e.g. from file upload).
@@ -2294,8 +2717,8 @@ function updateCurrentCv(newState: Partial<CvDocument>): void {
 function deleteCvCtx(id: string): void {
   try {
     if (typeof window !== "undefined" && (window as any).localStorage) {
-      (window as any).localStorage.removeItem(`${LOCAL_DOC_KEY_PREFIX}${id}`);
-      (window as any).localStorage.removeItem(`cv-doc:${id}`);
+      (window as any).localStorage.removeItem(getLocalCvDocumentStorageKey(id));
+      (window as any).localStorage.removeItem(getLegacyLocalCvDocumentStorageKey(id));
     }
   } catch { /* noop */ }
   setCvs((prev) => prev.filter((c) => String(c.id) !== String(id)));

@@ -20,8 +20,12 @@ import { convexClient } from "../lib/convex-client";
 import type { CvDocument } from "../types/cvDocument";
 import dbg from "../lib/cv-debug";
 import { parseCvDocumentStrict } from "../schemas/cvDocument.schema";
-
-const STORAGE_PREFIX = "cv-doc:";
+import {
+  getLegacyLocalCvDocumentStorageKey,
+  getLocalCvDocumentStorageKey,
+  LEGACY_LOCAL_CV_DOC_STORAGE_KEY_PREFIX,
+  LOCAL_CV_DOC_STORAGE_KEY_PREFIX,
+} from "../lib/cv-local-storage";
 
 function hasLocalStorage(): boolean {
   try {
@@ -32,6 +36,31 @@ function hasLocalStorage(): boolean {
 }
 
 const inMemoryStore: Record<string, string> = {};
+
+function writeLocalCvCache(id: string, payload: string): void {
+  window.localStorage.setItem(getLocalCvDocumentStorageKey(id), payload);
+  window.localStorage.removeItem(getLegacyLocalCvDocumentStorageKey(id));
+}
+
+function readLocalCvCache(id: string): string | null {
+  const primaryRaw = window.localStorage.getItem(getLocalCvDocumentStorageKey(id));
+  if (primaryRaw) {
+    return primaryRaw;
+  }
+
+  const legacyRaw = window.localStorage.getItem(getLegacyLocalCvDocumentStorageKey(id));
+  if (!legacyRaw) {
+    return null;
+  }
+
+  try {
+    writeLocalCvCache(id, legacyRaw);
+  } catch {
+    // Best-effort.
+  }
+
+  return legacyRaw;
+}
 
 /* -------------------- Serialization -------------------- */
 
@@ -100,7 +129,7 @@ export class ConvexStorageAdapter {
     // SSR-safe localStorage - cache the original cv (not the backend-mapped payload)
     try {
       if (hasLocalStorage()) {
-        window.localStorage.setItem(`${STORAGE_PREFIX}${cv.id}`, serialize(cv));
+        writeLocalCvCache(cv.id, serialize(cv));
       }
     } catch {
       // ignore
@@ -129,7 +158,7 @@ export class ConvexStorageAdapter {
           // Validate and map Convex profile -> CvDocument using schema
           const mapped = parseCvDocumentStrict(prof as unknown);
           // Cache locally
-          if (hasLocalStorage()) window.localStorage.setItem(`${STORAGE_PREFIX}${mapped.id}`, serialize(mapped));
+          if (hasLocalStorage()) writeLocalCvCache(mapped.id, serialize(mapped));
           return mapped;
         } catch {
           // invalid mapping, ignore
@@ -142,7 +171,7 @@ export class ConvexStorageAdapter {
     // Final fallback: localStorage
     try {
       if (hasLocalStorage()) {
-        const raw = window.localStorage.getItem(`${STORAGE_PREFIX}${id}`);
+        const raw = readLocalCvCache(id);
         if (!raw) return null;
         const parsed = deserialize(raw);
         if (!parsed) return null;
@@ -154,7 +183,7 @@ export class ConvexStorageAdapter {
     }
 
     // Fallback in-memory
-    return deserialize(inMemoryStore[`${STORAGE_PREFIX}${id}`] ?? null);
+    return deserialize(inMemoryStore[getLocalCvDocumentStorageKey(id)] ?? null);
   }
 
   /**
@@ -220,11 +249,11 @@ export function useConvexStorageAdapter(): ConvexStorageAdapter {
 /* -------------------- Local/Memory Utilities -------------------- */
 
 export async function saveCv(cv: CvDocument): Promise<void> {
-  const key = `${STORAGE_PREFIX}${cv.id}`;
+  const key = getLocalCvDocumentStorageKey(cv.id);
   const payload = serialize(cv);
   try {
     if (hasLocalStorage()) {
-      window.localStorage.setItem(key, payload);
+      writeLocalCvCache(cv.id, payload);
       return;
     }
   } catch {}
@@ -232,10 +261,10 @@ export async function saveCv(cv: CvDocument): Promise<void> {
 }
 
 export async function loadCv(id: string): Promise<CvDocument | null> {
-  const key = `${STORAGE_PREFIX}${id}`;
+  const key = getLocalCvDocumentStorageKey(id);
   try {
     if (hasLocalStorage()) {
-      const raw = window.localStorage.getItem(key);
+      const raw = readLocalCvCache(id);
       return deserialize(raw);
     }
   } catch {}
@@ -243,10 +272,11 @@ export async function loadCv(id: string): Promise<CvDocument | null> {
 }
 
 export async function deleteCv(id: string): Promise<void> {
-  const key = `${STORAGE_PREFIX}${id}`;
+  const key = getLocalCvDocumentStorageKey(id);
   try {
     if (hasLocalStorage()) {
       window.localStorage.removeItem(key);
+      window.localStorage.removeItem(getLegacyLocalCvDocumentStorageKey(id));
       return;
     }
   } catch {}
@@ -259,12 +289,24 @@ export async function listCvIds(): Promise<string[]> {
       const out: string[] = [];
       for (let i = 0; i < window.localStorage.length; i++) {
         const k = window.localStorage.key(i);
-        if (k && k.startsWith(STORAGE_PREFIX)) out.push(k.replace(STORAGE_PREFIX, ""));
+        if (k && k.startsWith(LOCAL_CV_DOC_STORAGE_KEY_PREFIX)) {
+          out.push(k.replace(LOCAL_CV_DOC_STORAGE_KEY_PREFIX, ""));
+          continue;
+        }
+        if (k && k.startsWith(LEGACY_LOCAL_CV_DOC_STORAGE_KEY_PREFIX)) {
+          out.push(k.replace(LEGACY_LOCAL_CV_DOC_STORAGE_KEY_PREFIX, ""));
+        }
       }
-      return out;
+      return Array.from(new Set(out));
     }
   } catch {}
-  return Object.keys(inMemoryStore).filter((k) => k.startsWith(STORAGE_PREFIX)).map((k) => k.replace(STORAGE_PREFIX, ""));
+  return Array.from(
+    new Set(
+      Object.keys(inMemoryStore)
+        .filter((k) => k.startsWith(LOCAL_CV_DOC_STORAGE_KEY_PREFIX))
+        .map((k) => k.replace(LOCAL_CV_DOC_STORAGE_KEY_PREFIX, "")),
+    ),
+  );
 }
 
 export async function loadAnyCv(): Promise<CvDocument | null> {

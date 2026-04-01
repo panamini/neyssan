@@ -207,13 +207,70 @@ Reason:
 ## Concrete Next Implementation Steps
 
 1. Commit the current proposal recovery work.
-2. Add a dev storage diagnostics helper.
-3. Measure real browser storage size by key.
-4. Move proposal output draft persistence to IndexedDB.
-5. Migrate compose draft persistence off document-scale `localStorage`.
-6. Audit CV cache duplication and migrate heavy CV snapshots off `localStorage`.
-7. Re-profile `/proposal`.
-8. Only then start the next UI pass.
+2. Remove duplicate legacy CV cache writes.
+3. Add a dev storage diagnostics helper.
+4. Measure real browser storage size by key.
+5. Move proposal output draft persistence to IndexedDB.
+6. Migrate compose draft persistence off document-scale `localStorage`.
+7. Shrink the `cvDocuments` library index so it no longer mirrors full documents.
+8. Re-profile `/proposal`.
+9. Only then start the next UI pass.
+
+## Implemented First Pass
+
+This plan now has a first concrete implementation in the local codebase:
+
+- proposal output draft stops hammering `localStorage` after the first quota failure in a tab session
+- CV document cache now writes the current `cv:` key and removes the legacy `cv-doc:` duplicate
+- CV library persistence now keeps `cvDocuments` as the current key and removes the legacy `cvLibrary` duplicate
+- CV provider mount now migrates legacy `cvLibrary` and `cv-doc:` entries into the current keys and clears the duplicates
+- Proposal Forge attached-CV focus refresh now reads the attached snapshot directly instead of rebuilding the full picker list
+
+This is a storage-footprint and hot-path reduction pass, not the final storage architecture.
+
+## Implemented Second Pass
+
+The local codebase now also includes a second lag-reduction pass on the active `/proposal` route:
+
+- `ProposalForge.tsx` no longer stores the full live compose payload in page-level `lastProposalRequest` state on every form watch update
+- live brief/style/character-limit rendering now reads from a lightweight `composePreviewValues` snapshot
+- compose-draft persistence is batched with a short timeout instead of forcing synchronous page-level churn on each change
+- submit, delete, reset, saved-copy, and handoff-restore paths explicitly cancel or replace pending compose-sync work so draft correctness remains intact
+
+What this means:
+
+- the main proposal page should do less render work while the user edits long imported job offers
+- this is a real hot-path reduction in active code
+- it is still not proof that all remaining lag is solved
+
+## Implemented Third Pass
+
+The local codebase now also includes a sidebar and resume-switch follow-up:
+
+- `Sidebar.tsx` no longer queues resume loads through `requestAnimationFrame(...)`
+- `CvLibraryContext.tsx` now reuses the in-memory CV collection before parsing browser storage during `loadCv(...)`
+- `Sidebar.tsx` no longer re-reads proposal draft storage during render when it already has synchronized state
+
+This pass is directly aimed at the browser warning path the user reported under `Sidebar.tsx:822`.
+
+## Implemented Fourth Pass
+
+The plan now also has the promised measurement hook:
+
+- `storage-diagnostics.ts` exposes a dev-only browser helper at `window.__DASTI_STORAGE_DIAGNOSTICS__`
+- `App.tsx` installs that helper in dev mode
+- the helper reports localStorage and sessionStorage key sizes, total bytes, and relevant proposal/CV entries
+
+This does not reduce lag by itself. It exists so the next persistence migration can be driven by measured browser data instead of inference.
+
+## Remaining Highest-Value Next Steps
+
+1. Add a dev storage diagnostics helper that reports browser-storage key sizes.
+2. Measure a real heavy browser profile so the largest remaining keys are no longer inferred.
+3. Move proposal output drafts to IndexedDB or a server-backed cache.
+4. Shrink `cvDocuments` so it no longer mirrors full CV documents when that data is already cached elsewhere.
+5. Re-profile `/proposal` after the storage migration.
+6. Only then decide whether more React-level optimization is still justified.
 
 ## User Guidance Right Now
 

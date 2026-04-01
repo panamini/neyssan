@@ -23,7 +23,7 @@ vi.mock('uuid', () => {
 });
 
 // Key used by the provider
-const LOCAL_STORAGE_KEY = 'cvLibrary';
+const LOCAL_STORAGE_KEY = 'cvDocuments';
 
 function TestConsumer({ setCtx }: { setCtx: (c: any) => void }) {
   const ctx = useCvLibrary();
@@ -36,6 +36,10 @@ function TestConsumer({ setCtx }: { setCtx: (c: any) => void }) {
 describe('CvLibraryContext', () => {
   let storage: Record<string, string>;
   const mockLocalStorage = {
+    get length() {
+      return Object.keys(storage).length;
+    },
+    key: (index: number) => Object.keys(storage)[index] ?? null,
     getItem: (key: string) => (key in storage ? storage[key] : null),
     setItem: (key: string, value: string) => {
       storage[key] = value;
@@ -138,6 +142,72 @@ describe('CvLibraryContext', () => {
     expect(Array.isArray(stored)).toBe(true);
     expect(stored.length).toBe(1);
     expect(stored[0].id).toBe(ctx.currentCvId);
+    expect(Array.isArray(stored[0].sections)).toBe(false);
+    expect(stored[0].metadata?.librarySummaryOnly).toBe(true);
+  });
+
+  it('hydrates a compact cvDocuments index but still loads the full cached cv document', async () => {
+    const now = new Date().toISOString();
+    const compact = {
+      id: 'cv_compact',
+      title: 'Compact CV',
+      metadata: {
+        createdAt: now,
+        updatedAt: now,
+        version: 1,
+        librarySummaryOnly: true,
+      },
+      profilePreview: {
+        name: 'Ada Lovelace',
+        desiredPosition: 'Engineer',
+      },
+    };
+    const full = {
+      id: 'cv_compact',
+      title: 'Compact CV',
+      metadata: {
+        createdAt: now,
+        updatedAt: now,
+        version: 1,
+      },
+      sections: [
+        {
+          id: 'profile-1',
+          type: 'profile',
+          title: 'Profile',
+          blocks: [],
+          structuredContent: [{ id: 'profile-item-1', name: 'Ada Lovelace' }],
+        },
+        {
+          id: 'summary-1',
+          type: 'summary',
+          title: 'Summary',
+          blocks: [],
+          structuredContent: [{ id: 'summary-item-1', summary: 'Full content' }],
+        },
+      ],
+    };
+
+    mockLocalStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([compact]));
+    mockLocalStorage.setItem('cv:cv_compact', JSON.stringify(full));
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(ctx).toBeDefined());
+    await waitFor(() => expect(ctx.cvs.length).toBe(1));
+
+    act(() => {
+      ctx.loadCv('cv_compact');
+    });
+
+    await waitFor(() => expect(ctx.currentCvId).toBe('cv_compact'));
+    expect(ctx.currentCv.sections.length).toBeGreaterThan(1);
+    expect(ctx.currentCv.metadata?.librarySummaryOnly).not.toBe(true);
   });
 
   it('loadCv sets the corresponding CV as currentCv', async () => {
@@ -155,9 +225,13 @@ describe('CvLibraryContext', () => {
     });
     await waitFor(() => expect(ctx.cvs.length).toBe(1));
     const firstId = ctx.currentCvId;
-
     act(() => {
-      ctx.createNewCv();
+      ctx.renameCv(firstId, 'First Resume');
+    });
+    await waitFor(() => expect(ctx.currentCv.title).toBe('First Resume'));
+
+    await act(async () => {
+      await ctx.createNewCv();
     });
     await waitFor(() => expect(ctx.cvs.length).toBe(2));
     const secondId = ctx.currentCvId;
@@ -216,6 +290,66 @@ describe('CvLibraryContext', () => {
     expect(ctx.currentCv?.title).toBe('Beta CV');
   });
 
+  it('migrates legacy library and doc cache keys into the current storage keys on mount', async () => {
+    const now = new Date().toISOString();
+    const alpha = {
+      id: 'cv_alpha',
+      title: 'Alpha CV',
+      metadata: {
+        createdAt: now,
+        updatedAt: now,
+        version: 1,
+      },
+      sections: [],
+    };
+
+    mockLocalStorage.setItem('cvLibrary', JSON.stringify([alpha]));
+    mockLocalStorage.setItem('cv-doc:cv_alpha', JSON.stringify(alpha));
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(ctx).toBeDefined());
+    await waitFor(() => expect(ctx.cvs.length).toBe(1));
+    expect(mockLocalStorage.getItem('cvDocuments')).toBeTruthy();
+    expect(mockLocalStorage.getItem('cvLibrary')).toBeNull();
+    expect(mockLocalStorage.getItem('cv:cv_alpha')).toBeTruthy();
+    expect(mockLocalStorage.getItem('cv-doc:cv_alpha')).toBeNull();
+  });
+
+  it('removes orphan legacy cv-doc keys even when they are not present in cvDocuments', async () => {
+    const now = new Date().toISOString();
+    const orphan = {
+      id: 'cv_orphan',
+      title: 'Orphan CV',
+      metadata: {
+        createdAt: now,
+        updatedAt: now,
+        version: 1,
+      },
+      sections: [],
+    };
+
+    mockLocalStorage.setItem('cv-doc:cv_orphan', JSON.stringify(orphan));
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(ctx).toBeDefined());
+    await waitFor(() =>
+      expect(mockLocalStorage.getItem('cv:cv_orphan')).toBeTruthy(),
+    );
+    expect(mockLocalStorage.getItem('cv-doc:cv_orphan')).toBeNull();
+  });
+
   it('auto-persists when dirty and loadCv switches immediately', async () => {
     let ctx: any;
     render(
@@ -231,9 +365,13 @@ describe('CvLibraryContext', () => {
     });
     await waitFor(() => expect(ctx.cvs.length).toBe(1));
     const firstId = ctx.currentCvId;
-
     act(() => {
-      ctx.createNewCv();
+      ctx.renameCv(firstId, 'First Resume');
+    });
+    await waitFor(() => expect(ctx.currentCv.title).toBe('First Resume'));
+
+    await act(async () => {
+      await ctx.createNewCv();
     });
     await waitFor(() => expect(ctx.cvs.length).toBe(2));
     const secondId = ctx.currentCvId;
@@ -321,8 +459,15 @@ describe('CvLibraryContext', () => {
     
     // Wait for effect to persist updated cvs
     await waitFor(() => {
-      const stored = JSON.parse(mockLocalStorage.getItem(LOCAL_STORAGE_KEY) as string);
-      expect(stored[0].cvState).toEqual(newState);
+      const indexStored = JSON.parse(
+        mockLocalStorage.getItem(LOCAL_STORAGE_KEY) as string,
+      );
+      const fullStored = JSON.parse(
+        mockLocalStorage.getItem(`cv:${ctx.currentCvId}`) as string,
+      );
+      expect(indexStored[0].cvState).toBeUndefined();
+      expect(fullStored.id).toBe(ctx.currentCvId);
+      expect(fullStored.cvState).toBeUndefined();
     });
   });
 
@@ -525,6 +670,66 @@ describe('CvLibraryContext', () => {
 
     await waitFor(() => expect(ctx.currentCv.title).toBe('My Custom CV'));
     expect(ctx.cvs[0].title).toBe('My Custom CV');
+  });
+
+  it('promotes a meaningful current CV before replacing it with a fresh draft', async () => {
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+    await waitFor(() => expect(ctx).toBeDefined());
+
+    act(() => {
+      ctx.createNewCv();
+    });
+    await waitFor(() => expect(ctx.currentCv).not.toBeNull());
+
+    const firstId = ctx.currentCvId;
+    const unregister = ctx.registerFlushCallback(() => {
+      ctx.renameCv(firstId, 'Jane Doe — Product Manager');
+    });
+
+    await act(async () => {
+      await ctx.createNewCv();
+    });
+
+    unregister();
+
+    await waitFor(() => expect(ctx.cvs.length).toBe(2));
+    expect(ctx.currentCvId).not.toBe(firstId);
+    expect(ctx.currentCv.title).toBe('Untitled CV');
+    expect(
+      ctx.cvs.find((doc: any) => doc.id === firstId)?.title,
+    ).toBe('Jane Doe — Product Manager');
+  });
+
+  it('drops an untouched placeholder draft before creating a fresh replacement', async () => {
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+    await waitFor(() => expect(ctx).toBeDefined());
+
+    act(() => {
+      ctx.createNewCv();
+    });
+    await waitFor(() => expect(ctx.currentCv).not.toBeNull());
+
+    const firstId = ctx.currentCvId;
+
+    await act(async () => {
+      await ctx.createNewCv();
+    });
+
+    await waitFor(() => expect(ctx.cvs.length).toBe(1));
+    expect(ctx.currentCvId).not.toBe(firstId);
+    expect(
+      JSON.parse(mockLocalStorage.getItem(LOCAL_STORAGE_KEY) as string),
+    ).toHaveLength(1);
   });
 });
 // Undo/Redo unit tests
