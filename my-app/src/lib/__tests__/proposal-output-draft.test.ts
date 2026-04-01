@@ -178,6 +178,39 @@ describe("readStoredProposalOutputDraft", () => {
     );
   });
 
+  it("preserves an explicit auto tone sentinel inside the stored source compose draft", () => {
+    window.localStorage.setItem(
+      PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,
+      JSON.stringify({
+        proposalContent: "Generated proposal body.",
+        proposalType: "cover_letter",
+        proposalVoicePreset: "expert",
+        proposalStyleLinkMode: "proposal_local",
+        proposalStyleChoice: "formal",
+        proposalDocumentTitle: "Operations Associate",
+        generatedProposalId: "proposal_live",
+        proposalOutputMode: "preview",
+        sourceComposeDraft: {
+          jobTitle: "Operations Associate",
+          jobDescription:
+            "Support recurring processes and coordinate communication across teams.",
+          proposalType: "cover_letter",
+          voicePreset: null,
+        },
+      }),
+    );
+
+    expect(readStoredProposalOutputDraft()).toEqual(
+      expect.objectContaining({
+        proposalVoicePreset: "expert",
+        sourceComposeDraft: expect.objectContaining({
+          jobTitle: "Operations Associate",
+          voicePreset: null,
+        }),
+      }),
+    );
+  });
+
   it("falls back to sessionStorage when localStorage persistence exceeds quota", () => {
     const originalSetItem = Storage.prototype.setItem;
     const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
