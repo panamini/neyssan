@@ -394,7 +394,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     enabled: usesDocumentRenderer && Boolean(proposalContent),
     measurementRef: stageMeasureRef,
     zoomLevel: effectiveZoomLevel,
-    fitMode: !isEditable && usesDocumentRenderer ? "contain" : "width",
+    fitMode: usesDocumentRenderer ? "contain" : "width",
     pageWidthPx: A4_PAGE_WIDTH_PX,
     pageHeightPx: A4_PAGE_HEIGHT_PX,
   });

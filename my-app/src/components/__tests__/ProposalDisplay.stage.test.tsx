@@ -111,6 +111,23 @@ describe("ProposalDisplay stage behavior", () => {
     expect(lastCall).toMatchObject({ fitMode: "contain" });
   });
 
+  it("uses the same contain-fit stage sizing in edit mode for document proposals", () => {
+    render(
+      <ProposalDisplay
+        proposalContent={"Dear team,\n\nSingle-page proposal.\n\nAlex"}
+        loading={false}
+        error={null}
+        proposalType="cover_letter"
+        mode="edit"
+        onContentChange={vi.fn()}
+      />,
+    );
+
+    const lastCall =
+      stageLayoutSpy.mock.calls[stageLayoutSpy.mock.calls.length - 1]?.[0];
+    expect(lastCall).toMatchObject({ fitMode: "contain" });
+  });
+
   it("switches multipage previews to stacked inner A4 pages without re-skinning the outer shell", () => {
     const { container } = render(
       <ProposalDisplay
