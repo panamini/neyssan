@@ -2381,11 +2381,11 @@ export function ProposalForge(): JSX.Element {
       (isConvexAuthenticated && handoffRecord === undefined));
 
   const stackedCardWidthStyle: React.CSSProperties = isCompactComposeLayout
-    ? { width: "min(100%, 560px)", marginInline: "auto", minWidth: 0 }
+    ? { width: "min(100%, 560px)", minWidth: 0 }
     : { width: "100%", minWidth: 0 };
   const proposalToolbarWidthStyle: React.CSSProperties = {
     width: "100%",
-    maxWidth: isCompactComposeLayout ? "560px" : "480px",
+    maxWidth: isCompactComposeLayout ? "560px" : "460px",
     minWidth: 0,
   };
   const proposalWorkbenchFrameStyle: React.CSSProperties = {
@@ -2394,10 +2394,8 @@ export function ProposalForge(): JSX.Element {
       ? "560px"
       : shouldCenterOutputStage
         ? "860px"
-        : isNarrowLaptop
-          ? "1060px"
-          : "1160px",
-    marginInline: "auto",
+        : "calc(460px + var(--document-viewer-shell-inline-size) + var(--layout-card-grid))",
+    marginInline: 0,
     minWidth: 0,
   };
   const activeCharacterLimitSelection = React.useMemo(
@@ -2532,7 +2530,9 @@ export function ProposalForge(): JSX.Element {
                   ? "1180px"
                   : "1380px"
               : "100%",
-            "--page-shell-gap": "var(--layout-panel-stack)",
+            "--page-shell-gap": isSavedView
+              ? "var(--layout-panel-stack)"
+              : "var(--space-2)",
             "--page-shell-pad-top": "var(--space-2)",
           } as React.CSSProperties
         }
@@ -2577,6 +2577,21 @@ export function ProposalForge(): JSX.Element {
           </section>
         ) : (
           <>
+            {proposalWorkbenchToolbar ? (
+              <div className="dasti-workbench-top-left-slot dasti-workbench-top-left-slot--proposal">
+                <div
+                  className="dasti-cv-workbench-bar dasti-cv-workbench-bar--proposal-workspace"
+                  style={proposalToolbarWidthStyle}
+                >
+                  <div
+                    className="dasti-forge-compose-toolbar-slot"
+                    data-testid="proposal-workbench-toolbar-slot"
+                  >
+                    {proposalWorkbenchToolbar}
+                  </div>
+                </div>
+              </div>
+            ) : null}
             <div className="dasti-flow" style={proposalWorkbenchFrameStyle}>
             <section aria-hidden={false}>
               <div
@@ -2586,7 +2601,7 @@ export function ProposalForge(): JSX.Element {
                     "--grid-columns": isCompactComposeLayout
                       ? "minmax(0, 1fr)"
                       : showComposePanel
-                        ? "minmax(0, 480px) minmax(0, 640px)"
+                        ? "minmax(0, 460px) minmax(0, var(--document-viewer-shell-inline-size))"
                         : "minmax(0, 0px) minmax(0, 1fr)",
                     "--grid-gap": showComposePanel
                       ? "var(--layout-card-grid)"
@@ -2611,21 +2626,6 @@ export function ProposalForge(): JSX.Element {
                   style={stackedCardWidthStyle}
                   className="dasti-proposal-compose-column"
                 >
-                  {proposalWorkbenchToolbar ? (
-                    <div className="dasti-proposal-compose-column__toolbar">
-                      <div
-                        className="dasti-cv-workbench-bar dasti-cv-workbench-bar--proposal-workspace"
-                        style={proposalToolbarWidthStyle}
-                      >
-                        <div
-                          className="dasti-forge-compose-toolbar-slot"
-                          data-testid="proposal-workbench-toolbar-slot"
-                        >
-                          {proposalWorkbenchToolbar}
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
                   {showBriefCard ? (
                     <ProposalBriefCard
                       documentTitle={
