@@ -2533,10 +2533,7 @@ export function ProposalForge(): JSX.Element {
                   : "1380px"
               : "100%",
             "--page-shell-gap": "var(--layout-panel-stack)",
-            "--page-shell-pad-top":
-              isSavedView || shouldCenterOutputStage
-                ? "var(--space-2)"
-                : "var(--space-6)",
+            "--page-shell-pad-top": "var(--space-2)",
           } as React.CSSProperties
         }
       >
@@ -2580,21 +2577,6 @@ export function ProposalForge(): JSX.Element {
           </section>
         ) : (
           <>
-            {proposalWorkbenchToolbar ? (
-              <div className="dasti-workbench-top-left-slot dasti-workbench-top-left-slot--proposal">
-                <div
-                  className="dasti-cv-workbench-bar dasti-cv-workbench-bar--proposal-workspace"
-                  style={proposalToolbarWidthStyle}
-                >
-                  <div
-                    className="dasti-forge-compose-toolbar-slot"
-                    data-testid="proposal-workbench-toolbar-slot"
-                  >
-                    {proposalWorkbenchToolbar}
-                  </div>
-                </div>
-              </div>
-            ) : null}
             <div className="dasti-flow" style={proposalWorkbenchFrameStyle}>
             <section aria-hidden={false}>
               <div
@@ -2625,7 +2607,25 @@ export function ProposalForge(): JSX.Element {
                   .filter(Boolean)
                   .join(" ")}
               >
-                <div style={stackedCardWidthStyle}>
+                <div
+                  style={stackedCardWidthStyle}
+                  className="dasti-proposal-compose-column"
+                >
+                  {proposalWorkbenchToolbar ? (
+                    <div className="dasti-proposal-compose-column__toolbar">
+                      <div
+                        className="dasti-cv-workbench-bar dasti-cv-workbench-bar--proposal-workspace"
+                        style={proposalToolbarWidthStyle}
+                      >
+                        <div
+                          className="dasti-forge-compose-toolbar-slot"
+                          data-testid="proposal-workbench-toolbar-slot"
+                        >
+                          {proposalWorkbenchToolbar}
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
                   {showBriefCard ? (
                     <ProposalBriefCard
                       documentTitle={
@@ -2736,7 +2736,7 @@ export function ProposalForge(): JSX.Element {
                     zoomStorageKey={null}
                     previewAnchor="top"
                     size="default"
-                    documentHeaderMode="actions-only"
+                    documentHeaderMode="hidden"
                     railStartAddon={
                       proposalContent ? (
                         <ProposalArtifactInspector
