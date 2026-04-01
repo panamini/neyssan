@@ -1616,6 +1616,15 @@
 }
 
 .dasti-proposal-library-card {
+  --document-viewer-shell-inline-size: calc(
+    var(--document-sheet-inline-size) - (var(--s4) * 2)
+  );
+  --document-shell-padding-inline: 0px;
+  --document-shell-padding-block: 0px;
+  --document-viewer-bleed-inline: var(--s2);
+  --document-viewer-bleed-block: var(--s2);
+  --proposal-output-stage-frame-padding: var(--s2);
+  --proposal-output-rail-inline-inset: var(--s2);
   width: 100%;
   min-width: 0;
   scroll-margin-block: calc(var(--space-6) + var(--space-4));
@@ -1623,6 +1632,11 @@
 
 .dasti-proposal-library-card--spotlit .dasti-proposal-sheet {
   border-color: transparent;
+}
+
+.dasti-proposal-library-card .dasti-proposal-sheet__body--document-viewer .dasti-document-stage-chassis {
+  justify-content: center;
+  padding: var(--proposal-output-stage-frame-padding);
 }
 
 .dasti-proposal-library-card--secondary {
@@ -1850,8 +1864,8 @@
 
 .dasti-resume-workspace-stage .resume-page-stage,
 .dasti-resume-workspace-stage .resume-page-stage--embedded {
-  width: var(--preview-stage-width, 100%);
-  max-width: none;
+  width: min(var(--preview-stage-width, 100%), 100%);
+  max-width: 100%;
   margin-inline: 0;
   align-items: start;
 }
@@ -1969,9 +1983,17 @@
 .dasti-proposal-character-badge-wrap {
   position: absolute;
   inset-inline-start: calc(
-    var(--document-shell-padding-inline) + var(--space-1)
+    max(
+        var(--document-shell-padding-inline),
+        var(--proposal-output-stage-frame-padding, 0px)
+      ) + var(--space-1)
   );
-  inset-block-end: calc(var(--document-shell-padding-block) + var(--space-1));
+  inset-block-end: calc(
+    max(
+        var(--document-shell-padding-block),
+        var(--proposal-output-stage-frame-padding, 0px)
+      ) + var(--space-1)
+  );
   z-index: 18;
   pointer-events: none;
 }
@@ -2386,8 +2408,10 @@
 .dasti-proposal-output-shell--workspace {
   --document-shell-padding-inline: 0px;
   --document-shell-padding-block: 0px;
-  --proposal-output-stage-frame-padding: 4px;
-  --proposal-output-rail-inline-inset: 4px;
+  --document-viewer-bleed-inline: var(--s2);
+  --document-viewer-bleed-block: var(--s2);
+  --proposal-output-stage-frame-padding: var(--s2);
+  --proposal-output-rail-inline-inset: var(--s2);
 }
 
 .dasti-proposal-style-source {
@@ -6419,7 +6443,12 @@
 .dasti-workbench-top-left-slot--proposal {
   position: relative;
   min-width: 0;
+  pointer-events: none;
   z-index: 26;
+}
+
+.dasti-workbench-top-left-slot--proposal > * {
+  pointer-events: auto;
 }
 
 .dasti-workbench-top-left-slot--cv {
@@ -7028,12 +7057,10 @@
 .dasti-compose-toolbar__collapsed-shell {
   box-sizing: border-box;
   position: relative;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: flex-start;
   min-block-size: var(--dasti-compose-toolbar-shell-min-block-size);
-  width: 100%;
-  max-width: 100%;
   padding: var(--proposal-chrome-shell-padding);
   border-radius: var(--radius-toolbar-shell);
   border: 1px solid color-mix(in srgb, var(--color-border) 82%, transparent);
@@ -7057,7 +7084,6 @@
   align-items: center;
   gap: var(--proposal-chrome-tight-gap);
   min-block-size: var(--dasti-compose-toolbar-control-block-size);
-  width: 100%;
   min-width: 0;
   overflow: visible;
 }
@@ -7067,7 +7093,6 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  margin-inline-start: auto;
   overflow: visible;
 }
 
@@ -7091,7 +7116,8 @@
 }
 
 .dasti-compose-toolbar__tone-popover--collapsed {
-  inset-inline-start: 50%;
+  inset-inline-start: auto;
+  inset-inline-end: 0;
   inset-block-start: calc(
     100% +
       var(
@@ -7099,8 +7125,8 @@
         var(--dasti-toolbar-attached-surface-gap)
       )
   );
-  transform: translate(-50%, 0);
-  transform-origin: center top;
+  transform: none;
+  transform-origin: right top;
 }
 
 .dasti-compose-toolbar__tone-list {
@@ -7704,9 +7730,9 @@
 .dasti-doc-viewer-shell--resume-workspace
   .dasti-doc-viewport--resume
   .resume-page-stage--embedded {
-  width: var(--preview-stage-width, 100%);
+  width: min(var(--preview-stage-width, 100%), 100%);
   min-width: 0;
-  max-width: none;
+  max-width: 100%;
   margin-inline: 0;
   display: block;
 }

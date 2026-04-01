@@ -2375,14 +2375,14 @@ export function ProposalForge(): JSX.Element {
   const proposalDesktopComposeWidth = `${proposalDesktopComposeWidthPx}px`;
   const proposalTwoPaneMinViewportWidth = 1440;
   const proposalWorkspaceOutputShellInlineSize =
-    "calc(var(--document-sheet-inline-size) + 34px)";
+    "calc(var(--document-sheet-inline-size) - (var(--s4) * 2))";
   const proposalWorkspaceShellBlockSize =
     "min(var(--document-viewer-shell-max-block), calc(100dvh - var(--header-height) - (var(--space-2) * 2) - (var(--document-viewer-toolbar-block-size) + var(--space-2)) - 8px))";
   const isCompactComposeLayout =
     viewportWidth < proposalTwoPaneMinViewportWidth;
   const shouldLeftAnchorStackedWorkbench =
     isCompactComposeLayout && viewportWidth >= 768;
-  const canCollapseComposePanel = viewportWidth >= 768;
+  const canCollapseComposePanel = !isSavedView && !isCompactComposeLayout;
   const isNarrowLaptop = viewportWidth < 1360;
   const shouldCenterOutputStage = !isSavedView && !isComposePanelVisible && !isCompactComposeLayout;
   const isLoadingHandoff =
@@ -2390,11 +2390,17 @@ export function ProposalForge(): JSX.Element {
     (isConvexAuthLoading ||
       (isConvexAuthenticated && handoffRecord === undefined));
   const showComposePanel = isComposePanelVisible && !isSavedView;
+  const shouldShowCollapsedComposeToolbar =
+    !isComposePanelVisible && !isSavedView && canCollapseComposePanel;
   const liveWorkbenchMaxWidth = isCompactComposeLayout
     ? "560px"
     : shouldCenterOutputStage
       ? "860px"
       : `calc(${proposalDesktopComposeWidth} + var(--proposal-workspace-output-shell-inline-size) + var(--layout-card-grid))`;
+  const toolbarWorkbenchMaxWidth =
+    shouldShowCollapsedComposeToolbar && !isCompactComposeLayout
+      ? `calc(${proposalDesktopComposeWidth} + var(--proposal-workspace-output-shell-inline-size) + var(--layout-card-grid))`
+      : liveWorkbenchMaxWidth;
 
   const stackedCardWidthStyle: React.CSSProperties = isCompactComposeLayout
     ? { width: "min(100%, 560px)", minWidth: 0 }
@@ -2416,7 +2422,7 @@ export function ProposalForge(): JSX.Element {
   };
   const proposalWorkbenchToolbarSlotStyle: React.CSSProperties = {
     width: "100%",
-    maxWidth: liveWorkbenchMaxWidth,
+    maxWidth: toolbarWorkbenchMaxWidth,
     marginInline: shouldLeftAnchorStackedWorkbench ? 0 : "auto",
     minWidth: 0,
   };
@@ -2437,8 +2443,6 @@ export function ProposalForge(): JSX.Element {
   const hasBriefContent = Boolean(briefJobDescription);
   const showBriefCard =
     Boolean(proposalContent) && !isBriefExpanded && showComposePanel;
-  const shouldShowCollapsedComposeToolbar =
-    !isComposePanelVisible && !isSavedView && canCollapseComposePanel;
   const focusComposeBrief = React.useCallback(() => {
     const jobDescriptionField =
       typeof document !== "undefined"
@@ -2484,10 +2488,10 @@ export function ProposalForge(): JSX.Element {
   }, [updateProposalRoute]);
 
   React.useEffect(() => {
-    if (viewportWidth < 768 && !isComposePanelVisible) {
+    if (!canCollapseComposePanel && !isComposePanelVisible) {
       setIsComposePanelVisible(true);
     }
-  }, [isComposePanelVisible, viewportWidth]);
+  }, [canCollapseComposePanel, isComposePanelVisible]);
 
   React.useEffect(() => {
     if (!isBriefExpanded || !pendingComposeBriefFocusRef.current) {
