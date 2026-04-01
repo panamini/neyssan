@@ -106,8 +106,8 @@ function normalizeStoredProposalComposeDraft(
     ...(typeof parsed.proposalType === "string"
       ? { proposalType: parsed.proposalType }
       : null),
-    ...(typeof parsed.voicePreset === "string"
-      ? { voicePreset: parsed.voicePreset }
+    ...(typeof parsed.voicePreset === "string" || parsed.voicePreset === null
+      ? { voicePreset: parsed.voicePreset ?? null }
       : null),
     ...(typeof parsed.toneTuning === "string" || parsed.toneTuning === null
       ? { toneTuning: parsed.toneTuning ?? null }
