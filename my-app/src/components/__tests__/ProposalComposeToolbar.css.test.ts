@@ -35,21 +35,24 @@ describe("ProposalComposeToolbar CSS contracts", () => {
     );
   });
 
-  it("treats the collapsed toolbar as a full-width condensed bar with restore left and tone right", () => {
+  it("keeps the collapsed toolbar as a compact left-anchored shell", () => {
     expect(productCss).toMatch(
-      /\.dasti-compose-toolbar__collapsed-shell\s*\{[\s\S]*display:\s*flex;[\s\S]*justify-content:\s*flex-start;[\s\S]*width:\s*100%;[\s\S]*max-width:\s*100%;/,
+      /\.dasti-compose-toolbar__collapsed-shell\s*\{[\s\S]*display:\s*inline-flex;[\s\S]*justify-content:\s*flex-start;/,
     );
     expect(productCss).toMatch(
-      /\.dasti-compose-toolbar__collapsed-meta\s*\{[\s\S]*width:\s*100%;[\s\S]*min-width:\s*0;/,
+      /\.dasti-compose-toolbar__collapsed-meta\s*\{[\s\S]*min-width:\s*0;/,
     );
     expect(productCss).toMatch(
-      /\.dasti-compose-toolbar__tone-anchor\s*\{[\s\S]*margin-inline-start:\s*auto;/,
+      /\.dasti-compose-toolbar__tone-popover--collapsed\s*\{[\s\S]*inset-inline-start:\s*auto;[\s\S]*inset-inline-end:\s*0;[\s\S]*transform:\s*none;[\s\S]*transform-origin:\s*right top;/,
     );
   });
 
-  it("keeps the proposal workspace toolbar stack above the compose shell so collapsed drawers stay clickable", () => {
+  it("keeps the proposal workspace toolbar stack above the compose shell without blocking output controls", () => {
     expect(productCss).toMatch(
-      /\.dasti-workbench-top-left-slot--proposal\s*\{[\s\S]*position:\s*relative;[\s\S]*z-index:\s*26;/,
+      /\.dasti-workbench-top-left-slot--proposal\s*\{[\s\S]*position:\s*relative;[\s\S]*pointer-events:\s*none;[\s\S]*z-index:\s*26;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-workbench-top-left-slot--proposal\s*>\s*\*\s*\{[\s\S]*pointer-events:\s*auto;/,
     );
   });
 });
