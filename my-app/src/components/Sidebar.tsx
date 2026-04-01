@@ -705,6 +705,7 @@ export const Sidebar: React.FC = () => {
   );
 
   const forcedCollapsed = viewportWidth < 768;
+  const hideSidebar = viewportWidth < 480;
   const sidebarCollapsed = collapsed || forcedCollapsed;
   const isResumeRoute = matchesRoute("/cv");
   const isResumeLibraryRoute = matchesRoute("/cvs");
@@ -1140,6 +1141,10 @@ export const Sidebar: React.FC = () => {
   const hasProposalDocuments =
     proposalTotalCount > 0 || Boolean(activeProposalKey);
 
+  if (hideSidebar) {
+    return null;
+  }
+
   return (
     <aside
       className={clsx(
@@ -1250,7 +1255,9 @@ export const Sidebar: React.FC = () => {
           sidebarCollapsed && "sb-footer--collapsed",
         )}
       >
-        <UserButton afterSignOutUrl="/" appearance={clerkAppearance} />
+        <div className="sb-footer__avatar">
+          <UserButton afterSignOutUrl="/" appearance={clerkAppearance} />
+        </div>
         {!sidebarCollapsed ? (
           <div className="sb-footer__account">
             <div className="sb-footer__title">

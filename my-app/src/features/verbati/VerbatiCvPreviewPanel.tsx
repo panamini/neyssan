@@ -4,12 +4,10 @@ import EmbeddedStyleInspector from "../../components/EmbeddedStyleInspector";
 import { useCvLibrary } from "../../contexts/CvLibraryContext";
 import { resumeMock } from "./resume/resume.mock";
 import {
-  getLayoutLabel,
   getVerbatiStyleFromCv,
   resolveVerbatiStyle,
   serializeVerbatiStyle,
   stylesEqual,
-  VERBATI_LAYOUT_OPTIONS,
 } from "./style";
 import {
   getVerbatiStyleBundleDefinition,
@@ -35,7 +33,7 @@ type VerbatiCvPreviewPanelProps = {
 export function VerbatiCvPreviewPanel({
   layoutMode: _layoutMode = "stacked",
   hostMode = "panel",
-  railLeadControl = null,
+  railLeadControl: _railLeadControl = null,
   stylePreset: controlledStylePreset,
   onStylePresetChange,
 }: VerbatiCvPreviewPanelProps): JSX.Element {
@@ -54,14 +52,6 @@ export function VerbatiCvPreviewPanel({
     React.useState(persistedStylePreset);
   const stylePreset = controlledStylePreset ?? uncontrolledStylePreset;
   const setStylePreset = onStylePresetChange ?? setUncontrolledStylePreset;
-  const layoutOptions = React.useMemo(
-    () => VERBATI_LAYOUT_OPTIONS.map((option) => option.id),
-    [],
-  );
-  const activeLayoutIndex = React.useMemo(() => {
-    const matchedIndex = layoutOptions.indexOf(stylePreset.layout);
-    return matchedIndex >= 0 ? matchedIndex : 0;
-  }, [layoutOptions, stylePreset.layout]);
   const activeBundleId = React.useMemo(() => {
     const exactBundleId = resolveVerbatiStyleBundleId({
       stylePreset,
@@ -133,35 +123,6 @@ export function VerbatiCvPreviewPanel({
     };
   }, [currentCv, importCv, persistedStylePreset, stylePreset]);
 
-  const handleCycleLayout = React.useCallback(
-    (direction: -1 | 1) => {
-      const nextIndex =
-        (activeLayoutIndex + direction + layoutOptions.length) %
-        layoutOptions.length;
-      const nextLayout = layoutOptions[nextIndex];
-      setStylePreset((current) =>
-        resolveVerbatiStyle({ ...current, layout: nextLayout }),
-      );
-    },
-    [activeLayoutIndex, layoutOptions],
-  );
-
-  const previousLayoutLabel = React.useMemo(
-    () =>
-      getLayoutLabel(
-        layoutOptions[
-          (activeLayoutIndex - 1 + layoutOptions.length) % layoutOptions.length
-        ],
-      ),
-    [activeLayoutIndex, layoutOptions],
-  );
-  const nextLayoutLabel = React.useMemo(
-    () =>
-      getLayoutLabel(
-        layoutOptions[(activeLayoutIndex + 1) % layoutOptions.length],
-      ),
-    [activeLayoutIndex, layoutOptions],
-  );
   const handleCycleBundle = React.useCallback(
     (direction: -1 | 1) => {
       const nextIndex =
@@ -266,7 +227,6 @@ export function VerbatiCvPreviewPanel({
             data={previewData}
             stylePreset={stylePreset}
             hostMode="workspace"
-            railLeadControl={railLeadControl}
             railStartAddon={
               <>
                 {workspaceStyleCycleControls}
@@ -323,12 +283,6 @@ export function VerbatiCvPreviewPanel({
             data={previewData}
             stylePreset={stylePreset}
             hostMode="panel"
-            panelNavigation={{
-              onPrevious: () => handleCycleLayout(-1),
-              onNext: () => handleCycleLayout(1),
-              previousLabel: `Show previous resume layout: ${previousLayoutLabel}`,
-              nextLabel: `Show next resume layout: ${nextLayoutLabel}`,
-            }}
           />
         </div>
       )}

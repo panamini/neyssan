@@ -181,6 +181,7 @@ export function EmbeddedStyleInspector({
   const hasOpenDrawer = activeDrawer !== null || isColorPickerOpen;
   const isTitleOnlyCopy = copyMode === "title-only";
   const isDirectControlMode = controlMode === "direct";
+  const useIconOnlyBundleDrawer = !isDirectControlMode && isTitleOnlyCopy;
 
   React.useEffect(() => {
     if (!activeDrawer) return undefined;
@@ -479,12 +480,69 @@ export function EmbeddedStyleInspector({
 
             {activeDrawer === "bundle" ? (
               <div
-                className="dasti-resume-style-inspector__drawer dasti-proposal-chrome-drawer dasti-proposal-chrome-drawer--stack"
+                className={[
+                  useIconOnlyBundleDrawer
+                    ? "dasti-artifact-inspector__style-drawer"
+                    : "dasti-resume-style-inspector__drawer",
+                  "dasti-proposal-chrome-drawer",
+                  "dasti-proposal-chrome-drawer--stack",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
                 role="dialog"
                 aria-label="Resume style presets"
               >
                 {resolvedBundleOptions.map((bundle) => {
                   const active = bundle.id === activeBundleId;
+                  const typographyOption =
+                    VERBATI_TYPOGRAPHY_OPTIONS.find(
+                      (option) => option.id === bundle.stylePreset.typography,
+                    ) ?? activeTypographyOption;
+
+                  if (useIconOnlyBundleDrawer) {
+                    return (
+                      <button
+                        key={bundle.id}
+                        type="button"
+                        className={[
+                          "dasti-artifact-inspector__action",
+                          "dasti-artifact-inspector__action--drawer",
+                          active
+                            ? "dasti-artifact-inspector__action--active"
+                            : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                        aria-pressed={active}
+                        aria-label={bundle.label}
+                        onClick={() => {
+                          onSelectBundle(bundle.id);
+                          setActiveDrawer(null);
+                        }}
+                        disabled={readOnly}
+                      >
+                        <span
+                          className="dasti-artifact-inspector__icon dasti-artifact-inspector__icon--aa"
+                          aria-hidden="true"
+                          style={{
+                            fontFamily: typographyOption.headingFamily,
+                            fontWeight:
+                              bundle.stylePreset.typography === "expert"
+                                ? 500
+                                : 600,
+                          }}
+                        >
+                          Aa
+                        </span>
+                        <InspectorTooltip
+                          className="dasti-artifact-inspector__tooltip--drawer"
+                          title={bundle.label}
+                          description={bundle.description}
+                        />
+                      </button>
+                    );
+                  }
+
                   return (
                     <button
                       key={bundle.id}
@@ -507,11 +565,7 @@ export function EmbeddedStyleInspector({
                         className="dasti-proposal-chrome-option__icon dasti-artifact-inspector__icon--aa"
                         aria-hidden="true"
                         style={{
-                          fontFamily:
-                            VERBATI_TYPOGRAPHY_OPTIONS.find(
-                              (option) =>
-                                option.id === bundle.stylePreset.typography,
-                            )?.headingFamily ?? activeTypographyOption.headingFamily,
+                          fontFamily: typographyOption.headingFamily,
                           fontWeight:
                             bundle.stylePreset.typography === "expert" ? 500 : 600,
                         }}

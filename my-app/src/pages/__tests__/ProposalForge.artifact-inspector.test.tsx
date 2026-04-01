@@ -6,6 +6,7 @@ import { ProposalForge } from "../ProposalForge";
 import { readStoredProposalOutputDraft } from "../../lib/proposal-output-draft";
 
 const proposalDisplaySpy = vi.fn();
+let mockVoicePreset: "signature" | null = "signature";
 
 vi.mock("convex/react", () => ({
   useConvexAuth: () => ({
@@ -55,7 +56,7 @@ vi.mock("../../components/ProposalInputForm", () => ({
           jobDescription:
             "Support recurring processes and coordinate communication.",
           proposalType: "cover_letter",
-          voicePreset: "signature",
+          voicePreset: mockVoicePreset,
           toneTuning: null,
           characterLimitMode: "none",
           characterLimitValue: null,
@@ -92,6 +93,30 @@ vi.mock("../../components/ProposalDisplay", () => ({
   getDisplayedProposalText: (value: string) => value,
 }));
 
+vi.mock("../../components/ProposalArtifactInspector", () => ({
+  ProposalArtifactInspector: ({
+    onStyleBundleChange,
+    onPaletteOverrideChange,
+  }: Record<string, any>) => (
+    <div>
+      <button
+        type="button"
+        aria-label="Style"
+        onClick={() => onStyleBundleChange?.("magazine_editorial")}
+      >
+        Style
+      </button>
+      <button
+        type="button"
+        aria-label="Color"
+        onClick={() => onPaletteOverrideChange?.("encre")}
+      >
+        Color
+      </button>
+    </div>
+  ),
+}));
+
 vi.mock("../../components/ProposalsList", () => ({
   default: () => <div>Saved proposals</div>,
 }));
@@ -99,6 +124,7 @@ vi.mock("../../components/ProposalsList", () => ({
 describe("ProposalForge artifact inspector integration", () => {
   beforeEach(() => {
     proposalDisplaySpy.mockClear();
+    mockVoicePreset = "signature";
     window.localStorage.clear();
   });
 
@@ -115,7 +141,6 @@ describe("ProposalForge artifact inspector integration", () => {
     expect(screen.getByRole("button", { name: "Color" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Style" }));
-    fireEvent.click(screen.getByRole("button", { name: "Editorial" }));
 
     await waitFor(() => {
       expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
@@ -127,7 +152,6 @@ describe("ProposalForge artifact inspector integration", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Color" }));
-    fireEvent.click(screen.getByRole("button", { name: "Ink" }));
 
     await waitFor(() => {
       expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
@@ -137,6 +161,24 @@ describe("ProposalForge artifact inspector integration", () => {
         paletteOverride: "encre",
         templateBundleId: "magazine_editorial",
       });
+    });
+  });
+
+  it("keeps Auto visible in the output meta when auto tone was requested", async () => {
+    mockVoicePreset = null;
+
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate proposal" }));
+
+    await waitFor(() => {
+      const lastCall =
+        proposalDisplaySpy.mock.calls[proposalDisplaySpy.mock.calls.length - 1]?.[0];
+      expect(lastCall?.documentMeta).toContain("Auto");
     });
   });
 });

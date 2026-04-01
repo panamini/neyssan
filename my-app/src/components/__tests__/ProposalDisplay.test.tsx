@@ -210,6 +210,9 @@ describe("ProposalDisplay", () => {
     expect(
       document.querySelector(".dasti-proposal-sheet__preview-page"),
     ).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open zoom controls" }),
+    );
     expect(screen.getByRole("button", { name: "Fit page" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Zoom out" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Zoom in" })).toBeInTheDocument();
@@ -218,6 +221,9 @@ describe("ProposalDisplay", () => {
         ".dasti-proposal-rail-cluster .dasti-doc-zoom-menu",
       ),
     ).toBeTruthy();
+    expect(
+      screen.queryByRole("button", { name: "100 percent zoom" }),
+    ).not.toBeInTheDocument();
   });
 
   it("hides zoom controls while the proposal is in edit mode", () => {
@@ -236,7 +242,7 @@ describe("ProposalDisplay", () => {
     );
 
     expect(
-      screen.queryByRole("button", { name: "Fit page" }),
+      screen.queryByRole("button", { name: "Open zoom controls" }),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Zoom out" }),
@@ -267,5 +273,37 @@ describe("ProposalDisplay", () => {
     fireEvent.click(toggle);
 
     expect(handleModeChange).toHaveBeenCalledWith("edit");
+  });
+
+  it("places the actions-only document header inside the sheet under the toolbar rail", () => {
+    render(
+      <ProposalDisplay
+        proposalContent={"Hello hiring team,\n\nI build calm, reliable proposal copy."}
+        loading={false}
+        error={null}
+        proposalType="cover_letter"
+        documentHeaderMode="actions-only"
+        documentTitle="Generated proposal"
+        documentMeta="Compose output"
+        showModeToggle
+        onModeChange={vi.fn()}
+      />,
+    );
+
+    const rail = document.querySelector(".dasti-document-rail");
+    const inlineHeading = document.querySelector(
+      ".dasti-proposal-sheet__heading--inline",
+    );
+    const externalHeading = document.querySelector(
+      ".dasti-proposal-sheet__heading--external",
+    );
+
+    expect(rail).toBeTruthy();
+    expect(inlineHeading).toBeTruthy();
+    expect(externalHeading).toBeNull();
+    expect(
+      (rail as HTMLElement).compareDocumentPosition(inlineHeading as HTMLElement) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 });

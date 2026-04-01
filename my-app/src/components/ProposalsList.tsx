@@ -1,14 +1,11 @@
 import React from "react";
 import {
-  ArrowsOutSimple,
   Check,
-  CornersIn,
   Feather,
   PenLine,
   PenNib,
   RotateCcw,
   Sunglasses,
-  SquaresFour,
   Trash,
   Wand2,
   X,
@@ -742,18 +739,6 @@ export default function ProposalsList({
     setIsRegenerateToneMenuOpen(false);
   }, [selected?._id, selectedStoredAppearance]);
 
-  const toggleFocusView = React.useCallback(() => {
-    setSavedViewMode((current) =>
-      current === "focused" ? "stack" : "focused",
-    );
-  }, []);
-
-  const toggleLibraryOverview = React.useCallback(() => {
-    setSavedViewMode((current) =>
-      current === "library" ? "stack" : "library",
-    );
-  }, []);
-
   React.useEffect(() => {
     if (!isRegenerateToneMenuOpen) return undefined;
 
@@ -1338,58 +1323,6 @@ export default function ProposalsList({
           .filter(Boolean)
           .join(" ")}
       >
-        {isMobileSavedViewport ? (
-          <div className="dasti-proposal-library-mobile-controls">
-            <button
-              type="button"
-              aria-label={
-                isLibraryOverview
-                  ? "Return to proposal stack"
-                  : "Open proposal library overview"
-              }
-              data-toolbar-tooltip={
-                isLibraryOverview
-                  ? "Return to proposal stack"
-                  : "Open proposal library overview"
-              }
-              aria-pressed={isLibraryOverview}
-              className={
-                isLibraryOverview
-                  ? "dasti-icon-button dasti-proposal-mode-toggle dasti-proposal-mode-toggle--active"
-                  : "dasti-icon-button dasti-proposal-mode-toggle"
-              }
-              onClick={toggleLibraryOverview}
-            >
-              <SquaresFour size={16} strokeWidth={1.7} />
-            </button>
-            <button
-              type="button"
-              aria-label={
-                isOutputFocused
-                  ? "Return to card stack"
-                  : "Focus selected proposal"
-              }
-              data-toolbar-tooltip={
-                isOutputFocused
-                  ? "Return to card stack"
-                  : "Focus selected proposal"
-              }
-              aria-pressed={isOutputFocused}
-              className={
-                isOutputFocused
-                  ? "dasti-icon-button dasti-proposal-mode-toggle dasti-proposal-mode-toggle--active"
-                  : "dasti-icon-button dasti-proposal-mode-toggle"
-              }
-              onClick={toggleFocusView}
-            >
-              {isOutputFocused ? (
-                <CornersIn size={16} strokeWidth={1.7} />
-              ) : (
-                <ArrowsOutSimple size={16} strokeWidth={1.7} />
-              )}
-            </button>
-          </div>
-        ) : null}
         {selected ? (
           isLibraryOverview ? (
             <div className="dasti-proposal-library-overview">
@@ -1486,37 +1419,29 @@ export default function ProposalsList({
                   size="default"
                   documentHeaderMode="actions-only"
                   railStartAddon={
-                    <>
-                      {selectedActionCluster}
-                      {selectedActionCluster && selectedRenderState ? (
-                        <div className="dasti-icon-cluster__divider dasti-proposal-rail-cluster__divider" />
-                      ) : null}
-                      {selectedRenderState ? (
-                        <ProposalArtifactInspector
-                          variant="header"
-                          styleBundleId={selectedStyleBundleId}
-                          onStyleBundleChange={setSelectedStyleBundleId}
-                          paletteOverride={selectedPaletteOverride}
-                          onPaletteOverrideChange={(value) => {
-                            setSelectedCustomAccentHex(null);
-                            setSelectedPaletteOverride(value);
-                          }}
-                          customAccentHex={selectedCustomAccentHex}
-                          onCustomAccentHexChange={(hex) => {
-                            setSelectedCustomAccentHex(hex);
-                            if (hex !== null) {
-                              setSelectedPaletteOverride(null);
-                            }
-                          }}
-                          resolvedPaletteId={
-                            selectedRenderState.stylePreset.palette === "custom"
-                              ? null
-                              : selectedRenderState.stylePreset.palette
-                          }
-                          hasGenerated
-                        />
-                      ) : null}
-                    </>
+                    selectedRenderState ? (
+                      <ProposalArtifactInspector
+                        variant="header"
+                        styleBundleId={selectedStyleBundleId}
+                        onStyleBundleChange={setSelectedStyleBundleId}
+                        paletteOverride={selectedPaletteOverride}
+                        onPaletteOverrideChange={(value) => {
+                          setSelectedCustomAccentHex(null);
+                          setSelectedPaletteOverride(value);
+                        }}
+                        customAccentHex={selectedCustomAccentHex}
+                        onCustomAccentHexChange={(hex) => {
+                          setSelectedCustomAccentHex(hex);
+                          setSelectedPaletteOverride(null);
+                        }}
+                        resolvedPaletteId={
+                          selectedRenderState.stylePreset.palette === "custom"
+                            ? null
+                            : selectedRenderState.stylePreset.palette
+                        }
+                        hasGenerated={Boolean(editContent)}
+                      />
+                    ) : null
                   }
                   onCopy={() => {
                     void navigator.clipboard.writeText(editContent).then(() => {
@@ -1529,7 +1454,7 @@ export default function ProposalsList({
                   onContentCommit={() => {
                     void handleSaveDocument();
                   }}
-                  actions={null}
+                  actions={selectedActionCluster}
                 />
               </div>
 
