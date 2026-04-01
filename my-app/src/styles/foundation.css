@@ -190,19 +190,33 @@
   );
   --document-viewer-frame-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.76),
     0 10px 24px color-mix(in srgb, var(--color-text) 2.8%, transparent);
+  --document-viewer-toolbar-block-size: calc(
+    var(--hs) + (2 * (var(--space-2) - 2px)) + 2px
+  );
+  --document-viewer-paper-max-block: max(
+    var(--document-sheet-max-block),
+    calc(var(--document-sheet-inline-size) / var(--document-sheet-ratio))
+  );
   --document-viewer-shell-inline-size: min(
     var(--card-rail-md),
     calc(
       var(--document-sheet-inline-size) +
+        (var(--document-viewer-bleed-inline) * 2) +
         (var(--document-shell-padding-inline) * 2) +
         2px
     )
   );
   --document-viewer-shell-min-block: calc(
-    var(--document-sheet-min-block) + (var(--document-viewer-bleed-block) * 2)
+    var(--document-sheet-min-block) +
+      (var(--document-viewer-bleed-block) * 2) +
+      (var(--document-shell-padding-block) * 2) +
+      var(--document-rail-gap) + var(--document-viewer-toolbar-block-size)
   );
   --document-viewer-shell-max-block: calc(
-    var(--document-sheet-max-block) + (var(--document-viewer-bleed-block) * 2)
+    var(--document-viewer-paper-max-block) +
+      (var(--document-viewer-bleed-block) * 2) +
+      (var(--document-shell-padding-block) * 2) +
+      var(--document-rail-gap) + var(--document-viewer-toolbar-block-size)
   );
   --proposal-page-width-mm: 210;
   --proposal-page-height-mm: 297;
