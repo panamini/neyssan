@@ -13,7 +13,7 @@ type ProposalColorPickerPopoverProps = {
   onClear?: () => void;
 };
 
-const COLOR_POPOVER_ESTIMATED_SIZE = 176;
+const COLOR_POPOVER_ESTIMATED_SIZE = 160;
 const COLOR_POPOVER_VIEWPORT_GUTTER = 12;
 const ATTACHED_SURFACE_SELECTOR = [
   ".dasti-artifact-inspector",
