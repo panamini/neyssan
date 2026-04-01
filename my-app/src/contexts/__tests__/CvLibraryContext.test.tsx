@@ -210,6 +210,123 @@ describe('CvLibraryContext', () => {
     expect(ctx.currentCv.metadata?.librarySummaryOnly).not.toBe(true);
   });
 
+  it('restores the active cv from full cached storage instead of the compact index on refresh', async () => {
+    const now = new Date().toISOString();
+    const compact = {
+      id: 'cv_active',
+      title: 'Active CV',
+      metadata: {
+        createdAt: now,
+        updatedAt: now,
+        version: 1,
+        librarySummaryOnly: true,
+      },
+      profilePreview: {
+        name: 'Ada Lovelace',
+        desiredPosition: 'Engineer',
+      },
+    };
+    const full = {
+      id: 'cv_active',
+      title: 'Active CV',
+      metadata: {
+        createdAt: now,
+        updatedAt: now,
+        version: 1,
+      },
+      sections: [
+        {
+          id: 'profile-1',
+          type: 'profile',
+          title: 'Profile',
+          blocks: [],
+          structuredContent: [{ id: 'profile-item-1', name: 'Ada Lovelace' }],
+        },
+        {
+          id: 'summary-1',
+          type: 'summary',
+          title: 'Summary',
+          blocks: [],
+          structuredContent: [{ id: 'summary-item-1', summary: 'Full content' }],
+        },
+        {
+          id: 'experience-1',
+          type: 'experience',
+          title: 'Experience',
+          blocks: [],
+          structuredContent: [{ id: 'exp-item-1', company: 'Analytical Engine' }],
+        },
+      ],
+    };
+
+    mockLocalStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([compact]));
+    mockLocalStorage.setItem('cvActiveId', 'cv_active');
+    mockLocalStorage.setItem('cv:cv_active', JSON.stringify(full));
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(ctx).toBeDefined());
+    await waitFor(() => expect(ctx.currentCvId).toBe('cv_active'));
+    expect(ctx.currentCv.sections.map((section: any) => section.type)).toEqual([
+      'profile',
+      'summary',
+      'experience',
+      'education',
+      'skills',
+    ]);
+    expect(ctx.currentCv.metadata?.librarySummaryOnly).not.toBe(true);
+  });
+
+  it('repairs a summary-only cached active cv back into the canonical five-section blank draft', async () => {
+    const now = new Date().toISOString();
+    const summaryOnlyDoc = {
+      id: 'cv_summary_only',
+      title: 'Untitled CV',
+      metadata: {
+        createdAt: now,
+        updatedAt: now,
+        version: 1,
+        librarySummaryOnly: true,
+      },
+      sections: [
+        {
+          id: 'profile-1',
+          type: 'profile',
+          title: 'Profile',
+          blocks: [],
+          structuredContent: [{ id: 'profile-item-1', name: '' }],
+        },
+      ],
+    };
+
+    mockLocalStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([summaryOnlyDoc]));
+    mockLocalStorage.setItem('cvActiveId', 'cv_summary_only');
+    mockLocalStorage.setItem('cv:cv_summary_only', JSON.stringify(summaryOnlyDoc));
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(ctx).toBeDefined());
+    await waitFor(() => expect(ctx.currentCvId).toBe('cv_summary_only'));
+    expect(ctx.currentCv.sections.map((section: any) => section.type)).toEqual([
+      'profile',
+      'summary',
+      'experience',
+      'education',
+      'skills',
+    ]);
+    expect(ctx.currentCv.metadata?.librarySummaryOnly).not.toBe(true);
+  });
+
   it('loadCv sets the corresponding CV as currentCv', async () => {
     let ctx: any;
     render(

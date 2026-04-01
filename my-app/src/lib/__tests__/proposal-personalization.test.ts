@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   buildAppProposalPersonalizationPayload,
+  buildActiveCvSnapshotFromCvDocument,
   clearProposalAttachedCvId,
   extractPersonalizationContextFromCvDocument,
   getActiveLocalPersonalizationSource,
@@ -182,6 +183,13 @@ describe("buildAppProposalPersonalizationPayload", () => {
       id: CV_ALPHA.id,
       title: CV_ALPHA.title,
     });
+  });
+
+  it("keeps the display title split between stored CV title and sidebar/library title", () => {
+    const snapshot = buildActiveCvSnapshotFromCvDocument(CV_ALPHA as any);
+
+    expect(CV_ALPHA.title).toBe("Alex Martin Resume");
+    expect(snapshot.title).toBe("Operations Associate — Alex Martin");
   });
 
   it("migrates the legacy active CV once and keeps proposal detach independent", () => {

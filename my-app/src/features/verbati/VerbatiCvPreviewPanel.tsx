@@ -21,12 +21,18 @@ type VerbatiCvPreviewPanelProps = {
   layoutMode?: "rail" | "stacked";
   hostMode?: "panel" | "workspace";
   railLeadControl?: React.ReactNode;
+  stylePreset?: ReturnType<typeof getVerbatiStyleFromCv>;
+  onStylePresetChange?: React.Dispatch<
+    React.SetStateAction<ReturnType<typeof getVerbatiStyleFromCv>>
+  >;
 };
 
 export function VerbatiCvPreviewPanel({
   layoutMode: _layoutMode = "stacked",
   hostMode = "panel",
   railLeadControl = null,
+  stylePreset: controlledStylePreset,
+  onStylePresetChange,
 }: VerbatiCvPreviewPanelProps): JSX.Element {
   const { currentCv, importCv } = useCvLibrary();
   const persistedStylePreset = React.useMemo(
@@ -39,7 +45,10 @@ export function VerbatiCvPreviewPanel({
   );
   const hasActiveResume = hasRenderableResumeData(activeData);
   const previewData = hasActiveResume ? (activeData ?? resumeMock) : resumeMock;
-  const [stylePreset, setStylePreset] = React.useState(persistedStylePreset);
+  const [uncontrolledStylePreset, setUncontrolledStylePreset] =
+    React.useState(persistedStylePreset);
+  const stylePreset = controlledStylePreset ?? uncontrolledStylePreset;
+  const setStylePreset = onStylePresetChange ?? setUncontrolledStylePreset;
   const layoutOptions = React.useMemo(
     () => VERBATI_LAYOUT_OPTIONS.map((option) => option.id),
     [],
@@ -50,8 +59,13 @@ export function VerbatiCvPreviewPanel({
   }, [layoutOptions, stylePreset.layout]);
 
   React.useEffect(() => {
+    if (controlledStylePreset) {
+      return;
+    }
+
     setStylePreset(persistedStylePreset);
   }, [
+    controlledStylePreset,
     currentCv?.id,
     persistedStylePreset.accentHex,
     persistedStylePreset.layout,
