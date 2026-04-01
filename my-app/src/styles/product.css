@@ -1769,14 +1769,14 @@
 .dasti-doc-viewer-shell--resume-workspace {
   display: grid;
   align-content: start;
-  gap: var(--layout-panel-stack);
+  gap: var(--space-2);
   min-height: 0;
   height: 100%;
 }
 
 .dasti-document-rail--resume-workspace {
   position: sticky;
-  inset-block-start: var(--space-3);
+  inset-block-start: var(--space-2);
   z-index: 24;
 }
 
@@ -3974,6 +3974,27 @@
   position: sticky;
   inset-block-start: calc(var(--space-3) + 48px);
   align-self: start;
+}
+
+.dasti-proposal-compose-column {
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+}
+
+.dasti-proposal-compose-column__toolbar {
+  min-width: 0;
+}
+
+@media (max-width: 960px) {
+  .dasti-cv-preview-workbench {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-2);
+  }
+
+  .dasti-workbench-top-left-slot--cv-preview {
+    margin-bottom: var(--space-2);
+  }
 }
 
 .dasti-cv-workbench-toggle {
@@ -6316,7 +6337,32 @@
   position: sticky;
   inset-block-start: var(--space-3);
   z-index: 24;
+}
+
+.dasti-workbench-top-left-slot--cv-edit {
   margin-bottom: var(--layout-panel-stack);
+}
+
+.dasti-workbench-top-left-slot--cv-preview {
+  align-self: start;
+}
+
+.dasti-cv-preview-workbench {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: start;
+  gap: var(--layout-panel-stack);
+  min-width: 0;
+}
+
+.dasti-cv-preview-workbench__rail,
+.dasti-cv-preview-workbench__main {
+  min-width: 0;
+}
+
+.dasti-cv-preview-workbench__main {
+  display: grid;
+  align-content: start;
 }
 
 .dasti-forge-compose-toolbar-slot {
