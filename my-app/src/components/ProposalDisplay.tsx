@@ -1,5 +1,4 @@
 import React from "react";
-import { useAction } from "convex/react";
 import {
   Check,
   Copy,
@@ -17,9 +16,6 @@ import {
   getProposalGenerationFallbackDisclosureMessage,
   type ProposalGenerationFallbackInfo,
 } from "../lib/proposal-generation-ui";
-import FloatingAiToolbar, {
-  type InlineAiActionId,
-} from "./FloatingAiToolbar";
 import { getProposalDocumentTypography } from "../lib/proposal-document-typography";
 import { useScrollEdgeFades } from "../hooks/use-scroll-edge-fades";
 import { useDocumentPan } from "../hooks/use-document-pan";
@@ -37,7 +33,6 @@ import {
   A4_PAGE_WIDTH_PX,
   DOCUMENT_ZOOM_STEPS,
 } from "../lib/document-stage";
-import { getTextareaSelectionState } from "../lib/editor-ai-selection";
 import { resolveProposalCharacterLimitSelection } from "../../convex/lib/proposals/generationControls";
 
 interface ProposalDisplayProps {
@@ -308,9 +303,6 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     voicePreset,
     resolvedStylePreset,
   );
-  const transformEditorSelectionAction = useAction(
-    (api.functions as any).transformEditorSelection,
-  );
   const displayedProposalText = React.useMemo(
     () =>
       proposalContent
@@ -345,18 +337,8 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   const [isZoomMenuOpen, setIsZoomMenuOpen] = React.useState(false);
   const [documentPageCount, setDocumentPageCount] = React.useState(1);
   const [fitRequestCount, setFitRequestCount] = React.useState(0);
-  const [isApplyingInlineAi, setIsApplyingInlineAi] = React.useState(false);
-  const [pendingInlineAiActionId, setPendingInlineAiActionId] =
-    React.useState<InlineAiActionId | null>(null);
-  const [textareaSelectionState, setTextareaSelectionState] = React.useState<{
-    text: string;
-    anchor: { left: number; top: number };
-    start: number;
-    end: number;
-  } | null>(null);
   const zoomLevel = DOCUMENT_ZOOM_STEPS[zoomIndex];
   const editableTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
-  const selectionDebounceRef = React.useRef<number | null>(null);
   const zoomMenuRef = React.useRef<HTMLDivElement | null>(null);
 
   const {
@@ -519,20 +501,6 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   }, [isZoomMenuOpen]);
 
   React.useEffect(() => {
-    return () => {
-      if (selectionDebounceRef.current !== null) {
-        window.clearTimeout(selectionDebounceRef.current);
-      }
-    };
-  }, []);
-
-  React.useEffect(() => {
-    if (!isEditable) {
-      setTextareaSelectionState(null);
-    }
-  }, [isEditable]);
-
-  React.useEffect(() => {
     if (isEditable) {
       setIsZoomMenuOpen(false);
     }
@@ -543,79 +511,6 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       setDocumentPageCount(1);
     }
   }, [isEditable, proposalContent, usesDocumentRenderer]);
-
-  const scheduleTextareaSelectionCheck = React.useCallback(() => {
-    if (selectionDebounceRef.current !== null) {
-      window.clearTimeout(selectionDebounceRef.current);
-    }
-
-    selectionDebounceRef.current = window.setTimeout(() => {
-      selectionDebounceRef.current = null;
-      const nextSelection = getTextareaSelectionState(editableTextareaRef.current);
-      setTextareaSelectionState(nextSelection);
-    }, 90);
-  }, []);
-
-  React.useEffect(() => {
-    if (!isEditable) {
-      return undefined;
-    }
-
-    const handleSelectionChange = () => {
-      scheduleTextareaSelectionCheck();
-    };
-
-    document.addEventListener("selectionchange", handleSelectionChange);
-    return () => {
-      document.removeEventListener("selectionchange", handleSelectionChange);
-    };
-  }, [isEditable, scheduleTextareaSelectionCheck]);
-
-  const handleRunInlineAiAction = React.useCallback(
-    async (actionId: InlineAiActionId, instruction: string) => {
-      if (!textareaSelectionState || !proposalContent) return;
-
-      try {
-        setPendingInlineAiActionId(actionId);
-        setIsApplyingInlineAi(true);
-        const result = await transformEditorSelectionAction({
-          mode: actionId,
-          instruction,
-          selectedText: textareaSelectionState.text,
-        });
-        const replacementText =
-          typeof result?.text === "string" ? result.text : "";
-        if (!replacementText.trim()) {
-          return;
-        }
-
-        const nextContent =
-          proposalContent.slice(0, textareaSelectionState.start) +
-          replacementText +
-          proposalContent.slice(textareaSelectionState.end);
-        onContentChange?.(nextContent);
-        setTextareaSelectionState(null);
-
-        window.setTimeout(() => {
-          const textarea = editableTextareaRef.current;
-          if (!textarea) return;
-          const selectionEnd =
-            textareaSelectionState.start + replacementText.length;
-          textarea.focus();
-          textarea.setSelectionRange(selectionEnd, selectionEnd);
-        }, 0);
-      } finally {
-        setIsApplyingInlineAi(false);
-        setPendingInlineAiActionId(null);
-      }
-    },
-    [
-      onContentChange,
-      proposalContent,
-      textareaSelectionState,
-      transformEditorSelectionAction,
-    ],
-  );
 
   const attachPreviewScrollContainer = React.useCallback(
     (node: HTMLDivElement | null) => {
@@ -1233,16 +1128,6 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       ) : null}
       {documentCaption}
       <div className="dasti-doc-viewer-shell">
-        {isEditable && textareaSelectionState ? (
-          <FloatingAiToolbar
-            open
-            anchor={textareaSelectionState.anchor}
-            isLoading={isApplyingInlineAi}
-            pendingActionId={pendingInlineAiActionId}
-            onClose={() => setTextareaSelectionState(null)}
-            onRunAction={handleRunInlineAiAction}
-          />
-        ) : null}
         <div className="dasti-doc-viewer-shell__surface">
           <div
             className={
