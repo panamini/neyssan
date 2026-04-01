@@ -20,4 +20,13 @@ describe("ProposalDisplay CSS contracts", () => {
     expect(productCss).toContain("aspect-ratio: auto;");
     expect(productCss).toContain("overflow: visible;");
   });
+
+  it("pads the document stage inside the proposal shell and anchors the character badge to the shell corner", () => {
+    expect(productCss).toMatch(
+      /\.dasti-proposal-sheet__body--document-viewer\s+\.dasti-document-stage-chassis\s*\{[\s\S]*padding:\s*var\(--document-viewer-bleed-block\)\s+var\(--document-viewer-bleed-inline\);[\s\S]*box-sizing:\s*border-box;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-character-badge-wrap\s*\{[\s\S]*position:\s*absolute;[\s\S]*inset-inline-start:[\s\S]*inset-block-end:/,
+    );
+  });
 });
