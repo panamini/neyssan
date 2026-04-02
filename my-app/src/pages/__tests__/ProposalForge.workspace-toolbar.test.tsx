@@ -231,7 +231,7 @@ describe("ProposalForge workbench layout", () => {
       pageShell?.style.getPropertyValue("--page-shell-gap"),
     ).toBe("var(--space-2)");
     expect(workbenchFrame?.style.maxWidth).toBe(
-      "calc(480px + var(--proposal-workspace-output-shell-inline-size) + var(--layout-card-grid))",
+      "calc(var(--proposal-workspace-output-shell-inline-size) + var(--proposal-workspace-output-shell-inline-size) + var(--layout-card-grid))",
     );
     expect(
       workbenchFrame?.style.getPropertyValue(
@@ -240,10 +240,17 @@ describe("ProposalForge workbench layout", () => {
     ).toBe("calc(var(--document-sheet-inline-size) - (var(--s4) * 2))");
     expect(
       gridSplit?.style.getPropertyValue("--grid-columns"),
-    ).toBe("480px minmax(0, var(--proposal-workspace-output-shell-inline-size))");
-    expect(toolbarRow?.style.maxWidth).toBe(
-      "calc(480px + var(--proposal-workspace-output-shell-inline-size) + var(--layout-card-grid))",
+    ).toBe(
+      "var(--proposal-workspace-output-shell-inline-size) minmax(0, var(--proposal-workspace-output-shell-inline-size))",
     );
+    expect(toolbarRow?.style.maxWidth).toBe(
+      "calc(var(--proposal-workspace-output-shell-inline-size) + var(--proposal-workspace-output-shell-inline-size) + var(--layout-card-grid))",
+    );
+    expect(
+      toolbarRow?.style.getPropertyValue(
+        "--proposal-workspace-output-shell-inline-size",
+      ),
+    ).toBe("calc(var(--document-sheet-inline-size) - (var(--s4) * 2))");
     expect(outputShell?.style.width).toBe("100%");
     expect(
       outputShell?.style.getPropertyValue("--document-viewer-shell-inline-size"),
@@ -279,6 +286,46 @@ describe("ProposalForge workbench layout", () => {
     expect(workbenchFrame?.style.maxWidth).toBe("560px");
     expect(workbenchFrame?.style.marginInline).toBe("0");
     expect(toolbarRow?.style.marginInline).toBe("0");
+    expect(
+      gridSplit?.style.getPropertyValue("--grid-columns"),
+    ).toBe("minmax(0, 1fr)");
+  });
+
+  it("keeps the compose shell width contract stable when the workbench drops from desktop to compact", () => {
+    const { container } = render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    const composeColumn = container.querySelector(
+      ".dasti-proposal-compose-column--workspace",
+    ) as HTMLElement | null;
+
+    expect(
+      composeColumn?.style.getPropertyValue("--document-viewer-shell-inline-size"),
+    ).toBe("var(--proposal-workspace-output-shell-inline-size)");
+
+    act(() => {
+      Object.defineProperty(window, "innerWidth", {
+        configurable: true,
+        value: 1000,
+        writable: true,
+      });
+      window.dispatchEvent(new Event("resize"));
+    });
+
+    const workbenchFrame = container.querySelector(".dasti-flow") as
+      | HTMLElement
+      | null;
+    const gridSplit = container.querySelector(".dasti-grid-split") as
+      | HTMLElement
+      | null;
+
+    expect(
+      composeColumn?.style.getPropertyValue("--document-viewer-shell-inline-size"),
+    ).toBe("var(--proposal-workspace-output-shell-inline-size)");
+    expect(workbenchFrame?.style.maxWidth).toBe("560px");
     expect(
       gridSplit?.style.getPropertyValue("--grid-columns"),
     ).toBe("minmax(0, 1fr)");
@@ -353,7 +400,7 @@ describe("ProposalForge workbench layout", () => {
       ".dasti-workbench-top-left-slot--proposal",
     ) as HTMLElement | null;
     expect(toolbarRowAfterCollapse?.style.maxWidth).toBe(
-      "calc(480px + var(--proposal-workspace-output-shell-inline-size) + var(--layout-card-grid))",
+      "calc(var(--proposal-workspace-output-shell-inline-size) + var(--proposal-workspace-output-shell-inline-size) + var(--layout-card-grid))",
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Restore compose" }));
@@ -424,7 +471,9 @@ describe("ProposalForge workbench layout", () => {
     expect(workbenchFrame?.style.marginInline).toBe("0");
     expect(
       gridSplit?.style.getPropertyValue("--grid-columns"),
-    ).toBe("480px minmax(0, var(--proposal-workspace-output-shell-inline-size))");
+    ).toBe(
+      "var(--proposal-workspace-output-shell-inline-size) minmax(0, var(--proposal-workspace-output-shell-inline-size))",
+    );
     expect(gridSplit?.style.getPropertyValue("--grid-justify")).toBe("start");
     expect(outputShell?.style.width).toBe("100%");
     expect(
@@ -513,8 +562,12 @@ describe("ProposalForge workbench layout", () => {
     expect(
       gridSplit?.style.getPropertyValue("--grid-columns"),
     ).toBe("minmax(0, 1fr)");
-    expect(composeShell?.style.width).toBe("min(100%, 560px)");
-    expect(outputShell?.style.width).toBe("min(100%, 560px)");
+    expect(composeShell?.style.width).toBe(
+      "min(100%, var(--proposal-workspace-output-shell-inline-size))",
+    );
+    expect(outputShell?.style.width).toBe(
+      "min(100%, var(--proposal-workspace-output-shell-inline-size))",
+    );
   });
 
   it("orders compose output actions as save, delete, then copy", () => {
