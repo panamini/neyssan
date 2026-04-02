@@ -2279,18 +2279,17 @@ export function ProposalForge(): JSX.Element {
   ]);
 
   const isSavedView = requestedView === "saved";
-  const proposalDesktopComposeWidthPx = 480;
-  const proposalDesktopComposeWidth = `${proposalDesktopComposeWidthPx}px`;
   const proposalTwoPaneMinViewportWidth = 1440;
   const proposalWorkspaceOutputShellInlineSize =
     "calc(var(--document-sheet-inline-size) - (var(--s4) * 2))";
+  const proposalWorkbenchColumnInlineSize =
+    "var(--proposal-workspace-output-shell-inline-size)";
+  const proposalDesktopComposeWidth = proposalWorkbenchColumnInlineSize;
   const proposalWorkspaceShellBlockSize =
     "min(var(--document-viewer-shell-max-block), calc(100dvh - var(--header-height) - (var(--space-2) * 2) - (var(--document-viewer-toolbar-block-size) + var(--space-2))))";
   const isCompactComposeLayout =
     viewportWidth < proposalTwoPaneMinViewportWidth;
-  const proposalComposeColumnInlineSize = isCompactComposeLayout
-    ? "560px"
-    : proposalDesktopComposeWidth;
+  const proposalComposeColumnInlineSize = proposalWorkbenchColumnInlineSize;
   const showComposePanel = isComposePanelVisible && !isSavedView;
   const briefJobDescription =
     composePreviewValues?.jobDescription?.trim() ||
@@ -2328,11 +2327,18 @@ export function ProposalForge(): JSX.Element {
       : liveWorkbenchMaxWidth;
 
   const stackedCardWidthStyle: React.CSSProperties = isCompactComposeLayout
-    ? { width: "min(100%, 560px)", minWidth: 0 }
+    ? {
+        width: `min(100%, ${proposalWorkbenchColumnInlineSize})`,
+        minWidth: 0,
+      }
     : { width: "100%", minWidth: 0 };
+  const composeColumnShellWidthStyle: React.CSSProperties = {
+    ...stackedCardWidthStyle,
+    "--document-viewer-shell-inline-size": proposalWorkbenchColumnInlineSize,
+  };
   const proposalToolbarWidthStyle: React.CSSProperties = {
     width: "100%",
-    maxWidth: isCompactComposeLayout ? "560px" : proposalDesktopComposeWidth,
+    maxWidth: proposalWorkbenchColumnInlineSize,
     minWidth: 0,
   };
   const proposalWorkbenchFrameStyle: React.CSSProperties = {
@@ -2357,6 +2363,8 @@ export function ProposalForge(): JSX.Element {
         ? 0
         : "auto",
     minWidth: 0,
+    "--proposal-workspace-output-shell-inline-size":
+      proposalWorkspaceOutputShellInlineSize,
     "--proposal-compose-column-inline-size": proposalComposeColumnInlineSize,
   };
   const activeCharacterLimitSelection = React.useMemo(
@@ -2806,7 +2814,7 @@ export function ProposalForge(): JSX.Element {
                   .join(" ")}
               >
                 <div
-                  style={stackedCardWidthStyle}
+                  style={composeColumnShellWidthStyle}
                   className="dasti-proposal-compose-column dasti-proposal-compose-column--workspace"
                 >
                   {shouldRenderBriefCard ? (
