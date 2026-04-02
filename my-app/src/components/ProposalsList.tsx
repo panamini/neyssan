@@ -1481,7 +1481,9 @@ export default function ProposalsList({
                   tabIndex={-1}
                   className="dasti-proposal-library-card"
                 >
-                  <div className="dasti-proposal-output-shell dasti-proposal-output-shell--workspace dasti-proposal-output-shell--saved">
+                <div
+                    className="dasti-proposal-output-shell dasti-proposal-output-shell--workspace dasti-proposal-output-shell--saved"
+                  >
                     <ProposalDisplay
                       proposalContent={editContent}
                       loading={isMainCardLoading}
