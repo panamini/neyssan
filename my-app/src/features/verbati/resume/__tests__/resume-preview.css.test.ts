@@ -41,4 +41,29 @@ describe("resume preview workspace anchoring", () => {
     expect(embeddedFrameClamp).toContain("max-width: 100%;");
     expect(embeddedFrameClamp).toContain("min-width: 0;");
   });
+
+  it("keeps the CV Forge workspace preview on a narrow shell and stage margin", () => {
+    const workspaceShellRule = productCss.match(
+      /\.dasti-doc-viewer-shell--resume-workspace\s*\{[^}]*\}/,
+    )?.[0];
+    const workspacePanelRule = productCss.match(
+      /\.dasti-resume-preview-panel--workspace\s*\{[^}]*\}/,
+    )?.[0];
+    const workspaceFrameRule = productCss.match(
+      /\.dasti-proposal-sheet-frame--resume-workspace\s*\{[^}]*\}/,
+    )?.[0];
+    const workspaceStagePaddingRule = productCss.match(
+      /\.dasti-doc-viewer-shell--resume-workspace\s+\.dasti-proposal-sheet__body--document-viewer\s+\.dasti-document-stage-chassis\s*\{[^}]*\}/,
+    )?.[0];
+
+    expect(workspaceShellRule).toContain(
+      "--document-viewer-bleed-inline: var(--space-1);",
+    );
+    expect(workspaceShellRule).toContain(
+      "--document-viewer-bleed-block: var(--space-1);",
+    );
+    expect(workspacePanelRule).toContain("padding: var(--space-1);");
+    expect(workspaceFrameRule).toContain("max-width: none;");
+    expect(workspaceStagePaddingRule).toContain("padding: var(--space-1);");
+  });
 });

@@ -1,5 +1,5 @@
 import React from "react";
-import { ArrowLeft, ArrowRight } from "@/lib/icons";
+import { ArrowLeft, ArrowRight, ReadCvLogo } from "@/lib/icons";
 import EmbeddedStyleInspector from "../../components/EmbeddedStyleInspector";
 import { useCvLibrary } from "../../contexts/CvLibraryContext";
 import { resumeMock } from "./resume/resume.mock";
@@ -19,6 +19,7 @@ import {
   hasRenderableResumeData,
   mapCvDocumentToResumeData,
 } from "./cvDocumentToResumeData";
+import type { VerbatiPreviewSource } from "./types";
 
 type VerbatiCvPreviewPanelProps = {
   layoutMode?: "rail" | "stacked";
@@ -47,11 +48,22 @@ export function VerbatiCvPreviewPanel({
     [currentCv],
   );
   const hasActiveResume = hasRenderableResumeData(activeData);
-  const previewData = hasActiveResume ? (activeData ?? resumeMock) : resumeMock;
+  const [previewSource, setPreviewSource] =
+    React.useState<VerbatiPreviewSource>(() =>
+      hasActiveResume ? "active" : "sample",
+    );
   const [uncontrolledStylePreset, setUncontrolledStylePreset] =
     React.useState(persistedStylePreset);
   const stylePreset = controlledStylePreset ?? uncontrolledStylePreset;
   const setStylePreset = onStylePresetChange ?? setUncontrolledStylePreset;
+  const lastResolvedCvIdRef = React.useRef<string | null>(
+    currentCv?.id ? String(currentCv.id) : null,
+  );
+  const previewData =
+    previewSource === "active" && hasActiveResume && activeData
+      ? activeData
+      : resumeMock;
+  const isActivePreview = previewSource === "active" && hasActiveResume;
   const activeBundleId = React.useMemo(() => {
     const exactBundleId = resolveVerbatiStyleBundleId({
       stylePreset,
@@ -94,6 +106,20 @@ export function VerbatiCvPreviewPanel({
     persistedStylePreset.palette,
     persistedStylePreset.typography,
   ]);
+
+  React.useEffect(() => {
+    const nextCvId = currentCv?.id ? String(currentCv.id) : null;
+
+    if (lastResolvedCvIdRef.current !== nextCvId) {
+      lastResolvedCvIdRef.current = nextCvId;
+      setPreviewSource(hasActiveResume ? "active" : "sample");
+      return;
+    }
+
+    if (!hasActiveResume && previewSource === "active") {
+      setPreviewSource("sample");
+    }
+  }, [currentCv?.id, hasActiveResume, previewSource]);
 
   React.useEffect(() => {
     if (!currentCv || stylesEqual(stylePreset, persistedStylePreset)) {
@@ -200,6 +226,74 @@ export function VerbatiCvPreviewPanel({
         </button>
       </div>
     ) : null;
+  const workspacePreviewSourceControl =
+    hostMode === "workspace" ? (
+      <div
+        className={
+          isActivePreview
+            ? "styleforge-active-cv-control styleforge-active-cv-control--loaded"
+            : "styleforge-active-cv-control styleforge-active-cv-control--ghost"
+        }
+      >
+        <button
+          type="button"
+          className="styleforge-active-cv-control__icon-button"
+          onClick={() =>
+            setPreviewSource((current) =>
+              current === "active" ? "sample" : "active",
+            )
+          }
+          aria-label={
+            isActivePreview
+              ? "Switch to sample preview"
+              : hasActiveResume
+                ? "Switch to active CV preview"
+                : "Active CV preview unavailable"
+          }
+          title={
+            isActivePreview
+              ? "Preview the sample CV"
+              : hasActiveResume
+                ? "Preview the active CV"
+                : "Active CV preview unavailable"
+          }
+          disabled={!isActivePreview && !hasActiveResume}
+        >
+          <span
+            className="styleforge-active-cv-control__icon styleforge-active-cv-control__icon--base"
+            aria-hidden
+          >
+            <ReadCvLogo size={15} strokeWidth={1.5} />
+          </span>
+        </button>
+        <button
+          type="button"
+          className="styleforge-active-cv-control__body"
+          onClick={() =>
+            setPreviewSource((current) =>
+              current === "active" ? "sample" : "active",
+            )
+          }
+          aria-label={
+            isActivePreview
+              ? "Previewing active CV"
+              : hasActiveResume
+                ? "Previewing sample CV"
+                : "Previewing sample CV because the active CV is unavailable"
+          }
+          title={
+            isActivePreview
+              ? currentCv?.title ?? "Active CV"
+              : "Verbati sample CV"
+          }
+          disabled={!isActivePreview && !hasActiveResume}
+        >
+          <span className="dasti-proposal-chip__label dasti-proposal-chip__label--resume">
+            {isActivePreview ? currentCv?.title ?? "Active CV" : "Sample CV"}
+          </span>
+        </button>
+      </div>
+    ) : null;
 
   const previewSurface = (
     <>
@@ -229,6 +323,10 @@ export function VerbatiCvPreviewPanel({
             hostMode="workspace"
             railStartAddon={
               <>
+                {workspacePreviewSourceControl}
+                {workspacePreviewSourceControl ? (
+                  <div className="dasti-icon-cluster__divider dasti-proposal-rail-cluster__divider" />
+                ) : null}
                 {workspaceStyleCycleControls}
                 {workspaceStyleCycleControls ? (
                   <div className="dasti-icon-cluster__divider dasti-proposal-rail-cluster__divider" />

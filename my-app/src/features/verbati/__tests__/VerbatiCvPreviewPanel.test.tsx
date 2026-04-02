@@ -32,16 +32,19 @@ vi.mock("../cvDocumentToResumeData", () => ({
 
 vi.mock("../VerbatiResumePreview", () => ({
   VerbatiResumePreview: ({
+    data,
     stylePreset,
     railLeadControl,
     railStartAddon,
   }: {
+    data: { title: string };
     stylePreset: { layout: string };
     railLeadControl?: React.ReactNode;
     railStartAddon?: React.ReactNode;
   }) => (
     <div>
       <div>Preview layout: {stylePreset.layout}</div>
+      <div>Preview title: {data.title}</div>
       {railLeadControl}
       {railStartAddon}
     </div>
@@ -55,6 +58,7 @@ describe("VerbatiCvPreviewPanel", () => {
     render(<VerbatiCvPreviewPanel />);
 
     expect(screen.getByText("Preview layout: swiss")).toBeInTheDocument();
+    expect(screen.getByText("Preview title: Protection Guard")).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /Show next resume layout:/ }),
     ).not.toBeInTheDocument();
@@ -78,6 +82,10 @@ describe("VerbatiCvPreviewPanel", () => {
     expect(
       screen.getByRole("button", { name: "Open palette controls" }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Switch to sample preview" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Preview title: Protection Guard")).toBeInTheDocument();
     expect(
       screen.queryByRole("button", {
         name: "Open layout and typography controls",
@@ -122,5 +130,22 @@ describe("VerbatiCvPreviewPanel", () => {
     expect(
       screen.queryByText("Robial split layout with the accent rail sidebar."),
     ).not.toBeInTheDocument();
+  });
+
+  it("lets the workspace toolbar switch between the active CV and the sample preview", () => {
+    render(<VerbatiCvPreviewPanel hostMode="workspace" />);
+
+    expect(screen.getByText("Preview title: Protection Guard")).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Switch to sample preview" }),
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Switch to active CV preview" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Preview title: Senior Product Designer"),
+    ).toBeInTheDocument();
   });
 });
