@@ -21,31 +21,6 @@ type ProposalArtifactInspectorProps = {
   variant?: "rail" | "header";
 };
 
-function InspectorTooltip({
-  title,
-  description = null,
-  className,
-}: {
-  title: string;
-  description?: string | null;
-  className?: string;
-}): JSX.Element {
-  return (
-    <span
-      className={[
-        "dasti-artifact-inspector__tooltip",
-        className ?? "",
-      ]
-        .filter(Boolean)
-        .join(" ")}
-      aria-hidden="true"
-    >
-      <strong>{title}</strong>
-      {description ? <span>{description}</span> : null}
-    </span>
-  );
-}
-
 const STYLE_OPTIONS: Array<{
   id: ProposalTemplateBundleId;
   label: string;
@@ -136,6 +111,7 @@ export function ProposalArtifactInspector({
 
   const rootClass = [
     "dasti-artifact-inspector",
+    "dasti-toolbar--surface-tooltips",
     variant === "header"
       ? "dasti-artifact-inspector--header"
       : "dasti-artifact-inspector--rail",
@@ -174,6 +150,7 @@ export function ProposalArtifactInspector({
             setIsStyleDrawerOpen((current) => !current);
           }}
           aria-label="Style"
+          data-toolbar-tooltip={hasOpenDrawer ? undefined : "Style"}
         >
           <span
             className="dasti-artifact-inspector__icon dasti-artifact-inspector__icon--aa"
@@ -186,12 +163,6 @@ export function ProposalArtifactInspector({
           >
             Aa
           </span>
-          {!hasOpenDrawer ? (
-            <InspectorTooltip
-              className="dasti-artifact-inspector__tooltip--trigger"
-              title="Style"
-            />
-          ) : null}
         </button>
 
         {isStyleDrawerOpen ? (
@@ -219,6 +190,8 @@ export function ProposalArtifactInspector({
                     setIsStyleDrawerOpen(false);
                   }}
                   aria-label={option.label}
+                  data-toolbar-tooltip={option.label}
+                  data-toolbar-tooltip-placement="inline-end"
                 >
                   <span
                     className="dasti-artifact-inspector__icon dasti-artifact-inspector__icon--aa"
@@ -231,11 +204,6 @@ export function ProposalArtifactInspector({
                   >
                     Aa
                   </span>
-                  <InspectorTooltip
-                    className="dasti-artifact-inspector__tooltip--drawer"
-                    title={option.label}
-                    description={option.description}
-                  />
                 </button>
               );
             })}
@@ -275,6 +243,7 @@ export function ProposalArtifactInspector({
             setIsColorDrawerOpen((current) => !current);
           }}
           aria-label="Color"
+          data-toolbar-tooltip={hasOpenDrawer ? undefined : "Colors"}
         >
           <span className="dasti-artifact-inspector__icon" aria-hidden="true">
             <span
@@ -295,12 +264,6 @@ export function ProposalArtifactInspector({
             />
           </span>
           <span className="dasti-artifact-inspector__label">Color</span>
-          {!hasOpenDrawer ? (
-            <InspectorTooltip
-              className="dasti-artifact-inspector__tooltip--trigger"
-              title="Colors"
-            />
-          ) : null}
         </button>
 
         {isColorDrawerOpen ? (

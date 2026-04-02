@@ -72,10 +72,12 @@ interface ProposalDisplayProps {
   documentHeaderMode?: "full" | "actions-only" | "hidden";
   showZoomControls?: boolean;
   zoomStorageKey?: string | null;
+  detachedActionHeader?: boolean;
   documentTitleEditable?: boolean;
   onDocumentTitleChange?: (value: string) => void;
   onDocumentTitleCommit?: () => void;
   documentTitlePlaceholder?: string;
+  showDocumentCaption?: boolean;
   characterLimit?: number | null;
   characterLimitAdvisory?: boolean;
 }
@@ -269,10 +271,12 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   documentHeaderMode = "full",
   showZoomControls = false,
   zoomStorageKey = PROPOSAL_PREVIEW_ZOOM_STORAGE_KEY,
+  detachedActionHeader = false,
   documentTitleEditable = false,
   onDocumentTitleChange,
   onDocumentTitleCommit,
   documentTitlePlaceholder = "Proposal title",
+  showDocumentCaption = true,
   characterLimit,
   characterLimitAdvisory = false,
 }) => {
@@ -372,7 +376,10 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   const resolvedDocumentHeaderMode = hideDocumentHeader
     ? "hidden"
     : documentHeaderMode;
+  const shouldDetachActionHeader =
+    detachedActionHeader && resolvedDocumentHeaderMode === "actions-only";
   const hasDocumentCaption =
+    showDocumentCaption &&
     resolvedDocumentHeaderMode !== "hidden" &&
     Boolean(
       (documentTitle && documentTitle.trim().length > 0) ||
@@ -769,7 +776,10 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   const shouldShowCopyButton = Boolean(onCopy && proposalContent && !loading && !error);
 
   const actionControls = actions || shouldShowCopyButton ? (
-    <div className="dasti-proposal-sheet__controls" data-no-pan="true">
+    <div
+      className="dasti-proposal-sheet__controls dasti-toolbar--surface-tooltips"
+      data-no-pan="true"
+    >
       {actions}
       <span className="dasti-proposal-sheet__action-slot">
         {shouldShowCopyButton ? (
@@ -884,7 +894,10 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   );
   const railStartControls =
     modeToggleControl || zoomControls || railStartAddon ? (
-      <div className="dasti-proposal-rail-cluster" data-no-pan="true">
+      <div
+        className="dasti-proposal-rail-cluster dasti-toolbar--surface-tooltips"
+        data-no-pan="true"
+      >
         {modeToggleControl}
         {modeToggleControl && zoomControls ? (
           <div
@@ -904,7 +917,14 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     ) : null;
   const floatingRail =
     railStartControls || actionControls ? (
-      <div className="dasti-document-rail" data-no-pan="true">
+      <div
+        className={
+          shouldDetachActionHeader
+            ? "dasti-document-rail dasti-document-rail--detached dasti-toolbar--surface-tooltips"
+            : "dasti-document-rail dasti-toolbar--surface-tooltips"
+        }
+        data-no-pan="true"
+      >
         <div className="dasti-document-rail__section dasti-document-rail__section--start">
           {railStartControls}
         </div>
@@ -916,8 +936,8 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       </div>
     ) : null;
 
-  const documentCaption = hasDocumentCaption ? (
-    <div className="dasti-proposal-sheet__heading dasti-proposal-sheet__heading--external">
+  const renderDocumentCaption = (variantClassName: string) => (
+    <div className={`dasti-proposal-sheet__heading ${variantClassName}`}>
       {documentTitleEditable ? (
         <input
           type="text"
@@ -941,32 +961,24 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         <p className="dasti-proposal-sheet__meta">{documentMeta}</p>
       ) : null}
     </div>
-  ) : null;
+  );
+  const documentCaption = hasDocumentCaption
+    ? renderDocumentCaption("dasti-proposal-sheet__heading--external")
+    : null;
   const inlineDocumentCaption =
-    hasDocumentCaption && documentHeaderMode === "actions-only" ? (
-      <div className="dasti-proposal-sheet__heading dasti-proposal-sheet__heading--inline">
-        {documentTitleEditable ? (
-          <input
-            type="text"
-            value={documentTitle ?? ""}
-            onChange={(event) => onDocumentTitleChange?.(event.target.value)}
-            onBlur={() => onDocumentTitleCommit?.()}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                (event.currentTarget as HTMLInputElement).blur();
-              }
-            }}
-            placeholder={documentTitlePlaceholder}
-            className="dasti-proposal-sheet__title-input"
-            aria-label="Proposal title"
-          />
-        ) : documentTitle ? (
-          <h3 className="dasti-proposal-sheet__title">{documentTitle}</h3>
-        ) : null}
-        {documentMeta ? (
-          <p className="dasti-proposal-sheet__meta">{documentMeta}</p>
-        ) : null}
+    hasDocumentCaption &&
+    documentHeaderMode === "actions-only" &&
+    !shouldDetachActionHeader ? (
+      renderDocumentCaption("dasti-proposal-sheet__heading--inline")
+    ) : null;
+  const detachedDocumentCaption =
+    shouldDetachActionHeader && hasDocumentCaption
+      ? renderDocumentCaption("dasti-proposal-sheet__heading--sidecar")
+      : null;
+  const detachedActionHeaderContent =
+    shouldDetachActionHeader && floatingRail ? (
+      <div className="dasti-proposal-sheet__header dasti-proposal-sheet__header--actions-only dasti-proposal-sheet__header--detached">
+        <div className="dasti-proposal-sheet__header-rail">{floatingRail}</div>
       </div>
     ) : null;
 
@@ -1316,6 +1328,57 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     );
   }
 
+  const viewerShell = (
+    <div className="dasti-doc-viewer-shell">
+      {isEditable && textareaSelectionState ? (
+        <FloatingAiToolbar
+          open
+          anchor={textareaSelectionState.anchor}
+          isLoading={isApplyingInlineAi}
+          pendingActionId={pendingInlineAiActionId}
+          onClose={() => setTextareaSelectionState(null)}
+          onRunAction={handleRunInlineAiAction}
+        />
+      ) : null}
+      <div ref={viewerSurfaceRef} className="dasti-doc-viewer-shell__surface">
+        <div
+          className={
+            size === "focused"
+              ? "dasti-proposal-sheet-frame dasti-proposal-sheet-frame--focused"
+              : "dasti-proposal-sheet-frame"
+          }
+          style={proposalDocumentThemeVars}
+        >
+          <div
+            className={
+              size === "focused"
+                ? "dasti-proposal-sheet dasti-proposal-sheet--focused dasti-document-shell"
+                : "dasti-proposal-sheet dasti-document-shell"
+            }
+            style={stageLayoutVars}
+            aria-busy={loading || undefined}
+            aria-label={loading ? "Generating proposal" : undefined}
+          >
+            {shouldDetachActionHeader ? null : floatingRail}
+            {inlineDocumentCaption}
+            {sheetBody}
+          </div>
+        </div>
+        {characterCountBadge ? (
+          <div
+            ref={characterBadgeWrapRef}
+            className="dasti-proposal-character-badge-wrap"
+            data-overlap-hidden={
+              isCharacterBadgeOverlappingPage ? "true" : "false"
+            }
+          >
+            {characterCountBadge}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+
   return (
     <div
       style={{
@@ -1335,55 +1398,26 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           {fallbackDisclosure}
         </div>
       ) : null}
-      {documentHeaderMode === "actions-only" ? null : documentCaption}
-      <div className="dasti-doc-viewer-shell">
-        {isEditable && textareaSelectionState ? (
-          <FloatingAiToolbar
-            open
-            anchor={textareaSelectionState.anchor}
-            isLoading={isApplyingInlineAi}
-            pendingActionId={pendingInlineAiActionId}
-            onClose={() => setTextareaSelectionState(null)}
-            onRunAction={handleRunInlineAiAction}
-          />
-        ) : null}
-        <div ref={viewerSurfaceRef} className="dasti-doc-viewer-shell__surface">
-          <div
-            className={
-              size === "focused"
-                ? "dasti-proposal-sheet-frame dasti-proposal-sheet-frame--focused"
-                : "dasti-proposal-sheet-frame"
-            }
-            style={proposalDocumentThemeVars}
-          >
-            <div
-              className={
-                size === "focused"
-                  ? "dasti-proposal-sheet dasti-proposal-sheet--focused dasti-document-shell"
-                  : "dasti-proposal-sheet dasti-document-shell"
-              }
-              style={stageLayoutVars}
-              aria-busy={loading || undefined}
-              aria-label={loading ? "Generating proposal" : undefined}
-            >
-              {floatingRail}
-              {inlineDocumentCaption}
-              {sheetBody}
-            </div>
+      {shouldDetachActionHeader && detachedDocumentCaption ? (
+        <div className="dasti-proposal-display__detached-layout">
+          <div className="dasti-proposal-display__detached-aside">
+            {detachedDocumentCaption}
           </div>
-          {characterCountBadge ? (
-            <div
-              ref={characterBadgeWrapRef}
-              className="dasti-proposal-character-badge-wrap"
-              data-overlap-hidden={
-                isCharacterBadgeOverlappingPage ? "true" : "false"
-              }
-            >
-              {characterCountBadge}
-            </div>
-          ) : null}
+          <div className="dasti-proposal-display__detached-main">
+            {detachedActionHeaderContent}
+            {viewerShell}
+          </div>
         </div>
-      </div>
+      ) : (
+        <>
+          {shouldDetachActionHeader
+            ? detachedActionHeaderContent
+            : documentHeaderMode === "actions-only"
+              ? null
+              : documentCaption}
+          {viewerShell}
+        </>
+      )}
     </div>
   );
 };

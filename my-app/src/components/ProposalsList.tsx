@@ -2,7 +2,6 @@ import React from "react";
 import {
   Check,
   Feather,
-  PenLine,
   PenNib,
   RotateCcw,
   Sunglasses,
@@ -76,6 +75,8 @@ type SavedProposalRecord = {
     actualModelType?: string;
     fallbackTriggerCode?: string;
     voicePreset?: ProposalVoicePreset;
+    requestedVoicePreset?: ProposalVoicePreset | null;
+    resolvedVoicePreset?: ProposalVoicePreset;
     formalityLevel?: ProposalFormalityLevel;
     creativity?: ProposalCreativityLevel;
     templateId?: ProposalTemplateId;
@@ -92,7 +93,7 @@ type RegeneratePayload = {
   jobTitle: string;
   jobDescription: string;
   proposalType: SavedProposalType;
-  voicePreset: ProposalVoicePreset;
+  voicePreset: ProposalVoicePreset | null;
   formalityLevel?: ProposalFormalityLevel;
   creativity?: ProposalCreativityLevel;
   modelType:
@@ -105,11 +106,17 @@ type RegeneratePayload = {
 } & ProposalGenerationPersonalizationPayload;
 
 const SAVED_PROPOSAL_TONE_OPTIONS: ReadonlyArray<{
-  id: ProposalVoicePreset;
+  id: ProposalVoicePreset | null;
   label: string;
   description: string;
   Icon: typeof Wand2;
 }> = [
+  {
+    id: null,
+    label: getVoicePresetDisplayLabel(null),
+    description: "System picks the tone.",
+    Icon: Wand2,
+  },
   {
     id: "signature",
     label: getVoicePresetDisplayLabel("signature"),
@@ -284,6 +291,26 @@ function getStoredRegenerateJobDescription(
 function getStoredVoicePreset(
   proposal: SavedProposalRecord,
 ): ProposalVoicePreset {
+  return (
+    proposal.metadata?.resolvedVoicePreset ??
+    proposal.metadata?.voicePreset ??
+    DEFAULT_PROPOSAL_VOICE_PRESET
+  );
+}
+
+function getStoredRequestedVoicePreset(
+  proposal: SavedProposalRecord,
+): ProposalVoicePreset | null {
+  if (
+    proposal.metadata &&
+    Object.prototype.hasOwnProperty.call(
+      proposal.metadata,
+      "requestedVoicePreset",
+    )
+  ) {
+    return proposal.metadata.requestedVoicePreset ?? null;
+  }
+
   return proposal.metadata?.voicePreset ?? DEFAULT_PROPOSAL_VOICE_PRESET;
 }
 
@@ -330,7 +357,7 @@ const MOBILE_SAVED_PROPOSAL_MEDIA_QUERY = "(max-width: 820px)";
 const PINCH_OVERVIEW_THRESHOLD = 0.88;
 const PINCH_DETAIL_THRESHOLD = 1.12;
 
-function toneLabel(preset: ProposalVoicePreset): string {
+function toneLabel(preset: ProposalVoicePreset | null): string {
   return getVoicePresetDisplayLabel(preset);
 }
 
@@ -383,6 +410,7 @@ function stepSavedProposalViewMode(
 interface ProposalsListProps {
   selectedProposalId?: string | null;
   onSelectedProposalIdChange?: (id: string | null) => void;
+  savedViewActions?: React.ReactNode;
 }
 
 const SECONDARY_PROPOSAL_PAGE_SIZE = 2;
@@ -390,6 +418,7 @@ const SECONDARY_PROPOSAL_PAGE_SIZE = 2;
 export default function ProposalsList({
   selectedProposalId = null,
   onSelectedProposalIdChange,
+  savedViewActions = null,
 }: ProposalsListProps) {
   const { isLoaded, isSignedIn } = useAuth();
   const {
@@ -500,16 +529,16 @@ export default function ProposalsList({
   const [isMobileSavedViewport, setIsMobileSavedViewport] =
     React.useState(false);
   const [selectionRevealToken, setSelectionRevealToken] = React.useState(0);
-  const [isSelectedCardSpotlit, setIsSelectedCardSpotlit] =
-    React.useState(false);
   const [selectedStyleBundleId, setSelectedStyleBundleId] =
     React.useState<ProposalTemplateBundleId | null>(null);
   const [selectedPaletteOverride, setSelectedPaletteOverride] =
     React.useState<ProposalPaletteId | null>(null);
   const [selectedCustomAccentHex, setSelectedCustomAccentHex] =
     React.useState<string | null>(null);
-  const [isRegenerateToneMenuOpen, setIsRegenerateToneMenuOpen] =
+  const [isSavedToneMenuOpen, setIsSavedToneMenuOpen] =
     React.useState(false);
+  const [selectedRefineVoicePreset, setSelectedRefineVoicePreset] =
+    React.useState<ProposalVoicePreset | null>(DEFAULT_PROPOSAL_VOICE_PRESET);
   const [isSelectionPending, startSelectionTransition] = React.useTransition();
   const { showToast } = useToast();
   const activeCvStylePreset = React.useMemo(
@@ -528,9 +557,8 @@ export default function ProposalsList({
   const loadMoreSentinelRef = React.useRef<HTMLDivElement | null>(null);
   const gestureSurfaceRef = React.useRef<HTMLDivElement | null>(null);
   const selectedCardRef = React.useRef<HTMLDivElement | null>(null);
-  const regenerateToneMenuRef = React.useRef<HTMLSpanElement | null>(null);
+  const savedToneMenuRef = React.useRef<HTMLSpanElement | null>(null);
   const shouldRevealSelectedCardRef = React.useRef(false);
-  const spotlightTimeoutRef = React.useRef<number | null>(null);
 
   const selectProposal = React.useCallback(
     (proposal: SavedProposalRecord | null, syncSelection: boolean) => {
@@ -736,24 +764,29 @@ export default function ProposalsList({
     setSelectedStyleBundleId(selectedStoredAppearance.bundleId);
     setSelectedPaletteOverride(selectedStoredAppearance.paletteOverride);
     setSelectedCustomAccentHex(selectedStoredAppearance.customAccentHex);
-    setIsRegenerateToneMenuOpen(false);
-  }, [selected?._id, selectedStoredAppearance]);
+    setSelectedRefineVoicePreset(
+      selected
+        ? getStoredRequestedVoicePreset(selected)
+        : DEFAULT_PROPOSAL_VOICE_PRESET,
+    );
+    setIsSavedToneMenuOpen(false);
+  }, [selected, selected?._id, selectedStoredAppearance]);
 
   React.useEffect(() => {
-    if (!isRegenerateToneMenuOpen) return undefined;
+    if (!isSavedToneMenuOpen) return undefined;
 
     const handleOutside = (event: MouseEvent) => {
       if (
-        regenerateToneMenuRef.current &&
-        !regenerateToneMenuRef.current.contains(event.target as Node)
+        savedToneMenuRef.current &&
+        !savedToneMenuRef.current.contains(event.target as Node)
       ) {
-        setIsRegenerateToneMenuOpen(false);
+        setIsSavedToneMenuOpen(false);
       }
     };
 
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setIsRegenerateToneMenuOpen(false);
+        setIsSavedToneMenuOpen(false);
       }
     };
 
@@ -763,7 +796,7 @@ export default function ProposalsList({
       window.removeEventListener("mousedown", handleOutside);
       window.removeEventListener("keydown", handleEscape);
     };
-  }, [isRegenerateToneMenuOpen]);
+  }, [isSavedToneMenuOpen]);
 
   React.useEffect(() => {
     if (
@@ -838,15 +871,6 @@ export default function ProposalsList({
     };
   }, [isSwitchingProposal, selectedId]);
 
-  React.useEffect(
-    () => () => {
-      if (spotlightTimeoutRef.current !== null) {
-        window.clearTimeout(spotlightTimeoutRef.current);
-      }
-    },
-    [],
-  );
-
   React.useEffect(() => {
     if (!shouldRevealSelectedCardRef.current) return;
     const target = selectedCardRef.current;
@@ -859,14 +883,6 @@ export default function ProposalsList({
         inline: "nearest",
         behavior: "smooth",
       });
-      target.focus({ preventScroll: true });
-      setIsSelectedCardSpotlit(true);
-      if (spotlightTimeoutRef.current !== null) {
-        window.clearTimeout(spotlightTimeoutRef.current);
-      }
-      spotlightTimeoutRef.current = window.setTimeout(() => {
-        setIsSelectedCardSpotlit(false);
-      }, 1400);
     });
 
     return () => {
@@ -1087,7 +1103,7 @@ export default function ProposalsList({
     }
   }
 
-  async function handleRegenerate(nextVoicePreset?: ProposalVoicePreset) {
+  async function handleRegenerate(nextVoicePreset?: ProposalVoicePreset | null) {
     if (!selected || !selectedRenderState || isRegenerating) return;
     if (!isConvexAuthenticated) {
       showConvexAuthRequiredToast("Refine");
@@ -1104,7 +1120,10 @@ export default function ProposalsList({
         return;
       }
       const proposalType = getStoredProposalType(selected);
-      const voicePreset = nextVoicePreset ?? getStoredVoicePreset(selected);
+      const voicePreset =
+        nextVoicePreset === undefined
+          ? getStoredRequestedVoicePreset(selected)
+          : nextVoicePreset;
       const jobTitle = resolveRegenerateJobTitle(selected.title, proposalType);
       const payload: RegeneratePayload = {
         jobTitle,
@@ -1131,13 +1150,20 @@ export default function ProposalsList({
         ...(selected.metadata ?? {}),
         sourceJobDescription,
         proposalType,
-        voicePreset,
+        requestedVoicePreset: voicePreset ?? null,
         templateId: selectedRenderState.templateId,
         verbatiStyle: selectedRenderState.stylePreset,
         requestedModelType: res.requestedModelType,
         actualModelType: res.actualModelType,
         fallbackTriggerCode: res.fallbackTriggerCode,
       };
+      if (voicePreset) {
+        nextMetadata.voicePreset = voicePreset;
+        nextMetadata.resolvedVoicePreset = voicePreset;
+      } else {
+        delete nextMetadata.voicePreset;
+        delete nextMetadata.resolvedVoicePreset;
+      }
       if (selectedStyleBundleId) {
         nextMetadata.templateBundleId = selectedStyleBundleId;
       } else {
@@ -1160,7 +1186,7 @@ export default function ProposalsList({
       };
       upsertLocalProposal(regeneratedRecord);
       selectProposal(regeneratedRecord, true);
-      setIsRegenerateToneMenuOpen(false);
+      setIsSavedToneMenuOpen(false);
       showToast("Proposal refined", {
         variant: "success",
         description: "A refreshed saved version is now in Proposal Library.",
@@ -1193,64 +1219,124 @@ export default function ProposalsList({
   const selectedHeaderMeta = selected
     ? buildProposalMeta(selected) || "Saved proposal"
     : "";
+  const activeSavedToneOption =
+    SAVED_PROPOSAL_TONE_OPTIONS.find(
+      (option) => option.id === selectedRefineVoicePreset,
+    ) ?? SAVED_PROPOSAL_TONE_OPTIONS[0];
+  const selectedSidebarHeading = selected ? (
+    <div className="dasti-proposal-library-sidebar__heading">
+      {selectedOutputMode === "edit" ? (
+        <input
+          type="text"
+          value={selectedHeaderTitle || ""}
+          onChange={(event) => setEditTitle(event.target.value)}
+          onBlur={() => {
+            void handleSaveDocument();
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              (event.currentTarget as HTMLInputElement).blur();
+            }
+          }}
+          placeholder="Saved proposal"
+          className="dasti-proposal-sheet__title-input"
+          aria-label="Proposal title"
+        />
+      ) : selectedHeaderTitle ? (
+        <h3 className="dasti-proposal-sheet__title">{selectedHeaderTitle}</h3>
+      ) : null}
+      {selectedHeaderMeta ? (
+        <p className="dasti-proposal-sheet__meta">{selectedHeaderMeta}</p>
+      ) : null}
+    </div>
+  ) : null;
   const selectedActionCluster = selected ? (
     <span className="dasti-icon-cluster dasti-icon-cluster--tight">
       <span
-        ref={regenerateToneMenuRef}
-        className="dasti-proposal-regenerate-drawer"
+        ref={savedToneMenuRef}
+        className="dasti-compose-toolbar__tone-anchor dasti-proposal-saved-tone-anchor"
       >
         <button
           type="button"
-          className="dasti-icon-button dasti-toolbar-tooltip-trigger--above"
-          aria-label="Refine saved proposal"
-          data-toolbar-tooltip={
-            isRegenerating === selected._id ? "Refining" : "Refine"
-          }
-          style={{
-            opacity: isRegenerating === selected._id ? 0.5 : 1,
-          }}
-          onClick={() => setIsRegenerateToneMenuOpen((open) => !open)}
-          aria-expanded={isRegenerateToneMenuOpen}
+          className={[
+            "dasti-icon-button",
+            "dasti-proposal-saved-tone-button",
+            "dasti-compose-toolbar__tone-option--active",
+            isSavedToneMenuOpen
+              ? "dasti-proposal-saved-tone-button--popover-open"
+              : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+          aria-label={`Tone of voice ${activeSavedToneOption.label}`}
+          data-toolbar-tooltip={isSavedToneMenuOpen ? undefined : activeSavedToneOption.label}
+          onClick={() => setIsSavedToneMenuOpen((open) => !open)}
+          aria-expanded={isSavedToneMenuOpen}
           aria-haspopup="dialog"
           disabled={Boolean(isRegenerating)}
         >
-          <RotateCcw size={16} strokeWidth={1.5} />
+          <activeSavedToneOption.Icon
+            size={15}
+            strokeWidth={1.7}
+            aria-hidden="true"
+          />
         </button>
-        {isRegenerateToneMenuOpen ? (
+        {isSavedToneMenuOpen ? (
           <div
-            className="dasti-proposal-regenerate-drawer__menu dasti-proposal-chrome-drawer dasti-proposal-chrome-drawer--stack"
+            className="dasti-compose-toolbar__tone-popover dasti-proposal-saved-tone-popover dasti-proposal-chrome-drawer dasti-proposal-chrome-drawer--stack"
             role="dialog"
-            aria-label="Choose tone for refine"
+            aria-label="Tone of voice"
           >
-            {SAVED_PROPOSAL_TONE_OPTIONS.map((option) => {
-              const active = option.id === getStoredVoicePreset(selected);
-              return (
-                <button
-                  key={option.id}
-                  type="button"
-                  className={[
-                    "dasti-proposal-regenerate-drawer__option",
-                    active
-                      ? "dasti-proposal-regenerate-drawer__option--active"
-                      : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                  aria-label={option.label}
-                  data-toolbar-tooltip={option.label}
-                  onClick={() => {
-                    setIsRegenerateToneMenuOpen(false);
-                    void handleRegenerate(option.id);
-                  }}
-                  disabled={Boolean(isRegenerating)}
-                >
-                  <option.Icon size={15} strokeWidth={1.7} aria-hidden="true" />
-                </button>
-              );
-            })}
+            <div className="dasti-compose-toolbar__tone-list">
+              {SAVED_PROPOSAL_TONE_OPTIONS.map((option) => {
+                const active = option.id === selectedRefineVoicePreset;
+                return (
+                  <button
+                    key={option.id ?? "auto"}
+                    type="button"
+                    className={[
+                      "dasti-compose-toolbar__tone-option",
+                      "dasti-compose-toolbar__tone-option--drawer",
+                      active ? "dasti-compose-toolbar__tone-option--active" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    aria-label={option.label}
+                    data-toolbar-tooltip={option.label}
+                    data-toolbar-tooltip-placement="inline-end"
+                    onClick={() => {
+                      setSelectedRefineVoicePreset(option.id);
+                      setIsSavedToneMenuOpen(false);
+                    }}
+                    disabled={Boolean(isRegenerating)}
+                  >
+                    <option.Icon size={15} strokeWidth={1.7} aria-hidden="true" />
+                  </button>
+                );
+              })}
+            </div>
           </div>
         ) : null}
       </span>
+      <button
+        type="button"
+        className="dasti-icon-button"
+        aria-label="Refine saved proposal"
+        data-toolbar-tooltip={
+          isRegenerating === selected._id ? "Refining" : "Refine"
+        }
+        style={{
+          opacity: isRegenerating === selected._id ? 0.5 : 1,
+        }}
+        onClick={() => {
+          setIsSavedToneMenuOpen(false);
+          void handleRegenerate(selectedRefineVoicePreset);
+        }}
+        disabled={Boolean(isRegenerating)}
+      >
+        <RotateCcw size={16} strokeWidth={1.5} />
+      </button>
       <div className="dasti-icon-cluster__divider" />
       {!isConfirmingDelete ? (
         <button
@@ -1381,82 +1467,83 @@ export default function ProposalsList({
             </div>
           ) : (
             <>
-              <div
-                ref={selectedCardRef}
-                tabIndex={-1}
-                className={[
-                  "dasti-proposal-library-card",
-                  isSelectedCardSpotlit
-                    ? "dasti-proposal-library-card--spotlit"
-                    : null,
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-              >
-                <ProposalDisplay
-                  proposalContent={editContent}
-                  loading={isMainCardLoading}
-                  error={null}
-                  proposalType={getStoredProposalType(selected)}
-                  voicePreset={getStoredVoicePreset(selected)}
-                  templateId={selectedRenderState?.templateId ?? null}
-                  stylePreset={selectedRenderState?.stylePreset ?? null}
-                  characterLimit={selectedCharacterLimitSelection.value}
-                  characterLimitAdvisory={selectedCharacterLimitSelection.advisory}
-                  fallbackInfo={buildFallbackInfo(selected)}
-                  documentTitle={selectedHeaderTitle || "Saved proposal"}
-                  documentMeta={selectedHeaderMeta}
-                  documentTitleEditable={selectedOutputMode === "edit"}
-                  onDocumentTitleChange={setEditTitle}
-                  onDocumentTitleCommit={() => {
-                    void handleSaveDocument();
-                  }}
-                  documentTitlePlaceholder="Saved proposal"
-                  mode={selectedOutputMode}
-                  onModeChange={setSelectedOutputMode}
-                  showModeToggle
-                  showZoomControls
-                  zoomStorageKey={null}
-                  size="default"
-                  documentHeaderMode="actions-only"
-                  railStartAddon={
-                    selectedRenderState ? (
-                      <ProposalArtifactInspector
-                        variant="header"
-                        styleBundleId={selectedStyleBundleId}
-                        onStyleBundleChange={setSelectedStyleBundleId}
-                        paletteOverride={selectedPaletteOverride}
-                        onPaletteOverrideChange={(value) => {
-                          setSelectedCustomAccentHex(null);
-                          setSelectedPaletteOverride(value);
-                        }}
-                        customAccentHex={selectedCustomAccentHex}
-                        onCustomAccentHexChange={(hex) => {
-                          setSelectedCustomAccentHex(hex);
-                          setSelectedPaletteOverride(null);
-                        }}
-                        resolvedPaletteId={
-                          selectedRenderState.stylePreset.palette === "custom"
-                            ? null
-                            : selectedRenderState.stylePreset.palette
-                        }
-                        hasGenerated={Boolean(editContent)}
-                      />
-                    ) : null
-                  }
-                  onCopy={() => {
-                    void navigator.clipboard.writeText(editContent).then(() => {
-                      setCopied(true);
-                      setTimeout(() => setCopied(false), 1500);
-                    });
-                  }}
-                  copyFeedback={copied ? "copied" : "idle"}
-                  onContentChange={setEditContent}
-                  onContentCommit={() => {
-                    void handleSaveDocument();
-                  }}
-                  actions={selectedActionCluster}
-                />
+              <div className="dasti-proposal-library-selected-shell">
+                <aside className="dasti-proposal-library-selected-sidebar">
+                  {savedViewActions ? (
+                    <div className="dasti-proposal-library-sidebar__actions">
+                      {savedViewActions}
+                    </div>
+                  ) : null}
+                  {selectedSidebarHeading}
+                </aside>
+                <div
+                  ref={selectedCardRef}
+                  tabIndex={-1}
+                  className="dasti-proposal-library-card"
+                >
+                  <div className="dasti-proposal-output-shell dasti-proposal-output-shell--workspace dasti-proposal-output-shell--saved">
+                    <ProposalDisplay
+                      proposalContent={editContent}
+                      loading={isMainCardLoading}
+                      error={null}
+                      proposalType={getStoredProposalType(selected)}
+                      voicePreset={getStoredVoicePreset(selected)}
+                      templateId={selectedRenderState?.templateId ?? null}
+                      stylePreset={selectedRenderState?.stylePreset ?? null}
+                      characterLimit={selectedCharacterLimitSelection.value}
+                      characterLimitAdvisory={selectedCharacterLimitSelection.advisory}
+                      fallbackInfo={buildFallbackInfo(selected)}
+                      documentTitle={selectedHeaderTitle || "Saved proposal"}
+                      documentMeta={selectedHeaderMeta}
+                      showDocumentCaption={false}
+                      mode={selectedOutputMode}
+                      onModeChange={setSelectedOutputMode}
+                      showModeToggle
+                      showZoomControls
+                      zoomStorageKey={null}
+                      size="default"
+                      documentHeaderMode="actions-only"
+                      detachedActionHeader
+                      railStartAddon={
+                        selectedRenderState ? (
+                          <ProposalArtifactInspector
+                            variant="header"
+                            styleBundleId={selectedStyleBundleId}
+                            onStyleBundleChange={setSelectedStyleBundleId}
+                            paletteOverride={selectedPaletteOverride}
+                            onPaletteOverrideChange={(value) => {
+                              setSelectedCustomAccentHex(null);
+                              setSelectedPaletteOverride(value);
+                            }}
+                            customAccentHex={selectedCustomAccentHex}
+                            onCustomAccentHexChange={(hex) => {
+                              setSelectedCustomAccentHex(hex);
+                              setSelectedPaletteOverride(null);
+                            }}
+                            resolvedPaletteId={
+                              selectedRenderState.stylePreset.palette === "custom"
+                                ? null
+                                : selectedRenderState.stylePreset.palette
+                            }
+                            hasGenerated={Boolean(editContent)}
+                          />
+                        ) : null
+                      }
+                      onCopy={() => {
+                        void navigator.clipboard.writeText(editContent).then(() => {
+                          setCopied(true);
+                          setTimeout(() => setCopied(false), 1500);
+                        });
+                      }}
+                      copyFeedback={copied ? "copied" : "idle"}
+                      onContentChange={setEditContent}
+                      onContentCommit={() => {
+                        void handleSaveDocument();
+                      }}
+                      actions={selectedActionCluster}
+                    />
+                  </div>
+                </div>
               </div>
 
               {!isOutputFocused

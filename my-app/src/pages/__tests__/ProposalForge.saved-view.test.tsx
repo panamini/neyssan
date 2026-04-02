@@ -149,10 +149,13 @@ vi.mock("../../components/ProposalDisplay", () => ({
 vi.mock("../../components/ProposalsList", () => ({
   default: ({
     selectedProposalId,
+    savedViewActions,
   }: {
     selectedProposalId?: string | null;
+    savedViewActions?: React.ReactNode;
   }) => (
     <div data-testid="saved-proposals-list">
+      {savedViewActions ?? null}
       {selectedProposalId ?? "no-selection"}
     </div>
   ),
@@ -184,7 +187,7 @@ describe("ProposalForge saved view", () => {
   });
 
   it("renders explicit saved proposal actions beside the saved stack", () => {
-    render(
+    const { container } = render(
       <MemoryRouter initialEntries={["/proposal?view=saved&id=proposal_beta"]}>
         <ProposalForge />
       </MemoryRouter>,
@@ -194,6 +197,19 @@ describe("ProposalForge saved view", () => {
     expect(screen.getByRole("button", { name: "Duplicate to draft" })).toBeInTheDocument();
     expect(screen.getByTestId("saved-proposals-list")).toHaveTextContent(
       "proposal_beta",
+    );
+    const toolbar = container.querySelector(
+      ".dasti-proposal-saved-view-toolbar",
+    ) as HTMLElement | null;
+    const pageShell = container.querySelector(
+      ".dasti-page-shell",
+    ) as HTMLElement | null;
+    expect(toolbar).toBeTruthy();
+    expect(toolbar).toHaveClass("dasti-toolbar--surface-tooltips");
+    expect(toolbar?.closest('[data-testid="saved-proposals-list"]')).toBeTruthy();
+    expect(pageShell).toHaveClass("dasti-page-shell--proposal-saved");
+    expect(pageShell?.style.getPropertyValue("--page-shell-max-width")).toBe(
+      "100%",
     );
   });
 
