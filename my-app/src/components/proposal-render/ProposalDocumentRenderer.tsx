@@ -42,6 +42,8 @@ type ProposalDocumentBlock =
       id: string;
       type: "paragraph";
       text: string;
+      paragraphId: string;
+      continuation: boolean;
     }
   | {
       id: string;
@@ -55,6 +57,16 @@ const AUTO_FIT_LEVELS: AutoFitLevel[] = ["0", "1", "2", "3", "4", "5", "6"];
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function resolveLineHeightPx(styles: CSSStyleDeclaration) {
+  const parsedLineHeight = Number.parseFloat(styles.lineHeight || "");
+  if (Number.isFinite(parsedLineHeight) && parsedLineHeight > 0) {
+    return parsedLineHeight;
+  }
+
+  const fontSize = Number.parseFloat(styles.fontSize || "0");
+  return fontSize > 0 ? fontSize * 1.35 : 0;
 }
 
 function getPageBottomBoundary(page: HTMLElement) {
@@ -124,6 +136,75 @@ function isLikelySignatureName(value: string): boolean {
   }
 
   return SIGNATURE_NAME_PATTERN.test(normalized);
+}
+
+function splitParagraphIntoPaginationFragments(paragraph: string): string[] {
+  const normalized = paragraph.replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return [];
+  }
+
+  const targetLength = 260;
+  if (normalized.length <= targetLength) {
+    return [normalized];
+  }
+
+  const sentenceParts = normalized
+    .split(/(?<=[.!?])\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  const sourceParts =
+    sentenceParts.length > 1
+      ? sentenceParts
+      : normalized
+          .split(/,\s+/)
+          .map((part, index, parts) =>
+            index < parts.length - 1 ? `${part},` : part,
+          )
+          .map((part) => part.trim())
+          .filter(Boolean);
+
+  if (sourceParts.length <= 1) {
+    const words = normalized.split(/\s+/).filter(Boolean);
+    const chunks: string[] = [];
+    let current = "";
+
+    words.forEach((word) => {
+      const next = current ? `${current} ${word}` : word;
+      if (current && next.length > targetLength) {
+        chunks.push(current);
+        current = word;
+      } else {
+        current = next;
+      }
+    });
+
+    if (current) {
+      chunks.push(current);
+    }
+
+    return chunks;
+  }
+
+  const fragments: string[] = [];
+  let current = "";
+
+  sourceParts.forEach((part) => {
+    const next = current ? `${current} ${part}` : part;
+    if (current && next.length > targetLength) {
+      fragments.push(current);
+      current = part;
+    } else {
+      current = next;
+    }
+  });
+
+  if (current) {
+    fragments.push(current);
+  }
+
+  return fragments;
 }
 
 function parseProposalDocumentContent(
@@ -240,11 +321,17 @@ function buildProposalDocumentBlocks(
   }
 
   parsedDocument.paragraphs.forEach((paragraph, index) => {
-    blocks.push({
-      id: `paragraph-${index}`,
-      type: "paragraph",
-      text: paragraph,
-    });
+    splitParagraphIntoPaginationFragments(paragraph).forEach(
+      (fragment, fragmentIndex) => {
+        blocks.push({
+          id: `paragraph-${index}-${fragmentIndex}`,
+          type: "paragraph",
+          text: fragment,
+          paragraphId: `paragraph-${index}`,
+          continuation: fragmentIndex > 0,
+        });
+      },
+    );
   });
 
   if (parsedDocument.signOff || parsedDocument.signatureName) {
@@ -265,16 +352,29 @@ function paginateMeasuredProposalBlocks(args: {
     gapBefore: number;
   }>;
   capacity: number;
+  firstPageLeadIn?: number;
+  continuationPageLeadIn?: number;
+  pageBreakSafetyReserve?: number;
 }): number[][] {
-  const { blocks, capacity } = args;
+  const {
+    blocks,
+    capacity,
+    firstPageLeadIn = 0,
+    continuationPageLeadIn = firstPageLeadIn,
+    pageBreakSafetyReserve = 0,
+  } = args;
 
   if (blocks.length === 0) {
     return [[]];
   }
 
+  const getPageLeadIn = (pageIndex: number) =>
+    pageIndex === 0 ? firstPageLeadIn : continuationPageLeadIn;
+  const effectiveCapacity = Math.max(0, capacity - pageBreakSafetyReserve);
   const pages: number[][] = [];
   let currentPage: number[] = [];
-  let usedHeight = 0;
+  let currentPageIndex = 0;
+  let usedHeight = getPageLeadIn(currentPageIndex);
 
   blocks.forEach((block, index) => {
     const nextHeight =
@@ -282,11 +382,12 @@ function paginateMeasuredProposalBlocks(args: {
 
     if (
       currentPage.length > 0 &&
-      usedHeight + nextHeight > capacity + 1
+      usedHeight + nextHeight > effectiveCapacity + 1
     ) {
       pages.push(currentPage);
+      currentPageIndex += 1;
       currentPage = [index];
-      usedHeight = block.height;
+      usedHeight = getPageLeadIn(currentPageIndex) + block.height;
       return;
     }
 
@@ -391,6 +492,14 @@ export function ProposalDocumentRenderer({
 
       const { bottomBoundary } = getPageBottomBoundary(measurementPage);
       const bodyRect = measurementBody.getBoundingClientRect();
+      const measurementBodyStyles = window.getComputedStyle(measurementBody);
+      const firstPageLeadIn = Number.parseFloat(
+        measurementBodyStyles.paddingTop || "0",
+      );
+      const pageBreakSafetyReserve = Math.max(
+        4,
+        Math.round(resolveLineHeightPx(measurementBodyStyles) * 0.7),
+      );
       const blockNodes = Array.from(
         measurementBody.querySelectorAll<HTMLElement>("[data-proposal-block]"),
       );
@@ -418,6 +527,9 @@ export function ProposalDocumentRenderer({
       const nextPageGroups = paginateMeasuredProposalBlocks({
         blocks: measuredBlocks,
         capacity: availableBodyHeight,
+        firstPageLeadIn,
+        continuationPageLeadIn: 0,
+        pageBreakSafetyReserve,
       });
 
       setPageGroups((current) =>
@@ -569,7 +681,14 @@ export function ProposalDocumentRenderer({
           return (
             <p
               key={block.id}
-              className="dasti-proposal-document__paragraph"
+              className={[
+                "dasti-proposal-document__paragraph",
+                block.continuation
+                  ? "dasti-proposal-document__paragraph--continuation"
+                  : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
               data-proposal-block
             >
               {block.text}
@@ -597,6 +716,57 @@ export function ProposalDocumentRenderer({
       }
     },
     [],
+  );
+
+  const renderVisibleDocumentBlocks = React.useCallback(
+    (blocks: ProposalDocumentBlock[]) => {
+      const elements: React.ReactNode[] = [];
+
+      for (let index = 0; index < blocks.length; index += 1) {
+        const block = blocks[index];
+
+        if (block.type === "paragraph") {
+          let text = block.text;
+          let lastIndex = index;
+
+          while (lastIndex + 1 < blocks.length) {
+            const next = blocks[lastIndex + 1];
+            if (
+              next.type !== "paragraph" ||
+              next.paragraphId !== block.paragraphId
+            ) {
+              break;
+            }
+
+            text = `${text} ${next.text}`;
+            lastIndex += 1;
+          }
+
+          elements.push(
+            <p
+              key={`visible-${block.id}`}
+              className={[
+                "dasti-proposal-document__paragraph",
+                block.continuation
+                  ? "dasti-proposal-document__paragraph--continuation"
+                  : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+            >
+              {text}
+            </p>,
+          );
+          index = lastIndex;
+          continue;
+        }
+
+        elements.push(renderDocumentBlock(block));
+      }
+
+      return elements;
+    },
+    [renderDocumentBlock],
   );
 
   const resolvedPageGroups =
@@ -714,7 +884,7 @@ export function ProposalDocumentRenderer({
           className="dasti-proposal-document__body"
         >
           {pageBlocks.length > 0 ? (
-            pageBlocks.map((block) => renderDocumentBlock(block))
+            renderVisibleDocumentBlocks(pageBlocks)
           ) : pageIndex === 0 ? (
             <div className="dasti-proposal-document__raw-body">
               {stripInlineProposalMarkdown(parsedDocument.rawBody || content)}
@@ -732,4 +902,5 @@ export {
   buildProposalDocumentBlocks,
   paginateMeasuredProposalBlocks,
   parseProposalDocumentContent,
+  splitParagraphIntoPaginationFragments,
 };
