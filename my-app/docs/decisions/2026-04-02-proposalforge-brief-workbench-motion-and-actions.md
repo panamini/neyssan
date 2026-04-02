@@ -178,6 +178,8 @@ The shared proposal renderer now:
 
 - builds ordered salutation / paragraph / closing blocks from the parsed content
 - measures those blocks against the current A4 body height
+- fragments oversized paragraphs before pagination so one merged paragraph cannot
+  force the page to overflow
 - paginates them at paragraph boundaries into continuation pages
 - reports the page count back to `ProposalDisplay`, so the stacked preview shell
   expands to fit page 2 and beyond
