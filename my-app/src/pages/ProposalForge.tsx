@@ -2380,16 +2380,31 @@ export function ProposalForge(): JSX.Element {
     "min(var(--document-viewer-shell-max-block), calc(100dvh - var(--header-height) - (var(--space-2) * 2) - (var(--document-viewer-toolbar-block-size) + var(--space-2)) - 8px))";
   const isCompactComposeLayout =
     viewportWidth < proposalTwoPaneMinViewportWidth;
+  const showComposePanel = isComposePanelVisible && !isSavedView;
+  const briefJobDescription =
+    composePreviewValues?.jobDescription?.trim() ||
+    prefill?.jobDescription?.trim() ||
+    (typeof window !== "undefined"
+      ? readStoredProposalComposeDraft()?.jobDescription?.trim() || ""
+      : "");
+  const hasBriefContent = Boolean(briefJobDescription);
+  const showBriefCard =
+    Boolean(proposalContent) && !isBriefExpanded && showComposePanel;
+  const shouldShowDesktopBriefCapsule =
+    showBriefCard && !isCompactComposeLayout;
   const shouldLeftAnchorStackedWorkbench =
     isCompactComposeLayout && viewportWidth >= 768;
   const canCollapseComposePanel = !isSavedView && !isCompactComposeLayout;
   const isNarrowLaptop = viewportWidth < 1360;
-  const shouldCenterOutputStage = !isSavedView && !isComposePanelVisible && !isCompactComposeLayout;
+  const shouldCenterOutputStage =
+    !isSavedView &&
+    !isComposePanelVisible &&
+    !isCompactComposeLayout &&
+    !shouldShowDesktopBriefCapsule;
   const isLoadingHandoff =
     Boolean(handoffId) &&
     (isConvexAuthLoading ||
       (isConvexAuthenticated && handoffRecord === undefined));
-  const showComposePanel = isComposePanelVisible && !isSavedView;
   const shouldShowCollapsedComposeToolbar =
     !isComposePanelVisible && !isSavedView && canCollapseComposePanel;
   const liveWorkbenchMaxWidth = isCompactComposeLayout
@@ -2413,7 +2428,10 @@ export function ProposalForge(): JSX.Element {
   const proposalWorkbenchFrameStyle: React.CSSProperties = {
     width: "100%",
     maxWidth: liveWorkbenchMaxWidth,
-    marginInline: shouldLeftAnchorStackedWorkbench ? 0 : "auto",
+    marginInline:
+      shouldLeftAnchorStackedWorkbench || shouldShowDesktopBriefCapsule
+        ? 0
+        : "auto",
     minWidth: 0,
     "--proposal-workspace-output-shell-inline-size":
       proposalWorkspaceOutputShellInlineSize,
@@ -2423,7 +2441,10 @@ export function ProposalForge(): JSX.Element {
   const proposalWorkbenchToolbarSlotStyle: React.CSSProperties = {
     width: "100%",
     maxWidth: toolbarWorkbenchMaxWidth,
-    marginInline: shouldLeftAnchorStackedWorkbench ? 0 : "auto",
+    marginInline:
+      shouldLeftAnchorStackedWorkbench || shouldShowDesktopBriefCapsule
+        ? 0
+        : "auto",
     minWidth: 0,
   };
   const activeCharacterLimitSelection = React.useMemo(
@@ -2434,15 +2455,7 @@ export function ProposalForge(): JSX.Element {
       }),
     [draftCharacterLimitMode, draftCharacterLimitValue],
   );
-  const briefJobDescription =
-    composePreviewValues?.jobDescription?.trim() ||
-    prefill?.jobDescription?.trim() ||
-    (typeof window !== "undefined"
-      ? readStoredProposalComposeDraft()?.jobDescription?.trim() || ""
-      : "");
-  const hasBriefContent = Boolean(briefJobDescription);
-  const showBriefCard =
-    Boolean(proposalContent) && !isBriefExpanded && showComposePanel;
+  const showComposeGridColumn = showComposePanel;
   const focusComposeBrief = React.useCallback(() => {
     const jobDescriptionField =
       typeof document !== "undefined"
@@ -2607,16 +2620,19 @@ export function ProposalForge(): JSX.Element {
                 className="dasti-workbench-top-left-slot dasti-workbench-top-left-slot--proposal"
                 style={proposalWorkbenchToolbarSlotStyle}
               >
-                <div
-                  className="dasti-cv-workbench-bar dasti-cv-workbench-bar--proposal-workspace"
-                  style={proposalToolbarWidthStyle}
-                >
-                  <div
-                    className="dasti-forge-compose-toolbar-slot"
-                    data-testid="proposal-workbench-toolbar-slot"
-                  >
-                    {proposalWorkbenchToolbar}
-                  </div>
+                <div className="dasti-proposal-workbench-left-stack" style={proposalToolbarWidthStyle}>
+                  {proposalWorkbenchToolbar ? (
+                    <div
+                      className="dasti-cv-workbench-bar dasti-cv-workbench-bar--proposal-workspace"
+                    >
+                      <div
+                        className="dasti-forge-compose-toolbar-slot"
+                        data-testid="proposal-workbench-toolbar-slot"
+                      >
+                        {proposalWorkbenchToolbar}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             ) : null}
@@ -2628,10 +2644,10 @@ export function ProposalForge(): JSX.Element {
                   {
                     "--grid-columns": isCompactComposeLayout
                       ? "minmax(0, 1fr)"
-                      : showComposePanel
+                      : showComposeGridColumn
                         ? `${proposalDesktopComposeWidth} minmax(0, var(--proposal-workspace-output-shell-inline-size))`
                         : "minmax(0, 0px) minmax(0, 1fr)",
-                    "--grid-gap": showComposePanel
+                    "--grid-gap": showComposeGridColumn
                       ? "var(--layout-card-grid)"
                       : "0px",
                     "--grid-align": "start",
@@ -2643,7 +2659,7 @@ export function ProposalForge(): JSX.Element {
                 className={[
                   "dasti-flow",
                   "dasti-forge-left-col",
-                  !showComposePanel && !isCompactComposeLayout
+                  !showComposeGridColumn && !isCompactComposeLayout
                     ? "dasti-forge-left-col--hidden"
                     : "",
                 ]
@@ -2661,6 +2677,7 @@ export function ProposalForge(): JSX.Element {
                       }
                       jobDescription={briefJobDescription}
                       onToggleBrief={handleOpenComposeBrief}
+                      variant={shouldShowDesktopBriefCapsule ? "compact" : "card"}
                     />
                   ) : null}
                   <div
