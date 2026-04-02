@@ -41,7 +41,35 @@ vi.mock("../../components/ui/toast", () => ({
 vi.mock("../../components/ProposalInputForm", () => ({
   default: (props: Record<string, unknown>) => {
     proposalInputFormSpy(props);
-    return <div data-testid="proposal-input-form">Mock compose shell</div>;
+    return (
+      <div data-testid="proposal-input-form">
+        Mock compose shell
+        {props.headerAction as React.ReactNode}
+        <button
+          type="button"
+          onClick={() =>
+            props.onSubmit?.(
+              {
+                jobTitle: "Game UI Artist",
+                jobDescription:
+                  "Detailed role description for the proposal brief capsule tests.",
+                proposalType: "cover_letter",
+                voicePreset: undefined,
+                formalityLevel: undefined,
+                creativity: undefined,
+                toneTuning: null,
+                characterLimitMode: "none",
+                characterLimitValue: 1500,
+                modelType: "chatgpt",
+              },
+              "Generated proposal body.",
+            )
+          }
+        >
+          Generate sample proposal
+        </button>
+      </div>
+    );
   },
 }));
 
@@ -311,6 +339,95 @@ describe("ProposalForge workbench layout", () => {
     expect(composeShell.parentElement).not.toHaveStyle({ display: "none" });
     expect(
       container.querySelector(".dasti-cv-workbench-bar--proposal-workspace"),
+    ).toBeTruthy();
+  });
+
+  it("replaces the desktop floating brief card with a compact capsule under the detached toolbar", () => {
+    const { container } = render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate sample proposal" }));
+
+    const briefCapsule = container.querySelector(
+      ".dasti-brief-card--compact",
+    ) as HTMLElement | null;
+    const toolbarSlot = container.querySelector(
+      '[data-testid="proposal-workbench-toolbar-slot"]',
+    ) as HTMLElement | null;
+    const leftColumn = container.querySelector(".dasti-forge-left-col") as
+      | HTMLElement
+      | null;
+    expect(briefCapsule).toBeTruthy();
+    expect(
+      briefCapsule?.closest(".dasti-proposal-compose-column"),
+    ).toBeTruthy();
+    expect(
+      briefCapsule?.closest(".dasti-workbench-top-left-slot--proposal"),
+    ).toBeNull();
+    expect(toolbarSlot).toBeTruthy();
+    expect(
+      toolbarSlot?.closest(".dasti-workbench-top-left-slot--proposal"),
+    ).toBeTruthy();
+    expect(
+      toolbarSlot?.closest(".dasti-proposal-compose-column"),
+    ).toBeNull();
+    expect(toolbarSlot?.contains(briefCapsule ?? null)).toBe(false);
+    expect(
+      container.querySelector(".dasti-proposal-workbench-left-stack"),
+    ).toBeTruthy();
+    const workbenchFrame = container.querySelector(".dasti-flow") as
+      | HTMLElement
+      | null;
+    const gridSplit = container.querySelector(".dasti-grid-split") as
+      | HTMLElement
+      | null;
+    const outputShell = container.querySelector(
+      ".dasti-proposal-output-shell",
+    ) as HTMLElement | null;
+    expect(leftColumn?.classList.contains("dasti-forge-left-col--hidden")).toBe(false);
+    expect(workbenchFrame?.style.marginInline).toBe("0");
+    expect(
+      gridSplit?.style.getPropertyValue("--grid-columns"),
+    ).toBe("480px minmax(0, var(--proposal-workspace-output-shell-inline-size))");
+    expect(gridSplit?.style.getPropertyValue("--grid-justify")).toBe("start");
+    expect(outputShell?.style.width).toBe("100%");
+    expect(
+      outputShell?.closest(".dasti-workbench-top-left-slot--proposal"),
+    ).toBeNull();
+    expect(
+      outputShell?.closest(".dasti-grid-split"),
+    ).toBe(gridSplit);
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit brief" }));
+
+    expect(
+      container.querySelector(".dasti-brief-card--compact"),
+    ).toBeNull();
+    expect(screen.getByTestId("proposal-input-form")).toBeInTheDocument();
+  });
+
+  it("keeps the compact brief card inside the compose column on compact widths", () => {
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 1000,
+      writable: true,
+    });
+    window.dispatchEvent(new Event("resize"));
+
+    const { container } = render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate sample proposal" }));
+
+    expect(container.querySelector(".dasti-brief-card--compact")).toBeNull();
+    expect(
+      container.querySelector(".dasti-proposal-compose-column .dasti-brief-card"),
     ).toBeTruthy();
   });
 
