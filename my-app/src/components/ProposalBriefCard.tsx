@@ -5,19 +5,41 @@ type ProposalBriefCardProps = {
   documentTitle: string;
   jobDescription: string;
   onToggleBrief: () => void;
+  variant?: "card" | "compact";
 };
 
 export function ProposalBriefCard({
   documentTitle,
   jobDescription,
   onToggleBrief,
+  variant = "card",
 }: ProposalBriefCardProps): JSX.Element {
   const hasSummary = Boolean(jobDescription);
+  const isCompact = variant === "compact";
 
   return (
-    <div className="dasti-proposal-sheet dasti-brief-card">
-      <div className="dasti-proposal-sheet__header dasti-proposal-sheet__header--brief">
+    <div
+      className={[
+        "dasti-proposal-sheet",
+        "dasti-brief-card",
+        isCompact ? "dasti-brief-card--compact" : null,
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      <div
+        className={[
+          "dasti-proposal-sheet__header",
+          "dasti-proposal-sheet__header--brief",
+          isCompact ? "dasti-proposal-sheet__header--brief-compact" : null,
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      >
         <div className="dasti-proposal-sheet__heading dasti-proposal-sheet__heading--full">
+          {isCompact ? (
+            <span className="dasti-brief-card__eyebrow">Brief</span>
+          ) : null}
           <div className="dasti-proposal-compose-shell__header-row">
             <h2 className="dasti-brief-card__document-title">
               {documentTitle || "Untitled Proposal"}
@@ -29,7 +51,11 @@ export function ProposalBriefCard({
               aria-label="Edit brief"
               title="Edit brief"
             >
-              <ChevronDown size={14} strokeWidth={1.8} aria-hidden="true" />
+              <ChevronDown
+                size={isCompact ? 12 : 14}
+                strokeWidth={1.8}
+                aria-hidden="true"
+              />
             </button>
           </div>
         </div>
