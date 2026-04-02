@@ -80,6 +80,7 @@ vi.mock("../../components/ProposalComposeToolbar", () => ({
       <div
         data-testid="proposal-compose-toolbar"
         data-collapsed={props.collapsed ? "true" : "false"}
+        data-transition-state={props.transitionState ?? "idle"}
       >
         <button
           type="button"
@@ -309,6 +310,10 @@ describe("ProposalForge workbench layout", () => {
         proposalComposeToolbarSpy.mock.calls.length - 1
       ]?.[0];
     expect(lastToolbarCall).toMatchObject({ collapsed: true });
+    expect(screen.getByTestId("proposal-compose-toolbar")).toHaveAttribute(
+      "data-transition-state",
+      "entering",
+    );
     expect(lastToolbarCall.onRestoreCompose).toEqual(expect.any(Function));
     expect(composeShell.parentElement).toHaveStyle({ display: "none" });
     const gridSplitAfterCollapse = container.querySelector(
@@ -335,6 +340,10 @@ describe("ProposalForge workbench layout", () => {
         proposalComposeToolbarSpy.mock.calls.length - 1
       ]?.[0];
     expect(lastToolbarCall.collapsed).not.toBe(true);
+    expect(screen.getByTestId("proposal-compose-toolbar")).toHaveAttribute(
+      "data-transition-state",
+      "entering",
+    );
     expect(lastToolbarCall.onCollapseCompose).toEqual(expect.any(Function));
     expect(composeShell.parentElement).not.toHaveStyle({ display: "none" });
     expect(
@@ -343,6 +352,7 @@ describe("ProposalForge workbench layout", () => {
   });
 
   it("replaces the desktop floating brief card with a compact capsule under the detached toolbar", () => {
+    vi.useFakeTimers();
     const { container } = render(
       <MemoryRouter initialEntries={["/proposal"]}>
         <ProposalForge />
@@ -400,13 +410,24 @@ describe("ProposalForge workbench layout", () => {
     expect(
       outputShell?.closest(".dasti-grid-split"),
     ).toBe(gridSplit);
+    const expandButton = screen.getByRole("button", { name: "Expand" });
+    expect(expandButton).not.toHaveAttribute("data-toolbar-tooltip");
 
-    fireEvent.click(screen.getByRole("button", { name: "Edit brief" }));
+    fireEvent.click(expandButton);
+    const composeStage = container.querySelector(
+      ".dasti-proposal-compose-panel-stage",
+    ) as HTMLElement | null;
+    expect(composeStage?.style.display).toBe("none");
+    expect(container.querySelector(".dasti-brief-card--compact")).toBeTruthy();
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
 
     expect(
       container.querySelector(".dasti-brief-card--compact"),
     ).toBeNull();
     expect(screen.getByTestId("proposal-input-form")).toBeInTheDocument();
+    vi.useRealTimers();
   });
 
   it("keeps the compact brief card inside the compose column on compact widths", () => {

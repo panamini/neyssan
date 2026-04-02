@@ -1,5 +1,5 @@
 import React from "react";
-import { ChevronDown } from "@/lib/icons";
+import { ChevronUp } from "@/lib/icons";
 
 type ProposalBriefCardProps = {
   documentTitle: string;
@@ -37,9 +37,6 @@ export function ProposalBriefCard({
           .join(" ")}
       >
         <div className="dasti-proposal-sheet__heading dasti-proposal-sheet__heading--full">
-          {isCompact ? (
-            <span className="dasti-brief-card__eyebrow">Brief</span>
-          ) : null}
           <div className="dasti-proposal-compose-shell__header-row">
             <h2 className="dasti-brief-card__document-title">
               {documentTitle || "Untitled Proposal"}
@@ -48,14 +45,9 @@ export function ProposalBriefCard({
               type="button"
               className="dasti-brief-card__dismiss"
               onClick={onToggleBrief}
-              aria-label="Edit brief"
-              title="Edit brief"
+              aria-label="Expand"
             >
-              <ChevronDown
-                size={isCompact ? 12 : 14}
-                strokeWidth={1.8}
-                aria-hidden="true"
-              />
+              <ChevronUp size={14} strokeWidth={1.7} aria-hidden="true" />
             </button>
           </div>
         </div>

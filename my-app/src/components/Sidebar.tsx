@@ -9,7 +9,7 @@ import {
   Gear,
   Menu,
   Moon,
-  SunMedium,
+  Sun,
   Trash,
   X,
 } from "@/lib/icons";
@@ -1296,7 +1296,7 @@ export const Sidebar: React.FC = () => {
               title={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
             >
               {isDarkMode ? (
-                <SunMedium size={14} strokeWidth={1.6} aria-hidden="true" />
+                <Sun size={14} strokeWidth={1.6} aria-hidden="true" />
               ) : (
                 <Moon size={14} strokeWidth={1.6} aria-hidden="true" />
               )}

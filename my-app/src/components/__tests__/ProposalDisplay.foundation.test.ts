@@ -17,4 +17,22 @@ describe("ProposalDisplay foundation tokens", () => {
       /--document-viewer-shell-max-block:\s*calc\([\s\S]*var\(--document-viewer-paper-max-block\)[\s\S]*var\(--document-viewer-bleed-block\) \* 2[\s\S]*var\(--document-shell-padding-block\) \* 2[\s\S]*var\(--document-rail-gap\)\s*\+\s*var\(--document-viewer-toolbar-block-size\)[\s\S]*\);/,
     );
   });
+
+  it("defines subtle compose edge shadows for both light and dark themes", () => {
+    expect(foundationCss).toContain(
+      "--proposal-sheet-top-shadow: 0 12px 18px -16px",
+    );
+    expect(foundationCss).toContain(
+      "--proposal-sheet-bottom-shadow: 0 -12px 18px -16px",
+    );
+    expect(foundationCss).toContain(
+      ".dark {\n  color-scheme: dark;",
+    );
+    expect(foundationCss).toContain(
+      "--proposal-sheet-top-shadow: 0 12px 18px -16px hsla(0, 0%, 0%, 0.14);",
+    );
+    expect(foundationCss).toContain(
+      "--proposal-sheet-bottom-shadow: 0 -12px 18px -16px hsla(0, 0%, 0%, 0.16);",
+    );
+  });
 });

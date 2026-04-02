@@ -111,7 +111,10 @@ describe("ProposalForge brief card", () => {
       ).length,
     ).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByRole("button", { name: "Edit brief" }));
+    const expandButton = screen.getByRole("button", { name: "Expand" });
+    expect(expandButton).not.toHaveAttribute("data-toolbar-tooltip");
+
+    fireEvent.click(expandButton);
 
     await waitFor(() => {
       expect(document.getElementById("jobDescription")).toHaveFocus();
