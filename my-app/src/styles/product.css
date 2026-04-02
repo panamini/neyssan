@@ -6290,9 +6290,39 @@
   gap: 0;
 }
 
+.dasti-proposal-workbench-left-stack {
+  display: grid;
+  align-content: start;
+  justify-items: stretch;
+  gap: var(--space-2);
+  width: 100%;
+  min-width: 0;
+}
+
+.dasti-brief-card--compact {
+  --document-shell-padding-inline: 0px;
+  --document-shell-padding-block: 0px;
+  gap: 0;
+  border-radius: var(--document-viewer-radius);
+  border-color: color-mix(
+    in srgb,
+    var(--document-viewer-frame-border) 92%,
+    transparent
+  );
+  background: var(--document-viewer-frame-surface);
+  box-shadow: var(--document-viewer-frame-shadow);
+}
+
 .dasti-proposal-sheet__header--brief {
   padding-block-end: var(--s3);
   border-bottom: none;
+}
+
+.dasti-proposal-sheet__header--brief-compact {
+  padding:
+    calc(var(--space-2) + 1px)
+    calc(var(--space-3) - 2px)
+    calc(var(--space-1) + 1px);
 }
 
 .dasti-brief-card__summary {
@@ -6305,6 +6335,26 @@
   padding-block-end: var(--proposal-sheet-margin-block-start);
 }
 
+.dasti-brief-card--compact .dasti-brief-card__summary {
+  gap: var(--space-1);
+  padding:
+    0
+    calc(var(--space-3) - 2px)
+    calc(var(--space-2) + 1px);
+}
+
+.dasti-brief-card__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 6px;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--tm2);
+}
+
 .dasti-brief-card__document-title {
   margin: 0;
   min-width: 0;
@@ -6315,6 +6365,13 @@
   color: var(--ti);
   line-height: 1.16;
   letter-spacing: -0.02em;
+}
+
+.dasti-brief-card--compact .dasti-brief-card__document-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: clamp(18px, 1.3vw, 20px);
 }
 
 .dasti-proposal-sheet__header--brief .dasti-proposal-compose-shell__header-row {
@@ -6361,6 +6418,10 @@
   overflow: hidden;
 }
 
+.dasti-brief-card--compact .dasti-brief-card__description {
+  color: color-mix(in srgb, var(--tm2) 92%, var(--ti) 8%);
+}
+
 .dasti-brief-card__dismiss,
 .dasti-proposal-compose-shell__toggle {
   width: 30px;
@@ -6382,6 +6443,25 @@
 
 .dasti-brief-card__dismiss {
   flex: 0 0 auto;
+}
+
+.dasti-brief-card--compact .dasti-brief-card__dismiss {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  border-radius: 999px;
+  border-color: color-mix(
+    in srgb,
+    var(--document-viewer-frame-border) 82%,
+    transparent
+  );
+  background: color-mix(
+    in srgb,
+    var(--document-viewer-frame-surface) 92%,
+    transparent
+  );
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 32%, transparent);
 }
 
 .dasti-brief-card__dismiss:hover,
