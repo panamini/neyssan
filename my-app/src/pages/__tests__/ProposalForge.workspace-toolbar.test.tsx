@@ -246,6 +246,7 @@ describe("ProposalForge workbench layout", () => {
     expect(toolbarRow?.style.maxWidth).toBe(
       "calc(var(--proposal-workspace-output-shell-inline-size) + var(--proposal-workspace-output-shell-inline-size) + var(--layout-card-grid))",
     );
+    expect(toolbarRow?.style.marginInline).toBe("0");
     expect(
       toolbarRow?.style.getPropertyValue(
         "--proposal-workspace-output-shell-inline-size",
