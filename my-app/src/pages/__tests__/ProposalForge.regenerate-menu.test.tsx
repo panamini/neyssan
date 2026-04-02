@@ -115,7 +115,7 @@ vi.mock("../../components/ProposalsList", () => ({
   default: () => <div>Saved proposals</div>,
 }));
 
-describe("ProposalForge refine action", () => {
+describe("ProposalForge draft output actions", () => {
   beforeEach(() => {
     window.localStorage.clear();
     mockAttachedCvState.current = null;
@@ -135,7 +135,7 @@ describe("ProposalForge refine action", () => {
     };
   });
 
-  it("shows the Refine action after a successful generation", async () => {
+  it("does not show a Refine action after a successful generation", async () => {
     render(
       <MemoryRouter>
         <ProposalForge />
@@ -147,13 +147,11 @@ describe("ProposalForge refine action", () => {
     });
 
     await waitFor(() => {
-      expect(
-        screen.getByRole("button", { name: "Refine proposal" }),
-      ).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Refine proposal" })).toBeNull();
     });
   });
 
-  it("reuses the current compose tone when Refine is clicked", async () => {
+  it("keeps tone selection available without rendering a secondary refine trigger", async () => {
     render(
       <MemoryRouter>
         <ProposalForge />
@@ -166,61 +164,9 @@ describe("ProposalForge refine action", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Trigger generation" }));
     });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Refine proposal" }));
-    });
 
     await waitFor(() => {
-      expect(mockGenerateProposalAction).toHaveBeenCalledWith(
-        expect.objectContaining({
-          voicePreset: "expert",
-        }),
-      );
-    });
-  });
-
-  it("sends a null voice preset when Refine is triggered from an auto-tone draft", async () => {
-    mockProposalInputValues.current = {
-      proposalType: "cover_letter",
-      jobTitle: "Customer Support Specialist",
-      jobDescription: "Help customers, resolve issues, and coordinate with internal teams.",
-      voicePreset: undefined,
-      formalityLevel: undefined,
-      creativity: undefined,
-      toneTuning: null,
-      characterLimitMode: "custom",
-      characterLimitValue: 1500,
-      modelType: "mistral-small-latest",
-    };
-    mockGenerateProposalAction.mockResolvedValue({
-      proposalId: "proposal_refined_auto",
-      proposalContent: "Hello team,\n\nI would love to help your customers.\n\nBest,",
-      requestedModelType: "mistral-small-latest",
-      actualModelType: "mistral-small-latest",
-      fallbackTriggerCode: null,
-    });
-
-    render(
-      <MemoryRouter>
-        <ProposalForge />
-      </MemoryRouter>,
-    );
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Trigger generation" }));
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Refine proposal" }));
-    });
-
-    await waitFor(() => {
-      expect(
-        mockGenerateProposalAction,
-      ).toHaveBeenCalledWith(
-        expect.objectContaining({
-          voicePreset: null,
-        }),
-      );
+      expect(screen.queryByRole("button", { name: "Refine proposal" })).toBeNull();
     });
   });
 });

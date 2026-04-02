@@ -9,7 +9,7 @@ describe("ProposalArtifactInspector", () => {
     vi.restoreAllMocks();
   });
 
-  it("opens the style drawer as a downward menu and suppresses trigger tooltips while open", async () => {
+  it("opens the style drawer as a downward menu and uses shared toolbar tooltip attributes", async () => {
     const user = userEvent.setup();
 
     render(
@@ -26,24 +26,24 @@ describe("ProposalArtifactInspector", () => {
       />,
     );
 
-    expect(
-      screen.getByRole("button", { name: "Style" }),
-    ).toBeInTheDocument();
+    const styleTrigger = screen.getByRole("button", { name: "Style" });
+    const colorTrigger = screen.getByRole("button", { name: "Color" });
 
-    await user.click(screen.getByRole("button", { name: "Style" }));
+    expect(styleTrigger).toHaveAttribute("data-toolbar-tooltip", "Style");
+    expect(colorTrigger).toHaveAttribute("data-toolbar-tooltip", "Colors");
+
+    await user.click(styleTrigger);
 
     expect(
       screen.getByRole("dialog", { name: "Style options" }),
     ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Style" })
-        ?.querySelector(".dasti-artifact-inspector__tooltip--trigger"),
-    ).toBeNull();
-    expect(screen.getByText("Calm grid. Easy to read.")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Color" })
-        ?.querySelector(".dasti-artifact-inspector__tooltip--trigger"),
-    ).toBeNull();
+    expect(styleTrigger).not.toHaveAttribute("data-toolbar-tooltip");
+    expect(colorTrigger).not.toHaveAttribute("data-toolbar-tooltip");
+    const swissOption = screen.getByRole("button", { name: "Swiss" });
+    expect(swissOption).toHaveAttribute(
+      "data-toolbar-tooltip-placement",
+      "inline-end",
+    );
   });
 
   it("reopens the custom color picker directly when a custom accent is active", async () => {

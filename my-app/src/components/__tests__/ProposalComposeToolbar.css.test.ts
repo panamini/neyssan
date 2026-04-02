@@ -43,7 +43,7 @@ describe("ProposalComposeToolbar CSS contracts", () => {
       /\.dasti-compose-toolbar__collapsed-actions\s*\{[\s\S]*justify-content:\s*flex-end;[\s\S]*margin-inline-start:\s*auto;/,
     );
     expect(productCss).toMatch(
-      /\.dasti-compose-toolbar__tone-popover--collapsed\s*\{[\s\S]*inset-inline-start:\s*auto;[\s\S]*inset-inline-end:\s*0;[\s\S]*transform:\s*none;[\s\S]*transform-origin:\s*right top;/,
+      /\.dasti-compose-toolbar__tone-popover--collapsed\s*\{[\s\S]*inset-inline-start:\s*50%;[\s\S]*inset-inline-end:\s*auto;[\s\S]*transform:\s*translateX\(-50%\);[\s\S]*transform-origin:\s*center top;/,
     );
     expect(productCss).toContain(
       "--dasti-proposal-submit-stroke-width: var(--proposal-submit-stroke-width-sm);",

@@ -1,9 +1,10 @@
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ProposalsList from "../ProposalsList";
 
 const proposalDisplaySpy = vi.fn();
+const generateProposalActionMock = vi.fn().mockResolvedValue(null);
 
 const SAVED_PROPOSALS = [
   {
@@ -42,7 +43,7 @@ vi.mock("convex/react", () => ({
   useQuery: (query: string) =>
     query === "proposalsPublic.default" ? SAVED_PROPOSALS : null,
   useMutation: () => vi.fn().mockResolvedValue(undefined),
-  useAction: () => vi.fn().mockResolvedValue(null),
+  useAction: () => generateProposalActionMock,
 }));
 
 vi.mock("../../../convex/_generated/api", () => ({
@@ -82,18 +83,28 @@ vi.mock("../ProposalArtifactInspector", () => ({
 vi.mock("../ProposalDisplay", () => ({
   default: (props: Record<string, unknown>) => {
     proposalDisplaySpy(props);
-    return <div data-testid="proposal-display">Mock proposal display</div>;
+    return (
+      <div data-testid="proposal-display">
+        {props.railStartAddon as React.ReactNode}
+        {props.actions as React.ReactNode}
+      </div>
+    );
   },
 }));
 
 describe("ProposalsList toolbar grouping", () => {
   beforeEach(() => {
     proposalDisplaySpy.mockClear();
+    generateProposalActionMock.mockClear();
     window.localStorage.clear();
   });
 
-  it("keeps regenerate and delete actions in the right action slot while style controls stay on the left rail", async () => {
-    render(<ProposalsList />);
+  it("keeps the saved-proposal chrome detached above the shell with a separate tone drawer and refine action", async () => {
+    const { container } = render(
+      <ProposalsList
+        savedViewActions={<div data-testid="saved-view-actions">Saved actions</div>}
+      />,
+    );
 
     await waitFor(() => {
       const mainCall = proposalDisplaySpy.mock.calls.find(
@@ -102,8 +113,50 @@ describe("ProposalsList toolbar grouping", () => {
 
       expect(mainCall).toBeTruthy();
       expect(mainCall?.documentHeaderMode).toBe("actions-only");
+      expect(mainCall?.detachedActionHeader).toBe(true);
+      expect(mainCall?.showDocumentCaption).toBe(false);
       expect(mainCall?.railStartAddon).toBeTruthy();
       expect(mainCall?.actions).toBeTruthy();
+    });
+
+    expect(screen.getByTestId("saved-view-actions")).toBeInTheDocument();
+    expect(
+      container.querySelector(".dasti-proposal-output-shell--workspace"),
+    ).toBeTruthy();
+    expect(
+      container.querySelector(".dasti-proposal-output-shell--saved"),
+    ).toBeTruthy();
+    expect(
+      container.querySelector(".dasti-proposal-library-selected-sidebar"),
+    ).toBeTruthy();
+
+    expect(
+      screen.getByRole("button", { name: "Tone of voice Natural" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Refine saved proposal" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Refine saved proposal" }),
+    ).not.toHaveClass("dasti-toolbar-tooltip-trigger--above");
+
+    fireEvent.click(screen.getByRole("button", { name: "Tone of voice Natural" }));
+
+    expect(screen.getByRole("dialog", { name: "Tone of voice" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Auto" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Formal" })).toHaveAttribute(
+      "data-toolbar-tooltip-placement",
+      "inline-end",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Formal" }));
+    fireEvent.click(screen.getByRole("button", { name: "Refine saved proposal" }));
+
+    await waitFor(() => {
+      expect(generateProposalActionMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          voicePreset: "expert",
+        }),
+      );
     });
   });
 
