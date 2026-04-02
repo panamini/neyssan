@@ -6,9 +6,8 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
-  Copy,
   FloppyDisk,
-  RotateCcw,
+  PenLine,
   Trash,
   X,
 } from "@/lib/icons";
@@ -37,10 +36,7 @@ import {
   getProposalAttachedCvLocalDocument,
   PROPOSAL_ATTACHED_CV_UPDATED_EVENT,
 } from "../lib/proposal-personalization";
-import {
-  getProposalGenerationUiErrorMessage,
-  type ProposalGenerationFallbackInfo,
-} from "../lib/proposal-generation-ui";
+import { type ProposalGenerationFallbackInfo } from "../lib/proposal-generation-ui";
 import {
   readStoredProposalOutputDraft,
   resolveProposalStoredText,
@@ -84,11 +80,6 @@ import {
   resolveProposalStyleRenderState,
   type ProposalStyleChoice,
 } from "../lib/proposal-style-choice";
-import {
-  applyProposalVoiceSelection,
-  buildProposalGenerationRequest,
-  type ProposalGenerationRequestPayload,
-} from "../lib/proposal-generation-request";
 import { getVoicePresetDisplayLabel } from "../lib/proposal-voice-label";
 import type { ProposalPaletteId } from "../lib/proposal-style-display";
 import {
@@ -218,13 +209,6 @@ function isProposalPaletteId(value: unknown): value is ProposalPaletteId {
     value === "encre"
   );
 }
-
-type GenerateProposalResult = {
-  proposalId: Id<"proposals">;
-  proposalContent: string;
-} & Required<ProposalGenerationFallbackInfo>;
-
-type GenerateProposalPayload = ProposalGenerationRequestPayload;
 
 function shouldPreserveLeadBreak(line: string): boolean {
   const trimmed = line.trim();
@@ -510,8 +494,6 @@ export function ProposalForge(): JSX.Element {
     composePreviewValues?.characterLimitValue ??
     storedOutputDraft?.characterLimitValue ??
     null;
-  const [isRegeneratingGeneratedProposal, setIsRegeneratingGeneratedProposal] =
-    React.useState(false);
   const [isConfirmingGeneratedDelete, setIsConfirmingGeneratedDelete] =
     React.useState(false);
   const [copyFeedback, setCopyFeedback] = React.useState<"idle" | "copied">(
@@ -1172,7 +1154,6 @@ export function ProposalForge(): JSX.Element {
     setIsSavingGeneratedProposal(false);
     setIsSavingOutputToLibrary(false);
     setLastProposalRequest(null);
-    setIsRegeneratingGeneratedProposal(false);
     setIsConfirmingGeneratedDelete(false);
     setIsCvPickerOpen(false);
     setIsComposePanelVisible(true);
@@ -2120,105 +2101,6 @@ export function ProposalForge(): JSX.Element {
     updateProposalRoute,
   ]);
 
-  const handleRegenerateOutput = React.useCallback(
-    async (voiceOverride?: FormValues["voicePreset"] | null) => {
-      if (!lastProposalRequest || isRegeneratingGeneratedProposal) {
-        return;
-      }
-
-      const currentActiveCvSource = getActiveLocalPersonalizationSource();
-      const hasCandidateContext = Boolean(
-        currentActiveCvSource.personalizationContext,
-      );
-      const requestWithVoice = applyProposalVoiceSelection(
-        lastProposalRequest,
-        voiceOverride === undefined ? composeToolbarVoicePreset : voiceOverride,
-      );
-      const requestPayload = buildProposalGenerationRequest(
-        requestWithVoice,
-        buildAppProposalPersonalizationPayload(currentActiveCvSource),
-      );
-
-      try {
-        setIsRegeneratingGeneratedProposal(true);
-        setLoading(true);
-        setError(null);
-        setStatusMessage(null);
-        setErrorDetail(null);
-        setFallbackInfo(null);
-
-        const result = await (
-          generateProposalAction as unknown as (
-            input: GenerateProposalPayload,
-          ) => Promise<GenerateProposalResult | null>
-        )(requestPayload);
-
-        if (!result) {
-          const nextErrorMessage = "No proposal returned from the server.";
-          handleProposalError(nextErrorMessage, requestWithVoice);
-          return;
-        }
-
-        try {
-          if (canPersistProposalState) {
-            await updateProposal({
-              id: result.proposalId,
-              content: result.proposalContent,
-              sections: [{ type: "text", content: result.proposalContent }],
-              status: "draft",
-              metadata: proposalRenderMetadata,
-            });
-          }
-        } catch (saveErr) {
-          console.warn(
-            "Failed to update regenerated proposal status:",
-            saveErr,
-          );
-        }
-
-        handleProposalSubmit(
-          requestWithVoice,
-          result.proposalContent,
-          {
-            requestedModelType: result.requestedModelType,
-            actualModelType: result.actualModelType,
-            fallbackTriggerCode: result.fallbackTriggerCode,
-          },
-          result.proposalId,
-        );
-        showToast("Proposal refined", { variant: "success" });
-      } catch (regenerateError) {
-        const nextErrorMessage = getProposalGenerationUiErrorMessage({
-          error: regenerateError,
-          proposalType: requestWithVoice.proposalType,
-          hasCandidateContext,
-        });
-        const rawReason =
-          regenerateError instanceof Error ? regenerateError.message : null;
-        handleProposalError(nextErrorMessage, requestWithVoice, rawReason);
-        showToast("Refinement failed", {
-          variant: "error",
-          description: nextErrorMessage,
-        });
-      } finally {
-        setLoading(false);
-        setIsRegeneratingGeneratedProposal(false);
-      }
-    },
-    [
-      generateProposalAction,
-      handleProposalError,
-      handleProposalSubmit,
-      canPersistProposalState,
-      isRegeneratingGeneratedProposal,
-      lastProposalRequest,
-      composeToolbarVoicePreset,
-      proposalRenderMetadata,
-      showToast,
-      updateProposal,
-    ],
-  );
-
   const handleDeleteOutput = React.useCallback(async () => {
     if (!generatedProposalId) return;
     if (!canPersistProposalState) {
@@ -2424,7 +2306,6 @@ export function ProposalForge(): JSX.Element {
   const shouldLeftAnchorStackedWorkbench =
     isCompactComposeLayout && viewportWidth >= 768;
   const canCollapseComposePanel = !isSavedView && !isCompactComposeLayout;
-  const isNarrowLaptop = viewportWidth < 1360;
   const shouldCenterOutputStage =
     !isSavedView &&
     !isComposePanelVisible &&
@@ -2818,15 +2699,15 @@ export function ProposalForge(): JSX.Element {
       }}
     >
       <div
-        className="dasti-page-shell"
+        className={
+          isSavedView
+            ? "dasti-page-shell dasti-page-shell--proposal-saved"
+            : "dasti-page-shell"
+        }
         style={
           {
             "--page-shell-max-width": isSavedView
-              ? isCompactComposeLayout
-                ? "860px"
-                : isNarrowLaptop
-                  ? "1180px"
-                  : "1380px"
+              ? "100%"
               : "100%",
             "--page-shell-gap": isSavedView
               ? "var(--layout-panel-stack)"
@@ -2837,10 +2718,14 @@ export function ProposalForge(): JSX.Element {
       >
         {isSavedView ? (
           <section aria-hidden={false}>
-            <div className="dasti-workbench-top-left-slot dasti-workbench-top-left-slot--proposal">
-              <div className="dasti-cv-workbench-bar">
+            <ProposalsList
+              selectedProposalId={selectedProposalId}
+              onSelectedProposalIdChange={(id) =>
+                updateProposalRoute("saved", id)
+              }
+              savedViewActions={
                 <div
-                  className="dasti-proposal-saved-view-toolbar"
+                  className="dasti-proposal-saved-view-toolbar dasti-toolbar--surface-tooltips"
                   role="group"
                   aria-label="Saved proposal actions"
                 >
@@ -2861,15 +2746,9 @@ export function ProposalForge(): JSX.Element {
                     disabled={!openedSavedProposal || !savedProposalContent}
                     aria-label="Duplicate to draft"
                   >
-                    <Copy size={16} strokeWidth={1.7} />
+                    <PenLine size={16} strokeWidth={1.6} />
                   </button>
                 </div>
-              </div>
-            </div>
-            <ProposalsList
-              selectedProposalId={selectedProposalId}
-              onSelectedProposalIdChange={(id) =>
-                updateProposalRoute("saved", id)
               }
             />
           </section>
@@ -3088,30 +2967,6 @@ export function ProposalForge(): JSX.Element {
                     actions={
                       proposalContent && !loading && !error ? (
                         <span className="dasti-icon-cluster dasti-icon-cluster--tight">
-                          <button
-                            type="button"
-                            className="dasti-icon-button"
-                            aria-label="Refine proposal"
-                            data-toolbar-tooltip={
-                              isRegeneratingGeneratedProposal
-                                ? "Refining"
-                                : "Refine"
-                            }
-                            onClick={() => {
-                              void handleRegenerateOutput();
-                            }}
-                            disabled={
-                              isRegeneratingGeneratedProposal ||
-                              !proposalContent ||
-                              loading ||
-                              !lastProposalRequest
-                            }
-                            style={{
-                              opacity: isRegeneratingGeneratedProposal ? 0.55 : 1,
-                            }}
-                          >
-                            <RotateCcw size={16} strokeWidth={1.7} />
-                          </button>
                           <button
                             type="button"
                             className="dasti-icon-button"

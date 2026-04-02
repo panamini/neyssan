@@ -19,6 +19,8 @@ type ProposalDocumentRendererProps = {
   /** Explicit page width in px. When provided, syncs mm vars immediately on change
    *  without waiting for the ResizeObserver callback. */
   pageWidth?: number;
+  pageGapPx?: number;
+  onPageCountChange?: (count: number) => void;
 };
 
 type ParsedProposalDocument = {
@@ -30,11 +32,56 @@ type ParsedProposalDocument = {
   rawBody: string;
 };
 
+type ProposalDocumentBlock =
+  | {
+      id: string;
+      type: "salutation";
+      text: string;
+    }
+  | {
+      id: string;
+      type: "paragraph";
+      text: string;
+    }
+  | {
+      id: string;
+      type: "closing";
+      signOff: string | null;
+      signatureName: string | null;
+    };
+
 type AutoFitLevel = "0" | "1" | "2" | "3" | "4" | "5" | "6";
 const AUTO_FIT_LEVELS: AutoFitLevel[] = ["0", "1", "2", "3", "4", "5", "6"];
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function getPageBottomBoundary(page: HTMLElement) {
+  const pageRect = page.getBoundingClientRect();
+  const pageStyles = window.getComputedStyle(page);
+  const pagePaddingBottom = Number.parseFloat(pageStyles.paddingBottom || "0");
+
+  return {
+    pageRect,
+    pagePaddingBottom,
+    bottomBoundary: pageRect.bottom - pagePaddingBottom,
+  };
+}
+
+function arePageGroupsEqual(a: number[][], b: number[][]) {
+  if (a.length !== b.length) {
+    return false;
+  }
+
+  return a.every((group, groupIndex) => {
+    const next = b[groupIndex];
+    if (!next || next.length !== group.length) {
+      return false;
+    }
+
+    return group.every((value, valueIndex) => next[valueIndex] === value);
+  });
 }
 
 const SALUTATION_PATTERN =
@@ -179,6 +226,81 @@ function parseProposalDocumentContent(
   };
 }
 
+function buildProposalDocumentBlocks(
+  parsedDocument: ParsedProposalDocument,
+): ProposalDocumentBlock[] {
+  const blocks: ProposalDocumentBlock[] = [];
+
+  if (parsedDocument.salutation) {
+    blocks.push({
+      id: "salutation",
+      type: "salutation",
+      text: parsedDocument.salutation,
+    });
+  }
+
+  parsedDocument.paragraphs.forEach((paragraph, index) => {
+    blocks.push({
+      id: `paragraph-${index}`,
+      type: "paragraph",
+      text: paragraph,
+    });
+  });
+
+  if (parsedDocument.signOff || parsedDocument.signatureName) {
+    blocks.push({
+      id: "closing",
+      type: "closing",
+      signOff: parsedDocument.signOff,
+      signatureName: parsedDocument.signatureName,
+    });
+  }
+
+  return blocks;
+}
+
+function paginateMeasuredProposalBlocks(args: {
+  blocks: Array<{
+    height: number;
+    gapBefore: number;
+  }>;
+  capacity: number;
+}): number[][] {
+  const { blocks, capacity } = args;
+
+  if (blocks.length === 0) {
+    return [[]];
+  }
+
+  const pages: number[][] = [];
+  let currentPage: number[] = [];
+  let usedHeight = 0;
+
+  blocks.forEach((block, index) => {
+    const nextHeight =
+      (currentPage.length === 0 ? 0 : block.gapBefore) + block.height;
+
+    if (
+      currentPage.length > 0 &&
+      usedHeight + nextHeight > capacity + 1
+    ) {
+      pages.push(currentPage);
+      currentPage = [index];
+      usedHeight = block.height;
+      return;
+    }
+
+    currentPage.push(index);
+    usedHeight += nextHeight;
+  });
+
+  if (currentPage.length > 0) {
+    pages.push(currentPage);
+  }
+
+  return pages.length > 0 ? pages : [[]];
+}
+
 export function ProposalDocumentRenderer({
   content,
   proposalType,
@@ -189,6 +311,8 @@ export function ProposalDocumentRenderer({
   documentMeta,
   documentTypography,
   pageWidth,
+  pageGapPx = 0,
+  onPageCountChange,
 }: ProposalDocumentRendererProps): JSX.Element {
   const resolvedTemplateId = resolveProposalTemplateId(templateId);
   const templateDefinition = getProposalTemplateDefinition(resolvedTemplateId);
@@ -197,6 +321,10 @@ export function ProposalDocumentRenderer({
   const parsedDocument = React.useMemo(
     () => parseProposalDocumentContent(content, proposalType),
     [content, proposalType],
+  );
+  const documentBlocks = React.useMemo(
+    () => buildProposalDocumentBlocks(parsedDocument),
+    [parsedDocument],
   );
 
   // --proposal-inline-mm / --proposal-block-mm are defined on :root as
@@ -208,6 +336,13 @@ export function ProposalDocumentRenderer({
   const rootRef = React.useRef<HTMLDivElement>(null);
   const pageRef = React.useRef<HTMLDivElement>(null);
   const bodyRef = React.useRef<HTMLDivElement>(null);
+  const measurementPageRef = React.useRef<HTMLDivElement>(null);
+  const measurementBodyRef = React.useRef<HTMLDivElement>(null);
+  const [pageGroups, setPageGroups] = React.useState<number[][]>(() =>
+    documentBlocks.length > 0
+      ? [documentBlocks.map((_, index) => index)]
+      : [[]],
+  );
   React.useLayoutEffect(() => {
     const el = rootRef.current;
     if (!el) return;
@@ -236,9 +371,99 @@ export function ProposalDocumentRenderer({
   }, [pageWidth]);
 
   React.useLayoutEffect(() => {
+    const measurementPage = measurementPageRef.current;
+    const measurementBody = measurementBodyRef.current;
+
+    if (!measurementPage || !measurementBody) {
+      return undefined;
+    }
+
+    let frame: number | null = null;
+
+    const measurePages = () => {
+      if (documentBlocks.length === 0) {
+        setPageGroups((current) =>
+          arePageGroupsEqual(current, [[]]) ? current : [[]],
+        );
+        onPageCountChange?.(1);
+        return;
+      }
+
+      const { bottomBoundary } = getPageBottomBoundary(measurementPage);
+      const bodyRect = measurementBody.getBoundingClientRect();
+      const blockNodes = Array.from(
+        measurementBody.querySelectorAll<HTMLElement>("[data-proposal-block]"),
+      );
+
+      if (blockNodes.length === 0) {
+        return;
+      }
+
+      const availableBodyHeight = bottomBoundary - bodyRect.top;
+      if (availableBodyHeight <= 0) {
+        return;
+      }
+
+      let previousBottom = bodyRect.top;
+      const measuredBlocks = blockNodes.map((node) => {
+        const rect = node.getBoundingClientRect();
+        const gapBefore = Math.max(0, rect.top - previousBottom);
+        previousBottom = rect.bottom;
+        return {
+          height: rect.height,
+          gapBefore,
+        };
+      });
+
+      const nextPageGroups = paginateMeasuredProposalBlocks({
+        blocks: measuredBlocks,
+        capacity: availableBodyHeight,
+      });
+
+      setPageGroups((current) =>
+        arePageGroupsEqual(current, nextPageGroups) ? current : nextPageGroups,
+      );
+      onPageCountChange?.(Math.max(1, nextPageGroups.length));
+    };
+
+    const scheduleMeasure = () => {
+      if (frame !== null) {
+        window.cancelAnimationFrame(frame);
+      }
+
+      frame = window.requestAnimationFrame(() => {
+        frame = null;
+        measurePages();
+      });
+    };
+
+    const resizeObserver = new ResizeObserver(scheduleMeasure);
+    resizeObserver.observe(measurementPage);
+    resizeObserver.observe(measurementBody);
+    if (rootRef.current) {
+      resizeObserver.observe(rootRef.current);
+    }
+
+    void document.fonts?.ready.then(() => {
+      scheduleMeasure();
+    });
+    document.fonts?.addEventListener?.("loadingdone", scheduleMeasure);
+
+    scheduleMeasure();
+
+    return () => {
+      if (frame !== null) {
+        window.cancelAnimationFrame(frame);
+      }
+      resizeObserver.disconnect();
+      document.fonts?.removeEventListener?.("loadingdone", scheduleMeasure);
+    };
+  }, [documentBlocks, onPageCountChange, pageWidth, resolvedTemplateId]);
+
+  React.useLayoutEffect(() => {
     const page = pageRef.current;
     const body = bodyRef.current;
-    if (!page || !body) {
+    if (!page || !body || pageGroups.length > 1) {
       return undefined;
     }
 
@@ -248,13 +473,14 @@ export function ProposalDocumentRenderer({
       for (const fit of AUTO_FIT_LEVELS) {
         page.dataset.fit = fit;
 
-        const nextPageRect = page.getBoundingClientRect();
+        const { pageRect: nextPageRect, bottomBoundary } =
+          getPageBottomBoundary(page);
         const nextBodyRect = body.getBoundingClientRect();
         if (
-          nextBodyRect.bottom <= nextPageRect.bottom + 1 ||
+          nextBodyRect.bottom <= bottomBoundary + 1 ||
           fit === AUTO_FIT_LEVELS[AUTO_FIT_LEVELS.length - 1]
         ) {
-          const overflow = nextBodyRect.bottom - nextPageRect.bottom;
+          const overflow = nextBodyRect.bottom - bottomBoundary;
           if (overflow > 1) {
             const mmPx = Math.max(1, nextPageRect.width / 210);
             const overflowMm = overflow / mmPx;
@@ -324,7 +550,61 @@ export function ProposalDocumentRenderer({
       resizeObserver.disconnect();
       document.fonts?.removeEventListener?.("loadingdone", scheduleFit);
     };
-  }, [content, pageWidth, parsedDocument.kind, resolvedTemplateId]);
+  }, [content, pageGroups.length, pageWidth, parsedDocument.kind, resolvedTemplateId]);
+
+  const renderDocumentBlock = React.useCallback(
+    (block: ProposalDocumentBlock) => {
+      switch (block.type) {
+        case "salutation":
+          return (
+            <p
+              key={block.id}
+              className="dasti-proposal-document__salutation"
+              data-proposal-block
+            >
+              {block.text}
+            </p>
+          );
+        case "paragraph":
+          return (
+            <p
+              key={block.id}
+              className="dasti-proposal-document__paragraph"
+              data-proposal-block
+            >
+              {block.text}
+            </p>
+          );
+        case "closing":
+          return (
+            <div
+              key={block.id}
+              className="dasti-proposal-document__closing"
+              data-proposal-block
+            >
+              {block.signOff ? (
+                <p className="dasti-proposal-document__signoff">
+                  {block.signOff}
+                </p>
+              ) : null}
+              {block.signatureName ? (
+                <p className="dasti-proposal-document__signature">
+                  {block.signatureName}
+                </p>
+              ) : null}
+            </div>
+          );
+      }
+    },
+    [],
+  );
+
+  const resolvedPageGroups =
+    pageGroups.length > 0
+      ? pageGroups
+      : documentBlocks.length > 0
+        ? [documentBlocks.map((_, index) => index)]
+        : [[]];
 
   return (
     <div
@@ -362,62 +642,94 @@ export function ProposalDocumentRenderer({
           "--proposal-document-letter-spacing":
             documentTypography.letterSpacing ?? "0em",
           "--proposal-document-line-height": String(documentTypography.lineHeight),
+          "--proposal-document-page-gap": `${pageGapPx}px`,
         } as React.CSSProperties
       }
     >
-      <div ref={pageRef} className="dasti-proposal-document__page" data-fit="0">
+      <div className="dasti-proposal-document__measurement" aria-hidden="true">
+        <div
+          ref={measurementPageRef}
+          className="dasti-proposal-document__page"
+          data-fit="0"
+        >
+          <aside className="dasti-proposal-document__rail">
+            <p className="dasti-proposal-document__eyebrow">
+              {templateDefinition.shortLabel}
+            </p>
+            {resolvedRailTitle ? (
+              <h4 className="dasti-proposal-document__title">{resolvedRailTitle}</h4>
+            ) : null}
+            {resolvedRailMeta ? (
+              <p className="dasti-proposal-document__meta">{resolvedRailMeta}</p>
+            ) : null}
+          </aside>
+
+          <div ref={measurementBodyRef} className="dasti-proposal-document__body">
+            {documentBlocks.length > 0 ? (
+              documentBlocks.map((block) => renderDocumentBlock(block))
+            ) : (
+              <div
+                className="dasti-proposal-document__raw-body"
+                data-proposal-block
+              >
+                {stripInlineProposalMarkdown(parsedDocument.rawBody || content)}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+      {resolvedPageGroups.map((pageGroup, pageIndex) => {
+        const isContinuationPage = pageIndex > 0;
+        const pageBlocks =
+          pageGroup.length > 0
+            ? pageGroup.map((blockIndex) => documentBlocks[blockIndex]).filter(Boolean)
+            : [];
+
+        return (
+          <div
+            key={`proposal-page-${pageIndex}`}
+            ref={pageIndex === 0 && resolvedPageGroups.length === 1 ? pageRef : null}
+            className={[
+              "dasti-proposal-document__page",
+              isContinuationPage ? "dasti-proposal-document__page--continuation" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            data-fit="0"
+          >
         <aside className="dasti-proposal-document__rail">
           <p className="dasti-proposal-document__eyebrow">
             {templateDefinition.shortLabel}
           </p>
-          {resolvedRailTitle ? (
+          {!isContinuationPage && resolvedRailTitle ? (
             <h4 className="dasti-proposal-document__title">{resolvedRailTitle}</h4>
           ) : null}
-          {resolvedRailMeta ? (
+          {!isContinuationPage && resolvedRailMeta ? (
             <p className="dasti-proposal-document__meta">{resolvedRailMeta}</p>
           ) : null}
         </aside>
 
-        <div ref={bodyRef} className="dasti-proposal-document__body">
-          {parsedDocument.salutation ? (
-            <p className="dasti-proposal-document__salutation">
-              {parsedDocument.salutation}
-            </p>
-          ) : null}
-
-          {parsedDocument.paragraphs.length > 0 ? (
-            parsedDocument.paragraphs.map((paragraph, index) => (
-              <p
-                key={`${index}-${paragraph.slice(0, 32)}`}
-                className="dasti-proposal-document__paragraph"
-              >
-                {paragraph}
-              </p>
-            ))
-          ) : (
+        <div
+          ref={pageIndex === 0 && resolvedPageGroups.length === 1 ? bodyRef : null}
+          className="dasti-proposal-document__body"
+        >
+          {pageBlocks.length > 0 ? (
+            pageBlocks.map((block) => renderDocumentBlock(block))
+          ) : pageIndex === 0 ? (
             <div className="dasti-proposal-document__raw-body">
               {stripInlineProposalMarkdown(parsedDocument.rawBody || content)}
             </div>
-          )}
-
-          {parsedDocument.signOff || parsedDocument.signatureName ? (
-            <div className="dasti-proposal-document__closing">
-              {parsedDocument.signOff ? (
-                <p className="dasti-proposal-document__signoff">
-                  {parsedDocument.signOff}
-                </p>
-              ) : null}
-              {parsedDocument.signatureName ? (
-                <p className="dasti-proposal-document__signature">
-                  {parsedDocument.signatureName}
-                </p>
-              ) : null}
-            </div>
           ) : null}
         </div>
-      </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-export { parseProposalDocumentContent };
+export {
+  buildProposalDocumentBlocks,
+  paginateMeasuredProposalBlocks,
+  parseProposalDocumentContent,
+};

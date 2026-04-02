@@ -517,7 +517,7 @@ describe("ProposalForge workbench layout", () => {
     expect(outputShell?.style.width).toBe("min(100%, 560px)");
   });
 
-  it("orders compose output actions as regenerate, save, delete, then copy", () => {
+  it("orders compose output actions as save, delete, then copy", () => {
     window.localStorage.setItem(
       "dasti:proposal-output-draft:v1",
       JSON.stringify({
@@ -568,7 +568,6 @@ describe("ProposalForge workbench layout", () => {
         button.getAttribute("data-toolbar-tooltip"),
     );
     expect(buttonLabels).toEqual([
-      "Refine proposal",
       "Save proposal to library",
       "Delete",
       "Copy",
