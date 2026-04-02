@@ -1,6 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
-import { Check, ChevronDown, FileText, GripHorizontal, X } from "@/lib/icons";
+import {
+  Check,
+  ChevronDown,
+  FileText,
+  GripHorizontal,
+  Pencil,
+  X,
+} from "@/lib/icons";
 import { useNavigate } from "react-router-dom";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import SectionComponent from "./cv-editor/Section";
@@ -50,7 +57,6 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
     currentCvId,
     loadCv,
     isLoading,
-    isDirty,
     reorderSections,
     addSection,
     createNewCv,
@@ -700,22 +706,6 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
 
       {!isLoading && currentCv && (
         <div>
-          {/* ── CV title ────────────────────────────────────── */}
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-            <button
-              type="button"
-              className="text-left text-lg font-semibold text-foreground [transition:color_.12s_var(--ez)] hover:text-foreground/80 focus:outline-none focus:[box-shadow:0_0_0_3px_var(--fr)] rounded-sm"
-              onClick={() => setIsRenameDialogOpen(true)}
-              title="Rename CV"
-              aria-label="Rename CV"
-            >
-              {currentCv.title}
-            </button>
-            <span className="sr-only" aria-live="polite" role="status">
-              {isDirty ? "Saving" : "Saved"}
-            </span>
-          </div>
-
           <div
             className="mb-4 dasti-cluster"
             style={
@@ -851,6 +841,16 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
               }}
               renderAs="dropdown"
             />
+
+            <button
+              type="button"
+              className="dasti-icon-button"
+              onClick={() => setIsRenameDialogOpen(true)}
+              aria-label="Rename resume"
+              title="Rename resume"
+            >
+              <Pencil size={14} strokeWidth={1.8} aria-hidden />
+            </button>
           </div>
 
           <CvRenameDialog

@@ -1,6 +1,7 @@
 import { mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { PROPOSAL_TEMPLATE_IDS } from "./lib/proposals/renderTemplates";
+import { listProfilesForClerk } from "./lib/userProfiles";
 
 const proposalVoicePresetChoice = v.union(
   v.literal("signature"),
@@ -149,16 +150,12 @@ export default mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
 
-    const user = await ctx.db
-      .query("userProfiles")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
-      .unique();
-
-    if (!user) throw new Error("User not found");
+    const ownedProfiles = await listProfilesForClerk(ctx, identity.subject);
+    const ownedProfileIds = new Set(ownedProfiles.map((profile) => String(profile._id)));
 
     const proposal = await ctx.db.get(args.id);
     if (!proposal) throw new Error("Proposal not found");
-    if (proposal.userId !== user._id)
+    if (!ownedProfileIds.has(String(proposal.userId)))
       throw new Error("Not authorized to update this proposal");
 
     const hasTitlePatch = typeof args.title === "string";

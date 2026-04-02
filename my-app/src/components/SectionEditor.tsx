@@ -64,7 +64,10 @@ import {
 } from "../utils/cv/renderGuards";
 import { docToPlainText } from "./remirror-editor/utils/text";
 import { deepEqual } from "../utils/deepEqual";
-import { getDomSelectionState } from "../lib/editor-ai-selection";
+import {
+  getDomSelectionState,
+  isInlineAiToolbarActiveElement,
+} from "../lib/editor-ai-selection";
 import { useToast } from "./ui/toast";
 
 /**
@@ -98,7 +101,7 @@ const LANGUAGE_DOT_LEVELS: Array<{ value: Level; label: string }> = [
 
 type InlineEditorSelectionState = {
   text: string;
-  anchor: { left: number; top: number };
+  anchor: { left: number; top: number; bottom: number };
   from: number;
   to: number;
 };
@@ -1185,6 +1188,9 @@ export default function SectionEditor({
       const nextSelection = getDomSelectionState(view?.dom as HTMLElement | null);
 
       if (!nextSelection || !selection || selection.empty) {
+        if (isInlineAiToolbarActiveElement()) {
+          return;
+        }
         setInlineSelectionState(null);
         return;
       }

@@ -1,25 +1,14 @@
 import React from "react";
+import { LayoutGroup, motion } from "framer-motion";
 import { BodyPortal } from "@/components/ui/body-portal";
-import { Loader2 } from "@/lib/icons";
+import { Loader2, SendHorizontal, Wand2 } from "@/lib/icons";
 
 export const INLINE_AI_ACTIONS = [
   {
     id: "make_human",
-    label: "Make It Human",
+    label: "Rewrite",
     instruction:
       "Make this selection sound more human and natural while staying credible and professional.",
-  },
-  {
-    id: "make_clearer",
-    label: "Make It Clearer",
-    instruction:
-      "Make this selection clearer, easier to scan, and more direct without changing its meaning.",
-  },
-  {
-    id: "make_persuasive",
-    label: "Make It Persuasive",
-    instruction:
-      "Make this selection more persuasive and convincing without exaggerating or inventing facts.",
   },
   {
     id: "shorten",
@@ -29,22 +18,44 @@ export const INLINE_AI_ACTIONS = [
   },
   {
     id: "lengthen",
-    label: "Make It Longer",
+    label: "Expand",
     instruction:
       "Make this selection a little longer and fuller while keeping the same core meaning.",
   },
   {
+    id: "make_clearer",
+    label: "Clarify",
+    instruction:
+      "Make this selection clearer, easier to scan, and more direct without changing its meaning.",
+  },
+  {
+    id: "make_persuasive",
+    label: "Strengthen",
+    instruction:
+      "Make this selection more persuasive and convincing without exaggerating or inventing facts.",
+  },
+  {
     id: "fix_grammar",
-    label: "Fix Grammar",
+    label: "Fix",
     instruction:
       "Fix grammar, spelling, punctuation, and phrasing issues in this selection.",
   },
+  {
+    id: "ask",
+    label: "Ask",
+    instruction: "",
+  },
 ] as const;
 
-export type InlineAiActionId = (typeof INLINE_AI_ACTIONS)[number]["id"] | "custom";
+const DEFAULT_ACTION_ID = "make_human";
+const MOTION_EASE = [0.22, 1, 0.36, 1] as const;
+
+export type InlineAiActionId =
+  | (typeof INLINE_AI_ACTIONS)[number]["id"]
+  | "custom";
 
 type FloatingAiToolbarProps = {
-  anchor: { left: number; top: number } | null;
+  anchor: { left: number; top: number; bottom?: number } | null;
   open: boolean;
   isLoading?: boolean;
   pendingActionId?: InlineAiActionId | null;
@@ -60,7 +71,8 @@ export function FloatingAiToolbar({
   onClose,
   onRunAction,
 }: FloatingAiToolbarProps) {
-  const [isCustomOpen, setIsCustomOpen] = React.useState(false);
+  const [activeActionId, setActiveActionId] =
+    React.useState<InlineAiActionId>(DEFAULT_ACTION_ID);
   const [customInstruction, setCustomInstruction] = React.useState("");
   const [position, setPosition] = React.useState<{
     left: number;
@@ -76,7 +88,7 @@ export function FloatingAiToolbar({
 
     const panel = panelRef.current;
     const margin = 16;
-    const gap = 8;
+    const gap = 10;
     const width = panel.offsetWidth;
     const height = panel.offsetHeight;
     const viewportLeft = window.scrollX + margin;
@@ -88,15 +100,14 @@ export function FloatingAiToolbar({
       Math.min(Math.max(value, min), Math.max(min, max));
 
     const maxLeft = viewportRight - width;
-    let left = clamp(anchor.left + 2, viewportLeft, maxLeft);
-
     const maxTop = viewportBottom - height;
-    let top = anchor.top + gap;
-    let placement: "above" | "below" = "below";
+    let left = clamp(anchor.left - width / 2, viewportLeft, maxLeft);
+    let top = anchor.top - height - gap;
+    let placement: "above" | "below" = "above";
 
-    if (top > maxTop) {
-      top = anchor.top - height - gap;
-      placement = "above";
+    if (top < viewportTop) {
+      top = (anchor.bottom ?? anchor.top) + gap;
+      placement = "below";
     }
 
     top = clamp(top, viewportTop, maxTop);
@@ -107,11 +118,19 @@ export function FloatingAiToolbar({
 
   React.useEffect(() => {
     if (!open) {
-      setIsCustomOpen(false);
+      setActiveActionId(DEFAULT_ACTION_ID);
       setCustomInstruction("");
       setPosition(null);
     }
   }, [open]);
+
+  React.useEffect(() => {
+    if (pendingActionId) {
+      setActiveActionId(
+        pendingActionId === "custom" ? "ask" : pendingActionId,
+      );
+    }
+  }, [pendingActionId]);
 
   React.useLayoutEffect(() => {
     if (!open || !anchor) {
@@ -129,7 +148,7 @@ export function FloatingAiToolbar({
       window.removeEventListener("resize", update);
       window.removeEventListener("scroll", update, true);
     };
-  }, [anchor, isCustomOpen, open, updatePosition]);
+  }, [anchor, open, updatePosition]);
 
   React.useEffect(() => {
     if (!open) return undefined;
@@ -154,112 +173,165 @@ export function FloatingAiToolbar({
     };
   }, [onClose, open]);
 
+  const handlePresetAction = React.useCallback(
+    (action: (typeof INLINE_AI_ACTIONS)[number]) => {
+      if (action.id === "ask") {
+        setActiveActionId((current) =>
+          current === "ask" ? DEFAULT_ACTION_ID : "ask",
+        );
+        return;
+      }
+
+      setActiveActionId(action.id);
+      onRunAction(action.id, action.instruction);
+    },
+    [onRunAction],
+  );
+
   if (!open || !anchor) return null;
 
-  const isCustomLoading = isLoading && pendingActionId === "custom";
+  const isAskOpen = activeActionId === "ask";
+  const isPromptLoading = isLoading && pendingActionId === "custom";
+  const promptPlaceholder = "Tell AI what to change";
 
   return (
     <BodyPortal>
-      <div
+      <motion.div
         ref={panelRef}
         className="dasti-inline-ai-toolbar"
-        data-placement={position?.placement ?? "below"}
+        data-inline-ai-toolbar="true"
+        data-placement={position?.placement ?? "above"}
         role="toolbar"
-        aria-label="Selection rewrite tools"
+        aria-label="Selected text actions"
         style={{
           position: "absolute",
           left: position?.left ?? anchor.left,
           top: position?.top ?? anchor.top,
           zIndex: 11000,
         }}
+        initial={{
+          opacity: 0,
+          scale: 0.985,
+          y: position?.placement === "below" ? -6 : -10,
+        }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ duration: 0.22, ease: MOTION_EASE }}
+        onPointerDownCapture={(event) => {
+          const target = event.target as HTMLElement | null;
+          if (
+            target?.closest(
+              "input, textarea, select, [contenteditable='true']",
+            )
+          ) {
+            return;
+          }
+
+          event.preventDefault();
+        }}
       >
-        <div className="dasti-inline-ai-toolbar__eyebrow">
-          Rewrite Selection
-        </div>
-        <div className="dasti-inline-ai-toolbar__actions">
-          {INLINE_AI_ACTIONS.map((action) => {
-            const isActionLoading = isLoading && pendingActionId === action.id;
-            return (
-              <button
-                key={action.id}
-                type="button"
-                className={
-                  isActionLoading
-                    ? "dasti-inline-ai-toolbar__action dasti-inline-ai-toolbar__action--pending"
-                    : "dasti-inline-ai-toolbar__action"
-                }
-                onClick={() => onRunAction(action.id, action.instruction)}
-                disabled={isLoading}
-                aria-busy={isActionLoading || undefined}
-              >
-                <span className="dasti-inline-ai-toolbar__action-label">
-                  {action.label}
-                </span>
-                {isActionLoading ? (
-                  <Loader2
-                    size={12}
-                    strokeWidth={1.8}
-                    aria-hidden="true"
-                    className="dasti-inline-ai-toolbar__action-spinner animate-spin"
-                  />
-                ) : null}
-              </button>
-            );
-          })}
-          <button
-            type="button"
-            className={
-              isCustomOpen
-                ? "dasti-inline-ai-toolbar__action dasti-inline-ai-toolbar__action--custom dasti-inline-ai-toolbar__action--active"
-                : "dasti-inline-ai-toolbar__action dasti-inline-ai-toolbar__action--custom"
-            }
-            onClick={() => setIsCustomOpen((current) => !current)}
-            disabled={isLoading}
-          >
-            Ask AI
-          </button>
+        <div className="dasti-inline-ai-toolbar__shadow" aria-hidden="true" />
+        <div className="dasti-inline-ai-toolbar__ribbon dasti-inline-ai-toolbar__ribbon--actions">
+          <LayoutGroup id="inline-ai-toolbar-actions">
+            <div className="dasti-inline-ai-toolbar__actions">
+              {INLINE_AI_ACTIONS.map((action) => {
+                const isActionLoading = isLoading && pendingActionId === action.id;
+                const isActive = activeActionId === action.id;
+                return (
+                  <button
+                    key={action.id}
+                    type="button"
+                    className={
+                      isActionLoading
+                        ? "dasti-inline-ai-toolbar__action dasti-inline-ai-toolbar__action--pending"
+                        : "dasti-inline-ai-toolbar__action"
+                    }
+                    onClick={() => handlePresetAction(action)}
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                    }}
+                    disabled={isLoading}
+                    aria-busy={isActionLoading || undefined}
+                    aria-pressed={isActive}
+                  >
+                    {isActive ? (
+                      <motion.span
+                        layoutId="dasti-inline-ai-toolbar-pill"
+                        className="dasti-inline-ai-toolbar__action-pill"
+                        transition={{ duration: 0.18, ease: MOTION_EASE }}
+                      />
+                    ) : null}
+                    <span className="dasti-inline-ai-toolbar__action-label">
+                      {action.label}
+                    </span>
+                    {isActionLoading ? (
+                      <Loader2
+                        size={12}
+                        strokeWidth={1.8}
+                        aria-hidden="true"
+                        className="dasti-inline-ai-toolbar__action-spinner animate-spin"
+                      />
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          </LayoutGroup>
         </div>
 
-        {isCustomOpen ? (
-          <div className="dasti-inline-ai-toolbar__prompt">
-            <input
-              type="text"
-              value={customInstruction}
-              onChange={(event) => setCustomInstruction(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && customInstruction.trim()) {
-                  event.preventDefault();
-                  onRunAction("custom", customInstruction.trim());
-                }
-              }}
-              placeholder="Tell AI what to change"
-              className="dasti-field dasti-field--sm dasti-inline-ai-toolbar__prompt-field"
-              disabled={isLoading}
-            />
+        {isAskOpen ? (
+          <motion.div
+            className="dasti-inline-ai-toolbar__ribbon dasti-inline-ai-toolbar__ribbon--prompt"
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.18, ease: MOTION_EASE }}
+          >
+            <label className="dasti-inline-ai-toolbar__prompt-shell">
+              <span className="dasti-inline-ai-toolbar__prompt-icon" aria-hidden="true">
+                <Wand2 size={15} strokeWidth={1.7} />
+              </span>
+              <span className="sr-only">Ask AI</span>
+              <input
+                type="text"
+                value={customInstruction}
+                onChange={(event) => setCustomInstruction(event.target.value)}
+                onFocus={() => setActiveActionId("ask")}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && customInstruction.trim()) {
+                    event.preventDefault();
+                    onRunAction("custom", customInstruction.trim());
+                  }
+                }}
+                placeholder={promptPlaceholder}
+                className="dasti-inline-ai-toolbar__prompt-field"
+                disabled={isLoading}
+              />
+            </label>
+
             <button
               type="button"
-              className="dasti-inline-ai-toolbar__apply"
+              className="dasti-inline-ai-toolbar__apply dasti-inline-ai-toolbar__apply--icon"
               onClick={() => onRunAction("custom", customInstruction.trim())}
+              onMouseDown={(event) => {
+                event.preventDefault();
+              }}
               disabled={isLoading || !customInstruction.trim()}
-              aria-busy={isCustomLoading || undefined}
+              aria-busy={isPromptLoading || undefined}
+              aria-label={isPromptLoading ? "Sending request" : "Send request"}
             >
-              {isCustomLoading ? (
-                <>
-                  <Loader2
-                    size={13}
-                    strokeWidth={1.8}
-                    aria-hidden="true"
-                    className="animate-spin"
-                  />
-                  Asking...
-                </>
+              {isPromptLoading ? (
+                <Loader2
+                  size={15}
+                  strokeWidth={1.8}
+                  aria-hidden="true"
+                  className="animate-spin"
+                />
               ) : (
-                "Ask AI"
+                <SendHorizontal size={15} strokeWidth={1.8} aria-hidden="true" />
               )}
             </button>
-          </div>
+          </motion.div>
         ) : null}
-      </div>
+      </motion.div>
     </BodyPortal>
   );
 }

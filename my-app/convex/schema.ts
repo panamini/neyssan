@@ -271,6 +271,7 @@ export default defineSchema({
         filename: v.optional(v.string()),
       }),
     ),
+    cvDocument: v.optional(v.any()),
 
     // Fields used by upsert logic
     idempotencyKeys: v.optional(v.array(v.string())),

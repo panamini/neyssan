@@ -19,7 +19,11 @@ import { api } from "../../convex/_generated/api";
 import { convexClient } from "../lib/convex-client";
 import type { CvDocument } from "../types/cvDocument";
 import dbg from "../lib/cv-debug";
-import { parseCvDocumentStrict } from "../schemas/cvDocument.schema";
+import {
+  parseCvDocumentStrict,
+  safeParseCvDocument,
+} from "../schemas/cvDocument.schema";
+import { mapProfileToCvDocument } from "./profile-mapper";
 import {
   getLegacyLocalCvDocumentStorageKey,
   getLocalCvDocumentStorageKey,
@@ -77,6 +81,25 @@ function deserialize(payload: string | null): CvDocument | null {
   }
 }
 
+export function mapPersistedProfileToCvDocument(
+  rawProfile: Record<string, unknown> | null | undefined,
+  profileId: string,
+): CvDocument | null {
+  if (!rawProfile || typeof rawProfile !== "object") {
+    return null;
+  }
+
+  const embeddedDocument = rawProfile.cvDocument;
+  if (embeddedDocument && typeof embeddedDocument === "object") {
+    const embeddedResult = safeParseCvDocument(embeddedDocument);
+    if (embeddedResult.ok) {
+      return embeddedResult.value;
+    }
+  }
+
+  return mapProfileToCvDocument(rawProfile, profileId);
+}
+
 /* -------------------- ConvexStorageAdapter -------------------- */
 
 export class ConvexStorageAdapter {
@@ -110,6 +133,7 @@ export class ConvexStorageAdapter {
       // Keep other allowed keys (source, importedAt, confidence, filename)
       backendPayload.metadata = md;
     }
+    backendPayload.cvDocument = cv;
 
     // Instrument: record metadata keys and short stack to in-app debug stream before mutation
     try {
@@ -152,16 +176,22 @@ export class ConvexStorageAdapter {
 
     // Fallback: public Convex query
     try {
-      const prof = await convexClient.query(api.profilesPublic.get);
+      const prof = await convexClient.query(api.profilesPublic.getByProfileId, {
+        profileId: id,
+      });
       if (prof) {
-        try {
-          // Validate and map Convex profile -> CvDocument using schema
-          const mapped = parseCvDocumentStrict(prof as unknown);
-          // Cache locally
-          if (hasLocalStorage()) writeLocalCvCache(mapped.id, serialize(mapped));
-          return mapped;
-        } catch {
-          // invalid mapping, ignore
+        const mapped = mapPersistedProfileToCvDocument(
+          prof as Record<string, unknown>,
+          id,
+        );
+        if (mapped) {
+          try {
+            parseCvDocumentStrict(mapped);
+            if (hasLocalStorage()) writeLocalCvCache(mapped.id, serialize(mapped));
+            return mapped;
+          } catch {
+            // invalid mapping, ignore
+          }
         }
       }
     } catch {
@@ -213,13 +243,14 @@ export function useConvexStorageAdapter(): ConvexStorageAdapter {
   const patchMutation = useMutation(api.profiles.patch) as unknown as (args: { profileId: string; patch: any }) => Promise<any>;
   const loadFn = useCallback(async (_profileId: string): Promise<CvDocument | null> => {
     try {
-      const prof = await convexClient.query(api.profilesPublic.get);
+      const prof = await convexClient.query(api.profilesPublic.getByProfileId, {
+        profileId: _profileId,
+      });
       if (!prof) return null;
-      try {
-        return parseCvDocumentStrict(prof as unknown);
-      } catch {
-        return null;
-      }
+      return mapPersistedProfileToCvDocument(
+        prof as Record<string, unknown>,
+        _profileId,
+      );
     } catch {
       return null;
     }
