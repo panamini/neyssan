@@ -40,6 +40,7 @@ import FloatingAiToolbar, {
 import {
   getDomSelectionState,
   isInlineAiToolbarActiveElement,
+  isPrimaryPointerPressed,
 } from "../../lib/editor-ai-selection";
 
 type UiPatch = Partial<{
@@ -378,6 +379,9 @@ const RichEditor = forwardRef<
 
     selectionDebounceRef.current = window.setTimeout(() => {
       selectionDebounceRef.current = null;
+      if (isPrimaryPointerPressed()) {
+        return;
+      }
       const view = (manager as any)?.view;
       const selection = view?.state?.selection;
       const nextSelection = getDomSelectionState(view?.dom as HTMLElement | null);
@@ -402,10 +406,15 @@ const RichEditor = forwardRef<
     const handleSelectionChange = () => {
       scheduleSelectionCheck();
     };
+    const handlePointerUp = () => {
+      scheduleSelectionCheck();
+    };
 
     document.addEventListener("selectionchange", handleSelectionChange);
+    document.addEventListener("pointerup", handlePointerUp);
     return () => {
       document.removeEventListener("selectionchange", handleSelectionChange);
+      document.removeEventListener("pointerup", handlePointerUp);
     };
   }, [scheduleSelectionCheck]);
 
