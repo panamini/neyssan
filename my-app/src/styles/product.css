@@ -2056,6 +2056,14 @@
   );
   z-index: 18;
   pointer-events: none;
+  transition:
+    opacity var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
+}
+
+.dasti-proposal-character-badge-wrap[data-overlap-hidden="true"] {
+  opacity: 0;
+  transform: translate3d(0, 6px, 0);
 }
 
 .dasti-proposal-character-badge {
@@ -3003,6 +3011,79 @@
   background: var(--proposal-document-paper);
 }
 
+.dasti-proposal-sheet__body--document-editor .dasti-document-stage-chassis {
+  padding-block-start: var(--document-viewer-bleed-block);
+  padding-inline: var(--document-viewer-bleed-inline);
+  padding-block-end: var(--document-viewer-bleed-block);
+}
+
+.dasti-proposal-sheet__body--document-editor
+  .dasti-proposal-sheet__preview-page--editable {
+  width: 100%;
+}
+
+.dasti-proposal-sheet__body--document-editor .dasti-proposal-editor-page__inner {
+  width: 100%;
+  min-width: 0;
+  padding-block: 0;
+  padding-inline: var(--proposal-output-editor-inline-padding);
+}
+
+.dasti-proposal-sheet__body--document-editor
+  .dasti-proposal-editor-page__inner::before {
+  inset: var(--proposal-output-editor-guide-inset);
+}
+
+.dasti-proposal-editor-page__textarea {
+  padding-inline: 0;
+  padding-block-start: var(--proposal-output-editor-block-start);
+  padding-block-end: var(--proposal-output-editor-block-end);
+  box-sizing: border-box;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+}
+
+.dasti-proposal-sheet__body--document-editor .dasti-proposal-editor-page__textarea {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    rgb(0 0 0 / calc(1 - var(--proposal-scroll-top-strength))) 0,
+    rgb(0 0 0 / 1)
+      calc(
+        var(--proposal-output-editor-fade-height) *
+          var(--proposal-scroll-top-strength)
+      ),
+    rgb(0 0 0 / 1)
+      calc(
+        100% -
+          (
+            var(--proposal-output-editor-fade-height) *
+              var(--proposal-scroll-bottom-strength)
+          )
+      ),
+    rgb(0 0 0 / calc(1 - var(--proposal-scroll-bottom-strength))) 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    rgb(0 0 0 / calc(1 - var(--proposal-scroll-top-strength))) 0,
+    rgb(0 0 0 / 1)
+      calc(
+        var(--proposal-output-editor-fade-height) *
+          var(--proposal-scroll-top-strength)
+      ),
+    rgb(0 0 0 / 1)
+      calc(
+        100% -
+          (
+            var(--proposal-output-editor-fade-height) *
+              var(--proposal-scroll-bottom-strength)
+          )
+      ),
+    rgb(0 0 0 / calc(1 - var(--proposal-scroll-bottom-strength))) 100%
+  );
+}
+
 .dasti-proposal-sheet__scroll--letter {
   padding-top: max(var(--document-shell-padding-block), var(--space-4));
 }
@@ -3515,9 +3596,11 @@
   box-shadow: var(--shadow-sm);
   color: var(--tm2);
   transition:
-    transform 380ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    box-shadow 380ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    background-color 220ms ease,
+    transform var(--proposal-submit-surface-duration)
+      var(--proposal-submit-surface-ease),
+    box-shadow var(--proposal-submit-surface-duration)
+      var(--proposal-submit-surface-ease),
+    background-color var(--proposal-submit-state-duration) var(--ease-standard),
     border-color 0.12s var(--ez),
     color 0.12s var(--ez),
     opacity 0.18s var(--ez);
@@ -3534,12 +3617,19 @@
 .dasti-proposal-submit-token .dasti-proposal-submit__square {
   fill: none;
   stroke: currentColor;
-  stroke-width: var(--dasti-proposal-submit-stroke-width, 8) !important;
+  stroke-width: var(
+    --dasti-proposal-submit-stroke-width,
+    var(--proposal-submit-stroke-width-md)
+  ) !important;
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
   transition:
-    stroke-dashoffset var(--dasti-proposal-submit-draw-duration, 1080ms)
+    stroke-dashoffset
+      var(
+        --dasti-proposal-submit-draw-duration,
+        var(--proposal-submit-draw-duration)
+      )
       cubic-bezier(0.2, 0.78, 0.18, 1),
     opacity 0.16s linear;
 }
@@ -3555,7 +3645,10 @@
   stroke-dashoffset: 0;
   opacity: 0;
   animation: dasti-proposal-submit-flow
-    var(--dasti-proposal-submit-spinner-duration, 1450ms) linear infinite;
+    var(
+      --dasti-proposal-submit-spinner-duration,
+      var(--proposal-submit-spinner-duration)
+    ) linear infinite;
 }
 
 .dasti-proposal-submit__square {
@@ -3563,6 +3656,18 @@
   stroke-dashoffset: 100;
   opacity: 0;
   transition-delay: 0ms;
+}
+
+.dasti-proposal-submit--composer {
+  --dasti-proposal-submit-button-size: var(--proposal-submit-size-md);
+  --dasti-proposal-submit-radius: var(--proposal-submit-radius-md);
+  --dasti-proposal-submit-icon-size: var(--proposal-submit-icon-size-md);
+  --dasti-proposal-submit-stroke-width: var(--proposal-submit-stroke-width-md);
+  --dasti-proposal-submit-phase-gap: var(--proposal-submit-phase-gap);
+  --dasti-proposal-submit-spinner-duration: var(
+    --proposal-submit-spinner-duration
+  );
+  --dasti-proposal-submit-draw-duration: var(--proposal-submit-draw-duration);
 }
 
 .dasti-proposal-submit--pop:hover:not(:disabled),
@@ -3651,7 +3756,10 @@
 .dasti-proposal-submit.is-done .dasti-proposal-submit__square {
   opacity: 1;
   stroke-dashoffset: 0;
-  transition-delay: var(--dasti-proposal-submit-phase-gap, 140ms);
+  transition-delay: var(
+    --dasti-proposal-submit-phase-gap,
+    var(--proposal-submit-phase-gap)
+  );
 }
 
 .dasti-proposal-submit.is-back-undrawing .dasti-proposal-submit__square {
@@ -3664,7 +3772,10 @@
 .dasti-proposal-submit.is-finishing-revealing .dasti-proposal-submit__scribble {
   opacity: 1;
   stroke-dashoffset: 0;
-  transition-delay: var(--dasti-proposal-submit-phase-gap, 140ms);
+  transition-delay: var(
+    --dasti-proposal-submit-phase-gap,
+    var(--proposal-submit-phase-gap)
+  );
 }
 
 .dasti-proposal-submit.is-spinning .dasti-proposal-submit__square,
@@ -6660,17 +6771,8 @@
 .dasti-forge-compose-toolbar-slot .dasti-compose-toolbar--collapsed,
 .dasti-forge-compose-toolbar-slot
   .dasti-compose-toolbar--collapsed
-  .dasti-compose-toolbar__collapsed-shell,
-.dasti-forge-compose-toolbar-slot
-  .dasti-compose-toolbar--collapsed
-  .dasti-compose-toolbar__collapsed-meta {
+  .dasti-compose-toolbar__collapsed-shell {
   width: 100%;
-}
-
-.dasti-forge-compose-toolbar-slot
-  .dasti-compose-toolbar--collapsed
-  .dasti-compose-toolbar__collapsed-meta {
-  justify-content: space-between;
 }
 
 .dasti-forge-panel-restore {
@@ -6738,25 +6840,29 @@
 }
 
 .dasti-proposal-brief-stage--entering {
-  animation: dasti-proposal-brief-enter 240ms cubic-bezier(0.22, 1, 0.36, 1)
-    both;
+  animation: dasti-proposal-brief-enter
+    var(--proposal-motion-brief-enter-duration)
+    var(--proposal-motion-ease-enter) both;
 }
 
 .dasti-proposal-brief-stage--exiting {
   pointer-events: none;
-  animation: dasti-proposal-brief-exit 180ms cubic-bezier(0.4, 0, 0.2, 1)
-    both;
+  animation: dasti-proposal-brief-exit
+    var(--proposal-motion-brief-exit-duration)
+    var(--proposal-motion-ease-exit) both;
 }
 
 .dasti-proposal-compose-panel-stage--entering {
-  animation: dasti-proposal-compose-stage-enter 240ms
-    cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: dasti-proposal-compose-stage-enter
+    var(--proposal-motion-compose-enter-duration)
+    var(--proposal-motion-ease-enter) both;
 }
 
 .dasti-proposal-compose-panel-stage--exiting {
   pointer-events: none;
-  animation: dasti-proposal-compose-stage-exit 180ms
-    cubic-bezier(0.4, 0, 0.2, 1) both;
+  animation: dasti-proposal-compose-stage-exit
+    var(--proposal-motion-compose-exit-duration)
+    var(--proposal-motion-ease-exit) both;
 }
 
 .dasti-proposal-compose-shell__status-heading {
@@ -7227,14 +7333,16 @@
 }
 
 .dasti-compose-toolbar--entering {
-  animation: dasti-compose-toolbar-enter var(--duration-normal)
-    var(--ease-standard) both;
+  animation: dasti-compose-toolbar-enter
+    var(--proposal-motion-toolbar-enter-duration)
+    var(--proposal-motion-ease-enter) both;
 }
 
 .dasti-compose-toolbar--exiting {
   pointer-events: none;
-  animation: dasti-compose-toolbar-exit var(--duration-fast)
-    var(--ease-standard) both;
+  animation: dasti-compose-toolbar-exit
+    var(--proposal-motion-toolbar-exit-duration)
+    var(--proposal-motion-ease-exit) both;
 }
 
 .dasti-compose-toolbar--collapsed {
@@ -7258,7 +7366,8 @@
   position: relative;
   display: inline-flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
+  width: 100%;
   min-block-size: var(--dasti-compose-toolbar-shell-min-block-size);
   padding: var(--proposal-chrome-shell-padding);
   border-radius: var(--radius-toolbar-shell);
@@ -7275,7 +7384,7 @@
 }
 
 .dasti-compose-toolbar__collapsed-shell--stack {
-  justify-content: flex-start;
+  justify-content: space-between;
 }
 
 .dasti-compose-toolbar__collapsed-meta {
@@ -7283,6 +7392,16 @@
   align-items: center;
   gap: var(--proposal-chrome-tight-gap);
   min-block-size: var(--dasti-compose-toolbar-control-block-size);
+  min-width: 0;
+  overflow: visible;
+}
+
+.dasti-compose-toolbar__collapsed-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--proposal-chrome-tight-gap);
+  margin-inline-start: auto;
   min-width: 0;
   overflow: visible;
 }
@@ -7296,6 +7415,15 @@
 }
 
 .dasti-compose-toolbar__generate-button {
+  --dasti-proposal-submit-button-size: var(--proposal-submit-size-sm);
+  --dasti-proposal-submit-radius: var(--proposal-submit-radius-sm);
+  --dasti-proposal-submit-icon-size: var(--proposal-submit-icon-size-sm);
+  --dasti-proposal-submit-stroke-width: var(--proposal-submit-stroke-width-sm);
+  --dasti-proposal-submit-phase-gap: var(--proposal-submit-phase-gap);
+  --dasti-proposal-submit-spinner-duration: var(
+    --proposal-submit-spinner-duration
+  );
+  --dasti-proposal-submit-draw-duration: var(--proposal-submit-draw-duration);
   margin-left: 0;
   box-shadow: none;
 }
@@ -7574,8 +7702,10 @@
 @keyframes dasti-compose-toolbar-enter {
   from {
     opacity: 0;
-    transform: translate3d(-10px, 0, 0) scale(0.985);
-    filter: blur(6px) saturate(0.94);
+    transform: translate3d(var(--proposal-motion-toolbar-enter-shift), 0, 0)
+      scale(var(--proposal-motion-toolbar-enter-scale));
+    filter: blur(var(--proposal-motion-enter-blur))
+      saturate(var(--proposal-motion-toolbar-enter-saturate));
   }
   to {
     opacity: 1;
@@ -7592,16 +7722,20 @@
   }
   to {
     opacity: 0;
-    transform: translate3d(-8px, 0, 0) scale(0.985);
-    filter: blur(5px) saturate(0.95);
+    transform: translate3d(var(--proposal-motion-toolbar-exit-shift), 0, 0)
+      scale(var(--proposal-motion-toolbar-exit-scale));
+    filter: blur(var(--proposal-motion-exit-blur))
+      saturate(var(--proposal-motion-toolbar-exit-saturate));
   }
 }
 
 @keyframes dasti-proposal-brief-enter {
   from {
     opacity: 0;
-    transform: translate3d(10px, 0, 0) scale(0.988);
-    filter: blur(6px) saturate(0.95);
+    transform: translate3d(var(--proposal-motion-brief-enter-shift), 0, 0)
+      scale(var(--proposal-motion-brief-enter-scale));
+    filter: blur(var(--proposal-motion-enter-blur))
+      saturate(var(--proposal-motion-brief-enter-saturate));
   }
   to {
     opacity: 1;
@@ -7618,16 +7752,20 @@
   }
   to {
     opacity: 0;
-    transform: translate3d(8px, 0, 0) scale(0.99);
-    filter: blur(5px) saturate(0.95);
+    transform: translate3d(var(--proposal-motion-brief-exit-shift), 0, 0)
+      scale(var(--proposal-motion-brief-exit-scale));
+    filter: blur(var(--proposal-motion-exit-blur))
+      saturate(var(--proposal-motion-brief-exit-saturate));
   }
 }
 
 @keyframes dasti-proposal-compose-stage-enter {
   from {
     opacity: 0;
-    transform: translate3d(12px, 0, 0) scale(0.992);
-    filter: blur(6px) saturate(0.96);
+    transform: translate3d(var(--proposal-motion-compose-enter-shift), 0, 0)
+      scale(var(--proposal-motion-compose-enter-scale));
+    filter: blur(var(--proposal-motion-enter-blur))
+      saturate(var(--proposal-motion-compose-enter-saturate));
   }
   to {
     opacity: 1;
@@ -7644,8 +7782,10 @@
   }
   to {
     opacity: 0;
-    transform: translate3d(-10px, 0, 0) scale(0.992);
-    filter: blur(5px) saturate(0.96);
+    transform: translate3d(var(--proposal-motion-compose-exit-shift), 0, 0)
+      scale(var(--proposal-motion-compose-exit-scale));
+    filter: blur(var(--proposal-motion-exit-blur))
+      saturate(var(--proposal-motion-compose-exit-saturate));
   }
 }
 

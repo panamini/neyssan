@@ -187,6 +187,16 @@ describe("ProposalComposeToolbar", () => {
     expect(
       container.querySelector(".dasti-compose-toolbar__generate-button .dasti-proposal-submit__glyph"),
     ).toBeTruthy();
+    const collapsedActions = container.querySelector(
+      ".dasti-compose-toolbar__collapsed-actions",
+    );
+    expect(collapsedActions).toBeTruthy();
+    expect(
+      collapsedActions?.querySelector(".dasti-compose-toolbar__tone-anchor"),
+    ).toBeTruthy();
+    expect(
+      collapsedActions?.querySelector(".dasti-compose-toolbar__generate-button"),
+    ).toBeTruthy();
   });
 
   it("marks compact no-collapse layouts with the stable left-anchor class", () => {

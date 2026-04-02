@@ -54,10 +54,22 @@ describe("ProposalBriefCard CSS contracts", () => {
     expect(productCss).toContain("@keyframes dasti-proposal-brief-enter {");
     expect(productCss).toContain("@keyframes dasti-proposal-compose-stage-enter {");
     expect(productCss).toContain("@keyframes dasti-compose-toolbar-enter {");
-    expect(productCss).toContain("transform: translate3d(-14px, 0, 0) scale(0.985);");
-    expect(productCss).toContain("filter: saturate(0.92) blur(6px);");
+    expect(productCss).toContain(
+      "var(--proposal-motion-toolbar-enter-shift)",
+    );
+    expect(productCss).toContain(
+      "var(--proposal-motion-toolbar-enter-scale)",
+    );
+    expect(productCss).toContain("var(--proposal-motion-enter-blur)");
+    expect(productCss).toContain(
+      "var(--proposal-motion-brief-enter-shift)",
+    );
     expect(productCss).toContain("overflow-anchor: none;");
-    expect(productCss).toContain("transform: translate3d(12px, 0, 0) scale(0.992);");
-    expect(productCss).toContain("transform: translate3d(-10px, 0, 0) scale(0.992);");
+    expect(productCss).toContain(
+      "var(--proposal-motion-compose-enter-shift)",
+    );
+    expect(productCss).toContain(
+      "var(--proposal-motion-compose-exit-shift)",
+    );
   });
 });
