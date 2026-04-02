@@ -67,6 +67,7 @@ import { deepEqual } from "../utils/deepEqual";
 import {
   getDomSelectionState,
   isInlineAiToolbarActiveElement,
+  isPrimaryPointerPressed,
 } from "../lib/editor-ai-selection";
 import { useToast } from "./ui/toast";
 
@@ -1183,6 +1184,9 @@ export default function SectionEditor({
 
     inlineSelectionDebounceRef.current = window.setTimeout(() => {
       inlineSelectionDebounceRef.current = null;
+      if (isPrimaryPointerPressed()) {
+        return;
+      }
       const view = (manager as any)?.view;
       const selection = view?.state?.selection;
       const nextSelection = getDomSelectionState(view?.dom as HTMLElement | null);
@@ -1207,10 +1211,15 @@ export default function SectionEditor({
     const handleSelectionChange = () => {
       scheduleInlineSelectionCheck();
     };
+    const handlePointerUp = () => {
+      scheduleInlineSelectionCheck();
+    };
 
     document.addEventListener("selectionchange", handleSelectionChange);
+    document.addEventListener("pointerup", handlePointerUp);
     return () => {
       document.removeEventListener("selectionchange", handleSelectionChange);
+      document.removeEventListener("pointerup", handlePointerUp);
     };
   }, [scheduleInlineSelectionCheck]);
 

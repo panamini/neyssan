@@ -40,6 +40,7 @@ import {
 import {
   getTextareaSelectionState,
   isInlineAiToolbarActiveElement,
+  isPrimaryPointerPressed,
 } from "../lib/editor-ai-selection";
 import { resolveProposalCharacterLimitSelection } from "../../convex/lib/proposals/generationControls";
 
@@ -631,6 +632,9 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
 
     selectionDebounceRef.current = window.setTimeout(() => {
       selectionDebounceRef.current = null;
+      if (isPrimaryPointerPressed()) {
+        return;
+      }
       const nextSelection = getTextareaSelectionState(editableTextareaRef.current);
       if (!nextSelection && isInlineAiToolbarActiveElement()) {
         return;
@@ -647,10 +651,15 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     const handleSelectionChange = () => {
       scheduleTextareaSelectionCheck();
     };
+    const handlePointerUp = () => {
+      scheduleTextareaSelectionCheck();
+    };
 
     document.addEventListener("selectionchange", handleSelectionChange);
+    document.addEventListener("pointerup", handlePointerUp);
     return () => {
       document.removeEventListener("selectionchange", handleSelectionChange);
+      document.removeEventListener("pointerup", handlePointerUp);
     };
   }, [isEditable, scheduleTextareaSelectionCheck]);
 

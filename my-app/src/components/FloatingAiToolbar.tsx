@@ -2,6 +2,7 @@ import React from "react";
 import { LayoutGroup, motion } from "framer-motion";
 import { BodyPortal } from "@/components/ui/body-portal";
 import { Loader2, SendHorizontal, Wand2 } from "@/lib/icons";
+import type { EditorSelectionAnchor } from "@/lib/editor-ai-selection";
 
 export const INLINE_AI_ACTIONS = [
   {
@@ -50,12 +51,87 @@ export const INLINE_AI_ACTIONS = [
 const DEFAULT_ACTION_ID = "make_human";
 const MOTION_EASE = [0.22, 1, 0.36, 1] as const;
 
+function resolveCssLength(
+  element: HTMLElement,
+  cssVariable: string,
+  fallback: number,
+): number {
+  const value = window
+    .getComputedStyle(element)
+    .getPropertyValue(cssVariable)
+    .trim();
+  const parsed = Number.parseFloat(value);
+
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function computeToolbarLeft({
+  panelWidth,
+  boundsMin,
+  boundsMax,
+  preferredCenter,
+  preferredLeftEdge,
+  preferredRightEdge,
+  selectionWidth,
+  edgePadding,
+  preferStartAlign = false,
+}: {
+  panelWidth: number;
+  boundsMin: number;
+  boundsMax: number;
+  preferredCenter: number;
+  preferredLeftEdge: number;
+  preferredRightEdge: number;
+  selectionWidth: number;
+  edgePadding: number;
+  preferStartAlign?: boolean;
+}): number {
+  const clamp = (value: number, min: number, max: number) =>
+    Math.min(Math.max(value, min), Math.max(min, max));
+  const maxLeft = boundsMax - panelWidth;
+  const centeredLeft = clamp(
+    preferredCenter - panelWidth / 2,
+    boundsMin,
+    maxLeft,
+  );
+  const startAlignedLeft = clamp(preferredLeftEdge - edgePadding, boundsMin, maxLeft);
+  const endAlignedLeft = clamp(
+    preferredRightEdge - panelWidth + edgePadding,
+    boundsMin,
+    maxLeft,
+  );
+  const shortSelection = selectionWidth <= panelWidth * 0.34;
+  const nearLeadingEdge = preferredCenter - boundsMin < panelWidth * 0.42;
+  const nearTrailingEdge = boundsMax - preferredCenter < panelWidth * 0.42;
+
+  if (preferStartAlign) {
+    if (nearTrailingEdge && !nearLeadingEdge) {
+      return endAlignedLeft;
+    }
+    return startAlignedLeft;
+  }
+
+  if (!shortSelection) {
+    return centeredLeft;
+  }
+
+  if (nearLeadingEdge && !nearTrailingEdge) {
+    return startAlignedLeft;
+  }
+
+  if (nearTrailingEdge && !nearLeadingEdge) {
+    return endAlignedLeft;
+  }
+
+  return centeredLeft;
+}
+
 export type InlineAiActionId =
   | (typeof INLINE_AI_ACTIONS)[number]["id"]
   | "custom";
 
 type FloatingAiToolbarProps = {
-  anchor: { left: number; top: number; bottom?: number } | null;
+  anchor: EditorSelectionAnchor | null;
   open: boolean;
   isLoading?: boolean;
   pendingActionId?: InlineAiActionId | null;
@@ -78,6 +154,7 @@ export function FloatingAiToolbar({
     left: number;
     top: number;
     placement: "above" | "below";
+    pointerOffset: number;
   } | null>(null);
   const panelRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -87,10 +164,12 @@ export function FloatingAiToolbar({
     }
 
     const panel = panelRef.current;
-    const margin = 16;
-    const gap = 10;
     const width = panel.offsetWidth;
     const height = panel.offsetHeight;
+    const margin = resolveCssLength(panel, "--space-3", 12);
+    const compactGap = resolveCssLength(panel, "--space-1", 4);
+    const baseGap = resolveCssLength(panel, "--space-2", compactGap * 2);
+    const controlSize = resolveCssLength(panel, "--control-md", 36);
     const viewportLeft = window.scrollX + margin;
     const viewportTop = window.scrollY + margin;
     const viewportRight = window.scrollX + window.innerWidth - margin;
@@ -99,21 +178,127 @@ export function FloatingAiToolbar({
     const clamp = (value: number, min: number, max: number) =>
       Math.min(Math.max(value, min), Math.max(min, max));
 
-    const maxLeft = viewportRight - width;
-    const maxTop = viewportBottom - height;
-    let left = clamp(anchor.left - width / 2, viewportLeft, maxLeft);
-    let top = anchor.top - height - gap;
-    let placement: "above" | "below" = "above";
+    const horizontalMin = Math.max(
+      viewportLeft,
+      (anchor.containerLeft ?? viewportLeft) + compactGap,
+    );
+    const horizontalMax = Math.min(
+      viewportRight,
+      (anchor.containerRight ?? viewportRight) - compactGap,
+    );
+    const verticalMin = Math.max(
+      viewportTop,
+      (anchor.containerTop ?? viewportTop) + compactGap,
+    );
+    const verticalMax = Math.min(
+      viewportBottom,
+      (anchor.containerBottom ?? viewportBottom) - compactGap,
+    );
 
-    if (top < viewportTop) {
-      top = (anchor.bottom ?? anchor.top) + gap;
+    const maxLeft = horizontalMax - width;
+    const maxTop = verticalMax - height;
+    const focusTop =
+      anchor.focusTop ??
+      (anchor.belowLineHeight
+        ? (anchor.bottom ?? anchor.top) - anchor.belowLineHeight
+        : anchor.top);
+    const focusBottom =
+      anchor.focusBottom ??
+      (anchor.focusLineHeight
+        ? focusTop + anchor.focusLineHeight
+        : anchor.bottom ?? anchor.top);
+    const focusLineHeight = Math.max(
+      compactGap,
+      anchor.focusLineHeight ?? anchor.belowLineHeight ?? anchor.height ?? compactGap,
+    );
+    const isBlockSelection =
+      (anchor.lineCount ?? 1) > 1 ||
+      ((anchor.height ?? 0) > focusLineHeight * 1.5);
+    const aboveLineHeight = Math.max(
+      compactGap,
+      anchor.aboveLineHeight ?? focusLineHeight,
+    );
+    const belowLineHeight = Math.max(
+      compactGap,
+      anchor.belowLineHeight ?? focusLineHeight,
+    );
+    const aboveGap = baseGap + Math.min(controlSize, aboveLineHeight);
+    const belowGap = baseGap + Math.min(controlSize, belowLineHeight);
+    const anchorTop = isBlockSelection ? anchor.top : focusTop;
+    const anchorBottom = isBlockSelection
+      ? (anchor.bottom ?? focusBottom)
+      : focusBottom;
+    const preferredAboveTop = anchorTop - height - aboveGap;
+    const preferredBelowTop = anchorBottom + belowGap;
+    const hasRoomAbove = preferredAboveTop >= verticalMin;
+    const hasRoomBelow = preferredBelowTop <= maxTop;
+    const roomAbove = anchorTop - verticalMin;
+    const roomBelow = verticalMax - anchorBottom;
+
+    let placement: "above" | "below" = hasRoomAbove
+      ? "above"
+      : hasRoomBelow
+        ? "below"
+        : roomAbove >= roomBelow
+          ? "above"
+          : "below";
+
+    let top =
+      placement === "above" ? preferredAboveTop : preferredBelowTop;
+    if (placement === "above" && top < verticalMin && hasRoomBelow) {
       placement = "below";
+      top = preferredBelowTop;
+    } else if (placement === "below" && top > maxTop && hasRoomAbove) {
+      placement = "above";
+      top = preferredAboveTop;
     }
 
-    top = clamp(top, viewportTop, maxTop);
-    left = clamp(left, viewportLeft, maxLeft);
+    const preferredCenter =
+      isBlockSelection
+        ? anchor.left
+        : anchor.focusCenter ??
+          (placement === "above"
+            ? anchor.aboveCenter ?? anchor.left
+            : anchor.belowCenter ?? anchor.left);
+    const preferredLeftEdge =
+      isBlockSelection
+        ? anchor.leftEdge ?? anchor.aboveLeft ?? anchor.left
+        : anchor.focusLeft ??
+          (placement === "above"
+            ? anchor.aboveLeft ?? anchor.leftEdge ?? anchor.left
+            : anchor.belowLeft ?? anchor.leftEdge ?? anchor.left);
+    const preferredRightEdge =
+      isBlockSelection
+        ? anchor.rightEdge ?? anchor.belowRight ?? anchor.left
+        : anchor.focusRight ??
+          (placement === "above"
+            ? anchor.aboveRight ?? anchor.rightEdge ?? anchor.left
+            : anchor.belowRight ?? anchor.rightEdge ?? anchor.left);
+    const activeSpanWidth = Math.max(
+      compactGap,
+      preferredRightEdge - preferredLeftEdge,
+    );
+    const desiredLeft = computeToolbarLeft({
+      panelWidth: width,
+      boundsMin: horizontalMin,
+      boundsMax: horizontalMax,
+      preferredCenter,
+      preferredLeftEdge,
+      preferredRightEdge,
+      selectionWidth: activeSpanWidth,
+      edgePadding: compactGap,
+      preferStartAlign: isBlockSelection,
+    });
 
-    setPosition({ left, top, placement });
+    top = clamp(top, verticalMin, maxTop);
+    const left = clamp(desiredLeft, horizontalMin, maxLeft);
+    const pointerOffset = clamp(
+      preferredCenter - left,
+      compactGap * 2,
+      width - compactGap * 2,
+    );
+
+    setPosition({ left, top, placement, pointerOffset });
   }, [anchor]);
 
   React.useEffect(() => {
@@ -207,6 +392,8 @@ export function FloatingAiToolbar({
           position: "absolute",
           left: position?.left ?? anchor.left,
           top: position?.top ?? anchor.top,
+          ["--dasti-inline-ai-toolbar-pointer-offset" as string]:
+            position ? `${position.pointerOffset}px` : "50%",
           zIndex: 11000,
         }}
         initial={{

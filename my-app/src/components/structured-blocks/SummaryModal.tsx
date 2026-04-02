@@ -31,6 +31,7 @@ import FloatingAiToolbar, {
 import {
   getDomSelectionState,
   isInlineAiToolbarActiveElement,
+  isPrimaryPointerPressed,
 } from "../../lib/editor-ai-selection";
 
 interface SummaryModalProps {
@@ -208,6 +209,9 @@ export function SummaryModal({
 
     selectionDebounceRef.current = window.setTimeout(() => {
       selectionDebounceRef.current = null;
+      if (isPrimaryPointerPressed()) {
+        return;
+      }
       const view = (manager as any)?.view;
       const selection = view?.state?.selection;
       const nextSelection = getDomSelectionState(view?.dom as HTMLElement | null);
@@ -236,10 +240,15 @@ export function SummaryModal({
     const handleSelectionChange = () => {
       scheduleSelectionCheck();
     };
+    const handlePointerUp = () => {
+      scheduleSelectionCheck();
+    };
 
     document.addEventListener("selectionchange", handleSelectionChange);
+    document.addEventListener("pointerup", handlePointerUp);
     return () => {
       document.removeEventListener("selectionchange", handleSelectionChange);
+      document.removeEventListener("pointerup", handlePointerUp);
     };
   }, [open, scheduleSelectionCheck]);
 
