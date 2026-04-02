@@ -107,7 +107,7 @@
 
   /* Typography families and weights */
   --font-heading-family: "Fraunces", serif;
-  --font-body-family: "Source Sans 3", system-ui, sans-serif;
+  --font-body-family: "Geist Variable", "Source Sans 3", system-ui, sans-serif;
   --font-mono-family: "IBM Plex Mono", source-code-pro, Menlo, Monaco, Consolas,
     monospace;
   --font-heading-weight: 600;
@@ -223,8 +223,8 @@
   --document-rail-gap: 12px;
   --document-stage-radius: clamp(12px, 1.5vw, 18px);
   --document-stage-halo: 0 0 0 1px
-      color-mix(in srgb, var(--color-border) 52%, transparent),
-    0 10px 24px color-mix(in srgb, var(--color-text) 4.2%, transparent);
+      color-mix(in srgb, var(--color-border) 48%, transparent),
+    0 2px 12px rgba(0, 0, 0, 0.06);
   --document-viewer-bleed-inline: clamp(16px, 1.8vw, 24px);
   --document-viewer-bleed-block: clamp(18px, 2.1vw, 28px);
   --document-viewer-radius: clamp(18px, 2vw, 24px);
@@ -239,7 +239,8 @@
     transparent
   );
   --document-viewer-frame-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.76),
-    0 10px 24px color-mix(in srgb, var(--color-text) 2.8%, transparent);
+    0 2px 12px rgba(0, 0, 0, 0.06),
+    0 10px 24px color-mix(in srgb, var(--color-text) 2.4%, transparent);
   --document-viewer-toolbar-block-size: calc(
     var(--hs) + (2 * (var(--space-2) - 2px)) + 2px
   );
@@ -337,7 +338,7 @@
   --proposal-compose-edge-top-shadow: none;
   --proposal-compose-edge-bottom-shadow: none;
   --proposal-compose-edge-max-opacity: 1;
-  --proposal-output-editor-inline-padding: clamp(24px, 4vw, 40px);
+  --proposal-output-editor-inline-padding: clamp(32px, 4.5vw, 48px);
   --proposal-output-editor-block-start: clamp(28px, 4vh, 44px);
   --proposal-output-editor-block-end: clamp(32px, 4.5vh, 48px);
   --proposal-output-editor-guide-inset: clamp(18px, 2.6vw, 28px);
@@ -364,9 +365,9 @@
   --app-sidebar-action-height: 30px;
   --app-sidebar-action-height-compact: 28px;
   --app-sidebar-icon-size: 16px;
-  --app-sidebar-label-size: var(--text-label-size);
-  --app-sidebar-section-size: 11px;
-  --app-sidebar-section-tracking: 0.12em;
+  --app-sidebar-label-size: 13px;
+  --app-sidebar-section-size: 10px;
+  --app-sidebar-section-tracking: 0.08em;
   --app-sidebar-section-pad: var(--space-4) var(--space-2) var(--space-3);
   --app-sidebar-section-pad-compact: var(--space-3) var(--space-2)
     var(--space-2);
@@ -517,19 +518,19 @@
   --section-hover-lift: -1px;
 }
 
-/* --- §6 Mode Dark — Graphite Kaki Tellurique -------------- */
+/* --- §6 Mode Dark — 3-tier neutral dark ------------------- */
 .dark {
   color-scheme: dark;
-  --bg: hsl(80, 5%, 7%);
-  --sf1: hsl(80, 5%, 11%);
-  --sf2: hsl(78, 5%, 16%);
-  --sfr: hsl(75, 5%, 19%);
+  --bg: #141414;
+  --sf1: #1A1A1A;
+  --sf2: #1C1C1C;
+  --sfr: #1F1F1F;
   --ti: hsl(46, 12%, 86%);
   --tm2: hsl(44, 8%, 60%);
   --tg2: hsl(42, 6%, 38%);
-  --border-soft: hsla(46, 12%, 86%, 0.1);
-  --border-field: hsla(46, 12%, 86%, 0.16);
-  --border-strong: hsla(46, 12%, 86%, 0.22);
+  --border-soft: hsla(0, 0%, 100%, 0.10);
+  --border-field: hsla(0, 0%, 100%, 0.16);
+  --border-strong: hsla(0, 0%, 100%, 0.22);
 
   /* §6 Sémantiques dark — sat ≤26% Itten */
   --ok: hsl(152, 22%, 56%);
@@ -600,9 +601,9 @@
   );
 
   /* Frost */
-  --frost-bg: hsla(75, 5%, 19%, 0.82);
-  --frost-surface: hsla(75, 5%, 19%, 0.7);
-  --frost-border: hsla(46, 12%, 86%, 0.12);
+  --frost-bg: hsla(0, 0%, 12%, 0.82);
+  --frost-surface: hsla(0, 0%, 12%, 0.7);
+  --frost-border: hsla(0, 0%, 100%, 0.10);
   --frost-blur: 18px;
   --frost-saturate: 130%;
   --sidebar-hover-bg: linear-gradient(
@@ -644,7 +645,7 @@
   );
   --document-viewer-frame-border: var(--border-field);
   --document-viewer-frame-shadow: inset 0 1px 0
-      color-mix(in srgb, white 5%, transparent),
+      hsla(0, 0%, 100%, 0.10),
     0 14px 26px -24px hsla(0, 0%, 0%, 0.8);
   --paper: #faf9f5;
   --proposal-document-paper: var(--paper);

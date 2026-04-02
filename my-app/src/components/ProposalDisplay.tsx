@@ -17,9 +17,7 @@ import {
   getProposalGenerationFallbackDisclosureMessage,
   type ProposalGenerationFallbackInfo,
 } from "../lib/proposal-generation-ui";
-import FloatingAiToolbar, {
-  type InlineAiActionId,
-} from "./FloatingAiToolbar";
+import FloatingAiToolbar, { type InlineAiActionId } from "./FloatingAiToolbar";
 import { getProposalDocumentTypography } from "../lib/proposal-document-typography";
 import { useScrollEdgeFades } from "../hooks/use-scroll-edge-fades";
 import { useDocumentPan } from "../hooks/use-document-pan";
@@ -27,9 +25,7 @@ import { useDocumentStageLayout } from "../hooks/use-document-stage-layout";
 import { useDocumentViewportCentering } from "../hooks/use-document-viewport-centering";
 import { ProposalDocumentRenderer } from "./proposal-render/ProposalDocumentRenderer";
 import type { ProposalTemplateId } from "../../convex/lib/proposals/renderTemplates";
-import {
-  buildVerbatiProposalDocumentVars,
-} from "../features/verbati/style";
+import { buildVerbatiProposalDocumentVars } from "../features/verbati/style";
 import type { VerbatiStylePreset } from "../features/verbati/types";
 import { resolveProposalRenderState } from "../lib/proposal-render-state";
 import {
@@ -194,6 +190,37 @@ function formatCharacterCountLabel(args: {
   return `${args.count.toLocaleString()} / ${args.advisory ? "~" : ""}${args.limit.toLocaleString()}`;
 }
 
+const SEMANTIC_IDEAL_MIN = 800;
+const SEMANTIC_IDEAL_MAX = 1200;
+const SEMANTIC_SCALE_MAX = 2000;
+
+function getSemanticLengthZone(count: number): "brief" | "ideal" | "long" {
+  if (count < SEMANTIC_IDEAL_MIN) return "brief";
+  if (count <= SEMANTIC_IDEAL_MAX) return "ideal";
+  return "long";
+}
+
+function SemanticLengthBadge({ count }: { count: number }): JSX.Element {
+  const zone = getSemanticLengthZone(count);
+  const label =
+    zone === "brief" ? "Brief" : zone === "ideal" ? "Ideal" : "Long";
+  const markerPct = Math.min((count / SEMANTIC_SCALE_MAX) * 100, 100);
+  return (
+    <span
+      className={`dasti-pill dasti-proposal-character-badge dasti-length-signal dasti-length-signal--${zone}`}
+      title={`${count.toLocaleString()} characters — ${label} length`}
+    >
+      <span className="dasti-length-signal__bar" aria-hidden="true">
+        <span
+          className="dasti-length-signal__marker"
+          style={{ left: `${markerPct}%` }}
+        />
+      </span>
+      <span className="dasti-length-signal__label">{label}</span>
+    </span>
+  );
+}
+
 export function getDisplayedProposalText(
   content: string,
   proposalType?: FormValues["proposalType"] | null,
@@ -238,7 +265,8 @@ export function fallbackCopyText(text: string): boolean {
 }
 
 const isDev = import.meta.env.DEV;
-const PROPOSAL_PREVIEW_ZOOM_STORAGE_KEY = "dasti:proposal-preview-zoom-index:v1";
+const PROPOSAL_PREVIEW_ZOOM_STORAGE_KEY =
+  "dasti:proposal-preview-zoom-index:v1";
 
 function readProposalZoomIndex(_storageKey: string | null | undefined) {
   return 1;
@@ -387,7 +415,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     resolvedDocumentHeaderMode !== "hidden" &&
     Boolean(
       (documentTitle && documentTitle.trim().length > 0) ||
-      (documentMeta && documentMeta.trim().length > 0),
+        (documentMeta && documentMeta.trim().length > 0),
     );
   const usesDocumentRenderer =
     proposalType === "cover_letter" ||
@@ -635,7 +663,9 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       if (isPrimaryPointerPressed()) {
         return;
       }
-      const nextSelection = getTextareaSelectionState(editableTextareaRef.current);
+      const nextSelection = getTextareaSelectionState(
+        editableTextareaRef.current,
+      );
       if (!nextSelection && isInlineAiToolbarActiveElement()) {
         return;
       }
@@ -715,18 +745,21 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     },
     [attachPreviewScrollEdges],
   );
-  const { attachViewport: attachPanViewport, viewportPanProps } = useDocumentPan({
-    enabled: enablesDocumentZoom && effectiveZoomLevel > 1,
-    onPan: updatePreviewScrollEdges,
-  });
-  const { attachViewport: attachAnchorViewport } = useDocumentViewportCentering({
-    enabled: enablesDocumentZoom,
-    layoutKey: `${effectiveZoomLevel}:${stageLayout.stageWidth}:${stageLayout.stageHeight}:${resolvedTemplateId}:${proposalContent?.length ?? 0}:${mode}:${previewAnchor}`,
-    recenterKey: fitRequestCount,
-    defaultCenterX: previewAnchor === "body" ? 0.5 : 0,
-    defaultCenterY: previewAnchor === "body" ? 0.46 : 0,
-    onSync: updatePreviewScrollEdges,
-  });
+  const { attachViewport: attachPanViewport, viewportPanProps } =
+    useDocumentPan({
+      enabled: enablesDocumentZoom && effectiveZoomLevel > 1,
+      onPan: updatePreviewScrollEdges,
+    });
+  const { attachViewport: attachAnchorViewport } = useDocumentViewportCentering(
+    {
+      enabled: enablesDocumentZoom,
+      layoutKey: `${effectiveZoomLevel}:${stageLayout.stageWidth}:${stageLayout.stageHeight}:${resolvedTemplateId}:${proposalContent?.length ?? 0}:${mode}:${previewAnchor}`,
+      recenterKey: fitRequestCount,
+      defaultCenterX: previewAnchor === "body" ? 0.5 : 0,
+      defaultCenterY: previewAnchor === "body" ? 0.46 : 0,
+      onSync: updatePreviewScrollEdges,
+    },
+  );
   const attachPreviewViewport = React.useCallback(
     (node: HTMLDivElement | null) => {
       attachPreviewScrollContainer(node);
@@ -763,21 +796,25 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   ) : null;
 
   const characterCountBadge = shouldShowCharacterCountBadge ? (
+    resolvedCharacterLimitSelection.value === null &&
+    !resolvedCharacterLimitSelection.advisory ? (
+      <SemanticLengthBadge count={proposalCharacterCount} />
+    ) : (
       <span
         className={(() => {
           if (resolvedCharacterLimitSelection.advisory) {
             return "dasti-pill dasti-proposal-character-badge dasti-proposal-character-badge--advisory";
           }
-          if (characterCountTone === "danger") return "dasti-pill dasti-pill--danger";
-          if (characterCountTone === "warning") return "dasti-pill dasti-pill--warning";
+          if (characterCountTone === "danger")
+            return "dasti-pill dasti-pill--danger";
+          if (characterCountTone === "warning")
+            return "dasti-pill dasti-pill--warning";
           return "dasti-pill dasti-proposal-character-badge";
         })()}
         title={
           resolvedCharacterLimitSelection.advisory
             ? "Approximate platform target. Treat this as a friendly guide, not a confirmed hard cap."
-            : resolvedCharacterLimitSelection.value !== null
-              ? "Current draft length versus the selected limit."
-              : "Current draft character count."
+            : "Current draft length versus the selected limit."
         }
       >
         {formatCharacterCountLabel({
@@ -786,51 +823,53 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           advisory: resolvedCharacterLimitSelection.advisory,
         })}
       </span>
-    ) : null;
-
-  const shouldShowCopyButton = Boolean(onCopy && proposalContent && !loading && !error);
-
-  const actionControls = actions || shouldShowCopyButton ? (
-    <div
-      className="dasti-proposal-sheet__controls dasti-toolbar--surface-tooltips"
-      data-no-pan="true"
-    >
-      {actions}
-      <span className="dasti-proposal-sheet__action-slot">
-        {shouldShowCopyButton ? (
-          <button
-            type="button"
-            onClick={onCopy}
-            aria-label={copyFeedback === "copied" ? "Copied" : "Copy"}
-            className="dasti-icon-button"
-            data-toolbar-tooltip={copyFeedback === "copied" ? "Copied" : "Copy"}
-            style={{
-              color: copyFeedback === "copied" ? "var(--ok)" : undefined,
-            }}
-          >
-            {copyFeedback === "copied" ? (
-              <Check size={16} strokeWidth={2} aria-hidden="true" />
-            ) : (
-              <Copy size={16} strokeWidth={1.5} aria-hidden="true" />
-            )}
-          </button>
-        ) : null}
-      </span>
-    </div>
+    )
   ) : null;
+
+  const shouldShowCopyButton = Boolean(
+    onCopy && proposalContent && !loading && !error,
+  );
+
+  const actionControls =
+    actions || shouldShowCopyButton ? (
+      <div
+        className="dasti-proposal-sheet__controls dasti-toolbar--surface-tooltips"
+        data-no-pan="true"
+      >
+        {actions}
+        <span className="dasti-proposal-sheet__action-slot">
+          {shouldShowCopyButton ? (
+            <button
+              type="button"
+              onClick={onCopy}
+              aria-label={copyFeedback === "copied" ? "Copied" : "Copy"}
+              className="dasti-icon-button"
+              data-toolbar-tooltip={
+                copyFeedback === "copied" ? "Copied" : "Copy"
+              }
+              style={{
+                color: copyFeedback === "copied" ? "var(--ok)" : undefined,
+              }}
+            >
+              {copyFeedback === "copied" ? (
+                <Check size={16} strokeWidth={2} aria-hidden="true" />
+              ) : (
+                <Copy size={16} strokeWidth={1.5} aria-hidden="true" />
+              )}
+            </button>
+          ) : null}
+        </span>
+      </div>
+    ) : null;
 
   const renderZoomControls = (className: string) =>
     showZoomControls &&
     Boolean(proposalContent) &&
     !loading &&
     !error &&
-      usesDocumentRenderer &&
-      !isEditable ? (
-      <div
-        ref={zoomMenuRef}
-        className={className}
-        data-no-pan="true"
-      >
+    usesDocumentRenderer &&
+    !isEditable ? (
+      <div ref={zoomMenuRef} className={className} data-no-pan="true">
         <button
           type="button"
           className={
@@ -905,7 +944,9 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     ) : null;
 
   const zoomControls = renderZoomControls(
-    isZoomMenuOpen ? "dasti-doc-zoom-menu dasti-doc-zoom-menu--open" : "dasti-doc-zoom-menu",
+    isZoomMenuOpen
+      ? "dasti-doc-zoom-menu dasti-doc-zoom-menu--open"
+      : "dasti-doc-zoom-menu",
   );
   const railStartControls =
     modeToggleControl || zoomControls || railStartAddon ? (
@@ -915,9 +956,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       >
         {modeToggleControl}
         {modeToggleControl && zoomControls ? (
-          <div
-            className="dasti-icon-cluster__divider dasti-proposal-rail-cluster__divider"
-          />
+          <div className="dasti-icon-cluster__divider dasti-proposal-rail-cluster__divider" />
         ) : null}
         {zoomControls}
         {railStartAddon ? (
@@ -943,8 +982,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         <div className="dasti-document-rail__section dasti-document-rail__section--start">
           {railStartControls}
         </div>
-        <div className="dasti-document-rail__section dasti-document-rail__section--center">
-        </div>
+        <div className="dasti-document-rail__section dasti-document-rail__section--center"></div>
         <div className="dasti-document-rail__section dasti-document-rail__section--end">
           {actionControls}
         </div>
@@ -983,9 +1021,9 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   const inlineDocumentCaption =
     hasDocumentCaption &&
     documentHeaderMode === "actions-only" &&
-    !shouldDetachActionHeader ? (
-      renderDocumentCaption("dasti-proposal-sheet__heading--inline")
-    ) : null;
+    !shouldDetachActionHeader
+      ? renderDocumentCaption("dasti-proposal-sheet__heading--inline")
+      : null;
   const detachedDocumentCaption =
     shouldDetachActionHeader && hasDocumentCaption
       ? renderDocumentCaption("dasti-proposal-sheet__heading--sidecar")
@@ -1117,9 +1155,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
 
   if (loading) {
     sheetBody = (
-      <div
-        className={resolveBodyClassName({ letterLike: isLetterLike })}
-      >
+      <div className={resolveBodyClassName({ letterLike: isLetterLike })}>
         <div
           style={{
             display: "flex",
@@ -1325,7 +1361,9 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           >
             <div
               className="dasti-proposal-sheet__scroll-content"
-              style={zoomLevel !== 1 ? { width: `${zoomLevel * 100}%` } : undefined}
+              style={
+                zoomLevel !== 1 ? { width: `${zoomLevel * 100}%` } : undefined
+              }
             >
               {isLetterLike ? (
                 <div className="max-w-none">
