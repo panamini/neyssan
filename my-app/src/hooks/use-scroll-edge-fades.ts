@@ -3,24 +3,59 @@ import { useCallback, useEffect, useRef, useState } from "react";
 type ScrollEdgeState = {
   showTop: boolean;
   showBottom: boolean;
+  topStrength: number;
+  bottomStrength: number;
 };
 
 const SCROLL_EDGE_EPSILON = 1;
+const SCROLL_EDGE_FADE_DISTANCE = 28;
 
-function getScrollEdgeState(node: HTMLElement | null): ScrollEdgeState {
+function clamp01(value: number): number {
+  if (Number.isNaN(value)) {
+    return 0;
+  }
+  if (value <= 0) {
+    return 0;
+  }
+  if (value >= 1) {
+    return 1;
+  }
+  return value;
+}
+
+export function getScrollEdgeState(
+  node: Pick<HTMLElement, "scrollHeight" | "clientHeight" | "scrollTop"> | null,
+): ScrollEdgeState {
   if (!node) {
-    return { showTop: false, showBottom: false };
+    return {
+      showTop: false,
+      showBottom: false,
+      topStrength: 0,
+      bottomStrength: 0,
+    };
   }
 
   const scrollableDistance = node.scrollHeight - node.clientHeight;
 
   if (scrollableDistance <= SCROLL_EDGE_EPSILON) {
-    return { showTop: false, showBottom: false };
+    return {
+      showTop: false,
+      showBottom: false,
+      topStrength: 0,
+      bottomStrength: 0,
+    };
   }
 
+  const topStrength = clamp01(node.scrollTop / SCROLL_EDGE_FADE_DISTANCE);
+  const bottomStrength = clamp01(
+    (scrollableDistance - node.scrollTop) / SCROLL_EDGE_FADE_DISTANCE,
+  );
+
   return {
-    showTop: node.scrollTop > SCROLL_EDGE_EPSILON,
-    showBottom: scrollableDistance - node.scrollTop > SCROLL_EDGE_EPSILON,
+    showTop: topStrength > 0,
+    showBottom: bottomStrength > 0,
+    topStrength,
+    bottomStrength,
   };
 }
 
@@ -29,6 +64,8 @@ export function useScrollEdgeFades<T extends HTMLElement>() {
   const [state, setState] = useState<ScrollEdgeState>({
     showTop: false,
     showBottom: false,
+    topStrength: 0,
+    bottomStrength: 0,
   });
   const frameRef = useRef<number | null>(null);
 
@@ -37,7 +74,9 @@ export function useScrollEdgeFades<T extends HTMLElement>() {
       const next = getScrollEdgeState(targetNode);
       if (
         previous.showTop === next.showTop &&
-        previous.showBottom === next.showBottom
+        previous.showBottom === next.showBottom &&
+        previous.topStrength === next.topStrength &&
+        previous.bottomStrength === next.bottomStrength
       ) {
         return previous;
       }
@@ -67,7 +106,12 @@ export function useScrollEdgeFades<T extends HTMLElement>() {
 
   useEffect(() => {
     if (!node) {
-      setState({ showTop: false, showBottom: false });
+      setState({
+        showTop: false,
+        showBottom: false,
+        topStrength: 0,
+        bottomStrength: 0,
+      });
       return undefined;
     }
 
@@ -107,6 +151,8 @@ export function useScrollEdgeFades<T extends HTMLElement>() {
     attach,
     showTop: state.showTop,
     showBottom: state.showBottom,
+    topStrength: state.topStrength,
+    bottomStrength: state.bottomStrength,
     update,
   };
 }

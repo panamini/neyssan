@@ -269,6 +269,26 @@
     color-mix(in srgb, var(--document-viewer-frame-surface) 58%, transparent) 56%,
     transparent 100%
   );
+  --proposal-compose-edge-fade-height: 28px;
+  --proposal-compose-edge-top-fade: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--document-viewer-frame-surface) 99%, transparent) 0%,
+    color-mix(in srgb, var(--document-viewer-frame-surface) 94%, hsl(28 18% 14% / 0.08) 6%) 38%,
+    color-mix(in srgb, var(--document-viewer-frame-surface) 68%, transparent) 76%,
+    transparent 100%
+  );
+  --proposal-compose-edge-bottom-fade: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--document-viewer-frame-surface) 99%, transparent) 0%,
+    color-mix(in srgb, var(--document-viewer-frame-surface) 92%, hsl(28 18% 14% / 0.1) 8%) 40%,
+    color-mix(in srgb, var(--document-viewer-frame-surface) 64%, transparent) 78%,
+    transparent 100%
+  );
+  --proposal-compose-edge-top-shadow: inset 0 -18px 20px -22px
+    hsla(28, 18%, 12%, 0.18);
+  --proposal-compose-edge-bottom-shadow: inset 0 18px 20px -22px
+    hsla(28, 18%, 12%, 0.2);
+  --proposal-compose-edge-max-opacity: 0.94;
   --proposal-sheet-top-shadow: 0 12px 18px -16px
     hsla(28, 22%, 12%, 0.1);
   --proposal-sheet-bottom-shadow: 0 -12px 18px -16px
@@ -474,6 +494,25 @@
   --shb: 0 2px 8px hsla(0, 0%, 0%, 0.28), 0 14px 30px hsla(0, 0%, 0%, 0.3);
   --shc: 0 8px 22px hsla(0, 0%, 0%, 0.34), 0 28px 56px hsla(0, 0%, 0%, 0.36);
   --shadow-frost: 0 14px 34px hsla(0, 0%, 0%, 0.32);
+  --proposal-compose-edge-top-fade: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--document-viewer-frame-surface) 98%, transparent) 0%,
+    color-mix(in srgb, var(--document-viewer-frame-surface) 88%, hsla(0 0% 0% / 0.1) 12%) 40%,
+    color-mix(in srgb, var(--document-viewer-frame-surface) 62%, transparent) 78%,
+    transparent 100%
+  );
+  --proposal-compose-edge-bottom-fade: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--document-viewer-frame-surface) 98%, transparent) 0%,
+    color-mix(in srgb, var(--document-viewer-frame-surface) 86%, hsla(0 0% 0% / 0.12) 14%) 42%,
+    color-mix(in srgb, var(--document-viewer-frame-surface) 58%, transparent) 80%,
+    transparent 100%
+  );
+  --proposal-compose-edge-top-shadow: inset 0 -18px 20px -22px
+    hsla(0, 0%, 0%, 0.12);
+  --proposal-compose-edge-bottom-shadow: inset 0 18px 20px -22px
+    hsla(0, 0%, 0%, 0.14);
+  --proposal-compose-edge-max-opacity: 0.88;
   --proposal-sheet-top-shadow: 0 12px 18px -16px hsla(0, 0%, 0%, 0.14);
   --proposal-sheet-bottom-shadow: 0 -12px 18px -16px hsla(0, 0%, 0%, 0.16);
 
