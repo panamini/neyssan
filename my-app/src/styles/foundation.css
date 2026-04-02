@@ -269,8 +269,10 @@
     color-mix(in srgb, var(--document-viewer-frame-surface) 58%, transparent) 56%,
     transparent 100%
   );
-  --proposal-sheet-bottom-shadow: 0 -18px 26px -18px
-    color-mix(in srgb, var(--shadow-color) 90%, transparent);
+  --proposal-sheet-top-shadow: 0 12px 18px -16px
+    hsla(28, 22%, 12%, 0.1);
+  --proposal-sheet-bottom-shadow: 0 -12px 18px -16px
+    hsla(28, 22%, 12%, 0.12);
 
   /* App shell sidebar */
   --app-sidebar-width-expanded: 256px;
@@ -472,6 +474,8 @@
   --shb: 0 2px 8px hsla(0, 0%, 0%, 0.28), 0 14px 30px hsla(0, 0%, 0%, 0.3);
   --shc: 0 8px 22px hsla(0, 0%, 0%, 0.34), 0 28px 56px hsla(0, 0%, 0%, 0.36);
   --shadow-frost: 0 14px 34px hsla(0, 0%, 0%, 0.32);
+  --proposal-sheet-top-shadow: 0 12px 18px -16px hsla(0, 0%, 0%, 0.14);
+  --proposal-sheet-bottom-shadow: 0 -12px 18px -16px hsla(0, 0%, 0%, 0.16);
 
   /* Subtle gradients */
   --gradient-canvas: radial-gradient(
