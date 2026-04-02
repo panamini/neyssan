@@ -104,6 +104,16 @@ type ProposalForgePrefill = {
 } | null;
 
 type ProposalForgeView = "compose" | "saved";
+type ProposalBriefAnimationPhase =
+  | "idle"
+  | "form-exit"
+  | "brief-enter"
+  | "brief-exit"
+  | "form-enter";
+
+const PROPOSAL_BRIEF_SWAP_MS = 160;
+const PROPOSAL_BRIEF_SETTLE_MS = 260;
+const PROPOSAL_TOOLBAR_ENTER_MS = 320;
 
 const COMPOSE_TOOLBAR_VISIBLE_VOICE_PRESETS = new Set<
   NonNullable<FormValues["voicePreset"]>
@@ -512,6 +522,11 @@ export function ProposalForge(): JSX.Element {
   const [isCvPickerOpen, setIsCvPickerOpen] = React.useState(false);
   const [isComposePanelVisible, setIsComposePanelVisible] = React.useState(true);
   const [isBriefExpanded, setIsBriefExpanded] = React.useState(true);
+  const [briefAnimationPhase, setBriefAnimationPhase] =
+    React.useState<ProposalBriefAnimationPhase>("idle");
+  const [toolbarTransitionState, setToolbarTransitionState] = React.useState<
+    "entering" | null
+  >(null);
   const [composeToolbarVoicePreset, setComposeToolbarVoicePreset] =
     React.useState<FormValues["voicePreset"] | null>(() => {
       const storedComposeDraft = readStoredProposalComposeDraft();
@@ -535,6 +550,10 @@ export function ProposalForge(): JSX.Element {
     }
   }, []);
   const pendingComposeBriefFocusRef = React.useRef(false);
+  const previousShowBriefCardRef = React.useRef(false);
+  const briefSwapTimerRef = React.useRef<number | null>(null);
+  const briefSettleTimerRef = React.useRef<number | null>(null);
+  const toolbarTransitionTimerRef = React.useRef<number | null>(null);
   const syncedStoredOutputSourceComposeRef = React.useRef(false);
 
   React.useEffect(() => {
@@ -2377,9 +2396,12 @@ export function ProposalForge(): JSX.Element {
   const proposalWorkspaceOutputShellInlineSize =
     "calc(var(--document-sheet-inline-size) - (var(--s4) * 2))";
   const proposalWorkspaceShellBlockSize =
-    "min(var(--document-viewer-shell-max-block), calc(100dvh - var(--header-height) - (var(--space-2) * 2) - (var(--document-viewer-toolbar-block-size) + var(--space-2)) - 8px))";
+    "min(var(--document-viewer-shell-max-block), calc(100dvh - var(--header-height) - (var(--space-2) * 2) - (var(--document-viewer-toolbar-block-size) + var(--space-2))))";
   const isCompactComposeLayout =
     viewportWidth < proposalTwoPaneMinViewportWidth;
+  const proposalComposeColumnInlineSize = isCompactComposeLayout
+    ? "560px"
+    : proposalDesktopComposeWidth;
   const showComposePanel = isComposePanelVisible && !isSavedView;
   const briefJobDescription =
     composePreviewValues?.jobDescription?.trim() ||
@@ -2437,6 +2459,7 @@ export function ProposalForge(): JSX.Element {
       proposalWorkspaceOutputShellInlineSize,
     "--proposal-workspace-shell-block-size":
       proposalWorkspaceShellBlockSize,
+    "--proposal-compose-column-inline-size": proposalComposeColumnInlineSize,
   };
   const proposalWorkbenchToolbarSlotStyle: React.CSSProperties = {
     width: "100%",
@@ -2446,6 +2469,7 @@ export function ProposalForge(): JSX.Element {
         ? 0
         : "auto",
     minWidth: 0,
+    "--proposal-compose-column-inline-size": proposalComposeColumnInlineSize,
   };
   const activeCharacterLimitSelection = React.useMemo(
     () =>
@@ -2456,15 +2480,84 @@ export function ProposalForge(): JSX.Element {
     [draftCharacterLimitMode, draftCharacterLimitValue],
   );
   const showComposeGridColumn = showComposePanel;
+  const shouldAnimateDesktopBriefTransition =
+    !isSavedView && !isCompactComposeLayout;
+  const shouldRenderBriefCard =
+    showBriefCard || briefAnimationPhase === "brief-exit";
+  const composeShellMotionClass =
+    briefAnimationPhase === "form-exit"
+      ? "dasti-proposal-compose-panel-stage--exiting"
+      : briefAnimationPhase === "form-enter"
+        ? "dasti-proposal-compose-panel-stage--entering"
+        : "";
+  const briefCardMotionClass =
+    briefAnimationPhase === "brief-enter"
+      ? "dasti-proposal-brief-stage--entering"
+      : briefAnimationPhase === "brief-exit"
+        ? "dasti-proposal-brief-stage--exiting"
+        : "";
+  const shouldHideComposeShell =
+    !showComposePanel || showBriefCard;
+
+  const clearBriefAnimationTimers = React.useCallback(() => {
+    if (briefSwapTimerRef.current !== null) {
+      window.clearTimeout(briefSwapTimerRef.current);
+      briefSwapTimerRef.current = null;
+    }
+    if (briefSettleTimerRef.current !== null) {
+      window.clearTimeout(briefSettleTimerRef.current);
+      briefSettleTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleBriefAnimationSettle = React.useCallback(
+    (phase: Exclude<ProposalBriefAnimationPhase, "idle">) => {
+      if (briefSettleTimerRef.current !== null) {
+        window.clearTimeout(briefSettleTimerRef.current);
+      }
+      setBriefAnimationPhase(phase);
+      briefSettleTimerRef.current = window.setTimeout(() => {
+        setBriefAnimationPhase("idle");
+        briefSettleTimerRef.current = null;
+      }, PROPOSAL_BRIEF_SETTLE_MS);
+    },
+    [],
+  );
+
+  const triggerToolbarEnterTransition = React.useCallback(() => {
+    if (toolbarTransitionTimerRef.current !== null) {
+      window.clearTimeout(toolbarTransitionTimerRef.current);
+    }
+    setToolbarTransitionState("entering");
+    toolbarTransitionTimerRef.current = window.setTimeout(() => {
+      setToolbarTransitionState(null);
+      toolbarTransitionTimerRef.current = null;
+    }, PROPOSAL_TOOLBAR_ENTER_MS);
+  }, []);
+
   const focusComposeBrief = React.useCallback(() => {
+    const focusField = (
+      element: HTMLTextAreaElement | HTMLInputElement | null,
+    ): boolean => {
+      if (!element) {
+        return false;
+      }
+
+      try {
+        element.focus({ preventScroll: true });
+      } catch {
+        element.focus();
+      }
+      return true;
+    };
+
     const jobDescriptionField =
       typeof document !== "undefined"
         ? (document.getElementById("jobDescription") as
             | HTMLTextAreaElement
             | null)
         : null;
-    if (jobDescriptionField) {
-      jobDescriptionField.focus();
+    if (focusField(jobDescriptionField)) {
       return;
     }
 
@@ -2472,28 +2565,83 @@ export function ProposalForge(): JSX.Element {
       typeof document !== "undefined"
         ? (document.getElementById("jobTitle") as HTMLInputElement | null)
         : null;
-    jobTitleField?.focus();
+    focusField(jobTitleField);
   }, []);
   const handleOpenComposeBrief = React.useCallback(() => {
     pendingComposeBriefFocusRef.current = true;
-    setIsComposePanelVisible(true);
-    setIsBriefExpanded(true);
     setIsCvPickerOpen(false);
-  }, []);
+    if (!shouldAnimateDesktopBriefTransition || !showBriefCard) {
+      clearBriefAnimationTimers();
+      setBriefAnimationPhase("idle");
+      setIsComposePanelVisible(true);
+      setIsBriefExpanded(true);
+      return;
+    }
+
+    clearBriefAnimationTimers();
+    setBriefAnimationPhase("brief-exit");
+    briefSwapTimerRef.current = window.setTimeout(() => {
+      setIsComposePanelVisible(true);
+      setIsBriefExpanded(true);
+      scheduleBriefAnimationSettle("form-enter");
+      briefSwapTimerRef.current = null;
+    }, PROPOSAL_BRIEF_SWAP_MS);
+  }, [
+    clearBriefAnimationTimers,
+    scheduleBriefAnimationSettle,
+    shouldAnimateDesktopBriefTransition,
+    showBriefCard,
+  ]);
   const handleToggleComposeBrief = React.useCallback(() => {
-    setIsBriefExpanded((current) => {
-      const next = !current;
-      pendingComposeBriefFocusRef.current = next;
-      return next;
-    });
-  }, []);
+    if (!hasBriefContent) {
+      return;
+    }
+
+    if (!shouldAnimateDesktopBriefTransition) {
+      setIsBriefExpanded((current) => {
+        const next = !current;
+        pendingComposeBriefFocusRef.current = next;
+        return next;
+      });
+      return;
+    }
+
+    clearBriefAnimationTimers();
+
+    if (isBriefExpanded) {
+      setBriefAnimationPhase("form-exit");
+      briefSwapTimerRef.current = window.setTimeout(() => {
+        setIsBriefExpanded(false);
+        scheduleBriefAnimationSettle("brief-enter");
+        briefSwapTimerRef.current = null;
+      }, PROPOSAL_BRIEF_SWAP_MS);
+      return;
+    }
+
+    pendingComposeBriefFocusRef.current = true;
+    setIsCvPickerOpen(false);
+    setBriefAnimationPhase("brief-exit");
+    briefSwapTimerRef.current = window.setTimeout(() => {
+      setIsBriefExpanded(true);
+      scheduleBriefAnimationSettle("form-enter");
+      briefSwapTimerRef.current = null;
+    }, PROPOSAL_BRIEF_SWAP_MS);
+  }, [
+    clearBriefAnimationTimers,
+    hasBriefContent,
+    isBriefExpanded,
+    scheduleBriefAnimationSettle,
+    shouldAnimateDesktopBriefTransition,
+  ]);
   const handleCollapseCompose = React.useCallback(() => {
     setIsComposePanelVisible(false);
     setIsCvPickerOpen(false);
-  }, []);
+    triggerToolbarEnterTransition();
+  }, [triggerToolbarEnterTransition]);
   const handleRestoreCompose = React.useCallback(() => {
     setIsComposePanelVisible(true);
-  }, []);
+    triggerToolbarEnterTransition();
+  }, [triggerToolbarEnterTransition]);
   const handleReturnToDraft = React.useCallback(() => {
     setIsComposePanelVisible(true);
     setIsBriefExpanded(true);
@@ -2511,6 +2659,10 @@ export function ProposalForge(): JSX.Element {
       return;
     }
 
+    if (shouldAnimateDesktopBriefTransition && briefAnimationPhase !== "idle") {
+      return;
+    }
+
     pendingComposeBriefFocusRef.current = false;
     if (typeof window !== "undefined" && window.requestAnimationFrame) {
       window.requestAnimationFrame(() => {
@@ -2520,7 +2672,50 @@ export function ProposalForge(): JSX.Element {
     }
 
     focusComposeBrief();
-  }, [focusComposeBrief, isBriefExpanded]);
+  }, [
+    briefAnimationPhase,
+    focusComposeBrief,
+    isBriefExpanded,
+    shouldAnimateDesktopBriefTransition,
+  ]);
+
+  React.useEffect(() => {
+    return () => {
+      clearBriefAnimationTimers();
+      if (toolbarTransitionTimerRef.current !== null) {
+        window.clearTimeout(toolbarTransitionTimerRef.current);
+        toolbarTransitionTimerRef.current = null;
+      }
+    };
+  }, [clearBriefAnimationTimers]);
+
+  React.useEffect(() => {
+    if (!shouldAnimateDesktopBriefTransition && briefAnimationPhase !== "idle") {
+      clearBriefAnimationTimers();
+      setBriefAnimationPhase("idle");
+    }
+  }, [
+    briefAnimationPhase,
+    clearBriefAnimationTimers,
+    shouldAnimateDesktopBriefTransition,
+  ]);
+
+  React.useEffect(() => {
+    const didShowBriefCard = showBriefCard && !previousShowBriefCardRef.current;
+    previousShowBriefCardRef.current = showBriefCard;
+    if (
+      shouldAnimateDesktopBriefTransition &&
+      didShowBriefCard &&
+      briefAnimationPhase === "idle"
+    ) {
+      scheduleBriefAnimationSettle("brief-enter");
+    }
+  }, [
+    briefAnimationPhase,
+    scheduleBriefAnimationSettle,
+    shouldAnimateDesktopBriefTransition,
+    showBriefCard,
+  ]);
 
   const proposalWorkbenchToolbar = shouldShowCollapsedComposeToolbar ? (
     <ProposalComposeToolbar
@@ -2533,6 +2728,7 @@ export function ProposalForge(): JSX.Element {
       isCvPickerOpen={isCvPickerOpen}
       disabled={loading || isLoadingHandoff}
       collapsed
+      transitionState={toolbarTransitionState ?? undefined}
       onRestoreCompose={handleRestoreCompose}
     />
   ) : showComposePanel ? (
@@ -2546,6 +2742,7 @@ export function ProposalForge(): JSX.Element {
       isCvPickerOpen={isCvPickerOpen}
       disabled={loading || isLoadingHandoff}
       compact={isCompactComposeLayout}
+      transitionState={toolbarTransitionState ?? undefined}
       onCollapseCompose={canCollapseComposePanel ? handleCollapseCompose : undefined}
     />
   ) : null;
@@ -2670,22 +2867,33 @@ export function ProposalForge(): JSX.Element {
                   style={stackedCardWidthStyle}
                   className="dasti-proposal-compose-column dasti-proposal-compose-column--workspace"
                 >
-                  {showBriefCard ? (
-                    <ProposalBriefCard
-                      documentTitle={
-                        proposalDocumentTitle || "Generated proposal"
-                      }
-                      jobDescription={briefJobDescription}
-                      onToggleBrief={handleOpenComposeBrief}
-                      variant={shouldShowDesktopBriefCapsule ? "compact" : "card"}
-                    />
+                  {shouldRenderBriefCard ? (
+                    <div
+                      className={[
+                        "dasti-proposal-brief-stage",
+                        briefCardMotionClass,
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                    >
+                      <ProposalBriefCard
+                        documentTitle={
+                          proposalDocumentTitle || "Generated proposal"
+                        }
+                        jobDescription={briefJobDescription}
+                        onToggleBrief={handleOpenComposeBrief}
+                        variant={shouldShowDesktopBriefCapsule ? "compact" : "card"}
+                      />
+                    </div>
                   ) : null}
                   <div
-                    style={
-                      showBriefCard || !showComposePanel
-                        ? { display: "none" }
-                        : undefined
-                    }
+                    className={[
+                      "dasti-proposal-compose-panel-stage",
+                      composeShellMotionClass,
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    style={shouldHideComposeShell ? { display: "none" } : undefined}
                   >
                     {isLoadingHandoff ? (
                       <div style={{ paddingTop: "var(--s2)" }}>
@@ -2716,22 +2924,19 @@ export function ProposalForge(): JSX.Element {
                               className="dasti-proposal-compose-shell__toggle"
                               onClick={handleToggleComposeBrief}
                               aria-label={
-                                isBriefExpanded ? "Collapse brief" : "Edit brief"
-                              }
-                              title={
-                                isBriefExpanded ? "Collapse brief" : "Edit brief"
+                                isBriefExpanded ? "Collapse" : "Expand"
                               }
                             >
                               {isBriefExpanded ? (
-                                <ChevronUp
+                                <ChevronDown
                                   size={14}
-                                  strokeWidth={1.8}
+                                  strokeWidth={1.7}
                                   aria-hidden="true"
                                 />
                               ) : (
-                                <ChevronDown
+                                <ChevronUp
                                   size={14}
-                                  strokeWidth={1.8}
+                                  strokeWidth={1.7}
                                   aria-hidden="true"
                                 />
                               )}

@@ -16,6 +16,7 @@ import {
   DotsSixVertical as PhDotsSixVertical,
   Eye as PhEye,
   Eyedropper as PhEyedropper,
+  Feather as PhFeather,
   FileImage as PhFileImage,
   FilePdf as PhFilePdf,
   FileText as PhFileText,
@@ -49,7 +50,6 @@ import {
   Square as PhSquare,
   Star as PhStar,
   Sun as PhSun,
-  SunDim as PhSunDim,
   Sunglasses as PhSunglasses,
   TextB as PhTextB,
   TextItalic as PhTextItalic,
@@ -127,7 +127,7 @@ export const Copy = withCompat(PhCopy);
 export const CornersIn = withCompat(PhCornersIn);
 export const Eye = withCompat(PhEye);
 export const EyeDropper = withCompat(PhEyedropper);
-export const Feather = withCompat(PhPenNib);
+export const Feather = withCompat(PhFeather);
 export const FileImage = withCompat(PhFileImage);
 export const FilePdf = withCompat(PhFilePdf);
 export const FileText = withCompat(PhFileText);
@@ -165,7 +165,7 @@ export const ImagesSquare = withCompat(PhImagesSquare);
 export const SquaresFour = withCompat(PhSquaresFour);
 export const Star = withCompat(PhStar);
 export const Sun = withCompat(PhSun);
-export const SunMedium = withCompat(PhSunDim);
+export const SunMedium = withCompat(PhSun);
 export const Sunglasses = withCompat(PhSunglasses);
 export const Trash = withCompat(PhTrash);
 export const Underline = withCompat(PhTextUnderline);
