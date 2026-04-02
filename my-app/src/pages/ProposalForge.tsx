@@ -2358,10 +2358,7 @@ export function ProposalForge(): JSX.Element {
   const proposalWorkbenchToolbarSlotStyle: React.CSSProperties = {
     width: "100%",
     maxWidth: toolbarWorkbenchMaxWidth,
-    marginInline:
-      shouldLeftAnchorStackedWorkbench || shouldShowDesktopBriefCapsule
-        ? 0
-        : "auto",
+    marginInline: 0,
     minWidth: 0,
     "--proposal-workspace-output-shell-inline-size":
       proposalWorkspaceOutputShellInlineSize,
