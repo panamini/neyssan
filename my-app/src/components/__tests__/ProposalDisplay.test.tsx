@@ -317,6 +317,66 @@ describe("ProposalDisplay", () => {
     ).toBeTruthy();
   });
 
+  it("can detach the actions-only document header above the shell for saved proposals", () => {
+    render(
+      <ProposalDisplay
+        proposalContent={"Hello hiring team,\n\nI build calm, reliable proposal copy."}
+        loading={false}
+        error={null}
+        proposalType="cover_letter"
+        documentHeaderMode="actions-only"
+        detachedActionHeader
+        documentTitle="Saved proposal"
+        documentMeta="Letter · Natural"
+        showModeToggle
+        onModeChange={vi.fn()}
+        actions={<button type="button">Refine</button>}
+        railStartAddon={<button type="button">Style inspector</button>}
+      />,
+    );
+
+    const detachedHeader = document.querySelector(
+      ".dasti-proposal-sheet__header--detached",
+    );
+    const detachedLayout = document.querySelector(
+      ".dasti-proposal-display__detached-layout",
+    );
+    const detachedRail = document.querySelector(
+      ".dasti-proposal-sheet__header-rail",
+    );
+    const detachedAside = document.querySelector(
+      ".dasti-proposal-sheet__heading--sidecar",
+    );
+    const inlineHeading = document.querySelector(
+      ".dasti-proposal-sheet__heading--inline",
+    );
+    const shell = document.querySelector(".dasti-doc-viewer-shell");
+
+    expect(detachedHeader).toBeTruthy();
+    expect(detachedLayout).toBeTruthy();
+    expect(detachedRail).toBeTruthy();
+    expect(detachedAside).toBeTruthy();
+    expect(inlineHeading).toBeNull();
+    expect(screen.getByRole("button", { name: "Refine" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Style inspector" })).toBeInTheDocument();
+    expect(
+      (detachedHeader as HTMLElement).compareDocumentPosition(detachedRail as HTMLElement) &
+        Node.DOCUMENT_POSITION_CONTAINED_BY,
+    ).toBeTruthy();
+    expect(
+      (detachedLayout as HTMLElement).compareDocumentPosition(detachedAside as HTMLElement) &
+        Node.DOCUMENT_POSITION_CONTAINED_BY,
+    ).toBeTruthy();
+    expect(
+      (detachedLayout as HTMLElement).compareDocumentPosition(detachedHeader as HTMLElement) &
+        Node.DOCUMENT_POSITION_CONTAINED_BY,
+    ).toBeTruthy();
+    expect(
+      (detachedHeader as HTMLElement).compareDocumentPosition(shell as HTMLElement) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   it("hides the character capsule once it overlaps the editable page", async () => {
     const { container } = render(
       <ProposalDisplay

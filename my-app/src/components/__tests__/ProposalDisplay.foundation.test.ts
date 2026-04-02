@@ -48,8 +48,9 @@ describe("ProposalDisplay foundation tokens", () => {
     );
     expect(foundationCss).toContain("--proposal-submit-size-sm: 30px;");
     expect(foundationCss).toContain("--proposal-submit-radius-sm: 11px;");
+    expect(foundationCss).toContain("--proposal-submit-stroke-width-md: 2.4;");
     expect(foundationCss).toContain(
-      "--proposal-submit-stroke-width-sm: 1.6;",
+      "--proposal-submit-stroke-width-sm: 1.4;",
     );
     expect(foundationCss).toContain(
       "--proposal-output-editor-inline-padding: clamp(24px, 4vw, 40px);",

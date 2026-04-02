@@ -184,11 +184,11 @@
   --proposal-submit-size-md: 52px;
   --proposal-submit-radius-md: 16px;
   --proposal-submit-icon-size-md: 28px;
-  --proposal-submit-stroke-width-md: 2;
+  --proposal-submit-stroke-width-md: 2.4;
   --proposal-submit-size-sm: 30px;
   --proposal-submit-radius-sm: 11px;
   --proposal-submit-icon-size-sm: 16px;
-  --proposal-submit-stroke-width-sm: 1.6;
+  --proposal-submit-stroke-width-sm: 1.4;
   --proposal-submit-phase-gap: 140ms;
   --proposal-submit-spinner-duration: 1450ms;
   --proposal-submit-draw-duration: 1080ms;
