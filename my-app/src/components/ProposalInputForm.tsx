@@ -377,6 +377,8 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
     attach: attachComposeScrollEdges,
     showTop: showComposeScrollTop,
     showBottom: showComposeScrollBottom,
+    topStrength: composeScrollTopStrength,
+    bottomStrength: composeScrollBottomStrength,
     update: updateComposeScrollEdges,
   } = useScrollEdgeFades<HTMLTextAreaElement>();
   const appliedPrefillRef = React.useRef<{
@@ -1324,6 +1326,14 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                   data-scroll-top={showComposeScrollTop ? "true" : "false"}
                   data-scroll-bottom={
                     showComposeScrollBottom ? "true" : "false"
+                  }
+                  style={
+                    {
+                      "--proposal-scroll-top-strength":
+                        composeScrollTopStrength.toFixed(3),
+                      "--proposal-scroll-bottom-strength":
+                        composeScrollBottomStrength.toFixed(3),
+                    } as React.CSSProperties
                   }
                 >
                   <textarea
