@@ -1,5 +1,6 @@
 /* Composition-only entrypoint.
    Keep app imports stable while the CSS system is split by concern. */
+@import "@fontsource-variable/geist";
 @import "./foundation.css";
 @import "./themes.css";
 @import "./base.css";

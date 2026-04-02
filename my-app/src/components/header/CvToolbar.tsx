@@ -52,17 +52,36 @@ export function CvToolbar({ className = "" }: CvToolbarProps): JSX.Element {
         Add
       </button>
 
-      {/* Spacer */}
+      {/* Spacer + zone divider */}
       <div style={{ flex: 1 }} />
+      <span
+        style={{
+          display: "block",
+          width: 1,
+          alignSelf: "stretch",
+          margin: "4px 4px",
+          background: "var(--color-border)",
+          opacity: 0.6,
+          flexShrink: 0,
+        }}
+        aria-hidden="true"
+      />
 
-      {/* Upload button */}
-      <button type="button" className="ctb-btn ctb-btn--ghost">
+      {/* Zone 2 — Import */}
+      <button
+        type="button"
+        className="ctb-btn ctb-btn--ghost"
+        title="Upload a CV file"
+      >
         <Upload size={14} />
         Upload
       </button>
 
-      {/* Scanned PDF button */}
-      <button type="button" className="ctb-btn ctb-btn--ghost">
+      <button
+        type="button"
+        className="ctb-btn ctb-btn--ghost"
+        title="Import a scanned PDF"
+      >
         <ScanLine size={14} />
         Scanned PDF
       </button>
