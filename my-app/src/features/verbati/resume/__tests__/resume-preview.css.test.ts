@@ -62,8 +62,12 @@ describe("resume preview workspace anchoring", () => {
     expect(workspaceShellRule).toContain(
       "--document-viewer-bleed-block: var(--space-1);",
     );
+    expect(workspaceShellRule).toContain(
+      "grid-template-rows: auto minmax(0, 1fr);",
+    );
     expect(workspacePanelRule).toContain("padding: var(--space-1);");
     expect(workspaceFrameRule).toContain("max-width: 100%;");
+    expect(workspaceFrameRule).toContain("height: auto;");
     expect(workspaceStagePaddingRule).toContain("padding: var(--space-1);");
     expect(productCss).toContain(
       ".dasti-doc-viewer-shell--resume-workspace .dasti-doc-viewport--resume {",
