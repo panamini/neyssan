@@ -7,9 +7,30 @@ import {
   formatCvDisplaySubtitle,
 } from "../lib/proposal-personalization";
 import { formatUiDate } from "../lib/ui-date";
-import type { CvDocument, IProfileItem } from "../types/cvDocument";
+import type {
+  CvDocument,
+  IExperienceItem,
+  IProfileItem,
+} from "../types/cvDocument";
 
 const CV_LIBRARY_PAGE_SIZE = 12;
+
+function readFirstJobTitles(
+  cv: CvDocument,
+  limit = 2,
+): Array<{ position: string; company: string }> {
+  const experienceSection = Array.isArray(cv.sections)
+    ? cv.sections.find((s) => s.type === "experience")
+    : undefined;
+  if (!Array.isArray(experienceSection?.structuredContent)) return [];
+  return (experienceSection.structuredContent as IExperienceItem[])
+    .slice(0, limit)
+    .map((item) => ({
+      position: String(item.position ?? "").trim(),
+      company: String(item.company ?? "").trim(),
+    }))
+    .filter((item) => item.position || item.company);
+}
 
 function readProfileContact(cv: CvDocument): {
   email?: string;
@@ -187,6 +208,7 @@ export function CvsLibrary(): JSX.Element {
                 location: contact.location,
               });
               const isConfirming = confirmingId === cv.id;
+              const jobTitles = readFirstJobTitles(cv);
 
               return (
                 <div
@@ -219,15 +241,27 @@ export function CvsLibrary(): JSX.Element {
                       </div>
 
                       <div className="dasti-doc-card__body-band">
-                        <p
-                          className={
-                            summarySnippet
-                              ? "dasti-doc-card__snippet dasti-doc-card__snippet--library"
-                              : "dasti-doc-card__snippet dasti-doc-card__snippet--library dasti-doc-card__snippet--muted"
-                          }
-                        >
-                          {summarySnippet || "Profile preview appears here."}
-                        </p>
+                        {summarySnippet ? (
+                          <p className="dasti-doc-card__snippet dasti-doc-card__snippet--library">
+                            {summarySnippet}
+                          </p>
+                        ) : jobTitles.length > 0 ? (
+                          <div className="dasti-doc-card__job-preview">
+                            {jobTitles.map((job, i) => (
+                              <div key={i} className="dasti-doc-card__job-line">
+                                <span className="dasti-doc-card__job-position">
+                                  {job.position}
+                                </span>
+                                {job.company ? (
+                                  <span className="dasti-doc-card__job-company">
+                                    {" · "}
+                                    {job.company}
+                                  </span>
+                                ) : null}
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
 
                       <div className="dasti-doc-card__footer dasti-doc-card__footer--stamp-only">
