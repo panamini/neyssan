@@ -1548,6 +1548,10 @@
   min-width: 0;
   position: relative;
   z-index: 0;
+  --proposal-scroll-top-strength: 0;
+  --proposal-scroll-bottom-strength: 0;
+  --proposal-sheet-edge-max-opacity: 1;
+  --proposal-sheet-edge-shift: 6px;
 }
 
 .dasti-document-shell .dasti-proposal-sheet__body {
@@ -1557,6 +1561,12 @@
 .dasti-proposal-sheet__body--composer {
   padding-block-start: 0;
   padding-block-end: 0;
+  --proposal-sheet-edge-fade-height: var(--proposal-compose-edge-fade-height);
+  --proposal-sheet-top-fade: var(--proposal-compose-edge-top-fade);
+  --proposal-sheet-bottom-fade: var(--proposal-compose-edge-bottom-fade);
+  --proposal-sheet-top-shadow: var(--proposal-compose-edge-top-shadow);
+  --proposal-sheet-bottom-shadow: var(--proposal-compose-edge-bottom-shadow);
+  --proposal-sheet-edge-max-opacity: var(--proposal-compose-edge-max-opacity);
 }
 
 .dasti-proposal-sheet__body--with-header {
@@ -2742,32 +2752,37 @@
   opacity: 0;
   will-change: opacity, transform;
   transition:
-    opacity 220ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+    opacity 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .dasti-proposal-sheet__body::before {
   top: 0;
   background: var(--proposal-sheet-top-fade);
   box-shadow: var(--proposal-sheet-top-shadow, none);
-  transform: translate3d(0, -4px, 0);
+  opacity: calc(
+    var(--proposal-scroll-top-strength) * var(--proposal-sheet-edge-max-opacity)
+  );
+  transform: translate3d(
+    0,
+    calc((var(--proposal-scroll-top-strength) - 1) * var(--proposal-sheet-edge-shift)),
+    0
+  );
 }
 
 .dasti-proposal-sheet__body::after {
   bottom: 0;
   background: var(--proposal-sheet-bottom-fade);
   box-shadow: var(--proposal-sheet-bottom-shadow);
-  transform: translate3d(0, 4px, 0);
-}
-
-.dasti-proposal-sheet__body[data-scroll-top="true"]::before {
-  opacity: 1;
-  transform: translate3d(0, 0, 0);
-}
-
-.dasti-proposal-sheet__body[data-scroll-bottom="true"]::after {
-  opacity: 1;
-  transform: translate3d(0, 0, 0);
+  opacity: calc(
+    var(--proposal-scroll-bottom-strength) *
+      var(--proposal-sheet-edge-max-opacity)
+  );
+  transform: translate3d(
+    0,
+    calc((1 - var(--proposal-scroll-bottom-strength)) * var(--proposal-sheet-edge-shift)),
+    0
+  );
 }
 
 .dasti-proposal-sheet__body--editable:focus,

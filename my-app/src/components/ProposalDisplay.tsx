@@ -348,12 +348,16 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     attach: attachEditableScrollEdges,
     showTop: showEditableScrollTop,
     showBottom: showEditableScrollBottom,
+    topStrength: editableScrollTopStrength,
+    bottomStrength: editableScrollBottomStrength,
     update: updateEditableScrollEdges,
   } = useScrollEdgeFades<HTMLTextAreaElement>();
   const {
     attach: attachPreviewScrollEdges,
     showTop: showPreviewScrollTop,
     showBottom: showPreviewScrollBottom,
+    topStrength: previewScrollTopStrength,
+    bottomStrength: previewScrollBottomStrength,
     update: updatePreviewScrollEdges,
   } = useScrollEdgeFades<HTMLDivElement>();
   const stageMeasureRef = React.useRef<HTMLDivElement | null>(null);
@@ -390,6 +394,16 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   const activeScrollBottom = isEditable
     ? showEditableScrollBottom
     : showPreviewScrollBottom;
+  const activeScrollTopStrength = isEditable
+    ? editableScrollTopStrength
+    : previewScrollTopStrength;
+  const activeScrollBottomStrength = isEditable
+    ? editableScrollBottomStrength
+    : previewScrollBottomStrength;
+  const activeScrollFadeStyle = {
+    "--proposal-scroll-top-strength": activeScrollTopStrength.toFixed(3),
+    "--proposal-scroll-bottom-strength": activeScrollBottomStrength.toFixed(3),
+  } as React.CSSProperties;
   const stageLayout = useDocumentStageLayout({
     enabled: usesDocumentRenderer && Boolean(proposalContent),
     measurementRef: stageMeasureRef,
@@ -1128,6 +1142,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         className={resolveBodyClassName({ letterLike: isLetterLike })}
         data-scroll-top={activeScrollTop ? "true" : "false"}
         data-scroll-bottom={activeScrollBottom ? "true" : "false"}
+        style={activeScrollFadeStyle}
       >
         {renderDocumentStage()}
       </div>
@@ -1136,6 +1151,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         className={resolveBodyClassName({ letterLike: isLetterLike })}
         data-scroll-top={activeScrollTop ? "true" : "false"}
         data-scroll-bottom={activeScrollBottom ? "true" : "false"}
+        style={activeScrollFadeStyle}
       >
         <textarea
           ref={(node) => {
