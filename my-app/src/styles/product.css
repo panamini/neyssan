@@ -2185,7 +2185,7 @@
 .dasti-inline-ai-toolbar::before {
   content: "";
   position: absolute;
-  inset-inline-start: 50%;
+  inset-inline-start: var(--dasti-inline-ai-toolbar-pointer-offset, 50%);
   width: 12px;
   height: 12px;
   margin-inline-start: -6px;
