@@ -61,6 +61,11 @@ import {
   type StoredProposalComposeDraft,
 } from "../lib/proposal-workspace-state";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
+import {
+  getProposalGenerateButtonVisualClass,
+  ProposalGenerateButtonGlyph,
+  type ProposalGenerateButtonVisualState,
+} from "./ProposalGenerateGlyph";
 
 interface ProposalInputFormProps {
   onSubmit: (
@@ -101,7 +106,15 @@ interface ProposalInputFormProps {
   headerAction?: React.ReactNode;
   jobDescriptionPlaceholder?: string;
   initialComposeDraft?: StoredProposalComposeDraft | null;
+  onGenerateControlChange?: (control: ProposalGenerateControl | null) => void;
 }
+
+export type ProposalGenerateControl = {
+  trigger: () => void;
+  label: string;
+  disabled: boolean;
+  state: ProposalGenerateButtonVisualState;
+};
 
 type GenerateProposalPayload = ProposalGenerationRequestPayload;
 
@@ -229,18 +242,6 @@ function formatToolbarResumeLabel(value: string | null | undefined): string {
   return `${normalized.slice(0, 12).trimEnd()}…`;
 }
 
-type ProposalGenerateButtonVisualState =
-  | "idle"
-  | "loading-hiding"
-  | "loading-spinning"
-  | "loading-revealing-stop"
-  | "loading-stop"
-  | "stop-undrawing"
-  | "stop-revealing"
-  | "finishing-hiding"
-  | "finishing-spinning"
-  | "finishing-revealing";
-
 const PROPOSAL_GENERATE_BUTTON_TIMINGS = {
   loadingHideMs: 0,
   stopRevealDelayMs: 1800,
@@ -249,71 +250,6 @@ const PROPOSAL_GENERATE_BUTTON_TIMINGS = {
   stopUndrawMs: 880,
   stopRedrawMs: 1080,
 } as const;
-
-const PROPOSAL_GENERATE_FLOW_PATH =
-  "M 37 92 C 57 67, 82 52, 111 52 C 134 52, 152 59, 166 73 C 178 86, 185 104, 185 124 C 186 145, 179 165, 166 181 C 153 197, 134 208, 109 208 C 87 208, 71 200, 64 185 C 57 170, 60 151, 73 137 C 87 122, 107 113, 133 112 C 173 111, 211 127, 241 159";
-const PROPOSAL_GENERATE_SQUARE_PATH =
-  "M 84 74 H 172 Q 184 74, 184 86 V 170 Q 184 182, 172 182 H 96 Q 84 182, 84 170 V 86 Q 84 74, 96 74";
-
-function ProposalGenerateButtonGlyph({
-  state,
-}: {
-  state: ProposalGenerateButtonVisualState;
-}) {
-  return (
-    <svg
-      className="dasti-proposal-submit__glyph"
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 256 256"
-      fill="none"
-      aria-hidden="true"
-      data-state={state}
-    >
-      <path
-        className="dasti-proposal-submit__scribble"
-        pathLength={100}
-        d={PROPOSAL_GENERATE_FLOW_PATH}
-      />
-      <path
-        className="dasti-proposal-submit__spinner"
-        pathLength={100}
-        d={PROPOSAL_GENERATE_FLOW_PATH}
-      />
-      <path
-        className="dasti-proposal-submit__square"
-        pathLength={100}
-        d={PROPOSAL_GENERATE_SQUARE_PATH}
-      />
-    </svg>
-  );
-}
-
-function getProposalGenerateButtonVisualClass(
-  state: ProposalGenerateButtonVisualState,
-): string {
-  switch (state) {
-    case "idle":
-      return "is-idle";
-    case "loading-hiding":
-    case "loading-spinning":
-      return "is-spinning";
-    case "loading-revealing-stop":
-      return "is-revealing";
-    case "loading-stop":
-      return "is-done";
-    case "stop-undrawing":
-      return "is-back-undrawing";
-    case "stop-revealing":
-      return "is-back-revealing";
-    case "finishing-hiding":
-    case "finishing-spinning":
-      return "is-finishing-spinning";
-    case "finishing-revealing":
-      return "is-finishing-revealing";
-    default:
-      return "is-idle";
-  }
-}
 
 const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   onSubmit,
@@ -334,6 +270,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   headerAction = null,
   jobDescriptionPlaceholder = "Paste or write the job offer here…",
   initialComposeDraft = null,
+  onGenerateControlChange,
 }) => {
   const navigate = useNavigate();
   const hasHeaderLabel = Boolean(headerLabel);
@@ -1138,6 +1075,75 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
       requestGenerateButtonReverseSequence,
     ],
   );
+
+  const handleGenerateControlTrigger = React.useCallback(() => {
+    if (isGenerating) {
+      if (!canStopGeneration) {
+        return;
+      }
+
+      stopRequestedRunIdRef.current = activeGenerateRunIdRef.current;
+      setIsStopRequested(true);
+      setIsGenerating(false);
+      const clientRunId = activeGenerationClientRunIdRef.current;
+      if (clientRunId) {
+        void requestProposalGenerationCancel({ clientRunId }).catch((error) => {
+          console.warn(
+            "[ProposalInputForm] Failed to request proposal cancellation",
+            error,
+          );
+        });
+      }
+      onStop?.();
+      requestGenerateButtonReverseSequence();
+      return;
+    }
+
+    if (watchedJobDescription.length < 10 || !canSubmitGeneration) {
+      return;
+    }
+
+    void form.handleSubmit(handleSubmit)();
+  }, [
+    canStopGeneration,
+    canSubmitGeneration,
+    form,
+    handleSubmit,
+    isGenerating,
+    onStop,
+    requestProposalGenerationCancel,
+    requestGenerateButtonReverseSequence,
+    watchedJobDescription.length,
+  ]);
+
+  React.useEffect(() => {
+    if (!onGenerateControlChange) {
+      return;
+    }
+
+    onGenerateControlChange({
+      trigger: handleGenerateControlTrigger,
+      label: generateButtonLabel,
+      disabled:
+        watchedJobDescription.length < 10 ||
+        (isGenerating && !canStopGeneration),
+      state: generateButtonState,
+    });
+  }, [
+    canStopGeneration,
+    generateButtonLabel,
+    generateButtonState,
+    handleGenerateControlTrigger,
+    isGenerating,
+    onGenerateControlChange,
+    watchedJobDescription.length,
+  ]);
+
+  React.useEffect(() => {
+    return () => {
+      onGenerateControlChange?.(null);
+    };
+  }, [onGenerateControlChange]);
 
   return (
     <div className={styles.container}>

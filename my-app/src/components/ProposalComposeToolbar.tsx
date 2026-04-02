@@ -9,6 +9,11 @@ import {
   Wand2,
   X,
 } from "@/lib/icons";
+import {
+  getProposalGenerateButtonVisualClass,
+  ProposalGenerateButtonGlyph,
+  type ProposalGenerateButtonVisualState,
+} from "./ProposalGenerateGlyph";
 import type { ProposalVoicePreset } from "../../convex/lib/proposals/voicePresets";
 import type { FormValues } from "./ProposalInputForm.schemas";
 import { getVoicePresetDisplayLabel } from "../lib/proposal-voice-label";
@@ -29,6 +34,10 @@ type ProposalComposeToolbarProps = {
   transitionState?: "entering" | "exiting";
   onCollapseCompose?: () => void;
   onRestoreCompose?: () => void;
+  onGenerateFromBrief?: () => void;
+  generateLabel?: string;
+  generateDisabled?: boolean;
+  generateState?: ProposalGenerateButtonVisualState;
 };
 
 type ToneOption = {
@@ -108,6 +117,10 @@ export function ProposalComposeToolbar({
   transitionState,
   onCollapseCompose,
   onRestoreCompose,
+  onGenerateFromBrief,
+  generateLabel = "Generate",
+  generateDisabled = true,
+  generateState = "idle",
 }: ProposalComposeToolbarProps): JSX.Element {
   const rootRef = React.useRef<HTMLDivElement>(null);
   const [isToneMenuOpen, setIsToneMenuOpen] = React.useState(false);
@@ -170,6 +183,8 @@ export function ProposalComposeToolbar({
     [onClearCv],
   );
   const hasCollapseControl = Boolean(onCollapseCompose);
+  const collapsedGenerateClass =
+    getProposalGenerateButtonVisualClass(generateState);
 
   return (
     <section
@@ -268,6 +283,36 @@ export function ProposalComposeToolbar({
                 </div>
               ) : null}
             </span>
+            {onGenerateFromBrief ? (
+              <button
+                type="button"
+                className={[
+                  "dasti-proposal-submit",
+                  "dasti-proposal-submit-token",
+                  "dasti-compose-toolbar__generate-button",
+                  collapsedGenerateClass,
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                onClick={onGenerateFromBrief}
+                aria-label={generateLabel}
+                data-toolbar-tooltip={generateLabel}
+                disabled={generateDisabled}
+                style={
+                  {
+                    "--dasti-proposal-submit-button-size": "30px",
+                    "--dasti-proposal-submit-radius": "11px",
+                    "--dasti-proposal-submit-icon-size": "16px",
+                    "--dasti-proposal-submit-stroke-width": "7",
+                    "--dasti-proposal-submit-phase-gap": "120ms",
+                    "--dasti-proposal-submit-spinner-duration": "1450ms",
+                    "--dasti-proposal-submit-draw-duration": "1080ms",
+                  } as React.CSSProperties
+                }
+              >
+                <ProposalGenerateButtonGlyph state={generateState} />
+              </button>
+            ) : null}
           </div>
         </div>
       ) : (
