@@ -1,5 +1,5 @@
 import React from "react";
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { ProposalForge } from "../ProposalForge";
@@ -52,10 +52,12 @@ vi.mock("../../../convex/_generated/api", () => ({
 
 vi.mock("../../lib/proposal-personalization", () => ({
   buildAppProposalPersonalizationPayload: () => ({}),
+  clearActiveLocalCvId: () => undefined,
   getProposalApplicantIdentity: () => ({
     name: "Alex Martin",
     role: "Product Designer",
   }),
+  getProposalAttachedCvId: () => mockAttachedCvState.current?.id ?? null,
   getProposalAttachedCvLocalDocument: () =>
     mockAttachedCvState.current
       ? {
@@ -69,6 +71,7 @@ vi.mock("../../lib/proposal-personalization", () => ({
       ? { name: "Alex Martin", desiredPosition: "Product Designer" }
       : null,
   }),
+  getLocalActiveCvSnapshotById: () => null,
   listLocalCvPickerOptions: () =>
     mockAttachedCvState.current
       ? [
@@ -112,7 +115,7 @@ vi.mock("../../components/ProposalsList", () => ({
   default: () => <div>Saved proposals</div>,
 }));
 
-describe("ProposalForge RegenerateMenu", () => {
+describe("ProposalForge refine action", () => {
   beforeEach(() => {
     window.localStorage.clear();
     mockAttachedCvState.current = null;
@@ -132,41 +135,7 @@ describe("ProposalForge RegenerateMenu", () => {
     };
   });
 
-  it("shows local style choices in the output rail when the proposal is not linked", () => {
-    render(
-      <MemoryRouter>
-        <ProposalForge />
-      </MemoryRouter>,
-    );
-
-    expect(screen.getByRole("button", { name: "Auto" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Formal" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Warm" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Technical" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Balanced" })).toBeInTheDocument();
-  });
-
-  it("hides style choices when the proposal inherits style from the linked CV", () => {
-    mockAttachedCvState.current = {
-      id: "cv-linked",
-      title: "Linked CV",
-    };
-
-    render(
-      <MemoryRouter>
-        <ProposalForge />
-      </MemoryRouter>,
-    );
-
-    expect(screen.getByRole("button", { name: "Local" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Linked" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Formal" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Warm" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Technical" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Balanced" })).not.toBeInTheDocument();
-  });
-
-  it("shows the Regenerate button after a successful generation", async () => {
+  it("shows the Refine action after a successful generation", async () => {
     render(
       <MemoryRouter>
         <ProposalForge />
@@ -179,12 +148,12 @@ describe("ProposalForge RegenerateMenu", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole("button", { name: "Regenerate" }),
+        screen.getByRole("button", { name: "Refine proposal" }),
       ).toBeInTheDocument();
     });
   });
 
-  it("opens the voice popover when Regenerate is clicked", async () => {
+  it("reuses the current compose tone when Refine is clicked", async () => {
     render(
       <MemoryRouter>
         <ProposalForge />
@@ -192,61 +161,25 @@ describe("ProposalForge RegenerateMenu", () => {
     );
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Trigger generation" }));
+      fireEvent.click(screen.getByRole("button", { name: "Formal" }));
     });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Regenerate" }));
-    });
-
-    const dialog = screen.getByRole("dialog", { name: "Regenerate options" });
-    expect(dialog).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Voice" })).toBeInTheDocument();
-    expect(within(dialog).getByRole("button", { name: "Auto" })).toBeInTheDocument();
-    expect(within(dialog).getByRole("button", { name: "Natural" })).toBeInTheDocument();
-    expect(within(dialog).getByRole("button", { name: "Formal" })).toBeInTheDocument();
-    expect(within(dialog).getByRole("button", { name: "Warm" })).toBeInTheDocument();
-  });
-
-  it("closes the popover when a voice chip is selected and Regenerate is confirmed", async () => {
-    render(
-      <MemoryRouter>
-        <ProposalForge />
-      </MemoryRouter>,
-    );
-
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Trigger generation" }));
     });
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Regenerate" }));
-    });
-
-    const dialog = screen.getByRole("dialog", { name: "Regenerate options" });
-    expect(dialog).toBeInTheDocument();
-
-    await act(async () => {
-      fireEvent.click(within(dialog).getByRole("button", { name: "Formal" }));
-    });
-
-    // Confirm regenerate from inside the popover
-    const confirmButtons = screen.getAllByRole("button", { name: "Regenerate" });
-    // The confirm button inside the dialog
-    const confirmButton = confirmButtons.find(
-      (btn) => btn.closest('[role="dialog"]') !== null,
-    );
-    expect(confirmButton).toBeTruthy();
-    await act(async () => {
-      fireEvent.click(confirmButton!);
+      fireEvent.click(screen.getByRole("button", { name: "Refine proposal" }));
     });
 
     await waitFor(() => {
-      expect(
-        screen.queryByRole("dialog", { name: "Regenerate options" }),
-      ).not.toBeInTheDocument();
+      expect(mockGenerateProposalAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          voicePreset: "expert",
+        }),
+      );
     });
   });
 
-  it("sends a null voice preset when Auto is confirmed from regenerate", async () => {
+  it("sends a null voice preset when Refine is triggered from an auto-tone draft", async () => {
     mockProposalInputValues.current = {
       proposalType: "cover_letter",
       jobTitle: "Customer Support Specialist",
@@ -260,7 +193,7 @@ describe("ProposalForge RegenerateMenu", () => {
       modelType: "mistral-small-latest",
     };
     mockGenerateProposalAction.mockResolvedValue({
-      proposalId: "proposal_regenerated_auto",
+      proposalId: "proposal_refined_auto",
       proposalContent: "Hello team,\n\nI would love to help your customers.\n\nBest,",
       requestedModelType: "mistral-small-latest",
       actualModelType: "mistral-small-latest",
@@ -277,26 +210,13 @@ describe("ProposalForge RegenerateMenu", () => {
       fireEvent.click(screen.getByRole("button", { name: "Trigger generation" }));
     });
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Regenerate" }));
-    });
-
-    const dialog = screen.getByRole("dialog", { name: "Regenerate options" });
-    await act(async () => {
-      fireEvent.click(within(dialog).getByRole("button", { name: "Auto" }));
-    });
-
-    const confirmButton = screen
-      .getAllByRole("button", { name: "Regenerate" })
-      .find((button) => button.closest('[role="dialog"]') !== null);
-
-    expect(confirmButton).toBeTruthy();
-
-    await act(async () => {
-      fireEvent.click(confirmButton!);
+      fireEvent.click(screen.getByRole("button", { name: "Refine proposal" }));
     });
 
     await waitFor(() => {
-      expect(mockGenerateProposalAction).toHaveBeenCalledWith(
+      expect(
+        mockGenerateProposalAction,
+      ).toHaveBeenCalledWith(
         expect.objectContaining({
           voicePreset: null,
         }),

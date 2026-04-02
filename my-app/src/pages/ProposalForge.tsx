@@ -12,7 +12,9 @@ import {
   Trash,
   X,
 } from "@/lib/icons";
-import ProposalInputForm from "../components/ProposalInputForm";
+import ProposalInputForm, {
+  type ProposalGenerateControl,
+} from "../components/ProposalInputForm";
 import { ProposalComposeToolbar } from "../components/ProposalComposeToolbar";
 import { ProposalArtifactInspector } from "../components/ProposalArtifactInspector";
 import { ProposalBriefCard } from "../components/ProposalBriefCard";
@@ -537,6 +539,14 @@ export function ProposalForge(): JSX.Element {
       });
     });
   const [cvPickerRequestKey, setCvPickerRequestKey] = React.useState(0);
+  const composeGenerateTriggerRef = React.useRef<(() => void) | null>(null);
+  const [composeGenerateControl, setComposeGenerateControl] = React.useState<
+    Omit<ProposalGenerateControl, "trigger">
+  >({
+    label: "Generate",
+    disabled: true,
+    state: "idle",
+  });
   const hasCompletedInitialRenderRef = React.useRef(false);
   const appliedSavedToolbarVoicePresetRef = React.useRef(false);
   const pendingComposeDraftSyncRef =
@@ -2094,7 +2104,7 @@ export function ProposalForge(): JSX.Element {
       variant: "success",
       description: restoredSourceJobDescription
         ? "A detached draft copy is ready with the saved proposal and its source brief."
-        : "A detached draft copy is ready. Review the brief in Compose before regenerating.",
+        : "A detached draft copy is ready. Review the brief in Compose before refining.",
     });
     updateProposalRoute("compose");
   }, [
@@ -2179,7 +2189,7 @@ export function ProposalForge(): JSX.Element {
           },
           result.proposalId,
         );
-        showToast("Proposal regenerated", { variant: "success" });
+        showToast("Proposal refined", { variant: "success" });
       } catch (regenerateError) {
         const nextErrorMessage = getProposalGenerationUiErrorMessage({
           error: regenerateError,
@@ -2189,7 +2199,7 @@ export function ProposalForge(): JSX.Element {
         const rawReason =
           regenerateError instanceof Error ? regenerateError.message : null;
         handleProposalError(nextErrorMessage, requestWithVoice, rawReason);
-        showToast("Regeneration failed", {
+        showToast("Refinement failed", {
           variant: "error",
           description: nextErrorMessage,
         });
@@ -2647,6 +2657,42 @@ export function ProposalForge(): JSX.Element {
     setIsBriefExpanded(true);
     updateProposalRoute("compose");
   }, [updateProposalRoute]);
+  const handleComposeGenerateControlChange = React.useCallback(
+    (control: ProposalGenerateControl | null) => {
+      if (!control) {
+        composeGenerateTriggerRef.current = null;
+        setComposeGenerateControl((current) =>
+          current.label === "Generate" &&
+          current.disabled &&
+          current.state === "idle"
+            ? current
+            : {
+                label: "Generate",
+                disabled: true,
+                state: "idle",
+              },
+        );
+        return;
+      }
+
+      composeGenerateTriggerRef.current = control.trigger;
+      setComposeGenerateControl((current) =>
+        current.label === control.label &&
+        current.disabled === control.disabled &&
+        current.state === control.state
+          ? current
+          : {
+              label: control.label,
+              disabled: control.disabled,
+              state: control.state,
+            },
+      );
+    },
+    [],
+  );
+  const handleGenerateFromCollapsedToolbar = React.useCallback(() => {
+    composeGenerateTriggerRef.current?.();
+  }, []);
 
   React.useEffect(() => {
     if (!canCollapseComposePanel && !isComposePanelVisible) {
@@ -2730,6 +2776,10 @@ export function ProposalForge(): JSX.Element {
       collapsed
       transitionState={toolbarTransitionState ?? undefined}
       onRestoreCompose={handleRestoreCompose}
+      onGenerateFromBrief={handleGenerateFromCollapsedToolbar}
+      generateLabel={composeGenerateControl.label}
+      generateDisabled={composeGenerateControl.disabled}
+      generateState={composeGenerateControl.state}
     />
   ) : showComposePanel ? (
     <ProposalComposeToolbar
@@ -2917,6 +2967,7 @@ export function ProposalForge(): JSX.Element {
                         externalVoicePreset={composeToolbarVoicePreset}
                         headerLabel={null}
                         initialComposeDraft={composeDraftInitialSeed}
+                        onGenerateControlChange={handleComposeGenerateControlChange}
                         headerAction={
                           hasBriefContent ? (
                             <button
@@ -3027,11 +3078,11 @@ export function ProposalForge(): JSX.Element {
                           <button
                             type="button"
                             className="dasti-icon-button"
-                            aria-label="Regenerate proposal"
+                            aria-label="Refine proposal"
                             data-toolbar-tooltip={
                               isRegeneratingGeneratedProposal
-                                ? "Regenerating"
-                                : "Regenerate"
+                                ? "Refining"
+                                : "Refine"
                             }
                             onClick={() => {
                               void handleRegenerateOutput();
