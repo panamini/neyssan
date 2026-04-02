@@ -161,6 +161,34 @@ describe("ProposalComposeToolbar", () => {
     ).toBeTruthy();
   });
 
+  it("renders the collapsed brief generate action with the shared scribble glyph", async () => {
+    const user = userEvent.setup();
+    const handleGenerateFromBrief = vi.fn();
+    const { container } = render(
+      <ProposalComposeToolbar
+        value="signature"
+        onChange={vi.fn()}
+        onToggleCvPicker={vi.fn()}
+        cvTitle={null}
+        isCvPickerOpen={false}
+        collapsed
+        onRestoreCompose={vi.fn()}
+        onGenerateFromBrief={handleGenerateFromBrief}
+        generateLabel="Generate"
+        generateDisabled={false}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Generate" }));
+    expect(handleGenerateFromBrief).toHaveBeenCalledTimes(1);
+    expect(
+      container.querySelector(".dasti-compose-toolbar__generate-button"),
+    ).toBeTruthy();
+    expect(
+      container.querySelector(".dasti-compose-toolbar__generate-button .dasti-proposal-submit__glyph"),
+    ).toBeTruthy();
+  });
+
   it("marks compact no-collapse layouts with the stable left-anchor class", () => {
     const { container } = render(
       <ProposalComposeToolbar

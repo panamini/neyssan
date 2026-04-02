@@ -37,6 +37,15 @@ describe("ProposalBriefCard CSS contracts", () => {
     expect(productCss).toContain("--proposal-sheet-edge-fade-height: 22px;");
     expect(productCss).toContain("box-shadow: var(--proposal-sheet-top-shadow, none);");
     expect(productCss).toContain(".dasti-proposal-sheet--composer {");
+    expect(productCss).toContain(".dasti-proposal-sheet__body--composer::before,");
+    expect(productCss).toContain("content: none;");
+    expect(productCss).toContain(
+      ".dasti-proposal-sheet__body--composer .dasti-proposal-sheet__body--editable {",
+    );
+    expect(productCss).toContain("-webkit-mask-image: linear-gradient(");
+    expect(productCss).toContain(
+      "var(--proposal-compose-edge-fade-height) *",
+    );
   });
 
   it("defines calm motion states for brief swaps and compose collapse", () => {

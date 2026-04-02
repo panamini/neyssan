@@ -1551,7 +1551,7 @@
   --proposal-scroll-top-strength: 0;
   --proposal-scroll-bottom-strength: 0;
   --proposal-sheet-edge-max-opacity: 1;
-  --proposal-sheet-edge-shift: 6px;
+  --proposal-sheet-edge-shift: 4px;
 }
 
 .dasti-document-shell .dasti-proposal-sheet__body {
@@ -1567,6 +1567,55 @@
   --proposal-sheet-top-shadow: var(--proposal-compose-edge-top-shadow);
   --proposal-sheet-bottom-shadow: var(--proposal-compose-edge-bottom-shadow);
   --proposal-sheet-edge-max-opacity: var(--proposal-compose-edge-max-opacity);
+  --proposal-sheet-edge-shift: 2px;
+}
+
+.dasti-proposal-sheet__body--composer::before,
+.dasti-proposal-sheet__body--composer::after {
+  content: none;
+}
+
+.dasti-proposal-sheet__body--composer .dasti-proposal-sheet__body--editable {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    rgb(0 0 0 / calc(1 - var(--proposal-scroll-top-strength))) 0,
+    rgb(0 0 0 / 1)
+      calc(
+        var(--proposal-compose-edge-fade-height) *
+          var(--proposal-scroll-top-strength)
+      ),
+    rgb(0 0 0 / 1)
+      calc(
+        100% -
+          (
+            var(--proposal-compose-edge-fade-height) *
+              var(--proposal-scroll-bottom-strength)
+          )
+      ),
+    rgb(0 0 0 / calc(1 - var(--proposal-scroll-bottom-strength))) 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    rgb(0 0 0 / calc(1 - var(--proposal-scroll-top-strength))) 0,
+    rgb(0 0 0 / 1)
+      calc(
+        var(--proposal-compose-edge-fade-height) *
+          var(--proposal-scroll-top-strength)
+      ),
+    rgb(0 0 0 / 1)
+      calc(
+        100% -
+          (
+            var(--proposal-compose-edge-fade-height) *
+              var(--proposal-scroll-bottom-strength)
+          )
+      ),
+    rgb(0 0 0 / calc(1 - var(--proposal-scroll-bottom-strength))) 100%
+  );
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
 }
 
 .dasti-proposal-sheet__body--with-header {
@@ -7244,6 +7293,16 @@
   align-items: center;
   justify-content: center;
   overflow: visible;
+}
+
+.dasti-compose-toolbar__generate-button {
+  margin-left: 0;
+  box-shadow: none;
+}
+
+.dasti-compose-toolbar__generate-button:hover:not(:disabled),
+.dasti-compose-toolbar__generate-button:focus-visible {
+  box-shadow: none;
 }
 
 .dasti-compose-toolbar__tone-option--collapsed {

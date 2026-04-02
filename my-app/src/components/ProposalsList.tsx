@@ -1090,7 +1090,7 @@ export default function ProposalsList({
   async function handleRegenerate(nextVoicePreset?: ProposalVoicePreset) {
     if (!selected || !selectedRenderState || isRegenerating) return;
     if (!isConvexAuthenticated) {
-      showConvexAuthRequiredToast("Regenerate");
+      showConvexAuthRequiredToast("Refine");
       return;
     }
     setIsRegenerating(selected._id);
@@ -1124,7 +1124,7 @@ export default function ProposalsList({
       };
       const res = await generateProposalAction(payload);
       if (!res?.proposalContent) {
-        showToast("Regeneration returned no content", { variant: "warning" });
+        showToast("Refinement returned no content", { variant: "warning" });
         return;
       }
       const nextMetadata: NonNullable<SavedProposalRecord["metadata"]> = {
@@ -1161,13 +1161,13 @@ export default function ProposalsList({
       upsertLocalProposal(regeneratedRecord);
       selectProposal(regeneratedRecord, true);
       setIsRegenerateToneMenuOpen(false);
-      showToast("Proposal regenerated", {
+      showToast("Proposal refined", {
         variant: "success",
         description: "A refreshed saved version is now in Proposal Library.",
       });
     } catch (err) {
       console.error("Regenerate failed:", err);
-      showToast("Regeneration failed", { variant: "error" });
+      showToast("Refinement failed", { variant: "error" });
     } finally {
       setIsRegenerating(null);
     }
@@ -1202,8 +1202,9 @@ export default function ProposalsList({
         <button
           type="button"
           className="dasti-icon-button dasti-toolbar-tooltip-trigger--above"
+          aria-label="Refine saved proposal"
           data-toolbar-tooltip={
-            isRegenerating === selected._id ? "Regenerating" : "Regenerate"
+            isRegenerating === selected._id ? "Refining" : "Refine"
           }
           style={{
             opacity: isRegenerating === selected._id ? 0.5 : 1,
@@ -1219,7 +1220,7 @@ export default function ProposalsList({
           <div
             className="dasti-proposal-regenerate-drawer__menu dasti-proposal-chrome-drawer dasti-proposal-chrome-drawer--stack"
             role="dialog"
-            aria-label="Choose tone for regenerate"
+            aria-label="Choose tone for refine"
           >
             {SAVED_PROPOSAL_TONE_OPTIONS.map((option) => {
               const active = option.id === getStoredVoicePreset(selected);
