@@ -63,7 +63,10 @@ describe("resume preview workspace anchoring", () => {
       "--document-viewer-bleed-block: var(--space-1);",
     );
     expect(workspacePanelRule).toContain("padding: var(--space-1);");
-    expect(workspaceFrameRule).toContain("max-width: none;");
+    expect(workspaceFrameRule).toContain("max-width: 100%;");
     expect(workspaceStagePaddingRule).toContain("padding: var(--space-1);");
+    expect(productCss).toContain(
+      ".dasti-doc-viewer-shell--resume-workspace .dasti-doc-viewport--resume {",
+    );
   });
 });
