@@ -2,6 +2,7 @@ import { mutation } from './_generated/server';
 import { v } from 'convex/values';
 import { internalMutation } from './_generated/server';
 import { internal } from './_generated/api';
+import { getPrimaryProfileForClerk } from './lib/userProfiles';
 
 const savedProposalType = v.optional(
   v.union(
@@ -41,10 +42,7 @@ export const saveJobAndProposal = internalMutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not logged in");
 
-    let user = await ctx.db
-      .query('userProfiles')
-      .withIndex('by_clerk_id', (q) => q.eq('clerkId', identity.subject))
-      .unique();
+    let user = await getPrimaryProfileForClerk(ctx, identity.subject);
 
     if (!user) {
       console.warn("User profile not found. Creating a new profile.");
@@ -53,10 +51,7 @@ export const saveJobAndProposal = internalMutation({
         email: identity.email ?? "unknown@example.com",
         name: identity.name,
       });
-      user = await ctx.db
-        .query('userProfiles')
-        .withIndex('by_clerk_id', (q) => q.eq('clerkId', identity.subject))
-        .unique();
+      user = await getPrimaryProfileForClerk(ctx, identity.subject);
       if (!user) throw new Error("Failed to create user profile");
     }
 
@@ -95,10 +90,7 @@ export default mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not logged in");
 
-    const user = await ctx.db
-      .query('userProfiles')
-      .withIndex('by_clerk_id', (q) => q.eq('clerkId', identity.subject))
-      .unique();
+    const user = await getPrimaryProfileForClerk(ctx, identity.subject);
 
     if (!user) {
       throw new Error('User not found');

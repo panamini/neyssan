@@ -161,6 +161,13 @@ const inlineEditorModeChoice = v.union(
   v.literal("shorten"),
   v.literal("lengthen"),
   v.literal("fix_grammar"),
+  v.literal("rewrite"),
+  v.literal("expand"),
+  v.literal("clarify"),
+  v.literal("fix"),
+  v.literal("tone"),
+  v.literal("summarize"),
+  v.literal("ask"),
   v.literal("custom"),
 );
 

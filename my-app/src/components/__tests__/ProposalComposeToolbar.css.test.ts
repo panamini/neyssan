@@ -35,12 +35,15 @@ describe("ProposalComposeToolbar CSS contracts", () => {
     );
   });
 
-  it("keeps the collapsed toolbar as a split shell with trailing tone and generate actions", () => {
+  it("keeps the collapsed toolbar as a compact icon cluster sized to its own controls", () => {
     expect(productCss).toMatch(
-      /\.dasti-compose-toolbar__collapsed-shell\s*\{[\s\S]*display:\s*inline-flex;[\s\S]*justify-content:\s*space-between;[\s\S]*width:\s*100%;/,
+      /\.dasti-compose-toolbar__collapsed-shell\s*\{[\s\S]*display:\s*inline-flex;[\s\S]*justify-content:\s*flex-start;[\s\S]*width:\s*max-content;[\s\S]*max-width:\s*100%;/,
     );
     expect(productCss).toMatch(
-      /\.dasti-compose-toolbar__collapsed-actions\s*\{[\s\S]*justify-content:\s*flex-end;[\s\S]*margin-inline-start:\s*auto;/,
+      /\.dasti-compose-toolbar__collapsed-actions\s*\{[\s\S]*justify-content:\s*flex-start;[\s\S]*margin-inline-start:\s*0;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-forge-compose-toolbar-slot\s+\.dasti-compose-toolbar--collapsed,[\s\S]*\.dasti-forge-compose-toolbar-slot[\s\S]*\.dasti-compose-toolbar__collapsed-shell\s*\{[\s\S]*width:\s*max-content;[\s\S]*max-width:\s*100%;/,
     );
     expect(productCss).toMatch(
       /\.dasti-compose-toolbar__tone-popover--collapsed\s*\{[\s\S]*inset-inline-start:\s*50%;[\s\S]*inset-inline-end:\s*auto;[\s\S]*transform:\s*translateX\(-50%\);[\s\S]*transform-origin:\s*center top;/,

@@ -37,7 +37,10 @@ import { useCvAiCapabilities } from "../../hooks/use-cv-ai-capabilities";
 import FloatingAiToolbar, {
   type InlineAiActionId,
 } from "../FloatingAiToolbar";
-import { getDomSelectionState } from "../../lib/editor-ai-selection";
+import {
+  getDomSelectionState,
+  isInlineAiToolbarActiveElement,
+} from "../../lib/editor-ai-selection";
 
 type UiPatch = Partial<{
   startYear: string;
@@ -321,7 +324,7 @@ const RichEditor = forwardRef<
   });
   const [inlineSelectionState, setInlineSelectionState] = useState<{
     text: string;
-    anchor: { left: number; top: number };
+    anchor: { left: number; top: number; bottom: number };
     from: number;
     to: number;
   } | null>(null);
@@ -380,6 +383,9 @@ const RichEditor = forwardRef<
       const nextSelection = getDomSelectionState(view?.dom as HTMLElement | null);
 
       if (!nextSelection || !selection || selection.empty) {
+        if (isInlineAiToolbarActiveElement()) {
+          return;
+        }
         setInlineSelectionState(null);
         return;
       }

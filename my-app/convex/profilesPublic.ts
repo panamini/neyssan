@@ -2,11 +2,65 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
+import { getPrimaryProfileForClerk } from "./lib/userProfiles";
 
-// Define the return type for your query handler
+const publicUserProfileValidator = v.object({
+  _id: v.id("userProfiles"),
+  _creationTime: v.number(),
+  profileId: v.optional(v.string()),
+  clerkId: v.optional(v.string()),
+  email: v.string(),
+  name: v.optional(v.string()),
+  version: v.number(),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+  preferences: v.object({
+    rateLimits: v.optional(v.any()),
+    writingStyle: v.string(),
+    tonePreference: v.string(),
+    autoSend: v.boolean(),
+  }),
+  summary: v.optional(v.string()),
+  skills: v.optional(v.array(v.string())),
+  experience: v.optional(
+    v.array(
+      v.object({
+        company: v.string(),
+        title: v.string(),
+        startDate: v.optional(v.union(v.string(), v.number(), v.null())),
+        endDate: v.optional(v.union(v.string(), v.number(), v.null())),
+        description: v.optional(v.string()),
+      }),
+    ),
+  ),
+  education: v.optional(
+    v.array(
+      v.object({
+        school: v.string(),
+        degree: v.optional(v.string()),
+        fieldOfStudy: v.optional(v.string()),
+        startDate: v.optional(v.union(v.string(), v.number(), v.null())),
+        endDate: v.optional(v.union(v.string(), v.number(), v.null())),
+      }),
+    ),
+  ),
+  linkedIn: v.optional(v.string()),
+  raw_text: v.optional(v.string()),
+  metadata: v.optional(
+    v.object({
+      source: v.optional(v.string()),
+      importedAt: v.optional(v.number()),
+      confidence: v.optional(v.number()),
+      filename: v.optional(v.string()),
+    }),
+  ),
+  cvDocument: v.optional(v.any()),
+});
+
 type UserProfile = {
   _id: Id<"userProfiles">;
   _creationTime: number;
+  profileId?: string;
   clerkId?: string;
   email: string;
   name?: string;
@@ -43,97 +97,95 @@ type UserProfile = {
     confidence?: number;
     filename?: string;
   };
+  cvDocument?: unknown;
 } | null;
+
+function projectProfileDoc(prof: any): Exclude<UserProfile, null> {
+  return {
+    _id: prof._id,
+    _creationTime: prof._creationTime,
+    profileId: prof.profileId ?? undefined,
+    clerkId: prof.clerkId ?? undefined,
+    email: prof.email,
+    name: prof.name ?? undefined,
+    version: prof.version,
+    createdAt: prof.createdAt,
+    updatedAt: prof.updatedAt,
+    preferences: prof.preferences,
+    summary: prof.summary ?? undefined,
+    skills: prof.skills ?? undefined,
+    experience: prof.experience ?? undefined,
+    education: prof.education ?? undefined,
+    linkedIn: prof.linkedIn ?? undefined,
+    raw_text: prof.raw_text ?? undefined,
+    metadata: prof.metadata ?? undefined,
+    cvDocument: prof.cvDocument ?? undefined,
+  };
+}
 
 export const get = query({
   args: {},
-  returns: v.union(
-    v.null(),
-    v.object({
-      _id: v.id("userProfiles"),
-      _creationTime: v.number(),
-      clerkId: v.optional(v.string()),
-      email: v.string(),
-      name: v.optional(v.string()),
-      version: v.number(),
-      createdAt: v.number(),
-      updatedAt: v.number(),
-      preferences: v.object({
-        rateLimits: v.optional(v.any()),
-        writingStyle: v.string(),
-        tonePreference: v.string(),
-        autoSend: v.boolean(),
-      }),
-      summary: v.optional(v.string()),
-      skills: v.optional(v.array(v.string())),
-      experience: v.optional(
-        v.array(
-          v.object({
-            company: v.string(),
-            title: v.string(),
-            startDate: v.optional(v.union(v.string(), v.number(), v.null())),
-            endDate: v.optional(v.union(v.string(), v.number(), v.null())),
-            description: v.optional(v.string()),
-          })
-        )
-      ),
-      education: v.optional(
-        v.array(
-          v.object({
-            school: v.string(),
-            degree: v.optional(v.string()),
-            fieldOfStudy: v.optional(v.string()),
-            startDate: v.optional(v.union(v.string(), v.number(), v.null())),
-            endDate: v.optional(v.union(v.string(), v.number(), v.null())),
-          })
-        )
-      ),
-      linkedIn: v.optional(v.string()),
-      raw_text: v.optional(v.string()),
-      metadata: v.optional(
-        v.object({
-          source: v.optional(v.string()),
-          importedAt: v.optional(v.number()),
-          confidence: v.optional(v.number()),
-          filename: v.optional(v.string()),
-        })
-      ),
-    })
-  ),
+  returns: v.union(v.null(), publicUserProfileValidator),
   handler: async (ctx): Promise<UserProfile> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       return null;
     }
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
-      .unique();
-    if (!user) {
-      return null;
-    }
-    // Call internal.profiles.get (may include system fields) and project only the fields
-    // declared in this query's return validator to avoid ReturnsValidationError.
     const prof = await ctx.runQuery(internal.profiles.get);
     if (!prof) return null;
-    return {
-      _id: prof._id,
-      _creationTime: prof._creationTime,
-      clerkId: prof.clerkId ?? undefined,
-      email: prof.email,
-      name: prof.name ?? undefined,
-      version: prof.version,
-      createdAt: prof.createdAt,
-      updatedAt: prof.updatedAt,
-      preferences: prof.preferences,
-      summary: prof.summary ?? undefined,
-      skills: prof.skills ?? undefined,
-      experience: prof.experience ?? undefined,
-      education: prof.education ?? undefined,
-      linkedIn: prof.linkedIn ?? undefined,
-      raw_text: prof.raw_text ?? undefined,
-      metadata: prof.metadata ?? undefined,
-    };
+    return projectProfileDoc(prof);
+  },
+});
+
+export const getByProfileId = query({
+  args: {
+    profileId: v.string(),
+  },
+  returns: v.union(v.null(), publicUserProfileValidator),
+  handler: async (ctx, args): Promise<UserProfile> => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return null;
+    }
+
+    const rows = await ctx.db
+      .query("userProfiles")
+      .withIndex("by_profileId", (q) => q.eq("profileId", args.profileId))
+      .collect();
+
+    const owned = rows.find((row) => row.clerkId === identity.subject);
+    if (owned) {
+      return projectProfileDoc(owned);
+    }
+
+    if (rows.some((row) => row.clerkId && row.clerkId !== identity.subject)) {
+      return null;
+    }
+
+    const unclaimed = rows.find((row) => !row.clerkId);
+    return unclaimed ? projectProfileDoc(unclaimed) : null;
+  },
+});
+
+export const listMine = query({
+  args: {},
+  returns: v.array(publicUserProfileValidator),
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return [];
+    }
+
+    const rows = await ctx.db
+      .query("userProfiles")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .collect();
+
+    return rows
+      .sort(
+        (a, b) => (b.updatedAt ?? b._creationTime) - (a.updatedAt ?? a._creationTime),
+      )
+      .map(projectProfileDoc);
   },
 });
 
@@ -198,10 +250,7 @@ export default mutation({
     });
 
     // Find existing profile
-    const existing = await ctx.db
-      .query("userProfiles")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
-      .unique();
+    const existing = await getPrimaryProfileForClerk(ctx, identity.subject);
 
     if (!existing) {
       throw new Error("User profile not found after createOrUpdateUser");

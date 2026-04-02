@@ -82,19 +82,23 @@ describe("ProfileReviewCard import", () => {
       strict: null,
     });
 
-    render(<ProfileReviewCard />);
+    const { container } = render(<ProfileReviewCard />);
 
     expect(screen.getByRole("button", { name: "Import" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Import" }));
-    const input = screen.getByLabelText(
-      /Import text PDF or TXT/i,
-    ) as HTMLInputElement;
+    await user.click(
+      screen.getByRole("button", { name: /Import text PDF or TXT/i }),
+    );
+    const input = container.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement | null;
+    expect(input).not.toBeNull();
     const file = new File(["Imported CV text"], "resume.txt", {
       type: "text/plain",
     });
 
-    fireEvent.change(input, { target: { files: [file] } });
+    fireEvent.change(input as HTMLInputElement, { target: { files: [file] } });
 
     await waitFor(() => expect(importCvMock).toHaveBeenCalledTimes(1));
     expect(importCvMock.mock.calls[0][0]).toMatchObject({
