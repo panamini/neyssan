@@ -32,81 +32,101 @@ export const EditorToolbar: React.FC<{ position?: "top" | "bottom" }> = ({
       ? `${containerBase} border-t rounded-b-md`
       : `${containerBase} border-b rounded-t-md`;
 
+  const dividerStyle =
+    "w-px self-stretch mx-1 [background:var(--color-border)] opacity-60 shrink-0";
+
   return (
     <div className={containerClass}>
-      <button
-        onClick={() => {
-          // Focus first so the command applies to the current selection
-          focus?.();
-          toggleBold?.();
-        }}
-        className={`${buttonStyle} ${typeof active.bold === "function" && active.bold() ? activeButtonStyle : ""}`}
-        aria-label="Toggle bold"
-        type="button"
+      {/* Zone 1 — Text formatting */}
+      <div
+        className="flex items-center"
+        role="group"
+        aria-label="Text formatting"
       >
-        <Bold size={16} />
-      </button>
-      <button
-        onClick={() => {
-          focus?.();
-          toggleItalic?.();
-        }}
-        className={`${buttonStyle} ${typeof active.italic === "function" && active.italic() ? activeButtonStyle : ""}`}
-        aria-label="Toggle italic"
-        type="button"
-      >
-        <Italic size={16} />
-      </button>
-      <button
-        onClick={() => {
-          focus?.();
-          toggleUnderline?.();
-        }}
-        className={`${buttonStyle} ${typeof active.underline === "function" && active.underline() ? activeButtonStyle : ""}`}
-        aria-label="Toggle underline"
-        type="button"
-      >
-        <Underline size={16} />
-      </button>
-      <button
-        onMouseDown={(e) => e.preventDefault()}
-        onClick={() => {
-          // Prefer chained commands with focus BEFORE toggling
-          try {
-            if (
-              chain &&
-              typeof chain.focus === "function" &&
-              typeof chain.toggleBulletList === "function"
-            ) {
-              chain.focus().toggleBulletList().run();
-              return;
-            }
-          } catch {
-            /* fall through to fallback */
-          }
-
-          // Fallback to direct commands if chaining is unavailable
-          try {
+        <button
+          onClick={() => {
+            // Focus first so the command applies to the current selection
             focus?.();
-            if (typeof toggleBulletList === "function") {
-              toggleBulletList();
-              return;
+            toggleBold?.();
+          }}
+          className={`${buttonStyle} ${typeof active.bold === "function" && active.bold() ? activeButtonStyle : ""}`}
+          aria-label="Toggle bold"
+          title="Bold"
+          type="button"
+        >
+          <Bold size={16} />
+        </button>
+        <button
+          onClick={() => {
+            focus?.();
+            toggleItalic?.();
+          }}
+          className={`${buttonStyle} ${typeof active.italic === "function" && active.italic() ? activeButtonStyle : ""}`}
+          aria-label="Toggle italic"
+          title="Italic"
+          type="button"
+        >
+          <Italic size={16} />
+        </button>
+        <button
+          onClick={() => {
+            focus?.();
+            toggleUnderline?.();
+          }}
+          className={`${buttonStyle} ${typeof active.underline === "function" && active.underline() ? activeButtonStyle : ""}`}
+          aria-label="Toggle underline"
+          title="Underline"
+          type="button"
+        >
+          <Underline size={16} />
+        </button>
+      </div>
+
+      {/* Divider */}
+      <span className={dividerStyle} aria-hidden="true" />
+
+      {/* Zone 2 — Structure */}
+      <div className="flex items-center" role="group" aria-label="Structure">
+        <button
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => {
+            // Prefer chained commands with focus BEFORE toggling
+            try {
+              if (
+                chain &&
+                typeof chain.focus === "function" &&
+                typeof chain.toggleBulletList === "function"
+              ) {
+                chain.focus().toggleBulletList().run();
+                return;
+              }
+            } catch {
+              /* fall through to fallback */
             }
-            if (typeof toggleList === "function") {
-              // Some remirror versions expose a generic toggleList({ type: 'bullet' })
-              toggleList({ type: "bullet" });
+
+            // Fallback to direct commands if chaining is unavailable
+            try {
+              focus?.();
+              if (typeof toggleBulletList === "function") {
+                toggleBulletList();
+                return;
+              }
+              if (typeof toggleList === "function") {
+                // Some remirror versions expose a generic toggleList({ type: 'bullet' })
+                toggleList({ type: "bullet" });
+              }
+            } catch {
+              /* noop */
             }
-          } catch {
-            /* noop */
-          }
-        }}
-        className={`${buttonStyle} ${typeof active.bulletList === "function" && active.bulletList() ? activeButtonStyle : ""}`}
-        aria-label="Toggle bullet list"
-        type="button"
-        title="Bullet list"
-      >
-        <List size={16} />
-      </button>
+          }}
+          className={`${buttonStyle} ${typeof active.bulletList === "function" && active.bulletList() ? activeButtonStyle : ""}`}
+          aria-label="Toggle bullet list"
+          title="Bullet list"
+          type="button"
+        >
+          <List size={16} />
+        </button>
+      </div>
     </div>
   );
 };
