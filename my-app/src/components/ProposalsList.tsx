@@ -29,7 +29,6 @@ import {
   type ProposalVoicePreset,
 } from "../../convex/lib/proposals/voicePresets";
 import {
-  resolveProposalCharacterLimitSelection,
   type ProposalCharacterLimitMode,
 } from "../../convex/lib/proposals/generationControls";
 import {
@@ -373,15 +372,6 @@ function buildProposalMeta(proposal: SavedProposalRecord | null): string {
   ]
     .filter(Boolean)
     .join(" · ");
-}
-
-function buildFallbackInfo(proposal: SavedProposalRecord | null) {
-  if (!proposal) return null;
-  return {
-    requestedModelType: proposal.metadata?.requestedModelType,
-    actualModelType: proposal.metadata?.actualModelType,
-    fallbackTriggerCode: proposal.metadata?.fallbackTriggerCode,
-  };
 }
 
 function getTouchDistance(touches: TouchList): number {
@@ -731,14 +721,6 @@ export default function ProposalsList({
       activeCvStylePreset,
     });
   }, [activeCvStylePreset, selected, selectedEffectiveStylePreset]);
-  const selectedCharacterLimitSelection = React.useMemo(
-    () =>
-      resolveProposalCharacterLimitSelection({
-        mode: selected?.metadata?.characterLimitMode,
-        value: selected?.metadata?.characterLimitValue,
-      }),
-    [selected?.metadata?.characterLimitMode, selected?.metadata?.characterLimitValue],
-  );
   const proposalStack = React.useMemo(() => {
     if (!selected) return [];
     return [
@@ -1481,70 +1463,63 @@ export default function ProposalsList({
                   tabIndex={-1}
                   className="dasti-proposal-library-card"
                 >
-                <div
-                    className="dasti-proposal-output-shell dasti-proposal-output-shell--workspace dasti-proposal-output-shell--saved"
-                  >
-                    <ProposalDisplay
-                      proposalContent={editContent}
-                      loading={isMainCardLoading}
-                      error={null}
-                      proposalType={getStoredProposalType(selected)}
-                      voicePreset={getStoredVoicePreset(selected)}
-                      templateId={selectedRenderState?.templateId ?? null}
-                      stylePreset={selectedRenderState?.stylePreset ?? null}
-                      characterLimit={selectedCharacterLimitSelection.value}
-                      characterLimitAdvisory={selectedCharacterLimitSelection.advisory}
-                      fallbackInfo={buildFallbackInfo(selected)}
-                      documentTitle={selectedHeaderTitle || "Saved proposal"}
-                      documentMeta={selectedHeaderMeta}
-                      showDocumentCaption={false}
-                      mode={selectedOutputMode}
-                      onModeChange={setSelectedOutputMode}
-                      showModeToggle
-                      showZoomControls
-                      zoomStorageKey={null}
-                      size="default"
-                      documentHeaderMode="actions-only"
-                      detachedActionHeader
-                      railStartAddon={
-                        selectedRenderState ? (
-                          <ProposalArtifactInspector
-                            variant="header"
-                            styleBundleId={selectedStyleBundleId}
-                            onStyleBundleChange={setSelectedStyleBundleId}
-                            paletteOverride={selectedPaletteOverride}
-                            onPaletteOverrideChange={(value) => {
-                              setSelectedCustomAccentHex(null);
-                              setSelectedPaletteOverride(value);
-                            }}
-                            customAccentHex={selectedCustomAccentHex}
-                            onCustomAccentHexChange={(hex) => {
-                              setSelectedCustomAccentHex(hex);
-                              setSelectedPaletteOverride(null);
-                            }}
-                            resolvedPaletteId={
-                              selectedRenderState.stylePreset.palette === "custom"
-                                ? null
-                                : selectedRenderState.stylePreset.palette
-                            }
-                            hasGenerated={Boolean(editContent)}
-                          />
-                        ) : null
-                      }
-                      onCopy={() => {
-                        void navigator.clipboard.writeText(editContent).then(() => {
-                          setCopied(true);
-                          setTimeout(() => setCopied(false), 1500);
-                        });
-                      }}
-                      copyFeedback={copied ? "copied" : "idle"}
-                      onContentChange={setEditContent}
-                      onContentCommit={() => {
-                        void handleSaveDocument();
-                      }}
-                      actions={selectedActionCluster}
-                    />
-                  </div>
+                  <ProposalDisplay
+                    proposalContent={editContent}
+                    loading={isMainCardLoading}
+                    error={null}
+                    proposalType={getStoredProposalType(selected)}
+                    voicePreset={getStoredVoicePreset(selected)}
+                    templateId={selectedRenderState?.templateId ?? null}
+                    stylePreset={selectedRenderState?.stylePreset ?? null}
+                    characterLimit={selected?.metadata?.characterLimitValue ?? null}
+                    characterLimitAdvisory={false}
+                    documentTitle={selectedHeaderTitle || "Saved proposal"}
+                    documentMeta={selectedHeaderMeta}
+                    showDocumentCaption={false}
+                    mode={selectedOutputMode}
+                    onModeChange={setSelectedOutputMode}
+                    showModeToggle
+                    showZoomControls
+                    detachedActionHeader
+                    documentHeaderMode="actions-only"
+                    railStartAddon={
+                      selectedRenderState ? (
+                        <ProposalArtifactInspector
+                          variant="header"
+                          styleBundleId={selectedStyleBundleId}
+                          onStyleBundleChange={setSelectedStyleBundleId}
+                          paletteOverride={selectedPaletteOverride}
+                          onPaletteOverrideChange={(value) => {
+                            setSelectedCustomAccentHex(null);
+                            setSelectedPaletteOverride(value);
+                          }}
+                          customAccentHex={selectedCustomAccentHex}
+                          onCustomAccentHexChange={(hex) => {
+                            setSelectedCustomAccentHex(hex);
+                            setSelectedPaletteOverride(null);
+                          }}
+                          resolvedPaletteId={
+                            selectedRenderState.stylePreset.palette === "custom"
+                              ? null
+                              : selectedRenderState.stylePreset.palette
+                          }
+                          hasGenerated={Boolean(editContent)}
+                        />
+                      ) : null
+                    }
+                    onCopy={() => {
+                      void navigator.clipboard.writeText(editContent).then(() => {
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 1500);
+                      });
+                    }}
+                    copyFeedback={copied ? "copied" : "idle"}
+                    onContentChange={setEditContent}
+                    onContentCommit={() => {
+                      void handleSaveDocument();
+                    }}
+                    actions={selectedActionCluster}
+                  />
                 </div>
               </div>
 
