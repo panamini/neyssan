@@ -2,7 +2,9 @@ import React, { createContext, useContext, useEffect, useRef, useState, ReactNod
 import { useAuth } from "@clerk/clerk-react";
 import { v4 as uuidv4 } from "uuid";
 import { useMutation } from "convex/react";
+import { convexClient } from "../lib/convex-client";
 import { useConvexStorageAdapter } from "../adapters/StorageAdapter";
+import { mapProfileToCvDocument } from "../adapters/profile-mapper";
 import DebugToggle from "../components/dev/debug-toggle";
 import type { CvDocument, CvSection, CvBlock } from "../types/cvDocument";
 import { safeParseCvDocument } from "../schemas/cvDocument.schema";
@@ -351,6 +353,34 @@ function expandLibrarySummaryOnlyCv(doc: CvDocument): CvDocument {
   };
 }
 
+function buildRemoteLibrarySummary(profile: Record<string, unknown>): CvDocument | null {
+  const embeddedDocument = profile.cvDocument;
+  let sourceDocument: CvDocument | null = null;
+
+  if (embeddedDocument && typeof embeddedDocument === "object") {
+    const embeddedResult = safeParseCvDocument(embeddedDocument);
+    if (embeddedResult.ok) {
+      sourceDocument = embeddedResult.value;
+    }
+  }
+
+  if (!sourceDocument) {
+    const forcedId =
+      typeof profile.profileId === "string" && profile.profileId.trim().length > 0
+        ? profile.profileId
+        : typeof profile._id === "string"
+          ? profile._id
+          : undefined;
+    sourceDocument = mapProfileToCvDocument(profile, forcedId);
+  }
+
+  if (!sourceDocument) {
+    return null;
+  }
+
+  return inflateCvLibraryIndexEntry(buildCvLibraryIndexEntry(sourceDocument));
+}
+
 /**
  * Context shape for the new CV library using CvDocument + ConvexStorageAdapter.
  */
@@ -588,6 +618,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const [currentCv, setCurrentCv] = useState<CvDocument | null>(null);
   const hasHydratedActiveCvRef = useRef(false);
+  const hasHydratedRemoteLibraryRef = useRef(false);
   const pendingActiveRestoreIdRef = useRef<string | null>(null);
   const cvsRef = useRef<CvDocument[]>(cvs);
   const currentCvRef = useRef<CvDocument | null>(null);
@@ -616,6 +647,70 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({ children 
   useEffect(() => {
     cvsRef.current = cvs;
   }, [cvs]);
+
+  useEffect(() => {
+    if (!isSignedIn) {
+      hasHydratedRemoteLibraryRef.current = false;
+    }
+  }, [isSignedIn]);
+
+  useEffect(() => {
+    if (!isAuthLoaded || !isSignedIn || hasHydratedRemoteLibraryRef.current) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const remoteProfiles = await convexClient.query(api.profilesPublic.listMine);
+        if (cancelled || !Array.isArray(remoteProfiles) || remoteProfiles.length === 0) {
+          return;
+        }
+
+        const remoteDocs = remoteProfiles
+          .map((profile) =>
+            buildRemoteLibrarySummary(profile as Record<string, unknown>),
+          )
+          .filter((doc): doc is CvDocument => Boolean(doc));
+
+        if (cancelled || remoteDocs.length === 0) {
+          return;
+        }
+
+        setCvs((prev) => {
+          const byId = new Map(prev.map((doc) => [String(doc.id), doc]));
+          let changed = false;
+
+          remoteDocs.forEach((remoteDoc) => {
+            const existing = byId.get(String(remoteDoc.id));
+            if (!existing) {
+              byId.set(String(remoteDoc.id), remoteDoc);
+              changed = true;
+              return;
+            }
+
+            if (isLibrarySummaryOnlyCv(existing)) {
+              byId.set(String(remoteDoc.id), remoteDoc);
+              changed = true;
+            }
+          });
+
+          return changed ? Array.from(byId.values()) : prev;
+        });
+      } catch (error) {
+        dbg("[CvLibraryContext] remote library hydration failed", error);
+      } finally {
+        if (!cancelled) {
+          hasHydratedRemoteLibraryRef.current = true;
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthLoaded, isSignedIn]);
 
   useEffect(() => {
     try {
@@ -1660,6 +1755,7 @@ const flushPendingEdits = useCallback((): void => {
       // otherwise return false and perform async background attempts.
       setIsLoading(true);
       try {
+      let summaryOnlyFallbackDoc: CvDocument | null = null;
       let doc: CvDocument | null =
         currentCvRef.current && String(currentCvRef.current.id) === targetId
           ? currentCvRef.current
@@ -1667,7 +1763,8 @@ const flushPendingEdits = useCallback((): void => {
             null;
 
       if (doc && isLibrarySummaryOnlyCv(doc)) {
-        doc = expandLibrarySummaryOnlyCv(doc);
+        summaryOnlyFallbackDoc = doc;
+        doc = null;
       }
 
       if (doc) {
@@ -1714,7 +1811,8 @@ const flushPendingEdits = useCallback((): void => {
               } as CvDocument;
             }
             if (doc && isLibrarySummaryOnlyCv(doc)) {
-              doc = expandLibrarySummaryOnlyCv(doc);
+              summaryOnlyFallbackDoc = doc;
+              doc = null;
             }
           }
         }
@@ -1816,7 +1914,8 @@ const flushPendingEdits = useCallback((): void => {
                     } as CvDocument;
                   }
                   if (remoteDoc && isLibrarySummaryOnlyCv(remoteDoc)) {
-                    remoteDoc = expandLibrarySummaryOnlyCv(remoteDoc);
+                    summaryOnlyFallbackDoc = remoteDoc;
+                    remoteDoc = null;
                   }
                   try {
                     if (remoteDoc) remoteDoc = migrateLegacyIds(remoteDoc);
@@ -1839,6 +1938,23 @@ const flushPendingEdits = useCallback((): void => {
             });
             cacheDocumentLocally(docNorm);
             lastSavedRef.current = docNorm;
+          } else if (summaryOnlyFallbackDoc) {
+            let repairedDoc = expandLibrarySummaryOnlyCv(summaryOnlyFallbackDoc);
+            try {
+              repairedDoc = migrateLegacyIds(repairedDoc);
+            } catch {
+              /* noop */
+            }
+            const repairedV1 = normalizeToV1Document(repairedDoc as CvDocument);
+            const repairedNorm = ensureRepresentativeBlocks(repairedV1 as CvDocument);
+            safeSetCurrentCv(repairedNorm);
+            setCvs((prev) => {
+              const exists = prev.some((c) => c.id === repairedNorm.id);
+              if (exists) return prev.map((c) => (c.id === repairedNorm.id ? repairedNorm : c));
+              return [...prev, repairedNorm];
+            });
+            cacheDocumentLocally(repairedNorm);
+            lastSavedRef.current = repairedNorm;
           } else {
             safeSetCurrentCv(null);
           }

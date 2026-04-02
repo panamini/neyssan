@@ -1,6 +1,8 @@
 import { mutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { PROPOSAL_TEMPLATE_IDS } from "./lib/proposals/renderTemplates";
+import { getPrimaryProfileForClerk } from "./lib/userProfiles";
 
 const proposalVoicePresetChoice = v.union(
   v.literal("signature"),
@@ -81,6 +83,7 @@ export default mutation({
   args: {
     title: v.string(),
     content: v.string(),
+    profileId: v.optional(v.string()),
     sections: v.optional(
       v.array(
         v.object({
@@ -141,10 +144,22 @@ export default mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
 
-    const user = await ctx.db
-      .query("userProfiles")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
-      .unique();
+    let user = args.profileId
+      ? await ctx.db
+          .query("userProfiles")
+          .withIndex("by_profileId", (q) => q.eq("profileId", args.profileId!))
+          .filter((q) => q.eq(q.field("clerkId"), identity.subject))
+          .first()
+      : await getPrimaryProfileForClerk(ctx, identity.subject);
+
+    if (!user) {
+      await ctx.runMutation(internal.users.createOrUpdateUser, {
+        clerkId: identity.subject,
+        email: identity.email ?? "unknown@example.com",
+        name: identity.name,
+      });
+      user = await getPrimaryProfileForClerk(ctx, identity.subject);
+    }
 
     if (!user) throw new Error("User not found");
 

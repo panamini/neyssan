@@ -1,5 +1,6 @@
 import { query } from "./_generated/server";
 import { v } from "convex/values";
+import { listProfilesForClerk } from "./lib/userProfiles";
 
 /**
  * Public query returning the total number of saved proposals
@@ -14,22 +15,22 @@ export default query({
       throw new Error("Not authenticated");
     }
 
-    const user = await ctx.db
-      .query("userProfiles")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
-      .unique();
-
-    if (!user) {
-      throw new Error("User not found");
+    const profiles = await listProfilesForClerk(ctx, identity.subject);
+    if (profiles.length === 0) {
+      return 0;
     }
 
-    const proposals = await ctx.db
-      .query("proposals")
-      .withIndex("by_user_and_status", (q) =>
-        q.eq("userId", user._id).eq("status", "saved"),
-      )
-      .collect();
+    const proposalGroups = await Promise.all(
+      profiles.map((profile) =>
+        ctx.db
+          .query("proposals")
+          .withIndex("by_user_and_status", (q) =>
+            q.eq("userId", profile._id).eq("status", "saved"),
+          )
+          .collect(),
+      ),
+    );
 
-    return proposals.filter((proposal) => proposal.status === "saved").length;
+    return proposalGroups.flat().filter((proposal) => proposal.status === "saved").length;
   },
 });

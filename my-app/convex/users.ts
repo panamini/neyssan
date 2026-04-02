@@ -7,6 +7,10 @@ import {
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import type { ProposalTemplateId } from "./lib/proposals/renderTemplates";
+import {
+  getPrimaryProfileForClerk,
+  listProfilesForClerk,
+} from "./lib/userProfiles";
 
 export type UserProfile = {
   _id: Id<"userProfiles">;
@@ -41,23 +45,23 @@ export const createOrUpdateUser = internalMutation({
   handler: async (ctx, args) => {
     const { clerkId, email, name } = args;
 
-    const existingUser = await ctx.db
-      .query("userProfiles")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", clerkId))
-      .unique();
+    const existingUsers = await listProfilesForClerk(ctx, clerkId);
+    const existingUser = existingUsers[0] ?? null;
 
     if (existingUser) {
-      const updateData: Partial<UserProfile> = {
-        email,
-        updatedAt: Date.now(),
-      };
-      // Only set the name if the existing profile does not already have one.
-      // This prevents sign-in hooks (which send identity.name) from overwriting
-      // a display name that the user has edited and saved.
-      if (name !== undefined && !existingUser.name) {
-        updateData.name = name;
-      }
-      return await ctx.db.patch(existingUser._id, updateData);
+      await Promise.all(
+        existingUsers.map((profile) => {
+          const updateData: Partial<UserProfile> = {
+            email,
+            updatedAt: Date.now(),
+          };
+          if (name !== undefined && !profile.name) {
+            updateData.name = name;
+          }
+          return ctx.db.patch(profile._id, updateData);
+        }),
+      );
+      return existingUser._id;
     } else {
       const newUser: Omit<UserProfile, "_id" | "_creationTime"> = {
         clerkId,
@@ -111,14 +115,8 @@ export const getProfileById = internalQuery({
 export const deleteUser = internalMutation({
   args: { clerkId: v.string() },
   handler: async (ctx, args) => {
-    const user = await ctx.db
-      .query("userProfiles")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
-      .unique();
-
-    if (user) {
-      await ctx.db.delete(user._id);
-    }
+    const users = await listProfilesForClerk(ctx, args.clerkId);
+    await Promise.all(users.map((user) => ctx.db.delete(user._id)));
   },
 });
 
@@ -131,10 +129,7 @@ export const getUser = query({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return null;
 
-    const user = await ctx.db
-      .query("userProfiles")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
-      .unique();
+    const user = await getPrimaryProfileForClerk(ctx, identity.subject);
 
     if (!user) {
       throw new Error("User not found");
@@ -188,10 +183,7 @@ export const updateUserProfile = internalMutation({
   handler: async (ctx, args) => {
     const { clerkId, profileData } = args;
 
-    const user = await ctx.db
-      .query("userProfiles")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", clerkId))
-      .unique();
+    const user = await getPrimaryProfileForClerk(ctx, clerkId);
 
     if (!user) {
       throw new Error("User not found");

@@ -37,7 +37,10 @@ import {
   A4_PAGE_WIDTH_PX,
   DOCUMENT_ZOOM_STEPS,
 } from "../lib/document-stage";
-import { getTextareaSelectionState } from "../lib/editor-ai-selection";
+import {
+  getTextareaSelectionState,
+  isInlineAiToolbarActiveElement,
+} from "../lib/editor-ai-selection";
 import { resolveProposalCharacterLimitSelection } from "../../convex/lib/proposals/generationControls";
 
 interface ProposalDisplayProps {
@@ -339,7 +342,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     React.useState<InlineAiActionId | null>(null);
   const [textareaSelectionState, setTextareaSelectionState] = React.useState<{
     text: string;
-    anchor: { left: number; top: number };
+    anchor: { left: number; top: number; bottom: number };
     start: number;
     end: number;
   } | null>(null);
@@ -629,6 +632,9 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     selectionDebounceRef.current = window.setTimeout(() => {
       selectionDebounceRef.current = null;
       const nextSelection = getTextareaSelectionState(editableTextareaRef.current);
+      if (!nextSelection && isInlineAiToolbarActiveElement()) {
+        return;
+      }
       setTextareaSelectionState(nextSelection);
     }, 90);
   }, []);
