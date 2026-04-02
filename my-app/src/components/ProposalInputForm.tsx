@@ -61,6 +61,7 @@ import {
   type StoredProposalComposeDraft,
 } from "../lib/proposal-workspace-state";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
+import { readCssDurationMs } from "../lib/readCssDuration";
 import {
   getProposalGenerateButtonVisualClass,
   ProposalGenerateButtonGlyph,
@@ -242,15 +243,6 @@ function formatToolbarResumeLabel(value: string | null | undefined): string {
   return `${normalized.slice(0, 12).trimEnd()}…`;
 }
 
-const PROPOSAL_GENERATE_BUTTON_TIMINGS = {
-  loadingHideMs: 0,
-  stopRevealDelayMs: 1800,
-  stopRevealMs: 1080,
-  stopHoldMs: 220,
-  stopUndrawMs: 880,
-  stopRedrawMs: 1080,
-} as const;
-
 const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   onSubmit,
   onStart,
@@ -391,47 +383,78 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
     [],
   );
 
+  const resolveGenerateButtonTimings = React.useCallback(
+    () => ({
+      loadingHideMs: readCssDurationMs(
+        "--proposal-submit-loading-hide-duration",
+        0,
+      ),
+      stopRevealDelayMs: readCssDurationMs(
+        "--proposal-submit-stop-reveal-delay",
+        1800,
+      ),
+      stopRevealMs: readCssDurationMs(
+        "--proposal-submit-stop-reveal-duration",
+        1080,
+      ),
+      stopHoldMs: readCssDurationMs("--proposal-submit-stop-hold-duration", 220),
+      stopUndrawMs: readCssDurationMs(
+        "--proposal-submit-stop-undraw-duration",
+        880,
+      ),
+      stopRedrawMs: readCssDurationMs(
+        "--proposal-submit-stop-redraw-duration",
+        1080,
+      ),
+    }),
+    [],
+  );
+
   const startGenerateButtonSequence = React.useCallback(() => {
+    const timings = resolveGenerateButtonTimings();
     clearGenerateButtonTimers();
     shouldPlayGenerateButtonReverseRef.current = false;
     setGenerateButtonState("loading-hiding");
     scheduleGenerateButtonState(
       "loading-spinning",
-      PROPOSAL_GENERATE_BUTTON_TIMINGS.loadingHideMs,
+      timings.loadingHideMs,
     );
     scheduleGenerateButtonState(
       "loading-revealing-stop",
-      PROPOSAL_GENERATE_BUTTON_TIMINGS.loadingHideMs +
-        PROPOSAL_GENERATE_BUTTON_TIMINGS.stopRevealDelayMs,
+      timings.loadingHideMs + timings.stopRevealDelayMs,
     );
     scheduleGenerateButtonState(
       "loading-stop",
-      PROPOSAL_GENERATE_BUTTON_TIMINGS.loadingHideMs +
-        PROPOSAL_GENERATE_BUTTON_TIMINGS.stopRevealDelayMs +
-        PROPOSAL_GENERATE_BUTTON_TIMINGS.stopRevealMs,
+      timings.loadingHideMs + timings.stopRevealDelayMs + timings.stopRevealMs,
     );
-  }, [clearGenerateButtonTimers, scheduleGenerateButtonState]);
+  }, [
+    clearGenerateButtonTimers,
+    resolveGenerateButtonTimings,
+    scheduleGenerateButtonState,
+  ]);
 
   const playGenerateButtonReverseSequence = React.useCallback(() => {
+    const timings = resolveGenerateButtonTimings();
     clearGenerateButtonTimers();
     shouldPlayGenerateButtonReverseRef.current = false;
     setGenerateButtonState("loading-stop");
     scheduleGenerateButtonState(
       "stop-undrawing",
-      PROPOSAL_GENERATE_BUTTON_TIMINGS.stopHoldMs,
+      timings.stopHoldMs,
     );
     scheduleGenerateButtonState(
       "stop-revealing",
-      PROPOSAL_GENERATE_BUTTON_TIMINGS.stopHoldMs +
-        PROPOSAL_GENERATE_BUTTON_TIMINGS.stopUndrawMs,
+      timings.stopHoldMs + timings.stopUndrawMs,
     );
     scheduleGenerateButtonState(
       "idle",
-      PROPOSAL_GENERATE_BUTTON_TIMINGS.stopHoldMs +
-        PROPOSAL_GENERATE_BUTTON_TIMINGS.stopUndrawMs +
-        PROPOSAL_GENERATE_BUTTON_TIMINGS.stopRedrawMs,
+      timings.stopHoldMs + timings.stopUndrawMs + timings.stopRedrawMs,
     );
-  }, [clearGenerateButtonTimers, scheduleGenerateButtonState]);
+  }, [
+    clearGenerateButtonTimers,
+    resolveGenerateButtonTimings,
+    scheduleGenerateButtonState,
+  ]);
 
   const requestGenerateButtonReverseSequence = React.useCallback(() => {
     if (generateButtonStateRef.current === "loading-stop") {
@@ -1477,6 +1500,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                     className={clsx(
                       "dasti-proposal-submit",
                       "dasti-proposal-submit-token",
+                      "dasti-proposal-submit--composer",
                       "dasti-proposal-submit--pop",
                       "dasti-toolbar-tooltip-trigger--above",
                       generateButtonVisualClass,
@@ -1493,22 +1517,11 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                     data-toolbar-tooltip={generateButtonLabel}
                     onClick={handleGenerateButtonClick}
                     style={{
-                      ["--dasti-proposal-submit-button-size" as string]: "52px",
-                      ["--dasti-proposal-submit-radius" as string]: "16px",
-                      ["--dasti-proposal-submit-icon-size" as string]: "28px",
-                      ["--dasti-proposal-submit-stroke-width" as string]: "2",
-                      ["--dasti-proposal-submit-phase-gap" as string]: "140ms",
-                      ["--dasti-proposal-submit-spinner-duration" as string]:
-                        "1450ms",
-                      ["--dasti-proposal-submit-draw-duration" as string]:
-                        "1080ms",
                       cursor:
                         watchedJobDescription.length < 10 ||
                         (isGenerating && !canStopGeneration)
                           ? "not-allowed"
                           : "pointer",
-                      transition:
-                        "background .15s var(--ez), border-color .15s var(--ez), opacity .15s var(--ez), color .15s var(--ez)",
                       opacity:
                         watchedJobDescription.length < 10
                           ? 0.4

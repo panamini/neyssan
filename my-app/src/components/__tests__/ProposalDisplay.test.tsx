@@ -11,6 +11,16 @@ describe("ProposalDisplay", () => {
         writeText: vi.fn().mockResolvedValue(undefined),
       },
     });
+    class ResizeObserverMock {
+      observe = vi.fn();
+      disconnect = vi.fn();
+      unobserve = vi.fn();
+    }
+    Object.defineProperty(window, "ResizeObserver", {
+      configurable: true,
+      writable: true,
+      value: ResizeObserverMock,
+    });
   });
 
   it("renders a copy button when proposal text is present", () => {
@@ -305,5 +315,63 @@ describe("ProposalDisplay", () => {
       (rail as HTMLElement).compareDocumentPosition(inlineHeading as HTMLElement) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+  });
+
+  it("hides the character capsule once it overlaps the editable page", async () => {
+    const { container } = render(
+      <ProposalDisplay
+        proposalContent={"Dear Hiring Manager,\n\nA precise product proposal body."}
+        loading={false}
+        error={null}
+        proposalType="cover_letter"
+        mode="edit"
+        onContentChange={vi.fn()}
+      />,
+    );
+
+    const editablePage = container.querySelector(
+      ".dasti-proposal-sheet__preview-page--editable",
+    ) as HTMLElement | null;
+    const badgeWrap = container.querySelector(
+      ".dasti-proposal-character-badge-wrap",
+    ) as HTMLElement | null;
+
+    expect(editablePage).toBeTruthy();
+    expect(badgeWrap).toBeTruthy();
+
+    Object.defineProperty(editablePage as HTMLElement, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({
+        x: 48,
+        y: 84,
+        width: 520,
+        height: 700,
+        top: 84,
+        right: 568,
+        bottom: 784,
+        left: 48,
+        toJSON: () => ({}),
+      }),
+    });
+    Object.defineProperty(badgeWrap as HTMLElement, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({
+        x: 32,
+        y: 744,
+        width: 96,
+        height: 32,
+        top: 744,
+        right: 128,
+        bottom: 776,
+        left: 32,
+        toJSON: () => ({}),
+      }),
+    });
+
+    fireEvent(window, new Event("resize"));
+
+    await waitFor(() => {
+      expect(badgeWrap).toHaveAttribute("data-overlap-hidden", "true");
+    });
   });
 });

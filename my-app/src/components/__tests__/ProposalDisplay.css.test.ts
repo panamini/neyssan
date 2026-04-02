@@ -89,7 +89,7 @@ describe("ProposalDisplay CSS contracts", () => {
 
   it("lets the desktop Proposal Forge compose shell match the live output shell block size instead of shrinking by A4 ratio", () => {
     expect(productCss).toMatch(
-      /\.dasti-proposal-compose-column--workspace\s*\{[\s\S]*--document-shell-padding-inline:\s*4px;[\s\S]*--proposal-sheet-margin-inline-inner:\s*4px;[\s\S]*--proposal-sheet-margin-inline-outer:\s*4px;[\s\S]*--proposal-sheet-margin-block-start:\s*4px;[\s\S]*--proposal-sheet-margin-block-end:\s*12px;[\s\S]*--proposal-sheet-content-bottom-inset:\s*12px;[\s\S]*--proposal-sheet-edge-fade-height:\s*18px;[\s\S]*--proposal-live-shell-block-size:\s*var\(--proposal-workspace-shell-block-size\);/,
+      /\.dasti-proposal-compose-column--workspace\s*\{[\s\S]*--document-shell-padding-inline:\s*4px;[\s\S]*--proposal-sheet-margin-inline-inner:\s*4px;[\s\S]*--proposal-sheet-margin-inline-outer:\s*4px;[\s\S]*--proposal-sheet-margin-block-start:\s*0px;[\s\S]*--proposal-sheet-margin-block-end:\s*0px;[\s\S]*--proposal-sheet-content-bottom-inset:\s*0px;[\s\S]*--proposal-sheet-edge-fade-height:\s*22px;[\s\S]*--proposal-live-shell-block-size:\s*var\(--proposal-workspace-shell-block-size\);/,
     );
     expect(productCss).toMatch(
       /@media \(min-width: 1440px\)\s*\{[\s\S]*\.dasti-proposal-compose-column--workspace\s+\.dasti-proposal-sheet--composer\s*\{[\s\S]*aspect-ratio:\s*auto;[\s\S]*min-height:\s*var\(--proposal-live-shell-block-size\);[\s\S]*height:\s*var\(--proposal-live-shell-block-size\);[\s\S]*max-height:\s*var\(--proposal-live-shell-block-size\);/,
@@ -99,6 +99,21 @@ describe("ProposalDisplay CSS contracts", () => {
     );
     expect(productCss).toMatch(
       /\.dasti-proposal-compose-column--workspace\s+\.dasti-proposal-sheet,\s*[\s\S]*\.dasti-proposal-output-shell--workspace\s+\.dasti-document-shell\s*\{[\s\S]*box-shadow:\s*[\s\S]*var\(--document-viewer-frame-shadow\)/,
+    );
+  });
+
+  it("gives document edit mode full-width paper, top-and-bottom fade masking, and overlap-aware badge hiding", () => {
+    expect(productCss).toMatch(
+      /\.dasti-proposal-sheet__body--document-editor\s+\.dasti-proposal-editor-page__inner\s*\{[\s\S]*width:\s*100%;[\s\S]*min-width:\s*0;[\s\S]*padding-block:\s*0;[\s\S]*padding-inline:\s*var\(--proposal-output-editor-inline-padding\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-editor-page__textarea\s*\{[\s\S]*padding-block-start:\s*var\(--proposal-output-editor-block-start\);[\s\S]*padding-block-end:\s*var\(--proposal-output-editor-block-end\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-sheet__body--document-editor\s+\.dasti-proposal-editor-page__textarea\s*\{[\s\S]*-webkit-mask-image:\s*linear-gradient\([\s\S]*var\(--proposal-output-editor-fade-height\)[\s\S]*var\(--proposal-scroll-top-strength\)[\s\S]*var\(--proposal-scroll-bottom-strength\)/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-character-badge-wrap\[data-overlap-hidden="true"\]\s*\{[\s\S]*opacity:\s*0;[\s\S]*transform:\s*translate3d\(0,\s*6px,\s*0\);/,
     );
   });
 });
