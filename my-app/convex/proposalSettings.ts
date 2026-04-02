@@ -10,6 +10,10 @@ import {
   PROPOSAL_TEMPLATE_IDS,
   resolveProposalTemplateId,
 } from "./lib/proposals/renderTemplates";
+import {
+  getPrimaryProfileForClerk,
+  listProfilesForClerk,
+} from "./lib/userProfiles";
 
 const proposalVoicePresetChoice = v.union(
   v.literal("signature"),
@@ -67,10 +71,7 @@ export const getCurrent = query({
       };
     }
 
-    const user = await ctx.db
-      .query("userProfiles")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
-      .unique();
+    const user = await getPrimaryProfileForClerk(ctx, identity.subject);
 
     return {
       voicePreset: resolveProposalVoicePreset(user?.proposalVoicePreset)
@@ -147,10 +148,8 @@ export const setCurrent = mutation({
       throw new Error("No proposal setting patch was provided");
     }
 
-    let user = await ctx.db
-      .query("userProfiles")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
-      .unique();
+    let profiles = await listProfilesForClerk(ctx, identity.subject);
+    let user = profiles[0] ?? null;
 
     if (!user) {
       await ctx.runMutation(internal.users.createOrUpdateUser, {
@@ -159,10 +158,8 @@ export const setCurrent = mutation({
         name: identity.name,
       });
 
-      user = await ctx.db
-        .query("userProfiles")
-        .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
-        .unique();
+      profiles = await listProfilesForClerk(ctx, identity.subject);
+      user = profiles[0] ?? null;
     }
 
     if (!user) {
@@ -207,45 +204,53 @@ export const setCurrent = mutation({
       user.proposalSourceMode !== nextSourceMode;
 
     if (needsWrite) {
-      const { _creationTime, _id, ...rest } = user;
-      const replacement: Record<string, unknown> = {
-        ...rest,
-        proposalTemplateId: nextTemplateId,
-        updatedAt: Date.now(),
-        version: (user.version ?? 1) + 1,
-      };
+      const replacementByProfile = profiles.map((profile) => {
+        const { _creationTime, _id, ...rest } = profile;
+        const nextReplacement: Record<string, unknown> = {
+          ...rest,
+          proposalTemplateId: nextTemplateId,
+          updatedAt: Date.now(),
+          version: (profile.version ?? 1) + 1,
+        };
 
-      if (nextSavedVoicePreset) {
-        replacement.proposalVoicePreset = nextSavedVoicePreset;
-      } else {
-        delete replacement.proposalVoicePreset;
-      }
+        if (nextSavedVoicePreset) {
+          nextReplacement.proposalVoicePreset = nextSavedVoicePreset;
+        } else {
+          delete nextReplacement.proposalVoicePreset;
+        }
 
-      if (nextStyleChoice !== undefined) {
-        replacement.proposalStyleChoice = nextStyleChoice;
-      } else {
-        delete replacement.proposalStyleChoice;
-      }
+        if (nextStyleChoice !== undefined) {
+          nextReplacement.proposalStyleChoice = nextStyleChoice;
+        } else {
+          delete nextReplacement.proposalStyleChoice;
+        }
 
-      if (nextPaletteOverride !== undefined) {
-        replacement.proposalPaletteOverride = nextPaletteOverride;
-      } else {
-        delete replacement.proposalPaletteOverride;
-      }
+        if (nextPaletteOverride !== undefined) {
+          nextReplacement.proposalPaletteOverride = nextPaletteOverride;
+        } else {
+          delete nextReplacement.proposalPaletteOverride;
+        }
 
-      if (nextAccentHex !== undefined) {
-        replacement.proposalAccentHex = nextAccentHex;
-      } else {
-        delete replacement.proposalAccentHex;
-      }
+        if (nextAccentHex !== undefined) {
+          nextReplacement.proposalAccentHex = nextAccentHex;
+        } else {
+          delete nextReplacement.proposalAccentHex;
+        }
 
-      if (nextSourceMode !== undefined) {
-        replacement.proposalSourceMode = nextSourceMode;
-      } else {
-        delete replacement.proposalSourceMode;
-      }
+        if (nextSourceMode !== undefined) {
+          nextReplacement.proposalSourceMode = nextSourceMode;
+        } else {
+          delete nextReplacement.proposalSourceMode;
+        }
 
-      await ctx.db.replace(user._id, replacement);
+        return { id: profile._id, replacement: nextReplacement };
+      });
+
+      await Promise.all(
+        replacementByProfile.map(({ id, replacement }) =>
+          ctx.db.replace(id, replacement),
+        ),
+      );
     }
 
     return {

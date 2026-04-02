@@ -6,6 +6,19 @@ import FloatingAiToolbar, {
 } from "../FloatingAiToolbar";
 
 describe("FloatingAiToolbar", () => {
+  it("keeps the Ask field collapsed until the Ask action is clicked", () => {
+    render(
+      <FloatingAiToolbar
+        anchor={{ left: 120, top: 80 }}
+        open
+        onClose={vi.fn()}
+        onRunAction={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByPlaceholderText("Tell AI what to change")).toBeNull();
+  });
+
   it("runs a preset action from the floating toolbar", async () => {
     const onRunAction = vi.fn();
 
@@ -38,11 +51,14 @@ describe("FloatingAiToolbar", () => {
       />,
     );
 
-    fireEvent.click(await screen.findByRole("button", { name: "Ask AI" }));
-    fireEvent.change(screen.getByPlaceholderText("Tell AI what to change"), {
-      target: { value: "Make this sound calmer." },
-    });
-    fireEvent.click(screen.getAllByRole("button", { name: "Ask AI" })[1]);
+    fireEvent.click((await screen.findAllByRole("button", { name: "Ask" }))[0]);
+    fireEvent.change(
+      screen.getByPlaceholderText("Tell AI what to change"),
+      {
+        target: { value: "Make this sound calmer." },
+      },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Send request" }));
 
     expect(onRunAction).toHaveBeenCalledWith(
       "custom",
@@ -60,7 +76,7 @@ describe("FloatingAiToolbar", () => {
     };
 
     const { rerender } = render(<FloatingAiToolbar {...props} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Ask AI" }));
+    fireEvent.click((await screen.findAllByRole("button", { name: "Ask" }))[0]);
 
     rerender(
       <FloatingAiToolbar
@@ -70,7 +86,7 @@ describe("FloatingAiToolbar", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "Asking..." })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Sending request" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Shorten" })).toBeDisabled();
   });
 
@@ -86,7 +102,7 @@ describe("FloatingAiToolbar", () => {
       />,
     );
 
-    const action = screen.getByRole("button", { name: "Fix Grammar" });
+    const action = screen.getByRole("button", { name: "Fix" });
     expect(action).toBeDisabled();
     expect(action).toHaveAttribute("aria-busy", "true");
     expect(
@@ -106,7 +122,7 @@ describe("FloatingAiToolbar", () => {
       />,
     );
 
-    await screen.findByRole("button", { name: "Fix Grammar" });
+    await screen.findByRole("button", { name: "Fix" });
     fireEvent.keyDown(document, { key: "Escape" });
 
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -127,7 +143,7 @@ describe("FloatingAiToolbar", () => {
       </div>,
     );
 
-    await screen.findByRole("button", { name: "Make It Human" });
+    await screen.findByRole("button", { name: "Rewrite" });
     fireEvent.pointerDown(screen.getByRole("button", { name: "Outside target" }));
 
     expect(onClose).toHaveBeenCalledTimes(1);

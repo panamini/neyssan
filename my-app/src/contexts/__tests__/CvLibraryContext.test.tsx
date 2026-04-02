@@ -2,12 +2,23 @@ import React, { useEffect } from 'react';
 import { render, waitFor, cleanup, act } from '@testing-library/react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { CvLibraryProvider, useCvLibrary } from '../CvLibraryContext';
+import { convexClient } from '../../lib/convex-client';
 
 vi.mock('@clerk/clerk-react', () => ({
   useAuth: () => ({
     isLoaded: false,
     isSignedIn: false,
   }),
+}));
+
+vi.mock('../../lib/convex-client', () => ({
+  convexClient: {
+    query: vi.fn(async () => null),
+    mutation: vi.fn(async () => null),
+    action: vi.fn(async () => null),
+    setAuth: vi.fn(async () => undefined),
+    clearAuth: vi.fn(async () => undefined),
+  },
 }));
 
 vi.mock('uuid', () => {
@@ -63,10 +74,13 @@ describe('CvLibraryContext', () => {
     // Reset mocked UUID counter so each test starts with mock-uuid-1
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (globalThis as any).__mock_uuid_count = 0;
+    vi.mocked(convexClient.query).mockReset();
+    vi.mocked(convexClient.query).mockResolvedValue(null);
   });
 
   afterEach(() => {
     cleanup();
+    vi.restoreAllMocks();
     vi.useRealTimers();
     window.history.pushState({}, '', '/');
     // restore localStorage to avoid polluting other tests (if any)
@@ -272,14 +286,15 @@ describe('CvLibraryContext', () => {
 
     await waitFor(() => expect(ctx).toBeDefined());
     await waitFor(() => expect(ctx.currentCvId).toBe('cv_active'));
-    expect(ctx.currentCv.sections.map((section: any) => section.type)).toEqual([
-      'profile',
-      'summary',
-      'experience',
-      'education',
-      'skills',
-    ]);
+    await waitFor(() =>
+      expect(ctx.currentCv.sections.map((section: any) => section.type)).toEqual([
+        'profile',
+        'summary',
+        'experience',
+      ]),
+    );
     expect(ctx.currentCv.metadata?.librarySummaryOnly).not.toBe(true);
+    expect(ctx.currentCv.sections[1].structuredContent[0].summary).toBe('Full content');
   });
 
   it('repairs a summary-only cached active cv back into the canonical five-section blank draft', async () => {
@@ -325,6 +340,94 @@ describe('CvLibraryContext', () => {
       'skills',
     ]);
     expect(ctx.currentCv.metadata?.librarySummaryOnly).not.toBe(true);
+  });
+
+  it('restores the full remote cv when only a compact library entry survives locally', async () => {
+    const now = new Date().toISOString();
+    const compact = {
+      id: 'cv_remote_only',
+      title: 'Remote Resume',
+      metadata: {
+        createdAt: now,
+        updatedAt: now,
+        version: 1,
+        librarySummaryOnly: true,
+      },
+      profilePreview: {
+        name: 'Ada Lovelace',
+        desiredPosition: 'Engineer',
+      },
+    };
+    const remoteFull = {
+      id: 'cv_remote_only',
+      title: 'Remote Resume',
+      metadata: {
+        createdAt: now,
+        updatedAt: now,
+        version: 1,
+      },
+      sections: [
+        {
+          id: 'profile-1',
+          type: 'profile',
+          title: 'Profile',
+          blocks: [],
+          structuredContent: [{ id: 'profile-item-1', name: 'Ada Lovelace' }],
+        },
+        {
+          id: 'summary-1',
+          type: 'summary',
+          title: 'Summary',
+          blocks: [],
+          structuredContent: [{ id: 'summary-item-1', summary: 'Invented modern computing concepts.' }],
+        },
+        {
+          id: 'experience-1',
+          type: 'experience',
+          title: 'Experience',
+          blocks: [],
+          structuredContent: [{ id: 'exp-item-1', company: 'Analytical Engine', title: 'Programmer' }],
+        },
+      ],
+    };
+
+    vi.mocked(convexClient.query).mockImplementation(async (_query: unknown, args: unknown) => {
+      if ((args as { profileId?: string } | undefined)?.profileId === 'cv_remote_only') {
+        return {
+          profileId: 'cv_remote_only',
+          cvDocument: remoteFull,
+        };
+      }
+      return null;
+    });
+
+    mockLocalStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([compact]));
+    mockLocalStorage.setItem('cvActiveId', 'cv_remote_only');
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(ctx).toBeDefined());
+    await waitFor(() => expect(ctx.currentCvId).toBe('cv_remote_only'));
+    await waitFor(() =>
+      expect(ctx.currentCv.sections.map((section: any) => section.type)).toEqual([
+        'profile',
+        'summary',
+        'experience',
+      ]),
+    );
+    expect(ctx.currentCv.metadata?.librarySummaryOnly).not.toBe(true);
+    expect(ctx.currentCv.sections[1].structuredContent[0].summary).toBe(
+      'Invented modern computing concepts.',
+    );
+    expect(
+      JSON.parse(mockLocalStorage.getItem('cv:cv_remote_only') as string).sections[1]
+        .structuredContent[0].summary,
+    ).toBe('Invented modern computing concepts.');
   });
 
   it('loadCv sets the corresponding CV as currentCv', async () => {

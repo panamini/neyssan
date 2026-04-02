@@ -1,7 +1,21 @@
 export type EditorSelectionAnchor = {
   left: number;
   top: number;
+  bottom: number;
 };
+
+export const INLINE_AI_TOOLBAR_SELECTOR = "[data-inline-ai-toolbar='true']";
+
+export function isInlineAiToolbarActiveElement(
+  activeElement: Element | null | undefined =
+    typeof document !== "undefined" ? document.activeElement : null,
+): boolean {
+  if (!activeElement || typeof activeElement.closest !== "function") {
+    return false;
+  }
+
+  return Boolean(activeElement.closest(INLINE_AI_TOOLBAR_SELECTOR));
+}
 
 export function getDomSelectionState(
   root: HTMLElement | null | undefined,
@@ -27,25 +41,22 @@ export function getDomSelectionState(
     return null;
   }
 
-  const endpointRect = readSelectionEndpointRect(selection, root);
-  const clientRects = Array.from(
-    (endpointRect ? [endpointRect] : Array.from(range.getClientRects())).filter(
-      (rect) => rect.width > 0 || rect.height > 0,
+  const rangeRect = range.getBoundingClientRect();
+  const rect = mergeClientRects(
+    Array.from(range.getClientRects()).filter(
+      (clientRect) => clientRect.width > 0 || clientRect.height > 0,
     ),
+    rangeRect,
   );
-  const rect =
-    clientRects[clientRects.length - 1] ??
-    (range.getBoundingClientRect().width > 0
-      ? range.getBoundingClientRect()
-      : null);
 
   if (!rect) return null;
 
   return {
     text,
     anchor: {
-      left: rect.right + window.scrollX,
-      top: rect.bottom + window.scrollY,
+      left: rect.left + window.scrollX + rect.width / 2,
+      top: rect.top + window.scrollY,
+      bottom: rect.bottom + window.scrollY,
     },
   };
 }
@@ -59,74 +70,26 @@ export function getTextareaSelectionState(
   const end = textarea.selectionEnd ?? 0;
   if (end <= start) return null;
 
-  const rawText = textarea.value.slice(start, end);
-  const text = rawText.trim();
+  const text = textarea.value.slice(start, end).trim();
   if (!text) return null;
 
-  const anchorIndex =
-    textarea.selectionDirection === "backward" ? start : end;
   return {
     text,
-    anchor: measureTextareaAnchor(textarea, anchorIndex),
+    anchor: measureTextareaSelectionAnchor(textarea, start, end),
     start,
     end,
   };
 }
 
-function readSelectionEndpointRect(
-  selection: Selection,
-  root: HTMLElement,
-): DOMRect | null {
-  const focusNode = selection.focusNode;
-  if (!focusNode) {
-    return null;
-  }
-
-  const focusElement =
-    focusNode.nodeType === Node.ELEMENT_NODE
-      ? (focusNode as HTMLElement)
-      : focusNode.parentElement;
-
-  if (focusElement && !root.contains(focusElement)) {
-    return null;
-  }
-
-  try {
-    const endpointRange = document.createRange();
-    const safeOffset = getSafeSelectionOffset(focusNode, selection.focusOffset);
-    endpointRange.setStart(focusNode, safeOffset);
-    endpointRange.setEnd(focusNode, safeOffset);
-
-    const clientRects = Array.from(endpointRange.getClientRects()).filter(
-      (rect) => rect.width > 0 || rect.height > 0,
-    );
-    const boundingRect = endpointRange.getBoundingClientRect();
-    return (
-      clientRects[clientRects.length - 1] ??
-      (boundingRect.width > 0 || boundingRect.height > 0
-        ? boundingRect
-        : null)
-    );
-  } catch {
-    return null;
-  }
-}
-
-function getSafeSelectionOffset(node: Node, offset: number): number {
-  if (node.nodeType === Node.TEXT_NODE) {
-    return Math.min(Math.max(offset, 0), node.textContent?.length ?? 0);
-  }
-
-  return Math.min(Math.max(offset, 0), node.childNodes.length);
-}
-
-function measureTextareaAnchor(
+function measureTextareaSelectionAnchor(
   textarea: HTMLTextAreaElement,
+  start: number,
   end: number,
 ): EditorSelectionAnchor {
   const computed = window.getComputedStyle(textarea);
   const mirror = document.createElement("div");
-  const caretSpan = document.createElement("span");
+  const beforeSelection = document.createTextNode(textarea.value.slice(0, start));
+  const selectionSpan = document.createElement("span");
   const properties = [
     "boxSizing",
     "width",
@@ -169,18 +132,46 @@ function measureTextareaAnchor(
     (mirror.style as any)[property] = computed[property];
   }
 
-  mirror.textContent = textarea.value.slice(0, end);
-  caretSpan.textContent = "\u200b";
-  mirror.appendChild(caretSpan);
+  selectionSpan.textContent = textarea.value.slice(start, end) || "\u200b";
+  mirror.appendChild(beforeSelection);
+  mirror.appendChild(selectionSpan);
   document.body.appendChild(mirror);
   mirror.scrollTop = textarea.scrollTop;
   mirror.scrollLeft = textarea.scrollLeft;
 
-  const rect = caretSpan.getBoundingClientRect();
+  const rect = selectionSpan.getBoundingClientRect();
   document.body.removeChild(mirror);
 
   return {
-    left: rect.right + window.scrollX,
-    top: rect.bottom + window.scrollY,
+    left: rect.left + window.scrollX + rect.width / 2,
+    top: rect.top + window.scrollY,
+    bottom: rect.bottom + window.scrollY,
   };
+}
+
+function mergeClientRects(
+  rects: DOMRect[],
+  fallbackRect: DOMRect,
+): DOMRect | null {
+  if (rects.length === 0) {
+    if (fallbackRect.width > 0 || fallbackRect.height > 0) {
+      return fallbackRect;
+    }
+
+    return null;
+  }
+
+  let left = rects[0].left;
+  let right = rects[0].right;
+  let top = rects[0].top;
+  let bottom = rects[0].bottom;
+
+  for (const rect of rects.slice(1)) {
+    left = Math.min(left, rect.left);
+    right = Math.max(right, rect.right);
+    top = Math.min(top, rect.top);
+    bottom = Math.max(bottom, rect.bottom);
+  }
+
+  return new DOMRect(left, top, right - left, bottom - top);
 }

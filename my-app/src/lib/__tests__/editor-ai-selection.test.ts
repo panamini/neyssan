@@ -30,8 +30,9 @@ describe("getDomSelectionState", () => {
     expect(getDomSelectionState(root)).toEqual({
       text: "Selected text",
       anchor: {
-        left: 60,
-        top: 42,
+        left: 50,
+        top: 30,
+        bottom: 42,
       },
     });
   });

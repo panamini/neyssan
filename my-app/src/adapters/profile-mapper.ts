@@ -14,6 +14,7 @@ import type { INormalizedProfile } from "../types/profile";
 export interface ConvexUserProfile {
   _id: unknown;
   _creationTime: number;
+  profileId?: string | undefined;
   clerkId?: string | undefined;
   email: string;
   name?: string | undefined;
@@ -50,6 +51,7 @@ export interface ConvexUserProfile {
     confidence?: number;
     filename?: string;
   } | undefined;
+  cvDocument?: unknown;
 }
  
 /**

@@ -1,6 +1,7 @@
 import { internalMutation, internalQuery, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
+import { listProfilesForClerk } from "./lib/userProfiles";
 
 const PROPOSAL_GENERATION_JOB_KIND = "proposal_generation";
 
@@ -511,19 +512,21 @@ export const requestProposalGenerationCancel = mutation({
       throw new Error("Not authenticated");
     }
 
-    const profile = await ctx.db
-      .query("userProfiles")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
-      .unique();
-    if (!profile) {
+    const profiles = await listProfilesForClerk(ctx, identity.subject);
+    if (profiles.length === 0) {
       return false;
     }
 
-    const candidates = await ctx.db
-      .query("llmJobs")
-      .withIndex("by_profile", (q) => q.eq("profileId", profile._id))
-      .order("desc")
-      .take(20);
+    const candidateGroups = await Promise.all(
+      profiles.map((profile) =>
+        ctx.db
+          .query("llmJobs")
+          .withIndex("by_profile", (q) => q.eq("profileId", profile._id))
+          .order("desc")
+          .take(20),
+      ),
+    );
+    const candidates = candidateGroups.flat();
 
     const run = candidates.find(
       (job) =>

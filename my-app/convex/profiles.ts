@@ -1,5 +1,6 @@
 import { mutation, internalQuery, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
+import { getPrimaryProfileForClerk } from "./lib/userProfiles";
 
 export const get = internalQuery({
   args: {},
@@ -99,6 +100,7 @@ export const patch = mutation({
   },
   handler: async (ctx, args) => {
     const now = Date.now();
+    const identity = await ctx.auth.getUserIdentity();
 
     // Resolve existing document. Prefer profileId (autosave flows), otherwise use authenticated clerk user.
     let existing: any = null;
@@ -109,12 +111,14 @@ export const patch = mutation({
         .take(1);
       if (rows && rows.length > 0) existing = rows[0];
     } else {
-      const identity = await ctx.auth.getUserIdentity();
       if (!identity) throw new Error("Not authenticated");
-      existing = await ctx.db
-        .query("userProfiles")
-        .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
-        .unique();
+      existing = await getPrimaryProfileForClerk(ctx, identity.subject);
+    }
+
+    if (existing?.clerkId) {
+      if (!identity || existing.clerkId !== identity.subject) {
+        throw new Error("Not authorized to access this profile");
+      }
     }
 
     // If no existing doc and profileId was provided, create a new draft document (autosave can create drafts).
@@ -122,14 +126,15 @@ export const patch = mutation({
       const incoming: any = (args.profile as any) || {};
       const doc: any = {
         profileId: args.profileId,
-        email: incoming.email ?? "",
+        clerkId: identity?.subject ?? undefined,
+        email: incoming.email ?? identity?.email ?? "",
         achievements: incoming.achievements ?? [],
         skills: incoming.skills ?? [],
         languages: incoming.languages ?? [],
         experience: incoming.experience ?? [],
         education: incoming.education ?? [],
         contact: incoming.contact ?? undefined,
-        name: incoming.name ?? undefined,
+        name: incoming.name ?? identity?.name ?? undefined,
         summary: incoming.summary ?? undefined,
         idempotencyKeys: Array.isArray(incoming.idempotencyKeys) ? incoming.idempotencyKeys : [],
         preferences: args.patch?.preferences ?? incoming.preferences ?? {
@@ -142,6 +147,12 @@ export const patch = mutation({
         updatedAt: now,
         version: args.version ?? 1,
       };
+
+      if (args.patch?.cvDocument !== undefined) {
+        doc.cvDocument = args.patch.cvDocument;
+      } else if (incoming.cvDocument !== undefined) {
+        doc.cvDocument = incoming.cvDocument;
+      }
 
       // If autosave sent rich `rawSections`, convert to a single raw_text field to match the table schema.
       if (args.patch && Array.isArray(args.patch.rawSections)) {
@@ -162,6 +173,12 @@ export const patch = mutation({
         updatedAt: now,
         version: (existing.version || 1) + 1,
       };
+
+      if (identity && !existing.clerkId) {
+        updates.clerkId = identity.subject;
+        if (!existing.email && identity.email) updates.email = identity.email;
+        if (!existing.name && identity.name) updates.name = identity.name;
+      }
 
       if (args.profile.summary !== undefined) updates.summary = args.profile.summary;
       if (args.profile.skills !== undefined) updates.skills = args.profile.skills;
@@ -205,6 +222,7 @@ export const patch = mutation({
         "education",
         "achievements",
         "metadata",
+        "cvDocument",
         "idempotencyKeys",
         "preferences",
       ]);
@@ -220,6 +238,12 @@ export const patch = mutation({
           if (key === "rawText") updates.raw_text = args.patch[key];
           else updates[key] = args.patch[key];
         }
+      }
+
+      if (identity && !existing.clerkId) {
+        updates.clerkId = identity.subject;
+        if (!existing.email && identity.email) updates.email = identity.email;
+        if (!existing.name && identity.name) updates.name = identity.name;
       }
 
       updates.updatedAt = now;
