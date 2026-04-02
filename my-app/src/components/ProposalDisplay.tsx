@@ -341,8 +341,13 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   } | null>(null);
   const zoomLevel = DOCUMENT_ZOOM_STEPS[zoomIndex];
   const editableTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const editablePageRef = React.useRef<HTMLDivElement | null>(null);
+  const viewerSurfaceRef = React.useRef<HTMLDivElement | null>(null);
+  const characterBadgeWrapRef = React.useRef<HTMLDivElement | null>(null);
   const selectionDebounceRef = React.useRef<number | null>(null);
   const zoomMenuRef = React.useRef<HTMLDivElement | null>(null);
+  const [isCharacterBadgeOverlappingPage, setIsCharacterBadgeOverlappingPage] =
+    React.useState(false);
 
   const {
     attach: attachEditableScrollEdges,
@@ -380,6 +385,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   const isLetterLike =
     proposalType === "cover_letter" || proposalType === "application_message";
   const isEditable = mode === "edit" && Boolean(onContentChange);
+  const isDocumentEditor = isEditable && usesDocumentRenderer;
   const effectiveZoomLevel = isEditable ? 1 : zoomLevel;
   const enablesDocumentZoom =
     showZoomControls &&
@@ -446,9 +452,11 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     ({
       isReadonly = false,
       letterLike = false,
+      documentEditor = false,
     }: {
       isReadonly?: boolean;
       letterLike?: boolean;
+      documentEditor?: boolean;
     } = {}) => {
       const classNames = ["dasti-proposal-sheet__body"];
 
@@ -458,6 +466,9 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       if (usesDocumentRenderer) {
         classNames.push("dasti-proposal-sheet__body--document-viewer");
       }
+      if (documentEditor) {
+        classNames.push("dasti-proposal-sheet__body--document-editor");
+      }
       if (letterLike) {
         classNames.push("dasti-proposal-sheet__body--letter");
       }
@@ -465,6 +476,10 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       return classNames.join(" ");
     },
     [usesDocumentRenderer],
+  );
+
+  const shouldShowCharacterCountBadge = Boolean(
+    proposalContent && !loading && !error && isEditable,
   );
 
   React.useEffect(() => {
@@ -480,6 +495,66 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     updateEditableScrollEdges,
     updatePreviewScrollEdges,
   ]);
+
+  React.useEffect(() => {
+    if (!shouldShowCharacterCountBadge || !usesDocumentRenderer) {
+      setIsCharacterBadgeOverlappingPage(false);
+      return undefined;
+    }
+
+    const measureOverlap = () => {
+      const badgeNode = characterBadgeWrapRef.current;
+      const pageNode = editablePageRef.current;
+      if (!badgeNode || !pageNode) {
+        setIsCharacterBadgeOverlappingPage(false);
+        return;
+      }
+
+      const badgeRect = badgeNode.getBoundingClientRect();
+      const pageRect = pageNode.getBoundingClientRect();
+      const overlaps =
+        badgeRect.left < pageRect.right - 1 &&
+        badgeRect.right > pageRect.left + 1 &&
+        badgeRect.top < pageRect.bottom - 1 &&
+        badgeRect.bottom > pageRect.top + 1;
+
+      setIsCharacterBadgeOverlappingPage((current) =>
+        current === overlaps ? current : overlaps,
+      );
+    };
+
+    let frameId: number | null = null;
+    if (typeof window !== "undefined" && window.requestAnimationFrame) {
+      frameId = window.requestAnimationFrame(measureOverlap);
+    } else {
+      measureOverlap();
+    }
+
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(measureOverlap)
+        : null;
+
+    if (viewerSurfaceRef.current) {
+      resizeObserver?.observe(viewerSurfaceRef.current);
+    }
+    if (editablePageRef.current) {
+      resizeObserver?.observe(editablePageRef.current);
+    }
+    if (characterBadgeWrapRef.current) {
+      resizeObserver?.observe(characterBadgeWrapRef.current);
+    }
+
+    window.addEventListener("resize", measureOverlap);
+
+    return () => {
+      if (frameId !== null && typeof window !== "undefined") {
+        window.cancelAnimationFrame(frameId);
+      }
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", measureOverlap);
+    };
+  }, [shouldShowCharacterCountBadge, usesDocumentRenderer]);
 
   React.useEffect(() => {
     setZoomIndex(readProposalZoomIndex(zoomStorageKey));
@@ -665,8 +740,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     </button>
   ) : null;
 
-  const characterCountBadge =
-    proposalContent && !loading && !error && isEditable ? (
+  const characterCountBadge = shouldShowCharacterCountBadge ? (
       <span
         className={(() => {
           if (resolvedCharacterLimitSelection.advisory) {
@@ -942,6 +1016,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
               height: `${isEditable ? stageLayout.pageHeight : renderedDocumentHeight}px`,
               aspectRatio: isMultiPagePreview ? "auto" : undefined,
             }}
+            ref={editablePageRef}
             onClick={() => {
               if (!isEditable && mode === "preview") {
                 onPreviewInteract?.();
@@ -970,7 +1045,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                       scheduleTextareaSelectionCheck();
                     }}
                     placeholder="Content will appear here…"
-                    className="dasti-proposal-sheet__body--editable"
+                    className="dasti-proposal-sheet__body--editable dasti-proposal-editor-page__textarea"
                     style={{
                       fontFamily: documentTypography.fontFamily,
                       fontSize: "var(--tb)",
@@ -1139,7 +1214,10 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   } else if (isEditable) {
     sheetBody = usesDocumentRenderer ? (
       <div
-        className={resolveBodyClassName({ letterLike: isLetterLike })}
+        className={resolveBodyClassName({
+          letterLike: isLetterLike,
+          documentEditor: isDocumentEditor,
+        })}
         data-scroll-top={activeScrollTop ? "true" : "false"}
         data-scroll-bottom={activeScrollBottom ? "true" : "false"}
         style={activeScrollFadeStyle}
@@ -1269,7 +1347,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
             onRunAction={handleRunInlineAiAction}
           />
         ) : null}
-        <div className="dasti-doc-viewer-shell__surface">
+        <div ref={viewerSurfaceRef} className="dasti-doc-viewer-shell__surface">
           <div
             className={
               size === "focused"
@@ -1294,7 +1372,13 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
             </div>
           </div>
           {characterCountBadge ? (
-            <div className="dasti-proposal-character-badge-wrap">
+            <div
+              ref={characterBadgeWrapRef}
+              className="dasti-proposal-character-badge-wrap"
+              data-overlap-hidden={
+                isCharacterBadgeOverlappingPage ? "true" : "false"
+              }
+            >
               {characterCountBadge}
             </div>
           ) : null}

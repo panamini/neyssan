@@ -148,6 +148,56 @@
   --duration-slow: 240ms;
   --ease-standard: var(--ez);
   --ease-emphasis: var(--ezb);
+  --proposal-motion-ease-enter: cubic-bezier(0.22, 1, 0.36, 1);
+  --proposal-motion-ease-exit: cubic-bezier(0.4, 0, 0.2, 1);
+  --proposal-motion-toolbar-enter-duration: 320ms;
+  --proposal-motion-toolbar-exit-duration: 160ms;
+  --proposal-motion-brief-swap-duration: 160ms;
+  --proposal-motion-brief-settle-duration: 260ms;
+  --proposal-motion-brief-enter-duration: 260ms;
+  --proposal-motion-brief-exit-duration: 160ms;
+  --proposal-motion-compose-enter-duration: 260ms;
+  --proposal-motion-compose-exit-duration: 160ms;
+  --proposal-motion-toolbar-enter-shift: -10px;
+  --proposal-motion-toolbar-exit-shift: -8px;
+  --proposal-motion-brief-enter-shift: 10px;
+  --proposal-motion-brief-exit-shift: 8px;
+  --proposal-motion-compose-enter-shift: 12px;
+  --proposal-motion-compose-exit-shift: -10px;
+  --proposal-motion-toolbar-enter-scale: 0.985;
+  --proposal-motion-toolbar-exit-scale: 0.985;
+  --proposal-motion-brief-enter-scale: 0.988;
+  --proposal-motion-brief-exit-scale: 0.99;
+  --proposal-motion-compose-enter-scale: 0.992;
+  --proposal-motion-compose-exit-scale: 0.992;
+  --proposal-motion-enter-blur: 6px;
+  --proposal-motion-exit-blur: 5px;
+  --proposal-motion-toolbar-enter-saturate: 0.94;
+  --proposal-motion-toolbar-exit-saturate: 0.95;
+  --proposal-motion-brief-enter-saturate: 0.95;
+  --proposal-motion-brief-exit-saturate: 0.95;
+  --proposal-motion-compose-enter-saturate: 0.96;
+  --proposal-motion-compose-exit-saturate: 0.96;
+  --proposal-submit-surface-duration: 380ms;
+  --proposal-submit-surface-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --proposal-submit-state-duration: 220ms;
+  --proposal-submit-size-md: 52px;
+  --proposal-submit-radius-md: 16px;
+  --proposal-submit-icon-size-md: 28px;
+  --proposal-submit-stroke-width-md: 2;
+  --proposal-submit-size-sm: 30px;
+  --proposal-submit-radius-sm: 11px;
+  --proposal-submit-icon-size-sm: 16px;
+  --proposal-submit-stroke-width-sm: 1.6;
+  --proposal-submit-phase-gap: 140ms;
+  --proposal-submit-spinner-duration: 1450ms;
+  --proposal-submit-draw-duration: 1080ms;
+  --proposal-submit-loading-hide-duration: 0ms;
+  --proposal-submit-stop-reveal-delay: 1800ms;
+  --proposal-submit-stop-reveal-duration: 1080ms;
+  --proposal-submit-stop-hold-duration: 220ms;
+  --proposal-submit-stop-undraw-duration: 880ms;
+  --proposal-submit-stop-redraw-duration: 1080ms;
 
   /* Layering + containers */
   --z-base: 0;
@@ -287,6 +337,11 @@
   --proposal-compose-edge-top-shadow: none;
   --proposal-compose-edge-bottom-shadow: none;
   --proposal-compose-edge-max-opacity: 1;
+  --proposal-output-editor-inline-padding: clamp(24px, 4vw, 40px);
+  --proposal-output-editor-block-start: clamp(28px, 4vh, 44px);
+  --proposal-output-editor-block-end: clamp(32px, 4.5vh, 48px);
+  --proposal-output-editor-guide-inset: clamp(18px, 2.6vw, 28px);
+  --proposal-output-editor-fade-height: 18px;
   --proposal-sheet-top-shadow: 0 12px 18px -16px
     hsla(28, 22%, 12%, 0.1);
   --proposal-sheet-bottom-shadow: 0 -12px 18px -16px

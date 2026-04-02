@@ -35,15 +35,18 @@ describe("ProposalComposeToolbar CSS contracts", () => {
     );
   });
 
-  it("keeps the collapsed toolbar as a compact left-anchored shell", () => {
+  it("keeps the collapsed toolbar as a split shell with trailing tone and generate actions", () => {
     expect(productCss).toMatch(
-      /\.dasti-compose-toolbar__collapsed-shell\s*\{[\s\S]*display:\s*inline-flex;[\s\S]*justify-content:\s*flex-start;/,
+      /\.dasti-compose-toolbar__collapsed-shell\s*\{[\s\S]*display:\s*inline-flex;[\s\S]*justify-content:\s*space-between;[\s\S]*width:\s*100%;/,
     );
     expect(productCss).toMatch(
-      /\.dasti-compose-toolbar__collapsed-meta\s*\{[\s\S]*min-width:\s*0;/,
+      /\.dasti-compose-toolbar__collapsed-actions\s*\{[\s\S]*justify-content:\s*flex-end;[\s\S]*margin-inline-start:\s*auto;/,
     );
     expect(productCss).toMatch(
       /\.dasti-compose-toolbar__tone-popover--collapsed\s*\{[\s\S]*inset-inline-start:\s*auto;[\s\S]*inset-inline-end:\s*0;[\s\S]*transform:\s*none;[\s\S]*transform-origin:\s*right top;/,
+    );
+    expect(productCss).toContain(
+      "--dasti-proposal-submit-stroke-width: var(--proposal-submit-stroke-width-sm);",
     );
   });
 
