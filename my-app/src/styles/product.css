@@ -3216,8 +3216,13 @@
   --proposal-fit-fine-body-start-adjust-mm: 0;
   --proposal-fit-fine-bottom-margin-adjust-mm: 0;
   width: 100%;
-  min-height: 0;
-  height: auto;
+  min-height: calc(
+    var(--proposal-block-mm) * var(--proposal-page-height-mm)
+  );
+  height: calc(var(--proposal-block-mm) * var(--proposal-page-height-mm));
+  max-height: calc(
+    var(--proposal-block-mm) * var(--proposal-page-height-mm)
+  );
   aspect-ratio: 210 / 297;
   display: grid;
   grid-template-columns:
@@ -3237,6 +3242,7 @@
   );
   background: var(--proposal-document-paper);
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .dasti-proposal-document__measurement {
@@ -3341,6 +3347,10 @@
 
 .dasti-proposal-document__paragraph + .dasti-proposal-document__paragraph {
   margin-top: calc(1em * var(--proposal-document-computed-line-height));
+}
+
+.dasti-proposal-document__paragraph--continuation {
+  margin-top: 0 !important;
 }
 
 .dasti-proposal-document__closing {
@@ -3454,6 +3464,10 @@
 
 .dasti-proposal-document__page--continuation .dasti-proposal-document__rail {
   gap: calc(var(--proposal-grid-half-step-block) * 0.55);
+}
+
+.dasti-proposal-document__page--continuation .dasti-proposal-document__body {
+  padding-block-start: 0;
 }
 
 .dasti-proposal-document__page--continuation .dasti-proposal-document__eyebrow {
@@ -7296,9 +7310,20 @@
   position: relative;
   width: 30px;
   height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 0;
   border-radius: var(--radius-toolbar-control);
   overflow: visible;
+  line-height: 0;
+}
+
+.dasti-compose-toolbar__tone-option > svg,
+.dasti-proposal-saved-tone-button > svg {
+  display: block;
+  flex: 0 0 auto;
+  margin: auto;
 }
 
 .dasti-compose-toolbar__tone-option--active {
@@ -7360,6 +7385,7 @@
 .dasti-proposal-saved-tone-button {
   position: relative;
   overflow: visible;
+  line-height: 0;
 }
 
 .dasti-proposal-saved-tone-button--popover-open::after {
