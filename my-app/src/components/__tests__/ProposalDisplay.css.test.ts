@@ -28,6 +28,9 @@ describe("ProposalDisplay CSS contracts", () => {
 
   it("pads the document stage inside the proposal shell and anchors the character badge to the shell corner", () => {
     expect(productCss).toMatch(
+      /\.dasti-proposal-sheet\s*\{[\s\S]*width:\s*100%;[\s\S]*max-width:\s*100%;[\s\S]*box-sizing:\s*border-box;[\s\S]*border:\s*1px solid var\(--document-viewer-frame-border\);/,
+    );
+    expect(productCss).toMatch(
       /\.dasti-proposal-sheet__body--document-viewer\s+\.dasti-document-stage-chassis\s*\{[\s\S]*padding-block-start:\s*var\(--document-viewer-bleed-block\);[\s\S]*padding-inline:\s*var\(--document-viewer-bleed-inline\);[\s\S]*padding-block-end:\s*calc\(var\(--document-viewer-bleed-block\)\s*\+\s*var\(--space-2\)\);[\s\S]*box-sizing:\s*border-box;/,
     );
     expect(productCss).toContain(".dasti-proposal-character-badge-wrap {");
@@ -132,11 +135,8 @@ describe("ProposalDisplay CSS contracts", () => {
     expect(productCss).toContain(".dasti-proposal-library-selected-sidebar {");
     expect(productCss).toContain(".dasti-proposal-library-sidebar__heading {");
     expect(productCss).toContain(".dasti-proposal-output-shell--saved {");
-    expect(productCss).toContain(
-      "--proposal-library-selected-shell-inline-size: var(",
-    );
-    expect(productCss).toContain(
-      "--proposal-workspace-output-shell-inline-size,",
+    expect(productCss).toMatch(
+      /--proposal-library-selected-shell-inline-size:\s*min\([\s\S]*100%[\s\S]*var\(--document-sheet-inline-size\)[\s\S]*var\(--s2\)\s*\*\s*2[\s\S]*2px/,
     );
     expect(productCss).toContain(
       "grid-template-columns: minmax(132px, 160px) minmax(",

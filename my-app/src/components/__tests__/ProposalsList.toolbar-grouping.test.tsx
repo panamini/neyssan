@@ -121,14 +121,9 @@ describe("ProposalsList toolbar grouping", () => {
 
     expect(screen.getByTestId("saved-view-actions")).toBeInTheDocument();
     expect(
-      container.querySelector(".dasti-proposal-output-shell--workspace"),
-    ).toBeTruthy();
-    expect(
-      container.querySelector(".dasti-proposal-output-shell--saved"),
-    ).toBeTruthy();
-    expect(
       container.querySelector(".dasti-proposal-library-selected-sidebar"),
     ).toBeTruthy();
+    expect(container.querySelector(".dasti-proposal-library-card")).toBeTruthy();
 
     expect(
       screen.getByRole("button", { name: "Tone of voice Natural" }),
