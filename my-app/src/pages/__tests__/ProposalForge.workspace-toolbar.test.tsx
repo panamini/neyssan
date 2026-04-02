@@ -41,30 +41,47 @@ vi.mock("../../components/ui/toast", () => ({
 vi.mock("../../components/ProposalInputForm", () => ({
   default: (props: Record<string, unknown>) => {
     proposalInputFormSpy(props);
+    const submitFromBrief = React.useCallback(
+      () =>
+        props.onSubmit?.(
+          {
+            jobTitle: "Game UI Artist",
+            jobDescription:
+              "Detailed role description for the proposal brief capsule tests.",
+            proposalType: "cover_letter",
+            voicePreset: undefined,
+            formalityLevel: undefined,
+            creativity: undefined,
+            toneTuning: null,
+            characterLimitMode: "none",
+            characterLimitValue: 1500,
+            modelType: "chatgpt",
+          },
+          "Generated proposal body.",
+        ),
+      [props.onSubmit],
+    );
+
+    React.useEffect(() => {
+      props.onGenerateControlChange?.({
+        trigger: submitFromBrief,
+        label: "Generate",
+        disabled: false,
+        state: "idle",
+      });
+
+      return () => {
+        props.onGenerateControlChange?.(null);
+      };
+    }, [props.onGenerateControlChange, submitFromBrief]);
+
     return (
       <div data-testid="proposal-input-form">
         Mock compose shell
         {props.headerAction as React.ReactNode}
         <button
           type="button"
-          onClick={() =>
-            props.onSubmit?.(
-              {
-                jobTitle: "Game UI Artist",
-                jobDescription:
-                  "Detailed role description for the proposal brief capsule tests.",
-                proposalType: "cover_letter",
-                voicePreset: undefined,
-                formalityLevel: undefined,
-                creativity: undefined,
-                toneTuning: null,
-                characterLimitMode: "none",
-                characterLimitValue: 1500,
-                modelType: "chatgpt",
-              },
-              "Generated proposal body.",
-            )
-          }
+          onClick={submitFromBrief}
         >
           Generate sample proposal
         </button>
@@ -102,6 +119,11 @@ vi.mock("../../components/ProposalComposeToolbar", () => ({
         {props.onRestoreCompose ? (
           <button type="button" onClick={() => props.onRestoreCompose?.()}>
             Restore compose
+          </button>
+        ) : null}
+        {props.onGenerateFromBrief ? (
+          <button type="button" onClick={() => props.onGenerateFromBrief?.()}>
+            {props.generateLabel ?? "Generate"}
           </button>
         ) : null}
       </div>
@@ -315,6 +337,7 @@ describe("ProposalForge workbench layout", () => {
       "entering",
     );
     expect(lastToolbarCall.onRestoreCompose).toEqual(expect.any(Function));
+    expect(lastToolbarCall.onGenerateFromBrief).toEqual(expect.any(Function));
     expect(composeShell.parentElement).toHaveStyle({ display: "none" });
     const gridSplitAfterCollapse = container.querySelector(
       ".dasti-grid-split",
@@ -545,7 +568,7 @@ describe("ProposalForge workbench layout", () => {
         button.getAttribute("data-toolbar-tooltip"),
     );
     expect(buttonLabels).toEqual([
-      "Regenerate proposal",
+      "Refine proposal",
       "Save proposal to library",
       "Delete",
       "Copy",
