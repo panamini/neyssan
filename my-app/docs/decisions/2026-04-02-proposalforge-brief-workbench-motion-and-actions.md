@@ -73,6 +73,14 @@ is still owned by the compose source of truth:
 - it mirrors the main button state and disabled rules
 - it does not create a second generation system
 
+The collapsed control order is also intentional:
+
+- restore / show compose stays on the left as the workbench affordance
+- tone and generate sit together on the right as the brief action cluster
+
+This keeps the source action and its tone modifier visually coupled instead of
+leaving the tone chip stranded in the middle of the toolbar.
+
 ### 5. Output and saved-proposal actions are `Refine`, not `Regenerate`
 
 The output-side and library-side action label is now `Refine`.
@@ -87,6 +95,31 @@ Why:
 
 The page action and the saved-proposal list keep the same capability, but the
 copy, tooltips, and toasts now use the refinement vocabulary.
+
+### 6. Motion timings and submit timings are stylesheet-owned tokens
+
+The Proposal Forge workspace no longer hardcodes the brief swap and generate
+button timings in component constants. Those values now live in foundation
+tokens and are read at runtime from computed styles.
+
+This keeps the animation system adjustable from CSS:
+
+- motion durations and easing can be tuned without editing component logic
+- the small collapsed generate button can use its own size / radius / stroke
+  token set
+- JS timers stay aligned with the visible CSS timing budget
+
+### 7. Output edit mode uses full-width inner paper with masked top and bottom edges
+
+The editable output page now differs from preview mode on purpose:
+
+- preview mode keeps the reading-measure cap because the page is being viewed
+- edit mode uses the available paper width with preserved inline padding
+- the first lines start with a calm top inset
+- once scrolled, text fades behind the sheet border at the top and bottom
+
+The character counter capsule is also overlap-aware and hides itself once it
+would collide with the editable page area.
 
 ## What was not changed
 

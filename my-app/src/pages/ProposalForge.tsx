@@ -96,6 +96,7 @@ import {
   getProposalTemplateBundleDefinition,
   type ProposalTemplateBundleId,
 } from "../lib/proposal-template-bundles";
+import { readCssDurationMs } from "../lib/readCssDuration";
 
 type ProposalForgePrefill = {
   handoffId: string;
@@ -112,10 +113,6 @@ type ProposalBriefAnimationPhase =
   | "brief-enter"
   | "brief-exit"
   | "form-enter";
-
-const PROPOSAL_BRIEF_SWAP_MS = 160;
-const PROPOSAL_BRIEF_SETTLE_MS = 260;
-const PROPOSAL_TOOLBAR_ENTER_MS = 320;
 
 const COMPOSE_TOOLBAR_VISIBLE_VOICE_PRESETS = new Set<
   NonNullable<FormValues["voicePreset"]>
@@ -2522,6 +2519,10 @@ export function ProposalForge(): JSX.Element {
 
   const scheduleBriefAnimationSettle = React.useCallback(
     (phase: Exclude<ProposalBriefAnimationPhase, "idle">) => {
+      const settleDurationMs = readCssDurationMs(
+        "--proposal-motion-brief-settle-duration",
+        260,
+      );
       if (briefSettleTimerRef.current !== null) {
         window.clearTimeout(briefSettleTimerRef.current);
       }
@@ -2529,12 +2530,16 @@ export function ProposalForge(): JSX.Element {
       briefSettleTimerRef.current = window.setTimeout(() => {
         setBriefAnimationPhase("idle");
         briefSettleTimerRef.current = null;
-      }, PROPOSAL_BRIEF_SETTLE_MS);
+      }, settleDurationMs);
     },
     [],
   );
 
   const triggerToolbarEnterTransition = React.useCallback(() => {
+    const toolbarEnterDurationMs = readCssDurationMs(
+      "--proposal-motion-toolbar-enter-duration",
+      320,
+    );
     if (toolbarTransitionTimerRef.current !== null) {
       window.clearTimeout(toolbarTransitionTimerRef.current);
     }
@@ -2542,7 +2547,7 @@ export function ProposalForge(): JSX.Element {
     toolbarTransitionTimerRef.current = window.setTimeout(() => {
       setToolbarTransitionState(null);
       toolbarTransitionTimerRef.current = null;
-    }, PROPOSAL_TOOLBAR_ENTER_MS);
+    }, toolbarEnterDurationMs);
   }, []);
 
   const focusComposeBrief = React.useCallback(() => {
@@ -2578,6 +2583,10 @@ export function ProposalForge(): JSX.Element {
     focusField(jobTitleField);
   }, []);
   const handleOpenComposeBrief = React.useCallback(() => {
+    const briefSwapDurationMs = readCssDurationMs(
+      "--proposal-motion-brief-swap-duration",
+      160,
+    );
     pendingComposeBriefFocusRef.current = true;
     setIsCvPickerOpen(false);
     if (!shouldAnimateDesktopBriefTransition || !showBriefCard) {
@@ -2595,7 +2604,7 @@ export function ProposalForge(): JSX.Element {
       setIsBriefExpanded(true);
       scheduleBriefAnimationSettle("form-enter");
       briefSwapTimerRef.current = null;
-    }, PROPOSAL_BRIEF_SWAP_MS);
+    }, briefSwapDurationMs);
   }, [
     clearBriefAnimationTimers,
     scheduleBriefAnimationSettle,
@@ -2603,6 +2612,10 @@ export function ProposalForge(): JSX.Element {
     showBriefCard,
   ]);
   const handleToggleComposeBrief = React.useCallback(() => {
+    const briefSwapDurationMs = readCssDurationMs(
+      "--proposal-motion-brief-swap-duration",
+      160,
+    );
     if (!hasBriefContent) {
       return;
     }
@@ -2624,7 +2637,7 @@ export function ProposalForge(): JSX.Element {
         setIsBriefExpanded(false);
         scheduleBriefAnimationSettle("brief-enter");
         briefSwapTimerRef.current = null;
-      }, PROPOSAL_BRIEF_SWAP_MS);
+      }, briefSwapDurationMs);
       return;
     }
 
@@ -2635,7 +2648,7 @@ export function ProposalForge(): JSX.Element {
       setIsBriefExpanded(true);
       scheduleBriefAnimationSettle("form-enter");
       briefSwapTimerRef.current = null;
-    }, PROPOSAL_BRIEF_SWAP_MS);
+    }, briefSwapDurationMs);
   }, [
     clearBriefAnimationTimers,
     hasBriefContent,

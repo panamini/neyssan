@@ -35,4 +35,30 @@ describe("ProposalDisplay foundation tokens", () => {
       "--proposal-sheet-bottom-shadow: 0 -12px 18px -16px hsla(0, 0%, 0%, 0.16);",
     );
   });
+
+  it("defines workspace motion, compact submit, and output editor tokens in foundation", () => {
+    expect(foundationCss).toContain(
+      "--proposal-motion-toolbar-enter-duration: 320ms;",
+    );
+    expect(foundationCss).toContain(
+      "--proposal-motion-brief-swap-duration: 160ms;",
+    );
+    expect(foundationCss).toContain(
+      "--proposal-motion-compose-enter-shift: 12px;",
+    );
+    expect(foundationCss).toContain("--proposal-submit-size-sm: 30px;");
+    expect(foundationCss).toContain("--proposal-submit-radius-sm: 11px;");
+    expect(foundationCss).toContain(
+      "--proposal-submit-stroke-width-sm: 1.6;",
+    );
+    expect(foundationCss).toContain(
+      "--proposal-output-editor-inline-padding: clamp(24px, 4vw, 40px);",
+    );
+    expect(foundationCss).toContain(
+      "--proposal-output-editor-block-start: clamp(28px, 4vh, 44px);",
+    );
+    expect(foundationCss).toContain(
+      "--proposal-output-editor-fade-height: 18px;",
+    );
+  });
 });

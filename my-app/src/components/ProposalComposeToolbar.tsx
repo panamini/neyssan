@@ -210,16 +210,16 @@ export function ProposalComposeToolbar({
     >
       {collapsed ? (
         <div className="dasti-compose-toolbar__collapsed-shell dasti-toolbar--surface-tooltips">
-          <div className="dasti-compose-toolbar__collapsed-meta">
-            <button
-                type="button"
-                className="dasti-compose-toolbar__icon-button dasti-compose-toolbar__icon-button--leading"
-                onClick={onRestoreCompose}
-                aria-label="Show compose panel"
-                data-toolbar-tooltip="Show"
-            >
-              <PanelLeftDashed size={15} strokeWidth={1.8} aria-hidden="true" />
-            </button>
+          <button
+            type="button"
+            className="dasti-compose-toolbar__icon-button dasti-compose-toolbar__icon-button--leading"
+            onClick={onRestoreCompose}
+            aria-label="Show compose panel"
+            data-toolbar-tooltip="Show"
+          >
+            <PanelLeftDashed size={15} strokeWidth={1.8} aria-hidden="true" />
+          </button>
+          <div className="dasti-compose-toolbar__collapsed-actions">
             <span className="dasti-compose-toolbar__tone-anchor">
               <button
                 type="button"
@@ -298,17 +298,6 @@ export function ProposalComposeToolbar({
                 aria-label={generateLabel}
                 data-toolbar-tooltip={generateLabel}
                 disabled={generateDisabled}
-                style={
-                  {
-                    "--dasti-proposal-submit-button-size": "30px",
-                    "--dasti-proposal-submit-radius": "11px",
-                    "--dasti-proposal-submit-icon-size": "16px",
-                    "--dasti-proposal-submit-stroke-width": "7",
-                    "--dasti-proposal-submit-phase-gap": "120ms",
-                    "--dasti-proposal-submit-spinner-duration": "1450ms",
-                    "--dasti-proposal-submit-draw-duration": "1080ms",
-                  } as React.CSSProperties
-                }
               >
                 <ProposalGenerateButtonGlyph state={generateState} />
               </button>
