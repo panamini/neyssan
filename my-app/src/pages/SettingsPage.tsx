@@ -22,6 +22,7 @@ import { getVoicePresetDisplayLabel } from "../lib/proposal-voice-label";
 import { ProposalColorPickerPopover } from "../components/ProposalColorPickerPopover";
 import {
   VERBATI_FONT_PAIR_OPTIONS,
+  type VerbatiFontPairOption,
   type VerbatiFontPairId,
 } from "../features/verbati/fontCatalog";
 
@@ -240,6 +241,39 @@ export function SettingsPage(): JSX.Element {
     VERBATI_FONT_PAIR_OPTIONS[0];
   const selectedStyleOption =
     STYLE_OPTIONS.find((option) => option.id === localStyle) ?? STYLE_OPTIONS[0];
+
+  const renderFontPairLabels = React.useCallback(
+    (option: VerbatiFontPairOption) => (
+      <>
+        <span
+          className="dasti-settings-font-token"
+          style={{
+            fontFamily: option.headingFamily,
+            fontWeight: 700,
+          }}
+        >
+          {option.headingLabel}
+        </span>
+        <span className="dasti-settings-font-token-separator" aria-hidden="true">
+          /
+        </span>
+        <span
+          className="dasti-settings-font-token"
+          style={{
+            fontFamily: option.bodyFamily,
+            fontWeight: 500,
+          }}
+        >
+          {option.bodyLabel}
+        </span>
+      </>
+    ),
+    [],
+  );
+  const visibleFontPairOptions = React.useMemo(
+    () => VERBATI_FONT_PAIR_OPTIONS.slice(0, 5),
+    [],
+  );
   const selectedPaletteOption =
     localPalette === null
       ? null
@@ -367,259 +401,210 @@ export function SettingsPage(): JSX.Element {
                   </div>
                   <div className="dasti-settings-preview-card__footer">
                     <span className="dasti-settings-preview-card__chip">
-                      {selectedFontPair.name}
-                    </span>
-                    <span className="dasti-settings-preview-card__meta">
-                      {selectedStyleOption.preview.templateName}
+                      {selectedFontPair.headingLabel} / {selectedFontPair.bodyLabel}
                     </span>
                   </div>
                 </article>
-                <div className="dasti-settings-preview-stage__copy">
-                  <div className="dasti-settings-preview-stage__title">
-                    {selectedFontPair.headingLabel} + {selectedFontPair.bodyLabel}
-                  </div>
-                  <p className="dasti-settings-preview-stage__description">
-                    {selectedFontPair.description}
-                  </p>
-                </div>
               </div>
             </div>
 
-            <div className="dasti-settings-section dasti-settings-section--font-pair">
-              <div className="dasti-settings-section__label">Default font pair</div>
-              <div className="dasti-settings-font-carousel">
-                <div className="dasti-settings-font-carousel__controls">
-                  <button
-                    type="button"
-                    className="dasti-settings-font-nav"
-                    aria-label="Show previous font pair"
-                    onClick={() => handleFontPairStep(-1)}
-                  >
-                    <ArrowLeft size={16} strokeWidth={1.9} aria-hidden="true" />
-                  </button>
-                  <button
-                    type="button"
-                    className="dasti-settings-pill dasti-settings-pill--active dasti-settings-font-card dasti-settings-font-card--current"
-                    aria-expanded={isFontPairDrawerOpen}
-                    aria-controls="settings-font-pair-drawer"
-                    onClick={() =>
-                      setIsFontPairDrawerOpen((current) => !current)
-                    }
-                    title={`${selectedFontPair.headingLabel} + ${selectedFontPair.bodyLabel}`}
-                  >
-                    <span className="dasti-settings-font-card__preview" aria-hidden="true">
-                      <span
-                        className="dasti-settings-font-card__heading"
-                        style={{
-                          fontFamily: selectedFontPair.headingFamily,
-                          fontWeight: 700,
-                        }}
+            <div className="dasti-settings-section dasti-settings-section--appearance">
+              <div className="dasti-settings-section__label">Default appearance</div>
+              <div className="dasti-settings-appearance-toolbar dasti-toolbar-drawer-surface">
+                <div className="dasti-settings-appearance-group">
+                  <div className="dasti-settings-appearance-label">Font pair</div>
+                  <div className="dasti-settings-font-carousel">
+                    <div className="dasti-settings-font-carousel__controls">
+                      <button
+                        type="button"
+                        className="dasti-settings-font-nav"
+                        aria-label="Show previous font pair"
+                        onClick={() => handleFontPairStep(-1)}
                       >
-                        {selectedFontPair.headingLabel}
-                      </span>
-                      <span
-                        className="dasti-settings-font-card__body"
-                        style={{
-                          fontFamily: selectedFontPair.bodyFamily,
-                          fontWeight: 500,
-                        }}
+                        <ArrowLeft size={16} strokeWidth={1.9} aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        className="dasti-settings-font-card dasti-settings-font-card--current"
+                        aria-expanded={isFontPairDrawerOpen}
+                        aria-controls="settings-font-pair-drawer"
+                        onClick={() =>
+                          setIsFontPairDrawerOpen((current) => !current)
+                        }
+                        title={`${selectedFontPair.headingLabel} + ${selectedFontPair.bodyLabel}`}
                       >
-                        {selectedFontPair.bodyLabel}
-                      </span>
-                    </span>
-                    <span className="dasti-settings-font-card__meta">
-                      <span className="dasti-settings-font-card__name">
-                        {selectedFontPair.name}
-                      </span>
-                      <span className="dasti-settings-font-card__description">
-                        {selectedFontPair.description}
-                      </span>
-                    </span>
-                    <span className="dasti-settings-font-card__status">
-                      {isFontPairDrawerOpen ? "Hide pairs" : "Browse pairs"}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="dasti-settings-font-nav"
-                    aria-label="Show next font pair"
-                    onClick={() => handleFontPairStep(1)}
-                  >
-                    <ArrowRight size={16} strokeWidth={1.9} aria-hidden="true" />
-                  </button>
+                        <span className="dasti-settings-font-card__meta">
+                          <span className="dasti-settings-font-card__name">
+                            {renderFontPairLabels(selectedFontPair)}
+                          </span>
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="dasti-settings-font-nav"
+                        aria-label="Show next font pair"
+                        onClick={() => handleFontPairStep(1)}
+                      >
+                        <ArrowRight size={16} strokeWidth={1.9} aria-hidden="true" />
+                      </button>
+                    </div>
+                    {isFontPairDrawerOpen ? (
+                      <div
+                        id="settings-font-pair-drawer"
+                        className="dasti-settings-font-drawer"
+                        role="group"
+                        aria-label="Default font pair"
+                      >
+                        {visibleFontPairOptions.map((option, index) => {
+                          const active = localFontPairId === option.id;
+                          return (
+                            <React.Fragment key={option.id}>
+                              {index > 0 ? (
+                                <div
+                                  className="dasti-settings-font-drawer-divider"
+                                  aria-hidden="true"
+                                />
+                              ) : null}
+                              <button
+                                type="button"
+                                className={
+                                  active
+                                    ? "dasti-settings-font-drawer-option dasti-settings-font-drawer-option--active"
+                                    : "dasti-settings-font-drawer-option"
+                                }
+                                aria-pressed={active}
+                                onClick={() => {
+                                  void handleFontPairChange(option.id);
+                                }}
+                                title={`${option.headingLabel} / ${option.bodyLabel}`}
+                              >
+                                <span className="dasti-settings-font-drawer-option__label">
+                                  {renderFontPairLabels(option)}
+                                </span>
+                              </button>
+                            </React.Fragment>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
-                {isFontPairDrawerOpen ? (
-                  <div
-                    id="settings-font-pair-drawer"
-                    className="dasti-settings-font-drawer"
-                    role="group"
-                    aria-label="Default font pair"
-                  >
-                    {VERBATI_FONT_PAIR_OPTIONS.map((option) => {
-                      const active = localFontPairId === option.id;
+
+                <div className="dasti-settings-appearance-group">
+                  <div className="dasti-settings-appearance-label">Layout</div>
+                  <div className="dasti-settings-style-grid" role="group" aria-label="Default style">
+                    {STYLE_OPTIONS.map((option) => {
+                      const active = localStyle === option.id;
                       return (
                         <button
                           key={option.id}
                           type="button"
                           className={
                             active
-                              ? "dasti-settings-pill dasti-settings-pill--active dasti-settings-font-card"
-                              : "dasti-settings-pill dasti-settings-font-card"
+                              ? "dasti-settings-style-card dasti-settings-style-card--active"
+                              : "dasti-settings-style-card"
                           }
                           aria-pressed={active}
-                          onClick={() => {
-                            void handleFontPairChange(option.id);
-                          }}
-                          title={`${option.headingLabel} + ${option.bodyLabel}`}
+                          onClick={() => { void handleStyleChange(option.id); }}
+                          title={option.description}
                         >
-                          <span className="dasti-settings-font-card__preview" aria-hidden="true">
-                            <span
-                              className="dasti-settings-font-card__heading"
-                              style={{
-                                fontFamily: option.headingFamily,
-                                fontWeight: 700,
-                              }}
-                            >
-                              {option.headingLabel}
+                          <span className="dasti-settings-style-card__top">
+                            <span className="dasti-settings-style-card__label">
+                              {option.label}
                             </span>
-                            <span
-                              className="dasti-settings-font-card__body"
-                              style={{
-                                fontFamily: option.bodyFamily,
-                                fontWeight: 500,
-                              }}
-                            >
-                              {option.bodyLabel}
+                            <span className="dasti-settings-style-card__indicator" aria-hidden="true">
+                              {active ? (
+                                <>
+                                  <Check size={12} strokeWidth={2.4} />
+                                  Selected
+                                </>
+                              ) : (
+                                "Choose"
+                              )}
                             </span>
                           </span>
-                          <span className="dasti-settings-font-card__meta">
-                            <span className="dasti-settings-font-card__name">
-                              {option.name}
-                            </span>
-                            <span className="dasti-settings-font-card__description">
-                              {option.description}
-                            </span>
+                          <span className="dasti-settings-style-card__description">
+                            {option.description}
                           </span>
                         </button>
                       );
                     })}
                   </div>
-                ) : null}
-              </div>
-            </div>
+                </div>
 
-            {/* ── Style ── */}
-            <div className="dasti-settings-section">
-              <div className="dasti-settings-section__label">Default style</div>
-              <div className="dasti-settings-style-grid" role="group" aria-label="Default style">
-                {STYLE_OPTIONS.map((option) => {
-                  const active = localStyle === option.id;
-                  return (
+                <div className="dasti-settings-appearance-group">
+                  <div className="dasti-settings-appearance-label">Color</div>
+                  <div
+                    className="dasti-settings-section__row dasti-settings-section__row--palette"
+                    role="group"
+                    aria-label="Default palette"
+                  >
                     <button
-                      key={option.id}
                       type="button"
                       className={
-                        active
-                          ? "dasti-settings-style-card dasti-settings-style-card--active"
-                          : "dasti-settings-style-card"
+                        localPalette === null
+                          && localAccentHex === null
+                          ? "dasti-settings-swatch dasti-settings-swatch--auto dasti-settings-swatch--active"
+                          : "dasti-settings-swatch dasti-settings-swatch--auto"
                       }
-                      aria-pressed={active}
-                      onClick={() => { void handleStyleChange(option.id); }}
-                      title={option.description}
+                      aria-pressed={localPalette === null && localAccentHex === null}
+                      onClick={() => { void handlePaletteChange(null); }}
+                      title="Automatic palette — follows the selected style"
+                      aria-label="Automatic palette"
                     >
-                      <span className="dasti-settings-style-card__top">
-                        <span className="dasti-settings-style-card__label">
-                          {option.label}
-                        </span>
-                        <span className="dasti-settings-style-card__indicator" aria-hidden="true">
-                          {active ? <Check size={12} strokeWidth={2.4} /> : null}
-                        </span>
-                      </span>
-                      <span className="dasti-settings-style-card__template">
-                        {option.preview.templateName}
-                      </span>
-                      <span className="dasti-settings-style-card__description">
-                        {option.description}
-                      </span>
+                      <Wand2 size={14} strokeWidth={1.9} aria-hidden="true" />
                     </button>
-                  );
-                })}
-              </div>
-            </div>
 
-            {/* ── Palette ── */}
-            <div className="dasti-settings-section">
-              <div className="dasti-settings-section__label">Default palette</div>
-              <div
-                className="dasti-settings-section__row dasti-settings-section__row--palette"
-                role="group"
-                aria-label="Default palette"
-              >
-                {/* Auto swatch */}
-                <button
-                  type="button"
-                  className={
-                    localPalette === null
-                      && localAccentHex === null
-                      ? "dasti-settings-swatch dasti-settings-swatch--auto dasti-settings-swatch--active"
-                      : "dasti-settings-swatch dasti-settings-swatch--auto"
-                  }
-                  aria-pressed={localPalette === null && localAccentHex === null}
-                  onClick={() => { void handlePaletteChange(null); }}
-                  title="Automatic palette — follows the selected style"
-                  aria-label="Automatic palette"
-                >
-                  <Wand2 size={14} strokeWidth={1.9} aria-hidden="true" />
-                </button>
-
-                {PROPOSAL_PALETTE_OPTIONS.map((pal) => {
-                  const active = localPalette === pal.id;
-                  return (
+                    {PROPOSAL_PALETTE_OPTIONS.map((pal) => {
+                      const active = localPalette === pal.id;
+                      return (
+                        <button
+                          key={pal.id}
+                          type="button"
+                          className={
+                            active
+                              ? "dasti-settings-swatch dasti-settings-swatch--active"
+                              : "dasti-settings-swatch"
+                          }
+                          aria-pressed={active}
+                          onClick={() => { void handlePaletteChange(pal.id); }}
+                          title={pal.label}
+                          aria-label={pal.label}
+                          style={{ "--swatch-color": pal.color } as React.CSSProperties}
+                        />
+                      );
+                    })}
                     <button
-                      key={pal.id}
+                      ref={colorPickerAnchorRef}
                       type="button"
-                      className={
-                        active
-                          ? "dasti-settings-swatch dasti-settings-swatch--active"
-                          : "dasti-settings-swatch"
+                      className={[
+                        "dasti-settings-swatch",
+                        "dasti-settings-swatch--custom",
+                        localAccentHex ? "" : "dasti-settings-swatch--icon",
+                        localAccentHex ? "dasti-settings-swatch--active" : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                      aria-pressed={localAccentHex !== null}
+                      onClick={() => setIsColorPickerOpen(true)}
+                      title={localAccentHex ?? "Custom color"}
+                      aria-label="Custom accent color"
+                      style={
+                        localAccentHex
+                          ? ({ "--swatch-color": localAccentHex } as React.CSSProperties)
+                          : undefined
                       }
-                      aria-pressed={active}
-                      onClick={() => { void handlePaletteChange(pal.id); }}
-                      title={pal.label}
-                      aria-label={pal.label}
-                      style={{ "--swatch-color": pal.color } as React.CSSProperties}
-                    />
-                  );
-                })}
-                <button
-                  ref={colorPickerAnchorRef}
-                  type="button"
-                  className={[
-                    "dasti-settings-swatch",
-                    "dasti-settings-swatch--custom",
-                    localAccentHex ? "" : "dasti-settings-swatch--icon",
-                    localAccentHex ? "dasti-settings-swatch--active" : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                  aria-pressed={localAccentHex !== null}
-                  onClick={() => setIsColorPickerOpen(true)}
-                  title={localAccentHex ?? "Custom color"}
-                  aria-label="Custom accent color"
-                  style={
-                    localAccentHex
-                      ? ({ "--swatch-color": localAccentHex } as React.CSSProperties)
-                      : undefined
-                  }
-                >
-                  {!localAccentHex ? (
-                    <ColorWheel
-                      size={16}
-                      className="dasti-settings-swatch__wheel"
-                      aria-hidden="true"
-                    />
-                  ) : null}
-                </button>
+                    >
+                      {!localAccentHex ? (
+                        <ColorWheel
+                          size={16}
+                          className="dasti-settings-swatch__wheel"
+                          aria-hidden="true"
+                        />
+                      ) : null}
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
 

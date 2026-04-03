@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsPage } from "../SettingsPage";
@@ -40,12 +40,20 @@ describe("SettingsPage preview controls", () => {
   it("updates the live preview when cycling font pairs", async () => {
     const user = userEvent.setup();
 
-    render(<SettingsPage />);
+    const { container } = render(<SettingsPage />);
 
     expect(
       screen.getByRole("button", { name: "Automatic palette" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Fraunces Bold + Geist")).toBeInTheDocument();
+    expect(
+      container.querySelector(".dasti-settings-font-card--current"),
+    ).toHaveTextContent("Fraunces Bold");
+    expect(
+      container.querySelector(".dasti-settings-font-card--current"),
+    ).toHaveTextContent("Geist");
+    expect(
+      container.querySelector(".dasti-settings-preview-stage__copy"),
+    ).toBeNull();
 
     await user.click(
       screen.getByRole("button", { name: "Show next font pair" }),
@@ -56,7 +64,26 @@ describe("SettingsPage preview controls", () => {
         fontPairId: "ledger-sans",
       });
     });
-    expect(screen.getByText("Hepta Slab + Geist")).toBeInTheDocument();
+    expect(
+      container.querySelector(".dasti-settings-font-card--current"),
+    ).toHaveTextContent("Hepta Slab");
+    expect(
+      container.querySelector(".dasti-settings-font-card--current"),
+    ).toHaveTextContent("Geist");
+  });
+
+  it("shows a capped calm font drawer with five pair options", async () => {
+    const user = userEvent.setup();
+
+    render(<SettingsPage />);
+
+    await user.click(screen.getByRole("button", { name: /Fraunces Bold/i }));
+
+    const drawer = screen.getByRole("group", { name: "Default font pair" });
+    const optionButtons = within(drawer).getAllByRole("button");
+
+    expect(optionButtons).toHaveLength(5);
+    expect(within(drawer).queryByRole("button", { name: /Special Elite/i })).toBeNull();
   });
 
   it("switches style cards and refreshes the preview label", async () => {
