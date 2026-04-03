@@ -140,7 +140,6 @@ export function CvsLibrary(): JSX.Element {
       >
         <div className="dasti-page-header">
           <div className="dasti-stack">
-            <div className="dasti-stack__eyebrow">Resume</div>
             <h1 className="dasti-stack__title">All resumes</h1>
           </div>
           <div className="dasti-page-actions">
@@ -209,6 +208,9 @@ export function CvsLibrary(): JSX.Element {
               });
               const isConfirming = confirmingId === cv.id;
               const jobTitles = readFirstJobTitles(cv);
+              const displayTitle = position || cardTitle || "Resume";
+              const displaySubtitle =
+                profileName || identityLine || "Draft resume";
 
               return (
                 <div
@@ -232,12 +234,12 @@ export function CvsLibrary(): JSX.Element {
                     <div className="dasti-doc-card__stack">
                       <div className="dasti-doc-card__header">
                         <div className="dasti-doc-card__title-frame">
-                          <h2 className="dasti-doc-card__title">{cardTitle}</h2>
+                          <h2 className="dasti-doc-card__title">{displayTitle}</h2>
                         </div>
                       </div>
 
                       <div className="dasti-doc-card__meta">
-                        {identityLine || "Draft resume"}
+                        {displaySubtitle}
                       </div>
 
                       <div className="dasti-doc-card__body-band">

@@ -44,6 +44,7 @@ const proposalPaletteOverrideValidator = v.union(
   v.null(),
 );
 const proposalAccentHexValidator = v.union(v.string(), v.null());
+const proposalFontPairIdValidator = v.union(v.string(), v.null());
 
 const proposalSourceModeValidator = v.union(
   v.literal("inherit_cv"),
@@ -59,6 +60,7 @@ export const getCurrent = query({
     styleChoice: v.optional(proposalStyleChoiceValidator),
     paletteOverride: v.optional(proposalPaletteOverrideValidator),
     accentHex: v.optional(proposalAccentHexValidator),
+    fontPairId: v.optional(proposalFontPairIdValidator),
     sourceMode: v.optional(proposalSourceModeValidator),
   }),
   handler: async (ctx) => {
@@ -83,6 +85,7 @@ export const getCurrent = query({
       styleChoice: user?.proposalStyleChoice,
       paletteOverride: user?.proposalPaletteOverride,
       accentHex: user?.proposalAccentHex,
+      fontPairId: user?.proposalFontPairId,
       sourceMode: user?.proposalSourceMode,
     };
   },
@@ -95,6 +98,7 @@ export const setCurrent = mutation({
     styleChoice: v.optional(proposalStyleChoiceValidator),
     paletteOverride: v.optional(proposalPaletteOverrideValidator),
     accentHex: v.optional(proposalAccentHexValidator),
+    fontPairId: v.optional(proposalFontPairIdValidator),
     sourceMode: v.optional(proposalSourceModeValidator),
   },
   returns: v.object({
@@ -104,6 +108,7 @@ export const setCurrent = mutation({
     styleChoice: v.optional(proposalStyleChoiceValidator),
     paletteOverride: v.optional(proposalPaletteOverrideValidator),
     accentHex: v.optional(proposalAccentHexValidator),
+    fontPairId: v.optional(proposalFontPairIdValidator),
     sourceMode: v.optional(proposalSourceModeValidator),
   }),
   handler: async (ctx, args) => {
@@ -132,6 +137,10 @@ export const setCurrent = mutation({
       args,
       "accentHex",
     );
+    const hasFontPairPatch = Object.prototype.hasOwnProperty.call(
+      args,
+      "fontPairId",
+    );
     const hasSourceModePatch = Object.prototype.hasOwnProperty.call(
       args,
       "sourceMode",
@@ -143,6 +152,7 @@ export const setCurrent = mutation({
       !hasStyleChoicePatch &&
       !hasPalettePatch &&
       !hasAccentHexPatch &&
+      !hasFontPairPatch &&
       !hasSourceModePatch
     ) {
       throw new Error("No proposal setting patch was provided");
@@ -191,6 +201,11 @@ export const setCurrent = mutation({
         : hasAccentHexPatch
           ? null
           : user.proposalAccentHex;
+    const nextFontPairId = hasFontPairPatch
+      ? typeof args.fontPairId === "string" && args.fontPairId.trim()
+        ? args.fontPairId.trim()
+        : null
+      : user.proposalFontPairId;
     const nextSourceMode = hasSourceModePatch
       ? (args.sourceMode ?? undefined)
       : user.proposalSourceMode;
@@ -201,6 +216,7 @@ export const setCurrent = mutation({
       user.proposalStyleChoice !== nextStyleChoice ||
       user.proposalPaletteOverride !== nextPaletteOverride ||
       user.proposalAccentHex !== nextAccentHex ||
+      user.proposalFontPairId !== nextFontPairId ||
       user.proposalSourceMode !== nextSourceMode;
 
     if (needsWrite) {
@@ -237,6 +253,12 @@ export const setCurrent = mutation({
           delete nextReplacement.proposalAccentHex;
         }
 
+        if (nextFontPairId !== undefined) {
+          nextReplacement.proposalFontPairId = nextFontPairId;
+        } else {
+          delete nextReplacement.proposalFontPairId;
+        }
+
         if (nextSourceMode !== undefined) {
           nextReplacement.proposalSourceMode = nextSourceMode;
         } else {
@@ -260,6 +282,7 @@ export const setCurrent = mutation({
       styleChoice: nextStyleChoice,
       paletteOverride: nextPaletteOverride,
       accentHex: nextAccentHex,
+      fontPairId: nextFontPairId,
       sourceMode: nextSourceMode,
     };
   },

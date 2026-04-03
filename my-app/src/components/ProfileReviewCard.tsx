@@ -5,7 +5,6 @@ import {
   ChevronDown,
   FileText,
   GripHorizontal,
-  Pencil,
   X,
 } from "@/lib/icons";
 import { useNavigate } from "react-router-dom";
@@ -30,9 +29,9 @@ import {
 import { generateCvTemplate, generateCvTemplateV1 } from "../lib/cv-template";
 import { isV1SectionsEnabled } from "../lib/flags";
 import StructuredUploadButton from "./StructuredUploadButton";
-import CvRenameDialog from "./CvRenameDialog";
 import type { CvDocument } from "../types/cvDocument";
 import { deriveCvTitleFromSections } from "../lib/normalize-cv";
+import { inspectCvImportSignals } from "../lib/cv-import-signals";
 
 /**
  * Props for ProfileReviewCard
@@ -62,7 +61,6 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
     createNewCv,
     importCv,
     closeInspector,
-    renameCv,
     isV1Active,
   } = useCvLibrary();
 
@@ -70,6 +68,7 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
   const v1Enabled = isV1Active || isV1SectionsEnabled();
   const requestedCvIdRef = useRef<string | null>(null);
   const addSectionMenuRef = useRef<HTMLDivElement | null>(null);
+  const manageSectionsMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!cvId) {
@@ -201,9 +200,14 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
 
   const [recentlyAddedSectionType, setRecentlyAddedSectionType] =
     useState<string>("");
-  const [isRenameDialogOpen, setIsRenameDialogOpen] = useState<boolean>(false);
   const [isAddSectionMenuOpen, setIsAddSectionMenuOpen] =
     useState<boolean>(false);
+  const [isManageSectionsMenuOpen, setIsManageSectionsMenuOpen] =
+    useState<boolean>(false);
+  const importSignals = useMemo(
+    () => inspectCvImportSignals(currentCv),
+    [currentCv],
+  );
 
   // Simple in-component toast notifications for debugging (no external deps)
   const [toasts, setToasts] = useState<{ id: string; message: string }[]>([]);
@@ -250,24 +254,20 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
   }, [recentlyAddedSectionType]);
 
   React.useEffect(() => {
-    if (!currentCv) {
-      setIsRenameDialogOpen(false);
-    }
-  }, [currentCv]);
-
-  React.useEffect(() => {
-    if (!isAddSectionMenuOpen) return undefined;
+    if (!isAddSectionMenuOpen && !isManageSectionsMenuOpen) return undefined;
 
     const handleDocumentClick = (event: MouseEvent) => {
       if (addSectionMenuRef.current?.contains(event.target as Node)) return;
+      if (manageSectionsMenuRef.current?.contains(event.target as Node)) return;
       setIsAddSectionMenuOpen(false);
+      setIsManageSectionsMenuOpen(false);
     };
 
     document.addEventListener("mousedown", handleDocumentClick);
     return () => {
       document.removeEventListener("mousedown", handleDocumentClick);
     };
-  }, [isAddSectionMenuOpen]);
+  }, [isAddSectionMenuOpen, isManageSectionsMenuOpen]);
 
   /**
    * Replace an updated section into the current document via context.
@@ -517,7 +517,32 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
     }
 
     reorderSections(nextSections as any);
+    setIsManageSectionsMenuOpen(false);
     pushToast("Added sections removed");
+  }
+
+  function handleRemoveAddedSection(type: string) {
+    const normalizedType = String(type ?? "").trim();
+    if (!normalizedType) {
+      pushToast("Choose a section to remove");
+      return;
+    }
+
+    const nextSections = sections.filter(
+      (section) => String(section.type ?? "") !== normalizedType,
+    );
+
+    if (nextSections.length === sections.length) {
+      pushToast("Section not found");
+      return;
+    }
+
+    reorderSections(nextSections as any);
+    setIsManageSectionsMenuOpen(false);
+    const removedLabel =
+      sectionCatalog.find((option) => option.value === normalizedType)?.label ??
+      normalizedType;
+    pushToast(`${removedLabel} removed`);
   }
 
   return (
@@ -540,6 +565,34 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
           </div>
         ))}
       </div>
+
+      {importSignals.length > 0 ? (
+        <section
+          className="dasti-inline-review"
+          aria-label="Import review checks"
+        >
+          <div className="dasti-inline-review__header">
+            <div className="dasti-inline-review__eyebrow">Import review</div>
+            <p className="dasti-inline-review__summary">
+              These fields look suspicious. Clean them here before generating proposals.
+            </p>
+          </div>
+          <div className="dasti-inline-review__list" role="list">
+            {importSignals.map((signal) => (
+              <div
+                key={signal.id}
+                className="dasti-inline-review__item"
+                role="listitem"
+              >
+                <div className="dasti-inline-review__title">{signal.title}</div>
+                <p className="dasti-inline-review__description">
+                  {signal.description}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {/* Toolbar is rendered below the title only when a CV is loaded — see the !isLoading && currentCv block */}
 
@@ -781,30 +834,87 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
                 ) : null}
               </div>
             ) : removableAddedSectionTypes.length > 0 ? (
-              <button
-                type="button"
-                className="dasti-add-section-state dasti-add-section-state--resettable"
-                onClick={handleClearAddedSections}
-                aria-label="Delete added sections"
-                title="Delete added sections"
+              <div
+                ref={manageSectionsMenuRef}
+                className="dasti-import-dropdown"
+                style={{ flex: "0 0 auto" }}
               >
-                <span className="dasti-add-section-state__copy">
-                  <span className="dasti-add-section-state__label dasti-add-section-state__label--default">
-                    All sections added
+                <button
+                  type="button"
+                  aria-label="Manage sections"
+                  className="dasti-select dasti-select--sm dasti-add-section-trigger"
+                  onClick={() =>
+                    setIsManageSectionsMenuOpen((current) => !current)
+                  }
+                >
+                  <span
+                    className="dasti-add-section-trigger__spacer"
+                    aria-hidden
+                  />
+                  <span className="dasti-add-section-trigger__label">
+                    Manage sections
                   </span>
-                  <span className="dasti-add-section-state__label dasti-add-section-state__label--hover">
-                    Delete added sections
+                  <span className="dasti-add-section-trigger__icon">
+                    {isManageSectionsMenuOpen ? (
+                      <X className="h-4 w-4 [color:var(--ti)]" aria-hidden />
+                    ) : (
+                      <ChevronDown
+                        className="h-4 w-4 [color:var(--tg2)]"
+                        aria-hidden
+                      />
+                    )}
                   </span>
-                </span>
-                <span className="dasti-add-section-state__icon">
-                  <span className="dasti-add-section-state__icon-layer dasti-add-section-state__icon-layer--base">
-                    <Check size={14} strokeWidth={2.1} aria-hidden />
-                  </span>
-                  <span className="dasti-add-section-state__icon-layer dasti-add-section-state__icon-layer--hover">
-                    <X size={13} strokeWidth={2.1} aria-hidden />
-                  </span>
-                </span>
-              </button>
+                </button>
+                {isManageSectionsMenuOpen ? (
+                  <div className="dasti-import-dropdown__menu dasti-add-section-menu">
+                    {removableAddedSectionTypes.map((sectionType) => {
+                      const sectionLabel =
+                        sectionCatalog.find(
+                          (option) => option.value === sectionType,
+                        )?.label ?? sectionType;
+                      return (
+                        <button
+                          key={sectionType}
+                          type="button"
+                          className="dasti-menu-option dasti-menu-option--section"
+                          onClick={() => {
+                            handleRemoveAddedSection(sectionType);
+                          }}
+                        >
+                          <div className="dasti-menu-option__row">
+                            <div className="dasti-menu-option__copy">
+                              <div className="dasti-menu-option__title">
+                                Remove {sectionLabel}
+                              </div>
+                              <div className="dasti-menu-option__description">
+                                Remove this optional section from the resume.
+                              </div>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                    {removableAddedSectionTypes.length > 1 ? (
+                      <button
+                        type="button"
+                        className="dasti-menu-option dasti-menu-option--section"
+                        onClick={handleClearAddedSections}
+                      >
+                        <div className="dasti-menu-option__row">
+                          <div className="dasti-menu-option__copy">
+                            <div className="dasti-menu-option__title">
+                              Remove all optional sections
+                            </div>
+                            <div className="dasti-menu-option__description">
+                              Keep only the core sections in this CV.
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
             ) : (
               <span className="text-xs [color:var(--tg2)]">
                 All sections added.
@@ -841,32 +951,7 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
               }}
               renderAs="dropdown"
             />
-
-            <button
-              type="button"
-              className="dasti-icon-button"
-              onClick={() => setIsRenameDialogOpen(true)}
-              aria-label="Rename resume"
-              title="Rename resume"
-            >
-              <Pencil size={14} strokeWidth={1.8} aria-hidden />
-            </button>
           </div>
-
-          <CvRenameDialog
-            open={isRenameDialogOpen}
-            currentTitle={currentCv.title}
-            onClose={() => setIsRenameDialogOpen(false)}
-            onSave={(nextTitle) => {
-              try {
-                renameCv(currentCv.id, nextTitle);
-                setIsRenameDialogOpen(false);
-              } catch (err) {
-                // eslint-disable-next-line no-console
-                console.error("[ProfileReviewCard] renameCv failed", err);
-              }
-            }}
-          />
 
           <div>
             {sections.length === 0 ? (

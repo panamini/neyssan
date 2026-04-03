@@ -6,12 +6,9 @@ const productCssPath = resolve(process.cwd(), "src/styles/product.css");
 const productCss = readFileSync(productCssPath, "utf8");
 
 describe("CvForge toolbar CSS contracts", () => {
-  it("keeps the CV eye toggle in flow instead of sticking to the top edge", () => {
+  it("keeps the CV eye toggle floating inside the workbench scroll area", () => {
     expect(productCss).toMatch(
-      /\.dasti-workbench-top-left-slot--cv\s*\{[\s\S]*position:\s*relative;[\s\S]*z-index:\s*24;/,
-    );
-    expect(productCss).not.toMatch(
-      /\.dasti-workbench-top-left-slot--cv\s*\{[\s\S]*position:\s*sticky;/,
+      /\.dasti-workbench-top-left-slot--cv\s*\{[\s\S]*position:\s*sticky;[\s\S]*inset-block-start:\s*var\(--space-2\);[\s\S]*width:\s*max-content;[\s\S]*z-index:\s*24;/,
     );
   });
 });

@@ -118,6 +118,7 @@ export interface UserProfileDoc extends Doc<"userProfiles"> {
     | "encre"
     | null;
   proposalAccentHex?: string | null;
+  proposalFontPairId?: string | null;
   proposalSourceMode?: "inherit_cv" | "proposal_local";
 }
 
