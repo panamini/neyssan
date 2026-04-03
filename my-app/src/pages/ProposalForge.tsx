@@ -210,6 +210,36 @@ function isProposalPaletteId(value: unknown): value is ProposalPaletteId {
   );
 }
 
+function normalizeProposalAccentHex(value: unknown): string | null {
+  return typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value)
+    ? value.toUpperCase()
+    : null;
+}
+
+function normalizeProposalSettingsStyleChoice(
+  value: unknown,
+): ProposalStyleChoice {
+  if (value === "formal") {
+    return "balanced";
+  }
+
+  return resolveProposalStyleChoice(value);
+}
+
+function applyProposalTypographyPreference(input: {
+  stylePreset: ReturnType<typeof resolveVerbatiStyle>;
+  fontPairId: unknown;
+}) {
+  if (typeof input.fontPairId !== "string" || !input.fontPairId.trim()) {
+    return input.stylePreset;
+  }
+
+  return resolveVerbatiStyle({
+    ...input.stylePreset,
+    typography: input.fontPairId,
+  });
+}
+
 function shouldPreserveLeadBreak(line: string): boolean {
   const trimmed = line.trim();
   if (!trimmed) return false;
@@ -584,7 +614,26 @@ export function ProposalForge(): JSX.Element {
     storedOutputDraft?.proposalDocumentTitle ?? "",
   );
   const lastStampedTemplateTokenRef = React.useRef<string | null>(null);
+  const appliedSettingsAppearanceDefaultsRef = React.useRef(false);
   const canPersistProposalState = isConvexAuthenticated && !isConvexAuthLoading;
+  const settingsStyleChoice = React.useMemo(
+    () =>
+      normalizeProposalSettingsStyleChoice(currentProposalSettings?.styleChoice),
+    [currentProposalSettings?.styleChoice],
+  );
+  const settingsAccentHex = React.useMemo(
+    () => normalizeProposalAccentHex(currentProposalSettings?.accentHex),
+    [currentProposalSettings?.accentHex],
+  );
+  const settingsPaletteOverride = React.useMemo(
+    () =>
+      settingsAccentHex
+        ? null
+        : isProposalPaletteId(currentProposalSettings?.paletteOverride)
+          ? currentProposalSettings.paletteOverride
+          : null,
+    [currentProposalSettings?.paletteOverride, settingsAccentHex],
+  );
 
   const showConvexAuthRequiredToast = React.useCallback(
     (actionLabel: string) => {
@@ -748,19 +797,74 @@ export function ProposalForge(): JSX.Element {
   }, [activeCvProposalStylePreset, proposalStyleLinkMode, proposalStylePreset]);
 
   const resolvedProposalLocalStyle = React.useMemo(
-    () =>
-      resolveProposalStyleRenderState({
+    () => {
+      const baseRenderState = resolveProposalStyleRenderState({
         choice: proposalStyleChoice,
         jobTitle: composePreviewValues?.jobTitle ?? proposalDocumentTitle,
         jobDescription: composePreviewValues?.jobDescription,
-      }),
+      });
+      const stylePreset = applyProposalTypographyPreference({
+        stylePreset: baseRenderState.stylePreset,
+        fontPairId: currentProposalSettings?.fontPairId,
+      });
+
+      return {
+        ...baseRenderState,
+        stylePreset,
+        templateId: getProposalTwinTemplateId(stylePreset),
+      };
+    },
     [
       composePreviewValues?.jobDescription,
       composePreviewValues?.jobTitle,
+      currentProposalSettings?.fontPairId,
       proposalDocumentTitle,
       proposalStyleChoice,
     ],
   );
+
+  React.useEffect(() => {
+    if (
+      appliedSettingsAppearanceDefaultsRef.current ||
+      currentProposalSettings === undefined
+    ) {
+      return;
+    }
+
+    if (
+      storedOutputDraft?.proposalStyleChoice ||
+      storedOutputDraft?.proposalVerbatiStyle ||
+      storedOutputDraft?.proposalTemplateId ||
+      storedOutputDraft?.templateBundleId ||
+      storedOutputDraft?.customAccentHex ||
+      storedOutputDraft?.paletteOverride
+    ) {
+      appliedSettingsAppearanceDefaultsRef.current = true;
+      return;
+    }
+
+    if (activeCvProposalStylePreset) {
+      appliedSettingsAppearanceDefaultsRef.current = true;
+      return;
+    }
+
+    setProposalStyleChoice(settingsStyleChoice);
+    setProposalPaletteOverride(settingsPaletteOverride);
+    setProposalCustomAccentHex(settingsAccentHex);
+    appliedSettingsAppearanceDefaultsRef.current = true;
+  }, [
+    activeCvProposalStylePreset,
+    currentProposalSettings,
+    settingsAccentHex,
+    settingsPaletteOverride,
+    settingsStyleChoice,
+    storedOutputDraft?.customAccentHex,
+    storedOutputDraft?.paletteOverride,
+    storedOutputDraft?.proposalStyleChoice,
+    storedOutputDraft?.proposalTemplateId,
+    storedOutputDraft?.proposalVerbatiStyle,
+    storedOutputDraft?.templateBundleId,
+  ]);
 
   const resolvedStyleLinkMode =
     proposalStyleLinkMode === "inherit_cv" && activeCvProposalStylePreset
@@ -1123,10 +1227,17 @@ export function ProposalForge(): JSX.Element {
     const nextStyleLinkMode = activeCvProposalStylePreset
       ? "inherit_cv"
       : "proposal_local";
-    const nextStylePreset =
-      activeCvProposalStylePreset ?? resolveVerbatiStyle(undefined);
+    const nextStyleChoice = activeCvProposalStylePreset ? "auto" : settingsStyleChoice;
+    const nextResolvedLocalStyle = resolveProposalStyleRenderState({
+      choice: nextStyleChoice,
+    });
+    const nextStylePreset = activeCvProposalStylePreset
+      ? activeCvProposalStylePreset
+      : applyProposalTypographyPreference({
+          stylePreset: nextResolvedLocalStyle.stylePreset,
+          fontPairId: currentProposalSettings?.fontPairId,
+        });
     const nextTemplateId = getProposalTwinTemplateId(nextStylePreset);
-    const nextStyleChoice = activeCvProposalStylePreset ? "auto" : "balanced";
 
     setProposalContent(null);
     setLoading(false);
@@ -1141,6 +1252,8 @@ export function ProposalForge(): JSX.Element {
     setProposalStyleLinkMode(nextStyleLinkMode);
     setProposalStyleChoice(nextStyleChoice);
     setProposalStylePreset(nextStylePreset);
+    setProposalPaletteOverride(activeCvProposalStylePreset ? null : settingsPaletteOverride);
+    setProposalCustomAccentHex(activeCvProposalStylePreset ? null : settingsAccentHex);
     setProposalApplicantName(initialApplicantIdentity.name || "");
     setProposalApplicantRole(initialApplicantIdentity.role || "");
     setProposalDocumentTitle("");
@@ -1165,9 +1278,13 @@ export function ProposalForge(): JSX.Element {
   }, [
     activeCvProposalStylePreset,
     cancelPendingComposeDraftSync,
+    currentProposalSettings?.fontPairId,
     currentProposalSettings?.savedVoicePreset,
     initialApplicantIdentity.name,
     initialApplicantIdentity.role,
+    settingsAccentHex,
+    settingsPaletteOverride,
+    settingsStyleChoice,
   ]);
 
   React.useEffect(() => {
@@ -1841,7 +1958,11 @@ export function ProposalForge(): JSX.Element {
   ]);
 
   React.useEffect(() => {
-    if (!proposalContent) {
+    if (
+      !proposalContent ||
+      !draftCharacterLimitMode ||
+      draftCharacterLimitMode === "none"
+    ) {
       lastCharacterLimitToastIdRef.current = null;
       return;
     }
@@ -1869,7 +1990,12 @@ export function ProposalForge(): JSX.Element {
       variant: nextThreshold.advisory ? "warning" : "neutral",
       description: nextThreshold.description,
     });
-  }, [proposalContent, proposalType, showToast]);
+  }, [
+    draftCharacterLimitMode,
+    proposalContent,
+    proposalType,
+    showToast,
+  ]);
 
   React.useEffect(() => {
     if (

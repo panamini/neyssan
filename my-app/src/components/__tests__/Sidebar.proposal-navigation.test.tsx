@@ -323,7 +323,7 @@ describe("Sidebar proposal navigation", () => {
     expect(savedLink).toHaveTextContent("Operations Associate Proposal");
   });
 
-  it("labels the active editing section as Current", () => {
+  it("uses in-place active rows instead of a separate Current section", () => {
     mockCvLibraryState.currentCv = {
       id: "cv_alpha",
       title: "Alex Martin Resume",
@@ -342,8 +342,11 @@ describe("Sidebar proposal navigation", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("Current")).toBeInTheDocument();
-    expect(screen.getByText("Proposal")).toBeInTheDocument();
-    expect(screen.getByText("Resume")).toBeInTheDocument();
+    expect(screen.queryByText("Current")).not.toBeInTheDocument();
+    expect(screen.getByText("Proposals")).toBeInTheDocument();
+    expect(screen.getByText("Resumes")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Operations Associate Proposal" }),
+    ).toHaveAttribute("aria-current", "page");
   });
 });

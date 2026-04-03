@@ -1,8 +1,8 @@
 import "./styles/globals.css";
 
 import React from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { Unauthenticated } from "convex/react";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { Unauthenticated, useConvexAuth, useQuery } from "convex/react";
 import { SignInButton } from "@clerk/clerk-react";
 import { ConvexStatusBanner } from "./components/ConvexStatusBanner";
 import { CvForge } from "./pages/CvForge";
@@ -14,11 +14,154 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { Sidebar } from "./components/Sidebar";
 import { CvLibraryProvider } from "./contexts/CvLibraryContext";
 import { installStorageDiagnostics } from "./lib/storage-diagnostics";
+import { useCvLibrary } from "./contexts/CvLibraryContext";
+import { api } from "../convex/_generated/api";
+import {
+  PROPOSAL_COMPOSE_DRAFT_UPDATED_EVENT,
+  readStoredProposalComposeDraft,
+} from "./lib/proposal-workspace-state";
+import {
+  PROPOSAL_OUTPUT_DRAFT_UPDATED_EVENT,
+  readStoredProposalOutputDraft,
+} from "./lib/proposal-output-draft";
+import { readStoredSavedProposalFixtures } from "./lib/proposal-saved-fixtures";
+
+function normalizeTitle(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function useTopbarDocumentTitle(): string | null {
+  const location = useLocation();
+  const { currentCv, currentCvId, cvs } = useCvLibrary();
+  const { isAuthenticated, isLoading } = useConvexAuth();
+  const [composeDraftToken, setComposeDraftToken] = React.useState(0);
+  const [outputDraftToken, setOutputDraftToken] = React.useState(0);
+  const proposals = useQuery(
+    api.proposalsPublic.default,
+    isAuthenticated && !isLoading ? {} : "skip",
+  );
+
+  React.useEffect(() => {
+    const handleComposeDraft = () => setComposeDraftToken((current) => current + 1);
+    const handleOutputDraft = () => setOutputDraftToken((current) => current + 1);
+
+    window.addEventListener(PROPOSAL_COMPOSE_DRAFT_UPDATED_EVENT, handleComposeDraft);
+    window.addEventListener(PROPOSAL_OUTPUT_DRAFT_UPDATED_EVENT, handleOutputDraft);
+    return () => {
+      window.removeEventListener(PROPOSAL_COMPOSE_DRAFT_UPDATED_EVENT, handleComposeDraft);
+      window.removeEventListener(PROPOSAL_OUTPUT_DRAFT_UPDATED_EVENT, handleOutputDraft);
+    };
+  }, []);
+
+  return React.useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    const pathname = location.pathname;
+    const cvCount = (() => {
+      const ids = new Set(cvs.map((cv) => String(cv.id)));
+      if (currentCvId) {
+        ids.add(String(currentCvId));
+      } else if (currentCv?.id) {
+        ids.add(String(currentCv.id));
+      }
+      return ids.size;
+    })();
+    const savedProposalCount =
+      (proposals ?? readStoredSavedProposalFixtures()).filter(
+        (proposal) => proposal.status === "saved",
+      ).length;
+
+    if (pathname === "/cv" || pathname === "/style") {
+      return normalizeTitle(currentCv?.title) || null;
+    }
+
+    if (pathname === "/cvs") {
+      return cvCount > 0 ? `All resumes (${cvCount})` : "All resumes";
+    }
+
+    if (pathname === "/proposal") {
+      const selectedProposalId = normalizeTitle(params.get("id"));
+      const selectedProposalTitle =
+        selectedProposalId &&
+        [...(proposals ?? []), ...readStoredSavedProposalFixtures()]
+          .find((proposal) => String(proposal._id) === selectedProposalId)
+          ?.title;
+      const outputDraftTitle = normalizeTitle(
+        readStoredProposalOutputDraft()?.proposalDocumentTitle,
+      );
+      const composeDraftTitle = normalizeTitle(
+        readStoredProposalComposeDraft()?.jobTitle,
+      );
+
+      return (
+        normalizeTitle(selectedProposalTitle) ||
+        outputDraftTitle ||
+        composeDraftTitle ||
+        null
+      );
+    }
+
+    if (pathname === "/proposals") {
+      return savedProposalCount > 0
+        ? `All proposals (${savedProposalCount})`
+        : "All proposals";
+    }
+
+    if (pathname === "/settings") {
+      return "Proposal defaults";
+    }
+
+    return null;
+  }, [
+    composeDraftToken,
+    currentCv?.id,
+    currentCv?.title,
+    currentCvId,
+    cvs,
+    location.pathname,
+    location.search,
+    outputDraftToken,
+    proposals,
+  ]);
+}
+
+function useBrowserTitle(topbarDocumentTitle: string | null): void {
+  const location = useLocation();
+
+  React.useEffect(() => {
+    const pathname = location.pathname;
+    let pageTitle = "dasti";
+
+    if (pathname === "/cv") {
+      pageTitle = topbarDocumentTitle ? `${topbarDocumentTitle} · Resume · dasti` : "Resume · dasti";
+    } else if (pathname === "/cvs") {
+      pageTitle = topbarDocumentTitle
+        ? `${topbarDocumentTitle} · dasti`
+        : "All resumes · dasti";
+    } else if (pathname === "/proposal") {
+      pageTitle = topbarDocumentTitle ? `${topbarDocumentTitle} · Proposal · dasti` : "Proposal · dasti";
+    } else if (pathname === "/proposals") {
+      pageTitle = topbarDocumentTitle
+        ? `${topbarDocumentTitle} · dasti`
+        : "All proposals · dasti";
+    } else if (pathname === "/settings") {
+      pageTitle = topbarDocumentTitle
+        ? `${topbarDocumentTitle} · dasti`
+        : "Proposal defaults · dasti";
+    } else if (pathname === "/style") {
+      pageTitle = topbarDocumentTitle ? `${topbarDocumentTitle} · Style Forge · dasti` : "Style Forge · dasti";
+    }
+
+    document.title = pageTitle;
+  }, [location.pathname, topbarDocumentTitle]);
+}
 
 /**
  * Topbar — h:54px (--hdr), wordmark only.
  */
 function Topbar() {
+  const topbarDocumentTitle = useTopbarDocumentTitle();
+  useBrowserTitle(topbarDocumentTitle);
+
   return (
     <header
       style={{
@@ -35,18 +178,56 @@ function Topbar() {
         zIndex: 5,
       }}
     >
-      {/* Left — wordmark only */}
-      <span
+      <div
         style={{
-          fontFamily: "var(--font-heading-family)",
-          fontSize: "var(--tm)",
-          fontWeight: "var(--font-heading-weight)",
-          letterSpacing: "var(--tracking-display)",
-          color: "var(--ti)",
+          display: "flex",
+          alignItems: "baseline",
+          gap: "var(--space-3)",
+          minWidth: 0,
         }}
       >
-        dasti
-      </span>
+        <span
+          style={{
+            fontFamily: "var(--font-heading-family)",
+            fontSize: "var(--tm)",
+            fontWeight: "var(--font-heading-weight)",
+            letterSpacing: "var(--tracking-display)",
+            color: "var(--ti)",
+            lineHeight: 1,
+            flexShrink: 0,
+          }}
+        >
+          dasti
+        </span>
+        {topbarDocumentTitle ? (
+          <>
+            <span
+              aria-hidden="true"
+              style={{
+                color: "var(--color-text-subtle)",
+                flexShrink: 0,
+                lineHeight: 1,
+              }}
+            >
+              &gt;
+            </span>
+            <span
+              style={{
+                color: "var(--color-text-muted)",
+                fontSize: "var(--ts)",
+                fontWeight: 500,
+                lineHeight: 1,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+              title={topbarDocumentTitle}
+            >
+              {topbarDocumentTitle}
+            </span>
+          </>
+        ) : null}
+      </div>
 
       {/* Right — auth only when logged out */}
       <div style={{ display: "flex", alignItems: "center", gap: "var(--s2)" }}>

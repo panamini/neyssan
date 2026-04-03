@@ -1536,6 +1536,21 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                     </span>
                   </button>
                 </div>
+                {!suppressCvPicker ? (
+                  <div
+                    className="dasti-proposal-context-note"
+                    aria-live="polite"
+                  >
+                    {activeCvTitle ? (
+                      <>
+                        Using <strong>{activeCvTitle}</strong> to personalize
+                        voice, details, and styling.
+                      </>
+                    ) : (
+                      "Attach a resume to pull in your experience, voice, and style before you generate."
+                    )}
+                  </div>
+                ) : null}
               </div>
             </div>
             {prefill?.platform || prefill?.sourceUrl ? (

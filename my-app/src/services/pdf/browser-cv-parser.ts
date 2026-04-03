@@ -132,27 +132,74 @@ function extractEmail(text: string): string | null {
   return m ? m[0] : null;
 }
 
-function extractName(text: string, email?: string | null): string | null {
+function normalizeLine(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function looksLikeContactLine(value: string): boolean {
+  return /@|https?:\/\/|www\.|\+?\d[\d\s().-]{6,}/i.test(value);
+}
+
+function looksLikeHeadingLine(value: string): boolean {
+  return /^(?:resume|curriculum vitae|profile|summary|experience|education|skills|languages|projects|certifications)$/i.test(
+    value,
+  );
+}
+
+function looksLikeLikelyPersonName(value: string): boolean {
+  const normalized = normalizeLine(value);
+  if (!normalized || looksLikeContactLine(normalized) || looksLikeHeadingLine(normalized)) {
+    return false;
+  }
+  if (normalized.length > 48 || normalized.split(/\s+/).length > 5) {
+    return false;
+  }
+  if (/\d/.test(normalized)) {
+    return false;
+  }
+  const tokens = normalized.split(/\s+/).filter(Boolean);
+  if (tokens.length < 2 || tokens.length > 4) {
+    return false;
+  }
+  return tokens.every((token) =>
+    /^[A-Z][a-z'`-]+$/.test(token) || /^[A-Z]{2,}$/.test(token),
+  );
+}
+
+export function extractName(text: string, email?: string | null): string | null {
   if (email) {
     const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
     for (let i = 0; i < lines.length; i++) {
       if (lines[i].includes(email)) {
-        if (i > 0 && lines[i - 1].length > 1 && lines[i - 1].length < 60) {
-          return lines[i - 1];
+        if (i > 0 && looksLikeLikelyPersonName(lines[i - 1])) {
+          return normalizeLine(lines[i - 1]);
         }
         break;
       }
     }
   }
-  const lines = text.split(/\r?\n/).map((l) => l.trim());
-  for (const line of lines) {
-    const low = line.toLowerCase();
-    if (!line) continue;
-    if (low.includes("resume") || low.includes("curriculum") || low.includes("profile")) continue;
-    if (line.split(" ").length <= 6) {
+
+  const topLines = text
+    .split(/\r?\n/)
+    .map((line) => normalizeLine(line))
+    .filter(Boolean)
+    .slice(0, 12);
+  for (const line of topLines) {
+    if (looksLikeLikelyPersonName(line)) {
       return line;
     }
   }
+
+  if (email) {
+    const localPart = email.split("@")[0]?.replace(/[._-]+/g, " ").trim();
+    if (localPart && looksLikeLikelyPersonName(localPart)) {
+      return localPart
+        .split(/\s+/)
+        .map((token) => token.charAt(0).toUpperCase() + token.slice(1).toLowerCase())
+        .join(" ");
+    }
+  }
+
   return null;
 }
 
@@ -178,33 +225,51 @@ function extractSkills(text: string): string[] {
   return Array.from(new Set(skills)).slice(0, 50);
 }
 
-function extractSummary(text: string): string | null {
-  const lines = text.split(/\r?\n/).map((l) => l.trim());
-  const blocks: string[] = [];
-  let current: string[] = [];
-  for (const line of lines.slice(0, 40)) {
-    if (!line) {
-      if (current.length) {
-        blocks.push(current.join(" "));
-        current = [];
-      }
-    } else {
-      current.push(line);
-      if (current.length >= 6) {
-        blocks.push(current.join(" "));
-        break;
-      }
-    }
-  }
-  if (current.length) blocks.push(current.join(" "));
-  if (blocks.length) {
-    const candidate = blocks[0];
-    if (candidate.length >= 40 && candidate.length <= 2000) return candidate;
-  }
-  return null;
+function cleanSummaryCandidate(value: string): string {
+  return normalizeLine(
+    value
+      .replace(/\b(?:summary|profile)\b[:\s-]*/gi, "")
+      .replace(/\s{2,}/g, " "),
+  );
 }
 
-type Experience = {
+export function extractSummary(text: string): string | null {
+  const summaryHeadingMatch = text.match(
+    /\b(?:professional summary|summary|profile)\b[:\s]*\n([\s\S]{40,900})/i,
+  );
+  if (summaryHeadingMatch?.[1]) {
+    const candidate = cleanSummaryCandidate(
+      summaryHeadingMatch[1]
+        .split(/\n{2,}/)[0]
+        .split(/\n(?=(?:experience|education|skills|languages|projects)\b)/i)[0] ?? "",
+    );
+    if (candidate.length >= 40 && candidate.length <= 600) {
+      return candidate;
+    }
+  }
+
+  const paragraphs = text
+    .split(/\n{2,}/)
+    .map((paragraph) => cleanSummaryCandidate(paragraph))
+    .filter(Boolean);
+
+  const candidate = paragraphs.find((paragraph) => {
+    if (paragraph.length < 40 || paragraph.length > 600) {
+      return false;
+    }
+    if (looksLikeContactLine(paragraph) || looksLikeHeadingLine(paragraph)) {
+      return false;
+    }
+    if (/\b(?:experience|education|skills|languages|projects)\b/i.test(paragraph)) {
+      return false;
+    }
+    return true;
+  });
+
+  return candidate ?? null;
+}
+
+export type Experience = {
   company?: string;
   title?: string;
   startDate?: string | null;
@@ -212,25 +277,91 @@ type Experience = {
   description?: string;
 };
 
-function extractExperiences(text: string): Experience[] {
+function cleanExperienceField(value: string): string {
+  return normalizeLine(
+    value
+      .replace(/[|•]+/g, " ")
+      .replace(/\b(?:location|dates?) not set\b/gi, "")
+      .replace(/\s{2,}/g, " "),
+  );
+}
+
+function looksLikeCompanyName(value: string): boolean {
+  return /\b(?:inc|llc|ltd|corp|company|studio|group|agency|university|college|hospital)\b/i.test(
+    value,
+  );
+}
+
+function looksLikeJobTitle(value: string): boolean {
+  return /\b(?:manager|engineer|developer|designer|assistant|analyst|consultant|guard|specialist|lead|director|coordinator)\b/i.test(
+    value,
+  );
+}
+
+function dedupeMergedDescription(value: string): string {
+  const normalized = cleanExperienceField(value);
+  if (!normalized) {
+    return "";
+  }
+
+  const midpoint = Math.floor(normalized.length / 2);
+  const left = normalized.slice(0, midpoint).trim();
+  const right = normalized.slice(midpoint).trim();
+  if (left && right && left === right) {
+    return left;
+  }
+
+  const seen = new Set<string>();
+  const pieces = normalized
+    .split(/(?<=[.!?])\s+/)
+    .map((piece) => piece.trim())
+    .filter(Boolean)
+    .filter((piece) => {
+      const key = piece.toLowerCase();
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+
+  return pieces.join(" ").trim();
+}
+
+export function extractExperiences(text: string): Experience[] {
   const lines = text.split(/\r?\n/).map((l) => l.trim());
   const exp: Experience[] = [];
   const dateRegex = /((Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s*\d{4}|\d{4})\s*[-–—]\s*((Present|\d{4}|(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s*\d{4}))/i;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (dateRegex.test(line)) {
-      const titleLine = lines[i - 1] || "";
-      const companyLine = lines[i - 2] || "";
+      let titleLine = cleanExperienceField(lines[i - 1] || "");
+      let companyLine = cleanExperienceField(lines[i - 2] || "");
+      if (
+        companyLine &&
+        titleLine &&
+        looksLikeJobTitle(companyLine) &&
+        !looksLikeJobTitle(titleLine)
+      ) {
+        [companyLine, titleLine] = [titleLine, companyLine];
+      }
+      if (!looksLikeCompanyName(companyLine) && looksLikeCompanyName(titleLine)) {
+        [companyLine, titleLine] = [titleLine, companyLine];
+      }
       const descriptionLines: string[] = [];
       for (let j = i + 1; j <= i + 3 && j < lines.length; j++) {
-        if (lines[j]) descriptionLines.push(lines[j]);
+        if (!lines[j] || dateRegex.test(lines[j]) || looksLikeHeadingLine(lines[j])) {
+          break;
+        }
+        descriptionLines.push(lines[j]);
       }
+      const description = dedupeMergedDescription(descriptionLines.join(" "));
       exp.push({
         title: titleLine || undefined,
         company: companyLine || undefined,
         startDate: (line.match(dateRegex) || [])[1] || null,
         endDate: (line.match(dateRegex) || [])[3] || null,
-        description: descriptionLines.join(" ") || undefined,
+        description: description || undefined,
       });
     }
   }
