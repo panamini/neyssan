@@ -68,7 +68,14 @@ describe("VerbatiCvPreviewPanel", () => {
   });
 
   it("keeps the proposal-like appearance toolbar in workspace mode", () => {
-    render(<VerbatiCvPreviewPanel hostMode="workspace" />);
+    const { container } = render(<VerbatiCvPreviewPanel hostMode="workspace" />);
+
+    expect(
+      container.querySelector(".dasti-resume-preview-panel--workspace"),
+    ).toBeTruthy();
+    expect(
+      container.querySelector(".dasti-resume-preview-panel--workspace"),
+    ).not.toHaveClass("dasti-panel--spacious");
 
     expect(
       screen.queryByRole("group", { name: "Resume layout slideshow" }),
