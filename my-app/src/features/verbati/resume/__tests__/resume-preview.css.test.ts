@@ -28,6 +28,14 @@ describe("resume preview workspace anchoring", () => {
       "scrollbar-gutter: stable both-edges;",
     );
     expect(workspaceStageOverride).not.toContain("overflow: visible;");
+
+    const workspaceRailRule = productCss.match(
+      /\.dasti-document-rail--resume-workspace\s*\{[^}]*\}/,
+    )?.[0];
+
+    expect(workspaceRailRule).toContain(
+      "inset-block-start: var(--cv-preview-toolbar-inset, 0px);",
+    );
   });
 
   it("clamps embedded resume frames to the viewport width outside workspace mode", () => {
@@ -49,6 +57,9 @@ describe("resume preview workspace anchoring", () => {
     const workspacePanelRule = productCss.match(
       /\.dasti-resume-preview-panel--workspace\s*\{[^}]*\}/,
     )?.[0];
+    const workspaceSurfaceRule = productCss.match(
+      /\.dasti-resume-preview-panel__surface--workspace\s*\{[^}]*\}/,
+    )?.[0];
     const workspaceFrameRule = productCss.match(
       /\.dasti-proposal-sheet-frame--resume-workspace\s*\{[^}]*\}/,
     )?.[0];
@@ -62,13 +73,17 @@ describe("resume preview workspace anchoring", () => {
     expect(workspaceShellRule).toContain(
       "--document-viewer-bleed-block: var(--space-1);",
     );
-    expect(workspaceShellRule).toContain(
-      "grid-template-rows: auto minmax(0, 1fr);",
-    );
-    expect(workspacePanelRule).toContain("padding: var(--space-1);");
+    expect(workspaceShellRule).toContain("grid-template-rows: minmax(0, 1fr);");
+    expect(workspacePanelRule).toContain("padding: 0;");
+    expect(workspacePanelRule).toContain("gap: 0;");
+    expect(workspacePanelRule).toContain("border: none;");
+    expect(workspaceSurfaceRule).toContain("min-block-size: 0;");
+    expect(workspaceSurfaceRule).toContain("block-size: auto;");
+    expect(workspaceSurfaceRule).not.toContain("100dvh");
     expect(workspaceFrameRule).toContain("max-width: 100%;");
     expect(workspaceFrameRule).toContain("height: auto;");
-    expect(workspaceStagePaddingRule).toContain("padding: var(--space-1);");
+    expect(workspaceFrameRule).toContain("var(--cv-preview-toolbar-inset, 0px)");
+    expect(workspaceStagePaddingRule).toContain("padding: var(--space-5);");
     expect(productCss).toContain(
       ".dasti-doc-viewer-shell--resume-workspace .dasti-doc-viewport--resume {",
     );
