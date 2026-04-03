@@ -23,6 +23,8 @@ type StageMeasurement = {
 
 export type DocumentStageLayout = {
   fitScale: number;
+  availableWidth: number;
+  availableHeight: number;
   stageWidth: number;
   stageHeight: number;
   pageWidth: number;
@@ -157,6 +159,8 @@ export function useDocumentStageLayout({
 
   return {
     fitScale,
+    availableWidth: measurement.availableWidth,
+    availableHeight: measurement.availableHeight,
     stageWidth,
     stageHeight,
     pageWidth,

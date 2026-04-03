@@ -29,9 +29,14 @@ import {
 import { generateCvTemplate, generateCvTemplateV1 } from "../lib/cv-template";
 import { isV1SectionsEnabled } from "../lib/flags";
 import StructuredUploadButton from "./StructuredUploadButton";
+import ImportWarningBanner from "./ImportWarningBanner";
+import CvRenameDialog from "./CvRenameDialog";
 import type { CvDocument } from "../types/cvDocument";
 import { deriveCvTitleFromSections } from "../lib/normalize-cv";
-import { inspectCvImportSignals } from "../lib/cv-import-signals";
+import {
+  inspectCvImportSignals,
+  type CvImportSignal,
+} from "../lib/cv-import-signals";
 
 /**
  * Props for ProfileReviewCard
@@ -39,6 +44,55 @@ import { inspectCvImportSignals } from "../lib/cv-import-signals";
 interface Props {
   cvId?: string;
   profile?: unknown;
+  onRequestExport?: () => void;
+}
+
+const IMPORT_WARNING_SESSION_KEY_PREFIX = "dasti:cv-import-warning-banner:";
+const IMPORT_REVIEW_SESSION_KEY_PREFIX = "dasti:cv-import-review:";
+const IMPORT_RENAME_PROMPT_SESSION_KEY_PREFIX = "dasti:cv-import-rename:";
+
+function shouldPromptForImportedTitleRename(
+  cv: CvDocument | null | undefined,
+  signals: CvImportSignal[],
+): boolean {
+  if (!cv) {
+    return false;
+  }
+
+  return signals.some((signal) => signal.id === "document-title-generic");
+}
+
+function getFlaggedSectionTypes(signals: CvImportSignal[]): Set<string> {
+  const sectionTypes = new Set<string>();
+
+  signals.forEach((signal) => {
+    if (
+      signal.id === "profile-name-noise" ||
+      signal.id === "document-template-skeleton"
+    ) {
+      sectionTypes.add("profile");
+    }
+
+    if (
+      signal.id === "summary-repeated" ||
+      signal.id === "summary-noisy" ||
+      signal.id === "content-placeholder-copy" ||
+      signal.id === "content-all-caps" ||
+      signal.id === "document-template-skeleton"
+    ) {
+      sectionTypes.add("summary");
+    }
+
+    if (
+      signal.id.startsWith("experience-") ||
+      signal.id === "document-title-role-duplicate" ||
+      signal.id === "document-template-skeleton"
+    ) {
+      sectionTypes.add("experience");
+    }
+  });
+
+  return sectionTypes;
 }
 
 /**
@@ -49,7 +103,7 @@ interface Props {
  * - Renders the mounted typed-editor section workflow for each section
  * - Exposes typed section creation controls for the mounted /cv user workflow
  */
-export function ProfileReviewCard({ cvId, profile }: Props) {
+export function ProfileReviewCard({ cvId, profile, onRequestExport }: Props) {
   const navigate = useNavigate();
   const {
     currentCv,
@@ -60,6 +114,7 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
     addSection,
     createNewCv,
     importCv,
+    renameCv,
     closeInspector,
     isV1Active,
   } = useCvLibrary();
@@ -69,6 +124,7 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
   const requestedCvIdRef = useRef<string | null>(null);
   const addSectionMenuRef = useRef<HTMLDivElement | null>(null);
   const manageSectionsMenuRef = useRef<HTMLDivElement | null>(null);
+  const inlineReviewRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!cvId) {
@@ -204,10 +260,90 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
     useState<boolean>(false);
   const [isManageSectionsMenuOpen, setIsManageSectionsMenuOpen] =
     useState<boolean>(false);
+  const [isImportWarningDismissed, setIsImportWarningDismissed] =
+    useState<boolean>(false);
+  const [isImportReviewAcknowledged, setIsImportReviewAcknowledged] =
+    useState<boolean>(false);
+  const [isRenameDialogOpen, setIsRenameDialogOpen] = useState<boolean>(false);
+  const [renameDraftTitle, setRenameDraftTitle] = useState<string>("");
+  const [renameTargetCvId, setRenameTargetCvId] = useState<string | null>(null);
+  const [reviewFlashToken, setReviewFlashToken] = useState(0);
   const importSignals = useMemo(
     () => inspectCvImportSignals(currentCv),
     [currentCv],
   );
+  const importSignalSignature = useMemo(
+    () => importSignals.map((signal) => signal.id).sort().join("|"),
+    [importSignals],
+  );
+  const importWarningSessionKey = currentCv?.id
+    ? `${IMPORT_WARNING_SESSION_KEY_PREFIX}${currentCv.id}`
+    : null;
+  const importReviewSessionKey = currentCv?.id
+    ? `${IMPORT_REVIEW_SESSION_KEY_PREFIX}${currentCv.id}`
+    : null;
+  const importRenamePromptSessionKey = currentCv?.id
+    ? `${IMPORT_RENAME_PROMPT_SESSION_KEY_PREFIX}${currentCv.id}`
+    : null;
+  const flaggedSectionTypes = useMemo(
+    () => getFlaggedSectionTypes(importSignals),
+    [importSignals],
+  );
+
+  useEffect(() => {
+    if (!importWarningSessionKey || typeof window === "undefined") {
+      setIsImportWarningDismissed(false);
+      return;
+    }
+
+    setIsImportWarningDismissed(
+      window.sessionStorage.getItem(importWarningSessionKey) ===
+        importSignalSignature,
+    );
+  }, [importSignalSignature, importWarningSessionKey]);
+
+  useEffect(() => {
+    if (!importReviewSessionKey || typeof window === "undefined") {
+      setIsImportReviewAcknowledged(false);
+      return;
+    }
+
+    setIsImportReviewAcknowledged(
+      window.sessionStorage.getItem(importReviewSessionKey) ===
+        importSignalSignature,
+    );
+  }, [importReviewSessionKey, importSignalSignature]);
+
+  useEffect(() => {
+    if (
+      !currentCv ||
+      !importRenamePromptSessionKey ||
+      typeof window === "undefined" ||
+      !shouldPromptForImportedTitleRename(currentCv, importSignals)
+    ) {
+      return;
+    }
+
+    const storedPromptSignature = window.sessionStorage.getItem(
+      importRenamePromptSessionKey,
+    );
+    if (storedPromptSignature === importSignalSignature) {
+      return;
+    }
+
+    setRenameDraftTitle(currentCv.title ?? "");
+    setRenameTargetCvId(String(currentCv.id));
+    setIsRenameDialogOpen(true);
+    window.sessionStorage.setItem(
+      importRenamePromptSessionKey,
+      importSignalSignature,
+    );
+  }, [
+    currentCv,
+    importRenamePromptSessionKey,
+    importSignalSignature,
+    importSignals,
+  ]);
 
   // Simple in-component toast notifications for debugging (no external deps)
   const [toasts, setToasts] = useState<{ id: string; message: string }[]>([]);
@@ -216,6 +352,61 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
     setToasts((s) => [...s, { id, message }]);
     // auto-dismiss
     setTimeout(() => setToasts((s) => s.filter((t) => t.id !== id)), 3500);
+  }
+
+  function dismissImportWarning() {
+    if (importWarningSessionKey && typeof window !== "undefined") {
+      window.sessionStorage.setItem(
+        importWarningSessionKey,
+        importSignalSignature,
+      );
+    }
+    setIsImportWarningDismissed(true);
+  }
+
+  function acknowledgeImportReview() {
+    if (importReviewSessionKey && typeof window !== "undefined") {
+      window.sessionStorage.setItem(importReviewSessionKey, importSignalSignature);
+    }
+    setIsImportReviewAcknowledged(true);
+  }
+
+  function handleReviewFlaggedFields() {
+    acknowledgeImportReview();
+    setIsImportWarningDismissed(false);
+    setReviewFlashToken((current) => current + 1);
+    if (typeof inlineReviewRef.current?.scrollIntoView === "function") {
+      inlineReviewRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }
+  }
+
+  function closeRenameDialog() {
+    setIsRenameDialogOpen(false);
+  }
+
+  function handleExportClick() {
+    if (importSignals.length > 0 && !isImportReviewAcknowledged) {
+      handleReviewFlaggedFields();
+      pushToast("Review the flagged fields before exporting this CV.");
+      return;
+    }
+
+    onRequestExport?.();
+  }
+
+  function handleRenameSave(nextTitle: string) {
+    if (!renameTargetCvId) {
+      setIsRenameDialogOpen(false);
+      return;
+    }
+
+    renameCv(renameTargetCvId, nextTitle);
+    setRenameDraftTitle(nextTitle);
+    setIsRenameDialogOpen(false);
+    pushToast("CV title updated");
   }
 
   async function importSectionsIntoFreshCv(updated: CvSection[]) {
@@ -238,6 +429,12 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
 
     try {
       await importCv(importedDoc);
+      const importedSignals = inspectCvImportSignals(importedDoc);
+      if (shouldPromptForImportedTitleRename(importedDoc, importedSignals)) {
+        setRenameDraftTitle(importedDoc.title);
+        setRenameTargetCvId(importedDoc.id);
+        setIsRenameDialogOpen(true);
+      }
     } catch {
       pushToast("Failed to import CV");
     }
@@ -547,6 +744,16 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
 
   return (
     <div>
+      <CvRenameDialog
+        open={isRenameDialogOpen}
+        currentTitle={renameDraftTitle}
+        onClose={closeRenameDialog}
+        onSave={handleRenameSave}
+        title="Name this imported CV"
+        placeholder="e.g. Jane Doe — Product Manager"
+        saveLabel="Save title"
+      />
+
       {/* Always mount the inspector; it renders null when no selection to avoid mount/unmount churn */}
       <SelectedBlockInspector onClose={closeInspector} />
 
@@ -566,16 +773,43 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
         ))}
       </div>
 
+      {importSignals.length > 0 && !isImportWarningDismissed ? (
+        <ImportWarningBanner
+          signalCount={importSignals.length}
+          onReview={handleReviewFlaggedFields}
+          onDismiss={dismissImportWarning}
+          reviewLabel={
+            isImportReviewAcknowledged
+              ? "Review flagged fields again"
+              : "Review flagged fields"
+          }
+        />
+      ) : null}
+
       {importSignals.length > 0 ? (
         <section
+          ref={inlineReviewRef}
           className="dasti-inline-review"
           aria-label="Import review checks"
+          data-review-flash={reviewFlashToken > 0 ? "true" : "false"}
         >
           <div className="dasti-inline-review__header">
-            <div className="dasti-inline-review__eyebrow">Import review</div>
-            <p className="dasti-inline-review__summary">
-              These fields look suspicious. Clean them here before generating proposals.
-            </p>
+            <div className="dasti-inline-review__header-copy">
+              <div className="dasti-inline-review__eyebrow">Import review</div>
+              <p className="dasti-inline-review__summary">
+                Clean flagged parser noise here before generating proposals.
+              </p>
+            </div>
+            <div
+              className="dasti-inline-review__status"
+              data-review-state={
+                isImportReviewAcknowledged ? "acknowledged" : "required"
+              }
+            >
+              {isImportReviewAcknowledged
+                ? "Review acknowledged"
+                : "Review required before export"}
+            </div>
           </div>
           <div className="dasti-inline-review__list" role="list">
             {importSignals.map((signal) => (
@@ -665,61 +899,17 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
       )}
 
       {!isLoading && !currentCv && (
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "var(--s4)",
-            padding: "var(--s9) var(--s5)",
-            borderRadius: "var(--radius-surface)",
-            border: "1px solid var(--color-border)",
-            background: "var(--sfr)",
-            boxShadow: "var(--sha)",
-            textAlign: "center",
-          }}
-        >
-          {/* Icon */}
-          <div
-            style={{
-              width: 48,
-              height: 48,
-              borderRadius: "var(--radius-card)",
-              border: "1px solid var(--color-border)",
-              background: "var(--sf2)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "var(--am)",
-            }}
-          >
+        <div className="dasti-empty-state dasti-empty-state--panel">
+          <div className="dasti-empty-state__icon-shell">
             <FileText size={22} strokeWidth={1.4} />
           </div>
-          {/* Heading */}
           <div>
-            <h2
-              style={{
-                fontFamily: '"Fraunces", serif',
-                fontSize: "var(--tm)",
-                fontWeight: 600,
-                letterSpacing: "-.01em",
-                color: "var(--ti)",
-                margin: "0 0 var(--s2)",
-              }}
-            >
-              Your resume space is ready
+            <h2 className="dasti-empty-state__title">
+              Import your existing CV or start from scratch.
             </h2>
-            <p
-              style={{
-                fontSize: "var(--ts)",
-                color: "var(--tg2)",
-                lineHeight: "var(--ls)",
-                margin: 0,
-              }}
-            >
-              Select a resume from the sidebar, or create a new one to get
-              started.
+            <p className="dasti-empty-state__subtitle">
+              Bring in an existing resume, begin a clean draft, or open one from
+              the library before generating proposals.
             </p>
           </div>
           <div
@@ -732,6 +922,7 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
           >
             <StructuredUploadButton
               contextKey="cvforge-empty-state"
+              label="Import CV"
               onApplyToSections={(updated) => {
                 void importSectionsIntoFreshCv(updated);
               }}
@@ -744,7 +935,7 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
               }}
               className="dasti-button dasti-button--primary dasti-button--pill"
             >
-              Create new CV
+              Start from scratch
             </button>
             <button
               type="button"
@@ -945,6 +1136,16 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
               }}
               renderAs="dropdown"
             />
+            {onRequestExport ? (
+              <button
+                type="button"
+                onClick={handleExportClick}
+                className="dasti-button dasti-button--secondary dasti-button--pill"
+                aria-label="Export CV as PDF"
+              >
+                Export PDF
+              </button>
+            ) : null}
           </div>
 
           <div>
@@ -977,7 +1178,22 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
                     "[ProfileReviewCard] DnD disabled in debug mode",
                   )}
                 {sections.map((section, idx) => (
-                  <div key={String(section.id ?? "")} className="mb-6">
+                  <div
+                    key={String(section.id ?? "")}
+                    className={[
+                      "mb-6",
+                      flaggedSectionTypes.has(String(section.type ?? ""))
+                        ? "dasti-import-flagged-shell"
+                        : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    data-import-flagged={
+                      flaggedSectionTypes.has(String(section.type ?? ""))
+                        ? "true"
+                        : "false"
+                    }
+                  >
                     <SectionComponent
                       section={section}
                       index={idx}

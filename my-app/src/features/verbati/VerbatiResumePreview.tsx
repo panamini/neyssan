@@ -1,7 +1,6 @@
 import React from "react";
 import {
   CornersIn,
-  MagnifyingGlass,
   Minus,
   Plus,
 } from "@/lib/icons";
@@ -16,7 +15,11 @@ import {
   VERBATI_LAYOUT_TO_RENDERER,
 } from "./style";
 import type { ResumeData, ResumeLayoutVariantId } from "./resume/resume.types";
-import { DOCUMENT_ZOOM_STEPS } from "../../lib/document-stage";
+import {
+  A4_PAGE_HEIGHT_PX,
+  A4_PAGE_WIDTH_PX,
+  DOCUMENT_ZOOM_STEPS,
+} from "../../lib/document-stage";
 import type { VerbatiLayoutPreset, VerbatiStylePreset } from "./types";
 
 type VerbatiResumePreviewProps = {
@@ -62,18 +65,53 @@ export function VerbatiResumePreview({
   );
   const [zoomIndex, setZoomIndex] = React.useState(1);
   const [fitRequestCount, setFitRequestCount] = React.useState(0);
-  const [isZoomMenuOpen, setIsZoomMenuOpen] = React.useState(false);
+  const [workspaceViewMode, setWorkspaceViewMode] = React.useState<
+    "fit-page" | "manual"
+  >("fit-page");
   const stageMeasureRef = React.useRef<HTMLDivElement | null>(null);
-  const zoomMenuRef = React.useRef<HTMLDivElement | null>(null);
   const isWorkspaceMode = hostMode === "workspace";
-  const userZoom = isWorkspaceMode ? DOCUMENT_ZOOM_STEPS[zoomIndex] : 1;
   const stageLayout = useDocumentStageLayout({
     enabled: !compareLayouts,
     measurementRef: stageMeasureRef,
-    zoomLevel: userZoom,
+    zoomLevel:
+      !isWorkspaceMode || workspaceViewMode === "fit-page"
+        ? 1
+        : workspaceViewMode === "manual"
+          ? DOCUMENT_ZOOM_STEPS[zoomIndex]
+          : 1,
     fitMode: isWorkspaceMode ? "contain" : "width",
     fillAvailableOnZoom: isWorkspaceMode,
   });
+  const fitPageScale = React.useMemo(
+    () =>
+      Math.min(
+        1,
+        stageLayout.availableWidth / A4_PAGE_WIDTH_PX,
+        stageLayout.availableHeight / A4_PAGE_HEIGHT_PX,
+      ),
+    [stageLayout.availableHeight, stageLayout.availableWidth],
+  );
+  const userZoom = React.useMemo(() => {
+    if (!isWorkspaceMode || workspaceViewMode === "fit-page") {
+      return 1;
+    }
+    if (workspaceViewMode === "manual") {
+      return DOCUMENT_ZOOM_STEPS[zoomIndex];
+    }
+    return 1;
+  }, [fitPageScale, isWorkspaceMode, workspaceViewMode, zoomIndex]);
+  const workspaceZoomPercent = React.useMemo(() => {
+    if (!isWorkspaceMode) {
+      return 100;
+    }
+
+    const baseScale = fitPageScale;
+    return Math.max(1, Math.round(baseScale * userZoom * 100));
+  }, [
+    fitPageScale,
+    isWorkspaceMode,
+    userZoom,
+  ]);
   const stageMode = stageLayout.isFit ? "fit" : "overflow";
   const { attachViewport, viewportPanProps } = useDocumentPan({
     enabled: !compareLayouts && isWorkspaceMode && userZoom > 1,
@@ -92,32 +130,6 @@ export function VerbatiResumePreview({
     },
     [attachCenterViewport, attachViewport],
   );
-  React.useEffect(() => {
-    if (!isWorkspaceMode || !isZoomMenuOpen) {
-      return;
-    }
-
-    const handlePointerDown = (event: MouseEvent) => {
-      const target = event.target as Node | null;
-      if (target && !zoomMenuRef.current?.contains(target)) {
-        setIsZoomMenuOpen(false);
-      }
-    };
-
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setIsZoomMenuOpen(false);
-      }
-    };
-
-    window.addEventListener("mousedown", handlePointerDown);
-    window.addEventListener("keydown", handleEscape);
-
-    return () => {
-      window.removeEventListener("mousedown", handlePointerDown);
-      window.removeEventListener("keydown", handleEscape);
-    };
-  }, [isWorkspaceMode, isZoomMenuOpen]);
 
   if (compareLayouts) {
     const comparisonVariantIds = comparisonLayouts.map(
@@ -152,94 +164,76 @@ export function VerbatiResumePreview({
 
   const fitToken = `${stylePreset.layout}:${stylePreset.typography}:${accentToken}:single:${data.name}:${data.title}:${data.summary.length}:${data.experience.length}:${data.education.length}:${data.skills.length}:${data.languages.length}:${data.projects.length}:${data.achievements?.length ?? 0}`;
 
-  const popoverZoomControls = (
-    <div
-      ref={zoomMenuRef}
-      className={
-        isZoomMenuOpen
-          ? "dasti-doc-zoom-menu dasti-doc-zoom-menu--open"
-          : "dasti-doc-zoom-menu"
-      }
-      data-no-pan="true"
-    >
+  const workspaceZoomControls = isWorkspaceMode ? (
+    <div className="dasti-doc-zoom-bar dasti-doc-zoom-bar--rail" data-no-pan="true">
       <button
         type="button"
         className={
-          zoomIndex === 1
-            ? "dasti-doc-zoom-fit dasti-doc-zoom-trigger"
-            : "dasti-doc-zoom-fit dasti-doc-zoom-trigger dasti-doc-zoom-trigger--active"
+          workspaceViewMode === "fit-page"
+            ? "dasti-doc-zoom-fit dasti-doc-zoom-fit--active"
+            : "dasti-doc-zoom-fit"
         }
-        onClick={() => setIsZoomMenuOpen((current) => !current)}
-        aria-label="Open zoom controls"
-        title="Open zoom controls"
-        aria-expanded={isZoomMenuOpen}
-        aria-haspopup="dialog"
+        onClick={() => {
+          setWorkspaceViewMode("fit-page");
+          setFitRequestCount((count) => count + 1);
+        }}
+        aria-label="Fit page"
+        title="Fit page"
       >
-        <MagnifyingGlass size={14} strokeWidth={1.8} aria-hidden="true" />
+        <CornersIn size={14} strokeWidth={1.8} aria-hidden="true" />
       </button>
-      <div
-        className="dasti-doc-zoom-bar dasti-doc-zoom-bar--popover"
-        data-no-pan="true"
-        role="dialog"
-        aria-label="Zoom controls"
+      <button
+        type="button"
+        className="dasti-icon-button"
+        onClick={() => {
+          setWorkspaceViewMode("manual");
+          setZoomIndex((index) => Math.max(0, index - 1));
+        }}
+        disabled={zoomIndex === 0 && workspaceViewMode === "manual"}
+        aria-label="Zoom out"
+        title="Zoom out"
       >
-        <button
-          type="button"
-          className={
-            zoomIndex === 1
-              ? "dasti-doc-zoom-fit dasti-doc-zoom-fit--active"
-              : "dasti-doc-zoom-fit"
-          }
-          onClick={() => {
-            setZoomIndex(1);
-            setFitRequestCount((count) => count + 1);
-            setIsZoomMenuOpen(false);
-          }}
-          aria-label="Fit page"
-          title="Fit page"
-        >
-          <CornersIn size={14} strokeWidth={1.8} aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          className="dasti-icon-button"
-          onClick={() => setZoomIndex((i) => Math.max(0, i - 1))}
-          disabled={zoomIndex === 0}
-          aria-label="Zoom out"
-          title="Zoom out"
-        >
-          <Minus size={14} strokeWidth={1.7} aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          className="dasti-icon-button"
-          onClick={() =>
-            setZoomIndex((i) =>
-              Math.min(DOCUMENT_ZOOM_STEPS.length - 1, i + 1),
-            )
-          }
-          disabled={zoomIndex === DOCUMENT_ZOOM_STEPS.length - 1}
-          aria-label="Zoom in"
-          title="Zoom in"
-        >
-          <Plus size={14} strokeWidth={1.7} aria-hidden="true" />
-        </button>
-      </div>
+        <Minus size={14} strokeWidth={1.7} aria-hidden="true" />
+      </button>
+      <span className="dasti-doc-zoom-status" aria-label={`Zoom ${workspaceZoomPercent} percent`}>
+        {workspaceZoomPercent}%
+      </span>
+      <button
+        type="button"
+        className="dasti-icon-button"
+        onClick={() => {
+          setWorkspaceViewMode("manual");
+          setZoomIndex((index) =>
+            Math.min(DOCUMENT_ZOOM_STEPS.length - 1, index + 1),
+          );
+        }}
+        disabled={
+          zoomIndex === DOCUMENT_ZOOM_STEPS.length - 1 &&
+          workspaceViewMode === "manual"
+        }
+        aria-label="Zoom in"
+        title="Zoom in"
+      >
+        <Plus size={14} strokeWidth={1.7} aria-hidden="true" />
+      </button>
+      <span className="dasti-doc-page-count" aria-label="Page count">
+        1 page
+      </span>
     </div>
-  );
+  ) : null;
 
   const railStartControls =
     isWorkspaceMode &&
-    (railLeadControl || railStartAddon || popoverZoomControls) ? (
+    (railLeadControl || railStartAddon || workspaceZoomControls) ? (
       <div className="dasti-proposal-rail-cluster" data-no-pan="true">
         {railLeadControl}
-        {railLeadControl && popoverZoomControls ? (
+        {railLeadControl && workspaceZoomControls ? (
           <div className="dasti-icon-cluster__divider dasti-proposal-rail-cluster__divider" />
         ) : null}
-        {popoverZoomControls}
+        {workspaceZoomControls}
         {railStartAddon ? (
           <>
-            {railLeadControl || popoverZoomControls ? (
+            {railLeadControl || workspaceZoomControls ? (
               <div className="dasti-icon-cluster__divider dasti-proposal-rail-cluster__divider" />
             ) : null}
             {railStartAddon}

@@ -22,7 +22,7 @@ describe("ProposalDisplay CSS contracts", () => {
     expect(productCss).toContain(
       ".dasti-proposal-sheet__preview-page--stacked .dasti-proposal-document__page {",
     );
-    expect(productCss).toContain("border-radius: var(--document-stage-radius);");
+    expect(productCss).toContain("border-radius: var(--document-paper-radius);");
     expect(productCss).toContain("box-shadow: var(--document-stage-halo);");
   });
 
@@ -91,7 +91,7 @@ describe("ProposalDisplay CSS contracts", () => {
 
   it("lets the desktop Proposal Forge compose shell match the live output shell block size instead of shrinking by A4 ratio", () => {
     expect(productCss).toMatch(
-      /\.dasti-proposal-compose-column--workspace\s*\{[\s\S]*--document-shell-padding-inline:\s*4px;[\s\S]*--proposal-sheet-margin-inline-inner:\s*4px;[\s\S]*--proposal-sheet-margin-inline-outer:\s*4px;[\s\S]*--proposal-sheet-margin-block-start:\s*0px;[\s\S]*--proposal-sheet-margin-block-end:\s*0px;[\s\S]*--proposal-sheet-content-bottom-inset:\s*0px;[\s\S]*--proposal-sheet-edge-fade-height:\s*22px;[\s\S]*--proposal-live-shell-block-size:\s*var\(--proposal-workspace-shell-block-size\);/,
+      /\.dasti-proposal-compose-column--workspace\s*\{[\s\S]*--proposal-compose-workspace-inline-inset:\s*calc\(var\(--space-3\)\s*-\s*2px\);[\s\S]*--document-shell-padding-inline:\s*var\(--proposal-compose-workspace-inline-inset\);[\s\S]*--proposal-sheet-margin-inline-inner:\s*var\([\s\S]*--proposal-compose-workspace-inline-inset[\s\S]*\);[\s\S]*--proposal-sheet-margin-inline-outer:\s*var\([\s\S]*--proposal-compose-workspace-inline-inset[\s\S]*\);[\s\S]*--proposal-sheet-margin-block-start:\s*0px;[\s\S]*--proposal-sheet-margin-block-end:\s*0px;[\s\S]*--proposal-sheet-content-bottom-inset:\s*0px;[\s\S]*--proposal-sheet-edge-fade-height:\s*22px;[\s\S]*--proposal-live-shell-block-size:\s*var\(--proposal-workspace-shell-block-size\);/,
     );
     expect(productCss).toMatch(
       /@media \(min-width: 1440px\)\s*\{[\s\S]*\.dasti-proposal-compose-column--workspace\s+\.dasti-proposal-sheet--composer\s*\{[\s\S]*aspect-ratio:\s*auto;[\s\S]*min-height:\s*var\(--proposal-live-shell-block-size\);[\s\S]*height:\s*var\(--proposal-live-shell-block-size\);[\s\S]*max-height:\s*var\(--proposal-live-shell-block-size\);/,

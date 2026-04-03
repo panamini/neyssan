@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   Check,
   ChevronDown,
+  FilePdf,
   FloppyDisk,
   PenLine,
   Trash,
@@ -49,6 +50,7 @@ import {
   type StoredProposalComposeDraft,
 } from "../lib/proposal-workspace-state";
 import { readStoredSavedProposalFixtures } from "../lib/proposal-saved-fixtures";
+import { printFirstMatchingNodeAsPdf } from "../lib/document-export";
 import type { ProposalTemplateId } from "../../convex/lib/proposals/renderTemplates";
 import {
   getProposalTwinTemplateId,
@@ -548,6 +550,8 @@ export function ProposalForge(): JSX.Element {
     });
   const [cvPickerRequestKey, setCvPickerRequestKey] = React.useState(0);
   const composeGenerateTriggerRef = React.useRef<(() => void) | null>(null);
+  const composeProposalExportRef = React.useRef<HTMLDivElement | null>(null);
+  const savedProposalExportRef = React.useRef<HTMLElement | null>(null);
   const [composeGenerateControl, setComposeGenerateControl] = React.useState<
     Omit<ProposalGenerateControl, "trigger">
   >({
@@ -2106,6 +2110,37 @@ export function ProposalForge(): JSX.Element {
     showToast,
   ]);
 
+  const handleExportProposal = React.useCallback(() => {
+    const container = openedSavedProposal
+      ? savedProposalExportRef.current
+      : composeProposalExportRef.current;
+    const exported = printFirstMatchingNodeAsPdf({
+      container,
+      selectors: [
+        ".dasti-document-stage__canvas[data-document-page='true'] .dasti-proposal-document__page",
+        ".dasti-proposal-document__page",
+        ".dasti-document-stage__canvas[data-document-page='true']",
+      ],
+      title:
+        (openedSavedProposal
+          ? savedProposalDocumentTitle
+          : proposalDocumentTitle
+        ).trim() || "Proposal",
+    });
+
+    if (!exported) {
+      showToast("Export unavailable", {
+        variant: "error",
+        description: "Open a generated proposal preview before exporting.",
+      });
+    }
+  }, [
+    openedSavedProposal,
+    proposalDocumentTitle,
+    savedProposalDocumentTitle,
+    showToast,
+  ]);
+
   const handleCopySavedProposalToDraft = React.useCallback(() => {
     if (!openedSavedProposal || !savedProposalContent) {
       return;
@@ -2847,7 +2882,7 @@ export function ProposalForge(): JSX.Element {
         }
       >
         {isSavedView ? (
-          <section aria-hidden={false}>
+          <section aria-hidden={false} ref={savedProposalExportRef}>
             <ProposalsList
               selectedProposalId={selectedProposalId}
               onSelectedProposalIdChange={(id) =>
@@ -2867,6 +2902,16 @@ export function ProposalForge(): JSX.Element {
                     aria-label="Back to draft"
                   >
                     <ArrowLeft size={16} strokeWidth={1.7} />
+                  </button>
+                  <button
+                    type="button"
+                    className="dasti-icon-button"
+                    data-toolbar-tooltip="Export PDF"
+                    onClick={handleExportProposal}
+                    disabled={!openedSavedProposal || !savedProposalContent}
+                    aria-label="Export proposal as PDF"
+                  >
+                    <FilePdf size={16} strokeWidth={1.7} />
                   </button>
                   <button
                     type="button"
@@ -3028,6 +3073,7 @@ export function ProposalForge(): JSX.Element {
                     } as React.CSSProperties
                   }
                   className="dasti-proposal-output-shell dasti-proposal-output-shell--workspace"
+                  ref={composeProposalExportRef}
                 >
                   <ProposalDisplay
                     proposalContent={proposalContent}
@@ -3093,6 +3139,15 @@ export function ProposalForge(): JSX.Element {
                     actions={
                       proposalContent && !loading && !error ? (
                         <span className="dasti-icon-cluster dasti-icon-cluster--tight">
+                          <button
+                            type="button"
+                            className="dasti-icon-button"
+                            aria-label="Export proposal as PDF"
+                            data-toolbar-tooltip="Export PDF"
+                            onClick={handleExportProposal}
+                          >
+                            <FilePdf size={16} strokeWidth={1.7} />
+                          </button>
                           <button
                             type="button"
                             className="dasti-icon-button"

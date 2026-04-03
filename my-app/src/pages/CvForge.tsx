@@ -1,10 +1,11 @@
 import React from "react";
 import { useLocation } from "react-router-dom";
-import { Eye, X } from "@/lib/icons";
+import { Eye, FilePdf, X } from "@/lib/icons";
 import { ProfileReviewCard } from "../components/ProfileReviewCard";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import { VerbatiCvPreviewPanel } from "../features/verbati/VerbatiCvPreviewPanel";
 import { useBoundVerbatiCvStyle } from "../features/verbati/useBoundVerbatiCvStyle";
+import { printFirstMatchingNodeAsPdf } from "../lib/document-export";
 
 type CvForgeWorkspaceMode = "edit" | "preview";
 
@@ -31,6 +32,7 @@ function readStoredCvForgeWorkspaceMode(): CvForgeWorkspaceMode {
 export function CvForge(): JSX.Element {
   const { search } = useLocation();
   const { currentCv, importCv } = useCvLibrary();
+  const cvPreviewExportRef = React.useRef<HTMLDivElement | null>(null);
   const [viewportWidth, setViewportWidth] = React.useState(() =>
     typeof window === "undefined" ? 1440 : window.innerWidth,
   );
@@ -91,16 +93,34 @@ export function CvForge(): JSX.Element {
   );
 
   const previewModeLeadControl = (
-    <button
-      type="button"
-      className="dasti-cv-workbench-toggle__button"
-      aria-label="Back to resume editing"
-      onClick={() => setWorkspaceMode("edit")}
-      data-toolbar-tooltip="Back to edit"
-      data-no-pan="true"
-    >
-      <X size={15} strokeWidth={1.9} aria-hidden="true" />
-    </button>
+    <>
+      <button
+        type="button"
+        className="dasti-cv-workbench-toggle__button"
+        aria-label="Back to resume editing"
+        onClick={() => setWorkspaceMode("edit")}
+        data-toolbar-tooltip="Back to edit"
+        data-no-pan="true"
+      >
+        <X size={15} strokeWidth={1.9} aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        className="dasti-icon-button"
+        aria-label="Export CV as PDF"
+        onClick={() => {
+          printFirstMatchingNodeAsPdf({
+            container: cvPreviewExportRef.current,
+            selectors: [".resume-page-frame", ".resume-page-stage"],
+            title: currentCv?.title || "Resume",
+          });
+        }}
+        data-toolbar-tooltip="Export PDF"
+        data-no-pan="true"
+      >
+        <FilePdf size={15} strokeWidth={1.7} aria-hidden="true" />
+      </button>
+    </>
   );
   const cvWorkbenchShellStyle: React.CSSProperties = {
     width: "100%",
@@ -136,7 +156,10 @@ export function CvForge(): JSX.Element {
         {workspaceMode === "preview" ? (
           <>
             <div className="dasti-cv-preview-workbench">
-              <div className="dasti-cv-preview-workbench__main">
+              <div
+                className="dasti-cv-preview-workbench__main"
+                ref={cvPreviewExportRef}
+              >
                 <VerbatiCvPreviewPanel
                   layoutMode="stacked"
                   hostMode="workspace"
@@ -161,20 +184,30 @@ export function CvForge(): JSX.Element {
                 style={
                   {
                     "--grid-columns": isSplitCanvas
-                      ? "minmax(0, 1fr) clamp(360px, 34vw, 420px)"
+                      ? "minmax(0, 1fr) clamp(392px, 36vw, 468px)"
                       : "minmax(0, 1fr)",
                     "--grid-gap": "var(--layout-card-grid)",
                     "--grid-align": "start",
                   } as React.CSSProperties
                 }
               >
-                <ProfileReviewCard cvId={requestedCvId} />
+                <ProfileReviewCard
+                  cvId={requestedCvId}
+                  onRequestExport={() => {
+                    printFirstMatchingNodeAsPdf({
+                      container: cvPreviewExportRef.current,
+                      selectors: [".resume-page-frame", ".resume-page-stage"],
+                      title: currentCv?.title || "Resume",
+                    });
+                  }}
+                />
                 <div
                   className={
                     isSplitCanvas
                       ? "dasti-cv-preview-panel-slot dasti-cv-preview-panel-slot--sticky"
                       : "dasti-cv-preview-panel-slot"
                   }
+                  ref={cvPreviewExportRef}
                 >
                   <VerbatiCvPreviewPanel
                     layoutMode={isSplitCanvas ? "rail" : "stacked"}
