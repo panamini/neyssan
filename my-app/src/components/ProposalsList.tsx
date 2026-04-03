@@ -1,20 +1,10 @@
 import React from "react";
-import {
-  Check,
-  Feather,
-  PenNib,
-  RotateCcw,
-  Sunglasses,
-  Trash,
-  Wand2,
-  X,
-} from "@/lib/icons";
 import { useQuery, useMutation, useAction, useConvexAuth } from "convex/react";
 import { useAuth } from "@clerk/clerk-react";
 import { api } from "../../convex/_generated/api";
 import { useToast } from "./ui/toast";
 import ProposalDisplay from "./ProposalDisplay";
-import { ProposalArtifactInspector } from "./ProposalArtifactInspector";
+import { SavedProposalForgeToolbarPreview } from "./SavedProposalForgeToolbarPreview";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import {
   buildAppProposalPersonalizationPayload,
@@ -103,38 +93,6 @@ type RegeneratePayload = {
   characterLimitMode?: ProposalCharacterLimitMode;
   characterLimitValue?: number | null;
 } & ProposalGenerationPersonalizationPayload;
-
-const SAVED_PROPOSAL_TONE_OPTIONS: ReadonlyArray<{
-  id: ProposalVoicePreset | null;
-  label: string;
-  description: string;
-  Icon: typeof Wand2;
-}> = [
-  {
-    id: null,
-    label: getVoicePresetDisplayLabel(null),
-    description: "System picks the tone.",
-    Icon: Wand2,
-  },
-  {
-    id: "signature",
-    label: getVoicePresetDisplayLabel("signature"),
-    description: "Calm and direct.",
-    Icon: Feather,
-  },
-  {
-    id: "expert",
-    label: getVoicePresetDisplayLabel("expert"),
-    description: "Precise and authoritative.",
-    Icon: PenNib,
-  },
-  {
-    id: "engaging",
-    label: getVoicePresetDisplayLabel("engaging"),
-    description: "Friendly and more human.",
-    Icon: Sunglasses,
-  },
-] as const;
 
 function normalizeSavedBundleId(
   value: ProposalTemplateBundleId | null | undefined,
@@ -509,7 +467,6 @@ export default function ProposalsList({
     "preview" | "edit"
   >("preview");
   const [copied, setCopied] = React.useState(false);
-  const [isConfirmingDelete, setIsConfirmingDelete] = React.useState(false);
   const [savedViewMode, setSavedViewMode] =
     React.useState<SavedProposalViewMode>("stack");
   const [visibleSecondaryCount, setVisibleSecondaryCount] = React.useState(
@@ -525,8 +482,6 @@ export default function ProposalsList({
     React.useState<ProposalPaletteId | null>(null);
   const [selectedCustomAccentHex, setSelectedCustomAccentHex] =
     React.useState<string | null>(null);
-  const [isSavedToneMenuOpen, setIsSavedToneMenuOpen] =
-    React.useState(false);
   const [selectedRefineVoicePreset, setSelectedRefineVoicePreset] =
     React.useState<ProposalVoicePreset | null>(DEFAULT_PROPOSAL_VOICE_PRESET);
   const [isSelectionPending, startSelectionTransition] = React.useTransition();
@@ -547,7 +502,6 @@ export default function ProposalsList({
   const loadMoreSentinelRef = React.useRef<HTMLDivElement | null>(null);
   const gestureSurfaceRef = React.useRef<HTMLDivElement | null>(null);
   const selectedCardRef = React.useRef<HTMLDivElement | null>(null);
-  const savedToneMenuRef = React.useRef<HTMLSpanElement | null>(null);
   const shouldRevealSelectedCardRef = React.useRef(false);
 
   const selectProposal = React.useCallback(
@@ -556,7 +510,6 @@ export default function ProposalsList({
       setEditTitle(proposal?.title ?? "");
       setEditContent(getProposalDisplayText(proposal));
       setSelectedOutputMode("preview");
-      setIsConfirmingDelete(false);
       setCopied(false);
       if (syncSelection) {
         onSelectedProposalIdChange?.(proposal?._id ?? null);
@@ -751,34 +704,7 @@ export default function ProposalsList({
         ? getStoredRequestedVoicePreset(selected)
         : DEFAULT_PROPOSAL_VOICE_PRESET,
     );
-    setIsSavedToneMenuOpen(false);
   }, [selected, selected?._id, selectedStoredAppearance]);
-
-  React.useEffect(() => {
-    if (!isSavedToneMenuOpen) return undefined;
-
-    const handleOutside = (event: MouseEvent) => {
-      if (
-        savedToneMenuRef.current &&
-        !savedToneMenuRef.current.contains(event.target as Node)
-      ) {
-        setIsSavedToneMenuOpen(false);
-      }
-    };
-
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setIsSavedToneMenuOpen(false);
-      }
-    };
-
-    window.addEventListener("mousedown", handleOutside);
-    window.addEventListener("keydown", handleEscape);
-    return () => {
-      window.removeEventListener("mousedown", handleOutside);
-      window.removeEventListener("keydown", handleEscape);
-    };
-  }, [isSavedToneMenuOpen]);
 
   React.useEffect(() => {
     if (
@@ -1168,7 +1094,6 @@ export default function ProposalsList({
       };
       upsertLocalProposal(regeneratedRecord);
       selectProposal(regeneratedRecord, true);
-      setIsSavedToneMenuOpen(false);
       showToast("Proposal refined", {
         variant: "success",
         description: "A refreshed saved version is now in Proposal Library.",
@@ -1201,10 +1126,10 @@ export default function ProposalsList({
   const selectedHeaderMeta = selected
     ? buildProposalMeta(selected) || "Saved proposal"
     : "";
-  const activeSavedToneOption =
-    SAVED_PROPOSAL_TONE_OPTIONS.find(
-      (option) => option.id === selectedRefineVoicePreset,
-    ) ?? SAVED_PROPOSAL_TONE_OPTIONS[0];
+  const selectedTonePendingRefresh = selected
+    ? selectedRefineVoicePreset !== getStoredRequestedVoicePreset(selected)
+    : false;
+
   const selectedSidebarHeading = selected ? (
     <div className="dasti-proposal-library-sidebar__heading">
       {selectedOutputMode === "edit" ? (
@@ -1233,140 +1158,52 @@ export default function ProposalsList({
       ) : null}
     </div>
   ) : null;
-  const selectedActionCluster = selected ? (
-    <span className="dasti-icon-cluster dasti-icon-cluster--tight">
-      <span
-        ref={savedToneMenuRef}
-        className="dasti-compose-toolbar__tone-anchor dasti-proposal-saved-tone-anchor"
-      >
-        <button
-          type="button"
-          className={[
-            "dasti-icon-button",
-            "dasti-proposal-saved-tone-button",
-            "dasti-compose-toolbar__tone-option--active",
-            isSavedToneMenuOpen
-              ? "dasti-proposal-saved-tone-button--popover-open"
-              : "",
-          ]
-            .filter(Boolean)
-            .join(" ")}
-          aria-label={`Tone of voice ${activeSavedToneOption.label}`}
-          data-toolbar-tooltip={isSavedToneMenuOpen ? undefined : activeSavedToneOption.label}
-          onClick={() => setIsSavedToneMenuOpen((open) => !open)}
-          aria-expanded={isSavedToneMenuOpen}
-          aria-haspopup="dialog"
-          disabled={Boolean(isRegenerating)}
-        >
-          <activeSavedToneOption.Icon
-            size={15}
-            strokeWidth={1.7}
-            aria-hidden="true"
-          />
-        </button>
-        {isSavedToneMenuOpen ? (
-          <div
-            className="dasti-compose-toolbar__tone-popover dasti-proposal-saved-tone-popover dasti-proposal-chrome-drawer dasti-proposal-chrome-drawer--stack"
-            role="dialog"
-            aria-label="Tone of voice"
-          >
-            <div className="dasti-compose-toolbar__tone-list">
-              {SAVED_PROPOSAL_TONE_OPTIONS.map((option) => {
-                const active = option.id === selectedRefineVoicePreset;
-                return (
-                  <button
-                    key={option.id ?? "auto"}
-                    type="button"
-                    className={[
-                      "dasti-compose-toolbar__tone-option",
-                      "dasti-compose-toolbar__tone-option--drawer",
-                      active ? "dasti-compose-toolbar__tone-option--active" : "",
-                    ]
-                      .filter(Boolean)
-                      .join(" ")}
-                    aria-label={option.label}
-                    data-toolbar-tooltip={option.label}
-                    data-toolbar-tooltip-placement="inline-end"
-                    onClick={() => {
-                      setSelectedRefineVoicePreset(option.id);
-                      setIsSavedToneMenuOpen(false);
-                    }}
-                    disabled={Boolean(isRegenerating)}
-                  >
-                    <option.Icon size={15} strokeWidth={1.7} aria-hidden="true" />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ) : null}
-      </span>
-      <button
-        type="button"
-        className="dasti-icon-button"
-        aria-label="Refine saved proposal"
-        data-toolbar-tooltip={
-          isRegenerating === selected._id ? "Refining" : "Refine"
-        }
-        style={{
-          opacity: isRegenerating === selected._id ? 0.5 : 1,
-        }}
-        onClick={() => {
-          setIsSavedToneMenuOpen(false);
-          void handleRegenerate(selectedRefineVoicePreset);
-        }}
-        disabled={Boolean(isRegenerating)}
-      >
-        <RotateCcw size={16} strokeWidth={1.5} />
-      </button>
-      <div className="dasti-icon-cluster__divider" />
-      {!isConfirmingDelete ? (
-        <button
-          type="button"
-          className="dasti-icon-button"
-          data-toolbar-tooltip="Delete"
-          onClick={() => setIsConfirmingDelete(true)}
-        >
-          <Trash size={16} strokeWidth={1.5} />
-        </button>
-      ) : (
-        <span className="dasti-icon-cluster">
-          <button
-            type="button"
-            className="dasti-icon-button dasti-icon-button--compact dasti-icon-button--confirm"
-            data-toolbar-tooltip="Confirm delete"
-            style={{
-              background: "var(--erb)",
-              color: "var(--ert)",
-            }}
-            onMouseEnter={(e) => {
-              const button = e.currentTarget as HTMLButtonElement;
-              button.style.background = "var(--er)";
-              button.style.color = "var(--op)";
-            }}
-            onMouseLeave={(e) => {
-              const button = e.currentTarget as HTMLButtonElement;
-              button.style.background = "var(--erb)";
-              button.style.color = "var(--ert)";
-            }}
-            onClick={() => {
-              void handleDelete();
-              setIsConfirmingDelete(false);
-            }}
-          >
-            <Check size={12} strokeWidth={2.5} />
-          </button>
-          <button
-            type="button"
-            className="dasti-icon-button dasti-icon-button--compact"
-            data-toolbar-tooltip="Cancel"
-            onClick={() => setIsConfirmingDelete(false)}
-          >
-            <X size={12} strokeWidth={2} />
-          </button>
-        </span>
-      )}
-    </span>
+  const selectedForgeCloneToolbar = selected ? (
+    <SavedProposalForgeToolbarPreview
+      mode={selectedOutputMode}
+      onModeChange={setSelectedOutputMode}
+      showZoomControls={
+        Boolean(editContent) &&
+        selectedOutputMode !== "edit" &&
+        (getStoredProposalType(selected) === "cover_letter" ||
+          getStoredProposalType(selected) === "application_message" ||
+          getStoredProposalType(selected) === "freelance_proposal")
+      }
+      toneValue={selectedRefineVoicePreset}
+      onToneChange={setSelectedRefineVoicePreset}
+      onRefine={() => {
+        void handleRegenerate(selectedRefineVoicePreset);
+      }}
+      tonePendingRefresh={selectedTonePendingRefresh}
+      onDelete={() => {
+        void handleDelete();
+      }}
+      onCopy={() => {
+        void navigator.clipboard.writeText(editContent).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        });
+      }}
+      copyFeedback={copied ? "copied" : "idle"}
+      isRegenerating={Boolean(isRegenerating)}
+      styleBundleId={selectedStyleBundleId}
+      onStyleBundleChange={setSelectedStyleBundleId}
+      paletteOverride={selectedPaletteOverride}
+      onPaletteOverrideChange={(value) => {
+        setSelectedCustomAccentHex(null);
+        setSelectedPaletteOverride(value);
+      }}
+      customAccentHex={selectedCustomAccentHex}
+      onCustomAccentHexChange={(hex) => {
+        setSelectedCustomAccentHex(hex);
+        setSelectedPaletteOverride(null);
+      }}
+      resolvedPaletteId={
+        selectedRenderState?.stylePreset.palette === "custom"
+          ? null
+          : selectedRenderState?.stylePreset.palette ?? null
+      }
+    />
   ) : null;
 
   return (
@@ -1479,34 +1316,10 @@ export default function ProposalsList({
                     mode={selectedOutputMode}
                     onModeChange={setSelectedOutputMode}
                     showModeToggle
-                    showZoomControls
+                    showZoomControls={false}
                     detachedActionHeader
                     documentHeaderMode="actions-only"
-                    railStartAddon={
-                      selectedRenderState ? (
-                        <ProposalArtifactInspector
-                          variant="header"
-                          styleBundleId={selectedStyleBundleId}
-                          onStyleBundleChange={setSelectedStyleBundleId}
-                          paletteOverride={selectedPaletteOverride}
-                          onPaletteOverrideChange={(value) => {
-                            setSelectedCustomAccentHex(null);
-                            setSelectedPaletteOverride(value);
-                          }}
-                          customAccentHex={selectedCustomAccentHex}
-                          onCustomAccentHexChange={(hex) => {
-                            setSelectedCustomAccentHex(hex);
-                            setSelectedPaletteOverride(null);
-                          }}
-                          resolvedPaletteId={
-                            selectedRenderState.stylePreset.palette === "custom"
-                              ? null
-                              : selectedRenderState.stylePreset.palette
-                          }
-                          hasGenerated={Boolean(editContent)}
-                        />
-                      ) : null
-                    }
+                    detachedActionHeaderSupplement={selectedForgeCloneToolbar}
                     onCopy={() => {
                       void navigator.clipboard.writeText(editContent).then(() => {
                         setCopied(true);
@@ -1518,7 +1331,6 @@ export default function ProposalsList({
                     onContentCommit={() => {
                       void handleSaveDocument();
                     }}
-                    actions={selectedActionCluster}
                   />
                 </div>
               </div>

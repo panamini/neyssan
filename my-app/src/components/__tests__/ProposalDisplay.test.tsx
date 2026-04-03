@@ -332,6 +332,7 @@ describe("ProposalDisplay", () => {
         onModeChange={vi.fn()}
         actions={<button type="button">Refine</button>}
         railStartAddon={<button type="button">Style inspector</button>}
+        detachedActionHeaderSupplement={<button type="button">Forge preview</button>}
       />,
     );
 
@@ -344,6 +345,12 @@ describe("ProposalDisplay", () => {
     const detachedRail = document.querySelector(
       ".dasti-proposal-sheet__header-rail",
     );
+    const detachedRails = document.querySelectorAll(
+      ".dasti-proposal-sheet__header-rail",
+    );
+    const detachedToolbar = document.querySelector(
+      ".dasti-proposal-sheet__header-rail .dasti-document-rail.dasti-proposal-saved-view-toolbar",
+    );
     const detachedAside = document.querySelector(
       ".dasti-proposal-sheet__heading--sidecar",
     );
@@ -355,10 +362,13 @@ describe("ProposalDisplay", () => {
     expect(detachedHeader).toBeTruthy();
     expect(detachedLayout).toBeTruthy();
     expect(detachedRail).toBeTruthy();
+    expect(detachedRails).toHaveLength(2);
+    expect(detachedToolbar).toBeTruthy();
     expect(detachedAside).toBeTruthy();
     expect(inlineHeading).toBeNull();
     expect(screen.getByRole("button", { name: "Refine" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Style inspector" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Forge preview" })).toBeInTheDocument();
     expect(
       (detachedHeader as HTMLElement).compareDocumentPosition(detachedRail as HTMLElement) &
         Node.DOCUMENT_POSITION_CONTAINED_BY,
