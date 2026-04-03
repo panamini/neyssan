@@ -1832,14 +1832,12 @@ export default function SectionEditor({
           </div>
         )}
 
-        {isSummaryModalOpen ? (
-            <SummaryModal
-            open={isSummaryModalOpen}
-            sectionId={String(section.id)}
-            item={summaryItem}
-            onClose={() => setSummaryModalOpen(false)}
-          />
-        ) : null}
+        <SummaryModal
+          open={isSummaryModalOpen}
+          sectionId={String(section.id)}
+          item={summaryItem}
+          onClose={() => setSummaryModalOpen(false)}
+        />
       </div>
     );
   }
@@ -4034,7 +4032,7 @@ export default function SectionEditor({
           </div>
         )}
         {/* Typed v1 modals for Experience/Education */}
-        {isV1Active && sectionType === "experience" && isExperienceModalOpen ? (
+        {isV1Active && sectionType === "experience" ? (
           <ExperienceModal
             open={isExperienceModalOpen}
             onClose={() => setExperienceModalOpen(false)}
@@ -4102,7 +4100,7 @@ export default function SectionEditor({
             }}
           />
         ) : null}
-        {isV1Active && sectionType === "education" && isEducationModalOpen ? (
+        {isV1Active && sectionType === "education" ? (
           <EducationModal
             open={isEducationModalOpen}
             onClose={() => setEducationModalOpen(false)}
