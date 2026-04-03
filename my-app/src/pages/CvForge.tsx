@@ -121,15 +121,13 @@ export function CvForge(): JSX.Element {
       }}
     >
       <div
-        className="dasti-page-shell"
+        className="dasti-page-shell dasti-page-shell--cv-forge"
         style={
           {
             "--page-shell-max-width": "100%",
-            "--page-shell-gap": "var(--space-1)",
-            "--page-shell-pad-top": "var(--space-1)",
+            "--page-shell-gap": "var(--space-2)",
             "--page-shell-pad-inline": "var(--space-1)",
             "--page-shell-pad-bottom": "var(--space-1)",
-            "--page-shell-pad-top-mobile": "var(--space-1)",
             "--page-shell-pad-inline-mobile": "var(--space-1)",
             "--page-shell-pad-bottom-mobile": "var(--space-1)",
           } as React.CSSProperties

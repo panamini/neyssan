@@ -111,15 +111,7 @@ type SidebarListItem = {
   onFollow?: () => void;
   onDelete?: () => void | Promise<void>;
   isActive?: boolean;
-};
-
-type SidebarWorkspaceItem = {
-  key: string;
-  kind: "Resume" | "Proposal";
-  title: string;
-  href: string;
-  onFollow?: () => void;
-  onDelete?: () => void | Promise<void>;
+  markerTone?: "muted";
 };
 
 function normalizeLabel(value: unknown): string {
@@ -227,6 +219,8 @@ function SidebarDocumentSection({
                       className={clsx(
                         "sb-section__document",
                         item.isActive && "sb-section__document--active",
+                        item.markerTone === "muted" &&
+                          "sb-section__document--muted-marker",
                       )}
                       onClick={item.onFollow}
                       aria-current={item.isActive ? "page" : undefined}
@@ -314,161 +308,6 @@ function SidebarDocumentSection({
   );
 }
 
-function SidebarWorkspaceSection({
-  primaryItem,
-  secondaryItem,
-}: {
-  primaryItem: SidebarWorkspaceItem | null;
-  secondaryItem: SidebarWorkspaceItem | null;
-}) {
-  const [confirmingDeleteKey, setConfirmingDeleteKey] = React.useState<
-    string | null
-  >(null);
-
-  if (!primaryItem && !secondaryItem) {
-    return null;
-  }
-
-  return (
-    <section className="sb-section sb-section--workspace" aria-label="Current">
-      <div className="sb-section__title">Current</div>
-      {primaryItem ? (
-        <div className="sb-workspace-card-shell card-group">
-          <Link
-            to={primaryItem.href}
-            className="sb-workspace-card sb-workspace-card--primary"
-            onClick={primaryItem.onFollow}
-          >
-            <span className="sb-workspace-card__eyebrow">{primaryItem.kind}</span>
-            <span className="sb-workspace-card__title">{primaryItem.title}</span>
-          </Link>
-          {primaryItem.onDelete ? (
-            <div
-              className="sb-item-actions"
-              aria-label={`Delete ${primaryItem.title}`}
-            >
-              {confirmingDeleteKey === primaryItem.key ? (
-                <>
-                  <button
-                    type="button"
-                    className="sb-item-action sb-item-action--confirm"
-                    title={`Confirm delete ${primaryItem.title}`}
-                    aria-label={`Confirm delete ${primaryItem.title}`}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      void Promise.resolve(primaryItem.onDelete?.())
-                        .catch(() => undefined)
-                        .finally(() => {
-                          setConfirmingDeleteKey(null);
-                        });
-                    }}
-                  >
-                    <Check size={12} strokeWidth={2.4} aria-hidden="true" />
-                  </button>
-                  <button
-                    type="button"
-                    className="sb-item-action"
-                    title={`Cancel delete ${primaryItem.title}`}
-                    aria-label={`Cancel delete ${primaryItem.title}`}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      setConfirmingDeleteKey(null);
-                    }}
-                  >
-                    <X size={12} strokeWidth={2} aria-hidden="true" />
-                  </button>
-                </>
-              ) : (
-                <button
-                  type="button"
-                  className="sb-item-action card-delete-btn"
-                  title={`Delete ${primaryItem.title}`}
-                  aria-label={`Delete ${primaryItem.title}`}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    setConfirmingDeleteKey(primaryItem.key);
-                  }}
-                >
-                  <Trash size={12} strokeWidth={1.8} aria-hidden="true" />
-                </button>
-              )}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-      {secondaryItem ? (
-        <div className="sb-workspace-card-shell card-group">
-          <Link
-            to={secondaryItem.href}
-            className="sb-workspace-card sb-workspace-card--secondary"
-            onClick={secondaryItem.onFollow}
-          >
-            <span className="sb-workspace-card__eyebrow">{secondaryItem.kind}</span>
-            <span className="sb-workspace-card__title">{secondaryItem.title}</span>
-          </Link>
-          {secondaryItem.onDelete ? (
-            <div
-              className="sb-item-actions"
-              aria-label={`Delete ${secondaryItem.title}`}
-            >
-              {confirmingDeleteKey === secondaryItem.key ? (
-                <>
-                  <button
-                    type="button"
-                    className="sb-item-action sb-item-action--confirm"
-                    title={`Confirm delete ${secondaryItem.title}`}
-                    aria-label={`Confirm delete ${secondaryItem.title}`}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      void Promise.resolve(secondaryItem.onDelete?.())
-                        .catch(() => undefined)
-                        .finally(() => {
-                          setConfirmingDeleteKey(null);
-                        });
-                    }}
-                  >
-                    <Check size={12} strokeWidth={2.4} aria-hidden="true" />
-                  </button>
-                  <button
-                    type="button"
-                    className="sb-item-action"
-                    title={`Cancel delete ${secondaryItem.title}`}
-                    aria-label={`Cancel delete ${secondaryItem.title}`}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      setConfirmingDeleteKey(null);
-                    }}
-                  >
-                    <X size={12} strokeWidth={2} aria-hidden="true" />
-                  </button>
-                </>
-              ) : (
-                <button
-                  type="button"
-                  className="sb-item-action card-delete-btn"
-                  title={`Delete ${secondaryItem.title}`}
-                  aria-label={`Delete ${secondaryItem.title}`}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    setConfirmingDeleteKey(secondaryItem.key);
-                  }}
-                >
-                  <Trash size={12} strokeWidth={1.8} aria-hidden="true" />
-                </button>
-              )}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-    </section>
-  );
-}
 
 function SidebarRailButton({
   label,
@@ -877,7 +716,6 @@ export const Sidebar: React.FC = () => {
   const recentResumeItems = React.useMemo(
     () =>
       resumeDocs
-        .filter((doc) => doc.key !== activeResumeKey)
         .slice(0, MAX_RECENT_ITEMS)
         .map((doc) => ({
           key: doc.key,
@@ -983,19 +821,12 @@ export const Sidebar: React.FC = () => {
     hasStoredProposalDraft || hasStoredProposalComposeDraft;
   const highlightedSavedProposalKey =
     isProposalSavedView && selectedProposalId ? selectedProposalId : null;
-  const activeGeneratedProposalKey =
-    hasEditableProposalDraft && effectiveProposalOutputDraft?.generatedProposalId
-      ? String(effectiveProposalOutputDraft.generatedProposalId)
-      : null;
 
   let activeProposalKey: string | null = null;
   let activeProposalRawTitle = "";
   let activeProposalHref = "/proposal";
 
-  if (hasEditableProposalDraft) {
-    activeProposalKey = "__draft__";
-    activeProposalRawTitle = outputDraftTitle || composeJobTitle;
-  } else if (isProposalSavedView && selectedProposalId) {
+  if (isProposalSavedView && selectedProposalId) {
     activeProposalKey = selectedProposalId;
     activeProposalRawTitle =
       normalizeLabel(
@@ -1003,10 +834,22 @@ export const Sidebar: React.FC = () => {
           ?.rawTitle,
       ) || "";
     activeProposalHref = buildSavedProposalHref(selectedProposalId);
+  } else if (hasEditableProposalDraft) {
+    activeProposalKey = "__draft__";
+    activeProposalRawTitle = outputDraftTitle || composeJobTitle;
   }
 
   const proposalDocsForTitles = React.useMemo(() => {
     const docs = proposalDocs.map(({ key, rawTitle }) => ({ key, rawTitle }));
+    if (
+      hasEditableProposalDraft &&
+      !docs.some((doc) => doc.key === "__draft__")
+    ) {
+      docs.unshift({
+        key: "__draft__",
+        rawTitle: outputDraftTitle || composeJobTitle,
+      });
+    }
     if (activeProposalKey && !docs.some((doc) => doc.key === activeProposalKey)) {
       docs.unshift({
         key: activeProposalKey,
@@ -1014,7 +857,14 @@ export const Sidebar: React.FC = () => {
       });
     }
     return docs;
-  }, [activeProposalKey, activeProposalRawTitle, proposalDocs]);
+  }, [
+    activeProposalKey,
+    activeProposalRawTitle,
+    composeJobTitle,
+    hasEditableProposalDraft,
+    outputDraftTitle,
+    proposalDocs,
+  ]);
 
   const proposalTitles = React.useMemo(
     () =>
@@ -1032,105 +882,50 @@ export const Sidebar: React.FC = () => {
 
   const recentProposalItems = React.useMemo(
     () =>
-      proposalDocs
-        .filter(
-          (doc) =>
-            doc.key !== activeProposalKey &&
-            (isProposalSavedView || doc.key !== activeGeneratedProposalKey),
-        )
+      proposalDocsForTitles
         .slice(0, MAX_RECENT_ITEMS)
         .map((doc) => ({
           key: doc.key,
           title: proposalTitles.get(doc.key) ?? "Untitled Proposal",
-          href: buildSavedProposalHref(doc.key),
-          onDelete: () => handleDeleteSavedProposal(doc.proposalId),
-          isActive: highlightedSavedProposalKey === doc.key,
+          href:
+            doc.key === "__draft__" ? "/proposal" : buildSavedProposalHref(doc.key),
+          onFollow:
+            doc.key === "__draft__" ? handleOpenProposalWorkspace : undefined,
+          onDelete:
+            doc.key === "__draft__"
+              ? () => handleDeleteProposalWorkspace()
+              : () => {
+                  const matchingProposal = sortedProposals.find(
+                    (proposal) => String(proposal._id) === doc.key,
+                  );
+                  if (matchingProposal) {
+                    return handleDeleteSavedProposal(matchingProposal._id);
+                  }
+                  return undefined;
+                },
+          isActive:
+            doc.key === "__draft__"
+              ? activeProposalKey === "__draft__"
+              : highlightedSavedProposalKey === doc.key,
+          markerTone:
+            doc.key === "__draft__" && activeProposalKey !== "__draft__"
+              ? "muted"
+              : undefined,
         })),
     [
       activeProposalKey,
-      activeGeneratedProposalKey,
       handleDeleteSavedProposal,
+      handleDeleteProposalWorkspace,
+      handleOpenProposalWorkspace,
       highlightedSavedProposalKey,
-      isProposalSavedView,
-      proposalDocs,
+      proposalDocsForTitles,
       proposalTitles,
+      sortedProposals,
     ],
   );
 
   const proposalTotalCount =
     proposalCount ?? proposalDocs.length;
-
-  const proposalWorkspaceItem = React.useMemo<SidebarWorkspaceItem | null>(
-    () =>
-      hasEditableProposalDraft && activeProposalTitle
-        ? {
-            key: "__proposal_draft__",
-            kind: "Proposal",
-            title: activeProposalTitle,
-            href: "/proposal",
-            onFollow: handleOpenProposalWorkspace,
-            onDelete: () => {
-              void handleDeleteProposalWorkspace();
-            },
-          }
-        : null,
-    [
-      activeProposalTitle,
-      handleDeleteProposalWorkspace,
-      handleOpenProposalWorkspace,
-      hasEditableProposalDraft,
-    ],
-  );
-  const resumeWorkspaceItem = React.useMemo<SidebarWorkspaceItem | null>(
-    () =>
-      activeResumeKey && activeResumeTitle
-        ? {
-            key: activeResumeKey,
-            kind: "Resume",
-            title: activeResumeTitle,
-            href: activeResumeHref,
-            onFollow: () => {
-              queueResumeLoad(activeResumeKey);
-            },
-            onDelete: () => handleDeleteResume(activeResumeKey),
-          }
-        : null,
-    [
-      activeResumeHref,
-      activeResumeKey,
-      activeResumeTitle,
-      handleDeleteResume,
-      queueResumeLoad,
-    ],
-  );
-
-  const primaryWorkspaceItem = React.useMemo<SidebarWorkspaceItem | null>(() => {
-    if (isResumeRoute) {
-      return resumeWorkspaceItem ?? proposalWorkspaceItem;
-    }
-    if (isProposalRoute) {
-      return proposalWorkspaceItem ?? resumeWorkspaceItem;
-    }
-    return proposalWorkspaceItem ?? resumeWorkspaceItem;
-  }, [isProposalRoute, isResumeRoute, proposalWorkspaceItem, resumeWorkspaceItem]);
-
-  const secondaryWorkspaceItem = React.useMemo<SidebarWorkspaceItem | null>(() => {
-    if (!primaryWorkspaceItem) {
-      return null;
-    }
-
-    if (primaryWorkspaceItem.kind === "Proposal") {
-      return resumeWorkspaceItem &&
-        resumeWorkspaceItem.key !== primaryWorkspaceItem.key
-        ? resumeWorkspaceItem
-        : null;
-    }
-
-    return proposalWorkspaceItem &&
-      proposalWorkspaceItem.key !== primaryWorkspaceItem.key
-      ? proposalWorkspaceItem
-      : null;
-  }, [primaryWorkspaceItem, proposalWorkspaceItem, resumeWorkspaceItem]);
 
   const handleCreateResume = React.useCallback(async () => {
     await createNewCv(undefined, { forceV1: true });
@@ -1220,11 +1015,6 @@ export const Sidebar: React.FC = () => {
         </nav>
       ) : (
         <nav className="sb__nav sb__nav--stack" aria-label="Primary sidebar">
-          <SidebarWorkspaceSection
-            primaryItem={primaryWorkspaceItem}
-            secondaryItem={secondaryWorkspaceItem}
-          />
-
           <SidebarDocumentSection
             sectionLabel="Resumes"
             hasDocuments={hasResumeDocuments}

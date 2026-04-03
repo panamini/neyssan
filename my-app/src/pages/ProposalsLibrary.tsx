@@ -131,7 +131,6 @@ export function ProposalsLibrary(): JSX.Element {
       >
         <div className="dasti-page-header">
           <div className="dasti-stack">
-            <div className="dasti-stack__eyebrow">Write</div>
             <h1 className="dasti-stack__title">All letters & proposals</h1>
           </div>
           <div className="dasti-page-actions">

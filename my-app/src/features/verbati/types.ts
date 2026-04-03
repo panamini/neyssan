@@ -1,3 +1,7 @@
+import type {
+  VerbatiFontPairId,
+  VerbatiTypographyPreset,
+} from "./fontCatalog";
 import type { CvDocument } from "../../types/cvDocument";
 
 export type VerbatiLayoutPreset =
@@ -9,7 +13,6 @@ export type VerbatiLayoutPreset =
   | "soft-ribbon"
   | "slate-column"
   | "quire";
-export type VerbatiTypographyPreset = "signature" | "engaging" | "expert";
 export type VerbatiPalettePreset =
   | "sauge"
   | "ocre"
@@ -25,6 +28,8 @@ export interface VerbatiStylePreset {
   palette: VerbatiPalettePreset;
   accentHex?: string;
 }
+
+export type { VerbatiFontPairId, VerbatiTypographyPreset };
 
 export type CvDocumentWithVerbatiStyle = CvDocument & {
   metadata: CvDocument["metadata"] & {

@@ -2,6 +2,13 @@ import type React from "react";
 import type { CvDocument } from "../../types/cvDocument";
 import type { ProposalTemplateId } from "../../../convex/lib/proposals/renderTemplates";
 import type { ResumeLayoutVariantId } from "./resume/resume.types";
+import {
+  getVerbatiFontPairLabel,
+  getVerbatiFontPairOption,
+  resolveVerbatiFontPairId,
+  VERBATI_FONT_PAIR_OPTIONS,
+  type VerbatiFontPairOption,
+} from "./fontCatalog";
 import type {
   VerbatiLayoutPreset,
   VerbatiPalettePreset,
@@ -15,13 +22,7 @@ type LayoutOption = {
   description: string;
 };
 
-type TypographyOption = {
-  id: VerbatiTypographyPreset;
-  name: string;
-  description: string;
-  headingFamily: string;
-  bodyFamily: string;
-};
+type TypographyOption = VerbatiFontPairOption;
 
 type PaletteOption = {
   id: Exclude<VerbatiPalettePreset, "custom">;
@@ -31,7 +32,7 @@ type PaletteOption = {
 
 export const DEFAULT_VERBATI_STYLE: VerbatiStylePreset = {
   layout: "swiss",
-  typography: "signature",
+  typography: "quiet-editorial",
   palette: "sauge",
 };
 
@@ -68,28 +69,7 @@ export const VERBATI_LAYOUT_OPTIONS: LayoutOption[] = [
 ];
 
 export const VERBATI_TYPOGRAPHY_OPTIONS: TypographyOption[] = [
-  {
-    id: "signature",
-    name: "Signature",
-    description: "Fraunces heading with a calm sans body.",
-    headingFamily: '"Fraunces", serif',
-    bodyFamily: '"Source Sans 3", system-ui, sans-serif',
-  },
-  {
-    id: "engaging",
-    name: "Engaging",
-    description: "Source Serif display with a full editorial text voice.",
-    headingFamily: '"Source Serif 4", serif',
-    bodyFamily: '"Source Serif 4", serif',
-  },
-  {
-    id: "expert",
-    name: "Expert",
-    description: "IBM Plex Mono display over a sharper utility sans.",
-    headingFamily:
-      '"IBM Plex Mono", source-code-pro, Menlo, Monaco, Consolas, monospace',
-    bodyFamily: '"IBM Plex Sans", "Source Sans 3", system-ui, sans-serif',
-  },
+  ...VERBATI_FONT_PAIR_OPTIONS,
 ];
 
 export const VERBATI_PALETTE_OPTIONS: PaletteOption[] = [
@@ -191,10 +171,7 @@ function withAlpha(hex: string, alpha: number): string {
 function getTypographyOption(
   preset: VerbatiTypographyPreset,
 ): TypographyOption {
-  return (
-    VERBATI_TYPOGRAPHY_OPTIONS.find((option) => option.id === preset) ??
-    VERBATI_TYPOGRAPHY_OPTIONS[0]
-  );
+  return getVerbatiFontPairOption(preset);
 }
 
 const DEFAULT_VERBATI_ACCENT = VERBATI_PALETTE_OPTIONS[0].accentHex;
@@ -249,13 +226,7 @@ export function resolveVerbatiStyle(
       ? safeCandidate.layout
       : DEFAULT_VERBATI_STYLE.layout;
 
-  const typography =
-    safeCandidate.typography &&
-    VERBATI_TYPOGRAPHY_OPTIONS.some(
-      (option) => option.id === safeCandidate.typography,
-    )
-      ? safeCandidate.typography
-      : DEFAULT_VERBATI_STYLE.typography;
+  const typography = resolveVerbatiFontPairId(safeCandidate.typography);
 
   const accentHex =
     paletteOption === "custom"
@@ -371,7 +342,7 @@ export function serializeVerbatiStyle(
 ): VerbatiStylePreset {
   return {
     layout: style.layout,
-    typography: style.typography,
+    typography: resolveVerbatiFontPairId(style.typography),
     palette: style.palette,
     accentHex:
       style.palette === "custom"
@@ -410,7 +381,13 @@ export function stylesEqual(
     normalizedLeft.layout === normalizedRight.layout &&
     normalizedLeft.typography === normalizedRight.typography &&
     normalizedLeft.palette === normalizedRight.palette &&
-    String(normalizedLeft.accentHex ?? "") ===
+      String(normalizedLeft.accentHex ?? "") ===
       String(normalizedRight.accentHex ?? "")
   );
+}
+
+export function getVerbatiTypographyLabel(
+  preset: VerbatiTypographyPreset,
+): string {
+  return getVerbatiFontPairLabel(preset);
 }

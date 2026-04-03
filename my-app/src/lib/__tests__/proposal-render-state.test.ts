@@ -19,14 +19,14 @@ describe("resolveProposalRenderState", () => {
     });
 
     expect(result.stylePreset.layout).toBe("modernist");
-    expect(result.stylePreset.typography).toBe("expert");
+    expect(result.stylePreset.typography).toBe("mono-signal");
     expect(result.templateId).toBe("modernist_signal");
   });
 
   it("falls back to the active cv style and its proposal twin for legacy proposals", () => {
     const activeCvStylePreset = {
       layout: "quire",
-      typography: "engaging",
+      typography: "soft-serif",
       palette: "bordeaux",
     } as const;
 
@@ -57,7 +57,7 @@ describe("resolveProposalRenderState", () => {
     });
 
     expect(result.stylePreset.layout).toBe("two-column");
-    expect(result.stylePreset.typography).toBe("expert");
+    expect(result.stylePreset.typography).toBe("mono-signal");
     expect(result.templateId).toBe("editorial_wide");
   });
 });
