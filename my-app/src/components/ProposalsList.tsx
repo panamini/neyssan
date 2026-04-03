@@ -1314,19 +1314,12 @@ export default function ProposalsList({
                     documentMeta={selectedHeaderMeta}
                     showDocumentCaption={false}
                     mode={selectedOutputMode}
+                    showModeToggle={false}
                     onModeChange={setSelectedOutputMode}
-                    showModeToggle
                     showZoomControls={false}
                     detachedActionHeader
                     documentHeaderMode="actions-only"
                     detachedActionHeaderSupplement={selectedForgeCloneToolbar}
-                    onCopy={() => {
-                      void navigator.clipboard.writeText(editContent).then(() => {
-                        setCopied(true);
-                        setTimeout(() => setCopied(false), 1500);
-                      });
-                    }}
-                    copyFeedback={copied ? "copied" : "idle"}
                     onContentChange={setEditContent}
                     onContentCommit={() => {
                       void handleSaveDocument();

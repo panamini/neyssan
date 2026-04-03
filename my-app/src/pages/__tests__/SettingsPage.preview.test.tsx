@@ -75,7 +75,7 @@ describe("SettingsPage preview controls", () => {
   it("shows a capped calm font drawer with five pair options", async () => {
     const user = userEvent.setup();
 
-    render(<SettingsPage />);
+    const { container } = render(<SettingsPage />);
 
     await user.click(screen.getByRole("button", { name: /Fraunces Bold/i }));
 
@@ -84,6 +84,7 @@ describe("SettingsPage preview controls", () => {
 
     expect(optionButtons).toHaveLength(5);
     expect(within(drawer).queryByRole("button", { name: /Special Elite/i })).toBeNull();
+    expect(container.querySelector(".dasti-settings-font-carousel")).toBeTruthy();
   });
 
   it("switches style cards and refreshes the preview label", async () => {
@@ -109,5 +110,13 @@ describe("SettingsPage preview controls", () => {
       });
     });
     expect(previewEyebrow()).toHaveTextContent("Editorial");
+  });
+
+  it("renders mini layout previews inside the style cards", () => {
+    const { container } = render(<SettingsPage />);
+
+    expect(
+      container.querySelectorAll(".dasti-settings-style-card__mini").length,
+    ).toBeGreaterThanOrEqual(3);
   });
 });

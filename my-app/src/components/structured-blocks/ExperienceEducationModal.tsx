@@ -31,12 +31,9 @@ import { EditorToolbar } from "../remirror-editor/components/EditorToolbar";
 import { Loader2, Trash, Wand2, X } from "@/lib/icons";
 import { Button } from "../ui/button";
 import { useToast } from "../ui/toast";
-import { useCloseOnEscape } from "../../hooks/use-close-on-escape";
-import { BodyPortal } from "@/components/ui/body-portal";
+import { CvModalShell } from "./CvModalShell";
 import { useCvAiCapabilities } from "../../hooks/use-cv-ai-capabilities";
-import FloatingAiToolbar, {
-  type InlineAiActionId,
-} from "../FloatingAiToolbar";
+import FloatingAiToolbar, { type InlineAiActionId } from "../FloatingAiToolbar";
 import {
   getDomSelectionState,
   isInlineAiToolbarActiveElement,
@@ -213,7 +210,9 @@ function splitPlainTextIntoLines(text: string): string[] {
 }
 
 function formatDiffLines(value: string[]): string {
-  return value.length > 0 ? value.map((line) => `• ${line}`).join("\n") : "No existing content.";
+  return value.length > 0
+    ? value.map((line) => `• ${line}`).join("\n")
+    : "No existing content.";
 }
 
 function ModalAiDiffCard({
@@ -384,7 +383,9 @@ const RichEditor = forwardRef<
       }
       const view = (manager as any)?.view;
       const selection = view?.state?.selection;
-      const nextSelection = getDomSelectionState(view?.dom as HTMLElement | null);
+      const nextSelection = getDomSelectionState(
+        view?.dom as HTMLElement | null,
+      );
 
       if (!nextSelection || !selection || selection.empty) {
         if (isInlineAiToolbarActiveElement()) {
@@ -511,71 +512,53 @@ function ModalShell({
   primaryAction?: { label: string; onClick: () => void; disabled?: boolean };
   footerNote?: string;
 }) {
-  useCloseOnEscape({ open, onClose });
-
-  if (!open) return null;
   return (
-    <BodyPortal>
+    <CvModalShell open={open} onClose={onClose}>
       <div
-        className="fixed inset-0 z-[10000] flex items-center justify-center p-4"
-        onMouseDownCapture={(e) => e.stopPropagation()}
-        onPointerDownCapture={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className="dasti-modal"
+        onClick={(e) => e.stopPropagation()}
       >
-        <div
-          className="absolute inset-0"
-          onClick={onClose}
-          aria-hidden
-          style={{
-            background: "hsla(30,12%,11%,.32)",
-            backdropFilter: "blur(8px) saturate(1.2)",
-          }}
-        />
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label={title}
-          className="dasti-modal"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="dasti-modal-header">
-            <div className="dasti-modal-heading">
-              <h2 className="dasti-modal-title">{title}</h2>
-              {subtitle ? (
-                <p className="dasti-modal-subtitle">{subtitle}</p>
-              ) : null}
-            </div>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Close"
-              className="dasti-modal-close"
-            >
-              <X className="w-5 h-5" />
-            </button>
+        <div className="dasti-modal-header">
+          <div className="dasti-modal-heading">
+            <h2 className="dasti-modal-title">{title}</h2>
+            {subtitle ? (
+              <p className="dasti-modal-subtitle">{subtitle}</p>
+            ) : null}
           </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="dasti-modal-close"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
 
-          <div className="dasti-modal-body">{children}</div>
+        <div className="dasti-modal-body">{children}</div>
 
-          <div className="dasti-modal-footer">
-            <div className="dasti-modal-footer-note">
-              {footerNote ?? "Applied to the active resume."}
-            </div>
-            <div className="dasti-modal-actions">
-              {primaryAction ? (
-                <Button
-                  type="button"
-                  variant="primary"
-                  onClick={primaryAction.onClick}
-                  disabled={primaryAction.disabled}
-                >
-                  {primaryAction.label}
-                </Button>
-              ) : null}
-            </div>
+        <div className="dasti-modal-footer">
+          <div className="dasti-modal-footer-note">
+            {footerNote ?? "Applied to the active resume."}
+          </div>
+          <div className="dasti-modal-actions">
+            {primaryAction ? (
+              <Button
+                type="button"
+                variant="primary"
+                onClick={primaryAction.onClick}
+                disabled={primaryAction.disabled}
+              >
+                {primaryAction.label}
+              </Button>
+            ) : null}
           </div>
         </div>
       </div>
-    </BodyPortal>
+    </CvModalShell>
   );
 }
 
@@ -826,7 +809,9 @@ export function ExperienceModal({
       item.position ? `Role: ${item.position}` : null,
       item.company ? `Company: ${item.company}` : null,
       item.location ? `Location: ${item.location}` : null,
-      item.description ? `Description: ${plainTextFromValue(item.description)}` : null,
+      item.description
+        ? `Description: ${plainTextFromValue(item.description)}`
+        : null,
     ].filter(Boolean) as string[];
     const bullets = getResponsibilityLines(item, doc);
     if (bullets.length > 0) {

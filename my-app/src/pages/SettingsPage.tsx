@@ -241,6 +241,22 @@ export function SettingsPage(): JSX.Element {
     VERBATI_FONT_PAIR_OPTIONS[0];
   const selectedStyleOption =
     STYLE_OPTIONS.find((option) => option.id === localStyle) ?? STYLE_OPTIONS[0];
+  const renderStyleMiniPreview = React.useCallback((option: StyleOption) => {
+    const previewClassName = [
+      "dasti-settings-style-card__mini",
+      `dasti-settings-style-card__mini--${option.id}`,
+    ].join(" ");
+
+    return (
+      <div className={previewClassName} aria-hidden="true">
+        <span className="dasti-settings-style-card__mini-header" />
+        <span className="dasti-settings-style-card__mini-title" />
+        <span className="dasti-settings-style-card__mini-body dasti-settings-style-card__mini-body--primary" />
+        <span className="dasti-settings-style-card__mini-body" />
+        <span className="dasti-settings-style-card__mini-body" />
+      </div>
+    );
+  }, []);
 
   const renderFontPairLabels = React.useCallback(
     (option: VerbatiFontPairOption) => (
@@ -409,7 +425,7 @@ export function SettingsPage(): JSX.Element {
             </div>
 
             <div className="dasti-settings-section dasti-settings-section--appearance">
-              <div className="dasti-settings-section__label">Default appearance</div>
+              <div className="dasti-settings-section__label">Default style</div>
               <div className="dasti-settings-appearance-toolbar dasti-toolbar-drawer-surface">
                 <div className="dasti-settings-appearance-group">
                   <div className="dasti-settings-appearance-label">Font pair</div>
@@ -523,6 +539,7 @@ export function SettingsPage(): JSX.Element {
                               )}
                             </span>
                           </span>
+                          {renderStyleMiniPreview(option)}
                           <span className="dasti-settings-style-card__description">
                             {option.description}
                           </span>

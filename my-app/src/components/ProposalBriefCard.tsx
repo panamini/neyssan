@@ -1,5 +1,5 @@
 import React from "react";
-import { ChevronUp } from "@/lib/icons";
+import { ChevronDown } from "@/lib/icons";
 
 type ProposalBriefCardProps = {
   documentTitle: string;
@@ -47,7 +47,7 @@ export function ProposalBriefCard({
               onClick={onToggleBrief}
               aria-label="Expand"
             >
-              <ChevronUp size={14} strokeWidth={1.7} aria-hidden="true" />
+              <ChevronDown size={14} strokeWidth={1.7} aria-hidden="true" />
             </button>
           </div>
         </div>
