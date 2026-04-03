@@ -11,6 +11,8 @@ const viewportCenteringSpy = vi.fn();
 vi.mock("../../../hooks/use-document-stage-layout", () => ({
   useDocumentStageLayout: () => ({
     fitScale: 1,
+    availableWidth: 794,
+    availableHeight: 1123,
     stageWidth: 794,
     stageHeight: 1123,
     pageWidth: 794,
@@ -106,14 +108,19 @@ describe("VerbatiResumePreview", () => {
       "dasti-proposal-sheet-frame--resume-workspace",
     );
     expect(
-      screen.getByRole("button", { name: "Open zoom controls" }),
+      screen.getByRole("button", { name: "Fit page" }),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Fit width" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "100 percent zoom" }),
     ).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Page count")).toHaveTextContent("1 page");
+    expect(screen.getByText("100%")).toBeInTheDocument();
   });
 
-  it("keeps the restored zoom drawer centered on the full page in workspace mode", () => {
+  it("keeps the explicit fit controls centered on the full page in workspace mode", () => {
     render(
       <VerbatiResumePreview
         data={resumeMock}
@@ -122,7 +129,6 @@ describe("VerbatiResumePreview", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Open zoom controls" }));
     fireEvent.click(screen.getByRole("button", { name: "Fit page" }));
 
     const lastCall =

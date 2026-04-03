@@ -77,6 +77,13 @@ type SavedProposalRecord = {
 };
 
 type SavedProposalViewMode = "focused" | "stack" | "library";
+type SavedProposalSortOrder = "newest" | "oldest" | "title";
+type SavedProposalToneFilter =
+  | "all"
+  | "signature"
+  | "expert"
+  | "engaging"
+  | "auto";
 
 type RegeneratePayload = {
   jobTitle: string;
@@ -189,16 +196,29 @@ function shouldPreserveLeadBreak(line: string): boolean {
   return /[:,]$/.test(trimmed) && trimmed.split(/\s+/).length <= 6;
 }
 
+function isGenericSalutation(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed) return false;
+  return /^(dear|hello|hi|greetings|bonjour|bonsoir)\b[\s,!:-]*/i.test(
+    trimmed,
+  );
+}
+
 function buildProposalSnippet(value: unknown): string {
   if (typeof value !== "string") return "";
   const paragraphs = value
     .replace(/\r/g, "\n")
     .split(/\n\s*\n/)
     .map((paragraph, index) => {
-      const lines = paragraph
+      const rawLines = paragraph
         .split("\n")
         .map((line) => line.trim())
         .filter(Boolean);
+
+      const lines =
+        index === 0 && rawLines.length > 0 && isGenericSalutation(rawLines[0])
+          ? rawLines.slice(1)
+          : rawLines;
 
       if (lines.length === 0) return "";
       if (
@@ -318,14 +338,18 @@ function toneLabel(preset: ProposalVoicePreset | null): string {
   return getVoicePresetDisplayLabel(preset);
 }
 
-function buildProposalMeta(proposal: SavedProposalRecord | null): string {
+function buildProposalMeta(
+  proposal: SavedProposalRecord | null,
+  options?: { includeTone?: boolean },
+): string {
   if (!proposal) return "";
 
   const proposalDate = formatUiDate(proposal._creationTime) ?? "";
+  const includeTone = options?.includeTone ?? true;
 
   return [
     typeLabel(getStoredProposalType(proposal)),
-    toneLabel(getStoredVoicePreset(proposal)),
+    includeTone ? toneLabel(getStoredVoicePreset(proposal)) : null,
     proposalDate,
   ]
     .filter(Boolean)
@@ -484,6 +508,11 @@ export default function ProposalsList({
     React.useState<string | null>(null);
   const [selectedRefineVoicePreset, setSelectedRefineVoicePreset] =
     React.useState<ProposalVoicePreset | null>(DEFAULT_PROPOSAL_VOICE_PRESET);
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const [toneFilter, setToneFilter] =
+    React.useState<SavedProposalToneFilter>("all");
+  const [sortOrder, setSortOrder] =
+    React.useState<SavedProposalSortOrder>("newest");
   const [isSelectionPending, startSelectionTransition] = React.useTransition();
   const { showToast } = useToast();
   const activeCvStylePreset = React.useMemo(
@@ -617,6 +646,7 @@ export default function ProposalsList({
   ]);
 
   const displayList = localProposals ?? savedProposals;
+  const savedProposalCount = displayList.length;
   const selected = displayList.find((p) => p._id === selectedId) ?? null;
   const resolveSavedProposalRenderState = React.useCallback(
     (proposal: SavedProposalRecord | null) => {
@@ -674,13 +704,53 @@ export default function ProposalsList({
       activeCvStylePreset,
     });
   }, [activeCvStylePreset, selected, selectedEffectiveStylePreset]);
+  const filteredProposalList = React.useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+
+    return [...displayList]
+      .filter((proposal) => {
+        if (
+          toneFilter !== "all" &&
+          (toneFilter === "auto"
+            ? getStoredRequestedVoicePreset(proposal) !== null
+            : getStoredVoicePreset(proposal) !== toneFilter)
+        ) {
+          return false;
+        }
+
+        if (!normalizedQuery) {
+          return true;
+        }
+
+        const searchableText = [
+          proposal.title,
+          proposal.content,
+          proposal.metadata?.sourceJobDescription,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+
+        return searchableText.includes(normalizedQuery);
+      })
+      .sort((left, right) => {
+        if (sortOrder === "oldest") {
+          return left._creationTime - right._creationTime;
+        }
+        if (sortOrder === "title") {
+          return (left.title ?? "").localeCompare(right.title ?? "");
+        }
+        return right._creationTime - left._creationTime;
+      });
+  }, [displayList, searchQuery, sortOrder, toneFilter]);
+  const filteredProposalCount = filteredProposalList.length;
   const proposalStack = React.useMemo(() => {
-    if (!selected) return [];
+    if (!selected) return filteredProposalList;
     return [
       selected,
-      ...displayList.filter((proposal) => proposal._id !== selected._id),
+      ...filteredProposalList.filter((proposal) => proposal._id !== selected._id),
     ];
-  }, [displayList, selected]);
+  }, [filteredProposalList, selected]);
   const visibleSecondaryProposals = React.useMemo(
     () => proposalStack.slice(1, 1 + visibleSecondaryCount),
     [proposalStack, visibleSecondaryCount],
@@ -1124,14 +1194,23 @@ export default function ProposalsList({
   const selectedHeaderTitle =
     editTitle.trim() || (selected?.title || "").trim();
   const selectedHeaderMeta = selected
-    ? buildProposalMeta(selected) || "Saved proposal"
+    ? buildProposalMeta(selected, { includeTone: false }) || "Saved proposal"
     : "";
   const selectedTonePendingRefresh = selected
     ? selectedRefineVoicePreset !== getStoredRequestedVoicePreset(selected)
     : false;
+  const selectedToneLabel = selected ? toneLabel(getStoredVoicePreset(selected)) : "";
 
   const selectedSidebarHeading = selected ? (
     <div className="dasti-proposal-library-sidebar__heading">
+      <div className="dasti-proposal-library-sidebar__eyebrow-row">
+        <div className="dasti-proposal-library-sidebar__eyebrow">
+          Saved proposals
+        </div>
+        <span className="dasti-count-pill" aria-label={`${savedProposalCount} saved proposals`}>
+          {savedProposalCount}
+        </span>
+      </div>
       {selectedOutputMode === "edit" ? (
         <input
           type="text"
@@ -1152,6 +1231,11 @@ export default function ProposalsList({
         />
       ) : selectedHeaderTitle ? (
         <h3 className="dasti-proposal-sheet__title">{selectedHeaderTitle}</h3>
+      ) : null}
+      {selectedToneLabel ? (
+        <div className="dasti-proposal-library-sidebar__tone-row">
+          <span className="dasti-proposal-tone-badge">{selectedToneLabel}</span>
+        </div>
       ) : null}
       {selectedHeaderMeta ? (
         <p className="dasti-proposal-sheet__meta">{selectedHeaderMeta}</p>
@@ -1216,6 +1300,61 @@ export default function ProposalsList({
         minWidth: 0,
       }}
     >
+      {savedProposalCount > 0 ? (
+        <div className="dasti-proposal-library-utility-row">
+          <label className="dasti-proposal-library-utility-row__search">
+            <span className="sr-only">Search saved proposals</span>
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search saved proposals"
+              aria-label="Search saved proposals"
+              className="dasti-proposal-library-utility-row__input"
+            />
+          </label>
+          <label className="dasti-proposal-library-utility-row__select-shell">
+            <span className="sr-only">Filter saved proposals by tone</span>
+            <select
+              value={toneFilter}
+              onChange={(event) =>
+                setToneFilter(event.target.value as SavedProposalToneFilter)
+              }
+              aria-label="Filter saved proposals by tone"
+              className="dasti-select dasti-select--sm"
+            >
+              <option value="all">All tones</option>
+              <option value="signature">Natural</option>
+              <option value="expert">Formal</option>
+              <option value="engaging">Warm</option>
+              <option value="auto">Auto</option>
+            </select>
+          </label>
+          <label className="dasti-proposal-library-utility-row__select-shell">
+            <span className="sr-only">Sort saved proposals</span>
+            <select
+              value={sortOrder}
+              onChange={(event) =>
+                setSortOrder(event.target.value as SavedProposalSortOrder)
+              }
+              aria-label="Sort saved proposals"
+              className="dasti-select dasti-select--sm"
+            >
+              <option value="newest">Newest first</option>
+              <option value="oldest">Oldest first</option>
+              <option value="title">Title</option>
+            </select>
+          </label>
+          <span
+            className="dasti-proposal-library-utility-row__count"
+            aria-label={`${filteredProposalCount} filtered proposals`}
+          >
+            {filteredProposalCount === savedProposalCount
+              ? `${savedProposalCount} saved`
+              : `${filteredProposalCount} of ${savedProposalCount}`}
+          </span>
+        </div>
+      ) : null}
       <div
         ref={gestureSurfaceRef}
         className={[
@@ -1235,11 +1374,11 @@ export default function ProposalsList({
               {visibleLibraryProposals.map((proposal) => {
                 const snippet = buildProposalSnippet(proposal.content);
                 const isSelectedCard = proposal._id === selected._id;
+                const proposalToneLabel = toneLabel(getStoredVoicePreset(proposal));
 
                 return (
-                  <button
+                  <article
                     key={proposal._id}
-                    type="button"
                     className={[
                       "dasti-doc-card",
                       "dasti-doc-card--library",
@@ -1248,39 +1387,76 @@ export default function ProposalsList({
                     ]
                       .filter(Boolean)
                       .join(" ")}
-                    onClick={() => {
-                      handleSelectProposal(proposal, true);
-                      setSavedViewMode("stack");
-                    }}
                   >
-                    <div className="dasti-doc-card__stack">
-                      <div className="dasti-doc-card__header">
-                        <div className="dasti-doc-card__title-frame dasti-doc-card__title-frame--top">
-                          <h3 className="dasti-doc-card__title">
-                            {(proposal.title || "").trim() || "Saved proposal"}
-                          </h3>
+                    <button
+                      type="button"
+                      className="dasti-doc-card__surface"
+                      onClick={() => {
+                        handleSelectProposal(proposal, true);
+                        setSavedViewMode("stack");
+                      }}
+                    >
+                      <div className="dasti-doc-card__stack">
+                        <div className="dasti-doc-card__header">
+                          <div className="dasti-doc-card__title-frame dasti-doc-card__title-frame--top">
+                            <h3 className="dasti-doc-card__title">
+                              {(proposal.title || "").trim() || "Saved proposal"}
+                            </h3>
+                          </div>
+                        </div>
+                        <div className="dasti-doc-card__body-band">
+                          <p
+                            className={
+                              snippet
+                                ? "dasti-doc-card__snippet dasti-doc-card__snippet--library"
+                                : "dasti-doc-card__snippet dasti-doc-card__snippet--library dasti-doc-card__snippet--muted"
+                            }
+                          >
+                            {snippet || "Draft preview appears here."}
+                          </p>
+                        </div>
+                        <div className="dasti-doc-card__footer dasti-doc-card__footer--stamp-only">
+                          <div className="dasti-doc-card__footer-meta">
+                            <span className="dasti-proposal-tone-badge dasti-proposal-tone-badge--compact">
+                              {proposalToneLabel}
+                            </span>
+                            <span>
+                              {buildProposalMeta(proposal, {
+                                includeTone: false,
+                              }) || "Saved proposal"}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                      <div className="dasti-doc-card__body-band">
-                        <p
-                          className={
-                            snippet
-                              ? "dasti-doc-card__snippet dasti-doc-card__snippet--library"
-                              : "dasti-doc-card__snippet dasti-doc-card__snippet--library dasti-doc-card__snippet--muted"
-                          }
-                        >
-                          {snippet || "Draft preview appears here."}
-                        </p>
-                      </div>
-                      <div className="dasti-doc-card__footer dasti-doc-card__footer--stamp-only">
-                        <div className="dasti-doc-card__footer-meta">
-                          <span>
-                            {buildProposalMeta(proposal) || "Saved proposal"}
-                          </span>
-                        </div>
-                      </div>
+                    </button>
+                    <div className="dasti-doc-card__quick-actions">
+                      <button
+                        type="button"
+                        className="dasti-doc-card__quick-action"
+                        onClick={() => {
+                          handleSelectProposal(proposal, true);
+                          setSavedViewMode("stack");
+                        }}
+                      >
+                        Open
+                      </button>
+                      <button
+                        type="button"
+                        className="dasti-doc-card__quick-action"
+                        onClick={() => {
+                          const text = getProposalDisplayText(proposal);
+                          void navigator.clipboard.writeText(text).then(() => {
+                            showToast("Copied proposal", {
+                              description:
+                                "Saved proposal text copied to clipboard.",
+                            });
+                          });
+                        }}
+                      >
+                        Copy
+                      </button>
                     </div>
-                  </button>
+                  </article>
                 );
               })}
             </div>

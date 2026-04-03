@@ -41,7 +41,7 @@ export const isEducationRenderable = (entry: any): boolean => {
   if (hasNonEmptyString(entry.degree)) return true;
   if (hasNonEmptyString(entry.fieldOfStudy)) return true;
   const description = entry?.description;
-  if (description && typeof description === "object") return true;
+  if (hasNonEmptyRichTextObject(description)) return true;
   if (hasNonEmptyString(description)) return true;
   return false;
 };

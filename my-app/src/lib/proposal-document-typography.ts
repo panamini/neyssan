@@ -56,7 +56,7 @@ export function getProposalDocumentTypography(
   return {
     fontFamily: typographyFamilies.bodyFamily,
     fontSize: "calc(var(--proposal-inline-mm) * 3.79)",
-    lineHeight: 1.62,
+    lineHeight: 1.65,
     fontWeight: 400,
     letterSpacing: "0em",
   };

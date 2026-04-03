@@ -580,6 +580,28 @@ describe("ProposalInputForm provider-busy handling", () => {
     );
   });
 
+  it("surfaces the imported source link in the visible summary area when a handoff includes it", async () => {
+    render(
+      <ProposalInputForm
+        onSubmit={vi.fn()}
+        prefill={{
+          handoffId: "handoff_source",
+          jobTitle: "Operations Lead",
+          jobDescription:
+            "Coordinate recurring operations, document handoffs, and keep teams aligned across a distributed team.",
+          platform: "linkedin",
+          sourceUrl: "https://www.linkedin.com/jobs/view/123456",
+        }}
+      />,
+    );
+
+    expect(await screen.findByText(/Imported from/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Open original offer on LinkedIn" }),
+    ).toHaveAttribute("href", "https://www.linkedin.com/jobs/view/123456");
+    expect(screen.getByText("linkedin.com")).toBeInTheDocument();
+  });
+
   it("does not clear the active CV id just because Proposal Forge cannot resolve it immediately", () => {
     window.localStorage.setItem("cvActiveId", "cv_alpha");
     mockGetActiveLocalPersonalizationSource.mockReturnValue({
