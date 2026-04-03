@@ -5,8 +5,7 @@ import { api } from "../../../convex/_generated/api";
 import { X, Plus, Loader2, Wand2 } from "@/lib/icons";
 import { Button } from "../ui/button";
 import { useToast } from "../ui/toast";
-import { useCloseOnEscape } from "../../hooks/use-close-on-escape";
-import { BodyPortal } from "@/components/ui/body-portal";
+import { CvModalShell } from "./CvModalShell";
 import { useCvAiCapabilities } from "../../hooks/use-cv-ai-capabilities";
 
 interface AchievementsModalProps {
@@ -85,8 +84,6 @@ export function AchievementsModal({
     Record<string, { before: string; after: string }>
   >({});
   const textareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
-
-  useCloseOnEscape({ open, onClose, disabled: isSaving });
 
   const openerRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
@@ -174,8 +171,6 @@ export function AchievementsModal({
       syncTextareaHeight(String(row.id ?? idx));
     });
   }, [open, rows, syncTextareaHeight]);
-
-  if (!open) return null;
 
   function updateRow(
     idx: number,
@@ -269,7 +264,10 @@ export function AchievementsModal({
         },
       }));
     } catch (error) {
-      console.error("[AchievementsModal] improve_achievement_line failed", error);
+      console.error(
+        "[AchievementsModal] improve_achievement_line failed",
+        error,
+      );
       const rawMessage =
         error instanceof Error ? error.message : String(error ?? "");
       showToast("Achievement AI unavailable", {
@@ -330,215 +328,205 @@ export function AchievementsModal({
   }
 
   return (
-    <BodyPortal>
+    <CvModalShell
+      open={open}
+      onClose={onClose}
+      onBackdropClick={() => (isSaving ? undefined : onClose())}
+    >
       <div
-        className="fixed inset-0 z-[10000] flex items-center justify-center p-4"
-        onMouseDownCapture={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Edit achievements"
+        className="dasti-modal dasti-achievements-modal"
+        onClick={(e) => e.stopPropagation()}
       >
-        <div
-          className="absolute inset-0 backdrop-blur-[8px]"
-          onClick={() => (isSaving ? null : onClose())}
-          aria-hidden
-          style={{
-            background: "hsla(30,12%,11%,.32)",
-            backdropFilter: "blur(8px)",
-          }}
-        />
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Edit achievements"
-          className="dasti-modal dasti-achievements-modal"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="dasti-modal-header dasti-achievements-modal__header">
-            <div className="dasti-modal-heading">
-              <h2 className="dasti-modal-title dasti-achievements-modal__title">
-                Edit achievements
-              </h2>
-              <p className="dasti-modal-subtitle dasti-achievements-modal__subtitle">
-                Outcome-led lines for measurable wins
-              </p>
-            </div>
-            <div className="dasti-achievements-modal__toolbar">
+        <div className="dasti-modal-header dasti-achievements-modal__header">
+          <div className="dasti-modal-heading">
+            <h2 className="dasti-modal-title dasti-achievements-modal__title">
+              Edit achievements
+            </h2>
+            <p className="dasti-modal-subtitle dasti-achievements-modal__subtitle">
+              Outcome-led lines for measurable wins
+            </p>
+          </div>
+          <div className="dasti-achievements-modal__toolbar">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={handleAdd}
+              ariaLabel="Add achievement"
+            >
+              <Plus className="w-4 h-4" />
+              Add achievement
+            </Button>
+            <button
+              type="button"
+              onClick={() => (isSaving ? null : onClose())}
+              aria-label="Close"
+              className="dasti-modal-close disabled:opacity-50"
+              disabled={isSaving}
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        <div className="dasti-modal-body dasti-achievements-modal__body">
+          <div className="dasti-achievements-modal__list">
+            {cvAiCapabilities.status === "stale" &&
+            !cvAiCapabilities.isSupported("improve_achievement_line") ? (
+              <div className="dasti-hint" role="status">
+                {cvAiCapabilities.staleMessage}
+              </div>
+            ) : null}
+
+            {rows.map((row, idx) => {
+              const rowId = String(row.id ?? idx);
+              const rowText = String(row.text ?? "");
+
+              return (
+                <article
+                  key={row.id ?? `row-${idx}`}
+                  className={[
+                    "dasti-achievements-modal__entry",
+                    savedTick === rowId
+                      ? "dasti-achievements-modal__entry--saved"
+                      : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                >
+                  <div className="dasti-achievements-modal__entry-main">
+                    <label
+                      className="sr-only"
+                      htmlFor={`achievement-text-${idx}`}
+                    >
+                      Achievement {idx + 1}
+                    </label>
+                    <textarea
+                      ref={(node) => {
+                        textareaRefs.current[rowId] = node;
+                      }}
+                      id={`achievement-text-${idx}`}
+                      className="dasti-field dasti-achievements-modal__textarea"
+                      placeholder="Reduced stock loss by 15% through tighter floor controls."
+                      value={rowText}
+                      rows={1}
+                      onChange={(e) => {
+                        updateRow(idx, { text: e.target.value });
+                        window.requestAnimationFrame(() => {
+                          syncTextareaHeight(rowId);
+                        });
+                      }}
+                      onBlur={() => updateRow(idx, {}, true)}
+                      style={{
+                        resize: "none",
+                        whiteSpace: "pre-wrap",
+                      }}
+                    />
+
+                    <div className="dasti-achievements-modal__entry-actions">
+                      <button
+                        type="button"
+                        className="dasti-icon-button dasti-achievements-modal__ai-action"
+                        onClick={() => void handleRunAchievementAi(idx)}
+                        disabled={
+                          !cvAiCapabilities.isSupported(
+                            "improve_achievement_line",
+                          ) ||
+                          aiLoadingId === rowId ||
+                          rowText.trim().length === 0
+                        }
+                        aria-label="Improve achievement with AI"
+                        data-toolbar-tooltip="Improve"
+                      >
+                        {aiLoadingId === rowId ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Wand2 className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleRemove(idx)}
+                        className="dasti-icon-button dasti-achievements-modal__remove"
+                        aria-label={`Remove achievement ${idx + 1}`}
+                        data-toolbar-tooltip="Delete"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {aiDiffs[rowId] ? (
+                    <AchievementAiDiffCard
+                      before={aiDiffs[rowId].before}
+                      after={aiDiffs[rowId].after}
+                      onAccept={() => handleAcceptAiDiff(rowId)}
+                      onDiscard={() =>
+                        setAiDiffs((current) => {
+                          const next = { ...current };
+                          delete next[rowId];
+                          return next;
+                        })
+                      }
+                    />
+                  ) : null}
+                </article>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="dasti-modal-footer dasti-achievements-modal__footer">
+          <div className="dasti-modal-actions">
+            {isClearConfirming ? (
+              <span className="sb-doc-confirm" style={{ gap: "var(--s2)" }}>
+                <span
+                  className="sb-doc-confirm__label"
+                  style={{ fontSize: "var(--tx)" }}
+                >
+                  Clear all?
+                </span>
+                <button
+                  type="button"
+                  className="sb-doc-confirm__yes"
+                  onClick={handleClear}
+                >
+                  Clear
+                </button>
+                <button
+                  type="button"
+                  className="sb-doc-confirm__no"
+                  onClick={() => setIsClearConfirming(false)}
+                >
+                  Cancel
+                </button>
+              </span>
+            ) : (
               <Button
                 type="button"
                 variant="secondary"
-                onClick={handleAdd}
-                ariaLabel="Add achievement"
-              >
-                <Plus className="w-4 h-4" />
-                Add achievement
-              </Button>
-              <button
-                type="button"
-                onClick={() => (isSaving ? null : onClose())}
-                aria-label="Close"
-                className="dasti-modal-close disabled:opacity-50"
+                onClick={() => setIsClearConfirming(true)}
                 disabled={isSaving}
               >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-
-          <div className="dasti-modal-body dasti-achievements-modal__body">
-            <div className="dasti-achievements-modal__list">
-              {cvAiCapabilities.status === "stale" &&
-              !cvAiCapabilities.isSupported("improve_achievement_line") ? (
-                <div className="dasti-hint" role="status">
-                  {cvAiCapabilities.staleMessage}
-                </div>
-              ) : null}
-
-              {rows.map((row, idx) => {
-                const rowId = String(row.id ?? idx);
-                const rowText = String(row.text ?? "");
-
-                return (
-                  <article
-                    key={row.id ?? `row-${idx}`}
-                    className={[
-                      "dasti-achievements-modal__entry",
-                      savedTick === rowId
-                        ? "dasti-achievements-modal__entry--saved"
-                        : "",
-                    ]
-                      .filter(Boolean)
-                      .join(" ")}
-                  >
-                    <div className="dasti-achievements-modal__entry-main">
-                      <label
-                        className="sr-only"
-                        htmlFor={`achievement-text-${idx}`}
-                      >
-                        Achievement {idx + 1}
-                      </label>
-                      <textarea
-                        ref={(node) => {
-                          textareaRefs.current[rowId] = node;
-                        }}
-                        id={`achievement-text-${idx}`}
-                        className="dasti-field dasti-achievements-modal__textarea"
-                        placeholder="Reduced stock loss by 15% through tighter floor controls."
-                        value={rowText}
-                        rows={1}
-                        onChange={(e) => {
-                          updateRow(idx, { text: e.target.value });
-                          window.requestAnimationFrame(() => {
-                            syncTextareaHeight(rowId);
-                          });
-                        }}
-                        onBlur={() => updateRow(idx, {}, true)}
-                        style={{
-                          resize: "none",
-                          whiteSpace: "pre-wrap",
-                        }}
-                      />
-
-                      <div className="dasti-achievements-modal__entry-actions">
-                        <button
-                          type="button"
-                          className="dasti-icon-button dasti-achievements-modal__ai-action"
-                          onClick={() => void handleRunAchievementAi(idx)}
-                          disabled={
-                            !cvAiCapabilities.isSupported(
-                              "improve_achievement_line",
-                            ) ||
-                            aiLoadingId === rowId ||
-                            rowText.trim().length === 0
-                          }
-                          aria-label="Improve achievement with AI"
-                          data-toolbar-tooltip="Improve"
-                        >
-                          {aiLoadingId === rowId ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <Wand2 className="w-3.5 h-3.5" />
-                          )}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleRemove(idx)}
-                          className="dasti-icon-button dasti-achievements-modal__remove"
-                          aria-label={`Remove achievement ${idx + 1}`}
-                          data-toolbar-tooltip="Delete"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {aiDiffs[rowId] ? (
-                      <AchievementAiDiffCard
-                        before={aiDiffs[rowId].before}
-                        after={aiDiffs[rowId].after}
-                        onAccept={() => handleAcceptAiDiff(rowId)}
-                        onDiscard={() =>
-                          setAiDiffs((current) => {
-                            const next = { ...current };
-                            delete next[rowId];
-                            return next;
-                          })
-                        }
-                      />
-                    ) : null}
-                  </article>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="dasti-modal-footer dasti-achievements-modal__footer">
-            <div className="dasti-modal-actions">
-              {isClearConfirming ? (
-                <span className="sb-doc-confirm" style={{ gap: "var(--s2)" }}>
-                  <span
-                    className="sb-doc-confirm__label"
-                    style={{ fontSize: "var(--tx)" }}
-                  >
-                    Clear all?
-                  </span>
-                      <button
-                        type="button"
-                        className="sb-doc-confirm__yes"
-                        onClick={handleClear}
-                      >
-                        Clear
-                      </button>
-                  <button
-                    type="button"
-                    className="sb-doc-confirm__no"
-                    onClick={() => setIsClearConfirming(false)}
-                  >
-                    Cancel
-                  </button>
-                </span>
-              ) : (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => setIsClearConfirming(true)}
-                  disabled={isSaving}
-                >
-                  Clear all
-                </Button>
-              )}
-              <Button
-                type="button"
-                variant="primary"
-                onClick={() => void handleSave()}
-                disabled={isSaving}
-                ariaLabel="Save achievements"
-              >
-                Save
+                Clear all
               </Button>
-            </div>
+            )}
+            <Button
+              type="button"
+              variant="primary"
+              onClick={() => void handleSave()}
+              disabled={isSaving}
+              ariaLabel="Save achievements"
+            >
+              Save
+            </Button>
           </div>
         </div>
       </div>
-    </BodyPortal>
+    </CvModalShell>
   );
 }
 

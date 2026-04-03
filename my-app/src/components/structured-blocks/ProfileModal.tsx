@@ -3,8 +3,7 @@ import { X } from "@/lib/icons";
 import type { IProfileItem } from "../../types/cvDocument";
 import { useCvLibrary } from "../../contexts/CvLibraryContext";
 import { Button } from "../ui/button";
-import { useCloseOnEscape } from "../../hooks/use-close-on-escape";
-import { BodyPortal } from "@/components/ui/body-portal";
+import { CvModalShell } from "./CvModalShell";
 
 interface ProfileModalProps {
   open: boolean;
@@ -54,15 +53,11 @@ export function ProfileModal({
   const [isSaving, setIsSaving] = useState(false);
   const [isClearConfirming, setIsClearConfirming] = useState(false);
 
-  useCloseOnEscape({ open, onClose, disabled: isSaving });
-
   useEffect(() => {
     if (!open) return;
     setForm(buildInitialForm(item));
     setIsClearConfirming(false);
   }, [open, item]);
-
-  if (!open) return null;
 
   const itemId = String(item?.id ?? "");
 
@@ -145,203 +140,191 @@ export function ProfileModal({
   }
 
   return (
-    <BodyPortal>
+    <CvModalShell
+      open={open}
+      onClose={onClose}
+      onBackdropClick={() => (isSaving ? undefined : onClose())}
+    >
       <div
-        className="fixed inset-0 z-[10000] flex items-center justify-center p-4"
-        onMouseDownCapture={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Edit profile"
+        className="dasti-modal"
+        onClick={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
       >
-        <div
-          className="absolute inset-0"
-          onClick={() => (isSaving ? null : onClose())}
-          style={{
-            background: "hsla(30,12%,11%,.32)",
-            backdropFilter: "blur(8px) saturate(1.2)",
-          }}
-        />
-
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Edit profile"
-          className="dasti-modal"
-          onClick={(e) => e.stopPropagation()}
-          onPointerDown={(e) => e.stopPropagation()}
-        >
-          <div className="dasti-modal-header">
-            <div className="dasti-modal-heading">
-              <h2 className="dasti-modal-title">Edit profile</h2>
-              <p className="dasti-modal-subtitle">
-                Identity and contact details
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => (isSaving ? null : onClose())}
-              aria-label="Close"
-              className="dasti-modal-close"
-              disabled={isSaving}
-            >
-              <X className="h-5 w-5" />
-            </button>
+        <div className="dasti-modal-header">
+          <div className="dasti-modal-heading">
+            <h2 className="dasti-modal-title">Edit profile</h2>
+            <p className="dasti-modal-subtitle">Identity and contact details</p>
           </div>
 
-          <div className="dasti-modal-body">
-            <section className="dasti-zone">
-              <h3 className="dasti-zone-title">Identity</h3>
+          <button
+            type="button"
+            onClick={() => (isSaving ? null : onClose())}
+            aria-label="Close"
+            className="dasti-modal-close"
+            disabled={isSaving}
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
 
-              <div className="dasti-grid-2">
-                <label className="dasti-field-group">
-                  <span className="dasti-label">Full name</span>
-                  <input
-                    id="profile-name"
-                    className="dasti-field"
-                    value={form.name}
-                    onChange={(e) => handleChange("name", e.target.value)}
-                    autoFocus
-                  />
-                </label>
+        <div className="dasti-modal-body">
+          <section className="dasti-zone">
+            <h3 className="dasti-zone-title">Identity</h3>
 
-                <label className="dasti-field-group">
-                  <span className="dasti-label">Desired position</span>
-                  <input
-                    id="profile-desired-position"
-                    className="dasti-field"
-                    value={form.desiredPosition}
-                    onChange={(e) =>
-                      handleChange("desiredPosition", e.target.value)
-                    }
-                    placeholder="e.g. Senior Designer"
-                  />
-                </label>
-              </div>
+            <div className="dasti-grid-2">
+              <label className="dasti-field-group">
+                <span className="dasti-label">Full name</span>
+                <input
+                  id="profile-name"
+                  className="dasti-field"
+                  value={form.name}
+                  onChange={(e) => handleChange("name", e.target.value)}
+                  autoFocus
+                />
+              </label>
 
               <label className="dasti-field-group">
-                <span className="dasti-label">Photo URL</span>
+                <span className="dasti-label">Desired position</span>
                 <input
-                  id="profile-photo-url"
+                  id="profile-desired-position"
                   className="dasti-field"
-                  value={form.photoUrl}
-                  onChange={(e) => handleChange("photoUrl", e.target.value)}
+                  value={form.desiredPosition}
+                  onChange={(e) =>
+                    handleChange("desiredPosition", e.target.value)
+                  }
+                  placeholder="e.g. Senior Designer"
+                />
+              </label>
+            </div>
+
+            <label className="dasti-field-group">
+              <span className="dasti-label">Photo URL</span>
+              <input
+                id="profile-photo-url"
+                className="dasti-field"
+                value={form.photoUrl}
+                onChange={(e) => handleChange("photoUrl", e.target.value)}
+                placeholder="https://..."
+              />
+            </label>
+
+            <div className="dasti-hint">Optional</div>
+          </section>
+
+          <section className="dasti-zone">
+            <h3 className="dasti-zone-title">Contact</h3>
+
+            <div className="dasti-grid-2">
+              <label className="dasti-field-group">
+                <span className="dasti-label">Email</span>
+                <input
+                  id="profile-email"
+                  className="dasti-field"
+                  value={form.email}
+                  onChange={(e) => handleChange("email", e.target.value)}
+                  type="email"
+                />
+              </label>
+
+              <label className="dasti-field-group">
+                <span className="dasti-label">Phone</span>
+                <input
+                  id="profile-phone"
+                  className="dasti-field"
+                  value={form.phone}
+                  onChange={(e) => handleChange("phone", e.target.value)}
+                />
+              </label>
+
+              <label className="dasti-field-group">
+                <span className="dasti-label">LinkedIn</span>
+                <input
+                  id="profile-linkedin"
+                  className="dasti-field"
+                  value={form.linkedin}
+                  onChange={(e) => handleChange("linkedin", e.target.value)}
+                  placeholder="linkedin.com/in/..."
+                />
+              </label>
+
+              <label className="dasti-field-group">
+                <span className="dasti-label">Website</span>
+                <input
+                  id="profile-website"
+                  className="dasti-field"
+                  value={form.website}
+                  onChange={(e) => handleChange("website", e.target.value)}
                   placeholder="https://..."
                 />
               </label>
+            </div>
 
-              <div className="dasti-hint">Optional</div>
-            </section>
+            <label className="dasti-field-group">
+              <span className="dasti-label">Address</span>
+              <input
+                id="profile-location"
+                className="dasti-field"
+                value={form.location}
+                onChange={(e) => handleChange("location", e.target.value)}
+              />
+            </label>
+          </section>
+        </div>
 
-            <section className="dasti-zone">
-              <h3 className="dasti-zone-title">Contact</h3>
-
-              <div className="dasti-grid-2">
-                <label className="dasti-field-group">
-                  <span className="dasti-label">Email</span>
-                  <input
-                    id="profile-email"
-                    className="dasti-field"
-                    value={form.email}
-                    onChange={(e) => handleChange("email", e.target.value)}
-                    type="email"
-                  />
-                </label>
-
-                <label className="dasti-field-group">
-                  <span className="dasti-label">Phone</span>
-                  <input
-                    id="profile-phone"
-                    className="dasti-field"
-                    value={form.phone}
-                    onChange={(e) => handleChange("phone", e.target.value)}
-                  />
-                </label>
-
-                <label className="dasti-field-group">
-                  <span className="dasti-label">LinkedIn</span>
-                  <input
-                    id="profile-linkedin"
-                    className="dasti-field"
-                    value={form.linkedin}
-                    onChange={(e) => handleChange("linkedin", e.target.value)}
-                    placeholder="linkedin.com/in/..."
-                  />
-                </label>
-
-                <label className="dasti-field-group">
-                  <span className="dasti-label">Website</span>
-                  <input
-                    id="profile-website"
-                    className="dasti-field"
-                    value={form.website}
-                    onChange={(e) => handleChange("website", e.target.value)}
-                    placeholder="https://..."
-                  />
-                </label>
-              </div>
-
-              <label className="dasti-field-group">
-                <span className="dasti-label">Address</span>
-                <input
-                  id="profile-location"
-                  className="dasti-field"
-                  value={form.location}
-                  onChange={(e) => handleChange("location", e.target.value)}
-                />
-              </label>
-            </section>
+        <div className="dasti-modal-footer">
+          <div className="dasti-modal-footer-note">
+            Applied to all resume exports.
           </div>
 
-          <div className="dasti-modal-footer">
-            <div className="dasti-modal-footer-note">
-              Applied to all resume exports.
-            </div>
-
-            <div className="dasti-modal-actions">
-              {isClearConfirming ? (
-                <span className="sb-doc-confirm" style={{ gap: "var(--s2)" }}>
-                  <span
-                    className="sb-doc-confirm__label"
-                    style={{ fontSize: "var(--tx)" }}
-                  >
-                    Clear?
-                  </span>
-                  <button
-                    type="button"
-                    className="sb-doc-confirm__yes"
-                    onClick={handleClear}
-                  >
-                    Clear
-                  </button>
-                  <button
-                    type="button"
-                    className="sb-doc-confirm__no"
-                    onClick={() => setIsClearConfirming(false)}
-                  >
-                    Cancel
-                  </button>
+          <div className="dasti-modal-actions">
+            {isClearConfirming ? (
+              <span className="sb-doc-confirm" style={{ gap: "var(--s2)" }}>
+                <span
+                  className="sb-doc-confirm__label"
+                  style={{ fontSize: "var(--tx)" }}
+                >
+                  Clear?
                 </span>
-              ) : (
-                <Button
+                <button
                   type="button"
-                  variant="secondary"
-                  onClick={() => setIsClearConfirming(true)}
-                  disabled={isSaving}
+                  className="sb-doc-confirm__yes"
+                  onClick={handleClear}
                 >
                   Clear
-                </Button>
-              )}
+                </button>
+                <button
+                  type="button"
+                  className="sb-doc-confirm__no"
+                  onClick={() => setIsClearConfirming(false)}
+                >
+                  Cancel
+                </button>
+              </span>
+            ) : (
               <Button
                 type="button"
-                variant="primary"
-                onClick={() => void handleSave()}
+                variant="secondary"
+                onClick={() => setIsClearConfirming(true)}
                 disabled={isSaving}
               >
-                Save
+                Clear
               </Button>
-            </div>
+            )}
+            <Button
+              type="button"
+              variant="primary"
+              onClick={() => void handleSave()}
+              disabled={isSaving}
+            >
+              Save
+            </Button>
           </div>
         </div>
       </div>
-    </BodyPortal>
+    </CvModalShell>
   );
 }
 

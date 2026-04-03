@@ -23,11 +23,8 @@ import { X } from "@/lib/icons";
 import { TextSelection } from "prosemirror-state";
 import { docToPlainText } from "../remirror-editor/utils/text";
 import { Button } from "../ui/button";
-import { useCloseOnEscape } from "../../hooks/use-close-on-escape";
-import { BodyPortal } from "@/components/ui/body-portal";
-import FloatingAiToolbar, {
-  type InlineAiActionId,
-} from "../FloatingAiToolbar";
+import { CvModalShell } from "./CvModalShell";
+import FloatingAiToolbar, { type InlineAiActionId } from "../FloatingAiToolbar";
 import {
   getDomSelectionState,
   isInlineAiToolbarActiveElement,
@@ -63,8 +60,6 @@ export function SummaryModal({
   const [pendingInlineAiActionId, setPendingInlineAiActionId] =
     useState<InlineAiActionId | null>(null);
   const selectionDebounceRef = useRef<number | null>(null);
-
-  useCloseOnEscape({ open, onClose, disabled: isSaving });
 
   // Initialize Remirror doc once when opened
   // Treat UI placeholder docs as empty so clicking "Start typing here" opens a blank editor.
@@ -214,7 +209,9 @@ export function SummaryModal({
       }
       const view = (manager as any)?.view;
       const selection = view?.state?.selection;
-      const nextSelection = getDomSelectionState(view?.dom as HTMLElement | null);
+      const nextSelection = getDomSelectionState(
+        view?.dom as HTMLElement | null,
+      );
 
       if (!nextSelection || !selection || selection.empty) {
         if (isInlineAiToolbarActiveElement()) {
@@ -339,8 +336,6 @@ export function SummaryModal({
     }
   }, [open, manager]);
 
-  if (!open) return null;
-
   async function handleSave() {
     const itemId = String((item as any)?.id ?? "");
     if (!itemId) {
@@ -375,129 +370,120 @@ export function SummaryModal({
   }
 
   return (
-    <BodyPortal>
-      <div
-        className="fixed inset-0 z-[10000] flex items-center justify-center p-4"
-        onMouseDownCapture={(e) => e.stopPropagation()}
-      >
-        {inlineSelectionState ? (
-          <FloatingAiToolbar
-            open
-            anchor={inlineSelectionState.anchor}
-            isLoading={isApplyingInlineAi}
-            pendingActionId={pendingInlineAiActionId}
-            onClose={() => setInlineSelectionState(null)}
-            onRunAction={handleRunInlineAiAction}
-          />
-        ) : null}
-        <div
-          className="absolute inset-0"
-          onClick={() => (isSaving ? null : onClose())}
-          style={{
-            background: "hsla(30,12%,11%,.32)",
-            backdropFilter: "blur(8px) saturate(1.2)",
-          }}
+    <CvModalShell
+      open={open}
+      onClose={onClose}
+      onBackdropClick={() => (isSaving ? undefined : onClose())}
+    >
+      {inlineSelectionState ? (
+        <FloatingAiToolbar
+          open
+          anchor={inlineSelectionState.anchor}
+          isLoading={isApplyingInlineAi}
+          pendingActionId={pendingInlineAiActionId}
+          onClose={() => setInlineSelectionState(null)}
+          onRunAction={handleRunInlineAiAction}
         />
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Edit summary"
-          className="dasti-modal"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="dasti-modal-header">
-            <div className="dasti-modal-heading">
-              <h2 className="dasti-modal-title">Edit summary</h2>
-              <p className="dasti-modal-subtitle">
-                Profile narrative and positioning
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => (isSaving ? null : onClose())}
-              aria-label="Close"
-              className="dasti-modal-close"
-              disabled={isSaving}
-            >
-              <X className="w-5 h-5" />
-            </button>
+      ) : null}
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Edit summary"
+        className="dasti-modal"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="dasti-modal-header">
+          <div className="dasti-modal-heading">
+            <h2 className="dasti-modal-title">Edit summary</h2>
+            <p className="dasti-modal-subtitle">
+              Profile narrative and positioning
+            </p>
           </div>
 
-          <div className="dasti-modal-body">
-            <section className="dasti-zone">
-              <div className="dasti-rich">
-                <Remirror
-                  manager={manager}
-                  initialContent={state}
-                  onChange={handleChange}
+          <button
+            type="button"
+            onClick={() => (isSaving ? null : onClose())}
+            aria-label="Close"
+            className="dasti-modal-close"
+            disabled={isSaving}
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="dasti-modal-body">
+          <section className="dasti-zone">
+            <div className="dasti-rich">
+              <Remirror
+                manager={manager}
+                initialContent={state}
+                onChange={handleChange}
+              >
+                <div
+                  className="rich-content"
+                  onPointerUp={scheduleSelectionCheck}
+                  onKeyUp={scheduleSelectionCheck}
                 >
-                  <div
-                    className="rich-content"
-                    onPointerUp={scheduleSelectionCheck}
-                    onKeyUp={scheduleSelectionCheck}
-                  >
-                    <EditorToolbar position="top" />
-                    <EditorComponent />
-                  </div>
-                </Remirror>
-              </div>
-            </section>
+                  <EditorToolbar position="top" />
+                  <EditorComponent />
+                </div>
+              </Remirror>
+            </div>
+          </section>
+        </div>
+
+        <div className="dasti-modal-footer">
+          <div className="dasti-modal-footer-note">
+            Used in your resume header and exports.
           </div>
 
-          <div className="dasti-modal-footer">
-            <div className="dasti-modal-footer-note">
-              Used in your resume header and exports.
-            </div>
-
-            <div className="dasti-modal-actions">
-              {isClearConfirming ? (
-                <span className="sb-doc-confirm" style={{ gap: "var(--s2)" }}>
-                  <span
-                    className="sb-doc-confirm__label"
-                    style={{ fontSize: "var(--tx)" }}
-                  >
-                    Clear?
-                  </span>
-                  <button
-                    type="button"
-                    className="sb-doc-confirm__yes"
-                    onClick={handleClear}
-                  >
-                    Clear
-                  </button>
-                  <button
-                    type="button"
-                    className="sb-doc-confirm__no"
-                    onClick={() => setIsClearConfirming(false)}
-                  >
-                    Cancel
-                  </button>
+          <div className="dasti-modal-actions">
+            {isClearConfirming ? (
+              <span className="sb-doc-confirm" style={{ gap: "var(--s2)" }}>
+                <span
+                  className="sb-doc-confirm__label"
+                  style={{ fontSize: "var(--tx)" }}
+                >
+                  Clear?
                 </span>
-              ) : (
-                <Button
+                <button
                   type="button"
-                  variant="secondary"
-                  onClick={() => setIsClearConfirming(true)}
-                  disabled={isSaving}
+                  className="sb-doc-confirm__yes"
+                  onClick={handleClear}
                 >
                   Clear
-                </Button>
-              )}
+                </button>
+                <button
+                  type="button"
+                  className="sb-doc-confirm__no"
+                  onClick={() => setIsClearConfirming(false)}
+                >
+                  Cancel
+                </button>
+              </span>
+            ) : (
               <Button
                 type="button"
-                variant="primary"
-                onClick={() => void handleSave()}
+                variant="secondary"
+                onClick={() => setIsClearConfirming(true)}
                 disabled={isSaving}
-                ariaLabel="Save summary"
               >
-                Save
+                Clear
               </Button>
-            </div>
+            )}
+            <Button
+              type="button"
+              variant="primary"
+              onClick={() => void handleSave()}
+              disabled={isSaving}
+              ariaLabel="Save summary"
+            >
+              Save
+            </Button>
           </div>
         </div>
       </div>
-    </BodyPortal>
+    </CvModalShell>
   );
 }
 

@@ -3,8 +3,7 @@ import type { ISkillItem, Level } from "../../types/cvDocument";
 import { X, Plus } from "@/lib/icons";
 import { LEVELS } from "../ui/levelLabels";
 import { Button } from "../ui/button";
-import { useCloseOnEscape } from "../../hooks/use-close-on-escape";
-import { BodyPortal } from "@/components/ui/body-portal";
+import { CvModalShell } from "./CvModalShell";
 
 interface SkillsModalProps {
   open: boolean;
@@ -34,8 +33,6 @@ export function SkillsModal({
   const [rows, setRows] = useState<ISkillItem[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
-  useCloseOnEscape({ open, onClose, disabled: isSaving });
-
   // Seed rows only when the modal opens or when the real items content changes.
   // Prevents resetting the input on each parent render (which caused single-character typing).
   const lastSeedRef = React.useRef<string | null>(null);
@@ -61,8 +58,6 @@ export function SkillsModal({
     );
   }, [rows]);
 
-  if (!open) return null;
-
   function updateRow(idx: number, patch: Partial<ISkillItem>) {
     setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
   }
@@ -81,7 +76,10 @@ export function SkillsModal({
 
     setRows((prev) => {
       const alreadyPresent = prev.some(
-        (row) => String(row.name ?? "").trim().toLocaleLowerCase() === cleanName.toLocaleLowerCase(),
+        (row) =>
+          String(row.name ?? "")
+            .trim()
+            .toLocaleLowerCase() === cleanName.toLocaleLowerCase(),
       );
       if (alreadyPresent) {
         return prev;
@@ -105,119 +103,111 @@ export function SkillsModal({
   }
 
   return (
-    <BodyPortal>
+    <CvModalShell
+      open={open}
+      onClose={onClose}
+      onBackdropClick={() => (isSaving ? undefined : onClose())}
+    >
       <div
-        className="fixed inset-0 z-[10000] flex items-center justify-center p-4"
-        onMouseDownCapture={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Edit skills"
+        className="dasti-modal"
+        onClick={(e) => e.stopPropagation()}
       >
-        <div
-          className="absolute inset-0"
-          onClick={() => (isSaving ? null : onClose())}
-          style={{
-            background: "hsla(30,12%,11%,.32)",
-            backdropFilter: "blur(8px)",
-          }}
-        />
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Edit skills"
-          className="dasti-modal"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="flex items-center justify-between px-4 py-3 border-b [border-color:var(--color-border)]">
-            <h2 className="text-lg font-semibold">Edit skills</h2>
-            <button
+        <div className="flex items-center justify-between px-4 py-3 border-b [border-color:var(--color-border)]">
+          <h2 className="text-lg font-semibold">Edit skills</h2>
+          <button
+            type="button"
+            onClick={() => (isSaving ? null : onClose())}
+            aria-label="Close"
+            className="dasti-modal-close disabled:opacity-50"
+            disabled={isSaving}
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="text-sm [color:var(--tm2)]">
+              Add, remove, or edit your skills and levels
+            </div>
+            <Button
               type="button"
-              onClick={() => (isSaving ? null : onClose())}
-              aria-label="Close"
-              className="dasti-modal-close disabled:opacity-50"
-              disabled={isSaving}
+              onClick={handleAdd}
+              variant="ghost"
+              size="sm"
+              ariaLabel="Add skill"
+              className="gap-1"
             >
-              <X className="w-5 h-5" />
-            </button>
+              <Plus className="w-4 h-4" />
+              Add
+            </Button>
           </div>
 
-          <div className="p-4 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="text-sm [color:var(--tm2)]">
-                Add, remove, or edit your skills and levels
-              </div>
-              <Button
-                type="button"
-                onClick={handleAdd}
-                variant="ghost"
-                size="sm"
-                ariaLabel="Add skill"
-                className="gap-1"
-              >
-                <Plus className="w-4 h-4" />
-                Add
-              </Button>
-            </div>
-
-            <div className="space-y-2">
-              {suggestedItems.length > 0 ? (
-                <div className="space-y-2">
-                  <div className="text-xs [color:var(--tg2)]">
-                    Suggested from experience
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {suggestedItems.map((skill) => (
-                      <div
-                        key={skill}
-                        className="inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-xs"
-                        style={{
-                          borderStyle: "dashed",
-                          borderColor: "var(--color-border-strong)",
-                          background: "color-mix(in srgb, var(--sf1) 88%, transparent)",
-                          color: "var(--tm2)",
-                        }}
-                      >
-                        <span style={{ color: "var(--ti)" }}>{skill}</span>
-                        <button
-                          type="button"
-                          onClick={() => handleAcceptSuggestion(skill)}
-                          className="dasti-icon-button dasti-icon-button--compact"
-                          aria-label={`Add suggested skill ${skill}`}
-                          title={`Add ${skill}`}
-                        >
-                          <Plus className="w-3 h-3" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onDismissSuggestion?.(skill)}
-                          className="dasti-icon-button dasti-icon-button--compact"
-                          aria-label={`Dismiss suggested skill ${skill}`}
-                          title={`Dismiss ${skill}`}
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
+          <div className="space-y-2">
+            {suggestedItems.length > 0 ? (
+              <div className="space-y-2">
+                <div className="text-xs [color:var(--tg2)]">
+                  Suggested from experience
                 </div>
-              ) : null}
-              {rows.length === 0 ? (
-                <div className="px-3 py-2 text-sm rounded [color:var(--tg2)] [background:var(--sf1)]">
-                  No skills yet. Add your first skill.
-                </div>
-              ) : (
-                rows.map((row, idx) => (
-                  <div
-                    key={row.id ?? `row-${idx}`}
-                    className="group flex items-center gap-2"
-                  >
-                    {/* Level dots — LEFT */}
+                <div className="flex flex-wrap gap-2">
+                  {suggestedItems.map((skill) => (
                     <div
-                      className="flex items-center gap-1.5 flex-shrink-0"
-                      role="group"
-                      aria-label="Skill level"
-                      style={{ width: 88 }}
+                      key={skill}
+                      className="inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-xs"
+                      style={{
+                        borderStyle: "dashed",
+                        borderColor: "var(--color-border-strong)",
+                        background:
+                          "color-mix(in srgb, var(--sf1) 88%, transparent)",
+                        color: "var(--tm2)",
+                      }}
                     >
-                      {(
-                        ["Beginner", "Intermediate", "Advanced"] as Level[]
-                      ).map((lvl, di) => {
+                      <span style={{ color: "var(--ti)" }}>{skill}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleAcceptSuggestion(skill)}
+                        className="dasti-icon-button dasti-icon-button--compact"
+                        aria-label={`Add suggested skill ${skill}`}
+                        title={`Add ${skill}`}
+                      >
+                        <Plus className="w-3 h-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDismissSuggestion?.(skill)}
+                        className="dasti-icon-button dasti-icon-button--compact"
+                        aria-label={`Dismiss suggested skill ${skill}`}
+                        title={`Dismiss ${skill}`}
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            {rows.length === 0 ? (
+              <div className="px-3 py-2 text-sm rounded [color:var(--tg2)] [background:var(--sf1)]">
+                No skills yet. Add your first skill.
+              </div>
+            ) : (
+              rows.map((row, idx) => (
+                <div
+                  key={row.id ?? `row-${idx}`}
+                  className="group flex items-center gap-2"
+                >
+                  {/* Level dots — LEFT */}
+                  <div
+                    className="flex items-center gap-1.5 flex-shrink-0"
+                    role="group"
+                    aria-label="Skill level"
+                    style={{ width: 88 }}
+                  >
+                    {(["Beginner", "Intermediate", "Advanced"] as Level[]).map(
+                      (lvl, di) => {
                         const activeIdx = [
                           "Beginner",
                           "Intermediate",
@@ -246,64 +236,64 @@ export function SkillsModal({
                             }}
                           />
                         );
-                      })}
-                      <span
-                        style={{
-                          fontSize: 10,
-                          color: "var(--tg2)",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {(
-                          {
-                            Beginner: "Beginner",
-                            Intermediate: "Mid",
-                            Advanced: "Expert",
-                          } as Record<string, string>
-                        )[row.level as string] ?? String(row.level ?? "")}
-                      </span>
-                    </div>
-                    {/* Name input — CENTER (flex-1) */}
-                    <label className="sr-only" htmlFor={`skill-name-${idx}`}>
-                      Skill name
-                    </label>
-                    <input
-                      id={`skill-name-${idx}`}
-                      className="flex-1 min-w-0 px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
-                      placeholder="Skill name"
-                      value={row.name ?? ""}
-                      onChange={(e) => updateRow(idx, { name: e.target.value })}
-                    />
-                    {/* Delete — RIGHT */}
-                    <button
-                      type="button"
-                      onClick={() => handleRemove(idx)}
-                      className="dasti-modal-close flex-shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
-                      aria-label={`Remove ${row.name || "skill"}`}
-                      title={`Remove ${row.name || "skill"}`}
+                      },
+                    )}
+                    <span
+                      style={{
+                        fontSize: 10,
+                        color: "var(--tg2)",
+                        whiteSpace: "nowrap",
+                      }}
                     >
-                      <X className="w-4 h-4" />
-                    </button>
+                      {(
+                        {
+                          Beginner: "Beginner",
+                          Intermediate: "Mid",
+                          Advanced: "Expert",
+                        } as Record<string, string>
+                      )[row.level as string] ?? String(row.level ?? "")}
+                    </span>
                   </div>
-                ))
-              )}
-            </div>
+                  {/* Name input — CENTER (flex-1) */}
+                  <label className="sr-only" htmlFor={`skill-name-${idx}`}>
+                    Skill name
+                  </label>
+                  <input
+                    id={`skill-name-${idx}`}
+                    className="flex-1 min-w-0 px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                    placeholder="Skill name"
+                    value={row.name ?? ""}
+                    onChange={(e) => updateRow(idx, { name: e.target.value })}
+                  />
+                  {/* Delete — RIGHT */}
+                  <button
+                    type="button"
+                    onClick={() => handleRemove(idx)}
+                    className="dasti-modal-close flex-shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
+                    aria-label={`Remove ${row.name || "skill"}`}
+                    title={`Remove ${row.name || "skill"}`}
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
 
-            <div className="flex items-center justify-end gap-2">
-              <Button
-                type="button"
-                variant="primary"
-                onClick={() => void handleSave()}
-                disabled={isSaving || !canSave}
-                ariaLabel="Save skills"
-              >
-                Save
-              </Button>
-            </div>
+          <div className="flex items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="primary"
+              onClick={() => void handleSave()}
+              disabled={isSaving || !canSave}
+              ariaLabel="Save skills"
+            >
+              Save
+            </Button>
           </div>
         </div>
       </div>
-    </BodyPortal>
+    </CvModalShell>
   );
 }
 
