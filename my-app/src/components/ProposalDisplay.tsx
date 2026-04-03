@@ -73,6 +73,7 @@ interface ProposalDisplayProps {
   showZoomControls?: boolean;
   zoomStorageKey?: string | null;
   detachedActionHeader?: boolean;
+  detachedActionHeaderSupplement?: React.ReactNode;
   documentTitleEditable?: boolean;
   onDocumentTitleChange?: (value: string) => void;
   onDocumentTitleCommit?: () => void;
@@ -304,6 +305,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   showZoomControls = false,
   zoomStorageKey = PROPOSAL_PREVIEW_ZOOM_STORAGE_KEY,
   detachedActionHeader = false,
+  detachedActionHeaderSupplement,
   documentTitleEditable = false,
   onDocumentTitleChange,
   onDocumentTitleCommit,
@@ -1029,9 +1031,17 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       ? renderDocumentCaption("dasti-proposal-sheet__heading--sidecar")
       : null;
   const detachedActionHeaderContent =
-    shouldDetachActionHeader && floatingRail ? (
+    shouldDetachActionHeader &&
+    (floatingRail || detachedActionHeaderSupplement) ? (
       <div className="dasti-proposal-sheet__header dasti-proposal-sheet__header--actions-only dasti-proposal-sheet__header--detached">
-        <div className="dasti-proposal-sheet__header-rail">{floatingRail}</div>
+        {floatingRail ? (
+          <div className="dasti-proposal-sheet__header-rail">{floatingRail}</div>
+        ) : null}
+        {detachedActionHeaderSupplement ? (
+          <div className="dasti-proposal-sheet__header-rail">
+            {detachedActionHeaderSupplement}
+          </div>
+        ) : null}
       </div>
     ) : null;
 
