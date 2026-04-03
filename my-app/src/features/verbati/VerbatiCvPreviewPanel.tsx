@@ -34,7 +34,7 @@ type VerbatiCvPreviewPanelProps = {
 export function VerbatiCvPreviewPanel({
   layoutMode: _layoutMode = "stacked",
   hostMode = "panel",
-  railLeadControl: _railLeadControl = null,
+  railLeadControl = null,
   stylePreset: controlledStylePreset,
   onStylePresetChange,
 }: VerbatiCvPreviewPanelProps): JSX.Element {
@@ -321,6 +321,7 @@ export function VerbatiCvPreviewPanel({
             data={previewData}
             stylePreset={stylePreset}
             hostMode="workspace"
+            railLeadControl={railLeadControl}
             railStartAddon={
               <>
                 {workspacePreviewSourceControl}
@@ -391,9 +392,9 @@ export function VerbatiCvPreviewPanel({
     <section
       className={[
         "dasti-panel",
-        "dasti-panel--spacious",
         "dasti-flow",
         "dasti-resume-preview-panel",
+        hostMode === "panel" ? "dasti-panel--spacious" : "",
         hostMode === "workspace"
           ? "dasti-resume-preview-panel--workspace"
           : "dasti-resume-preview-panel--panel",

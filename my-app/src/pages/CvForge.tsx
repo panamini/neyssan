@@ -1,6 +1,6 @@
 import React from "react";
 import { useLocation } from "react-router-dom";
-import { Eye, Pencil } from "@/lib/icons";
+import { Eye, X } from "@/lib/icons";
 import { ProfileReviewCard } from "../components/ProfileReviewCard";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import { VerbatiCvPreviewPanel } from "../features/verbati/VerbatiCvPreviewPanel";
@@ -75,42 +75,32 @@ export function CvForge(): JSX.Element {
     );
   }, [workspaceMode]);
 
-  const workspaceModeToggle = (
+  const editModeToggle = (
     <div className="dasti-cv-workbench-toggle dasti-toolbar--surface-tooltips">
       <button
         type="button"
-        className={
-          workspaceMode === "edit"
-            ? "dasti-icon-button dasti-proposal-mode-toggle dasti-proposal-mode-toggle--active"
-            : "dasti-icon-button dasti-proposal-mode-toggle"
-        }
-        aria-label={
-          workspaceMode === "preview"
-            ? "Return to resume editing"
-            : "Open resume preview"
-        }
-        onClick={() =>
-          setWorkspaceMode((current) =>
-            current === "preview" ? "edit" : "preview",
-          )
-        }
-        data-toolbar-tooltip={
-          workspaceMode === "preview" ? "Switch to edit" : "Switch to preview"
-        }
+        className="dasti-cv-workbench-toggle__button"
+        aria-label="Open resume preview"
+        onClick={() => setWorkspaceMode("preview")}
+        data-toolbar-tooltip="Switch to preview"
         data-no-pan="true"
       >
-        {workspaceMode === "preview" ? (
-          <Pencil size={15} strokeWidth={1.7} aria-hidden="true" />
-        ) : (
-          <Eye size={15} strokeWidth={1.7} aria-hidden="true" />
-        )}
+        <Eye size={15} strokeWidth={1.7} aria-hidden="true" />
       </button>
     </div>
   );
-  const workspaceModeToggleShell = (
-    <div className="dasti-cv-workbench-bar dasti-cv-workbench-bar--cv-workspace">
-      {workspaceModeToggle}
-    </div>
+
+  const previewModeLeadControl = (
+    <button
+      type="button"
+      className="dasti-icon-button"
+      aria-label="Back to resume editing"
+      onClick={() => setWorkspaceMode("edit")}
+      data-toolbar-tooltip="Back to edit"
+      data-no-pan="true"
+    >
+      <X size={15} strokeWidth={1.9} aria-hidden="true" />
+    </button>
   );
 
   return (
@@ -126,33 +116,43 @@ export function CvForge(): JSX.Element {
           {
             "--page-shell-max-width": "100%",
             "--page-shell-gap": "var(--space-2)",
+            "--page-shell-pad-top": workspaceMode === "preview" ? "0px" : undefined,
             "--page-shell-pad-inline": "var(--space-1)",
             "--page-shell-pad-bottom": "var(--space-1)",
+            "--cv-preview-toolbar-inset":
+              workspaceMode === "preview" ? "var(--space-2)" : undefined,
+            "--page-shell-pad-top-mobile":
+              workspaceMode === "preview" ? "0px" : undefined,
             "--page-shell-pad-inline-mobile": "var(--space-1)",
             "--page-shell-pad-bottom-mobile": "var(--space-1)",
           } as React.CSSProperties
         }
       >
         {workspaceMode === "preview" ? (
-          <div className="dasti-cv-preview-workbench">
-            <div className="dasti-cv-preview-workbench__rail">
-              <div className="dasti-workbench-top-left-slot dasti-workbench-top-left-slot--cv dasti-workbench-top-left-slot--cv-preview">
-                {workspaceModeToggleShell}
+          <>
+            <div className="dasti-cv-preview-workbench">
+              <div className="dasti-cv-preview-workbench__main">
+                <VerbatiCvPreviewPanel
+                  layoutMode="stacked"
+                  hostMode="workspace"
+                  railLeadControl={previewModeLeadControl}
+                  stylePreset={stylePreset}
+                  onStylePresetChange={setStylePreset}
+                />
               </div>
             </div>
-            <div className="dasti-cv-preview-workbench__main">
-              <VerbatiCvPreviewPanel
-                layoutMode="stacked"
-                hostMode="workspace"
-                stylePreset={stylePreset}
-                onStylePresetChange={setStylePreset}
-              />
-            </div>
-          </div>
+          </>
         ) : (
           <>
-            <div className="dasti-workbench-top-left-slot dasti-workbench-top-left-slot--cv dasti-workbench-top-left-slot--cv-edit">
-              {workspaceModeToggleShell}
+            <div
+              className="dasti-workbench-top-left-slot dasti-workbench-top-left-slot--cv dasti-workbench-top-left-slot--cv-edit dasti-workbench-top-left-slot--cv-toggle"
+              style={{
+                width: "100%",
+                maxWidth: editorGridMaxWidth,
+                marginInline: "auto",
+              }}
+            >
+              {editModeToggle}
             </div>
             <div
               style={{
