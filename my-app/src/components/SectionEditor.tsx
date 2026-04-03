@@ -247,6 +247,39 @@ function formatDiffValue(value: string | string[]): string {
   return value.trim();
 }
 
+function normalizePreviewPlaceholder(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function hasMeaningfulBlockPreview(block: unknown): boolean {
+  if (!block || typeof block !== "object") {
+    return false;
+  }
+
+  const record = block as Record<string, unknown>;
+  const plainText =
+    typeof record.plainText === "string" ? record.plainText.trim() : "";
+  if (
+    plainText &&
+    plainText !== "Start typing here..." &&
+    plainText !== "Start typing here…"
+  ) {
+    return true;
+  }
+
+  const content = record.content;
+  const normalized =
+    content && typeof content === "object"
+      ? normalizePreviewPlaceholder(docToPlainText(content as any))
+      : "";
+
+  return (
+    normalized.length > 0 &&
+    normalized !== "Start typing here..." &&
+    normalized !== "Start typing here…"
+  );
+}
+
 function CvAiDiffCard({
   label,
   before,
@@ -1886,6 +1919,9 @@ export default function SectionEditor({
     }
 
     const [savedTick, setSavedTick] = useState<string | null>(null);
+    const visibleSkillItems = items.filter(
+      (item) => String(item.name ?? "").trim().length > 0,
+    );
     function persistRows(next: ISkillItem[], tickId?: string) {
       try {
         const sanitized = next
@@ -2237,12 +2273,12 @@ export default function SectionEditor({
         {collapsed && (
           <div className="cv-section-preview">
             <div className="flex flex-wrap gap-2">
-              {items.length === 0 ? (
+              {visibleSkillItems.length === 0 ? (
                 <span className="cv-preview-empty cv-preview-text cv-preview-text--muted">
-                  No skills yet
+                  Add your first skill
                 </span>
               ) : (
-                items.map((s) => (
+                visibleSkillItems.map((s) => (
                   <span
                     key={s.id}
                     className="card-group inline-flex items-center gap-2 px-2.5 py-1 text-xs rounded-full [background:var(--sf2)] [color:var(--tm2)]"
@@ -2483,6 +2519,9 @@ export default function SectionEditor({
 
     // Inline-first editing for Languages (parity with Skills but without buckets/pinning/sort)
     const [languageRows, setLanguageRows] = useState<ILanguageItem[]>([]);
+    const visibleLanguageItems = items.filter(
+      (item) => String(item.name ?? "").trim().length > 0,
+    );
     const lastLanguagesSeedRef = useRef<string | null>(null);
     // Keep a ref to the latest local rows so the seeding effect can merge drafts safely.
     const languageRowsRef = useRef<ILanguageItem[]>([]);
@@ -2870,12 +2909,12 @@ export default function SectionEditor({
         {collapsed && (
           <div className="cv-section-preview">
             <div className="flex flex-wrap gap-2">
-              {items.length === 0 ? (
+              {visibleLanguageItems.length === 0 ? (
                 <span className="cv-preview-empty cv-preview-text cv-preview-text--muted">
-                  No languages yet
+                  Add your first language
                 </span>
               ) : (
-                items.map((lng) => (
+                visibleLanguageItems.map((lng) => (
                   <span
                     key={lng.id}
                     className="card-group inline-flex items-center gap-2 px-2.5 py-1 text-xs rounded-full [background:var(--sf2)] [color:var(--tm2)]"
@@ -3461,13 +3500,17 @@ export default function SectionEditor({
     const hasBlocks =
       Array.isArray(structuredSection.blocks) &&
       structuredSection.blocks.length > 0;
+    const hasMeaningfulBlocks =
+      hasBlocks &&
+      structuredSection.blocks.some((block) => hasMeaningfulBlockPreview(block));
+    const hasStructuredSeed = structuredList.length > 0;
     const collapsedListExpanded = Boolean(
       expandedStructuredSectionIds[String(section.id)],
     );
-    const sectionCanToggleEntries = hasBlocks
+    const sectionCanToggleEntries = hasMeaningfulBlocks
       ? structuredSection.blocks.length > 3
       : renderableStructured.length > 3;
-    const visibleBlocks = hasBlocks
+    const visibleBlocks = hasMeaningfulBlocks
       ? collapsedListExpanded
         ? structuredSection.blocks
         : structuredSection.blocks.slice(0, 3)
@@ -3498,6 +3541,11 @@ export default function SectionEditor({
         return false;
       }
     }
+
+    const emptyStructuredPlaceholder =
+      sectionType === "experience"
+        ? "Add role, company, dates, and bullet points"
+        : "Add degree, school, and dates";
 
     function commitStructuredSection(updatedSection: CvSection) {
       try {
@@ -3887,7 +3935,7 @@ export default function SectionEditor({
                   </div>
                 ) : null}
               </>
-            ) : hasBlocks ? (
+            ) : hasMeaningfulBlocks ? (
               <>
                 <p className="cv-preview-empty cv-preview-text cv-preview-text--muted">
                   Entries stored in rich text. Expand to view.
@@ -3920,6 +3968,10 @@ export default function SectionEditor({
                   </div>
                 ) : null}
               </>
+            ) : hasStructuredSeed ? (
+              <p className="cv-preview-empty cv-preview-text cv-preview-text--muted">
+                {emptyStructuredPlaceholder}
+              </p>
             ) : (
               <p className="cv-preview-empty cv-preview-text cv-preview-text--muted">
                 No entries
@@ -3947,7 +3999,7 @@ export default function SectionEditor({
               }
             }}
           >
-            {hasBlocks && !usingStructuredPreviewOverride ? (
+            {hasMeaningfulBlocks && !usingStructuredPreviewOverride ? (
               <>
                 <div className="cv-entry-stack">
                   {visibleBlocks.map((block) => (
@@ -4024,6 +4076,10 @@ export default function SectionEditor({
                   </div>
                 ) : null}
               </>
+            ) : hasStructuredSeed ? (
+              <p className="p-3 cv-preview-empty cv-preview-text cv-preview-text--muted">
+                {emptyStructuredPlaceholder}
+              </p>
             ) : (
               <p className="p-3 cv-preview-empty cv-preview-text cv-preview-text--muted">
                 No entries

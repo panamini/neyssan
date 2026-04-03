@@ -222,13 +222,13 @@
   --document-shell-padding-inline: 14px;
   --document-shell-padding-block: 14px;
   --document-rail-gap: 12px;
-  --document-stage-radius: clamp(12px, 1.5vw, 18px);
+  --document-stage-radius: 10px;
   --document-stage-halo: 0 0 0 1px
       color-mix(in srgb, var(--color-border) 48%, transparent),
     0 2px 12px rgba(0, 0, 0, 0.06);
   --document-viewer-bleed-inline: clamp(24px, 2.8vw, 40px);
   --document-viewer-bleed-block: clamp(28px, 3.2vw, 48px);
-  --document-viewer-radius: clamp(18px, 2vw, 24px);
+  --document-viewer-radius: 12px;
   --document-viewer-frame-surface: linear-gradient(
     180deg,
     color-mix(in srgb, var(--color-surface) 58%, var(--color-canvas) 42%),
@@ -428,16 +428,16 @@
 
 /* --- §6 Mode Light — Papier Lin --------------------------- */
 :root {
-  --bg: hsl(38, 16%, 95%);
-  --sf1: hsl(38, 12%, 93%);
-  --sf2: hsl(36, 14%, 88%);
-  --sfr: hsl(40, 20%, 99%);
-  --ti: hsl(30, 12%, 11%);
-  --tm2: hsl(30, 8%, 42%);
-  --tg2: hsl(30, 6%, 62%);
-  --border-soft: hsla(30, 10%, 12%, 0.07);
-  --border-field: hsla(30, 10%, 12%, 0.11);
-  --border-strong: hsla(30, 10%, 12%, 0.16);
+  --bg: #F3F0EB;
+  --sf1: #F7F4EF;
+  --sf2: #FCFAF7;
+  --sfr: #FFFFFF;
+  --ti: #171717;
+  --tm2: #4B4B4B;
+  --tg2: #7A7A7A;
+  --border-soft: rgba(0, 0, 0, 0.08);
+  --border-field: rgba(0, 0, 0, 0.06);
+  --border-strong: rgba(0, 0, 0, 0.12);
   --border-selected: color-mix(in srgb, var(--ac) 45%, transparent);
 
   /* §6 Sémantiques light — désaturées, analogiques */

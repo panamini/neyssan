@@ -236,7 +236,7 @@ export function AchievementsBlock({
               aria-label="Add your first achievement"
               title="Click to add your first achievement"
             >
-              No achievements yet — click to start typing
+              Add key wins, awards, or standout results
             </div>
           ) : isExpanded ? (
             <AchievementsDisplay

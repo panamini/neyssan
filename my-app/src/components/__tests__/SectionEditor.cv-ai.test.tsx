@@ -237,6 +237,7 @@ function renderSectionEditor(
     currentCv?: CvDocument | null;
     onChange?: ReturnType<typeof vi.fn>;
     onContentChange?: ReturnType<typeof vi.fn>;
+    collapsed?: boolean;
   },
 ) {
   mockCvLibraryValue.currentCv =
@@ -251,6 +252,7 @@ function renderSectionEditor(
       index={0}
       onChange={onChange}
       onContentChange={onContentChange}
+      collapsed={options?.collapsed}
     />,
   );
 
@@ -573,5 +575,90 @@ describe("SectionEditor CV AI flows", () => {
         }),
       ]),
     );
+  });
+
+  it("shows fresh-cv placeholder guidance for empty experience sections", () => {
+    const experienceSection: CvSection = {
+      id: "exp-empty",
+      title: "Experience",
+      type: "experience",
+      blocks: [
+        {
+          id: "exp-block-1",
+          type: "text",
+          content: ensureRemirrorDoc(undefined),
+          attributes: { linkedStructuredId: "exp-1" },
+        } as any,
+      ],
+      structuredContent: [
+        {
+          id: "exp-1",
+          company: "",
+          position: "",
+          startDate: "1970-01-01T00:00:00.000Z",
+          endDate: null,
+          responsibilities: ensureRemirrorDoc(undefined),
+          achievements: [],
+        },
+      ],
+    };
+
+    renderSectionEditor(experienceSection, { collapsed: true });
+
+    expect(
+      screen.getByText("Add role, company, dates, and bullet points"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Entries stored in rich text. Expand to view.")).not.toBeInTheDocument();
+    expect(screen.queryByText("No entries")).not.toBeInTheDocument();
+  });
+
+  it("shows fresh-cv placeholder guidance for empty education sections", () => {
+    const educationSection: CvSection = {
+      id: "edu-empty",
+      title: "Education",
+      type: "education",
+      blocks: [
+        {
+          id: "edu-block-1",
+          type: "text",
+          content: ensureRemirrorDoc(undefined),
+          attributes: { linkedStructuredId: "edu-1" },
+        } as any,
+      ],
+      structuredContent: [
+        {
+          id: "edu-1",
+          institution: "",
+          degree: "",
+          fieldOfStudy: "",
+          startDate: undefined,
+          endDate: undefined,
+          description: ensureRemirrorDoc(undefined),
+        },
+      ],
+    };
+
+    renderSectionEditor(educationSection);
+
+    expect(
+      screen.getByText("Add degree, school, and dates"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("No entries")).not.toBeInTheDocument();
+  });
+
+  it("shows fresh-cv placeholder guidance for empty achievements sections", () => {
+    const achievementsSection: CvSection = {
+      id: "ach-empty",
+      title: "Achievements",
+      type: "achievements",
+      blocks: [],
+      structuredContent: [],
+    };
+
+    renderSectionEditor(achievementsSection);
+
+    expect(
+      screen.getByText("Add key wins, awards, or standout results"),
+    ).toBeInTheDocument();
   });
 });

@@ -179,15 +179,9 @@
   align-content: start;
   padding: var(--document-viewer-bleed-block) var(--document-viewer-bleed-inline);
   border-radius: var(--document-viewer-radius);
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--color-surface) 58%, var(--color-canvas) 42%),
-    color-mix(in srgb, var(--color-canvas) 82%, var(--color-surface-muted) 18%)
-  );
-  border: 1px solid color-mix(in srgb, var(--color-border) 74%, transparent);
-  box-shadow:
-    inset 0 1px 0 hsl(0 0% 100% / 0.78),
-    0 16px 36px color-mix(in srgb, var(--color-text) 4%, transparent);
+  background: var(--document-viewer-frame-surface);
+  border: 1px solid var(--document-viewer-frame-border);
+  box-shadow: var(--document-viewer-frame-shadow);
   overflow: visible;
 }
 

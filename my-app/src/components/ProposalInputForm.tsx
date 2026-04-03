@@ -48,6 +48,7 @@ import { formatUiDate } from "../lib/ui-date";
 import { useScrollEdgeFades } from "../hooks/use-scroll-edge-fades";
 import { getVoicePresetDisplayLabel } from "../lib/proposal-voice-label";
 import {
+  ArrowSquareOut,
   Check,
   ChevronDown,
   FolderTree,
@@ -67,6 +68,7 @@ import {
   ProposalGenerateButtonGlyph,
   type ProposalGenerateButtonVisualState,
 } from "./ProposalGenerateGlyph";
+import { buildProposalSourceSummary } from "../lib/proposal-source-summary";
 
 interface ProposalInputFormProps {
   onSubmit: (
@@ -243,6 +245,54 @@ function formatToolbarResumeLabel(value: string | null | undefined): string {
   return `${normalized.slice(0, 12).trimEnd()}…`;
 }
 
+function formatImportedSourceLabel(
+  platform: string | null | undefined,
+  sourceUrl: string | null | undefined,
+): string | null {
+  const normalizedPlatform = String(platform ?? "").trim();
+  if (normalizedPlatform) {
+    if (/linkedin/i.test(normalizedPlatform)) {
+      return "LinkedIn";
+    }
+    if (/indeed/i.test(normalizedPlatform)) {
+      return "Indeed";
+    }
+    return capitalizeLabel(normalizedPlatform);
+  }
+
+  if (!sourceUrl) {
+    return null;
+  }
+
+  try {
+    const url = new URL(sourceUrl);
+    const hostname = url.hostname.replace(/^www\./i, "");
+    if (/linkedin/i.test(hostname)) {
+      return "LinkedIn";
+    }
+    if (/indeed/i.test(hostname)) {
+      return "Indeed";
+    }
+    return hostname;
+  } catch {
+    return "External source";
+  }
+}
+
+function formatImportedSourceHost(
+  sourceUrl: string | null | undefined,
+): string | null {
+  if (!sourceUrl) {
+    return null;
+  }
+
+  try {
+    return new URL(sourceUrl).hostname.replace(/^www\./i, "");
+  } catch {
+    return null;
+  }
+}
+
 const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   onSubmit,
   onStart,
@@ -309,7 +359,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
     topStrength: composeScrollTopStrength,
     bottomStrength: composeScrollBottomStrength,
     update: updateComposeScrollEdges,
-  } = useScrollEdgeFades<HTMLTextAreaElement>();
+  } = useScrollEdgeFades<HTMLDivElement>();
   const appliedPrefillRef = React.useRef<{
     handoffId: string;
     jobTitle: string;
@@ -523,6 +573,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
     },
   });
 
+  const watchedJobTitle = form.watch("jobTitle");
   const watchedJobDescription = form.watch("jobDescription");
   const selectedModelType = form.watch("modelType");
   const selectedProposalType = form.watch("proposalType");
@@ -1049,6 +1100,79 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
     ? TONE_OPTIONS.find((t) => t.id === selectedVisibleVoicePreset)?.uiLabel ??
       selectedVoicePresetDefinition.label
     : AUTO_TONE_OPTION.uiLabel;
+  const [isRawJobTextExpanded, setIsRawJobTextExpanded] =
+    React.useState<boolean>(true);
+  const sourceSummary = React.useMemo(
+    () =>
+      buildProposalSourceSummary({
+        jobTitle: watchedJobTitle,
+        jobDescription: watchedJobDescription,
+        voicePreset: selectedVisibleVoicePreset ?? null,
+      }),
+    [selectedVisibleVoicePreset, watchedJobDescription, watchedJobTitle],
+  );
+  const hasStructuredSourceSummary = React.useMemo(
+    () =>
+      Boolean(
+        sourceSummary.company ||
+          sourceSummary.location ||
+          sourceSummary.city ||
+          sourceSummary.address ||
+          sourceSummary.email ||
+          sourceSummary.phone ||
+          sourceSummary.role ||
+          sourceSummary.responsibilities.length ||
+          sourceSummary.keywords.length ||
+          sourceSummary.toneCues.length,
+      ),
+    [sourceSummary],
+  );
+  const sourceMetadataCards = React.useMemo(
+    () =>
+      [
+        { label: "Company", value: sourceSummary.company },
+        { label: "Role", value: sourceSummary.role },
+        {
+          label: "City",
+          value:
+            sourceSummary.city &&
+            sourceSummary.city !== sourceSummary.location
+              ? sourceSummary.city
+              : null,
+        },
+        { label: "Location", value: sourceSummary.location },
+        { label: "Email", value: sourceSummary.email },
+        { label: "Phone", value: sourceSummary.phone },
+        { label: "Address", value: sourceSummary.address },
+      ].filter(
+        (
+          item,
+        ): item is {
+          label: string;
+          value: string;
+        } => Boolean(item.value),
+      ),
+    [sourceSummary],
+  );
+  const importedSourceLabel = React.useMemo(
+    () => formatImportedSourceLabel(prefill?.platform, prefill?.sourceUrl),
+    [prefill?.platform, prefill?.sourceUrl],
+  );
+  const importedSourceHost = React.useMemo(
+    () => formatImportedSourceHost(prefill?.sourceUrl),
+    [prefill?.sourceUrl],
+  );
+  React.useEffect(() => {
+    updateComposeScrollEdges();
+  }, [
+    hasStructuredSourceSummary,
+    isRawJobTextExpanded,
+    sourceMetadataCards.length,
+    sourceSummary.keywords.length,
+    sourceSummary.responsibilities.length,
+    sourceSummary.toneCues.length,
+    updateComposeScrollEdges,
+  ]);
   const canStopGeneration =
     isGenerating && !isStopRequested && generateButtonState === "loading-stop";
   const generateButtonLabel = canStopGeneration
@@ -1365,33 +1489,168 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                     } as React.CSSProperties
                   }
                 >
-                  <textarea
-                    ref={(node) => {
-                      jobDescriptionRef.current = node;
-                      jobDescriptionFieldRef(node);
-                      attachComposeScrollEdges(node);
-                    }}
-                    id="jobDescription"
-                    {...jobDescriptionFieldProps}
-                    className="dasti-proposal-sheet__body--editable"
-                    style={{
-                      color: "var(--ti)",
-                      fontFamily: composeInputTypography.fontFamily,
-                      fontSize: "var(--tb)",
-                      lineHeight: "var(--lb)",
-                      fontWeight: composeInputTypography.fontWeight,
-                      letterSpacing: composeInputTypography.letterSpacing,
-                      outline: "none",
-                      display: "block",
-                      background: "transparent",
-                      width: "100%",
-                      height: "100%",
-                      resize: "none",
-                      overflowY: "auto",
-                      caretColor: "var(--ti)",
-                    }}
-                    placeholder={jobDescriptionPlaceholder}
-                  />
+                  <div
+                    className="dasti-proposal-source-scroll-region"
+                    ref={attachComposeScrollEdges}
+                  >
+                    {hasStructuredSourceSummary || importedSourceLabel ? (
+                      <div className="dasti-proposal-source-summary">
+                        {importedSourceLabel ? (
+                          <div className="dasti-proposal-source-summary__origin-strip">
+                            <div className="dasti-proposal-source-summary__origin-strip-copy">
+                              <div className="dasti-proposal-source-summary__label">
+                                Imported from
+                              </div>
+                              {prefill?.sourceUrl ? (
+                                <a
+                                  href={prefill.sourceUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="dasti-proposal-source-summary__origin-link dasti-proposal-source-summary__origin-link--prominent"
+                                >
+                                  <span>
+                                    Open original offer on {importedSourceLabel}
+                                  </span>
+                                  <ArrowSquareOut
+                                    size={14}
+                                    strokeWidth={1.8}
+                                    aria-hidden="true"
+                                  />
+                                </a>
+                              ) : (
+                                <span className="dasti-proposal-source-summary__origin-label">
+                                  {importedSourceLabel}
+                                </span>
+                              )}
+                              {importedSourceHost ? (
+                                <span className="dasti-proposal-source-summary__origin-host">
+                                  {importedSourceHost}
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+                        ) : null}
+                        <p className="dasti-proposal-source-summary__note">
+                          Quick scan only. Generation still uses the full job
+                          offer below.
+                        </p>
+                        <div className="dasti-proposal-source-summary__grid">
+                          {sourceMetadataCards.map((item) => (
+                            <div
+                              key={`${item.label}:${item.value}`}
+                              className="dasti-proposal-source-summary__card"
+                            >
+                              <div className="dasti-proposal-source-summary__label">
+                                {item.label}
+                              </div>
+                              <div className="dasti-proposal-source-summary__value">
+                                {item.value}
+                              </div>
+                            </div>
+                          ))}
+                          {sourceSummary.toneCues.length > 0 ? (
+                            <div className="dasti-proposal-source-summary__card">
+                              <div className="dasti-proposal-source-summary__label">
+                                Tone cues
+                              </div>
+                              <div className="dasti-proposal-source-summary__value dasti-proposal-source-summary__value--chips">
+                                {sourceSummary.toneCues.map((cue) => (
+                                  <span
+                                    key={cue}
+                                    className="dasti-proposal-source-summary__chip"
+                                  >
+                                    {cue}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+                        {sourceSummary.responsibilities.length > 0 ? (
+                          <div className="dasti-proposal-source-summary__block">
+                            <div className="dasti-proposal-source-summary__label">
+                              Key responsibilities
+                            </div>
+                            <ul className="dasti-proposal-source-summary__list">
+                              {sourceSummary.responsibilities.map((item) => (
+                                <li key={item}>{item}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
+                        {sourceSummary.keywords.length > 0 ? (
+                          <div className="dasti-proposal-source-summary__block">
+                            <div className="dasti-proposal-source-summary__label">
+                              Keywords
+                            </div>
+                            <div className="dasti-proposal-source-summary__keywords">
+                              {sourceSummary.keywords.map((keyword) => (
+                                <span
+                                  key={keyword}
+                                  className="dasti-proposal-source-summary__keyword"
+                                >
+                                  {keyword}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    <div className="dasti-proposal-source-raw">
+                      <button
+                        type="button"
+                        className="dasti-proposal-source-raw__toggle"
+                        onClick={() =>
+                          setIsRawJobTextExpanded((current) => !current)
+                        }
+                        aria-expanded={isRawJobTextExpanded}
+                        aria-controls="jobDescription"
+                      >
+                        <span className="dasti-proposal-source-raw__label">
+                          {isRawJobTextExpanded
+                            ? "Hide job offer"
+                            : "Show job offer"}
+                        </span>
+                      </button>
+                      {isRawJobTextExpanded ? (
+                        <div className="dasti-proposal-source-raw__editor">
+                          <textarea
+                            ref={(node) => {
+                              jobDescriptionRef.current = node;
+                              jobDescriptionFieldRef(node);
+                            }}
+                            id="jobDescription"
+                            {...jobDescriptionFieldProps}
+                            className="dasti-proposal-sheet__body--editable"
+                            style={{
+                              color: "var(--ti)",
+                              fontFamily: composeInputTypography.fontFamily,
+                              fontSize: "var(--tb)",
+                              lineHeight: composeInputTypography.lineHeight,
+                              fontWeight: composeInputTypography.fontWeight,
+                              letterSpacing:
+                                composeInputTypography.letterSpacing,
+                              outline: "none",
+                              display: "block",
+                              background: "transparent",
+                              width: "100%",
+                              height: "clamp(240px, 34vh, 420px)",
+                              resize: "none",
+                              overflowY: "auto",
+                              caretColor: "var(--ti)",
+                            }}
+                            placeholder={jobDescriptionPlaceholder}
+                          />
+                        </div>
+                      ) : (
+                        <p className="dasti-proposal-source-raw__collapsed-copy">
+                          The original job offer stays intact for generation and
+                          can be reopened here any time.
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </div>
                 {/* .cbar */}
                 <div className="dasti-proposal-toolbar dasti-proposal-toolbar--inside">
@@ -1553,31 +1812,6 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                 ) : null}
               </div>
             </div>
-            {prefill?.platform || prefill?.sourceUrl ? (
-              <div className="dasti-proposal-context-band">
-                {(prefill?.platform || prefill?.sourceUrl) && (
-                  <div className="dasti-proposal-source-meta">
-                    Imported from{" "}
-                    {prefill?.platform
-                      ? capitalizeLabel(prefill.platform)
-                      : "external source"}
-                    {prefill?.sourceUrl && (
-                      <>
-                        {" · "}
-                        <a
-                          href={prefill.sourceUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="underline underline-offset-2 hover:[color:var(--tm2)]"
-                        >
-                          View source
-                        </a>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-            ) : null}
             {form.formState.errors.jobTitle && (
               <p className={styles.errorMessage}>
                 {form.formState.errors.jobTitle.message}

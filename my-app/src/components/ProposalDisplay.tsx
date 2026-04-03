@@ -83,6 +83,33 @@ interface ProposalDisplayProps {
   characterLimitAdvisory?: boolean;
 }
 
+const PREVIEW_PARAGRAPH_ACTIONS: Array<{
+  id: InlineAiActionId;
+  label: string;
+  helperLabel: string;
+}> = [
+  {
+    id: "make_human",
+    label: "Rewrite",
+    helperLabel: "Rewrite",
+  },
+  {
+    id: "shorten",
+    label: "Shorten",
+    helperLabel: "Shorten",
+  },
+  {
+    id: "fix_grammar",
+    label: "Polish",
+    helperLabel: "Polish",
+  },
+  {
+    id: "ask",
+    label: "Ask AI",
+    helperLabel: "Ask AI",
+  },
+];
+
 function stripInlineMarkdown(text: string): string {
   return text
     .replace(/^\s{0,3}#{1,6}\s+/gm, "")
@@ -371,6 +398,8 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   const [isApplyingInlineAi, setIsApplyingInlineAi] = React.useState(false);
   const [pendingInlineAiActionId, setPendingInlineAiActionId] =
     React.useState<InlineAiActionId | null>(null);
+  const [queuedPreviewActionLabel, setQueuedPreviewActionLabel] =
+    React.useState<string | null>(null);
   const [textareaSelectionState, setTextareaSelectionState] = React.useState<{
     text: string;
     anchor: { left: number; top: number; bottom: number };
@@ -644,6 +673,25 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   }, [isEditable]);
 
   React.useEffect(() => {
+    if (!isEditable) {
+      setQueuedPreviewActionLabel(null);
+      return;
+    }
+
+    if (queuedPreviewActionLabel) {
+      window.setTimeout(() => {
+        editableTextareaRef.current?.focus();
+      }, 0);
+    }
+  }, [isEditable, queuedPreviewActionLabel]);
+
+  React.useEffect(() => {
+    if (textareaSelectionState) {
+      setQueuedPreviewActionLabel(null);
+    }
+  }, [textareaSelectionState]);
+
+  React.useEffect(() => {
     if (isEditable) {
       setIsZoomMenuOpen(false);
     }
@@ -739,6 +787,14 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       textareaSelectionState,
       transformEditorSelectionAction,
     ],
+  );
+
+  const handlePreviewParagraphAction = React.useCallback(
+    (label: string) => {
+      setQueuedPreviewActionLabel(label);
+      onModeChange?.("edit");
+    },
+    [onModeChange],
   );
 
   const attachPreviewScrollContainer = React.useCallback(
@@ -1124,7 +1180,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                     style={{
                       fontFamily: documentTypography.fontFamily,
                       fontSize: "var(--tb)",
-                      lineHeight: "var(--lb)",
+                      lineHeight: documentTypography.lineHeight,
                       fontWeight: documentTypography.fontWeight,
                       letterSpacing: documentTypography.letterSpacing,
                       color: "var(--proposal-document-ink)",
@@ -1295,6 +1351,12 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         data-scroll-bottom={activeScrollBottom ? "true" : "false"}
         style={activeScrollFadeStyle}
       >
+        {queuedPreviewActionLabel ? (
+          <div className="dasti-proposal-editor-hint" role="status" aria-live="polite">
+            Select a paragraph, then use {queuedPreviewActionLabel.toLowerCase()} in
+            the inline toolbar.
+          </div>
+        ) : null}
         {renderDocumentStage()}
       </div>
     ) : (
@@ -1323,7 +1385,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           style={{
             fontFamily: documentTypography.fontFamily,
             fontSize: "var(--tb)",
-            lineHeight: "var(--lb)",
+            lineHeight: documentTypography.lineHeight,
             fontWeight: documentTypography.fontWeight,
             letterSpacing: documentTypography.letterSpacing,
             color: "var(--ti)",
@@ -1349,7 +1411,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         style={{
           fontFamily: documentTypography.fontFamily,
           fontSize: "var(--tb)",
-          lineHeight: "var(--lb)",
+          lineHeight: documentTypography.lineHeight,
           fontWeight: documentTypography.fontWeight,
           letterSpacing: documentTypography.letterSpacing,
           color: "var(--ti)",
@@ -1427,6 +1489,23 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
             {sheetBody}
           </div>
         </div>
+        {!isEditable && proposalContent ? (
+          <div className="dasti-proposal-paragraph-affordances">
+            <span className="dasti-proposal-paragraph-affordances__label">
+              Paragraph actions
+            </span>
+            {PREVIEW_PARAGRAPH_ACTIONS.map((action) => (
+              <button
+                key={action.id}
+                type="button"
+                className="dasti-proposal-paragraph-affordances__action"
+                onClick={() => handlePreviewParagraphAction(action.helperLabel)}
+              >
+                {action.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
         {characterCountBadge ? (
           <div
             ref={characterBadgeWrapRef}
