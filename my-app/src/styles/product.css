@@ -199,11 +199,14 @@
 }
 
 .sb-section__action {
+  display: flex;
+  align-items: center;
   padding: 0 var(--space-2);
   min-height: var(--app-sidebar-action-height);
   color: var(--ti);
   font-size: var(--app-sidebar-label-size);
   font-weight: 500;
+  line-height: 1.32;
 }
 
 .sb-section__action:hover {
@@ -223,16 +226,32 @@
   position: relative;
 }
 
+.sb-section__list > li,
+.sb-section__document-row {
+  min-width: 0;
+  width: 100%;
+}
+
+.sb-section__document-row {
+  overflow: hidden;
+}
+
 .sb-section__document {
   position: relative;
   display: block;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   padding: 7px var(--space-2) 7px calc(var(--space-2) + var(--space-4));
-  padding-inline-end: calc(var(--space-6) + 32px);
+  padding-inline-end: calc(var(--space-2) + 34px);
   color: var(--color-text-muted);
   font-size: var(--app-sidebar-label-size);
   font-weight: 400;
   line-height: 1.32;
-  overflow-wrap: anywhere;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sb-section__document::before {
@@ -279,12 +298,15 @@
 .sb-item-actions {
   position: absolute;
   inset-block-start: 50%;
-  inset-inline-end: var(--space-2);
-  transform: translateY(-50%);
+  inset-inline-end: var(--space-1);
+  transform: translate3d(4px, -50%, 0);
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  z-index: 2;
+  z-index: 4;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-fast) var(--ease-standard);
 }
 
 .sb-item-action {
@@ -299,18 +321,28 @@
   background: transparent;
   color: var(--color-text-subtle);
   cursor: pointer;
-  opacity: 0;
   transition:
-    opacity var(--duration-fast) var(--ease-standard),
     background-color var(--duration-fast) var(--ease-standard),
     color var(--duration-fast) var(--ease-standard),
     border-color var(--duration-fast) var(--ease-standard);
 }
 
-.sb-section__document-row:hover .sb-item-action,
-.sb-section__document-row:focus-within .sb-item-action,
-.sb-section__document--active ~ .sb-item-actions .sb-item-action {
+.sb-section__document-row:hover .sb-item-actions,
+.sb-section__document-row:focus-within .sb-item-actions,
+.sb-section__document--active + .sb-item-actions {
   opacity: 1;
+  pointer-events: auto;
+  transform: translate3d(0, -50%, 0);
+}
+
+.sb-item-actions--always-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate3d(0, -50%, 0);
+}
+
+.sb-item-action--delete {
+  color: color-mix(in srgb, var(--color-text-subtle) 74%, var(--ti) 26%);
 }
 
 .sb-item-action:hover {
