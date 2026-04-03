@@ -5,7 +5,6 @@ import {
   ArrowLeft,
   Check,
   ChevronDown,
-  ChevronUp,
   FloppyDisk,
   PenLine,
   Trash,
@@ -3002,13 +3001,9 @@ export function ProposalForge(): JSX.Element {
                               }
                             >
                               {isBriefExpanded ? (
-                                <ChevronDown
-                                  size={14}
-                                  strokeWidth={1.7}
-                                  aria-hidden="true"
-                                />
+                                <X size={14} strokeWidth={1.9} aria-hidden="true" />
                               ) : (
-                                <ChevronUp
+                                <ChevronDown
                                   size={14}
                                   strokeWidth={1.7}
                                   aria-hidden="true"

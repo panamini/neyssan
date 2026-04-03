@@ -321,7 +321,7 @@ export function ProposalColorPickerPopover({
   return createPortal(
     <div
       ref={popoverRef}
-      className="dasti-color-popover"
+      className="dasti-color-popover dasti-toolbar-drawer-surface"
       style={
         {
           top: `${position.top}px`,
