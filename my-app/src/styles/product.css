@@ -6079,6 +6079,14 @@ html:not(.dark) .dasti-proposal-submit {
   gap: var(--space-1);
 }
 
+.dasti-import-dropdown__menu--compact {
+  inline-size: fit-content;
+  min-inline-size: 100%;
+  max-inline-size: min(288px, calc(100vw - (var(--space-4) * 2)));
+  padding: var(--space-1);
+  gap: 2px;
+}
+
 .dasti-toolbar-drawer-surface {
   border-radius: var(--radius-toolbar-shell, var(--radius-card));
   border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
@@ -7404,7 +7412,7 @@ html:not(.dark) .dasti-proposal-submit {
 .dasti-workbench-top-left-slot--cv-toggle {
   position: absolute;
   inset-block-start: var(--space-2);
-  inset-inline-start: var(--space-2);
+  inset-inline-start: var(--space-4);
   width: auto !important;
   max-width: none !important;
   margin: 0 !important;
@@ -8869,6 +8877,26 @@ html:not(.dark) .dasti-proposal-submit {
   gap: var(--space-4);
   padding: var(--space-4);
   border-radius: calc(var(--radius-card) + 2px);
+  border: 1px solid color-mix(in srgb, var(--color-border) 88%, white 12%);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, white 94%, var(--color-surface) 6%),
+      color-mix(in srgb, var(--color-surface) 98%, white 2%)
+    );
+  box-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.78),
+    0 18px 34px -30px color-mix(in srgb, black 22%, transparent);
+}
+
+.dark .dasti-settings-appearance-toolbar {
+  border-color: color-mix(in srgb, var(--color-border) 76%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--frost-bg, var(--document-viewer-frame-surface)) 90%,
+    transparent
+  );
+  box-shadow: var(--shadow-frost, var(--shadow-sm));
 }
 
 .dasti-settings-appearance-group {

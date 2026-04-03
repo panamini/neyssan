@@ -119,6 +119,8 @@ describe("ProfileReviewCard import", () => {
 
     await user.click(screen.getByRole("button", { name: "Import" }));
 
+    const menu = container.querySelector(".dasti-import-dropdown__menu");
+
     expect(
       screen.getByRole("button", { name: /Import text PDF or TXT/i }),
     ).toBeInTheDocument();
@@ -131,6 +133,7 @@ describe("ProfileReviewCard import", () => {
     expect(
       screen.queryByText(/Image-based PDF, screenshot, or photo/i),
     ).toBeNull();
+    expect(menu).toHaveClass("dasti-import-dropdown__menu--compact");
     expect(container.querySelectorAll(".dasti-menu-option__icon")).toHaveLength(2);
   });
 });

@@ -16,5 +16,8 @@ describe("CvForge toolbar CSS contracts", () => {
     expect(productCss).toMatch(
       /\.dasti-workbench-top-left-slot--cv-preview\s*\{[\s\S]*margin-bottom:\s*var\(--space-2\);[\s\S]*overflow:\s*visible;[\s\S]*pointer-events:\s*none;/,
     );
+    expect(productCss).toMatch(
+      /\.dasti-workbench-top-left-slot--cv-toggle\s*\{[\s\S]*inset-block-start:\s*var\(--space-2\);[\s\S]*inset-inline-start:\s*var\(--space-4\);/,
+    );
   });
 });
