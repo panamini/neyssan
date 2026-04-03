@@ -57,7 +57,7 @@ export const resumeLayoutSpec = {
   page: {
     width: "210mm",
     height: "297mm",
-    borderRadius: "8mm",
+    borderRadius: "1mm",
   },
   variants: {
 

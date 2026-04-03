@@ -122,6 +122,20 @@ describe("ProposalsList toolbar grouping", () => {
       container.querySelector(".dasti-proposal-library-selected-sidebar"),
     ).toBeTruthy();
     expect(container.querySelector(".dasti-proposal-library-card")).toBeTruthy();
+    expect(screen.getByText("Saved proposals")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("2 saved proposals"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("searchbox", { name: "Search saved proposals" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("combobox", { name: "Filter saved proposals by tone" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("combobox", { name: "Sort saved proposals" }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("Natural").length).toBeGreaterThan(0);
 
     expect(screen.getByRole("button", { name: /tone of voice/i })).toBeInTheDocument();
     expect(

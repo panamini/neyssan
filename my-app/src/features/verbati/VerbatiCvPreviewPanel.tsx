@@ -402,7 +402,8 @@ export function VerbatiCvPreviewPanel({
         .filter(Boolean)
         .join(" ")}
       style={{
-        background: "linear-gradient(180deg, var(--sfr), var(--sf1))",
+        background:
+          "linear-gradient(180deg, var(--sf2), color-mix(in srgb, var(--sf1) 88%, var(--bg) 12%))",
       }}
     >
       {previewSurface}
