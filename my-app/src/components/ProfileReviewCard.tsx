@@ -804,7 +804,7 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
                   </span>
                 </button>
                 {isAddSectionMenuOpen ? (
-                  <div className="dasti-import-dropdown__menu dasti-add-section-menu">
+                  <div className="dasti-import-dropdown__menu dasti-add-section-menu dasti-toolbar-drawer-surface">
                     {addableSectionOptions.map((option) => (
                       <button
                         key={option.value}
@@ -866,7 +866,7 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
                   </span>
                 </button>
                 {isManageSectionsMenuOpen ? (
-                  <div className="dasti-import-dropdown__menu dasti-add-section-menu">
+                  <div className="dasti-import-dropdown__menu dasti-add-section-menu dasti-add-section-menu--manage dasti-toolbar-drawer-surface">
                     {removableAddedSectionTypes.map((sectionType) => {
                       const sectionLabel =
                         sectionCatalog.find(
@@ -886,9 +886,6 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
                               <div className="dasti-menu-option__title">
                                 Remove {sectionLabel}
                               </div>
-                              <div className="dasti-menu-option__description">
-                                Remove this optional section from the resume.
-                              </div>
                             </div>
                           </div>
                         </button>
@@ -904,9 +901,6 @@ export function ProfileReviewCard({ cvId, profile }: Props) {
                           <div className="dasti-menu-option__copy">
                             <div className="dasti-menu-option__title">
                               Remove all optional sections
-                            </div>
-                            <div className="dasti-menu-option__description">
-                              Keep only the core sections in this CV.
                             </div>
                           </div>
                         </div>
