@@ -76,17 +76,12 @@ vi.mock("../../contexts/CvLibraryContext", () => ({
   }),
 }));
 
-vi.mock("../ProposalArtifactInspector", () => ({
-  ProposalArtifactInspector: () => <div>Style inspector</div>,
-}));
-
 vi.mock("../ProposalDisplay", () => ({
   default: (props: Record<string, unknown>) => {
     proposalDisplaySpy(props);
     return (
       <div data-testid="proposal-display">
-        {props.railStartAddon as React.ReactNode}
-        {props.actions as React.ReactNode}
+        {props.detachedActionHeaderSupplement as React.ReactNode}
       </div>
     );
   },
@@ -115,8 +110,9 @@ describe("ProposalsList toolbar grouping", () => {
       expect(mainCall?.documentHeaderMode).toBe("actions-only");
       expect(mainCall?.detachedActionHeader).toBe(true);
       expect(mainCall?.showDocumentCaption).toBe(false);
-      expect(mainCall?.railStartAddon).toBeTruthy();
-      expect(mainCall?.actions).toBeTruthy();
+      expect(mainCall?.railStartAddon).toBeUndefined();
+      expect(mainCall?.actions).toBeUndefined();
+      expect(mainCall?.detachedActionHeaderSupplement).toBeTruthy();
     });
 
     expect(screen.getByTestId("saved-view-actions")).toBeInTheDocument();
@@ -125,9 +121,7 @@ describe("ProposalsList toolbar grouping", () => {
     ).toBeTruthy();
     expect(container.querySelector(".dasti-proposal-library-card")).toBeTruthy();
 
-    expect(
-      screen.getByRole("button", { name: "Tone of voice Natural" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /tone of voice/i })).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Refine saved proposal" }),
     ).toBeInTheDocument();
@@ -135,7 +129,7 @@ describe("ProposalsList toolbar grouping", () => {
       screen.getByRole("button", { name: "Refine saved proposal" }),
     ).not.toHaveClass("dasti-toolbar-tooltip-trigger--above");
 
-    fireEvent.click(screen.getByRole("button", { name: "Tone of voice Natural" }));
+    fireEvent.click(screen.getByRole("button", { name: /tone of voice/i }));
 
     expect(screen.getByRole("dialog", { name: "Tone of voice" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Auto" })).toBeInTheDocument();
@@ -143,13 +137,16 @@ describe("ProposalsList toolbar grouping", () => {
       "data-toolbar-tooltip-placement",
       "inline-end",
     );
-    fireEvent.click(screen.getByRole("button", { name: "Formal" }));
-    fireEvent.click(screen.getByRole("button", { name: "Refine saved proposal" }));
+    fireEvent.click(screen.getByRole("button", { name: "Auto" }));
+    expect(
+      screen.getByRole("button", { name: "Apply tone change" }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Apply tone change" }));
 
     await waitFor(() => {
       expect(generateProposalActionMock).toHaveBeenCalledWith(
         expect.objectContaining({
-          voicePreset: "expert",
+          voicePreset: null,
         }),
       );
     });

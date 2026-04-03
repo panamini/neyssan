@@ -80,11 +80,11 @@ describe("CvForge workspace mode", () => {
       container.querySelector(".dasti-workbench-top-left-slot--cv-preview"),
     ).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: "Return to resume editing" }),
+      screen.getByRole("button", { name: "Back to resume editing" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Return to resume editing" }),
-    ).toHaveAttribute("data-toolbar-tooltip", "Switch to edit");
+      screen.getByRole("button", { name: "Back to resume editing" }),
+    ).toHaveAttribute("data-toolbar-tooltip", "Back to edit");
     expect(
       window.localStorage.getItem("dasti:cv-forge-workspace-mode:v1"),
     ).toBe("preview");
