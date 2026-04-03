@@ -1620,6 +1620,7 @@ function collectContactLines(lines: string[], email?: string, phone?: string, li
 function deriveNameFromContext(normalized: any, context: CanonicalizeContext): string | undefined {
   const existing = coerceString(normalized?.name ?? normalized?.contact?.name ?? "");
   if (existing && isUsablePersonName(existing, existing)) return existing;
+  const skillTokens = collectSkillTokens(normalized);
 
   const email = coerceString(normalized?.contact?.email ?? "") || undefined;
   const phone = coerceString(normalized?.contact?.phone ?? normalized?.contact?.phoneRaw ?? "") || undefined;
@@ -1653,6 +1654,7 @@ function deriveNameFromContext(normalized: any, context: CanonicalizeContext): s
       if (!isUsablePersonName(formatted, line)) return;
       const normalizedKey = normalizeCandidateForStoplist(formatted);
       if (!normalizedKey || isHeaderStopword(normalizedKey) || isGeoStopword(normalizedKey)) return;
+      if (skillTokens.has(normalizedKey)) return;
       const score = computeNameScore(formatted, normalizedTokens, idx, weight, contactLines);
       const previous = seen.get(normalizedKey) ?? -Infinity;
       if (score <= previous) return;

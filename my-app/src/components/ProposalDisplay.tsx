@@ -974,7 +974,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       <div
         className={
           shouldDetachActionHeader
-            ? "dasti-document-rail dasti-document-rail--detached dasti-toolbar--surface-tooltips"
+            ? "dasti-document-rail dasti-document-rail--detached dasti-proposal-saved-view-toolbar dasti-toolbar--surface-tooltips"
             : "dasti-document-rail dasti-toolbar--surface-tooltips"
         }
         data-no-pan="true"

@@ -221,6 +221,7 @@ export default defineSchema({
       ),
     ),
     proposalAccentHex: v.optional(v.union(v.string(), v.null())),
+    proposalFontPairId: v.optional(v.union(v.string(), v.null())),
     proposalSourceMode: v.optional(proposalStyleLinkModeChoice),
     // New optional profile fields for ingestion
     summary: v.optional(v.string()),

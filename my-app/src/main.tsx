@@ -9,6 +9,7 @@ import "./styles/tailwind.css";
 import "./index.css";
 import "remirror/styles/all.css";
 import { ToastProvider } from "./components/ui/toast";
+import { ensureLocalFontFacesLoaded } from "./features/verbati/fontCatalog";
 
 if (import.meta.env.DEV) {
   const parserUrl = import.meta.env.VITE_PARSER_URL ?? import.meta.env.VITE_CONVEX_PARSER_URL;
@@ -19,6 +20,8 @@ if (import.meta.env.DEV) {
     console.warn("[structuredUpload] Parser URL unresolved. Ensure start-parser-service.sh has populated .parser-tunnel-url.");
   }
 }
+
+ensureLocalFontFacesLoaded();
 
 /**
  * Global app entry.
