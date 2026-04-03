@@ -11,7 +11,6 @@ import {
   Paperclip,
   ChevronDown,
   FilePdf,
-  FileText,
   FileImage,
 } from "@/lib/icons";
 import { useToast } from "./ui/toast";
@@ -669,7 +668,7 @@ export function StructuredUploadButton({
             <div className="dasti-import-dropdown__menu">
               <button
                 type="button"
-                className="dasti-menu-option"
+                className="dasti-menu-option dasti-menu-option--import-route"
                 onClick={() => startMenuImport("default")}
               >
                 <div className="dasti-menu-option__row">
@@ -677,32 +676,22 @@ export function StructuredUploadButton({
                     <span className="dasti-menu-option__icon">
                       <FilePdf size={15} strokeWidth={1.6} />
                     </span>
-                    <span className="dasti-menu-option__icon">
-                      <FileText size={15} strokeWidth={1.6} />
-                    </span>
                   </div>
                   <div className="dasti-menu-option__copy">
                     <div className="dasti-menu-option__title">
                       Import text PDF or TXT
-                    </div>
-                    <div className="dasti-menu-option__description">
-                      Selectable PDF or plain text resume. Best for structured
-                      parsing.
                     </div>
                   </div>
                 </div>
               </button>
               <button
                 type="button"
-                className="dasti-menu-option"
+                className="dasti-menu-option dasti-menu-option--import-route"
                 onClick={() => startMenuImport("mistral")}
                 disabled={!mistralAvailable}
               >
                 <div className="dasti-menu-option__row">
                   <div className="dasti-menu-option__icons" aria-hidden>
-                    <span className="dasti-menu-option__icon">
-                      <FilePdf size={15} strokeWidth={1.6} />
-                    </span>
                     <span className="dasti-menu-option__icon">
                       <FileImage size={15} strokeWidth={1.6} />
                     </span>
@@ -710,9 +699,6 @@ export function StructuredUploadButton({
                   <div className="dasti-menu-option__copy">
                     <div className="dasti-menu-option__title">
                       Import scanned PDF or image
-                    </div>
-                    <div className="dasti-menu-option__description">
-                      Image-based PDF, screenshot, or photo. Uses Mistral OCR.
                     </div>
                   </div>
                 </div>
