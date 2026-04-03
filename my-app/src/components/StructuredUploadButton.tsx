@@ -665,7 +665,7 @@ export function StructuredUploadButton({
             <ChevronDown size={14} aria-hidden />
           </button>
           {isMenuOpen ? (
-            <div className="dasti-import-dropdown__menu">
+            <div className="dasti-import-dropdown__menu dasti-import-dropdown__menu--compact dasti-toolbar-drawer-surface">
               <button
                 type="button"
                 className="dasti-menu-option dasti-menu-option--import-route"
