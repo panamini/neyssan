@@ -172,6 +172,10 @@ function resolveDocumentTitles(
   return titles;
 }
 
+function formatSidebarResumeLabel(value: string): string {
+  return value.replace(/\s+[—–]\s+/g, " - ");
+}
+
 function SidebarDocumentSection({
   sectionLabel,
   hasDocuments,
@@ -268,7 +272,7 @@ function SidebarDocumentSection({
                         ) : (
                           <button
                             type="button"
-                            className="sb-item-action card-delete-btn"
+                            className="sb-item-action sb-item-action--delete"
                             title={`Delete ${item.title}`}
                             aria-label={`Delete ${item.title}`}
                             onClick={(event) => {
@@ -676,17 +680,19 @@ export const Sidebar: React.FC = () => {
 
         return {
           key: String(cv.id),
-          rawTitle: formatCvDisplayTitle({
-            title: cv.title,
-            profileName:
-              typeof profileItem?.name === "string" ? profileItem.name : null,
-            desiredPosition:
-              typeof profileItem?.desiredPosition === "string"
-                ? profileItem.desiredPosition
-                : typeof profileItem?.title === "string"
-                ? profileItem.title
-                  : null,
-          }),
+          rawTitle: formatSidebarResumeLabel(
+            formatCvDisplayTitle({
+              title: cv.title,
+              profileName:
+                typeof profileItem?.name === "string" ? profileItem.name : null,
+              desiredPosition:
+                typeof profileItem?.desiredPosition === "string"
+                  ? profileItem.desiredPosition
+                  : typeof profileItem?.title === "string"
+                    ? profileItem.title
+                    : null,
+            }),
+          ),
           onOpen: () => {
             queueResumeLoad(String(cv.id));
           },
