@@ -218,6 +218,7 @@
   --document-sheet-ratio: 1 / 1.41421356;
   --document-sheet-min-block: 420px;
   --document-sheet-max-block: min(72vh, 780px);
+  --document-paper-radius: 4px;
   --document-shell-padding-inline: 14px;
   --document-shell-padding-block: 14px;
   --document-rail-gap: 12px;
@@ -225,8 +226,8 @@
   --document-stage-halo: 0 0 0 1px
       color-mix(in srgb, var(--color-border) 48%, transparent),
     0 2px 12px rgba(0, 0, 0, 0.06);
-  --document-viewer-bleed-inline: clamp(16px, 1.8vw, 24px);
-  --document-viewer-bleed-block: clamp(18px, 2.1vw, 28px);
+  --document-viewer-bleed-inline: clamp(24px, 2.8vw, 40px);
+  --document-viewer-bleed-block: clamp(28px, 3.2vw, 48px);
   --document-viewer-radius: clamp(18px, 2vw, 24px);
   --document-viewer-frame-surface: linear-gradient(
     180deg,
@@ -437,6 +438,7 @@
   --border-soft: hsla(30, 10%, 12%, 0.07);
   --border-field: hsla(30, 10%, 12%, 0.11);
   --border-strong: hsla(30, 10%, 12%, 0.16);
+  --border-selected: color-mix(in srgb, var(--ac) 45%, transparent);
 
   /* §6 Sémantiques light — désaturées, analogiques */
   --ok: hsl(152, 20%, 28%);
@@ -521,16 +523,17 @@
 /* --- §6 Mode Dark — 3-tier neutral dark ------------------- */
 .dark {
   color-scheme: dark;
-  --bg: #141414;
-  --sf1: #1A1A1A;
-  --sf2: #1C1C1C;
-  --sfr: #1F1F1F;
-  --ti: hsl(46, 12%, 86%);
-  --tm2: hsl(44, 8%, 60%);
-  --tg2: hsl(42, 6%, 38%);
-  --border-soft: hsla(0, 0%, 100%, 0.10);
-  --border-field: hsla(0, 0%, 100%, 0.16);
-  --border-strong: hsla(0, 0%, 100%, 0.22);
+  --bg: #0D0D0D;
+  --sf1: #111111;
+  --sf2: #161616;
+  --sfr: #1E1E1E;
+  --ti: #F5F3EF;
+  --tm2: #C9C5BE;
+  --tg2: #9B978F;
+  --border-soft: rgba(255, 255, 255, 0.08);
+  --border-field: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.12);
+  --border-selected: color-mix(in srgb, var(--ac) 65%, transparent);
 
   /* §6 Sémantiques dark — sat ≤26% Itten */
   --ok: hsl(152, 22%, 56%);
@@ -544,9 +547,9 @@
   --wat: hsl(36, 26%, 72%);
 
   /* §9 Ombres dark */
-  --sha: 0 1px 2px hsla(0, 0%, 0%, 0.24), 0 8px 18px hsla(0, 0%, 0%, 0.22);
-  --shb: 0 2px 8px hsla(0, 0%, 0%, 0.28), 0 14px 30px hsla(0, 0%, 0%, 0.3);
-  --shc: 0 8px 22px hsla(0, 0%, 0%, 0.34), 0 28px 56px hsla(0, 0%, 0%, 0.36);
+  --sha: 0 4px 24px rgba(0, 0, 0, 0.40), 0 1px 2px rgba(0, 0, 0, 0.80);
+  --shb: 0 6px 32px rgba(0, 0, 0, 0.48), 0 2px 4px rgba(0, 0, 0, 0.72);
+  --shc: 0 12px 48px rgba(0, 0, 0, 0.56), 0 4px 8px rgba(0, 0, 0, 0.64);
   --shadow-frost: 0 14px 34px hsla(0, 0%, 0%, 0.32);
   --proposal-compose-edge-top-fade: linear-gradient(
     to bottom,
@@ -674,6 +677,8 @@
   --color-border: var(--border-soft);
   --color-border-strong: var(--border-field);
   --color-border-contrast: var(--border-strong);
+  --color-border-hover: var(--border-strong);
+  --color-border-selected: var(--border-selected);
   --color-accent: var(--ac);
   --color-accent-hover: var(--am);
   --color-accent-soft: var(--as);
