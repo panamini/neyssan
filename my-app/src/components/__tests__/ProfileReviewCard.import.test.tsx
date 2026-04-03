@@ -111,4 +111,26 @@ describe("ProfileReviewCard import", () => {
       ]),
     );
   });
+
+  it("keeps the import drawer compact with one icon per route and no subtitles", async () => {
+    const user = userEvent.setup();
+
+    const { container } = render(<ProfileReviewCard />);
+
+    await user.click(screen.getByRole("button", { name: "Import" }));
+
+    expect(
+      screen.getByRole("button", { name: /Import text PDF or TXT/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Import scanned PDF or image/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Selectable PDF or plain text resume/i),
+    ).toBeNull();
+    expect(
+      screen.queryByText(/Image-based PDF, screenshot, or photo/i),
+    ).toBeNull();
+    expect(container.querySelectorAll(".dasti-menu-option__icon")).toHaveLength(2);
+  });
 });

@@ -700,6 +700,18 @@
   color: var(--tm2);
 }
 
+.dasti-menu-option--import-route {
+  padding: var(--space-2) var(--space-3);
+}
+
+.dasti-menu-option--import-route .dasti-menu-option__row {
+  gap: var(--space-3);
+}
+
+.dasti-menu-option--import-route .dasti-menu-option__copy {
+  gap: 0;
+}
+
 /* ============================================================
    DIALOG ANIMATION
    ============================================================ */

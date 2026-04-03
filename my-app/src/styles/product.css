@@ -6079,6 +6079,21 @@ html:not(.dark) .dasti-proposal-submit {
   gap: var(--space-1);
 }
 
+.dasti-toolbar-drawer-surface {
+  border-radius: var(--radius-toolbar-shell, var(--radius-card));
+  border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--frost-bg, var(--document-viewer-frame-surface)) 90%,
+    transparent
+  );
+  box-shadow: var(--shadow-frost, var(--shadow-sm));
+  backdrop-filter: saturate(var(--frost-saturate, 1))
+    blur(var(--frost-blur, 14px));
+  -webkit-backdrop-filter: saturate(var(--frost-saturate, 1))
+    blur(var(--frost-blur, 14px));
+}
+
 .dasti-add-section-trigger {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
@@ -6112,7 +6127,19 @@ html:not(.dark) .dasti-proposal-submit {
 }
 
 .dasti-add-section-menu {
-  width: min(320px, calc(100vw - (var(--space-4) * 2)));
+  left: 0;
+  right: auto;
+  width: 100%;
+  min-width: 100%;
+  padding: var(--space-1);
+}
+
+.dasti-add-section-menu--manage {
+  left: 0;
+  right: auto;
+  width: 100%;
+  min-width: 100%;
+  padding: var(--space-1);
 }
 
 .cv-photo-upload-trigger {
@@ -8828,78 +8855,80 @@ html:not(.dark) .dasti-proposal-submit {
   align-items: center;
 }
 
+.dasti-settings-section--preview,
+.dasti-settings-section--font-pair {
+  gap: var(--space-4);
+}
+
+.dasti-settings-section--appearance {
+  gap: var(--space-3);
+}
+
+.dasti-settings-appearance-toolbar {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border-radius: calc(var(--radius-card) + 2px);
+}
+
+.dasti-settings-appearance-group {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.dasti-settings-appearance-label {
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tm2);
+}
+
 .dasti-settings-font-card {
   width: 100%;
   min-width: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 160px) minmax(0, 1fr);
+  display: flex;
   align-items: center;
-  gap: var(--space-3);
+  justify-content: center;
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-card);
   text-align: left;
 }
 
-.dasti-settings-font-card__preview {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
-.dasti-settings-font-card__heading,
-.dasti-settings-font-card__body {
-  display: block;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.dasti-settings-font-card__heading {
-  font-size: 18px;
-  line-height: 1.1;
-  color: var(--ti);
-}
-
-.dasti-settings-font-card__body {
-  font-size: var(--ts);
-  line-height: var(--ls);
-  color: var(--tm2);
-}
-
 .dasti-settings-font-card__meta {
-  display: grid;
-  gap: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   min-width: 0;
 }
 
 .dasti-settings-font-card__name {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   font-size: var(--ts);
   line-height: 1.25;
   font-weight: 600;
   color: var(--ti);
-}
-
-.dasti-settings-font-card__description {
-  font-size: var(--tx);
-  line-height: var(--lx);
-  color: var(--tm2);
-}
-
-.dasti-settings-font-card__status {
-  font-size: var(--tx);
-  font-weight: 600;
-  color: var(--tm2);
-  justify-self: end;
+  width: 100%;
 }
 
 .dasti-settings-font-card--current {
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  width: 100%;
+  min-height: 44px;
+  border-radius: var(--radius-toolbar-shell, var(--radius-card));
+  cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
+  background: color-mix(in srgb, var(--color-surface) 80%, transparent);
 }
 
 .dasti-settings-font-carousel {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-2);
+  width: min(100%, 520px);
+  margin-inline: auto;
 }
 
 .dasti-settings-font-carousel__controls {
@@ -8938,8 +8967,77 @@ html:not(.dark) .dasti-proposal-submit {
 
 .dasti-settings-font-drawer {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: var(--space-2);
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  padding: var(--space-1) 0;
+  width: 100%;
+  margin-inline: 0;
+  border-radius: var(--radius-toolbar-shell, var(--radius-card));
+  border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--frost-bg, var(--document-viewer-frame-surface)) 90%,
+    transparent
+  );
+  box-shadow: var(--shadow-frost, var(--shadow-sm));
+  backdrop-filter: saturate(var(--frost-saturate, 1))
+    blur(var(--frost-blur, 14px));
+  -webkit-backdrop-filter: saturate(var(--frost-saturate, 1))
+    blur(var(--frost-blur, 14px));
+}
+
+.dasti-settings-font-drawer-divider {
+  height: 1px;
+  margin: 0 var(--space-3);
+  background: color-mix(in srgb, var(--color-border) 84%, transparent);
+}
+
+.dasti-settings-font-drawer-option {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0 var(--space-3);
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--tm2);
+  font: inherit;
+  font-size: var(--ts);
+  font-weight: 500;
+  text-align: left;
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.dasti-settings-font-drawer-option:hover,
+.dasti-settings-font-drawer-option:focus-visible {
+  background: color-mix(in srgb, var(--sfr) 92%, transparent);
+  color: var(--ti);
+  outline: none;
+}
+
+.dasti-settings-font-drawer-option--active {
+  background: color-mix(in srgb, var(--sfr) 94%, transparent);
+  color: var(--ti);
+}
+
+.dasti-settings-font-drawer-option__label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  text-align: left;
+}
+
+.dasti-settings-font-token {
+  display: inline-block;
+  color: var(--ti);
+}
+
+.dasti-settings-font-token-separator {
+  color: var(--tm2);
 }
 
 .dasti-settings-preview-stage {
@@ -8974,14 +9072,25 @@ html:not(.dark) .dasti-proposal-submit {
   overflow: hidden;
 }
 
+.dark .dasti-settings-preview-card {
+  background:
+    radial-gradient(
+      circle at top right,
+      color-mix(in srgb, var(--settings-preview-accent) 10%, transparent) 0%,
+      transparent 42%
+    ),
+    linear-gradient(
+      160deg,
+      color-mix(in srgb, var(--color-surface) 88%, var(--settings-preview-accent) 12%),
+      color-mix(in srgb, var(--color-canvas) 92%, var(--settings-preview-accent) 8%)
+    );
+  box-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.04),
+    0 18px 40px -32px color-mix(in srgb, black 72%, var(--settings-preview-accent) 28%);
+}
+
 .dasti-settings-preview-card::after {
-  content: "";
-  position: absolute;
-  inset: auto var(--space-4) var(--space-4) auto;
-  width: 44px;
-  height: 44px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--settings-preview-accent) 22%, transparent);
+  display: none;
 }
 
 .dasti-settings-preview-card--technical {
@@ -9046,7 +9155,7 @@ html:not(.dark) .dasti-proposal-submit {
   z-index: 1;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: var(--space-2);
   flex-wrap: wrap;
 }
@@ -9057,36 +9166,21 @@ html:not(.dark) .dasti-proposal-submit {
   min-height: 24px;
   padding: 0 var(--space-2);
   border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 68%, transparent);
   background: color-mix(in srgb, white 82%, var(--settings-preview-accent) 18%);
   color: var(--ti);
   font-size: var(--tx);
   font-weight: 600;
 }
 
-.dasti-settings-preview-card__meta {
-  font-size: var(--tx);
-  line-height: 1.2;
-  color: var(--tm2);
-}
-
-.dasti-settings-preview-stage__copy {
-  display: grid;
-  gap: 4px;
-  max-width: 440px;
-}
-
-.dasti-settings-preview-stage__title {
-  font-size: var(--ts);
-  line-height: 1.3;
-  font-weight: 600;
-  color: var(--ti);
-}
-
-.dasti-settings-preview-stage__description {
-  margin: 0;
-  font-size: var(--tx);
-  line-height: 1.6;
-  color: var(--tm2);
+.dark .dasti-settings-preview-card__chip {
+  background: color-mix(
+    in srgb,
+    var(--color-surface-raised) 78%,
+    var(--settings-preview-accent) 22%
+  );
+  border-color: color-mix(in srgb, white 18%, var(--settings-preview-accent) 24%);
+  color: var(--color-text);
 }
 
 .dasti-settings-style-grid {
@@ -9098,11 +9192,11 @@ html:not(.dark) .dasti-proposal-submit {
 .dasti-settings-style-card {
   display: grid;
   gap: var(--space-2);
-  min-height: 112px;
+  min-height: 96px;
   padding: var(--space-3);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
-  background: var(--color-surface);
+  background: color-mix(in srgb, var(--color-surface) 94%, transparent);
   color: var(--tm2);
   text-align: left;
   cursor: pointer;
@@ -9142,28 +9236,30 @@ html:not(.dark) .dasti-proposal-submit {
 }
 
 .dasti-settings-style-card__indicator {
-  width: 18px;
-  height: 18px;
+  min-height: 24px;
+  padding: 0 10px;
   border-radius: 999px;
   border: 1px solid color-mix(in srgb, var(--color-border-contrast) 78%, transparent);
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
   color: var(--ti);
   flex: 0 0 auto;
-}
-
-.dasti-settings-style-card__template {
-  font-size: var(--tx);
-  line-height: 1.2;
-  font-weight: 600;
-  color: color-mix(in srgb, var(--tm2) 72%, var(--ti) 28%);
+  background: color-mix(in srgb, var(--sf1) 92%, transparent);
 }
 
 .dasti-settings-style-card__description {
   font-size: var(--tx);
   line-height: 1.55;
   color: var(--tm2);
+}
+
+.dasti-settings-appearance-toolbar .dasti-settings-section__row--palette {
+  gap: var(--space-2);
 }
 
 /* Pill buttons */
@@ -9739,6 +9835,12 @@ html:not(.dark) .dasti-proposal-submit {
     transform var(--duration-fast) var(--ease-standard),
     border-color var(--duration-fast) var(--ease-standard),
     background var(--duration-fast) var(--ease-standard);
+}
+
+@media (max-width: 720px) {
+  .dasti-settings-preview-card {
+    width: 100%;
+  }
 }
 
 .dasti-template-card:hover,
