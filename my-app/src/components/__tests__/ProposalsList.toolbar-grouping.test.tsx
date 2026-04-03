@@ -110,6 +110,8 @@ describe("ProposalsList toolbar grouping", () => {
       expect(mainCall?.documentHeaderMode).toBe("actions-only");
       expect(mainCall?.detachedActionHeader).toBe(true);
       expect(mainCall?.showDocumentCaption).toBe(false);
+      expect(mainCall?.showModeToggle).toBeFalsy();
+      expect(mainCall?.onCopy).toBeUndefined();
       expect(mainCall?.railStartAddon).toBeUndefined();
       expect(mainCall?.actions).toBeUndefined();
       expect(mainCall?.detachedActionHeaderSupplement).toBeTruthy();

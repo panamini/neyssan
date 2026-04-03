@@ -6,6 +6,8 @@ import { X } from "@/lib/icons";
 import { useCloseOnEscape } from "@/hooks/use-close-on-escape";
 import { BodyPortal } from "@/components/ui/body-portal";
 
+const DIALOG_EXIT_DURATION = 150;
+
 export interface DialogProps {
   open: boolean;
   onClose: () => void;
@@ -21,22 +23,56 @@ export function Dialog({
   children,
   className,
 }: DialogProps) {
+  const [isVisible, setIsVisible] = React.useState(open);
+  const [surfaceState, setSurfaceState] = React.useState<"closed" | "open">(
+    open ? "closed" : "closed",
+  );
+  const exitTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const enterFrameRef = React.useRef<number | null>(null);
+
+  React.useEffect(() => {
+    if (open) {
+      if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
+      if (enterFrameRef.current) cancelAnimationFrame(enterFrameRef.current);
+      setIsVisible(true);
+      setSurfaceState("closed");
+      enterFrameRef.current = requestAnimationFrame(() => {
+        setSurfaceState("open");
+      });
+    } else if (isVisible) {
+      if (enterFrameRef.current) cancelAnimationFrame(enterFrameRef.current);
+      setSurfaceState("closed");
+      exitTimerRef.current = setTimeout(() => {
+        setIsVisible(false);
+      }, DIALOG_EXIT_DURATION);
+    }
+    return () => {
+      if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
+      if (enterFrameRef.current) cancelAnimationFrame(enterFrameRef.current);
+    };
+  }, [open]);
+
   useCloseOnEscape({ open, onClose });
 
-  if (!open) return null;
+  if (!isVisible) return null;
 
   return (
     <BodyPortal>
-      <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
+      <div
+        className={clsx(
+          "dasti-dialog-root fixed inset-0 z-[10000] flex items-center justify-center p-4",
+        )}
+        data-state={surfaceState}
+      >
         <div
-          className="fixed inset-0 backdrop-blur-[8px] saturate-120"
-          style={{ background: "hsla(30,12%,11%,.32)" }}
+          className="dasti-dialog-overlay fixed inset-0 backdrop-blur-[6px] saturate-120"
+          style={{ background: "hsla(30,12%,11%,.45)" }}
           onClick={onClose}
           aria-hidden="true"
         />
         <div
           className={clsx(
-            "relative isolate [background:var(--sfr)] border [border-color:var(--color-border)] [border-radius:var(--radius-surface)] [box-shadow:var(--shc)] w-full overflow-hidden [max-width:var(--modal-max-width)]",
+            "dasti-dialog-panel relative isolate [background:var(--sfr)] border [border-color:var(--color-border)] [border-radius:var(--radius-surface)] [box-shadow:var(--shc)] w-full overflow-hidden [max-width:var(--modal-max-width)]",
             className,
           )}
         >

@@ -93,7 +93,7 @@ export function CvForge(): JSX.Element {
   const previewModeLeadControl = (
     <button
       type="button"
-      className="dasti-icon-button"
+      className="dasti-cv-workbench-toggle__button"
       aria-label="Back to resume editing"
       onClick={() => setWorkspaceMode("edit")}
       data-toolbar-tooltip="Back to edit"
@@ -102,6 +102,11 @@ export function CvForge(): JSX.Element {
       <X size={15} strokeWidth={1.9} aria-hidden="true" />
     </button>
   );
+  const cvWorkbenchShellStyle: React.CSSProperties = {
+    width: "100%",
+    maxWidth: editorGridMaxWidth,
+    marginInline: "auto",
+  };
 
   return (
     <div
@@ -146,21 +151,11 @@ export function CvForge(): JSX.Element {
           <>
             <div
               className="dasti-workbench-top-left-slot dasti-workbench-top-left-slot--cv dasti-workbench-top-left-slot--cv-edit dasti-workbench-top-left-slot--cv-toggle"
-              style={{
-                width: "100%",
-                maxWidth: editorGridMaxWidth,
-                marginInline: "auto",
-              }}
+              style={cvWorkbenchShellStyle}
             >
               {editModeToggle}
             </div>
-            <div
-              style={{
-                width: "100%",
-                maxWidth: editorGridMaxWidth,
-                marginInline: "auto",
-              }}
-            >
+            <div style={cvWorkbenchShellStyle}>
               <div
                 className="dasti-grid-split"
                 style={
