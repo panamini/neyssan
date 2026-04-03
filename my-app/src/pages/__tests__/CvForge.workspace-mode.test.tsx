@@ -55,7 +55,7 @@ describe("CvForge workspace mode", () => {
     expect(
       container.querySelector(".dasti-workbench-top-left-slot--cv"),
     ).toBeTruthy();
-    expect(container.querySelector(".dasti-proposal-mode-toggle")).toBeTruthy();
+    expect(container.querySelector(".dasti-cv-workbench-toggle")).toBeTruthy();
     expect(
       screen.getByRole("button", { name: "Open resume preview" }),
     ).toHaveAttribute("data-toolbar-tooltip", "Switch to preview");
@@ -74,17 +74,24 @@ describe("CvForge workspace mode", () => {
       container.querySelector(".dasti-cv-preview-workbench"),
     ).toBeTruthy();
     expect(
-      container.querySelector(".dasti-workbench-top-left-slot--cv"),
-    ).toBeTruthy();
-    expect(
       container.querySelector(".dasti-workbench-top-left-slot--cv-preview"),
-    ).toBeTruthy();
+    ).toBeFalsy();
     expect(
       screen.getByRole("button", { name: "Back to resume editing" }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Back to resume editing" }),
     ).toHaveAttribute("data-toolbar-tooltip", "Back to edit");
+    const pageShell = container.querySelector(
+      ".dasti-page-shell--cv-forge",
+    ) as HTMLElement | null;
+    expect(pageShell?.style.getPropertyValue("--page-shell-pad-top")).toBe("0px");
+    expect(pageShell?.style.getPropertyValue("--page-shell-pad-top-mobile")).toBe(
+      "0px",
+    );
+    expect(pageShell?.style.getPropertyValue("--cv-preview-toolbar-inset")).toBe(
+      "var(--space-2)",
+    );
     expect(
       window.localStorage.getItem("dasti:cv-forge-workspace-mode:v1"),
     ).toBe("preview");
