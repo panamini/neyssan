@@ -171,7 +171,25 @@ describe("ProposalDisplay CSS contracts", () => {
       /\.dasti-proposal-saved-tone-popover\s*\{[\s\S]*width:\s*max-content;[\s\S]*inset-inline-start:\s*50%;[\s\S]*transform:\s*translateX\(-50%\);/,
     );
     expect(productCss).toMatch(
+      /\.dasti-proposal-saved-view-toolbar\s+\.dasti-proposal-chrome-drawer,\s*[\s\S]*\.dasti-proposal-saved-view-toolbar\s+\.dasti-doc-zoom-bar--popover\s*\{[\s\S]*border-radius:\s*var\(--radius-toolbar-shell\);[\s\S]*background:\s*color-mix\(/,
+    );
+    expect(productCss).toMatch(
       /\.dasti-proposal-saved-view-toolbar\.dasti-toolbar--surface-tooltips\s*\{[\s\S]*--dasti-toolbar-shell-edge-padding:/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-saved-view-toolbar[\s\S]*?\.dasti-doc-zoom-bar--popover,[\s\S]*?\.dasti-artifact-inspector--header[\s\S]*?\.dasti-artifact-inspector__style-drawer,[\s\S]*?\.dasti-artifact-inspector__palette-drawer[\s\S]*?inset-inline-start:\s*0;[\s\S]*transform:\s*none;[\s\S]*transform-origin:\s*left top;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-saved-view-toolbar[\s\S]*?\.dasti-proposal-saved-tone-popover\s*\{[\s\S]*inset-inline-start:\s*auto;[\s\S]*inset-inline-end:\s*0;[\s\S]*transform:\s*none;[\s\S]*transform-origin:\s*right top;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-saved-proposal-forge-toolbar-preview\s*\{[\s\S]*--proposal-chrome-shell-padding:\s*calc\(var\(--space-2\)\s*-\s*2px\);[\s\S]*--proposal-chrome-tight-gap:\s*var\(--space-1\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-saved-proposal-forge-toolbar-preview\s*\{[\s\S]*min-block-size:\s*var\(--document-viewer-toolbar-block-size\);[\s\S]*padding:\s*var\(--proposal-chrome-shell-padding\);[\s\S]*border-radius:\s*var\(--radius-toolbar-shell,\s*var\(--radius-card\)\);[\s\S]*background:\s*color-mix\(/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-saved-proposal-forge-toolbar-preview__drawer\s*\{[\s\S]*--dasti-toolbar-shell-edge-padding:\s*var\(--proposal-chrome-shell-padding\);[\s\S]*--dasti-toolbar-attached-surface-offset:\s*calc\([\s\S]*var\(--toolbar-attached-surface-gap,\s*2px\)[\s\S]*var\(--dasti-toolbar-shell-edge-padding,\s*0px\)[\s\S]*var\(--dasti-toolbar-surface-border-width,\s*0px\)/,
     );
     expect(productCss).toContain(".dasti-artifact-inspector,");
     expect(productCss).toContain(".dasti-proposal-chrome-drawer {");
