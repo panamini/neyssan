@@ -5,6 +5,7 @@ type ImportWarningBannerProps = {
   onReview: () => void;
   onDismiss: () => void;
   reviewLabel?: string;
+  isExiting?: boolean;
 };
 
 export default function ImportWarningBanner({
@@ -12,6 +13,7 @@ export default function ImportWarningBanner({
   onReview,
   onDismiss,
   reviewLabel = "Review flagged fields",
+  isExiting = false,
 }: ImportWarningBannerProps): JSX.Element {
   const issueLabel = signalCount === 1 ? "issue" : "issues";
 
@@ -20,6 +22,7 @@ export default function ImportWarningBanner({
       className="dasti-import-warning-banner"
       aria-label="Import warning"
       role="status"
+      data-visibility={isExiting ? "hidden" : "visible"}
     >
       <div className="dasti-import-warning-banner__body">
         <div className="dasti-import-warning-banner__eyebrow">Import check</div>
