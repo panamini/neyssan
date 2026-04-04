@@ -183,7 +183,10 @@ export function CvForge(): JSX.Element {
             >
               {editModeToggle}
             </div>
-            <div style={cvWorkbenchShellStyle}>
+            <div
+              className="dasti-cv-edit-workbench-shell"
+              style={cvWorkbenchShellStyle}
+            >
               <div
                 className="dasti-grid-split"
                 style={
