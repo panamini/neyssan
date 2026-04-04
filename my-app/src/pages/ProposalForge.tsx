@@ -679,6 +679,9 @@ export function ProposalForge(): JSX.Element {
       ...existingComposeDraft,
       jobTitle: prefill.jobTitle,
       jobDescription: prefill.jobDescription,
+      // Persist source metadata so "Imported from" survives URL-param removal
+      sourceUrl: prefill.sourceUrl ?? null,
+      platform: prefill.platform ?? null,
     };
     pendingComposeDraftSyncRef.current = null;
     if (composeDraftSyncTimeoutRef.current !== null) {
@@ -691,6 +694,8 @@ export function ProposalForge(): JSX.Element {
     prefill?.handoffId,
     prefill?.jobDescription,
     prefill?.jobTitle,
+    prefill?.sourceUrl,
+    prefill?.platform,
     requestedView,
   ]);
 
@@ -2551,6 +2556,16 @@ export function ProposalForge(): JSX.Element {
     (typeof window !== "undefined"
       ? readStoredProposalComposeDraft()?.jobDescription?.trim() || ""
       : "");
+  const briefSourceUrl =
+    prefill?.sourceUrl ||
+    (typeof window !== "undefined"
+      ? readStoredProposalComposeDraft()?.sourceUrl ?? null
+      : null);
+  const briefSourcePlatform =
+    prefill?.platform ||
+    (typeof window !== "undefined"
+      ? readStoredProposalComposeDraft()?.platform ?? null
+      : null);
   const hasBriefContent = Boolean(briefJobDescription);
   const showBriefCard =
     Boolean(proposalContent) && !isBriefExpanded && showComposePanel;
@@ -3094,6 +3109,8 @@ export function ProposalForge(): JSX.Element {
                         jobDescription={briefJobDescription}
                         onToggleBrief={handleOpenComposeBrief}
                         variant={shouldShowDesktopBriefCapsule ? "compact" : "card"}
+                        sourceUrl={briefSourceUrl}
+                        sourcePlatform={briefSourcePlatform}
                       />
                     </div>
                   ) : null}

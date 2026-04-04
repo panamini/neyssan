@@ -1154,13 +1154,24 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
       ),
     [sourceSummary],
   );
+  // Fall back to persisted draft values once handoff URL param is consumed and prefill becomes null
+  const draftSourceUrl = React.useMemo(
+    () => prefill?.sourceUrl ?? readStoredProposalComposeDraft()?.sourceUrl ?? null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [prefill?.sourceUrl],
+  );
+  const draftPlatform = React.useMemo(
+    () => prefill?.platform ?? readStoredProposalComposeDraft()?.platform ?? null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [prefill?.platform],
+  );
   const importedSourceLabel = React.useMemo(
-    () => formatImportedSourceLabel(prefill?.platform, prefill?.sourceUrl),
-    [prefill?.platform, prefill?.sourceUrl],
+    () => formatImportedSourceLabel(draftPlatform, draftSourceUrl),
+    [draftPlatform, draftSourceUrl],
   );
   const importedSourceHost = React.useMemo(
-    () => formatImportedSourceHost(prefill?.sourceUrl),
-    [prefill?.sourceUrl],
+    () => formatImportedSourceHost(draftSourceUrl),
+    [draftSourceUrl],
   );
   React.useEffect(() => {
     updateComposeScrollEdges();
@@ -1496,37 +1507,37 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                     {hasStructuredSourceSummary || importedSourceLabel ? (
                       <div className="dasti-proposal-source-summary">
                         {importedSourceLabel ? (
-                          <div className="dasti-proposal-source-summary__origin-strip">
-                            <div className="dasti-proposal-source-summary__origin-strip-copy">
-                              <div className="dasti-proposal-source-summary__label">
-                                Imported from
-                              </div>
-                              {prefill?.sourceUrl ? (
-                                <a
-                                  href={prefill.sourceUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="dasti-proposal-source-summary__origin-link dasti-proposal-source-summary__origin-link--prominent"
-                                >
-                                  <span>
-                                    Open original offer on {importedSourceLabel}
+                          <div className="dasti-proposal-source-summary__job-offer-card">
+                            <div className="dasti-proposal-source-summary__job-offer-row">
+                              <div className="dasti-proposal-source-summary__job-offer-copy">
+                                <span className="dasti-proposal-source-summary__job-offer-kicker">
+                                  Job Offer
+                                </span>
+                                {draftSourceUrl ? (
+                                  <a
+                                    href={draftSourceUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="dasti-proposal-source-summary__job-offer-link"
+                                  >
+                                    <span>View on {importedSourceLabel}</span>
+                                    <ArrowSquareOut
+                                      size={13}
+                                      strokeWidth={1.8}
+                                      aria-hidden="true"
+                                    />
+                                  </a>
+                                ) : (
+                                  <span className="dasti-proposal-source-summary__origin-label">
+                                    {importedSourceLabel}
                                   </span>
-                                  <ArrowSquareOut
-                                    size={14}
-                                    strokeWidth={1.8}
-                                    aria-hidden="true"
-                                  />
-                                </a>
-                              ) : (
-                                <span className="dasti-proposal-source-summary__origin-label">
-                                  {importedSourceLabel}
-                                </span>
-                              )}
-                              {importedSourceHost ? (
-                                <span className="dasti-proposal-source-summary__origin-host">
-                                  {importedSourceHost}
-                                </span>
-                              ) : null}
+                                )}
+                                {importedSourceHost ? (
+                                  <span className="dasti-proposal-source-summary__origin-host">
+                                    {importedSourceHost}
+                                  </span>
+                                ) : null}
+                              </div>
                             </div>
                           </div>
                         ) : null}
