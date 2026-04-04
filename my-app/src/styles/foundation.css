@@ -427,12 +427,31 @@
 }
 
 /* --- §6 Mode Light — Papier Lin --------------------------- */
+/*
+  Token map — what each var controls:
+
+  --bg    → app canvas / shell background  (body, main stage area)
+  --sf1   → sidebar, panel surfaces        (→ --color-surface)
+  --sf2   → secondary surfaces             (→ --color-surface-muted)
+            ALSO: resume/CV stage grey area behind the paper
+            via .dasti-doc-viewer-shell--resume-workspace
+                 --document-viewer-stage-surface: var(--color-surface-muted)
+                 set in product.css
+  --sfr   → raised surfaces                (→ --color-surface-raised)
+            toolbars, cards, popovers, modals
+
+  --paper → document sheet (white-ish paper page itself)
+            used by: --proposal-document-paper (proposals)
+            used by: ResumePage.tsx inline `background: var(--paper)` on .resume-page articles
+            NOTE: resume templates that previously used `var(--color-surface)` as page
+            background were wrong — those now use `var(--paper)` directly.
+*/
 :root {
-  --bg: #F3F0EB;
-  --sf1: #F7F4EF;
-  --sf2: #FCFAF7;
-  --sfr: #FFFFFF;
-  --ti: #171717;
+  --bg: #F0ECE5;   /* app canvas / shell background — ΔL*≈4 above sf1 for clear depth */
+  --sf1: #EAE6DE;  /* sidebar, panel surfaces — --color-surface */
+  --sf2: #E4E0D9;  /* secondary surfaces + resume stage — --color-surface-muted */
+  --sfr: #F6F4EF;  /* raised: toolbars, cards, popovers — --color-surface-raised */
+  --ti: #1F1F1C;
   --tm2: #4B4B4B;
   --tg2: #7A7A7A;
   --border-soft: rgba(0, 0, 0, 0.08);
@@ -451,25 +470,25 @@
   --wab: hsl(34, 30%, 92%);
   --wat: hsl(34, 36%, 26%);
 
-  /* §9 Ombres light */
-  --sha: 0 1px 2px hsla(30, 20%, 8%, 0.03),
-    0 5px 12px hsla(30, 20%, 8%, 0.028);
-  --shb: 0 2px 5px hsla(30, 20%, 8%, 0.04),
-    0 8px 20px hsla(30, 20%, 8%, 0.048);
-  --shc: 0 6px 16px hsla(30, 20%, 8%, 0.055),
-    0 22px 46px hsla(30, 20%, 8%, 0.085);
-  --shadow-frost: 0 8px 20px -18px hsla(30, 20%, 8%, 0.22),
-    0 2px 5px -4px hsla(30, 20%, 8%, 0.07);
+  /* §9 Ombres light — slightly stronger to read on richer surfaces */
+  --sha: 0 1px 2px hsla(30, 20%, 8%, 0.04),
+    0 5px 12px hsla(30, 20%, 8%, 0.036);
+  --shb: 0 2px 5px hsla(30, 20%, 8%, 0.052),
+    0 8px 20px hsla(30, 20%, 8%, 0.06);
+  --shc: 0 6px 16px hsla(30, 20%, 8%, 0.068),
+    0 22px 46px hsla(30, 20%, 8%, 0.10);
+  --shadow-frost: 0 8px 20px -18px hsla(30, 20%, 8%, 0.26),
+    0 2px 5px -4px hsla(30, 20%, 8%, 0.09);
 
   /* Subtle gradients */
   --gradient-canvas: radial-gradient(
       circle at 6% 0%,
-      hsla(24, 36%, 88%, 0.34) 0%,
+      hsla(28, 36%, 84%, 0.42) 0%,
       transparent 34%
     ),
     radial-gradient(
       circle at 92% 10%,
-      hsla(92, 14%, 82%, 0.15) 0%,
+      hsla(92, 14%, 78%, 0.14) 0%,
       transparent 30%
     ),
     linear-gradient(
@@ -480,30 +499,30 @@
   --gradient-sidebar: linear-gradient(
     180deg,
     color-mix(in srgb, var(--sf1) 90%, white 10%) 0%,
-    color-mix(in srgb, var(--sf1) 95%, hsl(32, 22%, 90%) 5%) 100%
+    color-mix(in srgb, var(--sf1) 95%, hsl(30, 22%, 86%) 5%) 100%
   );
   --gradient-surface: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--sfr) 84%, white 16%) 0%,
-    color-mix(in srgb, var(--sf1) 92%, hsl(28, 22%, 91%) 8%) 100%
+    color-mix(in srgb, var(--sfr) 80%, white 20%) 0%,
+    color-mix(in srgb, var(--sf1) 92%, hsl(28, 22%, 88%) 8%) 100%
   );
   --gradient-stage: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--sfr) 78%, white 22%),
-    color-mix(in srgb, var(--sf1) 88%, hsl(86, 12%, 88%) 12%)
+    color-mix(in srgb, var(--sfr) 76%, white 24%),
+    color-mix(in srgb, var(--sf1) 86%, hsl(30, 14%, 82%) 14%)
   );
 
-  /* Frost */
-  --frost-bg: hsla(40, 20%, 99%, 0.84);
-  --frost-surface: hsla(40, 20%, 99%, 0.72);
-  --frost-border: hsla(30, 10%, 12%, 0.09);
+  /* Frost — warmer tinted glass on richer surfaces */
+  --frost-bg: hsla(38, 22%, 96%, 0.88);
+  --frost-surface: hsla(38, 22%, 96%, 0.74);
+  --frost-border: hsla(30, 12%, 10%, 0.10);
   --frost-blur: 18px;
   --frost-saturate: 140%;
   --sidebar-hover-bg: color-mix(in srgb, var(--sf2) 72%, var(--sfr) 28%);
   --sidebar-active-bg: linear-gradient(
     180deg,
-    color-mix(in srgb, white 76%, var(--sf1) 24%) 0%,
-    color-mix(in srgb, var(--sfr) 90%, var(--sf1) 10%) 100%
+    color-mix(in srgb, var(--sfr) 88%, white 12%) 0%,
+    color-mix(in srgb, var(--sfr) 94%, var(--sf1) 6%) 100%
   );
   --sidebar-hover-ink: var(--ti);
   --sidebar-active-ink: var(--ti);
@@ -512,8 +531,8 @@
     var(--color-border-contrast) 80%,
     transparent
   );
-  --drop-surface-bg: hsla(38, 26%, 98%, 0.78);
-  --drop-surface-border: hsla(30, 14%, 16%, 0.1);
+  --drop-surface-bg: hsla(38, 24%, 96%, 0.82);
+  --drop-surface-border: hsla(30, 14%, 14%, 0.10);
   --section-hover-surface: var(--gradient-surface);
   --section-hover-border: var(--color-border-contrast);
   --section-hover-shadow: var(--shadow-sm);
@@ -523,6 +542,10 @@
 /* --- §6 Mode Dark — 3-tier neutral dark ------------------- */
 .dark {
   color-scheme: dark;
+  --app-bg: #0D0D0D;
+  /* Resume preview canvas color is not defined in foundation tokens.
+     Keep it on the workspace selector in product.css so the preview canvas
+     can be changed without creating a parallel theme token. */
   --bg: #0D0D0D;
   --sf1: #111111;
   --sf2: #161616;
@@ -669,6 +692,7 @@
 :root {
   --color-canvas: var(--bg);
   --color-surface: var(--sf1);
+  --color-surface-muted: var(--sf2);
   --color-surface-2: var(--sf2);
   --color-surface-raised: var(--sfr);
   --color-text: var(--ti);
