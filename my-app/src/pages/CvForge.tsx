@@ -93,34 +93,34 @@ export function CvForge(): JSX.Element {
   );
 
   const previewModeLeadControl = (
-    <>
-      <button
-        type="button"
-        className="dasti-cv-workbench-toggle__button"
-        aria-label="Back to resume editing"
-        onClick={() => setWorkspaceMode("edit")}
-        data-toolbar-tooltip="Back to edit"
-        data-no-pan="true"
-      >
-        <X size={15} strokeWidth={1.9} aria-hidden="true" />
-      </button>
-      <button
-        type="button"
-        className="dasti-icon-button"
-        aria-label="Export CV as PDF"
-        onClick={() => {
-          printFirstMatchingNodeAsPdf({
-            container: cvPreviewExportRef.current,
-            selectors: [".resume-page-frame", ".resume-page-stage"],
-            title: currentCv?.title || "Resume",
-          });
-        }}
-        data-toolbar-tooltip="Export PDF"
-        data-no-pan="true"
-      >
-        <FilePdf size={15} strokeWidth={1.7} aria-hidden="true" />
-      </button>
-    </>
+    <button
+      type="button"
+      className="dasti-cv-workbench-toggle__button"
+      aria-label="Back to resume editing"
+      onClick={() => setWorkspaceMode("edit")}
+      data-toolbar-tooltip="Back to edit"
+      data-no-pan="true"
+    >
+      <X size={15} strokeWidth={1.9} aria-hidden="true" />
+    </button>
+  );
+  const previewModePdfControl = (
+    <button
+      type="button"
+      className="dasti-icon-button"
+      aria-label="Export CV as PDF"
+      onClick={() => {
+        printFirstMatchingNodeAsPdf({
+          container: cvPreviewExportRef.current,
+          selectors: [".resume-page-frame", ".resume-page-stage"],
+          title: currentCv?.title || "Resume",
+        });
+      }}
+      data-toolbar-tooltip="Export PDF"
+      data-no-pan="true"
+    >
+      <FilePdf size={15} strokeWidth={1.7} aria-hidden="true" />
+    </button>
   );
   const cvWorkbenchShellStyle: React.CSSProperties = {
     width: "100%",
@@ -142,13 +142,17 @@ export function CvForge(): JSX.Element {
             "--page-shell-max-width": "100%",
             "--page-shell-gap": "var(--space-2)",
             "--page-shell-pad-top": workspaceMode === "preview" ? "0px" : undefined,
-            "--page-shell-pad-inline": "var(--space-1)",
+            "--page-shell-pad-inline":
+              workspaceMode === "preview" ? "0px" : "var(--space-1)",
             "--page-shell-pad-bottom": "var(--space-1)",
             "--cv-preview-toolbar-inset":
               workspaceMode === "preview" ? "var(--space-2)" : undefined,
             "--page-shell-pad-top-mobile":
-              workspaceMode === "preview" ? "0px" : undefined,
-            "--page-shell-pad-inline-mobile": "var(--space-1)",
+              workspaceMode === "preview"
+                ? "0px"
+                : "calc(var(--document-viewer-toolbar-block-size) + var(--space-5))",
+            "--page-shell-pad-inline-mobile":
+              workspaceMode === "preview" ? "0px" : "var(--space-1)",
             "--page-shell-pad-bottom-mobile": "var(--space-1)",
           } as React.CSSProperties
         }
@@ -164,6 +168,7 @@ export function CvForge(): JSX.Element {
                   layoutMode="stacked"
                   hostMode="workspace"
                   railLeadControl={previewModeLeadControl}
+                  railTrailingControl={previewModePdfControl}
                   stylePreset={stylePreset}
                   onStylePresetChange={setStylePreset}
                 />

@@ -5,6 +5,7 @@ import {
   ChevronDown,
   FileText,
   GripHorizontal,
+  SealWarning,
   X,
 } from "@/lib/icons";
 import { useNavigate } from "react-router-dom";
@@ -264,6 +265,8 @@ export function ProfileReviewCard({ cvId, profile, onRequestExport }: Props) {
     useState<boolean>(false);
   const [isImportReviewAcknowledged, setIsImportReviewAcknowledged] =
     useState<boolean>(false);
+  const [isImportReviewCollapsed, setIsImportReviewCollapsed] =
+    useState<boolean>(true);
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState<boolean>(false);
   const [renameDraftTitle, setRenameDraftTitle] = useState<string>("");
   const [renameTargetCvId, setRenameTargetCvId] = useState<string | null>(null);
@@ -313,6 +316,10 @@ export function ProfileReviewCard({ cvId, profile, onRequestExport }: Props) {
         importSignalSignature,
     );
   }, [importReviewSessionKey, importSignalSignature]);
+
+  useEffect(() => {
+    setIsImportReviewCollapsed(true);
+  }, [currentCv?.id, importSignalSignature]);
 
   useEffect(() => {
     if (
@@ -374,6 +381,7 @@ export function ProfileReviewCard({ cvId, profile, onRequestExport }: Props) {
   function handleReviewFlaggedFields() {
     acknowledgeImportReview();
     setIsImportWarningDismissed(false);
+    setIsImportReviewCollapsed(false);
     setReviewFlashToken((current) => current + 1);
     if (typeof inlineReviewRef.current?.scrollIntoView === "function") {
       inlineReviewRef.current.scrollIntoView({
@@ -792,38 +800,41 @@ export function ProfileReviewCard({ cvId, profile, onRequestExport }: Props) {
           className="dasti-inline-review"
           aria-label="Import review checks"
           data-review-flash={reviewFlashToken > 0 ? "true" : "false"}
+          data-collapsed={isImportReviewCollapsed ? "true" : "false"}
         >
-          <div className="dasti-inline-review__header">
-            <div className="dasti-inline-review__header-copy">
-              <div className="dasti-inline-review__eyebrow">Import review</div>
-              <p className="dasti-inline-review__summary">
-                Clean flagged parser noise here before generating proposals.
-              </p>
-            </div>
-            <div
-              className="dasti-inline-review__status"
-              data-review-state={
-                isImportReviewAcknowledged ? "acknowledged" : "required"
-              }
-            >
-              {isImportReviewAcknowledged
-                ? "Review acknowledged"
-                : "Review required before export"}
-            </div>
-          </div>
-          <div className="dasti-inline-review__list" role="list">
-            {importSignals.map((signal) => (
-              <div
-                key={signal.id}
-                className="dasti-inline-review__item"
-                role="listitem"
-              >
-                <div className="dasti-inline-review__title">{signal.title}</div>
-                <p className="dasti-inline-review__description">
-                  {signal.description}
+          <div className="dasti-inline-review__panel">
+            <div className="dasti-inline-review__header">
+              <div className="dasti-inline-review__header-copy">
+                <div className="dasti-inline-review__eyebrow">Import review</div>
+                <p className="dasti-inline-review__summary">
+                  Clean flagged parser noise here before generating proposals.
                 </p>
               </div>
-            ))}
+              <div
+                className="dasti-inline-review__status"
+                data-review-state={
+                  isImportReviewAcknowledged ? "acknowledged" : "required"
+                }
+              >
+                {isImportReviewAcknowledged
+                  ? "Review acknowledged"
+                  : "Review required before export"}
+              </div>
+            </div>
+            <div className="dasti-inline-review__list" role="list">
+              {importSignals.map((signal) => (
+                <div
+                  key={signal.id}
+                  className="dasti-inline-review__item"
+                  role="listitem"
+                >
+                  <div className="dasti-inline-review__title">{signal.title}</div>
+                  <p className="dasti-inline-review__description">
+                    {signal.description}
+                  </p>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
       ) : null}
@@ -1144,6 +1155,26 @@ export function ProfileReviewCard({ cvId, profile, onRequestExport }: Props) {
                 aria-label="Export CV as PDF"
               >
                 Export PDF
+              </button>
+            ) : null}
+            {importSignals.length > 0 ? (
+              <button
+                type="button"
+                onClick={() =>
+                  setIsImportReviewCollapsed((current) => !current)
+                }
+                className="dasti-icon-button dasti-import-review-trigger"
+                aria-label={
+                  isImportReviewCollapsed
+                    ? "Open import review"
+                    : "Close import review"
+                }
+                aria-expanded={!isImportReviewCollapsed}
+                data-review-state={
+                  isImportReviewAcknowledged ? "acknowledged" : "required"
+                }
+              >
+                <SealWarning size={18} strokeWidth={1.7} aria-hidden="true" />
               </button>
             ) : null}
           </div>
