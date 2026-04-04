@@ -384,4 +384,37 @@ describe("ProfileReviewCard import", () => {
       actionGroup?.querySelector('[aria-label="Open import review"]'),
     ).not.toBeNull();
   });
+
+  it("renders the lead toolbar control inside the anchored CV action rail", () => {
+    cvLibraryState.currentCv = {
+      id: "cv_imported",
+      title: "Imported CV",
+      metadata: {
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        version: 1,
+      },
+      sections: [],
+    };
+
+    const { container } = render(
+      <ProfileReviewCard
+        toolbarLeadControl={
+          <button type="button" aria-label="Open resume preview">
+            Preview
+          </button>
+        }
+      />,
+    );
+
+    const leadGroup = container.querySelector(".dasti-cv-edit-toolbar__group--lead");
+
+    expect(leadGroup).not.toBeNull();
+    expect(
+      leadGroup?.querySelector('[aria-label="Open resume preview"]'),
+    ).not.toBeNull();
+    expect(
+      container.querySelector(".dasti-cv-edit-toolbar.dasti-proposal-rail-cluster"),
+    ).not.toBeNull();
+  });
 });

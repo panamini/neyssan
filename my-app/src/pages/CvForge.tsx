@@ -51,9 +51,12 @@ export function CvForge(): JSX.Element {
     [search],
   );
   const isSplitCanvas = viewportWidth >= 1240;
-  const editorGridMaxWidth = isSplitCanvas
-    ? "1240px"
-    : "var(--cv-editor-shell-max-width)";
+  const editorGridMaxWidth =
+    workspaceMode === "edit"
+      ? "100%"
+      : isSplitCanvas
+        ? "1240px"
+        : "var(--cv-editor-shell-max-width)";
 
   React.useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -78,18 +81,16 @@ export function CvForge(): JSX.Element {
   }, [workspaceMode]);
 
   const editModeToggle = (
-    <div className="dasti-cv-workbench-toggle dasti-toolbar--surface-tooltips">
-      <button
-        type="button"
-        className="dasti-cv-workbench-toggle__button"
-        aria-label="Open resume preview"
-        onClick={() => setWorkspaceMode("preview")}
-        data-toolbar-tooltip="Switch to preview"
-        data-no-pan="true"
-      >
-        <Eye size={15} strokeWidth={1.7} aria-hidden="true" />
-      </button>
-    </div>
+    <button
+      type="button"
+      className="dasti-icon-button"
+      aria-label="Open resume preview"
+      onClick={() => setWorkspaceMode("preview")}
+      data-toolbar-tooltip="Switch to preview"
+      data-no-pan="true"
+    >
+      <Eye size={15} strokeWidth={1.7} aria-hidden="true" />
+    </button>
   );
 
   const previewModeLeadControl = (
@@ -141,18 +142,19 @@ export function CvForge(): JSX.Element {
           {
             "--page-shell-max-width": "100%",
             "--page-shell-gap": "var(--space-2)",
-            "--page-shell-pad-top": workspaceMode === "preview" ? "0px" : undefined,
+            "--page-shell-pad-top":
+              workspaceMode === "preview" ? "0px" : "var(--space-2)",
             "--page-shell-pad-inline":
-              workspaceMode === "preview" ? "0px" : "var(--space-1)",
+              workspaceMode === "preview" ? "0px" : "var(--space-4)",
             "--page-shell-pad-bottom": "var(--space-1)",
             "--cv-preview-toolbar-inset":
               workspaceMode === "preview" ? "var(--space-2)" : undefined,
             "--page-shell-pad-top-mobile":
               workspaceMode === "preview"
                 ? "0px"
-                : "calc(var(--document-viewer-toolbar-block-size) + var(--space-5))",
+                : "var(--space-2)",
             "--page-shell-pad-inline-mobile":
-              workspaceMode === "preview" ? "0px" : "var(--space-1)",
+              workspaceMode === "preview" ? "0px" : "var(--space-4)",
             "--page-shell-pad-bottom-mobile": "var(--space-1)",
           } as React.CSSProperties
         }
@@ -178,12 +180,6 @@ export function CvForge(): JSX.Element {
         ) : (
           <>
             <div
-              className="dasti-workbench-top-left-slot dasti-workbench-top-left-slot--cv dasti-workbench-top-left-slot--cv-edit dasti-workbench-top-left-slot--cv-toggle"
-              style={cvWorkbenchShellStyle}
-            >
-              {editModeToggle}
-            </div>
-            <div
               className="dasti-cv-edit-workbench-shell"
               style={cvWorkbenchShellStyle}
             >
@@ -201,6 +197,7 @@ export function CvForge(): JSX.Element {
               >
                 <ProfileReviewCard
                   cvId={requestedCvId}
+                  toolbarLeadControl={editModeToggle}
                   onRequestExport={() => {
                     printFirstMatchingNodeAsPdf({
                       container: cvPreviewExportRef.current,

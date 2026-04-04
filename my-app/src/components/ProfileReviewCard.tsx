@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import {
   Check,
   ChevronDown,
+  FilePdf,
   FileText,
   GripHorizontal,
   SealWarning,
@@ -46,6 +47,7 @@ interface Props {
   cvId?: string;
   profile?: unknown;
   onRequestExport?: () => void;
+  toolbarLeadControl?: React.ReactNode;
 }
 
 const IMPORT_WARNING_SESSION_KEY_PREFIX = "dasti:cv-import-warning-banner:";
@@ -106,7 +108,12 @@ function getFlaggedSectionTypes(signals: CvImportSignal[]): Set<string> {
  * - Renders the mounted typed-editor section workflow for each section
  * - Exposes typed section creation controls for the mounted /cv user workflow
  */
-export function ProfileReviewCard({ cvId, profile, onRequestExport }: Props) {
+export function ProfileReviewCard({
+  cvId,
+  profile,
+  onRequestExport,
+  toolbarLeadControl,
+}: Props) {
   const navigate = useNavigate();
   const {
     currentCv,
@@ -1031,7 +1038,10 @@ export function ProfileReviewCard({ cvId, profile, onRequestExport }: Props) {
 
       {!isLoading && currentCv && (
         <div>
-          <div className="mb-4 dasti-cv-edit-toolbar">
+          <div className="mb-4 dasti-cv-edit-toolbar dasti-proposal-rail-cluster dasti-toolbar--surface-tooltips">
+            <div className="dasti-cv-edit-toolbar__group dasti-cv-edit-toolbar__group--lead">
+              {toolbarLeadControl}
+            </div>
             <div className="dasti-cv-edit-toolbar__group dasti-cv-edit-toolbar__group--primary">
               {addableSectionOptions.length > 0 ? (
                 <div
@@ -1042,7 +1052,7 @@ export function ProfileReviewCard({ cvId, profile, onRequestExport }: Props) {
                 >
                   <button
                     type="button"
-                    aria-label="Add section"
+                    aria-label="Manage sections"
                     className="dasti-select dasti-select--sm dasti-add-section-trigger"
                     onClick={() => setIsAddSectionMenuOpen((current) => !current)}
                   >
@@ -1051,7 +1061,7 @@ export function ProfileReviewCard({ cvId, profile, onRequestExport }: Props) {
                       aria-hidden
                     />
                     <span className="dasti-add-section-trigger__label">
-                      Add section
+                      Manage sections
                     </span>
                     <span className="dasti-add-section-trigger__icon">
                       {isAddSectionMenuOpen ? (
@@ -1221,6 +1231,7 @@ export function ProfileReviewCard({ cvId, profile, onRequestExport }: Props) {
                     className="dasti-button dasti-button--secondary dasti-button--pill dasti-button--sm dasti-cv-edit-toolbar__export"
                     aria-label="Export CV as PDF"
                   >
+                    <FilePdf size={14} strokeWidth={1.6} aria-hidden="true" />
                     Export PDF
                   </button>
                 ) : null}
