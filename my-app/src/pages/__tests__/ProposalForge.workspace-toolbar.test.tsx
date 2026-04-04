@@ -622,6 +622,7 @@ describe("ProposalForge workbench layout", () => {
         button.getAttribute("data-toolbar-tooltip"),
     );
     expect(buttonLabels).toEqual([
+      "Export proposal as PDF",
       "Save proposal to library",
       "Delete",
       "Copy",

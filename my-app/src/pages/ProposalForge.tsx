@@ -50,7 +50,7 @@ import {
   type StoredProposalComposeDraft,
 } from "../lib/proposal-workspace-state";
 import { readStoredSavedProposalFixtures } from "../lib/proposal-saved-fixtures";
-import { printFirstMatchingNodeAsPdf } from "../lib/document-export";
+import { downloadFirstMatchingNodeAsPdf } from "../lib/document-export";
 import type { ProposalTemplateId } from "../../convex/lib/proposals/renderTemplates";
 import {
   getProposalTwinTemplateId,
@@ -530,6 +530,9 @@ export function ProposalForge(): JSX.Element {
   const [copyFeedback, setCopyFeedback] = React.useState<"idle" | "copied">(
     "idle",
   );
+  const [pendingExportTarget, setPendingExportTarget] = React.useState<
+    { target: "compose" | "saved" } | null
+  >(null);
   const [composeFormInstanceKey, setComposeFormInstanceKey] = React.useState(0);
   const [isCvPickerOpen, setIsCvPickerOpen] = React.useState(false);
   const [isComposePanelVisible, setIsComposePanelVisible] = React.useState(true);
@@ -2110,35 +2113,126 @@ export function ProposalForge(): JSX.Element {
     showToast,
   ]);
 
-  const handleExportProposal = React.useCallback(() => {
-    const container = openedSavedProposal
-      ? savedProposalExportRef.current
-      : composeProposalExportRef.current;
-    const exported = printFirstMatchingNodeAsPdf({
-      container,
-      selectors: [
-        ".dasti-document-stage__canvas[data-document-page='true'] .dasti-proposal-document__page",
-        ".dasti-proposal-document__page",
-        ".dasti-document-stage__canvas[data-document-page='true']",
-      ],
-      title:
-        (openedSavedProposal
-          ? savedProposalDocumentTitle
-          : proposalDocumentTitle
-        ).trim() || "Proposal",
-    });
+  const downloadProposalFromMountedPreview = React.useCallback(
+    async (target: "compose" | "saved") => {
+      const container =
+        target === "saved"
+          ? savedProposalExportRef.current
+          : composeProposalExportRef.current;
 
-    if (!exported) {
-      showToast("Export unavailable", {
+      return downloadFirstMatchingNodeAsPdf({
+        container,
+        selectors: [
+          ".dasti-proposal-document",
+          ".dasti-proposal-sheet__preview-stage[data-document-stage='true']",
+          ".dasti-proposal-sheet__preview-page[data-document-page='true']",
+          ".dasti-document-stage__canvas[data-document-page='true']",
+        ],
+        title:
+          (target === "saved"
+            ? savedProposalDocumentTitle
+            : proposalDocumentTitle
+          ).trim() || "Proposal",
+      });
+    },
+    [proposalDocumentTitle, savedProposalDocumentTitle],
+  );
+
+  React.useEffect(() => {
+    if (!pendingExportTarget) {
+      return undefined;
+    }
+
+    const previewReady =
+      pendingExportTarget.target === "saved"
+        ? savedProposalOutputMode === "preview"
+        : proposalOutputMode === "preview";
+    if (!previewReady) {
+      return undefined;
+    }
+
+    let settleFrameId = 0;
+    let initialFrameId = 0;
+    let cancelled = false;
+    let attemptCount = 0;
+    const maxExportSettleAttempts = 8;
+
+    const tryExport = async () => {
+      if (cancelled) {
+        return;
+      }
+
+      const exported = await downloadProposalFromMountedPreview(
+        pendingExportTarget.target,
+      );
+      if (cancelled) {
+        return;
+      }
+      if (exported) {
+        setPendingExportTarget(null);
+        return;
+      }
+
+      attemptCount += 1;
+      if (attemptCount < maxExportSettleAttempts) {
+        settleFrameId = window.requestAnimationFrame(() => {
+          void tryExport();
+        });
+        return;
+      }
+
+      showToast("PDF export unavailable", {
         variant: "error",
         description: "Open a generated proposal preview before exporting.",
       });
-    }
+      setPendingExportTarget(null);
+    };
+
+    initialFrameId = window.requestAnimationFrame(() => {
+      settleFrameId = window.requestAnimationFrame(() => {
+        void tryExport();
+      });
+    });
+
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(initialFrameId);
+      window.cancelAnimationFrame(settleFrameId);
+    };
   }, [
-    openedSavedProposal,
-    proposalDocumentTitle,
-    savedProposalDocumentTitle,
+    downloadProposalFromMountedPreview,
+    pendingExportTarget,
+    proposalOutputMode,
+    savedProposalOutputMode,
     showToast,
+  ]);
+
+  const handleExportProposal = React.useCallback(async () => {
+    const exportTarget = openedSavedProposal ? "saved" : "compose";
+    const currentMode =
+      exportTarget === "saved" ? savedProposalOutputMode : proposalOutputMode;
+
+    if (currentMode !== "preview") {
+      if (exportTarget === "saved") {
+        setSavedProposalOutputMode("preview");
+      } else {
+        setProposalOutputMode("preview");
+      }
+      setPendingExportTarget({ target: exportTarget });
+      return;
+    }
+
+    const exported = await downloadProposalFromMountedPreview(exportTarget);
+    if (exported) {
+      return;
+    }
+
+    setPendingExportTarget({ target: exportTarget });
+  }, [
+    downloadProposalFromMountedPreview,
+    openedSavedProposal,
+    proposalOutputMode,
+    savedProposalOutputMode,
   ]);
 
   const handleCopySavedProposalToDraft = React.useCallback(() => {
@@ -3109,7 +3203,7 @@ export function ProposalForge(): JSX.Element {
                     size="default"
                     documentHeaderMode="hidden"
                     railStartAddon={
-                      proposalContent ? (
+                      proposalContent && proposalOutputMode === "preview" ? (
                         <ProposalArtifactInspector
                           variant="header"
                           styleBundleId={selectedStyleBundleId}
