@@ -7366,7 +7366,7 @@ html:not(.dark) .dasti-proposal-submit {
 .dasti-import-warning-banner {
   position: sticky;
   top: var(--space-2);
-  z-index: 2;
+  z-index: 18;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -7376,10 +7376,12 @@ html:not(.dark) .dasti-proposal-submit {
   padding: 10px 12px;
   border-radius: calc(var(--radius-control) + 2px);
   border: 1px solid color-mix(in srgb, var(--wa) 20%, var(--color-border) 80%);
-  background: color-mix(in srgb, var(--color-surface) 96%, var(--wab) 4%);
-  box-shadow: 0 12px 24px -26px color-mix(in srgb, var(--shadow-color) 82%, transparent);
-  backdrop-filter: saturate(1.02) blur(10px);
-  -webkit-backdrop-filter: saturate(1.02) blur(10px);
+  background: color-mix(in srgb, var(--color-surface) 90%, var(--wab) 10%);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--wa) 10%, transparent),
+    0 16px 28px -24px color-mix(in srgb, var(--shadow-color) 88%, transparent);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   opacity: 1;
   transform: translate3d(0, 0, 0);
   transition:
@@ -7662,6 +7664,10 @@ html:not(.dark) .dasti-proposal-submit {
   position: relative;
   display: inline-flex;
   align-items: center;
+  z-index: auto;
+}
+
+.dasti-import-dropdown[data-open="true"] {
   z-index: var(--z-popover);
   isolation: isolate;
 }
@@ -9074,11 +9080,59 @@ html:not(.dark) .dasti-proposal-submit {
 }
 
 .dasti-cv-edit-toolbar {
+  --dasti-cv-edit-toolbar-gap: var(--space-2);
+  --dasti-cv-edit-toolbar-row-gap: var(--space-2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--dasti-cv-edit-toolbar-row-gap) var(--dasti-cv-edit-toolbar-gap);
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
   min-block-size: var(--document-viewer-toolbar-block-size);
   padding-inline-start: var(--cv-edit-toolbar-inline-offset, 0px);
+}
+
+.dasti-cv-edit-toolbar__group {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dasti-cv-edit-toolbar-gap);
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.dasti-cv-edit-toolbar__group--primary {
+  flex: 1 1 260px;
+}
+
+.dasti-cv-edit-toolbar__group--actions {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  margin-inline-start: auto;
+}
+
+.dasti-cv-edit-toolbar__hint {
+  color: var(--tg2);
+  font-size: var(--tx);
+  line-height: 1.35;
+}
+
+.dasti-cv-edit-toolbar .dasti-import-dropdown,
+.dasti-cv-edit-toolbar .dasti-button,
+.dasti-cv-edit-toolbar .dasti-icon-button,
+.dasti-cv-edit-toolbar .dasti-select {
+  max-width: 100%;
+}
+
+.dasti-cv-edit-toolbar .dasti-import-button {
+  min-width: 0;
+  padding-inline: var(--space-3);
+}
+
+.dasti-cv-edit-toolbar__export {
+  flex: 0 0 auto;
 }
 
 @media (min-width: 768px) {
@@ -9100,6 +9154,15 @@ html:not(.dark) .dasti-proposal-submit {
   .dasti-workbench-top-left-slot--cv-toggle {
     inset-inline-start: var(--space-3);
     inset-block-start: var(--space-3);
+  }
+
+  .dasti-cv-edit-toolbar {
+    --dasti-cv-edit-toolbar-gap: var(--space-1);
+    --dasti-cv-edit-toolbar-row-gap: var(--space-1);
+  }
+
+  .dasti-cv-edit-toolbar__group--primary {
+    flex-basis: min(100%, 264px);
   }
 
   .dasti-cv-edit-workbench-shell {
