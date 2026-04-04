@@ -11,7 +11,7 @@ describe("buildProposalSourceSummary", () => {
       voicePreset: "signature",
     });
 
-    expect(summary.role).toBe("Operations Associate");
+    expect(summary.role).toBeNull();
     expect(summary.company).toBe("Northstar Health");
     expect(summary.location).toBe("Paris, France");
     expect(summary.city).toBe("Paris");
@@ -42,11 +42,37 @@ describe("buildProposalSourceSummary", () => {
     expect(summary.phone).toBe("+33 1 44 55 66 77");
   });
 
+  it("only surfaces a role when the raw offer labels it explicitly", () => {
+    const summary = buildProposalSourceSummary({
+      jobTitle: "Operations Associate",
+      jobDescription: `
+        Role: Senior Operations Coordinator
+        Company: Northstar Health
+
+        Coordinate stakeholder communication, maintain handoffs, and keep recurring operations on track.
+      `,
+      voicePreset: "signature",
+    });
+
+    expect(summary.role).toBe("Senior Operations Coordinator");
+  });
+
   it("does not misclassify body prose as a location", () => {
     const summary = buildProposalSourceSummary({
       jobTitle: "Operations Associate",
       jobDescription:
         "Our strength in healthcare innovation empowers us to build a world where complex diseases are prevented, treated, and cured. You will support recurring processes and coordinate communication across stakeholders.",
+      voicePreset: "signature",
+    });
+
+    expect(summary.location).toBeNull();
+  });
+
+  it("suppresses business-domain phrases that only look like place names", () => {
+    const summary = buildProposalSourceSummary({
+      jobTitle: "Operations Associate",
+      jobDescription:
+        "Join Innovative Medicine to coordinate recurring operations, maintain documentation quality, and support cross-functional execution.",
       voicePreset: "signature",
     });
 
@@ -75,5 +101,18 @@ describe("buildProposalSourceSummary", () => {
     expect(summary.keywords).not.toContain("The");
     expect(summary.keywords).not.toContain("For");
     expect(summary.keywords).not.toContain("Description");
+  });
+
+  it("suppresses low-signal keyword chips that do not improve scanability", () => {
+    const summary = buildProposalSourceSummary({
+      jobTitle: "Community Video Producer",
+      jobDescription:
+        "Job description: This dedicated role helps independent brands gain visibility and thrive through campaign planning, editing, and community storytelling.",
+      voicePreset: "signature",
+    });
+
+    expect(summary.keywords).not.toContain("Dedicated");
+    expect(summary.keywords).not.toContain("Independent");
+    expect(summary.keywords).not.toContain("Visibility");
   });
 });

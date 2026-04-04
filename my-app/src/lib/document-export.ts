@@ -1,17 +1,222 @@
-function escapeHtmlAttribute(value: string): string {
-  return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
+
+function sanitizePdfTitle(value: string): string {
+  const normalized = value
+    .trim()
+    .replace(/[<>:"/\\|?*\u0000-\u001f]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return normalized || "document";
 }
 
-function collectHeadMarkup(): string {
-  return Array.from(
-    document.querySelectorAll<HTMLStyleElement | HTMLLinkElement>(
-      'style, link[rel="stylesheet"]',
-    ),
-  )
-    .map((node) => node.outerHTML)
-    .join("\n");
+function buildPdfFilename(title: string): string {
+  return `${sanitizePdfTitle(title)}.pdf`;
 }
 
+function findFirstMatchingNode(args: {
+  container: HTMLElement | null;
+  selectors: string[];
+}): HTMLElement | null {
+  if (!args.container) {
+    return null;
+  }
+
+  for (const selector of args.selectors) {
+    const node = args.container.querySelector<HTMLElement>(selector);
+    if (node) {
+      return node;
+    }
+  }
+
+  return null;
+}
+
+async function waitForRenderableNode(node: HTMLElement): Promise<void> {
+  await waitForExportDocumentAssets(node.ownerDocument);
+
+  if (node.ownerDocument.fonts?.ready) {
+    try {
+      await node.ownerDocument.fonts.ready;
+    } catch {
+      // ignore font readiness failures and continue with raster export
+    }
+  }
+
+  await new Promise<void>((resolve) => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        resolve();
+      });
+    });
+  });
+}
+
+function sliceCanvasForPdf(args: {
+  canvas: HTMLCanvasElement;
+  sourceY: number;
+  sliceHeight: number;
+}): HTMLCanvasElement {
+  const sliceCanvas = document.createElement("canvas");
+  sliceCanvas.width = args.canvas.width;
+  sliceCanvas.height = args.sliceHeight;
+
+  const context = sliceCanvas.getContext("2d");
+  if (!context) {
+    return sliceCanvas;
+  }
+
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+  context.drawImage(
+    args.canvas,
+    0,
+    args.sourceY,
+    args.canvas.width,
+    args.sliceHeight,
+    0,
+    0,
+    sliceCanvas.width,
+    sliceCanvas.height,
+  );
+
+  return sliceCanvas;
+}
+
+async function rasterizeNodeForPdf(node: HTMLElement): Promise<HTMLCanvasElement> {
+  await waitForRenderableNode(node);
+
+  return html2canvas(node, {
+    backgroundColor: "#ffffff",
+    logging: false,
+    scale: Math.max(2, Math.min(3, window.devicePixelRatio || 1)),
+    useCORS: true,
+  });
+}
+
+function canvasToPdf(canvas: HTMLCanvasElement, title: string): void {
+  const pdf = new jsPDF({
+    orientation: canvas.width > canvas.height ? "landscape" : "portrait",
+    unit: "pt",
+    format: "a4",
+    compress: true,
+  });
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const margin = 18;
+  const printableWidth = pageWidth - margin * 2;
+  const printableHeight = pageHeight - margin * 2;
+  const sourcePageHeight = Math.max(
+    1,
+    Math.floor((printableHeight / printableWidth) * canvas.width),
+  );
+
+  let sourceY = 0;
+  let pageIndex = 0;
+
+  while (sourceY < canvas.height) {
+    const remainingHeight = canvas.height - sourceY;
+    const sliceHeight = Math.min(sourcePageHeight, remainingHeight);
+    const sliceCanvas = sliceCanvasForPdf({
+      canvas,
+      sourceY,
+      sliceHeight,
+    });
+    const renderedHeight = (sliceHeight / canvas.width) * printableWidth;
+
+    if (pageIndex > 0) {
+      pdf.addPage();
+    }
+
+    pdf.addImage(
+      sliceCanvas.toDataURL("image/png"),
+      "PNG",
+      margin,
+      margin,
+      printableWidth,
+      renderedHeight,
+      undefined,
+      "FAST",
+    );
+
+    sourceY += sliceHeight;
+    pageIndex += 1;
+  }
+
+  pdf.save(buildPdfFilename(title));
+}
+
+function waitForLoadableNode(
+  node: HTMLImageElement | HTMLLinkElement,
+): Promise<void> {
+  const alreadyReady =
+    node instanceof HTMLImageElement ? node.complete : Boolean(node.sheet);
+  if (alreadyReady) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve) => {
+    const cleanup = () => {
+      window.clearTimeout(timeoutId);
+      node.removeEventListener("load", cleanup);
+      node.removeEventListener("error", cleanup);
+      resolve();
+    };
+
+    const timeoutId = window.setTimeout(cleanup, 1500);
+    node.addEventListener("load", cleanup, { once: true });
+    node.addEventListener("error", cleanup, { once: true });
+  });
+}
+
+async function waitForExportDocumentAssets(doc: Document): Promise<void> {
+  const pendingImages = Array.from(doc.images);
+  const pendingStylesheets = Array.from(
+    doc.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]'),
+  );
+
+  await Promise.all([
+    ...pendingImages.map((image) => waitForLoadableNode(image)),
+    ...pendingStylesheets.map((stylesheet) => waitForLoadableNode(stylesheet)),
+  ]);
+}
+
+export async function downloadElementAsPdf(args: {
+  node: HTMLElement;
+  title: string;
+}): Promise<boolean> {
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return false;
+  }
+
+  try {
+    const canvas = await rasterizeNodeForPdf(args.node);
+    canvasToPdf(canvas, args.title);
+    return true;
+  } catch (error) {
+    console.warn("Failed to export PDF", error);
+    return false;
+  }
+}
+
+export async function downloadFirstMatchingNodeAsPdf(args: {
+  container: HTMLElement | null;
+  selectors: string[];
+  title: string;
+}): Promise<boolean> {
+  const node = findFirstMatchingNode(args);
+  if (!node) {
+    return false;
+  }
+
+  return downloadElementAsPdf({
+    node,
+    title: args.title,
+  });
+}
+
+// Backward-compatible wrappers for callers still using the old print API names.
 export function printElementAsPdf(args: {
   node: HTMLElement;
   title: string;
@@ -20,120 +225,7 @@ export function printElementAsPdf(args: {
     return false;
   }
 
-  const printWindow = window.open(
-    "",
-    "_blank",
-    "noopener,noreferrer,width=1100,height=1400",
-  );
-  if (!printWindow) {
-    return false;
-  }
-
-  const clonedNode = args.node.cloneNode(true) as HTMLElement;
-  const htmlClassName = escapeHtmlAttribute(
-    document.documentElement.className ?? "",
-  );
-  const bodyClassName = escapeHtmlAttribute(document.body.className ?? "");
-  const title = escapeHtmlAttribute(args.title);
-
-  printWindow.document.write(`<!doctype html>
-<html class="${htmlClassName}">
-  <head>
-    <meta charset="utf-8" />
-    <title>${title}</title>
-    ${collectHeadMarkup()}
-    <style>
-      html, body {
-        margin: 0;
-        min-height: 100%;
-        background: #f3f0eb;
-      }
-
-      body {
-        display: grid;
-        place-items: start center;
-        padding: 24px;
-        box-sizing: border-box;
-      }
-
-      .dasti-print-export {
-        width: 100%;
-        display: grid;
-        place-items: start center;
-      }
-
-      .dasti-print-export__sheet {
-        display: grid;
-        place-items: start center;
-      }
-
-      .dasti-print-export__sheet .resume-page-frame,
-      .dasti-print-export__sheet .resume-page-stage,
-      .dasti-print-export__sheet .resume-page,
-      .dasti-print-export__sheet .dasti-document-stage__canvas[data-document-page="true"],
-      .dasti-print-export__sheet .dasti-proposal-document__page {
-        box-shadow: none !important;
-      }
-
-      .dasti-print-export__sheet .resume-page-frame {
-        padding: 0 !important;
-        border: 0 !important;
-        background: transparent !important;
-      }
-
-      @page {
-        size: A4;
-        margin: 12mm;
-      }
-
-      @media print {
-        html, body {
-          background: white;
-        }
-
-        body {
-          padding: 0;
-        }
-
-        .dasti-print-export {
-          padding: 0;
-        }
-      }
-    </style>
-  </head>
-  <body class="${bodyClassName}">
-    <div class="dasti-print-export">
-      <div class="dasti-print-export__sheet">${clonedNode.outerHTML}</div>
-    </div>
-  </body>
-</html>`);
-  printWindow.document.close();
-
-  const triggerPrint = () => {
-    printWindow.focus();
-    printWindow.print();
-  };
-
-  if (printWindow.document.readyState === "complete") {
-    window.setTimeout(triggerPrint, 180);
-  } else {
-    printWindow.addEventListener(
-      "load",
-      () => {
-        window.setTimeout(triggerPrint, 180);
-      },
-      { once: true },
-    );
-  }
-
-  printWindow.addEventListener(
-    "afterprint",
-    () => {
-      printWindow.close();
-    },
-    { once: true },
-  );
-
+  void downloadElementAsPdf(args);
   return true;
 }
 
@@ -142,16 +234,14 @@ export function printFirstMatchingNodeAsPdf(args: {
   selectors: string[];
   title: string;
 }): boolean {
-  if (!args.container) {
+  const node = findFirstMatchingNode(args);
+  if (!node) {
     return false;
   }
 
-  for (const selector of args.selectors) {
-    const node = args.container.querySelector<HTMLElement>(selector);
-    if (node) {
-      return printElementAsPdf({ node, title: args.title });
-    }
-  }
-
-  return false;
+  void downloadElementAsPdf({
+    node,
+    title: args.title,
+  });
+  return true;
 }
