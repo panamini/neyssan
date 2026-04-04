@@ -77,13 +77,6 @@ type SavedProposalRecord = {
 };
 
 type SavedProposalViewMode = "focused" | "stack" | "library";
-type SavedProposalSortOrder = "newest" | "oldest" | "title";
-type SavedProposalToneFilter =
-  | "all"
-  | "signature"
-  | "expert"
-  | "engaging"
-  | "auto";
 
 type RegeneratePayload = {
   jobTitle: string;
@@ -508,11 +501,6 @@ export default function ProposalsList({
     React.useState<string | null>(null);
   const [selectedRefineVoicePreset, setSelectedRefineVoicePreset] =
     React.useState<ProposalVoicePreset | null>(DEFAULT_PROPOSAL_VOICE_PRESET);
-  const [searchQuery, setSearchQuery] = React.useState("");
-  const [toneFilter, setToneFilter] =
-    React.useState<SavedProposalToneFilter>("all");
-  const [sortOrder, setSortOrder] =
-    React.useState<SavedProposalSortOrder>("newest");
   const [isSelectionPending, startSelectionTransition] = React.useTransition();
   const { showToast } = useToast();
   const activeCvStylePreset = React.useMemo(
@@ -704,53 +692,13 @@ export default function ProposalsList({
       activeCvStylePreset,
     });
   }, [activeCvStylePreset, selected, selectedEffectiveStylePreset]);
-  const filteredProposalList = React.useMemo(() => {
-    const normalizedQuery = searchQuery.trim().toLowerCase();
-
-    return [...displayList]
-      .filter((proposal) => {
-        if (
-          toneFilter !== "all" &&
-          (toneFilter === "auto"
-            ? getStoredRequestedVoicePreset(proposal) !== null
-            : getStoredVoicePreset(proposal) !== toneFilter)
-        ) {
-          return false;
-        }
-
-        if (!normalizedQuery) {
-          return true;
-        }
-
-        const searchableText = [
-          proposal.title,
-          proposal.content,
-          proposal.metadata?.sourceJobDescription,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-
-        return searchableText.includes(normalizedQuery);
-      })
-      .sort((left, right) => {
-        if (sortOrder === "oldest") {
-          return left._creationTime - right._creationTime;
-        }
-        if (sortOrder === "title") {
-          return (left.title ?? "").localeCompare(right.title ?? "");
-        }
-        return right._creationTime - left._creationTime;
-      });
-  }, [displayList, searchQuery, sortOrder, toneFilter]);
-  const filteredProposalCount = filteredProposalList.length;
   const proposalStack = React.useMemo(() => {
-    if (!selected) return filteredProposalList;
+    if (!selected) return displayList;
     return [
       selected,
-      ...filteredProposalList.filter((proposal) => proposal._id !== selected._id),
+      ...displayList.filter((proposal) => proposal._id !== selected._id),
     ];
-  }, [filteredProposalList, selected]);
+  }, [displayList, selected]);
   const visibleSecondaryProposals = React.useMemo(
     () => proposalStack.slice(1, 1 + visibleSecondaryCount),
     [proposalStack, visibleSecondaryCount],
@@ -1202,44 +1150,53 @@ export default function ProposalsList({
   const selectedToneLabel = selected ? toneLabel(getStoredVoicePreset(selected)) : "";
 
   const selectedSidebarHeading = selected ? (
-    <div className="dasti-proposal-library-sidebar__heading">
-      <div className="dasti-proposal-library-sidebar__eyebrow-row">
-        <div className="dasti-proposal-library-sidebar__eyebrow">
-          Saved proposals
+    <div className="dasti-proposal-library-info-card dasti-proposal-library-sidebar__heading">
+      <div className="dasti-proposal-library-info-card__stack">
+        <div className="dasti-proposal-library-sidebar__eyebrow-row">
+          <div className="dasti-proposal-library-sidebar__eyebrow">
+            Saved proposals
+          </div>
+          <span
+            className="dasti-count-pill"
+            aria-label={`${savedProposalCount} saved proposals`}
+          >
+            {savedProposalCount}
+          </span>
         </div>
-        <span className="dasti-count-pill" aria-label={`${savedProposalCount} saved proposals`}>
-          {savedProposalCount}
-        </span>
+        {selectedOutputMode === "edit" ? (
+          <input
+            type="text"
+            value={selectedHeaderTitle || ""}
+            onChange={(event) => setEditTitle(event.target.value)}
+            onBlur={() => {
+              void handleSaveDocument();
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                (event.currentTarget as HTMLInputElement).blur();
+              }
+            }}
+            placeholder="Saved proposal"
+            className="dasti-proposal-sheet__title-input"
+            aria-label="Proposal title"
+          />
+        ) : selectedHeaderTitle ? (
+          <h3 className="dasti-proposal-sheet__title">
+            {selectedHeaderTitle}
+          </h3>
+        ) : null}
+        {selectedToneLabel ? (
+          <div className="dasti-proposal-library-sidebar__tone-row">
+            <span className="dasti-proposal-tone-badge">{selectedToneLabel}</span>
+          </div>
+        ) : null}
+        {selectedHeaderMeta ? (
+          <p className="dasti-proposal-sheet__meta dasti-proposal-library-info-card__details">
+            {selectedHeaderMeta}
+          </p>
+        ) : null}
       </div>
-      {selectedOutputMode === "edit" ? (
-        <input
-          type="text"
-          value={selectedHeaderTitle || ""}
-          onChange={(event) => setEditTitle(event.target.value)}
-          onBlur={() => {
-            void handleSaveDocument();
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              (event.currentTarget as HTMLInputElement).blur();
-            }
-          }}
-          placeholder="Saved proposal"
-          className="dasti-proposal-sheet__title-input"
-          aria-label="Proposal title"
-        />
-      ) : selectedHeaderTitle ? (
-        <h3 className="dasti-proposal-sheet__title">{selectedHeaderTitle}</h3>
-      ) : null}
-      {selectedToneLabel ? (
-        <div className="dasti-proposal-library-sidebar__tone-row">
-          <span className="dasti-proposal-tone-badge">{selectedToneLabel}</span>
-        </div>
-      ) : null}
-      {selectedHeaderMeta ? (
-        <p className="dasti-proposal-sheet__meta">{selectedHeaderMeta}</p>
-      ) : null}
     </div>
   ) : null;
   const selectedForgeCloneToolbar = selected ? (
@@ -1300,61 +1257,6 @@ export default function ProposalsList({
         minWidth: 0,
       }}
     >
-      {savedProposalCount > 0 ? (
-        <div className="dasti-proposal-library-utility-row">
-          <label className="dasti-proposal-library-utility-row__search">
-            <span className="sr-only">Search saved proposals</span>
-            <input
-              type="search"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search saved proposals"
-              aria-label="Search saved proposals"
-              className="dasti-proposal-library-utility-row__input"
-            />
-          </label>
-          <label className="dasti-proposal-library-utility-row__select-shell">
-            <span className="sr-only">Filter saved proposals by tone</span>
-            <select
-              value={toneFilter}
-              onChange={(event) =>
-                setToneFilter(event.target.value as SavedProposalToneFilter)
-              }
-              aria-label="Filter saved proposals by tone"
-              className="dasti-select dasti-select--sm"
-            >
-              <option value="all">All tones</option>
-              <option value="signature">Natural</option>
-              <option value="expert">Formal</option>
-              <option value="engaging">Warm</option>
-              <option value="auto">Auto</option>
-            </select>
-          </label>
-          <label className="dasti-proposal-library-utility-row__select-shell">
-            <span className="sr-only">Sort saved proposals</span>
-            <select
-              value={sortOrder}
-              onChange={(event) =>
-                setSortOrder(event.target.value as SavedProposalSortOrder)
-              }
-              aria-label="Sort saved proposals"
-              className="dasti-select dasti-select--sm"
-            >
-              <option value="newest">Newest first</option>
-              <option value="oldest">Oldest first</option>
-              <option value="title">Title</option>
-            </select>
-          </label>
-          <span
-            className="dasti-proposal-library-utility-row__count"
-            aria-label={`${filteredProposalCount} filtered proposals`}
-          >
-            {filteredProposalCount === savedProposalCount
-              ? `${savedProposalCount} saved`
-              : `${filteredProposalCount} of ${savedProposalCount}`}
-          </span>
-        </div>
-      ) : null}
       <div
         ref={gestureSurfaceRef}
         className={[

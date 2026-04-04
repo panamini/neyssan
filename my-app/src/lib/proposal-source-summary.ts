@@ -56,6 +56,79 @@ const KEYWORD_STOPWORDS = new Set([
   "your",
 ]);
 
+const LOW_SIGNAL_KEYWORDS = new Set([
+  "audiences",
+  "dedicated",
+  "external",
+  "fields",
+  "flagged",
+  "gain",
+  "independent",
+  "issue",
+  "issues",
+  "later",
+  "offer",
+  "offers",
+  "original",
+  "review",
+  "thrive",
+  "visibility",
+]);
+
+const KEYWORD_ALLOWLIST = new Set([
+  "api",
+  "apis",
+  "b2b",
+  "b2c",
+  "crm",
+  "erp",
+  "figma",
+  "seo",
+  "sql",
+  "ux",
+  "ui",
+]);
+
+const LOCATION_REJECT_TOKENS = new Set([
+  "analytics",
+  "automation",
+  "business",
+  "campaign",
+  "communications",
+  "community",
+  "data",
+  "design",
+  "digital",
+  "engineering",
+  "finance",
+  "health",
+  "healthcare",
+  "innovative",
+  "innovation",
+  "legal",
+  "manufacturing",
+  "marketing",
+  "medicine",
+  "operations",
+  "pharma",
+  "platform",
+  "policy",
+  "product",
+  "quality",
+  "research",
+  "sales",
+  "science",
+  "stakeholder",
+  "strategy",
+  "support",
+  "systems",
+  "technology",
+]);
+
+const REMOTE_LOCATION_PATTERN = /\b(remote|hybrid|on-site|onsite)\b/i;
+const PLACE_SEGMENT_PATTERN =
+  /^(?:[A-Z][A-Za-z.'’-]+|[A-Z]{2,3})(?:[\s-](?:[A-Z][A-Za-z.'’-]+|[A-Z]{2,3}))*$/;
+
 function normalizeWhitespace(value: unknown): string {
   return typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
 }
@@ -66,6 +139,10 @@ function splitMetadataLines(value: string): string[] {
     .split(/\n+/)
     .map((line) => line.trim())
     .filter(Boolean);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function extractLabeledValue(value: string, labels: string[]): string | null {
@@ -83,6 +160,15 @@ function extractLabeledValue(value: string, labels: string[]): string | null {
   }
 
   return null;
+}
+
+function extractRole(rawJobDescription: string): string | null {
+  return extractLabeledValue(rawJobDescription, [
+    "role",
+    "job title",
+    "position",
+    "title",
+  ]);
 }
 
 function titleCaseKeyword(value: string): string {
@@ -125,9 +211,73 @@ function normalizePlaceLikeValue(value: string | null): string | null {
   return normalized;
 }
 
+function containsRejectedLocationToken(value: string): boolean {
+  return (
+    value
+      .toLowerCase()
+      .match(/[a-z][a-z'-]+/g)
+      ?.some((token) => LOCATION_REJECT_TOKENS.has(token)) ?? false
+  );
+}
+
+function hasPlaceShape(value: string): boolean {
+  const normalized = normalizeWhitespace(value).replace(/[()]/g, "");
+  if (!normalized) {
+    return false;
+  }
+
+  if (REMOTE_LOCATION_PATTERN.test(normalized)) {
+    return true;
+  }
+
+  const segments = normalized
+    .split(",")
+    .map((segment) => normalizeWhitespace(segment))
+    .filter(Boolean);
+  const candidateSegments = segments.length > 0 ? segments : [normalized];
+
+  return candidateSegments.every((segment) => {
+    const compact = segment.replace(/\b(?:remote|hybrid|on-site|onsite)\b/gi, "").trim();
+    if (!compact) {
+      return true;
+    }
+
+    const tokenCount = compact.split(/\s+/).length;
+    if (tokenCount > 3) {
+      return false;
+    }
+
+    return PLACE_SEGMENT_PATTERN.test(compact);
+  });
+}
+
+function isHighConfidenceLocation(
+  value: string | null,
+  options: { allowSingleSegment?: boolean } = {},
+): string | null {
+  const normalized = normalizePlaceLikeValue(value);
+  if (!normalized) {
+    return null;
+  }
+
+  if (REMOTE_LOCATION_PATTERN.test(normalized)) {
+    return normalized;
+  }
+
+  if (containsRejectedLocationToken(normalized)) {
+    return null;
+  }
+
+  if (!options.allowSingleSegment && !normalized.includes(",")) {
+    return null;
+  }
+
+  return hasPlaceShape(normalized) ? normalized : null;
+}
+
 function extractLocation(rawJobDescription: string): string | null {
   const normalized = normalizeWhitespace(rawJobDescription);
-  const remoteMatch = normalized.match(/\b(remote|hybrid|on-site|onsite)\b/i);
+  const remoteMatch = normalized.match(REMOTE_LOCATION_PATTERN);
   if (remoteMatch?.[1]) {
     return normalizeWhitespace(remoteMatch[1]);
   }
@@ -137,22 +287,46 @@ function extractLocation(rawJobDescription: string): string | null {
     "city",
     "based in",
     "located in",
+    "work model",
+    "workplace",
   ]);
-  const normalizedLabeledValue = normalizePlaceLikeValue(labeledValue);
+  const normalizedLabeledValue = isHighConfidenceLocation(labeledValue, {
+    allowSingleSegment: true,
+  });
   if (normalizedLabeledValue) {
     return normalizedLabeledValue;
   }
 
+  const company = extractCompany(rawJobDescription);
+  if (company) {
+    const companyContextMatch = normalized.match(
+      new RegExp(
+        `${escapeRegExp(company)}\\s+in\\s+([A-Z][A-Za-z.'’-]+(?:[\\s-][A-Z][A-Za-z.'’-]+){0,2}(?:,\\s*[A-Z][A-Za-z.'’-]+(?:[\\s-][A-Z][A-Za-z.'’-]+){0,2})?)(?=\\s+(?:to|and|where|while|with|for|who|that)\\b|[.;]|$)`,
+      ),
+    );
+    const contextualCompanyLocation = isHighConfidenceLocation(
+      companyContextMatch?.[1] ?? null,
+      { allowSingleSegment: true },
+    );
+    if (contextualCompanyLocation) {
+      return contextualCompanyLocation;
+    }
+  }
+
   const contextMatch = normalized.match(
-    /\b(?:[Bb]ased in|[Ll]ocated in|[Ii]n)\s+([A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){0,3}(?:,\s*[A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){0,2})?)(?=\s+(?:to|and|where|while|with|for|who|that)\b|[.;]|$)/,
+    /\b(?:[Bb]ased in|[Ll]ocated in|[Ww]orking from|[Pp]osition in)\s+([A-Z][A-Za-z.'’-]+(?:[\s-][A-Z][A-Za-z.'’-]+){0,2}(?:,\s*[A-Z][A-Za-z.'’-]+(?:[\s-][A-Z][A-Za-z.'’-]+){0,2})?)(?=\s+(?:to|and|where|while|with|for|who|that)\b|[.;]|$)/,
   );
-  return normalizePlaceLikeValue(contextMatch?.[1] ?? null);
+  return isHighConfidenceLocation(contextMatch?.[1] ?? null, {
+    allowSingleSegment: true,
+  });
 }
 
 function extractCity(rawJobDescription: string, location: string | null): string | null {
   const labeledValue = extractLabeledValue(rawJobDescription, ["city", "town"]);
   if (labeledValue) {
-    return labeledValue;
+    return isHighConfidenceLocation(labeledValue, {
+      allowSingleSegment: true,
+    });
   }
 
   if (!location) {
@@ -164,7 +338,9 @@ function extractCity(rawJobDescription: string, location: string | null): string
   }
 
   const [firstSegment] = location.split(",");
-  return normalizePlaceLikeValue(firstSegment ?? null);
+  return isHighConfidenceLocation(firstSegment ?? null, {
+    allowSingleSegment: true,
+  });
 }
 
 function extractAddress(rawJobDescription: string): string | null {
@@ -292,6 +468,21 @@ function extractKeywords(
   });
 
   return [...frequency.entries()]
+    .filter(([keyword, score]) => {
+      if (LOW_SIGNAL_KEYWORDS.has(keyword)) {
+        return false;
+      }
+      if (KEYWORD_ALLOWLIST.has(keyword)) {
+        return true;
+      }
+      if (keyword.length < 4) {
+        return false;
+      }
+      if (score < 2 && keyword.length < 6) {
+        return false;
+      }
+      return true;
+    })
     .sort((left, right) => {
       if (right[1] !== left[1]) {
         return right[1] - left[1];
@@ -349,6 +540,7 @@ export function buildProposalSourceSummary(args: {
   const rawJobDescription =
     typeof args.jobDescription === "string" ? args.jobDescription.trim() : "";
   const jobDescription = normalizeWhitespace(rawJobDescription);
+  const role = extractRole(rawJobDescription);
   const company = extractCompany(rawJobDescription);
   const location = extractLocation(rawJobDescription);
   const city = extractCity(rawJobDescription, location);
@@ -357,7 +549,7 @@ export function buildProposalSourceSummary(args: {
   const phone = extractPhone(rawJobDescription);
 
   return {
-    role: jobTitle || null,
+    role,
     company,
     location,
     city,

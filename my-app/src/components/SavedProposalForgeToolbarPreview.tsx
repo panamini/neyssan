@@ -300,194 +300,198 @@ export function SavedProposalForgeToolbarPreview({
           </>
         ) : null}
 
-        <div className="dasti-icon-cluster__divider dasti-proposal-rail-cluster__divider" />
+        {mode !== "edit" ? (
+          <>
+            <div className="dasti-icon-cluster__divider dasti-proposal-rail-cluster__divider" />
 
-        <span className="dasti-saved-proposal-forge-toolbar-preview__anchor dasti-saved-proposal-forge-toolbar-preview__anchor--style">
-          <button
-            type="button"
-            className={[
-              "dasti-artifact-inspector__action",
-              "dasti-artifact-inspector__action--style-trigger",
-              openDrawer === "style" ? "dasti-artifact-inspector__action--active" : "",
-            ]
-              .filter(Boolean)
-              .join(" ")}
-            aria-pressed={openDrawer === "style"}
-            aria-expanded={openDrawer === "style"}
-            aria-haspopup="dialog"
-            onClick={() => handleToggleDrawer("style")}
-            aria-label="Style"
-            data-toolbar-tooltip={openDrawer === "style" ? undefined : "Style"}
-          >
-            <span
-              className="dasti-artifact-inspector__icon dasti-artifact-inspector__icon--aa"
-              aria-hidden="true"
-              style={{
-                fontFamily: activeStyleOption.preview.headingFont,
-                fontWeight: activeStyleOption.preview.headingWeight,
-                fontStyle: activeStyleOption.preview.fontStyle ?? "normal",
-              }}
-            >
-              Aa
-            </span>
-          </button>
-
-          {openDrawer === "style" ? (
-            <div
-              className="dasti-proposal-chrome-drawer dasti-proposal-chrome-drawer--stack dasti-saved-proposal-forge-toolbar-preview__drawer dasti-saved-proposal-forge-toolbar-preview__drawer--center dasti-saved-proposal-forge-toolbar-preview__drawer--style"
-              role="dialog"
-              aria-label="Style options"
-            >
-              {STYLE_OPTIONS.map((option) => {
-                const active = styleBundleId === option.id;
-                return (
-                  <button
-                    key={option.id}
-                    type="button"
-                    className={[
-                      "dasti-artifact-inspector__action",
-                      "dasti-artifact-inspector__action--drawer",
-                      active ? "dasti-artifact-inspector__action--active" : "",
-                    ]
-                      .filter(Boolean)
-                      .join(" ")}
-                    aria-pressed={active}
-                    onClick={() => {
-                      onStyleBundleChange(active ? null : option.id);
-                      setOpenDrawer(null);
-                    }}
-                    aria-label={option.label}
-                    data-toolbar-tooltip={option.label}
-                    data-toolbar-tooltip-placement="inline-end"
-                  >
-                    <span
-                      className="dasti-artifact-inspector__icon dasti-artifact-inspector__icon--aa"
-                      aria-hidden="true"
-                      style={{
-                        fontFamily: option.preview.headingFont,
-                        fontWeight: option.preview.headingWeight,
-                        fontStyle: option.preview.fontStyle ?? "normal",
-                      }}
-                    >
-                      Aa
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          ) : null}
-        </span>
-
-        <span className="dasti-saved-proposal-forge-toolbar-preview__anchor dasti-saved-proposal-forge-toolbar-preview__anchor--color">
-          <button
-            ref={colorButtonRef}
-            type="button"
-            className={[
-              "dasti-artifact-inspector__action",
-              "dasti-artifact-inspector__action--color",
-              openDrawer === "color" || isColorPickerOpen
-                ? "dasti-artifact-inspector__action--active"
-                : "",
-            ]
-              .filter(Boolean)
-              .join(" ")}
-            aria-pressed={openDrawer === "color" || isColorPickerOpen}
-            aria-expanded={openDrawer === "color" || isColorPickerOpen}
-            aria-haspopup="dialog"
-            onClick={() => handleToggleDrawer("color")}
-            aria-label="Color"
-            data-toolbar-tooltip={
-              openDrawer === "color" || isColorPickerOpen ? undefined : "Colors"
-            }
-          >
-            <span className="dasti-artifact-inspector__icon" aria-hidden="true">
-              <span
+            <span className="dasti-saved-proposal-forge-toolbar-preview__anchor dasti-saved-proposal-forge-toolbar-preview__anchor--style">
+              <button
+                type="button"
                 className={[
-                  "dasti-artifact-inspector__swatch",
-                  "dasti-artifact-inspector__swatch--inline",
-                  customAccentHex ? "dasti-artifact-inspector__swatch--custom" : "",
+                  "dasti-artifact-inspector__action",
+                  "dasti-artifact-inspector__action--style-trigger",
+                  openDrawer === "style" ? "dasti-artifact-inspector__action--active" : "",
                 ]
                   .filter(Boolean)
                   .join(" ")}
-                style={
-                  customAccentHex
-                    ? ({ "--swatch-color": customAccentHex } as React.CSSProperties)
-                    : activePaletteOption
-                      ? ({ "--swatch-color": activePaletteOption.color } as React.CSSProperties)
-                      : undefined
-                }
-              />
-            </span>
-          </button>
-
-          {openDrawer === "color" ? (
-            <div
-              ref={colorDrawerRef}
-              className="dasti-proposal-chrome-drawer dasti-proposal-chrome-drawer--stack dasti-artifact-inspector__palette-drawer dasti-saved-proposal-forge-toolbar-preview__drawer dasti-saved-proposal-forge-toolbar-preview__drawer--center dasti-saved-proposal-forge-toolbar-preview__drawer--palette"
-              role="dialog"
-              aria-label="Color options"
-            >
-              <div className="dasti-artifact-inspector__palette">
-                {PROPOSAL_PALETTE_OPTIONS.map((option) => {
-                  const active = activePaletteId === option.id;
-                  return (
-                    <button
-                      key={option.id}
-                      type="button"
-                      className={
-                        active
-                          ? "dasti-artifact-inspector__swatch dasti-artifact-inspector__swatch--active"
-                          : "dasti-artifact-inspector__swatch"
-                      }
-                      aria-pressed={active}
-                      aria-label={option.label}
-                      onClick={() => {
-                        setIsColorPickerOpen(false);
-                        onCustomAccentHexChange(null);
-                        onPaletteOverrideChange(
-                          active && paletteOverride === option.id ? null : option.id,
-                        );
-                        setOpenDrawer(null);
-                      }}
-                      style={{ "--swatch-color": option.color } as React.CSSProperties}
-                    />
-                  );
-                })}
-
-                <button
-                  type="button"
-                  className={[
-                    "dasti-artifact-inspector__swatch",
-                    "dasti-artifact-inspector__swatch--custom",
-                    customAccentHex ? "" : "dasti-artifact-inspector__swatch--icon",
-                    customAccentHex ? "dasti-artifact-inspector__swatch--active" : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                  aria-pressed={customAccentHex !== null}
-                  aria-label="Custom accent color"
-                  onClick={() => {
-                    setOpenDrawer("color");
-                    setIsColorPickerOpen(true);
+                aria-pressed={openDrawer === "style"}
+                aria-expanded={openDrawer === "style"}
+                aria-haspopup="dialog"
+                onClick={() => handleToggleDrawer("style")}
+                aria-label="Style"
+                data-toolbar-tooltip={openDrawer === "style" ? undefined : "Style"}
+              >
+                <span
+                  className="dasti-artifact-inspector__icon dasti-artifact-inspector__icon--aa"
+                  aria-hidden="true"
+                  style={{
+                    fontFamily: activeStyleOption.preview.headingFont,
+                    fontWeight: activeStyleOption.preview.headingWeight,
+                    fontStyle: activeStyleOption.preview.fontStyle ?? "normal",
                   }}
-                  style={
-                    customAccentHex
-                      ? ({ "--swatch-color": customAccentHex } as React.CSSProperties)
-                      : undefined
-                  }
                 >
-                  {!customAccentHex ? (
-                    <ColorWheel
-                      size={16}
-                      className="dasti-artifact-inspector__swatch-wheel"
-                      aria-hidden="true"
-                    />
-                  ) : null}
-                </button>
-              </div>
-            </div>
-          ) : null}
-        </span>
+                  Aa
+                </span>
+              </button>
+
+              {openDrawer === "style" ? (
+                <div
+                  className="dasti-proposal-chrome-drawer dasti-proposal-chrome-drawer--stack dasti-saved-proposal-forge-toolbar-preview__drawer dasti-saved-proposal-forge-toolbar-preview__drawer--center dasti-saved-proposal-forge-toolbar-preview__drawer--style"
+                  role="dialog"
+                  aria-label="Style options"
+                >
+                  {STYLE_OPTIONS.map((option) => {
+                    const active = styleBundleId === option.id;
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        className={[
+                          "dasti-artifact-inspector__action",
+                          "dasti-artifact-inspector__action--drawer",
+                          active ? "dasti-artifact-inspector__action--active" : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                        aria-pressed={active}
+                        onClick={() => {
+                          onStyleBundleChange(active ? null : option.id);
+                          setOpenDrawer(null);
+                        }}
+                        aria-label={option.label}
+                        data-toolbar-tooltip={option.label}
+                        data-toolbar-tooltip-placement="inline-end"
+                      >
+                        <span
+                          className="dasti-artifact-inspector__icon dasti-artifact-inspector__icon--aa"
+                          aria-hidden="true"
+                          style={{
+                            fontFamily: option.preview.headingFont,
+                            fontWeight: option.preview.headingWeight,
+                            fontStyle: option.preview.fontStyle ?? "normal",
+                          }}
+                        >
+                          Aa
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </span>
+
+            <span className="dasti-saved-proposal-forge-toolbar-preview__anchor dasti-saved-proposal-forge-toolbar-preview__anchor--color">
+              <button
+                ref={colorButtonRef}
+                type="button"
+                className={[
+                  "dasti-artifact-inspector__action",
+                  "dasti-artifact-inspector__action--color",
+                  openDrawer === "color" || isColorPickerOpen
+                    ? "dasti-artifact-inspector__action--active"
+                    : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                aria-pressed={openDrawer === "color" || isColorPickerOpen}
+                aria-expanded={openDrawer === "color" || isColorPickerOpen}
+                aria-haspopup="dialog"
+                onClick={() => handleToggleDrawer("color")}
+                aria-label="Color"
+                data-toolbar-tooltip={
+                  openDrawer === "color" || isColorPickerOpen ? undefined : "Colors"
+                }
+              >
+                <span className="dasti-artifact-inspector__icon" aria-hidden="true">
+                  <span
+                    className={[
+                      "dasti-artifact-inspector__swatch",
+                      "dasti-artifact-inspector__swatch--inline",
+                      customAccentHex ? "dasti-artifact-inspector__swatch--custom" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    style={
+                      customAccentHex
+                        ? ({ "--swatch-color": customAccentHex } as React.CSSProperties)
+                        : activePaletteOption
+                          ? ({ "--swatch-color": activePaletteOption.color } as React.CSSProperties)
+                          : undefined
+                    }
+                  />
+                </span>
+              </button>
+
+              {openDrawer === "color" ? (
+                <div
+                  ref={colorDrawerRef}
+                  className="dasti-proposal-chrome-drawer dasti-proposal-chrome-drawer--stack dasti-artifact-inspector__palette-drawer dasti-saved-proposal-forge-toolbar-preview__drawer dasti-saved-proposal-forge-toolbar-preview__drawer--center dasti-saved-proposal-forge-toolbar-preview__drawer--palette"
+                  role="dialog"
+                  aria-label="Color options"
+                >
+                  <div className="dasti-artifact-inspector__palette">
+                    {PROPOSAL_PALETTE_OPTIONS.map((option) => {
+                      const active = activePaletteId === option.id;
+                      return (
+                        <button
+                          key={option.id}
+                          type="button"
+                          className={
+                            active
+                              ? "dasti-artifact-inspector__swatch dasti-artifact-inspector__swatch--active"
+                              : "dasti-artifact-inspector__swatch"
+                          }
+                          aria-pressed={active}
+                          aria-label={option.label}
+                          onClick={() => {
+                            setIsColorPickerOpen(false);
+                            onCustomAccentHexChange(null);
+                            onPaletteOverrideChange(
+                              active && paletteOverride === option.id ? null : option.id,
+                            );
+                            setOpenDrawer(null);
+                          }}
+                          style={{ "--swatch-color": option.color } as React.CSSProperties}
+                        />
+                      );
+                    })}
+
+                    <button
+                      type="button"
+                      className={[
+                        "dasti-artifact-inspector__swatch",
+                        "dasti-artifact-inspector__swatch--custom",
+                        customAccentHex ? "" : "dasti-artifact-inspector__swatch--icon",
+                        customAccentHex ? "dasti-artifact-inspector__swatch--active" : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                      aria-pressed={customAccentHex !== null}
+                      aria-label="Custom accent color"
+                      onClick={() => {
+                        setOpenDrawer("color");
+                        setIsColorPickerOpen(true);
+                      }}
+                      style={
+                        customAccentHex
+                          ? ({ "--swatch-color": customAccentHex } as React.CSSProperties)
+                          : undefined
+                      }
+                    >
+                      {!customAccentHex ? (
+                        <ColorWheel
+                          size={16}
+                          className="dasti-artifact-inspector__swatch-wheel"
+                          aria-hidden="true"
+                        />
+                      ) : null}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </span>
+          </>
+        ) : null}
       </div>
 
       <div className="dasti-document-rail__section dasti-document-rail__section--center"></div>

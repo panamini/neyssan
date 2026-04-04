@@ -127,14 +127,17 @@ describe("ProposalsList toolbar grouping", () => {
       screen.getByLabelText("2 saved proposals"),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("searchbox", { name: "Search saved proposals" }),
-    ).toBeInTheDocument();
+      container.querySelector(".dasti-proposal-library-info-card"),
+    ).toBeTruthy();
     expect(
-      screen.getByRole("combobox", { name: "Filter saved proposals by tone" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("searchbox", { name: "Search saved proposals" }),
+    ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("combobox", { name: "Sort saved proposals" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("combobox", { name: "Filter saved proposals by tone" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("combobox", { name: "Sort saved proposals" }),
+    ).not.toBeInTheDocument();
     expect(screen.getAllByText("Natural").length).toBeGreaterThan(0);
 
     expect(screen.getByRole("button", { name: /tone of voice/i })).toBeInTheDocument();
