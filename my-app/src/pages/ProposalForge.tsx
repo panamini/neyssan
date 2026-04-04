@@ -152,6 +152,8 @@ function resolveStoredComposeToolbarVoicePreset(args: {
 
 type ProposalDocumentMetadata = {
   sourceJobDescription?: string;
+  sourceUrl?: string;
+  platform?: string;
   proposalType?: FormValues["proposalType"];
   voicePreset?: FormValues["voicePreset"];
   requestedVoicePreset?: FormValues["voicePreset"] | null;
@@ -1041,6 +1043,20 @@ export function ProposalForge(): JSX.Element {
     if (sourceJobDescription) {
       nextMetadata.sourceJobDescription = sourceJobDescription;
     }
+    const sourceUrl =
+      outputSourceComposeDraft?.sourceUrl?.trim() ||
+      composePreviewValues?.sourceUrl?.trim() ||
+      "";
+    if (sourceUrl) {
+      nextMetadata.sourceUrl = sourceUrl;
+    }
+    const sourcePlatform =
+      outputSourceComposeDraft?.platform?.trim() ||
+      composePreviewValues?.platform?.trim() ||
+      "";
+    if (sourcePlatform) {
+      nextMetadata.platform = sourcePlatform;
+    }
     if (lastProposalRequest?.formalityLevel) {
       nextMetadata.formalityLevel = lastProposalRequest.formalityLevel;
     }
@@ -1051,10 +1067,14 @@ export function ProposalForge(): JSX.Element {
     return Object.keys(nextMetadata).length > 0 ? nextMetadata : undefined;
   }, [
     composePreviewValues?.jobDescription,
+    composePreviewValues?.platform,
+    composePreviewValues?.sourceUrl,
     lastProposalRequest?.creativity,
     lastProposalRequest?.formalityLevel,
     lastProposalRequest?.voicePreset,
+    outputSourceComposeDraft?.platform,
     outputSourceComposeDraft?.jobDescription,
+    outputSourceComposeDraft?.sourceUrl,
     proposalRenderMetadata,
     proposalType,
     proposalVoicePreset,
@@ -1360,16 +1380,41 @@ export function ProposalForge(): JSX.Element {
   }, []);
 
   const buildStoredProposalComposeDraftSnapshot = React.useCallback(
-    (values: FormValues): StoredProposalComposeDraft => ({
-      jobTitle: values.jobTitle,
-      jobDescription: values.jobDescription,
-      proposalType: values.proposalType,
-      voicePreset: values.voicePreset ?? null,
-      toneTuning: values.toneTuning ?? null,
-      characterLimitMode: values.characterLimitMode ?? null,
-      characterLimitValue: values.characterLimitValue ?? null,
-    }),
-    [],
+    (values: FormValues): StoredProposalComposeDraft => {
+      const storedComposeDraft = readStoredProposalComposeDraft();
+      const preservedSourceUrl =
+        outputSourceComposeDraft?.sourceUrl ??
+        composePreviewValues?.sourceUrl ??
+        storedComposeDraft?.sourceUrl ??
+        prefill?.sourceUrl ??
+        null;
+      const preservedPlatform =
+        outputSourceComposeDraft?.platform ??
+        composePreviewValues?.platform ??
+        storedComposeDraft?.platform ??
+        prefill?.platform ??
+        null;
+
+      return {
+        jobTitle: values.jobTitle,
+        jobDescription: values.jobDescription,
+        proposalType: values.proposalType,
+        voicePreset: values.voicePreset ?? null,
+        toneTuning: values.toneTuning ?? null,
+        characterLimitMode: values.characterLimitMode ?? null,
+        characterLimitValue: values.characterLimitValue ?? null,
+        sourceUrl: preservedSourceUrl,
+        platform: preservedPlatform,
+      };
+    },
+    [
+      composePreviewValues?.platform,
+      composePreviewValues?.sourceUrl,
+      outputSourceComposeDraft?.platform,
+      outputSourceComposeDraft?.sourceUrl,
+      prefill?.platform,
+      prefill?.sourceUrl,
+    ],
   );
   const commitComposeDraftPreview = React.useCallback(
     (draft: StoredProposalComposeDraft | null) => {
@@ -2247,6 +2292,10 @@ export function ProposalForge(): JSX.Element {
 
     const restoredSourceJobDescription =
       openedSavedProposal.metadata?.sourceJobDescription?.trim() ?? "";
+    const restoredSourceUrl =
+      openedSavedProposal.metadata?.sourceUrl?.trim() ?? "";
+    const restoredSourcePlatform =
+      openedSavedProposal.metadata?.platform?.trim() ?? "";
     const restoredJobTitle =
       savedProposalDocumentTitle.trim() ||
       openedSavedProposal.title.trim() ||
@@ -2281,6 +2330,12 @@ export function ProposalForge(): JSX.Element {
 
         if (restoredSourceJobDescription) {
           composeDraft.jobDescription = restoredSourceJobDescription;
+        }
+        if (restoredSourceUrl) {
+          composeDraft.sourceUrl = restoredSourceUrl;
+        }
+        if (restoredSourcePlatform) {
+          composeDraft.platform = restoredSourcePlatform;
         }
 
         const normalizedRestoredToolbarVoicePreset =

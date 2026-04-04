@@ -282,12 +282,35 @@ function formatImportedSourceLabel(
 function formatImportedSourceHost(
   sourceUrl: string | null | undefined,
 ): string | null {
-  if (!sourceUrl) {
+  const normalizedSourceUrl = String(sourceUrl ?? "").trim();
+  if (!normalizedSourceUrl) {
     return null;
   }
 
+  const readHostname = (value: string): string | null => {
+    try {
+      return new URL(value).hostname.replace(/^www\./i, "");
+    } catch {
+      return null;
+    }
+  };
+
+  const parsedHostname =
+    readHostname(normalizedSourceUrl) ??
+    (/^[a-z][a-z0-9+.-]*:\/\//i.test(normalizedSourceUrl)
+      ? null
+      : readHostname(`https://${normalizedSourceUrl}`));
+
+  if (parsedHostname) {
+    return parsedHostname;
+  }
+
   try {
-    return new URL(sourceUrl).hostname.replace(/^www\./i, "");
+    return normalizedSourceUrl
+      .replace(/^[a-z][a-z0-9+.-]*:\/\//i, "")
+      .replace(/^www\./i, "")
+      .split("/")[0]
+      .trim() || null;
   } catch {
     return null;
   }
