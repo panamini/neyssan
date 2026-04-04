@@ -816,7 +816,7 @@ function QuirePage({
         className={`resume-page resume-page--${variant.id}`}
         style={{
           ...pageVars,
-          background: "var(--color-surface)",
+          background: "var(--paper)", /* --paper (#faf9f5) = warm document sheet */
           border: "0.36mm solid rgba(0,0,0,0.15)",
           overflow: "hidden",
           fontFamily: "var(--font-body-family)",
@@ -1291,7 +1291,7 @@ function ClassicResumePage({
       <article
         ref={pageRef}
         className={`resume-page resume-page--${variant.id}`}
-        style={{ ...pageVars, fontFamily: "var(--font-body-family)" }}
+        style={{ ...pageVars, background: "var(--paper)", fontFamily: "var(--font-body-family)" }}
         aria-label={variant.label}
       >
         <div ref={innerRef} className="resume-inner">
@@ -1478,7 +1478,7 @@ function OneColumnPage({
       <article
         ref={pageRef}
         className={`resume-page resume-page--${variant.id}`}
-        style={{ ...pageVars, fontFamily: "var(--font-body-family)" }}
+        style={{ ...pageVars, background: "var(--paper)", fontFamily: "var(--font-body-family)" }}
         aria-label={variant.label}
       >
         <div ref={innerRef} className="resume-inner resume-inner--onecol">
@@ -1640,7 +1640,7 @@ function SwissMinimaPage({
         className={`resume-page resume-page--${variant.id}`}
         style={{
           ...pageVars,
-          background: "var(--color-surface)",
+          background: "var(--paper)", /* --paper (#faf9f5) = warm document sheet */
           borderColor: "rgba(17, 17, 17, 0.18)",
           borderWidth: "0.6mm",
           boxShadow: "0 5mm 14mm rgba(18, 12, 8, 0.08)",
@@ -2016,7 +2016,7 @@ function EditorialMagazinePage({
         style={{
           ...pageVars,
           background:
-            "linear-gradient(180deg, var(--color-surface), color-mix(in srgb, var(--color-surface) 94%, var(--color-surface-muted) 6%))",
+            "linear-gradient(180deg, var(--paper), color-mix(in srgb, var(--paper) 94%, var(--sf1) 6%))", /* --paper base, faint sf1 tint toward foot */
           fontFamily: "var(--font-body-family)",
         }}
         aria-label={variant.label}
@@ -2987,7 +2987,7 @@ function SignalGridPage({
         style={{
           ...pageVars,
           background:
-            "linear-gradient(180deg, var(--color-surface-raised), color-mix(in srgb, var(--color-surface) 96%, var(--color-surface-muted) 4%))",
+            "linear-gradient(180deg, var(--paper), color-mix(in srgb, var(--paper) 96%, var(--sf1) 4%))", /* --paper base, barely-there sf1 tint */
           borderColor: "var(--color-border)",
           fontFamily: "var(--font-body-family)",
         }}
