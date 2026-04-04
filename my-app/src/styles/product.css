@@ -4114,7 +4114,8 @@
   --document-viewer-bleed-inline: var(--s2);
   --document-viewer-bleed-block: var(--s2);
   --proposal-output-stage-frame-padding: var(--s2);
-  --proposal-output-rail-inline-inset: var(--s2);
+  --proposal-output-rail-inline-inset: 0px;
+  --document-rail-gap: var(--space-2);
 }
 
 .dasti-proposal-output-shell--saved {
@@ -10265,6 +10266,24 @@ html:not(.dark) .dasti-proposal-submit {
     inset: auto;
     width: 100%;
     margin-block-end: var(--document-rail-gap);
+  }
+
+  .dasti-proposal-output-shell--workspace .dasti-document-shell {
+    gap: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .dasti-proposal-output-shell--workspace
+    .dasti-proposal-sheet__body--document-viewer {
+    border: 1px solid var(--document-viewer-frame-border);
+    border-radius: var(--document-viewer-radius);
+    background: var(--document-viewer-frame-surface);
+    box-shadow:
+      var(--document-viewer-frame-shadow),
+      0 12px 28px -24px color-mix(in srgb, var(--shadow-color) 92%, transparent);
   }
 
   .dasti-compose-toolbar__bar {
