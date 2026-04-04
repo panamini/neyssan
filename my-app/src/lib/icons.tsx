@@ -11,6 +11,7 @@ import {
   CaretDown as PhCaretDown,
   CaretUp as PhCaretUp,
   Check as PhCheck,
+  SealWarning as PhSealWarning,
   CornersIn as PhCornersIn,
   Copy as PhCopy,
   DotsSixVertical as PhDotsSixVertical,
@@ -159,6 +160,7 @@ export const Plus = withCompat(PhPlus);
 export const RotateCcw = withCompat(PhArrowsClockwise);
 export const ScanLine = withCompat(PhScan);
 export const ScrollText = withCompat(PhScroll);
+export const SealWarning = withCompat(PhSealWarning);
 export const SendHorizontal = withCompat(PhPaperPlaneTilt);
 export const Square = withCompat(PhSquare);
 export const ImagesSquare = withCompat(PhImagesSquare);
