@@ -91,6 +91,50 @@ describe("document export", () => {
     expect(jsPdfSaveMock).toHaveBeenCalledWith("Generated proposal.pdf");
   });
 
+  it("normalizes the cloned export tree when a clone hook is provided", async () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1200;
+    canvas.height = 1600;
+    canvas.toDataURL = vi.fn(() => "data:image/png;base64,export");
+    const prepareClone = vi.fn();
+    html2canvasMock.mockImplementation(async (node, options) => {
+      const sourceNode = node as HTMLElement;
+      const exportRootId = sourceNode.getAttribute("data-document-export-root");
+      const clonedDocument = document.implementation.createHTMLDocument("clone");
+      const clonedNode = clonedDocument.createElement("div");
+
+      if (exportRootId) {
+        clonedNode.setAttribute("data-document-export-root", exportRootId);
+      }
+
+      clonedDocument.body.appendChild(clonedNode);
+      options?.onclone?.(clonedDocument);
+
+      return canvas;
+    });
+
+    const node = document.createElement("div");
+    document.body.appendChild(node);
+
+    await expect(
+      downloadElementAsPdf({
+        node,
+        title: "Generated proposal",
+        prepareClone,
+      }),
+    ).resolves.toBe(true);
+
+    expect(prepareClone).toHaveBeenCalledTimes(1);
+    expect(prepareClone).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceNode: node,
+        clonedNode: expect.any(HTMLElement),
+        clonedDocument: expect.any(Document),
+      }),
+    );
+    expect(node.hasAttribute("data-document-export-root")).toBe(false);
+  });
+
   it("exports the first matching mounted node when downloading a PDF", async () => {
     const canvas = document.createElement("canvas");
     canvas.width = 1200;

@@ -4,6 +4,7 @@ export const LOCAL_FONT_DIRECTORY_HINT = "src/assets/fonts";
 
 export const FONT_PAIR_IDS = [
   "quiet-editorial",
+  "civic-correspondence",
   "ledger-sans",
   "mono-signal",
   "studio-grotesk",
@@ -41,6 +42,12 @@ export type VerbatiFontPairOption = {
 };
 
 const LOCAL_FONT_ALIASES: LocalFontAlias[] = [
+  { family: "Archivo", matchTokens: ["archivo"], fontWeight: 700 },
+  {
+    family: "Source Serif 4",
+    matchTokens: ["sourceserif4", "source-serif-4", "source_serif_4"],
+    fontWeight: 400,
+  },
   { family: "Sono", matchTokens: ["sono"], fontWeight: 400 },
   { family: "Geist", matchTokens: ["geist"], fontWeight: 400 },
   { family: "Hepta Slab", matchTokens: ["heptaslab", "hepta-slab"], fontWeight: 500 },
@@ -171,6 +178,22 @@ export const VERBATI_FONT_PAIR_OPTIONS: VerbatiFontPairOption[] = [
     bodyFamily: buildFamilyStack("Geist", "system-ui, sans-serif"),
     headingLabel: "Fraunces Bold",
     bodyLabel: "Geist",
+  },
+  {
+    id: "civic-correspondence",
+    name: "Civic Correspondence",
+    description:
+      "Archivo register headings over Source Serif 4 for a historic civic-letter rhythm.",
+    headingFamily: buildFamilyStack(
+      "Archivo",
+      '"Helvetica Neue", Helvetica, Arial, sans-serif',
+    ),
+    bodyFamily: buildFamilyStack(
+      "Source Serif 4",
+      'Georgia, "Times New Roman", serif',
+    ),
+    headingLabel: "Archivo Bold",
+    bodyLabel: "Source Serif 4",
   },
   {
     id: "ledger-sans",

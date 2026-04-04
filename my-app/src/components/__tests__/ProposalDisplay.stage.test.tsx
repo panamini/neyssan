@@ -154,4 +154,21 @@ describe("ProposalDisplay stage behavior", () => {
       container.querySelector(".dasti-proposal-sheet__preview-stage"),
     ).toHaveAttribute("data-stage-mode", "overflow");
   });
+
+  it("scales the volk register preview from a fixed A4 shell", () => {
+    const { container } = render(
+      <ProposalDisplay
+        proposalContent={"Dear team,\n\nSingle-page proposal.\n\nAlex"}
+        loading={false}
+        error={null}
+        proposalType="cover_letter"
+        templateId="volk_register"
+        showZoomControls
+      />,
+    );
+
+    expect(
+      container.querySelector(".dasti-proposal-sheet__preview-scale-shell"),
+    ).toBeTruthy();
+  });
 });

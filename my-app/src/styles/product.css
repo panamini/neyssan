@@ -2917,8 +2917,17 @@
   z-index: 18;
   display: flex;
   justify-content: flex-start;
-  padding-inline: var(--space-2);
+  padding-inline: max(
+    var(--space-2),
+    var(--proposal-output-stage-frame-padding, 0px)
+  );
   padding-block-start: var(--space-2);
+  pointer-events: none;
+}
+
+.dasti-proposal-character-badge-wrap[data-overlap-hidden="true"] {
+  opacity: 0;
+  transform: translate3d(0, 6px, 0);
   pointer-events: none;
 }
 
@@ -4399,7 +4408,12 @@
 .dasti-doc-viewport[data-pannable="true"],
 .dasti-proposal-sheet__scroll[data-pannable="true"] {
   cursor: grab;
-  touch-action: none;
+  touch-action: pan-x pan-y;
+}
+
+.dasti-doc-viewport[data-pannable="true"] *,
+.dasti-proposal-sheet__scroll[data-pannable="true"] * {
+  cursor: inherit;
 }
 
 .dasti-doc-viewport[data-dragging="true"],
@@ -4681,6 +4695,12 @@
   flex: 0 0 auto;
   display: grid;
   place-items: center;
+}
+
+.dasti-proposal-sheet__preview-scale-shell {
+  position: relative;
+  transform-origin: top left;
+  will-change: transform;
 }
 
 .dasti-proposal-sheet__preview-page-positioner {
@@ -5055,6 +5075,289 @@
   font-style: italic;
 }
 
+.dasti-proposal-document--volk-register .dasti-proposal-document__page {
+  position: relative;
+  display: block;
+  grid-template-columns: none;
+  column-gap: 0;
+  padding-block-start: 0;
+  padding-inline: 0;
+  padding-block-end: calc(
+    var(--proposal-block-mm) *
+      (
+        var(--proposal-template-bottom-margin-mm) -
+          var(--proposal-fit-bottom-margin-adjust-mm) -
+          var(--proposal-fit-fine-bottom-margin-adjust-mm)
+      )
+  );
+  background:
+    linear-gradient(
+      to right,
+      transparent 0%,
+      transparent 50.5%,
+      rgba(120, 108, 77, 0.055) 50.67%,
+      transparent 50.84%,
+      transparent 58.58%,
+      rgba(120, 108, 77, 0.028) 58.73%,
+      transparent 58.88%,
+      transparent 100%
+    ),
+    radial-gradient(circle at 18% 8%, rgba(255, 255, 255, 0.22), transparent 27%),
+    radial-gradient(circle at 95% 94%, rgba(125, 110, 80, 0.06), transparent 38%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+    var(--proposal-document-paper);
+  clip-path: polygon(0 0, 100% 0, 100% 98.9%, 98.8% 100%, 0 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.18),
+    inset 0 0 40px rgba(123, 111, 81, 0.05);
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__rail,
+.dasti-proposal-document--volk-register .dasti-proposal-document__eyebrow,
+.dasti-proposal-document--volk-register .dasti-proposal-document__title,
+.dasti-proposal-document--volk-register .dasti-proposal-document__meta {
+  display: none;
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__title {
+  display: none;
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__meta {
+  display: none;
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-header,
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-register-item,
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-subject-label,
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-content,
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-dot,
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-tier-marker {
+  position: absolute;
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-header {
+  left: var(--volk-grid-left);
+  top: var(--volk-grid-title-top);
+  width: var(--volk-grid-header-width);
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  max-width: calc(100% - (var(--proposal-inline-mm) * 18));
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-title,
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-subtitle,
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-sender,
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-register-label,
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-subject-label,
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-subject-value,
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-tier-marker {
+  margin: 0;
+  font-family: var(--font-heading-family);
+  color: var(--proposal-document-accent-ink);
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-title {
+  margin: 0;
+  font-size: calc(
+    32pt * var(--proposal-fit-title-scale, 1) * var(--proposal-fit-fine-scale, 1)
+  );
+  line-height: calc(
+    24pt * var(--proposal-fit-title-scale, 1) * var(--proposal-fit-fine-scale, 1)
+  );
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  max-width: 100%;
+  white-space: normal;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-subtitle {
+  margin: calc(
+      4pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
+    )
+    0 0;
+  font-size: calc(
+    20pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
+  );
+  line-height: calc(
+    18pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
+  );
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  max-width: 100%;
+  white-space: normal;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-sender {
+  margin: calc(
+      18pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
+    )
+    0 0;
+  font-size: calc(
+    11pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
+  );
+  line-height: calc(
+    18pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
+  );
+  font-weight: 800;
+  letter-spacing: 0.005em;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-register-item {
+  top: var(--volk-grid-meta-top);
+  display: grid;
+  gap: calc(var(--proposal-inline-mm) * 0.5);
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-register-label {
+  font-size: calc(
+    11pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
+  );
+  line-height: calc(
+    18pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
+  );
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  text-transform: lowercase;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-subject-label {
+  font-size: calc(
+    16pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
+  );
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  text-transform: lowercase;
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-subject-value {
+  margin: 0.9mm 0 0;
+  width: min(calc(var(--volk-grid-body-width) - 16mm), 48ch);
+  font-size: calc(
+    11pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
+  );
+  line-height: calc(
+    18pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
+  );
+  font-weight: 700;
+  letter-spacing: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-content {
+  left: var(--volk-grid-left);
+  top: var(--volk-grid-subject-top);
+  width: min(var(--volk-grid-body-width), 60ch);
+  bottom: calc(
+    var(--proposal-block-mm) *
+      (
+        var(--proposal-template-bottom-margin-mm) -
+          var(--proposal-fit-bottom-margin-adjust-mm) -
+          var(--proposal-fit-fine-bottom-margin-adjust-mm)
+      )
+  );
+  display: grid;
+  align-content: start;
+  gap: calc(var(--proposal-inline-mm) * 1.8);
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-dot {
+  left: var(--volk-grid-dot-left);
+  top: var(--volk-grid-dot-top);
+  width: calc(var(--proposal-inline-mm) * 1.15);
+  height: calc(var(--proposal-inline-mm) * 1.15);
+  border-radius: 50%;
+  background: var(--proposal-document-accent-ink);
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-tier-marker {
+  left: calc(var(--proposal-inline-mm) * 2.8);
+  font-size: calc(
+    10pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
+  );
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  transform: rotate(-90deg);
+  transform-origin: top left;
+  opacity: 0.72;
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-tier-marker--two {
+  top: 66.666%;
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-tier-marker--three {
+  top: 33.333%;
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__body--volk-register {
+  position: relative;
+  left: auto;
+  top: auto;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  padding: 0;
+  display: grid;
+  align-content: start;
+  gap: 0;
+}
+
+.dasti-proposal-document--volk-register
+  .dasti-proposal-document__body--volk-register
+  .dasti-proposal-document__salutation,
+.dasti-proposal-document--volk-register
+  .dasti-proposal-document__body--volk-register
+  .dasti-proposal-document__paragraph,
+.dasti-proposal-document--volk-register
+  .dasti-proposal-document__body--volk-register
+  .dasti-proposal-document__signoff,
+.dasti-proposal-document--volk-register
+  .dasti-proposal-document__body--volk-register
+  .dasti-proposal-document__signature,
+.dasti-proposal-document--volk-register
+  .dasti-proposal-document__body--volk-register
+  .dasti-proposal-document__raw-body {
+  font-family: var(--font-heading-family);
+  font-size: calc(
+    11pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
+  );
+  line-height: calc(1.5 * var(--proposal-fit-line-height-scale, 1));
+  color: color-mix(
+    in srgb,
+    var(--proposal-document-ink) 74%,
+    var(--proposal-document-accent-ink) 26%
+  );
+}
+
+.dasti-proposal-document--volk-register
+  .dasti-proposal-document__body--volk-register
+  .dasti-proposal-document__signature {
+  font-family: var(--font-heading-family);
+  font-weight: 700;
+  color: var(--proposal-document-accent-ink);
+}
+
+.dasti-proposal-document--volk-register
+  .dasti-proposal-document__page--continuation
+  .dasti-proposal-document__volk-content {
+  top: calc(var(--proposal-block-mm) * 35);
+  width: calc(100% - var(--volk-grid-left) - 18mm);
+}
+
 .dasti-proposal-document--modernist-signal .dasti-proposal-document__eyebrow {
   letter-spacing: 0.22em;
 }
@@ -5087,54 +5390,6 @@
   .dasti-proposal-document__paragraph
   + .dasti-proposal-document__paragraph {
   margin-top: calc(1em * var(--proposal-document-computed-line-height) * 0.85);
-}
-
-.dasti-proposal-document__page[data-fit="1"] {
-  --proposal-fit-font-scale: 0.985;
-  --proposal-fit-line-height-scale: 0.985;
-  --proposal-fit-title-scale: 0.985;
-  --proposal-fit-body-start-adjust-mm: 1;
-  --proposal-fit-bottom-margin-adjust-mm: 0.5;
-}
-
-.dasti-proposal-document__page[data-fit="2"] {
-  --proposal-fit-font-scale: 0.97;
-  --proposal-fit-line-height-scale: 0.97;
-  --proposal-fit-title-scale: 0.97;
-  --proposal-fit-body-start-adjust-mm: 2;
-  --proposal-fit-bottom-margin-adjust-mm: 1;
-}
-
-.dasti-proposal-document__page[data-fit="3"] {
-  --proposal-fit-font-scale: 0.955;
-  --proposal-fit-line-height-scale: 0.96;
-  --proposal-fit-title-scale: 0.955;
-  --proposal-fit-body-start-adjust-mm: 3;
-  --proposal-fit-bottom-margin-adjust-mm: 1.5;
-}
-
-.dasti-proposal-document__page[data-fit="4"] {
-  --proposal-fit-font-scale: 0.94;
-  --proposal-fit-line-height-scale: 0.95;
-  --proposal-fit-title-scale: 0.94;
-  --proposal-fit-body-start-adjust-mm: 4;
-  --proposal-fit-bottom-margin-adjust-mm: 2;
-}
-
-.dasti-proposal-document__page[data-fit="5"] {
-  --proposal-fit-font-scale: 0.925;
-  --proposal-fit-line-height-scale: 0.94;
-  --proposal-fit-title-scale: 0.925;
-  --proposal-fit-body-start-adjust-mm: 5;
-  --proposal-fit-bottom-margin-adjust-mm: 2.5;
-}
-
-.dasti-proposal-document__page[data-fit="6"] {
-  --proposal-fit-font-scale: 0.88;
-  --proposal-fit-line-height-scale: 0.9;
-  --proposal-fit-title-scale: 0.89;
-  --proposal-fit-body-start-adjust-mm: 8;
-  --proposal-fit-bottom-margin-adjust-mm: 4;
 }
 
 .dasti-proposal-document__page--continuation .dasti-proposal-document__rail {
@@ -5851,6 +6106,8 @@ html:not(.dark) .dasti-proposal-submit {
   margin-inline: 0;
   max-width: none;
   border-radius: calc(var(--document-paper-radius) + 1px);
+  overscroll-behavior-y: auto;
+  overscroll-behavior-x: contain;
 }
 
 .dasti-doc-viewer-shell--resume-workspace

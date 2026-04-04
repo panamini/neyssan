@@ -9,6 +9,7 @@ import { useCvLibrary } from "../contexts/CvLibraryContext";
 import {
   buildAppProposalPersonalizationPayload,
   getActiveLocalPersonalizationSource,
+  getProposalApplicantHeaderData,
   type ProposalGenerationPersonalizationPayload,
 } from "../lib/proposal-personalization";
 import { resolveRegeneratedProposalTitle } from "../../convex/lib/proposals/proposalOutput";
@@ -391,6 +392,10 @@ export default function ProposalsList({
     isLoading: isConvexAuthLoading,
   } = useConvexAuth();
   const { currentCv } = useCvLibrary();
+  const activeApplicantHeader = React.useMemo(
+    () => getProposalApplicantHeaderData(getActiveLocalPersonalizationSource()),
+    [currentCv?.id, currentCv?.metadata?.updatedAt, currentCv?.title],
+  );
   const proposals = useQuery(
     api.proposalsPublic.default as any,
     isLoaded && isSignedIn && isConvexAuthenticated ? {} : "skip",
@@ -1386,6 +1391,7 @@ export default function ProposalsList({
                     voicePreset={getStoredVoicePreset(selected)}
                     templateId={selectedRenderState?.templateId ?? null}
                     stylePreset={selectedRenderState?.stylePreset ?? null}
+                    applicantHeader={activeApplicantHeader}
                     characterLimit={selected?.metadata?.characterLimitValue ?? null}
                     characterLimitAdvisory={false}
                     documentTitle={selectedHeaderTitle || "Saved proposal"}
@@ -1434,6 +1440,7 @@ export default function ProposalsList({
                           voicePreset={getStoredVoicePreset(proposal)}
                           templateId={proposalRenderState?.templateId ?? null}
                           stylePreset={proposalRenderState?.stylePreset ?? null}
+                          applicantHeader={activeApplicantHeader}
                           documentTitle={
                             (proposal.title || "").trim() || "Saved proposal"
                           }

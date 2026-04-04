@@ -3,6 +3,7 @@ import "./resume-preview.css";
 
 import { resumeLayoutSpec } from "./resume-layout.spec";
 import type { ResumeData, ResumeLayoutVariantId } from "./resume.types";
+import { VOLK_REGISTER_GRID } from "../volkGrid";
 import type { DocumentStageLayout } from "../../../hooks/use-document-stage-layout";
 import {
   A4_PAGE_HEIGHT_PX,
@@ -37,9 +38,6 @@ type ResumeLabeledValue = {
 type ContactItemView = ResumeData["contact"][number] & {
   compact?: boolean;
 };
-
-type AutoFitLevel = "0" | "1" | "2" | "3" | "4";
-const AUTO_FIT_LEVELS: AutoFitLevel[] = ["0", "1", "2", "3", "4"];
 
 const COMPACT_COMPARISON_BREAKPOINT = 1040;
 
@@ -156,74 +154,9 @@ function usePreviewScale() {
 }
 
 function useAutoFitPage(fitToken?: string) {
+  void fitToken;
   const pageRef = React.useRef<HTMLElement | null>(null);
   const innerRef = React.useRef<HTMLDivElement | null>(null);
-  const frameRef = React.useRef<number | null>(null);
-
-  const applyFit = React.useCallback(() => {
-    const page = pageRef.current;
-    const inner = innerRef.current;
-    if (!page || !inner) return;
-
-    const overflows = () => inner.scrollHeight > inner.clientHeight + 1;
-
-    for (const fit of AUTO_FIT_LEVELS) {
-      page.dataset.fit = fit;
-
-      if (!overflows() || fit === AUTO_FIT_LEVELS[AUTO_FIT_LEVELS.length - 1]) {
-        break;
-      }
-    }
-  }, []);
-
-  const scheduleFit = React.useCallback(() => {
-    if (frameRef.current !== null) {
-      cancelAnimationFrame(frameRef.current);
-    }
-
-    frameRef.current = requestAnimationFrame(() => {
-      frameRef.current = null;
-      applyFit();
-    });
-  }, [applyFit]);
-
-  React.useLayoutEffect(() => {
-    const page = pageRef.current;
-    const inner = innerRef.current;
-    if (!page || !inner) return;
-
-    const ro = new ResizeObserver(scheduleFit);
-    const fonts = document.fonts;
-
-    ro.observe(page);
-    ro.observe(inner);
-    window.addEventListener("resize", scheduleFit);
-
-    if (fonts) {
-      void fonts.ready.then(() => {
-        scheduleFit();
-      });
-    }
-
-    fonts?.addEventListener?.("loadingdone", scheduleFit);
-
-    scheduleFit();
-
-    return () => {
-      if (frameRef.current !== null) {
-        cancelAnimationFrame(frameRef.current);
-        frameRef.current = null;
-      }
-
-      ro.disconnect();
-      window.removeEventListener("resize", scheduleFit);
-      fonts?.removeEventListener?.("loadingdone", scheduleFit);
-    };
-  }, [scheduleFit]);
-
-  React.useLayoutEffect(() => {
-    scheduleFit();
-  }, [fitToken, scheduleFit]);
 
   return { pageRef, innerRef };
 }
@@ -392,6 +325,13 @@ function uniqueRows(
   return result;
 }
 
+function buildVolkRegisterMetaItems(data: ResumeData): ResumeLabeledValue[] {
+  return uniqueRows([
+    ...data.metadata,
+    ...data.contact,
+  ]).slice(0, 4);
+}
+
 function getInitials(name: string): string {
   const parts = name
     .split(/\s+/)
@@ -525,6 +465,13 @@ function getComparisonCardCopy(variant: ResumeVariant): ComparisonCardCopy {
           "Oversized Swiss masthead, mono register labels, and a sharper editorial standfirst.",
         color:
           "Warm paper neutrals with a restrained rust accent and field-line discipline.",
+      };
+    case "volkregister":
+      return {
+        typography:
+          "Register-led civic masthead, sender line microcopy, and an administrative rhythm rebuilt as a resume.",
+        color:
+          "Cream archival stock with civic red-orange anchors, fold-line traces, and a quieter paper field.",
       };
     case "robial":
       return {
@@ -819,7 +766,7 @@ function QuirePage({
           background: "var(--paper)", /* --paper (#faf9f5) = warm document sheet */
           border: "0.36mm solid rgba(0,0,0,0.15)",
           overflow: "hidden",
-          fontFamily: "var(--font-body-family)",
+          fontFamily: "var(--font-heading-family)",
           borderRadius: "var(--page-radius)",
         }}
         aria-label={variant.label}
@@ -1644,7 +1591,7 @@ function SwissMinimaPage({
           borderColor: "rgba(17, 17, 17, 0.18)",
           borderWidth: "0.6mm",
           boxShadow: "0 5mm 14mm rgba(18, 12, 8, 0.08)",
-          fontFamily: "var(--font-body-family)",
+          fontFamily: "var(--font-heading-family)",
         }}
         aria-label={variant.label}
       >
@@ -1977,6 +1924,372 @@ function SwissMinimaPage({
               </p>
             </div>
           </section>
+        </div>
+      </article>
+    </PreviewFrame>
+  );
+}
+
+function VolkRegisterPage({
+  variant,
+  data,
+  comparisonLabel,
+  compactComparison,
+  onActivateComparison,
+  fitToken,
+}: {
+  variant: ResumeVariant;
+  data: ResumeData;
+  comparisonLabel?: string;
+  compactComparison?: boolean;
+  onActivateComparison?: (() => void) | undefined;
+  fitToken?: string;
+}) {
+  const volkTitleLineHeight = "24pt";
+  const volkSubtitleGap = "4pt";
+  const volkSubtitleLineHeight = "18pt";
+  const volkBodyLeading = "18pt";
+  const pageVars = buildPageVars(variant);
+  const { pageRef, innerRef } = useAutoFitPage(fitToken);
+  const mergedMeta = [...data.metadata, ...data.contact];
+  const email =
+    findLabeledValue(data.contact, ["email"]) ??
+    findLabeledValue(mergedMeta, ["email"]);
+  const phone =
+    findLabeledValue(data.contact, ["phone"]) ??
+    findLabeledValue(mergedMeta, ["phone"]);
+  const location =
+    findLabeledValue(mergedMeta, ["location", "city", "base"]) ??
+    data.experience[0]?.location;
+  const website =
+    findLabeledValue(data.contact, ["web", "portfolio", "site", "linkedin"]) ??
+    findLabeledValue(mergedMeta, ["web", "portfolio", "site", "linkedin"]);
+  const senderLine = [location, email, phone, website].filter(Boolean).join(" · ");
+  const registerSkills = data.skills
+    .map((skill) => skill.trim())
+    .filter(Boolean)
+    .slice(0, 3);
+  const supportSkills = data.skills.slice(0, 10);
+  const sectionStackGap = "6mm";
+  const sectionHeadingGap = "1.7mm";
+  const bodyTextColor = "rgba(57, 48, 38, 0.9)";
+  const sectionHeadingStyle: React.CSSProperties = {
+    margin: 0,
+    color: "var(--color-accent)",
+    fontFamily: "var(--font-heading-family)",
+    fontSize: "16pt",
+    lineHeight: "18pt",
+    fontWeight: 800,
+    textTransform: "lowercase",
+  };
+
+  return (
+    <PreviewFrame
+      variant={variant}
+      comparisonLabel={comparisonLabel}
+      compactComparison={compactComparison}
+      onActivateComparison={onActivateComparison}
+    >
+      <article
+        ref={pageRef}
+        className={`resume-page resume-page--${variant.id}`}
+        style={{
+          ...pageVars,
+          position: "relative",
+          overflow: "hidden",
+          background:
+            "linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0.04)), radial-gradient(circle at 18% 8%, rgba(255,255,255,0.22), transparent 26%), radial-gradient(circle at 92% 92%, rgba(120, 95, 52, 0.06), transparent 34%), var(--paper)",
+          borderColor: "rgba(130, 112, 82, 0.18)",
+          borderWidth: "0.42mm",
+          boxShadow:
+            "0 5mm 13mm rgba(28, 20, 14, 0.08), inset 0 0 0 0.18mm rgba(255,255,255,0.38), inset 0 0 10mm rgba(123,111,81,0.05)",
+          clipPath: "polygon(0 0, 100% 0, 100% 98.8%, 98.8% 100%, 0 100%)",
+          fontFamily: "var(--font-heading-family)",
+        }}
+        aria-label={variant.label}
+      >
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            pointerEvents: "none",
+            background:
+              "linear-gradient(to right, transparent 0%, transparent 50.5%, rgba(120,108,77,0.055) 50.67%, transparent 50.84%, transparent 58.58%, rgba(120,108,77,0.028) 58.73%, transparent 58.88%, transparent 100%)",
+            opacity: 0.95,
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            inset: "0",
+            pointerEvents: "none",
+            background:
+              "linear-gradient(to right, rgba(255,255,255,0.14), transparent 3%, transparent 97%, rgba(120,108,77,0.04)), linear-gradient(to bottom, rgba(255,255,255,0.08), transparent 5%, transparent 97%, rgba(120,108,77,0.04))",
+            mixBlendMode: "multiply",
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+          }}
+        >
+          <div
+            style={{
+              position: "absolute",
+              left: VOLK_REGISTER_GRID.left,
+              top: VOLK_REGISTER_GRID.titleTop,
+              width: VOLK_REGISTER_GRID.headerWidth,
+              display: "grid",
+              alignContent: "start",
+              justifyItems: "start",
+            }}
+          >
+            <h1
+              style={{
+                margin: 0,
+                color: "var(--color-accent)",
+                fontFamily: "var(--font-heading-family)",
+                fontSize: "32pt",
+                lineHeight: volkTitleLineHeight,
+                fontWeight: 800,
+                letterSpacing: "-0.045em",
+                whiteSpace: "nowrap",
+                textTransform: "lowercase",
+              }}
+            >
+              {data.name.toLowerCase()}
+            </h1>
+            <p
+              style={{
+                margin: `${volkSubtitleGap} 0 0`,
+                color: "var(--color-accent)",
+                fontFamily: "var(--font-heading-family)",
+                fontSize: "20pt",
+                lineHeight: volkSubtitleLineHeight,
+                fontWeight: 800,
+                letterSpacing: "-0.02em",
+                whiteSpace: "nowrap",
+                textTransform: "lowercase",
+              }}
+            >
+              {data.title.toLowerCase()}
+            </p>
+            <p
+              style={{
+                margin: "18pt 0 0",
+                color: "var(--color-accent)",
+                fontFamily: "var(--font-heading-family)",
+                fontSize: "11pt",
+                lineHeight: volkBodyLeading,
+                fontWeight: 800,
+                letterSpacing: "0.005em",
+              }}
+            >
+              {senderLine || "sender / contact details"}
+            </p>
+          </div>
+
+          {registerSkills.map((skill, index) => (
+            <div
+              key={`${skill}-${index}`}
+              style={{
+                position: "absolute",
+                left: VOLK_REGISTER_GRID.metaLefts[index],
+                top: VOLK_REGISTER_GRID.metaTop,
+                display: "block",
+                color: "var(--color-accent)",
+              }}
+            >
+              <p
+                style={{
+                  margin: 0,
+                  fontFamily: "var(--font-heading-family)",
+                  fontSize: "11pt",
+                  lineHeight: volkBodyLeading,
+                  fontWeight: 800,
+                  letterSpacing: "-0.01em",
+                  whiteSpace: "nowrap",
+                  textTransform: "lowercase",
+                }}
+              >
+                {skill.toLowerCase()}
+              </p>
+            </div>
+          ))}
+
+          <div
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              left: VOLK_REGISTER_GRID.dotLeft,
+              top: VOLK_REGISTER_GRID.dotTop,
+              width: "1.15mm",
+              height: "1.15mm",
+              borderRadius: "50%",
+              background: "var(--color-accent)",
+            }}
+          />
+
+          <div
+            ref={innerRef}
+            style={{
+              position: "absolute",
+              left: VOLK_REGISTER_GRID.left,
+              top: VOLK_REGISTER_GRID.subjectTop,
+              width: `min(${VOLK_REGISTER_GRID.bodyWidth}, 60ch)`,
+              bottom: VOLK_REGISTER_GRID.bottomMargin,
+              overflow: "hidden",
+            }}
+          >
+            <main
+              style={{
+                display: "grid",
+                gap: sectionStackGap,
+                alignContent: "start",
+                maxWidth: "60ch",
+              }}
+            >
+              <section
+                style={{
+                  display: "grid",
+                  gap: sectionHeadingGap,
+                  alignItems: "start",
+                }}
+              >
+                <p style={sectionHeadingStyle}>summary</p>
+                <p
+                  style={{
+                    margin: 0,
+                    color: bodyTextColor,
+                    fontFamily: "var(--font-heading-family)",
+                    fontSize: "11pt",
+                    lineHeight: 1.5,
+                    textAlign: "left",
+                  }}
+                >
+                  {data.summary}
+                </p>
+              </section>
+
+              <section style={{ display: "grid", gap: sectionHeadingGap }}>
+                <p style={sectionHeadingStyle}>experience</p>
+                <div style={{ display: "grid", gap: "3.5mm" }}>
+                  {data.experience.slice(0, 2).map((item, index) => (
+                    <article
+                      key={`${item.company}-${item.role}-${item.period}-${index}`}
+                      style={{
+                        display: "grid",
+                        gap: "0.9mm",
+                        alignItems: "start",
+                      }}
+                    >
+                      <p
+                        style={{
+                          margin: 0,
+                          color: bodyTextColor,
+                          fontFamily: "var(--font-heading-family)",
+                          fontSize: "11pt",
+                          lineHeight: 1.5,
+                          fontWeight: 600,
+                        }}
+                      >
+                        {item.role}
+                      </p>
+                      <p
+                        style={{
+                          margin: 0,
+                          color: bodyTextColor,
+                          fontFamily: "var(--font-heading-family)",
+                          fontSize: "11pt",
+                          lineHeight: 1.5,
+                          fontWeight: 500,
+                        }}
+                      >
+                        {[item.company, item.period, item.location]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                      {item.bullets.slice(0, 2).map((bullet, bulletIndex) => (
+                        <p
+                          key={`${bullet}-${bulletIndex}`}
+                          style={{
+                            margin: 0,
+                            color: bodyTextColor,
+                            fontFamily: "var(--font-heading-family)",
+                            fontSize: "11pt",
+                            lineHeight: 1.5,
+                            fontWeight: 400,
+                          }}
+                        >
+                          {bullet}
+                        </p>
+                      ))}
+                    </article>
+                  ))}
+                </div>
+              </section>
+
+              {data.education.length > 0 ? (
+                <section style={{ display: "grid", gap: sectionHeadingGap }}>
+                  <p style={sectionHeadingStyle}>education</p>
+                  <div style={{ display: "grid", gap: "3.2mm" }}>
+                    {data.education.slice(0, 2).map((item) => (
+                      <article
+                        key={`${item.school}-${item.degree}`}
+                        style={{
+                          display: "grid",
+                          gap: "0.55mm",
+                        }}
+                      >
+                        <p
+                          style={{
+                            margin: 0,
+                            color: bodyTextColor,
+                            fontFamily: "var(--font-heading-family)",
+                            fontSize: "11pt",
+                            lineHeight: 1.5,
+                            fontWeight: 600,
+                          }}
+                        >
+                          {item.degree}
+                        </p>
+                        <p
+                          style={{
+                            margin: 0,
+                            color: bodyTextColor,
+                            fontFamily: "var(--font-heading-family)",
+                            fontSize: "11pt",
+                            lineHeight: 1.5,
+                            fontWeight: 500,
+                          }}
+                        >
+                          {[item.school, item.period].filter(Boolean).join(" · ")}
+                        </p>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              {supportSkills.length > 0 ? (
+                <section style={{ display: "grid", gap: sectionHeadingGap }}>
+                  <p style={sectionHeadingStyle}>skills</p>
+                  <p
+                    style={{
+                      margin: 0,
+                      color: bodyTextColor,
+                      fontFamily: "var(--font-heading-family)",
+                      fontSize: "11pt",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {supportSkills.join(" · ")}
+                  </p>
+                </section>
+              ) : null}
+            </main>
+          </div>
         </div>
       </article>
     </PreviewFrame>
@@ -4240,6 +4553,19 @@ function ResumeVariantPage({
     );
   }
 
+  if (variant.id === "volkregister") {
+    return (
+      <VolkRegisterPage
+        variant={variant}
+        data={data}
+        comparisonLabel={comparisonLabel}
+        compactComparison={compactComparison}
+        onActivateComparison={onActivateComparison}
+        fitToken={fitToken}
+      />
+    );
+  }
+
   if (variant.id === "signalgrid") {
     return (
       <SignalGridPage
@@ -4354,7 +4680,7 @@ export default function ResumePage({
     mode === "comparison"
       ? ["swissminima", "robial", "editorialmag", "signalgrid"]
       : mode === "comparisonAll"
-        ? ["swissminima", "robial", "editorialmag", "signalgrid"]
+        ? ["swissminima", "volkregister", "robial", "editorialmag", "signalgrid"]
         : [mode];
 
   const resolvedVariantIds = isComparisonMode

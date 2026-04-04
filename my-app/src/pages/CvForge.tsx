@@ -5,7 +5,14 @@ import { ProfileReviewCard } from "../components/ProfileReviewCard";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import { VerbatiCvPreviewPanel } from "../features/verbati/VerbatiCvPreviewPanel";
 import { useBoundVerbatiCvStyle } from "../features/verbati/useBoundVerbatiCvStyle";
-import { printFirstMatchingNodeAsPdf } from "../lib/document-export";
+import {
+  printFirstMatchingNodeAsPdf,
+  type DocumentExportCloneContext,
+} from "../lib/document-export";
+import {
+  A4_PAGE_HEIGHT_PX,
+  A4_PAGE_WIDTH_PX,
+} from "../lib/document-stage";
 
 type CvForgeWorkspaceMode = "edit" | "preview";
 
@@ -20,6 +27,54 @@ function readStoredCvForgeWorkspaceMode(): CvForgeWorkspaceMode {
     "preview"
     ? "preview"
     : "edit";
+}
+
+function getExportCloneNode(
+  root: HTMLElement,
+  selector: string,
+): HTMLElement | null {
+  if (root.matches(selector)) {
+    return root;
+  }
+
+  return root.querySelector<HTMLElement>(selector);
+}
+
+function normalizeResumeExportClone({
+  clonedNode,
+}: DocumentExportCloneContext): void {
+  const pageWidth = `${A4_PAGE_WIDTH_PX}px`;
+  const pageHeight = `${A4_PAGE_HEIGHT_PX}px`;
+  const nodes = [
+    clonedNode,
+    getExportCloneNode(clonedNode, ".resume-page-frame"),
+    getExportCloneNode(clonedNode, ".resume-page-stage"),
+  ].filter((node): node is HTMLElement => Boolean(node));
+
+  for (const node of nodes) {
+    node.style.setProperty("--preview-scale", "1");
+    node.style.setProperty("--preview-stage-width", pageWidth);
+    node.style.setProperty("--preview-stage-height", pageHeight);
+    node.style.width = pageWidth;
+    node.style.minWidth = pageWidth;
+    node.style.maxWidth = pageWidth;
+    node.style.height = pageHeight;
+    node.style.minHeight = pageHeight;
+    node.style.maxHeight = pageHeight;
+    node.style.overflow = "visible";
+  }
+
+  const page = getExportCloneNode(clonedNode, ".resume-page");
+  if (page) {
+    page.style.transform = "none";
+    page.style.transformOrigin = "top left";
+    page.style.width = pageWidth;
+    page.style.minWidth = pageWidth;
+    page.style.maxWidth = pageWidth;
+    page.style.height = pageHeight;
+    page.style.minHeight = pageHeight;
+    page.style.maxHeight = pageHeight;
+  }
 }
 
 /**
@@ -80,6 +135,15 @@ export function CvForge(): JSX.Element {
     );
   }, [workspaceMode]);
 
+  const exportCurrentCvAsPdf = React.useCallback(() => {
+    printFirstMatchingNodeAsPdf({
+      container: cvPreviewExportRef.current,
+      selectors: [".resume-page-stage", ".resume-page-frame"],
+      title: currentCv?.title || "Resume",
+      prepareClone: normalizeResumeExportClone,
+    });
+  }, [currentCv?.title]);
+
   const editModeToggle = (
     <button
       type="button"
@@ -110,13 +174,7 @@ export function CvForge(): JSX.Element {
       type="button"
       className="dasti-icon-button"
       aria-label="Export CV as PDF"
-      onClick={() => {
-        printFirstMatchingNodeAsPdf({
-          container: cvPreviewExportRef.current,
-          selectors: [".resume-page-frame", ".resume-page-stage"],
-          title: currentCv?.title || "Resume",
-        });
-      }}
+      onClick={exportCurrentCvAsPdf}
       data-toolbar-tooltip="Export PDF"
       data-no-pan="true"
     >
@@ -198,13 +256,7 @@ export function CvForge(): JSX.Element {
                 <ProfileReviewCard
                   cvId={requestedCvId}
                   toolbarLeadControl={editModeToggle}
-                  onRequestExport={() => {
-                    printFirstMatchingNodeAsPdf({
-                      container: cvPreviewExportRef.current,
-                      selectors: [".resume-page-frame", ".resume-page-stage"],
-                      title: currentCv?.title || "Resume",
-                    });
-                  }}
+                  onRequestExport={exportCurrentCvAsPdf}
                 />
                 <div
                   className={
