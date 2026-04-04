@@ -3038,6 +3038,8 @@ export function ProposalForge(): JSX.Element {
               ? "var(--layout-panel-stack)"
               : "var(--space-2)",
             "--page-shell-pad-top": "var(--space-2)",
+            "--page-shell-pad-inline": "var(--space-4)",
+            "--page-shell-pad-inline-mobile": "var(--space-4)",
           } as React.CSSProperties
         }
       >
