@@ -1,8 +1,8 @@
 import React from "react";
 import {
   CornersIn,
-  Minus,
-  Plus,
+  MagnifyingGlassMinus,
+  MagnifyingGlassPlus,
 } from "@/lib/icons";
 import { useDocumentPan } from "../../hooks/use-document-pan";
 import { useDocumentStageLayout } from "../../hooks/use-document-stage-layout";
@@ -100,18 +100,6 @@ export function VerbatiResumePreview({
     }
     return 1;
   }, [fitPageScale, isWorkspaceMode, workspaceViewMode, zoomIndex]);
-  const workspaceZoomPercent = React.useMemo(() => {
-    if (!isWorkspaceMode) {
-      return 100;
-    }
-
-    const baseScale = fitPageScale;
-    return Math.max(1, Math.round(baseScale * userZoom * 100));
-  }, [
-    fitPageScale,
-    isWorkspaceMode,
-    userZoom,
-  ]);
   const stageMode = stageLayout.isFit ? "fit" : "overflow";
   const { attachViewport, viewportPanProps } = useDocumentPan({
     enabled: !compareLayouts && isWorkspaceMode && userZoom > 1,
@@ -193,11 +181,8 @@ export function VerbatiResumePreview({
         aria-label="Zoom out"
         title="Zoom out"
       >
-        <Minus size={14} strokeWidth={1.7} aria-hidden="true" />
+        <MagnifyingGlassMinus size={14} strokeWidth={1.7} aria-hidden="true" />
       </button>
-      <span className="dasti-doc-zoom-status" aria-label={`Zoom ${workspaceZoomPercent} percent`}>
-        {workspaceZoomPercent}%
-      </span>
       <button
         type="button"
         className="dasti-icon-button"
@@ -214,7 +199,7 @@ export function VerbatiResumePreview({
         aria-label="Zoom in"
         title="Zoom in"
       >
-        <Plus size={14} strokeWidth={1.7} aria-hidden="true" />
+        <MagnifyingGlassPlus size={14} strokeWidth={1.7} aria-hidden="true" />
       </button>
       <span className="dasti-doc-page-count" aria-label="Page count">
         1 page

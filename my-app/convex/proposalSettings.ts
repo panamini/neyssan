@@ -91,6 +91,160 @@ export const getCurrent = query({
   },
 });
 
+// ─── Preset slot shape ────────────────────────────────────────────────────────
+
+const presetSlotValidator = v.object({
+  fontPairId: v.union(v.string(), v.null()),
+  styleChoice: proposalStyleChoiceValidator,
+  paletteOverride: proposalPaletteOverrideValidator,
+  accentHex: proposalAccentHexValidator,
+  voicePreset: v.union(proposalVoicePresetChoice, v.null()),
+  name: v.optional(v.string()),
+});
+
+type PresetSlotData = {
+  fontPairId: string | null;
+  styleChoice: "auto" | "formal" | "warm" | "technical" | "balanced";
+  paletteOverride: "sauge" | "ocre" | "pierre" | "bordeaux" | "encre" | null;
+  accentHex: string | null;
+  voicePreset: "signature" | "expert" | "direct" | "engaging" | "storyteller" | null;
+  name?: string;
+};
+
+export const getPresets = query({
+  args: {},
+  returns: v.object({
+    preset1: v.union(presetSlotValidator, v.null()),
+    preset2: v.union(presetSlotValidator, v.null()),
+    preset3: v.union(presetSlotValidator, v.null()),
+    activeSlot: v.union(v.literal(1), v.literal(2), v.literal(3), v.null()),
+  }),
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return { preset1: null, preset2: null, preset3: null, activeSlot: null };
+    }
+    const user = await getPrimaryProfileForClerk(ctx, identity.subject);
+    return {
+      preset1: (user?.proposalPreset1 as PresetSlotData | null | undefined) ?? null,
+      preset2: (user?.proposalPreset2 as PresetSlotData | null | undefined) ?? null,
+      preset3: (user?.proposalPreset3 as PresetSlotData | null | undefined) ?? null,
+      activeSlot: (user?.proposalActivePresetSlot as 1 | 2 | 3 | undefined) ?? null,
+    };
+  },
+});
+
+export const savePreset = mutation({
+  args: {
+    slot: v.union(v.literal(1), v.literal(2), v.literal(3)),
+    preset: presetSlotValidator,
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    let profiles = await listProfilesForClerk(ctx, identity.subject);
+    let user = profiles[0] ?? null;
+
+    if (!user) {
+      await ctx.runMutation(internal.users.createOrUpdateUser, {
+        clerkId: identity.subject,
+        email: identity.email ?? "unknown@example.com",
+        name: identity.name,
+      });
+      profiles = await listProfilesForClerk(ctx, identity.subject);
+      user = profiles[0] ?? null;
+    }
+    if (!user) throw new Error("User profile not found");
+
+    const fieldKey = `proposalPreset${args.slot}` as "proposalPreset1" | "proposalPreset2" | "proposalPreset3";
+    const nextAccentHex =
+      typeof args.preset.accentHex === "string" &&
+      /^#[0-9a-fA-F]{6}$/.test(args.preset.accentHex)
+        ? args.preset.accentHex.toUpperCase()
+        : null;
+    const cleanPreset: PresetSlotData = { ...args.preset, accentHex: nextAccentHex };
+
+    await Promise.all(
+      profiles.map((profile) => {
+        const { _creationTime, _id, ...rest } = profile;
+        return ctx.db.replace(_id, {
+          ...rest,
+          [fieldKey]: cleanPreset,
+          updatedAt: Date.now(),
+          version: (profile.version ?? 1) + 1,
+        });
+      }),
+    );
+    return null;
+  },
+});
+
+export const setActivePreset = mutation({
+  args: {
+    slot: v.union(v.literal(1), v.literal(2), v.literal(3)),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    let profiles = await listProfilesForClerk(ctx, identity.subject);
+    let user = profiles[0] ?? null;
+
+    if (!user) {
+      await ctx.runMutation(internal.users.createOrUpdateUser, {
+        clerkId: identity.subject,
+        email: identity.email ?? "unknown@example.com",
+        name: identity.name,
+      });
+      profiles = await listProfilesForClerk(ctx, identity.subject);
+      user = profiles[0] ?? null;
+    }
+    if (!user) throw new Error("User profile not found");
+
+    const fieldKey = `proposalPreset${args.slot}` as "proposalPreset1" | "proposalPreset2" | "proposalPreset3";
+    const preset = (user[fieldKey] as PresetSlotData | null | undefined) ?? null;
+
+    await Promise.all(
+      profiles.map((profile) => {
+        const { _creationTime, _id, ...rest } = profile;
+        const nextReplacement: Record<string, unknown> = {
+          ...rest,
+          proposalActivePresetSlot: args.slot,
+          updatedAt: Date.now(),
+          version: (profile.version ?? 1) + 1,
+        };
+
+        // Mirror active preset into legacy single-default fields so ProposalForge continues to work
+        if (preset) {
+          if (preset.voicePreset) {
+            nextReplacement.proposalVoicePreset = preset.voicePreset;
+          } else {
+            delete nextReplacement.proposalVoicePreset;
+          }
+          if (preset.styleChoice && preset.styleChoice !== "auto") {
+            nextReplacement.proposalStyleChoice = preset.styleChoice;
+          } else {
+            delete nextReplacement.proposalStyleChoice;
+          }
+          nextReplacement.proposalPaletteOverride = preset.paletteOverride;
+          const nextAccentHex =
+            typeof preset.accentHex === "string" && /^#[0-9a-fA-F]{6}$/.test(preset.accentHex)
+              ? preset.accentHex.toUpperCase()
+              : null;
+          nextReplacement.proposalAccentHex = nextAccentHex;
+          nextReplacement.proposalFontPairId = preset.fontPairId;
+        }
+
+        return ctx.db.replace(_id, nextReplacement);
+      }),
+    );
+    return null;
+  },
+});
+
 export const setCurrent = mutation({
   args: {
     voicePreset: v.optional(v.union(proposalVoicePresetChoice, v.null())),

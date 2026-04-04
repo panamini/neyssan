@@ -198,4 +198,20 @@ describe("EmbeddedStyleInspector", () => {
       expect(button).not.toHaveClass("dasti-proposal-chrome-option");
     });
   });
+
+  it("offers the Volk layout and civic typography in the direct control drawers", async () => {
+    const user = userEvent.setup();
+
+    renderInspector();
+
+    await user.click(
+      screen.getByRole("button", { name: "Open layout controls" }),
+    );
+
+    expect(screen.getByRole("button", { name: "Volk Register" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Open text styles" }));
+
+    expect(screen.getByRole("button", { name: "Civic Correspondence" })).toBeInTheDocument();
+  });
 });

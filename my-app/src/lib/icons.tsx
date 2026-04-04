@@ -31,6 +31,8 @@ import {
   MagicWand as PhMagicWand,
   Moon as PhMoon,
   MagnifyingGlass as PhMagnifyingGlass,
+  MagnifyingGlassMinus as PhMagnifyingGlassMinus,
+  MagnifyingGlassPlus as PhMagnifyingGlassPlus,
   PaperPlaneTilt as PhPaperPlaneTilt,
   Paperclip as PhPaperclip,
   Palette as PhPalette,
@@ -146,6 +148,8 @@ export const Link = withCompat(PhLink);
 export const List = withCompat(PhListBullets);
 export const Loader2 = withCompat(PhSpinnerGap, "bold");
 export const MagnifyingGlass = withCompat(PhMagnifyingGlass);
+export const MagnifyingGlassMinus = withCompat(PhMagnifyingGlassMinus);
+export const MagnifyingGlassPlus = withCompat(PhMagnifyingGlassPlus);
 export const Menu = withCompat(PhRows);
 export const Minus = withCompat(PhMinus);
 export const Moon = withCompat(PhMoon);

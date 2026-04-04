@@ -6,6 +6,7 @@ import type { CvDocument } from "../../types/cvDocument";
 
 export type VerbatiLayoutPreset =
   | "swiss"
+  | "volk-register"
   | "two-column"
   | "editorial"
   | "modernist"

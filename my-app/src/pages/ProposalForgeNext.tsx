@@ -28,6 +28,7 @@ import {
   buildAppProposalPersonalizationPayload,
   clearActiveLocalCvId,
   getActiveLocalPersonalizationSource,
+  getProposalApplicantHeaderData,
   getProposalApplicantIdentity,
   listLocalCvPickerOptions,
 } from "../lib/proposal-personalization";
@@ -69,10 +70,10 @@ import {
   resolveProposalCharacterLimitSelection,
   PROPOSAL_CHARACTER_LIMIT_TOAST_THRESHOLDS,
 } from "../../convex/lib/proposals/generationControls";
-import { getVoicePresetDisplayLabel } from "../lib/proposal-voice-label";
 import { resolveProposalRenderState } from "../lib/proposal-render-state";
 import { type ProposalPaletteId } from "../lib/proposal-style-display";
 import { type ProposalStyleChoice } from "../lib/proposal-style-choice";
+import { buildProposalSourceSummary } from "../lib/proposal-source-summary";
 
 type ProposalForgePrefill = {
   handoffId: string;
@@ -271,13 +272,30 @@ function formatProposalTypeLabel(type: FormValues["proposalType"]): string {
 }
 
 function buildAutoProposalTitle(
-  values: Pick<FormValues, "jobTitle" | "proposalType">,
+  values: Pick<FormValues, "jobTitle" | "jobDescription" | "proposalType">,
 ): string {
-  return values.jobTitle.trim() || formatProposalTypeLabel(values.proposalType);
+  const jobTitle = values.jobTitle.trim();
+  if (!jobTitle) {
+    return values.proposalType === "freelance_proposal"
+      ? "Project proposal"
+      : "Application for the role";
+  }
+
+  const summary = buildProposalSourceSummary({
+    jobTitle,
+    jobDescription: values.jobDescription,
+  });
+  const company = summary.company?.trim();
+
+  if (company) {
+    return `Application for the ${jobTitle} role at ${company}`;
+  }
+
+  return `Application for the ${jobTitle} role`;
 }
 
 function resolveNextProposalTitle(
-  values: Pick<FormValues, "jobTitle" | "proposalType">,
+  values: Pick<FormValues, "jobTitle" | "jobDescription" | "proposalType">,
   currentTitle: string,
   manual: boolean,
 ): string {
@@ -288,14 +306,14 @@ function resolveNextProposalTitle(
   return buildAutoProposalTitle(values);
 }
 
-function buildProposalMetaLine(
-  proposalType: FormValues["proposalType"],
-  voicePreset: ProposalVoicePreset,
-): string {
-  return [
-    formatProposalTypeLabel(proposalType),
-    getVoicePresetDisplayLabel(voicePreset),
-  ].join(" · ");
+function resolveActiveApplicantContext() {
+  const source = getActiveLocalPersonalizationSource();
+
+  return {
+    source,
+    applicantIdentity: getProposalApplicantIdentity(source),
+    applicantHeader: getProposalApplicantHeaderData(source),
+  };
 }
 
 export function ProposalForgeNext(): JSX.Element {
@@ -326,10 +344,12 @@ export function ProposalForgeNext(): JSX.Element {
     () => resolveInitialTemplateBundleId(storedOutputDraft),
     [storedOutputDraft],
   );
-  const initialApplicantIdentity = React.useMemo(
-    () => getProposalApplicantIdentity(getActiveLocalPersonalizationSource()),
+  const initialApplicantContext = React.useMemo(
+    () => resolveActiveApplicantContext(),
     [],
   );
+  const initialApplicantIdentity = initialApplicantContext.applicantIdentity;
+  const initialApplicantHeader = initialApplicantContext.applicantHeader;
   const initialAttachedCv = React.useMemo(() => resolveInitialAttachedCv(), []);
 
   const handoffId = React.useMemo(
@@ -531,6 +551,16 @@ export function ProposalForgeNext(): JSX.Element {
     }
     return getVerbatiStyleFromCv(currentCv);
   }, [attachedCvId, currentCv]);
+  const activeApplicantHeader = React.useMemo(
+    () => resolveActiveApplicantContext().applicantHeader,
+    [
+      attachedCvId,
+      attachedCvTitle,
+      currentCv?.id,
+      currentCv?.metadata?.updatedAt,
+      currentCv?.title,
+    ],
+  );
 
   const defaultStylePreset = React.useMemo(
     () =>
@@ -675,7 +705,7 @@ export function ProposalForgeNext(): JSX.Element {
       setProposalApplicantRole(initialApplicantIdentity.role ?? "");
       setProposalDocumentTitle("");
       setProposalDocumentTitleManual(false);
-      setProposalDocumentMeta("");
+      setProposalDocumentMeta(initialApplicantHeader.email ?? "");
       setGeneratedProposalId(null);
       setProposalOutputMode("preview");
       setFallbackInfo(null);
@@ -706,6 +736,7 @@ export function ProposalForgeNext(): JSX.Element {
     [
       applyVisualDefaults,
       currentProposalSettings?.savedVoicePreset,
+      initialApplicantHeader.email,
       initialApplicantIdentity.name,
       initialApplicantIdentity.role,
     ],
@@ -732,7 +763,9 @@ export function ProposalForgeNext(): JSX.Element {
     setProposalDocumentTitleManual(
       liveDraft.proposalDocumentTitleManual === true,
     );
-    setProposalDocumentMeta(liveDraft.proposalDocumentMeta ?? "");
+    setProposalDocumentMeta(
+      liveDraft.proposalDocumentMeta ?? initialApplicantHeader.email ?? "",
+    );
     setGeneratedProposalId(liveDraft.generatedProposalId ?? null);
     setProposalOutputMode(liveDraft.proposalOutputMode ?? "preview");
     setFallbackInfo(null);
@@ -757,6 +790,7 @@ export function ProposalForgeNext(): JSX.Element {
   }, [
     clearProposalOutputState,
     currentProposalSettings?.savedVoicePreset,
+    initialApplicantHeader.email,
     initialApplicantIdentity.name,
     initialApplicantIdentity.role,
   ]);
@@ -860,9 +894,7 @@ export function ProposalForgeNext(): JSX.Element {
     setProposalDocumentTitleManual(
       Boolean((openedSavedProposal.title || "").trim()),
     );
-    setProposalDocumentMeta(
-      buildProposalMetaLine(savedProposalType, savedVoicePreset),
-    );
+    setProposalDocumentMeta(initialApplicantHeader.email ?? "");
     setGeneratedProposalId(openedSavedProposal._id);
     setProposalOutputMode("preview");
     setFallbackInfo({
@@ -1021,10 +1053,8 @@ export function ProposalForgeNext(): JSX.Element {
   );
 
   const applyProposalHeaderFromValues = React.useCallback(
-    (
-      values: Pick<FormValues, "jobTitle" | "proposalType">,
-      resolvedVoice: ProposalVoicePreset,
-    ) => {
+    (values: Pick<FormValues, "jobTitle" | "jobDescription" | "proposalType">) => {
+      const applicantHeader = resolveActiveApplicantContext().applicantHeader;
       setProposalDocumentTitle((currentTitle) =>
         resolveNextProposalTitle(
           values,
@@ -1032,9 +1062,7 @@ export function ProposalForgeNext(): JSX.Element {
           proposalDocumentTitleManual,
         ),
       );
-      setProposalDocumentMeta(
-        buildProposalMetaLine(values.proposalType, resolvedVoice),
-      );
+      setProposalDocumentMeta(applicantHeader.email ?? "");
     },
     [proposalDocumentTitleManual],
   );
@@ -1063,10 +1091,8 @@ export function ProposalForgeNext(): JSX.Element {
         proposalApplicantName: input.applicantIdentity.name ?? "",
         proposalApplicantRole: input.applicantIdentity.role ?? "",
         proposalDocumentTitle: input.title,
-        proposalDocumentMeta: buildProposalMetaLine(
-          input.values.proposalType,
-          input.resolvedVoice,
-        ),
+        proposalDocumentMeta:
+          resolveActiveApplicantContext().applicantHeader.email ?? "",
         generatedProposalId: input.proposalId ?? null,
         proposalOutputMode: "preview",
         paletteOverride,
@@ -1233,15 +1259,16 @@ export function ProposalForgeNext(): JSX.Element {
       setLastProposalRequest(values);
       setProposalDocumentTitleManual(false);
       setProposalDocumentTitle(buildAutoProposalTitle(values));
+      setProposalDocumentMeta(
+        resolveActiveApplicantContext().applicantHeader.email ?? "",
+      );
     },
     [],
   );
 
   const handleProposalStart = React.useCallback(
     (values: FormValues) => {
-      const applicantIdentity = getProposalApplicantIdentity(
-        getActiveLocalPersonalizationSource(),
-      );
+      const { applicantIdentity } = resolveActiveApplicantContext();
       const resolvedVoice = resolveProposalVoicePresetFromValues(values);
       setLastProposalRequest(values);
       setLoading(true);
@@ -1249,7 +1276,7 @@ export function ProposalForgeNext(): JSX.Element {
       setProposalVoicePreset(resolvedVoice);
       setProposalApplicantName(applicantIdentity.name ?? "");
       setProposalApplicantRole(applicantIdentity.role ?? "");
-      applyProposalHeaderFromValues(values, resolvedVoice);
+      applyProposalHeaderFromValues(values);
       setProposalContent(null);
       setGeneratedProposalId(null);
       setProposalOutputMode("preview");
@@ -1269,19 +1296,14 @@ export function ProposalForgeNext(): JSX.Element {
       nextFallbackInfo?: ProposalGenerationFallbackInfo,
       nextProposalId?: Id<"proposals">,
     ) => {
-      const applicantIdentity = getProposalApplicantIdentity(
-        getActiveLocalPersonalizationSource(),
-      );
+      const { applicantIdentity, applicantHeader } = resolveActiveApplicantContext();
       const resolvedVoice = resolveProposalVoicePresetFromValues(values);
       const nextTitle = resolveNextProposalTitle(
         values,
         proposalDocumentTitle,
         proposalDocumentTitleManual,
       );
-      const nextMetaLine = buildProposalMetaLine(
-        values.proposalType,
-        resolvedVoice,
-      );
+      const nextMetaLine = applicantHeader.email ?? "";
 
       persistProposalOutputDraftSnapshot({
         values,
@@ -1322,9 +1344,7 @@ export function ProposalForgeNext(): JSX.Element {
 
   const handleProposalError = React.useCallback(
     (message: string, values: FormValues, rawReason?: string | null) => {
-      const applicantIdentity = getProposalApplicantIdentity(
-        getActiveLocalPersonalizationSource(),
-      );
+      const { applicantIdentity } = resolveActiveApplicantContext();
       const resolvedVoice = resolveProposalVoicePresetFromValues(values);
       setLastProposalRequest(values);
       setLoading(false);
@@ -1332,7 +1352,7 @@ export function ProposalForgeNext(): JSX.Element {
       setProposalVoicePreset(resolvedVoice);
       setProposalApplicantName(applicantIdentity.name ?? "");
       setProposalApplicantRole(applicantIdentity.role ?? "");
-      applyProposalHeaderFromValues(values, resolvedVoice);
+      applyProposalHeaderFromValues(values);
       setProposalContent(null);
       setGeneratedProposalId(null);
       setProposalOutputMode("preview");
@@ -1942,6 +1962,7 @@ export function ProposalForgeNext(): JSX.Element {
                   stylePreset={effectiveStylePresetWithPalette}
                   railTitle={proposalApplicantName || null}
                   railMeta={proposalApplicantRole || null}
+                  applicantHeader={activeApplicantHeader}
                   fallbackInfo={fallbackInfo}
                   documentTitle={proposalDocumentTitle || "Generated proposal"}
                   documentMeta={

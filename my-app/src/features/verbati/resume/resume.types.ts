@@ -49,6 +49,7 @@ export type ResumeLayoutVariantId =
   | "robial"
   | "onecol"
   | "swissminima"
+  | "volkregister"
   | "editorialmag"
   | "signalgrid"
   | "studiopop"

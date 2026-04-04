@@ -207,4 +207,21 @@ describe("ProposalDisplay CSS contracts", () => {
       /\.dasti-proposal-library-card\s*\{[\s\S]*--document-rail-gap:\s*var\(--space-2\);[\s\S]*--proposal-sheet-edge-fade-height:\s*22px;[\s\S]*--proposal-chrome-shell-padding:\s*calc\(var\(--space-2\)\s*-\s*3px\);/,
     );
   });
+
+  it("includes a dedicated Volk register proposal template branch", () => {
+    expect(productCss).toContain(
+      ".dasti-proposal-document--volk-register .dasti-proposal-document__page {",
+    );
+    expect(productCss).toContain(
+      ".dasti-proposal-document--volk-register .dasti-proposal-document__title {",
+    );
+    expect(productCss).toContain(
+      ".dasti-proposal-document--volk-register .dasti-proposal-document__meta {",
+    );
+  });
+
+  it("adds a fixed-scale shell for volk register preview rendering", () => {
+    expect(productCss).toContain(".dasti-proposal-sheet__preview-scale-shell {");
+    expect(productCss).toContain("transform-origin: top left;");
+  });
 });

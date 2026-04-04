@@ -96,6 +96,16 @@ export interface ProposalGenerationPersonalizationPayload {
   personalizationRichness?: ProposalPersonalizationRichness;
 }
 
+export type ProposalApplicantHeaderData = {
+  name: string | null;
+  role: string | null;
+  email: string | null;
+  phone: string | null;
+  linkedin: string | null;
+  website: string | null;
+  tag: string | null;
+};
+
 type CvDisplayIdentity = {
   title?: string | null;
   profileName?: string | null;
@@ -732,6 +742,10 @@ export function getActiveLocalPersonalizationSource(): {
   title: string | null;
   personalizationContext: ProposalPersonalizationContext | null;
   richness?: ProposalPersonalizationRichness;
+  email?: string | null;
+  phone?: string | null;
+  linkedin?: string | null;
+  website?: string | null;
 } {
   if (!hasLocalStorage()) {
     return { title: null, personalizationContext: null };
@@ -757,11 +771,16 @@ export function getActiveLocalPersonalizationSource(): {
   const richness = classifyPersonalizationRichness(
     snapshot.personalizationContext,
   );
+  const contact = readProfileContact(activeDoc);
 
   return {
     title: snapshot.title,
     personalizationContext: snapshot.personalizationContext,
     richness,
+    email: contact.email ?? null,
+    phone: contact.phone ?? null,
+    linkedin: contact.linkedin ?? null,
+    website: contact.website ?? null,
   };
 }
 
@@ -780,6 +799,30 @@ export function getProposalApplicantIdentity(source: {
         context?.desiredPosition ?? context?.recentExperience?.[0]?.position,
         88,
       ) ?? null,
+  };
+}
+
+export function getProposalApplicantHeaderData(source: {
+  personalizationContext: ProposalPersonalizationContext | null;
+  email?: string | null;
+  phone?: string | null;
+  linkedin?: string | null;
+  website?: string | null;
+}): ProposalApplicantHeaderData {
+  const identity = getProposalApplicantIdentity(source);
+  const context = source.personalizationContext;
+
+  return {
+    name: identity.name,
+    role: identity.role,
+    email: compactDisplayPart(source.email ?? undefined, 120) ?? null,
+    phone: compactDisplayPart(source.phone ?? undefined, 48) ?? null,
+    linkedin: compactDisplayPart(source.linkedin ?? undefined, 120) ?? null,
+    website: compactDisplayPart(source.website ?? undefined, 120) ?? null,
+    tag:
+      compactDisplayPart(context?.topSkills?.[0], 48) ??
+      compactDisplayPart(context?.recentExperience?.[0]?.company, 48) ??
+      null,
   };
 }
 

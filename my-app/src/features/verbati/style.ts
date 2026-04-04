@@ -44,6 +44,12 @@ export const VERBATI_LAYOUT_OPTIONS: LayoutOption[] = [
       "Swiss register typography built on a Robial 17/18 modular field.",
   },
   {
+    id: "volk-register",
+    name: "Volk Register",
+    description:
+      "Historic civic letterhead logic translated into a disciplined archival resume.",
+  },
+  {
     id: "two-column",
     name: "Two Column",
     description: "Robial split layout with the accent rail sidebar.",
@@ -85,6 +91,7 @@ export const VERBATI_LAYOUT_TO_RENDERER: Record<
   ResumeLayoutVariantId
 > = {
   swiss: "swissminima",
+  "volk-register": "volkregister",
   "two-column": "robial",
   editorial: "editorialmag",
   modernist: "signalgrid",
@@ -181,6 +188,7 @@ export const VERBATI_LAYOUT_TO_PROPOSAL_TEMPLATE: Record<
   ProposalTemplateId
 > = {
   swiss: "swiss_margin",
+  "volk-register": "volk_register",
   "two-column": "two_column_rail",
   editorial: "editorial_wide",
   modernist: "modernist_signal",
