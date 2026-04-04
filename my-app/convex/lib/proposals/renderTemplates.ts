@@ -1,5 +1,6 @@
 export const PROPOSAL_ACTIVE_TEMPLATE_IDS = [
   "swiss_margin",
+  "volk_register",
   "two_column_rail",
   "editorial_wide",
   "modernist_signal",
@@ -62,6 +63,21 @@ export const PROPOSAL_TEMPLATE_DEFINITIONS: readonly ProposalTemplateDefinition[
       rightMarginMm: 18,
       readingMeasureCh: 56,
       titleScaleMm: 6.6,
+    },
+    {
+      id: "volk_register",
+      name: "Volk Register",
+      shortLabel: "register canon",
+      description:
+        "An archival civic-letter twin with a narrower register rail, slower vertical cadence, and stronger paper-field pause.",
+      twinLabel: "Volk Register",
+      leftZoneMm: 35,
+      topOffsetMm: 35,
+      bodyStartMm: 99,
+      bottomMarginMm: 18,
+      rightMarginMm: 18,
+      readingMeasureCh: 58,
+      titleScaleMm: 7,
     },
     {
       id: "two_column_rail",

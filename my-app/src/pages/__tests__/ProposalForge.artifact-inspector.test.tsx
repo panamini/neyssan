@@ -93,23 +93,23 @@ vi.mock("../../components/ProposalDisplay", () => ({
   getDisplayedProposalText: (value: string) => value,
 }));
 
-vi.mock("../../components/ProposalArtifactInspector", () => ({
-  ProposalArtifactInspector: ({
-    onStyleBundleChange,
-    onPaletteOverrideChange,
+vi.mock("../../components/EmbeddedStyleInspector", () => ({
+  default: ({
+    onSelectLayout,
+    onSelectPalette,
   }: Record<string, any>) => (
     <div>
       <button
         type="button"
-        aria-label="Style"
-        onClick={() => onStyleBundleChange?.("magazine_editorial")}
+        aria-label="Open layout controls"
+        onClick={() => onSelectLayout?.("volk-register")}
       >
-        Style
+        Layout
       </button>
       <button
         type="button"
-        aria-label="Color"
-        onClick={() => onPaletteOverrideChange?.("encre")}
+        aria-label="Open palette controls"
+        onClick={() => onSelectPalette?.("encre")}
       >
         Color
       </button>
@@ -128,7 +128,7 @@ describe("ProposalForge artifact inspector integration", () => {
     window.localStorage.clear();
   });
 
-  it("mounts the artifact inspector on the live output and persists style and palette choices", async () => {
+  it("mounts the output style controls and persists direct layout and palette choices", async () => {
     render(
       <MemoryRouter initialEntries={["/proposal"]}>
         <ProposalForge />
@@ -137,34 +137,46 @@ describe("ProposalForge artifact inspector integration", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Generate proposal" }));
 
-    expect(screen.getByRole("button", { name: "Style" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Color" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Open layout controls" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Open palette controls" }),
+    ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Style" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open layout controls" }));
 
     await waitFor(() => {
       expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
-        "|editorial|",
+        "volk_register|volk-register|",
       );
       expect(readStoredProposalOutputDraft()).toMatchObject({
-        templateBundleId: "magazine_editorial",
+        proposalTemplateId: "volk_register",
+        proposalVerbatiStyle: expect.objectContaining({
+          layout: "volk-register",
+        }),
+        templateBundleId: null,
       });
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Color" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open palette controls" }));
 
     await waitFor(() => {
       expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
         "|encre|",
       );
       expect(readStoredProposalOutputDraft()).toMatchObject({
-        paletteOverride: "encre",
-        templateBundleId: "magazine_editorial",
+        proposalVerbatiStyle: expect.objectContaining({
+          layout: "volk-register",
+          palette: "encre",
+        }),
+        paletteOverride: null,
+        templateBundleId: null,
       });
     });
   });
 
-  it("keeps Auto visible in the output meta when auto tone was requested", async () => {
+  it("uses the applicant header contract instead of tone metadata in the output preview", async () => {
     mockVoicePreset = null;
 
     render(
@@ -178,7 +190,12 @@ describe("ProposalForge artifact inspector integration", () => {
     await waitFor(() => {
       const lastCall =
         proposalDisplaySpy.mock.calls[proposalDisplaySpy.mock.calls.length - 1]?.[0];
-      expect(lastCall?.documentMeta).toContain("Auto");
+      expect(lastCall?.documentTitle).toContain("Application for the");
+      expect(lastCall?.applicantHeader).toMatchObject({
+        name: null,
+        role: null,
+        email: null,
+      });
     });
   });
 });

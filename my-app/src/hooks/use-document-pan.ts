@@ -92,20 +92,21 @@ export function useDocumentPan({
 
       node.scrollLeft = startLeft - (event.clientX - startX);
       node.scrollTop = startTop - (event.clientY - startY);
+      event.preventDefault();
       onPan?.();
     };
 
     node.addEventListener("pointerdown", handlePointerDown);
-    node.addEventListener("pointermove", handlePointerMove);
-    node.addEventListener("pointerup", releasePointer);
-    node.addEventListener("pointercancel", releasePointer);
+    window.addEventListener("pointermove", handlePointerMove, { passive: false });
+    window.addEventListener("pointerup", releasePointer);
+    window.addEventListener("pointercancel", releasePointer);
     node.addEventListener("lostpointercapture", releasePointer);
 
     return () => {
       node.removeEventListener("pointerdown", handlePointerDown);
-      node.removeEventListener("pointermove", handlePointerMove);
-      node.removeEventListener("pointerup", releasePointer);
-      node.removeEventListener("pointercancel", releasePointer);
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", releasePointer);
+      window.removeEventListener("pointercancel", releasePointer);
       node.removeEventListener("lostpointercapture", releasePointer);
       releasePointer();
     };

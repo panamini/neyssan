@@ -60,4 +60,18 @@ describe("resolveProposalRenderState", () => {
     expect(result.stylePreset.typography).toBe("mono-signal");
     expect(result.templateId).toBe("editorial_wide");
   });
+
+  it("maps the Volk manual style family to the Volk proposal twin", () => {
+    const result = resolveProposalRenderState({
+      activeCvStylePreset: {
+        layout: "volk-register",
+        typography: "civic-correspondence",
+        palette: "ocre",
+      },
+    });
+
+    expect(result.stylePreset.layout).toBe("volk-register");
+    expect(result.stylePreset.typography).toBe("civic-correspondence");
+    expect(result.templateId).toBe("volk_register");
+  });
 });

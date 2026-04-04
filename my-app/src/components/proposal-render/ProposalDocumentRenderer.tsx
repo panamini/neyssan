@@ -6,6 +6,8 @@ import {
   type ProposalTemplateId,
 } from "../../../convex/lib/proposals/renderTemplates";
 import type { ProposalDocumentTypography } from "../../lib/proposal-document-typography";
+import { VOLK_REGISTER_GRID } from "../../features/verbati/volkGrid";
+import type { ProposalApplicantHeaderData } from "../../lib/proposal-personalization";
 
 type ProposalDocumentRendererProps = {
   content: string;
@@ -15,6 +17,7 @@ type ProposalDocumentRendererProps = {
   railMeta?: string | null;
   documentTitle?: string | null;
   documentMeta?: string | null;
+  applicantHeader?: ProposalApplicantHeaderData | null;
   documentTypography: ProposalDocumentTypography;
   /** Explicit page width in px. When provided, syncs mm vars immediately on change
    *  without waiting for the ResizeObserver callback. */
@@ -52,12 +55,10 @@ type ProposalDocumentBlock =
       signatureName: string | null;
     };
 
-type AutoFitLevel = "0" | "1" | "2" | "3" | "4" | "5" | "6";
-const AUTO_FIT_LEVELS: AutoFitLevel[] = ["0", "1", "2", "3", "4", "5", "6"];
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value));
-}
+type VolkRegisterMetaEntry = {
+  value: string;
+  key: string;
+};
 
 function resolveLineHeightPx(styles: CSSStyleDeclaration) {
   const parsedLineHeight = Number.parseFloat(styles.lineHeight || "");
@@ -136,6 +137,29 @@ function isLikelySignatureName(value: string): boolean {
   }
 
   return SIGNATURE_NAME_PATTERN.test(normalized);
+}
+
+function buildVolkRegisterMetaEntries(
+  applicantHeader?: ProposalApplicantHeaderData | null,
+): VolkRegisterMetaEntry[] {
+  return [
+    {
+      key: "phone",
+      value: applicantHeader?.phone?.trim() ?? "",
+    },
+    {
+      key: "website",
+      value: applicantHeader?.website?.trim() ?? "",
+    },
+    {
+      key: "linkedin",
+      value: applicantHeader?.linkedin?.trim() ?? "",
+    },
+    {
+      key: "tag",
+      value: applicantHeader?.tag?.trim() ?? "",
+    },
+  ].filter((entry) => entry.value.length > 0);
 }
 
 function splitParagraphIntoPaginationFragments(paragraph: string): string[] {
@@ -402,6 +426,22 @@ function paginateMeasuredProposalBlocks(args: {
   return pages.length > 0 ? pages : [[]];
 }
 
+function buildVolkFallbackParagraphs(args: {
+  documentTitle: string | null;
+  railTitle: string | null;
+}) {
+  const role = args.documentTitle?.trim() || "the role";
+  const sender = args.railTitle?.trim() || "the applicant";
+
+  return [
+    `Dear Hiring Team,`,
+    `I am writing to express my interest in ${role}. My background combines structured delivery, careful written communication, and the ability to turn complex briefs into clear, dependable execution.`,
+    `${sender} brings a practical approach to stakeholder coordination, editorial clarity, and proposal work. I focus on keeping communication concise, maintaining high standards of detail, and producing documents that read with confidence from the first line to the closing sign-off.`,
+    `I would welcome the opportunity to discuss how this experience can support your team and contribute to the quality of your work.`,
+    `Kind regards,\n${sender}`,
+  ];
+}
+
 export function ProposalDocumentRenderer({
   content,
   proposalType,
@@ -410,6 +450,7 @@ export function ProposalDocumentRenderer({
   railMeta,
   documentTitle,
   documentMeta,
+  applicantHeader,
   documentTypography,
   pageWidth,
   pageGapPx = 0,
@@ -417,8 +458,9 @@ export function ProposalDocumentRenderer({
 }: ProposalDocumentRendererProps): JSX.Element {
   const resolvedTemplateId = resolveProposalTemplateId(templateId);
   const templateDefinition = getProposalTemplateDefinition(resolvedTemplateId);
-  const resolvedRailTitle = railTitle ?? documentTitle;
-  const resolvedRailMeta = railMeta ?? documentMeta;
+  const resolvedRailTitle = applicantHeader?.name ?? railTitle ?? documentTitle;
+  const resolvedRailMeta = applicantHeader?.role ?? railMeta ?? documentMeta;
+  const resolvedSenderEmail = applicantHeader?.email ?? documentMeta ?? null;
   const parsedDocument = React.useMemo(
     () => parseProposalDocumentContent(content, proposalType),
     [content, proposalType],
@@ -572,98 +614,6 @@ export function ProposalDocumentRenderer({
     };
   }, [documentBlocks, onPageCountChange, pageWidth, resolvedTemplateId]);
 
-  React.useLayoutEffect(() => {
-    const page = pageRef.current;
-    const body = bodyRef.current;
-    if (!page || !body || pageGroups.length > 1) {
-      return undefined;
-    }
-
-    let frame: number | null = null;
-
-    const applyFit = () => {
-      for (const fit of AUTO_FIT_LEVELS) {
-        page.dataset.fit = fit;
-
-        const { pageRect: nextPageRect, bottomBoundary } =
-          getPageBottomBoundary(page);
-        const nextBodyRect = body.getBoundingClientRect();
-        if (
-          nextBodyRect.bottom <= bottomBoundary + 1 ||
-          fit === AUTO_FIT_LEVELS[AUTO_FIT_LEVELS.length - 1]
-        ) {
-          const overflow = nextBodyRect.bottom - bottomBoundary;
-          if (overflow > 1) {
-            const mmPx = Math.max(1, nextPageRect.width / 210);
-            const overflowMm = overflow / mmPx;
-            const contentHeight = Math.max(1, nextBodyRect.height);
-            const fineScale = clamp(
-              (contentHeight - overflow - 2) / contentHeight,
-              0.84,
-              1,
-            );
-            page.style.setProperty(
-              "--proposal-fit-fine-scale",
-              String(fineScale),
-            );
-            page.style.setProperty(
-              "--proposal-fit-fine-body-start-adjust-mm",
-              String(clamp(overflowMm * 1.1, 0, 10)),
-            );
-            page.style.setProperty(
-              "--proposal-fit-fine-bottom-margin-adjust-mm",
-              String(clamp(overflowMm * 0.4, 0, 5)),
-            );
-          } else {
-            page.style.setProperty("--proposal-fit-fine-scale", "1");
-            page.style.setProperty(
-              "--proposal-fit-fine-body-start-adjust-mm",
-              "0",
-            );
-            page.style.setProperty(
-              "--proposal-fit-fine-bottom-margin-adjust-mm",
-              "0",
-            );
-          }
-          break;
-        }
-      }
-    };
-
-    const scheduleFit = () => {
-      if (frame !== null) {
-        window.cancelAnimationFrame(frame);
-      }
-
-      frame = window.requestAnimationFrame(() => {
-        frame = null;
-        applyFit();
-      });
-    };
-
-    const resizeObserver = new ResizeObserver(scheduleFit);
-    resizeObserver.observe(page);
-    resizeObserver.observe(body);
-    if (rootRef.current) {
-      resizeObserver.observe(rootRef.current);
-    }
-
-    void document.fonts?.ready.then(() => {
-      scheduleFit();
-    });
-    document.fonts?.addEventListener?.("loadingdone", scheduleFit);
-
-    scheduleFit();
-
-    return () => {
-      if (frame !== null) {
-        window.cancelAnimationFrame(frame);
-      }
-      resizeObserver.disconnect();
-      document.fonts?.removeEventListener?.("loadingdone", scheduleFit);
-    };
-  }, [content, pageGroups.length, pageWidth, parsedDocument.kind, resolvedTemplateId]);
-
   const renderDocumentBlock = React.useCallback(
     (block: ProposalDocumentBlock) => {
       switch (block.type) {
@@ -775,6 +725,190 @@ export function ProposalDocumentRenderer({
       : documentBlocks.length > 0
         ? [documentBlocks.map((_, index) => index)]
         : [[]];
+  const volkMetaEntries = React.useMemo(
+    () => buildVolkRegisterMetaEntries(applicantHeader),
+    [
+      applicantHeader?.linkedin,
+      applicantHeader?.phone,
+      applicantHeader?.tag,
+      applicantHeader?.website,
+    ],
+  );
+  const volkMetaLefts = React.useMemo(() => VOLK_REGISTER_GRID.metaLefts, []);
+  const volkFallbackParagraphs = React.useMemo(
+    () =>
+      buildVolkFallbackParagraphs({
+        documentTitle,
+        railTitle: resolvedRailTitle,
+      }),
+    [documentTitle, resolvedRailTitle],
+  );
+  const renderVolkBodyContent = React.useCallback(
+    (args: {
+      pageBlocks: ProposalDocumentBlock[];
+      showFallback: boolean;
+      measurement: boolean;
+    }) => {
+      const { pageBlocks, showFallback, measurement } = args;
+
+      if (pageBlocks.length > 0) {
+        return measurement
+          ? pageBlocks.map((block) => renderDocumentBlock(block))
+          : renderVisibleDocumentBlocks(pageBlocks);
+      }
+
+      if (!showFallback) {
+        return null;
+      }
+
+      return volkFallbackParagraphs.map((paragraph, index) => {
+        if (index === 0) {
+          return (
+            <p
+              key={`volk-fallback-${index}`}
+              className="dasti-proposal-document__salutation"
+              data-proposal-block={measurement ? true : undefined}
+            >
+              {paragraph}
+            </p>
+          );
+        }
+
+        if (index === volkFallbackParagraphs.length - 1) {
+          const [signOff, signatureName] = paragraph.split("\n");
+          return (
+            <div
+              key={`volk-fallback-${index}`}
+              className="dasti-proposal-document__closing"
+              data-proposal-block={measurement ? true : undefined}
+            >
+              <p className="dasti-proposal-document__signoff">{signOff}</p>
+              <p className="dasti-proposal-document__signature">
+                {signatureName}
+              </p>
+            </div>
+          );
+        }
+
+        return (
+          <p
+            key={`volk-fallback-${index}`}
+            className="dasti-proposal-document__paragraph"
+            data-proposal-block={measurement ? true : undefined}
+          >
+            {paragraph}
+          </p>
+        );
+      });
+    },
+    [renderVisibleDocumentBlocks, volkFallbackParagraphs],
+  );
+  const renderGenericRail = React.useCallback(
+    (isContinuationPage: boolean) => (
+      <aside className="dasti-proposal-document__rail">
+        <p className="dasti-proposal-document__eyebrow">
+          {templateDefinition.shortLabel}
+        </p>
+        {!isContinuationPage && resolvedRailTitle ? (
+          <h4 className="dasti-proposal-document__title">{resolvedRailTitle}</h4>
+        ) : null}
+        {!isContinuationPage && resolvedRailMeta ? (
+          <p className="dasti-proposal-document__meta">{resolvedRailMeta}</p>
+        ) : null}
+      </aside>
+    ),
+    [resolvedRailMeta, resolvedRailTitle, templateDefinition.shortLabel],
+  );
+  const renderVolkRegisterShell = React.useCallback(
+    (args: {
+      bodyRef?: React.Ref<HTMLDivElement> | null;
+      pageBlocks: ProposalDocumentBlock[];
+      isContinuationPage: boolean;
+      showFallback: boolean;
+      measurement: boolean;
+    }) => (
+      <>
+        {!args.isContinuationPage ? (
+          <div className="dasti-proposal-document__volk-header">
+            <p className="dasti-proposal-document__volk-title">
+              {resolvedRailTitle ?? "volk register letter"}
+            </p>
+            <p className="dasti-proposal-document__volk-subtitle">
+              {resolvedRailMeta ?? documentTitle ?? templateDefinition.name}
+            </p>
+            <p className="dasti-proposal-document__volk-sender">
+              {resolvedSenderEmail
+                ? `sender / ${resolvedSenderEmail}`
+                : "sender / contact details"}
+            </p>
+          </div>
+        ) : null}
+
+        {!args.isContinuationPage ? (
+          <>
+            {volkMetaEntries.map((entry, index) => (
+              <div
+                key={entry.key}
+                className="dasti-proposal-document__volk-register-item"
+                style={{ left: volkMetaLefts[index] }}
+              >
+                <p className="dasti-proposal-document__volk-register-label">
+                  {entry.value}
+                </p>
+              </div>
+            ))}
+            <div className="dasti-proposal-document__volk-dot" aria-hidden="true" />
+            <p
+              className="dasti-proposal-document__volk-tier-marker dasti-proposal-document__volk-tier-marker--two"
+              aria-hidden="true"
+            >
+              2
+            </p>
+            <p
+              className="dasti-proposal-document__volk-tier-marker dasti-proposal-document__volk-tier-marker--three"
+              aria-hidden="true"
+            >
+              3
+            </p>
+          </>
+        ) : null}
+
+        <div className="dasti-proposal-document__volk-content">
+          {!args.isContinuationPage ? (
+            <>
+              <p className="dasti-proposal-document__volk-subject-label">subject</p>
+              <p className="dasti-proposal-document__volk-subject-value">
+                {documentTitle ?? "Application for the role"}
+              </p>
+            </>
+          ) : null}
+
+          <div
+            ref={args.bodyRef ?? undefined}
+            className="dasti-proposal-document__body dasti-proposal-document__body--volk-register"
+          >
+            {renderVolkBodyContent({
+              pageBlocks: args.pageBlocks,
+              showFallback: args.showFallback,
+              measurement: args.measurement,
+            })}
+          </div>
+        </div>
+      </>
+    ),
+    [
+      documentMeta,
+      documentTitle,
+      applicantHeader,
+      renderVolkBodyContent,
+      volkMetaLefts,
+      resolvedRailMeta,
+      resolvedSenderEmail,
+      resolvedRailTitle,
+      templateDefinition.name,
+      volkMetaEntries,
+    ],
+  );
 
   return (
     <div
@@ -813,6 +947,19 @@ export function ProposalDocumentRenderer({
             documentTypography.letterSpacing ?? "0em",
           "--proposal-document-line-height": String(documentTypography.lineHeight),
           "--proposal-document-page-gap": `${pageGapPx}px`,
+          "--volk-grid-left": VOLK_REGISTER_GRID.left,
+          "--volk-grid-header-width": VOLK_REGISTER_GRID.headerWidth,
+          "--volk-grid-body-width": VOLK_REGISTER_GRID.bodyWidth,
+          "--volk-grid-title-top": VOLK_REGISTER_GRID.titleTop,
+          "--volk-grid-subtitle-top": VOLK_REGISTER_GRID.subtitleTop,
+          "--volk-grid-sender-top": VOLK_REGISTER_GRID.senderTop,
+          "--volk-grid-meta-top": VOLK_REGISTER_GRID.metaTop,
+          "--volk-grid-subject-top": VOLK_REGISTER_GRID.subjectTop,
+          "--volk-grid-subject-value-top": VOLK_REGISTER_GRID.subjectValueTop,
+          "--volk-grid-subject-value-left": VOLK_REGISTER_GRID.subjectValueLeft,
+          "--volk-grid-body-top": VOLK_REGISTER_GRID.bodyTop,
+          "--volk-grid-dot-left": VOLK_REGISTER_GRID.dotLeft,
+          "--volk-grid-dot-top": VOLK_REGISTER_GRID.dotTop,
         } as React.CSSProperties
       }
     >
@@ -822,30 +969,31 @@ export function ProposalDocumentRenderer({
           className="dasti-proposal-document__page"
           data-fit="0"
         >
-          <aside className="dasti-proposal-document__rail">
-            <p className="dasti-proposal-document__eyebrow">
-              {templateDefinition.shortLabel}
-            </p>
-            {resolvedRailTitle ? (
-              <h4 className="dasti-proposal-document__title">{resolvedRailTitle}</h4>
-            ) : null}
-            {resolvedRailMeta ? (
-              <p className="dasti-proposal-document__meta">{resolvedRailMeta}</p>
-            ) : null}
-          </aside>
-
-          <div ref={measurementBodyRef} className="dasti-proposal-document__body">
-            {documentBlocks.length > 0 ? (
-              documentBlocks.map((block) => renderDocumentBlock(block))
-            ) : (
-              <div
-                className="dasti-proposal-document__raw-body"
-                data-proposal-block
-              >
-                {stripInlineProposalMarkdown(parsedDocument.rawBody || content)}
+          {resolvedTemplateId === "volk_register" ? (
+            renderVolkRegisterShell({
+              bodyRef: measurementBodyRef,
+              pageBlocks: documentBlocks,
+              isContinuationPage: false,
+              showFallback: true,
+              measurement: true,
+            })
+          ) : (
+            <>
+              {renderGenericRail(false)}
+              <div ref={measurementBodyRef} className="dasti-proposal-document__body">
+                {documentBlocks.length > 0 ? (
+                  documentBlocks.map((block) => renderDocumentBlock(block))
+                ) : (
+                  <div
+                    className="dasti-proposal-document__raw-body"
+                    data-proposal-block
+                  >
+                    {stripInlineProposalMarkdown(parsedDocument.rawBody || content)}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </>
+          )}
         </div>
       </div>
       {resolvedPageGroups.map((pageGroup, pageIndex) => {
@@ -867,30 +1015,34 @@ export function ProposalDocumentRenderer({
               .join(" ")}
             data-fit="0"
           >
-        <aside className="dasti-proposal-document__rail">
-          <p className="dasti-proposal-document__eyebrow">
-            {templateDefinition.shortLabel}
-          </p>
-          {!isContinuationPage && resolvedRailTitle ? (
-            <h4 className="dasti-proposal-document__title">{resolvedRailTitle}</h4>
-          ) : null}
-          {!isContinuationPage && resolvedRailMeta ? (
-            <p className="dasti-proposal-document__meta">{resolvedRailMeta}</p>
-          ) : null}
-        </aside>
-
-        <div
-          ref={pageIndex === 0 && resolvedPageGroups.length === 1 ? bodyRef : null}
-          className="dasti-proposal-document__body"
-        >
-          {pageBlocks.length > 0 ? (
-            renderVisibleDocumentBlocks(pageBlocks)
-          ) : pageIndex === 0 ? (
-            <div className="dasti-proposal-document__raw-body">
-              {stripInlineProposalMarkdown(parsedDocument.rawBody || content)}
-            </div>
-          ) : null}
-        </div>
+            {resolvedTemplateId === "volk_register" ? (
+              renderVolkRegisterShell({
+                bodyRef:
+                  pageIndex === 0 && resolvedPageGroups.length === 1 ? bodyRef : null,
+                pageBlocks,
+                isContinuationPage,
+                showFallback: pageIndex === 0,
+                measurement: false,
+              })
+            ) : (
+              <>
+                {renderGenericRail(isContinuationPage)}
+                <div
+                  ref={
+                    pageIndex === 0 && resolvedPageGroups.length === 1 ? bodyRef : null
+                  }
+                  className="dasti-proposal-document__body"
+                >
+                  {pageBlocks.length > 0 ? (
+                    renderVisibleDocumentBlocks(pageBlocks)
+                  ) : pageIndex === 0 ? (
+                    <div className="dasti-proposal-document__raw-body">
+                      {stripInlineProposalMarkdown(parsedDocument.rawBody || content)}
+                    </div>
+                  ) : null}
+                </div>
+              </>
+            )}
           </div>
         );
       })}

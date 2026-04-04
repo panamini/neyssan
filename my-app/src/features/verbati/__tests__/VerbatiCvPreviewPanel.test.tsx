@@ -84,7 +84,10 @@ describe("VerbatiCvPreviewPanel", () => {
       screen.getByRole("group", { name: "Resume appearance controls" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Open style presets" }),
+      screen.getByRole("button", { name: "Open text styles" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Open layout controls" }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Open palette controls" }),
@@ -98,29 +101,27 @@ describe("VerbatiCvPreviewPanel", () => {
         name: "Open layout and typography controls",
       }),
     ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Open style presets" }),
+    ).not.toBeInTheDocument();
   });
 
-  it("uses shared style and color drawers in cv workspace preview mode", () => {
+  it("uses direct text, layout, and color drawers in cv workspace preview mode", () => {
     render(<VerbatiCvPreviewPanel hostMode="workspace" />);
 
+    fireEvent.click(screen.getByRole("button", { name: "Open text styles" }));
+
+    expect(
+      screen.getByRole("button", { name: "Civic Correspondence" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Quiet Editorial" })).toBeInTheDocument();
+
     fireEvent.click(
-      screen.getByRole("button", { name: "Open style presets" }),
+      screen.getByRole("button", { name: "Open layout controls" }),
     );
 
-    const styleButtons = [
-      screen.getByRole("button", { name: "Clean" }),
-      screen.getByRole("button", { name: "Soft" }),
-      screen.getByRole("button", { name: "Editorial" }),
-      screen.getByRole("button", { name: "Bold" }),
-    ];
-
-    styleButtons.forEach((button) => {
-      expect(button).toHaveClass(
-        "dasti-artifact-inspector__action",
-        "dasti-artifact-inspector__action--drawer",
-      );
-      expect(button).not.toHaveClass("dasti-proposal-chrome-option");
-    });
+    expect(screen.getByRole("button", { name: "Volk Register" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Swiss Minima" })).toBeInTheDocument();
 
     fireEvent.click(
       screen.getByRole("button", {

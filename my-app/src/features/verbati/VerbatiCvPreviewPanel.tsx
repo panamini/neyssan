@@ -333,6 +333,7 @@ export function VerbatiCvPreviewPanel({
                 <EmbeddedStyleInspector
                   stylePreset={stylePreset}
                   copyMode="title-only"
+                  controlMode="direct"
                   bundleOptions={VERBATI_STYLE_BUNDLE_DEFINITIONS}
                   activeBundleIdOverride={activeBundleId}
                   showCustomizeControl={false}

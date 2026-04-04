@@ -7,6 +7,7 @@ import { DEFAULT_VERBATI_STYLE } from "../style";
 
 const recenterViewport = vi.fn();
 const viewportCenteringSpy = vi.fn();
+const resumePageSpy = vi.fn();
 
 vi.mock("../../../hooks/use-document-stage-layout", () => ({
   useDocumentStageLayout: () => ({
@@ -42,13 +43,17 @@ vi.mock("../../../hooks/use-document-viewport-centering", () => ({
 }));
 
 vi.mock("../resume/ResumePage", () => ({
-  default: () => <div data-testid="resume-page" />,
+  default: (props: Record<string, unknown>) => {
+    resumePageSpy(props);
+    return <div data-testid="resume-page" />;
+  },
 }));
 
 describe("VerbatiResumePreview", () => {
   beforeEach(() => {
     recenterViewport.mockClear();
     viewportCenteringSpy.mockClear();
+    resumePageSpy.mockClear();
   });
 
   it("keeps the workspace shell on the canvas viewer classes", () => {
@@ -117,7 +122,7 @@ describe("VerbatiResumePreview", () => {
       screen.queryByRole("button", { name: "100 percent zoom" }),
     ).not.toBeInTheDocument();
     expect(screen.getByLabelText("Page count")).toHaveTextContent("1 page");
-    expect(screen.getByText("100%")).toBeInTheDocument();
+    expect(screen.queryByText("100%")).not.toBeInTheDocument();
   });
 
   it("keeps the explicit fit controls centered on the full page in workspace mode", () => {
@@ -159,5 +164,22 @@ describe("VerbatiResumePreview", () => {
     expect(
       screen.queryByRole("button", { name: /Show previous resume layout:/ }),
     ).not.toBeInTheDocument();
+  });
+
+  it("includes the Volk renderer in comparison mode when layout comparison is enabled", () => {
+    render(
+      <VerbatiResumePreview
+        data={resumeMock}
+        stylePreset={DEFAULT_VERBATI_STYLE}
+        compareLayouts
+      />,
+    );
+
+    const lastCall =
+      resumePageSpy.mock.calls[resumePageSpy.mock.calls.length - 1]?.[0];
+    expect(lastCall).toMatchObject({
+      mode: "comparisonAll",
+      comparisonVariantIds: expect.arrayContaining(["volkregister"]),
+    });
   });
 });

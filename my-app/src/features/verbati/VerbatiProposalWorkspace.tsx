@@ -24,6 +24,7 @@ import {
 } from "./style";
 import {
   getActiveLocalPersonalizationSource,
+  getProposalApplicantHeaderData,
   getProposalApplicantIdentity,
 } from "../../lib/proposal-personalization";
 import {
@@ -324,6 +325,9 @@ export function VerbatiProposalWorkspace({
     currentProposalSettings?.voicePreset ??
     DEFAULT_PROPOSAL_VOICE_PRESET;
   const previewApplicantIdentity = getProposalApplicantIdentity(
+    getActiveLocalPersonalizationSource(),
+  );
+  const previewApplicantHeader = getProposalApplicantHeaderData(
     getActiveLocalPersonalizationSource(),
   );
   const persistedVoicePreset =
@@ -863,6 +867,7 @@ export function VerbatiProposalWorkspace({
             proposalDraft?.proposalApplicantRole ||
             previewApplicantIdentity.role
           }
+          applicantHeader={previewApplicantHeader}
           documentTitle={previewTitle}
           documentMeta={previewMeta}
           mode={previewMode}

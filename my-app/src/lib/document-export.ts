@@ -1,6 +1,16 @@
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 
+export type DocumentExportCloneContext = {
+  sourceNode: HTMLElement;
+  clonedNode: HTMLElement;
+  clonedDocument: Document;
+};
+
+type PrepareDocumentExportClone =
+  | ((args: DocumentExportCloneContext) => void)
+  | undefined;
+
 function sanitizePdfTitle(value: string): string {
   const normalized = value
     .trim()
@@ -84,15 +94,40 @@ function sliceCanvasForPdf(args: {
   return sliceCanvas;
 }
 
-async function rasterizeNodeForPdf(node: HTMLElement): Promise<HTMLCanvasElement> {
+async function rasterizeNodeForPdf(
+  node: HTMLElement,
+  prepareClone?: PrepareDocumentExportClone,
+): Promise<HTMLCanvasElement> {
   await waitForRenderableNode(node);
 
-  return html2canvas(node, {
-    backgroundColor: "#ffffff",
-    logging: false,
-    scale: Math.max(2, Math.min(3, window.devicePixelRatio || 1)),
-    useCORS: true,
-  });
+  const exportRootId = `document-export-${Math.random().toString(36).slice(2, 10)}`;
+  node.setAttribute("data-document-export-root", exportRootId);
+
+  try {
+    return await html2canvas(node, {
+      backgroundColor: "#ffffff",
+      logging: false,
+      scale: Math.max(2, Math.min(3, window.devicePixelRatio || 1)),
+      useCORS: true,
+      onclone: (clonedDocument) => {
+        const clonedNode = clonedDocument.querySelector<HTMLElement>(
+          `[data-document-export-root="${exportRootId}"]`,
+        );
+        if (!clonedNode) {
+          return;
+        }
+
+        prepareClone?.({
+          sourceNode: node,
+          clonedNode,
+          clonedDocument,
+        });
+        clonedNode.removeAttribute("data-document-export-root");
+      },
+    });
+  } finally {
+    node.removeAttribute("data-document-export-root");
+  }
 }
 
 function canvasToPdf(canvas: HTMLCanvasElement, title: string): void {
@@ -185,13 +220,14 @@ async function waitForExportDocumentAssets(doc: Document): Promise<void> {
 export async function downloadElementAsPdf(args: {
   node: HTMLElement;
   title: string;
+  prepareClone?: PrepareDocumentExportClone;
 }): Promise<boolean> {
   if (typeof window === "undefined" || typeof document === "undefined") {
     return false;
   }
 
   try {
-    const canvas = await rasterizeNodeForPdf(args.node);
+    const canvas = await rasterizeNodeForPdf(args.node, args.prepareClone);
     canvasToPdf(canvas, args.title);
     return true;
   } catch (error) {
@@ -204,6 +240,7 @@ export async function downloadFirstMatchingNodeAsPdf(args: {
   container: HTMLElement | null;
   selectors: string[];
   title: string;
+  prepareClone?: PrepareDocumentExportClone;
 }): Promise<boolean> {
   const node = findFirstMatchingNode(args);
   if (!node) {
@@ -213,6 +250,7 @@ export async function downloadFirstMatchingNodeAsPdf(args: {
   return downloadElementAsPdf({
     node,
     title: args.title,
+    prepareClone: args.prepareClone,
   });
 }
 
@@ -220,6 +258,7 @@ export async function downloadFirstMatchingNodeAsPdf(args: {
 export function printElementAsPdf(args: {
   node: HTMLElement;
   title: string;
+  prepareClone?: PrepareDocumentExportClone;
 }): boolean {
   if (typeof window === "undefined" || typeof document === "undefined") {
     return false;
@@ -233,6 +272,7 @@ export function printFirstMatchingNodeAsPdf(args: {
   container: HTMLElement | null;
   selectors: string[];
   title: string;
+  prepareClone?: PrepareDocumentExportClone;
 }): boolean {
   const node = findFirstMatchingNode(args);
   if (!node) {
@@ -242,6 +282,7 @@ export function printFirstMatchingNodeAsPdf(args: {
   void downloadElementAsPdf({
     node,
     title: args.title,
+    prepareClone: args.prepareClone,
   });
   return true;
 }

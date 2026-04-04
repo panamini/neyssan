@@ -2,6 +2,8 @@ Drop local font files for Dasti here.
 
 Supported auto-detected families:
 
+- `Archivo`
+- `Source Serif 4`
 - `Sono`
 - `Geist`
 - `Hepta Slab`
