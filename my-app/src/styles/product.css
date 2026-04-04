@@ -3515,16 +3515,17 @@
 }
 
 .dasti-proposal-source-summary__label {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.10em;
   text-transform: uppercase;
   color: var(--tg2);
 }
 
 .dasti-proposal-source-summary__value {
-  font-size: var(--ts);
-  line-height: 1.5;
+  font-size: var(--tu);
+  font-weight: 500;
+  line-height: 1.45;
   color: var(--ti);
   min-width: 0;
   overflow-wrap: anywhere;
@@ -3543,11 +3544,11 @@
   display: inline-flex;
   align-items: center;
   max-width: 100%;
-  min-height: 28px;
-  padding: 0 10px;
+  min-height: 26px;
+  padding: 0 9px;
   border-radius: var(--radius-pill);
   border: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
-  background: color-mix(in srgb, var(--color-surface) 86%, transparent);
+  background: color-mix(in srgb, var(--color-surface-raised) 90%, transparent);
   color: var(--tm2);
   font-size: var(--tx);
   font-weight: 600;
@@ -3562,6 +3563,77 @@
   color: var(--tm2);
   font-size: var(--tx);
   line-height: 1.6;
+}
+
+/* ─── Job Offer card — shown at top of source summary ─────────────────────── */
+.dasti-proposal-source-summary__job-offer-card {
+  display: grid;
+  gap: var(--space-1);
+  padding: 11px 14px;
+  border-radius: calc(var(--radius-card) - 1px);
+  border: 1px solid
+    color-mix(in srgb, var(--color-accent) 18%, var(--color-border-selected) 82%);
+  background:
+    linear-gradient(
+      160deg,
+      color-mix(in srgb, var(--color-accent-soft) 28%, var(--color-surface-raised) 72%),
+      color-mix(in srgb, var(--color-surface-raised) 92%, var(--color-surface-muted) 8%)
+    );
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 50%, transparent),
+    0 4px 12px -8px color-mix(in srgb, var(--shadow-color) 60%, transparent);
+}
+
+.dasti-proposal-source-summary__job-offer-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.dasti-proposal-source-summary__job-offer-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.dasti-proposal-source-summary__job-offer-kicker {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 20px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--color-accent-soft) 70%, transparent);
+  color: color-mix(in srgb, var(--tm2) 78%, var(--color-accent) 22%);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.dasti-proposal-source-summary__job-offer-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  max-width: 100%;
+  color: var(--color-accent);
+  font-size: var(--ts);
+  font-weight: 600;
+  line-height: 1.4;
+  text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+  transition: color 0.12s var(--ez);
+}
+
+.dasti-proposal-source-summary__job-offer-link:hover,
+.dasti-proposal-source-summary__job-offer-link:focus-visible {
+  color: color-mix(in srgb, var(--color-accent) 76%, var(--ti) 24%);
+  outline: none;
 }
 
 .dasti-proposal-source-raw {
@@ -8756,9 +8828,9 @@ html:not(.dark) .dasti-proposal-submit {
   margin: 0;
   font-size: var(--tx);
   color: var(--tm2);
-  line-height: 1.5;
+  line-height: 1.55;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -8770,28 +8842,30 @@ html:not(.dark) .dasti-proposal-submit {
 .dasti-brief-card__source-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
+  margin-top: 5px;
 }
 
 .dasti-brief-card__source-kicker {
-  font-size: 10px;
+  font-size: 9px;
   line-height: 1;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--tm2);
+  color: var(--tg2);
 }
 
 .dasti-brief-card__source-link {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
   min-width: 0;
   color: var(--color-accent);
   text-decoration: underline;
   text-decoration-thickness: 1.5px;
   text-underline-offset: 3px;
+  transition: color 0.12s var(--ez);
 }
 
 .dasti-brief-card__source-link:hover,
