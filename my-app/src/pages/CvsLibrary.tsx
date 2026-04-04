@@ -68,22 +68,69 @@ export function CvsLibrary(): JSX.Element {
   const navigate = useNavigate();
   const { cvs, loadCv, createNewCv, deleteCv } = useCvLibrary();
   const [confirmingId, setConfirmingId] = React.useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const [sortOrder, setSortOrder] = React.useState<
+    "newest" | "oldest" | "title"
+  >("newest");
   const [visibleCvCount, setVisibleCvCount] =
     React.useState(CV_LIBRARY_PAGE_SIZE);
   const loadMoreSentinelRef = React.useRef<HTMLDivElement | null>(null);
 
   const sorted = React.useMemo(
-    () =>
-      [...cvs].sort((a, b) => {
-        const aTime = new Date(
-          a.metadata?.updatedAt ?? a.metadata?.createdAt ?? 0,
-        ).getTime();
-        const bTime = new Date(
-          b.metadata?.updatedAt ?? b.metadata?.createdAt ?? 0,
-        ).getTime();
-        return bTime - aTime;
-      }),
-    [cvs],
+    () => {
+      const normalizedQuery = searchQuery.trim().toLowerCase();
+
+      return [...cvs]
+        .filter((cv) => {
+          if (!normalizedQuery) {
+            return true;
+          }
+
+          const snapshot = buildActiveCvSnapshotFromCvDocument(cv);
+          const personalization = snapshot.personalizationContext;
+          const jobTitles = readFirstJobTitles(cv)
+            .map((item) => `${item.position} ${item.company}`.trim())
+            .filter(Boolean)
+            .join(" ");
+          const searchableText = [
+            cv.title,
+            snapshot.title,
+            personalization?.name,
+            personalization?.desiredPosition,
+            personalization?.summary,
+            formatCvDisplaySubtitle({
+              title: String(cv.title ?? ""),
+              profileName: String(personalization?.name ?? "").trim(),
+              desiredPosition: String(
+                personalization?.desiredPosition ?? "",
+              ).trim(),
+              ...readProfileContact(cv),
+            }),
+            jobTitles,
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+
+          return searchableText.includes(normalizedQuery);
+        })
+        .sort((a, b) => {
+          const aTime = new Date(
+            a.metadata?.updatedAt ?? a.metadata?.createdAt ?? 0,
+          ).getTime();
+          const bTime = new Date(
+            b.metadata?.updatedAt ?? b.metadata?.createdAt ?? 0,
+          ).getTime();
+          if (sortOrder === "oldest") {
+            return aTime - bTime;
+          }
+          if (sortOrder === "title") {
+            return String(a.title ?? "").localeCompare(String(b.title ?? ""));
+          }
+          return bTime - aTime;
+        });
+    },
+    [cvs, searchQuery, sortOrder],
   );
   const visibleCvs = React.useMemo(
     () => sorted.slice(0, visibleCvCount),
@@ -159,26 +206,66 @@ export function CvsLibrary(): JSX.Element {
 
         {sorted.length === 0 && (
           <div className="dasti-empty-state">
-            <div className="dasti-empty-state__title">No resumes yet</div>
+            <div className="dasti-empty-state__title">
+              {searchQuery.trim() ? "No resumes match this search" : "No resumes yet"}
+            </div>
             <p className="dasti-empty-state__subtitle">
-              Create or import a resume to start editing and personalizing it.
+              {searchQuery.trim()
+                ? "Search checks the title, profile details, summary, and recent roles."
+                : "Create or import a resume to start editing and personalizing it."}
             </p>
-            <button
-              onClick={() => {
-                createNewCv();
-                void navigate("/cv");
-              }}
-              className="dasti-button dasti-button--primary dasti-button--pill"
-            >
-              <Plus size={14} />
-              Create your first resume
-            </button>
+            {!searchQuery.trim() ? (
+              <button
+                onClick={() => {
+                  createNewCv();
+                  void navigate("/cv");
+                }}
+                className="dasti-button dasti-button--primary dasti-button--pill"
+              >
+                <Plus size={14} />
+                Create your first resume
+              </button>
+            ) : null}
           </div>
         )}
 
         {sorted.length > 0 && (
-          <div className="dasti-grid-auto">
-            {visibleCvs.map((cv) => {
+          <>
+            <div className="dasti-proposal-library-utility-row">
+              <label className="dasti-proposal-library-utility-row__search">
+                <span className="sr-only">Search all resumes</span>
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Search all resumes"
+                  aria-label="Search all resumes"
+                  className="dasti-proposal-library-utility-row__input"
+                />
+              </label>
+              <label className="dasti-proposal-library-utility-row__select-shell">
+                <span className="sr-only">Sort all resumes</span>
+                <select
+                  value={sortOrder}
+                  onChange={(event) =>
+                    setSortOrder(
+                      event.target.value as "newest" | "oldest" | "title",
+                    )
+                  }
+                  aria-label="Sort all resumes"
+                  className="dasti-select dasti-select--sm"
+                >
+                  <option value="newest">Newest</option>
+                  <option value="oldest">Oldest</option>
+                  <option value="title">Title</option>
+                </select>
+              </label>
+              <span className="dasti-proposal-library-utility-row__count">
+                {sorted.length} resume{sorted.length === 1 ? "" : "s"}
+              </span>
+            </div>
+            <div className="dasti-grid-auto">
+              {visibleCvs.map((cv) => {
               const updatedAt =
                 formatUiDate(
                   cv.metadata?.updatedAt ??
@@ -322,15 +409,16 @@ export function CvsLibrary(): JSX.Element {
                   )}
                 </div>
               );
-            })}
-            {hasMoreCvs ? (
-              <div
-                ref={loadMoreSentinelRef}
-                aria-hidden="true"
-                style={{ height: 1, gridColumn: "1 / -1" }}
-              />
-            ) : null}
-          </div>
+              })}
+              {hasMoreCvs ? (
+                <div
+                  ref={loadMoreSentinelRef}
+                  aria-hidden="true"
+                  style={{ height: 1, gridColumn: "1 / -1" }}
+                />
+              ) : null}
+            </div>
+          </>
         )}
       </div>
     </div>

@@ -83,6 +83,11 @@ export function ProposalsLibrary(): JSX.Element {
   const deleteProposal = useMutation(api.deleteProposalPublic.default);
   const [confirmingId, setConfirmingId] =
     React.useState<Id<"proposals"> | null>(null);
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const [toneFilter, setToneFilter] = React.useState("all");
+  const [sortOrder, setSortOrder] = React.useState<
+    "newest" | "oldest" | "title"
+  >("newest");
 
   const handleCreateProposal = React.useCallback(() => {
     startFreshProposalWorkspace();
@@ -91,12 +96,51 @@ export function ProposalsLibrary(): JSX.Element {
     });
   }, [navigate]);
 
-  const sorted = React.useMemo(() => {
+  const filteredProposals = React.useMemo(() => {
     if (!proposals) return [];
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+
     return [...proposals]
       .filter((proposal) => proposal.status === "saved")
-      .sort((a, b) => b._creationTime - a._creationTime);
-  }, [proposals]);
+      .filter((proposal) => {
+        if (
+          toneFilter !== "all" &&
+          (proposal.metadata?.voicePreset ?? "signature") !== toneFilter
+        ) {
+          return false;
+        }
+
+        if (!normalizedQuery) {
+          return true;
+        }
+
+        const searchableText = [
+          proposal.title,
+          proposal.content,
+          proposal.metadata?.sourceJobDescription,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+
+        return searchableText.includes(normalizedQuery);
+      })
+      .sort((a, b) => {
+        if (sortOrder === "oldest") {
+          return a._creationTime - b._creationTime;
+        }
+        if (sortOrder === "title") {
+          return (a.title ?? "").localeCompare(b.title ?? "");
+        }
+        return b._creationTime - a._creationTime;
+      });
+  }, [proposals, searchQuery, sortOrder, toneFilter]);
+
+  const sorted = filteredProposals;
+  const savedProposalCount = React.useMemo(
+    () => (proposals ?? []).filter((proposal) => proposal.status === "saved").length,
+    [proposals],
+  );
 
   async function handleDelete(id: Id<"proposals">) {
     if (!isConvexAuthenticated || isConvexAuthLoading) {
@@ -117,6 +161,8 @@ export function ProposalsLibrary(): JSX.Element {
     : !isSignedIn || !isConvexAuthenticated
       ? "Sign in to view saved proposals."
       : null;
+  const hasActiveLibraryFilters =
+    searchQuery.trim().length > 0 || toneFilter !== "all";
 
   return (
     <div className="dasti-page-scroll">
@@ -155,25 +201,78 @@ export function ProposalsLibrary(): JSX.Element {
           <div className="dasti-empty-state">
             <FileText size={32} strokeWidth={1.2} />
             <div className="dasti-empty-state__title">
-              No letters or proposals yet
+              {hasActiveLibraryFilters
+                ? "No proposals match this search"
+                : "No letters or proposals yet"}
             </div>
             <p className="dasti-empty-state__subtitle">
-              Generated drafts will appear here with their title, tone, and a
-              readable excerpt.
+              {hasActiveLibraryFilters
+                ? "Search checks the title, saved text, and imported job offer."
+                : "Generated drafts will appear here with their title, tone, and a readable excerpt."}
             </p>
-            <button
-              onClick={handleCreateProposal}
-              className="dasti-button dasti-button--primary dasti-button--pill"
-            >
-              <Plus size={14} />
-              Write your first letter
-            </button>
+            {!hasActiveLibraryFilters ? (
+              <button
+                onClick={handleCreateProposal}
+                className="dasti-button dasti-button--primary dasti-button--pill"
+              >
+                <Plus size={14} />
+                Write your first letter
+              </button>
+            ) : null}
           </div>
         )}
 
-        {!authStatusMessage && sorted.length > 0 && (
-          <div className="dasti-grid-auto">
-            {sorted.map((p) => {
+        {!authStatusMessage && savedProposalCount > 0 && (
+          <>
+            <div className="dasti-proposal-library-utility-row">
+              <label className="dasti-proposal-library-utility-row__search">
+                <span className="sr-only">Search all proposals</span>
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Search all proposals"
+                  aria-label="Search all proposals"
+                  className="dasti-proposal-library-utility-row__input"
+                />
+              </label>
+              <label className="dasti-proposal-library-utility-row__select-shell">
+                <span className="sr-only">Filter all proposals by tone</span>
+                <select
+                  value={toneFilter}
+                  onChange={(event) => setToneFilter(event.target.value)}
+                  aria-label="Filter all proposals by tone"
+                  className="dasti-select dasti-select--sm"
+                >
+                  <option value="all">All tones</option>
+                  <option value="signature">Natural</option>
+                  <option value="expert">Formal</option>
+                  <option value="engaging">Warm</option>
+                </select>
+              </label>
+              <label className="dasti-proposal-library-utility-row__select-shell">
+                <span className="sr-only">Sort all proposals</span>
+                <select
+                  value={sortOrder}
+                  onChange={(event) =>
+                    setSortOrder(event.target.value as "newest" | "oldest" | "title")
+                  }
+                  aria-label="Sort all proposals"
+                  className="dasti-select dasti-select--sm"
+                >
+                  <option value="newest">Newest first</option>
+                  <option value="oldest">Oldest first</option>
+                  <option value="title">Title</option>
+                </select>
+              </label>
+              <span className="dasti-proposal-library-utility-row__count">
+                {sorted.length === savedProposalCount
+                  ? `${savedProposalCount} saved`
+                  : `${sorted.length} of ${savedProposalCount}`}
+              </span>
+            </div>
+            <div className="dasti-grid-auto">
+              {sorted.map((p) => {
               const date = formatUiDate(p._creationTime) ?? "";
               const label = typeLabel(p.metadata?.proposalType);
               const tone = toneLabel(p.metadata?.voicePreset);
@@ -287,8 +386,9 @@ export function ProposalsLibrary(): JSX.Element {
                   )}
                 </div>
               );
-            })}
-          </div>
+              })}
+            </div>
+          </>
         )}
       </div>
     </div>
