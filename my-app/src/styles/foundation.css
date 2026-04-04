@@ -521,7 +521,7 @@
   --sidebar-hover-bg: color-mix(in srgb, var(--sf2) 72%, var(--sfr) 28%);
   --sidebar-active-bg: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--sfr) 88%, white 12%) 0%,
+    color-mix(in srgb, var(--sfr) 88%, hsl(38, 30%, 98%) 12%) 0%,
     color-mix(in srgb, var(--sfr) 94%, var(--sf1) 6%) 100%
   );
   --sidebar-hover-ink: var(--ti);

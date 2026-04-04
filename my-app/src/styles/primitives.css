@@ -266,11 +266,11 @@
 }
 
 .dasti-button--success:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--color-success) 22%, white 78%);
+  background: color-mix(in srgb, var(--color-success) 38%, var(--sfr) 62%);
 }
 
 .dasti-button--warning:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--color-warning) 22%, white 78%);
+  background: color-mix(in srgb, var(--color-warning) 38%, var(--sfr) 62%);
 }
 
 .dasti-button--pill {
