@@ -24,6 +24,8 @@ const SAVED_PROPOSALS = [
       proposalType: "cover_letter",
       voicePreset: "signature",
       requestedVoicePreset: "signature",
+      sourceUrl: "https://www.linkedin.com/jobs/view/123456",
+      platform: "linkedin",
       sourceJobDescription:
         "Lead recurring operations and keep cross-team communication on track.",
     },
@@ -57,6 +59,8 @@ const SAVED_PROPOSALS = [
       voicePreset: "expert",
       requestedVoicePreset: null,
       resolvedVoicePreset: "expert",
+      sourceUrl: "https://example.com/jobs/operations-auto",
+      platform: "company_website",
       sourceJobDescription:
         "Coordinate operations, keep processes clean, and support team communication.",
     },
@@ -107,13 +111,40 @@ vi.mock("../../components/ui/toast", () => ({
 }));
 
 vi.mock("../../components/ProposalInputForm", () => ({
-  default: () => {
+  default: (props: { onValuesChange?: (values: any) => void }) => {
     const storedDraft = JSON.parse(
       window.localStorage.getItem(PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY) ?? "{}",
     ) as {
       jobTitle?: string;
       jobDescription?: string;
+      proposalType?: string;
+      voicePreset?: string | null;
+      toneTuning?: string | null;
+      characterLimitMode?: string | null;
+      characterLimitValue?: number | null;
     };
+
+    React.useEffect(() => {
+      props.onValuesChange?.({
+        jobTitle: storedDraft.jobTitle ?? "",
+        jobDescription: storedDraft.jobDescription ?? "",
+        proposalType: storedDraft.proposalType ?? "cover_letter",
+        voicePreset:
+          storedDraft.voicePreset === undefined ? undefined : storedDraft.voicePreset,
+        toneTuning: storedDraft.toneTuning ?? null,
+        characterLimitMode: storedDraft.characterLimitMode ?? "none",
+        characterLimitValue: storedDraft.characterLimitValue ?? null,
+      });
+    }, [
+      props,
+      storedDraft.characterLimitMode,
+      storedDraft.characterLimitValue,
+      storedDraft.jobDescription,
+      storedDraft.jobTitle,
+      storedDraft.proposalType,
+      storedDraft.toneTuning,
+      storedDraft.voicePreset,
+    ]);
 
     return (
       <div>
@@ -314,6 +345,14 @@ describe("ProposalForge saved view", () => {
     expect(screen.getByTestId("compose-job-description")).toHaveTextContent(
       "Lead recurring operations and keep cross-team communication on track.",
     );
+    expect(
+      JSON.parse(
+        window.localStorage.getItem(PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY) ?? "{}",
+      ),
+    ).toMatchObject({
+      sourceUrl: "https://www.linkedin.com/jobs/view/123456",
+      platform: "linkedin",
+    });
   });
 
   it("keeps the existing compose brief when the saved proposal lacks source brief metadata", () => {
@@ -371,6 +410,8 @@ describe("ProposalForge saved view", () => {
         "Coordinate operations, keep processes clean, and support team communication.",
       proposalType: "cover_letter",
       voicePreset: null,
+      sourceUrl: "https://example.com/jobs/operations-auto",
+      platform: "company_website",
     });
 
     await waitFor(() => {

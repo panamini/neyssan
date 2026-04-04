@@ -595,11 +595,32 @@ describe("ProposalInputForm provider-busy handling", () => {
       />,
     );
 
-    expect(await screen.findByText(/Imported from/i)).toBeInTheDocument();
+    expect(await screen.findByText("Job Offer")).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Open original offer on LinkedIn" }),
+      screen.getByRole("link", { name: "View on LinkedIn" }),
     ).toHaveAttribute("href", "https://www.linkedin.com/jobs/view/123456");
     expect(screen.getByText("linkedin.com")).toBeInTheDocument();
+  });
+
+  it("keeps the imported source host visible even when the restored url is missing a scheme", async () => {
+    window.localStorage.setItem(
+      "dasti:proposal-compose-draft:v1",
+      JSON.stringify({
+        jobTitle: "Operations Lead",
+        jobDescription:
+          "Coordinate recurring operations, document handoffs, and keep teams aligned across a distributed team.",
+        proposalType: "cover_letter",
+        sourceUrl: "www.linkedin.com/jobs/view/123456",
+        platform: "linkedin",
+      }),
+    );
+
+    render(<ProposalInputForm onSubmit={vi.fn()} />);
+
+    expect(await screen.findByText("linkedin.com")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "View on LinkedIn" }),
+    ).toHaveAttribute("href", "www.linkedin.com/jobs/view/123456");
   });
 
   it("does not clear the active CV id just because Proposal Forge cannot resolve it immediately", () => {

@@ -103,6 +103,12 @@ function normalizeStoredProposalComposeDraft(
     ...(typeof parsed.jobDescription === "string"
       ? { jobDescription: parsed.jobDescription }
       : null),
+    ...(typeof parsed.sourceUrl === "string" || parsed.sourceUrl === null
+      ? { sourceUrl: parsed.sourceUrl ?? null }
+      : null),
+    ...(typeof parsed.platform === "string" || parsed.platform === null
+      ? { platform: parsed.platform ?? null }
+      : null),
     ...(typeof parsed.proposalType === "string"
       ? { proposalType: parsed.proposalType }
       : null),

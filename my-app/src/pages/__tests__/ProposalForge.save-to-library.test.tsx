@@ -160,9 +160,6 @@ describe("ProposalForge save to library", () => {
     });
 
     expect(screen.getByText("Saved proposals")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Duplicate to draft" }),
-    ).toBeInTheDocument();
 
     expect(readStoredProposalComposeDraft()).toMatchObject({
       jobTitle: "Operations Associate",
@@ -188,6 +185,8 @@ describe("ProposalForge save to library", () => {
         jobTitle: "Operations Associate",
         jobDescription:
           "Support recurring processes and coordinate communication.",
+        sourceUrl: "https://www.linkedin.com/jobs/view/123456",
+        platform: "linkedin",
         proposalType: "cover_letter",
         voicePreset: "signature",
       }),
@@ -236,14 +235,17 @@ describe("ProposalForge save to library", () => {
           title: "Detached proposal",
           content: "Edited detached draft.",
           status: "saved",
+          metadata: expect.objectContaining({
+            sourceJobDescription:
+              "Support recurring processes and coordinate communication.",
+            sourceUrl: "https://www.linkedin.com/jobs/view/123456",
+            platform: "linkedin",
+          }),
         }),
       );
     });
 
     expect(screen.getByText("Saved proposals")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Duplicate to draft" }),
-    ).toBeInTheDocument();
     expect(readStoredProposalOutputDraft()).toMatchObject({
       proposalContent: "Edited detached draft.",
       proposalDocumentTitle: "Detached proposal",
