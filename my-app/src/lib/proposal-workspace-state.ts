@@ -20,6 +20,10 @@ export type StoredProposalComposeDraft = {
   toneTuning?: string | null;
   characterLimitMode?: string;
   characterLimitValue?: number | null;
+  /** Source URL from Clerk chrome-extension handoff (persisted so it survives URL param removal) */
+  sourceUrl?: string | null;
+  /** Platform label from handoff (e.g. "LinkedIn", "Indeed") */
+  platform?: string | null;
 };
 
 function dispatchBrowserEvent(name: string): void {
