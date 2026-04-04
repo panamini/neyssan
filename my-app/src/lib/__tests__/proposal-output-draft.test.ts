@@ -211,6 +211,40 @@ describe("readStoredProposalOutputDraft", () => {
     );
   });
 
+  it("preserves source url and platform inside the stored source compose draft across reloads", () => {
+    window.localStorage.setItem(
+      PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,
+      JSON.stringify({
+        proposalContent: "Generated proposal body.",
+        proposalType: "cover_letter",
+        proposalVoicePreset: "expert",
+        proposalStyleLinkMode: "proposal_local",
+        proposalStyleChoice: "formal",
+        proposalDocumentTitle: "Operations Associate",
+        generatedProposalId: "proposal_live",
+        proposalOutputMode: "preview",
+        sourceComposeDraft: {
+          jobTitle: "Operations Associate",
+          jobDescription:
+            "Support recurring processes and coordinate communication across teams.",
+          proposalType: "cover_letter",
+          voicePreset: null,
+          sourceUrl: "https://www.linkedin.com/jobs/view/123456",
+          platform: "linkedin",
+        },
+      }),
+    );
+
+    expect(readStoredProposalOutputDraft()).toEqual(
+      expect.objectContaining({
+        sourceComposeDraft: expect.objectContaining({
+          sourceUrl: "https://www.linkedin.com/jobs/view/123456",
+          platform: "linkedin",
+        }),
+      }),
+    );
+  });
+
   it("falls back to sessionStorage when localStorage persistence exceeds quota", () => {
     const originalSetItem = Storage.prototype.setItem;
     const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
