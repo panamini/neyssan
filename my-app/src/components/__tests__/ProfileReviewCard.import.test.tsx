@@ -357,4 +357,31 @@ describe("ProfileReviewCard import", () => {
     expect(reviewToggle).toHaveAccessibleName("Open import review");
     expect(reviewSection).toHaveAttribute("data-collapsed", "true");
   });
+
+  it("keeps the export button and import warning trigger in the same toolbar action group", () => {
+    cvLibraryState.currentCv = {
+      id: "cv_imported",
+      title: "Imported CV",
+      metadata: {
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        version: 1,
+      },
+      sections: [],
+    };
+
+    const { container } = render(<ProfileReviewCard onRequestExport={exportCvMock} />);
+
+    const actionGroup = container.querySelector(
+      ".dasti-cv-edit-toolbar__group--actions",
+    );
+
+    expect(actionGroup).not.toBeNull();
+    expect(
+      actionGroup?.querySelector('[aria-label="Export CV as PDF"]'),
+    ).not.toBeNull();
+    expect(
+      actionGroup?.querySelector('[aria-label="Open import review"]'),
+    ).not.toBeNull();
+  });
 });
