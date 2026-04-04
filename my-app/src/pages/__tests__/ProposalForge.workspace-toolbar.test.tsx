@@ -244,7 +244,7 @@ describe("ProposalForge workbench layout", () => {
       "var(--proposal-workspace-output-shell-inline-size) minmax(0, var(--proposal-workspace-output-shell-inline-size))",
     );
     expect(toolbarRow?.style.maxWidth).toBe(
-      "calc(var(--proposal-workspace-output-shell-inline-size) + var(--proposal-workspace-output-shell-inline-size) + var(--layout-card-grid))",
+      "var(--proposal-workspace-output-shell-inline-size)",
     );
     expect(toolbarRow?.style.marginInline).toBe("0");
     expect(
@@ -401,7 +401,7 @@ describe("ProposalForge workbench layout", () => {
       ".dasti-workbench-top-left-slot--proposal",
     ) as HTMLElement | null;
     expect(toolbarRowAfterCollapse?.style.maxWidth).toBe(
-      "calc(var(--proposal-workspace-output-shell-inline-size) + var(--proposal-workspace-output-shell-inline-size) + var(--layout-card-grid))",
+      "var(--proposal-workspace-output-shell-inline-size)",
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Restore compose" }));

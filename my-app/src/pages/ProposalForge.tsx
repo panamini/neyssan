@@ -2590,10 +2590,6 @@ export function ProposalForge(): JSX.Element {
     : shouldCenterOutputStage
       ? "860px"
       : `calc(${proposalDesktopComposeWidth} + var(--proposal-workspace-output-shell-inline-size) + var(--layout-card-grid))`;
-  const toolbarWorkbenchMaxWidth =
-    shouldShowCollapsedComposeToolbar && !isCompactComposeLayout
-      ? `calc(${proposalDesktopComposeWidth} + var(--proposal-workspace-output-shell-inline-size) + var(--layout-card-grid))`
-      : liveWorkbenchMaxWidth;
 
   const stackedCardWidthStyle: React.CSSProperties = isCompactComposeLayout
     ? {
@@ -2626,7 +2622,7 @@ export function ProposalForge(): JSX.Element {
   };
   const proposalWorkbenchToolbarSlotStyle: React.CSSProperties = {
     width: "100%",
-    maxWidth: toolbarWorkbenchMaxWidth,
+    maxWidth: proposalWorkbenchColumnInlineSize,
     marginInline: 0,
     minWidth: 0,
     "--proposal-workspace-output-shell-inline-size":

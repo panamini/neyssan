@@ -25,6 +25,7 @@ type VerbatiCvPreviewPanelProps = {
   layoutMode?: "rail" | "stacked";
   hostMode?: "panel" | "workspace";
   railLeadControl?: React.ReactNode;
+  railTrailingControl?: React.ReactNode;
   stylePreset?: ReturnType<typeof getVerbatiStyleFromCv>;
   onStylePresetChange?: React.Dispatch<
     React.SetStateAction<ReturnType<typeof getVerbatiStyleFromCv>>
@@ -35,6 +36,7 @@ export function VerbatiCvPreviewPanel({
   layoutMode: _layoutMode = "stacked",
   hostMode = "panel",
   railLeadControl = null,
+  railTrailingControl = null,
   stylePreset: controlledStylePreset,
   onStylePresetChange,
 }: VerbatiCvPreviewPanelProps): JSX.Element {
@@ -328,10 +330,6 @@ export function VerbatiCvPreviewPanel({
                 {workspacePreviewSourceControl ? (
                   <div className="dasti-icon-cluster__divider dasti-proposal-rail-cluster__divider" />
                 ) : null}
-                {workspaceStyleCycleControls}
-                {workspaceStyleCycleControls ? (
-                  <div className="dasti-icon-cluster__divider dasti-proposal-rail-cluster__divider" />
-                ) : null}
                 <EmbeddedStyleInspector
                   stylePreset={stylePreset}
                   copyMode="title-only"
@@ -372,6 +370,14 @@ export function VerbatiCvPreviewPanel({
                     )
                   }
                 />
+                {workspaceStyleCycleControls ? (
+                  <div className="dasti-icon-cluster__divider dasti-proposal-rail-cluster__divider" />
+                ) : null}
+                {workspaceStyleCycleControls}
+                {railTrailingControl ? (
+                  <div className="dasti-icon-cluster__divider dasti-proposal-rail-cluster__divider" />
+                ) : null}
+                {railTrailingControl}
               </>
             }
           />

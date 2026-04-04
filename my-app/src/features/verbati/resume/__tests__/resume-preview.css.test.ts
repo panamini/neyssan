@@ -83,7 +83,9 @@ describe("resume preview workspace anchoring", () => {
     expect(workspaceFrameRule).toContain("max-width: 100%;");
     expect(workspaceFrameRule).toContain("height: auto;");
     expect(workspaceFrameRule).toContain("var(--cv-preview-toolbar-inset, 0px)");
-    expect(workspaceStagePaddingRule).toContain("padding: var(--space-5);");
+    expect(workspaceStagePaddingRule).toContain(
+      "padding: var(--space-3) var(--space-5) var(--space-5);",
+    );
     expect(productCss).toContain(
       ".dasti-doc-viewer-shell--resume-workspace .dasti-doc-viewport--resume {",
     );
