@@ -503,8 +503,8 @@
   box-shadow: none;
   border: none !important;
   transition:
-    background 150ms ease-out,
-    color 150ms ease-out;
+    background 0.14s var(--ez),
+    color 0.14s var(--ez);
 }
 
 .sb--compact .sb-nav-item {
@@ -584,7 +584,10 @@
   .card-delete-btn,
   .dasti-card-delete-button {
     opacity: 0;
-    transition: opacity 0.15s var(--ez);
+    transition:
+      opacity 0.15s var(--ez),
+      background-color 0.12s var(--ez),
+      color 0.12s var(--ez);
   }
   .card-group:hover .card-delete-btn,
   .card-group:hover .dasti-card-delete-button {
@@ -992,6 +995,7 @@
   transition:
     background 0.12s var(--ez),
     border-color 0.12s var(--ez),
+    box-shadow 0.12s var(--ez),
     transform 0.12s var(--ez);
   font-family: inherit;
 }
@@ -999,6 +1003,7 @@
 .dasti-doc-card:hover {
   background: var(--sf2);
   border-color: var(--color-border-contrast);
+  box-shadow: var(--shb);
   transform: translateY(-1px);
 }
 
@@ -1218,8 +1223,8 @@
   transform: translateY(4px);
   pointer-events: none;
   transition:
-    opacity 0.16s ease-out,
-    transform 0.16s ease-out;
+    opacity 0.16s var(--ez),
+    transform 0.16s var(--ez);
 }
 
 .dasti-doc-card--library:hover .dasti-doc-card__quick-actions,
@@ -1928,6 +1933,17 @@
   color: var(--ti);
   font: inherit;
   font-size: var(--ts);
+  transition:
+    border-color 0.12s var(--ez),
+    box-shadow 0.12s var(--ez),
+    background-color 0.12s var(--ez);
+}
+
+.dasti-proposal-library-utility-row__input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: var(--focus-shadow-soft);
+  background: var(--color-surface-raised);
 }
 
 .dasti-proposal-library-utility-row__count {
