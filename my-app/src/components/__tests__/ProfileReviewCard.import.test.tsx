@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -183,6 +183,84 @@ describe("ProfileReviewCard import", () => {
     expect(
       window.sessionStorage.getItem("dasti:cv-import-warning-banner:cv_imported"),
     ).toContain("document-title-generic");
+  });
+
+  it("auto-hides the import warning banner after 5 seconds without persisting dismissal", async () => {
+    vi.useFakeTimers();
+
+    try {
+      cvLibraryState.currentCv = {
+        id: "cv_imported",
+        title: "Imported CV",
+        metadata: {
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          version: 1,
+        },
+        sections: [],
+      };
+
+      render(<ProfileReviewCard />);
+
+      expect(
+        screen.getByRole("status", { name: "Import warning" }),
+      ).toBeInTheDocument();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5000);
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(200);
+      });
+
+      expect(
+        screen.queryByRole("status", { name: "Import warning" }),
+      ).not.toBeInTheDocument();
+      expect(
+        window.sessionStorage.getItem("dasti:cv-import-warning-banner:cv_imported"),
+      ).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("auto-hides the import warning banner on scroll before the timeout", async () => {
+    vi.useFakeTimers();
+
+    try {
+      cvLibraryState.currentCv = {
+        id: "cv_imported",
+        title: "Imported CV",
+        metadata: {
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          version: 1,
+        },
+        sections: [],
+      };
+
+      render(<ProfileReviewCard />);
+
+      expect(
+        screen.getByRole("status", { name: "Import warning" }),
+      ).toBeInTheDocument();
+
+      await act(async () => {
+        fireEvent.scroll(window);
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(200);
+      });
+
+      expect(
+        screen.queryByRole("status", { name: "Import warning" }),
+      ).not.toBeInTheDocument();
+      expect(
+        window.sessionStorage.getItem("dasti:cv-import-warning-banner:cv_imported"),
+      ).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("prompts for a real title when an imported CV keeps a generic name", async () => {

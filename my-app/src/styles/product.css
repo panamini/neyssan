@@ -2433,6 +2433,11 @@
 }
 
 .dasti-doc-viewer-shell--resume-workspace {
+  --cv-edit-toggle-shell-inline-size: calc(
+    var(--hs) +
+      (var(--proposal-chrome-shell-padding, calc(var(--space-2) - 2px)) * 2)
+  );
+  --cv-edit-toolbar-inline-offset: 0px;
   --document-shell-padding-inline: var(--space-1);
   --document-shell-padding-block: var(--space-1);
   --document-viewer-bleed-inline: var(--space-1);
@@ -7375,6 +7380,17 @@ html:not(.dark) .dasti-proposal-submit {
   box-shadow: 0 12px 24px -26px color-mix(in srgb, var(--shadow-color) 82%, transparent);
   backdrop-filter: saturate(1.02) blur(10px);
   -webkit-backdrop-filter: saturate(1.02) blur(10px);
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+  transition:
+    opacity 180ms var(--ease-standard),
+    transform 180ms var(--ease-standard);
+}
+
+.dasti-import-warning-banner[data-visibility="hidden"] {
+  opacity: 0;
+  transform: translate3d(0, -8px, 0);
+  pointer-events: none;
 }
 
 .dasti-import-warning-banner__actions {
@@ -9057,6 +9073,23 @@ html:not(.dark) .dasti-proposal-submit {
   min-width: 0;
 }
 
+.dasti-cv-edit-toolbar {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-block-size: var(--document-viewer-toolbar-block-size);
+  padding-inline-start: var(--cv-edit-toolbar-inline-offset, 0px);
+}
+
+@media (min-width: 768px) {
+  .dasti-doc-viewer-shell--resume-workspace,
+  .dasti-cv-edit-workbench-shell {
+    --cv-edit-toolbar-inline-offset: calc(
+      var(--cv-edit-toggle-shell-inline-size) + var(--space-2)
+    );
+  }
+}
+
 @media (max-width: 1239px) {
   .dasti-cv-edit-workbench-shell {
     padding-top: calc(var(--document-viewer-toolbar-block-size) + var(--space-4));
@@ -9067,6 +9100,10 @@ html:not(.dark) .dasti-proposal-submit {
   .dasti-workbench-top-left-slot--cv-toggle {
     inset-inline-start: var(--space-3);
     inset-block-start: var(--space-3);
+  }
+
+  .dasti-cv-edit-workbench-shell {
+    --cv-edit-toolbar-inline-offset: 0px;
   }
 
   .dasti-cv-edit-workbench-shell {
