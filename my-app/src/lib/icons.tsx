@@ -11,6 +11,7 @@ import {
   CaretDown as PhCaretDown,
   CaretUp as PhCaretUp,
   Check as PhCheck,
+  ClipboardText as PhClipboardText,
   SealWarning as PhSealWarning,
   CornersIn as PhCornersIn,
   Copy as PhCopy,
@@ -122,6 +123,7 @@ export const Camera = withCompat(PhCamera);
 export const CaretDownIcon = withCompat(PhCaretDown);
 export const CaretUpIcon = withCompat(PhCaretUp);
 export const Check = withCompat(PhCheck);
+export const ClipboardText = withCompat(PhClipboardText);
 export const ChevronDown = withCompat(PhCaretDown);
 export const ChevronUp = withCompat(PhCaretUp);
 export const Copy = withCompat(PhCopy);
