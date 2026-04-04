@@ -611,7 +611,11 @@ export function StructuredUploadButton({
     return (
       <>
         {fileInput}
-        <div ref={dropdownRef} className="dasti-import-dropdown">
+        <div
+          ref={dropdownRef}
+          className="dasti-import-dropdown"
+          data-open={isMenuOpen ? "true" : "false"}
+        >
           <button
             type="button"
             disabled={disabled || isBusy}

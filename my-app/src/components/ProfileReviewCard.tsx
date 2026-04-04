@@ -1031,221 +1031,220 @@ export function ProfileReviewCard({ cvId, profile, onRequestExport }: Props) {
 
       {!isLoading && currentCv && (
         <div>
-          <div
-            className="mb-4 dasti-cluster dasti-cv-edit-toolbar"
-            style={
-              {
-                "--cluster-gap": "var(--space-2)",
-                alignItems: "center",
-              } as React.CSSProperties
-            }
-          >
-            {addableSectionOptions.length > 0 ? (
-              <div
-                ref={addSectionMenuRef}
-                className="dasti-import-dropdown"
-                style={{ flex: "0 0 auto" }}
-              >
-                <button
-                  type="button"
-                  aria-label="Add section"
-                  className="dasti-select dasti-select--sm dasti-add-section-trigger"
-                  onClick={() => setIsAddSectionMenuOpen((current) => !current)}
+          <div className="mb-4 dasti-cv-edit-toolbar">
+            <div className="dasti-cv-edit-toolbar__group dasti-cv-edit-toolbar__group--primary">
+              {addableSectionOptions.length > 0 ? (
+                <div
+                  ref={addSectionMenuRef}
+                  className="dasti-import-dropdown"
+                  data-open={isAddSectionMenuOpen ? "true" : "false"}
+                  style={{ flex: "0 0 auto" }}
                 >
-                  <span
-                    className="dasti-add-section-trigger__spacer"
-                    aria-hidden
-                  />
-                  <span className="dasti-add-section-trigger__label">
-                    Add section
-                  </span>
-                  <span className="dasti-add-section-trigger__icon">
-                    {isAddSectionMenuOpen ? (
-                      <X className="h-4 w-4 [color:var(--ti)]" aria-hidden />
-                    ) : recentlyAddedSectionType ? (
-                      <Check
-                        className="h-4 w-4 [color:var(--color-accent)]"
-                        aria-hidden
-                      />
-                    ) : (
-                      <ChevronDown
-                        className="h-4 w-4 [color:var(--tg2)]"
-                        aria-hidden
-                      />
-                    )}
-                  </span>
-                </button>
-                {isAddSectionMenuOpen ? (
-                  <div className="dasti-import-dropdown__menu dasti-add-section-menu dasti-toolbar-drawer-surface">
-                    {addableSectionOptions.map((option) => (
-                      <button
-                        key={option.value}
-                        type="button"
-                        className="dasti-menu-option dasti-menu-option--section"
-                        onClick={() => {
-                          handleAddSection(option.value);
-                          setIsAddSectionMenuOpen(false);
-                        }}
-                      >
-                        <div className="dasti-menu-option__row">
-                          <div className="dasti-menu-option__copy">
-                            <div className="dasti-menu-option__title">
-                              {option.label}
-                            </div>
-                            {option.value === "achievements" ||
-                            option.value === "languages" ? null : (
-                              <div className="dasti-menu-option__description">
-                                Add {option.label.toLowerCase()} to this resume.
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ) : removableAddedSectionTypes.length > 0 ? (
-              <div
-                ref={manageSectionsMenuRef}
-                className="dasti-import-dropdown"
-                style={{ flex: "0 0 auto" }}
-              >
-                <button
-                  type="button"
-                  aria-label="Manage sections"
-                  className="dasti-select dasti-select--sm dasti-add-section-trigger"
-                  onClick={() =>
-                    setIsManageSectionsMenuOpen((current) => !current)
-                  }
-                >
-                  <span
-                    className="dasti-add-section-trigger__spacer"
-                    aria-hidden
-                  />
-                  <span className="dasti-add-section-trigger__label">
-                    Manage sections
-                  </span>
-                  <span className="dasti-add-section-trigger__icon">
-                    {isManageSectionsMenuOpen ? (
-                      <X className="h-4 w-4 [color:var(--ti)]" aria-hidden />
-                    ) : (
-                      <ChevronDown
-                        className="h-4 w-4 [color:var(--tg2)]"
-                        aria-hidden
-                      />
-                    )}
-                  </span>
-                </button>
-                {isManageSectionsMenuOpen ? (
-                  <div className="dasti-import-dropdown__menu dasti-add-section-menu dasti-add-section-menu--manage dasti-toolbar-drawer-surface">
-                    {removableAddedSectionTypes.map((sectionType) => {
-                      const sectionLabel =
-                        sectionCatalog.find(
-                          (option) => option.value === sectionType,
-                        )?.label ?? sectionType;
-                      return (
+                  <button
+                    type="button"
+                    aria-label="Add section"
+                    className="dasti-select dasti-select--sm dasti-add-section-trigger"
+                    onClick={() => setIsAddSectionMenuOpen((current) => !current)}
+                  >
+                    <span
+                      className="dasti-add-section-trigger__spacer"
+                      aria-hidden
+                    />
+                    <span className="dasti-add-section-trigger__label">
+                      Add section
+                    </span>
+                    <span className="dasti-add-section-trigger__icon">
+                      {isAddSectionMenuOpen ? (
+                        <X className="h-4 w-4 [color:var(--ti)]" aria-hidden />
+                      ) : recentlyAddedSectionType ? (
+                        <Check
+                          className="h-4 w-4 [color:var(--color-accent)]"
+                          aria-hidden
+                        />
+                      ) : (
+                        <ChevronDown
+                          className="h-4 w-4 [color:var(--tg2)]"
+                          aria-hidden
+                        />
+                      )}
+                    </span>
+                  </button>
+                  {isAddSectionMenuOpen ? (
+                    <div className="dasti-import-dropdown__menu dasti-add-section-menu dasti-toolbar-drawer-surface">
+                      {addableSectionOptions.map((option) => (
                         <button
-                          key={sectionType}
+                          key={option.value}
                           type="button"
                           className="dasti-menu-option dasti-menu-option--section"
                           onClick={() => {
-                            handleRemoveAddedSection(sectionType);
+                            handleAddSection(option.value);
+                            setIsAddSectionMenuOpen(false);
                           }}
                         >
                           <div className="dasti-menu-option__row">
                             <div className="dasti-menu-option__copy">
                               <div className="dasti-menu-option__title">
-                                Remove {sectionLabel}
+                                {option.label}
+                              </div>
+                              {option.value === "achievements" ||
+                              option.value === "languages" ? null : (
+                                <div className="dasti-menu-option__description">
+                                  Add {option.label.toLowerCase()} to this resume.
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : removableAddedSectionTypes.length > 0 ? (
+                <div
+                  ref={manageSectionsMenuRef}
+                  className="dasti-import-dropdown"
+                  data-open={isManageSectionsMenuOpen ? "true" : "false"}
+                  style={{ flex: "0 0 auto" }}
+                >
+                  <button
+                    type="button"
+                    aria-label="Manage sections"
+                    className="dasti-select dasti-select--sm dasti-add-section-trigger"
+                    onClick={() =>
+                      setIsManageSectionsMenuOpen((current) => !current)
+                    }
+                  >
+                    <span
+                      className="dasti-add-section-trigger__spacer"
+                      aria-hidden
+                    />
+                    <span className="dasti-add-section-trigger__label">
+                      Manage sections
+                    </span>
+                    <span className="dasti-add-section-trigger__icon">
+                      {isManageSectionsMenuOpen ? (
+                        <X className="h-4 w-4 [color:var(--ti)]" aria-hidden />
+                      ) : (
+                        <ChevronDown
+                          className="h-4 w-4 [color:var(--tg2)]"
+                          aria-hidden
+                        />
+                      )}
+                    </span>
+                  </button>
+                  {isManageSectionsMenuOpen ? (
+                    <div className="dasti-import-dropdown__menu dasti-add-section-menu dasti-add-section-menu--manage dasti-toolbar-drawer-surface">
+                      {removableAddedSectionTypes.map((sectionType) => {
+                        const sectionLabel =
+                          sectionCatalog.find(
+                            (option) => option.value === sectionType,
+                          )?.label ?? sectionType;
+                        return (
+                          <button
+                            key={sectionType}
+                            type="button"
+                            className="dasti-menu-option dasti-menu-option--section"
+                            onClick={() => {
+                              handleRemoveAddedSection(sectionType);
+                            }}
+                          >
+                            <div className="dasti-menu-option__row">
+                              <div className="dasti-menu-option__copy">
+                                <div className="dasti-menu-option__title">
+                                  Remove {sectionLabel}
+                                </div>
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                      {removableAddedSectionTypes.length > 1 ? (
+                        <button
+                          type="button"
+                          className="dasti-menu-option dasti-menu-option--section"
+                          onClick={handleClearAddedSections}
+                        >
+                          <div className="dasti-menu-option__row">
+                            <div className="dasti-menu-option__copy">
+                              <div className="dasti-menu-option__title">
+                                Remove all optional sections
                               </div>
                             </div>
                           </div>
                         </button>
-                      );
-                    })}
-                    {removableAddedSectionTypes.length > 1 ? (
-                      <button
-                        type="button"
-                        className="dasti-menu-option dasti-menu-option--section"
-                        onClick={handleClearAddedSections}
-                      >
-                        <div className="dasti-menu-option__row">
-                          <div className="dasti-menu-option__copy">
-                            <div className="dasti-menu-option__title">
-                              Remove all optional sections
-                            </div>
-                          </div>
-                        </div>
-                      </button>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-            ) : (
-              <span className="text-xs [color:var(--tg2)]">
-                All sections added.
-              </span>
-            )}
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <span className="dasti-cv-edit-toolbar__hint">
+                  All sections added.
+                </span>
+              )}
 
-            {/* Import dropdown */}
-            <StructuredUploadButton
-              contextKey={currentCv?.id ?? ""}
-              sections={
-                sections as unknown as import("../types/cvDocument").CvSection[]
-              }
-              onApplyToSections={(updated) => {
-                try {
-                  reorderSections(updated as any);
-                } catch {
-                  /* noop */
+              <StructuredUploadButton
+                contextKey={currentCv?.id ?? ""}
+                sections={
+                  sections as unknown as import("../types/cvDocument").CvSection[]
                 }
-              }}
-              onResult={(payload) => {
-                if (
-                  typeof window !== "undefined" &&
-                  (window as any).__CV_EDITOR_DEBUG__ === true
-                ) {
+                onApplyToSections={(updated) => {
                   try {
-                    console.debug(
-                      "[ProfileReviewCard] structured payload",
-                      payload,
-                    );
+                    reorderSections(updated as any);
                   } catch {
                     /* noop */
                   }
-                }
-              }}
-              renderAs="dropdown"
-            />
-            {onRequestExport ? (
-              <button
-                type="button"
-                onClick={handleExportClick}
-                className="dasti-button dasti-button--secondary dasti-button--pill"
-                aria-label="Export CV as PDF"
-              >
-                Export PDF
-              </button>
-            ) : null}
-            {importSignals.length > 0 ? (
-              <button
-                type="button"
-                onClick={() =>
-                  setIsImportReviewCollapsed((current) => !current)
-                }
-                className="dasti-icon-button dasti-import-review-trigger"
-                aria-label={
-                  isImportReviewCollapsed
-                    ? "Open import review"
-                    : "Close import review"
-                }
-                aria-expanded={!isImportReviewCollapsed}
-                data-review-state={
-                  isImportReviewAcknowledged ? "acknowledged" : "required"
-                }
-              >
-                <SealWarning size={18} strokeWidth={1.7} aria-hidden="true" />
-              </button>
+                }}
+                onResult={(payload) => {
+                  if (
+                    typeof window !== "undefined" &&
+                    (window as any).__CV_EDITOR_DEBUG__ === true
+                  ) {
+                    try {
+                      console.debug(
+                        "[ProfileReviewCard] structured payload",
+                        payload,
+                      );
+                    } catch {
+                      /* noop */
+                    }
+                  }
+                }}
+                renderAs="dropdown"
+              />
+            </div>
+            {onRequestExport || importSignals.length > 0 ? (
+              <div className="dasti-cv-edit-toolbar__group dasti-cv-edit-toolbar__group--actions">
+                {onRequestExport ? (
+                  <button
+                    type="button"
+                    onClick={handleExportClick}
+                    className="dasti-button dasti-button--secondary dasti-button--pill dasti-button--sm dasti-cv-edit-toolbar__export"
+                    aria-label="Export CV as PDF"
+                  >
+                    Export PDF
+                  </button>
+                ) : null}
+                {importSignals.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setIsImportReviewCollapsed((current) => !current)
+                    }
+                    className="dasti-icon-button dasti-import-review-trigger"
+                    aria-label={
+                      isImportReviewCollapsed
+                        ? "Open import review"
+                        : "Close import review"
+                    }
+                    aria-expanded={!isImportReviewCollapsed}
+                    data-review-state={
+                      isImportReviewAcknowledged ? "acknowledged" : "required"
+                    }
+                  >
+                    <SealWarning size={18} strokeWidth={1.7} aria-hidden="true" />
+                  </button>
+                ) : null}
+              </div>
             ) : null}
           </div>
 
