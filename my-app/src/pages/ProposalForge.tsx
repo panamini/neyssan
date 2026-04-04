@@ -5,9 +5,9 @@ import {
   ArrowLeft,
   Check,
   ChevronDown,
+  ClipboardText,
   FilePdf,
   FloppyDisk,
-  PenLine,
   Trash,
   X,
 } from "@/lib/icons";
@@ -3011,22 +3011,22 @@ export function ProposalForge(): JSX.Element {
                   <button
                     type="button"
                     className="dasti-icon-button"
+                    data-toolbar-tooltip="Duplicate to draft"
+                    onClick={handleCopySavedProposalToDraft}
+                    disabled={!openedSavedProposal || !savedProposalContent}
+                    aria-label="Duplicate to draft"
+                  >
+                    <ClipboardText size={16} strokeWidth={1.6} />
+                  </button>
+                  <button
+                    type="button"
+                    className="dasti-icon-button"
                     data-toolbar-tooltip="Export PDF"
                     onClick={handleExportProposal}
                     disabled={!openedSavedProposal || !savedProposalContent}
                     aria-label="Export proposal as PDF"
                   >
                     <FilePdf size={16} strokeWidth={1.7} />
-                  </button>
-                  <button
-                    type="button"
-                    className="dasti-icon-button"
-                    data-toolbar-tooltip="Duplicate to draft"
-                    onClick={handleCopySavedProposalToDraft}
-                    disabled={!openedSavedProposal || !savedProposalContent}
-                    aria-label="Duplicate to draft"
-                  >
-                    <PenLine size={16} strokeWidth={1.6} />
                   </button>
                 </div>
               }

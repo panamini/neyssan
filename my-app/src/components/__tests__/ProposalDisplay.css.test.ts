@@ -54,7 +54,7 @@ describe("ProposalDisplay CSS contracts", () => {
       /\.dasti-proposal-output-shell\s*\{[\s\S]*--document-shell-padding-inline:\s*8px;[\s\S]*--document-shell-padding-block:\s*8px;[\s\S]*--proposal-output-stage-frame-padding:\s*8px;[\s\S]*--proposal-output-rail-inline-inset:\s*var\(--document-shell-padding-inline\);/,
     );
     expect(productCss).toMatch(
-      /\.dasti-proposal-output-shell--workspace\s*\{[\s\S]*--document-shell-padding-inline:\s*0px;[\s\S]*--document-shell-padding-block:\s*0px;[\s\S]*--document-viewer-bleed-inline:\s*var\(--s2\);[\s\S]*--document-viewer-bleed-block:\s*var\(--s2\);[\s\S]*--proposal-output-stage-frame-padding:\s*var\(--s2\);[\s\S]*--proposal-output-rail-inline-inset:\s*var\(--s2\);/,
+      /\.dasti-proposal-output-shell--workspace\s*\{[\s\S]*--document-shell-padding-inline:\s*0px;[\s\S]*--document-shell-padding-block:\s*0px;[\s\S]*--document-viewer-bleed-inline:\s*var\(--s2\);[\s\S]*--document-viewer-bleed-block:\s*var\(--s2\);[\s\S]*--proposal-output-stage-frame-padding:\s*var\(--s2\);[\s\S]*--proposal-output-rail-inline-inset:\s*0px;[\s\S]*--document-rail-gap:\s*var\(--space-2\);/,
     );
     expect(productCss).toMatch(
       /\.dasti-proposal-output-shell\s*\{[\s\S]*--proposal-output-toolbar-lift:\s*calc\([\s\S]*var\(--document-viewer-toolbar-block-size\)\s*\+\s*var\(--space-2\)[\s\S]*\);/,
@@ -83,6 +83,12 @@ describe("ProposalDisplay CSS contracts", () => {
     );
     expect(productCss).toMatch(
       /@media \(max-width: 1439px\)\s*\{[\s\S]*\.dasti-proposal-output-shell\s*\{[\s\S]*--proposal-output-toolbar-lift:\s*0px;[\s\S]*\}[\s\S]*\.dasti-proposal-output-shell\s+\.dasti-document-rail\s*\{[\s\S]*position:\s*static;[\s\S]*margin-block-end:\s*var\(--document-rail-gap\);/,
+    );
+    expect(productCss).toMatch(
+      /@media \(max-width: 1439px\)\s*\{[\s\S]*\.dasti-proposal-output-shell--workspace\s+\.dasti-document-shell\s*\{[\s\S]*gap:\s*0;[\s\S]*padding:\s*0;[\s\S]*border:\s*none;[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/,
+    );
+    expect(productCss).toMatch(
+      /@media \(max-width: 1439px\)\s*\{[\s\S]*\.dasti-proposal-output-shell--workspace[\s\S]*\.dasti-proposal-sheet__body--document-viewer\s*\{[\s\S]*border:\s*1px solid var\(--document-viewer-frame-border\);[\s\S]*border-radius:\s*var\(--document-viewer-radius\);[\s\S]*background:\s*var\(--document-viewer-frame-surface\);[\s\S]*box-shadow:/,
     );
     expect(productCss).toMatch(
       /@media \(max-width: 520px\)\s*\{[\s\S]*\.dasti-proposal-output-shell\s+\.dasti-document-rail\s*\{[\s\S]*gap:\s*var\(--space-1\);[\s\S]*\}[\s\S]*\.dasti-proposal-output-shell\s+\.dasti-document-rail__section\s*\{[\s\S]*gap:\s*var\(--space-1\);[\s\S]*\}[\s\S]*\.dasti-proposal-output-shell\s+\.dasti-proposal-rail-cluster,\s*[\s\S]*\.dasti-proposal-output-shell\s+\.dasti-proposal-sheet__controls\s*\{[\s\S]*padding:\s*4px;/,

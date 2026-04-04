@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { ProposalForge } from "../ProposalForge";
@@ -211,6 +211,14 @@ describe("ProposalForge saved view", () => {
     expect(pageShell?.style.getPropertyValue("--page-shell-max-width")).toBe(
       "100%",
     );
+    const actionButtons = within(toolbar as HTMLElement)
+      .getAllByRole("button")
+      .map((button) => button.getAttribute("aria-label"));
+    expect(actionButtons).toEqual([
+      "Back to draft",
+      "Duplicate to draft",
+      "Export proposal as PDF",
+    ]);
   });
 
   it("treats bare proposal id links as saved view for backward compatibility", () => {
