@@ -51,6 +51,8 @@ interface Props {
 const IMPORT_WARNING_SESSION_KEY_PREFIX = "dasti:cv-import-warning-banner:";
 const IMPORT_REVIEW_SESSION_KEY_PREFIX = "dasti:cv-import-review:";
 const IMPORT_RENAME_PROMPT_SESSION_KEY_PREFIX = "dasti:cv-import-rename:";
+const IMPORT_WARNING_AUTO_HIDE_DELAY_MS = 5000;
+const IMPORT_WARNING_EXIT_DURATION_MS = 180;
 
 function shouldPromptForImportedTitleRename(
   cv: CvDocument | null | undefined,
@@ -263,6 +265,10 @@ export function ProfileReviewCard({ cvId, profile, onRequestExport }: Props) {
     useState<boolean>(false);
   const [isImportWarningDismissed, setIsImportWarningDismissed] =
     useState<boolean>(false);
+  const [isImportWarningAutoHidden, setIsImportWarningAutoHidden] =
+    useState<boolean>(false);
+  const [isImportWarningExiting, setIsImportWarningExiting] =
+    useState<boolean>(false);
   const [isImportReviewAcknowledged, setIsImportReviewAcknowledged] =
     useState<boolean>(false);
   const [isImportReviewCollapsed, setIsImportReviewCollapsed] =
@@ -304,6 +310,65 @@ export function ProfileReviewCard({ cvId, profile, onRequestExport }: Props) {
         importSignalSignature,
     );
   }, [importSignalSignature, importWarningSessionKey]);
+
+  useEffect(() => {
+    setIsImportWarningAutoHidden(false);
+    setIsImportWarningExiting(false);
+  }, [currentCv?.id, importSignalSignature]);
+
+  useEffect(() => {
+    if (
+      typeof window === "undefined" ||
+      importSignals.length === 0 ||
+      isImportWarningDismissed ||
+      isImportWarningAutoHidden ||
+      isImportWarningExiting
+    ) {
+      return;
+    }
+
+    let hasStartedExit = false;
+    const beginExit = () => {
+      if (hasStartedExit) {
+        return;
+      }
+      hasStartedExit = true;
+      setIsImportWarningExiting(true);
+    };
+
+    const autoHideTimer = window.setTimeout(
+      beginExit,
+      IMPORT_WARNING_AUTO_HIDE_DELAY_MS,
+    );
+
+    window.addEventListener("scroll", beginExit, { passive: true });
+
+    return () => {
+      hasStartedExit = true;
+      window.clearTimeout(autoHideTimer);
+      window.removeEventListener("scroll", beginExit);
+    };
+  }, [
+    importSignals.length,
+    isImportWarningAutoHidden,
+    isImportWarningDismissed,
+    isImportWarningExiting,
+  ]);
+
+  useEffect(() => {
+    if (!isImportWarningExiting) {
+      return;
+    }
+
+    const exitTimer = window.setTimeout(() => {
+      setIsImportWarningExiting(false);
+      setIsImportWarningAutoHidden(true);
+    }, IMPORT_WARNING_EXIT_DURATION_MS);
+
+    return () => {
+      window.clearTimeout(exitTimer);
+    };
+  }, [isImportWarningExiting]);
 
   useEffect(() => {
     if (!importReviewSessionKey || typeof window === "undefined") {
@@ -368,6 +433,8 @@ export function ProfileReviewCard({ cvId, profile, onRequestExport }: Props) {
         importSignalSignature,
       );
     }
+    setIsImportWarningExiting(false);
+    setIsImportWarningAutoHidden(false);
     setIsImportWarningDismissed(true);
   }
 
@@ -781,11 +848,14 @@ export function ProfileReviewCard({ cvId, profile, onRequestExport }: Props) {
         ))}
       </div>
 
-      {importSignals.length > 0 && !isImportWarningDismissed ? (
+      {importSignals.length > 0 &&
+      !isImportWarningDismissed &&
+      !isImportWarningAutoHidden ? (
         <ImportWarningBanner
           signalCount={importSignals.length}
           onReview={handleReviewFlaggedFields}
           onDismiss={dismissImportWarning}
+          isExiting={isImportWarningExiting}
           reviewLabel={
             isImportReviewAcknowledged
               ? "Review flagged fields again"
@@ -962,7 +1032,7 @@ export function ProfileReviewCard({ cvId, profile, onRequestExport }: Props) {
       {!isLoading && currentCv && (
         <div>
           <div
-            className="mb-4 dasti-cluster"
+            className="mb-4 dasti-cluster dasti-cv-edit-toolbar"
             style={
               {
                 "--cluster-gap": "var(--space-2)",
