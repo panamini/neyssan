@@ -87,6 +87,8 @@ function getLayoutBadge(layout: VerbatiLayoutPreset): string {
   switch (layout) {
     case "swiss":
       return "SW";
+    case "volk-register":
+      return "VR";
     case "two-column":
       return "2C";
     case "editorial":

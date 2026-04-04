@@ -223,6 +223,32 @@ export default defineSchema({
     proposalAccentHex: v.optional(v.union(v.string(), v.null())),
     proposalFontPairId: v.optional(v.union(v.string(), v.null())),
     proposalSourceMode: v.optional(proposalStyleLinkModeChoice),
+    // Style preset slots (3-slot builder)
+    proposalPreset1: v.optional(v.union(v.object({
+      fontPairId: v.union(v.string(), v.null()),
+      styleChoice: proposalStyleChoiceChoice,
+      paletteOverride: v.union(v.literal("sauge"), v.literal("ocre"), v.literal("pierre"), v.literal("bordeaux"), v.literal("encre"), v.null()),
+      accentHex: v.union(v.string(), v.null()),
+      voicePreset: v.union(proposalVoicePresetChoice, v.null()),
+      name: v.optional(v.string()),
+    }), v.null())),
+    proposalPreset2: v.optional(v.union(v.object({
+      fontPairId: v.union(v.string(), v.null()),
+      styleChoice: proposalStyleChoiceChoice,
+      paletteOverride: v.union(v.literal("sauge"), v.literal("ocre"), v.literal("pierre"), v.literal("bordeaux"), v.literal("encre"), v.null()),
+      accentHex: v.union(v.string(), v.null()),
+      voicePreset: v.union(proposalVoicePresetChoice, v.null()),
+      name: v.optional(v.string()),
+    }), v.null())),
+    proposalPreset3: v.optional(v.union(v.object({
+      fontPairId: v.union(v.string(), v.null()),
+      styleChoice: proposalStyleChoiceChoice,
+      paletteOverride: v.union(v.literal("sauge"), v.literal("ocre"), v.literal("pierre"), v.literal("bordeaux"), v.literal("encre"), v.null()),
+      accentHex: v.union(v.string(), v.null()),
+      voicePreset: v.union(proposalVoicePresetChoice, v.null()),
+      name: v.optional(v.string()),
+    }), v.null())),
+    proposalActivePresetSlot: v.optional(v.union(v.literal(1), v.literal(2), v.literal(3))),
     // New optional profile fields for ingestion
     summary: v.optional(v.string()),
     skills: v.optional(v.array(v.string())),

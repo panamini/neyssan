@@ -39,6 +39,7 @@ import {
   isPrimaryPointerPressed,
 } from "../lib/editor-ai-selection";
 import { resolveProposalCharacterLimitSelection } from "../../convex/lib/proposals/generationControls";
+import type { ProposalApplicantHeaderData } from "../lib/proposal-personalization";
 
 interface ProposalDisplayProps {
   proposalContent: string | null;
@@ -58,6 +59,7 @@ interface ProposalDisplayProps {
   railMeta?: string | null;
   documentTitle?: string | null;
   documentMeta?: string | null;
+  applicantHeader?: ProposalApplicantHeaderData | null;
   mode?: "preview" | "edit";
   onModeChange?: (mode: "preview" | "edit") => void;
   onPreviewInteract?: () => void;
@@ -317,6 +319,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   railMeta = null,
   documentTitle = null,
   documentMeta = null,
+  applicantHeader = null,
   mode = "preview",
   onModeChange,
   onPreviewInteract,
@@ -452,9 +455,13 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     proposalType === "cover_letter" ||
     proposalType === "application_message" ||
     proposalType === "freelance_proposal";
+  const isEditable = mode === "edit" && Boolean(onContentChange);
+  const usesFixedA4ScalePreview =
+    usesDocumentRenderer &&
+    resolvedTemplateId === "volk_register" &&
+    !isEditable;
   const isLetterLike =
     proposalType === "cover_letter" || proposalType === "application_message";
-  const isEditable = mode === "edit" && Boolean(onContentChange);
   const isDocumentEditor = isEditable && usesDocumentRenderer;
   const effectiveZoomLevel = isEditable ? 1 : zoomLevel;
   const enablesDocumentZoom =
@@ -505,11 +512,24 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           Math.round(24 * (stageLayout.pageWidth / A4_PAGE_WIDTH_PX)),
         )
       : 0;
+  const previewDocumentScale =
+    usesFixedA4ScalePreview && stageLayout.pageWidth > 0
+      ? stageLayout.pageWidth / A4_PAGE_WIDTH_PX
+      : 1;
+  const unscaledDocumentPageGapPx =
+    usesFixedA4ScalePreview && previewDocumentScale > 0
+      ? documentPageGapPx / previewDocumentScale
+      : documentPageGapPx;
   const renderedDocumentHeight =
     usesDocumentRenderer && !isEditable
       ? stageLayout.pageHeight * Math.max(1, documentPageCount) +
         documentPageGapPx * Math.max(0, documentPageCount - 1)
       : stageLayout.pageHeight;
+  const renderedUnscaledDocumentHeight =
+    usesFixedA4ScalePreview
+      ? A4_PAGE_HEIGHT_PX * Math.max(1, documentPageCount) +
+        unscaledDocumentPageGapPx * Math.max(0, documentPageCount - 1)
+      : renderedDocumentHeight;
   const isMultiPagePreview =
     usesDocumentRenderer && !isEditable && documentPageCount > 1;
   const previewStageMode =
@@ -1128,90 +1148,139 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
             height: `${renderedDocumentHeight}px`,
           }}
         >
-          <div
-            className={
-              isEditable
-                ? "dasti-proposal-sheet__preview-page dasti-proposal-sheet__preview-page--editable"
-                : [
-                    "dasti-proposal-sheet__preview-page",
-                    isMultiPagePreview
-                      ? "dasti-proposal-sheet__preview-page--stacked"
-                      : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")
-            }
-            data-document-page="true"
-            style={{
-              width: `${stageLayout.pageWidth}px`,
-              height: `${isEditable ? stageLayout.pageHeight : renderedDocumentHeight}px`,
-              aspectRatio: isMultiPagePreview ? "auto" : undefined,
-            }}
-            ref={editablePageRef}
-            onClick={() => {
-              if (!isEditable && mode === "preview") {
-                onPreviewInteract?.();
-              }
-            }}
-          >
-            {isEditable ? (
-              <div className="dasti-proposal-editor-page">
-                <div className="dasti-proposal-editor-page__inner">
-                  <textarea
-                    ref={(node) => {
-                      editableTextareaRef.current = node;
-                      attachEditableScrollEdges(node);
-                    }}
-                    value={proposalContent ?? ""}
-                    onChange={(event) => onContentChange?.(event.target.value)}
-                    onBlur={() => {
-                      setTextareaSelectionState(null);
-                      onContentCommit?.();
-                    }}
-                    onSelect={scheduleTextareaSelectionCheck}
-                    onMouseUp={scheduleTextareaSelectionCheck}
-                    onKeyUp={scheduleTextareaSelectionCheck}
-                    onScroll={() => {
-                      updateEditableScrollEdges();
-                      scheduleTextareaSelectionCheck();
-                    }}
-                    placeholder="Content will appear here…"
-                    className="dasti-proposal-sheet__body--editable dasti-proposal-editor-page__textarea"
-                    style={{
-                      fontFamily: documentTypography.fontFamily,
-                      fontSize: "var(--tb)",
-                      lineHeight: documentTypography.lineHeight,
-                      fontWeight: documentTypography.fontWeight,
-                      letterSpacing: documentTypography.letterSpacing,
-                      color: "var(--proposal-document-ink)",
-                      caretColor: "var(--proposal-document-ink)",
-                      background: "transparent",
-                      whiteSpace: "pre-wrap",
-                      cursor: "text",
-                      width: "100%",
-                      outline: "none",
-                      height: "100%",
-                      resize: "none",
-                    }}
-                  />
-                </div>
+          {usesFixedA4ScalePreview ? (
+            <div
+              className="dasti-proposal-sheet__preview-scale-shell"
+              style={{
+                width: `${A4_PAGE_WIDTH_PX}px`,
+                height: `${renderedUnscaledDocumentHeight}px`,
+                transform: `scale(${previewDocumentScale})`,
+              }}
+            >
+              <div
+                className={[
+                  "dasti-proposal-sheet__preview-page",
+                  isMultiPagePreview
+                    ? "dasti-proposal-sheet__preview-page--stacked"
+                    : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                data-document-page="true"
+                style={{
+                  width: `${A4_PAGE_WIDTH_PX}px`,
+                  height: `${renderedUnscaledDocumentHeight}px`,
+                  aspectRatio: isMultiPagePreview ? "auto" : undefined,
+                }}
+                onClick={() => {
+                  if (mode === "preview") {
+                    onPreviewInteract?.();
+                  }
+                }}
+              >
+                <ProposalDocumentRenderer
+                  content={proposalContent ?? ""}
+                  proposalType={proposalType}
+                  templateId={resolvedTemplateId}
+                  railTitle={railTitle}
+                  railMeta={railMeta}
+                  documentTitle={documentTitle}
+                  documentMeta={documentMeta}
+                  applicantHeader={applicantHeader}
+                  documentTypography={documentTypography}
+                  pageWidth={A4_PAGE_WIDTH_PX}
+                  pageGapPx={unscaledDocumentPageGapPx}
+                  onPageCountChange={setDocumentPageCount}
+                />
               </div>
-            ) : (
-              <ProposalDocumentRenderer
-                content={proposalContent ?? ""}
-                proposalType={proposalType}
-                templateId={resolvedTemplateId}
-                railTitle={railTitle}
-                railMeta={railMeta}
-                documentTitle={documentTitle}
-                documentMeta={documentMeta}
-                documentTypography={documentTypography}
-                pageWidth={stageLayout.pageWidth}
-                pageGapPx={documentPageGapPx}
-                onPageCountChange={setDocumentPageCount}
-              />
-            )}
-          </div>
+            </div>
+          ) : (
+            <div
+              className={
+                isEditable
+                  ? "dasti-proposal-sheet__preview-page dasti-proposal-sheet__preview-page--editable"
+                  : [
+                      "dasti-proposal-sheet__preview-page",
+                      isMultiPagePreview
+                        ? "dasti-proposal-sheet__preview-page--stacked"
+                        : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")
+              }
+              data-document-page="true"
+              style={{
+                width: `${stageLayout.pageWidth}px`,
+                height: `${isEditable ? stageLayout.pageHeight : renderedDocumentHeight}px`,
+                aspectRatio: isMultiPagePreview ? "auto" : undefined,
+              }}
+              ref={editablePageRef}
+              onClick={() => {
+                if (!isEditable && mode === "preview") {
+                  onPreviewInteract?.();
+                }
+              }}
+            >
+              {isEditable ? (
+                <div className="dasti-proposal-editor-page">
+                  <div className="dasti-proposal-editor-page__inner">
+                    <textarea
+                      ref={(node) => {
+                        editableTextareaRef.current = node;
+                        attachEditableScrollEdges(node);
+                      }}
+                      value={proposalContent ?? ""}
+                      onChange={(event) => onContentChange?.(event.target.value)}
+                      onBlur={() => {
+                        setTextareaSelectionState(null);
+                        onContentCommit?.();
+                      }}
+                      onSelect={scheduleTextareaSelectionCheck}
+                      onMouseUp={scheduleTextareaSelectionCheck}
+                      onKeyUp={scheduleTextareaSelectionCheck}
+                      onScroll={() => {
+                        updateEditableScrollEdges();
+                        scheduleTextareaSelectionCheck();
+                      }}
+                      placeholder="Content will appear here…"
+                      className="dasti-proposal-sheet__body--editable dasti-proposal-editor-page__textarea"
+                      style={{
+                        fontFamily: documentTypography.fontFamily,
+                        fontSize: "var(--tb)",
+                        lineHeight: documentTypography.lineHeight,
+                        fontWeight: documentTypography.fontWeight,
+                        letterSpacing: documentTypography.letterSpacing,
+                        color: "var(--proposal-document-ink)",
+                        caretColor: "var(--proposal-document-ink)",
+                        background: "transparent",
+                        whiteSpace: "pre-wrap",
+                        cursor: "text",
+                        width: "100%",
+                        outline: "none",
+                        height: "100%",
+                        resize: "none",
+                      }}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <ProposalDocumentRenderer
+                  content={proposalContent ?? ""}
+                  proposalType={proposalType}
+                  templateId={resolvedTemplateId}
+                  railTitle={railTitle}
+                  railMeta={railMeta}
+                  documentTitle={documentTitle}
+                  documentMeta={documentMeta}
+                  applicantHeader={applicantHeader}
+                  documentTypography={documentTypography}
+                  pageWidth={stageLayout.pageWidth}
+                  pageGapPx={documentPageGapPx}
+                  onPageCountChange={setDocumentPageCount}
+                />
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

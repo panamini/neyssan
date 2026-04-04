@@ -17,6 +17,7 @@ describe("verbati font catalog", () => {
     expect(VERBATI_FONT_PAIR_OPTIONS.map((option) => option.id)).toEqual(
       expect.arrayContaining([
         "quiet-editorial",
+        "civic-correspondence",
         "ledger-sans",
         "mono-signal",
         "studio-grotesk",
@@ -33,6 +34,14 @@ describe("verbati font catalog", () => {
   it("falls back safely when a requested font pair is missing", () => {
     expect(getVerbatiFontPairOption("does-not-exist")).toMatchObject({
       id: "quiet-editorial",
+    });
+  });
+
+  it("resolves the Volk civic pair with the intended Google-font compatible stacks", () => {
+    expect(getVerbatiFontPairOption("civic-correspondence")).toMatchObject({
+      id: "civic-correspondence",
+      headingLabel: "Archivo Bold",
+      bodyLabel: "Source Serif 4",
     });
   });
 
