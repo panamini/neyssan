@@ -300,7 +300,9 @@ export function FloatingAiToolbar({
     }
 
     const preferredCenter = isBlockSelection
-      ? anchor.left
+      ? anchor.containerLeft != null && anchor.containerRight != null
+        ? anchor.containerLeft + (anchor.containerRight - anchor.containerLeft) / 2
+        : anchor.left
       : anchor.focusCenter ??
         (placement === "above"
           ? anchor.aboveCenter ?? anchor.left

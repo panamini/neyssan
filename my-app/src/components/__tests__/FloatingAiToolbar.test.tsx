@@ -74,12 +74,9 @@ describe("FloatingAiToolbar", () => {
     );
 
     fireEvent.click((await screen.findAllByRole("button", { name: "Ask" }))[0]);
-    fireEvent.change(
-      screen.getByPlaceholderText("Tell AI what to change"),
-      {
-        target: { value: "Make this sound calmer." },
-      },
-    );
+    fireEvent.change(screen.getByRole("textbox", { name: "Ask AI" }), {
+      target: { value: "Make this sound calmer." },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Send request" }));
 
     expect(onRunAction).toHaveBeenCalledWith(
@@ -295,7 +292,7 @@ describe("FloatingAiToolbar", () => {
       expect(toolbar).toHaveStyle({ left: "112px" });
       expect(
         toolbar.style.getPropertyValue("--dasti-inline-ai-toolbar-pointer-offset"),
-      ).toBe("208px");
+      ).toBe("212px");
     });
   });
 });

@@ -239,4 +239,44 @@ describe("ProfileReviewCard import", () => {
       screen.getByRole("button", { name: "Review flagged fields again" }),
     ).toBeInTheDocument();
   });
+
+  it("opens the inline import review from the warning trigger next to export", async () => {
+    const user = userEvent.setup();
+
+    cvLibraryState.currentCv = {
+      id: "cv_imported",
+      title: "Imported CV",
+      metadata: {
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        version: 1,
+      },
+      sections: [],
+    };
+
+    render(<ProfileReviewCard />);
+
+    const reviewToggle = screen.getByRole("button", {
+      name: "Open import review",
+    });
+    const reviewSection = screen.getByLabelText("Import review checks");
+
+    expect(reviewToggle).toHaveAttribute("aria-expanded", "false");
+    expect(reviewSection).toHaveAttribute("data-collapsed", "true");
+
+    await user.click(reviewToggle);
+
+    expect(reviewToggle).toHaveAttribute("aria-expanded", "true");
+    expect(reviewToggle).toHaveAccessibleName("Close import review");
+    expect(reviewSection).toHaveAttribute("data-collapsed", "false");
+    expect(
+      screen.getByText("Clean flagged parser noise here before generating proposals."),
+    ).toBeInTheDocument();
+
+    await user.click(reviewToggle);
+
+    expect(reviewToggle).toHaveAttribute("aria-expanded", "false");
+    expect(reviewToggle).toHaveAccessibleName("Open import review");
+    expect(reviewSection).toHaveAttribute("data-collapsed", "true");
+  });
 });
