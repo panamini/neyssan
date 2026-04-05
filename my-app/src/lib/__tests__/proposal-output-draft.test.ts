@@ -36,6 +36,27 @@ describe("readStoredProposalOutputDraft", () => {
     );
   });
 
+  it("rehydrates stored layout and typography overrides when present", () => {
+    window.localStorage.setItem(
+      PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,
+      JSON.stringify({
+        proposalStyleLinkMode: "proposal_local",
+        proposalStyleChoice: "formal",
+        layoutOverride: "editorial",
+        typographyOverride: "quiet-editorial",
+      }),
+    );
+
+    expect(readStoredProposalOutputDraft()).toEqual(
+      expect.objectContaining({
+        proposalStyleLinkMode: "proposal_local",
+        proposalStyleChoice: "formal",
+        layoutOverride: "editorial",
+        typographyOverride: "quiet-editorial",
+      }),
+    );
+  });
+
   it("drops invalid custom accent values safely", () => {
     window.localStorage.setItem(
       PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,

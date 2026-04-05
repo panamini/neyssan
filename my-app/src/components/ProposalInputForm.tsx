@@ -1191,28 +1191,50 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   const draftSourceUrl = React.useMemo(
     () =>
       liveSourceUrl ??
+      initialComposeDraft?.sourceUrl ??
       prefill?.sourceUrl ??
       readStoredProposalComposeDraft()?.sourceUrl ??
       null,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [liveSourceUrl, prefill?.sourceUrl],
+    [initialComposeDraft?.sourceUrl, liveSourceUrl, prefill?.sourceUrl],
   );
   const draftPlatform = React.useMemo(
     () =>
       liveSourcePlatform ??
+      initialComposeDraft?.platform ??
       prefill?.platform ??
       readStoredProposalComposeDraft()?.platform ??
       null,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [liveSourcePlatform, prefill?.platform],
+    [initialComposeDraft?.platform, liveSourcePlatform, prefill?.platform],
   );
+  const [stickyImportedSource, setStickyImportedSource] = React.useState<{
+    sourceUrl: string | null;
+    platform: string | null;
+  }>(() => ({
+    sourceUrl: draftSourceUrl,
+    platform: draftPlatform,
+  }));
+  React.useEffect(() => {
+    if (!draftSourceUrl && !draftPlatform) {
+      return;
+    }
+
+    setStickyImportedSource((current) => ({
+      sourceUrl: draftSourceUrl ?? current.sourceUrl,
+      platform: draftPlatform ?? current.platform,
+    }));
+  }, [draftPlatform, draftSourceUrl]);
+  const resolvedDraftSourceUrl = draftSourceUrl ?? stickyImportedSource.sourceUrl;
+  const resolvedDraftPlatform =
+    draftPlatform ?? stickyImportedSource.platform;
   const importedSourceLabel = React.useMemo(
-    () => formatImportedSourceLabel(draftPlatform, draftSourceUrl),
-    [draftPlatform, draftSourceUrl],
+    () => formatImportedSourceLabel(resolvedDraftPlatform, resolvedDraftSourceUrl),
+    [resolvedDraftPlatform, resolvedDraftSourceUrl],
   );
   const importedSourceHost = React.useMemo(
-    () => formatImportedSourceHost(draftSourceUrl),
-    [draftSourceUrl],
+    () => formatImportedSourceHost(resolvedDraftSourceUrl),
+    [resolvedDraftSourceUrl],
   );
   React.useEffect(() => {
     updateComposeScrollEdges();
@@ -1552,9 +1574,9 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                             <span className="dasti-proposal-source-summary__job-offer-kicker">
                               Job Offer
                             </span>
-                            {draftSourceUrl ? (
+                            {resolvedDraftSourceUrl ? (
                               <a
-                                href={draftSourceUrl}
+                                href={resolvedDraftSourceUrl}
                                 target="_blank"
                                 rel="noreferrer"
                                 className="dasti-proposal-source-summary__job-offer-link"
