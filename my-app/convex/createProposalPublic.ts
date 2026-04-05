@@ -103,6 +103,7 @@ export default mutation({
         jobId: v.optional(v.string()),
         tags: v.optional(v.array(v.string())),
         sourceJobDescription: v.optional(v.string()),
+        sourceUrl: v.optional(v.string()),
         requestedModelType: v.optional(v.string()),
         actualModelType: v.optional(v.string()),
         fallbackTriggerCode: v.optional(v.string()),
