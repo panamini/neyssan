@@ -1604,10 +1604,6 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                     ) : null}
                     {hasStructuredSourceSummary ? (
                       <div className="dasti-proposal-source-summary">
-                        <p className="dasti-proposal-source-summary__note">
-                          Quick scan only. Generation still uses the full job
-                          offer below.
-                        </p>
                         <div className="dasti-proposal-source-summary__grid">
                           {sourceMetadataCards.map((item) => (
                             <div
@@ -1685,6 +1681,12 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                           {isRawJobTextExpanded
                             ? "Hide job offer"
                             : "Show job offer"}
+                        </span>
+                        <span
+                          className="dasti-proposal-source-raw__toggle-icon"
+                          aria-hidden="true"
+                        >
+                          <ChevronDown size={14} strokeWidth={1.7} />
                         </span>
                       </button>
                       {isRawJobTextExpanded ? (
