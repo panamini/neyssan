@@ -3269,7 +3269,8 @@ export function ProposalForge(): JSX.Element {
                     documentMeta={proposalDocumentMeta || activeApplicantHeader.email || null}
                     mode={proposalOutputMode}
                     onModeChange={setProposalOutputMode}
-                    documentTitleEditable={proposalOutputMode === "edit"}
+                    showDocumentCaption={false}
+                    documentTitleEditable={false}
                     onDocumentTitleChange={setProposalDocumentTitle}
                     onDocumentTitleCommit={() => {
                       void handleProposalDocumentCommit();
@@ -3283,9 +3284,7 @@ export function ProposalForge(): JSX.Element {
                     zoomStorageKey={null}
                     previewAnchor="top"
                     size="default"
-                    documentHeaderMode={
-                      proposalOutputMode === "edit" ? "full" : "hidden"
-                    }
+                    documentHeaderMode="actions-only"
                     railStartAddon={
                       proposalContent && proposalOutputMode === "preview" ? (
                         <EmbeddedStyleInspector

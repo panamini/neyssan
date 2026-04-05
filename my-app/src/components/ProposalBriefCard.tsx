@@ -15,8 +15,10 @@ function formatBriefSourceLabel(platform: string | null | undefined, sourceUrl: 
   if (p) {
     if (/linkedin/i.test(p)) return "LinkedIn";
     if (/indeed/i.test(p)) return "Indeed";
-    const capitalized = p.charAt(0).toUpperCase() + p.slice(1).toLowerCase();
-    return capitalized;
+    if (!/^web$/i.test(p) && !/^site$/i.test(p) && !/^website$/i.test(p)) {
+      const capitalized = p.charAt(0).toUpperCase() + p.slice(1).toLowerCase();
+      return capitalized;
+    }
   }
   if (!sourceUrl) return null;
   try {

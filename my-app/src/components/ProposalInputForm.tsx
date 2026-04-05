@@ -257,7 +257,13 @@ function formatImportedSourceLabel(
     if (/indeed/i.test(normalizedPlatform)) {
       return "Indeed";
     }
-    return capitalizeLabel(normalizedPlatform);
+    if (
+      !/^web$/i.test(normalizedPlatform) &&
+      !/^site$/i.test(normalizedPlatform) &&
+      !/^website$/i.test(normalizedPlatform)
+    ) {
+      return capitalizeLabel(normalizedPlatform);
+    }
   }
 
   if (!sourceUrl) {
