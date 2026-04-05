@@ -170,5 +170,8 @@ describe("ProposalDisplay stage behavior", () => {
     expect(
       container.querySelector(".dasti-proposal-sheet__preview-scale-shell"),
     ).toBeTruthy();
+    const lastCall =
+      stageLayoutSpy.mock.calls[stageLayoutSpy.mock.calls.length - 1]?.[0];
+    expect(lastCall).toMatchObject({ fitMode: "width" });
   });
 });

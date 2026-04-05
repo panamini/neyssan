@@ -115,14 +115,9 @@ const PREVIEW_PARAGRAPH_ACTIONS: Array<{
     helperLabel: "Shorten",
   },
   {
-    id: "fix_grammar",
-    label: "Polish",
-    helperLabel: "Polish",
-  },
-  {
     id: "ask",
-    label: "Ask AI",
-    helperLabel: "Ask AI",
+    label: "Ask",
+    helperLabel: "Ask",
   },
 ];
 
@@ -1706,8 +1701,8 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       >
         {queuedPreviewActionLabel ? (
           <div className="dasti-proposal-editor-hint" role="status" aria-live="polite">
-            Select a paragraph, then use {queuedPreviewActionLabel.toLowerCase()} in
-            the inline toolbar.
+            Select a paragraph, then tap{" "}
+            {queuedPreviewActionLabel.toLowerCase()} in the toolbar.
           </div>
         ) : null}
         {renderDocumentStage()}
@@ -1806,6 +1801,27 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     );
   }
 
+  const previewParagraphActionsFooter =
+    !isEditable && proposalContent ? (
+      <div className="dasti-proposal-sheet__footer">
+        <div className="dasti-proposal-paragraph-affordances">
+          <span className="dasti-proposal-paragraph-affordances__label">
+            Paragraph actions
+          </span>
+          {PREVIEW_PARAGRAPH_ACTIONS.map((action) => (
+            <button
+              key={action.id}
+              type="button"
+              className="dasti-proposal-paragraph-affordances__action"
+              onClick={() => handlePreviewParagraphAction(action.helperLabel)}
+            >
+              {action.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    ) : null;
+
   const viewerShell = (
     <div className="dasti-doc-viewer-shell">
       {isEditable && textareaSelectionState ? (
@@ -1842,23 +1858,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
             {sheetBody}
           </div>
         </div>
-        {!isEditable && proposalContent ? (
-          <div className="dasti-proposal-paragraph-affordances">
-            <span className="dasti-proposal-paragraph-affordances__label">
-              Paragraph actions
-            </span>
-            {PREVIEW_PARAGRAPH_ACTIONS.map((action) => (
-              <button
-                key={action.id}
-                type="button"
-                className="dasti-proposal-paragraph-affordances__action"
-                onClick={() => handlePreviewParagraphAction(action.helperLabel)}
-              >
-                {action.label}
-              </button>
-            ))}
-          </div>
-        ) : null}
+        {previewParagraphActionsFooter}
         {characterCountBadge ? (
           <div
             ref={characterBadgeWrapRef}
