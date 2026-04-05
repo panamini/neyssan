@@ -1042,6 +1042,9 @@ export function ProfileReviewCard({
             <div className="dasti-cv-edit-toolbar__group dasti-cv-edit-toolbar__group--lead">
               {toolbarLeadControl}
             </div>
+            {toolbarLeadControl ? (
+              <div className="dasti-icon-cluster__divider dasti-proposal-rail-cluster__divider" />
+            ) : null}
             <div className="dasti-cv-edit-toolbar__group dasti-cv-edit-toolbar__group--primary">
               {addableSectionOptions.length > 0 ? (
                 <div
