@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { X } from "@/lib/icons";
+import React, { useEffect, useRef, useState } from "react";
+import { User, X } from "@/lib/icons";
 import type { IProfileItem } from "../../types/cvDocument";
 import { useCvLibrary } from "../../contexts/CvLibraryContext";
 import { Button } from "../ui/button";
@@ -49,6 +49,7 @@ export function ProfileModal({
   onSavePatch,
 }: ProfileModalProps) {
   const { updateStructuredItem } = useCvLibrary();
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
   const [form, setForm] = useState<FormState>(() => buildInitialForm(item));
   const [isSaving, setIsSaving] = useState(false);
   const [isClearConfirming, setIsClearConfirming] = useState(false);
@@ -63,6 +64,36 @@ export function ProfileModal({
 
   function handleChange<K extends keyof FormState>(key: K, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function openPhotoPicker() {
+    photoInputRef.current?.click();
+  }
+
+  function handlePhotoFile(file: File | null) {
+    if (!file || !file.type.startsWith("image/")) {
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const nextPhotoUrl =
+        typeof reader.result === "string" ? reader.result : "";
+      if (!nextPhotoUrl) {
+        return;
+      }
+      setForm((prev) => ({ ...prev, photoUrl: nextPhotoUrl }));
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function handlePhotoChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null;
+    event.target.value = "";
+    handlePhotoFile(file);
+  }
+
+  function handleRemovePhoto() {
+    setForm((prev) => ({ ...prev, photoUrl: "" }));
   }
 
   async function handleSave() {
@@ -174,6 +205,65 @@ export function ProfileModal({
           <section className="dasti-zone">
             <h3 className="dasti-zone-title">Identity</h3>
 
+            <div className="dasti-profile-modal__hero">
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/jpg"
+                onChange={handlePhotoChange}
+                className="sr-only"
+                tabIndex={-1}
+                aria-hidden
+              />
+              <div className="dasti-profile-modal__media">
+                <button
+                  type="button"
+                  className="dasti-profile-modal__avatar"
+                  onClick={openPhotoPicker}
+                  aria-label={
+                    form.photoUrl ? "Change profile photo" : "Upload profile photo"
+                  }
+                  title={
+                    form.photoUrl ? "Change profile photo" : "Upload profile photo"
+                  }
+                >
+                  {form.photoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={form.photoUrl}
+                      alt=""
+                      className="dasti-profile-modal__avatar-image"
+                    />
+                  ) : (
+                    <span className="dasti-profile-modal__avatar-empty">
+                      <User
+                        className="dasti-profile-modal__avatar-icon"
+                        strokeWidth={1.75}
+                      />
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  className="dasti-icon-button dasti-profile-modal__avatar-remove"
+                  onClick={handleRemovePhoto}
+                  aria-label="Remove profile photo"
+                  title="Remove profile photo"
+                  disabled={!form.photoUrl}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="dasti-profile-modal__hero-copy">
+                <p className="dasti-profile-modal__hero-name">
+                  {form.name.trim() || "Your name"}
+                </p>
+                <p className="dasti-profile-modal__hero-role">
+                  {form.desiredPosition.trim() || "Desired position"}
+                </p>
+              </div>
+            </div>
+
             <div className="dasti-grid-2">
               <label className="dasti-field-group">
                 <span className="dasti-label">Full name</span>
@@ -199,17 +289,6 @@ export function ProfileModal({
                 />
               </label>
             </div>
-
-            <label className="dasti-field-group">
-              <span className="dasti-label">Photo URL</span>
-              <input
-                id="profile-photo-url"
-                className="dasti-field"
-                value={form.photoUrl}
-                onChange={(e) => handleChange("photoUrl", e.target.value)}
-                placeholder="https://..."
-              />
-            </label>
 
             <div className="dasti-hint">Optional</div>
           </section>
