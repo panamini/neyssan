@@ -162,6 +162,19 @@ function buildVolkRegisterMetaEntries(
   ].filter((entry) => entry.value.length > 0);
 }
 
+function buildVolkRegisterSenderLine(
+  applicantHeader?: ProposalApplicantHeaderData | null,
+): string {
+  return [
+    applicantHeader?.phone?.trim() ?? "",
+    applicantHeader?.email?.trim() ?? "",
+    applicantHeader?.website?.trim() ?? "",
+    applicantHeader?.linkedin?.trim() ?? "",
+  ]
+    .filter((value) => value.length > 0)
+    .join(" · ");
+}
+
 function splitParagraphIntoPaginationFragments(paragraph: string): string[] {
   const normalized = paragraph.replace(/\s+/g, " ").trim();
   if (!normalized) {
@@ -734,6 +747,15 @@ export function ProposalDocumentRenderer({
       applicantHeader?.website,
     ],
   );
+  const volkSenderLine = React.useMemo(
+    () => buildVolkRegisterSenderLine(applicantHeader),
+    [
+      applicantHeader?.email,
+      applicantHeader?.linkedin,
+      applicantHeader?.phone,
+      applicantHeader?.website,
+    ],
+  );
   const volkMetaLefts = React.useMemo(() => VOLK_REGISTER_GRID.metaLefts, []);
   const volkFallbackParagraphs = React.useMemo(
     () =>
@@ -831,15 +853,13 @@ export function ProposalDocumentRenderer({
         {!args.isContinuationPage ? (
           <div className="dasti-proposal-document__volk-header">
             <p className="dasti-proposal-document__volk-title">
-              {resolvedRailTitle ?? "volk register letter"}
+              {resolvedRailTitle ?? "candidate name"}
             </p>
             <p className="dasti-proposal-document__volk-subtitle">
-              {resolvedRailMeta ?? documentTitle ?? templateDefinition.name}
+              {resolvedRailMeta ?? "job role"}
             </p>
             <p className="dasti-proposal-document__volk-sender">
-              {resolvedSenderEmail
-                ? `sender / ${resolvedSenderEmail}`
-                : "sender / contact details"}
+              {volkSenderLine || "phone · email · website"}
             </p>
           </div>
         ) : null}
@@ -903,10 +923,10 @@ export function ProposalDocumentRenderer({
       renderVolkBodyContent,
       volkMetaLefts,
       resolvedRailMeta,
-      resolvedSenderEmail,
       resolvedRailTitle,
       templateDefinition.name,
       volkMetaEntries,
+      volkSenderLine,
     ],
   );
 
