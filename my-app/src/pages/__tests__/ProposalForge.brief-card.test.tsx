@@ -4,12 +4,25 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { ProposalForge } from "../ProposalForge";
 
+let mockHandoffRecord: {
+  handoffId: string;
+  jobTitle: string;
+  jobDescription: string;
+  sourceUrl?: string;
+  platform?: string;
+} | null = null;
+
 vi.mock("convex/react", () => ({
   useConvexAuth: () => ({
     isLoading: false,
     isAuthenticated: true,
   }),
-  useQuery: () => null,
+  useQuery: (query: string, args: unknown) => {
+    if (query === "proposalHandoffs.get" && args !== "skip") {
+      return mockHandoffRecord;
+    }
+    return null;
+  },
   useMutation: () => vi.fn().mockResolvedValue(undefined),
   useAction: () => vi.fn().mockResolvedValue(null),
 }));
@@ -91,6 +104,7 @@ vi.mock("../../components/ProposalsList", () => ({
 describe("ProposalForge brief card", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    mockHandoffRecord = null;
   });
 
   it("shows the brief summary above compose and routes the edit action back to the compose brief fields", async () => {
@@ -103,7 +117,9 @@ describe("ProposalForge brief card", () => {
     fireEvent.click(screen.getByRole("button", { name: "Generate proposal" }));
 
     expect(
-      screen.getByRole("heading", { name: "Operations Associate" }),
+      screen.getByRole("heading", {
+        name: "Application for the Operations Associate role",
+      }),
     ).toBeInTheDocument();
     expect(
       screen.getAllByText(
@@ -119,5 +135,32 @@ describe("ProposalForge brief card", () => {
     await waitFor(() => {
       expect(document.getElementById("jobDescription")).toHaveFocus();
     });
+  });
+
+  it("keeps the brief source link visible from live state even if storage is cleared after generation", async () => {
+    mockHandoffRecord = {
+      handoffId: "handoff_source",
+      jobTitle: "Operations Associate",
+      jobDescription:
+        "Support recurring processes and coordinate communication.",
+      sourceUrl: "https://www.linkedin.com/jobs/view/123456",
+      platform: "linkedin",
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/proposal?handoffId=handoff_source"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate proposal" }));
+
+    window.localStorage.clear();
+
+    expect(
+      await screen.findByRole("link", {
+        name: "Open original job offer on LinkedIn",
+      }),
+    ).toHaveAttribute("href", "https://www.linkedin.com/jobs/view/123456");
   });
 });

@@ -110,6 +110,8 @@ interface ProposalInputFormProps {
   jobDescriptionPlaceholder?: string;
   initialComposeDraft?: StoredProposalComposeDraft | null;
   onGenerateControlChange?: (control: ProposalGenerateControl | null) => void;
+  sourceUrl?: string | null;
+  sourcePlatform?: string | null;
 }
 
 export type ProposalGenerateControl = {
@@ -342,6 +344,8 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   jobDescriptionPlaceholder = "Paste or write the job offer here…",
   initialComposeDraft = null,
   onGenerateControlChange,
+  sourceUrl: liveSourceUrl = null,
+  sourcePlatform: liveSourcePlatform = null,
 }) => {
   const navigate = useNavigate();
   const hasHeaderLabel = Boolean(headerLabel);
@@ -1185,14 +1189,22 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   );
   // Fall back to persisted draft values once handoff URL param is consumed and prefill becomes null
   const draftSourceUrl = React.useMemo(
-    () => prefill?.sourceUrl ?? readStoredProposalComposeDraft()?.sourceUrl ?? null,
+    () =>
+      liveSourceUrl ??
+      prefill?.sourceUrl ??
+      readStoredProposalComposeDraft()?.sourceUrl ??
+      null,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [prefill?.sourceUrl],
+    [liveSourceUrl, prefill?.sourceUrl],
   );
   const draftPlatform = React.useMemo(
-    () => prefill?.platform ?? readStoredProposalComposeDraft()?.platform ?? null,
+    () =>
+      liveSourcePlatform ??
+      prefill?.platform ??
+      readStoredProposalComposeDraft()?.platform ??
+      null,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [prefill?.platform],
+    [liveSourcePlatform, prefill?.platform],
   );
   const importedSourceLabel = React.useMemo(
     () => formatImportedSourceLabel(draftPlatform, draftSourceUrl),
@@ -1533,43 +1545,43 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                     className="dasti-proposal-source-scroll-region"
                     ref={attachComposeScrollEdges}
                   >
-                    {hasStructuredSourceSummary || importedSourceLabel ? (
-                      <div className="dasti-proposal-source-summary">
-                        {importedSourceLabel ? (
-                          <div className="dasti-proposal-source-summary__job-offer-card">
-                            <div className="dasti-proposal-source-summary__job-offer-row">
-                              <div className="dasti-proposal-source-summary__job-offer-copy">
-                                <span className="dasti-proposal-source-summary__job-offer-kicker">
-                                  Job Offer
-                                </span>
-                                {draftSourceUrl ? (
-                                  <a
-                                    href={draftSourceUrl}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="dasti-proposal-source-summary__job-offer-link"
-                                  >
-                                    <span>View on {importedSourceLabel}</span>
-                                    <ArrowSquareOut
-                                      size={13}
-                                      strokeWidth={1.8}
-                                      aria-hidden="true"
-                                    />
-                                  </a>
-                                ) : (
-                                  <span className="dasti-proposal-source-summary__origin-label">
-                                    {importedSourceLabel}
-                                  </span>
-                                )}
-                                {importedSourceHost ? (
-                                  <span className="dasti-proposal-source-summary__origin-host">
-                                    {importedSourceHost}
-                                  </span>
-                                ) : null}
-                              </div>
-                            </div>
+                    {importedSourceLabel ? (
+                      <div className="dasti-proposal-source-summary__job-offer-card">
+                        <div className="dasti-proposal-source-summary__job-offer-row">
+                          <div className="dasti-proposal-source-summary__job-offer-copy">
+                            <span className="dasti-proposal-source-summary__job-offer-kicker">
+                              Job Offer
+                            </span>
+                            {draftSourceUrl ? (
+                              <a
+                                href={draftSourceUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="dasti-proposal-source-summary__job-offer-link"
+                              >
+                                <span>View on {importedSourceLabel}</span>
+                                <ArrowSquareOut
+                                  size={13}
+                                  strokeWidth={1.8}
+                                  aria-hidden="true"
+                                />
+                              </a>
+                            ) : (
+                              <span className="dasti-proposal-source-summary__origin-label">
+                                {importedSourceLabel}
+                              </span>
+                            )}
+                            {importedSourceHost ? (
+                              <span className="dasti-proposal-source-summary__origin-host">
+                                {importedSourceHost}
+                              </span>
+                            ) : null}
                           </div>
-                        ) : null}
+                        </div>
+                      </div>
+                    ) : null}
+                    {hasStructuredSourceSummary ? (
+                      <div className="dasti-proposal-source-summary">
                         <p className="dasti-proposal-source-summary__note">
                           Quick scan only. Generation still uses the full job
                           offer below.
