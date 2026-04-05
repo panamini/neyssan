@@ -2184,8 +2184,44 @@
   inset-inline-start: var(--space-3);
   inset-inline-end: auto;
   width: max-content;
-  max-width: 100%;
+  max-width: none;
   z-index: 24;
+}
+
+.dasti-document-rail--resume-workspace .dasti-proposal-rail-cluster {
+  flex-wrap: nowrap;
+  align-items: center;
+  width: max-content;
+  max-width: none;
+  overflow: visible;
+  scrollbar-width: auto;
+  padding-inline-start: var(
+    --proposal-chrome-shell-padding,
+    calc(var(--space-2) - 2px)
+  );
+  padding-inline-end: var(
+    --proposal-chrome-shell-padding,
+    calc(var(--space-2) - 2px)
+  );
+  background: var(--color-surface-raised);
+  border-color: var(--color-border);
+  box-shadow: var(--shadow-frost, var(--shadow-sm));
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.dasti-document-rail--resume-workspace .dasti-proposal-rail-cluster > * {
+  flex: 0 0 auto;
+}
+
+.dasti-document-rail--resume-workspace
+  .dasti-proposal-rail-cluster::-webkit-scrollbar {
+  display: none;
+}
+
+.dasti-document-rail--resume-workspace .dasti-document-rail__section--start {
+  max-width: none;
+  overflow: visible;
 }
 
 .dasti-cv-workbench-bar--resume-workspace {
@@ -2414,7 +2450,13 @@
 }
 
 .dasti-proposal-editor-hint {
-  margin: var(--space-2) var(--space-2) 0;
+  position: absolute;
+  inset-block-start: var(--space-2);
+  inset-inline-start: var(--space-2);
+  z-index: 6;
+  pointer-events: none;
+  margin: 0;
+  max-inline-size: min(240px, calc(100% - (var(--space-2) * 2)));
   padding: 10px 12px;
   border-radius: calc(var(--radius-card) - 4px);
   border: 1px solid color-mix(in srgb, var(--color-border-selected) 54%, transparent);
@@ -2422,6 +2464,8 @@
   color: var(--tm2);
   font-size: var(--tx);
   line-height: 1.55;
+  box-shadow: var(--shadow-sm);
+  animation: dasti-fade-in 140ms ease-out both;
 }
 
 .dasti-proposal-character-badge-wrap {
@@ -2709,6 +2753,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-2);
+  margin-block-start: var(--space-2);
   padding: 12px;
   border-radius: calc(var(--radius-card) - 4px);
   border: 1px solid color-mix(in srgb, var(--color-border-selected) 52%, transparent);
@@ -2865,18 +2910,65 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  width: 100%;
-  min-height: 34px;
-  padding: 0;
-  border: none;
-  background: transparent;
+  width: fit-content;
+  min-height: 30px;
+  max-width: 100%;
+  padding: 0 var(--s3);
+  border: 1px solid color-mix(in srgb, var(--color-border) 74%, transparent);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--sfr) 92%, transparent);
   color: var(--ti);
   cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    opacity 80ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.dasti-proposal-source-raw__toggle:hover,
+.dasti-proposal-source-raw__toggle:focus-visible {
+  background: color-mix(in srgb, var(--sfr) 82%, var(--color-surface) 18%);
+  border-color: color-mix(
+    in srgb,
+    var(--color-border-contrast) 34%,
+    transparent
+  );
+  color: var(--color-foreground-emphasis, var(--ti));
+}
+
+.dasti-proposal-source-raw__toggle:active:not(:disabled) {
+  opacity: 0.72;
+}
+
+.dasti-proposal-source-raw__toggle[aria-expanded="true"]
+  .dasti-proposal-source-raw__toggle-icon {
+  transform: rotate(180deg);
 }
 
 .dasti-proposal-source-raw__label {
   font-size: var(--tx);
   font-weight: 600;
+}
+
+.dasti-proposal-source-raw__toggle-icon {
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--tm2);
+  transition:
+    transform var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.dasti-proposal-source-raw__toggle:hover
+  .dasti-proposal-source-raw__toggle-icon,
+.dasti-proposal-source-raw__toggle:focus-visible
+  .dasti-proposal-source-raw__toggle-icon {
+  color: var(--ti);
 }
 
 .dasti-proposal-source-raw__editor {
@@ -3875,6 +3967,13 @@
   height: var(--document-page-height, auto);
 }
 
+.dasti-proposal-sheet__preview-scale-shell {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  transform-origin: top left;
+}
+
 .dasti-proposal-sheet__preview-page-positioner--stacked {
   align-items: start;
 }
@@ -3910,6 +4009,7 @@
 }
 
 .dasti-proposal-editor-page {
+  position: relative;
   width: 100%;
   height: 100%;
   display: flex;
@@ -3922,6 +4022,187 @@
   );
   border-radius: inherit;
   animation: dasti-fade-in 200ms ease-out both;
+}
+
+.dasti-proposal-editor-page::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 4;
+  transition:
+    opacity var(--duration-fast) var(--ease-standard),
+    backdrop-filter var(--duration-fast) var(--ease-standard),
+    -webkit-backdrop-filter var(--duration-fast) var(--ease-standard);
+}
+
+.dasti-proposal-editor-page[data-drawer-open="true"]::before {
+  opacity: 1;
+  background: color-mix(
+    in srgb,
+    var(--frost-bg, var(--document-viewer-frame-surface)) 20%,
+    transparent
+  );
+  backdrop-filter: saturate(calc(var(--frost-saturate, 1) + 0.02))
+    blur(calc(var(--frost-blur, 14px) - 4px));
+  -webkit-backdrop-filter: saturate(calc(var(--frost-saturate, 1) + 0.02))
+    blur(calc(var(--frost-blur, 14px) - 4px));
+}
+
+.dasti-proposal-editor-page__drawer-shell {
+  position: absolute;
+  inset: var(--proposal-output-stage-frame-padding, var(--s2));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.dasti-proposal-editor-page__drawer {
+  --proposal-card-body-padding: var(--space-4);
+  position: relative;
+  pointer-events: auto;
+  display: grid;
+  inline-size: 100%;
+  max-inline-size: 100%;
+  max-block-size: 100%;
+  padding: 0;
+  background-clip: padding-box;
+  overflow: auto;
+}
+
+.dasti-proposal-editor-page__drawer-body {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--proposal-card-body-padding);
+}
+
+.dasti-proposal-editor-page__drawer-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 0 0 var(--space-3);
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--color-border) 72%, transparent);
+}
+
+.dasti-proposal-editor-page__drawer-kicker {
+  margin: 0;
+  color: var(--tg2);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dasti-proposal-editor-page__drawer-title {
+  margin: 4px 0 0;
+  color: var(--ti);
+  font-size: var(--tl);
+  line-height: 1.1;
+  font-weight: 600;
+}
+
+.dasti-proposal-editor-page__drawer-profile {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.dasti-proposal-editor-page__drawer-avatar {
+  inline-size: 52px;
+  block-size: 52px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: calc(var(--radius-card) - 4px);
+  border: 1px solid color-mix(in srgb, var(--color-border) 74%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 10%, var(--sfr) 90%);
+  color: color-mix(in srgb, var(--color-accent) 66%, var(--ti) 34%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18);
+}
+
+.dasti-proposal-editor-page__drawer-profile-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.dasti-proposal-editor-page__drawer-profile-name,
+.dasti-proposal-editor-page__drawer-profile-role {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.dasti-proposal-editor-page__drawer-profile-name {
+  color: var(--ti);
+  font-size: var(--ts);
+  line-height: 1.25;
+  font-weight: 600;
+}
+
+.dasti-proposal-editor-page__drawer-profile-role {
+  color: var(--tm2);
+  font-size: var(--tx);
+  line-height: 1.35;
+}
+
+.dasti-proposal-editor-page__header-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.dasti-proposal-editor-page__field {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.dasti-proposal-editor-page__field--wide {
+  grid-column: 1 / -1;
+}
+
+.dasti-proposal-editor-page__field-label {
+  color: var(--tg2);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dasti-proposal-editor-page__field-input {
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 74%, transparent);
+  border-radius: calc(var(--radius-card) - 8px);
+  background: color-mix(in srgb, var(--color-surface) 24%, transparent);
+  color: var(--ti);
+  font: inherit;
+  line-height: 1.35;
+}
+
+.dasti-proposal-editor-page__field-input::placeholder {
+  color: color-mix(in srgb, var(--tm2) 74%, transparent);
+}
+
+.dasti-proposal-editor-page__field-input:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--color-accent) 44%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--fr) 24%, transparent);
+}
+
+.dasti-proposal-editor-page__field-textarea {
+  min-height: 92px;
+  padding-block: 10px;
+  resize: vertical;
 }
 
 .dasti-proposal-editor-page__inner {
@@ -4217,6 +4498,336 @@
   line-height: inherit;
   font-weight: 600;
   letter-spacing: inherit;
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__page {
+  position: relative;
+  grid-template-columns: minmax(0, 1fr);
+  column-gap: 0;
+  padding-block-start: 0;
+  background:
+    linear-gradient(
+      to right,
+      transparent 0%,
+      transparent 50.5%,
+      rgba(120, 108, 77, 0.055) 50.67%,
+      transparent 50.84%,
+      transparent 58.58%,
+      rgba(120, 108, 77, 0.028) 58.73%,
+      transparent 58.88%,
+      transparent 100%
+    ),
+    radial-gradient(circle at 18% 8%, rgba(255, 255, 255, 0.22), transparent 27%),
+    radial-gradient(circle at 95% 94%, rgba(125, 110, 80, 0.06), transparent 38%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+    var(--proposal-document-paper);
+  clip-path: polygon(0 0, 100% 0, 100% 98.9%, 98.8% 100%, 0 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.18),
+    inset 0 0 40px rgba(123, 111, 81, 0.05);
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__rail,
+.dasti-proposal-document--volk-register .dasti-proposal-document__eyebrow,
+.dasti-proposal-document--volk-register .dasti-proposal-document__title,
+.dasti-proposal-document--volk-register .dasti-proposal-document__meta {
+  display: none;
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-header,
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-register-item,
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-content,
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-dot,
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-tier-marker {
+  position: absolute;
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-header {
+  left: var(--volk-grid-left);
+  top: var(--volk-grid-title-top);
+  width: var(--volk-grid-header-width);
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  max-width: calc(100% - (var(--proposal-inline-mm) * 18));
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-title,
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-subtitle,
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-sender,
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-register-label,
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-recipient-label,
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-recipient-value,
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-date-label,
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-date-value,
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-subject-label,
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-subject-value,
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-tier-marker {
+  margin: 0;
+  font-family: var(--font-heading-family);
+  color: var(--proposal-document-accent-ink);
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-title {
+  font-size: calc(
+    32pt * var(--proposal-fit-title-scale, 1) * var(--proposal-fit-fine-scale, 1)
+  );
+  line-height: calc(
+    24pt * var(--proposal-fit-title-scale, 1) * var(--proposal-fit-fine-scale, 1)
+  );
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  max-width: 100%;
+  white-space: normal;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+  text-transform: lowercase;
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-subtitle {
+  margin: calc(
+      4pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
+    )
+    0 0;
+  font-size: calc(
+    20pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
+  );
+  line-height: calc(
+    18pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
+  );
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  max-width: 100%;
+  white-space: normal;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+  text-transform: lowercase;
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-sender {
+  margin: calc(
+      18pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
+    )
+    0 0;
+  font-size: calc(
+    11pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
+  );
+  line-height: calc(
+    18pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
+  );
+  font-weight: 800;
+  letter-spacing: 0.005em;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-transform: lowercase;
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-register-item {
+  top: var(--volk-grid-meta-top);
+  display: grid;
+  gap: calc(var(--proposal-inline-mm) * 0.5);
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-register-label {
+  font-size: calc(
+    11pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
+  );
+  line-height: calc(
+    18pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
+  );
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  text-transform: lowercase;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-subject-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  column-gap: calc(var(--proposal-inline-mm) * 1.6);
+  margin-block-end: calc(
+    16pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
+  );
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-intro {
+  display: grid;
+  gap: calc(var(--proposal-inline-mm) * 1.1);
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-recipient-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: calc(var(--proposal-inline-mm) * 1.6);
+  row-gap: calc(var(--proposal-inline-mm) * 0.6);
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-recipient-block,
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-date-block {
+  display: grid;
+  align-content: start;
+  gap: calc(var(--proposal-inline-mm) * 0.35);
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-date-block {
+  justify-items: end;
+  text-align: right;
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-recipient-label,
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-date-label {
+  font-size: calc(
+    10pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
+  );
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-recipient-value,
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-date-value {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  font-size: calc(
+    11pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
+  );
+  line-height: calc(
+    16pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
+  );
+  font-weight: 700;
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-subject-label {
+  font-size: calc(
+    16pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
+  );
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  text-transform: lowercase;
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-subject-value {
+  min-width: 0;
+  font-size: calc(
+    16pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
+  );
+  line-height: calc(
+    18pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
+  );
+  font-weight: 700;
+  letter-spacing: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+  text-transform: lowercase;
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-content {
+  left: var(--volk-grid-left);
+  top: var(--volk-grid-subject-top);
+  width: min(var(--volk-grid-body-width), 60ch);
+  bottom: calc(
+    var(--proposal-block-mm) *
+      (
+        var(--proposal-template-bottom-margin-mm) -
+          var(--proposal-fit-bottom-margin-adjust-mm) -
+          var(--proposal-fit-fine-bottom-margin-adjust-mm)
+      )
+  );
+  display: grid;
+  align-content: start;
+  gap: calc(var(--proposal-inline-mm) * 1.8);
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-dot {
+  left: var(--volk-grid-dot-left);
+  top: var(--volk-grid-dot-top);
+  width: calc(var(--proposal-inline-mm) * 1.15);
+  height: calc(var(--proposal-inline-mm) * 1.15);
+  border-radius: 50%;
+  background: var(--proposal-document-accent-ink);
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-tier-marker {
+  left: calc(var(--proposal-inline-mm) * 2.8);
+  font-size: calc(
+    10pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
+  );
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  transform: rotate(-90deg);
+  transform-origin: top left;
+  opacity: 0.72;
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-tier-marker--two {
+  top: 66.666%;
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__volk-tier-marker--three {
+  top: 33.333%;
+}
+
+.dasti-proposal-document--volk-register .dasti-proposal-document__body--volk-register {
+  position: relative;
+  left: auto;
+  top: auto;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  padding: 0;
+  display: grid;
+  align-content: start;
+  gap: 0;
+}
+
+.dasti-proposal-document--volk-register
+  .dasti-proposal-document__body--volk-register
+  .dasti-proposal-document__salutation,
+.dasti-proposal-document--volk-register
+  .dasti-proposal-document__body--volk-register
+  .dasti-proposal-document__paragraph,
+.dasti-proposal-document--volk-register
+  .dasti-proposal-document__body--volk-register
+  .dasti-proposal-document__signoff,
+.dasti-proposal-document--volk-register
+  .dasti-proposal-document__body--volk-register
+  .dasti-proposal-document__signature,
+.dasti-proposal-document--volk-register
+  .dasti-proposal-document__body--volk-register
+  .dasti-proposal-document__raw-body {
+  font-family: var(--font-heading-family);
+  font-size: calc(
+    11pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
+  );
+  line-height: calc(1.5 * var(--proposal-fit-line-height-scale, 1));
+  color: color-mix(
+    in srgb,
+    var(--proposal-document-ink) 74%,
+    var(--proposal-document-accent-ink) 26%
+  );
+}
+
+.dasti-proposal-document--volk-register
+  .dasti-proposal-document__body--volk-register
+  .dasti-proposal-document__signature {
+  font-family: var(--font-heading-family);
+  font-weight: 700;
+  color: var(--proposal-document-accent-ink);
+}
+
+.dasti-proposal-document--volk-register
+  .dasti-proposal-document__page--continuation
+  .dasti-proposal-document__volk-content {
+  top: calc(var(--proposal-block-mm) * 35);
+  width: calc(100% - var(--volk-grid-left) - 18mm);
 }
 
 .dasti-proposal-document--swiss-margin .dasti-proposal-document__title,
@@ -4638,9 +5249,15 @@ html:not(.dark) .dasti-proposal-submit {
 }
 
 .dasti-proposal-submit--composer {
-  --dasti-proposal-submit-button-size: var(--proposal-submit-size-sm);
-  --dasti-proposal-submit-radius: var(--proposal-submit-radius-sm);
-  --dasti-proposal-submit-icon-size: var(--proposal-submit-icon-size-sm);
+  --dasti-proposal-submit-button-size: calc(
+    var(--proposal-submit-size-sm) + var(--space-3)
+  );
+  --dasti-proposal-submit-radius: calc(
+    var(--proposal-submit-radius-sm) + 3px
+  );
+  --dasti-proposal-submit-icon-size: calc(
+    var(--proposal-submit-icon-size-sm) + var(--space-1)
+  );
   --dasti-proposal-submit-stroke-width: var(--proposal-submit-stroke-width-sm);
   --dasti-proposal-submit-phase-gap: var(--proposal-submit-phase-gap);
   --dasti-proposal-submit-spinner-duration: var(
@@ -5043,6 +5660,41 @@ html:not(.dark) .dasti-proposal-submit {
   min-height: 32px;
 }
 
+.dasti-document-rail--resume-workspace .styleforge-active-cv-control,
+.dasti-document-rail--resume-workspace .styleforge-active-cv-control--loaded,
+.dasti-document-rail--resume-workspace .styleforge-active-cv-control--ghost {
+  flex: 0 1 116px;
+  inline-size: 116px;
+  min-inline-size: 0;
+  max-inline-size: 116px;
+  border-color: var(--color-border);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  box-shadow: var(--shadow-sm);
+}
+
+.dasti-document-rail--resume-workspace .styleforge-active-cv-control__body,
+.dasti-document-rail--resume-workspace .styleforge-active-cv-control__icon-button {
+  color: var(--color-text-muted);
+}
+
+.dasti-document-rail--resume-workspace .styleforge-active-cv-control__body {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.dasti-document-rail--resume-workspace .dasti-proposal-chip__label--resume {
+  max-width: 8ch;
+}
+
+.dasti-document-rail--resume-workspace .styleforge-active-cv-control__body:hover,
+.dasti-document-rail--resume-workspace .styleforge-active-cv-control__icon-button:hover,
+.dasti-document-rail--resume-workspace .styleforge-active-cv-control__body:focus-visible,
+.dasti-document-rail--resume-workspace .styleforge-active-cv-control__icon-button:focus-visible {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
 .styleforge-active-cv-control--loaded {
   color: color-mix(in srgb, var(--ti) 92%, black 8%);
 }
@@ -5262,6 +5914,72 @@ html:not(.dark) .dasti-proposal-submit {
   position: sticky;
   inset-block-start: var(--space-2);
   align-self: start;
+}
+
+.dasti-cv-edit-workbench-shell .dasti-grid-split {
+  position: relative;
+  padding-top: calc(var(--document-viewer-toolbar-block-size) + var(--space-2));
+}
+
+.dasti-cv-edit-toolbar {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  justify-content: flex-start;
+  width: max-content;
+  max-width: 100%;
+  flex-wrap: nowrap;
+}
+
+.dasti-cv-edit-toolbar__group {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: var(--proposal-chrome-tight-gap, var(--space-1));
+  min-width: 0;
+  flex: 0 0 auto;
+}
+
+.dasti-cv-edit-toolbar__group--primary {
+  gap: var(--proposal-chrome-group-gap, var(--space-2));
+}
+
+.dasti-cv-edit-toolbar__group--actions {
+  gap: var(--proposal-chrome-tight-gap, var(--space-1));
+  margin-inline-start: var(--space-2);
+  padding-inline-start: var(--space-2);
+  border-inline-start: 1px solid
+    color-mix(in srgb, var(--color-border-contrast) 34%, transparent);
+}
+
+.dasti-cv-edit-toolbar__export,
+.dasti-import-review-trigger {
+  flex: 0 0 auto;
+}
+
+.dasti-import-review-trigger[data-review-state="required"] {
+  border-color: color-mix(in srgb, var(--wa) 34%, transparent);
+  background: color-mix(in srgb, var(--wab) 72%, var(--color-surface) 28%);
+  color: var(--wat);
+}
+
+.dasti-import-review-trigger[data-review-state="required"]:hover,
+.dasti-import-review-trigger[data-review-state="required"]:focus-visible {
+  border-color: color-mix(in srgb, var(--wa) 46%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--wab) 82%,
+    var(--color-surface-raised) 18%
+  );
+  color: var(--wat);
+}
+
+.dasti-import-review-trigger[data-review-state="acknowledged"] {
+  color: var(--tm2);
+}
+
+.dasti-cv-edit-toolbar__hint {
+  white-space: nowrap;
 }
 
 .dasti-proposal-compose-column {
@@ -6470,9 +7188,22 @@ html:not(.dark) .dasti-proposal-submit {
   background: color-mix(in srgb, var(--color-surface-muted) 72%, transparent);
 }
 
+.dasti-inline-review[data-collapsed="true"] {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 .dasti-inline-review[data-review-flash="true"] {
   border-color: color-mix(in srgb, var(--color-border-selected) 72%, transparent);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-border-selected) 42%, transparent);
+}
+
+.dasti-inline-review[data-collapsed="true"][data-review-flash="true"] {
+  box-shadow: none;
 }
 
 .dasti-import-warning-banner {
@@ -6589,6 +7320,27 @@ html:not(.dark) .dasti-proposal-submit {
 .dasti-inline-review__list {
   display: grid;
   gap: 10px;
+}
+
+.dasti-inline-review__panel {
+  display: grid;
+  gap: var(--space-2);
+  inline-size: 100%;
+  overflow: hidden;
+  opacity: 1;
+  max-height: 560px;
+  transform: translateY(0);
+  transition:
+    max-height var(--duration-fast) var(--ease-standard),
+    opacity var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
+}
+
+.dasti-inline-review[data-collapsed="true"] .dasti-inline-review__panel {
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(calc(-1 * var(--space-1)));
+  pointer-events: none;
 }
 
 .dasti-inline-review__status {
@@ -6839,6 +7591,105 @@ html:not(.dark) .dasti-proposal-submit {
 
 .cv-photo-upload-trigger__avatar {
   color: var(--tm2);
+}
+
+.dasti-profile-modal__hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.dasti-profile-modal__media {
+  position: relative;
+  display: inline-flex;
+  align-items: flex-start;
+}
+
+.dasti-profile-modal__avatar {
+  width: var(--s8);
+  height: calc(var(--s8) + var(--s4));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--color-border) 82%, transparent);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--color-surface-muted) 88%, white 12%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08);
+  cursor: pointer;
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    background var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.dasti-profile-modal__avatar:hover,
+.dasti-profile-modal__avatar:focus-visible {
+  border-color: var(--color-border-contrast);
+  background: color-mix(in srgb, var(--color-surface-muted) 78%, white 22%);
+  box-shadow: var(--shadow-sm);
+  outline: none;
+}
+
+.dasti-profile-modal__avatar-remove {
+  position: absolute;
+  inset-block-start: calc(-1 * var(--space-1));
+  inset-inline-end: calc(-1 * var(--space-1));
+  inline-size: 26px;
+  block-size: 26px;
+  min-inline-size: 26px;
+  min-block-size: 26px;
+  padding: 0;
+  border-radius: 999px;
+  z-index: 1;
+}
+
+.dasti-profile-modal__avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.dasti-profile-modal__avatar-empty {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2);
+}
+
+.dasti-profile-modal__avatar-icon {
+  width: var(--s7);
+  height: var(--s7);
+  color: var(--tm2);
+}
+
+.dasti-profile-modal__hero-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.dasti-profile-modal__hero-name,
+.dasti-profile-modal__hero-role {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.dasti-profile-modal__hero-name {
+  color: var(--ti);
+  font-size: var(--ts);
+  line-height: 1.25;
+  font-weight: 600;
+}
+
+.dasti-profile-modal__hero-role {
+  color: var(--tm2);
+  font-size: var(--tx);
+  line-height: 1.35;
 }
 
 .dasti-photo-upload-trigger__tooltip {
@@ -8614,7 +9465,23 @@ html:not(.dark) .dasti-proposal-submit {
 }
 
 .dasti-cv-workbench-bar--resume-workspace .dasti-proposal-rail-cluster {
-  padding-inline-end: 0;
+  width: max-content;
+  max-width: none;
+  flex-wrap: nowrap;
+  padding-inline-end: var(
+    --proposal-chrome-shell-padding,
+    calc(var(--space-2) - 2px)
+  );
+}
+
+.dasti-cv-workbench-bar--resume-workspace .dasti-proposal-rail-cluster > * {
+  flex: 0 0 auto;
+}
+
+.dasti-cv-workbench-bar--resume-workspace .styleforge-active-cv-control {
+  inline-size: min(124px, 100%);
+  min-inline-size: min(124px, 100%);
+  max-width: min(124px, 100%);
 }
 
 .dasti-proposal-saved-view-toolbar {
