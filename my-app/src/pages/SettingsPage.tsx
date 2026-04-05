@@ -106,6 +106,65 @@ const STYLE_OPTIONS: StyleOption[] = [
   },
 ];
 
+const STYLE_TILE_ZONE_INDICES = Array.from({ length: 25 }, (_, index) => index + 1);
+
+function SettingsStyleTile(props: {
+  option: StyleOption;
+  active: boolean;
+  onSelect: () => void;
+  renderMiniPreview: (option: StyleOption) => React.ReactNode;
+}) {
+  const { option, active, onSelect, renderMiniPreview } = props;
+
+  return (
+    <div className="dasti-settings-style-scene">
+      <div className="dasti-settings-style-hotspots" aria-hidden="true">
+        {STYLE_TILE_ZONE_INDICES.map((index) => (
+          <span
+            key={index}
+            className={`dasti-settings-style-zone dasti-settings-style-zone-${index}`}
+            onClick={onSelect}
+          />
+        ))}
+      </div>
+      <button
+        type="button"
+        className={
+          active
+            ? "dasti-settings-style-card dasti-settings-style-card--active"
+            : "dasti-settings-style-card"
+        }
+        aria-pressed={active}
+        onClick={onSelect}
+        title={option.description}
+      >
+        <span className="dasti-settings-style-card__grain" aria-hidden="true" />
+        <span className="dasti-settings-style-card__content">
+          <span className="dasti-settings-style-card__top">
+            <span className="dasti-settings-style-card__label">
+              {option.label}
+            </span>
+            <span className="dasti-settings-style-card__indicator" aria-hidden="true">
+              {active ? (
+                <>
+                  <Check size={12} strokeWidth={2.4} />
+                  Selected
+                </>
+              ) : (
+                "Choose"
+              )}
+            </span>
+          </span>
+          {renderMiniPreview(option)}
+          <span className="dasti-settings-style-card__description">
+            {option.description}
+          </span>
+        </span>
+      </button>
+    </div>
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function SettingsPage(): JSX.Element {
@@ -126,6 +185,7 @@ export function SettingsPage(): JSX.Element {
 
   const [savedTick, setSavedTick] = React.useState(false);
   const savedTickTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previewCardRef = React.useRef<HTMLElement>(null);
 
   // Sync from server once loaded
   const hydrated = React.useRef(false);
@@ -174,6 +234,77 @@ export function SettingsPage(): JSX.Element {
       if (savedTickTimeoutRef.current !== null) {
         clearTimeout(savedTickTimeoutRef.current);
       }
+    };
+  }, []);
+
+  React.useEffect(() => {
+    const card = previewCardRef.current;
+    if (!card) {
+      return undefined;
+    }
+
+    const maxTilt = 4;
+    let frameId: number | null = null;
+
+    const setFromPointer = (clientX: number, clientY: number) => {
+      const rect = card.getBoundingClientRect();
+      const px = (clientX - rect.left) / rect.width;
+      const py = (clientY - rect.top) / rect.height;
+      const x = Math.min(Math.max(px, 0), 1);
+      const y = Math.min(Math.max(py, 0), 1);
+      const rx = (0.5 - y) * (maxTilt * 2);
+      const ry = (x - 0.5) * (maxTilt * 2);
+
+      card.style.setProperty("--rx", `${rx.toFixed(2)}deg`);
+      card.style.setProperty("--ry", `${ry.toFixed(2)}deg`);
+      card.style.setProperty("--mx", `${(x * 100).toFixed(2)}%`);
+      card.style.setProperty("--my", `${(y * 100).toFixed(2)}%`);
+    };
+
+    const move = (clientX: number, clientY: number) => {
+      card.classList.remove("is-resetting");
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
+      frameId = window.requestAnimationFrame(() => {
+        setFromPointer(clientX, clientY);
+      });
+    };
+
+    const reset = () => {
+      card.classList.add("is-resetting");
+      card.style.setProperty("--rx", "0deg");
+      card.style.setProperty("--ry", "0deg");
+      card.style.setProperty("--mx", "50%");
+      card.style.setProperty("--my", "50%");
+    };
+
+    const handleMouseMove = (event: MouseEvent) => {
+      move(event.clientX, event.clientY);
+    };
+
+    const handleTouchMove = (event: TouchEvent) => {
+      const touch = event.touches[0];
+      if (touch) {
+        move(touch.clientX, touch.clientY);
+      }
+    };
+
+    card.addEventListener("mousemove", handleMouseMove);
+    card.addEventListener("mouseleave", reset);
+    card.addEventListener("touchstart", handleTouchMove, { passive: true });
+    card.addEventListener("touchmove", handleTouchMove, { passive: true });
+    card.addEventListener("touchend", reset, { passive: true });
+
+    return () => {
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
+      card.removeEventListener("mousemove", handleMouseMove);
+      card.removeEventListener("mouseleave", reset);
+      card.removeEventListener("touchstart", handleTouchMove);
+      card.removeEventListener("touchmove", handleTouchMove);
+      card.removeEventListener("touchend", reset);
     };
   }, []);
 
@@ -382,6 +513,7 @@ export function SettingsPage(): JSX.Element {
               <div className="dasti-settings-section__label">Style preview</div>
               <div className="dasti-settings-preview-stage">
                 <article
+                  ref={previewCardRef}
                   className={[
                     "dasti-settings-preview-card",
                     `dasti-settings-preview-card--${localStyle}`,
@@ -512,38 +644,15 @@ export function SettingsPage(): JSX.Element {
                     {STYLE_OPTIONS.map((option) => {
                       const active = localStyle === option.id;
                       return (
-                        <button
+                        <SettingsStyleTile
                           key={option.id}
-                          type="button"
-                          className={
-                            active
-                              ? "dasti-settings-style-card dasti-settings-style-card--active"
-                              : "dasti-settings-style-card"
-                          }
-                          aria-pressed={active}
-                          onClick={() => { void handleStyleChange(option.id); }}
-                          title={option.description}
-                        >
-                          <span className="dasti-settings-style-card__top">
-                            <span className="dasti-settings-style-card__label">
-                              {option.label}
-                            </span>
-                            <span className="dasti-settings-style-card__indicator" aria-hidden="true">
-                              {active ? (
-                                <>
-                                  <Check size={12} strokeWidth={2.4} />
-                                  Selected
-                                </>
-                              ) : (
-                                "Choose"
-                              )}
-                            </span>
-                          </span>
-                          {renderStyleMiniPreview(option)}
-                          <span className="dasti-settings-style-card__description">
-                            {option.description}
-                          </span>
-                        </button>
+                          option={option}
+                          active={active}
+                          onSelect={() => {
+                            void handleStyleChange(option.id);
+                          }}
+                          renderMiniPreview={renderStyleMiniPreview}
+                        />
                       );
                     })}
                   </div>

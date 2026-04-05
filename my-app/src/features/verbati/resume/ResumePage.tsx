@@ -2272,22 +2272,6 @@ function VolkRegisterPage({
                 </section>
               ) : null}
 
-              {supportSkills.length > 0 ? (
-                <section style={{ display: "grid", gap: sectionHeadingGap }}>
-                  <p style={sectionHeadingStyle}>skills</p>
-                  <p
-                    style={{
-                      margin: 0,
-                      color: bodyTextColor,
-                      fontFamily: "var(--font-heading-family)",
-                      fontSize: "11pt",
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    {supportSkills.join(" · ")}
-                  </p>
-                </section>
-              ) : null}
             </main>
           </div>
         </div>

@@ -2606,25 +2606,33 @@ export function ProposalForge(): JSX.Element {
     viewportWidth < proposalTwoPaneMinViewportWidth;
   const proposalComposeColumnInlineSize = proposalWorkbenchColumnInlineSize;
   const showComposePanel = isComposePanelVisible && !isSavedView;
+  const storedComposeDraft =
+    typeof window !== "undefined" ? readStoredProposalComposeDraft() : null;
   const briefJobDescription =
     composePreviewValues?.jobDescription?.trim() ||
     prefill?.jobDescription?.trim() ||
-    (typeof window !== "undefined"
-      ? readStoredProposalComposeDraft()?.jobDescription?.trim() || ""
-      : "");
+    storedComposeDraft?.jobDescription?.trim() ||
+    "";
   const briefSourceUrl =
-    prefill?.sourceUrl ||
-    (typeof window !== "undefined"
-      ? readStoredProposalComposeDraft()?.sourceUrl ?? null
-      : null);
+    outputSourceComposeDraft?.sourceUrl ??
+    composePreviewValues?.sourceUrl ??
+    storedComposeDraft?.sourceUrl ??
+    prefill?.sourceUrl ??
+    null;
   const briefSourcePlatform =
-    prefill?.platform ||
-    (typeof window !== "undefined"
-      ? readStoredProposalComposeDraft()?.platform ?? null
-      : null);
+    outputSourceComposeDraft?.platform ??
+    composePreviewValues?.platform ??
+    storedComposeDraft?.platform ??
+    prefill?.platform ??
+    null;
+  const briefJobTitle =
+    composePreviewValues?.jobTitle?.trim() ||
+    prefill?.jobTitle?.trim() ||
+    storedComposeDraft?.jobTitle?.trim() ||
+    "";
   const hasBriefContent = Boolean(briefJobDescription);
   const showBriefCard =
-    Boolean(proposalContent) && !isBriefExpanded && showComposePanel;
+    hasBriefContent && !isBriefExpanded && showComposePanel;
   const shouldShowDesktopBriefCapsule =
     showBriefCard && !isCompactComposeLayout;
   const shouldLeftAnchorStackedWorkbench =
@@ -2837,6 +2845,7 @@ export function ProposalForge(): JSX.Element {
     }
 
     clearBriefAnimationTimers();
+    flushPendingComposeDraftSync();
 
     if (isBriefExpanded) {
       setBriefAnimationPhase("form-exit");
@@ -2858,6 +2867,7 @@ export function ProposalForge(): JSX.Element {
     }, briefSwapDurationMs);
   }, [
     clearBriefAnimationTimers,
+    flushPendingComposeDraftSync,
     hasBriefContent,
     isBriefExpanded,
     scheduleBriefAnimationSettle,
@@ -3158,7 +3168,9 @@ export function ProposalForge(): JSX.Element {
                     >
                       <ProposalBriefCard
                         documentTitle={
-                          proposalDocumentTitle || "Generated proposal"
+                          proposalDocumentTitle ||
+                          briefJobTitle ||
+                          "Generated proposal"
                         }
                         jobDescription={briefJobDescription}
                         onToggleBrief={handleOpenComposeBrief}
@@ -3199,6 +3211,8 @@ export function ProposalForge(): JSX.Element {
                         externalVoicePreset={composeToolbarVoicePreset}
                         headerLabel={null}
                         initialComposeDraft={composeDraftInitialSeed}
+                        sourceUrl={briefSourceUrl}
+                        sourcePlatform={briefSourcePlatform}
                         onGenerateControlChange={handleComposeGenerateControlChange}
                         headerAction={
                           hasBriefContent ? (
