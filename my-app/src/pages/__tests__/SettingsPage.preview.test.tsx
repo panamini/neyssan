@@ -1,5 +1,11 @@
 import React from "react";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsPage } from "../SettingsPage";
@@ -61,15 +67,15 @@ describe("SettingsPage preview controls", () => {
 
     await waitFor(() => {
       expect(updateSettingsMock).toHaveBeenCalledWith({
-        fontPairId: "ledger-sans",
+        fontPairId: "civic-correspondence",
       });
     });
+    expect(container.querySelector(".dasti-settings-font-card--current")).toHaveTextContent(
+      "Archivo Bold",
+    );
     expect(
       container.querySelector(".dasti-settings-font-card--current"),
-    ).toHaveTextContent("Hepta Slab");
-    expect(
-      container.querySelector(".dasti-settings-font-card--current"),
-    ).toHaveTextContent("Geist");
+    ).toHaveTextContent("Source Serif 4");
   });
 
   it("shows a capped calm font drawer with five pair options", async () => {
@@ -118,5 +124,37 @@ describe("SettingsPage preview controls", () => {
     expect(
       container.querySelectorAll(".dasti-settings-style-card__mini").length,
     ).toBeGreaterThanOrEqual(3);
+  });
+
+  it("updates the preview business card tilt when the pointer moves", async () => {
+    const { container } = render(<SettingsPage />);
+    const previewCard = container.querySelector(".dasti-settings-preview-card");
+
+    expect(previewCard).toBeTruthy();
+
+    Object.defineProperty(previewCard!, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({
+        x: 0,
+        y: 0,
+        left: 0,
+        top: 0,
+        width: 320,
+        height: 196,
+        right: 320,
+        bottom: 196,
+        toJSON: () => null,
+      }),
+    });
+
+    fireEvent.pointerMove(previewCard!, {
+      clientX: 248,
+      clientY: 42,
+    });
+
+    await waitFor(() => {
+      expect(previewCard!.style.getPropertyValue("--ry")).not.toBe("0deg");
+      expect(previewCard!.style.getPropertyValue("--rx")).not.toBe("0deg");
+    });
   });
 });

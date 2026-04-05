@@ -106,8 +106,6 @@ const STYLE_OPTIONS: StyleOption[] = [
   },
 ];
 
-const STYLE_TILE_ZONE_INDICES = Array.from({ length: 25 }, (_, index) => index + 1);
-
 function SettingsStyleTile(props: {
   option: StyleOption;
   active: boolean;
@@ -117,51 +115,40 @@ function SettingsStyleTile(props: {
   const { option, active, onSelect, renderMiniPreview } = props;
 
   return (
-    <div className="dasti-settings-style-scene">
-      <div className="dasti-settings-style-hotspots" aria-hidden="true">
-        {STYLE_TILE_ZONE_INDICES.map((index) => (
-          <span
-            key={index}
-            className={`dasti-settings-style-zone dasti-settings-style-zone-${index}`}
-            onClick={onSelect}
-          />
-        ))}
-      </div>
-      <button
-        type="button"
-        className={
-          active
-            ? "dasti-settings-style-card dasti-settings-style-card--active"
-            : "dasti-settings-style-card"
-        }
-        aria-pressed={active}
-        onClick={onSelect}
-        title={option.description}
-      >
-        <span className="dasti-settings-style-card__grain" aria-hidden="true" />
-        <span className="dasti-settings-style-card__content">
-          <span className="dasti-settings-style-card__top">
-            <span className="dasti-settings-style-card__label">
-              {option.label}
-            </span>
-            <span className="dasti-settings-style-card__indicator" aria-hidden="true">
-              {active ? (
-                <>
-                  <Check size={12} strokeWidth={2.4} />
-                  Selected
-                </>
-              ) : (
-                "Choose"
-              )}
-            </span>
+    <button
+      type="button"
+      className={
+        active
+          ? "dasti-settings-style-card dasti-settings-style-card--active"
+          : "dasti-settings-style-card"
+      }
+      aria-pressed={active}
+      onClick={onSelect}
+      title={option.description}
+    >
+      <span className="dasti-settings-style-card__grain" aria-hidden="true" />
+      <span className="dasti-settings-style-card__content">
+        <span className="dasti-settings-style-card__top">
+          <span className="dasti-settings-style-card__label">
+            {option.label}
           </span>
-          {renderMiniPreview(option)}
-          <span className="dasti-settings-style-card__description">
-            {option.description}
+          <span className="dasti-settings-style-card__indicator" aria-hidden="true">
+            {active ? (
+              <>
+                <Check size={12} strokeWidth={2.4} />
+                Selected
+              </>
+            ) : (
+              "Choose"
+            )}
           </span>
         </span>
-      </button>
-    </div>
+        {renderMiniPreview(option)}
+        <span className="dasti-settings-style-card__description">
+          {option.description}
+        </span>
+      </span>
+    </button>
   );
 }
 
@@ -279,32 +266,29 @@ export function SettingsPage(): JSX.Element {
       card.style.setProperty("--my", "50%");
     };
 
-    const handleMouseMove = (event: MouseEvent) => {
+    const handlePointerMove = (event: PointerEvent) => {
       move(event.clientX, event.clientY);
     };
 
-    const handleTouchMove = (event: TouchEvent) => {
-      const touch = event.touches[0];
-      if (touch) {
-        move(touch.clientX, touch.clientY);
-      }
+    const handlePointerLeave = () => {
+      reset();
     };
 
-    card.addEventListener("mousemove", handleMouseMove);
-    card.addEventListener("mouseleave", reset);
-    card.addEventListener("touchstart", handleTouchMove, { passive: true });
-    card.addEventListener("touchmove", handleTouchMove, { passive: true });
-    card.addEventListener("touchend", reset, { passive: true });
+    card.addEventListener("pointerdown", handlePointerMove);
+    card.addEventListener("pointermove", handlePointerMove);
+    card.addEventListener("pointerleave", handlePointerLeave);
+    card.addEventListener("pointerup", handlePointerLeave);
+    card.addEventListener("pointercancel", handlePointerLeave);
 
     return () => {
       if (frameId !== null) {
         window.cancelAnimationFrame(frameId);
       }
-      card.removeEventListener("mousemove", handleMouseMove);
-      card.removeEventListener("mouseleave", reset);
-      card.removeEventListener("touchstart", handleTouchMove);
-      card.removeEventListener("touchmove", handleTouchMove);
-      card.removeEventListener("touchend", reset);
+      card.removeEventListener("pointerdown", handlePointerMove);
+      card.removeEventListener("pointermove", handlePointerMove);
+      card.removeEventListener("pointerleave", handlePointerLeave);
+      card.removeEventListener("pointerup", handlePointerLeave);
+      card.removeEventListener("pointercancel", handlePointerLeave);
     };
   }, []);
 
