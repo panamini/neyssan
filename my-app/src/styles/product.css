@@ -503,8 +503,8 @@
   box-shadow: none;
   border: none !important;
   transition:
-    background 0.14s var(--ez),
-    color 0.14s var(--ez);
+    background 150ms ease-out,
+    color 150ms ease-out;
 }
 
 .sb--compact .sb-nav-item {
@@ -584,10 +584,7 @@
   .card-delete-btn,
   .dasti-card-delete-button {
     opacity: 0;
-    transition:
-      opacity 0.15s var(--ez),
-      background-color 0.12s var(--ez),
-      color 0.12s var(--ez);
+    transition: opacity 0.15s var(--ez);
   }
   .card-group:hover .card-delete-btn,
   .card-group:hover .dasti-card-delete-button {
@@ -644,7 +641,6 @@
 .sb-nav-item--active {
   background: var(--sidebar-active-bg);
   color: var(--sidebar-active-ink);
-  box-shadow: inset 2px 0 0 var(--sidebar-active-stripe); /* left accent stripe */
 }
 
 .sb-nav-icon {
@@ -995,7 +991,6 @@
   transition:
     background 0.12s var(--ez),
     border-color 0.12s var(--ez),
-    box-shadow 0.12s var(--ez),
     transform 0.12s var(--ez);
   font-family: inherit;
 }
@@ -1003,7 +998,6 @@
 .dasti-doc-card:hover {
   background: var(--sf2);
   border-color: var(--color-border-contrast);
-  box-shadow: var(--shb);
   transform: translateY(-1px);
 }
 
@@ -1135,21 +1129,6 @@
   letter-spacing: 0.01em;
 }
 
-.dasti-doc-card__proposal-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.dasti-doc-card__proposal-stamp {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--tg2);
-}
-
 .dasti-doc-card__meta {
   display: flex;
   flex-wrap: wrap;
@@ -1223,8 +1202,8 @@
   transform: translateY(4px);
   pointer-events: none;
   transition:
-    opacity 0.16s var(--ez),
-    transform 0.16s var(--ez);
+    opacity 0.16s ease-out,
+    transform 0.16s ease-out;
 }
 
 .dasti-doc-card--library:hover .dasti-doc-card__quick-actions,
@@ -1288,21 +1267,6 @@
 
 .dasti-doc-card--proposal-library {
   flex: 1 1 auto;
-}
-
-.dasti-doc-card--proposal-library .dasti-doc-card__title {
-  font-size: clamp(18px, 1.18vw, 21px);
-  line-height: 1.14;
-  letter-spacing: -0.024em;
-}
-
-.dasti-doc-card--proposal-library .dasti-doc-card__body-band {
-  padding-top: var(--space-3);
-}
-
-.dasti-doc-card--proposal-library .dasti-doc-card__snippet--library {
-  color: color-mix(in srgb, var(--ti) 82%, var(--tm2));
-  line-height: 1.62;
 }
 
 .dasti-doc-card--cv-library .dasti-doc-card__title-frame {
@@ -1403,7 +1367,7 @@
   height: auto;
   padding-block-start: calc(
     var(--cv-preview-toolbar-inset, 0px) +
-      var(--document-viewer-toolbar-block-size) + var(--space-1)
+      var(--document-viewer-toolbar-block-size) + var(--space-2)
   );
 }
 
@@ -1421,10 +1385,6 @@
 .dasti-proposal-sheet-frame--resume-workspace .dasti-proposal-sheet {
   min-height: 0;
   height: 100%;
-  --document-viewer-frame-surface: transparent;
-  background: transparent;
-  border: none;
-  box-shadow: none;
 }
 
 .dasti-proposal-sheet__header {
@@ -1904,18 +1864,10 @@
 
 .dasti-proposal-library-utility-row {
   display: grid;
-  grid-template-columns: minmax(180px, 280px) repeat(2, auto) auto;
+  grid-template-columns: minmax(0, 1.4fr) repeat(2, auto) auto;
   align-items: center;
   gap: var(--space-2);
   min-width: 0;
-  justify-content: flex-start;
-}
-
-.dasti-proposal-library-actions-row {
-  width: 100%;
-  display: flex;
-  justify-content: flex-start;
-  align-items: center;
 }
 
 .dasti-proposal-library-utility-row__search,
@@ -1933,17 +1885,6 @@
   color: var(--ti);
   font: inherit;
   font-size: var(--ts);
-  transition:
-    border-color 0.12s var(--ez),
-    box-shadow 0.12s var(--ez),
-    background-color 0.12s var(--ez);
-}
-
-.dasti-proposal-library-utility-row__input:focus {
-  outline: none;
-  border-color: var(--color-accent);
-  box-shadow: var(--focus-shadow-soft);
-  background: var(--color-surface-raised);
 }
 
 .dasti-proposal-library-utility-row__count {
@@ -1986,13 +1927,6 @@
   column-gap: var(--layout-card-grid);
 }
 
-.dasti-proposal-library-secondary-shell {
-  width: min(100%, var(--proposal-library-selected-shell-inline-size));
-  display: grid;
-  gap: var(--space-3);
-  justify-self: center;
-}
-
 .dasti-proposal-library-selected-sidebar {
   min-width: 0;
   display: grid;
@@ -2001,53 +1935,9 @@
   justify-self: start;
 }
 
-.dasti-proposal-library-info-card {
-  width: min(100%, 264px);
-  padding: 18px 18px 16px;
-  border-radius: calc(var(--radius-card) + 2px);
-  border: 1px solid color-mix(in srgb, var(--color-border) 88%, transparent);
-  background: color-mix(
-    in srgb,
-    var(--document-viewer-frame-surface) 92%,
-    transparent
-  );
-  box-shadow: 0 18px 40px -34px color-mix(in srgb, var(--shadow-color) 86%, transparent);
-}
-
-.dasti-proposal-library-info-card__stack {
-  display: grid;
-  gap: 12px;
-}
-
-.dasti-proposal-library-info-card__title {
-  margin: 0;
-  font-family: var(--font-heading-family);
-  font-size: clamp(22px, 2.2vw, 28px);
-  line-height: 1.08;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  color: var(--ti);
-}
-
-.dasti-proposal-library-info-card__meta {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.dasti-proposal-library-info-card__details {
-  margin: 0;
-  font-size: var(--ts);
-  line-height: 1.45;
-  color: var(--tm2);
-}
-
 .dasti-proposal-library-sidebar__actions {
   width: max-content;
   max-width: 100%;
-  justify-self: start;
-  align-self: center;
 }
 
 .dasti-proposal-library-sidebar__heading {
@@ -2112,175 +2002,6 @@
   );
   width: min(100%, var(--document-viewer-shell-inline-size));
   justify-self: start;
-}
-
-.dasti-proposal-library-selected-context {
-  min-width: 0;
-  display: grid;
-  gap: var(--space-2);
-}
-
-.dasti-proposal-library-selected-context__title {
-  font-size: var(--tx);
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--tm2);
-}
-
-.dasti-proposal-library-selected-context__scroller {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(148px, 1fr);
-  gap: var(--space-2);
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  padding-block-end: 2px;
-  scrollbar-width: thin;
-}
-
-.dasti-proposal-library-selected-context__card {
-  display: grid;
-  gap: 6px;
-  padding: 12px 14px;
-  border-radius: calc(var(--radius-card) - 2px);
-  border: 1px solid color-mix(in srgb, var(--color-border) 82%, transparent);
-  background: color-mix(
-    in srgb,
-    var(--document-viewer-frame-surface) 84%,
-    transparent
-  );
-  box-shadow: 0 12px 28px -26px color-mix(in srgb, var(--shadow-color) 82%, transparent);
-}
-
-.dasti-proposal-library-selected-context__label {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--tm2);
-}
-
-.dasti-proposal-library-selected-context__value {
-  font-size: var(--ts);
-  line-height: 1.45;
-  color: var(--ti);
-  overflow-wrap: anywhere;
-}
-
-.dasti-proposal-library-ribbon {
-  width: 100%;
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(220px, 264px);
-  gap: var(--space-2);
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  padding-block-end: 2px;
-  scrollbar-width: thin;
-}
-
-.dasti-proposal-library-ribbon__card {
-  min-width: 0;
-  display: grid;
-  align-content: start;
-  gap: 8px;
-  padding: 14px 16px;
-  border-radius: calc(var(--radius-card) - 2px);
-  border: 1px solid color-mix(in srgb, var(--color-border) 84%, transparent);
-  background: color-mix(
-    in srgb,
-    var(--document-viewer-frame-surface) 86%,
-    transparent
-  );
-  box-shadow: 0 14px 32px -28px color-mix(in srgb, var(--shadow-color) 78%, transparent);
-  text-align: left;
-  cursor: pointer;
-}
-
-.dasti-proposal-library-ribbon__title {
-  display: block;
-  min-width: 0;
-  font-size: var(--tu);
-  line-height: 1.2;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--ti);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.dasti-proposal-library-ribbon__meta {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-  min-width: 0;
-}
-
-.dasti-proposal-library-ribbon__stamp {
-  font-size: var(--tx);
-  line-height: 1.45;
-  color: var(--tm2);
-}
-
-@media (min-width: 1200px) {
-  .dasti-proposal-library-selected-shell {
-    grid-template-columns:
-      minmax(220px, 264px)
-      minmax(0, var(--proposal-library-selected-shell-inline-size));
-    column-gap: var(--space-4);
-    align-items: start;
-    justify-content: flex-start;
-  }
-
-  .dasti-proposal-library-selected-sidebar {
-    width: 100%;
-    justify-self: start;
-  }
-
-  .dasti-proposal-library-selected-shell .dasti-proposal-library-card {
-    justify-self: start;
-  }
-
-  .dasti-proposal-library-selected-context {
-    position: sticky;
-    inset-block-start: var(--space-3);
-    align-self: start;
-  }
-}
-
-@media (max-width: 1023px) {
-  .dasti-proposal-library-utility-row {
-    grid-template-columns: minmax(0, 1fr) repeat(2, auto);
-  }
-
-  .dasti-proposal-library-utility-row__count {
-    justify-self: start;
-    grid-column: 1 / -1;
-  }
-}
-
-@media (max-width: 767px) {
-  .dasti-proposal-library-utility-row {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .dasti-proposal-library-utility-row__search {
-    grid-column: 1 / -1;
-  }
-
-  .dasti-proposal-library-ribbon {
-    grid-auto-columns: minmax(172px, 72vw);
-    gap: var(--space-1);
-    scroll-snap-type: x proximity;
-  }
-
-  .dasti-proposal-library-ribbon__card,
-  .dasti-proposal-library-selected-context__card {
-    scroll-snap-align: start;
-  }
 }
 
 .dasti-proposal-library-card .dasti-proposal-sheet__body--document-viewer .dasti-document-stage-chassis {
@@ -2433,25 +2154,16 @@
 }
 
 .dasti-doc-viewer-shell--resume-workspace {
-  --cv-edit-toggle-shell-inline-size: calc(
-    var(--hs) +
-      (var(--proposal-chrome-shell-padding, calc(var(--space-2) - 2px)) * 2)
-  );
-  --cv-edit-toggle-inset-inline: var(--space-6);
-  --cv-edit-toggle-inset-block: var(--space-6);
-  --cv-edit-toolbar-inline-offset: calc(
-    var(--cv-edit-toggle-inset-inline) +
-      var(--cv-edit-toggle-shell-inline-size) + var(--space-2)
-  );
   --document-shell-padding-inline: var(--space-1);
   --document-shell-padding-block: var(--space-1);
   --document-viewer-bleed-inline: var(--space-1);
   --document-viewer-bleed-block: var(--space-1);
   --document-rail-gap: var(--space-1);
-  /* Resume preview canvas background:
-     change this token if you want the grey area behind the paper to shift. */
-  --document-viewer-stage-surface: var(--color-surface-muted);
-  --document-viewer-frame-surface: transparent;
+  --document-viewer-frame-surface: color-mix(
+    in srgb,
+    var(--sf1) 78%,
+    var(--bg) 22%
+  );
   --document-viewer-frame-border: color-mix(
     in srgb,
     var(--color-border) 74%,
@@ -2464,209 +2176,16 @@
   gap: 0;
   min-height: 0;
   height: 100%;
-  background: var(--color-surface-muted);
 }
 
 .dasti-document-rail--resume-workspace {
   position: absolute;
   inset-block-start: var(--cv-preview-toolbar-inset, 0px);
-  inset-inline-start: var(--space-4);
+  inset-inline-start: var(--space-3);
   inset-inline-end: auto;
   width: max-content;
-  max-width: none;
+  max-width: 100%;
   z-index: 24;
-}
-
-.dasti-document-rail--resume-workspace .dasti-proposal-rail-cluster {
-  flex-wrap: nowrap;
-  align-items: center;
-  width: max-content;
-  max-width: none;
-  overflow: visible;
-  scrollbar-width: auto;
-  padding-inline-start: var(
-    --proposal-chrome-shell-padding,
-    calc(var(--space-2) - 2px)
-  );
-  padding-inline-end: var(
-    --proposal-chrome-shell-padding,
-    calc(var(--space-2) - 2px)
-  );
-  background: var(--color-surface-raised);
-  border-color: var(--color-border);
-  box-shadow: var(--shadow-frost, var(--shadow-sm));
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
-.dasti-document-rail--resume-workspace .dasti-proposal-rail-cluster > * {
-  flex: 0 0 auto;
-}
-
-.dasti-document-rail--resume-workspace .dasti-proposal-rail-cluster::-webkit-scrollbar {
-  display: none;
-}
-
-.dasti-document-rail--resume-workspace .dasti-document-rail__section--start {
-  max-width: none;
-  overflow: visible;
-}
-
-.dasti-document-rail--resume-workspace .dasti-artifact-inspector__action {
-  border-color: var(--color-border);
-  background: var(--color-surface-raised);
-  color: var(--color-text-muted);
-  box-shadow: var(--shadow-sm);
-}
-
-.dasti-document-rail--resume-workspace .dasti-artifact-inspector__action:hover,
-.dasti-document-rail--resume-workspace .dasti-artifact-inspector__action:focus-visible {
-  background: var(--color-surface-2);
-  border-color: var(--color-border-contrast);
-  color: var(--color-text);
-}
-
-.dasti-document-rail--resume-workspace .dasti-artifact-inspector__action--active {
-  background: var(--color-surface);
-  border-color: var(--color-border-contrast);
-  color: var(--color-text);
-}
-
-.dasti-document-rail--resume-workspace .dasti-icon-button,
-.dasti-document-rail--resume-workspace .dasti-doc-zoom-fit,
-.dasti-document-rail--resume-workspace .dasti-cv-workbench-toggle__button {
-  border-color: var(--color-border);
-  background: var(--color-surface-raised);
-  color: var(--color-text-muted);
-  box-shadow: var(--shadow-sm);
-}
-
-.dasti-document-rail--resume-workspace .dasti-icon-button:hover,
-.dasti-document-rail--resume-workspace .dasti-icon-button:focus-visible,
-.dasti-document-rail--resume-workspace .dasti-doc-zoom-fit:hover,
-.dasti-document-rail--resume-workspace .dasti-doc-zoom-fit:focus-visible,
-.dasti-document-rail--resume-workspace .dasti-cv-workbench-toggle__button:hover,
-.dasti-document-rail--resume-workspace .dasti-cv-workbench-toggle__button:focus-visible {
-  background: var(--color-surface);
-  border-color: var(--color-border-contrast);
-  color: var(--color-text);
-}
-
-.dasti-document-rail--resume-workspace .dasti-doc-zoom-fit--active,
-.dasti-document-rail--resume-workspace .dasti-cv-workbench-toggle__button--active {
-  background: var(--color-surface);
-  border-color: var(--color-border-contrast);
-  color: var(--color-text);
-}
-
-.dasti-document-rail--resume-workspace .styleforge-active-cv-control,
-.dasti-document-rail--resume-workspace .styleforge-active-cv-control--loaded,
-.dasti-document-rail--resume-workspace .styleforge-active-cv-control--ghost {
-  flex: 0 1 116px;
-  inline-size: 116px;
-  min-inline-size: 0;
-  max-inline-size: 116px;
-  border-color: var(--color-border);
-  background: var(--color-surface-raised);
-  color: var(--color-text);
-  box-shadow: var(--shadow-sm);
-}
-
-.dasti-document-rail--resume-workspace .styleforge-active-cv-control__body,
-.dasti-document-rail--resume-workspace .styleforge-active-cv-control__icon-button {
-  color: var(--color-text-muted);
-}
-
-.dasti-document-rail--resume-workspace .styleforge-active-cv-control__body {
-  min-width: 0;
-  overflow: hidden;
-}
-
-.dasti-document-rail--resume-workspace .dasti-proposal-chip__label--resume {
-  max-width: 8ch;
-}
-
-.dasti-document-rail--resume-workspace .styleforge-active-cv-control__body:hover,
-.dasti-document-rail--resume-workspace .styleforge-active-cv-control__icon-button:hover,
-.dasti-document-rail--resume-workspace .styleforge-active-cv-control__body:focus-visible,
-.dasti-document-rail--resume-workspace .styleforge-active-cv-control__icon-button:focus-visible {
-  background: var(--color-surface);
-  color: var(--color-text);
-}
-
-.dasti-doc-zoom-segmented-shell {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: var(--document-viewer-toolbar-block-size);
-  min-width: 0;
-}
-
-.dasti-doc-zoom-segmented-shell__icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  color: var(--tm2);
-  flex: 0 0 auto;
-}
-
-.dasti-segmented-control {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  padding: 4px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
-  background: color-mix(
-    in srgb,
-    var(--document-viewer-frame-surface) 92%,
-    transparent
-  );
-}
-
-.dasti-segmented-control__button {
-  appearance: none;
-  border: none;
-  background: transparent;
-  color: var(--tm2);
-  min-height: 28px;
-  padding: 0 10px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-  transition:
-    background var(--duration-fast) var(--ease-standard),
-    color var(--duration-fast) var(--ease-standard),
-    box-shadow var(--duration-fast) var(--ease-standard);
-}
-
-.dasti-segmented-control__button:hover:not(:disabled),
-.dasti-segmented-control__button:focus-visible {
-  background: color-mix(in srgb, var(--color-surface-raised) 88%, transparent);
-  color: var(--ti);
-  outline: none;
-}
-
-.dasti-segmented-control__button--active {
-  background: var(--color-surface-raised);
-  color: var(--ti);
-  box-shadow: inset 0 0 0 1px
-    color-mix(in srgb, var(--color-border-strong) 40%, transparent);
-}
-
-.dasti-toolbar-segmented-control {
-  max-width: min(100%, 340px);
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.dasti-toolbar-segmented-control::-webkit-scrollbar {
-  display: none;
 }
 
 .dasti-cv-workbench-bar--resume-workspace {
@@ -2895,12 +2414,7 @@
 }
 
 .dasti-proposal-editor-hint {
-  position: absolute;
-  inset-block-start: var(--space-2);
-  inset-inline-start: var(--space-2);
-  z-index: 6;
-  max-inline-size: min(240px, calc(100% - (var(--space-2) * 2)));
-  margin: 0;
+  margin: var(--space-2) var(--space-2) 0;
   padding: 10px 12px;
   border-radius: calc(var(--radius-card) - 4px);
   border: 1px solid color-mix(in srgb, var(--color-border-selected) 54%, transparent);
@@ -2908,29 +2422,32 @@
   color: var(--tm2);
   font-size: var(--tx);
   line-height: 1.55;
-  box-shadow: 0 12px 24px -20px color-mix(in srgb, var(--shadow-color) 82%, transparent);
-  pointer-events: none;
 }
 
 .dasti-proposal-character-badge-wrap {
-  position: sticky;
-  inset-inline-start: 0;
-  inset-block-end: calc(var(--space-4) + 2px);
-  z-index: 18;
-  display: flex;
-  justify-content: flex-start;
-  padding-inline: max(
-    var(--space-2),
-    var(--proposal-output-stage-frame-padding, 0px)
+  position: absolute;
+  inset-inline-start: calc(
+    max(
+        var(--document-shell-padding-inline),
+        var(--proposal-output-stage-frame-padding, 0px)
+      ) + var(--space-1)
   );
-  padding-block-start: var(--space-2);
+  inset-block-end: calc(
+    max(
+        var(--document-shell-padding-block),
+        var(--proposal-output-stage-frame-padding, 0px)
+      ) + var(--space-1)
+  );
+  z-index: 18;
   pointer-events: none;
+  transition:
+    opacity var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
 }
 
 .dasti-proposal-character-badge-wrap[data-overlap-hidden="true"] {
   opacity: 0;
   transform: translate3d(0, 6px, 0);
-  pointer-events: none;
 }
 
 .dasti-proposal-character-badge {
@@ -2943,64 +2460,6 @@
   background: color-mix(in srgb, var(--sfr) 90%, transparent);
   border-color: var(--color-border);
   color: var(--tg2);
-}
-
-.dasti-proposal-display__editor-assist {
-  display: grid;
-  gap: var(--space-2);
-}
-
-.dasti-proposal-display__editor-assist-card {
-  display: grid;
-  gap: var(--space-2);
-  padding: 16px;
-  border-radius: calc(var(--radius-card) + 2px);
-  border: 1px solid color-mix(in srgb, var(--color-border) 84%, transparent);
-  background: color-mix(in srgb, var(--document-viewer-frame-surface) 92%, transparent);
-  box-shadow: 0 16px 36px -30px color-mix(in srgb, var(--shadow-color) 86%, transparent);
-}
-
-.dasti-proposal-display__editor-assist-kicker {
-  margin: 0;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--tg2);
-}
-
-.dasti-proposal-display__editor-assist-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.dasti-proposal-display__editor-assist-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 32px;
-  padding: 0 12px;
-  border-radius: var(--radius-pill);
-  border: 1px solid color-mix(in srgb, var(--color-border) 78%, transparent);
-  background: var(--sf2);
-  color: var(--ti);
-  font: inherit;
-  font-size: var(--tx);
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.dasti-proposal-display__editor-assist-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
-}
-
-.dasti-proposal-display__editor-assist-note {
-  margin: 0;
-  color: var(--tm2);
-  font-size: var(--tx);
-  line-height: 1.55;
 }
 
 /* ── Semantic length signal (Brief / Ideal / Long) ───────── */
@@ -3063,18 +2522,21 @@
 }
 
 .dasti-doc-zoom-fit {
-  width: var(--hs);
+  width: auto;
   min-width: var(--hs);
   height: var(--hs);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0;
-  border: 1px solid var(--color-border);
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 82%, transparent);
   border-radius: var(--radius-toolbar-control, var(--radius-control));
-  background: var(--color-surface-raised);
-  color: var(--color-text-muted);
-  box-shadow: var(--shadow-sm);
+  background: color-mix(
+    in srgb,
+    var(--document-viewer-frame-surface, var(--sf2)) 92%,
+    transparent
+  );
+  color: var(--tm2);
   cursor: pointer;
   transition:
     background 0.12s var(--ez),
@@ -3084,15 +2546,23 @@
 }
 
 .dasti-doc-zoom-fit:hover {
-  background: var(--color-surface-2);
-  border-color: var(--color-border-contrast);
-  color: var(--color-text);
+  background: color-mix(in srgb, var(--sfr) 96%, transparent);
+  border-color: color-mix(
+    in srgb,
+    var(--color-border-contrast) 74%,
+    transparent
+  );
+  color: var(--ti);
 }
 
 .dasti-doc-zoom-fit--active {
   background: var(--color-surface);
-  border-color: var(--color-border-contrast);
-  color: var(--color-text);
+  border-color: color-mix(
+    in srgb,
+    var(--color-border-contrast) 78%,
+    transparent
+  );
+  color: var(--ti);
   box-shadow: var(--shadow-sm);
 }
 
@@ -3131,7 +2601,35 @@
 }
 
 .dasti-inline-ai-toolbar::before {
-  content: none;
+  content: "";
+  position: absolute;
+  inset-inline-start: var(--dasti-inline-ai-toolbar-pointer-offset, 50%);
+  width: 12px;
+  height: 12px;
+  margin-inline-start: -6px;
+  border-inline-start: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  border-block-start: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--color-surface-raised) 92%,
+    transparent
+  );
+  box-shadow: var(--shadow-frost, var(--shadow-sm));
+  backdrop-filter: saturate(calc(var(--frost-saturate, 1.03) + 0.02))
+    blur(calc(var(--frost-blur, 14px) + 4px));
+  -webkit-backdrop-filter: saturate(calc(var(--frost-saturate, 1.03) + 0.02))
+    blur(calc(var(--frost-blur, 14px) + 4px));
+  transform: rotate(45deg);
+  z-index: 0;
+}
+
+.dasti-inline-ai-toolbar[data-placement="below"]::before {
+  inset-block-start: -6px;
+}
+
+.dasti-inline-ai-toolbar[data-placement="above"]::before {
+  inset-block-end: -6px;
+  transform: rotate(225deg);
 }
 
 .dasti-inline-ai-toolbar__shadow {
@@ -3198,262 +2696,6 @@
     0;
 }
 
-.dasti-proposal-compose-shell__content-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-3);
-  min-width: 0;
-}
-
-.dasti-proposal-compose-shell__main-column,
-.dasti-proposal-compose-shell__aside-column {
-  min-width: 0;
-}
-
-.dasti-proposal-compose-shell__main-column {
-  order: 2;
-}
-
-.dasti-proposal-compose-shell__aside-column {
-  order: 1;
-  overflow: visible;
-  padding-block-end: 0;
-}
-
-.dasti-proposal-compose-shell__source-card {
-  display: grid;
-  gap: var(--space-2);
-  margin-top: var(--space-3);
-  padding: var(--space-3);
-  border-radius: calc(var(--radius-card) - 1px);
-  border: 1px solid
-    color-mix(
-      in srgb,
-      var(--color-accent) 18%,
-      var(--color-border-selected) 82%
-    );
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(
-        in srgb,
-        var(--color-accent-soft) 34%,
-        var(--color-surface-raised) 66%
-      ),
-      color-mix(
-        in srgb,
-        var(--color-surface) 84%,
-        var(--color-surface-muted) 16%
-      )
-    );
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, white 52%, transparent),
-    0 16px 36px -30px color-mix(in srgb, var(--shadow-color) 94%, transparent);
-}
-
-.dasti-proposal-compose-shell__source-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-}
-
-.dasti-proposal-compose-shell__source-copy {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
-
-.dasti-proposal-compose-shell__source-kicker {
-  display: inline-flex;
-  align-items: center;
-  width: fit-content;
-  min-height: 22px;
-  padding: 0 10px;
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--color-accent-soft) 76%, transparent);
-  color: color-mix(in srgb, var(--tm2) 82%, var(--color-accent) 18%);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.dasti-proposal-compose-shell__source-label {
-  font-size: var(--tu);
-  line-height: 1.3;
-  font-weight: 600;
-  color: var(--ti);
-  overflow-wrap: anywhere;
-}
-
-.dasti-proposal-compose-shell__source-host {
-  font-size: var(--tx);
-  line-height: 1.45;
-  color: var(--tg2);
-}
-
-.dasti-proposal-compose-shell__source-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 36px;
-  padding: 0 14px;
-  border-radius: var(--radius-pill);
-  border: 1px solid
-    color-mix(in srgb, var(--color-accent) 18%, var(--color-border-selected) 82%);
-  background: color-mix(
-    in srgb,
-    var(--color-surface-raised) 84%,
-    var(--color-accent-soft) 16%
-  );
-  box-shadow: var(--shadow-sm);
-  color: var(--ti);
-  font-size: var(--ts);
-  font-weight: 600;
-  text-decoration: none;
-  transition:
-    background 0.12s var(--ez),
-    border-color 0.12s var(--ez),
-    color 0.12s var(--ez),
-    transform 0.12s var(--ez),
-    box-shadow 0.12s var(--ez);
-}
-
-.dasti-proposal-compose-shell__source-link:hover,
-.dasti-proposal-compose-shell__source-link:focus-visible {
-  background: color-mix(
-    in srgb,
-    var(--color-surface) 74%,
-    var(--color-accent-soft) 26%
-  );
-  border-color: color-mix(in srgb, var(--color-accent) 28%, var(--color-border-selected) 72%);
-  color: color-mix(in srgb, var(--ti) 88%, var(--color-accent) 12%);
-  transform: translateY(-1px);
-  outline: none;
-}
-
-.dasti-proposal-compose-shell__source-note {
-  margin: 0;
-  color: var(--tm2);
-  font-size: var(--tx);
-  line-height: 1.55;
-}
-
-.dasti-proposal-source-summary__section,
-.dasti-proposal-source-summary__accordion {
-  display: grid;
-  gap: var(--space-2);
-  min-width: 0;
-  padding: 14px;
-  border-radius: calc(var(--radius-card) - 2px);
-  border: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
-  background: color-mix(in srgb, var(--color-surface-muted) 82%, transparent);
-}
-
-.dasti-proposal-source-summary__kicker {
-  margin: 0;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--tg2);
-}
-
-.dasti-proposal-source-summary__company {
-  margin: 0;
-  font-family: var(--font-heading-family);
-  font-size: clamp(24px, 2vw, 30px);
-  line-height: 1.02;
-  letter-spacing: -0.03em;
-  color: var(--ti);
-}
-
-.dasti-proposal-source-summary__role {
-  margin: 0;
-  color: var(--tm2);
-  font-size: var(--ts);
-  line-height: 1.45;
-}
-
-.dasti-proposal-source-summary__tone-list,
-.dasti-proposal-source-summary__keyword-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.dasti-proposal-source-summary__tone-pill,
-.dasti-proposal-source-summary__keyword-pill {
-  display: inline-flex;
-  align-items: center;
-  min-height: 28px;
-  padding: 0 10px;
-  border-radius: var(--radius-pill);
-  border: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
-  background: var(--sf2);
-  color: var(--tm2);
-  font-size: var(--tx);
-  font-weight: 600;
-}
-
-.dasti-proposal-source-summary__tone-pill--active {
-  background: var(--ac);
-  border-color: var(--ac);
-  color: var(--sfr);
-}
-
-.dasti-proposal-source-summary__accordion {
-  padding: 0;
-  overflow: clip;
-}
-
-.dasti-proposal-source-summary__accordion-summary {
-  list-style: none;
-  cursor: pointer;
-  padding: 14px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--tm2);
-}
-
-.dasti-proposal-source-summary__accordion-summary::-webkit-details-marker {
-  display: none;
-}
-
-.dasti-proposal-source-summary__responsibility-list {
-  margin: 0;
-  padding: 0 14px 14px 28px;
-  display: grid;
-  gap: 10px;
-}
-
-.dasti-proposal-source-summary__responsibility-item {
-  color: var(--tm2);
-  font-size: var(--tx);
-  line-height: 1.65;
-}
-
-.dasti-proposal-source-summary__responsibility-item::marker {
-  color: var(--ac);
-}
-
-.dasti-proposal-compose-shell__aside-column .dasti-proposal-source-summary {
-  padding-inline: calc(var(--space-2) + 2px);
-  padding-block-start: calc(var(--space-2) + 2px);
-  border-radius: calc(var(--radius-card) - 2px);
-  border: 1px solid color-mix(in srgb, var(--color-border) 82%, transparent);
-  background: color-mix(
-    in srgb,
-    var(--document-viewer-frame-surface) 84%,
-    transparent
-  );
-}
-
 .dasti-proposal-source-summary__note {
   margin: 0;
   color: var(--tm2);
@@ -3461,31 +2703,34 @@
   line-height: 1.55;
 }
 
-.dasti-proposal-source-summary__provenance {
+.dasti-proposal-source-summary__origin-strip,
+.dasti-proposal-source-summary__job-offer-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 12px;
+  border-radius: calc(var(--radius-card) - 4px);
+  border: 1px solid color-mix(in srgb, var(--color-border-selected) 52%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface-muted) 92%);
+}
+
+.dasti-proposal-source-summary__origin-strip-copy,
+.dasti-proposal-source-summary__job-offer-copy {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.dasti-proposal-source-summary__origin,
+.dasti-proposal-source-summary__job-offer-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
   flex-wrap: wrap;
-  padding: 10px 12px;
-  border-radius: calc(var(--radius-control) + 1px);
-  border: 1px solid color-mix(in srgb, var(--color-border-selected) 40%, transparent);
-  background: color-mix(
-    in srgb,
-    var(--color-accent-soft) 18%,
-    var(--color-surface-muted) 82%
-  );
 }
 
-.dasti-proposal-source-summary__provenance-copy {
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  min-width: 0;
-}
-
-.dasti-proposal-source-summary__provenance-label,
 .dasti-proposal-source-summary__origin-label {
   color: var(--ti);
   font-size: var(--ts);
@@ -3494,7 +2739,8 @@
   overflow-wrap: anywhere;
 }
 
-.dasti-proposal-source-summary__origin-link {
+.dasti-proposal-source-summary__origin-link,
+.dasti-proposal-source-summary__job-offer-link {
   color: var(--color-accent);
   font-size: var(--ts);
   line-height: 1.4;
@@ -3506,11 +2752,14 @@
 }
 
 .dasti-proposal-source-summary__origin-link:hover,
-.dasti-proposal-source-summary__origin-link:focus-visible {
+.dasti-proposal-source-summary__origin-link:focus-visible,
+.dasti-proposal-source-summary__job-offer-link:hover,
+.dasti-proposal-source-summary__job-offer-link:focus-visible {
   color: color-mix(in srgb, var(--color-accent) 78%, var(--ti) 22%);
 }
 
-.dasti-proposal-source-summary__origin-link--provenance {
+.dasti-proposal-source-summary__origin-link--prominent,
+.dasti-proposal-source-summary__job-offer-link {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -3519,14 +2768,14 @@
   font-size: var(--ts);
 }
 
-.dasti-proposal-source-summary__provenance-host,
 .dasti-proposal-source-summary__origin-host {
   color: var(--tg2);
   font-size: var(--tx);
   line-height: 1.4;
 }
 
-.dasti-proposal-source-summary__origin-meta {
+.dasti-proposal-source-summary__origin-meta,
+.dasti-proposal-source-summary__job-offer-kicker {
   color: var(--tg2);
   font-size: 10px;
   font-weight: 700;
@@ -3552,17 +2801,16 @@
 }
 
 .dasti-proposal-source-summary__label {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.10em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--tg2);
 }
 
 .dasti-proposal-source-summary__value {
-  font-size: var(--tu);
-  font-weight: 500;
-  line-height: 1.45;
+  font-size: var(--ts);
+  line-height: 1.5;
   color: var(--ti);
   min-width: 0;
   overflow-wrap: anywhere;
@@ -3581,11 +2829,11 @@
   display: inline-flex;
   align-items: center;
   max-width: 100%;
-  min-height: 26px;
-  padding: 0 9px;
+  min-height: 28px;
+  padding: 0 10px;
   border-radius: var(--radius-pill);
   border: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
-  background: color-mix(in srgb, var(--color-surface-raised) 90%, transparent);
+  background: color-mix(in srgb, var(--color-surface) 86%, transparent);
   color: var(--tm2);
   font-size: var(--tx);
   font-weight: 600;
@@ -3600,78 +2848,6 @@
   color: var(--tm2);
   font-size: var(--tx);
   line-height: 1.6;
-}
-
-/* ─── Job Offer card — shown at top of source summary ─────────────────────── */
-.dasti-proposal-source-summary__job-offer-card {
-  display: grid;
-  gap: var(--space-1);
-  margin-bottom: var(--space-2);
-  padding: 11px 14px;
-  border-radius: calc(var(--radius-card) - 1px);
-  border: 1px solid
-    color-mix(in srgb, var(--color-accent) 18%, var(--color-border-selected) 82%);
-  background:
-    linear-gradient(
-      160deg,
-      color-mix(in srgb, var(--color-accent-soft) 28%, var(--color-surface-raised) 72%),
-      color-mix(in srgb, var(--color-surface-raised) 92%, var(--color-surface-muted) 8%)
-    );
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, white 50%, transparent),
-    0 4px 12px -8px color-mix(in srgb, var(--shadow-color) 60%, transparent);
-}
-
-.dasti-proposal-source-summary__job-offer-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-}
-
-.dasti-proposal-source-summary__job-offer-copy {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
-
-.dasti-proposal-source-summary__job-offer-kicker {
-  display: inline-flex;
-  align-items: center;
-  width: fit-content;
-  min-height: 20px;
-  padding: 0 8px;
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--color-accent-soft) 70%, transparent);
-  color: color-mix(in srgb, var(--tm2) 78%, var(--color-accent) 22%);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
-}
-
-.dasti-proposal-source-summary__job-offer-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  width: fit-content;
-  max-width: 100%;
-  color: var(--color-accent);
-  font-size: var(--ts);
-  font-weight: 600;
-  line-height: 1.4;
-  text-decoration: underline;
-  text-decoration-thickness: 1.5px;
-  text-underline-offset: 3px;
-  overflow-wrap: anywhere;
-  transition: color 0.12s var(--ez);
-}
-
-.dasti-proposal-source-summary__job-offer-link:hover,
-.dasti-proposal-source-summary__job-offer-link:focus-visible {
-  color: color-mix(in srgb, var(--color-accent) 76%, var(--ti) 24%);
-  outline: none;
 }
 
 .dasti-proposal-source-raw {
@@ -4136,8 +3312,7 @@
   --document-viewer-bleed-inline: var(--s2);
   --document-viewer-bleed-block: var(--s2);
   --proposal-output-stage-frame-padding: var(--s2);
-  --proposal-output-rail-inline-inset: 0px;
-  --document-rail-gap: var(--space-2);
+  --proposal-output-rail-inline-inset: var(--s2);
 }
 
 .dasti-proposal-output-shell--saved {
@@ -4411,12 +3586,7 @@
 .dasti-doc-viewport[data-pannable="true"],
 .dasti-proposal-sheet__scroll[data-pannable="true"] {
   cursor: grab;
-  touch-action: pan-x pan-y;
-}
-
-.dasti-doc-viewport[data-pannable="true"] *,
-.dasti-proposal-sheet__scroll[data-pannable="true"] * {
-  cursor: inherit;
+  touch-action: none;
 }
 
 .dasti-doc-viewport[data-dragging="true"],
@@ -4700,12 +3870,6 @@
   place-items: center;
 }
 
-.dasti-proposal-sheet__preview-scale-shell {
-  position: relative;
-  transform-origin: top left;
-  will-change: transform;
-}
-
 .dasti-proposal-sheet__preview-page-positioner {
   width: var(--document-page-width, auto);
   height: var(--document-page-height, auto);
@@ -4746,11 +3910,8 @@
 }
 
 .dasti-proposal-editor-page {
-  position: relative;
   width: 100%;
   height: 100%;
-  min-width: 0;
-  max-width: 100%;
   display: flex;
   justify-content: center;
   align-items: stretch;
@@ -4760,39 +3921,16 @@
     var(--proposal-document-paper)
   );
   border-radius: inherit;
-  overflow: hidden;
   animation: dasti-fade-in 200ms ease-out both;
-  isolation: isolate;
-}
-
-.dasti-proposal-editor-page[data-drawer-open="true"]::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  background: color-mix(
-    in srgb,
-    var(--frost-bg, var(--document-viewer-frame-surface)) 22%,
-    transparent
-  );
-  backdrop-filter: saturate(var(--frost-saturate, 1))
-    blur(calc(var(--frost-blur, 14px) - 2px));
-  -webkit-backdrop-filter: saturate(var(--frost-saturate, 1))
-    blur(calc(var(--frost-blur, 14px) - 2px));
-  animation: styleforge-frost-fade 0.18s var(--ez) both;
-  pointer-events: none;
 }
 
 .dasti-proposal-editor-page__inner {
   width: min(100%, var(--proposal-document-reading-measure-max));
   min-width: min(100%, var(--proposal-document-reading-measure-min));
-  max-width: 100%;
   height: 100%;
   padding: clamp(36px, 5vw, 56px) clamp(32px, 5vw, 56px);
   display: flex;
   position: relative;
-  z-index: 0;
-  overflow: hidden;
 }
 
 .dasti-proposal-editor-page__inner::before {
@@ -4810,7 +3948,6 @@
 }
 
 .dasti-proposal-sheet__body--document-editor .dasti-document-stage-chassis {
-  position: relative;
   padding-block-start: var(--document-viewer-bleed-block);
   padding-inline: var(--document-viewer-bleed-inline);
   padding-block-end: var(--document-viewer-bleed-block);
@@ -4819,23 +3956,13 @@
 .dasti-proposal-sheet__body--document-editor
   .dasti-proposal-sheet__preview-page--editable {
   width: 100%;
-  min-width: 0;
-  max-width: 100%;
-  overflow: hidden;
 }
 
 .dasti-proposal-sheet__body--document-editor .dasti-proposal-editor-page__inner {
   width: 100%;
   min-width: 0;
-  height: 100%;
-  min-height: 0;
   padding-block: 0;
   padding-inline: var(--proposal-output-editor-inline-padding);
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  justify-content: flex-start;
-  overflow: hidden;
 }
 
 .dasti-proposal-sheet__body--document-editor
@@ -4844,8 +3971,6 @@
 }
 
 .dasti-proposal-editor-page__textarea {
-  flex: 1 1 auto;
-  min-height: 0;
   padding-inline: 0;
   padding-block-start: var(--proposal-output-editor-block-start);
   padding-block-end: var(--proposal-output-editor-block-end);
@@ -4895,117 +4020,6 @@
   );
 }
 
-.dasti-proposal-editor-page__drawer-shell {
-  position: absolute;
-  inset-block-start: var(--proposal-output-editor-guide-inset);
-  inset-inline: var(--proposal-output-editor-inline-padding);
-  z-index: 5;
-  display: grid;
-  justify-items: center;
-  pointer-events: none;
-}
-
-.dasti-proposal-editor-page__drawer {
-  position: relative;
-  inset: auto;
-  transform: none;
-  min-width: 0;
-  width: min(100%, 344px);
-  display: grid;
-  gap: calc(var(--space-2) + 2px);
-  padding: calc(var(--space-2) + 1px);
-  pointer-events: auto;
-}
-
-.dasti-proposal-editor-page__drawer-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-
-.dasti-proposal-editor-page__drawer-kicker {
-  margin: 0;
-  color: var(--tm2);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  line-height: 1;
-  text-transform: uppercase;
-}
-
-.dasti-proposal-editor-page__drawer-title {
-  margin: 6px 0 0;
-  color: var(--ti);
-  font-size: var(--ts);
-  font-weight: 600;
-  line-height: 1.2;
-}
-
-.dasti-proposal-editor-page__header-fields {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-2);
-}
-
-.dasti-proposal-editor-page__field {
-  display: grid;
-  gap: 6px;
-  min-width: 0;
-}
-
-.dasti-proposal-editor-page__field--wide {
-  grid-column: 1 / -1;
-}
-
-.dasti-proposal-editor-page__field-label {
-  color: var(--tm2);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  line-height: 1;
-  text-transform: uppercase;
-}
-
-.dasti-proposal-editor-page__field-input {
-  width: 100%;
-  min-height: 38px;
-  padding: 0 12px;
-  border: 1px solid color-mix(in srgb, var(--color-border) 82%, transparent);
-  border-radius: calc(var(--radius-card) - 4px);
-  background: color-mix(in srgb, var(--color-surface) 96%, white 4%);
-  color: var(--ti);
-  font: inherit;
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line);
-}
-
-.dasti-proposal-editor-page__field-textarea {
-  min-height: 96px;
-  padding: 12px;
-  resize: vertical;
-}
-
-.dasti-proposal-editor-page__field-input:focus {
-  outline: none;
-  border-color: color-mix(in srgb, var(--color-border-contrast) 84%, transparent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-soft) 42%, transparent);
-}
-
-@media (max-width: 720px) {
-  .dasti-proposal-editor-page__drawer-shell {
-    inset-inline: var(--proposal-output-editor-inline-padding);
-  }
-
-  .dasti-proposal-editor-page__drawer {
-    width: 100%;
-  }
-
-  .dasti-proposal-editor-page__header-fields {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
 .dasti-proposal-sheet__scroll--letter {
   padding-top: max(var(--document-shell-padding-block), var(--space-4));
 }
@@ -5018,7 +4032,6 @@
 .dasti-proposal-document {
   position: relative;
   width: 100%;
-  max-width: 100%;
   min-height: 100%;
   height: auto;
   display: grid;
@@ -5039,7 +4052,6 @@
   font-weight: var(--proposal-document-font-weight);
   letter-spacing: var(--proposal-document-letter-spacing);
   line-height: var(--proposal-document-computed-line-height);
-  overflow: hidden;
 }
 
 .dasti-proposal-document__page {
@@ -5052,8 +4064,6 @@
   --proposal-fit-fine-body-start-adjust-mm: 0;
   --proposal-fit-fine-bottom-margin-adjust-mm: 0;
   width: 100%;
-  min-width: 0;
-  max-width: 100%;
   min-height: calc(
     var(--proposal-block-mm) * var(--proposal-page-height-mm)
   );
@@ -5096,7 +4106,6 @@
 
 .dasti-proposal-document__rail {
   display: grid;
-  min-width: 0;
   align-content: start;
   gap: var(--proposal-grid-half-step-block);
   padding-inline-end: var(--proposal-grid-half-step-inline);
@@ -5148,7 +4157,6 @@
   justify-self: start;
   inline-size: 100%;
   min-inline-size: 0;
-  overflow: hidden;
   max-inline-size: min(
     100%,
     calc(
@@ -5220,356 +4228,6 @@
   font-style: italic;
 }
 
-.dasti-proposal-document--volk-register .dasti-proposal-document__page {
-  position: relative;
-  display: block;
-  grid-template-columns: none;
-  column-gap: 0;
-  padding-block-start: 0;
-  padding-inline: 0;
-  padding-block-end: calc(
-    var(--proposal-block-mm) *
-      (
-        var(--proposal-template-bottom-margin-mm) -
-          var(--proposal-fit-bottom-margin-adjust-mm) -
-          var(--proposal-fit-fine-bottom-margin-adjust-mm)
-      )
-  );
-  background:
-    linear-gradient(
-      to right,
-      transparent 0%,
-      transparent 50.5%,
-      rgba(120, 108, 77, 0.055) 50.67%,
-      transparent 50.84%,
-      transparent 58.58%,
-      rgba(120, 108, 77, 0.028) 58.73%,
-      transparent 58.88%,
-      transparent 100%
-    ),
-    radial-gradient(circle at 18% 8%, rgba(255, 255, 255, 0.22), transparent 27%),
-    radial-gradient(circle at 95% 94%, rgba(125, 110, 80, 0.06), transparent 38%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
-    var(--proposal-document-paper);
-  clip-path: polygon(0 0, 100% 0, 100% 98.9%, 98.8% 100%, 0 100%);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.18),
-    inset 0 0 40px rgba(123, 111, 81, 0.05);
-}
-
-.dasti-proposal-document--volk-register .dasti-proposal-document__rail,
-.dasti-proposal-document--volk-register .dasti-proposal-document__eyebrow,
-.dasti-proposal-document--volk-register .dasti-proposal-document__title,
-.dasti-proposal-document--volk-register .dasti-proposal-document__meta {
-  display: none;
-}
-
-.dasti-proposal-document--volk-register .dasti-proposal-document__title {
-  display: none;
-}
-
-.dasti-proposal-document--volk-register .dasti-proposal-document__meta {
-  display: none;
-}
-
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-header,
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-register-item,
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-content,
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-dot,
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-tier-marker {
-  position: absolute;
-}
-
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-header {
-  left: var(--volk-grid-left);
-  top: var(--volk-grid-title-top);
-  width: var(--volk-grid-header-width);
-  display: grid;
-  align-content: start;
-  justify-items: start;
-  max-width: calc(100% - (var(--proposal-inline-mm) * 18));
-}
-
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-title,
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-subtitle,
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-sender,
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-register-label,
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-recipient-label,
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-recipient-value,
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-date-label,
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-date-value,
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-subject-label,
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-subject-value,
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-tier-marker {
-  margin: 0;
-  font-family: var(--font-heading-family);
-  color: var(--proposal-document-accent-ink);
-}
-
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-title {
-  margin: 0;
-  font-size: calc(
-    32pt * var(--proposal-fit-title-scale, 1) * var(--proposal-fit-fine-scale, 1)
-  );
-  line-height: calc(
-    24pt * var(--proposal-fit-title-scale, 1) * var(--proposal-fit-fine-scale, 1)
-  );
-  font-weight: 800;
-  letter-spacing: -0.045em;
-  max-width: 100%;
-  white-space: normal;
-  text-wrap: balance;
-  overflow-wrap: anywhere;
-  text-transform: lowercase;
-}
-
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-subtitle {
-  margin: calc(
-      4pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
-    )
-    0 0;
-  font-size: calc(
-    20pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
-  );
-  line-height: calc(
-    18pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
-  );
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  max-width: 100%;
-  white-space: normal;
-  text-wrap: balance;
-  overflow-wrap: anywhere;
-  text-transform: lowercase;
-}
-
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-sender {
-  margin: calc(
-      18pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
-    )
-    0 0;
-  font-size: calc(
-    11pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
-  );
-  line-height: calc(
-    18pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
-  );
-  font-weight: 800;
-  letter-spacing: 0.005em;
-  max-width: 100%;
-  white-space: normal;
-  overflow-wrap: anywhere;
-  text-transform: lowercase;
-}
-
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-register-item {
-  top: var(--volk-grid-meta-top);
-  display: grid;
-  gap: calc(var(--proposal-inline-mm) * 0.5);
-}
-
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-register-label {
-  font-size: calc(
-    11pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
-  );
-  line-height: calc(
-    18pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
-  );
-  font-weight: 800;
-  letter-spacing: -0.01em;
-  text-transform: lowercase;
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-subject-row {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: baseline;
-  column-gap: calc(var(--proposal-inline-mm) * 1.6);
-  margin-block-end: calc(
-    16pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
-  );
-}
-
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-intro {
-  display: grid;
-  gap: calc(var(--proposal-inline-mm) * 1.1);
-}
-
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-recipient-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  column-gap: calc(var(--proposal-inline-mm) * 1.6);
-  row-gap: calc(var(--proposal-inline-mm) * 0.6);
-}
-
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-recipient-block,
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-date-block {
-  display: grid;
-  align-content: start;
-  gap: calc(var(--proposal-inline-mm) * 0.35);
-}
-
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-date-block {
-  justify-items: end;
-  text-align: right;
-}
-
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-recipient-label,
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-date-label {
-  font-size: calc(
-    10pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
-  );
-  line-height: 1;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: lowercase;
-}
-
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-recipient-value,
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-date-value {
-  white-space: pre-line;
-  overflow-wrap: anywhere;
-  font-size: calc(
-    11pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
-  );
-  line-height: calc(
-    16pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
-  );
-  font-weight: 700;
-}
-
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-subject-label {
-  font-size: calc(
-    16pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
-  );
-  line-height: 1;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  text-transform: lowercase;
-}
-
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-subject-value {
-  margin: 0;
-  min-width: 0;
-  font-size: calc(
-    16pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
-  );
-  line-height: calc(
-    18pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
-  );
-  font-weight: 700;
-  letter-spacing: 0;
-  white-space: normal;
-  overflow-wrap: anywhere;
-  text-wrap: pretty;
-  text-transform: lowercase;
-}
-
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-content {
-  left: var(--volk-grid-left);
-  top: var(--volk-grid-subject-top);
-  width: min(var(--volk-grid-body-width), 60ch);
-  bottom: calc(
-    var(--proposal-block-mm) *
-      (
-        var(--proposal-template-bottom-margin-mm) -
-          var(--proposal-fit-bottom-margin-adjust-mm) -
-          var(--proposal-fit-fine-bottom-margin-adjust-mm)
-      )
-  );
-  display: grid;
-  align-content: start;
-  gap: calc(var(--proposal-inline-mm) * 1.8);
-}
-
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-dot {
-  left: var(--volk-grid-dot-left);
-  top: var(--volk-grid-dot-top);
-  width: calc(var(--proposal-inline-mm) * 1.15);
-  height: calc(var(--proposal-inline-mm) * 1.15);
-  border-radius: 50%;
-  background: var(--proposal-document-accent-ink);
-}
-
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-tier-marker {
-  left: calc(var(--proposal-inline-mm) * 2.8);
-  font-size: calc(
-    10pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
-  );
-  line-height: 1;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  transform: rotate(-90deg);
-  transform-origin: top left;
-  opacity: 0.72;
-}
-
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-tier-marker--two {
-  top: 66.666%;
-}
-
-.dasti-proposal-document--volk-register .dasti-proposal-document__volk-tier-marker--three {
-  top: 33.333%;
-}
-
-.dasti-proposal-document--volk-register .dasti-proposal-document__body--volk-register {
-  position: relative;
-  left: auto;
-  top: auto;
-  width: 100%;
-  min-width: 0;
-  max-width: none;
-  padding: 0;
-  display: grid;
-  align-content: start;
-  gap: 0;
-}
-
-.dasti-proposal-document--volk-register
-  .dasti-proposal-document__body--volk-register
-  .dasti-proposal-document__salutation,
-.dasti-proposal-document--volk-register
-  .dasti-proposal-document__body--volk-register
-  .dasti-proposal-document__paragraph,
-.dasti-proposal-document--volk-register
-  .dasti-proposal-document__body--volk-register
-  .dasti-proposal-document__signoff,
-.dasti-proposal-document--volk-register
-  .dasti-proposal-document__body--volk-register
-  .dasti-proposal-document__signature,
-.dasti-proposal-document--volk-register
-  .dasti-proposal-document__body--volk-register
-  .dasti-proposal-document__raw-body {
-  font-family: var(--font-heading-family);
-  font-size: calc(
-    11pt * var(--proposal-fit-font-scale, 1) * var(--proposal-fit-fine-scale, 1)
-  );
-  line-height: calc(1.5 * var(--proposal-fit-line-height-scale, 1));
-  color: color-mix(
-    in srgb,
-    var(--proposal-document-ink) 74%,
-    var(--proposal-document-accent-ink) 26%
-  );
-}
-
-.dasti-proposal-document--volk-register
-  .dasti-proposal-document__body--volk-register
-  .dasti-proposal-document__signature {
-  font-family: var(--font-heading-family);
-  font-weight: 700;
-  color: var(--proposal-document-accent-ink);
-}
-
-.dasti-proposal-document--volk-register
-  .dasti-proposal-document__page--continuation
-  .dasti-proposal-document__volk-content {
-  top: calc(var(--proposal-block-mm) * 35);
-  width: calc(100% - var(--volk-grid-left) - 18mm);
-}
-
 .dasti-proposal-document--modernist-signal .dasti-proposal-document__eyebrow {
   letter-spacing: 0.22em;
 }
@@ -5602,6 +4260,54 @@
   .dasti-proposal-document__paragraph
   + .dasti-proposal-document__paragraph {
   margin-top: calc(1em * var(--proposal-document-computed-line-height) * 0.85);
+}
+
+.dasti-proposal-document__page[data-fit="1"] {
+  --proposal-fit-font-scale: 0.985;
+  --proposal-fit-line-height-scale: 0.985;
+  --proposal-fit-title-scale: 0.985;
+  --proposal-fit-body-start-adjust-mm: 1;
+  --proposal-fit-bottom-margin-adjust-mm: 0.5;
+}
+
+.dasti-proposal-document__page[data-fit="2"] {
+  --proposal-fit-font-scale: 0.97;
+  --proposal-fit-line-height-scale: 0.97;
+  --proposal-fit-title-scale: 0.97;
+  --proposal-fit-body-start-adjust-mm: 2;
+  --proposal-fit-bottom-margin-adjust-mm: 1;
+}
+
+.dasti-proposal-document__page[data-fit="3"] {
+  --proposal-fit-font-scale: 0.955;
+  --proposal-fit-line-height-scale: 0.96;
+  --proposal-fit-title-scale: 0.955;
+  --proposal-fit-body-start-adjust-mm: 3;
+  --proposal-fit-bottom-margin-adjust-mm: 1.5;
+}
+
+.dasti-proposal-document__page[data-fit="4"] {
+  --proposal-fit-font-scale: 0.94;
+  --proposal-fit-line-height-scale: 0.95;
+  --proposal-fit-title-scale: 0.94;
+  --proposal-fit-body-start-adjust-mm: 4;
+  --proposal-fit-bottom-margin-adjust-mm: 2;
+}
+
+.dasti-proposal-document__page[data-fit="5"] {
+  --proposal-fit-font-scale: 0.925;
+  --proposal-fit-line-height-scale: 0.94;
+  --proposal-fit-title-scale: 0.925;
+  --proposal-fit-body-start-adjust-mm: 5;
+  --proposal-fit-bottom-margin-adjust-mm: 2.5;
+}
+
+.dasti-proposal-document__page[data-fit="6"] {
+  --proposal-fit-font-scale: 0.88;
+  --proposal-fit-line-height-scale: 0.9;
+  --proposal-fit-title-scale: 0.89;
+  --proposal-fit-body-start-adjust-mm: 8;
+  --proposal-fit-bottom-margin-adjust-mm: 4;
 }
 
 .dasti-proposal-document__page--continuation .dasti-proposal-document__rail {
@@ -5810,26 +4516,22 @@
   background: transparent;
   border-radius: 0 0 calc(var(--radius-surface) - 1px)
     calc(var(--radius-surface) - 1px);
-  min-height: calc(var(--hs) + var(--s4));
+  min-height: var(--document-viewer-toolbar-block-size);
   flex-wrap: nowrap;
   overflow: visible;
 }
 
 .dasti-proposal-toolbar--inside {
-  --proposal-compose-bottom-toolbar-min-block-size: calc(
-    var(--hs) + var(--space-5) + var(--space-1)
-  );
-  --proposal-compose-bottom-toolbar-pad-block-start: var(--space-3);
-  --proposal-compose-bottom-toolbar-pad-block-end: var(--space-2);
   --dasti-toolbar-shell-edge-padding: var(
     --proposal-compose-workspace-inline-inset,
     var(--proposal-sheet-margin-inline-inner)
   );
   margin-top: auto;
   gap: var(--proposal-chrome-group-gap, var(--space-2));
-  min-height: var(--proposal-compose-bottom-toolbar-min-block-size);
-  padding-block: var(--proposal-compose-bottom-toolbar-pad-block-start)
-    var(--proposal-compose-bottom-toolbar-pad-block-end);
+  min-height: var(--document-viewer-toolbar-block-size);
+  padding-block:
+    calc(var(--proposal-chrome-shell-padding, var(--s2)) + 6px)
+    calc(var(--proposal-chrome-shell-padding, var(--s2)) + 2px);
   padding-inline-start: var(
     --proposal-compose-workspace-inline-inset,
     var(--proposal-sheet-margin-inline-inner)
@@ -5936,10 +4638,10 @@ html:not(.dark) .dasti-proposal-submit {
 }
 
 .dasti-proposal-submit--composer {
-  --dasti-proposal-submit-button-size: 42px;
-  --dasti-proposal-submit-radius: 14px;
-  --dasti-proposal-submit-icon-size: 32px;
-  --dasti-proposal-submit-stroke-width: 1.48;
+  --dasti-proposal-submit-button-size: var(--proposal-submit-size-sm);
+  --dasti-proposal-submit-radius: var(--proposal-submit-radius-sm);
+  --dasti-proposal-submit-icon-size: var(--proposal-submit-icon-size-sm);
+  --dasti-proposal-submit-stroke-width: var(--proposal-submit-stroke-width-sm);
   --dasti-proposal-submit-phase-gap: var(--proposal-submit-phase-gap);
   --dasti-proposal-submit-spinner-duration: var(
     --proposal-submit-spinner-duration
@@ -6295,8 +4997,6 @@ html:not(.dark) .dasti-proposal-submit {
   block-size: auto;
   display: flex;
   align-items: stretch;
-  background: transparent;
-  border-radius: 0;
 }
 
 .dasti-resume-preview-panel__surface--workspace .dasti-doc-viewer-shell {
@@ -6308,24 +5008,12 @@ html:not(.dark) .dasti-proposal-submit {
 .dasti-doc-viewer-shell--resume-workspace
   .dasti-proposal-sheet__body--document-viewer
   .dasti-document-stage-chassis {
-  padding: var(--space-3) var(--space-5) var(--space-5);
-  border-radius: calc(var(--document-paper-radius) + 2px);
-  background: var(--document-viewer-stage-surface);
-  box-shadow: none;
+  padding: var(--space-5);
 }
 
 .dasti-doc-viewer-shell--resume-workspace .dasti-doc-viewport--resume {
   margin-inline: 0;
   max-width: none;
-  border-radius: calc(var(--document-paper-radius) + 1px);
-  overscroll-behavior-y: auto;
-  overscroll-behavior-x: contain;
-}
-
-.dasti-doc-viewer-shell--resume-workspace
-  .dasti-document-stage__canvas[data-document-page="true"] {
-  background: transparent;
-  box-shadow: none;
 }
 
 .dasti-resume-preview-panel--panel {
@@ -6344,9 +5032,9 @@ html:not(.dark) .dasti-proposal-submit {
 .styleforge-active-cv-control {
   display: inline-flex;
   align-items: stretch;
-  inline-size: min(148px, 100%);
-  min-inline-size: min(148px, 100%);
-  max-width: min(148px, 100%);
+  inline-size: min(216px, 100%);
+  min-inline-size: min(216px, 100%);
+  max-width: min(216px, 100%);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
   background: var(--sf1);
@@ -6395,7 +5083,7 @@ html:not(.dark) .dasti-proposal-submit {
 
 .styleforge-active-cv-control__body {
   min-width: 0;
-  padding: 0 10px 0 8px;
+  padding: 0 var(--s2) 0 var(--s1);
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
@@ -6568,9 +5256,6 @@ html:not(.dark) .dasti-proposal-submit {
 
 .dasti-cv-preview-panel-slot {
   min-width: 0;
-  /* Keep the preview workbench chrome on the same grey token as the canvas. */
-  background: var(--color-surface-muted);
-  border-radius: calc(var(--document-paper-radius) + var(--space-2));
 }
 
 .dasti-cv-preview-panel-slot--sticky {
@@ -6587,7 +5272,6 @@ html:not(.dark) .dasti-proposal-submit {
 
 .dasti-proposal-compose-column--workspace {
   --proposal-compose-workspace-inline-inset: calc(var(--space-3) - 2px);
-  --proposal-compose-header-action-inset: var(--space-4);
   --document-shell-padding-inline: var(--proposal-compose-workspace-inline-inset);
   --proposal-sheet-margin-inline-inner: var(
     --proposal-compose-workspace-inline-inset
@@ -6607,20 +5291,6 @@ html:not(.dark) .dasti-proposal-submit {
   box-shadow:
     var(--document-viewer-frame-shadow),
     0 12px 28px -24px color-mix(in srgb, var(--shadow-color) 92%, transparent);
-}
-
-.dasti-proposal-compose-column--workspace .dasti-proposal-sheet__header--composer {
-  padding-inline-end: var(
-    --proposal-compose-header-action-inset,
-    var(--proposal-sheet-margin-inline-outer)
-  );
-}
-
-.dasti-proposal-compose-column--workspace .dasti-proposal-sheet__header--brief-compact {
-  padding-inline-end: var(
-    --proposal-compose-header-action-inset,
-    var(--proposal-compose-workspace-inline-inset)
-  );
 }
 
 .dasti-proposal-compose-column--workspace .dasti-proposal-sheet__body::before,
@@ -6647,30 +5317,6 @@ html:not(.dark) .dasti-proposal-submit {
     width: 100%;
     grid-template-columns: minmax(0, 1fr);
     row-gap: var(--space-2);
-  }
-
-  .dasti-proposal-library-selected-sidebar {
-    width: 100%;
-    grid-template-columns: minmax(0, 1fr);
-    justify-self: start;
-  }
-
-  .dasti-proposal-library-sidebar__actions,
-  .dasti-proposal-library-sidebar__heading {
-    grid-column: 1;
-  }
-
-  .dasti-proposal-library-sidebar__actions {
-    justify-self: start;
-  }
-
-  .dasti-proposal-library-sidebar__heading {
-    grid-row: 2;
-  }
-
-  .dasti-proposal-library-secondary-shell {
-    width: 100%;
-    justify-self: start;
   }
 
   .dasti-proposal-display__detached-layout {
@@ -6722,20 +5368,23 @@ html:not(.dark) .dasti-proposal-submit {
 
 .dasti-cv-workbench-toggle__button {
   position: relative;
-  width: var(--hs);
-  height: var(--hs);
-  min-width: var(--hs);
-  flex: 0 0 var(--hs);
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
   aspect-ratio: 1 / 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 0;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-control);
-  background: var(--color-surface-raised);
-  color: var(--color-text-muted);
-  box-shadow: var(--shadow-sm);
+  border: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
+  border-radius: 10px;
+  background: color-mix(
+    in srgb,
+    var(--document-viewer-frame-surface, var(--sf2)) 94%,
+    transparent
+  );
+  color: var(--tm2);
+  box-shadow: none;
   cursor: pointer;
   transition:
     background var(--duration-fast) var(--ease-standard),
@@ -6745,22 +5394,24 @@ html:not(.dark) .dasti-proposal-submit {
 
 .dasti-cv-workbench-toggle__button:hover,
 .dasti-cv-workbench-toggle__button:focus-visible {
-  background: var(--color-surface-2);
-  border-color: var(--color-border-contrast);
-  color: var(--color-text);
+  background: color-mix(in srgb, var(--sfr) 96%, transparent);
+  border-color: color-mix(
+    in srgb,
+    var(--color-border-contrast) 76%,
+    transparent
+  );
+  color: var(--ti);
   outline: none;
 }
 
 .dasti-cv-workbench-toggle__button--active {
-  background: var(--color-surface);
-  border-color: var(--color-border-contrast);
-  color: var(--color-text);
-}
-
-.dasti-cv-workbench-bar--resume-workspace .styleforge-active-cv-control {
-  inline-size: min(124px, 100%);
-  min-inline-size: min(124px, 100%);
-  max-width: min(124px, 100%);
+  background: color-mix(in srgb, var(--sfr) 98%, transparent);
+  border-color: color-mix(
+    in srgb,
+    var(--color-border-contrast) 84%,
+    transparent
+  );
+  color: var(--ti);
 }
 
 .styleforge-active-color-card {
@@ -7812,20 +6463,11 @@ html:not(.dark) .dasti-proposal-submit {
   display: grid;
   gap: var(--s2);
   margin: 0 0 var(--s5);
-  padding: var(--space-3);
-  border: 1px solid color-mix(in srgb, var(--color-border) 90%, transparent);
-  border-radius: calc(var(--radius-control) + 2px);
-  background: color-mix(in srgb, var(--color-surface) 94%, var(--sf1) 6%);
-  box-shadow: 0 10px 24px -24px color-mix(in srgb, var(--shadow-color) 70%, transparent);
-}
-
-.dasti-inline-review[data-collapsed="true"] {
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
+  padding: var(--s3);
+  border: 1px solid
+    color-mix(in srgb, var(--color-border) 88%, transparent);
+  border-radius: calc(var(--radius-card) - 2px);
+  background: color-mix(in srgb, var(--color-surface-muted) 72%, transparent);
 }
 
 .dasti-inline-review[data-review-flash="true"] {
@@ -7833,40 +6475,21 @@ html:not(.dark) .dasti-proposal-submit {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-border-selected) 42%, transparent);
 }
 
-.dasti-inline-review[data-collapsed="true"][data-review-flash="true"] {
-  box-shadow: none;
-}
-
 .dasti-import-warning-banner {
   position: sticky;
   top: var(--space-2);
-  z-index: 18;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--s2);
-  inline-size: min(100%, 460px);
+  inline-size: min(100%, 520px);
   margin: 0 0 var(--s4);
   padding: 10px 12px;
-  border-radius: calc(var(--radius-control) + 2px);
-  border: 1px solid color-mix(in srgb, var(--wa) 20%, var(--color-border) 80%);
-  background: color-mix(in srgb, var(--color-surface) 90%, var(--wab) 10%);
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--wa) 10%, transparent),
-    0 16px 28px -24px color-mix(in srgb, var(--shadow-color) 88%, transparent);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  opacity: 1;
-  transform: translate3d(0, 0, 0);
-  transition:
-    opacity 180ms var(--ease-standard),
-    transform 180ms var(--ease-standard);
-}
-
-.dasti-import-warning-banner[data-visibility="hidden"] {
-  opacity: 0;
-  transform: translate3d(0, -8px, 0);
-  pointer-events: none;
+  border-radius: calc(var(--radius-card) - 2px);
+  border: 1px solid color-mix(in srgb, var(--wa) 28%, transparent);
+  background: color-mix(in srgb, var(--wab) 64%, var(--color-surface-raised) 36%);
+  box-shadow: 0 8px 18px -18px color-mix(in srgb, var(--shadow-color) 80%, transparent);
 }
 
 .dasti-import-warning-banner__actions {
@@ -7878,21 +6501,12 @@ html:not(.dark) .dasti-proposal-submit {
 }
 
 .dasti-import-warning-banner__body {
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
+  display: grid;
+  gap: 2px;
   min-width: 0;
 }
 
 .dasti-import-warning-banner__eyebrow {
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  padding: 0 8px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--wa) 20%, transparent);
-  background: color-mix(in srgb, var(--wab) 70%, var(--color-surface) 30%);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -7902,7 +6516,7 @@ html:not(.dark) .dasti-proposal-submit {
 
 .dasti-import-warning-banner__title {
   margin: 0;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.3;
   font-weight: 600;
   color: var(--ti);
@@ -7931,8 +6545,8 @@ html:not(.dark) .dasti-proposal-submit {
 }
 
 .dasti-import-warning-banner__review {
-  border-color: color-mix(in srgb, var(--wa) 28%, transparent);
-  background: color-mix(in srgb, var(--wab) 62%, var(--color-surface) 38%);
+  border-color: color-mix(in srgb, var(--wa) 34%, transparent);
+  background: color-mix(in srgb, var(--wab) 72%, var(--color-surface) 28%);
 }
 
 .dasti-import-warning-banner__review:hover,
@@ -7943,18 +6557,18 @@ html:not(.dark) .dasti-proposal-submit {
   background: color-mix(in srgb, var(--color-surface-raised) 92%, transparent);
 }
 
-.dasti-inline-review__header-copy {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
 .dasti-inline-review__header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--s2);
   flex-wrap: wrap;
+}
+
+.dasti-inline-review__header-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
 }
 
 .dasti-inline-review__eyebrow {
@@ -7967,7 +6581,7 @@ html:not(.dark) .dasti-proposal-submit {
 
 .dasti-inline-review__summary {
   margin: 0;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.45;
   color: var(--tm2);
 }
@@ -7977,37 +6591,16 @@ html:not(.dark) .dasti-proposal-submit {
   gap: 10px;
 }
 
-.dasti-inline-review__panel {
-  display: grid;
-  gap: var(--space-2);
-  inline-size: 100%;
-  overflow: hidden;
-  opacity: 1;
-  max-height: 560px;
-  transform: translateY(0);
-  transition:
-    max-height var(--duration-fast) var(--ease-standard),
-    opacity var(--duration-fast) var(--ease-standard),
-    transform var(--duration-fast) var(--ease-standard);
-}
-
-.dasti-inline-review[data-collapsed="true"] .dasti-inline-review__panel {
-  max-height: 0;
-  opacity: 0;
-  transform: translateY(calc(-1 * var(--space-1)));
-  pointer-events: none;
-}
-
 .dasti-inline-review__status {
   display: inline-flex;
   align-items: center;
-  min-height: calc(var(--space-6) - var(--space-1));
-  padding: 0 var(--space-2);
+  min-height: 28px;
+  padding: 0 10px;
   border-radius: var(--radius-pill);
   border: 1px solid color-mix(in srgb, var(--color-border) 88%, transparent);
   background: color-mix(in srgb, var(--color-surface) 92%, transparent);
   color: var(--tm2);
-  font-size: var(--tx);
+  font-size: 12px;
   font-weight: 600;
   line-height: 1;
   white-space: nowrap;
@@ -8026,10 +6619,10 @@ html:not(.dark) .dasti-proposal-submit {
 .dasti-inline-review__item {
   display: grid;
   gap: 4px;
-  padding: 9px 11px;
+  padding: 10px 12px;
   border-radius: calc(var(--radius-control) - 2px);
   border: 1px solid color-mix(in srgb, var(--color-border) 94%, transparent);
-  background: color-mix(in srgb, var(--color-surface-muted) 52%, var(--color-surface) 48%);
+  background: color-mix(in srgb, var(--color-surface) 92%, transparent);
 }
 
 .dasti-inline-review__title {
@@ -8044,35 +6637,6 @@ html:not(.dark) .dasti-proposal-submit {
   font-size: var(--tx);
   line-height: var(--lx);
   color: var(--tm2);
-}
-
-.dasti-import-review-trigger {
-  flex: 0 0 auto;
-  color: var(--color-warning-ink);
-  border-color: color-mix(in srgb, var(--color-warning) 26%, transparent);
-  background: var(--color-warning-soft);
-  transition:
-    border-color var(--duration-fast) var(--ease-standard),
-    background var(--duration-fast) var(--ease-standard),
-    color var(--duration-fast) var(--ease-standard),
-    transform var(--duration-fast) var(--ease-standard);
-}
-
-.dasti-import-review-trigger:hover,
-.dasti-import-review-trigger:focus-visible {
-  border-color: var(--color-border-selected);
-  background: color-mix(in srgb, var(--color-warning) 22%, var(--sfr) 78%);
-}
-
-.dasti-import-review-trigger[data-review-state="acknowledged"] {
-  color: var(--okt);
-  border-color: color-mix(in srgb, var(--ok) 30%, transparent);
-  background: color-mix(in srgb, var(--ok) 12%, var(--sfr) 88%);
-}
-
-.dasti-import-review-trigger svg {
-  width: 18px;
-  height: 18px;
 }
 
 .dasti-import-flagged-shell {
@@ -8138,10 +6702,6 @@ html:not(.dark) .dasti-proposal-submit {
   position: relative;
   display: inline-flex;
   align-items: center;
-  z-index: auto;
-}
-
-.dasti-import-dropdown[data-open="true"] {
   z-index: var(--z-popover);
   isolation: isolate;
 }
@@ -9308,6 +7868,61 @@ html:not(.dark) .dasti-proposal-submit {
   margin-bottom: 0;
 }
 
+.dasti-brief-card__source-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: var(--space-2);
+  padding: 10px 12px;
+  border-radius: calc(var(--radius-card) - 4px);
+  border: 1px solid color-mix(in srgb, var(--color-border-selected) 52%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface-muted) 92%);
+}
+
+.dasti-brief-card__source-kicker {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-accent) 14%, var(--color-surface) 86%);
+  color: var(--tg2);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dasti-brief-card__source-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  color: var(--color-accent);
+  font-size: var(--ts);
+  line-height: 1.4;
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+  transition: color 0.12s var(--ez);
+}
+
+.dasti-brief-card__source-link:hover,
+.dasti-brief-card__source-link:focus-visible {
+  color: color-mix(in srgb, var(--color-accent) 78%, var(--ti) 22%);
+  outline: none;
+}
+
+.dasti-brief-card__source-link-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .dasti-brief-card__meta {
   display: flex;
   flex-wrap: wrap;
@@ -9341,62 +7956,16 @@ html:not(.dark) .dasti-proposal-submit {
   margin: 0;
   font-size: var(--tx);
   color: var(--tm2);
-  line-height: 1.55;
+  line-height: 1.5;
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  max-block-size: calc(1.55em * 3);
 }
 
 .dasti-brief-card--compact .dasti-brief-card__description {
   color: color-mix(in srgb, var(--tm2) 92%, var(--ti) 8%);
-}
-
-.dasti-brief-card__source-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 5px;
-}
-
-.dasti-brief-card__source-kicker {
-  font-size: 9px;
-  line-height: 1;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--tg2);
-}
-
-.dasti-brief-card__source-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-width: 0;
-  color: var(--color-accent);
-  text-decoration: underline;
-  text-decoration-thickness: 1.5px;
-  text-underline-offset: 3px;
-  transition: color 0.12s var(--ez);
-}
-
-.dasti-brief-card__source-link:hover,
-.dasti-brief-card__source-link:focus-visible {
-  color: color-mix(in srgb, var(--color-accent) 78%, var(--ti) 22%);
-  outline: none;
-}
-
-.dasti-brief-card__source-link-label {
-  font-size: var(--tx);
-  font-weight: 700;
-}
-
-.dasti-brief-card__source-link-meta {
-  color: var(--tg2);
-  font-size: var(--tx);
-  line-height: 1.4;
+  -webkit-line-clamp: 2;
 }
 
 .dasti-brief-card__dismiss,
@@ -9541,78 +8110,13 @@ html:not(.dark) .dasti-proposal-submit {
 
 .dasti-workbench-top-left-slot--cv-toggle {
   position: absolute;
-  inset-block-start: var(--cv-edit-toggle-inset-block, var(--space-6));
-  inset-inline-start: var(--cv-edit-toggle-inset-inline, var(--space-6));
+  inset-block-start: var(--space-2);
+  inset-inline-start: var(--space-4);
   width: auto !important;
   max-width: none !important;
   margin: 0 !important;
   min-block-size: 0;
   z-index: 28;
-}
-
-.dasti-cv-edit-workbench-shell {
-  min-width: 0;
-}
-
-.dasti-cv-edit-workbench-shell .dasti-grid-split {
-  position: relative;
-  padding-top: calc(var(--document-viewer-toolbar-block-size) + var(--space-2));
-}
-
-.dasti-cv-edit-toolbar {
-  --dasti-cv-edit-toolbar-gap: var(--proposal-chrome-tight-gap, var(--space-1));
-  --dasti-cv-edit-toolbar-row-gap: var(--space-1);
-  position: absolute;
-  inset-block-start: 0;
-  inset-inline-start: 0;
-  z-index: 24;
-  flex-wrap: wrap;
-  justify-content: flex-start;
-  gap: var(--dasti-cv-edit-toolbar-row-gap) var(--dasti-cv-edit-toolbar-gap);
-  width: max-content;
-  max-width: calc(100% - var(--space-4));
-  margin: 0;
-}
-
-.dasti-cv-edit-toolbar__group {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--dasti-cv-edit-toolbar-gap);
-  min-width: 0;
-  flex-wrap: nowrap;
-}
-
-.dasti-cv-edit-toolbar__group:empty {
-  display: none;
-}
-
-.dasti-cv-edit-toolbar__group--lead,
-.dasti-cv-edit-toolbar__group--primary,
-.dasti-cv-edit-toolbar__group--actions {
-  flex: 0 0 auto;
-}
-
-.dasti-cv-edit-toolbar__hint {
-  color: var(--tg2);
-  font-size: var(--tx);
-  line-height: 1.35;
-}
-
-.dasti-cv-edit-toolbar .dasti-import-button {
-  min-width: 0;
-  padding-inline: var(--space-3);
-}
-
-.dasti-cv-edit-toolbar__export {
-  flex: 0 0 auto;
-}
-
-@media (max-width: 767px) {
-  .dasti-cv-edit-toolbar {
-    --dasti-cv-edit-toolbar-gap: var(--space-1);
-    --dasti-cv-edit-toolbar-row-gap: var(--space-1);
-    max-width: calc(100% - var(--space-4));
-  }
 }
 
 .dasti-cv-preview-workbench {
@@ -9630,23 +8134,6 @@ html:not(.dark) .dasti-proposal-submit {
 .dasti-cv-preview-workbench__main {
   display: grid;
   align-content: start;
-  /* Mirrors the resume preview canvas background above. */
-  background: var(--color-surface-muted);
-  border-radius: 0;
-}
-
-.dasti-cv-preview-panel-slot__banner {
-  display: inline-flex;
-  align-items: center;
-  min-height: 32px;
-  margin: 0 0 var(--space-2);
-  padding: 0 12px;
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--document-viewer-frame-surface) 96%, transparent);
-  color: var(--tm2);
-  font-size: var(--tx);
-  font-weight: 600;
-  letter-spacing: 0.02em;
 }
 
 .dasti-forge-compose-toolbar-slot {
@@ -10809,24 +9296,6 @@ html:not(.dark) .dasti-proposal-submit {
     margin-block-end: var(--document-rail-gap);
   }
 
-  .dasti-proposal-output-shell--workspace .dasti-document-shell {
-    gap: 0;
-    padding: 0;
-    border: none;
-    background: transparent;
-    box-shadow: none;
-  }
-
-  .dasti-proposal-output-shell--workspace
-    .dasti-proposal-sheet__body--document-viewer {
-    border: 1px solid var(--document-viewer-frame-border);
-    border-radius: var(--document-viewer-radius);
-    background: var(--document-viewer-frame-surface);
-    box-shadow:
-      var(--document-viewer-frame-shadow),
-      0 12px 28px -24px color-mix(in srgb, var(--shadow-color) 92%, transparent);
-  }
-
   .dasti-compose-toolbar__bar {
     flex-wrap: nowrap;
     align-items: center;
@@ -11111,7 +9580,7 @@ html:not(.dark) .dasti-proposal-submit {
       color-mix(in srgb, var(--color-surface) 98%, white 2%)
     );
   box-shadow:
-    inset 0 1px 0 hsla(38, 20%, 96%, 0.78),
+    inset 0 1px 0 hsl(0 0% 100% / 0.78),
     0 18px 34px -30px color-mix(in srgb, black 22%, transparent);
 }
 
@@ -11131,10 +9600,10 @@ html:not(.dark) .dasti-proposal-submit {
 }
 
 .dasti-settings-appearance-label {
-  font-size: 11px;
+  font-size: 10.5px;
   line-height: 1.2;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-weight: 600;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--tm2);
 }
@@ -11298,15 +9767,9 @@ html:not(.dark) .dasti-proposal-submit {
 .dasti-settings-preview-stage {
   display: grid;
   gap: var(--space-3);
-  justify-items: start;
-  perspective: 1400px;
 }
 
 .dasti-settings-preview-card {
-  --rx: 0deg;
-  --ry: 0deg;
-  --mx: 50%;
-  --my: 50%;
   position: relative;
   width: min(100%, 360px);
   aspect-ratio: 85 / 52;
@@ -11328,94 +9791,30 @@ html:not(.dark) .dasti-proposal-submit {
       color-mix(in srgb, var(--color-surface) 84%, var(--color-canvas) 16%)
     );
   box-shadow:
-    inset 0 1px 0 hsla(38, 20%, 96%, 0.82),
+    inset 0 1px 0 hsl(0 0% 100% / 0.82),
     0 18px 40px -32px color-mix(in srgb, var(--settings-preview-accent) 42%, black 18%);
   overflow: hidden;
-  transform-style: preserve-3d;
-  transform: rotateX(var(--rx)) rotateY(var(--ry));
-  transition:
-    transform 0s,
-    background 0.28s var(--ez),
-    box-shadow 0.28s var(--ez);
-  will-change: transform;
-  cursor: default;
-  touch-action: none;
-  backdrop-filter: blur(4px) saturate(104%);
-  -webkit-backdrop-filter: blur(4px) saturate(104%);
 }
 
 .dark .dasti-settings-preview-card {
-  background: var(--color-surface-raised);
-  border-color: color-mix(in srgb, var(--color-border) 92%, transparent);
+  background:
+    radial-gradient(
+      circle at top right,
+      color-mix(in srgb, var(--settings-preview-accent) 10%, transparent) 0%,
+      transparent 42%
+    ),
+    linear-gradient(
+      160deg,
+      color-mix(in srgb, var(--color-surface) 88%, var(--settings-preview-accent) 12%),
+      color-mix(in srgb, var(--color-canvas) 92%, var(--settings-preview-accent) 8%)
+    );
   box-shadow:
-    inset 0 1px 0 hsl(0 0% 100% / 0.02),
-    var(--sha);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+    inset 0 1px 0 hsl(0 0% 100% / 0.04),
+    0 18px 40px -32px color-mix(in srgb, black 72%, var(--settings-preview-accent) 28%);
 }
 
 .dasti-settings-preview-card::after {
-  content: "";
-  position: absolute;
-  inset: 1px;
-  border-radius: 21px;
-  pointer-events: none;
-  z-index: 1;
-  background:
-    linear-gradient(180deg, hsl(0 0% 100% / 0.55), transparent 18%),
-    linear-gradient(135deg, hsl(0 0% 100% / 0.24), transparent 42%, hsl(0 0% 100% / 0.16));
-}
-
-.dasti-settings-preview-card::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 3;
-  opacity: 0.9;
-  background:
-    linear-gradient(
-      135deg,
-      hsl(0 0% 100% / 0.28) 0%,
-      hsl(0 0% 100% / 0.14) 22%,
-      hsl(0 0% 100% / 0.04) 38%,
-      transparent 56%
-    ),
-    linear-gradient(
-      calc(120deg + (var(--mx, 50%) - 50%) * 0.08),
-      transparent 18%,
-      hsl(0 0% 100% / 0.08) 42%,
-      hsl(0 0% 100% / 0.16) 50%,
-      hsl(0 0% 100% / 0.08) 58%,
-      transparent 78%
-    );
-}
-
-.dark .dasti-settings-preview-card::after {
-  background:
-    linear-gradient(180deg, hsl(0 0% 100% / 0.04), transparent 18%);
-}
-
-.dark .dasti-settings-preview-card::before {
-  opacity: 0.18;
-  background:
-    linear-gradient(
-      140deg,
-      hsl(0 0% 100% / 0.03) 0%,
-      transparent 44%
-    );
-}
-
-.dark .dasti-settings-preview-card--technical,
-.dark .dasti-settings-preview-card--warm {
-  background: var(--color-surface-raised);
-}
-
-.dark .dasti-settings-preview-card__title,
-.dark .dasti-settings-preview-card__subtitle,
-.dark .dasti-settings-preview-card__eyebrow,
-.dark .dasti-settings-preview-card__chip {
-  text-shadow: none;
+  display: none;
 }
 
 .dasti-settings-preview-card--technical {
@@ -11443,23 +9842,21 @@ html:not(.dark) .dasti-proposal-submit {
 
 .dasti-settings-preview-card__eyebrow {
   position: relative;
-  z-index: 4;
+  z-index: 1;
   font-size: var(--tx);
   line-height: 1;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: color-mix(in srgb, var(--tm2) 84%, var(--settings-preview-accent) 16%);
-  text-shadow: 0 1px 0 hsl(0 0% 100% / 0.34);
 }
 
 .dasti-settings-preview-card__body {
   position: relative;
-  z-index: 4;
+  z-index: 1;
   display: grid;
   gap: 4px;
   align-self: center;
-  transform: translateZ(34px);
 }
 
 .dasti-settings-preview-card__title {
@@ -11468,9 +9865,6 @@ html:not(.dark) .dasti-proposal-submit {
   line-height: 0.94;
   letter-spacing: -0.04em;
   color: var(--ti);
-  text-shadow:
-    0 1px 0 hsl(0 0% 100% / 0.34),
-    0 10px 24px color-mix(in srgb, var(--settings-preview-accent) 10%, transparent);
 }
 
 .dasti-settings-preview-card__subtitle {
@@ -11478,18 +9872,16 @@ html:not(.dark) .dasti-proposal-submit {
   font-size: var(--ts);
   line-height: 1.3;
   color: var(--tm2);
-  text-shadow: 0 1px 0 hsl(0 0% 100% / 0.24);
 }
 
 .dasti-settings-preview-card__footer {
   position: relative;
-  z-index: 4;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: flex-start;
   gap: var(--space-2);
   flex-wrap: wrap;
-  transform: translateZ(44px);
 }
 
 .dasti-settings-preview-card__chip {
@@ -11515,175 +9907,140 @@ html:not(.dark) .dasti-proposal-submit {
   color: var(--color-text);
 }
 
-.dasti-settings-preview-card.is-resetting {
-  transition:
-    transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
-    background 0.28s var(--ez),
-    box-shadow 0.28s var(--ez);
+.dasti-settings-style-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .dasti-settings-preview-card {
-    transform: none !important;
-    transition: none !important;
+@media (max-width: 600px) {
+  .dasti-settings-style-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-.dasti-settings-style-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
-  gap: var(--space-2);
+/* ─── Pure CSS 5×5 tilt scene ────────────────────────────────────────────────── */
+
+.dasti-style-scene {
+  position: relative;
+  perspective: 1400px;
 }
 
-.dasti-settings-style-card {
-  position: relative;
+/* Zone grid: absolutely covers the scene, sits above the card */
+.dasti-style-zones {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  grid-template-rows: repeat(5, 1fr);
+  cursor: pointer;
+}
+
+.dasti-style-zone {
+  width: 100%;
+  height: 100%;
+}
+
+/* No cursor-following shine on layout cards — tilt-only */
+
+/* ─── Layout style card — CSS tilt via :has() ────────────────────────────────── */
+
+/* Ghost sizer: invisible copy in flow that defines the scene's height */
+.dasti-style-sizer {
+  visibility: hidden;
   display: grid;
   gap: var(--space-2);
-  min-height: 136px;
   padding: var(--space-3);
-  border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
-  border-radius: 24px;
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, white 92%, var(--settings-preview-accent, var(--sfr)) 8%),
-      color-mix(in srgb, var(--color-surface) 97%, white 3%)
-    );
+  min-height: 96px;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Actual card: absolutely fills the scene — transforms never affect layout */
+.dasti-settings-style-card {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--color-surface) 94%, transparent);
   color: var(--tm2);
   text-align: left;
   cursor: pointer;
   overflow: hidden;
-  isolation: isolate;
-  transform: translateY(0) scale(1);
-  transform-style: preserve-3d;
+  transform:
+    rotateX(var(--rx, 0deg))
+    rotateY(var(--ry, 0deg))
+    scale(1);
   box-shadow:
-    0 22px 48px -36px color-mix(in srgb, var(--color-shadow) 34%, transparent),
-    0 8px 16px -12px color-mix(in srgb, var(--color-shadow) 24%, transparent),
-    inset 0 1px 0 hsl(0 0% 100% / 0.84);
+    var(--shadow-x, 0px) calc(10px + var(--shadow-y, 0px)) 24px rgba(43, 33, 19, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
   transition:
     transform 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.4s cubic-bezier(0.22, 1, 0.36, 1),
     background var(--duration-fast) var(--ease-standard),
-    border-color var(--duration-fast) var(--ease-standard),
-    box-shadow var(--duration-fast) var(--ease-standard);
+    border-color var(--duration-fast) var(--ease-standard);
 }
 
-.dasti-settings-style-card::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(180deg, hsl(0 0% 100% / 0.26), transparent 28%);
-  pointer-events: none;
-  z-index: 1;
+.dasti-settings-style-card:focus-visible {
+  outline: 2px solid var(--color-accent, hsl(155 22% 42%));
+  outline-offset: 2px;
 }
 
-.dasti-settings-style-card::after {
-  content: "";
-  position: absolute;
-  inset: auto 18px 14px;
-  height: 18px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--color-shadow) 12%, transparent);
-  filter: blur(16px);
-  opacity: 0.42;
-  pointer-events: none;
-  z-index: 0;
+/* 5×5 zone → card tilt rules (row = rx, col = ry) */
+.dasti-style-scene:has(.dasti-style-zone-1:hover)  .dasti-settings-style-card { --rx:  3deg; --ry: -3deg;   --shine-x: -60px; --shine-y: -60px; --shadow-x:  6px; --shadow-y:  6px; }
+.dasti-style-scene:has(.dasti-style-zone-2:hover)  .dasti-settings-style-card { --rx:  3deg; --ry: -1.5deg; --shine-x: -30px; --shine-y: -60px; --shadow-x:  3px; --shadow-y:  6px; }
+.dasti-style-scene:has(.dasti-style-zone-3:hover)  .dasti-settings-style-card { --rx:  3deg; --ry:  0deg;   --shine-x:   0px; --shine-y: -60px; --shadow-x:  0px; --shadow-y:  6px; }
+.dasti-style-scene:has(.dasti-style-zone-4:hover)  .dasti-settings-style-card { --rx:  3deg; --ry:  1.5deg; --shine-x:  30px; --shine-y: -60px; --shadow-x: -3px; --shadow-y:  6px; }
+.dasti-style-scene:has(.dasti-style-zone-5:hover)  .dasti-settings-style-card { --rx:  3deg; --ry:  3deg;   --shine-x:  60px; --shine-y: -60px; --shadow-x: -6px; --shadow-y:  6px; }
+.dasti-style-scene:has(.dasti-style-zone-6:hover)  .dasti-settings-style-card { --rx:  1.5deg; --ry: -3deg;   --shine-x: -60px; --shine-y: -30px; --shadow-x:  6px; --shadow-y:  3px; }
+.dasti-style-scene:has(.dasti-style-zone-7:hover)  .dasti-settings-style-card { --rx:  1.5deg; --ry: -1.5deg; --shine-x: -30px; --shine-y: -30px; --shadow-x:  3px; --shadow-y:  3px; }
+.dasti-style-scene:has(.dasti-style-zone-8:hover)  .dasti-settings-style-card { --rx:  1.5deg; --ry:  0deg;   --shine-x:   0px; --shine-y: -30px; --shadow-x:  0px; --shadow-y:  3px; }
+.dasti-style-scene:has(.dasti-style-zone-9:hover)  .dasti-settings-style-card { --rx:  1.5deg; --ry:  1.5deg; --shine-x:  30px; --shine-y: -30px; --shadow-x: -3px; --shadow-y:  3px; }
+.dasti-style-scene:has(.dasti-style-zone-10:hover) .dasti-settings-style-card { --rx:  1.5deg; --ry:  3deg;   --shine-x:  60px; --shine-y: -30px; --shadow-x: -6px; --shadow-y:  3px; }
+.dasti-style-scene:has(.dasti-style-zone-11:hover) .dasti-settings-style-card { --rx:  0deg; --ry: -3deg;   --shine-x: -60px; --shine-y:   0px; --shadow-x:  6px; --shadow-y:  0px; }
+.dasti-style-scene:has(.dasti-style-zone-12:hover) .dasti-settings-style-card { --rx:  0deg; --ry: -1.5deg; --shine-x: -30px; --shine-y:   0px; --shadow-x:  3px; --shadow-y:  0px; }
+.dasti-style-scene:has(.dasti-style-zone-13:hover) .dasti-settings-style-card { --rx:  0deg; --ry:  0deg;   --shine-x:   0px; --shine-y:   0px; --shadow-x:  0px; --shadow-y:  0px; }
+.dasti-style-scene:has(.dasti-style-zone-14:hover) .dasti-settings-style-card { --rx:  0deg; --ry:  1.5deg; --shine-x:  30px; --shine-y:   0px; --shadow-x: -3px; --shadow-y:  0px; }
+.dasti-style-scene:has(.dasti-style-zone-15:hover) .dasti-settings-style-card { --rx:  0deg; --ry:  3deg;   --shine-x:  60px; --shine-y:   0px; --shadow-x: -6px; --shadow-y:  0px; }
+.dasti-style-scene:has(.dasti-style-zone-16:hover) .dasti-settings-style-card { --rx: -1.5deg; --ry: -3deg;   --shine-x: -60px; --shine-y:  30px; --shadow-x:  6px; --shadow-y: -3px; }
+.dasti-style-scene:has(.dasti-style-zone-17:hover) .dasti-settings-style-card { --rx: -1.5deg; --ry: -1.5deg; --shine-x: -30px; --shine-y:  30px; --shadow-x:  3px; --shadow-y: -3px; }
+.dasti-style-scene:has(.dasti-style-zone-18:hover) .dasti-settings-style-card { --rx: -1.5deg; --ry:  0deg;   --shine-x:   0px; --shine-y:  30px; --shadow-x:  0px; --shadow-y: -3px; }
+.dasti-style-scene:has(.dasti-style-zone-19:hover) .dasti-settings-style-card { --rx: -1.5deg; --ry:  1.5deg; --shine-x:  30px; --shine-y:  30px; --shadow-x: -3px; --shadow-y: -3px; }
+.dasti-style-scene:has(.dasti-style-zone-20:hover) .dasti-settings-style-card { --rx: -1.5deg; --ry:  3deg;   --shine-x:  60px; --shine-y:  30px; --shadow-x: -6px; --shadow-y: -3px; }
+.dasti-style-scene:has(.dasti-style-zone-21:hover) .dasti-settings-style-card { --rx: -3deg; --ry: -3deg;   --shine-x: -60px; --shine-y:  60px; --shadow-x:  6px; --shadow-y: -6px; }
+.dasti-style-scene:has(.dasti-style-zone-22:hover) .dasti-settings-style-card { --rx: -3deg; --ry: -1.5deg; --shine-x: -30px; --shine-y:  60px; --shadow-x:  3px; --shadow-y: -6px; }
+.dasti-style-scene:has(.dasti-style-zone-23:hover) .dasti-settings-style-card { --rx: -3deg; --ry:  0deg;   --shine-x:   0px; --shine-y:  60px; --shadow-x:  0px; --shadow-y: -6px; }
+.dasti-style-scene:has(.dasti-style-zone-24:hover) .dasti-settings-style-card { --rx: -3deg; --ry:  1.5deg; --shine-x:  30px; --shine-y:  60px; --shadow-x: -3px; --shadow-y: -6px; }
+.dasti-style-scene:has(.dasti-style-zone-25:hover) .dasti-settings-style-card { --rx: -3deg; --ry:  3deg;   --shine-x:  60px; --shine-y:  60px; --shadow-x: -6px; --shadow-y: -6px; }
+
+/* Pressed state — no scale, tilt only resets */
+.dasti-style-scene:active .dasti-settings-style-card {
+  transform: rotateX(0deg) rotateY(0deg) scale(1);
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.08);
+  transition-duration: 0.12s;
 }
 
 .dasti-settings-style-card:hover,
 .dasti-settings-style-card:focus-visible {
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, white 94%, var(--settings-preview-accent, var(--sfr)) 6%),
-      color-mix(in srgb, var(--sfr) 96%, white 4%)
-    );
   border-color: var(--color-border-contrast);
-  box-shadow:
-    0 24px 54px -34px color-mix(in srgb, var(--color-shadow) 38%, transparent),
-    0 10px 18px -14px color-mix(in srgb, var(--color-shadow) 24%, transparent),
-    inset 0 1px 0 hsl(0 0% 100% / 0.88);
-  transform: translateY(-1px);
   outline: none;
 }
 
 .dasti-settings-style-card--active {
+  background: color-mix(in srgb, var(--sfr) 96%, transparent);
   border-color: var(--color-border-contrast);
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, white 94%, var(--settings-preview-accent, var(--sfr)) 6%),
-      color-mix(in srgb, var(--sfr) 96%, white 4%)
-    );
-  box-shadow:
-    0 24px 54px -34px color-mix(in srgb, var(--color-shadow) 38%, transparent),
-    0 10px 18px -14px color-mix(in srgb, var(--color-shadow) 24%, transparent),
-    inset 0 1px 0 hsl(0 0% 100% / 0.88);
-}
-
-.dasti-settings-style-card:active {
-  transform: scale(0.968);
-  box-shadow:
-    inset 0 2px 12px color-mix(in srgb, var(--color-shadow) 14%, transparent),
-    0 8px 18px -14px color-mix(in srgb, var(--color-shadow) 20%, transparent);
-}
-
-.dasti-settings-style-card__grain {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  opacity: 0.18;
-  background-image:
-    linear-gradient(hsl(0 0% 0% / 0.014), hsl(0 0% 0% / 0.014)),
-    radial-gradient(hsl(32 18% 34% / 0.045) 0.6px, transparent 0.6px);
-  background-size: auto, 7px 7px;
-  pointer-events: none;
-}
-
-.dasti-settings-style-card__content {
-  position: relative;
-  z-index: 3;
-  display: grid;
-  gap: var(--space-2);
-  height: 100%;
-  min-width: 0;
-  transform: translateZ(28px);
-  transition: transform 0.12s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.dasti-settings-style-card:active .dasti-settings-style-card__content {
-  transform: translateZ(16px);
-}
-
-.dasti-settings-style-card__content > * {
-  min-width: 0;
-}
-
-.dasti-settings-style-card__heading {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.dasti-settings-style-card__icon {
-  width: 28px;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--color-border-contrast) 74%, transparent);
-  background: color-mix(in srgb, white 84%, var(--settings-preview-accent, var(--sfr)) 16%);
-  color: var(--ti);
-  flex: 0 0 auto;
+  box-shadow: var(--shadow-sm);
 }
 
 .dasti-settings-style-card__top {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
 }
 
 .dasti-settings-style-card__label {
@@ -11693,39 +10050,36 @@ html:not(.dark) .dasti-proposal-submit {
 }
 
 .dasti-settings-style-card__indicator {
-  min-height: 24px;
-  padding: 0 10px;
+  height: 20px;
+  padding: 0 8px;
   border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--color-border-contrast) 78%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-border-contrast) 70%, transparent);
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
-  font-size: 11px;
+  gap: 4px;
+  font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.01em;
   color: var(--ti);
-  flex: 0 0 auto;
   background: color-mix(in srgb, var(--sf1) 92%, transparent);
-  transform: translateZ(42px);
+  white-space: nowrap;
 }
 
 .dasti-settings-style-card__description {
   font-size: var(--tx);
   line-height: 1.55;
   color: var(--tm2);
-  min-width: 0;
 }
 
 .dasti-settings-style-card__mini {
   display: grid;
   gap: 6px;
-  width: 100%;
-  min-width: 0;
   padding: 10px;
   border-radius: calc(var(--radius-card) - 4px);
   border: 1px solid color-mix(in srgb, var(--color-border) 78%, transparent);
   background: color-mix(in srgb, var(--sf1) 88%, transparent);
+  height: 72px;
+  flex-shrink: 0;
   overflow: hidden;
 }
 
@@ -12151,7 +10505,7 @@ html:not(.dark) .dasti-proposal-submit {
 }
 
 .dasti-color-popover__field-layer--light {
-  background: linear-gradient(90deg, hsla(38, 22%, 96%, 1) 0%, hsla(38, 22%, 96%, 0) 72%);
+  background: linear-gradient(90deg, #ffffff 0%, rgba(255, 255, 255, 0) 72%);
 }
 
 .dasti-color-popover__field-layer--shade {
@@ -12197,7 +10551,7 @@ html:not(.dark) .dasti-proposal-submit {
   background: var(--marker-color, var(--picker-hue-color));
   transform: translate(-50%, -50%);
   box-shadow:
-    0 0 0 3px hsla(38, 22%, 96%, 0.96),
+    0 0 0 3px rgba(255, 255, 255, 0.96),
     0 6px 14px rgba(15, 23, 42, 0.16);
   pointer-events: none;
   z-index: 6;
@@ -12265,7 +10619,7 @@ html:not(.dark) .dasti-proposal-submit {
   background: var(--picker-hue-color);
   transform: translate(-50%, -50%);
   box-shadow:
-    0 0 0 3px hsla(38, 22%, 96%, 0.95),
+    0 0 0 3px rgba(255, 255, 255, 0.95),
     0 6px 14px rgba(15, 23, 42, 0.12);
   pointer-events: none;
   z-index: 7;
@@ -12429,4 +10783,769 @@ html:not(.dark) .dasti-proposal-submit {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--tm2);
+}
+
+/* ─── Settings Builder — 3-slot style profile editor ─────────────────────── */
+
+/* Builder header */
+.dasti-settings-builder-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s4);
+  padding-bottom: var(--s2);
+}
+
+/* 2-column builder shell */
+.dasti-settings-builder {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 310px;
+  gap: var(--s5);
+  align-items: start;
+}
+
+.dasti-settings-builder__left {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  min-width: 0;
+}
+
+.dasti-settings-builder__right {
+  position: sticky;
+  top: calc(var(--header-height, 52px) + var(--s4));
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  perspective: 2500px;
+}
+
+.dasti-settings-builder__preview-label {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  font-size: var(--ts);
+  font-weight: 600;
+  color: var(--ti);
+}
+
+.dasti-settings-builder__active-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 90%, white 10%);
+  background: color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 28%, transparent);
+}
+
+.dasti-settings-builder__set-default-btn {
+  align-self: flex-start;
+  margin-top: var(--s1);
+}
+
+/* Responsive: single column below 920px */
+@media (max-width: 920px) {
+  .dasti-settings-builder {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dasti-settings-builder__right {
+    position: static;
+    order: -1;
+  }
+}
+
+/* ─── Slot rail ───────────────────────────────────────────────────────────── */
+
+.dasti-settings-slot-rail {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s2);
+}
+
+.dasti-settings-slot-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding: var(--s3);
+  border-radius: var(--radius-card);
+  border: 1.5px solid rgba(0, 0, 0, 0.1);
+  background: var(--sfr);
+  box-shadow: var(--sha);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color 0.12s var(--ez),
+    box-shadow 0.12s var(--ez),
+    background 0.12s var(--ez);
+}
+
+.dasti-settings-slot-card:hover {
+  border-color: rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shb);
+}
+
+.dasti-settings-slot-card:focus-visible {
+  outline: 2px solid var(--color-accent, hsl(155 22% 42%));
+  outline-offset: 2px;
+  border-color: color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 50%, transparent);
+}
+
+.dasti-settings-slot-card--editing {
+  border-color: rgba(0, 0, 0, 0.28);
+  box-shadow: var(--shb), 0 0 0 3px rgba(0, 0, 0, 0.06);
+  background: var(--sfr);
+}
+
+.dasti-settings-slot-card--active {
+  border-color: color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 52%, transparent);
+}
+
+.dasti-settings-slot-card--active.dasti-settings-slot-card--editing {
+  border-color: color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 68%, var(--ti) 32%);
+  box-shadow:
+    var(--shb),
+    0 0 0 3px color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 14%, transparent);
+}
+
+.dasti-settings-slot-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s1);
+  min-height: 18px;
+}
+
+.dasti-settings-slot-card__name {
+  font-size: var(--tx);
+  font-weight: 600;
+  color: var(--ti);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dasti-settings-slot-card__active-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  height: 17px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 90%, white 10%);
+  background: color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 30%, transparent);
+}
+
+.dasti-settings-slot-card__set-default {
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--tm2);
+  cursor: pointer;
+  padding: 2px 5px;
+  border-radius: 4px;
+  transition: color 0.1s var(--ez), background 0.1s var(--ez);
+  white-space: nowrap;
+}
+
+.dasti-settings-slot-card__set-default:hover {
+  color: var(--ti);
+  background: color-mix(in srgb, var(--color-border) 50%, transparent);
+}
+
+.dasti-settings-slot-card__mini-preview {
+  border-radius: 4px;
+  overflow: hidden;
+  min-height: 48px;
+}
+
+.dasti-settings-slot-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: auto;
+}
+
+.dasti-settings-slot-card__font-label {
+  font-size: 9px;
+  color: var(--tm2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 64px;
+}
+
+.dasti-settings-slot-card__font-sep {
+  font-size: 9px;
+  color: color-mix(in srgb, var(--tm2) 60%, transparent);
+  flex-shrink: 0;
+}
+
+/* ─── Font pair grid ──────────────────────────────────────────────────────── */
+
+.dasti-settings-font-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(172px, 1fr));
+  gap: var(--s2);
+}
+
+.dasti-settings-font-pair-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: var(--s3) var(--s3) var(--s2);
+  border-radius: var(--radius-card);
+  border: 1.5px solid rgba(0, 0, 0, 0.13);
+  background: var(--sfr);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color 0.12s var(--ez),
+    background 0.12s var(--ez),
+    box-shadow 0.12s var(--ez);
+}
+
+.dasti-settings-font-pair-card:hover {
+  border-color: rgba(0, 0, 0, 0.2);
+  background: color-mix(in srgb, var(--sfr) 96%, white 4%);
+  box-shadow: var(--sha);
+}
+
+.dasti-settings-font-pair-card:focus-visible {
+  outline: 2px solid var(--color-accent, hsl(155 22% 42%));
+  outline-offset: 2px;
+}
+
+.dasti-settings-font-pair-card--active {
+  border-color: color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 72%, rgba(0,0,0,0.1));
+  background: color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 8%, var(--sfr));
+  box-shadow: var(--sha);
+}
+
+.dasti-settings-font-pair-card--active:hover {
+  border-color: color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 88%, rgba(0,0,0,0.1));
+}
+
+.dasti-settings-font-pair-card__heading {
+  display: block;
+  font-size: 20px;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--ti);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-bottom: var(--s2);
+  margin-bottom: var(--s2);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.07);
+}
+
+.dasti-settings-font-pair-card__body {
+  display: block;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--tm2);
+  opacity: 0.78;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+
+.dasti-settings-font-pair-card__check {
+  position: absolute;
+  top: var(--s2);
+  right: var(--s2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 15%, transparent);
+  color: color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 92%, white 8%);
+  border: 1px solid color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 30%, transparent);
+}
+
+/* ─── Hero preview ────────────────────────────────────────────────────────── */
+
+@keyframes dasti-hero-slot-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+
+.dasti-settings-hero-preview {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  display: grid;
+  align-content: stretch;
+  container-type: inline-size;
+  border-radius: calc(var(--radius-card) + 4px);
+  border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  box-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.78),
+    var(--shb),
+    0 20px 44px -30px color-mix(in srgb, var(--hero-accent, hsl(155 22% 42%)) 38%, black 12%);
+  overflow: hidden;
+  background:
+    radial-gradient(
+      ellipse at top right,
+      color-mix(in srgb, var(--hero-accent, hsl(155 22% 42%)) 20%, white 80%) 0%,
+      transparent 52%
+    ),
+    linear-gradient(
+      168deg,
+      color-mix(in srgb, white 88%, var(--hero-accent, hsl(155 22% 42%)) 12%),
+      color-mix(in srgb, var(--color-surface) 82%, var(--color-canvas) 18%)
+    );
+}
+
+.dark .dasti-settings-hero-preview {
+  background:
+    radial-gradient(
+      ellipse at top right,
+      color-mix(in srgb, var(--hero-accent, hsl(155 22% 42%)) 12%, transparent) 0%,
+      transparent 48%
+    ),
+    linear-gradient(
+      168deg,
+      color-mix(in srgb, var(--color-surface) 86%, var(--hero-accent, hsl(155 22% 42%)) 14%),
+      color-mix(in srgb, var(--color-canvas) 90%, var(--hero-accent, hsl(155 22% 42%)) 10%)
+    );
+  box-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.04),
+    var(--shb),
+    0 20px 44px -30px color-mix(in srgb, black 68%, var(--hero-accent, hsl(155 22% 42%)) 32%);
+}
+
+/* Style-choice background variants */
+.dasti-settings-hero-preview--technical {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-canvas) 90%, var(--hero-accent, hsl(155 22% 42%)) 10%),
+      color-mix(in srgb, var(--color-surface) 84%, var(--hero-accent, hsl(155 22% 42%)) 16%)
+    );
+}
+
+.dasti-settings-hero-preview--warm {
+  background:
+    radial-gradient(
+      ellipse at top right,
+      color-mix(in srgb, var(--hero-accent, hsl(155 22% 42%)) 26%, white 74%) 0%,
+      transparent 44%
+    ),
+    linear-gradient(
+      160deg,
+      color-mix(in srgb, white 84%, var(--hero-accent, hsl(155 22% 42%)) 16%),
+      color-mix(in srgb, var(--color-surface) 78%, var(--hero-accent, hsl(155 22% 42%)) 22%)
+    );
+}
+
+.dasti-settings-hero-preview__inner {
+  display: grid;
+  grid-template-rows: auto auto 1px 1fr auto;
+  gap: var(--s3);
+  padding: var(--s5) var(--s4) var(--s4);
+  height: 100%;
+  animation: dasti-hero-slot-in 0.22s var(--ez) both;
+}
+
+.dasti-settings-hero-preview__kicker {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--tm2) 76%, var(--hero-accent, hsl(155 22% 42%)) 24%);
+  line-height: 1;
+}
+
+.dasti-settings-hero-preview__heading-block {
+  display: grid;
+  gap: 6px;
+}
+
+.dasti-settings-hero-preview__title {
+  margin: 0;
+  font-size: clamp(28px, 8cqi, 40px);
+  line-height: 0.9;
+  letter-spacing: -0.04em;
+  color: var(--ti);
+}
+
+.dasti-settings-hero-preview__subtitle {
+  margin: 0;
+  font-size: var(--ts);
+  line-height: 1.3;
+  color: var(--tm2);
+}
+
+.dasti-settings-hero-preview__divider {
+  background: color-mix(in srgb, var(--hero-accent, hsl(155 22% 42%)) 44%, var(--color-border) 56%);
+  height: 1px;
+  border-radius: 1px;
+  align-self: stretch;
+}
+
+.dasti-settings-hero-preview__body-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  overflow: hidden;
+}
+
+.dasti-settings-hero-preview__body-text {
+  margin: 0;
+  font-size: var(--tx);
+  line-height: 1.6;
+  color: var(--tm2);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+
+.dasti-settings-hero-preview__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  flex-wrap: wrap;
+  margin-top: auto;
+}
+
+.dasti-settings-hero-preview__chip {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 var(--s2);
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 64%, transparent);
+  background: color-mix(in srgb, white 78%, var(--hero-accent, hsl(155 22% 42%)) 22%);
+  color: var(--ti);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.dark .dasti-settings-hero-preview__chip {
+  background: color-mix(
+    in srgb,
+    var(--color-surface-raised, var(--sfr)) 72%,
+    var(--hero-accent, hsl(155 22% 42%)) 28%
+  );
+  border-color: color-mix(in srgb, white 14%, var(--hero-accent, hsl(155 22% 42%)) 20%);
+  color: var(--color-text, var(--ti));
+}
+
+.dasti-settings-hero-preview__style-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 var(--s2);
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 64%, transparent);
+  background: color-mix(in srgb, var(--hero-accent, hsl(155 22% 42%)) 12%, transparent);
+  color: color-mix(in srgb, var(--hero-accent, hsl(155 22% 42%)) 88%, var(--ti) 12%);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+/* ─── Dark mode slot card overrides ──────────────────────────────────────── */
+
+.dark .dasti-settings-slot-card {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: var(--sf2);
+}
+
+.dark .dasti-settings-slot-card:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.dark .dasti-settings-slot-card--editing {
+  border-color: rgba(255, 255, 255, 0.26);
+  background: color-mix(in srgb, var(--sf2) 94%, white 6%);
+}
+
+.dark .dasti-settings-font-pair-card {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: var(--sf2);
+}
+
+.dark .dasti-settings-font-pair-card:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.dark .dasti-settings-font-pair-card--active {
+  border-color: color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 60%, rgba(255,255,255,0.1));
+  background: color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 9%, var(--sf2));
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   2026 Design Meta Upgrades
+   ─ Bento 2.0 · Tactile Maximalism · Liquid Glass · Ghost pills · Micro-anim
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── 1. Bento 2.0: dissolve master toolbar, surface each group as its own card */
+
+.dasti-settings-builder__left .dasti-settings-appearance-toolbar {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  gap: var(--s3);
+}
+
+.dasti-settings-builder__left .dasti-settings-appearance-group {
+  padding: var(--s4);
+  background: var(--sfr);
+  border: 1.5px solid rgba(0, 0, 0, 0.09);
+  border-radius: var(--radius-card);
+  box-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.82),
+    var(--sha);
+  gap: var(--s3);
+}
+
+.dark .dasti-settings-builder__left .dasti-settings-appearance-group {
+  background: var(--sf2);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.04),
+    var(--sha);
+}
+
+/* ── 2. Tactile Maximalism: inset shadows + scale on selected states */
+
+/* Font pair cards — pressed-in feel when active */
+.dasti-settings-font-pair-card--active {
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, 0.07),
+    inset 0 1px 2px rgba(0, 0, 0, 0.05);
+  transform: scale(0.985);
+}
+
+.dasti-settings-font-pair-card--active:hover {
+  transform: scale(0.985);
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, 0.07),
+    inset 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.dasti-settings-font-pair-card:active {
+  transform: scale(0.975);
+  box-shadow: inset 0 3px 7px rgba(0, 0, 0, 0.09);
+  transition-duration: 0.06s;
+}
+
+/* Add transform to existing transition list */
+.dasti-settings-font-pair-card {
+  transition:
+    border-color 0.12s var(--ez),
+    background 0.12s var(--ez),
+    box-shadow 0.12s var(--ez),
+    transform 0.12s var(--ez);
+}
+
+/* Layout style cards — active selected state */
+.dasti-settings-style-card--active {
+  background: color-mix(in srgb, var(--sfr) 96%, transparent);
+  border-color: var(--color-border-contrast);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.06),
+    inset 0 1px 2px rgba(0, 0, 0, 0.04),
+    var(--shadow-x, 0px) calc(10px + var(--shadow-y, 0px)) 24px rgba(43, 33, 19, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+/* Slot cards — pressed-in when editing */
+.dasti-settings-slot-card--editing {
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.06),
+    inset 0 1px 2px rgba(0, 0, 0, 0.04),
+    0 0 0 3px rgba(0, 0, 0, 0.06);
+}
+
+.dasti-settings-slot-card {
+  transition:
+    border-color 0.12s var(--ez),
+    box-shadow 0.12s var(--ez),
+    background 0.12s var(--ez),
+    transform 0.12s var(--ez);
+}
+
+.dasti-settings-slot-card:active:not(.dasti-settings-slot-card--editing) {
+  transform: scale(0.97);
+  transition-duration: 0.06s;
+}
+
+/* ── 3. Liquid Glass Hero Preview */
+
+.dasti-settings-hero-preview {
+  background:
+    radial-gradient(
+      ellipse at top right,
+      color-mix(in srgb, var(--hero-accent, hsl(155 22% 42%)) 22%, white 78%) 0%,
+      transparent 52%
+    ),
+    linear-gradient(
+      168deg,
+      color-mix(in srgb, white 82%, var(--hero-accent, hsl(155 22% 42%)) 18%),
+      color-mix(in srgb, var(--color-surface) 76%, var(--color-canvas) 24%)
+    );
+  /* Glass layer on top */
+  backdrop-filter: blur(20px) saturate(1.6);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+}
+
+/* Gloss sheen — paper-soft diagonal sweep, not metallic.
+   Low-opacity warm white to avoid chrome effect. */
+.dasti-settings-hero-preview::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    calc(148deg + var(--ry, 0deg) * 2),
+    rgba(255, 255, 255, 0.18) 0%,
+    rgba(255, 255, 255, 0.07) 35%,
+    transparent 55%,
+    rgba(255, 255, 255, 0.03) 100%
+  );
+  pointer-events: none;
+  z-index: 1;
+  transition: background 0s;
+}
+
+/* Static top-edge catch-light — very soft paper rim, not chrome */
+.dasti-settings-hero-preview::after {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: calc(var(--radius-card) + 3px);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.28) 0%,
+    transparent 10%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Dark mode: warm paper card, not metallic sheet */
+.dark .dasti-settings-hero-preview {
+  background:
+    radial-gradient(
+      ellipse at top right,
+      color-mix(in srgb, var(--hero-accent, hsl(155 22% 42%)) 14%, rgba(255,248,235,0.06) 86%) 0%,
+      transparent 52%
+    ),
+    linear-gradient(
+      168deg,
+      color-mix(in srgb, rgba(255, 248, 235, 0.10) 60%, var(--hero-accent, hsl(155 22% 42%)) 40%),
+      color-mix(in srgb, var(--color-surface) 85%, var(--color-canvas) 15%)
+    );
+}
+
+.dark .dasti-settings-hero-preview::before {
+  background: linear-gradient(
+    calc(148deg + var(--ry, 0deg) * 2),
+    rgba(255, 248, 235, 0.09) 0%,
+    rgba(255, 248, 235, 0.04) 35%,
+    transparent 55%
+  );
+}
+
+.dark .dasti-settings-hero-preview::after {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 248, 235, 0.11) 0%,
+    transparent 10%
+  );
+}
+
+.dasti-settings-hero-preview__inner {
+  position: relative;
+  z-index: 2;
+}
+
+/* ── 4. Indicator always visible when rendered (active only — conditional in JSX) */
+
+.dasti-settings-style-card__indicator {
+  opacity: 1;
+}
+
+/* ── 5. Hero preview — JS-driven 3D tilt (Elite Material) */
+
+.dasti-settings-hero-preview {
+  transform:
+    rotateX(var(--rx, 0deg))
+    rotateY(var(--ry, 0deg));
+  transform-style: preserve-3d;
+  /* Instant tracking: transition: 0s while mouse moves */
+  transition:
+    transform 0s,
+    background 0.28s var(--ez),
+    box-shadow 0.28s var(--ez);
+  cursor: default;
+}
+
+/* Smooth snap-back when mouse leaves */
+.dasti-settings-hero-preview.is-resetting {
+  transition:
+    transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    background 0.28s var(--ez),
+    box-shadow 0.28s var(--ez);
+}
+
+/* Dark mode Bento group overrides */
+.dark .dasti-settings-builder__left .dasti-settings-appearance-toolbar {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+/* ── Layout card: prevent description overflow */
+.dasti-settings-style-card {
+  overflow: hidden;
+}
+
+.dasti-settings-style-card__description {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  word-break: break-word;
+}
+
+/* ── Active slot card: elevate without scale to signal "you're editing this one" */
+.dasti-settings-slot-card--editing {
+  z-index: 1;
+  position: relative;
+}
+
+/* Counter-cancel the inset shadow we set above so scale takes precedence visually */
+.dasti-settings-slot-card--editing:not(.dasti-settings-slot-card--active) {
+  box-shadow:
+    0 0 0 3px rgba(0, 0, 0, 0.06),
+    var(--shb);
+}
+
+/* Suppress native title tooltips — use no title attrs in JSX instead */
+/* (belt-and-suspenders for any remaining ones) */
+[title]:not(abbr):not([aria-describedby]) {
+  /* Let browser still read for a11y, just suppress via JS approach in TSX */
 }
