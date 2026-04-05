@@ -15,6 +15,9 @@ type ProposalDocumentRendererProps = {
   templateId?: ProposalTemplateId | null;
   railTitle?: string | null;
   railMeta?: string | null;
+  contactLine?: string | null;
+  letterDate?: string | null;
+  recipientDetails?: string | null;
   documentTitle?: string | null;
   documentMeta?: string | null;
   applicantHeader?: ProposalApplicantHeaderData | null;
@@ -139,25 +142,35 @@ function isLikelySignatureName(value: string): boolean {
   return SIGNATURE_NAME_PATTERN.test(normalized);
 }
 
-function buildVolkRegisterMetaEntries(
-  applicantHeader?: ProposalApplicantHeaderData | null,
-): VolkRegisterMetaEntry[] {
+function buildVolkRegisterMetaEntries(args: {
+  letterDate?: string | null;
+  recipientDetails?: string | null;
+}): VolkRegisterMetaEntry[] {
+  const lines = String(args.recipientDetails ?? "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const mergedTail =
+    lines.length > 3 ? lines.slice(2).join(" · ") : (lines[2] ?? "");
+
   return [
     {
-      key: "phone",
-      value: applicantHeader?.phone?.trim() ?? "",
+      key: "date",
+      value: args.letterDate?.trim()
+        ? `date: ${args.letterDate.trim()}`
+        : "",
     },
     {
-      key: "website",
-      value: applicantHeader?.website?.trim() ?? "",
+      key: "to",
+      value: lines[0] ? `to: ${lines[0]}` : "",
     },
     {
-      key: "linkedin",
-      value: applicantHeader?.linkedin?.trim() ?? "",
+      key: "recipient_line_two",
+      value: lines[1] ?? "",
     },
     {
-      key: "tag",
-      value: applicantHeader?.tag?.trim() ?? "",
+      key: "recipient_line_three",
+      value: mergedTail,
     },
   ].filter((entry) => entry.value.length > 0);
 }
@@ -172,6 +185,14 @@ function buildVolkRegisterSenderLine(
     applicantHeader?.linkedin?.trim() ?? "",
   ]
     .filter((value) => value.length > 0)
+    .join(" · ");
+}
+
+function normalizeDocumentContactLine(value: string | null | undefined): string {
+  return String(value ?? "")
+    .split(/\s*(?:,|·|•|\|)\s*/g)
+    .map((part) => part.trim())
+    .filter(Boolean)
     .join(" · ");
 }
 
@@ -461,6 +482,9 @@ export function ProposalDocumentRenderer({
   templateId,
   railTitle,
   railMeta,
+  contactLine,
+  letterDate,
+  recipientDetails,
   documentTitle,
   documentMeta,
   applicantHeader,
@@ -471,9 +495,16 @@ export function ProposalDocumentRenderer({
 }: ProposalDocumentRendererProps): JSX.Element {
   const resolvedTemplateId = resolveProposalTemplateId(templateId);
   const templateDefinition = getProposalTemplateDefinition(resolvedTemplateId);
-  const resolvedRailTitle = applicantHeader?.name ?? railTitle ?? documentTitle;
-  const resolvedRailMeta = applicantHeader?.role ?? railMeta ?? documentMeta;
+  const resolvedRailTitle =
+    railTitle?.trim() || applicantHeader?.name || documentTitle || null;
+  const resolvedRailMeta =
+    railMeta?.trim() || applicantHeader?.role || documentMeta || null;
   const resolvedSenderEmail = applicantHeader?.email ?? documentMeta ?? null;
+  const resolvedSenderLine =
+    normalizeDocumentContactLine(contactLine) ||
+    buildVolkRegisterSenderLine(applicantHeader) ||
+    resolvedSenderEmail ||
+    null;
   const parsedDocument = React.useMemo(
     () => parseProposalDocumentContent(content, proposalType),
     [content, proposalType],
@@ -739,21 +770,14 @@ export function ProposalDocumentRenderer({
         ? [documentBlocks.map((_, index) => index)]
         : [[]];
   const volkMetaEntries = React.useMemo(
-    () => buildVolkRegisterMetaEntries(applicantHeader),
+    () =>
+      buildVolkRegisterMetaEntries({
+        letterDate,
+        recipientDetails,
+      }),
     [
-      applicantHeader?.linkedin,
-      applicantHeader?.phone,
-      applicantHeader?.tag,
-      applicantHeader?.website,
-    ],
-  );
-  const volkSenderLine = React.useMemo(
-    () => buildVolkRegisterSenderLine(applicantHeader),
-    [
-      applicantHeader?.email,
-      applicantHeader?.linkedin,
-      applicantHeader?.phone,
-      applicantHeader?.website,
+      letterDate,
+      recipientDetails,
     ],
   );
   const volkMetaLefts = React.useMemo(() => VOLK_REGISTER_GRID.metaLefts, []);
@@ -859,7 +883,7 @@ export function ProposalDocumentRenderer({
               {resolvedRailMeta ?? "job role"}
             </p>
             <p className="dasti-proposal-document__volk-sender">
-              {volkSenderLine || "phone · email · website"}
+              {resolvedSenderLine || "phone · email · website"}
             </p>
           </div>
         ) : null}
@@ -921,14 +945,17 @@ export function ProposalDocumentRenderer({
     [
       documentMeta,
       documentTitle,
+      letterDate,
+      recipientDetails,
       applicantHeader,
+      contactLine,
       renderVolkBodyContent,
       volkMetaLefts,
       resolvedRailMeta,
       resolvedRailTitle,
+      resolvedSenderLine,
       templateDefinition.name,
       volkMetaEntries,
-      volkSenderLine,
     ],
   );
 

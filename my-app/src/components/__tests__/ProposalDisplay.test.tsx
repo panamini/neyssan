@@ -194,7 +194,7 @@ describe("ProposalDisplay", () => {
     expect(screen.getByText("Generate a proposal to see the results here.")).toBeInTheDocument();
     expect(
       (frame as HTMLElement).style.getPropertyValue("--font-body-family"),
-    ).toContain("Source Serif 4");
+    ).toContain("Geist");
     expect(
       (frame as HTMLElement).style.getPropertyValue("--color-canvas"),
     ).toBe("");
@@ -443,5 +443,92 @@ describe("ProposalDisplay", () => {
     await waitFor(() => {
       expect(badgeWrap).toHaveAttribute("data-overlap-hidden", "true");
     });
+  });
+
+  it("toggles the editable proposal header drawer in edit mode and forwards changes", () => {
+    const handleApplicantNameChange = vi.fn();
+    const handleApplicantRoleChange = vi.fn();
+    const handleContactLineChange = vi.fn();
+    const handleLetterDateChange = vi.fn();
+    const handleRecipientDetailsChange = vi.fn();
+    const handleSubjectChange = vi.fn();
+
+    render(
+      <ProposalDisplay
+        proposalContent={"Dear Hiring Manager,\n\nProposal body.\n\nBest,\nJane"}
+        loading={false}
+        error={null}
+        proposalType="cover_letter"
+        mode="edit"
+        railTitle="Jane Doe"
+        railMeta="Human Resources Administrator"
+        contactLine="+33 6 00 00 00 00 · jane@example.com · janedoe.dev"
+        letterDate="April 5, 2026"
+        recipientDetails={"Hiring Manager\nPeople Operations\nModine"}
+        documentTitle="Human Resources Administrator"
+        documentTitleEditable
+        onDocumentTitleChange={handleSubjectChange}
+        onRailTitleChange={handleApplicantNameChange}
+        onRailMetaChange={handleApplicantRoleChange}
+        contactLineEditable
+        onContactLineChange={handleContactLineChange}
+        letterDateEditable
+        onLetterDateChange={handleLetterDateChange}
+        recipientDetailsEditable
+        onRecipientDetailsChange={handleRecipientDetailsChange}
+        onContentChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByLabelText("Name")).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Show applicant details" }),
+    );
+
+    fireEvent.change(screen.getByLabelText("Name"), {
+      target: { value: "Elena Marlowe" },
+    });
+    fireEvent.change(screen.getByLabelText("Role"), {
+      target: { value: "Senior Product Designer" },
+    });
+    fireEvent.change(screen.getByLabelText("Contact"), {
+      target: {
+        value:
+          "+31 6 5555 2381, elena@sample.design, elenamarlowe.design",
+      },
+    });
+    fireEvent.change(screen.getByLabelText("Date"), {
+      target: {
+        value: "April 6, 2026",
+      },
+    });
+    fireEvent.change(screen.getByLabelText("To"), {
+      target: {
+        value:
+          "Elena Marlowe\nHead of Design\nAcme Studio\nelena@acme.studio",
+      },
+    });
+    fireEvent.change(screen.getByLabelText("Subject"), {
+      target: { value: "Lead Product Designer" },
+    });
+
+    expect(handleApplicantNameChange).toHaveBeenCalledWith("Elena Marlowe");
+    expect(handleApplicantRoleChange).toHaveBeenCalledWith(
+      "Senior Product Designer",
+    );
+    expect(handleContactLineChange).toHaveBeenCalledWith(
+      "+31 6 5555 2381, elena@sample.design, elenamarlowe.design",
+    );
+    expect(handleLetterDateChange).toHaveBeenCalledWith("April 6, 2026");
+    expect(handleRecipientDetailsChange).toHaveBeenCalledWith(
+      "Elena Marlowe\nHead of Design\nAcme Studio\nelena@acme.studio",
+    );
+    expect(handleSubjectChange).toHaveBeenCalledWith("Lead Product Designer");
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Close header details" }),
+    );
+    expect(screen.queryByLabelText("Name")).not.toBeInTheDocument();
   });
 });

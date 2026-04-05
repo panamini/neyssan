@@ -8,6 +8,7 @@ import {
   resolveVerbatiStyle,
   serializeVerbatiStyle,
 } from "../features/verbati/style";
+import { resolveVerbatiFontPairId } from "../features/verbati/fontCatalog";
 import type { VerbatiStylePreset } from "../features/verbati/types";
 import type { ProposalStyleLinkMode } from "./proposal-style-link";
 import {
@@ -46,6 +47,9 @@ export type StoredProposalOutputDraft = {
   proposalStyleChoice: ProposalStyleChoice;
   proposalApplicantName: string;
   proposalApplicantRole: string;
+  proposalContactLine?: string;
+  proposalLetterDate?: string;
+  proposalRecipientDetails?: string;
   proposalDocumentTitle: string;
   proposalDocumentMeta: string;
   generatedProposalId: Id<"proposals"> | null;
@@ -233,6 +237,18 @@ export function readStoredProposalOutputDraft(): StoredProposalOutputDraft | nul
         typeof parsed.proposalApplicantRole === "string"
           ? parsed.proposalApplicantRole
           : "",
+      proposalContactLine:
+        typeof parsed.proposalContactLine === "string"
+          ? parsed.proposalContactLine
+          : "",
+      proposalLetterDate:
+        typeof parsed.proposalLetterDate === "string"
+          ? parsed.proposalLetterDate
+          : "",
+      proposalRecipientDetails:
+        typeof parsed.proposalRecipientDetails === "string"
+          ? parsed.proposalRecipientDetails
+          : "",
       proposalDocumentTitle:
         typeof parsed.proposalDocumentTitle === "string"
           ? parsed.proposalDocumentTitle
@@ -262,10 +278,8 @@ export function readStoredProposalOutputDraft(): StoredProposalOutputDraft | nul
           : null,
       templateBundleId: resolveProposalTemplateBundleId(parsed.templateBundleId),
       typographyOverride:
-        parsed.typographyOverride === "signature" ||
-        parsed.typographyOverride === "engaging" ||
-        parsed.typographyOverride === "expert"
-          ? parsed.typographyOverride
+        typeof parsed.typographyOverride === "string"
+          ? resolveVerbatiFontPairId(parsed.typographyOverride)
           : null,
       layoutOverride:
         parsed.layoutOverride === "swiss" ||
@@ -339,6 +353,18 @@ function buildSanitizedStoredProposalOutputDraft(
       typeof draft.proposalApplicantRole === "string"
         ? draft.proposalApplicantRole
         : "",
+    proposalContactLine:
+      typeof draft.proposalContactLine === "string"
+        ? draft.proposalContactLine
+        : "",
+    proposalLetterDate:
+      typeof draft.proposalLetterDate === "string"
+        ? draft.proposalLetterDate
+        : "",
+    proposalRecipientDetails:
+      typeof draft.proposalRecipientDetails === "string"
+        ? draft.proposalRecipientDetails
+        : "",
     proposalDocumentTitle:
       typeof draft.proposalDocumentTitle === "string"
         ? draft.proposalDocumentTitle
@@ -367,10 +393,8 @@ function buildSanitizedStoredProposalOutputDraft(
         : null,
     templateBundleId: resolveProposalTemplateBundleId(draft.templateBundleId),
     typographyOverride:
-      draft.typographyOverride === "signature" ||
-      draft.typographyOverride === "engaging" ||
-      draft.typographyOverride === "expert"
-        ? draft.typographyOverride
+      typeof draft.typographyOverride === "string"
+        ? resolveVerbatiFontPairId(draft.typographyOverride)
         : null,
     layoutOverride:
       draft.layoutOverride === "swiss" ||
