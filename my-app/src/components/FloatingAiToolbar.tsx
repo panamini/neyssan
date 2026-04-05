@@ -121,7 +121,6 @@ function computeToolbarLeft({
   preferredRightEdge: number;
   selectionWidth: number;
   edgePadding: number;
-  preferStartAlign?: boolean;
 }): number {
   const clamp = (value: number, min: number, max: number) =>
     Math.min(Math.max(value, min), Math.max(min, max));
@@ -144,13 +143,6 @@ function computeToolbarLeft({
   const shortSelection = selectionWidth <= panelWidth * 0.34;
   const nearLeadingEdge = preferredCenter - boundsMin < panelWidth * 0.42;
   const nearTrailingEdge = boundsMax - preferredCenter < panelWidth * 0.42;
-
-  if (preferStartAlign) {
-    if (nearTrailingEdge && !nearLeadingEdge) {
-      return endAlignedLeft;
-    }
-    return startAlignedLeft;
-  }
 
   if (!shortSelection) {
     return centeredLeft;
@@ -299,26 +291,32 @@ export function FloatingAiToolbar({
       top = preferredAboveTop;
     }
 
-    const preferredCenter = isBlockSelection
-      ? anchor.containerLeft != null && anchor.containerRight != null
-        ? anchor.containerLeft + (anchor.containerRight - anchor.containerLeft) / 2
-        : anchor.left
-      : anchor.focusCenter ??
-        (placement === "above"
-          ? anchor.aboveCenter ?? anchor.left
-          : anchor.belowCenter ?? anchor.left);
     const preferredLeftEdge = isBlockSelection
-      ? anchor.leftEdge ?? anchor.aboveLeft ?? anchor.left
+      ? anchor.focusLeft ??
+        anchor.leftEdge ??
+        anchor.aboveLeft ??
+        anchor.left
       : anchor.focusLeft ??
         (placement === "above"
           ? anchor.aboveLeft ?? anchor.leftEdge ?? anchor.left
           : anchor.belowLeft ?? anchor.leftEdge ?? anchor.left);
     const preferredRightEdge = isBlockSelection
-      ? anchor.rightEdge ?? anchor.belowRight ?? anchor.left
+      ? anchor.focusRight ??
+        anchor.rightEdge ??
+        anchor.belowRight ??
+        anchor.right ??
+        anchor.left
       : anchor.focusRight ??
         (placement === "above"
           ? anchor.aboveRight ?? anchor.rightEdge ?? anchor.left
           : anchor.belowRight ?? anchor.rightEdge ?? anchor.left);
+    const preferredCenter = isBlockSelection
+      ? anchor.focusCenter ??
+        preferredLeftEdge + (preferredRightEdge - preferredLeftEdge) / 2
+      : anchor.focusCenter ??
+        (placement === "above"
+          ? anchor.aboveCenter ?? anchor.left
+          : anchor.belowCenter ?? anchor.left);
     const activeSpanWidth = Math.max(
       compactGap,
       preferredRightEdge - preferredLeftEdge,
@@ -332,7 +330,6 @@ export function FloatingAiToolbar({
       preferredRightEdge,
       selectionWidth: activeSpanWidth,
       edgePadding: compactGap,
-      preferStartAlign: isBlockSelection,
     });
 
     top = clamp(top, verticalMin, maxTop);
