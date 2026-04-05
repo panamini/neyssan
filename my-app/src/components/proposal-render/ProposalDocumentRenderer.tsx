@@ -895,12 +895,14 @@ export function ProposalDocumentRenderer({
 
         <div className="dasti-proposal-document__volk-content">
           {!args.isContinuationPage ? (
-            <>
-              <p className="dasti-proposal-document__volk-subject-label">subject</p>
-              <p className="dasti-proposal-document__volk-subject-value">
+            <div className="dasti-proposal-document__volk-subject-row">
+              <span className="dasti-proposal-document__volk-subject-label">
+                subject:
+              </span>
+              <span className="dasti-proposal-document__volk-subject-value">
                 {documentTitle ?? "Application for the role"}
-              </p>
-            </>
+              </span>
+            </div>
           ) : null}
 
           <div
