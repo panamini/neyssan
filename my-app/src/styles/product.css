@@ -1820,6 +1820,7 @@
   min-height: var(--document-viewer-shell-min-block);
   height: auto;
   max-height: var(--document-viewer-shell-max-block);
+  padding-block-end: 0;
   gap: 0;
   transition:
     opacity 0.16s var(--ez),
@@ -2418,8 +2419,19 @@
   border-block-end: 1px solid var(--document-viewer-frame-border);
   border-radius: 0 0 var(--document-viewer-radius) var(--document-viewer-radius);
   background: var(--document-viewer-frame-surface);
-  box-shadow: var(--document-viewer-frame-shadow);
+  box-shadow: none;
   overflow: hidden;
+}
+
+/* ── Footer/card shell unification ──────────────────────────────────────────
+   When the paragraph-actions footer is present, square off the card's bottom
+   edge. The footer's border-inline + border-block-end + bottom-radius own
+   the bottom of the unified shell. The affordances' border-top is the
+   interior divider. Card shadow wraps the full shell — no separate shadow.  */
+.dasti-doc-viewer-shell__surface:has(> .dasti-proposal-sheet__footer)
+  .dasti-proposal-sheet {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
 }
 
 .dasti-proposal-paragraph-affordances {
@@ -3406,6 +3418,30 @@
   --document-viewer-bleed-block: var(--s2);
   --proposal-output-stage-frame-padding: var(--s2);
   --proposal-output-rail-inline-inset: var(--s2);
+}
+
+.dasti-proposal-output-shell--workspace .dasti-doc-viewer-shell,
+.dasti-proposal-output-shell--workspace .dasti-doc-viewer-shell__surface {
+  height: var(--proposal-workspace-shell-block-size);
+  min-height: var(--proposal-workspace-shell-block-size);
+}
+
+.dasti-proposal-output-shell--workspace .dasti-doc-viewer-shell__surface {
+  display: flex;
+  flex-direction: column;
+}
+
+.dasti-proposal-output-shell--workspace .dasti-proposal-sheet-frame {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.dasti-proposal-output-shell--workspace .dasti-proposal-sheet-frame > .dasti-document-shell {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+  max-height: none;
 }
 
 .dasti-proposal-output-shell--saved {
@@ -5161,9 +5197,7 @@
   margin-top: auto;
   gap: var(--proposal-chrome-group-gap, var(--space-2));
   min-height: var(--document-viewer-toolbar-block-size);
-  padding-block:
-    calc(var(--proposal-chrome-shell-padding, var(--s2)) + 6px)
-    calc(var(--proposal-chrome-shell-padding, var(--s2)) + 2px);
+  padding-block: calc(var(--proposal-chrome-shell-padding, var(--s2)) + 4px);
   padding-inline-start: var(
     --proposal-compose-workspace-inline-inset,
     var(--proposal-sheet-margin-inline-inner)
@@ -5175,6 +5209,12 @@
   background: color-mix(in srgb, var(--color-surface) 94%, transparent);
   border-top: 1px solid var(--color-border);
   overflow: visible;
+}
+
+.dasti-proposal-sheet--composer .dasti-proposal-toolbar--inside {
+  margin-inline: calc(-1 * var(--document-shell-padding-inline));
+  border-bottom-left-radius: calc(var(--document-viewer-radius) - 1px);
+  border-bottom-right-radius: calc(var(--document-viewer-radius) - 1px);
 }
 
 .dasti-proposal-submit {
@@ -5273,9 +5313,7 @@ html:not(.dark) .dasti-proposal-submit {
   --dasti-proposal-submit-button-size: calc(
     var(--proposal-submit-size-sm) + var(--space-3)
   );
-  --dasti-proposal-submit-radius: calc(
-    var(--proposal-submit-radius-sm) + 3px
-  );
+  --dasti-proposal-submit-radius: 999px;
   --dasti-proposal-submit-icon-size: calc(
     var(--proposal-submit-icon-size-sm) + var(--space-1)
   );
