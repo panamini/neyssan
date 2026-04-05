@@ -661,6 +661,50 @@ describe("ProposalInputForm provider-busy handling", () => {
     expect(screen.getByText("linkedin.com")).toBeInTheDocument();
   });
 
+  it("keeps the imported source card from the initial compose draft seed when live storage is stale", async () => {
+    render(
+      <ProposalInputForm
+        onSubmit={vi.fn()}
+        initialComposeDraft={{
+          jobTitle: "Operations Lead",
+          jobDescription:
+            "Coordinate recurring operations, document handoffs, and keep teams aligned across a distributed team.",
+          proposalType: "cover_letter",
+          sourceUrl: "https://www.linkedin.com/jobs/view/123456",
+          platform: "linkedin",
+        }}
+      />,
+    );
+
+    expect(await screen.findByText("Job Offer")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "View on LinkedIn" }),
+    ).toHaveAttribute("href", "https://www.linkedin.com/jobs/view/123456");
+    expect(screen.getByText("linkedin.com")).toBeInTheDocument();
+  });
+
+  it("keeps the imported source card visible if live source props clear after mount", async () => {
+    const { rerender } = render(
+      <ProposalInputForm
+        onSubmit={vi.fn()}
+        sourceUrl="https://www.linkedin.com/jobs/view/123456"
+        sourcePlatform="linkedin"
+      />,
+    );
+
+    expect(await screen.findByText("Job Offer")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "View on LinkedIn" }),
+    ).toHaveAttribute("href", "https://www.linkedin.com/jobs/view/123456");
+
+    rerender(<ProposalInputForm onSubmit={vi.fn()} />);
+
+    expect(
+      screen.getByRole("link", { name: "View on LinkedIn" }),
+    ).toHaveAttribute("href", "https://www.linkedin.com/jobs/view/123456");
+    expect(screen.getByText("linkedin.com")).toBeInTheDocument();
+  });
+
   it("does not clear the active CV id just because Proposal Forge cannot resolve it immediately", () => {
     window.localStorage.setItem("cvActiveId", "cv_alpha");
     mockGetActiveLocalPersonalizationSource.mockReturnValue({
