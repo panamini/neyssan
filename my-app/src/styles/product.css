@@ -5311,7 +5311,7 @@ html:not(.dark) .dasti-proposal-submit {
 
 .dasti-proposal-submit--composer {
   --dasti-proposal-submit-button-size: calc(
-    var(--proposal-submit-size-sm) + var(--space-3)
+    var(--proposal-submit-size-sm) + var(--space-3) - 4px
   );
   --dasti-proposal-submit-radius: 999px;
   --dasti-proposal-submit-icon-size: calc(
