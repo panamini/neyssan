@@ -28,7 +28,7 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     });
   });
 
-  it("renders applicant header lines and subject on a single row", () => {
+  it("renders applicant header lines with date and recipient details in the meta rail", () => {
     const { container } = render(
       <ProposalDocumentRenderer
         content={
@@ -38,6 +38,8 @@ describe("ProposalDocumentRenderer volk register layout", () => {
         templateId="volk_register"
         railTitle="Jane Doe"
         railMeta="Human Resources Administrator"
+        letterDate="April 5, 2026"
+        recipientDetails={"Elena Marlowe\nHead of People\nModine\nelena@modine.com"}
         documentTitle="Human Resources Administrator"
         applicantHeader={{
           name: "Jane Doe",
@@ -62,12 +64,23 @@ describe("ProposalDocumentRenderer volk register layout", () => {
       ".dasti-proposal-document__volk-subject-row",
     );
     const header = container.querySelector(".dasti-proposal-document__volk-header");
+    const metaRail = container.querySelectorAll(
+      ".dasti-proposal-document__volk-register-label",
+    );
 
     expect(header?.textContent).toContain("Jane Doe");
     expect(header?.textContent).toContain("Human Resources Administrator");
     expect(header?.textContent).toContain("+33 6 00 00 00 00");
     expect(header?.textContent).toContain("jane@example.com");
     expect(header?.textContent).toContain("janedoe.dev");
+    expect(Array.from(metaRail).map((node) => node.textContent)).toEqual(
+      expect.arrayContaining([
+        "date: April 5, 2026",
+        "to: Elena Marlowe",
+        "Head of People",
+        "Modine · elena@modine.com",
+      ]),
+    );
     expect(subjectRow?.textContent).toContain(
       "subject:Human Resources Administrator",
     );

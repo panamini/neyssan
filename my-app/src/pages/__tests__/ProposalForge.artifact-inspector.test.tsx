@@ -85,6 +85,15 @@ vi.mock("../../components/ProposalDisplay", () => ({
           {props.stylePreset?.palette ?? "no-palette"}|
           {props.stylePreset?.accentHex ?? "no-accent"}
         </div>
+        <button
+          type="button"
+          aria-label="Toggle proposal mode"
+          onClick={() =>
+            props.onModeChange?.(props.mode === "preview" ? "edit" : "preview")
+          }
+        >
+          Toggle mode
+        </button>
         <div data-testid="proposal-display-addon">{props.railStartAddon}</div>
       </div>
     );
@@ -176,6 +185,47 @@ describe("ProposalForge artifact inspector integration", () => {
     });
   });
 
+  it("keeps the selected direct layout and typography fields across preview/edit mode switches", async () => {
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate proposal" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open layout controls" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+        "volk_register|volk-register|",
+      );
+      expect(readStoredProposalOutputDraft()).toMatchObject({
+        proposalTemplateId: "volk_register",
+        proposalVerbatiStyle: expect.objectContaining({
+          layout: "volk-register",
+        }),
+        typographyOverride: expect.any(String),
+        layoutOverride: null,
+      });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Toggle proposal mode" }));
+    fireEvent.click(screen.getByRole("button", { name: "Toggle proposal mode" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+        "volk_register|volk-register|",
+      );
+      expect(readStoredProposalOutputDraft()).toMatchObject({
+        proposalTemplateId: "volk_register",
+        proposalVerbatiStyle: expect.objectContaining({
+          layout: "volk-register",
+        }),
+        typographyOverride: expect.any(String),
+      });
+    });
+  });
+
   it("uses the applicant header contract instead of tone metadata in the output preview", async () => {
     mockVoicePreset = null;
 
@@ -192,9 +242,9 @@ describe("ProposalForge artifact inspector integration", () => {
         proposalDisplaySpy.mock.calls[proposalDisplaySpy.mock.calls.length - 1]?.[0];
       expect(lastCall?.documentTitle).toContain("Application for the");
       expect(lastCall?.applicantHeader).toMatchObject({
-        name: null,
-        role: null,
-        email: null,
+        name: "Elena Marlowe",
+        role: "Senior Product Designer",
+        email: "elena@sample.design",
       });
     });
   });

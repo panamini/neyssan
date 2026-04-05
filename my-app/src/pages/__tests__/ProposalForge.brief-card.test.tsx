@@ -163,4 +163,44 @@ describe("ProposalForge brief card", () => {
       }),
     ).toHaveAttribute("href", "https://www.linkedin.com/jobs/view/123456");
   });
+
+  it("keeps the brief source link visible after live handoff data disappears during the same session", async () => {
+    mockHandoffRecord = {
+      handoffId: "handoff_source_session",
+      jobTitle: "Operations Associate",
+      jobDescription:
+        "Support recurring processes and coordinate communication.",
+      sourceUrl: "https://www.linkedin.com/jobs/view/123456",
+      platform: "linkedin",
+    };
+
+    const { rerender } = render(
+      <MemoryRouter initialEntries={["/proposal?handoffId=handoff_source_session"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate proposal" }));
+
+    expect(
+      await screen.findByRole("link", {
+        name: "Open original job offer on LinkedIn",
+      }),
+    ).toHaveAttribute("href", "https://www.linkedin.com/jobs/view/123456");
+
+    mockHandoffRecord = null;
+    window.localStorage.clear();
+
+    rerender(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByRole("link", {
+        name: "Open original job offer on LinkedIn",
+      }),
+    ).toHaveAttribute("href", "https://www.linkedin.com/jobs/view/123456");
+  });
 });
