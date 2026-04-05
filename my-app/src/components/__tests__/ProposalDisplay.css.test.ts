@@ -206,6 +206,12 @@ describe("ProposalDisplay CSS contracts", () => {
     expect(productCss).toMatch(
       /\.dasti-proposal-library-card\s*\{[\s\S]*--document-rail-gap:\s*var\(--space-2\);[\s\S]*--proposal-sheet-edge-fade-height:\s*22px;[\s\S]*--proposal-chrome-shell-padding:\s*calc\(var\(--space-2\)\s*-\s*3px\);/,
     );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-sheet__body--document-editor\s+\.dasti-document-stage-chassis\s*\{[\s\S]*position:\s*relative;[\s\S]*padding-block-start:\s*var\(--document-viewer-bleed-block\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-editor-hint\s*\{[\s\S]*position:\s*absolute;[\s\S]*inset-block-start:\s*var\(--space-2\);[\s\S]*inset-inline-start:\s*var\(--space-2\);[\s\S]*z-index:\s*6;[\s\S]*pointer-events:\s*none;/,
+    );
   });
 
   it("includes a dedicated Volk register proposal template branch", () => {
