@@ -7,9 +7,39 @@ import { MemoryRouter } from "react-router-dom";
 import { CvForge } from "../CvForge";
 
 vi.mock("../../components/ProfileReviewCard", () => ({
-  ProfileReviewCard: ({ cvId }: { cvId?: string }) => (
-    <div>Mock profile editor {cvId ?? "none"}</div>
+  ProfileReviewCard: ({
+    cvId,
+    toolbarLeadControl,
+    toolbarPrimaryControl,
+  }: {
+    cvId?: string;
+    toolbarLeadControl?: React.ReactNode;
+    toolbarPrimaryControl?: React.ReactNode;
+  }) => (
+    <div>
+      <div className="dasti-workbench-top-left-slot--cv">
+        <div className="dasti-cv-workbench-toggle">{toolbarLeadControl}</div>
+      </div>
+      <div>Mock profile editor {cvId ?? "none"}</div>
+      {toolbarPrimaryControl}
+    </div>
   ),
+}));
+
+vi.mock("convex/react", () => ({
+  useQuery: vi.fn(() => ({
+    preset1: {
+      fontPairId: "quiet-editorial",
+      styleChoice: "balanced",
+      paletteOverride: "pierre",
+      accentHex: null,
+      voicePreset: null,
+      name: "Stone Swiss",
+    },
+    preset2: null,
+    preset3: null,
+    activeSlot: 1,
+  })),
 }));
 
 vi.mock("../../features/verbati/VerbatiCvPreviewPanel", () => ({
@@ -49,6 +79,9 @@ describe("CvForge workspace mode", () => {
     );
 
     expect(screen.getByText("Mock profile editor cv_123")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Open saved resume styles" }),
+    ).toBeInTheDocument();
     expect(
       screen.getByText(/Preview host: panel \/ layout:/),
     ).toBeInTheDocument();
