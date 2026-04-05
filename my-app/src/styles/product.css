@@ -9599,6 +9599,16 @@ html:not(.dark) .dasti-proposal-submit {
   gap: var(--space-2);
 }
 
+.dasti-settings-slot-card,
+.dasti-settings-font-pair-card,
+.dasti-settings-style-card,
+.dasti-style-sizer {
+  --dasti-settings-card-pad-block: var(--s3);
+  --dasti-settings-card-pad-inline: var(--s3);
+  --dasti-settings-card-gap: var(--s2);
+  --dasti-settings-card-corner-inset: var(--s2);
+}
+
 .dasti-settings-appearance-label {
   font-size: 10.5px;
   line-height: 1.2;
@@ -9950,8 +9960,11 @@ html:not(.dark) .dasti-proposal-submit {
 .dasti-style-sizer {
   visibility: hidden;
   display: grid;
-  gap: var(--space-2);
-  padding: var(--space-3);
+  align-content: start;
+  gap: var(--dasti-settings-card-gap);
+  padding:
+    var(--dasti-settings-card-pad-block)
+    var(--dasti-settings-card-pad-inline);
   min-height: 96px;
   pointer-events: none;
   user-select: none;
@@ -9962,8 +9975,11 @@ html:not(.dark) .dasti-proposal-submit {
   position: absolute;
   inset: 0;
   display: grid;
-  gap: var(--space-2);
-  padding: var(--space-3);
+  align-content: start;
+  gap: var(--dasti-settings-card-gap);
+  padding:
+    var(--dasti-settings-card-pad-block)
+    var(--dasti-settings-card-pad-inline);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
   background: color-mix(in srgb, var(--color-surface) 94%, transparent);
@@ -10038,9 +10054,11 @@ html:not(.dark) .dasti-proposal-submit {
 
 .dasti-settings-style-card__top {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-1);
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-2);
+  width: 100%;
+  padding-inline-end: calc(17px + var(--dasti-settings-card-corner-inset) + var(--s1));
 }
 
 .dasti-settings-style-card__label {
@@ -10050,19 +10068,19 @@ html:not(.dark) .dasti-proposal-submit {
 }
 
 .dasti-settings-style-card__indicator {
-  height: 20px;
-  padding: 0 8px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--color-border-contrast) 70%, transparent);
+  position: absolute;
+  top: var(--dasti-settings-card-corner-inset);
+  right: var(--dasti-settings-card-corner-inset);
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  color: var(--ti);
-  background: color-mix(in srgb, var(--sf1) 92%, transparent);
-  white-space: nowrap;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 30%, transparent);
+  background: color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 15%, transparent);
+  color: color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 92%, white 8%);
+  flex: 0 0 auto;
 }
 
 .dasti-settings-style-card__description {
@@ -10872,8 +10890,10 @@ html:not(.dark) .dasti-proposal-submit {
 .dasti-settings-slot-card {
   display: flex;
   flex-direction: column;
-  gap: var(--s2);
-  padding: var(--s3);
+  gap: var(--dasti-settings-card-gap);
+  padding:
+    var(--dasti-settings-card-pad-block)
+    var(--dasti-settings-card-pad-inline);
   border-radius: var(--radius-card);
   border: 1.5px solid rgba(0, 0, 0, 0.1);
   background: var(--sfr);
@@ -10917,9 +10937,10 @@ html:not(.dark) .dasti-proposal-submit {
 .dasti-settings-slot-card__top {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: var(--s1);
   min-height: 18px;
+  padding-inline-end: calc(17px + var(--dasti-settings-card-corner-inset) + var(--s1));
 }
 
 .dasti-settings-slot-card__name {
@@ -10932,6 +10953,9 @@ html:not(.dark) .dasti-proposal-submit {
 }
 
 .dasti-settings-slot-card__active-badge {
+  position: absolute;
+  top: var(--dasti-settings-card-corner-inset);
+  right: var(--dasti-settings-card-corner-inset);
   display: inline-flex;
   align-items: center;
   gap: 2px;
@@ -11005,8 +11029,10 @@ html:not(.dark) .dasti-proposal-submit {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 0;
-  padding: var(--s3) var(--s3) var(--s2);
+  gap: var(--dasti-settings-card-gap);
+  padding:
+    var(--dasti-settings-card-pad-block)
+    var(--dasti-settings-card-pad-inline);
   border-radius: var(--radius-card);
   border: 1.5px solid rgba(0, 0, 0, 0.13);
   background: var(--sfr);
@@ -11049,7 +11075,7 @@ html:not(.dark) .dasti-proposal-submit {
   text-overflow: ellipsis;
   white-space: nowrap;
   padding-bottom: var(--s2);
-  margin-bottom: var(--s2);
+  margin-bottom: 0;
   border-bottom: 1px solid rgba(0, 0, 0, 0.07);
 }
 
@@ -11067,8 +11093,8 @@ html:not(.dark) .dasti-proposal-submit {
 
 .dasti-settings-font-pair-card__check {
   position: absolute;
-  top: var(--s2);
-  right: var(--s2);
+  top: var(--dasti-settings-card-corner-inset);
+  right: var(--dasti-settings-card-corner-inset);
   display: inline-flex;
   align-items: center;
   justify-content: center;
