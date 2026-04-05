@@ -443,6 +443,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   const viewerSurfaceRef = React.useRef<HTMLDivElement | null>(null);
   const characterBadgeWrapRef = React.useRef<HTMLDivElement | null>(null);
   const selectionDebounceRef = React.useRef<number | null>(null);
+  const queuedPreviewActionTimeoutRef = React.useRef<number | null>(null);
   const zoomMenuRef = React.useRef<HTMLDivElement | null>(null);
   const [isCharacterBadgeOverlappingPage, setIsCharacterBadgeOverlappingPage] =
     React.useState(false);
@@ -492,6 +493,10 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       onRailTitleChange ||
       onRailMetaChange,
   );
+  const applicantDisplayName =
+    railTitle?.trim() || applicantHeader?.name?.trim() || "Applicant name";
+  const applicantDisplayRole =
+    railMeta?.trim() || applicantHeader?.role?.trim() || "Applicant role";
   const applicantDrawerId = React.useId();
   const usesFixedA4ScalePreview =
     usesDocumentRenderer &&
@@ -524,11 +529,17 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     "--proposal-scroll-top-strength": activeScrollTopStrength.toFixed(3),
     "--proposal-scroll-bottom-strength": activeScrollBottomStrength.toFixed(3),
   } as React.CSSProperties;
+  const documentStageFitMode =
+    usesDocumentRenderer && usesFixedA4ScalePreview && !isEditable
+      ? "width"
+      : usesDocumentRenderer
+        ? "contain"
+        : "width";
   const stageLayout = useDocumentStageLayout({
     enabled: usesDocumentRenderer && Boolean(proposalContent),
     measurementRef: stageMeasureRef,
     zoomLevel: effectiveZoomLevel,
-    fitMode: usesDocumentRenderer ? "contain" : "width",
+    fitMode: documentStageFitMode,
     pageWidthPx: A4_PAGE_WIDTH_PX,
     pageHeightPx: A4_PAGE_HEIGHT_PX,
   });
@@ -728,6 +739,9 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       if (selectionDebounceRef.current !== null) {
         window.clearTimeout(selectionDebounceRef.current);
       }
+      if (queuedPreviewActionTimeoutRef.current !== null) {
+        window.clearTimeout(queuedPreviewActionTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -738,6 +752,11 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   }, [isEditable]);
 
   React.useEffect(() => {
+    if (queuedPreviewActionTimeoutRef.current !== null) {
+      window.clearTimeout(queuedPreviewActionTimeoutRef.current);
+      queuedPreviewActionTimeoutRef.current = null;
+    }
+
     if (!isEditable) {
       setQueuedPreviewActionLabel(null);
       return;
@@ -747,7 +766,18 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       window.setTimeout(() => {
         editableTextareaRef.current?.focus();
       }, 0);
+      queuedPreviewActionTimeoutRef.current = window.setTimeout(() => {
+        setQueuedPreviewActionLabel(null);
+        queuedPreviewActionTimeoutRef.current = null;
+      }, 4000);
     }
+
+    return () => {
+      if (queuedPreviewActionTimeoutRef.current !== null) {
+        window.clearTimeout(queuedPreviewActionTimeoutRef.current);
+        queuedPreviewActionTimeoutRef.current = null;
+      }
+    };
   }, [isEditable, queuedPreviewActionLabel]);
 
   React.useEffect(() => {
@@ -1199,7 +1229,18 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     ) : null;
 
   const renderDocumentStage = () => (
-    <div className="dasti-document-stage-chassis" ref={stageMeasureRef}>
+    <div
+      className="dasti-document-stage-chassis"
+      ref={stageMeasureRef}
+      style={
+        !isEditable && previewAnchor === "top"
+          ? {
+              justifyContent: "flex-start",
+              alignItems: "flex-start",
+            }
+          : undefined
+      }
+    >
       <div
         className="dasti-proposal-sheet__preview-stage"
         ref={attachPreviewViewport}
@@ -1314,135 +1355,153 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                     <div className="dasti-proposal-editor-page__drawer-shell">
                       <section
                         id={applicantDrawerId}
-                        className="dasti-proposal-editor-page__drawer dasti-toolbar-drawer-surface dasti-proposal-chrome-drawer dasti-proposal-chrome-drawer--stack styleforge-color-popover"
+                        className="dasti-proposal-editor-page__drawer dasti-toolbar-drawer-surface styleforge-color-popover"
                         role="dialog"
                         aria-label="Proposal header details"
                       >
-                        <div className="dasti-proposal-editor-page__drawer-header">
-                          <div>
-                            <p className="dasti-proposal-editor-page__drawer-kicker">
-                              Applicant details
-                            </p>
-                            <h4 className="dasti-proposal-editor-page__drawer-title">
-                              Header lines
-                            </h4>
+                        <div className="dasti-proposal-editor-page__drawer-body">
+                          <div className="dasti-proposal-editor-page__drawer-header">
+                            <div>
+                              <p className="dasti-proposal-editor-page__drawer-kicker">
+                                Applicant details
+                              </p>
+                              <h4 className="dasti-proposal-editor-page__drawer-title">
+                                Header lines
+                              </h4>
+                            </div>
+                            <button
+                              type="button"
+                              className="dasti-icon-button"
+                              aria-label="Close header details"
+                              onClick={() => setIsApplicantDrawerOpen(false)}
+                            >
+                              <X size={14} strokeWidth={1.8} aria-hidden="true" />
+                            </button>
                           </div>
-                          <button
-                            type="button"
-                            className="dasti-icon-button"
-                            aria-label="Close header details"
-                            onClick={() => setIsApplicantDrawerOpen(false)}
-                          >
-                            <X size={14} strokeWidth={1.8} aria-hidden="true" />
-                          </button>
-                        </div>
-                        <div className="dasti-proposal-editor-page__header-fields">
-                          {onRailTitleChange ? (
-                            <label className="dasti-proposal-editor-page__field">
-                              <span className="dasti-proposal-editor-page__field-label">
-                                Name
-                              </span>
-                              <input
-                                type="text"
-                                value={railTitle ?? ""}
-                                onChange={(event) =>
-                                  onRailTitleChange(event.target.value)
-                                }
-                                className="dasti-proposal-editor-page__field-input"
-                                placeholder="Applicant name"
-                              />
-                            </label>
-                          ) : null}
-                          {onRailMetaChange ? (
-                            <label className="dasti-proposal-editor-page__field">
-                              <span className="dasti-proposal-editor-page__field-label">
-                                Role
-                              </span>
-                              <input
-                                type="text"
-                                value={railMeta ?? ""}
-                                onChange={(event) =>
-                                  onRailMetaChange(event.target.value)
-                                }
-                                className="dasti-proposal-editor-page__field-input"
-                                placeholder="Applicant role"
-                              />
-                            </label>
-                          ) : null}
-                          {letterDateEditable ? (
-                            <label className="dasti-proposal-editor-page__field">
-                              <span className="dasti-proposal-editor-page__field-label">
-                                Date
-                              </span>
-                              <input
-                                type="text"
-                                value={letterDate ?? ""}
-                                onChange={(event) =>
-                                  onLetterDateChange?.(event.target.value)
-                                }
-                                className="dasti-proposal-editor-page__field-input"
-                                placeholder="April 5, 2026"
-                              />
-                            </label>
-                          ) : null}
-                          {contactLineEditable ? (
-                            <label className="dasti-proposal-editor-page__field dasti-proposal-editor-page__field--wide">
-                              <span className="dasti-proposal-editor-page__field-label">
-                                Contact
-                              </span>
-                              <input
-                                type="text"
-                                value={contactLine ?? ""}
-                                onChange={(event) =>
-                                  onContactLineChange?.(event.target.value)
-                                }
-                                onBlur={() => onContactLineCommit?.()}
-                                className="dasti-proposal-editor-page__field-input"
-                                placeholder="phone, email, website"
-                              />
-                            </label>
-                          ) : null}
-                          {recipientDetailsEditable ? (
-                            <label className="dasti-proposal-editor-page__field dasti-proposal-editor-page__field--wide">
-                              <span className="dasti-proposal-editor-page__field-label">
-                                To
-                              </span>
-                              <textarea
-                                value={recipientDetails ?? ""}
-                                onChange={(event) =>
-                                  onRecipientDetailsChange?.(
-                                    event.target.value,
-                                  )
-                                }
-                                className="dasti-proposal-editor-page__field-input dasti-proposal-editor-page__field-textarea"
-                                placeholder={"Hiring Manager\nTitle\nCompany\nemail or address"}
-                                rows={4}
-                              />
-                            </label>
-                          ) : null}
-                          {documentTitleEditable ? (
-                            <label className="dasti-proposal-editor-page__field dasti-proposal-editor-page__field--wide">
-                              <span className="dasti-proposal-editor-page__field-label">
-                                Subject
-                              </span>
-                              <input
-                                type="text"
-                                value={documentTitle ?? ""}
-                                onChange={(event) =>
-                                  onDocumentTitleChange?.(event.target.value)
-                                }
-                                onBlur={() => onDocumentTitleCommit?.()}
-                                onKeyDown={(event) => {
-                                  if (event.key === "Enter") {
-                                    event.preventDefault();
-                                    (event.currentTarget as HTMLInputElement).blur();
+                          <div className="dasti-proposal-editor-page__drawer-profile">
+                            <div
+                              className="dasti-proposal-editor-page__drawer-avatar"
+                              aria-hidden="true"
+                            >
+                              <FileUser size={20} strokeWidth={1.8} />
+                            </div>
+                            <div className="dasti-proposal-editor-page__drawer-profile-copy">
+                              <p className="dasti-proposal-editor-page__drawer-profile-name">
+                                {applicantDisplayName}
+                              </p>
+                              <p className="dasti-proposal-editor-page__drawer-profile-role">
+                                {applicantDisplayRole}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="dasti-proposal-editor-page__header-fields">
+                            {onRailTitleChange ? (
+                              <label className="dasti-proposal-editor-page__field">
+                                <span className="dasti-proposal-editor-page__field-label">
+                                  Name
+                                </span>
+                                <input
+                                  type="text"
+                                  value={railTitle ?? ""}
+                                  onChange={(event) =>
+                                    onRailTitleChange(event.target.value)
                                   }
-                                }}
-                                className="dasti-proposal-editor-page__field-input"
-                                placeholder={documentTitlePlaceholder}
-                              />
-                            </label>
-                          ) : null}
+                                  className="dasti-proposal-editor-page__field-input"
+                                  placeholder="Applicant name"
+                                />
+                              </label>
+                            ) : null}
+                            {onRailMetaChange ? (
+                              <label className="dasti-proposal-editor-page__field">
+                                <span className="dasti-proposal-editor-page__field-label">
+                                  Role
+                                </span>
+                                <input
+                                  type="text"
+                                  value={railMeta ?? ""}
+                                  onChange={(event) =>
+                                    onRailMetaChange(event.target.value)
+                                  }
+                                  className="dasti-proposal-editor-page__field-input"
+                                  placeholder="Applicant role"
+                                />
+                              </label>
+                            ) : null}
+                            {letterDateEditable ? (
+                              <label className="dasti-proposal-editor-page__field">
+                                <span className="dasti-proposal-editor-page__field-label">
+                                  Date
+                                </span>
+                                <input
+                                  type="text"
+                                  value={letterDate ?? ""}
+                                  onChange={(event) =>
+                                    onLetterDateChange?.(event.target.value)
+                                  }
+                                  className="dasti-proposal-editor-page__field-input"
+                                  placeholder="April 5, 2026"
+                                />
+                              </label>
+                            ) : null}
+                            {contactLineEditable ? (
+                              <label className="dasti-proposal-editor-page__field dasti-proposal-editor-page__field--wide">
+                                <span className="dasti-proposal-editor-page__field-label">
+                                  Contact
+                                </span>
+                                <input
+                                  type="text"
+                                  value={contactLine ?? ""}
+                                  onChange={(event) =>
+                                    onContactLineChange?.(event.target.value)
+                                  }
+                                  onBlur={() => onContactLineCommit?.()}
+                                  className="dasti-proposal-editor-page__field-input"
+                                  placeholder="phone, email, website"
+                                />
+                              </label>
+                            ) : null}
+                            {recipientDetailsEditable ? (
+                              <label className="dasti-proposal-editor-page__field dasti-proposal-editor-page__field--wide">
+                                <span className="dasti-proposal-editor-page__field-label">
+                                  To
+                                </span>
+                                <textarea
+                                  value={recipientDetails ?? ""}
+                                  onChange={(event) =>
+                                    onRecipientDetailsChange?.(
+                                      event.target.value,
+                                    )
+                                  }
+                                  className="dasti-proposal-editor-page__field-input dasti-proposal-editor-page__field-textarea"
+                                  placeholder={"Hiring Manager\nTitle\nCompany\nemail or address"}
+                                  rows={4}
+                                />
+                              </label>
+                            ) : null}
+                            {documentTitleEditable ? (
+                              <label className="dasti-proposal-editor-page__field dasti-proposal-editor-page__field--wide">
+                                <span className="dasti-proposal-editor-page__field-label">
+                                  Subject
+                                </span>
+                                <input
+                                  type="text"
+                                  value={documentTitle ?? ""}
+                                  onChange={(event) =>
+                                    onDocumentTitleChange?.(event.target.value)
+                                  }
+                                  onBlur={() => onDocumentTitleCommit?.()}
+                                  onKeyDown={(event) => {
+                                    if (event.key === "Enter") {
+                                      event.preventDefault();
+                                      (event.currentTarget as HTMLInputElement).blur();
+                                    }
+                                  }}
+                                  className="dasti-proposal-editor-page__field-input"
+                                  placeholder={documentTitlePlaceholder}
+                                />
+                              </label>
+                            ) : null}
+                          </div>
                         </div>
                       </section>
                     </div>
