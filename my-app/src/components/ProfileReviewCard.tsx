@@ -48,6 +48,7 @@ interface Props {
   profile?: unknown;
   onRequestExport?: () => void;
   toolbarLeadControl?: React.ReactNode;
+  toolbarPrimaryControl?: React.ReactNode;
 }
 
 const IMPORT_WARNING_SESSION_KEY_PREFIX = "dasti:cv-import-warning-banner:";
@@ -113,6 +114,7 @@ export function ProfileReviewCard({
   profile,
   onRequestExport,
   toolbarLeadControl,
+  toolbarPrimaryControl,
 }: Props) {
   const navigate = useNavigate();
   const {
@@ -1046,6 +1048,7 @@ export function ProfileReviewCard({
               <div className="dasti-icon-cluster__divider dasti-proposal-rail-cluster__divider" />
             ) : null}
             <div className="dasti-cv-edit-toolbar__group dasti-cv-edit-toolbar__group--primary">
+              {toolbarPrimaryControl}
               {addableSectionOptions.length > 0 ? (
                 <div
                   ref={addSectionMenuRef}

@@ -6,9 +6,32 @@ import { MemoryRouter } from "react-router-dom";
 import { CvForge } from "../CvForge";
 import { DEFAULT_VERBATI_STYLE } from "../../features/verbati/style";
 
+vi.mock("convex/react", () => ({
+  useQuery: vi.fn(() => ({
+    preset1: null,
+    preset2: null,
+    preset3: null,
+    activeSlot: null,
+  })),
+}));
+
 vi.mock("../../components/ProfileReviewCard", () => ({
-  ProfileReviewCard: ({ cvId }: { cvId?: string }) => (
-    <div>Mock profile editor {cvId ?? "none"}</div>
+  ProfileReviewCard: ({
+    cvId,
+    toolbarLeadControl,
+    toolbarPrimaryControl,
+  }: {
+    cvId?: string;
+    toolbarLeadControl?: React.ReactNode;
+    toolbarPrimaryControl?: React.ReactNode;
+  }) => (
+    <div>
+      <div className="dasti-workbench-top-left-slot--cv">
+        <div className="dasti-cv-workbench-toggle">{toolbarLeadControl}</div>
+      </div>
+      <div>Mock profile editor {cvId ?? "none"}</div>
+      {toolbarPrimaryControl}
+    </div>
   ),
 }));
 
