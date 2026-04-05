@@ -1,6 +1,6 @@
 import React from "react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import ProposalDisplay from "../ProposalDisplay";
 
 describe("ProposalDisplay", () => {
@@ -233,6 +233,67 @@ describe("ProposalDisplay", () => {
     ).toBeTruthy();
     expect(
       screen.queryByRole("button", { name: "100 percent zoom" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows preview paragraph helper copy as a temporary edit-mode overlay and dismisses it after 4 seconds", () => {
+    vi.useFakeTimers();
+
+    function Harness() {
+      const [mode, setMode] = React.useState<"preview" | "edit">("preview");
+      return (
+        <ProposalDisplay
+          proposalContent={
+            "Dear Hiring Manager,\n\nI built reliable editorial tooling across product and content workflows.\n\nSincerely,\nAlex Martin"
+          }
+          loading={false}
+          error={null}
+          proposalType="cover_letter"
+          mode={mode}
+          onModeChange={setMode}
+          onContentChange={vi.fn()}
+        />
+      );
+    }
+
+    render(<Harness />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Rewrite" }));
+
+    expect(
+      screen.getByText(/Select a paragraph, then tap rewrite in the toolbar\./i),
+    ).toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(4000);
+    });
+
+    expect(
+      screen.queryByText(/Select a paragraph, then tap rewrite in the toolbar\./i),
+    ).not.toBeInTheDocument();
+
+    vi.useRealTimers();
+  });
+
+  it("renders preview paragraph actions in the output footer with rewrite, shorten, and ask only", () => {
+    render(
+      <ProposalDisplay
+        proposalContent={
+          "Dear Hiring Manager,\n\nI built reliable editorial tooling across product and content workflows.\n\nSincerely,\nAlex Martin"
+        }
+        loading={false}
+        error={null}
+        proposalType="cover_letter"
+        mode="preview"
+      />,
+    );
+
+    expect(screen.getByText("Paragraph actions")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Rewrite" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Shorten" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ask" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Polish" }),
     ).not.toBeInTheDocument();
   });
 

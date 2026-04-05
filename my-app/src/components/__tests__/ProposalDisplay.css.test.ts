@@ -210,7 +210,7 @@ describe("ProposalDisplay CSS contracts", () => {
       /\.dasti-proposal-sheet__body--document-editor\s+\.dasti-document-stage-chassis\s*\{[\s\S]*position:\s*relative;[\s\S]*padding-block-start:\s*var\(--document-viewer-bleed-block\);/,
     );
     expect(productCss).toMatch(
-      /\.dasti-proposal-editor-hint\s*\{[\s\S]*position:\s*absolute;[\s\S]*inset-block-start:\s*var\(--space-2\);[\s\S]*inset-inline-start:\s*var\(--space-2\);[\s\S]*z-index:\s*6;[\s\S]*pointer-events:\s*none;/,
+      /\.dasti-proposal-editor-hint\s*\{[\s\S]*position:\s*absolute;[\s\S]*inset-block-start:\s*var\(--space-2\);[\s\S]*inset-inline-end:\s*var\(--space-2\);[\s\S]*z-index:\s*6;[\s\S]*pointer-events:\s*none;/,
     );
   });
 
@@ -219,10 +219,13 @@ describe("ProposalDisplay CSS contracts", () => {
       ".dasti-proposal-document--volk-register .dasti-proposal-document__page {",
     );
     expect(productCss).toContain(
-      ".dasti-proposal-document--volk-register .dasti-proposal-document__title {",
+      ".dasti-proposal-document--volk-register .dasti-proposal-document__volk-header {",
     );
     expect(productCss).toContain(
-      ".dasti-proposal-document--volk-register .dasti-proposal-document__meta {",
+      ".dasti-proposal-document--volk-register .dasti-proposal-document__volk-content {",
+    );
+    expect(productCss).toContain(
+      ".dasti-proposal-document--volk-register .dasti-proposal-document__body--volk-register {",
     );
   });
 
