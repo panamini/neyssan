@@ -645,6 +645,22 @@ describe("ProposalInputForm provider-busy handling", () => {
     expect(screen.getByText("linkedin.com")).toBeInTheDocument();
   });
 
+  it("renders the imported source card from live source props even when storage is empty", async () => {
+    render(
+      <ProposalInputForm
+        onSubmit={vi.fn()}
+        sourceUrl="https://www.linkedin.com/jobs/view/123456"
+        sourcePlatform="web"
+      />,
+    );
+
+    expect(await screen.findByText("Job Offer")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "View on LinkedIn" }),
+    ).toHaveAttribute("href", "https://www.linkedin.com/jobs/view/123456");
+    expect(screen.getByText("linkedin.com")).toBeInTheDocument();
+  });
+
   it("does not clear the active CV id just because Proposal Forge cannot resolve it immediately", () => {
     window.localStorage.setItem("cvActiveId", "cv_alpha");
     mockGetActiveLocalPersonalizationSource.mockReturnValue({

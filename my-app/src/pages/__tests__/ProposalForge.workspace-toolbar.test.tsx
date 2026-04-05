@@ -171,7 +171,7 @@ describe("ProposalForge workbench layout", () => {
       proposalDisplaySpy.mock.calls[proposalDisplaySpy.mock.calls.length - 1]?.[0];
     expect(lastCall).toMatchObject({
       previewAnchor: "top",
-      documentHeaderMode: "hidden",
+      documentHeaderMode: "actions-only",
     });
   });
 
@@ -523,6 +523,47 @@ describe("ProposalForge workbench layout", () => {
     expect(
       container.querySelector(".dasti-proposal-compose-column .dasti-brief-card"),
     ).toBeTruthy();
+  });
+
+  it("collapses the compose shell to the brief card from the inline X control before generation", () => {
+    vi.useFakeTimers();
+    useQueryMock.mockImplementation((query: string) => {
+      if (query === "proposalHandoffs.get") {
+        return {
+          handoffId: "handoff_123",
+          jobTitle: "Imported Product Ops Lead",
+          jobDescription:
+            "Detailed role description for the proposal brief capsule tests.",
+          sourceUrl: "https://www.linkedin.com/jobs/view/123456",
+          platform: "linkedin",
+        };
+      }
+      return null;
+    });
+
+    const { container } = render(
+      <MemoryRouter initialEntries={["/proposal?handoffId=handoff_123"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    const composeStage = container.querySelector(
+      ".dasti-proposal-compose-panel-stage",
+    ) as HTMLElement | null;
+    expect(composeStage?.style.display).not.toBe("none");
+
+    fireEvent.click(screen.getByRole("button", { name: "Collapse" }));
+
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+
+    expect(composeStage?.style.display).toBe("none");
+    expect(container.querySelector(".dasti-brief-card")).toBeTruthy();
+    expect(
+      screen.getByRole("link", { name: "Open original job offer on LinkedIn" }),
+    ).toHaveAttribute("href", "https://www.linkedin.com/jobs/view/123456");
+    vi.useRealTimers();
   });
 
   it("keeps the compact compose and output cards constrained inside the active page shell", () => {
