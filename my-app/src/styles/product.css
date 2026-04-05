@@ -2895,10 +2895,11 @@
 }
 
 .dasti-proposal-editor-hint {
-  position: relative;
-  inset: auto;
-  z-index: auto;
-  max-inline-size: none;
+  position: absolute;
+  inset-block-start: var(--space-2);
+  inset-inline-start: var(--space-2);
+  z-index: 6;
+  max-inline-size: min(240px, calc(100% - (var(--space-2) * 2)));
   margin: 0;
   padding: 10px 12px;
   border-radius: calc(var(--radius-card) - 4px);
@@ -2908,6 +2909,7 @@
   font-size: var(--tx);
   line-height: 1.55;
   box-shadow: 0 12px 24px -20px color-mix(in srgb, var(--shadow-color) 82%, transparent);
+  pointer-events: none;
 }
 
 .dasti-proposal-character-badge-wrap {
@@ -4808,6 +4810,7 @@
 }
 
 .dasti-proposal-sheet__body--document-editor .dasti-document-stage-chassis {
+  position: relative;
   padding-block-start: var(--document-viewer-bleed-block);
   padding-inline: var(--document-viewer-bleed-inline);
   padding-block-end: var(--document-viewer-bleed-block);
