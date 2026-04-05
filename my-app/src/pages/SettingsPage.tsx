@@ -140,7 +140,7 @@ function StyleTiltCard({
           <span className="dasti-settings-style-card__label">{option.label}</span>
           {active && (
             <span className="dasti-settings-style-card__indicator" aria-hidden="true">
-              <Check size={12} strokeWidth={2.4} />Selected
+              <Check size={10} strokeWidth={2.6} />
             </span>
           )}
         </span>
