@@ -2913,7 +2913,7 @@
 .dasti-proposal-character-badge-wrap {
   position: sticky;
   inset-inline-start: 0;
-  inset-block-end: var(--space-2);
+  inset-block-end: calc(var(--space-2) + 4px);
   z-index: 18;
   display: flex;
   justify-content: flex-start;
