@@ -21,6 +21,25 @@ type StageMeasurement = {
   availableHeight: number;
 };
 
+function measureAvailableSize(
+  element: HTMLElement,
+  dimension: "width" | "height",
+) {
+  const styles = window.getComputedStyle(element);
+  const clientSize =
+    dimension === "width" ? element.clientWidth : element.clientHeight;
+  const paddingStart = Number.parseFloat(
+    dimension === "width" ? styles.paddingLeft || "0" : styles.paddingTop || "0",
+  );
+  const paddingEnd = Number.parseFloat(
+    dimension === "width"
+      ? styles.paddingRight || "0"
+      : styles.paddingBottom || "0",
+  );
+
+  return clientSize - paddingStart - paddingEnd;
+}
+
 export type DocumentStageLayout = {
   fitScale: number;
   availableWidth: number;
@@ -67,15 +86,14 @@ export function useDocumentStageLayout({
     let frameId: number | null = null;
 
     const measure = () => {
-      const styles = window.getComputedStyle(node);
-      const availableWidth =
-        node.clientWidth -
-        Number.parseFloat(styles.paddingLeft || "0") -
-        Number.parseFloat(styles.paddingRight || "0");
-      const availableHeight =
-        node.clientHeight -
-        Number.parseFloat(styles.paddingTop || "0") -
-        Number.parseFloat(styles.paddingBottom || "0");
+      const availableWidth = Math.max(
+        measureAvailableSize(node, "width"),
+        node.parentElement ? measureAvailableSize(node.parentElement, "width") : 0,
+      );
+      const availableHeight = Math.max(
+        measureAvailableSize(node, "height"),
+        node.parentElement ? measureAvailableSize(node.parentElement, "height") : 0,
+      );
 
       if (availableWidth <= 0 || availableHeight <= 0) {
         return;

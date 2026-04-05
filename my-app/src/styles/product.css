@@ -2410,13 +2410,31 @@
   overflow: visible;
 }
 
+.dasti-proposal-sheet__footer {
+  width: min(100%, var(--document-viewer-shell-inline-size));
+  margin: 0 auto;
+  box-sizing: border-box;
+  border-inline: 1px solid var(--document-viewer-frame-border);
+  border-block-end: 1px solid var(--document-viewer-frame-border);
+  border-radius: 0 0 var(--document-viewer-radius) var(--document-viewer-radius);
+  background: var(--document-viewer-frame-surface);
+  box-shadow: var(--document-viewer-frame-shadow);
+  overflow: hidden;
+}
+
 .dasti-proposal-paragraph-affordances {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-start;
   gap: var(--space-1);
-  margin-top: var(--space-2);
-  padding-inline: var(--space-1);
+  flex: 0 0 auto;
+  width: 100%;
+  margin: 0;
+  box-sizing: border-box;
+  padding: var(--space-2) var(--space-3) var(--space-3);
+  border-top: 1px solid
+    color-mix(in srgb, var(--color-border) 70%, transparent);
 }
 
 .dasti-proposal-paragraph-affordances__label {
@@ -2452,19 +2470,30 @@
 .dasti-proposal-editor-hint {
   position: absolute;
   inset-block-start: var(--space-2);
-  inset-inline-start: var(--space-2);
+  inset-inline-end: var(--space-2);
   z-index: 6;
   pointer-events: none;
   margin: 0;
-  max-inline-size: min(240px, calc(100% - (var(--space-2) * 2)));
-  padding: 10px 12px;
-  border-radius: calc(var(--radius-card) - 4px);
-  border: 1px solid color-mix(in srgb, var(--color-border-selected) 54%, transparent);
-  background: color-mix(in srgb, var(--color-accent) 9%, transparent);
-  color: var(--tm2);
-  font-size: var(--tx);
-  line-height: 1.55;
-  box-shadow: var(--shadow-sm);
+  max-inline-size: min(280px, calc(100% - (var(--space-2) * 2)));
+  padding: 12px 14px;
+  border-radius: calc(var(--radius-card) - 2px);
+  border: 1px solid
+    color-mix(in srgb, var(--color-border-selected) 38%, var(--color-border) 62%);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-accent-pale) 12%, transparent),
+      transparent 58%
+    ),
+    color-mix(in srgb, var(--color-surface-raised) 94%, var(--color-accent-pale) 6%);
+  color: var(--ti);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 10%, transparent),
+    0 10px 26px color-mix(in srgb, var(--shadow-color) 18%, transparent);
   animation: dasti-fade-in 140ms ease-out both;
 }
 
@@ -2645,35 +2674,7 @@
 }
 
 .dasti-inline-ai-toolbar::before {
-  content: "";
-  position: absolute;
-  inset-inline-start: var(--dasti-inline-ai-toolbar-pointer-offset, 50%);
-  width: 12px;
-  height: 12px;
-  margin-inline-start: -6px;
-  border-inline-start: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
-  border-block-start: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
-  background: color-mix(
-    in srgb,
-    var(--color-surface-raised) 92%,
-    transparent
-  );
-  box-shadow: var(--shadow-frost, var(--shadow-sm));
-  backdrop-filter: saturate(calc(var(--frost-saturate, 1.03) + 0.02))
-    blur(calc(var(--frost-blur, 14px) + 4px));
-  -webkit-backdrop-filter: saturate(calc(var(--frost-saturate, 1.03) + 0.02))
-    blur(calc(var(--frost-blur, 14px) + 4px));
-  transform: rotate(45deg);
-  z-index: 0;
-}
-
-.dasti-inline-ai-toolbar[data-placement="below"]::before {
-  inset-block-start: -6px;
-}
-
-.dasti-inline-ai-toolbar[data-placement="above"]::before {
-  inset-block-end: -6px;
-  transform: rotate(225deg);
+  content: none;
 }
 
 .dasti-inline-ai-toolbar__shadow {
@@ -4069,8 +4070,28 @@
   max-inline-size: 100%;
   max-block-size: 100%;
   padding: 0;
+  border: 1px solid color-mix(in srgb, var(--color-border) 82%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--frost-bg, var(--document-viewer-frame-surface)) 96%,
+    transparent
+  );
+  box-shadow: var(--shadow-frost, var(--shadow-sm));
   background-clip: padding-box;
   overflow: auto;
+}
+
+.dark .dasti-proposal-editor-page__drawer {
+  border-color: color-mix(
+    in srgb,
+    var(--color-border-contrast) 44%,
+    transparent
+  );
+  background: color-mix(
+    in srgb,
+    var(--color-surface-raised) 94%,
+    var(--frost-bg, var(--document-viewer-frame-surface)) 6%
+  );
 }
 
 .dasti-proposal-editor-page__drawer-body {

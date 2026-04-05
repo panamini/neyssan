@@ -32,6 +32,30 @@ function createMeasurementNode({
   return node;
 }
 
+function attachMeasurementParent(
+  node: HTMLDivElement,
+  {
+    width,
+    height,
+  }: {
+    width: number;
+    height: number;
+  },
+) {
+  const parent = document.createElement("div");
+  Object.defineProperty(parent, "clientWidth", {
+    configurable: true,
+    value: width,
+  });
+  Object.defineProperty(parent, "clientHeight", {
+    configurable: true,
+    value: height,
+  });
+  parent.appendChild(node);
+  document.body.appendChild(parent);
+  return parent;
+}
+
 describe("useDocumentStageLayout", () => {
   beforeEach(() => {
     vi.stubGlobal("ResizeObserver", ResizeObserverMock);
@@ -97,5 +121,33 @@ describe("useDocumentStageLayout", () => {
     );
     expect(result.current.overflowX).toBe(true);
     expect(result.current.overflowY).toBe(true);
+  });
+
+  it("falls back to the parent viewport size when the stage node collapses", async () => {
+    const collapsedNode = createMeasurementNode({ width: 28, height: 120 });
+    const parent = attachMeasurementParent(collapsedNode, {
+      width: 640,
+      height: 860,
+    });
+    const measurementRef = {
+      current: collapsedNode,
+    } as React.RefObject<HTMLDivElement>;
+
+    const { result } = renderHook(() =>
+      useDocumentStageLayout({
+        measurementRef,
+        fitMode: "width",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.availableWidth).toBe(640);
+      expect(result.current.availableHeight).toBe(860);
+    });
+
+    expect(result.current.stageWidth).toBeCloseTo(640, 2);
+    expect(result.current.pageWidth).toBeCloseTo(640, 2);
+
+    parent.remove();
   });
 });

@@ -289,10 +289,10 @@ describe("FloatingAiToolbar", () => {
     await waitFor(() => {
       expect(toolbar).toHaveAttribute("data-placement", "above");
       expect(toolbar).toHaveStyle({ top: "142px" });
-      expect(toolbar).toHaveStyle({ left: "112px" });
+      expect(toolbar).toHaveStyle({ left: "376px" });
       expect(
         toolbar.style.getPropertyValue("--dasti-inline-ai-toolbar-pointer-offset"),
-      ).toBe("212px");
+      ).toBe("110px");
     });
   });
 });
