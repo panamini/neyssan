@@ -2,10 +2,10 @@ Drop local font files for Dasti here.
 
 Supported auto-detected families:
 
-- `Fraunces Bold`
-- `Syne Regular`
+- `Fraunces`
+- `Syne`
 - `Thestral Neue`
-- `BioRhyme Light`
+- `BioRhyme`
 - `Courier Prime`
 - `Archivo`
 - `Parisienne`
@@ -15,10 +15,14 @@ Supported auto-detected families:
 - `Grave Presse`
 - `Borel`
 - `Algo`
-- `Hepta Slab Regular`
+- `Hepta Slab`
 - `Special Elite`
-- `Bricolage`
-- `Sono Light`
+- `Bricolage Grotesque`
+- `Sono`
+- `Nunito Sans`
+- `Ortica`
+- `Source Code Pro`
+- `Doto`
 
 Accepted formats:
 
@@ -30,3 +34,6 @@ Accepted formats:
 The app scans this folder on startup, registers any matching font files with
 `@font-face`, and exposes them through curated font pairs in Settings and Style
 Forge.
+
+For editor-safe typography, bundle roman and italic sources whenever they exist,
+plus the weights needed for bold text.

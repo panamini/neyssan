@@ -22,6 +22,9 @@ describe("verbati font catalog", () => {
         "mono-signal",
         "studio-grotesk",
         "bricolage-hepta",
+        "nunito-ortica",
+        "nunito-code",
+        "doto-code",
       ]),
     );
   });
@@ -51,5 +54,8 @@ describe("verbati font catalog", () => {
     const styleTag = document.head.querySelector("#dasti-local-font-faces");
     expect(styleTag).not.toBeNull();
     expect(styleTag?.textContent).toContain("@font-face");
+    expect(styleTag?.textContent).toContain("font-family:Archivo");
+    expect(styleTag?.textContent).toContain('font-family:"Source Code Pro"');
+    expect(styleTag?.textContent).toContain("font-style:italic");
   });
 });

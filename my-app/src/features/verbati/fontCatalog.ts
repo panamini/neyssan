@@ -13,6 +13,9 @@ export const FONT_PAIR_IDS = [
   "poster-accent",
   "high-contrast-editorial",
   "bricolage-hepta",
+  "nunito-ortica",
+  "nunito-code",
+  "doto-code",
 ] as const;
 
 export type VerbatiFontPairId = (typeof FONT_PAIR_IDS)[number];
@@ -25,11 +28,14 @@ export type VerbatiTypographyPreset =
   | VerbatiFontPairId
   | LegacyVerbatiTypographyPreset;
 
-type LocalFontAlias = {
+type FontWeightValue = number | `${number} ${number}`;
+
+type LocalFontFace = {
   family: string;
   matchTokens: string[];
-  fontStyle?: "normal" | "italic";
-  fontWeight?: number;
+  excludeTokens?: string[];
+  fontStyle: "normal" | "italic";
+  fontWeight: FontWeightValue;
 };
 
 export type VerbatiFontPairOption = {
@@ -42,56 +48,212 @@ export type VerbatiFontPairOption = {
   bodyLabel: string;
 };
 
-const LOCAL_FONT_ALIASES: LocalFontAlias[] = [
-  { family: "Fraunces Bold", matchTokens: ["fraunces"], fontWeight: 700 },
-  { family: "Syne Regular", matchTokens: ["syne"], fontWeight: 400 },
+const LOCAL_FONT_FACES: LocalFontFace[] = [
+  {
+    family: "Fraunces",
+    matchTokens: ["fraunces", "variablefont", "soft", "wonk"],
+    excludeTokens: ["italic"],
+    fontStyle: "normal",
+    fontWeight: "100 900",
+  },
+  {
+    family: "Fraunces",
+    matchTokens: ["fraunces", "italic", "variablefont", "soft", "wonk"],
+    fontStyle: "italic",
+    fontWeight: "100 900",
+  },
+  {
+    family: "Syne",
+    matchTokens: ["syne", "variablefont", "wght"],
+    fontStyle: "normal",
+    fontWeight: "400 800",
+  },
   {
     family: "Thestral Neue",
-    matchTokens: ["thestralneue", "thestral-neue"],
+    matchTokens: ["thestralneue", "bold"],
+    fontStyle: "normal",
     fontWeight: 700,
   },
   {
-    family: "BioRhyme Light",
-    matchTokens: ["biorhyme", "bio-rhyme"],
-    fontWeight: 300,
+    family: "BioRhyme",
+    matchTokens: ["biorhyme", "variablefont"],
+    fontStyle: "normal",
+    fontWeight: "200 800",
   },
   {
     family: "Special Elite",
-    matchTokens: ["specialelite", "special-elite"],
+    matchTokens: ["specialelite", "regular"],
+    fontStyle: "normal",
     fontWeight: 400,
   },
   {
     family: "Courier Prime",
-    matchTokens: ["courierprime", "courier-prime"],
-    fontWeight: 400,
-  },
-  { family: "Archivo", matchTokens: ["archivo"], fontWeight: 400 },
-  { family: "Parisienne", matchTokens: ["parisienne"], fontWeight: 400 },
-  { family: "Cormorant", matchTokens: ["cormorant"], fontWeight: 400 },
-  { family: "Bonbance", matchTokens: ["bonbance"], fontWeight: 700 },
-  { family: "Geist", matchTokens: ["geist"], fontWeight: 400 },
-  {
-    family: "Grave Presse",
-    matchTokens: ["gravepresse", "grave-presse", "gravepress"],
-    fontWeight: 800,
-  },
-  { family: "Borel", matchTokens: ["borel"], fontWeight: 400 },
-  {
-    family: "Algo",
-    matchTokens: ["algofy", "tryalgofy", "algofy", "algo"],
+    matchTokens: ["courierprime", "regular"],
+    fontStyle: "normal",
     fontWeight: 400,
   },
   {
-    family: "Hepta Slab Regular",
-    matchTokens: ["heptaslab", "hepta-slab"],
+    family: "Courier Prime",
+    matchTokens: ["courierprime", "italic"],
+    excludeTokens: ["bold"],
+    fontStyle: "italic",
     fontWeight: 400,
   },
   {
-    family: "Bricolage Bold",
-    matchTokens: ["bricolagegrotesque", "bricologegrotesque", "bricolage-grotesque"],
+    family: "Courier Prime",
+    matchTokens: ["courierprime", "bold"],
+    excludeTokens: ["italic"],
+    fontStyle: "normal",
     fontWeight: 700,
   },
-  { family: "Sono Light", matchTokens: ["sono"], fontWeight: 300 },
+  {
+    family: "Courier Prime",
+    matchTokens: ["courierprime", "bolditalic"],
+    fontStyle: "italic",
+    fontWeight: 700,
+  },
+  {
+    family: "Archivo",
+    matchTokens: ["archivo", "variablefont", "wdth", "wght"],
+    excludeTokens: ["italic"],
+    fontStyle: "normal",
+    fontWeight: "100 900",
+  },
+  {
+    family: "Archivo",
+    matchTokens: ["archivo", "italic", "variablefont", "wdth", "wght"],
+    fontStyle: "italic",
+    fontWeight: "100 900",
+  },
+  {
+    family: "Parisienne",
+    matchTokens: ["parisienne", "regular"],
+    fontStyle: "normal",
+    fontWeight: 400,
+  },
+  {
+    family: "Cormorant",
+    matchTokens: ["cormorant", "variablefont", "wght"],
+    excludeTokens: ["italic"],
+    fontStyle: "normal",
+    fontWeight: "300 700",
+  },
+  {
+    family: "Cormorant",
+    matchTokens: ["cormorant", "italic", "variablefont", "wght"],
+    fontStyle: "italic",
+    fontWeight: "300 700",
+  },
+  {
+    family: "Bonbance",
+    matchTokens: ["bonbance", "boldcondensed"],
+    fontStyle: "normal",
+    fontWeight: 700,
+  },
+  {
+    family: "Geist",
+    matchTokens: ["geist", "variablefont", "wght"],
+    fontStyle: "normal",
+    fontWeight: "100 900",
+  },
+  {
+    family: "Grave Presse",
+    matchTokens: ["gravepresse", "extrabold"],
+    fontStyle: "normal",
+    fontWeight: 800,
+  },
+  {
+    family: "Borel",
+    matchTokens: ["borel", "regular"],
+    fontStyle: "normal",
+    fontWeight: 400,
+  },
+  {
+    family: "Algo",
+    matchTokens: ["algofy", "regular"],
+    fontStyle: "normal",
+    fontWeight: 400,
+  },
+  {
+    family: "Hepta Slab",
+    matchTokens: ["heptaslab", "light"],
+    fontStyle: "normal",
+    fontWeight: 300,
+  },
+  {
+    family: "Hepta Slab",
+    matchTokens: ["heptaslab", "regular"],
+    fontStyle: "normal",
+    fontWeight: 400,
+  },
+  {
+    family: "Hepta Slab",
+    matchTokens: ["heptaslab", "bold"],
+    fontStyle: "normal",
+    fontWeight: 700,
+  },
+  {
+    family: "Bricolage Grotesque",
+    matchTokens: ["bricolagegrotesque", "variablefont"],
+    fontStyle: "normal",
+    fontWeight: "200 800",
+  },
+  {
+    family: "Sono",
+    matchTokens: ["sono", "mono", "wght"],
+    fontStyle: "normal",
+    fontWeight: "200 800",
+  },
+  {
+    family: "Nunito Sans",
+    matchTokens: ["nunitosans", "variablefont", "wdth", "wght"],
+    excludeTokens: ["italic"],
+    fontStyle: "normal",
+    fontWeight: "200 1000",
+  },
+  {
+    family: "Nunito Sans",
+    matchTokens: ["nunitosans", "italic", "variablefont", "wdth", "wght"],
+    fontStyle: "italic",
+    fontWeight: "200 1000",
+  },
+  {
+    family: "Ortica",
+    matchTokens: ["orticalinear", "light"],
+    fontStyle: "normal",
+    fontWeight: 300,
+  },
+  {
+    family: "Ortica",
+    matchTokens: ["orticalinear", "regular"],
+    fontStyle: "normal",
+    fontWeight: 400,
+  },
+  {
+    family: "Ortica",
+    matchTokens: ["orticalinear", "bold"],
+    fontStyle: "normal",
+    fontWeight: 700,
+  },
+  {
+    family: "Source Code Pro",
+    matchTokens: ["sourcecodepro", "variablefont", "wght"],
+    excludeTokens: ["italic"],
+    fontStyle: "normal",
+    fontWeight: "200 900",
+  },
+  {
+    family: "Source Code Pro",
+    matchTokens: ["sourcecodepro", "italic", "variablefont", "wght"],
+    fontStyle: "italic",
+    fontWeight: "200 900",
+  },
+  {
+    family: "Doto",
+    matchTokens: ["doto", "variablefont", "rond", "wght"],
+    fontStyle: "normal",
+    fontWeight: "100 900",
+  },
 ];
 
 const LOCAL_FONT_FILES = import.meta.glob(
@@ -132,23 +294,29 @@ function inferFontFormat(url: string): string | null {
   return null;
 }
 
-function findLocalFontAsset(alias: LocalFontAlias): string | null {
+function findLocalFontAsset(face: LocalFontFace): string | null {
   const assetEntries = Object.entries(LOCAL_FONT_FILES);
   const match = assetEntries.find(([filePath]) => {
     const normalizedPath = normalizeToken(filePath);
-    return alias.matchTokens.some((token) => normalizedPath.includes(token));
+    const includesTokens = face.matchTokens.every((token) =>
+      normalizedPath.includes(normalizeToken(token)),
+    );
+    const excludesTokens = (face.excludeTokens ?? []).some((token) =>
+      normalizedPath.includes(normalizeToken(token)),
+    );
+    return includesTokens && !excludesTokens;
   });
   return match?.[1] ?? null;
 }
 
 function buildFontFaceCss(): string {
-  const rules = LOCAL_FONT_ALIASES.flatMap((alias) => {
-    const url = findLocalFontAsset(alias);
+  const rules = LOCAL_FONT_FACES.flatMap((face) => {
+    const url = findLocalFontAsset(face);
     if (!url) return [];
     const format = inferFontFormat(url);
     const formatFragment = format ? ` format("${format}")` : "";
     return [
-      `@font-face{font-family:${quoteFamily(alias.family)};src:url("${url}")${formatFragment};font-style:${alias.fontStyle ?? "normal"};font-weight:${alias.fontWeight ?? 400};font-display:swap;}`,
+      `@font-face{font-family:${quoteFamily(face.family)};src:url("${url}")${formatFragment};font-style:${face.fontStyle};font-weight:${face.fontWeight};font-display:swap;}`,
     ];
   });
 
@@ -205,8 +373,8 @@ export const VERBATI_FONT_PAIR_OPTIONS: VerbatiFontPairOption[] = [
     id: "quiet-editorial",
     name: "Quiet Editorial",
     description: "Fraunces Bold heading over Syne Regular for a crisp serif-to-grotesk transition.",
-    headingFamily: buildFamilyStack("Fraunces Bold", "Georgia, serif"),
-    bodyFamily: buildFamilyStack("Syne Regular", '"Avenir Next", system-ui, sans-serif'),
+    headingFamily: buildFamilyStack("Fraunces", "Georgia, serif"),
+    bodyFamily: buildFamilyStack("Syne", '"Avenir Next", system-ui, sans-serif'),
     headingLabel: "Fraunces Bold",
     bodyLabel: "Syne Regular",
   },
@@ -216,7 +384,7 @@ export const VERBATI_FONT_PAIR_OPTIONS: VerbatiFontPairOption[] = [
     description:
       "Thestral Neue headlines over BioRhyme Light for a dramatic poster-letter cadence.",
     headingFamily: buildFamilyStack("Thestral Neue", '"Helvetica Neue", Helvetica, Arial, sans-serif'),
-    bodyFamily: buildFamilyStack("BioRhyme Light", 'Georgia, "Times New Roman", serif'),
+    bodyFamily: buildFamilyStack("BioRhyme", 'Georgia, "Times New Roman", serif'),
     headingLabel: "Thestral Neue",
     bodyLabel: "BioRhyme Light",
   },
@@ -232,7 +400,7 @@ export const VERBATI_FONT_PAIR_OPTIONS: VerbatiFontPairOption[] = [
   {
     id: "mono-signal",
     name: "Mono Signal",
-    description: "Archivo over Archivo for a restrained mono-family register when the font is available locally.",
+    description: "Archivo over Archivo for a restrained mono-family register.",
     headingFamily: buildFamilyStack("Archivo", '"Helvetica Neue", Helvetica, Arial, sans-serif'),
     bodyFamily: buildFamilyStack("Archivo", '"Helvetica Neue", Helvetica, Arial, sans-serif'),
     headingLabel: "Archivo",
@@ -270,7 +438,7 @@ export const VERBATI_FONT_PAIR_OPTIONS: VerbatiFontPairOption[] = [
     name: "Poster Accent",
     description: "Algo display with Hepta Slab Regular body copy for a shaped editorial masthead.",
     headingFamily: buildFamilyStack("Algo", '"Arial Rounded MT Bold", system-ui, sans-serif'),
-    bodyFamily: buildFamilyStack("Hepta Slab Regular", 'Georgia, "Times New Roman", serif'),
+    bodyFamily: buildFamilyStack("Hepta Slab", 'Georgia, "Times New Roman", serif'),
     headingLabel: "Algo",
     bodyLabel: "Hepta Slab Regular",
   },
@@ -278,8 +446,8 @@ export const VERBATI_FONT_PAIR_OPTIONS: VerbatiFontPairOption[] = [
     id: "high-contrast-editorial",
     name: "High Contrast Editorial",
     description: "Bricolage Bold display with Sono Light body text for a contemporary grotesk-mono mix.",
-    headingFamily: buildFamilyStack("Bricolage Bold", '"Avenir Next", system-ui, sans-serif'),
-    bodyFamily: buildFamilyStack("Sono Light", '"IBM Plex Mono", Menlo, monospace'),
+    headingFamily: buildFamilyStack("Bricolage Grotesque", '"Avenir Next", system-ui, sans-serif'),
+    bodyFamily: buildFamilyStack("Sono", '"IBM Plex Mono", Menlo, monospace'),
     headingLabel: "Bricolage Bold",
     bodyLabel: "Sono Light",
   },
@@ -287,10 +455,37 @@ export const VERBATI_FONT_PAIR_OPTIONS: VerbatiFontPairOption[] = [
     id: "bricolage-hepta",
     name: "Bricolage Hepta",
     description: "Bricolage Bold headings with Hepta Slab Regular body text for a sharper serif counterpoint.",
-    headingFamily: buildFamilyStack("Bricolage Bold", '"Avenir Next", system-ui, sans-serif'),
-    bodyFamily: buildFamilyStack("Hepta Slab Regular", 'Georgia, "Times New Roman", serif'),
+    headingFamily: buildFamilyStack("Bricolage Grotesque", '"Avenir Next", system-ui, sans-serif'),
+    bodyFamily: buildFamilyStack("Hepta Slab", 'Georgia, "Times New Roman", serif'),
     headingLabel: "Bricolage Bold",
     bodyLabel: "Hepta Slab Regular",
+  },
+  {
+    id: "nunito-ortica",
+    name: "Nunito Ortica",
+    description: "Nunito ExtraBold headlines with Ortica body text for a soft-modern contrast.",
+    headingFamily: buildFamilyStack("Nunito Sans", "system-ui, sans-serif"),
+    bodyFamily: buildFamilyStack("Ortica", 'Georgia, "Times New Roman", serif'),
+    headingLabel: "Nunito ExtraBold",
+    bodyLabel: "Ortica",
+  },
+  {
+    id: "nunito-code",
+    name: "Nunito Code",
+    description: "Nunito ExtraBold headlines with Source Code Pro Regular for a humane mono contrast.",
+    headingFamily: buildFamilyStack("Nunito Sans", "system-ui, sans-serif"),
+    bodyFamily: buildFamilyStack("Source Code Pro", '"IBM Plex Mono", Menlo, monospace'),
+    headingLabel: "Nunito ExtraBold",
+    bodyLabel: "Source Code Pro Regular",
+  },
+  {
+    id: "doto-code",
+    name: "Doto Code",
+    description: "Doto Black headlines with Source Code Pro Regular for a sharper technical display.",
+    headingFamily: buildFamilyStack("Doto", "system-ui, sans-serif"),
+    bodyFamily: buildFamilyStack("Source Code Pro", '"IBM Plex Mono", Menlo, monospace'),
+    headingLabel: "Doto Black",
+    bodyLabel: "Source Code Pro Regular",
   },
 ];
 
