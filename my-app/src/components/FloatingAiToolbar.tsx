@@ -374,9 +374,19 @@ export function FloatingAiToolbar({
     };
 
     update();
+    const resizeObserver =
+      panelRef.current && typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(update)
+        : null;
+
+    if (panelRef.current) {
+      resizeObserver?.observe(panelRef.current);
+    }
+
     window.addEventListener("resize", update);
     window.addEventListener("scroll", update, true);
     return () => {
+      resizeObserver?.disconnect();
       window.removeEventListener("resize", update);
       window.removeEventListener("scroll", update, true);
     };
