@@ -8,6 +8,11 @@ import {
 import type { ProposalDocumentTypography } from "../../lib/proposal-document-typography";
 import { VOLK_REGISTER_GRID } from "../../features/verbati/volkGrid";
 import type { ProposalApplicantHeaderData } from "../../lib/proposal-personalization";
+import {
+  resolveProposalHeaderVisibility,
+  resolveProposalRecipientLines,
+  type ProposalHeaderVisibility,
+} from "../../lib/proposal-header";
 
 type ProposalDocumentRendererProps = {
   content: string;
@@ -21,6 +26,7 @@ type ProposalDocumentRendererProps = {
   documentTitle?: string | null;
   documentMeta?: string | null;
   applicantHeader?: ProposalApplicantHeaderData | null;
+  headerVisibility?: ProposalHeaderVisibility | null;
   documentTypography: ProposalDocumentTypography;
   /** Explicit page width in px. When provided, syncs mm vars immediately on change
    *  without waiting for the ResizeObserver callback. */
@@ -67,6 +73,7 @@ type StructuredHeaderValues = {
   date: string;
   subject: string;
   to: string;
+  recipientDetails: string;
 };
 
 function resolveLineHeightPx(styles: CSSStyleDeclaration) {
@@ -151,31 +158,30 @@ function isLikelySignatureName(value: string): boolean {
 function buildVolkRegisterMetaEntries(args: {
   letterDate?: string | null;
   recipientDetails?: string | null;
+  headerVisibility?: ProposalHeaderVisibility | null;
 }): VolkRegisterMetaEntry[] {
-  const lines = String(args.recipientDetails ?? "")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-  const mergedTail =
-    lines.length > 3 ? lines.slice(2).join(" · ") : (lines[2] ?? "");
+  const visibility = resolveProposalHeaderVisibility(args.headerVisibility);
+  const { primary, secondaryLines } = resolveProposalRecipientLines(
+    args.recipientDetails,
+  );
+  const mergedTail = visibility.showRecipientDetails
+    ? secondaryLines.join(" · ")
+    : "";
 
   return [
     {
       key: "date",
-      value: args.letterDate?.trim()
+      value:
+        visibility.showDate && args.letterDate?.trim()
         ? `date: ${args.letterDate.trim()}`
-        : "",
+          : "",
     },
     {
       key: "to",
-      value: lines[0] ? `to: ${lines[0]}` : "",
+      value: visibility.showRecipient && primary ? `to: ${primary}` : "",
     },
     {
-      key: "recipient_line_two",
-      value: lines[1] ?? "",
-    },
-    {
-      key: "recipient_line_three",
+      key: "recipient_details",
       value: mergedTail,
     },
   ].filter((entry) => entry.value.length > 0);
@@ -206,20 +212,25 @@ function buildStructuredHeaderValues(args: {
   letterDate?: string | null;
   recipientDetails?: string | null;
   documentTitle?: string | null;
+  headerVisibility?: ProposalHeaderVisibility | null;
 }): StructuredHeaderValues | null {
-  const date = args.letterDate?.trim() ?? "";
-  const subject = args.documentTitle?.trim() ?? "";
-  const to = String(args.recipientDetails ?? "")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .join("\n");
+  const visibility = resolveProposalHeaderVisibility(args.headerVisibility);
+  const { primary, secondaryLines } = resolveProposalRecipientLines(
+    args.recipientDetails,
+  );
+  const date = visibility.showDate ? args.letterDate?.trim() ?? "" : "";
+  const subject = visibility.showSubject ? args.documentTitle?.trim() ?? "" : "";
+  const to = visibility.showRecipient ? primary : "";
+  const recipientDetails =
+    visibility.showRecipient && visibility.showRecipientDetails
+      ? secondaryLines.join("\n")
+      : "";
 
-  if (!date && !subject && !to) {
+  if (!date && !subject && !to && !recipientDetails) {
     return null;
   }
 
-  return { date, subject, to };
+  return { date, subject, to, recipientDetails };
 }
 
 function splitParagraphIntoPaginationFragments(paragraph: string): string[] {
@@ -514,6 +525,7 @@ export function ProposalDocumentRenderer({
   documentTitle,
   documentMeta,
   applicantHeader,
+  headerVisibility,
   documentTypography,
   pageWidth,
   pageGapPx = 0,
@@ -531,6 +543,10 @@ export function ProposalDocumentRenderer({
     buildVolkRegisterSenderLine(applicantHeader) ||
     resolvedSenderEmail ||
     null;
+  const resolvedHeaderVisibility = React.useMemo(
+    () => resolveProposalHeaderVisibility(headerVisibility),
+    [headerVisibility],
+  );
   const parsedDocument = React.useMemo(
     () => parseProposalDocumentContent(content, proposalType),
     [content, proposalType],
@@ -605,13 +621,17 @@ export function ProposalDocumentRenderer({
       const { bottomBoundary } = getPageBottomBoundary(measurementPage);
       const bodyRect = measurementBody.getBoundingClientRect();
       const measurementBodyStyles = window.getComputedStyle(measurementBody);
+      const senderHeaderHeight =
+        measurementBody.querySelector<HTMLElement>(
+          ".dasti-proposal-document__sender-header",
+        )?.getBoundingClientRect().height ?? 0;
       const structuredHeaderHeight =
         measurementBody.querySelector<HTMLElement>(
           ".dasti-proposal-document__structured-header",
         )?.getBoundingClientRect().height ?? 0;
       const firstPageLeadIn = Number.parseFloat(
         measurementBodyStyles.paddingTop || "0",
-      ) + structuredHeaderHeight;
+      ) + senderHeaderHeight + structuredHeaderHeight;
       const pageBreakSafetyReserve = Math.max(
         4,
         Math.round(resolveLineHeightPx(measurementBodyStyles) * 0.7),
@@ -804,8 +824,10 @@ export function ProposalDocumentRenderer({
       buildVolkRegisterMetaEntries({
         letterDate,
         recipientDetails,
+        headerVisibility: resolvedHeaderVisibility,
       }),
     [
+      resolvedHeaderVisibility,
       letterDate,
       recipientDetails,
     ],
@@ -817,8 +839,9 @@ export function ProposalDocumentRenderer({
         letterDate,
         recipientDetails,
         documentTitle,
+        headerVisibility: resolvedHeaderVisibility,
       }),
-    [documentTitle, letterDate, recipientDetails],
+    [documentTitle, letterDate, recipientDetails, resolvedHeaderVisibility],
   );
   const volkFallbackParagraphs = React.useMemo(
     () =>
@@ -889,20 +912,35 @@ export function ProposalDocumentRenderer({
     [renderVisibleDocumentBlocks, volkFallbackParagraphs],
   );
   const renderGenericRail = React.useCallback(
-    (isContinuationPage: boolean) => (
-      <aside className="dasti-proposal-document__rail">
-        <p className="dasti-proposal-document__eyebrow">
-          {templateDefinition.shortLabel}
-        </p>
-        {!isContinuationPage && resolvedRailTitle ? (
-          <h4 className="dasti-proposal-document__title">{resolvedRailTitle}</h4>
-        ) : null}
-        {!isContinuationPage && resolvedRailMeta ? (
-          <p className="dasti-proposal-document__meta">{resolvedRailMeta}</p>
-        ) : null}
-      </aside>
+    (_isContinuationPage: boolean) => (
+      <aside className="dasti-proposal-document__rail" aria-hidden="true" />
     ),
-    [resolvedRailMeta, resolvedRailTitle, templateDefinition.shortLabel],
+    [],
+  );
+  const renderSenderHeader = React.useCallback(
+    () => (
+      <div className="dasti-proposal-document__sender-header">
+        {resolvedRailTitle ? (
+          <p className="dasti-proposal-document__sender-label">
+            <span className="dasti-proposal-document__sender-label-key">
+              From:
+            </span>{" "}
+            <span className="dasti-proposal-document__sender-label-value">
+              {resolvedRailTitle}
+            </span>
+          </p>
+        ) : null}
+        {resolvedRailMeta ? (
+          <p className="dasti-proposal-document__sender-role">{resolvedRailMeta}</p>
+        ) : null}
+        {resolvedSenderLine ? (
+          <p className="dasti-proposal-document__sender-contact">
+            {resolvedSenderLine}
+          </p>
+        ) : null}
+      </div>
+    ),
+    [resolvedRailMeta, resolvedRailTitle, resolvedSenderLine],
   );
   const renderStructuredHeader = React.useCallback(() => {
     if (!structuredHeaderValues) {
@@ -922,9 +960,14 @@ export function ProposalDocumentRenderer({
         {structuredHeaderValues.to ? (
           <div className="dasti-proposal-document__structured-header-item">
             <p className="dasti-proposal-document__structured-header-label">To</p>
-            <p className="dasti-proposal-document__structured-header-value dasti-proposal-document__structured-header-value--multiline">
+            <p className="dasti-proposal-document__structured-header-value">
               {structuredHeaderValues.to}
             </p>
+            {structuredHeaderValues.recipientDetails ? (
+              <p className="dasti-proposal-document__structured-header-value dasti-proposal-document__structured-header-value--multiline dasti-proposal-document__structured-header-value--secondary">
+                {structuredHeaderValues.recipientDetails}
+              </p>
+            ) : null}
           </div>
         ) : null}
         {structuredHeaderValues.subject ? (
@@ -953,6 +996,7 @@ export function ProposalDocumentRenderer({
           ref={args.bodyRef ?? undefined}
           className="dasti-proposal-document__body"
         >
+          {!args.isContinuationPage ? renderSenderHeader() : null}
           {!args.isContinuationPage ? renderStructuredHeader() : null}
           {args.pageBlocks.length > 0 ? (
             args.measurement
@@ -974,6 +1018,7 @@ export function ProposalDocumentRenderer({
       parsedDocument.rawBody,
       renderDocumentBlock,
       renderGenericRail,
+      renderSenderHeader,
       renderStructuredHeader,
       renderVisibleDocumentBlocks,
     ],
@@ -1031,13 +1076,13 @@ export function ProposalDocumentRenderer({
         ) : null}
 
         <div className="dasti-proposal-document__volk-content">
-          {!args.isContinuationPage ? (
+          {!args.isContinuationPage && structuredHeaderValues?.subject ? (
             <div className="dasti-proposal-document__volk-subject-row">
               <span className="dasti-proposal-document__volk-subject-label">
                 subject:
               </span>
               <span className="dasti-proposal-document__volk-subject-value">
-                {documentTitle ?? "Application for the role"}
+                {structuredHeaderValues.subject}
               </span>
             </div>
           ) : null}
@@ -1057,17 +1102,12 @@ export function ProposalDocumentRenderer({
     ),
     [
       documentMeta,
-      documentTitle,
-      letterDate,
-      recipientDetails,
-      applicantHeader,
-      contactLine,
       renderVolkBodyContent,
+      structuredHeaderValues,
       volkMetaLefts,
       resolvedRailMeta,
       resolvedRailTitle,
       resolvedSenderLine,
-      templateDefinition.name,
       volkMetaEntries,
     ],
   );

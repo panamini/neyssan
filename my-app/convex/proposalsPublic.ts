@@ -146,6 +146,10 @@ export default query({
         contactLine: v.optional(v.string()),
         letterDate: v.optional(v.string()),
         recipientDetails: v.optional(v.string()),
+        headerShowDate: v.optional(v.boolean()),
+        headerShowSubject: v.optional(v.boolean()),
+        headerShowRecipient: v.optional(v.boolean()),
+        headerShowRecipientDetails: v.optional(v.boolean()),
         characterLimitMode: v.optional(
           v.union(proposalCharacterLimitModeChoice, v.null()),
         ),
@@ -252,6 +256,11 @@ export default query({
         contactLine: proposal.metadata.contactLine ?? undefined,
         letterDate: proposal.metadata.letterDate ?? undefined,
         recipientDetails: proposal.metadata.recipientDetails ?? undefined,
+        headerShowDate: proposal.metadata.headerShowDate ?? undefined,
+        headerShowSubject: proposal.metadata.headerShowSubject ?? undefined,
+        headerShowRecipient: proposal.metadata.headerShowRecipient ?? undefined,
+        headerShowRecipientDetails:
+          proposal.metadata.headerShowRecipientDetails ?? undefined,
         characterLimitMode:
           proposal.metadata.characterLimitMode ?? undefined,
         characterLimitValue:

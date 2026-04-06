@@ -44,6 +44,10 @@ import {
 } from "../lib/proposal-template-bundles";
 import type { ProposalPaletteId } from "../lib/proposal-style-display";
 import type { VerbatiLayoutPreset } from "../features/verbati/types";
+import {
+  buildProposalHeaderVisibilityFromContent,
+  resolveProposalHeaderVisibility,
+} from "../lib/proposal-header";
 
 type SavedProposalLayoutId = Extract<
   VerbatiLayoutPreset,
@@ -87,6 +91,10 @@ type SavedProposalRecord = {
     contactLine?: string;
     letterDate?: string;
     recipientDetails?: string;
+    headerShowDate?: boolean;
+    headerShowSubject?: boolean;
+    headerShowRecipient?: boolean;
+    headerShowRecipientDetails?: boolean;
   };
 };
 
@@ -147,6 +155,18 @@ function normalizeSavedTextValue(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0
     ? value.trim()
     : null;
+}
+
+function resolveSavedHeaderVisibility(proposal: SavedProposalRecord | null) {
+  return resolveProposalHeaderVisibility({
+    ...buildProposalHeaderVisibilityFromContent(
+      normalizeSavedTextValue(proposal?.metadata?.recipientDetails) ?? null,
+    ),
+    showDate: proposal?.metadata?.headerShowDate,
+    showSubject: proposal?.metadata?.headerShowSubject,
+    showRecipient: proposal?.metadata?.headerShowRecipient,
+    showRecipientDetails: proposal?.metadata?.headerShowRecipientDetails,
+  });
 }
 
 function resolveSavedAppearanceState(proposal: SavedProposalRecord | null): {
@@ -1247,6 +1267,10 @@ export default function ProposalsList({
     () => buildSavedApplicantHeader(selected, activeApplicantHeader),
     [activeApplicantHeader, selected],
   );
+  const selectedHeaderVisibility = React.useMemo(
+    () => resolveSavedHeaderVisibility(selected),
+    [selected],
+  );
   const selectedLayoutValue =
     selectedLayoutOverride ??
     (selectedBaseStylePreset?.layout === "swiss" ||
@@ -1521,6 +1545,7 @@ export default function ProposalsList({
                       null
                     }
                     applicantHeader={selectedApplicantHeader}
+                    headerVisibility={selectedHeaderVisibility}
                     characterLimit={selected?.metadata?.characterLimitValue ?? null}
                     characterLimitAdvisory={false}
                     documentTitle={selectedHeaderTitle || "Saved proposal"}
@@ -1598,6 +1623,7 @@ export default function ProposalsList({
                             proposal,
                             activeApplicantHeader,
                           )}
+                          headerVisibility={resolveSavedHeaderVisibility(proposal)}
                           documentTitle={
                             (proposal.title || "").trim() || "Saved proposal"
                           }

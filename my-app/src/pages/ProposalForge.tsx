@@ -93,6 +93,12 @@ import {
   type ProposalTemplateBundleId,
 } from "../lib/proposal-template-bundles";
 import { readCssDurationMs } from "../lib/readCssDuration";
+import {
+  buildProposalHeaderVisibilityFromContent,
+  hasProposalHeaderVisibilityOverride,
+  resolveProposalHeaderVisibility,
+  type ProposalHeaderVisibility,
+} from "../lib/proposal-header";
 
 type ProposalForgePrefill = {
   handoffId: string;
@@ -250,6 +256,10 @@ type ProposalDocumentMetadata = {
   contactLine?: string;
   letterDate?: string;
   recipientDetails?: string;
+  headerShowDate?: boolean;
+  headerShowSubject?: boolean;
+  headerShowRecipient?: boolean;
+  headerShowRecipientDetails?: boolean;
   characterLimitMode?: FormValues["characterLimitMode"];
   characterLimitValue?: number | null;
 };
@@ -288,10 +298,10 @@ function buildProfessionalApplicationSubject(args: {
   const company = summary.company?.trim();
 
   if (company) {
-    return `Application for the ${jobTitle} role at ${company}`;
+    return `Application for the position of ${jobTitle} at ${company}`;
   }
 
-  return `Application for the ${jobTitle} role`;
+  return `Application for the position of ${jobTitle}`;
 }
 
 function readAttachedCvSelection(): {
@@ -584,6 +594,15 @@ export function ProposalForge(): JSX.Element {
     [isConvexAuthenticated],
   );
   const deleteProposal = useMutation(api.deleteProposalPublic.default);
+  const initialProposalHeaderVisibility = resolveProposalHeaderVisibility({
+    ...buildProposalHeaderVisibilityFromContent(
+      storedOutputDraft?.proposalRecipientDetails ?? null,
+    ),
+    showDate: storedOutputDraft?.proposalHeaderShowDate,
+    showSubject: storedOutputDraft?.proposalHeaderShowSubject,
+    showRecipient: storedOutputDraft?.proposalHeaderShowRecipient,
+    showRecipientDetails: storedOutputDraft?.proposalHeaderShowRecipientDetails,
+  });
   const [proposalContent, setProposalContent] = React.useState<string | null>(
     storedOutputDraft?.proposalContent ?? null,
   );
@@ -660,6 +679,8 @@ export function ProposalForge(): JSX.Element {
   );
   const [proposalRecipientDetails, setProposalRecipientDetails] =
     React.useState<string>(storedOutputDraft?.proposalRecipientDetails || "");
+  const [proposalHeaderVisibility, setProposalHeaderVisibility] =
+    React.useState<ProposalHeaderVisibility>(initialProposalHeaderVisibility);
   const [proposalDocumentTitle, setProposalDocumentTitle] =
     React.useState<string>(storedOutputDraft?.proposalDocumentTitle ?? "");
   const [proposalDocumentMeta, setProposalDocumentMeta] =
@@ -1353,6 +1374,13 @@ export function ProposalForge(): JSX.Element {
     if (proposalRecipientDetails.trim()) {
       nextMetadata.recipientDetails = proposalRecipientDetails.trim();
     }
+    if (hasProposalHeaderVisibilityOverride(proposalHeaderVisibility)) {
+      nextMetadata.headerShowDate = proposalHeaderVisibility.showDate;
+      nextMetadata.headerShowSubject = proposalHeaderVisibility.showSubject;
+      nextMetadata.headerShowRecipient = proposalHeaderVisibility.showRecipient;
+      nextMetadata.headerShowRecipientDetails =
+        proposalHeaderVisibility.showRecipientDetails;
+    }
 
     return Object.keys(nextMetadata).length > 0 ? nextMetadata : undefined;
   }, [
@@ -1369,6 +1397,7 @@ export function ProposalForge(): JSX.Element {
     proposalApplicantName,
     proposalApplicantRole,
     proposalContactLine,
+    proposalHeaderVisibility,
     proposalLetterDate,
     proposalRecipientDetails,
     proposalType,
@@ -1585,6 +1614,7 @@ export function ProposalForge(): JSX.Element {
     setProposalContactLine(defaultPreviewContactLine);
     setProposalLetterDate(getDefaultProposalLetterDate());
     setProposalRecipientDetails("");
+    setProposalHeaderVisibility(buildProposalHeaderVisibilityFromContent(null));
     setProposalDocumentTitle("");
     setProposalDocumentMeta("");
     setFallbackInfo(null);
@@ -1971,6 +2001,11 @@ export function ProposalForge(): JSX.Element {
         ),
         proposalLetterDate,
         proposalRecipientDetails,
+        proposalHeaderShowDate: proposalHeaderVisibility.showDate,
+        proposalHeaderShowSubject: proposalHeaderVisibility.showSubject,
+        proposalHeaderShowRecipient: proposalHeaderVisibility.showRecipient,
+        proposalHeaderShowRecipientDetails:
+          proposalHeaderVisibility.showRecipientDetails,
         proposalDocumentTitle: nextDocumentTitle,
         proposalDocumentMeta: nextDocumentMeta,
         generatedProposalId: nextProposalId ?? null,
@@ -2022,6 +2057,7 @@ export function ProposalForge(): JSX.Element {
       buildStoredProposalComposeDraftSnapshot,
       formatProposalTypeLabel,
       proposalCustomAccentHex,
+      proposalHeaderVisibility,
       proposalLetterDate,
       proposalPaletteOverride,
       proposalRecipientDetails,
@@ -2286,6 +2322,11 @@ export function ProposalForge(): JSX.Element {
       proposalContactLine,
       proposalLetterDate,
       proposalRecipientDetails,
+      proposalHeaderShowDate: proposalHeaderVisibility.showDate,
+      proposalHeaderShowSubject: proposalHeaderVisibility.showSubject,
+      proposalHeaderShowRecipient: proposalHeaderVisibility.showRecipient,
+      proposalHeaderShowRecipientDetails:
+        proposalHeaderVisibility.showRecipientDetails,
       proposalDocumentTitle,
       proposalDocumentMeta,
       generatedProposalId,
@@ -2312,6 +2353,7 @@ export function ProposalForge(): JSX.Element {
     proposalApplicantName,
     proposalApplicantRole,
     proposalContactLine,
+    proposalHeaderVisibility,
     proposalLetterDate,
     proposalRecipientDetails,
     proposalDocumentMeta,
@@ -2757,6 +2799,7 @@ export function ProposalForge(): JSX.Element {
       setProposalContactLine(defaultPreviewContactLine);
       setProposalLetterDate(getDefaultProposalLetterDate());
       setProposalRecipientDetails("");
+      setProposalHeaderVisibility(buildProposalHeaderVisibilityFromContent(null));
       setProposalDocumentTitle("");
       setProposalDocumentMeta("");
       setGeneratedProposalId(null);
@@ -3615,6 +3658,7 @@ export function ProposalForge(): JSX.Element {
                     letterDate={proposalLetterDate || null}
                     recipientDetails={proposalRecipientDetails || null}
                     applicantHeader={proposalDisplayApplicantHeader}
+                    headerVisibility={proposalHeaderVisibility}
                     fallbackInfo={fallbackInfo}
                     documentTitle={
                       proposalDocumentTitle ||
@@ -3637,6 +3681,11 @@ export function ProposalForge(): JSX.Element {
                     onDocumentTitleCommit={() => {
                       void handleProposalDocumentCommit();
                     }}
+                    documentTitlePlaceholder={buildProfessionalApplicationSubject({
+                      jobTitle: composePreviewValues?.jobTitle ?? "",
+                      jobDescription: composePreviewValues?.jobDescription ?? "",
+                      proposalType,
+                    })}
                     onRailTitleChange={setProposalApplicantName}
                     onRailMetaChange={setProposalApplicantRole}
                     contactLineEditable={proposalOutputMode === "edit"}
@@ -3646,6 +3695,12 @@ export function ProposalForge(): JSX.Element {
                     onLetterDateChange={setProposalLetterDate}
                     recipientDetailsEditable={proposalOutputMode === "edit"}
                     onRecipientDetailsChange={setProposalRecipientDetails}
+                    onHeaderVisibilityChange={(value) => {
+                      setProposalHeaderVisibility((current) => ({
+                        ...current,
+                        ...(typeof value === "function" ? value(current) : value),
+                      }));
+                    }}
                     characterLimit={activeCharacterLimitSelection.value}
                     characterLimitAdvisory={
                       activeCharacterLimitSelection.advisory

@@ -50,6 +50,10 @@ export type StoredProposalOutputDraft = {
   proposalContactLine?: string;
   proposalLetterDate?: string;
   proposalRecipientDetails?: string;
+  proposalHeaderShowDate?: boolean;
+  proposalHeaderShowSubject?: boolean;
+  proposalHeaderShowRecipient?: boolean;
+  proposalHeaderShowRecipientDetails?: boolean;
   proposalDocumentTitle: string;
   proposalDocumentMeta: string;
   generatedProposalId: Id<"proposals"> | null;
@@ -249,6 +253,22 @@ export function readStoredProposalOutputDraft(): StoredProposalOutputDraft | nul
         typeof parsed.proposalRecipientDetails === "string"
           ? parsed.proposalRecipientDetails
           : "",
+      proposalHeaderShowDate:
+        typeof parsed.proposalHeaderShowDate === "boolean"
+          ? parsed.proposalHeaderShowDate
+          : undefined,
+      proposalHeaderShowSubject:
+        typeof parsed.proposalHeaderShowSubject === "boolean"
+          ? parsed.proposalHeaderShowSubject
+          : undefined,
+      proposalHeaderShowRecipient:
+        typeof parsed.proposalHeaderShowRecipient === "boolean"
+          ? parsed.proposalHeaderShowRecipient
+          : undefined,
+      proposalHeaderShowRecipientDetails:
+        typeof parsed.proposalHeaderShowRecipientDetails === "boolean"
+          ? parsed.proposalHeaderShowRecipientDetails
+          : undefined,
       proposalDocumentTitle:
         typeof parsed.proposalDocumentTitle === "string"
           ? parsed.proposalDocumentTitle
@@ -365,6 +385,22 @@ function buildSanitizedStoredProposalOutputDraft(
       typeof draft.proposalRecipientDetails === "string"
         ? draft.proposalRecipientDetails
         : "",
+    proposalHeaderShowDate:
+      typeof draft.proposalHeaderShowDate === "boolean"
+        ? draft.proposalHeaderShowDate
+        : undefined,
+    proposalHeaderShowSubject:
+      typeof draft.proposalHeaderShowSubject === "boolean"
+        ? draft.proposalHeaderShowSubject
+        : undefined,
+    proposalHeaderShowRecipient:
+      typeof draft.proposalHeaderShowRecipient === "boolean"
+        ? draft.proposalHeaderShowRecipient
+        : undefined,
+    proposalHeaderShowRecipientDetails:
+      typeof draft.proposalHeaderShowRecipientDetails === "boolean"
+        ? draft.proposalHeaderShowRecipientDetails
+        : undefined,
     proposalDocumentTitle:
       typeof draft.proposalDocumentTitle === "string"
         ? draft.proposalDocumentTitle
