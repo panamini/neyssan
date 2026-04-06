@@ -10,22 +10,35 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsPage } from "../SettingsPage";
 
-const updateSettingsMock = vi.fn(() => Promise.resolve(null));
-const settingsQueryMock = vi.fn();
+const savePresetMock = vi.fn(() => Promise.resolve(null));
+const setActivePresetMock = vi.fn(() => Promise.resolve(null));
+const presetsQueryMock = vi.fn();
 
-vi.mock("convex/react", () => ({
-  useQuery: () => settingsQueryMock(),
-  useMutation: () => updateSettingsMock,
-}));
-
-vi.mock("../../../convex/_generated/api", () => ({
+const { api } = vi.hoisted(() => ({
   api: {
     proposalSettings: {
-      getCurrent: {},
-      setCurrent: {},
+      getPresets: {},
+      savePreset: {},
+      setActivePreset: {},
     },
   },
 }));
+
+vi.mock("convex/react", () => ({
+  useQuery: () => presetsQueryMock(),
+  useMutation: (reference: unknown) => {
+    if (
+      reference ===
+      (api.proposalSettings.savePreset as unknown)
+    ) {
+      return savePresetMock;
+    }
+
+    return setActivePresetMock;
+  },
+}));
+
+vi.mock("../../../convex/_generated/api", () => ({ api }));
 
 vi.mock("../../components/ProposalColorPickerPopover", () => ({
   ProposalColorPickerPopover: () => null,
@@ -33,102 +46,127 @@ vi.mock("../../components/ProposalColorPickerPopover", () => ({
 
 describe("SettingsPage preview controls", () => {
   beforeEach(() => {
-    updateSettingsMock.mockClear();
-    settingsQueryMock.mockReturnValue({
-      savedVoicePreset: null,
-      styleChoice: "balanced",
-      paletteOverride: null,
-      accentHex: null,
-      fontPairId: "quiet-editorial",
+    savePresetMock.mockClear();
+    setActivePresetMock.mockClear();
+    presetsQueryMock.mockReturnValue({
+      activeSlot: 1,
+      preset1: {
+        fontPairId: "quiet-editorial",
+        styleChoice: "balanced",
+        paletteOverride: null,
+        accentHex: null,
+        voicePreset: null,
+        name: "Style 1",
+      },
+      preset2: {
+        fontPairId: "quiet-editorial",
+        styleChoice: "balanced",
+        paletteOverride: null,
+        accentHex: null,
+        voicePreset: null,
+        name: "Style 2",
+      },
+      preset3: {
+        fontPairId: "quiet-editorial",
+        styleChoice: "warm",
+        paletteOverride: null,
+        accentHex: null,
+        voicePreset: null,
+        name: "Style 3",
+      },
     });
   });
 
-  it("updates the live preview when cycling font pairs", async () => {
+  it("updates the live preview when selecting a different font pair", async () => {
     const user = userEvent.setup();
-
     const { container } = render(<SettingsPage />);
 
-    expect(
-      screen.getByRole("button", { name: "Automatic palette" }),
-    ).toBeInTheDocument();
-    expect(
-      container.querySelector(".dasti-settings-font-card--current"),
-    ).toHaveTextContent("Fraunces Bold");
-    expect(
-      container.querySelector(".dasti-settings-font-card--current"),
-    ).toHaveTextContent("Geist");
-    expect(
-      container.querySelector(".dasti-settings-preview-stage__copy"),
-    ).toBeNull();
-
-    await user.click(
-      screen.getByRole("button", { name: "Show next font pair" }),
+    const activePair = container.querySelector(
+      ".dasti-settings-font-pair-card--active",
     );
+
+    expect(activePair).toHaveTextContent("Fraunces Bold");
+    expect(activePair).toHaveTextContent("Syne Regular");
+    expect(
+      container.querySelector(".dasti-settings-hero-preview__chip"),
+    ).toHaveTextContent("Fraunces Bold / Syne Regular");
+
+    const fontCards = Array.from(
+      container.querySelectorAll<HTMLButtonElement>(
+        ".dasti-settings-font-pair-card",
+      ),
+    );
+
+    await user.click(fontCards[1]!);
 
     await waitFor(() => {
-      expect(updateSettingsMock).toHaveBeenCalledWith({
-        fontPairId: "civic-correspondence",
-      });
+      expect(savePresetMock).toHaveBeenCalled();
     });
-    expect(container.querySelector(".dasti-settings-font-card--current")).toHaveTextContent(
-      "Archivo Bold",
-    );
+
+    const lastCall = savePresetMock.mock.calls.at(-1)?.[0];
+    expect(lastCall).toMatchObject({
+      slot: 1,
+      preset: expect.objectContaining({
+        fontPairId: "civic-correspondence",
+      }),
+    });
     expect(
-      container.querySelector(".dasti-settings-font-card--current"),
-    ).toHaveTextContent("Source Serif 4");
+      container.querySelector(".dasti-settings-hero-preview__chip"),
+    ).toHaveTextContent("Thestral Neue / BioRhyme Light");
   });
 
-  it("shows a capped calm font drawer with five pair options", async () => {
-    const user = userEvent.setup();
-
+  it("renders all ten curated font pairs in the typography grid", () => {
     const { container } = render(<SettingsPage />);
+    const grid = screen.getByRole("group", { name: "Font pair" });
+    const optionButtons = within(grid).getAllByRole("button");
 
-    await user.click(screen.getByRole("button", { name: /Fraunces Bold/i }));
-
-    const drawer = screen.getByRole("group", { name: "Default font pair" });
-    const optionButtons = within(drawer).getAllByRole("button");
-
-    expect(optionButtons).toHaveLength(5);
-    expect(within(drawer).queryByRole("button", { name: /Special Elite/i })).toBeNull();
-    expect(container.querySelector(".dasti-settings-font-carousel")).toBeTruthy();
+    expect(optionButtons).toHaveLength(10);
+    expect(grid).toHaveTextContent("Grave Presse");
+    expect(grid).toHaveTextContent("Bricolage");
+    expect(container.querySelector(".dasti-settings-font-grid")).toBeTruthy();
   });
 
-  it("switches style cards and refreshes the preview label", async () => {
+  it("switches style cards and refreshes the preview badge", async () => {
     const user = userEvent.setup();
-
     const { container } = render(<SettingsPage />);
-    const previewEyebrow = () =>
-      container.querySelector(".dasti-settings-preview-card__eyebrow");
+    const previewBadge = () =>
+      container.querySelector(".dasti-settings-hero-preview__style-badge");
     const editorialStyleButton = screen
       .getAllByRole("button", { name: /Editorial/ })
       .find((element) =>
         element.className.includes("dasti-settings-style-card"),
       );
 
-    expect(previewEyebrow()).toHaveTextContent("Swiss");
+    expect(previewBadge()).toHaveTextContent("Swiss");
     expect(editorialStyleButton).toBeTruthy();
 
     await user.click(editorialStyleButton!);
 
     await waitFor(() => {
-      expect(updateSettingsMock).toHaveBeenCalledWith({
-        styleChoice: "warm",
-      });
+      expect(savePresetMock).toHaveBeenCalled();
     });
-    expect(previewEyebrow()).toHaveTextContent("Editorial");
+
+    const lastCall = savePresetMock.mock.calls.at(-1)?.[0];
+    expect(lastCall).toMatchObject({
+      slot: 1,
+      preset: expect.objectContaining({
+        styleChoice: "warm",
+      }),
+    });
+    expect(previewBadge()).toHaveTextContent("Editorial");
   });
 
-  it("renders mini layout previews inside the style cards", () => {
+  it("renders the layout style cards for the available presets", () => {
     const { container } = render(<SettingsPage />);
 
     expect(
-      container.querySelectorAll(".dasti-settings-style-card__mini").length,
+      container.querySelectorAll(".dasti-settings-style-card").length,
     ).toBeGreaterThanOrEqual(3);
   });
 
-  it("updates the preview business card tilt when the pointer moves", async () => {
+  it("updates the hero preview tilt when the pointer moves", async () => {
     const { container } = render(<SettingsPage />);
-    const previewCard = container.querySelector(".dasti-settings-preview-card");
+    const previewCard = container.querySelector(".dasti-settings-hero-preview");
 
     expect(previewCard).toBeTruthy();
 
@@ -147,7 +185,7 @@ describe("SettingsPage preview controls", () => {
       }),
     });
 
-    fireEvent.pointerMove(previewCard!, {
+    fireEvent.mouseMove(previewCard!, {
       clientX: 248,
       clientY: 42,
     });
