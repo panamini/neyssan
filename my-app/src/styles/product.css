@@ -12742,6 +12742,16 @@ html:not(.dark) .dasti-proposal-submit {
       color-mix(in srgb, rgba(255, 248, 235, 0.10) 60%, var(--hero-accent, hsl(155 22% 42%)) 40%),
       color-mix(in srgb, var(--color-surface) 85%, var(--color-canvas) 15%)
     );
+  border-color: color-mix(in srgb, white 6%, transparent);
+  box-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.03),
+    inset 0 -1px 0 hsl(0 0% 100% / 0.015),
+    var(--shb),
+    0 18px 40px -32px color-mix(
+      in srgb,
+      black 74%,
+      var(--hero-accent, hsl(155 22% 42%)) 26%
+    );
 }
 
 .dark .dasti-settings-hero-preview::before {
