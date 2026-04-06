@@ -899,25 +899,34 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     }
   }, [isEditable, proposalContent, usesDocumentRenderer]);
 
-  const scheduleTextareaSelectionCheck = React.useCallback(() => {
+  const runTextareaSelectionCheck = React.useCallback(() => {
+    if (isPrimaryPointerPressed()) {
+      return;
+    }
+    const nextSelection = getTextareaSelectionState(
+      editableTextareaRef.current,
+    );
+    if (!nextSelection && isInlineAiToolbarActiveElement()) {
+      return;
+    }
+    setTextareaSelectionState(nextSelection);
+  }, []);
+
+  const scheduleTextareaSelectionCheck = React.useCallback((immediate = false) => {
     if (selectionDebounceRef.current !== null) {
       window.clearTimeout(selectionDebounceRef.current);
     }
 
+    if (immediate) {
+      runTextareaSelectionCheck();
+      return;
+    }
+
     selectionDebounceRef.current = window.setTimeout(() => {
       selectionDebounceRef.current = null;
-      if (isPrimaryPointerPressed()) {
-        return;
-      }
-      const nextSelection = getTextareaSelectionState(
-        editableTextareaRef.current,
-      );
-      if (!nextSelection && isInlineAiToolbarActiveElement()) {
-        return;
-      }
-      setTextareaSelectionState(nextSelection);
+      runTextareaSelectionCheck();
     }, 90);
-  }, []);
+  }, [runTextareaSelectionCheck]);
 
   React.useEffect(() => {
     if (!isEditable) {
@@ -946,7 +955,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
 
     const textarea = editableTextareaRef.current;
     const handleReposition = () => {
-      scheduleTextareaSelectionCheck();
+      scheduleTextareaSelectionCheck(true);
     };
     const resizeObserver =
       textarea && typeof ResizeObserver !== "undefined"
@@ -1489,7 +1498,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                       >
                         <div className="dasti-proposal-editor-page__drawer-body">
                           <div className="dasti-proposal-editor-page__drawer-header">
-                            <div>
+                            <div className="dasti-proposal-editor-page__drawer-header-copy">
                               <p className="dasti-proposal-editor-page__drawer-kicker">
                                 Applicant details
                               </p>

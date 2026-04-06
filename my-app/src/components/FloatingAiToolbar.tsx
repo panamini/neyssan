@@ -287,6 +287,8 @@ export function FloatingAiToolbar({
   const promptShellRef = React.useRef<HTMLDivElement | null>(null);
   const actionFrameRef = React.useRef<number | null>(null);
   const promptFrameRef = React.useRef<number | null>(null);
+  const hasAnimatedActionShellRef = React.useRef(false);
+  const hasAnimatedPromptShellRef = React.useRef(false);
 
   const isAskOpen = activeActionId === "ask";
   const isPromptLoading = isLoading && pendingActionId === "custom";
@@ -473,6 +475,8 @@ export function FloatingAiToolbar({
       setMetrics(EMPTY_METRICS);
       setIsActionShellExpanded(false);
       setIsPromptShellExpanded(false);
+      hasAnimatedActionShellRef.current = false;
+      hasAnimatedPromptShellRef.current = false;
     }
   }, [open]);
 
@@ -533,8 +537,14 @@ export function FloatingAiToolbar({
       return undefined;
     }
 
+    if (hasAnimatedActionShellRef.current) {
+      setIsActionShellExpanded(true);
+      return undefined;
+    }
+
     setIsActionShellExpanded(false);
     actionFrameRef.current = window.requestAnimationFrame(() => {
+      hasAnimatedActionShellRef.current = true;
       setIsActionShellExpanded(true);
       actionFrameRef.current = null;
     });
@@ -555,11 +565,18 @@ export function FloatingAiToolbar({
 
     if (!open || !isAskOpen || metrics.promptWidth <= 0) {
       setIsPromptShellExpanded(false);
+      hasAnimatedPromptShellRef.current = false;
+      return undefined;
+    }
+
+    if (hasAnimatedPromptShellRef.current) {
+      setIsPromptShellExpanded(true);
       return undefined;
     }
 
     setIsPromptShellExpanded(false);
     promptFrameRef.current = window.requestAnimationFrame(() => {
+      hasAnimatedPromptShellRef.current = true;
       setIsPromptShellExpanded(true);
       promptFrameRef.current = null;
     });
@@ -614,6 +631,11 @@ export function FloatingAiToolbar({
   if (!open || !anchor) return null;
 
   const isPositionReady = position !== null && metrics.actionWidth > 0;
+  const panelWidth = Math.max(
+    metrics.actionWidth,
+    isAskOpen ? metrics.promptWidth : 0,
+    COLLAPSED_SHELL_WIDTH,
+  );
   const actionShellState =
     isPositionReady && isActionShellExpanded ? "open" : "closed";
   const promptShellState =
@@ -632,6 +654,7 @@ export function FloatingAiToolbar({
           position: "absolute",
           left: position?.left ?? anchor.left,
           top: position?.top ?? anchor.top,
+          width: `${panelWidth}px`,
           ["--dasti-inline-ai-toolbar-pointer-offset" as string]: position
             ? `${position.pointerOffset}px`
             : "50%",
@@ -676,7 +699,7 @@ export function FloatingAiToolbar({
             width: WIDTH_SPRING,
             clipPath: { duration: 0.28, ease: MOTION_EASE },
           }}
-          style={{ overflow: "hidden" }}
+          style={{ overflow: "hidden", justifySelf: "center" }}
         >
           <motion.div
             className="dasti-inline-ai-toolbar__actions"
@@ -793,7 +816,7 @@ export function FloatingAiToolbar({
               clipPath: { duration: 0.28, ease: MOTION_EASE },
               opacity: { duration: 0.18, ease: MOTION_EASE },
             }}
-            style={{ overflow: "hidden" }}
+            style={{ overflow: "hidden", justifySelf: "center" }}
           >
             <motion.label
               className="dasti-inline-ai-toolbar__prompt-shell"

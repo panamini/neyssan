@@ -2760,13 +2760,19 @@
   line-height: 1.55;
 }
 
+.dasti-proposal-source-summary-stack {
+  display: grid;
+  gap: var(--space-2);
+}
+
 .dasti-proposal-source-summary__origin-strip,
 .dasti-proposal-source-summary__job-offer-card {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-2);
-  margin-block-start: var(--space-2);
+  margin: 0
+    var(--proposal-compose-workspace-inline-inset, calc(var(--space-3) - 2px));
   padding: 12px;
   border-radius: calc(var(--radius-card) - 4px);
   border: 1px solid color-mix(in srgb, var(--color-border-selected) 52%, transparent);
@@ -4140,11 +4146,24 @@
 .dasti-proposal-editor-page__drawer-header {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
+  justify-content: center;
   gap: var(--space-3);
+  position: relative;
   padding: 0 0 var(--space-3);
   border-bottom: 1px solid
     color-mix(in srgb, var(--color-border) 72%, transparent);
+}
+
+.dasti-proposal-editor-page__drawer-header-copy {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+}
+
+.dasti-proposal-editor-page__drawer-header .dasti-icon-button {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 0;
 }
 
 .dasti-proposal-editor-page__drawer-kicker {
@@ -4188,6 +4207,8 @@
   min-width: 0;
   display: grid;
   gap: 4px;
+  justify-items: center;
+  text-align: center;
 }
 
 .dasti-proposal-editor-page__drawer-profile-name,
