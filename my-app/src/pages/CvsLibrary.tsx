@@ -204,32 +204,7 @@ export function CvsLibrary(): JSX.Element {
           </div>
         </div>
 
-        {sorted.length === 0 && (
-          <div className="dasti-empty-state">
-            <div className="dasti-empty-state__title">
-              {searchQuery.trim() ? "No resumes match this search" : "No resumes yet"}
-            </div>
-            <p className="dasti-empty-state__subtitle">
-              {searchQuery.trim()
-                ? "Search checks the title, profile details, summary, and recent roles."
-                : "Create or import a resume to start editing and personalizing it."}
-            </p>
-            {!searchQuery.trim() ? (
-              <button
-                onClick={() => {
-                  createNewCv();
-                  void navigate("/cv");
-                }}
-                className="dasti-button dasti-button--primary dasti-button--pill"
-              >
-                <Plus size={14} />
-                Create your first resume
-              </button>
-            ) : null}
-          </div>
-        )}
-
-        {sorted.length > 0 && (
+        {cvs.length > 0 ? (
           <>
             <div className="dasti-proposal-library-utility-row">
               <label className="dasti-proposal-library-utility-row__search">
@@ -264,8 +239,18 @@ export function CvsLibrary(): JSX.Element {
                 {sorted.length} resume{sorted.length === 1 ? "" : "s"}
               </span>
             </div>
-            <div className="dasti-grid-auto">
-              {visibleCvs.map((cv) => {
+            {sorted.length === 0 ? (
+              <div className="dasti-empty-state">
+                <div className="dasti-empty-state__title">
+                  No resumes match this search
+                </div>
+                <p className="dasti-empty-state__subtitle">
+                  Search checks the title, profile details, summary, and recent roles.
+                </p>
+              </div>
+            ) : (
+              <div className="dasti-grid-auto">
+                {visibleCvs.map((cv) => {
               const updatedAt =
                 formatUiDate(
                   cv.metadata?.updatedAt ??
@@ -409,16 +394,34 @@ export function CvsLibrary(): JSX.Element {
                   )}
                 </div>
               );
-              })}
-              {hasMoreCvs ? (
-                <div
-                  ref={loadMoreSentinelRef}
-                  aria-hidden="true"
-                  style={{ height: 1, gridColumn: "1 / -1" }}
-                />
-              ) : null}
-            </div>
+                })}
+                {hasMoreCvs ? (
+                  <div
+                    ref={loadMoreSentinelRef}
+                    aria-hidden="true"
+                    style={{ height: 1, gridColumn: "1 / -1" }}
+                  />
+                ) : null}
+              </div>
+            )}
           </>
+        ) : (
+          <div className="dasti-empty-state">
+            <div className="dasti-empty-state__title">No resumes yet</div>
+            <p className="dasti-empty-state__subtitle">
+              Create or import a resume to start editing and personalizing it.
+            </p>
+            <button
+              onClick={() => {
+                createNewCv();
+                void navigate("/cv");
+              }}
+              className="dasti-button dasti-button--primary dasti-button--pill"
+            >
+              <Plus size={14} />
+              Create your first resume
+            </button>
+          </div>
         )}
       </div>
     </div>

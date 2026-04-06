@@ -197,31 +197,6 @@ export function ProposalsLibrary(): JSX.Element {
           </div>
         )}
 
-        {!authStatusMessage && proposals !== undefined && sorted.length === 0 && (
-          <div className="dasti-empty-state">
-            <FileText size={32} strokeWidth={1.2} />
-            <div className="dasti-empty-state__title">
-              {hasActiveLibraryFilters
-                ? "No proposals match this search"
-                : "No letters or proposals yet"}
-            </div>
-            <p className="dasti-empty-state__subtitle">
-              {hasActiveLibraryFilters
-                ? "Search checks the title, saved text, and imported job offer."
-                : "Generated drafts will appear here with their title, tone, and a readable excerpt."}
-            </p>
-            {!hasActiveLibraryFilters ? (
-              <button
-                onClick={handleCreateProposal}
-                className="dasti-button dasti-button--primary dasti-button--pill"
-              >
-                <Plus size={14} />
-                Write your first letter
-              </button>
-            ) : null}
-          </div>
-        )}
-
         {!authStatusMessage && savedProposalCount > 0 && (
           <>
             <div className="dasti-proposal-library-utility-row">
@@ -271,8 +246,19 @@ export function ProposalsLibrary(): JSX.Element {
                   : `${sorted.length} of ${savedProposalCount}`}
               </span>
             </div>
-            <div className="dasti-grid-auto">
-              {sorted.map((p) => {
+            {sorted.length === 0 ? (
+              <div className="dasti-empty-state">
+                <FileText size={32} strokeWidth={1.2} />
+                <div className="dasti-empty-state__title">
+                  No proposals match this search
+                </div>
+                <p className="dasti-empty-state__subtitle">
+                  Search checks the title, saved text, and imported job offer.
+                </p>
+              </div>
+            ) : (
+              <div className="dasti-grid-auto">
+                {sorted.map((p) => {
               const date = formatUiDate(p._creationTime) ?? "";
               const label = typeLabel(p.metadata?.proposalType);
               const tone = toneLabel(p.metadata?.voicePreset);
@@ -386,10 +372,32 @@ export function ProposalsLibrary(): JSX.Element {
                   )}
                 </div>
               );
-              })}
-            </div>
+                })}
+              </div>
+            )}
           </>
         )}
+
+        {!authStatusMessage &&
+        proposals !== undefined &&
+        savedProposalCount === 0 ? (
+          <div className="dasti-empty-state">
+            <FileText size={32} strokeWidth={1.2} />
+            <div className="dasti-empty-state__title">
+              No letters or proposals yet
+            </div>
+            <p className="dasti-empty-state__subtitle">
+              Generated drafts will appear here with their title, tone, and a readable excerpt.
+            </p>
+            <button
+              onClick={handleCreateProposal}
+              className="dasti-button dasti-button--primary dasti-button--pill"
+            >
+              <Plus size={14} />
+              Write your first letter
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   );
