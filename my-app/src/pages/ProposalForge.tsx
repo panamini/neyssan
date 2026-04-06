@@ -95,7 +95,12 @@ import {
 import { readCssDurationMs } from "../lib/readCssDuration";
 import {
   buildProposalHeaderVisibilityFromContent,
+  buildProposalLetterDateLine,
+  buildProposalRecipientPrefill,
+  buildProposalSalutation,
   hasProposalHeaderVisibilityOverride,
+  readProposalSalutation,
+  replaceProposalSalutation,
   resolveProposalHeaderVisibility,
   type ProposalHeaderVisibility,
 } from "../lib/proposal-header";
@@ -144,6 +149,7 @@ const FALLBACK_PROPOSAL_APPLICANT_HEADER: ProposalApplicantHeaderData = {
   phone: getResumeContactValue("Phone"),
   linkedin: getResumeContactValue("LinkedIn"),
   website: getResumeContactValue("Web", ["Website", "Portfolio"]),
+  location: getResumeContactValue("Location", ["Address", "City"]),
   tag: resumeMock.metadata[1]?.value ?? null,
 };
 
@@ -186,12 +192,8 @@ function normalizeProposalContactLine(value: string | null | undefined): string 
     .join(" · ");
 }
 
-function getDefaultProposalLetterDate(): string {
-  return new Intl.DateTimeFormat(undefined, {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  }).format(new Date());
+function getDefaultProposalLetterDate(location?: string | null): string {
+  return buildProposalLetterDateLine({ location });
 }
 
 function normalizeComposeToolbarVoicePreset(
@@ -256,6 +258,7 @@ type ProposalDocumentMetadata = {
   contactLine?: string;
   letterDate?: string;
   recipientDetails?: string;
+  headerShowSender?: boolean;
   headerShowDate?: boolean;
   headerShowSubject?: boolean;
   headerShowRecipient?: boolean;
@@ -598,6 +601,7 @@ export function ProposalForge(): JSX.Element {
     ...buildProposalHeaderVisibilityFromContent(
       storedOutputDraft?.proposalRecipientDetails ?? null,
     ),
+    showSender: storedOutputDraft?.proposalHeaderShowSender,
     showDate: storedOutputDraft?.proposalHeaderShowDate,
     showSubject: storedOutputDraft?.proposalHeaderShowSubject,
     showRecipient: storedOutputDraft?.proposalHeaderShowRecipient,
@@ -675,7 +679,8 @@ export function ProposalForge(): JSX.Element {
     storedOutputDraft?.proposalContactLine ?? defaultPreviewContactLine,
   );
   const [proposalLetterDate, setProposalLetterDate] = React.useState<string>(
-    storedOutputDraft?.proposalLetterDate || getDefaultProposalLetterDate(),
+    storedOutputDraft?.proposalLetterDate ||
+      getDefaultProposalLetterDate(defaultPreviewApplicantHeader.location),
   );
   const [proposalRecipientDetails, setProposalRecipientDetails] =
     React.useState<string>(storedOutputDraft?.proposalRecipientDetails || "");
@@ -796,6 +801,55 @@ export function ProposalForge(): JSX.Element {
     role: defaultPreviewApplicantHeader.role ?? "",
     contactLine: defaultPreviewContactLine,
   });
+  const proposalHeaderSourceJobTitle =
+    composePreviewValues?.jobTitle?.trim() ||
+    outputSourceComposeDraft?.jobTitle?.trim() ||
+    composeDraftInitialSeed?.jobTitle?.trim() ||
+    storedOutputDraft?.sourceComposeDraft?.jobTitle?.trim() ||
+    prefill?.jobTitle?.trim() ||
+    "";
+  const proposalHeaderSourceDescription =
+    composePreviewValues?.jobDescription?.trim() ||
+    outputSourceComposeDraft?.jobDescription?.trim() ||
+    composeDraftInitialSeed?.jobDescription?.trim() ||
+    storedOutputDraft?.sourceComposeDraft?.jobDescription?.trim() ||
+    prefill?.jobDescription?.trim() ||
+    "";
+  const proposalHeaderSourceSummary = React.useMemo(
+    () =>
+      buildProposalSourceSummary({
+        jobTitle: proposalHeaderSourceJobTitle,
+        jobDescription: proposalHeaderSourceDescription,
+      }),
+    [proposalHeaderSourceDescription, proposalHeaderSourceJobTitle],
+  );
+  const autoProposalRecipientDetails = React.useMemo(
+    () =>
+      buildProposalRecipientPrefill({
+        company: proposalHeaderSourceSummary.company,
+        role: "",
+        address: proposalHeaderSourceSummary.address,
+        email: proposalHeaderSourceSummary.email,
+        city:
+          proposalHeaderSourceSummary.city || proposalHeaderSourceSummary.location,
+      }),
+    [
+      proposalHeaderSourceSummary.address,
+      proposalHeaderSourceSummary.city,
+      proposalHeaderSourceSummary.company,
+      proposalHeaderSourceSummary.email,
+      proposalHeaderSourceSummary.location,
+    ],
+  );
+  const autoProposalLetterDate = React.useMemo(
+    () => getDefaultProposalLetterDate(defaultPreviewApplicantHeader.location),
+    [defaultPreviewApplicantHeader.location],
+  );
+  const lastAutoLetterHeaderRef = React.useRef({
+    recipientDetails: autoProposalRecipientDetails,
+    letterDate: autoProposalLetterDate,
+    salutation: buildProposalSalutation(autoProposalRecipientDetails),
+  });
 
   const handleProposalContactLineChange = React.useCallback((value: string) => {
     setProposalContactLine(value);
@@ -846,6 +900,46 @@ export function ProposalForge(): JSX.Element {
     defaultPreviewApplicantHeader.role,
     defaultPreviewContactLine,
   ]);
+  React.useEffect(() => {
+    const previousAuto = lastAutoLetterHeaderRef.current;
+    const nextAuto = {
+      recipientDetails: autoProposalRecipientDetails,
+      letterDate: autoProposalLetterDate,
+      salutation: buildProposalSalutation(autoProposalRecipientDetails),
+    };
+
+    setProposalRecipientDetails((current) => {
+      const trimmedCurrent = current.trim();
+      if (!trimmedCurrent || trimmedCurrent === previousAuto.recipientDetails) {
+        return nextAuto.recipientDetails;
+      }
+      return current;
+    });
+    setProposalLetterDate((current) => {
+      const trimmedCurrent = current.trim();
+      if (!trimmedCurrent || trimmedCurrent === previousAuto.letterDate) {
+        return nextAuto.letterDate;
+      }
+      return current;
+    });
+    setProposalContent((current) => {
+      if (!current) {
+        return current;
+      }
+
+      const currentSalutation = readProposalSalutation(current);
+      if (!currentSalutation || currentSalutation === previousAuto.salutation) {
+        return replaceProposalSalutation({
+          content: current,
+          salutation: nextAuto.salutation,
+        });
+      }
+
+      return current;
+    });
+
+    lastAutoLetterHeaderRef.current = nextAuto;
+  }, [autoProposalLetterDate, autoProposalRecipientDetails]);
   const [savedProposalContent, setSavedProposalContent] = React.useState<
     string | null
   >(null);
@@ -1375,6 +1469,7 @@ export function ProposalForge(): JSX.Element {
       nextMetadata.recipientDetails = proposalRecipientDetails.trim();
     }
     if (hasProposalHeaderVisibilityOverride(proposalHeaderVisibility)) {
+      nextMetadata.headerShowSender = proposalHeaderVisibility.showSender;
       nextMetadata.headerShowDate = proposalHeaderVisibility.showDate;
       nextMetadata.headerShowSubject = proposalHeaderVisibility.showSubject;
       nextMetadata.headerShowRecipient = proposalHeaderVisibility.showRecipient;
@@ -1612,7 +1707,9 @@ export function ProposalForge(): JSX.Element {
     setProposalApplicantName(defaultPreviewApplicantHeader.name || "");
     setProposalApplicantRole(defaultPreviewApplicantHeader.role || "");
     setProposalContactLine(defaultPreviewContactLine);
-    setProposalLetterDate(getDefaultProposalLetterDate());
+    setProposalLetterDate(
+      getDefaultProposalLetterDate(defaultPreviewApplicantHeader.location),
+    );
     setProposalRecipientDetails("");
     setProposalHeaderVisibility(buildProposalHeaderVisibilityFromContent(null));
     setProposalDocumentTitle("");
@@ -2001,6 +2098,7 @@ export function ProposalForge(): JSX.Element {
         ),
         proposalLetterDate,
         proposalRecipientDetails,
+        proposalHeaderShowSender: proposalHeaderVisibility.showSender,
         proposalHeaderShowDate: proposalHeaderVisibility.showDate,
         proposalHeaderShowSubject: proposalHeaderVisibility.showSubject,
         proposalHeaderShowRecipient: proposalHeaderVisibility.showRecipient,
@@ -2033,7 +2131,9 @@ export function ProposalForge(): JSX.Element {
       setProposalContactLine(
         buildProposalApplicantContactLine(previewApplicantHeader),
       );
-      setProposalLetterDate((current) => current || getDefaultProposalLetterDate());
+      setProposalLetterDate((current) =>
+        current || getDefaultProposalLetterDate(defaultPreviewApplicantHeader.location),
+      );
       setProposalDocumentTitle(nextDocumentTitle);
       setProposalDocumentMeta(nextDocumentMeta);
       setProposalContent(proposal);
@@ -2094,7 +2194,9 @@ export function ProposalForge(): JSX.Element {
       setProposalContactLine(
         buildProposalApplicantContactLine(previewApplicantHeader),
       );
-      setProposalLetterDate((current) => current || getDefaultProposalLetterDate());
+      setProposalLetterDate((current) =>
+        current || getDefaultProposalLetterDate(defaultPreviewApplicantHeader.location),
+      );
       setProposalDocumentTitle(nextDocumentTitle);
       setProposalDocumentMeta(applicantHeader.email ?? "");
       setProposalContent(null);
@@ -2122,6 +2224,14 @@ export function ProposalForge(): JSX.Element {
     },
     [],
   );
+  const handleProposalSalutationChange = React.useCallback((value: string) => {
+    setProposalContent((current) =>
+      replaceProposalSalutation({
+        content: current,
+        salutation: value,
+      }),
+    );
+  }, []);
 
   const handleProposalStop = React.useCallback(() => {
     setLoading(false);
@@ -2322,6 +2432,7 @@ export function ProposalForge(): JSX.Element {
       proposalContactLine,
       proposalLetterDate,
       proposalRecipientDetails,
+      proposalHeaderShowSender: proposalHeaderVisibility.showSender,
       proposalHeaderShowDate: proposalHeaderVisibility.showDate,
       proposalHeaderShowSubject: proposalHeaderVisibility.showSubject,
       proposalHeaderShowRecipient: proposalHeaderVisibility.showRecipient,
@@ -2797,7 +2908,9 @@ export function ProposalForge(): JSX.Element {
       setProposalApplicantName(defaultPreviewApplicantHeader.name || "");
       setProposalApplicantRole(defaultPreviewApplicantHeader.role || "");
       setProposalContactLine(defaultPreviewContactLine);
-      setProposalLetterDate(getDefaultProposalLetterDate());
+      setProposalLetterDate(
+        getDefaultProposalLetterDate(defaultPreviewApplicantHeader.location),
+      );
       setProposalRecipientDetails("");
       setProposalHeaderVisibility(buildProposalHeaderVisibilityFromContent(null));
       setProposalDocumentTitle("");
@@ -3008,6 +3121,14 @@ export function ProposalForge(): JSX.Element {
       proposalApplicantName,
       proposalApplicantRole,
     ],
+  );
+  const proposalSalutationValue = React.useMemo(
+    () => readProposalSalutation(proposalContent),
+    [proposalContent],
+  );
+  const proposalSalutationPlaceholder = React.useMemo(
+    () => buildProposalSalutation(proposalRecipientDetails || autoProposalRecipientDetails),
+    [autoProposalRecipientDetails, proposalRecipientDetails],
   );
   const briefJobTitle =
     composePreviewValues?.jobTitle?.trim() ||
@@ -3657,6 +3778,7 @@ export function ProposalForge(): JSX.Element {
                     contactLine={proposalContactLine || null}
                     letterDate={proposalLetterDate || null}
                     recipientDetails={proposalRecipientDetails || null}
+                    salutationValue={proposalSalutationValue || null}
                     applicantHeader={proposalDisplayApplicantHeader}
                     headerVisibility={proposalHeaderVisibility}
                     fallbackInfo={fallbackInfo}
@@ -3695,6 +3817,9 @@ export function ProposalForge(): JSX.Element {
                     onLetterDateChange={setProposalLetterDate}
                     recipientDetailsEditable={proposalOutputMode === "edit"}
                     onRecipientDetailsChange={setProposalRecipientDetails}
+                    salutationEditable={proposalOutputMode === "edit"}
+                    salutationPlaceholder={proposalSalutationPlaceholder}
+                    onSalutationChange={handleProposalSalutationChange}
                     onHeaderVisibilityChange={(value) => {
                       setProposalHeaderVisibility((current) => ({
                         ...current,

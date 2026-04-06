@@ -4226,13 +4226,41 @@
 .dasti-proposal-editor-page__toggle {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 78%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--sfr) 78%, transparent);
   font-size: var(--ts);
   color: var(--tm2);
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
 }
 
-.dasti-proposal-editor-page__toggle input {
-  margin: 0;
+.dasti-proposal-editor-page__toggle:hover:not(:disabled),
+.dasti-proposal-editor-page__toggle:focus-visible {
+  border-color: color-mix(in srgb, var(--color-border-contrast) 82%, transparent);
+  color: var(--ti);
+}
+
+.dasti-proposal-editor-page__toggle--active {
+  border-color: color-mix(
+    in srgb,
+    var(--color-border-contrast) 86%,
+    transparent
+  );
+  background: color-mix(in srgb, var(--sfr) 96%, transparent);
+  color: var(--ti);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 44%, transparent);
+}
+
+.dasti-proposal-editor-page__toggle:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
 }
 
 .dasti-proposal-editor-page__field {
@@ -4534,6 +4562,26 @@
   );
   padding-inline-end: calc(
     var(--proposal-inline-mm) * var(--proposal-template-right-margin-mm)
+  );
+}
+
+.dasti-proposal-document__body--classic-letter {
+  padding-block-start: 0;
+}
+
+.dasti-proposal-document__header-stack {
+  display: grid;
+  align-content: start;
+  min-block-size: max(
+    0px,
+    calc(
+      var(--proposal-block-mm) *
+        (
+          var(--proposal-template-body-start-mm) - 35 -
+            var(--proposal-fit-body-start-adjust-mm, 0) -
+            var(--proposal-fit-fine-body-start-adjust-mm, 0)
+        )
+    )
   );
 }
 
@@ -5074,6 +5122,13 @@
           var(--proposal-fit-fine-body-start-adjust-mm) - 4.5
       )
   );
+}
+
+.dasti-proposal-document--message
+  .dasti-proposal-document__body--classic-letter,
+.dasti-proposal-document--proposal
+  .dasti-proposal-document__body--classic-letter {
+  padding-block-start: 0;
 }
 
 .dasti-proposal-document--proposal

@@ -103,6 +103,7 @@ export type ProposalApplicantHeaderData = {
   phone: string | null;
   linkedin: string | null;
   website: string | null;
+  location: string | null;
   tag: string | null;
 };
 
@@ -506,6 +507,7 @@ function readProfileContact(doc: CvDocument): {
   phone?: string;
   linkedin?: string;
   website?: string;
+  location?: string;
 } {
   const profileSection = getSectionByType(doc, "profile");
   const profileItem = asRecord(getStructuredItems(profileSection)[0]);
@@ -521,6 +523,9 @@ function readProfileContact(doc: CvDocument): {
       : {}),
     ...(clampText(readStringField(profileItem, "website"), 120)
       ? { website: clampText(readStringField(profileItem, "website"), 120) }
+      : {}),
+    ...(clampText(readStringField(profileItem, "location"), 120)
+      ? { location: clampText(readStringField(profileItem, "location"), 120) }
       : {}),
   };
 }
@@ -746,6 +751,7 @@ export function getActiveLocalPersonalizationSource(): {
   phone?: string | null;
   linkedin?: string | null;
   website?: string | null;
+  location?: string | null;
 } {
   if (!hasLocalStorage()) {
     return { title: null, personalizationContext: null };
@@ -781,6 +787,7 @@ export function getActiveLocalPersonalizationSource(): {
     phone: contact.phone ?? null,
     linkedin: contact.linkedin ?? null,
     website: contact.website ?? null,
+    location: contact.location ?? null,
   };
 }
 
@@ -808,6 +815,7 @@ export function getProposalApplicantHeaderData(source: {
   phone?: string | null;
   linkedin?: string | null;
   website?: string | null;
+  location?: string | null;
 }): ProposalApplicantHeaderData {
   const identity = getProposalApplicantIdentity(source);
   const context = source.personalizationContext;
@@ -819,6 +827,7 @@ export function getProposalApplicantHeaderData(source: {
     phone: compactDisplayPart(source.phone ?? undefined, 48) ?? null,
     linkedin: compactDisplayPart(source.linkedin ?? undefined, 120) ?? null,
     website: compactDisplayPart(source.website ?? undefined, 120) ?? null,
+    location: compactDisplayPart(source.location ?? undefined, 120) ?? null,
     tag:
       compactDisplayPart(context?.topSkills?.[0], 48) ??
       compactDisplayPart(context?.recentExperience?.[0]?.company, 48) ??
