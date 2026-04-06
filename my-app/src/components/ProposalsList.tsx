@@ -91,6 +91,7 @@ type SavedProposalRecord = {
     contactLine?: string;
     letterDate?: string;
     recipientDetails?: string;
+    headerShowSender?: boolean;
     headerShowDate?: boolean;
     headerShowSubject?: boolean;
     headerShowRecipient?: boolean;
@@ -162,6 +163,7 @@ function resolveSavedHeaderVisibility(proposal: SavedProposalRecord | null) {
     ...buildProposalHeaderVisibilityFromContent(
       normalizeSavedTextValue(proposal?.metadata?.recipientDetails) ?? null,
     ),
+    showSender: proposal?.metadata?.headerShowSender,
     showDate: proposal?.metadata?.headerShowDate,
     showSubject: proposal?.metadata?.headerShowSubject,
     showRecipient: proposal?.metadata?.headerShowRecipient,
@@ -518,6 +520,12 @@ export default function ProposalsList({
         letterDate: normalizeSavedTextValue(outputDraft.proposalLetterDate) ?? undefined,
         recipientDetails:
           normalizeSavedTextValue(outputDraft.proposalRecipientDetails) ?? undefined,
+        headerShowSender: outputDraft.proposalHeaderShowSender,
+        headerShowDate: outputDraft.proposalHeaderShowDate,
+        headerShowSubject: outputDraft.proposalHeaderShowSubject,
+        headerShowRecipient: outputDraft.proposalHeaderShowRecipient,
+        headerShowRecipientDetails:
+          outputDraft.proposalHeaderShowRecipientDetails,
       },
     };
   }, [selectedProposalId]);

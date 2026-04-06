@@ -43,6 +43,8 @@ import {
 import { resolveProposalCharacterLimitSelection } from "../../convex/lib/proposals/generationControls";
 import type { ProposalApplicantHeaderData } from "../lib/proposal-personalization";
 import {
+  buildProposalRecipientDetails,
+  parseProposalRecipientDetails,
   resolveProposalHeaderVisibility,
   type ProposalHeaderVisibility,
 } from "../lib/proposal-header";
@@ -66,6 +68,7 @@ interface ProposalDisplayProps {
   contactLine?: string | null;
   letterDate?: string | null;
   recipientDetails?: string | null;
+  salutationValue?: string | null;
   documentTitle?: string | null;
   documentMeta?: string | null;
   applicantHeader?: ProposalApplicantHeaderData | null;
@@ -101,6 +104,9 @@ interface ProposalDisplayProps {
   onLetterDateChange?: (value: string) => void;
   recipientDetailsEditable?: boolean;
   onRecipientDetailsChange?: (value: string) => void;
+  salutationEditable?: boolean;
+  salutationPlaceholder?: string;
+  onSalutationChange?: (value: string) => void;
   onHeaderVisibilityChange?: (
     value:
       | Partial<ProposalHeaderVisibility>
@@ -348,6 +354,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   contactLine = null,
   letterDate = null,
   recipientDetails = null,
+  salutationValue = null,
   documentTitle = null,
   documentMeta = null,
   applicantHeader = null,
@@ -383,6 +390,9 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   onLetterDateChange,
   recipientDetailsEditable = false,
   onRecipientDetailsChange,
+  salutationEditable = false,
+  salutationPlaceholder = "Dear Hiring Manager,",
+  onSalutationChange,
   onHeaderVisibilityChange,
   showDocumentCaption = true,
   characterLimit,
@@ -530,6 +540,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       contactLineEditable ||
       letterDateEditable ||
       recipientDetailsEditable ||
+      salutationEditable ||
       onRailTitleChange ||
       onRailMetaChange,
   );
@@ -540,6 +551,10 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   const resolvedHeaderVisibility = React.useMemo(
     () => resolveProposalHeaderVisibility(headerVisibility),
     [headerVisibility],
+  );
+  const recipientFields = React.useMemo(
+    () => parseProposalRecipientDetails(recipientDetails),
+    [recipientDetails],
   );
   const handleHeaderVisibilityChange = React.useCallback(
     (nextValue: Partial<ProposalHeaderVisibility>) => {
@@ -558,6 +573,26 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       });
     },
     [onHeaderVisibilityChange],
+  );
+  const handleRecipientFieldChange = React.useCallback(
+    (
+      field:
+        | "name"
+        | "role"
+        | "company"
+        | "address"
+        | "email"
+        | "city",
+      value: string,
+    ) => {
+      onRecipientDetailsChange?.(
+        buildProposalRecipientDetails({
+          ...recipientFields,
+          [field]: value,
+        }),
+      );
+    },
+    [onRecipientDetailsChange, recipientFields],
   );
   const applicantDrawerId = React.useId();
   const usesFixedA4ScalePreview =
@@ -1489,61 +1524,111 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                           </div>
                           {onHeaderVisibilityChange ? (
                             <div className="dasti-proposal-editor-page__header-toggles">
-                              <label className="dasti-proposal-editor-page__toggle">
-                                <input
-                                  type="checkbox"
-                                  checked={resolvedHeaderVisibility.showDate}
-                                  onChange={(event) =>
-                                    handleHeaderVisibilityChange({
-                                      showDate: event.target.checked,
-                                    })
-                                  }
-                                />
-                                <span>Date</span>
-                              </label>
-                              <label className="dasti-proposal-editor-page__toggle">
-                                <input
-                                  type="checkbox"
-                                  checked={resolvedHeaderVisibility.showSubject}
-                                  onChange={(event) =>
-                                    handleHeaderVisibilityChange({
-                                      showSubject: event.target.checked,
-                                    })
-                                  }
-                                />
-                                <span>Subject</span>
-                              </label>
-                              <label className="dasti-proposal-editor-page__toggle">
-                                <input
-                                  type="checkbox"
-                                  checked={resolvedHeaderVisibility.showRecipient}
-                                  onChange={(event) =>
-                                    handleHeaderVisibilityChange({
-                                      showRecipient: event.target.checked,
-                                    })
-                                  }
-                                />
-                                <span>To</span>
-                              </label>
-                              <label className="dasti-proposal-editor-page__toggle">
-                                <input
-                                  type="checkbox"
-                                  checked={
-                                    resolvedHeaderVisibility.showRecipient &&
-                                    resolvedHeaderVisibility.showRecipientDetails
-                                  }
-                                  onChange={(event) =>
-                                    handleHeaderVisibilityChange({
-                                      showRecipient:
-                                        event.target.checked ||
-                                        resolvedHeaderVisibility.showRecipient,
-                                      showRecipientDetails: event.target.checked,
-                                    })
-                                  }
-                                  disabled={!resolvedHeaderVisibility.showRecipient}
-                                />
-                                <span>Employer details</span>
-                              </label>
+                              <button
+                                type="button"
+                                className={[
+                                  "dasti-proposal-editor-page__toggle",
+                                  resolvedHeaderVisibility.showSender
+                                    ? "dasti-proposal-editor-page__toggle--active"
+                                    : "",
+                                ]
+                                  .filter(Boolean)
+                                  .join(" ")}
+                                aria-pressed={resolvedHeaderVisibility.showSender}
+                                onClick={() =>
+                                  handleHeaderVisibilityChange({
+                                    showSender: !resolvedHeaderVisibility.showSender,
+                                  })
+                                }
+                              >
+                                From
+                              </button>
+                              <button
+                                type="button"
+                                className={[
+                                  "dasti-proposal-editor-page__toggle",
+                                  resolvedHeaderVisibility.showRecipient
+                                    ? "dasti-proposal-editor-page__toggle--active"
+                                    : "",
+                                ]
+                                  .filter(Boolean)
+                                  .join(" ")}
+                                aria-pressed={resolvedHeaderVisibility.showRecipient}
+                                onClick={() =>
+                                  handleHeaderVisibilityChange({
+                                    showRecipient:
+                                      !resolvedHeaderVisibility.showRecipient,
+                                  })
+                                }
+                              >
+                                To
+                              </button>
+                              <button
+                                type="button"
+                                className={[
+                                  "dasti-proposal-editor-page__toggle",
+                                  resolvedHeaderVisibility.showRecipient &&
+                                  resolvedHeaderVisibility.showRecipientDetails
+                                    ? "dasti-proposal-editor-page__toggle--active"
+                                    : "",
+                                ]
+                                  .filter(Boolean)
+                                  .join(" ")}
+                                aria-pressed={
+                                  resolvedHeaderVisibility.showRecipient &&
+                                  resolvedHeaderVisibility.showRecipientDetails
+                                }
+                                onClick={() =>
+                                  handleHeaderVisibilityChange({
+                                    showRecipient:
+                                      !resolvedHeaderVisibility.showRecipientDetails ||
+                                      resolvedHeaderVisibility.showRecipient,
+                                    showRecipientDetails:
+                                      !resolvedHeaderVisibility.showRecipientDetails,
+                                  })
+                                }
+                                disabled={!resolvedHeaderVisibility.showRecipient}
+                              >
+                                Recipient details
+                              </button>
+                              <button
+                                type="button"
+                                className={[
+                                  "dasti-proposal-editor-page__toggle",
+                                  resolvedHeaderVisibility.showSubject
+                                    ? "dasti-proposal-editor-page__toggle--active"
+                                    : "",
+                                ]
+                                  .filter(Boolean)
+                                  .join(" ")}
+                                aria-pressed={resolvedHeaderVisibility.showSubject}
+                                onClick={() =>
+                                  handleHeaderVisibilityChange({
+                                    showSubject: !resolvedHeaderVisibility.showSubject,
+                                  })
+                                }
+                              >
+                                Subject
+                              </button>
+                              <button
+                                type="button"
+                                className={[
+                                  "dasti-proposal-editor-page__toggle",
+                                  resolvedHeaderVisibility.showDate
+                                    ? "dasti-proposal-editor-page__toggle--active"
+                                    : "",
+                                ]
+                                  .filter(Boolean)
+                                  .join(" ")}
+                                aria-pressed={resolvedHeaderVisibility.showDate}
+                                onClick={() =>
+                                  handleHeaderVisibilityChange({
+                                    showDate: !resolvedHeaderVisibility.showDate,
+                                  })
+                                }
+                              >
+                                Date / location
+                              </button>
                             </div>
                           ) : null}
                           <div className="dasti-proposal-editor-page__header-fields">
@@ -1582,7 +1667,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                             {letterDateEditable ? (
                               <label className="dasti-proposal-editor-page__field">
                                 <span className="dasti-proposal-editor-page__field-label">
-                                  Date
+                                  Date / location
                                 </span>
                                 <input
                                   type="text"
@@ -1591,7 +1676,23 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                                     onLetterDateChange?.(event.target.value)
                                   }
                                   className="dasti-proposal-editor-page__field-input"
-                                  placeholder="April 5, 2026"
+                                  placeholder="Paris, April 6, 2026"
+                                />
+                              </label>
+                            ) : null}
+                            {salutationEditable ? (
+                              <label className="dasti-proposal-editor-page__field dasti-proposal-editor-page__field--wide">
+                                <span className="dasti-proposal-editor-page__field-label">
+                                  Salutation
+                                </span>
+                                <input
+                                  type="text"
+                                  value={salutationValue ?? ""}
+                                  onChange={(event) =>
+                                    onSalutationChange?.(event.target.value)
+                                  }
+                                  className="dasti-proposal-editor-page__field-input"
+                                  placeholder={salutationPlaceholder}
                                 />
                               </label>
                             ) : null}
@@ -1613,22 +1714,128 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                               </label>
                             ) : null}
                             {recipientDetailsEditable ? (
-                              <label className="dasti-proposal-editor-page__field dasti-proposal-editor-page__field--wide">
-                                <span className="dasti-proposal-editor-page__field-label">
-                                  To
-                                </span>
-                                <textarea
-                                  value={recipientDetails ?? ""}
-                                  onChange={(event) =>
-                                    onRecipientDetailsChange?.(
-                                      event.target.value,
-                                    )
-                                  }
-                                  className="dasti-proposal-editor-page__field-input dasti-proposal-editor-page__field-textarea"
-                                  placeholder={"Hiring Manager\nTitle\nCompany\nemail or address"}
-                                  rows={4}
-                                />
-                              </label>
+                              <>
+                                <label className="dasti-proposal-editor-page__field">
+                                  <span className="dasti-proposal-editor-page__field-label">
+                                    Recipient
+                                  </span>
+                                  <input
+                                    type="text"
+                                    value={recipientFields.name}
+                                    onChange={(event) =>
+                                      handleRecipientFieldChange(
+                                        "name",
+                                        event.target.value,
+                                      )
+                                    }
+                                    className="dasti-proposal-editor-page__field-input"
+                                    placeholder="Hiring Manager"
+                                  />
+                                </label>
+                                <label className="dasti-proposal-editor-page__field">
+                                  <span className="dasti-proposal-editor-page__field-label">
+                                    Hiring role
+                                  </span>
+                                  <input
+                                    type="text"
+                                    value={recipientFields.role}
+                                    onChange={(event) =>
+                                      handleRecipientFieldChange(
+                                        "role",
+                                        event.target.value,
+                                      )
+                                    }
+                                    className="dasti-proposal-editor-page__field-input"
+                                    placeholder="Head of Talent"
+                                  />
+                                </label>
+                                <label className="dasti-proposal-editor-page__field">
+                                  <span className="dasti-proposal-editor-page__field-label">
+                                    Company
+                                  </span>
+                                  <input
+                                    type="text"
+                                    value={recipientFields.company}
+                                    onChange={(event) =>
+                                      handleRecipientFieldChange(
+                                        "company",
+                                        event.target.value,
+                                      )
+                                    }
+                                    className="dasti-proposal-editor-page__field-input"
+                                    placeholder="Northwind"
+                                  />
+                                </label>
+                                <label className="dasti-proposal-editor-page__field">
+                                  <span className="dasti-proposal-editor-page__field-label">
+                                    City
+                                  </span>
+                                  <input
+                                    type="text"
+                                    value={recipientFields.city}
+                                    onChange={(event) =>
+                                      handleRecipientFieldChange(
+                                        "city",
+                                        event.target.value,
+                                      )
+                                    }
+                                    className="dasti-proposal-editor-page__field-input"
+                                    placeholder="Paris"
+                                  />
+                                </label>
+                                <label className="dasti-proposal-editor-page__field dasti-proposal-editor-page__field--wide">
+                                  <span className="dasti-proposal-editor-page__field-label">
+                                    Address
+                                  </span>
+                                  <input
+                                    type="text"
+                                    value={recipientFields.address}
+                                    onChange={(event) =>
+                                      handleRecipientFieldChange(
+                                        "address",
+                                        event.target.value,
+                                      )
+                                    }
+                                    className="dasti-proposal-editor-page__field-input"
+                                    placeholder="12 Rue de la Paix"
+                                  />
+                                </label>
+                                <label className="dasti-proposal-editor-page__field dasti-proposal-editor-page__field--wide">
+                                  <span className="dasti-proposal-editor-page__field-label">
+                                    Employer email
+                                  </span>
+                                  <input
+                                    type="email"
+                                    value={recipientFields.email}
+                                    onChange={(event) =>
+                                      handleRecipientFieldChange(
+                                        "email",
+                                        event.target.value,
+                                      )
+                                    }
+                                    className="dasti-proposal-editor-page__field-input"
+                                    placeholder="hiring@northwind.com"
+                                  />
+                                </label>
+                                <label className="dasti-proposal-editor-page__field dasti-proposal-editor-page__field--wide">
+                                  <span className="dasti-proposal-editor-page__field-label">
+                                    Recipient block
+                                  </span>
+                                  <textarea
+                                    value={recipientDetails ?? ""}
+                                    onChange={(event) =>
+                                      onRecipientDetailsChange?.(
+                                        event.target.value,
+                                      )
+                                    }
+                                    className="dasti-proposal-editor-page__field-input dasti-proposal-editor-page__field-textarea"
+                                    placeholder={
+                                      "Hiring Manager\nHead of Talent\nNorthwind\n12 Rue de la Paix\nhiring@northwind.com\nParis"
+                                    }
+                                    rows={6}
+                                  />
+                                </label>
+                              </>
                             ) : null}
                             {documentTitleEditable ? (
                               <label className="dasti-proposal-editor-page__field dasti-proposal-editor-page__field--wide">

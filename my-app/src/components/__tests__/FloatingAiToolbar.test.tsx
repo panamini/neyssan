@@ -5,6 +5,8 @@ import FloatingAiToolbar, {
   INLINE_AI_ACTIONS,
 } from "../FloatingAiToolbar";
 
+let toolbarMeasurable = true;
+
 vi.mock("@/components/ui/body-portal", () => ({
   BodyPortal: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -12,14 +14,21 @@ vi.mock("@/components/ui/body-portal", () => ({
 
 describe("FloatingAiToolbar", () => {
   beforeEach(() => {
+    toolbarMeasurable = true;
     vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(
       function offsetWidthMock() {
-        return (this as HTMLElement).dataset.inlineAiToolbar === "true" ? 220 : 0;
+        return (this as HTMLElement).dataset.inlineAiToolbar === "true" &&
+          toolbarMeasurable
+          ? 220
+          : 0;
       },
     );
     vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(
       function offsetHeightMock() {
-        return (this as HTMLElement).dataset.inlineAiToolbar === "true" ? 48 : 0;
+        return (this as HTMLElement).dataset.inlineAiToolbar === "true" &&
+          toolbarMeasurable
+          ? 48
+          : 0;
       },
     );
   });
@@ -166,6 +175,29 @@ describe("FloatingAiToolbar", () => {
     fireEvent.pointerDown(screen.getByRole("button", { name: "Outside target" }));
 
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("stays hidden until it has a measured anchored position", async () => {
+    toolbarMeasurable = false;
+
+    render(
+      <FloatingAiToolbar
+        anchor={{ left: 120, top: 80, bottom: 96 }}
+        open
+        onClose={vi.fn()}
+        onRunAction={vi.fn()}
+      />,
+    );
+
+    const toolbar = screen.getByRole("toolbar", { hidden: true });
+    expect(toolbar).toHaveStyle({ visibility: "hidden" });
+
+    toolbarMeasurable = true;
+    fireEvent(window, new Event("resize"));
+
+    await waitFor(() => {
+      expect(toolbar).toHaveStyle({ visibility: "visible" });
+    });
   });
 
   it("prefers a roomier above placement when space is available", async () => {

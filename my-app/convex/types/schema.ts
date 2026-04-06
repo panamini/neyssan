@@ -78,6 +78,7 @@ export interface ProposalDoc extends Doc<"proposals"> {
     contactLine?: string;
     letterDate?: string;
     recipientDetails?: string;
+    headerShowSender?: boolean;
     headerShowDate?: boolean;
     headerShowSubject?: boolean;
     headerShowRecipient?: boolean;
