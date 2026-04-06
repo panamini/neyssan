@@ -48,6 +48,7 @@ describe("ProposalDocumentRenderer volk register layout", () => {
           phone: "+33 6 00 00 00 00",
           linkedin: null,
           website: "janedoe.dev",
+          location: "Paris",
           tag: null,
         }}
         documentTypography={{
@@ -121,10 +122,13 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     expect(structuredHeader?.textContent).toContain("April 6, 2026");
     expect(structuredHeader?.textContent).toContain("To");
     expect(structuredHeader?.textContent).toContain("Avery Stone");
+    expect(structuredHeader?.textContent).toContain("Hiring Manager");
+    expect(structuredHeader?.textContent).toContain("Northwind");
     expect(structuredHeader?.textContent).toContain("Subject");
     expect(structuredHeader?.textContent).toContain(
       "Application for Operations Specialist",
     );
+    expect(container.textContent).not.toContain("35 mm register");
   });
 
   it("respects header visibility flags in non-volk templates", () => {
@@ -141,6 +145,7 @@ describe("ProposalDocumentRenderer volk register layout", () => {
         recipientDetails={"Avery Stone\nHiring Manager\nNorthwind"}
         documentTitle="Application for Operations Specialist"
         headerVisibility={{
+          showSender: true,
           showDate: false,
           showSubject: false,
           showRecipient: true,
@@ -162,12 +167,13 @@ describe("ProposalDocumentRenderer volk register layout", () => {
 
     expect(structuredHeader?.textContent).toContain("To");
     expect(structuredHeader?.textContent).toContain("Avery Stone");
+    expect(structuredHeader?.textContent).toContain("Hiring Manager");
+    expect(structuredHeader?.textContent).toContain("Northwind");
     expect(structuredHeader?.textContent).not.toContain("Date");
     expect(structuredHeader?.textContent).not.toContain("April 6, 2026");
     expect(structuredHeader?.textContent).not.toContain("Subject");
     expect(structuredHeader?.textContent).not.toContain(
       "Application for Operations Specialist",
     );
-    expect(structuredHeader?.textContent).not.toContain("Hiring Manager");
   });
 });

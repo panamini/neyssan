@@ -167,6 +167,7 @@ export default defineSchema({
       contactLine: v.optional(v.string()),
       letterDate: v.optional(v.string()),
       recipientDetails: v.optional(v.string()),
+      headerShowSender: v.optional(v.boolean()),
       headerShowDate: v.optional(v.boolean()),
       headerShowSubject: v.optional(v.boolean()),
       headerShowRecipient: v.optional(v.boolean()),

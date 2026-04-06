@@ -9,6 +9,7 @@ import type { ProposalDocumentTypography } from "../../lib/proposal-document-typ
 import { VOLK_REGISTER_GRID } from "../../features/verbati/volkGrid";
 import type { ProposalApplicantHeaderData } from "../../lib/proposal-personalization";
 import {
+  parseProposalRecipientDetails,
   resolveProposalHeaderVisibility,
   resolveProposalRecipientLines,
   type ProposalHeaderVisibility,
@@ -72,8 +73,8 @@ type VolkRegisterMetaEntry = {
 type StructuredHeaderValues = {
   date: string;
   subject: string;
-  to: string;
-  recipientDetails: string;
+  toLines: string[];
+  recipientDetailLines: string[];
 };
 
 function resolveLineHeightPx(styles: CSSStyleDeclaration) {
@@ -215,22 +216,30 @@ function buildStructuredHeaderValues(args: {
   headerVisibility?: ProposalHeaderVisibility | null;
 }): StructuredHeaderValues | null {
   const visibility = resolveProposalHeaderVisibility(args.headerVisibility);
-  const { primary, secondaryLines } = resolveProposalRecipientLines(
-    args.recipientDetails,
-  );
+  const recipientFields = parseProposalRecipientDetails(args.recipientDetails);
   const date = visibility.showDate ? args.letterDate?.trim() ?? "" : "";
   const subject = visibility.showSubject ? args.documentTitle?.trim() ?? "" : "";
-  const to = visibility.showRecipient ? primary : "";
-  const recipientDetails =
+  const toLines = visibility.showRecipient
+    ? [
+        recipientFields.name,
+        recipientFields.role,
+        recipientFields.company,
+      ].filter(Boolean)
+    : [];
+  const recipientDetailLines =
     visibility.showRecipient && visibility.showRecipientDetails
-      ? secondaryLines.join("\n")
-      : "";
+      ? [
+          recipientFields.address,
+          recipientFields.email,
+          recipientFields.city,
+        ].filter(Boolean)
+      : [];
 
-  if (!date && !subject && !to && !recipientDetails) {
+  if (!date && !subject && toLines.length === 0 && recipientDetailLines.length === 0) {
     return null;
   }
 
-  return { date, subject, to, recipientDetails };
+  return { date, subject, toLines, recipientDetailLines };
 }
 
 function splitParagraphIntoPaginationFragments(paragraph: string): string[] {
@@ -621,17 +630,13 @@ export function ProposalDocumentRenderer({
       const { bottomBoundary } = getPageBottomBoundary(measurementPage);
       const bodyRect = measurementBody.getBoundingClientRect();
       const measurementBodyStyles = window.getComputedStyle(measurementBody);
-      const senderHeaderHeight =
+      const headerStackHeight =
         measurementBody.querySelector<HTMLElement>(
-          ".dasti-proposal-document__sender-header",
-        )?.getBoundingClientRect().height ?? 0;
-      const structuredHeaderHeight =
-        measurementBody.querySelector<HTMLElement>(
-          ".dasti-proposal-document__structured-header",
+          ".dasti-proposal-document__header-stack",
         )?.getBoundingClientRect().height ?? 0;
       const firstPageLeadIn = Number.parseFloat(
         measurementBodyStyles.paddingTop || "0",
-      ) + senderHeaderHeight + structuredHeaderHeight;
+      ) + headerStackHeight;
       const pageBreakSafetyReserve = Math.max(
         4,
         Math.round(resolveLineHeightPx(measurementBodyStyles) * 0.7),
@@ -957,15 +962,20 @@ export function ProposalDocumentRenderer({
             </p>
           </div>
         ) : null}
-        {structuredHeaderValues.to ? (
+        {structuredHeaderValues.toLines.length > 0 ? (
           <div className="dasti-proposal-document__structured-header-item">
             <p className="dasti-proposal-document__structured-header-label">To</p>
-            <p className="dasti-proposal-document__structured-header-value">
-              {structuredHeaderValues.to}
-            </p>
-            {structuredHeaderValues.recipientDetails ? (
+            {structuredHeaderValues.toLines.map((line, index) => (
+              <p
+                key={`recipient-line-${index}`}
+                className="dasti-proposal-document__structured-header-value"
+              >
+                {line}
+              </p>
+            ))}
+            {structuredHeaderValues.recipientDetailLines.length > 0 ? (
               <p className="dasti-proposal-document__structured-header-value dasti-proposal-document__structured-header-value--multiline dasti-proposal-document__structured-header-value--secondary">
-                {structuredHeaderValues.recipientDetails}
+                {structuredHeaderValues.recipientDetailLines.join("\n")}
               </p>
             ) : null}
           </div>
@@ -983,6 +993,15 @@ export function ProposalDocumentRenderer({
       </div>
     );
   }, [structuredHeaderValues]);
+  const renderClassicHeaderStack = React.useCallback(
+    () => (
+      <div className="dasti-proposal-document__header-stack">
+        {resolvedHeaderVisibility.showSender ? renderSenderHeader() : null}
+        {renderStructuredHeader()}
+      </div>
+    ),
+    [renderSenderHeader, renderStructuredHeader, resolvedHeaderVisibility.showSender],
+  );
   const renderGenericDocumentShell = React.useCallback(
     (args: {
       bodyRef?: React.Ref<HTMLDivElement> | null;
@@ -994,10 +1013,9 @@ export function ProposalDocumentRenderer({
         {renderGenericRail(args.isContinuationPage)}
         <div
           ref={args.bodyRef ?? undefined}
-          className="dasti-proposal-document__body"
+          className="dasti-proposal-document__body dasti-proposal-document__body--classic-letter"
         >
-          {!args.isContinuationPage ? renderSenderHeader() : null}
-          {!args.isContinuationPage ? renderStructuredHeader() : null}
+          {!args.isContinuationPage ? renderClassicHeaderStack() : null}
           {args.pageBlocks.length > 0 ? (
             args.measurement
               ? args.pageBlocks.map((block) => renderDocumentBlock(block))
@@ -1017,9 +1035,8 @@ export function ProposalDocumentRenderer({
       content,
       parsedDocument.rawBody,
       renderDocumentBlock,
+      renderClassicHeaderStack,
       renderGenericRail,
-      renderSenderHeader,
-      renderStructuredHeader,
       renderVisibleDocumentBlocks,
     ],
   );
@@ -1127,7 +1144,9 @@ export function ProposalDocumentRenderer({
             templateDefinition.leftZoneMm,
           ),
           "--proposal-template-top-offset-mm": String(
-            templateDefinition.topOffsetMm,
+            resolvedTemplateId === "volk_register"
+              ? templateDefinition.topOffsetMm
+              : 35,
           ),
           "--proposal-template-body-start-mm": String(
             templateDefinition.bodyStartMm,
