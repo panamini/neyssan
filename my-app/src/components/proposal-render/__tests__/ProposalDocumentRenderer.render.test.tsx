@@ -85,4 +85,42 @@ describe("ProposalDocumentRenderer volk register layout", () => {
       "subject:Human Resources Administrator",
     );
   });
+
+  it("renders a structured header for non-volk templates", () => {
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content={
+          "Dear Hiring Manager,\n\nI support delivery operations with careful written communication.\n\nBest regards,\nJane Doe"
+        }
+        proposalType="cover_letter"
+        templateId="swiss_margin"
+        railTitle="Jane Doe"
+        railMeta="Operations Specialist"
+        letterDate="April 6, 2026"
+        recipientDetails={"Avery Stone\nHiring Manager\nNorthwind"}
+        documentTitle="Application for Operations Specialist"
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+      />,
+    );
+
+    const structuredHeader = container.querySelector(
+      ".dasti-proposal-document__structured-header",
+    );
+
+    expect(structuredHeader?.textContent).toContain("Date");
+    expect(structuredHeader?.textContent).toContain("April 6, 2026");
+    expect(structuredHeader?.textContent).toContain("To");
+    expect(structuredHeader?.textContent).toContain("Avery Stone");
+    expect(structuredHeader?.textContent).toContain("Hiring Manager");
+    expect(structuredHeader?.textContent).toContain("Subject");
+    expect(structuredHeader?.textContent).toContain(
+      "Application for Operations Specialist",
+    );
+  });
 });

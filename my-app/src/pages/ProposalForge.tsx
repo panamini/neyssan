@@ -245,6 +245,11 @@ type ProposalDocumentMetadata = {
   styleLinkMode?: ProposalStyleLinkMode;
   styleChoice?: ProposalStyleChoice;
   templateBundleId?: ProposalTemplateBundleId;
+  applicantName?: string;
+  applicantRole?: string;
+  contactLine?: string;
+  letterDate?: string;
+  recipientDetails?: string;
   characterLimitMode?: FormValues["characterLimitMode"];
   characterLimitValue?: number | null;
 };
@@ -1333,6 +1338,21 @@ export function ProposalForge(): JSX.Element {
     if (lastProposalRequest?.creativity) {
       nextMetadata.creativity = lastProposalRequest.creativity;
     }
+    if (proposalApplicantName.trim()) {
+      nextMetadata.applicantName = proposalApplicantName.trim();
+    }
+    if (proposalApplicantRole.trim()) {
+      nextMetadata.applicantRole = proposalApplicantRole.trim();
+    }
+    if (proposalContactLine.trim()) {
+      nextMetadata.contactLine = proposalContactLine.trim();
+    }
+    if (proposalLetterDate.trim()) {
+      nextMetadata.letterDate = proposalLetterDate.trim();
+    }
+    if (proposalRecipientDetails.trim()) {
+      nextMetadata.recipientDetails = proposalRecipientDetails.trim();
+    }
 
     return Object.keys(nextMetadata).length > 0 ? nextMetadata : undefined;
   }, [
@@ -1346,6 +1366,11 @@ export function ProposalForge(): JSX.Element {
     outputSourceComposeDraft?.jobDescription,
     outputSourceComposeDraft?.sourceUrl,
     proposalRenderMetadata,
+    proposalApplicantName,
+    proposalApplicantRole,
+    proposalContactLine,
+    proposalLetterDate,
+    proposalRecipientDetails,
     proposalType,
     proposalVoicePreset,
   ]);

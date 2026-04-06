@@ -88,6 +88,13 @@ vi.mock("../ProposalDisplay", () => ({
 }));
 
 describe("ProposalsList toolbar grouping", () => {
+  function getMainProposalDisplayCall() {
+    return [...proposalDisplaySpy.mock.calls]
+      .reverse()
+      .find(([props]) => props.documentHeaderMode === "actions-only")
+      ?.[0] as Record<string, unknown> | undefined;
+  }
+
   beforeEach(() => {
     proposalDisplaySpy.mockClear();
     generateProposalActionMock.mockClear();
@@ -102,9 +109,7 @@ describe("ProposalsList toolbar grouping", () => {
     );
 
     await waitFor(() => {
-      const mainCall = proposalDisplaySpy.mock.calls.find(
-        ([props]) => props.documentHeaderMode === "actions-only",
-      )?.[0] as Record<string, unknown> | undefined;
+      const mainCall = getMainProposalDisplayCall();
 
       expect(mainCall).toBeTruthy();
       expect(mainCall?.documentHeaderMode).toBe("actions-only");
@@ -168,6 +173,30 @@ describe("ProposalsList toolbar grouping", () => {
           voicePreset: null,
         }),
       );
+    });
+
+    expect(
+      screen.getByRole("button", { name: /layout swiss/i }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /layout swiss/i }));
+    expect(
+      screen.getByRole("dialog", { name: "Layout options" }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /magazine/i }));
+
+    await waitFor(() => {
+      expect(getMainProposalDisplayCall()?.stylePreset).toEqual(
+        expect.objectContaining({
+          layout: "editorial",
+        }),
+      );
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open zoom controls" }));
+    fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
+
+    await waitFor(() => {
+      expect(getMainProposalDisplayCall()?.zoomIndex).toBe(2);
     });
   });
 

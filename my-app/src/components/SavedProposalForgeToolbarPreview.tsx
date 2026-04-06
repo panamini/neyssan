@@ -6,6 +6,7 @@ import {
   CornersIn,
   Eye,
   Feather,
+  Layout,
   MagnifyingGlass,
   Minus,
   Pencil,
@@ -20,17 +21,24 @@ import {
 import type { ProposalVoicePreset } from "../../convex/lib/proposals/voicePresets";
 import { ProposalColorPickerPopover } from "./ProposalColorPickerPopover";
 import { getVoicePresetDisplayLabel } from "../lib/proposal-voice-label";
+import { DOCUMENT_ZOOM_STEPS } from "../lib/document-stage";
 import {
   PROPOSAL_PALETTE_OPTIONS,
   PROPOSAL_STYLE_PREVIEW_DEFINITIONS,
   type ProposalPaletteId,
 } from "../lib/proposal-style-display";
-import type { ProposalTemplateBundleId } from "../lib/proposal-template-bundles";
+import type {
+  ProposalTemplateBundleId,
+} from "../lib/proposal-template-bundles";
+import { PROPOSAL_LAYOUT_OPTIONS } from "../lib/proposal-template-bundles";
+import type { VerbatiLayoutPreset } from "../features/verbati/types";
 
 type SavedProposalForgeToolbarPreviewProps = {
   mode: "preview" | "edit";
   onModeChange: (mode: "preview" | "edit") => void;
   showZoomControls: boolean;
+  zoomIndex: number;
+  onZoomIndexChange: (value: number) => void;
   toneValue: ProposalVoicePreset | null;
   onToneChange: (value: ProposalVoicePreset | null) => void;
   onRefine: () => void;
@@ -46,9 +54,13 @@ type SavedProposalForgeToolbarPreviewProps = {
   customAccentHex: string | null;
   onCustomAccentHexChange: (hex: string | null) => void;
   resolvedPaletteId: ProposalPaletteId | null;
+  layoutValue: Extract<VerbatiLayoutPreset, "swiss" | "editorial" | "modernist"> | null;
+  onLayoutChange: (
+    value: Extract<VerbatiLayoutPreset, "swiss" | "editorial" | "modernist">,
+  ) => void;
 };
 
-type DrawerId = "zoom" | "style" | "color" | "tone" | null;
+type DrawerId = "zoom" | "layout" | "style" | "color" | "tone" | null;
 
 const STYLE_OPTIONS: Array<{
   id: ProposalTemplateBundleId;
@@ -103,6 +115,8 @@ export function SavedProposalForgeToolbarPreview({
   mode,
   onModeChange,
   showZoomControls,
+  zoomIndex,
+  onZoomIndexChange,
   toneValue,
   onToneChange,
   onRefine,
@@ -118,13 +132,14 @@ export function SavedProposalForgeToolbarPreview({
   customAccentHex,
   onCustomAccentHexChange,
   resolvedPaletteId,
+  layoutValue,
+  onLayoutChange,
 }: SavedProposalForgeToolbarPreviewProps): JSX.Element {
   const rootRef = React.useRef<HTMLDivElement>(null);
   const colorButtonRef = React.useRef<HTMLButtonElement>(null);
   const colorDrawerRef = React.useRef<HTMLDivElement>(null);
   const [openDrawer, setOpenDrawer] = React.useState<DrawerId>(null);
   const [isColorPickerOpen, setIsColorPickerOpen] = React.useState(false);
-  const [zoomIndex, setZoomIndex] = React.useState(1);
   const [isDeleteConfirming, setIsDeleteConfirming] = React.useState(false);
 
   const activeStyleOption =
@@ -136,6 +151,9 @@ export function SavedProposalForgeToolbarPreview({
       : null;
   const activeToneOption =
     TONE_OPTIONS.find((option) => option.id === toneValue) ?? TONE_OPTIONS[0];
+  const activeLayoutOption =
+    PROPOSAL_LAYOUT_OPTIONS.find((option) => option.id === layoutValue) ??
+    PROPOSAL_LAYOUT_OPTIONS[0];
   const hasOpenDrawer = openDrawer !== null || isColorPickerOpen;
 
   React.useEffect(() => {
@@ -266,7 +284,7 @@ export function SavedProposalForgeToolbarPreview({
                       : "dasti-doc-zoom-fit"}
                     onClick={() => {
                       if (mode === "edit") return;
-                      setZoomIndex(1);
+                      onZoomIndexChange(1);
                     }}
                     aria-label="Fit page"
                     data-toolbar-tooltip="Fit page"
@@ -277,7 +295,7 @@ export function SavedProposalForgeToolbarPreview({
                   <button
                     type="button"
                     className="dasti-icon-button"
-                    onClick={() => setZoomIndex((current) => Math.max(0, current - 1))}
+                    onClick={() => onZoomIndexChange(Math.max(0, zoomIndex - 1))}
                     disabled={mode === "edit" || zoomIndex === 0}
                     aria-label="Zoom out"
                     data-toolbar-tooltip="Zoom out"
@@ -287,8 +305,15 @@ export function SavedProposalForgeToolbarPreview({
                   <button
                     type="button"
                     className="dasti-icon-button"
-                    onClick={() => setZoomIndex((current) => Math.min(2, current + 1))}
-                    disabled={mode === "edit" || zoomIndex === 2}
+                    onClick={() =>
+                      onZoomIndexChange(
+                        Math.min(DOCUMENT_ZOOM_STEPS.length - 1, zoomIndex + 1),
+                      )
+                    }
+                    disabled={
+                      mode === "edit" ||
+                      zoomIndex === DOCUMENT_ZOOM_STEPS.length - 1
+                    }
                     aria-label="Zoom in"
                     data-toolbar-tooltip="Zoom in"
                   >
@@ -303,6 +328,69 @@ export function SavedProposalForgeToolbarPreview({
         {mode !== "edit" ? (
           <>
             <div className="dasti-icon-cluster__divider dasti-proposal-rail-cluster__divider" />
+
+            <span className="dasti-saved-proposal-forge-toolbar-preview__anchor dasti-saved-proposal-forge-toolbar-preview__anchor--layout">
+              <button
+                type="button"
+                className={[
+                  "dasti-icon-button",
+                  openDrawer === "layout" ? "dasti-icon-button--active" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                aria-pressed={openDrawer === "layout"}
+                aria-expanded={openDrawer === "layout"}
+                aria-haspopup="dialog"
+                onClick={() => handleToggleDrawer("layout")}
+                aria-label={`Layout ${activeLayoutOption.label}`}
+                data-toolbar-tooltip={
+                  openDrawer === "layout" ? undefined : activeLayoutOption.label
+                }
+              >
+                <Layout size={14} strokeWidth={1.8} aria-hidden="true" />
+              </button>
+
+              {openDrawer === "layout" ? (
+                <div
+                  className="dasti-proposal-chrome-drawer dasti-proposal-chrome-drawer--stack dasti-saved-proposal-forge-toolbar-preview__drawer dasti-saved-proposal-forge-toolbar-preview__drawer--center dasti-saved-proposal-forge-toolbar-preview__drawer--layout"
+                  role="dialog"
+                  aria-label="Layout options"
+                >
+                  {PROPOSAL_LAYOUT_OPTIONS.map((option) => {
+                    const active = option.id === activeLayoutOption.id;
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        className={[
+                          "dasti-proposal-chrome-option",
+                          active ? "dasti-proposal-chrome-option--active" : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                        aria-pressed={active}
+                        onClick={() => {
+                          onLayoutChange(option.id);
+                          setOpenDrawer(null);
+                        }}
+                      >
+                        <span className="dasti-proposal-chrome-option__icon" aria-hidden="true">
+                          <Layout size={14} strokeWidth={1.8} />
+                        </span>
+                        <span className="dasti-proposal-chrome-option__copy">
+                          <span className="dasti-proposal-chrome-option__title">
+                            {option.label}
+                          </span>
+                          <span className="dasti-proposal-chrome-option__description">
+                            {option.description}
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </span>
 
             <span className="dasti-saved-proposal-forge-toolbar-preview__anchor dasti-saved-proposal-forge-toolbar-preview__anchor--style">
               <button

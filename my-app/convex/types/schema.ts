@@ -73,6 +73,11 @@ export interface ProposalDoc extends Doc<"proposals"> {
       | "quire_mono";
     typographyOverride?: "signature" | "engaging" | "expert" | null;
     layoutOverride?: "swiss" | "editorial" | "modernist" | "quire" | null;
+    applicantName?: string;
+    applicantRole?: string;
+    contactLine?: string;
+    letterDate?: string;
+    recipientDetails?: string;
     characterLimitMode?:
       | "none"
       | "linkedin_note_200"

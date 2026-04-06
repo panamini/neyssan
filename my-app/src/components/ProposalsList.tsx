@@ -10,6 +10,7 @@ import {
   buildAppProposalPersonalizationPayload,
   getActiveLocalPersonalizationSource,
   getProposalApplicantHeaderData,
+  type ProposalApplicantHeaderData,
   type ProposalGenerationPersonalizationPayload,
 } from "../lib/proposal-personalization";
 import { resolveRegeneratedProposalTitle } from "../../convex/lib/proposals/proposalOutput";
@@ -42,6 +43,12 @@ import {
   type ProposalTemplateBundleId,
 } from "../lib/proposal-template-bundles";
 import type { ProposalPaletteId } from "../lib/proposal-style-display";
+import type { VerbatiLayoutPreset } from "../features/verbati/types";
+
+type SavedProposalLayoutId = Extract<
+  VerbatiLayoutPreset,
+  "swiss" | "editorial" | "modernist"
+>;
 
 type SavedProposalType =
   | "cover_letter"
@@ -72,8 +79,14 @@ type SavedProposalRecord = {
     templateId?: ProposalTemplateId;
     verbatiStyle?: Partial<VerbatiStylePreset>;
     templateBundleId?: ProposalTemplateBundleId;
+    layoutOverride?: SavedProposalLayoutId | null;
     characterLimitMode?: ProposalCharacterLimitMode;
     characterLimitValue?: number | null;
+    applicantName?: string;
+    applicantRole?: string;
+    contactLine?: string;
+    letterDate?: string;
+    recipientDetails?: string;
   };
 };
 
@@ -122,16 +135,32 @@ function normalizeAccentHex(value: unknown): string | null {
     : null;
 }
 
+function normalizeSavedLayoutOverride(
+  value: unknown,
+): SavedProposalLayoutId | null {
+  return value === "swiss" || value === "editorial" || value === "modernist"
+    ? value
+    : null;
+}
+
+function normalizeSavedTextValue(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : null;
+}
+
 function resolveSavedAppearanceState(proposal: SavedProposalRecord | null): {
   bundleId: ProposalTemplateBundleId | null;
   paletteOverride: ProposalPaletteId | null;
   customAccentHex: string | null;
+  layoutOverride: SavedProposalLayoutId | null;
 } {
   if (!proposal) {
     return {
       bundleId: null,
       paletteOverride: null,
       customAccentHex: null,
+      layoutOverride: null,
     };
   }
 
@@ -161,6 +190,28 @@ function resolveSavedAppearanceState(proposal: SavedProposalRecord | null): {
         ? null
         : storedPalette,
     customAccentHex,
+    layoutOverride: normalizeSavedLayoutOverride(proposal.metadata?.layoutOverride),
+  };
+}
+
+function buildSavedApplicantHeader(
+  proposal: SavedProposalRecord | null,
+  fallbackHeader: ProposalApplicantHeaderData | null,
+): ProposalApplicantHeaderData | null {
+  if (!proposal && !fallbackHeader) {
+    return null;
+  }
+
+  return {
+    ...(fallbackHeader ?? {}),
+    name:
+      normalizeSavedTextValue(proposal?.metadata?.applicantName) ??
+      fallbackHeader?.name ??
+      null,
+    role:
+      normalizeSavedTextValue(proposal?.metadata?.applicantRole) ??
+      fallbackHeader?.role ??
+      null,
   };
 }
 
@@ -441,6 +492,12 @@ export default function ProposalsList({
           composeDraft?.jobDescription?.trim() || undefined,
         proposalType: outputDraft.proposalType ?? undefined,
         voicePreset: outputDraft.proposalVoicePreset ?? undefined,
+        applicantName: normalizeSavedTextValue(outputDraft.proposalApplicantName) ?? undefined,
+        applicantRole: normalizeSavedTextValue(outputDraft.proposalApplicantRole) ?? undefined,
+        contactLine: normalizeSavedTextValue(outputDraft.proposalContactLine) ?? undefined,
+        letterDate: normalizeSavedTextValue(outputDraft.proposalLetterDate) ?? undefined,
+        recipientDetails:
+          normalizeSavedTextValue(outputDraft.proposalRecipientDetails) ?? undefined,
       },
     };
   }, [selectedProposalId]);
@@ -504,8 +561,11 @@ export default function ProposalsList({
     React.useState<ProposalPaletteId | null>(null);
   const [selectedCustomAccentHex, setSelectedCustomAccentHex] =
     React.useState<string | null>(null);
+  const [selectedLayoutOverride, setSelectedLayoutOverride] =
+    React.useState<SavedProposalLayoutId | null>(null);
   const [selectedRefineVoicePreset, setSelectedRefineVoicePreset] =
     React.useState<ProposalVoicePreset | null>(DEFAULT_PROPOSAL_VOICE_PRESET);
+  const [selectedZoomIndex, setSelectedZoomIndex] = React.useState(1);
   const [isSelectionPending, startSelectionTransition] = React.useTransition();
   const { showToast } = useToast();
   const activeCvStylePreset = React.useMemo(
@@ -665,24 +725,31 @@ export default function ProposalsList({
   }, [activeCvStylePreset, selected, selectedStyleBundleId]);
   const selectedEffectiveStylePreset = React.useMemo(() => {
     if (!selectedBaseStylePreset) return null;
+    const nextStylePreset = selectedLayoutOverride
+      ? {
+          ...selectedBaseStylePreset,
+          layout: selectedLayoutOverride,
+        }
+      : selectedBaseStylePreset;
     if (selectedCustomAccentHex) {
       return {
-        ...selectedBaseStylePreset,
+        ...nextStylePreset,
         palette: "custom" as const,
         accentHex: selectedCustomAccentHex,
       };
     }
     if (selectedPaletteOverride) {
       return {
-        ...selectedBaseStylePreset,
+        ...nextStylePreset,
         palette: selectedPaletteOverride,
         accentHex: undefined,
       };
     }
-    return selectedBaseStylePreset;
+    return nextStylePreset;
   }, [
     selectedBaseStylePreset,
     selectedCustomAccentHex,
+    selectedLayoutOverride,
     selectedPaletteOverride,
   ]);
   const selectedRenderState = React.useMemo(() => {
@@ -722,12 +789,17 @@ export default function ProposalsList({
     setSelectedStyleBundleId(selectedStoredAppearance.bundleId);
     setSelectedPaletteOverride(selectedStoredAppearance.paletteOverride);
     setSelectedCustomAccentHex(selectedStoredAppearance.customAccentHex);
+    setSelectedLayoutOverride(selectedStoredAppearance.layoutOverride);
     setSelectedRefineVoicePreset(
       selected
         ? getStoredRequestedVoicePreset(selected)
         : DEFAULT_PROPOSAL_VOICE_PRESET,
     );
   }, [selected, selected?._id, selectedStoredAppearance]);
+
+  React.useEffect(() => {
+    setSelectedZoomIndex(1);
+  }, [selected?._id]);
 
   React.useEffect(() => {
     if (
@@ -742,7 +814,8 @@ export default function ProposalsList({
     const appearanceChanged =
       selectedStyleBundleId !== selectedStoredAppearance.bundleId ||
       selectedPaletteOverride !== selectedStoredAppearance.paletteOverride ||
-      selectedCustomAccentHex !== selectedStoredAppearance.customAccentHex;
+      selectedCustomAccentHex !== selectedStoredAppearance.customAccentHex ||
+      selectedLayoutOverride !== selectedStoredAppearance.layoutOverride;
 
     if (!appearanceChanged) {
       return undefined;
@@ -760,6 +833,11 @@ export default function ProposalsList({
           nextMetadata.templateBundleId = selectedStyleBundleId;
         } else {
           delete nextMetadata.templateBundleId;
+        }
+        if (selectedLayoutOverride) {
+          nextMetadata.layoutOverride = selectedLayoutOverride;
+        } else {
+          delete nextMetadata.layoutOverride;
         }
 
         await updateProposal({
@@ -783,10 +861,12 @@ export default function ProposalsList({
     isUpdating,
     selected,
     selectedCustomAccentHex,
+    selectedLayoutOverride,
     selectedPaletteOverride,
     selectedRenderState,
     selectedStoredAppearance.bundleId,
     selectedStoredAppearance.customAccentHex,
+    selectedStoredAppearance.layoutOverride,
     selectedStoredAppearance.paletteOverride,
     selectedStyleBundleId,
     updateProposal,
@@ -1009,6 +1089,11 @@ export default function ProposalsList({
       } else {
         delete nextMetadata.templateBundleId;
       }
+      if (selectedLayoutOverride) {
+        nextMetadata.layoutOverride = selectedLayoutOverride;
+      } else {
+        delete nextMetadata.layoutOverride;
+      }
       await updateProposal({
         id: selected._id,
         title: normalizedTitle,
@@ -1100,6 +1185,11 @@ export default function ProposalsList({
       } else {
         delete nextMetadata.templateBundleId;
       }
+      if (selectedLayoutOverride) {
+        nextMetadata.layoutOverride = selectedLayoutOverride;
+      } else {
+        delete nextMetadata.layoutOverride;
+      }
       await updateProposal({
         id: res.proposalId,
         title: jobTitle,
@@ -1153,6 +1243,17 @@ export default function ProposalsList({
     ? selectedRefineVoicePreset !== getStoredRequestedVoicePreset(selected)
     : false;
   const selectedToneLabel = selected ? toneLabel(getStoredVoicePreset(selected)) : "";
+  const selectedApplicantHeader = React.useMemo(
+    () => buildSavedApplicantHeader(selected, activeApplicantHeader),
+    [activeApplicantHeader, selected],
+  );
+  const selectedLayoutValue =
+    selectedLayoutOverride ??
+    (selectedBaseStylePreset?.layout === "swiss" ||
+    selectedBaseStylePreset?.layout === "editorial" ||
+    selectedBaseStylePreset?.layout === "modernist"
+      ? selectedBaseStylePreset.layout
+      : "swiss");
 
   const selectedSidebarHeading = selected ? (
     <div className="dasti-proposal-library-info-card dasti-proposal-library-sidebar__heading">
@@ -1215,6 +1316,8 @@ export default function ProposalsList({
           getStoredProposalType(selected) === "application_message" ||
           getStoredProposalType(selected) === "freelance_proposal")
       }
+      zoomIndex={selectedZoomIndex}
+      onZoomIndexChange={setSelectedZoomIndex}
       toneValue={selectedRefineVoicePreset}
       onToneChange={setSelectedRefineVoicePreset}
       onRefine={() => {
@@ -1249,6 +1352,12 @@ export default function ProposalsList({
           ? null
           : selectedRenderState?.stylePreset.palette ?? null
       }
+      layoutValue={selectedLayoutValue}
+      onLayoutChange={(value) => {
+        setSelectedLayoutOverride(
+          value === selectedBaseStylePreset?.layout ? null : value,
+        );
+      }}
     />
   ) : null;
 
@@ -1391,7 +1500,27 @@ export default function ProposalsList({
                     voicePreset={getStoredVoicePreset(selected)}
                     templateId={selectedRenderState?.templateId ?? null}
                     stylePreset={selectedRenderState?.stylePreset ?? null}
-                    applicantHeader={activeApplicantHeader}
+                    railTitle={
+                      normalizeSavedTextValue(selected?.metadata?.applicantName) ??
+                      selectedApplicantHeader?.name ??
+                      null
+                    }
+                    railMeta={
+                      normalizeSavedTextValue(selected?.metadata?.applicantRole) ??
+                      selectedApplicantHeader?.role ??
+                      null
+                    }
+                    contactLine={
+                      normalizeSavedTextValue(selected?.metadata?.contactLine) ?? null
+                    }
+                    letterDate={
+                      normalizeSavedTextValue(selected?.metadata?.letterDate) ?? null
+                    }
+                    recipientDetails={
+                      normalizeSavedTextValue(selected?.metadata?.recipientDetails) ??
+                      null
+                    }
+                    applicantHeader={selectedApplicantHeader}
                     characterLimit={selected?.metadata?.characterLimitValue ?? null}
                     characterLimitAdvisory={false}
                     documentTitle={selectedHeaderTitle || "Saved proposal"}
@@ -1401,6 +1530,8 @@ export default function ProposalsList({
                     showModeToggle={false}
                     onModeChange={setSelectedOutputMode}
                     showZoomControls={false}
+                    zoomIndex={selectedZoomIndex}
+                    onZoomIndexChange={setSelectedZoomIndex}
                     detachedActionHeader
                     documentHeaderMode="actions-only"
                     detachedActionHeaderSupplement={selectedForgeCloneToolbar}
@@ -1440,7 +1571,33 @@ export default function ProposalsList({
                           voicePreset={getStoredVoicePreset(proposal)}
                           templateId={proposalRenderState?.templateId ?? null}
                           stylePreset={proposalRenderState?.stylePreset ?? null}
-                          applicantHeader={activeApplicantHeader}
+                          railTitle={
+                            normalizeSavedTextValue(proposal.metadata?.applicantName) ??
+                            activeApplicantHeader?.name ??
+                            null
+                          }
+                          railMeta={
+                            normalizeSavedTextValue(proposal.metadata?.applicantRole) ??
+                            activeApplicantHeader?.role ??
+                            null
+                          }
+                          contactLine={
+                            normalizeSavedTextValue(proposal.metadata?.contactLine) ??
+                            null
+                          }
+                          letterDate={
+                            normalizeSavedTextValue(proposal.metadata?.letterDate) ??
+                            null
+                          }
+                          recipientDetails={
+                            normalizeSavedTextValue(
+                              proposal.metadata?.recipientDetails,
+                            ) ?? null
+                          }
+                          applicantHeader={buildSavedApplicantHeader(
+                            proposal,
+                            activeApplicantHeader,
+                          )}
                           documentTitle={
                             (proposal.title || "").trim() || "Saved proposal"
                           }

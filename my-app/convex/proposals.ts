@@ -130,6 +130,11 @@ export const storeProposal = internalMutation({
       layoutOverride: v.optional(
         v.union(proposalLayoutOverrideChoice, v.null()),
       ),
+      applicantName: v.optional(v.string()),
+      applicantRole: v.optional(v.string()),
+      contactLine: v.optional(v.string()),
+      letterDate: v.optional(v.string()),
+      recipientDetails: v.optional(v.string()),
       characterLimitMode: v.optional(
         v.union(proposalCharacterLimitModeChoice, v.null()),
       ),
@@ -216,6 +221,11 @@ export const updateProposal = internalMutation({
       layoutOverride: v.optional(
         v.union(proposalLayoutOverrideChoice, v.null()),
       ),
+      applicantName: v.optional(v.string()),
+      applicantRole: v.optional(v.string()),
+      contactLine: v.optional(v.string()),
+      letterDate: v.optional(v.string()),
+      recipientDetails: v.optional(v.string()),
       characterLimitMode: v.optional(
         v.union(proposalCharacterLimitModeChoice, v.null()),
       ),
