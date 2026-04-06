@@ -141,6 +141,11 @@ export default query({
         layoutOverride: v.optional(
           v.union(proposalLayoutOverrideChoice, v.null()),
         ),
+        applicantName: v.optional(v.string()),
+        applicantRole: v.optional(v.string()),
+        contactLine: v.optional(v.string()),
+        letterDate: v.optional(v.string()),
+        recipientDetails: v.optional(v.string()),
         characterLimitMode: v.optional(
           v.union(proposalCharacterLimitModeChoice, v.null()),
         ),
@@ -242,6 +247,11 @@ export default query({
         templateBundleId: proposal.metadata.templateBundleId ?? undefined,
         typographyOverride: proposal.metadata.typographyOverride ?? undefined,
         layoutOverride: proposal.metadata.layoutOverride ?? undefined,
+        applicantName: proposal.metadata.applicantName ?? undefined,
+        applicantRole: proposal.metadata.applicantRole ?? undefined,
+        contactLine: proposal.metadata.contactLine ?? undefined,
+        letterDate: proposal.metadata.letterDate ?? undefined,
+        recipientDetails: proposal.metadata.recipientDetails ?? undefined,
         characterLimitMode:
           proposal.metadata.characterLimitMode ?? undefined,
         characterLimitValue:

@@ -79,6 +79,8 @@ interface ProposalDisplayProps {
   documentHeaderMode?: "full" | "actions-only" | "hidden";
   showZoomControls?: boolean;
   zoomStorageKey?: string | null;
+  zoomIndex?: number | null;
+  onZoomIndexChange?: (index: number) => void;
   detachedActionHeader?: boolean;
   detachedActionHeaderSupplement?: React.ReactNode;
   documentTitleEditable?: boolean;
@@ -311,6 +313,13 @@ function readProposalZoomIndex(_storageKey: string | null | undefined) {
   return 1;
 }
 
+function clampProposalZoomIndex(value: number): number {
+  return Math.min(
+    DOCUMENT_ZOOM_STEPS.length - 1,
+    Math.max(0, Math.round(value)),
+  );
+}
+
 const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   proposalContent,
   loading,
@@ -346,6 +355,8 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   documentHeaderMode = "full",
   showZoomControls = false,
   zoomStorageKey = PROPOSAL_PREVIEW_ZOOM_STORAGE_KEY,
+  zoomIndex: controlledZoomIndex = null,
+  onZoomIndexChange,
   detachedActionHeader = false,
   detachedActionHeaderSupplement,
   documentTitleEditable = false,
@@ -413,7 +424,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     [resolvedStylePreset],
   );
 
-  const [zoomIndex, setZoomIndex] = React.useState(() =>
+  const [internalZoomIndex, setInternalZoomIndex] = React.useState(() =>
     readProposalZoomIndex(zoomStorageKey),
   );
   const [isZoomMenuOpen, setIsZoomMenuOpen] = React.useState(false);
@@ -432,7 +443,29 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     start: number;
     end: number;
   } | null>(null);
+  const isZoomControlled = typeof controlledZoomIndex === "number";
+  const zoomIndex = isZoomControlled
+    ? clampProposalZoomIndex(controlledZoomIndex)
+    : internalZoomIndex;
   const zoomLevel = DOCUMENT_ZOOM_STEPS[zoomIndex];
+  const setZoomIndex = React.useCallback(
+    (
+      nextValue:
+        | number
+        | ((currentIndex: number) => number),
+    ) => {
+      const resolvedIndex = clampProposalZoomIndex(
+        typeof nextValue === "function" ? nextValue(zoomIndex) : nextValue,
+      );
+
+      if (!isZoomControlled) {
+        setInternalZoomIndex(resolvedIndex);
+      }
+
+      onZoomIndexChange?.(resolvedIndex);
+    },
+    [isZoomControlled, onZoomIndexChange, zoomIndex],
+  );
   const editableTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
   const editablePageRef = React.useRef<HTMLDivElement | null>(null);
   const viewerSurfaceRef = React.useRef<HTMLDivElement | null>(null);
@@ -698,9 +731,13 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   }, [shouldShowCharacterCountBadge, usesDocumentRenderer]);
 
   React.useEffect(() => {
+    if (isZoomControlled) {
+      return;
+    }
+
     setZoomIndex(readProposalZoomIndex(zoomStorageKey));
     setFitRequestCount((count) => count + 1);
-  }, [zoomStorageKey]);
+  }, [isZoomControlled, setZoomIndex, zoomStorageKey]);
 
   React.useEffect(() => {
     if (!isZoomMenuOpen) {
