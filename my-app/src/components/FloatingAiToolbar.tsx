@@ -55,8 +55,12 @@ const WIDTH_SPRING = {
   stiffness: 300,
   damping: 32,
 };
-const CLOSED_CLIP_PATH = "inset(0 50% 0 50% round 999px)";
-const OPEN_CLIP_PATH = "inset(0 0% 0 0 round 999px)";
+const CLOSED_CLIP_PATH = "inset(0% 50% 0% 50% round 999px)";
+const OPEN_CLIP_PATH = "inset(0% 0% 0% 0% round 999px)";
+const CURTAIN_CLIP_TRANSITION = {
+  duration: 0.42,
+  ease: MOTION_EASE,
+} as const;
 const COLLAPSED_SHELL_WIDTH = 36;
 const SUBTLE_FADE = 0.001;
 
@@ -662,13 +666,6 @@ export function FloatingAiToolbar({
           visibility: isPositionReady ? "visible" : "hidden",
           pointerEvents: isPositionReady ? "auto" : "none",
         }}
-        initial={false}
-        animate={{
-          opacity: isPositionReady ? 1 : 0,
-          y: isPositionReady ? 0 : 2,
-          scale: isPositionReady ? 1 : 0.992,
-        }}
-        transition={{ duration: 0.18, ease: MOTION_EASE }}
         onPointerDownCapture={(event) => {
           const target = event.target as HTMLElement | null;
           if (
@@ -697,7 +694,7 @@ export function FloatingAiToolbar({
           }}
           transition={{
             width: WIDTH_SPRING,
-            clipPath: { duration: 0.28, ease: MOTION_EASE },
+            clipPath: CURTAIN_CLIP_TRANSITION,
           }}
           style={{ overflow: "hidden", justifySelf: "center" }}
         >
@@ -800,7 +797,6 @@ export function FloatingAiToolbar({
             initial={{
               width: COLLAPSED_SHELL_WIDTH,
               clipPath: CLOSED_CLIP_PATH,
-              opacity: SUBTLE_FADE,
             }}
             animate={{
               width:
@@ -809,12 +805,10 @@ export function FloatingAiToolbar({
                   : COLLAPSED_SHELL_WIDTH,
               clipPath:
                 promptShellState === "open" ? OPEN_CLIP_PATH : CLOSED_CLIP_PATH,
-              opacity: promptShellState === "open" ? 1 : SUBTLE_FADE,
             }}
             transition={{
               width: WIDTH_SPRING,
-              clipPath: { duration: 0.28, ease: MOTION_EASE },
-              opacity: { duration: 0.18, ease: MOTION_EASE },
+              clipPath: CURTAIN_CLIP_TRANSITION,
             }}
             style={{ overflow: "hidden", justifySelf: "center" }}
           >
