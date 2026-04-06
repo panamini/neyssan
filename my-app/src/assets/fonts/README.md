@@ -2,17 +2,23 @@ Drop local font files for Dasti here.
 
 Supported auto-detected families:
 
+- `Fraunces Bold`
+- `Syne Regular`
+- `Thestral Neue`
+- `BioRhyme Light`
+- `Courier Prime`
 - `Archivo`
-- `Source Serif 4`
-- `Sono`
+- `Parisienne`
+- `Cormorant`
+- `Bonbance`
 - `Geist`
-- `Hepta Slab`
-- `Permanent Marker`
+- `Grave Presse`
+- `Borel`
+- `Algo`
+- `Hepta Slab Regular`
 - `Special Elite`
-- `Fraunces`
-- `Syne`
-- `Bricolage Grotesque`
-- `BioRhyme`
+- `Bricolage`
+- `Sono Light`
 
 Accepted formats:
 

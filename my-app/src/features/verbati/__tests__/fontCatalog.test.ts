@@ -21,6 +21,7 @@ describe("verbati font catalog", () => {
         "ledger-sans",
         "mono-signal",
         "studio-grotesk",
+        "bricolage-hepta",
       ]),
     );
   });
@@ -37,16 +38,18 @@ describe("verbati font catalog", () => {
     });
   });
 
-  it("resolves the Volk civic pair with the intended Google-font compatible stacks", () => {
+  it("resolves the civic pair with the intended local-font labels", () => {
     expect(getVerbatiFontPairOption("civic-correspondence")).toMatchObject({
       id: "civic-correspondence",
-      headingLabel: "Archivo Bold",
-      bodyLabel: "Source Serif 4",
+      headingLabel: "Thestral Neue",
+      bodyLabel: "BioRhyme Light",
     });
   });
 
-  it("does not crash when local font assets are absent", () => {
+  it("injects local font-face rules when bundled font assets are present", () => {
     ensureLocalFontFacesLoaded();
-    expect(document.head.querySelector("#dasti-local-font-faces")).toBeNull();
+    const styleTag = document.head.querySelector("#dasti-local-font-faces");
+    expect(styleTag).not.toBeNull();
+    expect(styleTag?.textContent).toContain("@font-face");
   });
 });
