@@ -50,6 +50,7 @@ export type StoredProposalOutputDraft = {
   proposalContactLine?: string;
   proposalLetterDate?: string;
   proposalRecipientDetails?: string;
+  proposalHeaderShowSender?: boolean;
   proposalHeaderShowDate?: boolean;
   proposalHeaderShowSubject?: boolean;
   proposalHeaderShowRecipient?: boolean;
@@ -253,6 +254,10 @@ export function readStoredProposalOutputDraft(): StoredProposalOutputDraft | nul
         typeof parsed.proposalRecipientDetails === "string"
           ? parsed.proposalRecipientDetails
           : "",
+      proposalHeaderShowSender:
+        typeof parsed.proposalHeaderShowSender === "boolean"
+          ? parsed.proposalHeaderShowSender
+          : undefined,
       proposalHeaderShowDate:
         typeof parsed.proposalHeaderShowDate === "boolean"
           ? parsed.proposalHeaderShowDate
@@ -385,6 +390,10 @@ function buildSanitizedStoredProposalOutputDraft(
       typeof draft.proposalRecipientDetails === "string"
         ? draft.proposalRecipientDetails
         : "",
+    proposalHeaderShowSender:
+      typeof draft.proposalHeaderShowSender === "boolean"
+        ? draft.proposalHeaderShowSender
+        : undefined,
     proposalHeaderShowDate:
       typeof draft.proposalHeaderShowDate === "boolean"
         ? draft.proposalHeaderShowDate

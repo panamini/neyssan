@@ -202,6 +202,9 @@ export function FloatingAiToolbar({
     const panel = panelRef.current;
     const width = panel.offsetWidth;
     const height = panel.offsetHeight;
+    if (width <= 0 || height <= 0) {
+      return;
+    }
     const margin = resolveCssLength(panel, "--space-3", 12);
     const compactGap = resolveCssLength(panel, "--space-1", 4);
     const baseGap = resolveCssLength(panel, "--space-2", compactGap * 2);
@@ -369,6 +372,7 @@ export function FloatingAiToolbar({
       return undefined;
     }
 
+    setPosition(null);
     const update = () => {
       updatePosition();
     };
@@ -434,6 +438,7 @@ export function FloatingAiToolbar({
 
   const isAskOpen = activeActionId === "ask";
   const isPromptLoading = isLoading && pendingActionId === "custom";
+  const isPositionReady = position !== null;
 
   return (
     <BodyPortal>
@@ -452,13 +457,15 @@ export function FloatingAiToolbar({
             ? `${position.pointerOffset}px`
             : "50%",
           zIndex: 11000,
+          visibility: isPositionReady ? "visible" : "hidden",
+          pointerEvents: isPositionReady ? "auto" : "none",
         }}
-        initial={{
-          opacity: 0,
-          scale: 0.95,
-          y: position?.placement === "below" ? -4 : -6,
-        }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
+        initial={false}
+        animate={
+          isPositionReady
+            ? { opacity: 1, scale: 1, y: 0 }
+            : { opacity: 0, scale: 0.98, y: 0 }
+        }
         transition={{ duration: 0.12, ease: MOTION_EASE }}
         onPointerDownCapture={(event) => {
           const target = event.target as HTMLElement | null;
