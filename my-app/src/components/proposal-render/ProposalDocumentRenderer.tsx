@@ -63,6 +63,12 @@ type VolkRegisterMetaEntry = {
   key: string;
 };
 
+type StructuredHeaderValues = {
+  date: string;
+  subject: string;
+  to: string;
+};
+
 function resolveLineHeightPx(styles: CSSStyleDeclaration) {
   const parsedLineHeight = Number.parseFloat(styles.lineHeight || "");
   if (Number.isFinite(parsedLineHeight) && parsedLineHeight > 0) {
@@ -194,6 +200,26 @@ function normalizeDocumentContactLine(value: string | null | undefined): string 
     .map((part) => part.trim())
     .filter(Boolean)
     .join(" · ");
+}
+
+function buildStructuredHeaderValues(args: {
+  letterDate?: string | null;
+  recipientDetails?: string | null;
+  documentTitle?: string | null;
+}): StructuredHeaderValues | null {
+  const date = args.letterDate?.trim() ?? "";
+  const subject = args.documentTitle?.trim() ?? "";
+  const to = String(args.recipientDetails ?? "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n");
+
+  if (!date && !subject && !to) {
+    return null;
+  }
+
+  return { date, subject, to };
 }
 
 function splitParagraphIntoPaginationFragments(paragraph: string): string[] {
@@ -579,9 +605,13 @@ export function ProposalDocumentRenderer({
       const { bottomBoundary } = getPageBottomBoundary(measurementPage);
       const bodyRect = measurementBody.getBoundingClientRect();
       const measurementBodyStyles = window.getComputedStyle(measurementBody);
+      const structuredHeaderHeight =
+        measurementBody.querySelector<HTMLElement>(
+          ".dasti-proposal-document__structured-header",
+        )?.getBoundingClientRect().height ?? 0;
       const firstPageLeadIn = Number.parseFloat(
         measurementBodyStyles.paddingTop || "0",
-      );
+      ) + structuredHeaderHeight;
       const pageBreakSafetyReserve = Math.max(
         4,
         Math.round(resolveLineHeightPx(measurementBodyStyles) * 0.7),
@@ -781,6 +811,15 @@ export function ProposalDocumentRenderer({
     ],
   );
   const volkMetaLefts = React.useMemo(() => VOLK_REGISTER_GRID.metaLefts, []);
+  const structuredHeaderValues = React.useMemo(
+    () =>
+      buildStructuredHeaderValues({
+        letterDate,
+        recipientDetails,
+        documentTitle,
+      }),
+    [documentTitle, letterDate, recipientDetails],
+  );
   const volkFallbackParagraphs = React.useMemo(
     () =>
       buildVolkFallbackParagraphs({
@@ -864,6 +903,80 @@ export function ProposalDocumentRenderer({
       </aside>
     ),
     [resolvedRailMeta, resolvedRailTitle, templateDefinition.shortLabel],
+  );
+  const renderStructuredHeader = React.useCallback(() => {
+    if (!structuredHeaderValues) {
+      return null;
+    }
+
+    return (
+      <div className="dasti-proposal-document__structured-header">
+        {structuredHeaderValues.date ? (
+          <div className="dasti-proposal-document__structured-header-item">
+            <p className="dasti-proposal-document__structured-header-label">Date</p>
+            <p className="dasti-proposal-document__structured-header-value">
+              {structuredHeaderValues.date}
+            </p>
+          </div>
+        ) : null}
+        {structuredHeaderValues.to ? (
+          <div className="dasti-proposal-document__structured-header-item">
+            <p className="dasti-proposal-document__structured-header-label">To</p>
+            <p className="dasti-proposal-document__structured-header-value dasti-proposal-document__structured-header-value--multiline">
+              {structuredHeaderValues.to}
+            </p>
+          </div>
+        ) : null}
+        {structuredHeaderValues.subject ? (
+          <div className="dasti-proposal-document__structured-header-item dasti-proposal-document__structured-header-item--subject">
+            <p className="dasti-proposal-document__structured-header-label">
+              Subject
+            </p>
+            <p className="dasti-proposal-document__structured-header-value">
+              {structuredHeaderValues.subject}
+            </p>
+          </div>
+        ) : null}
+      </div>
+    );
+  }, [structuredHeaderValues]);
+  const renderGenericDocumentShell = React.useCallback(
+    (args: {
+      bodyRef?: React.Ref<HTMLDivElement> | null;
+      pageBlocks: ProposalDocumentBlock[];
+      isContinuationPage: boolean;
+      measurement: boolean;
+    }) => (
+      <>
+        {renderGenericRail(args.isContinuationPage)}
+        <div
+          ref={args.bodyRef ?? undefined}
+          className="dasti-proposal-document__body"
+        >
+          {!args.isContinuationPage ? renderStructuredHeader() : null}
+          {args.pageBlocks.length > 0 ? (
+            args.measurement
+              ? args.pageBlocks.map((block) => renderDocumentBlock(block))
+              : renderVisibleDocumentBlocks(args.pageBlocks)
+          ) : !args.isContinuationPage ? (
+            <div
+              className="dasti-proposal-document__raw-body"
+              data-proposal-block={args.measurement ? true : undefined}
+            >
+              {stripInlineProposalMarkdown(parsedDocument.rawBody || content)}
+            </div>
+          ) : null}
+        </div>
+      </>
+    ),
+    [
+      content,
+      parsedDocument.rawBody,
+      renderDocumentBlock,
+      renderGenericRail,
+      renderStructuredHeader,
+      renderVisibleDocumentBlocks,
+    ],
   );
   const renderVolkRegisterShell = React.useCallback(
     (args: {
@@ -1027,21 +1140,12 @@ export function ProposalDocumentRenderer({
               measurement: true,
             })
           ) : (
-            <>
-              {renderGenericRail(false)}
-              <div ref={measurementBodyRef} className="dasti-proposal-document__body">
-                {documentBlocks.length > 0 ? (
-                  documentBlocks.map((block) => renderDocumentBlock(block))
-                ) : (
-                  <div
-                    className="dasti-proposal-document__raw-body"
-                    data-proposal-block
-                  >
-                    {stripInlineProposalMarkdown(parsedDocument.rawBody || content)}
-                  </div>
-                )}
-              </div>
-            </>
+            renderGenericDocumentShell({
+              bodyRef: measurementBodyRef,
+              pageBlocks: documentBlocks,
+              isContinuationPage: false,
+              measurement: true,
+            })
           )}
         </div>
       </div>
@@ -1074,23 +1178,13 @@ export function ProposalDocumentRenderer({
                 measurement: false,
               })
             ) : (
-              <>
-                {renderGenericRail(isContinuationPage)}
-                <div
-                  ref={
-                    pageIndex === 0 && resolvedPageGroups.length === 1 ? bodyRef : null
-                  }
-                  className="dasti-proposal-document__body"
-                >
-                  {pageBlocks.length > 0 ? (
-                    renderVisibleDocumentBlocks(pageBlocks)
-                  ) : pageIndex === 0 ? (
-                    <div className="dasti-proposal-document__raw-body">
-                      {stripInlineProposalMarkdown(parsedDocument.rawBody || content)}
-                    </div>
-                  ) : null}
-                </div>
-              </>
+              renderGenericDocumentShell({
+                bodyRef:
+                  pageIndex === 0 && resolvedPageGroups.length === 1 ? bodyRef : null,
+                pageBlocks,
+                isContinuationPage,
+                measurement: false,
+              })
             )}
           </div>
         );
