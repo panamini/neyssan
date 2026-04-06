@@ -78,6 +78,10 @@ export interface ProposalDoc extends Doc<"proposals"> {
     contactLine?: string;
     letterDate?: string;
     recipientDetails?: string;
+    headerShowDate?: boolean;
+    headerShowSubject?: boolean;
+    headerShowRecipient?: boolean;
+    headerShowRecipientDetails?: boolean;
     characterLimitMode?:
       | "none"
       | "linkedin_note_200"

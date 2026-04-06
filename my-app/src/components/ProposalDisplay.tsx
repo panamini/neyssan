@@ -42,6 +42,10 @@ import {
 } from "../lib/editor-ai-selection";
 import { resolveProposalCharacterLimitSelection } from "../../convex/lib/proposals/generationControls";
 import type { ProposalApplicantHeaderData } from "../lib/proposal-personalization";
+import {
+  resolveProposalHeaderVisibility,
+  type ProposalHeaderVisibility,
+} from "../lib/proposal-header";
 
 interface ProposalDisplayProps {
   proposalContent: string | null;
@@ -65,6 +69,7 @@ interface ProposalDisplayProps {
   documentTitle?: string | null;
   documentMeta?: string | null;
   applicantHeader?: ProposalApplicantHeaderData | null;
+  headerVisibility?: ProposalHeaderVisibility | null;
   mode?: "preview" | "edit";
   onModeChange?: (mode: "preview" | "edit") => void;
   onPreviewInteract?: () => void;
@@ -96,6 +101,11 @@ interface ProposalDisplayProps {
   onLetterDateChange?: (value: string) => void;
   recipientDetailsEditable?: boolean;
   onRecipientDetailsChange?: (value: string) => void;
+  onHeaderVisibilityChange?: (
+    value:
+      | Partial<ProposalHeaderVisibility>
+      | ((current: ProposalHeaderVisibility) => Partial<ProposalHeaderVisibility>),
+  ) => void;
   showDocumentCaption?: boolean;
   characterLimit?: number | null;
   characterLimitAdvisory?: boolean;
@@ -341,6 +351,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   documentTitle = null,
   documentMeta = null,
   applicantHeader = null,
+  headerVisibility = null,
   mode = "preview",
   onModeChange,
   onPreviewInteract,
@@ -372,6 +383,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   onLetterDateChange,
   recipientDetailsEditable = false,
   onRecipientDetailsChange,
+  onHeaderVisibilityChange,
   showDocumentCaption = true,
   characterLimit,
   characterLimitAdvisory = false,
@@ -525,6 +537,28 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     railTitle?.trim() || applicantHeader?.name?.trim() || "Applicant name";
   const applicantDisplayRole =
     railMeta?.trim() || applicantHeader?.role?.trim() || "Applicant role";
+  const resolvedHeaderVisibility = React.useMemo(
+    () => resolveProposalHeaderVisibility(headerVisibility),
+    [headerVisibility],
+  );
+  const handleHeaderVisibilityChange = React.useCallback(
+    (nextValue: Partial<ProposalHeaderVisibility>) => {
+      onHeaderVisibilityChange?.((current) => {
+        const resolvedCurrent = resolveProposalHeaderVisibility(current);
+        const nextVisibility = {
+          ...resolvedCurrent,
+          ...nextValue,
+        };
+
+        if (!nextVisibility.showRecipient) {
+          nextVisibility.showRecipientDetails = false;
+        }
+
+        return nextVisibility;
+      });
+    },
+    [onHeaderVisibilityChange],
+  );
   const applicantDrawerId = React.useId();
   const usesFixedA4ScalePreview =
     usesDocumentRenderer &&
@@ -735,9 +769,9 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       return;
     }
 
-    setZoomIndex(readProposalZoomIndex(zoomStorageKey));
+    setInternalZoomIndex(readProposalZoomIndex(zoomStorageKey));
     setFitRequestCount((count) => count + 1);
-  }, [isZoomControlled, setZoomIndex, zoomStorageKey]);
+  }, [isZoomControlled, zoomStorageKey]);
 
   React.useEffect(() => {
     if (!isZoomMenuOpen) {
@@ -869,6 +903,32 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       document.removeEventListener("pointerup", handlePointerUp);
     };
   }, [isEditable, scheduleTextareaSelectionCheck]);
+
+  React.useEffect(() => {
+    if (!isEditable || !textareaSelectionState) {
+      return undefined;
+    }
+
+    const textarea = editableTextareaRef.current;
+    const handleReposition = () => {
+      scheduleTextareaSelectionCheck();
+    };
+    const resizeObserver =
+      textarea && typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(handleReposition)
+        : null;
+
+    if (textarea) {
+      resizeObserver?.observe(textarea);
+    }
+
+    window.addEventListener("resize", handleReposition);
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", handleReposition);
+    };
+  }, [isEditable, scheduleTextareaSelectionCheck, textareaSelectionState]);
 
   const handleRunInlineAiAction = React.useCallback(
     async (actionId: InlineAiActionId, instruction: string) => {
@@ -1340,6 +1400,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                   documentTitle={documentTitle}
                   documentMeta={documentMeta}
                   applicantHeader={applicantHeader}
+                  headerVisibility={resolvedHeaderVisibility}
                   documentTypography={documentTypography}
                   pageWidth={A4_PAGE_WIDTH_PX}
                   pageGapPx={unscaledDocumentPageGapPx}
@@ -1426,6 +1487,65 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                               </p>
                             </div>
                           </div>
+                          {onHeaderVisibilityChange ? (
+                            <div className="dasti-proposal-editor-page__header-toggles">
+                              <label className="dasti-proposal-editor-page__toggle">
+                                <input
+                                  type="checkbox"
+                                  checked={resolvedHeaderVisibility.showDate}
+                                  onChange={(event) =>
+                                    handleHeaderVisibilityChange({
+                                      showDate: event.target.checked,
+                                    })
+                                  }
+                                />
+                                <span>Date</span>
+                              </label>
+                              <label className="dasti-proposal-editor-page__toggle">
+                                <input
+                                  type="checkbox"
+                                  checked={resolvedHeaderVisibility.showSubject}
+                                  onChange={(event) =>
+                                    handleHeaderVisibilityChange({
+                                      showSubject: event.target.checked,
+                                    })
+                                  }
+                                />
+                                <span>Subject</span>
+                              </label>
+                              <label className="dasti-proposal-editor-page__toggle">
+                                <input
+                                  type="checkbox"
+                                  checked={resolvedHeaderVisibility.showRecipient}
+                                  onChange={(event) =>
+                                    handleHeaderVisibilityChange({
+                                      showRecipient: event.target.checked,
+                                    })
+                                  }
+                                />
+                                <span>To</span>
+                              </label>
+                              <label className="dasti-proposal-editor-page__toggle">
+                                <input
+                                  type="checkbox"
+                                  checked={
+                                    resolvedHeaderVisibility.showRecipient &&
+                                    resolvedHeaderVisibility.showRecipientDetails
+                                  }
+                                  onChange={(event) =>
+                                    handleHeaderVisibilityChange({
+                                      showRecipient:
+                                        event.target.checked ||
+                                        resolvedHeaderVisibility.showRecipient,
+                                      showRecipientDetails: event.target.checked,
+                                    })
+                                  }
+                                  disabled={!resolvedHeaderVisibility.showRecipient}
+                                />
+                                <span>Employer details</span>
+                              </label>
+                            </div>
+                          ) : null}
                           <div className="dasti-proposal-editor-page__header-fields">
                             {onRailTitleChange ? (
                               <label className="dasti-proposal-editor-page__field">
@@ -1586,9 +1706,12 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                   railTitle={railTitle}
                   railMeta={railMeta}
                   contactLine={contactLine}
+                  letterDate={letterDate}
+                  recipientDetails={recipientDetails}
                   documentTitle={documentTitle}
                   documentMeta={documentMeta}
                   applicantHeader={applicantHeader}
+                  headerVisibility={resolvedHeaderVisibility}
                   documentTypography={documentTypography}
                   pageWidth={stageLayout.pageWidth}
                   pageGapPx={documentPageGapPx}

@@ -77,8 +77,6 @@ describe("ProposalDocumentRenderer volk register layout", () => {
       expect.arrayContaining([
         "date: April 5, 2026",
         "to: Elena Marlowe",
-        "Head of People",
-        "Modine · elena@modine.com",
       ]),
     );
     expect(subjectRow?.textContent).toContain(
@@ -112,15 +110,64 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     const structuredHeader = container.querySelector(
       ".dasti-proposal-document__structured-header",
     );
+    const senderHeader = container.querySelector(
+      ".dasti-proposal-document__sender-header",
+    );
 
+    expect(senderHeader?.textContent).toContain("From:");
+    expect(senderHeader?.textContent).toContain("Jane Doe");
+    expect(senderHeader?.textContent).toContain("Operations Specialist");
     expect(structuredHeader?.textContent).toContain("Date");
     expect(structuredHeader?.textContent).toContain("April 6, 2026");
     expect(structuredHeader?.textContent).toContain("To");
     expect(structuredHeader?.textContent).toContain("Avery Stone");
-    expect(structuredHeader?.textContent).toContain("Hiring Manager");
     expect(structuredHeader?.textContent).toContain("Subject");
     expect(structuredHeader?.textContent).toContain(
       "Application for Operations Specialist",
     );
+  });
+
+  it("respects header visibility flags in non-volk templates", () => {
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content={
+          "Dear Hiring Manager,\n\nI support delivery operations with careful written communication.\n\nBest regards,\nJane Doe"
+        }
+        proposalType="cover_letter"
+        templateId="swiss_margin"
+        railTitle="Jane Doe"
+        railMeta="Operations Specialist"
+        letterDate="April 6, 2026"
+        recipientDetails={"Avery Stone\nHiring Manager\nNorthwind"}
+        documentTitle="Application for Operations Specialist"
+        headerVisibility={{
+          showDate: false,
+          showSubject: false,
+          showRecipient: true,
+          showRecipientDetails: false,
+        }}
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+      />,
+    );
+
+    const structuredHeader = container.querySelector(
+      ".dasti-proposal-document__structured-header",
+    );
+
+    expect(structuredHeader?.textContent).toContain("To");
+    expect(structuredHeader?.textContent).toContain("Avery Stone");
+    expect(structuredHeader?.textContent).not.toContain("Date");
+    expect(structuredHeader?.textContent).not.toContain("April 6, 2026");
+    expect(structuredHeader?.textContent).not.toContain("Subject");
+    expect(structuredHeader?.textContent).not.toContain(
+      "Application for Operations Specialist",
+    );
+    expect(structuredHeader?.textContent).not.toContain("Hiring Manager");
   });
 });

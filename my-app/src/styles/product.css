@@ -4216,6 +4216,25 @@
   gap: var(--space-2);
 }
 
+.dasti-proposal-editor-page__header-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-block-end: var(--space-1);
+}
+
+.dasti-proposal-editor-page__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--ts);
+  color: var(--tm2);
+}
+
+.dasti-proposal-editor-page__toggle input {
+  margin: 0;
+}
+
 .dasti-proposal-editor-page__field {
   min-width: 0;
   display: grid;
@@ -4518,6 +4537,67 @@
   );
 }
 
+.dasti-proposal-document__sender-header {
+  display: grid;
+  gap: calc(var(--proposal-inline-mm) * 0.85);
+  margin-block-end: calc(var(--proposal-inline-mm) * 4.2);
+}
+
+.dasti-proposal-document__sender-label,
+.dasti-proposal-document__sender-role,
+.dasti-proposal-document__sender-contact {
+  margin: 0;
+}
+
+.dasti-proposal-document__sender-label {
+  font-family: var(--font-heading-family);
+  font-size: calc(
+    var(--proposal-inline-mm) * 4.4 * var(--proposal-fit-font-scale, 1) *
+      var(--proposal-fit-fine-scale, 1)
+  );
+  line-height: 1.12;
+  font-weight: 600;
+  color: var(--proposal-document-ink);
+}
+
+.dasti-proposal-document__sender-label-key {
+  font-family: var(--font-body-family);
+  font-size: 0.58em;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--proposal-document-accent-ink);
+}
+
+.dasti-proposal-document__sender-role {
+  font-family: var(--font-heading-family);
+  font-size: calc(
+    var(--proposal-inline-mm) * 3.25 * var(--proposal-fit-font-scale, 1) *
+      var(--proposal-fit-fine-scale, 1)
+  );
+  line-height: calc(1.26 * var(--proposal-fit-line-height-scale, 1));
+  font-weight: 600;
+  color: color-mix(
+    in srgb,
+    var(--proposal-document-ink) 86%,
+    var(--proposal-document-accent-ink) 14%
+  );
+  text-decoration: underline;
+  text-decoration-thickness: 0.06em;
+  text-underline-offset: 0.16em;
+}
+
+.dasti-proposal-document__sender-contact {
+  font-family: var(--font-body-family);
+  font-size: calc(
+    var(--proposal-inline-mm) * 2.55 * var(--proposal-fit-font-scale, 1) *
+      var(--proposal-fit-fine-scale, 1)
+  );
+  line-height: calc(1.46 * var(--proposal-fit-line-height-scale, 1));
+  color: var(--proposal-document-meta-ink);
+  overflow-wrap: anywhere;
+}
+
 .dasti-proposal-document__structured-header {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -4577,6 +4657,16 @@
 
 .dasti-proposal-document__structured-header-value--multiline {
   white-space: pre-line;
+}
+
+.dasti-proposal-document__structured-header-value--secondary {
+  font-family: var(--font-body-family);
+  font-size: calc(
+    var(--proposal-inline-mm) * 2.65 * var(--proposal-fit-font-scale, 1) *
+      var(--proposal-fit-fine-scale, 1)
+  );
+  font-weight: 500;
+  color: var(--proposal-document-meta-ink);
 }
 
 .dasti-proposal-document__salutation,
@@ -4700,7 +4790,6 @@
   white-space: normal;
   text-wrap: balance;
   overflow-wrap: anywhere;
-  text-transform: lowercase;
 }
 
 .dasti-proposal-document--volk-register .dasti-proposal-document__volk-subtitle {
@@ -4720,7 +4809,9 @@
   white-space: normal;
   text-wrap: balance;
   overflow-wrap: anywhere;
-  text-transform: lowercase;
+  text-decoration: underline;
+  text-decoration-thickness: 0.06em;
+  text-underline-offset: 0.16em;
 }
 
 .dasti-proposal-document--volk-register .dasti-proposal-document__volk-sender {
@@ -4739,7 +4830,6 @@
   max-width: 100%;
   white-space: normal;
   overflow-wrap: anywhere;
-  text-transform: lowercase;
 }
 
 .dasti-proposal-document--volk-register .dasti-proposal-document__volk-register-item {

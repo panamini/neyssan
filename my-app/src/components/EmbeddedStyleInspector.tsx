@@ -1,5 +1,5 @@
 import React from "react";
-import { ColorWheel, Wand2 } from "@/lib/icons";
+import { ColorWheel, Layout, Wand2 } from "@/lib/icons";
 import type { ProposalTemplateId } from "../../convex/lib/proposals/renderTemplates";
 import type { VerbatiStyleBundleId } from "../../convex/lib/proposals/styleSuggestions";
 import { ProposalColorPickerPopover } from "./ProposalColorPickerPopover";
@@ -81,31 +81,6 @@ function InspectorTooltip({
       {description ? <span>{description}</span> : null}
     </span>
   );
-}
-
-function getLayoutBadge(layout: VerbatiLayoutPreset): string {
-  switch (layout) {
-    case "swiss":
-      return "SW";
-    case "volk-register":
-      return "VR";
-    case "two-column":
-      return "2C";
-    case "editorial":
-      return "ED";
-    case "modernist":
-      return "MG";
-    case "quire":
-      return "QU";
-    case "playful-photo":
-      return "PP";
-    case "soft-ribbon":
-      return "SR";
-    case "slate-column":
-      return "SC";
-    default:
-      return "ST";
-  }
 }
 
 export function EmbeddedStyleInspector({
@@ -389,7 +364,7 @@ export function EmbeddedStyleInspector({
                 className="dasti-artifact-inspector__icon dasti-artifact-inspector__icon--layout"
                 aria-hidden="true"
               >
-                {getLayoutBadge(stylePreset.layout)}
+                <Layout size={14} strokeWidth={1.8} />
               </span>
               <span className="dasti-artifact-inspector__label">Layout</span>
               {!hasOpenDrawer ? (
@@ -623,7 +598,7 @@ export function EmbeddedStyleInspector({
                   className="dasti-artifact-inspector__icon dasti-artifact-inspector__icon--layout"
                   aria-hidden="true"
                 >
-                  {getLayoutBadge(stylePreset.layout)}
+                  <Layout size={14} strokeWidth={1.8} />
                 </span>
                 <span className="dasti-artifact-inspector__label">Refine</span>
                 {!hasOpenDrawer ? (
@@ -668,7 +643,7 @@ export function EmbeddedStyleInspector({
                               className="dasti-proposal-chrome-option__icon dasti-artifact-inspector__icon--layout"
                               aria-hidden="true"
                             >
-                              {getLayoutBadge(option.id)}
+                              <Layout size={14} strokeWidth={1.8} />
                             </span>
                             <span className="dasti-proposal-chrome-option__copy">
                               <span className="dasti-proposal-chrome-option__title">

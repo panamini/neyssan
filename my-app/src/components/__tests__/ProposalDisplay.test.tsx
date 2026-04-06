@@ -236,6 +236,35 @@ describe("ProposalDisplay", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("keeps the uncontrolled zoom state after zooming in", async () => {
+    render(
+      <ProposalDisplay
+        proposalContent={
+          "Dear Hiring Manager,\n\nI built reliable editorial tooling across product and content workflows.\n\nSincerely,\nAlex Martin"
+        }
+        loading={false}
+        error={null}
+        proposalType="cover_letter"
+        showZoomControls
+        zoomStorageKey={null}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Open zoom controls" }));
+
+    const fitButton = screen.getByRole("button", { name: "Fit page" });
+    const zoomTrigger = screen.getByRole("button", {
+      name: "Open zoom controls",
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
+
+    await waitFor(() => {
+      expect(fitButton).not.toHaveClass("dasti-doc-zoom-fit--active");
+      expect(zoomTrigger).toHaveClass("dasti-doc-zoom-trigger--active");
+    });
+  });
+
   it("shows preview paragraph helper copy as a temporary edit-mode overlay and dismisses it after 4 seconds", () => {
     vi.useFakeTimers();
 

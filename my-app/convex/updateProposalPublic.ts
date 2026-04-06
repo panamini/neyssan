@@ -138,6 +138,10 @@ export default mutation({
         contactLine: v.optional(v.string()),
         letterDate: v.optional(v.string()),
         recipientDetails: v.optional(v.string()),
+        headerShowDate: v.optional(v.boolean()),
+        headerShowSubject: v.optional(v.boolean()),
+        headerShowRecipient: v.optional(v.boolean()),
+        headerShowRecipientDetails: v.optional(v.boolean()),
         characterLimitMode: v.optional(
           v.union(proposalCharacterLimitModeChoice, v.null()),
         ),
