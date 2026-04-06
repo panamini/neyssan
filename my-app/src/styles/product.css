@@ -2762,7 +2762,12 @@
 
 .dasti-proposal-source-summary-stack {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.dasti-proposal-source-summary-stack > .dasti-proposal-source-summary {
+  padding-top: 0;
 }
 
 .dasti-proposal-source-summary__origin-strip,
