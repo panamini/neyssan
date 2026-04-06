@@ -214,4 +214,33 @@ describe("EmbeddedStyleInspector", () => {
 
     expect(screen.getByRole("button", { name: "Civic Correspondence" })).toBeInTheDocument();
   });
+
+  it("applies the chosen layout from the layout drawer", async () => {
+    const user = userEvent.setup();
+    const onSelectLayout = vi.fn();
+
+    render(
+      <EmbeddedStyleInspector
+        stylePreset={{
+          layout: "swiss",
+          typography: "signature",
+          palette: "sauge",
+        }}
+        copyMode="title-only"
+        controlMode="direct"
+        onSelectBundle={vi.fn()}
+        onSelectLayout={onSelectLayout}
+        onSelectTypography={vi.fn()}
+        onSelectPalette={vi.fn()}
+        onSelectCustomAccent={vi.fn()}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Open layout controls" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Volk Register" }));
+
+    expect(onSelectLayout).toHaveBeenCalledWith("volk-register");
+  });
 });

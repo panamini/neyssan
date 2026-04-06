@@ -419,6 +419,33 @@ const RichEditor = forwardRef<
     };
   }, [scheduleSelectionCheck]);
 
+  useEffect(() => {
+    if (!inlineSelectionState) {
+      return undefined;
+    }
+
+    const view = (manager as any)?.view;
+    const root = view?.dom as HTMLElement | null;
+    const handleReposition = () => {
+      scheduleSelectionCheck();
+    };
+    const resizeObserver =
+      root && typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(handleReposition)
+        : null;
+
+    if (root) {
+      resizeObserver?.observe(root);
+    }
+
+    window.addEventListener("resize", handleReposition);
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", handleReposition);
+    };
+  }, [inlineSelectionState, manager, scheduleSelectionCheck]);
+
   const handleRunInlineAiAction = useCallback(
     async (actionId: InlineAiActionId, instruction: string) => {
       if (!inlineSelectionState) return;
