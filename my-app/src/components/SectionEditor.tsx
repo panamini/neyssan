@@ -1210,35 +1210,44 @@ export default function SectionEditor({
     setLanguagesAiRequested(false);
   }, [section.id]);
 
-  const scheduleInlineSelectionCheck = useCallback(() => {
+  const runInlineSelectionCheck = useCallback(() => {
+    if (isPrimaryPointerPressed()) {
+      return;
+    }
+    const view = (manager as any)?.view;
+    const selection = view?.state?.selection;
+    const nextSelection = getDomSelectionState(view?.dom as HTMLElement | null);
+
+    if (!nextSelection || !selection || selection.empty) {
+      if (isInlineAiToolbarActiveElement()) {
+        return;
+      }
+      setInlineSelectionState(null);
+      return;
+    }
+
+    setInlineSelectionState({
+      ...nextSelection,
+      from: selection.from,
+      to: selection.to,
+    });
+  }, [manager]);
+
+  const scheduleInlineSelectionCheck = useCallback((immediate = false) => {
     if (inlineSelectionDebounceRef.current !== null) {
       window.clearTimeout(inlineSelectionDebounceRef.current);
     }
 
+    if (immediate) {
+      runInlineSelectionCheck();
+      return;
+    }
+
     inlineSelectionDebounceRef.current = window.setTimeout(() => {
       inlineSelectionDebounceRef.current = null;
-      if (isPrimaryPointerPressed()) {
-        return;
-      }
-      const view = (manager as any)?.view;
-      const selection = view?.state?.selection;
-      const nextSelection = getDomSelectionState(view?.dom as HTMLElement | null);
-
-      if (!nextSelection || !selection || selection.empty) {
-        if (isInlineAiToolbarActiveElement()) {
-          return;
-        }
-        setInlineSelectionState(null);
-        return;
-      }
-
-      setInlineSelectionState({
-        ...nextSelection,
-        from: selection.from,
-        to: selection.to,
-      });
+      runInlineSelectionCheck();
     }, 90);
-  }, [manager]);
+  }, [runInlineSelectionCheck]);
 
   useEffect(() => {
     const handleSelectionChange = () => {
@@ -1264,7 +1273,7 @@ export default function SectionEditor({
     const view = (manager as any)?.view;
     const root = view?.dom as HTMLElement | null;
     const handleReposition = () => {
-      scheduleInlineSelectionCheck();
+      scheduleInlineSelectionCheck(true);
     };
     const resizeObserver =
       root && typeof ResizeObserver !== "undefined"

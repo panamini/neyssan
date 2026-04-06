@@ -371,37 +371,46 @@ const RichEditor = forwardRef<
     };
   }, []);
 
-  const scheduleSelectionCheck = useCallback(() => {
+  const runSelectionCheck = useCallback(() => {
+    if (isPrimaryPointerPressed()) {
+      return;
+    }
+    const view = (manager as any)?.view;
+    const selection = view?.state?.selection;
+    const nextSelection = getDomSelectionState(
+      view?.dom as HTMLElement | null,
+    );
+
+    if (!nextSelection || !selection || selection.empty) {
+      if (isInlineAiToolbarActiveElement()) {
+        return;
+      }
+      setInlineSelectionState(null);
+      return;
+    }
+
+    setInlineSelectionState({
+      ...nextSelection,
+      from: selection.from,
+      to: selection.to,
+    });
+  }, [manager]);
+
+  const scheduleSelectionCheck = useCallback((immediate = false) => {
     if (selectionDebounceRef.current !== null) {
       window.clearTimeout(selectionDebounceRef.current);
     }
 
+    if (immediate) {
+      runSelectionCheck();
+      return;
+    }
+
     selectionDebounceRef.current = window.setTimeout(() => {
       selectionDebounceRef.current = null;
-      if (isPrimaryPointerPressed()) {
-        return;
-      }
-      const view = (manager as any)?.view;
-      const selection = view?.state?.selection;
-      const nextSelection = getDomSelectionState(
-        view?.dom as HTMLElement | null,
-      );
-
-      if (!nextSelection || !selection || selection.empty) {
-        if (isInlineAiToolbarActiveElement()) {
-          return;
-        }
-        setInlineSelectionState(null);
-        return;
-      }
-
-      setInlineSelectionState({
-        ...nextSelection,
-        from: selection.from,
-        to: selection.to,
-      });
+      runSelectionCheck();
     }, 90);
-  }, [manager]);
+  }, [runSelectionCheck]);
 
   useEffect(() => {
     const handleSelectionChange = () => {
@@ -427,7 +436,7 @@ const RichEditor = forwardRef<
     const view = (manager as any)?.view;
     const root = view?.dom as HTMLElement | null;
     const handleReposition = () => {
-      scheduleSelectionCheck();
+      scheduleSelectionCheck(true);
     };
     const resizeObserver =
       root && typeof ResizeObserver !== "undefined"

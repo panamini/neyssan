@@ -1567,102 +1567,106 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                     className="dasti-proposal-source-scroll-region"
                     ref={attachComposeScrollEdges}
                   >
-                    {importedSourceLabel ? (
-                      <div className="dasti-proposal-source-summary__job-offer-card">
-                        <div className="dasti-proposal-source-summary__job-offer-row">
-                          <div className="dasti-proposal-source-summary__job-offer-copy">
-                            <span className="dasti-proposal-source-summary__job-offer-kicker">
-                              Job Offer
-                            </span>
-                            {resolvedDraftSourceUrl ? (
-                              <a
-                                href={resolvedDraftSourceUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="dasti-proposal-source-summary__job-offer-link"
-                              >
-                                <span>View on {importedSourceLabel}</span>
-                                <ArrowSquareOut
-                                  size={13}
-                                  strokeWidth={1.8}
-                                  aria-hidden="true"
-                                />
-                              </a>
-                            ) : (
-                              <span className="dasti-proposal-source-summary__origin-label">
-                                {importedSourceLabel}
-                              </span>
-                            )}
-                            {importedSourceHost ? (
-                              <span className="dasti-proposal-source-summary__origin-host">
-                                {importedSourceHost}
-                              </span>
-                            ) : null}
-                          </div>
-                        </div>
-                      </div>
-                    ) : null}
-                    {hasStructuredSourceSummary ? (
-                      <div className="dasti-proposal-source-summary">
-                        <div className="dasti-proposal-source-summary__grid">
-                          {sourceMetadataCards.map((item) => (
-                            <div
-                              key={`${item.label}:${item.value}`}
-                              className="dasti-proposal-source-summary__card"
-                            >
-                              <div className="dasti-proposal-source-summary__label">
-                                {item.label}
-                              </div>
-                              <div className="dasti-proposal-source-summary__value">
-                                {item.value}
-                              </div>
-                            </div>
-                          ))}
-                          {sourceSummary.toneCues.length > 0 ? (
-                            <div className="dasti-proposal-source-summary__card">
-                              <div className="dasti-proposal-source-summary__label">
-                                Tone cues
-                              </div>
-                              <div className="dasti-proposal-source-summary__value dasti-proposal-source-summary__value--chips">
-                                {sourceSummary.toneCues.map((cue) => (
-                                  <span
-                                    key={cue}
-                                    className="dasti-proposal-source-summary__chip"
+                    {importedSourceLabel || hasStructuredSourceSummary ? (
+                      <div className="dasti-proposal-source-summary-stack">
+                        {importedSourceLabel ? (
+                          <div className="dasti-proposal-source-summary__job-offer-card">
+                            <div className="dasti-proposal-source-summary__job-offer-row">
+                              <div className="dasti-proposal-source-summary__job-offer-copy">
+                                <span className="dasti-proposal-source-summary__job-offer-kicker">
+                                  Job Offer
+                                </span>
+                                {resolvedDraftSourceUrl ? (
+                                  <a
+                                    href={resolvedDraftSourceUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="dasti-proposal-source-summary__job-offer-link"
                                   >
-                                    {cue}
+                                    <span>View on {importedSourceLabel}</span>
+                                    <ArrowSquareOut
+                                      size={13}
+                                      strokeWidth={1.8}
+                                      aria-hidden="true"
+                                    />
+                                  </a>
+                                ) : (
+                                  <span className="dasti-proposal-source-summary__origin-label">
+                                    {importedSourceLabel}
                                   </span>
-                                ))}
+                                )}
+                                {importedSourceHost ? (
+                                  <span className="dasti-proposal-source-summary__origin-host">
+                                    {importedSourceHost}
+                                  </span>
+                                ) : null}
                               </div>
                             </div>
-                          ) : null}
-                        </div>
-                        {sourceSummary.responsibilities.length > 0 ? (
-                          <div className="dasti-proposal-source-summary__block">
-                            <div className="dasti-proposal-source-summary__label">
-                              Key responsibilities
-                            </div>
-                            <ul className="dasti-proposal-source-summary__list">
-                              {sourceSummary.responsibilities.map((item) => (
-                                <li key={item}>{item}</li>
-                              ))}
-                            </ul>
                           </div>
                         ) : null}
-                        {sourceSummary.keywords.length > 0 ? (
-                          <div className="dasti-proposal-source-summary__block">
-                            <div className="dasti-proposal-source-summary__label">
-                              Keywords
-                            </div>
-                            <div className="dasti-proposal-source-summary__keywords">
-                              {sourceSummary.keywords.map((keyword) => (
-                                <span
-                                  key={keyword}
-                                  className="dasti-proposal-source-summary__keyword"
+                        {hasStructuredSourceSummary ? (
+                          <div className="dasti-proposal-source-summary">
+                            <div className="dasti-proposal-source-summary__grid">
+                              {sourceMetadataCards.map((item) => (
+                                <div
+                                  key={`${item.label}:${item.value}`}
+                                  className="dasti-proposal-source-summary__card"
                                 >
-                                  {keyword}
-                                </span>
+                                  <div className="dasti-proposal-source-summary__label">
+                                    {item.label}
+                                  </div>
+                                  <div className="dasti-proposal-source-summary__value">
+                                    {item.value}
+                                  </div>
+                                </div>
                               ))}
+                              {sourceSummary.toneCues.length > 0 ? (
+                                <div className="dasti-proposal-source-summary__card">
+                                  <div className="dasti-proposal-source-summary__label">
+                                    Tone cues
+                                  </div>
+                                  <div className="dasti-proposal-source-summary__value dasti-proposal-source-summary__value--chips">
+                                    {sourceSummary.toneCues.map((cue) => (
+                                      <span
+                                        key={cue}
+                                        className="dasti-proposal-source-summary__chip"
+                                      >
+                                        {cue}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : null}
                             </div>
+                            {sourceSummary.responsibilities.length > 0 ? (
+                              <div className="dasti-proposal-source-summary__block">
+                                <div className="dasti-proposal-source-summary__label">
+                                  Key responsibilities
+                                </div>
+                                <ul className="dasti-proposal-source-summary__list">
+                                  {sourceSummary.responsibilities.map((item) => (
+                                    <li key={item}>{item}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            ) : null}
+                            {sourceSummary.keywords.length > 0 ? (
+                              <div className="dasti-proposal-source-summary__block">
+                                <div className="dasti-proposal-source-summary__label">
+                                  Keywords
+                                </div>
+                                <div className="dasti-proposal-source-summary__keywords">
+                                  {sourceSummary.keywords.map((keyword) => (
+                                    <span
+                                      key={keyword}
+                                      className="dasti-proposal-source-summary__keyword"
+                                    >
+                                      {keyword}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : null}
                           </div>
                         ) : null}
                       </div>
