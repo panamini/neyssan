@@ -115,14 +115,15 @@ describe("SettingsPage preview controls", () => {
     ).toHaveTextContent("Thestral Neue / BioRhyme Light");
   });
 
-  it("renders all ten curated font pairs in the typography grid", () => {
+  it("renders all thirteen curated font pairs in the typography grid", () => {
     const { container } = render(<SettingsPage />);
     const grid = screen.getByRole("group", { name: "Font pair" });
     const optionButtons = within(grid).getAllByRole("button");
 
-    expect(optionButtons).toHaveLength(10);
+    expect(optionButtons).toHaveLength(13);
     expect(grid).toHaveTextContent("Grave Presse");
-    expect(grid).toHaveTextContent("Bricolage");
+    expect(grid).toHaveTextContent("Nunito ExtraBold");
+    expect(grid).toHaveTextContent("Doto Black");
     expect(container.querySelector(".dasti-settings-font-grid")).toBeTruthy();
   });
 
