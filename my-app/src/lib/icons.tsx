@@ -44,6 +44,7 @@ import {
   Plus as PhPlus,
   PushPin as PhPushPin,
   PushPinSlash as PhPushPinSlash,
+  Question as PhQuestion,
   Rows as PhRows,
   Scan as PhScan,
   Scroll as PhScroll,
@@ -163,6 +164,7 @@ export const Pencil = withCompat(PhPencilSimple);
 export const Pin = withCompat(PhPushPin);
 export const PinOff = withCompat(PhPushPinSlash);
 export const Plus = withCompat(PhPlus);
+export const Question = withCompat(PhQuestion);
 export const RotateCcw = withCompat(PhArrowsClockwise);
 export const ScanLine = withCompat(PhScan);
 export const ScrollText = withCompat(PhScroll);

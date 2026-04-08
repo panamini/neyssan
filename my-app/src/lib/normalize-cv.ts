@@ -5,10 +5,23 @@ import {
   CvBlockSchemaStrict,
   IExperienceItemSchema as ExperienceItemSchema,
   IEducationItemSchema as EducationItemSchema,
+  CertificationItemSchema,
+  AffiliationItemSchema,
   SummaryItemSchema,
   CvSectionSchemaStrict,
 } from "../schemas/cvDocument.schema";
-import type { CvDocument, CvSection, CvBlock, IExperienceItem, IEducationItem, ISkillItem, ILanguageItem, IAchievementItem } from "../types/cvDocument";
+import type {
+  CvDocument,
+  CvSection,
+  CvBlock,
+  IExperienceItem,
+  IEducationItem,
+  ISkillItem,
+  ICertificationItem,
+  IAffiliationItem,
+  ILanguageItem,
+  IAchievementItem,
+} from "../types/cvDocument";
 import type { RemirrorJSON } from "remirror";
 import { ensureRemirrorDoc } from "../components/remirror-editor/utils/conversion";
 import { v4 as uuidv4 } from "uuid";
@@ -330,6 +343,73 @@ function normalizeSkillItem(entry: any, idx: number): ISkillItem {
   return { id, name, level, bucket };
 }
 
+function normalizeCertificationItem(entry: any, idx: number): ICertificationItem {
+  const issueDate = sanitizeDate(entry?.issueDate);
+  const expirationDate = entry?.expirationDate === null ? null : sanitizeDate(entry?.expirationDate);
+
+  return CertificationItemSchema.parse({
+    id:
+      typeof entry?.id === "string" && entry.id.trim().length > 0
+        ? String(entry.id)
+        : `cert-${uuidv4()}-${idx}`,
+    certificationName:
+      typeof entry?.certificationName === "string"
+        ? entry.certificationName
+        : typeof entry?.name === "string"
+          ? entry.name
+          : String(entry ?? ""),
+    issuingOrganization:
+      typeof entry?.issuingOrganization === "string"
+        ? entry.issuingOrganization
+        : typeof entry?.issuer === "string"
+          ? entry.issuer
+          : "",
+    issueDate,
+    expirationDate,
+    credentialId:
+      typeof entry?.credentialId === "string"
+        ? entry.credentialId
+        : typeof entry?.licenseNumber === "string"
+          ? entry.licenseNumber
+          : "",
+  });
+}
+
+function normalizeAffiliationItem(entry: any, idx: number): IAffiliationItem {
+  const startDate = sanitizeDate(entry?.startDate);
+  const isCurrent = Boolean(entry?.isCurrent ?? entry?.current ?? false);
+  const endDate = isCurrent ? null : entry?.endDate === null ? null : sanitizeDate(entry?.endDate);
+
+  return AffiliationItemSchema.parse({
+    id:
+      typeof entry?.id === "string" && entry.id.trim().length > 0
+        ? String(entry.id)
+        : `aff-${uuidv4()}-${idx}`,
+    organizationName:
+      typeof entry?.organizationName === "string"
+        ? entry.organizationName
+        : typeof entry?.organization === "string"
+          ? entry.organization
+          : String(entry ?? ""),
+    roleOrMembershipType:
+      typeof entry?.roleOrMembershipType === "string"
+        ? entry.roleOrMembershipType
+        : typeof entry?.membershipType === "string"
+          ? entry.membershipType
+          : typeof entry?.role === "string"
+            ? entry.role
+            : "",
+    startDate,
+    endDate,
+    isCurrent: isCurrent ? true : undefined,
+    notes: normalizeRichField(entry?.notes),
+  });
+}
+
+function matchesSectionTitle(section: any, title: string): boolean {
+  return String(section?.title ?? "").trim().toLowerCase() === title.trim().toLowerCase();
+}
+
 /** Normalize language item; ensure id and default level */
 function normalizeLanguageItem(entry: any, idx: number): ILanguageItem {
   const id =
@@ -609,6 +689,89 @@ export function ensureRepresentativeBlocks(cv: CvDocument): CvDocument {
         }
       }
 
+      // Certifications: ensure a representative block per structured item
+      if (hasStructured && secType === "certifications") {
+        const items: Array<Record<string, any>> = Array.isArray((s as any).structuredContent)
+          ? ((s as any).structuredContent as Array<Record<string, any>>)
+          : [];
+        const existingLinked = new Set<string>();
+        for (const b of originalBlocks) {
+          const linked =
+            (b as any)?.attributes?.linkedStructuredId ??
+            (b as any)?.attributes?.linkedstructuredid;
+          if (typeof linked === "string" && linked.trim().length > 0) existingLinked.add(String(linked));
+        }
+        const ensureBlocksCopy = () => {
+          if (blocks === originalBlocks) {
+            blocks = [...originalBlocks];
+          }
+        };
+        items.forEach((item, idx) => {
+          const itemId = typeof item?.id === "string" && item.id.trim().length > 0 ? String(item.id) : undefined;
+          if (itemId && existingLinked.has(itemId)) return;
+          const certificationName = String(item?.certificationName ?? "").trim();
+          const issuer = String(item?.issuingOrganization ?? "").trim();
+          const title = certificationName || `Certification ${idx + 1}`;
+          const detailBits = [issuer, String(item?.credentialId ?? "").trim()].filter(Boolean);
+          const content = ensureRemirrorDoc(detailBits.join("\n"));
+          const newBlock: CvBlock = CvBlockSchemaStrict.parse({
+            id: uuidv4(),
+            title,
+            type: "text",
+            content,
+            attributes: itemId ? { linkedStructuredId: itemId } : undefined,
+          });
+          ensureBlocksCopy();
+          blocks.push(newBlock);
+          blocksChanged = true;
+          if (itemId) existingLinked.add(itemId);
+        });
+      }
+
+      // Affiliations: ensure a representative block per structured item for titled text sections
+      if (hasStructured && secType === "text" && matchesSectionTitle(s, "Affiliations")) {
+        const items: Array<Record<string, any>> = Array.isArray((s as any).structuredContent)
+          ? ((s as any).structuredContent as Array<Record<string, any>>)
+          : [];
+        const existingLinked = new Set<string>();
+        for (const b of originalBlocks) {
+          const linked =
+            (b as any)?.attributes?.linkedStructuredId ??
+            (b as any)?.attributes?.linkedstructuredid;
+          if (typeof linked === "string" && linked.trim().length > 0) existingLinked.add(String(linked));
+        }
+        const ensureBlocksCopy = () => {
+          if (blocks === originalBlocks) {
+            blocks = [...originalBlocks];
+          }
+        };
+        items.forEach((item, idx) => {
+          const itemId = typeof item?.id === "string" && item.id.trim().length > 0 ? String(item.id) : undefined;
+          if (itemId && existingLinked.has(itemId)) return;
+          const organizationName = String(item?.organizationName ?? "").trim();
+          const membershipType = String(item?.roleOrMembershipType ?? "").trim();
+          const title = organizationName || `Affiliation ${idx + 1}`;
+          const notes =
+            typeof item?.notes === "string"
+              ? item.notes.trim()
+              : item?.notes && typeof item.notes === "object"
+                ? normalizeWhitespace(JSON.stringify(item.notes)).text
+                : "";
+          const content = ensureRemirrorDoc([membershipType, notes].filter(Boolean).join("\n"));
+          const newBlock: CvBlock = CvBlockSchemaStrict.parse({
+            id: uuidv4(),
+            title,
+            type: "text",
+            content,
+            attributes: itemId ? { linkedStructuredId: itemId } : undefined,
+          });
+          ensureBlocksCopy();
+          blocks.push(newBlock);
+          blocksChanged = true;
+          if (itemId) existingLinked.add(itemId);
+        });
+      }
+
       // Achievements: ensure a representative block per structured item (title=text)
       if (hasStructured && secType === "achievements") {
         const items: Array<Record<string, any>> = Array.isArray((s as any).structuredContent)
@@ -682,6 +845,10 @@ export function normalizeAndValidateCvDocument(
       locale: typeof meta.locale === "string" ? meta.locale : undefined,
       authorId: typeof meta.authorId === "string" ? meta.authorId : undefined,
       lastEditedBy: typeof meta.lastEditedBy === "string" ? meta.lastEditedBy : undefined,
+      importRecoverySession:
+        meta.importRecoverySession && typeof meta.importRecoverySession === "object"
+          ? meta.importRecoverySession
+          : undefined,
     };
 
     // Canonical template
@@ -789,6 +956,20 @@ export function normalizeAndValidateCvDocument(
             structuredContent = [];
           }
         }
+      } else if (secType === "certifications") {
+        const raw = s?.structuredContent as unknown;
+        if (Array.isArray(raw)) {
+          structuredContent = raw.map((it, idx) => normalizeCertificationItem(it, idx));
+        } else if (raw && typeof raw === "object") {
+          structuredContent = [normalizeCertificationItem(raw, 0)];
+        } else {
+          const tmpl = templateByType.get(secType);
+          if (Array.isArray(tmpl?.structuredContent)) {
+            structuredContent = (tmpl!.structuredContent as any[]).map((it, idx) => normalizeCertificationItem(it, idx));
+          } else {
+            structuredContent = [];
+          }
+        }
       } else if (secType === "languages") {
         // Normalize languages; support legacy string[] by coercing to { id, name, level }
         const raw = s?.structuredContent as unknown;
@@ -818,6 +999,24 @@ export function normalizeAndValidateCvDocument(
           } else {
             structuredContent = [];
           }
+        }
+      } else if (secType === "text" && matchesSectionTitle(s, "Hobbies")) {
+        const raw = s?.structuredContent as unknown;
+        if (Array.isArray(raw)) {
+          structuredContent = raw.map((it, idx) => normalizeSkillItem(it, idx));
+        } else if (raw && typeof raw === "object") {
+          structuredContent = [normalizeSkillItem(raw, 0)];
+        } else {
+          structuredContent = [];
+        }
+      } else if (secType === "text" && matchesSectionTitle(s, "Affiliations")) {
+        const raw = s?.structuredContent as unknown;
+        if (Array.isArray(raw)) {
+          structuredContent = raw.map((it, idx) => normalizeAffiliationItem(it, idx));
+        } else if (raw && typeof raw === "object") {
+          structuredContent = [normalizeAffiliationItem(raw, 0)];
+        } else {
+          structuredContent = [];
         }
       }
 

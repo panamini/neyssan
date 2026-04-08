@@ -226,6 +226,17 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
       return "";
     }
   }, [block]);
+  const genericPreviewDoc = useMemo(() => {
+    try {
+      return ensureRemirrorDoc((block as any)?.content as any);
+    } catch {
+      return null;
+    }
+  }, [block]);
+  const trimmedTitle = String(block.title ?? "").trim();
+  const showGenericBody =
+    extractedPlainText.length > 0 &&
+    (!trimmedTitle || extractedPlainText.trim().toLowerCase() !== trimmedTitle.toLowerCase());
 
 
 
@@ -337,12 +348,7 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
         (block as any)?.attributes?.linkedStructuredId ??
         (block as any)?.attributes?.linkedstructuredid ??
         null;
-      const shouldRouteToTypedModal = Boolean(isStructuredSection && linkedItem && linkedId);
-
       const basePayload = { sectionId, block, linkedStructured: linkedItem };
-      const payload = shouldRouteToTypedModal
-        ? ({ ...basePayload, openTypedModal: true } as const)
-        : basePayload;
 
       // eslint-disable-next-line no-console
       console.debug("[BlockRenderer] handleEditClick", {
@@ -351,7 +357,6 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
         linkedId: linkedId ? String(linkedId) : null,
         hasLinkedItem: Boolean(linkedItem),
         isStructuredSection,
-        shouldRouteToTypedModal,
       });
 
       if (typeof openInspector !== "function") {
@@ -359,9 +364,7 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
         console.error("[BlockRenderer] openInspector is not a function", { openInspector });
         return;
       }
-      // Route to typed modal via context signal when applicable; otherwise open inspector
-      // (SelectedBlockInspector will ignore when `openTypedModal` was requested).
-      openInspector(payload as any);
+      openInspector(basePayload as any);
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error("[BlockRenderer] handleEditClick error", err);
@@ -429,9 +432,20 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
             {linkedItem && section ? (
               <RichSummary item={linkedItem} sectionType={section.type} />
             ) : (
-              <p className="cv-entry-body cv-entry-body--muted">
-                {block.title || extractedPlainText.slice(0, 100) || "Block Content"}
-              </p>
+              <>
+                {trimmedTitle ? (
+                  <p className="cv-entry-title cv-entry-title--truncate">{trimmedTitle}</p>
+                ) : null}
+                {showGenericBody && genericPreviewDoc ? (
+                  <div className={trimmedTitle ? "mt-2" : undefined}>
+                    <ReadOnlyRichDoc doc={genericPreviewDoc} />
+                  </div>
+                ) : (
+                  <p className="cv-entry-body cv-entry-body--muted">
+                    {trimmedTitle || extractedPlainText.slice(0, 100) || "Block Content"}
+                  </p>
+                )}
+              </>
             )}
             {section?.type === "experience" ? (() => {
               const effectiveLinkedItem = linkedItem ?? (() => {
