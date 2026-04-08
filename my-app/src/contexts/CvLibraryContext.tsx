@@ -2243,8 +2243,17 @@ const flushPendingEdits = useCallback((): void => {
 
       // Apply canonical section ordering so imported CVs always show sections in the right order
       const preferredImportOrder = [
-        "profile", "summary", "experience", "achievements",
-        "education", "skills", "languages",
+        "profile",
+        "contact",
+        "summary",
+        "experience",
+        "education",
+        "skills",
+        "languages",
+        "projects",
+        "certifications",
+        "achievements",
+        "text",
       ] as const;
       const importOrderIndex = new Map(preferredImportOrder.map((t, i) => [t, i]));
       const reorderedSections = [...validated.sections].sort((a, b) => {

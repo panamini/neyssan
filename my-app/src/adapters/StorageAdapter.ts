@@ -135,6 +135,7 @@ export class ConvexStorageAdapter {
       delete md.createdAt;
       delete md.updatedAt;
       delete md.version;
+      delete md.importRecoverySession;
       // Keep other allowed keys (source, importedAt, confidence, filename)
       backendPayload.metadata = md;
     }

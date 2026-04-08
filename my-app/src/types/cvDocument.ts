@@ -135,6 +135,25 @@ export interface ISkillItem {
   bucket?: SkillBucket;
 }
 
+export interface ICertificationItem {
+  id?: string;
+  certificationName: string;
+  issuingOrganization?: string;
+  issueDate?: ISODateString;
+  expirationDate?: ISODateString | null;
+  credentialId?: string;
+}
+
+export interface IAffiliationItem {
+  id?: string;
+  organizationName: string;
+  roleOrMembershipType?: string;
+  startDate?: ISODateString;
+  endDate?: ISODateString | null;
+  isCurrent?: boolean;
+  notes?: RemirrorJSON | string;
+}
+
 /** Language item (name + level) */
 export interface ILanguageItem {
   id?: string;
@@ -156,6 +175,8 @@ export type SectionContent =
   | IExperienceItem[]
   | IEducationItem[]
   | ISkillItem[]
+  | ICertificationItem[]
+  | IAffiliationItem[]
   | ILanguageItem[]
   | IAchievementItem[]
   | IProfileItem[]
@@ -182,6 +203,8 @@ export interface CvSection {
     | IExperienceItem[]
     | IEducationItem[]
     | ISkillItem[]
+    | ICertificationItem[]
+    | IAffiliationItem[]
     | ILanguageItem[]
     | IAchievementItem[]
     | IProfileItem[]

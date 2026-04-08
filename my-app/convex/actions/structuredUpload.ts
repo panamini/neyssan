@@ -5,6 +5,7 @@ import { FormData } from "undici";
 import { v, ConvexError } from "convex/values";
 import { recordTelemetry } from "../../config/llmTelemetry";
 import { canonicalizeParserResult, firstSentence } from "../lib/parsing/canonicalize";
+import { buildImportRecoveryPayload } from "../lib/parsing/importRecovery";
 
 type UResponse = import("undici").Response;
 
@@ -21,6 +22,7 @@ type CanonicalPayload = {
   summary?: any;
   summaryFirstSentence?: string;
   diagnostics?: Record<string, any>;
+  rawSections?: Array<Record<string, any>>;
 };
 
 type ParserResponse = {
@@ -1011,6 +1013,60 @@ export const structuredUpload = action({
       mode: resolvedMode,
       parserUrl,
     });
+    const pickRecoverySourceSections = (...candidates: unknown[]): unknown[] => {
+      let best: unknown[] = [];
+      let bestScore = -1;
+
+      const scoreCandidate = (candidate: unknown[]): number =>
+        candidate.reduce<number>((sum, entry) => {
+          if (!entry || typeof entry !== "object") return sum;
+          const record = entry as Record<string, unknown>;
+          return (
+            sum +
+            (typeof record.fieldKey === "string" ? 4 : 0) +
+            (typeof record.confidence === "number" ? 4 : 0) +
+            (typeof record.title === "string" ? 2 : 0) +
+            (typeof record.label === "string" ? 2 : 0) +
+            (typeof record.content === "string" || typeof record.text === "string"
+              ? 1
+              : 0)
+          );
+        }, 0);
+
+      candidates.forEach((candidate) => {
+        if (!Array.isArray(candidate) || candidate.length === 0) return;
+        const score = scoreCandidate(candidate);
+        if (score > bestScore) {
+          best = candidate;
+          bestScore = score;
+        }
+      });
+
+      return best;
+    };
+
+    const recoverySourceSections = pickRecoverySourceSections(
+      (lastPayload as any)?.result?.sections,
+      (lastPayload as any)?.sections,
+      (lastPayload as any)?.result?.cv?.rawSections,
+      (lastPayload as any)?.cv?.rawSections,
+      (lastPayload as any)?.result?.rawSections,
+      (lastPayload as any)?.result?.normalized?.rawSections,
+      (normalizedResult as any)?.rawSections,
+      (normalizedResult as any)?.normalized?.rawSections,
+    );
+    const recovery = buildImportRecoveryPayload({
+      sourceSections: recoverySourceSections,
+      fullResult: normalizedResult as Record<string, any>,
+      context: {
+        rawText:
+          typeof (normalizedResult as any)?.normalized?.rawText === "string"
+            ? (normalizedResult as any).normalized.rawText
+            : trimmed,
+        mode: resolvedMode,
+        parserUrl,
+      },
+    });
 
     const normalized = (normalizedResult?.normalized ?? {}) as Record<string, any>;
     const normalizedRawText =
@@ -1177,6 +1233,14 @@ export const structuredUpload = action({
           detectorMode: diagnostics?.detector_mode ?? null,
         });
       }
+      if ((recovery?.items.length ?? 0) > 0) {
+        recordTelemetry("structured_upload.import_recovery", {
+          mode: resolvedMode,
+          reviewRequired: recovery?.reviewRequired ?? false,
+          lowConfidenceCount: recovery?.totalItems ?? 0,
+          totalRecoveryItems: recovery?.items.length ?? 0,
+        });
+      }
     } catch {
       // telemetry is best-effort
     }
@@ -1231,6 +1295,9 @@ export const structuredUpload = action({
       lastPayload.result = normalizedResult;
     }
 
-    return normalizedResult;
+    return {
+      ...normalizedResult,
+      recovery,
+    };
   },
 });

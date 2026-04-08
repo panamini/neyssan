@@ -9,6 +9,8 @@ interface ProfileModalProps {
   open: boolean;
   sectionId: string;
   item: IProfileItem | null;
+  recoveryNotes?: string[];
+  onDismissRecoveryNotes?: () => void;
   onClose: () => void;
   onSavePatch?: (patch: Partial<IProfileItem>) => void;
 }
@@ -45,6 +47,8 @@ export function ProfileModal({
   open,
   sectionId,
   item,
+  recoveryNotes = [],
+  onDismissRecoveryNotes,
   onClose,
   onSavePatch,
 }: ProfileModalProps) {
@@ -202,6 +206,30 @@ export function ProfileModal({
         </div>
 
         <div className="dasti-modal-body">
+          {recoveryNotes.length > 0 ? (
+            <section className="dasti-zone">
+              <div className="dasti-recovery-note-stack__header">
+                <span className="dasti-recovery-note__label">Recovered note</span>
+                {onDismissRecoveryNotes ? (
+                  <button
+                    type="button"
+                    className="dasti-recovery-inline__dismiss"
+                    aria-label="Dismiss recovered notes"
+                    onClick={onDismissRecoveryNotes}
+                  >
+                    <X className="w-3 h-3" aria-hidden />
+                  </button>
+                ) : null}
+              </div>
+              <div className="dasti-recovery-note-list">
+                {recoveryNotes.map((note) => (
+                  <div key={note} className="dasti-recovery-note">
+                    <p className="cv-entry-body">{note}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
           <section className="dasti-zone">
             <h3 className="dasti-zone-title">Identity</h3>
 

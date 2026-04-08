@@ -25,7 +25,12 @@ import {
 import { api } from "../../convex/_generated/api";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import { useCvAiCapabilities } from "../hooks/use-cv-ai-capabilities";
-import { makeExperienceItem, makeEducationItem } from "../lib/cv-template";
+import {
+  makeAffiliationItem,
+  makeCertificationItem,
+  makeEducationItem,
+  makeExperienceItem,
+} from "../lib/cv-template";
 import { SummaryBlock } from "./structured-blocks/SummaryBlock";
 import { SkillsBlock } from "./structured-blocks/SkillsBlock";
 import { ProfileModal } from "./structured-blocks/ProfileModal";
@@ -52,6 +57,10 @@ import {
   ExperienceModal,
   EducationModal,
 } from "./structured-blocks/ExperienceEducationModal";
+import {
+  AffiliationModal,
+  CertificationModal,
+} from "./structured-blocks/CertificationAffiliationModal";
 import FloatingAiToolbar, {
   type InlineAiActionId,
 } from "./FloatingAiToolbar";
@@ -79,6 +88,8 @@ import { useToast } from "./ui/toast";
 import type { RemirrorJSON } from "remirror";
 import type {
   CvSection,
+  IAffiliationItem,
+  ICertificationItem,
   IExperienceItem,
   IEducationItem,
   IProfileItem,
@@ -140,6 +151,202 @@ function plainTextFromStructuredValue(value: unknown): string {
   }
 
   return "";
+}
+
+function plainTextFromBlockValue(block: unknown): string {
+  if (!block || typeof block !== "object") return "";
+  const record = block as Record<string, unknown>;
+  const plainText = typeof record.plainText === "string" ? record.plainText.trim() : "";
+  if (plainText) return plainText;
+  return plainTextFromStructuredValue(record.content);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function extractRecoveryFallbackNotes(args: {
+  blocks: unknown[];
+  linkedStructuredId?: string | null;
+  hiddenValues?: string[];
+}): string[] {
+  const notes: string[] = [];
+  const seen = new Set<string>();
+
+  args.blocks.forEach((block) => {
+    if (!block || typeof block !== "object") return;
+    const record = block as Record<string, any>;
+    if (!record.attributes?.importRecovery) return;
+
+    const linkedId = String(
+      record.attributes?.linkedStructuredId ??
+        record.attributes?.linkedstructuredid ??
+        "",
+    );
+    if (args.linkedStructuredId && linkedId !== String(args.linkedStructuredId)) {
+      return;
+    }
+
+    let note = plainTextFromBlockValue(record);
+    if (!note) return;
+
+    (args.hiddenValues ?? []).forEach((value) => {
+      const trimmed = String(value ?? "").trim();
+      if (!trimmed) return;
+      note = note.replace(new RegExp(escapeRegExp(trimmed), "gi"), " ");
+    });
+
+    const normalized = note.replace(/\s+/g, " ").trim();
+    if (!normalized) return;
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    notes.push(normalized);
+  });
+
+  return notes;
+}
+
+function extractCompactRecoveryFallbackNotes(args: {
+  blocks: unknown[];
+  linkedStructuredId?: string | null;
+  hiddenValues?: string[];
+}): string[] {
+  const tokens: string[] = [];
+  const seen = new Set<string>();
+
+  extractRecoveryFallbackNotes(args).forEach((note) => {
+    note
+      .replace(/\r/g, "\n")
+      .split(/[\n,;|]+/)
+      .map((token) => token.replace(/^[-•*+\d.)\s]+/, "").trim())
+      .forEach((token) => {
+        if (!token) return;
+        if (/^[\p{P}\p{S}\s]+$/u.test(token)) return;
+        const key = token.toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        tokens.push(token);
+      });
+  });
+
+  return tokens;
+}
+
+function getBlockLinkedStructuredId(block: unknown): string {
+  if (!block || typeof block !== "object") return "";
+  const record = block as Record<string, any>;
+  return String(
+    record.attributes?.linkedStructuredId ??
+      record.attributes?.linkedstructuredid ??
+      "",
+  );
+}
+
+function hasImportRecoveryMetadata(block: unknown): boolean {
+  if (!block || typeof block !== "object") return false;
+  const record = block as Record<string, any>;
+  return Boolean(record.attributes?.importRecovery);
+}
+
+function buildRecoveryNoteMap(blocks: unknown[]): Map<string, string[]> {
+  const noteMap = new Map<string, string[]>();
+  const ids = new Set(
+    blocks
+      .map((block) => getBlockLinkedStructuredId(block))
+      .filter((linkedId) => linkedId.length > 0),
+  );
+
+  ids.forEach((linkedId) => {
+    noteMap.set(
+      linkedId,
+      extractRecoveryFallbackNotes({
+        blocks,
+        linkedStructuredId: linkedId,
+      }),
+    );
+  });
+
+  return noteMap;
+}
+
+function stripRecoveryNoteBlocks(
+  section: CvSection,
+  options?: { linkedStructuredId?: string | null },
+): CvSection {
+  const linkedStructuredId = String(options?.linkedStructuredId ?? "").trim();
+  const nextBlocks = (Array.isArray(section.blocks) ? section.blocks : []).filter((block) => {
+    if (!hasImportRecoveryMetadata(block)) return true;
+    if (!linkedStructuredId) return false;
+    return getBlockLinkedStructuredId(block) !== linkedStructuredId;
+  });
+
+  return {
+    ...section,
+    blocks: nextBlocks as any,
+  };
+}
+
+function RecoveryNotes({
+  notes,
+  variant = "default",
+  onDismiss,
+}: {
+  notes: string[];
+  variant?: "default" | "compact";
+  onDismiss?: () => void;
+}) {
+  if (notes.length === 0) return null;
+
+  if (variant === "compact") {
+    return (
+      <div className="dasti-recovery-inline">
+        <span className="dasti-recovery-inline__label">Recovered</span>
+        <div className="dasti-recovery-inline__tokens">
+          {notes.map((note) => (
+            <span key={note} className="dasti-recovery-inline__token">
+              {note}
+            </span>
+          ))}
+        </div>
+        {onDismiss ? (
+          <button
+            type="button"
+            className="dasti-recovery-inline__dismiss"
+            aria-label="Dismiss recovered notes"
+            onClick={onDismiss}
+          >
+            <X className="w-3 h-3" aria-hidden />
+          </button>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className="dasti-recovery-note-stack">
+      <div className="dasti-recovery-note-stack__header">
+        <span className="dasti-recovery-note__label">Recovered note</span>
+        {onDismiss ? (
+          <button
+            type="button"
+            className="dasti-recovery-inline__dismiss"
+            aria-label="Dismiss recovered notes"
+            onClick={onDismiss}
+          >
+            <X className="w-3 h-3" aria-hidden />
+          </button>
+        ) : null}
+      </div>
+      <div className="dasti-recovery-note-list">
+        {notes.map((note) => (
+          <div key={note} className="dasti-recovery-note">
+            <p className="cv-entry-body">{note}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function buildBulletListDoc(items: string[]): RemirrorJSON {
@@ -237,6 +444,25 @@ function dedupeStringList(items: string[]): string[] {
   }
 
   return next;
+}
+
+const HOBBY_SUGGESTION_LIBRARY = [
+  "Reading",
+  "Hiking",
+  "Running",
+  "Photography",
+  "Travel",
+  "Cooking",
+  "Cycling",
+  "Chess",
+  "Music",
+  "Volunteering",
+  "Swimming",
+  "Painting",
+];
+
+function hasSectionTitle(section: CvSection, expectedTitle: string): boolean {
+  return String(section.title ?? "").trim().toLowerCase() === expectedTitle.toLowerCase();
 }
 
 function formatDiffValue(value: string | string[]): string {
@@ -1122,6 +1348,18 @@ export default function SectionEditor({
       section.title.trim().toLowerCase() === "achievements"
     )
       sectionType = "achievements";
+    if (
+      sectionType === "text" &&
+      typeof section.title === "string" &&
+      section.title.trim().toLowerCase() === "hobbies"
+    )
+      sectionType = "hobbies";
+    if (
+      sectionType === "text" &&
+      typeof section.title === "string" &&
+      section.title.trim().toLowerCase() === "affiliations"
+    )
+      sectionType = "affiliations";
   } catch {
     /* noop */
   }
@@ -1554,6 +1792,11 @@ export default function SectionEditor({
   const [isSummaryModalOpen, setSummaryModalOpen] = useState<boolean>(false);
   // Skills modal editor
   const [isSkillsModalOpen, setSkillsModalOpen] = useState<boolean>(false);
+  const [isHobbiesModalOpen, setHobbiesModalOpen] = useState<boolean>(false);
+  const [isCertificationModalOpen, setCertificationModalOpen] =
+    useState<boolean>(false);
+  const [isAffiliationModalOpen, setAffiliationModalOpen] =
+    useState<boolean>(false);
   // Experience/Education modals (typed v1)
   const [isExperienceModalOpen, setExperienceModalOpen] =
     useState<boolean>(false);
@@ -1699,6 +1942,10 @@ export default function SectionEditor({
         ? (section.structuredContent[0] as ISummaryItem)
         : null;
     const summaryText = plainTextFromStructuredValue(summaryItem?.summary);
+    const recoveredSummaryNotes = extractRecoveryFallbackNotes({
+      blocks: Array.isArray(section.blocks) ? section.blocks : [],
+      linkedStructuredId: String(summaryItem?.id ?? ""),
+    });
 
     function handleSummaryPersist(updatedSection: CvSection) {
       try {
@@ -1896,6 +2143,14 @@ export default function SectionEditor({
               onContentChange={onContentChange}
               onOpenEditor={() => setSummaryModalOpen(true)}
             />
+            <RecoveryNotes
+              notes={recoveredSummaryNotes}
+              onDismiss={() => {
+                onChange(index, stripRecoveryNoteBlocks(section, {
+                  linkedStructuredId: String(summaryItem?.id ?? ""),
+                }) as any);
+              }}
+            />
 
             {/* Expanded summary: preview-only; representative blocks removed to avoid duplication */}
           </div>
@@ -1905,14 +2160,31 @@ export default function SectionEditor({
           open={isSummaryModalOpen}
           sectionId={String(section.id)}
           item={summaryItem}
+          recoveryNotes={recoveredSummaryNotes}
+          onDismissRecoveryNotes={() => {
+            onChange(index, stripRecoveryNoteBlocks(section, {
+              linkedStructuredId: String(summaryItem?.id ?? ""),
+            }) as any);
+          }}
           onClose={() => setSummaryModalOpen(false)}
         />
       </div>
     );
   }
 
-  // Structured "skills" section: collapsed chips + SkillsModal + full block editor when expanded
-  if (sectionType === "skills") {
+  // Structured "skills" and titled "hobbies" sections: chip/list editing with shared modal UX
+  if (sectionType === "skills" || sectionType === "hobbies") {
+    const isHobbiesSection = sectionType === "hobbies";
+    const itemLabel = isHobbiesSection ? "hobby" : "skill";
+    const emptyInlineLabel = isHobbiesSection
+      ? "Click + to add your first hobby"
+      : "Click + to add your first skill";
+    const emptyPreviewLabel = isHobbiesSection
+      ? "Add your first hobby"
+      : "Add your first skill";
+    const suggestionHeading = isHobbiesSection
+      ? "Suggested interests"
+      : "Suggested from experience and education";
     // Memoize to avoid new array identity on each parent render (prevents modal typing resets)
     const items: ISkillItem[] = useMemo(() => {
       if (!Array.isArray(section.structuredContent)) return [];
@@ -1958,6 +2230,17 @@ export default function SectionEditor({
     const visibleSkillItems = items.filter(
       (item) => String(item.name ?? "").trim().length > 0,
     );
+    const recoveredSkillNotes = extractCompactRecoveryFallbackNotes({
+      blocks: Array.isArray(section.blocks) ? section.blocks : [],
+      hiddenValues: visibleSkillItems.map((item) => String(item.name ?? "")),
+    });
+    const supplementalBlocks = Array.isArray(section.blocks)
+      ? section.blocks.filter((block) => {
+          const blockHasImportRecoveryMetadata = hasImportRecoveryMetadata(block);
+          return !(visibleSkillItems.length > 0 && blockHasImportRecoveryMetadata);
+        })
+      : [];
+
     function persistRows(next: ISkillItem[], tickId?: string) {
       try {
         const sanitized = next
@@ -2129,6 +2412,25 @@ export default function SectionEditor({
     }
 
     async function requestSkillsSuggestions(excludeItems: string[] = []) {
+      if (isHobbiesSection) {
+        const existingNames = new Set(
+          skillRows
+            .map((item) => normalizeSkillName(String(item.name ?? "")))
+            .filter(Boolean),
+        );
+        const nextSuggestions = HOBBY_SUGGESTION_LIBRARY.filter(
+          (candidate) =>
+            !existingNames.has(normalizeSkillName(candidate)) &&
+            !excludeItems.some(
+              (excluded) =>
+                normalizeSkillName(excluded) === normalizeSkillName(candidate),
+            ),
+        ).slice(0, 6);
+        setSkillsAiRequested(true);
+        setSkillsAiSuggestions(nextSuggestions);
+        return;
+      }
+
       if (!cvAiCapabilities.isSupported("generate_skills_suggestions")) {
         setSkillsAiSuggestions([]);
         showCvAiRefreshToast();
@@ -2228,46 +2530,61 @@ export default function SectionEditor({
       }
     }
 
-    const canSuggestSkills = cvAiCapabilities.isSupported(
-      "generate_skills_suggestions",
-    );
+    const canSuggestSkills = isHobbiesSection
+      ? true
+      : cvAiCapabilities.isSupported("generate_skills_suggestions");
 
     return (
-      <div className="mb-4 section-container">
-        <div className="section-container-header flex items-center justify-between">
-          <h3 className="cv-section-heading">{section.title}</h3>
-          <div className="flex items-center gap-1">
-            {renderAiMenuTrigger({
-              menu: { type: "skills" },
-              isLoading: sectionAiLoadingKey === "skills:generate",
-              title: "Skills AI actions",
-              items: [
-                {
-                  label: "Suggest skills",
-                  onClick: () => {
-                    setSkillsAiExcluded([]);
-                    setSkillsAiRefillCount(0);
-                    void requestSkillsSuggestions([]);
+        <div className="mb-4 section-container">
+          <div className="section-container-header flex items-center justify-between">
+            <h3 className="cv-section-heading">{section.title}</h3>
+            <div className="flex items-center gap-1">
+              {renderAiMenuTrigger({
+                menu: { type: "skills" },
+                isLoading: sectionAiLoadingKey === "skills:generate",
+                title: isHobbiesSection ? "Hobbies suggestions" : "Skills AI actions",
+                items: [
+                  {
+                    label: isHobbiesSection ? "Suggest hobbies" : "Suggest skills",
+                    onClick: () => {
+                      setSkillsAiExcluded([]);
+                      setSkillsAiRefillCount(0);
+                      void requestSkillsSuggestions([]);
+                    },
+                    disabled:
+                      !canSuggestSkills ||
+                      (!isHobbiesSection &&
+                        currentCvExperiences.length === 0 &&
+                        currentCvEducations.length === 0),
                   },
-                  disabled:
-                    !canSuggestSkills ||
-                    currentCvExperiences.length === 0 &&
-                    currentCvEducations.length === 0,
-                },
-              ],
-            })}
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleAddSkillInline();
-              }}
-              className="dasti-icon-button cv-section-edit-trigger"
-              aria-label="Add skill"
-              title="Add skill"
-            >
-              <Plus size={16} strokeWidth={1.7} aria-hidden />
-            </button>
+                ],
+              })}
+              {isHobbiesSection ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setHobbiesModalOpen(true);
+                  }}
+                  className="dasti-icon-button cv-section-edit-trigger"
+                  aria-label="Edit hobbies"
+                  title="Edit hobbies"
+                >
+                  <Pencil className="w-4 h-4" strokeWidth={1.5} aria-hidden />
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleAddSkillInline();
+                }}
+                className="dasti-icon-button cv-section-edit-trigger"
+                aria-label={`Add ${itemLabel}`}
+                title={`Add ${itemLabel}`}
+              >
+                <Plus size={16} strokeWidth={1.7} aria-hidden />
+              </button>
             {typeof onCollapseChange === "function" && (
               <button
                 type="button"
@@ -2297,11 +2614,11 @@ export default function SectionEditor({
         ) : null}
 
         <CvSuggestionRow
-          label="Suggested from experience and education"
+          label={suggestionHeading}
           items={skillsAiSuggestions}
           isLoading={sectionAiLoadingKey === "skills:generate"}
           hasRequested={skillsAiRequested}
-          emptyLabel="No new skill suggestions yet."
+          emptyLabel={isHobbiesSection ? "No hobby suggestions yet." : "No new skill suggestions yet."}
           onAccept={handleAcceptSkillSuggestion}
           onDismiss={handleDismissSkillSuggestion}
         />
@@ -2311,7 +2628,7 @@ export default function SectionEditor({
             <div className="flex flex-wrap gap-2">
               {visibleSkillItems.length === 0 ? (
                 <span className="cv-preview-empty cv-preview-text cv-preview-text--muted">
-                  Add your first skill
+                  {emptyPreviewLabel}
                 </span>
               ) : (
                 visibleSkillItems.map((s) => (
@@ -2341,8 +2658,8 @@ export default function SectionEditor({
                         }
                       }}
                       className="card-delete-btn dasti-icon-button dasti-icon-button--compact ml-1"
-                      aria-label={`Remove ${s.name || "skill"}`}
-                      title="Remove skill"
+                      aria-label={`Remove ${s.name || itemLabel}`}
+                      title={`Remove ${itemLabel}`}
                     >
                       <X className="w-3 h-3" aria-hidden />
                       <span className="sr-only">Remove</span>
@@ -2354,9 +2671,9 @@ export default function SectionEditor({
 
             {/* Collapsed skills: also render representative blocks via BlockRenderer (diagnostic + parity with v1 cards) */}
             <div className="mt-2 space-y-2">
-              {Array.isArray(section.blocks) && section.blocks.length > 0 ? (
+              {supplementalBlocks.length > 0 ? (
                 <>
-                  {section.blocks.map((b: any) => (
+                  {supplementalBlocks.map((b: any) => (
                     <div key={String(b.id)} className="p-0">
                       <BlockRenderer
                         sectionId={String(section.id)}
@@ -2369,6 +2686,13 @@ export default function SectionEditor({
                 </>
               ) : null}
             </div>
+            <RecoveryNotes
+              notes={recoveredSkillNotes}
+              variant="compact"
+              onDismiss={() => {
+                onChange(index, stripRecoveryNoteBlocks(section) as any);
+              }}
+            />
           </div>
         )}
 
@@ -2376,7 +2700,7 @@ export default function SectionEditor({
           <div className="px-3 pb-2">
             {skillRows.length === 0 ? (
               <div className="py-2 text-xs" style={{ color: "var(--tg2)" }}>
-                Click + to add your first skill
+                {emptyInlineLabel}
               </div>
             ) : (
               <div className="divide-y divide-[color:var(--color-border)]">
@@ -2403,7 +2727,7 @@ export default function SectionEditor({
                           color: "var(--ti)",
                           lineHeight: "var(--ls)",
                         }}
-                        placeholder="Skill name"
+                        placeholder={isHobbiesSection ? "Hobby name" : "Skill name"}
                         value={row.name ?? ""}
                         onChange={(e) =>
                           handleNameChangeInline(idx, e.target.value)
@@ -2430,8 +2754,8 @@ export default function SectionEditor({
                         className="dasti-icon-button dasti-icon-button--compact"
                         aria-label={
                           idx === 0
-                            ? `${row.name || "skill"} is pinned to top`
-                            : `Pin ${row.name || "skill"} to top`
+                            ? `${row.name || itemLabel} is pinned to top`
+                            : `Pin ${row.name || itemLabel} to top`
                         }
                         title={idx === 0 ? "Pinned to top" : "Pin to top"}
                         style={idx === 0 ? { color: "var(--ac)" } : undefined}
@@ -2448,8 +2772,8 @@ export default function SectionEditor({
                           handleRemoveSkillInline(String(row.id ?? idx))
                         }
                         className="dasti-icon-button dasti-icon-button--compact"
-                        aria-label={`Remove ${row.name || "skill"}`}
-                        title="Remove skill"
+                        aria-label={`Remove ${row.name || itemLabel}`}
+                        title={`Remove ${itemLabel}`}
                       >
                         <X className="w-3 h-3" aria-hidden />
                       </button>
@@ -2459,10 +2783,18 @@ export default function SectionEditor({
               </div>
             )}
 
+            <RecoveryNotes
+              notes={recoveredSkillNotes}
+              variant="compact"
+              onDismiss={() => {
+                onChange(index, stripRecoveryNoteBlocks(section) as any);
+              }}
+            />
+
             {/* Representative blocks (kept for parity/debug) */}
-            {Array.isArray(section.blocks) && section.blocks.length > 0 ? (
+            {supplementalBlocks.length > 0 ? (
               <div className="mt-2 space-y-2">
-                {section.blocks.map((b: any) => (
+                {supplementalBlocks.map((b: any) => (
                   <div key={String(b.id)} className="p-0">
                     <BlockRenderer
                       sectionId={String(section.id)}
@@ -2477,9 +2809,27 @@ export default function SectionEditor({
         )}
 
         <SkillsModal
-          open={isSkillsModalOpen}
+          open={isHobbiesSection ? isHobbiesModalOpen : isSkillsModalOpen}
           items={items}
           suggestedItems={skillsAiSuggestions}
+          title={isHobbiesSection ? "Edit hobbies" : "Edit skills"}
+          description={
+            isHobbiesSection
+              ? "Add, remove, or edit your hobbies and interests as lightweight tags"
+              : "Add, remove, or edit your skills and levels"
+          }
+          emptyLabel={
+            isHobbiesSection
+              ? "No hobbies yet. Add your first hobby."
+              : "No skills yet. Add your first skill."
+          }
+          recoveryNotes={recoveredSkillNotes}
+          onDismissRecoveryNotes={() => {
+            onChange(index, stripRecoveryNoteBlocks(section) as any);
+          }}
+          itemLabel={itemLabel}
+          suggestionLabel={suggestionHeading}
+          saveLabel={isHobbiesSection ? "Save hobbies" : "Save skills"}
           onAcceptSuggestion={(name) => {
             setSkillsAiSuggestions((current) =>
               current.filter(
@@ -2496,7 +2846,13 @@ export default function SectionEditor({
               ),
             );
           }}
-          onClose={() => setSkillsModalOpen(false)}
+          onClose={() => {
+            if (isHobbiesSection) {
+              setHobbiesModalOpen(false);
+              return;
+            }
+            setSkillsModalOpen(false);
+          }}
           onSave={(next) => {
             try {
               const updatedSection = {
@@ -2558,6 +2914,10 @@ export default function SectionEditor({
     const visibleLanguageItems = items.filter(
       (item) => String(item.name ?? "").trim().length > 0,
     );
+    const recoveredLanguageNotes = extractCompactRecoveryFallbackNotes({
+      blocks: Array.isArray(section.blocks) ? section.blocks : [],
+      hiddenValues: visibleLanguageItems.map((item) => String(item.name ?? "")),
+    });
     const lastLanguagesSeedRef = useRef<string | null>(null);
     // Keep a ref to the latest local rows so the seeding effect can merge drafts safely.
     const languageRowsRef = useRef<ILanguageItem[]>([]);
@@ -2987,6 +3347,13 @@ export default function SectionEditor({
                 ))
               )}
             </div>
+            <RecoveryNotes
+              notes={recoveredLanguageNotes}
+              variant="compact"
+              onDismiss={() => {
+                onChange(index, stripRecoveryNoteBlocks(section) as any);
+              }}
+            />
           </div>
         )}
 
@@ -3056,6 +3423,397 @@ export default function SectionEditor({
                 ))}
               </div>
             )}
+            <RecoveryNotes
+              notes={recoveredLanguageNotes}
+              variant="compact"
+              onDismiss={() => {
+                onChange(index, stripRecoveryNoteBlocks(section) as any);
+              }}
+            />
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (sectionType === "certifications") {
+    const items: ICertificationItem[] = useMemo(() => {
+      if (!Array.isArray(section.structuredContent)) return [];
+      return (section.structuredContent as any[]).map((item, idx) => ({
+        id: String((item as any)?.id ?? `cert-${idx}-${String(section.id)}`),
+        certificationName: String((item as any)?.certificationName ?? (item as any)?.name ?? ""),
+        issuingOrganization: String((item as any)?.issuingOrganization ?? (item as any)?.issuer ?? ""),
+        issueDate: typeof (item as any)?.issueDate === "string" ? (item as any).issueDate : undefined,
+        expirationDate:
+          typeof (item as any)?.expirationDate === "string" || (item as any)?.expirationDate === null
+            ? ((item as any).expirationDate ?? null)
+            : null,
+        credentialId: String((item as any)?.credentialId ?? (item as any)?.licenseNumber ?? ""),
+      }));
+    }, [section.id, section.structuredContent]);
+
+    const visibleItems = items.filter(
+      (item) =>
+        String(item.certificationName ?? "").trim().length > 0 ||
+        String(item.issuingOrganization ?? "").trim().length > 0,
+    );
+    const recoveryNotesByCertificationId = new Map(
+      items.map((item) => [
+        String(item.id ?? ""),
+        extractRecoveryFallbackNotes({
+          blocks: Array.isArray(section.blocks) ? section.blocks : [],
+          linkedStructuredId: String(item.id ?? ""),
+          hiddenValues: [
+            String(item.certificationName ?? ""),
+            String(item.issuingOrganization ?? ""),
+            String(item.credentialId ?? ""),
+          ],
+        }),
+      ]),
+    );
+
+    function persistCertificationItems(next: ICertificationItem[]) {
+      try {
+        onChange(index, {
+          ...section,
+          structuredContent: next as any,
+        } as CvSection);
+      } catch {
+        /* noop */
+      }
+    }
+
+    return (
+      <div className="mb-4 border [border-color:var(--color-border)] [border-radius:var(--radius-card)] section-container">
+        <div className="section-container-header flex items-center justify-between">
+          <h3 className="cv-section-heading">{section.title}</h3>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                setCertificationModalOpen(true);
+              }}
+              className="dasti-icon-button cv-section-edit-trigger"
+              aria-label="Edit certifications"
+              title="Edit certifications"
+            >
+              <Pencil className="w-4 h-4" strokeWidth={1.5} aria-hidden />
+            </button>
+            {typeof onCollapseChange === "function" ? (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onCollapseChange();
+                }}
+                aria-label={collapsed ? "Expand section" : "Collapse section"}
+                className="p-1 rounded focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
+              >
+                <span className="[color:var(--tg2)]" aria-hidden>
+                  {collapsed ? "▶" : "▼"}
+                </span>
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        {!collapsed ? (
+          <div className="cv-section-body cv-section-body--stack">
+            {visibleItems.length === 0 ? (
+              <p className="cv-preview-empty cv-preview-text cv-preview-text--muted">
+                Add certification name, issuer, dates, and credential details.
+              </p>
+            ) : (
+              <div className="cv-entry-stack">
+                {visibleItems.map((item) => (
+                  <div key={item.id} className="py-3">
+                    <div className="cv-entry-summary">
+                      <div className="cv-entry-summary__main">
+                        <p className="cv-entry-title cv-entry-title--truncate">
+                          {item.certificationName || "Certification"}
+                        </p>
+                        {String(item.issuingOrganization ?? "").trim() ? (
+                          <p className="cv-entry-subtitle cv-entry-subtitle--truncate">
+                            {item.issuingOrganization}
+                          </p>
+                        ) : null}
+                      </div>
+                      {(item.issueDate || item.expirationDate) ? (
+                        <p className="cv-entry-date">
+                          {[item.issueDate ? new Date(item.issueDate).toLocaleDateString() : null, item.expirationDate ? `Expires ${new Date(item.expirationDate).toLocaleDateString()}` : null]
+                            .filter(Boolean)
+                            .join(" • ")}
+                        </p>
+                      ) : null}
+                    </div>
+                    {String(item.credentialId ?? "").trim() ? (
+                      <p className="cv-entry-note">Credential ID: {item.credentialId}</p>
+                    ) : null}
+                    <RecoveryNotes
+                      notes={recoveryNotesByCertificationId.get(String(item.id ?? "")) ?? []}
+                      onDismiss={() => {
+                        onChange(index, stripRecoveryNoteBlocks(section, {
+                          linkedStructuredId: String(item.id ?? ""),
+                        }) as any);
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="cv-section-preview">
+            {visibleItems.length === 0 ? (
+              <span className="cv-preview-empty cv-preview-text cv-preview-text--muted">
+                Add your first certification
+              </span>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {visibleItems.map((item) => (
+                  <span
+                    key={item.id}
+                    className="card-group inline-flex items-center gap-2 px-2.5 py-1 text-xs rounded-full [background:var(--sf2)] [color:var(--tm2)]"
+                  >
+                    <span className="font-medium [color:var(--ti)]">
+                      {item.certificationName || "Certification"}
+                    </span>
+                    {String(item.issuingOrganization ?? "").trim() ? (
+                      <span>{item.issuingOrganization}</span>
+                    ) : null}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        <CertificationModal
+          open={isCertificationModalOpen}
+          items={items}
+          onClose={() => setCertificationModalOpen(false)}
+          onSave={persistCertificationItems}
+        />
+      </div>
+    );
+  }
+
+  if (sectionType === "affiliations") {
+    const items: IAffiliationItem[] = useMemo(() => {
+      if (!Array.isArray(section.structuredContent)) return [];
+      return (section.structuredContent as any[]).map((item, idx) => ({
+        id: String((item as any)?.id ?? `aff-${idx}-${String(section.id)}`),
+        organizationName: String((item as any)?.organizationName ?? (item as any)?.organization ?? ""),
+        roleOrMembershipType: String((item as any)?.roleOrMembershipType ?? (item as any)?.membershipType ?? (item as any)?.role ?? ""),
+        startDate: typeof (item as any)?.startDate === "string" ? (item as any).startDate : undefined,
+        endDate:
+          typeof (item as any)?.endDate === "string" || (item as any)?.endDate === null
+            ? ((item as any).endDate ?? null)
+            : null,
+        isCurrent: Boolean((item as any)?.isCurrent ?? false),
+        notes: (item as any)?.notes ?? "",
+      }));
+    }, [section.id, section.structuredContent]);
+
+    const visibleItems = items.filter(
+      (item) =>
+        String(item.organizationName ?? "").trim().length > 0 ||
+        String(item.roleOrMembershipType ?? "").trim().length > 0,
+    );
+
+    function persistAffiliationItems(next: IAffiliationItem[]) {
+      try {
+        onChange(index, {
+          ...section,
+          structuredContent: next as any,
+        } as CvSection);
+      } catch {
+        /* noop */
+      }
+    }
+
+    return (
+      <div className="mb-4 border [border-color:var(--color-border)] [border-radius:var(--radius-card)] section-container">
+        <div className="section-container-header flex items-center justify-between">
+          <h3 className="cv-section-heading">{section.title}</h3>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                setAffiliationModalOpen(true);
+              }}
+              className="dasti-icon-button cv-section-edit-trigger"
+              aria-label="Edit affiliations"
+              title="Edit affiliations"
+            >
+              <Pencil className="w-4 h-4" strokeWidth={1.5} aria-hidden />
+            </button>
+            {typeof onCollapseChange === "function" ? (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onCollapseChange();
+                }}
+                aria-label={collapsed ? "Expand section" : "Collapse section"}
+                className="p-1 rounded focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
+              >
+                <span className="[color:var(--tg2)]" aria-hidden>
+                  {collapsed ? "▶" : "▼"}
+                </span>
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        {!collapsed ? (
+          <div className="cv-section-body cv-section-body--stack">
+            {visibleItems.length === 0 ? (
+              <p className="cv-preview-empty cv-preview-text cv-preview-text--muted">
+                Add organization, membership details, dates, and notes.
+              </p>
+            ) : (
+              <div className="cv-entry-stack">
+                {visibleItems.map((item) => (
+                  <div key={item.id} className="py-3">
+                    <div className="cv-entry-summary">
+                      <div className="cv-entry-summary__main">
+                        <p className="cv-entry-title cv-entry-title--truncate">
+                          {item.organizationName || "Affiliation"}
+                        </p>
+                        {String(item.roleOrMembershipType ?? "").trim() ? (
+                          <p className="cv-entry-subtitle cv-entry-subtitle--truncate">
+                            {item.roleOrMembershipType}
+                          </p>
+                        ) : null}
+                      </div>
+                      {(item.startDate || item.endDate || item.isCurrent) ? (
+                        <p className="cv-entry-date">
+                          {[
+                            item.startDate ? new Date(item.startDate).toLocaleDateString() : null,
+                            item.isCurrent
+                              ? "Present"
+                              : item.endDate
+                                ? new Date(item.endDate).toLocaleDateString()
+                                : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" – ")}
+                        </p>
+                      ) : null}
+                    </div>
+                    {plainTextFromStructuredValue(item.notes) ? (
+                      <p className="cv-entry-body">{plainTextFromStructuredValue(item.notes)}</p>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="cv-section-preview">
+            {visibleItems.length === 0 ? (
+              <span className="cv-preview-empty cv-preview-text cv-preview-text--muted">
+                Add your first affiliation
+              </span>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {visibleItems.map((item) => (
+                  <span
+                    key={item.id}
+                    className="card-group inline-flex items-center gap-2 px-2.5 py-1 text-xs rounded-full [background:var(--sf2)] [color:var(--tm2)]"
+                  >
+                    <span className="font-medium [color:var(--ti)]">
+                      {item.organizationName || "Affiliation"}
+                    </span>
+                    {String(item.roleOrMembershipType ?? "").trim() ? (
+                      <span>{item.roleOrMembershipType}</span>
+                    ) : null}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        <AffiliationModal
+          open={isAffiliationModalOpen}
+          items={items}
+          onClose={() => setAffiliationModalOpen(false)}
+          onSave={persistAffiliationItems}
+        />
+      </div>
+    );
+  }
+
+  if (sectionType === "text" || sectionType === "projects") {
+    const blocks = Array.isArray(section.blocks) ? section.blocks : [];
+    const previewText = blocks
+      .map((block) => plainTextFromBlockValue(block))
+      .filter(Boolean)
+      .join(" • ")
+      .trim();
+
+    return (
+      <div className="mb-4 border [border-color:var(--color-border)] [border-radius:var(--radius-card)] section-container">
+        <div className="section-container-header flex items-center justify-between">
+          <h3 className="cv-section-heading">{section.title}</h3>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                void addBlock();
+              }}
+              className="dasti-icon-button cv-section-edit-trigger"
+              aria-label={`Add block to ${section.title}`}
+              title={`Add block to ${section.title}`}
+            >
+              <Plus size={16} strokeWidth={1.7} aria-hidden />
+            </button>
+            {typeof onCollapseChange === "function" ? (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onCollapseChange();
+                }}
+                aria-label={collapsed ? "Expand section" : "Collapse section"}
+                className="p-1 rounded focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
+              >
+                <span className="[color:var(--tg2)]" aria-hidden>
+                  {collapsed ? "▶" : "▼"}
+                </span>
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        {collapsed ? (
+          <div className="cv-section-preview">
+            <p className="cv-entry-body cv-entry-body--muted">
+              {previewText || "Add details to this section"}
+            </p>
+          </div>
+        ) : (
+          <div className="cv-section-body cv-section-body--stack">
+            {blocks.length === 0 ? (
+              <p className="cv-preview-empty cv-preview-text cv-preview-text--muted">
+                Add details to this section
+              </p>
+            ) : (
+              blocks.map((block) => (
+                <div key={String(block.id)} className="p-0">
+                  <BlockRenderer
+                    sectionId={String(section.id)}
+                    block={block as any}
+                    onDelete={() => handleDeleteBlock(String(block.id))}
+                  />
+                </div>
+              ))
+            )}
           </div>
         )}
       </div>
@@ -3095,6 +3853,18 @@ export default function SectionEditor({
     const website = String(item?.website ?? "");
     const location = String(item?.location ?? "");
     const photoUrl = String(item?.photoUrl ?? "");
+    const recoveredProfileNotes = extractRecoveryFallbackNotes({
+      blocks: Array.isArray(section.blocks) ? section.blocks : [],
+      hiddenValues: [
+        name,
+        desiredPosition,
+        email,
+        phone,
+        linkedin,
+        website,
+        location,
+      ],
+    });
 
     function openProfilePhotoPicker() {
       profilePhotoInputRef.current?.click();
@@ -3376,6 +4146,16 @@ export default function SectionEditor({
                     ariaLabel="Location"
                   />
                 </div>
+                {recoveredProfileNotes.length > 0 ? (
+                  <div className="mt-3">
+                    <RecoveryNotes
+                      notes={recoveredProfileNotes}
+                      onDismiss={() => {
+                        onChange(index, stripRecoveryNoteBlocks(section) as any);
+                      }}
+                    />
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>
@@ -3385,6 +4165,10 @@ export default function SectionEditor({
           open={isProfileModalOpen}
           sectionId={String(section.id)}
           item={item}
+          recoveryNotes={recoveredProfileNotes}
+          onDismissRecoveryNotes={() => {
+            onChange(index, stripRecoveryNoteBlocks(section) as any);
+          }}
           onClose={() => setProfileModalOpen(false)}
         />
       </div>
@@ -3554,6 +4338,46 @@ export default function SectionEditor({
     const collapsedVisibleStructured = collapsedListExpanded
       ? renderableStructured
       : renderableStructured.slice(0, 3);
+    const recoveryNotesByStructuredId = useMemo(
+      () =>
+        buildRecoveryNoteMap(
+          Array.isArray(structuredSection.blocks) ? structuredSection.blocks : [],
+        ),
+      [structuredSection.blocks],
+    );
+
+    function syncRepresentativeBlocks<T extends { id?: string }>(
+      nextItems: T[],
+      buildBlock: (item: T, existingBlock?: any) => any,
+    ) {
+      const nextItemIds = new Set(nextItems.map((item) => String(item.id ?? "")));
+      const existingBlocks = Array.isArray(structuredSection.blocks)
+        ? structuredSection.blocks
+        : [];
+      const preservedSupplementalBlocks = existingBlocks.filter((block: any) => {
+        const linkedId = getBlockLinkedStructuredId(block);
+        const isRecoveryBlock = hasImportRecoveryMetadata(block);
+        if (linkedId && !nextItemIds.has(linkedId)) {
+          return false;
+        }
+        if (isRecoveryBlock) {
+          return true;
+        }
+        return !linkedId;
+      });
+
+      const nextBlocks = [...preservedSupplementalBlocks];
+      nextItems.forEach((item) => {
+        const linkedId = String(item.id ?? "");
+        const existingRepresentativeBlock = existingBlocks.find((block: any) => {
+          if (hasImportRecoveryMetadata(block)) return false;
+          return getBlockLinkedStructuredId(block) === linkedId;
+        });
+        nextBlocks.push(buildBlock(item, existingRepresentativeBlock));
+      });
+
+      return nextBlocks;
+    }
 
     function openStructuredModal() {
       try {
@@ -3648,49 +4472,28 @@ export default function SectionEditor({
           : item,
       );
 
-      let matchedBlock = false;
-      const nextBlocks = (
-        Array.isArray(structuredSection.blocks) ? structuredSection.blocks : []
-      ).map((block: any) => {
-        const linkedId =
-          (block as any)?.attributes?.linkedStructuredId ??
-          (block as any)?.attributes?.linkedstructuredid;
-
-        if (String(linkedId) !== diff.itemId) {
-          return block;
-        }
-
-        matchedBlock = true;
-        const targetItem = nextStructured.find(
-          (candidate) => String(candidate?.id ?? "") === diff.itemId,
-        );
-        return {
-          ...block,
-          title: String(
-            targetItem?.position || targetItem?.company || "Experience",
-          ),
-          content: nextDoc,
-          attributes: {
-            ...((block as any)?.attributes ?? {}),
-            linkedStructuredId: diff.itemId,
-          },
-        };
-      });
-
-      if (!matchedBlock) {
-        const targetItem = nextStructured.find(
-          (candidate) => String(candidate?.id ?? "") === diff.itemId,
-        );
-        nextBlocks.push({
-          id: uuidv4(),
-          title: String(
-            targetItem?.position || targetItem?.company || "Experience",
-          ),
+      const nextBlocks = syncRepresentativeBlocks(
+        nextStructured,
+        (targetItem: any, existingBlock?: any) => ({
+          ...(existingBlock ?? {}),
+          id: String((existingBlock as any)?.id ?? uuidv4()),
+          title: String(targetItem?.position || targetItem?.company || "Experience"),
           type: "text" as const,
-          content: nextDoc,
-          attributes: { linkedStructuredId: diff.itemId },
-        });
-      }
+          content:
+            String(targetItem?.id ?? "") === diff.itemId
+              ? nextDoc
+              : ensureRemirrorDoc(
+                  typeof targetItem?.responsibilities !== "undefined" &&
+                    targetItem?.responsibilities !== null
+                    ? (targetItem.responsibilities as any)
+                    : (existingBlock as any)?.content,
+                ),
+          attributes: {
+            ...((existingBlock as any)?.attributes ?? {}),
+            linkedStructuredId: String(targetItem?.id ?? ""),
+          },
+        }),
+      );
 
       const updatedSection = {
         ...structuredSection,
@@ -3721,6 +4524,7 @@ export default function SectionEditor({
         const company = trim(rawItem?.company);
         const position = trim(rawItem?.position);
         const location = trim(rawItem?.location);
+        const recoveryNotes = recoveryNotesByStructuredId.get(structuredId) ?? [];
         const title = position || company || "Experience entry";
         const subtitle =
           [company, location].filter(Boolean).join(" • ") || undefined;
@@ -3773,6 +4577,14 @@ export default function SectionEditor({
                 ))}
               </ul>
             ) : null}
+            <RecoveryNotes
+              notes={recoveryNotes}
+              onDismiss={() => {
+                onChange(index, stripRecoveryNoteBlocks(section, {
+                  linkedStructuredId: structuredId,
+                }) as any);
+              }}
+            />
             {experienceAiDiff?.itemId === structuredId ? (
               <CvAiDiffCard
                 label={`${experienceAiDiff.title} suggestion`}
@@ -3815,6 +4627,7 @@ export default function SectionEditor({
       const institution = trim(rawItem?.institution);
       const degree = trim(rawItem?.degree);
       const fieldOfStudy = trim(rawItem?.fieldOfStudy);
+      const recoveryNotes = recoveryNotesByStructuredId.get(structuredId) ?? [];
       const descriptionRaw = rawItem?.description;
       const description =
         typeof descriptionRaw === "string"
@@ -3847,6 +4660,14 @@ export default function SectionEditor({
           {truncatedDescription ? (
             <p className="cv-entry-body">{truncatedDescription}</p>
           ) : null}
+          <RecoveryNotes
+            notes={recoveryNotes}
+            onDismiss={() => {
+              onChange(index, stripRecoveryNoteBlocks(section, {
+                linkedStructuredId: structuredId,
+              }) as any);
+            }}
+          />
           {canToggleDescription ? (
             <div className="cv-disclosure-row">
               <button
@@ -3885,20 +4706,18 @@ export default function SectionEditor({
         <div className="section-container-header flex items-center justify-between">
           <h3 className="cv-section-heading">{section.title}</h3>
           <div className="dasti-icon-cluster dasti-icon-cluster--tight">
-            {isV1Active ? (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  openStructuredModal();
-                }}
-                className="dasti-icon-button cv-section-edit-trigger"
-                aria-label={`Edit ${sectionType}`}
-                title={`Edit ${sectionType}`}
-              >
-                <Pencil className="w-4 h-4" strokeWidth={1.5} aria-hidden />
-              </button>
-            ) : null}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                openStructuredModal();
+              }}
+              className="dasti-icon-button cv-section-edit-trigger"
+              aria-label={`Edit ${sectionType}`}
+              title={`Edit ${sectionType}`}
+            >
+              <Pencil className="w-4 h-4" strokeWidth={1.5} aria-hidden />
+            </button>
             {typeof onCollapseChange === "function" && (
               <button
                 type="button"
@@ -4035,7 +4854,42 @@ export default function SectionEditor({
               }
             }}
           >
-            {hasMeaningfulBlocks && !usingStructuredPreviewOverride ? (
+            {hasRenderableStructured ? (
+              <>
+                <div className="cv-entry-stack">
+                  {collapsedVisibleStructured.map((it, i) =>
+                    renderStructuredPreview(it, i, "detailed"),
+                  )}
+                </div>
+                {sectionCanToggleEntries ? (
+                  <div className="cv-disclosure-row cv-disclosure-row--section">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setExpandedStructuredSectionIds((prev) => ({
+                          ...prev,
+                          [String(section.id)]: !prev[String(section.id)],
+                        }));
+                      }}
+                      className="dasti-icon-button dasti-icon-button--compact"
+                      aria-label={
+                        collapsedListExpanded
+                          ? `Show fewer ${sectionType} entries`
+                          : `Show more ${sectionType} entries`
+                      }
+                      title={collapsedListExpanded ? "Show less" : "Show more"}
+                    >
+                      {collapsedListExpanded ? (
+                        <ChevronDown className="w-3.5 h-3.5" aria-hidden />
+                      ) : (
+                        <ChevronUp className="w-3.5 h-3.5" aria-hidden />
+                      )}
+                    </button>
+                  </div>
+                ) : null}
+              </>
+            ) : hasMeaningfulBlocks && !usingStructuredPreviewOverride ? (
               <>
                 <div className="cv-entry-stack">
                   {visibleBlocks.map((block) => (
@@ -4077,41 +4931,6 @@ export default function SectionEditor({
                   </div>
                 ) : null}
               </>
-            ) : hasRenderableStructured ? (
-              <>
-                <div className="cv-entry-stack">
-                  {collapsedVisibleStructured.map((it, i) =>
-                    renderStructuredPreview(it, i, "detailed"),
-                  )}
-                </div>
-                {sectionCanToggleEntries ? (
-                  <div className="cv-disclosure-row cv-disclosure-row--section">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setExpandedStructuredSectionIds((prev) => ({
-                          ...prev,
-                          [String(section.id)]: !prev[String(section.id)],
-                        }));
-                      }}
-                      className="dasti-icon-button dasti-icon-button--compact"
-                      aria-label={
-                        collapsedListExpanded
-                          ? `Show fewer ${sectionType} entries`
-                          : `Show more ${sectionType} entries`
-                      }
-                      title={collapsedListExpanded ? "Show less" : "Show more"}
-                    >
-                      {collapsedListExpanded ? (
-                        <ChevronDown className="w-3.5 h-3.5" aria-hidden />
-                      ) : (
-                        <ChevronUp className="w-3.5 h-3.5" aria-hidden />
-                      )}
-                    </button>
-                  </div>
-                ) : null}
-              </>
             ) : hasStructuredSeed ? (
               <p className="p-3 cv-preview-empty cv-preview-text cv-preview-text--muted">
                 {emptyStructuredPlaceholder}
@@ -4124,7 +4943,7 @@ export default function SectionEditor({
           </div>
         )}
         {/* Typed v1 modals for Experience/Education */}
-        {isV1Active && sectionType === "experience" ? (
+        {sectionType === "experience" ? (
           <ExperienceModal
             open={isExperienceModalOpen}
             onClose={() => setExperienceModalOpen(false)}
@@ -4133,49 +4952,34 @@ export default function SectionEditor({
                 ? (structuredSection.structuredContent as any)
                 : []) as IExperienceItem[]
             }
+            recoveryNotesByItemId={Object.fromEntries(recoveryNotesByStructuredId)}
+            onDismissRecoveryNotesByItemId={(itemId) => {
+              onChange(index, stripRecoveryNoteBlocks(section, {
+                linkedStructuredId: itemId,
+              }) as any);
+            }}
             onSave={(next) => {
               try {
-                const existingBlocks = Array.isArray(structuredSection.blocks)
-                  ? structuredSection.blocks
-                  : [];
-                const linkedEntries = existingBlocks
-                  .map((b: any): [string, any] => [
-                    String(
-                      (b as any)?.attributes?.linkedStructuredId ??
-                        (b as any)?.attributes?.linkedstructuredid ??
-                        "",
-                    ),
-                    b,
-                  ])
-                  .filter(([id]) => id.length > 0);
-                const blockByLinkedId = new Map<string, any>(linkedEntries);
-
-                const syncedBlocks = next.map((it) => {
-                  const linkedId = String(it.id);
-                  const existing = blockByLinkedId.get(linkedId);
-                  const title = String(
-                    it.position || it.company || "Experience",
-                  );
-                  const content =
-                    typeof it.responsibilities !== "undefined" &&
-                    it.responsibilities !== null
-                      ? ensureRemirrorDoc(it.responsibilities as any)
-                      : existing
-                        ? ensureRemirrorDoc((existing as any).content as any)
-                        : ensureRemirrorDoc(undefined as any);
-
-                  return {
+                const syncedBlocks = syncRepresentativeBlocks(
+                  next,
+                  (it: IExperienceItem, existing?: any) => ({
                     ...(existing ?? {}),
                     id: String((existing as any)?.id ?? uuidv4()),
-                    title,
+                    title: String(it.position || it.company || "Experience"),
                     type: "text" as const,
-                    content,
+                    content:
+                      typeof it.responsibilities !== "undefined" &&
+                      it.responsibilities !== null
+                        ? ensureRemirrorDoc(it.responsibilities as any)
+                        : existing
+                          ? ensureRemirrorDoc((existing as any).content as any)
+                          : ensureRemirrorDoc(undefined as any),
                     attributes: {
                       ...((existing as any)?.attributes ?? {}),
-                      linkedStructuredId: linkedId,
+                      linkedStructuredId: String(it.id ?? ""),
                     },
-                  };
-                });
+                  }),
+                );
 
                 const updatedSection = {
                   ...structuredSection,
@@ -4192,7 +4996,7 @@ export default function SectionEditor({
             }}
           />
         ) : null}
-        {isV1Active && sectionType === "education" ? (
+        {sectionType === "education" ? (
           <EducationModal
             open={isEducationModalOpen}
             onClose={() => setEducationModalOpen(false)}
@@ -4201,49 +5005,34 @@ export default function SectionEditor({
                 ? (structuredSection.structuredContent as any)
                 : []) as IEducationItem[]
             }
+            recoveryNotesByItemId={Object.fromEntries(recoveryNotesByStructuredId)}
+            onDismissRecoveryNotesByItemId={(itemId) => {
+              onChange(index, stripRecoveryNoteBlocks(section, {
+                linkedStructuredId: itemId,
+              }) as any);
+            }}
             onSave={(next) => {
               try {
-                const existingBlocks = Array.isArray(structuredSection.blocks)
-                  ? structuredSection.blocks
-                  : [];
-                const linkedEntries = existingBlocks
-                  .map((b: any): [string, any] => [
-                    String(
-                      (b as any)?.attributes?.linkedStructuredId ??
-                        (b as any)?.attributes?.linkedstructuredid ??
-                        "",
-                    ),
-                    b,
-                  ])
-                  .filter(([id]) => id.length > 0);
-                const blockByLinkedId = new Map<string, any>(linkedEntries);
-
-                const syncedBlocks = next.map((it) => {
-                  const linkedId = String(it.id);
-                  const existing = blockByLinkedId.get(linkedId);
-                  const title = String(
-                    it.institution || it.degree || "Education",
-                  );
-                  const content =
-                    typeof it.description !== "undefined" &&
-                    it.description !== null
-                      ? ensureRemirrorDoc(it.description as any)
-                      : existing
-                        ? ensureRemirrorDoc((existing as any).content as any)
-                        : ensureRemirrorDoc(undefined as any);
-
-                  return {
+                const syncedBlocks = syncRepresentativeBlocks(
+                  next,
+                  (it: IEducationItem, existing?: any) => ({
                     ...(existing ?? {}),
                     id: String((existing as any)?.id ?? uuidv4()),
-                    title,
+                    title: String(it.institution || it.degree || "Education"),
                     type: "text" as const,
-                    content,
+                    content:
+                      typeof it.description !== "undefined" &&
+                      it.description !== null
+                        ? ensureRemirrorDoc(it.description as any)
+                        : existing
+                          ? ensureRemirrorDoc((existing as any).content as any)
+                          : ensureRemirrorDoc(undefined as any),
                     attributes: {
                       ...((existing as any)?.attributes ?? {}),
-                      linkedStructuredId: linkedId,
+                      linkedStructuredId: String(it.id ?? ""),
                     },
-                  };
-                });
+                  }),
+                );
 
                 const updatedSection = {
                   ...structuredSection,

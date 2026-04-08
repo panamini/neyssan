@@ -121,4 +121,75 @@ describe("StructuredUploadButton", () => {
       useMistral: true,
     });
   });
+
+  it("holds low-confidence imports for recovery review instead of auto-applying", async () => {
+    const user = userEvent.setup();
+    structuredActionMock.mockResolvedValue({
+      normalized: {
+        summary: "Full summary",
+        experience: [],
+        education: [],
+        skillsText: "",
+        languagesText: "",
+        achievements: [{ text: "Recovered achievement" }],
+      },
+      strict: null,
+      recovery: {
+        reviewRequired: true,
+        items: [
+          {
+            blockId: "recovery-1",
+            rawText: "Recovered achievement",
+            cleanedText: "Recovered achievement",
+            displayTextSource: "cleaned",
+            predictedSection: "achievements",
+            selectedSection: "achievements",
+            confidenceScore: "low",
+            confidenceValue: 0.4,
+            issueFlags: ["weakSectionMatch"],
+            reviewStatus: "pending",
+            sourceSectionTitle: "Achievements",
+            sourceFieldKey: "achievements",
+            fragmentAssignments: [],
+          },
+        ],
+        totalItems: 1,
+        overflowCount: 0,
+        reviewLimit: 12,
+        reviewNormalized: {
+          summary: "Base summary",
+          experience: [],
+          education: [],
+          skillsText: "",
+          languagesText: "",
+          achievements: [],
+        },
+      },
+    });
+
+    const onApply = vi.fn();
+    const onRecoveryRequired = vi.fn();
+
+    const { container } = render(
+      <StructuredUploadButton
+        onApplyToSections={onApply}
+        onRecoveryRequired={onRecoveryRequired}
+      />,
+    );
+
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(["John Doe"], "resume.txt", { type: "text/plain" });
+
+    await user.click(screen.getByRole("button", { name: "Upload CV" }));
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    await waitFor(() => expect(onRecoveryRequired).toHaveBeenCalledTimes(1));
+    expect(onApply).not.toHaveBeenCalled();
+    expect(onRecoveryRequired.mock.calls[0][0].baseSections).toEqual(
+      expect.arrayContaining([expect.objectContaining({ type: "summary" })]),
+    );
+    expect(onRecoveryRequired.mock.calls[0][0].fullSections).toEqual(
+      expect.arrayContaining([expect.objectContaining({ type: "achievements" })]),
+    );
+  });
 });

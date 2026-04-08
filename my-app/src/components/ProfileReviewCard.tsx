@@ -13,7 +13,6 @@ import { useNavigate } from "react-router-dom";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import SectionComponent from "./cv-editor/Section";
 import SelectedBlockInspector from "./SelectedBlockInspector";
-import type { CvSection } from "../schemas/cvDocument.schema";
 import {
   DndContext,
   closestCenter,
@@ -30,15 +29,39 @@ import {
 } from "@dnd-kit/sortable";
 import { generateCvTemplate, generateCvTemplateV1 } from "../lib/cv-template";
 import { isV1SectionsEnabled } from "../lib/flags";
-import StructuredUploadButton from "./StructuredUploadButton";
+import StructuredUploadButton, {
+  type StructuredPayload,
+} from "./StructuredUploadButton";
 import ImportWarningBanner from "./ImportWarningBanner";
 import CvRenameDialog from "./CvRenameDialog";
-import type { CvDocument } from "../types/cvDocument";
+import ImportRecoveryPanel from "./ImportRecoveryPanel";
+import type {
+  CvDocument,
+  CvSection,
+  IAffiliationItem,
+  ICertificationItem,
+  ISkillItem,
+} from "../types/cvDocument";
 import { deriveCvTitleFromSections } from "../lib/normalize-cv";
+import {
+  applyImportRecoveryItems,
+  buildRecoveryCommitState,
+  collectRecoveryDestinationSectionIds,
+  formatRecoveryCommitToast,
+  normalizeRecoverySectionTarget,
+  summarizeRecoveryCommitState,
+  type RecoveryCommitSummary,
+} from "../lib/import-recovery";
 import {
   inspectCvImportSignals,
   type CvImportSignal,
 } from "../lib/cv-import-signals";
+import type {
+  ImportRecoveryItem,
+  ImportRecoverySession,
+  ImportRecoverySectionType,
+} from "../types/importRecovery";
+import { makeTextSection } from "../lib/cv-template";
 
 /**
  * Props for ProfileReviewCard
@@ -51,11 +74,22 @@ interface Props {
   toolbarPrimaryControl?: React.ReactNode;
 }
 
+type ManualSectionOption = {
+  value: string;
+  label: string;
+  description?: string;
+  sectionType: string;
+  sectionTitle?: string;
+  isCustom?: boolean;
+};
+
 const IMPORT_WARNING_SESSION_KEY_PREFIX = "dasti:cv-import-warning-banner:";
 const IMPORT_REVIEW_SESSION_KEY_PREFIX = "dasti:cv-import-review:";
 const IMPORT_RENAME_PROMPT_SESSION_KEY_PREFIX = "dasti:cv-import-rename:";
+const IMPORT_RECOVERY_DRAFT_SESSION_KEY_PREFIX = "dasti:cv-import-recovery-draft:";
 const IMPORT_WARNING_AUTO_HIDE_DELAY_MS = 5000;
 const IMPORT_WARNING_EXIT_DURATION_MS = 180;
+const RECOVERY_RESUME_BANNER_AUTO_HIDE_DELAY_MS = 5000;
 
 function shouldPromptForImportedTitleRename(
   cv: CvDocument | null | undefined,
@@ -101,6 +135,110 @@ function getFlaggedSectionTypes(signals: CvImportSignal[]): Set<string> {
   return sectionTypes;
 }
 
+type RecoveryImportTarget = "fresh" | "existing";
+
+type PendingRecoveryImport = {
+  cycleId: string;
+  target: RecoveryImportTarget;
+  baseSections: CvSection[];
+  fullSections: CvSection[];
+  items: ImportRecoveryItem[];
+  overflowCount: number;
+  reviewLimit: number;
+};
+
+function getRecoveryDecisionStatus(
+  item: ImportRecoveryItem,
+  targetSection: ImportRecoverySectionType,
+  targetSectionTitle?: string | null,
+): ImportRecoveryItem["reviewStatus"] {
+  const normalizedPredicted = normalizeRecoverySectionTarget(item.predictedSection);
+  const normalizedSelected = normalizeRecoverySectionTarget(targetSection);
+  const normalizedTitle =
+    normalizedSelected === "custom" ? targetSectionTitle?.trim() ?? "" : "";
+
+  return normalizedSelected === normalizedPredicted && normalizedTitle.length === 0
+    ? "accepted"
+    : "reassigned";
+}
+
+function buildPendingRecoverySessionItem(item: ImportRecoveryItem): ImportRecoveryItem {
+  const sessionText =
+    item.displayTextSource === "raw" && item.rawText.trim()
+      ? item.rawText
+      : item.cleanedText || item.rawText;
+
+  return {
+    blockId: item.blockId,
+    rawText: item.displayTextSource === "raw" ? sessionText : "",
+    cleanedText: item.displayTextSource === "cleaned" ? sessionText : "",
+    displayTextSource: item.displayTextSource,
+    predictedSection: item.predictedSection,
+    confidenceScore: item.confidenceScore,
+    confidenceValue: item.confidenceValue,
+    issueFlags: item.issueFlags,
+    reviewStatus: "pending",
+    ...(item.sourceSectionTitle?.trim()
+      ? { sourceSectionTitle: item.sourceSectionTitle.trim() }
+      : {}),
+    ...(item.sourceFieldKey?.trim()
+      ? { sourceFieldKey: item.sourceFieldKey.trim() }
+      : {}),
+    ...(item.sourceLabel?.trim() ? { sourceLabel: item.sourceLabel.trim() } : {}),
+    fragmentAssignments: [],
+  };
+}
+
+function createImportRecoverySession(items: ImportRecoveryItem[], reviewLimit: number): ImportRecoverySession {
+  return {
+    status: items.length > 0 ? "pending" : "completed",
+    updatedAt: new Date().toISOString(),
+    items: items.map(buildPendingRecoverySessionItem),
+    overflowCount: Math.max(items.length - reviewLimit, 0),
+    reviewLimit,
+  };
+}
+
+function createCompletedImportRecoverySession(
+  items: ImportRecoveryItem[],
+  reviewLimit: number,
+  baseSectionsSnapshot?: CvSection[],
+): ImportRecoverySession {
+  return {
+    status: "completed",
+    updatedAt: new Date().toISOString(),
+    items: items.map((item) => normalizeRecoveryItemTargets(item)),
+    overflowCount: Math.max(items.length - reviewLimit, 0),
+    reviewLimit,
+    ...(Array.isArray(baseSectionsSnapshot)
+      ? { baseSectionsSnapshot }
+      : {}),
+  };
+}
+
+function normalizeRecoveryItemTargets(item: ImportRecoveryItem): ImportRecoveryItem {
+  return {
+    ...item,
+    predictedSection: normalizeRecoverySectionTarget(item.predictedSection),
+    selectedSection: normalizeRecoverySectionTarget(
+      item.selectedSection ?? item.predictedSection,
+    ),
+    fragmentAssignments: (item.fragmentAssignments ?? []).map((fragment) => ({
+      ...fragment,
+      targetSection: normalizeRecoverySectionTarget(fragment.targetSection),
+    })),
+  };
+}
+
+function buildTouchedSectionRevealState(sections: CvSection[], touchedSectionIds: string[]) {
+  const revealedIds = new Set(touchedSectionIds.map(String));
+  return sections.map((section) =>
+    revealedIds.has(String(section.id ?? ""))
+      ? { ...section, collapsed: false }
+      : section,
+  );
+}
+
 /**
  * ProfileReviewCard
  *
@@ -137,6 +275,10 @@ export function ProfileReviewCard({
   const addSectionMenuRef = useRef<HTMLDivElement | null>(null);
   const manageSectionsMenuRef = useRef<HTMLDivElement | null>(null);
   const inlineReviewRef = useRef<HTMLElement | null>(null);
+  const recoveryPanelRef = useRef<HTMLDivElement | null>(null);
+  const previousRecoveryOpenRef = useRef<boolean | null>(null);
+  const previousCvIdRef = useRef<string | null>(null);
+  const sectionRevealRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   useEffect(() => {
     if (!cvId) {
@@ -204,39 +346,104 @@ export function ProfileReviewCard({
       return Boolean(blockText);
     });
   }, [sections]);
-  const sectionCatalog = useMemo(() => {
-    return v1Enabled
+  const sectionCatalog = useMemo<ManualSectionOption[]>(() => {
+    const typedOptions: ManualSectionOption[] = v1Enabled
       ? [
-          { value: "achievements", label: "Achievements" },
-          { value: "languages", label: "Languages" },
+          { value: "achievements", label: "Achievements", sectionType: "achievements" },
+          { value: "languages", label: "Languages", sectionType: "languages" },
+          { value: "projects", label: "Projects", sectionType: "projects" },
+          { value: "certifications", label: "Certifications", sectionType: "certifications" },
         ]
       : [
-          { value: "summary", label: "Summary" },
-          { value: "experience", label: "Experience" },
-          { value: "achievements", label: "Achievements" },
-          { value: "education", label: "Education" },
-          { value: "skills", label: "Skills" },
-          { value: "languages", label: "Languages" },
-          { value: "projects", label: "Projects" },
-          { value: "certifications", label: "Certifications" },
-          { value: "contact", label: "Contact" },
+          { value: "summary", label: "Summary", sectionType: "summary" },
+          { value: "experience", label: "Experience", sectionType: "experience" },
+          { value: "achievements", label: "Achievements", sectionType: "achievements" },
+          { value: "education", label: "Education", sectionType: "education" },
+          { value: "skills", label: "Skills", sectionType: "skills" },
+          { value: "languages", label: "Languages", sectionType: "languages" },
+          { value: "projects", label: "Projects", sectionType: "projects" },
+          { value: "certifications", label: "Certifications", sectionType: "certifications" },
         ];
-  }, [v1Enabled, hasMeaningfulAchievementsSection]);
-  const addableSectionOptions = useMemo(() => {
-    const existingTypes = new Set(
-      sections.map((section) => String(section.type ?? "")),
-    );
-    return sectionCatalog.filter((option) => !existingTypes.has(option.value));
-  }, [sectionCatalog, sections]);
-  const removableAddedSectionTypes = useMemo(() => {
-    const existingTypes = new Set(
-      sections.map((section) => String(section.type ?? "")),
-    );
-    return sectionCatalog
-      .map((option) => option.value)
-      .filter((value) => existingTypes.has(value));
-  }, [sectionCatalog, sections]);
 
+    return [
+      ...typedOptions,
+      {
+        value: "additional_information",
+        label: "Additional Information",
+        description: "Extra details and references",
+        sectionType: "text",
+        sectionTitle: "Additional Information",
+      },
+      {
+        value: "affiliations",
+        label: "Affiliations",
+        description: "Memberships and associations",
+        sectionType: "text",
+        sectionTitle: "Affiliations",
+      },
+      {
+        value: "hobbies",
+        label: "Hobbies",
+        description: "Interests and personal activities",
+        sectionType: "text",
+        sectionTitle: "Hobbies",
+      },
+      {
+        value: "custom",
+        label: "Add your own",
+        description: "Create a custom titled section",
+        sectionType: "text",
+        isCustom: true,
+      },
+    ];
+  }, [v1Enabled]);
+  const addableSectionOptions = useMemo(() => {
+    const existingTypes = new Set(sections.map((section) => String(section.type ?? "")));
+    const existingTextTitles = new Set(
+      sections
+        .filter((section) => String(section.type ?? "") === "text")
+        .map((section) => String(section.title ?? "").trim().toLowerCase()),
+    );
+    return sectionCatalog.filter((option) => {
+      if (option.value === "achievements") {
+        return !hasMeaningfulAchievementsSection;
+      }
+      if (option.isCustom) {
+        return true;
+      }
+      if (option.sectionType === "text") {
+        return !existingTextTitles.has(String(option.sectionTitle ?? "").trim().toLowerCase());
+      }
+      return !existingTypes.has(option.sectionType);
+    });
+  }, [sectionCatalog, sections]);
+  const removableAddedSections = useMemo(() => {
+    return sections.flatMap((section) => {
+      const sectionType = String(section.type ?? "");
+      if (sectionType === "text") {
+        const title = String(section.title ?? "").trim();
+        const matchingOption = sectionCatalog.find(
+          (option) => option.sectionType === "text" && option.sectionTitle === title,
+        );
+        if (matchingOption) {
+          return [{ id: String(section.id), label: matchingOption.label, sectionId: String(section.id) }];
+        }
+        return [
+          {
+            id: String(section.id),
+            label: title || "Custom section",
+            sectionId: String(section.id),
+          },
+        ];
+      }
+
+      const matchingOption = sectionCatalog.find(
+        (option) => option.sectionType === sectionType,
+      );
+      if (!matchingOption) return [];
+      return [{ id: String(section.id), label: matchingOption.label, sectionId: String(section.id) }];
+    });
+  }, [sectionCatalog, sections]);
   React.useEffect(() => {
     if (
       typeof window !== "undefined" &&
@@ -278,6 +485,8 @@ export function ProfileReviewCard({
     useState<boolean>(false);
   const [isImportWarningExiting, setIsImportWarningExiting] =
     useState<boolean>(false);
+  const [isRecoveryResumeBannerHidden, setIsRecoveryResumeBannerHidden] =
+    useState<boolean>(false);
   const [isImportReviewAcknowledged, setIsImportReviewAcknowledged] =
     useState<boolean>(false);
   const [isImportReviewCollapsed, setIsImportReviewCollapsed] =
@@ -286,6 +495,22 @@ export function ProfileReviewCard({
   const [renameDraftTitle, setRenameDraftTitle] = useState<string>("");
   const [renameTargetCvId, setRenameTargetCvId] = useState<string | null>(null);
   const [reviewFlashToken, setReviewFlashToken] = useState(0);
+  const [pendingRecoveryImport, setPendingRecoveryImport] =
+    useState<PendingRecoveryImport | null>(null);
+  const [savedRecoveryDraft, setSavedRecoveryDraft] =
+    useState<PendingRecoveryImport | null>(null);
+  const [pendingTouchedRecoverySectionIds, setPendingTouchedRecoverySectionIds] =
+    useState<string[]>([]);
+  const [revealedRecoverySectionIds, setRevealedRecoverySectionIds] =
+    useState<string[]>([]);
+  const recoveryItemsToReview = useMemo(
+    () => pendingRecoveryImport?.items ?? [],
+    [pendingRecoveryImport],
+  );
+  const remainingRecoveryItemCount = Math.max(
+    pendingRecoveryImport?.overflowCount ?? 0,
+    0,
+  );
   const importSignals = useMemo(
     () => inspectCvImportSignals(currentCv),
     [currentCv],
@@ -297,6 +522,9 @@ export function ProfileReviewCard({
   const importWarningSessionKey = currentCv?.id
     ? `${IMPORT_WARNING_SESSION_KEY_PREFIX}${currentCv.id}`
     : null;
+  const importRecoveryDraftSessionKey = currentCv?.id
+    ? `${IMPORT_RECOVERY_DRAFT_SESSION_KEY_PREFIX}${currentCv.id}`
+    : `${IMPORT_RECOVERY_DRAFT_SESSION_KEY_PREFIX}fresh`;
   const importReviewSessionKey = currentCv?.id
     ? `${IMPORT_REVIEW_SESSION_KEY_PREFIX}${currentCv.id}`
     : null;
@@ -307,6 +535,52 @@ export function ProfileReviewCard({
     () => getFlaggedSectionTypes(importSignals),
     [importSignals],
   );
+  const persistedMetadataRecoverySession = useMemo(() => {
+    const candidate = (currentCv?.metadata as { importRecoverySession?: unknown } | undefined)
+      ?.importRecoverySession;
+    if (!candidate || typeof candidate !== "object") return null;
+    const session = candidate as ImportRecoverySession;
+    if (!Array.isArray(session.items) || session.items.length === 0) return null;
+    return session;
+  }, [currentCv]);
+  const resumableRecoveryItemCount =
+    persistedMetadataRecoverySession?.items.length ?? savedRecoveryDraft?.items.length ?? 0;
+  const recoveryResumeBannerSignature = !pendingRecoveryImport && resumableRecoveryItemCount > 0
+    ? [
+        currentCv?.id ?? "fresh",
+        savedRecoveryDraft?.cycleId ?? "",
+        savedRecoveryDraft?.items.length ?? 0,
+        persistedMetadataRecoverySession?.updatedAt ?? "",
+        persistedMetadataRecoverySession?.status ?? "",
+        resumableRecoveryItemCount,
+      ].join("|")
+    : "";
+  const hasCompletedRecoverySession =
+    persistedMetadataRecoverySession?.status === "completed" && !pendingRecoveryImport;
+  const hasPendingRecoveryEntryPoint =
+    Boolean(pendingRecoveryImport) ||
+    Boolean(savedRecoveryDraft) ||
+    Boolean(persistedMetadataRecoverySession);
+  const hasImportReviewEntryPoint =
+    importSignals.length > 0 ||
+    hasPendingRecoveryEntryPoint;
+  const reviewChecksLabel = isImportReviewAcknowledged
+    ? "Review flagged fields again"
+    : "Review flagged fields";
+  const recoveryEntryLabel = pendingRecoveryImport
+    ? "Close recovery workspace"
+    : hasCompletedRecoverySession
+      ? "Reopen recovery workspace"
+      : "Resume recovery review";
+  const toolbarImportEntryLabel = hasPendingRecoveryEntryPoint
+    ? recoveryEntryLabel
+    : "Review import changes";
+  const recoveryOutcomeSummary = useMemo<RecoveryCommitSummary | null>(() => {
+    if (!pendingRecoveryImport) return null;
+    return summarizeRecoveryCommitState(
+      pendingRecoveryImport.items.map(normalizeRecoveryItemTargets),
+    );
+  }, [pendingRecoveryImport]);
 
   useEffect(() => {
     if (!importWarningSessionKey || typeof window === "undefined") {
@@ -324,6 +598,40 @@ export function ProfileReviewCard({
     setIsImportWarningAutoHidden(false);
     setIsImportWarningExiting(false);
   }, [currentCv?.id, importSignalSignature]);
+
+  useEffect(() => {
+    const nextCvId = currentCv?.id ? String(currentCv.id) : null;
+    const previousCvId = previousCvIdRef.current;
+    if (previousCvId !== null && previousCvId !== nextCvId) {
+      resetRecoveryUiState({
+        storageKey: `${IMPORT_RECOVERY_DRAFT_SESSION_KEY_PREFIX}${previousCvId}`,
+      });
+    }
+    previousCvIdRef.current = nextCvId;
+  }, [currentCv?.id]);
+
+  useEffect(() => {
+    if (!recoveryResumeBannerSignature) {
+      setIsRecoveryResumeBannerHidden(false);
+      return;
+    }
+
+    setIsRecoveryResumeBannerHidden(false);
+    const timeoutId = window.setTimeout(() => {
+      try {
+        console.info("[importRecovery] resume_banner_hidden", {
+          signature: recoveryResumeBannerSignature,
+        });
+      } catch {
+        /* noop */
+      }
+      setIsRecoveryResumeBannerHidden(true);
+    }, RECOVERY_RESUME_BANNER_AUTO_HIDE_DELAY_MS);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [recoveryResumeBannerSignature]);
 
   useEffect(() => {
     if (
@@ -435,6 +743,56 @@ export function ProfileReviewCard({
     setTimeout(() => setToasts((s) => s.filter((t) => t.id !== id)), 3500);
   }
 
+  function clearRecoveryDraftStorage(storageKey?: string | null) {
+    if (!storageKey || typeof window === "undefined") return;
+    try {
+      window.sessionStorage.removeItem(storageKey);
+    } catch {
+      /* noop */
+    }
+  }
+
+  function resetRecoveryUiState(options?: { storageKey?: string | null }) {
+    setPendingRecoveryImport(null);
+    setSavedRecoveryDraft(null);
+    setPendingTouchedRecoverySectionIds([]);
+    previousRecoveryOpenRef.current = false;
+    clearRecoveryDraftStorage(options?.storageKey ?? importRecoveryDraftSessionKey);
+  }
+
+  async function clearPersistedRecoverySession(options?: {
+    toastMessage?: string;
+    preserveBannerState?: boolean;
+  }) {
+    resetRecoveryUiState();
+    if (!currentCv?.metadata?.importRecoverySession) {
+      if (options?.toastMessage) {
+        pushToast(options.toastMessage);
+      }
+      return true;
+    }
+
+    const nextMetadata = { ...(currentCv.metadata ?? {}) } as CvDocument["metadata"];
+    delete (nextMetadata as { importRecoverySession?: unknown }).importRecoverySession;
+
+    try {
+      await importCv({
+        ...currentCv,
+        metadata: nextMetadata,
+      });
+      if (!options?.preserveBannerState) {
+        setIsRecoveryResumeBannerHidden(false);
+      }
+      if (options?.toastMessage) {
+        pushToast(options.toastMessage);
+      }
+      return true;
+    } catch {
+      pushToast("Failed to clear recovery");
+      return false;
+    }
+  }
+
   function dismissImportWarning() {
     if (importWarningSessionKey && typeof window !== "undefined") {
       window.sessionStorage.setItem(
@@ -467,13 +825,85 @@ export function ProfileReviewCard({
     }
   }
 
+  function toggleInlineImportReview() {
+    setIsImportReviewCollapsed((current) => !current);
+  }
+
+  function scrollToRecoveryPanel() {
+    if (typeof recoveryPanelRef.current?.scrollIntoView === "function") {
+      recoveryPanelRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }
+  }
+
+  useEffect(() => {
+    if (!pendingRecoveryImport || recoveryPanelRef.current == null) return;
+
+    const wasClosed =
+      previousRecoveryOpenRef.current === false ||
+      previousRecoveryOpenRef.current === null;
+    previousRecoveryOpenRef.current = true;
+
+    if (!wasClosed) {
+      return;
+    }
+
+    const usesAnimationFrame = typeof window.requestAnimationFrame === "function";
+    const frameId = usesAnimationFrame
+      ? window.requestAnimationFrame(() => {
+          scrollToRecoveryPanel();
+        })
+      : window.setTimeout(scrollToRecoveryPanel, 0);
+
+    return () => {
+      if (usesAnimationFrame && typeof window.cancelAnimationFrame === "function") {
+        window.cancelAnimationFrame(frameId);
+      } else {
+        window.clearTimeout(frameId);
+      }
+    };
+  }, [pendingRecoveryImport]);
+
+  useEffect(() => {
+    if (pendingRecoveryImport) return;
+    previousRecoveryOpenRef.current = false;
+  }, [pendingRecoveryImport]);
+
+  function handleImportReviewEntryPoint() {
+    if (pendingRecoveryImport) {
+      setSavedRecoveryDraft(pendingRecoveryImport);
+      setPendingRecoveryImport(null);
+      return;
+    }
+    if (savedRecoveryDraft) {
+      resumeRecoverySessionFromDraft(savedRecoveryDraft);
+      return;
+    }
+    if (persistedMetadataRecoverySession) {
+      resumeRecoverySessionFromMetadata(persistedMetadataRecoverySession);
+      return;
+    }
+    if (importSignals.length > 0) {
+      if (isImportReviewCollapsed) {
+        handleReviewFlaggedFields();
+      } else if (typeof inlineReviewRef.current?.scrollIntoView === "function") {
+        inlineReviewRef.current.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }
+    }
+  }
+
   function closeRenameDialog() {
     setIsRenameDialogOpen(false);
   }
 
   function handleExportClick() {
     if (importSignals.length > 0 && !isImportReviewAcknowledged) {
-      handleReviewFlaggedFields();
+      handleImportReviewEntryPoint();
       pushToast("Review the flagged fields before exporting this CV.");
       return;
     }
@@ -524,6 +954,490 @@ export function ProfileReviewCard({
     }
   }
 
+  function buildRecoveryTargetDocument(args: {
+    updatedSections: CvSection[];
+    target: RecoveryImportTarget;
+    pendingSession?: ImportRecoverySession | null;
+  }): CvDocument {
+    const now = new Date().toISOString();
+    const pendingSession = args.pendingSession?.items.length
+      ? args.pendingSession
+      : undefined;
+
+    if (args.target === "fresh" || !currentCv) {
+      return {
+        id: uuidv4(),
+        title: deriveCvTitleFromSections(args.updatedSections as any, "Imported CV"),
+        metadata: {
+          createdAt: now,
+          updatedAt: now,
+          version: 1,
+          ...(pendingSession ? { importRecoverySession: pendingSession } : {}),
+        } as CvDocument["metadata"],
+        sections: args.updatedSections as any,
+      };
+    }
+
+    const nextMetadata = {
+      ...(currentCv.metadata ?? {}),
+      updatedAt: now,
+      ...(pendingSession
+        ? { importRecoverySession: pendingSession }
+        : { importRecoverySession: undefined }),
+    } as CvDocument["metadata"];
+    if (!pendingSession) {
+      delete (nextMetadata as { importRecoverySession?: unknown }).importRecoverySession;
+    }
+
+    return {
+      ...currentCv,
+      metadata: nextMetadata,
+      sections: args.updatedSections as any,
+    };
+  }
+
+  async function applyImportedSections(
+    updated: CvSection[],
+    target: RecoveryImportTarget,
+    pendingSession?: ImportRecoverySession | null,
+  ): Promise<boolean> {
+    const nextDoc = buildRecoveryTargetDocument({
+      updatedSections: updated,
+      target,
+      pendingSession,
+    });
+    try {
+      await importCv(nextDoc);
+      try {
+        window.sessionStorage.removeItem(importRecoveryDraftSessionKey);
+      } catch {
+        /* noop */
+      }
+      if (target === "fresh") {
+        const importedSignals = inspectCvImportSignals(nextDoc);
+        if (shouldPromptForImportedTitleRename(nextDoc, importedSignals)) {
+          setRenameDraftTitle(nextDoc.title);
+          setRenameTargetCvId(nextDoc.id);
+          setIsRenameDialogOpen(true);
+        }
+      }
+      return true;
+    } catch {
+      pushToast("Failed to apply reviewed import");
+      return false;
+    }
+  }
+
+  function resumeRecoverySessionFromDraft(draft: PendingRecoveryImport) {
+    setPendingRecoveryImport({
+      ...draft,
+      cycleId: uuidv4(),
+      items: draft.items.map(normalizeRecoveryItemTargets),
+    });
+    setSavedRecoveryDraft(null);
+  }
+
+  function resumeRecoverySessionFromMetadata(session: ImportRecoverySession) {
+    const baseSections = Array.isArray(session.baseSectionsSnapshot)
+      ? session.baseSectionsSnapshot
+      : currentCv?.sections ?? [];
+    setPendingRecoveryImport({
+      cycleId: uuidv4(),
+      target: "existing",
+      baseSections,
+      fullSections: currentCv?.sections ?? [],
+      items: session.items.map(normalizeRecoveryItemTargets),
+      overflowCount: session.overflowCount,
+      reviewLimit: session.reviewLimit,
+    });
+  }
+
+  async function beginRecoveryImport(
+    request: {
+      baseSections: CvSection[];
+      fullSections: CvSection[];
+      structured: StructuredPayload;
+    },
+    target: RecoveryImportTarget,
+  ) {
+    const recovery = request.structured.recovery;
+    const previousPersistedRecoverySession = currentCv?.metadata?.importRecoverySession;
+
+    if (!recovery || !recovery.reviewRequired || recovery.items.length === 0) {
+      resetRecoveryUiState();
+      void applyImportedSections(request.fullSections, target);
+      return;
+    }
+
+    try {
+      console.info("[importRecovery] review_required", {
+        target,
+        itemCount: recovery.items.length,
+      });
+    } catch {
+      /* noop */
+    }
+
+    const nextPendingRecoveryImport: PendingRecoveryImport = {
+      cycleId: uuidv4(),
+      target,
+      baseSections: request.baseSections,
+      fullSections: request.fullSections,
+      items: recovery.items.map((item) =>
+        normalizeRecoveryItemTargets({
+          ...item,
+          displayTextSource: item.displayTextSource ?? "cleaned",
+          reviewStatus: item.reviewStatus ?? "pending",
+          selectedSection: item.selectedSection ?? item.predictedSection,
+          selectedSectionTitle: item.selectedSectionTitle ?? null,
+          fragmentAssignments: item.fragmentAssignments ?? [],
+        }),
+      ),
+      overflowCount: recovery.overflowCount,
+      reviewLimit: recovery.reviewLimit,
+    };
+
+    setPendingTouchedRecoverySectionIds([]);
+    previousRecoveryOpenRef.current = false;
+    setSavedRecoveryDraft(null);
+    clearRecoveryDraftStorage();
+    setPendingRecoveryImport(nextPendingRecoveryImport);
+
+    if (previousPersistedRecoverySession && currentCv) {
+      const nextMetadata = { ...(currentCv.metadata ?? {}) } as CvDocument["metadata"];
+      delete (nextMetadata as { importRecoverySession?: unknown }).importRecoverySession;
+      try {
+        console.info("[importRecovery] replacing_open_cycle", {
+          nextCycleId: nextPendingRecoveryImport.cycleId,
+        });
+      } catch {
+        /* noop */
+      }
+      void importCv({
+        ...currentCv,
+        metadata: nextMetadata,
+      }).catch(() => {
+        pushToast("Failed to reset previous recovery state");
+      });
+    }
+  }
+
+  function updateRecoveryItem(
+    blockId: string,
+    updates: Partial<ImportRecoveryItem>,
+  ) {
+    setPendingRecoveryImport((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        items: current.items.map((item) => {
+          if (item.blockId !== blockId) return item;
+          const nextSelectedSection =
+            updates.selectedSection === undefined
+              ? item.selectedSection ?? item.predictedSection
+              : updates.selectedSection;
+          const nextStatus = updates.reviewStatus ?? item.reviewStatus;
+          return {
+            ...item,
+            ...updates,
+            selectedSection: nextSelectedSection,
+            reviewStatus:
+              nextStatus === "reassigned" &&
+              nextSelectedSection === item.predictedSection
+                ? "pending"
+                : nextStatus,
+          };
+        }),
+      };
+    });
+  }
+
+  function acceptRecoveryItem(blockId: string) {
+    setPendingRecoveryImport((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        items: current.items.map((item) =>
+          item.blockId === blockId
+            ? {
+                ...item,
+                selectedSection: normalizeRecoverySectionTarget(
+                  item.selectedSection ?? item.predictedSection,
+                ),
+                selectedSectionTitle:
+                  normalizeRecoverySectionTarget(
+                    item.selectedSection ?? item.predictedSection,
+                  ) === "custom"
+                    ? item.selectedSectionTitle ?? null
+                    : null,
+                reviewStatus: getRecoveryDecisionStatus(
+                  item,
+                  normalizeRecoverySectionTarget(
+                    item.selectedSection ?? item.predictedSection,
+                  ),
+                  item.selectedSectionTitle ?? null,
+                ),
+              }
+            : item,
+        ),
+      };
+    });
+  }
+
+  function updateRecoveryRemainingTarget(payload: {
+    blockId: string;
+    targetSection: ImportRecoverySectionType;
+    targetSectionTitle?: string | null;
+  }) {
+    setPendingRecoveryImport((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        items: current.items.map((item) => {
+          if (item.blockId !== payload.blockId) return item;
+
+          const nextSection = normalizeRecoverySectionTarget(payload.targetSection);
+          const nextTitle =
+            nextSection === "custom"
+              ? payload.targetSectionTitle?.trim() ?? null
+              : null;
+          const nextStatus =
+            item.reviewStatus === "accepted" || item.reviewStatus === "reassigned"
+              ? getRecoveryDecisionStatus(item, nextSection, nextTitle)
+              : item.reviewStatus;
+
+          return {
+            ...item,
+            selectedSection: nextSection,
+            selectedSectionTitle: nextTitle,
+            reviewStatus: nextStatus,
+          };
+        }),
+      };
+    });
+  }
+
+  function ignoreRecoveryItem(blockId: string) {
+    updateRecoveryItem(blockId, { reviewStatus: "ignored" });
+  }
+
+  function assignRecoveryFragment(payload: {
+    blockId: string;
+    range: { start: number; end: number };
+    text: string;
+    selectionSource: "cleaned" | "raw";
+    targetSection: ImportRecoverySectionType;
+    targetSectionTitle?: string | null;
+  }) {
+    setPendingRecoveryImport((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        items: current.items.map((item) => {
+          if (item.blockId !== payload.blockId) return item;
+          return {
+            ...item,
+            fragmentAssignments: [
+              ...item.fragmentAssignments,
+              {
+                fragmentId: uuidv4(),
+                blockId: item.blockId,
+                startOffset: payload.range.start,
+                endOffset: payload.range.end,
+                selectedText: payload.text,
+                selectionSource: payload.selectionSource,
+                targetSection: payload.targetSection,
+                targetSectionTitle: payload.targetSectionTitle ?? null,
+                status: "assigned",
+                createdAt: new Date().toISOString(),
+              },
+            ],
+          };
+        }),
+      };
+    });
+  }
+
+  function removeRecoveryFragment(blockId: string, fragmentId: string) {
+    setPendingRecoveryImport((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        items: current.items.map((item) =>
+          item.blockId === blockId
+            ? {
+                ...item,
+                fragmentAssignments: item.fragmentAssignments.filter(
+                  (fragment) => fragment.fragmentId !== fragmentId,
+                ),
+              }
+            : item,
+        ),
+      };
+    });
+  }
+
+  function cancelRecoveryImport() {
+    try {
+      console.info("[importRecovery] abandoned", {
+        itemCount: pendingRecoveryImport?.items.length ?? 0,
+      });
+    } catch {
+      /* noop */
+    }
+    setPendingRecoveryImport(null);
+    setSavedRecoveryDraft(null);
+    try {
+      window.sessionStorage.removeItem(importRecoveryDraftSessionKey);
+    } catch {
+      /* noop */
+    }
+    pushToast("Import cancelled");
+  }
+
+  async function discardRecoveryImport() {
+    const didClear = await clearPersistedRecoverySession({
+      toastMessage: "Recovery cleared",
+    });
+    if (!didClear) return;
+  }
+
+  async function importRecoveryAsIs() {
+    if (!pendingRecoveryImport) return;
+    const sectionsToApply = pendingRecoveryImport.fullSections;
+    const persistedSession = createCompletedImportRecoverySession(
+      pendingRecoveryImport.items.map(normalizeRecoveryItemTargets),
+      pendingRecoveryImport.reviewLimit,
+      pendingRecoveryImport.baseSections,
+    );
+    setPendingRecoveryImport(null);
+    try {
+      console.info("[importRecovery] imported_as_is", {
+        itemCount: pendingRecoveryImport.items.length,
+      });
+    } catch {
+      /* noop */
+    }
+    try {
+      console.info("[importRecovery] session_snapshot", {
+        status: persistedSession.status,
+        itemCount: persistedSession.items.length,
+      });
+    } catch {
+      /* noop */
+    }
+    await applyImportedSections(
+      sectionsToApply,
+      pendingRecoveryImport.target,
+      persistedSession,
+    );
+  }
+
+  async function applyReviewedRecoveryImport() {
+    if (!pendingRecoveryImport) return;
+    const normalizedItems = pendingRecoveryImport.items.map(normalizeRecoveryItemTargets);
+    const { itemsToApply, pendingItems, summary } = buildRecoveryCommitState(normalizedItems);
+    const reviewedSections = applyImportRecoveryItems(
+      pendingRecoveryImport.baseSections,
+      itemsToApply,
+    );
+    const touchedSectionIds = collectRecoveryDestinationSectionIds(
+      reviewedSections,
+      itemsToApply,
+    );
+    const revealedSections = buildTouchedSectionRevealState(
+      reviewedSections,
+      touchedSectionIds,
+    );
+    const persistedSession = pendingItems.length
+      ? createImportRecoverySession(pendingItems, pendingRecoveryImport.reviewLimit)
+      : createCompletedImportRecoverySession(
+          normalizedItems,
+          pendingRecoveryImport.reviewLimit,
+          pendingRecoveryImport.baseSections,
+        );
+    setPendingRecoveryImport(null);
+    setSavedRecoveryDraft(null);
+    try {
+      console.info("[importRecovery] reviewed_import_applied", {
+        decisions: itemsToApply.reduce(
+          (acc, item) => {
+            acc[item.reviewStatus] = (acc[item.reviewStatus] ?? 0) + 1;
+            return acc;
+          },
+          {} as Record<string, number>,
+        ),
+        pendingCount: pendingItems.length,
+      });
+    } catch {
+      /* noop */
+    }
+    try {
+      console.info("[importRecovery] session_snapshot", {
+        status: persistedSession.status,
+        itemCount: persistedSession.items.length,
+      });
+    } catch {
+      /* noop */
+    }
+    const didApply = await applyImportedSections(
+      revealedSections,
+      pendingRecoveryImport.target,
+      persistedSession,
+    );
+    if (didApply) {
+      setPendingTouchedRecoverySectionIds(touchedSectionIds);
+      pushToast(formatRecoveryCommitToast(summary));
+    }
+  }
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const recoveryDraftToPersist = pendingRecoveryImport ?? savedRecoveryDraft;
+    if (!recoveryDraftToPersist) {
+      try {
+        window.sessionStorage.removeItem(importRecoveryDraftSessionKey);
+      } catch {
+        /* noop */
+      }
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      try {
+        window.sessionStorage.setItem(
+          importRecoveryDraftSessionKey,
+          JSON.stringify(recoveryDraftToPersist),
+        );
+      } catch {
+        /* noop */
+      }
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [importRecoveryDraftSessionKey, pendingRecoveryImport, savedRecoveryDraft]);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.sessionStorage.getItem(importRecoveryDraftSessionKey);
+      if (!raw) {
+        setSavedRecoveryDraft(null);
+        return;
+      }
+      const parsed = JSON.parse(raw) as PendingRecoveryImport;
+      if (!parsed || !Array.isArray(parsed.items) || parsed.items.length === 0) {
+        setSavedRecoveryDraft(null);
+        return;
+      }
+      setSavedRecoveryDraft(parsed);
+    } catch {
+      setSavedRecoveryDraft(null);
+    }
+  }, [importRecoveryDraftSessionKey, pendingRecoveryImport]);
+
   React.useEffect(() => {
     if (!recentlyAddedSectionType) return;
     const timeoutId = window.setTimeout(() => {
@@ -533,6 +1447,40 @@ export function ProfileReviewCard({
       window.clearTimeout(timeoutId);
     };
   }, [recentlyAddedSectionType]);
+
+  React.useEffect(() => {
+    if (pendingTouchedRecoverySectionIds.length === 0) return undefined;
+
+    const availableIds = pendingTouchedRecoverySectionIds.filter(
+      (sectionId) => sectionRevealRefs.current[sectionId],
+    );
+    if (availableIds.length === 0) {
+      return undefined;
+    }
+
+    setRevealedRecoverySectionIds(availableIds);
+    setPendingTouchedRecoverySectionIds([]);
+
+    const firstSection = sectionRevealRefs.current[availableIds[0]];
+    if (firstSection) {
+      firstSection.scrollIntoView({ behavior: "smooth", block: "center" });
+      window.setTimeout(() => {
+        try {
+          firstSection.focus({ preventScroll: true });
+        } catch {
+          /* noop */
+        }
+      }, 80);
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setRevealedRecoverySectionIds([]);
+    }, 2400);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [pendingTouchedRecoverySectionIds, sections]);
 
   React.useEffect(() => {
     if (!isAddSectionMenuOpen && !isManageSectionsMenuOpen) return undefined;
@@ -587,7 +1535,27 @@ export function ProfileReviewCard({
       transition,
     };
     return (
-      <div ref={setNodeRef} style={style} className="mb-6">
+      <div
+        ref={(node) => {
+          setNodeRef(node);
+          sectionRevealRefs.current[String(section.id ?? "")] = node;
+        }}
+        style={style}
+        className={[
+          "mb-6",
+          revealedRecoverySectionIds.includes(String(section.id ?? ""))
+            ? "dasti-import-reveal-shell"
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        data-import-revealed={
+          revealedRecoverySectionIds.includes(String(section.id ?? ""))
+            ? "true"
+            : "false"
+        }
+        tabIndex={-1}
+      >
         <div className="flex items-center mb-2">
           <button
             type="button"
@@ -636,12 +1604,20 @@ export function ProfileReviewCard({
     reorderSections(newOrderSections);
   }
 
-  function handleAddSection(type?: string) {
+  function buildTextSection(title: string): CvSection {
+    return makeTextSection(title, { includeSeedBlock: true });
+  }
+
+  function handleAddSection(optionValue?: string) {
     try {
-      if (!type) {
+      const option = sectionCatalog.find(
+        (entry) => entry.value === String(optionValue ?? "").trim(),
+      );
+      if (!option) {
         pushToast("Choose a section type to add");
         return;
       }
+      const type = option.sectionType;
 
       // Prevent duplicates for typed singleton sections
       const typedSingletons = new Set([
@@ -652,6 +1628,8 @@ export function ProfileReviewCard({
         "skills",
         "languages",
         "achievements",
+        "projects",
+        "certifications",
       ]);
       const existingTypes = new Set(
         (currentCv?.sections ?? sections).map((s) => String((s as any).type)),
@@ -662,8 +1640,27 @@ export function ProfileReviewCard({
       }
 
       let newSection: CvSection;
-      // Generate a full template and pick the matching section to ensure schema-compliance.
-      try {
+      if (option.sectionType === "text") {
+        const requestedTitle = option.isCustom
+          ? window.prompt("Name the new section", "Additional Information")?.trim() ?? ""
+          : String(option.sectionTitle ?? "").trim();
+        if (!requestedTitle) {
+          pushToast("Section name is required");
+          return;
+        }
+        const existingTextTitles = new Set(
+          (currentCv?.sections ?? sections)
+            .filter((section) => String(section.type ?? "") === "text")
+            .map((section) => String(section.title ?? "").trim().toLowerCase()),
+        );
+        if (existingTextTitles.has(requestedTitle.toLowerCase())) {
+          pushToast(`Section "${requestedTitle}" already exists`);
+          return;
+        }
+        newSection = buildTextSection(requestedTitle);
+      } else {
+        // Generate a full template and pick the matching section to ensure schema-compliance.
+        try {
         // If the user explicitly requested a typed v1 section, force the v1 template
         // regardless of env flag. This ensures Add Section always creates a v1-shaped
         // section when the user picks a v1 type from the UI.
@@ -704,7 +1701,7 @@ export function ProfileReviewCard({
           } catch {}
         }
 
-        let matched = tmpl.sections.find((s) => s.type === (type as any));
+          let matched = tmpl.sections.find((s) => s.type === (type as any));
         if (
           !matched &&
           forceV1ForType &&
@@ -722,12 +1719,13 @@ export function ProfileReviewCard({
 
         // Clone and give it a unique id for this document.
         newSection = { ...matched, id: uuidv4() } as CvSection;
-      } catch (err) {
+        } catch (err) {
         // If template generation fails, fail safely instead of creating a legacy text section.
         // eslint-disable-next-line no-console
         console.error("[ProfileReviewCard] generateCvTemplate failed", err);
         pushToast("Failed to create section");
         return;
+        }
       }
 
       const preferredSectionOrder = [
@@ -738,6 +1736,9 @@ export function ProfileReviewCard({
         "education",
         "skills",
         "languages",
+        "projects",
+        "certifications",
+        "text",
       ] as const;
       const preferredOrderIndex = new Map<string, number>(
         preferredSectionOrder.map((sectionType, index): [string, number] => [
@@ -767,8 +1768,8 @@ export function ProfileReviewCard({
       } else {
         addSection(newSection);
       }
-      pushToast("Section added");
-      setRecentlyAddedSectionType(type);
+      pushToast(`${newSection.title || option.label} added`);
+      setRecentlyAddedSectionType(option.value);
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error("[ProfileReviewCard] addSection failed", err);
@@ -777,14 +1778,16 @@ export function ProfileReviewCard({
   }
 
   function handleClearAddedSections() {
-    const removableTypes = new Set(removableAddedSectionTypes);
-    if (removableTypes.size === 0) {
+    const removableSectionIds = new Set(
+      removableAddedSections.map((section) => section.sectionId),
+    );
+    if (removableSectionIds.size === 0) {
       pushToast("No added sections to remove");
       return;
     }
 
     const nextSections = sections.filter(
-      (section) => !removableTypes.has(String(section.type ?? "")),
+      (section) => !removableSectionIds.has(String(section.id ?? "")),
     );
 
     if (nextSections.length === sections.length) {
@@ -802,15 +1805,15 @@ export function ProfileReviewCard({
     pushToast("Added sections removed");
   }
 
-  function handleRemoveAddedSection(type: string) {
-    const normalizedType = String(type ?? "").trim();
-    if (!normalizedType) {
+  function handleRemoveAddedSection(sectionId: string) {
+    const normalizedSectionId = String(sectionId ?? "").trim();
+    if (!normalizedSectionId) {
       pushToast("Choose a section to remove");
       return;
     }
 
     const nextSections = sections.filter(
-      (section) => String(section.type ?? "") !== normalizedType,
+      (section) => String(section.id ?? "") !== normalizedSectionId,
     );
 
     if (nextSections.length === sections.length) {
@@ -821,8 +1824,8 @@ export function ProfileReviewCard({
     reorderSections(nextSections as any);
     setIsManageSectionsMenuOpen(false);
     const removedLabel =
-      sectionCatalog.find((option) => option.value === normalizedType)?.label ??
-      normalizedType;
+      removableAddedSections.find((section) => section.sectionId === normalizedSectionId)
+        ?.label ?? "Section";
     pushToast(`${removedLabel} removed`);
   }
 
@@ -865,10 +1868,14 @@ export function ProfileReviewCard({
           onReview={handleReviewFlaggedFields}
           onDismiss={dismissImportWarning}
           isExiting={isImportWarningExiting}
-          reviewLabel={
-            isImportReviewAcknowledged
-              ? "Review flagged fields again"
-              : "Review flagged fields"
+          reviewLabel={reviewChecksLabel}
+          recoveryAction={
+            hasPendingRecoveryEntryPoint
+              ? {
+                  label: recoveryEntryLabel,
+                  onClick: handleImportReviewEntryPoint,
+                }
+              : null
           }
         />
       ) : null}
@@ -889,15 +1896,31 @@ export function ProfileReviewCard({
                   Clean flagged parser noise here before generating proposals.
                 </p>
               </div>
-              <div
-                className="dasti-inline-review__status"
-                data-review-state={
-                  isImportReviewAcknowledged ? "acknowledged" : "required"
-                }
-              >
-                {isImportReviewAcknowledged
-                  ? "Review acknowledged"
-                  : "Review required before export"}
+              <div className="dasti-inline-review__header-actions">
+                <div
+                  className="dasti-inline-review__status"
+                  data-review-state={
+                    isImportReviewAcknowledged ? "acknowledged" : "required"
+                  }
+                >
+                  {isImportReviewAcknowledged
+                    ? "Review acknowledged"
+                    : "Review required before export"}
+                </div>
+                <button
+                  type="button"
+                  className="dasti-inline-review__close"
+                  aria-label={
+                    isImportReviewCollapsed ? "Open import review" : "Close import review"
+                  }
+                  onClick={toggleInlineImportReview}
+                >
+                  {isImportReviewCollapsed ? (
+                    <ChevronDown size={14} strokeWidth={2} aria-hidden="true" />
+                  ) : (
+                    <X size={14} strokeWidth={2} aria-hidden="true" />
+                  )}
+                </button>
               </div>
             </div>
             <div className="dasti-inline-review__list" role="list">
@@ -914,6 +1937,102 @@ export function ProfileReviewCard({
                 </div>
               ))}
             </div>
+            {pendingRecoveryImport || savedRecoveryDraft || persistedMetadataRecoverySession ? (
+              <div className="dasti-inline-review__actions">
+                <button
+                  type="button"
+                  className="dasti-button dasti-button--secondary dasti-button--pill dasti-button--sm"
+                  onClick={handleImportReviewEntryPoint}
+                >
+                  {recoveryEntryLabel}
+                </button>
+                <button
+                  type="button"
+                  className="dasti-button dasti-button--secondary dasti-button--pill dasti-button--sm"
+                  onClick={() => {
+                    void discardRecoveryImport();
+                  }}
+                >
+                  Discard recovery
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+
+      {pendingRecoveryImport ? (
+        <div ref={recoveryPanelRef}>
+          <ImportRecoveryPanel
+            recoveryCycleKey={pendingRecoveryImport.cycleId}
+            items={recoveryItemsToReview}
+            overflowCount={remainingRecoveryItemCount}
+            reviewLimit={pendingRecoveryImport.reviewLimit}
+            onAccept={acceptRecoveryItem}
+            onIgnore={ignoreRecoveryItem}
+            onUpdateRemainingTarget={updateRecoveryRemainingTarget}
+            onAssignFragment={assignRecoveryFragment}
+            onRemoveFragment={removeRecoveryFragment}
+            onImportAsIs={() => {
+              void importRecoveryAsIs();
+            }}
+            onCancel={cancelRecoveryImport}
+            onDiscardRecovery={() => {
+              void discardRecoveryImport();
+            }}
+            onApply={() => {
+              void applyReviewedRecoveryImport();
+            }}
+            outcomeSummary={recoveryOutcomeSummary}
+          />
+        </div>
+      ) : null}
+
+      {!pendingRecoveryImport &&
+      resumableRecoveryItemCount > 0 &&
+      !isRecoveryResumeBannerHidden ? (
+        <section className="dasti-import-recovery__resume-banner" aria-label="Pending import recovery review">
+          <div>
+            <div className="dasti-inline-review__eyebrow">Import recovery</div>
+            <div className="dasti-import-recovery__resume-title">
+              {hasCompletedRecoverySession
+                ? `Recovery review saved — reopen ${resumableRecoveryItemCount} reviewed item${resumableRecoveryItemCount === 1 ? "" : "s"}`
+                : `Import review incomplete — ${resumableRecoveryItemCount} item${resumableRecoveryItemCount === 1 ? "" : "s"} pending`}
+            </div>
+          </div>
+          <div className="dasti-import-recovery__resume-actions">
+            <button
+              type="button"
+              className="dasti-button dasti-button--secondary dasti-button--pill"
+              onClick={() => {
+                if (savedRecoveryDraft) {
+                  resumeRecoverySessionFromDraft(savedRecoveryDraft);
+                  return;
+                }
+                if (persistedMetadataRecoverySession) {
+                  resumeRecoverySessionFromMetadata(persistedMetadataRecoverySession);
+                }
+              }}
+            >
+              {recoveryEntryLabel}
+            </button>
+            <button
+              type="button"
+              className="dasti-button dasti-button--secondary dasti-button--pill"
+              onClick={() => {
+                void discardRecoveryImport();
+              }}
+            >
+              Discard recovery
+            </button>
+            <button
+              type="button"
+              className="dasti-import-recovery__resume-close"
+              aria-label="Dismiss recovery banner"
+              onClick={() => setIsRecoveryResumeBannerHidden(true)}
+            >
+              <X size={14} strokeWidth={2} aria-hidden="true" />
+            </button>
           </div>
         </section>
       ) : null}
@@ -1016,6 +2135,9 @@ export function ProfileReviewCard({
               onApplyToSections={(updated) => {
                 void importSectionsIntoFreshCv(updated);
               }}
+              onRecoveryRequired={(request) => {
+                void beginRecoveryImport(request, "fresh");
+              }}
               renderAs="dropdown"
             />
             <button
@@ -1099,23 +2221,22 @@ export function ProfileReviewCard({
                         >
                           <div className="dasti-menu-option__row">
                             <div className="dasti-menu-option__copy">
-                              <div className="dasti-menu-option__title">
-                                {option.label}
-                              </div>
-                              {option.value === "achievements" ||
-                              option.value === "languages" ? null : (
-                                <div className="dasti-menu-option__description">
-                                  Add {option.label.toLowerCase()} to this resume.
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </button>
+                               <div className="dasti-menu-option__title">
+                                 {option.label}
+                               </div>
+                               {option.description ? (
+                                 <div className="dasti-menu-option__description">
+                                   {option.description}
+                                 </div>
+                               ) : null}
+                             </div>
+                           </div>
+                         </button>
                       ))}
                     </div>
                   ) : null}
                 </div>
-              ) : removableAddedSectionTypes.length > 0 ? (
+              ) : removableAddedSections.length > 0 ? (
                 <div
                   ref={manageSectionsMenuRef}
                   className="dasti-import-dropdown"
@@ -1150,18 +2271,15 @@ export function ProfileReviewCard({
                   </button>
                   {isManageSectionsMenuOpen ? (
                     <div className="dasti-import-dropdown__menu dasti-add-section-menu dasti-add-section-menu--manage dasti-toolbar-drawer-surface">
-                      {removableAddedSectionTypes.map((sectionType) => {
-                        const sectionLabel =
-                          sectionCatalog.find(
-                            (option) => option.value === sectionType,
-                          )?.label ?? sectionType;
+                      {removableAddedSections.map((section) => {
+                        const sectionLabel = section.label;
                         return (
                           <button
-                            key={sectionType}
+                            key={section.sectionId}
                             type="button"
                             className="dasti-menu-option dasti-menu-option--section"
                             onClick={() => {
-                              handleRemoveAddedSection(sectionType);
+                              handleRemoveAddedSection(section.sectionId);
                             }}
                           >
                             <div className="dasti-menu-option__row">
@@ -1174,7 +2292,7 @@ export function ProfileReviewCard({
                           </button>
                         );
                       })}
-                      {removableAddedSectionTypes.length > 1 ? (
+                      {removableAddedSections.length > 1 ? (
                         <button
                           type="button"
                           className="dasti-menu-option dasti-menu-option--section"
@@ -1225,10 +2343,13 @@ export function ProfileReviewCard({
                     }
                   }
                 }}
+                onRecoveryRequired={(request) => {
+                  void beginRecoveryImport(request, "existing");
+                }}
                 renderAs="dropdown"
               />
             </div>
-            {onRequestExport || importSignals.length > 0 ? (
+            {onRequestExport || hasImportReviewEntryPoint ? (
               <div className="dasti-cv-edit-toolbar__group dasti-cv-edit-toolbar__group--actions">
                 {onRequestExport ? (
                   <button
@@ -1241,24 +2362,24 @@ export function ProfileReviewCard({
                     Export PDF
                   </button>
                 ) : null}
-                {importSignals.length > 0 ? (
+                {hasImportReviewEntryPoint ? (
                   <button
                     type="button"
-                    onClick={() =>
-                      setIsImportReviewCollapsed((current) => !current)
-                    }
-                    className="dasti-icon-button dasti-import-review-trigger"
-                    aria-label={
-                      isImportReviewCollapsed
-                        ? "Open import review"
-                        : "Close import review"
-                    }
-                    aria-expanded={!isImportReviewCollapsed}
+                    onClick={handleImportReviewEntryPoint}
+                    className="dasti-button dasti-button--secondary dasti-button--pill dasti-button--sm dasti-import-review-trigger"
+                    aria-label={toolbarImportEntryLabel}
+                    aria-expanded={pendingRecoveryImport ? true : importSignals.length > 0 ? !isImportReviewCollapsed : false}
+                    data-toolbar-tooltip={toolbarImportEntryLabel}
                     data-review-state={
-                      isImportReviewAcknowledged ? "acknowledged" : "required"
+                      pendingRecoveryImport || savedRecoveryDraft || persistedMetadataRecoverySession
+                        ? "required"
+                        : isImportReviewAcknowledged
+                          ? "acknowledged"
+                          : "required"
                     }
                   >
                     <SealWarning size={18} strokeWidth={1.7} aria-hidden="true" />
+                    {toolbarImportEntryLabel}
                   </button>
                 ) : null}
               </div>
@@ -1310,6 +2431,15 @@ export function ProfileReviewCard({
                         ? "true"
                         : "false"
                     }
+                    data-import-revealed={
+                      revealedRecoverySectionIds.includes(String(section.id ?? ""))
+                        ? "true"
+                        : "false"
+                    }
+                    ref={(node) => {
+                      sectionRevealRefs.current[String(section.id ?? "")] = node;
+                    }}
+                    tabIndex={-1}
                   >
                     <SectionComponent
                       section={section}

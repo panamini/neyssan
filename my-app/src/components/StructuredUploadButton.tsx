@@ -19,11 +19,17 @@ import {
   buildTypedSectionsFromNormalized,
   applyStrictContactToSections,
 } from "../utils/cv/mapping-utils";
+import type { ImportRecoveryPayload } from "../types/importRecovery";
 
 export interface StructuredUploadButtonProps {
   sections?: CvSection[];
   onApplyToSections?: (updated: CvSection[]) => void;
   onResult?: (payload: unknown) => void;
+  onRecoveryRequired?: (payload: {
+    baseSections: CvSection[];
+    fullSections: CvSection[];
+    structured: StructuredPayload;
+  }) => void;
   className?: string;
   label?: string;
   ocrLabel?: string;
@@ -47,7 +53,33 @@ type StructuredPayload = {
   } | null;
   layout?: unknown;
   diagnostics?: unknown;
+  recovery?: ImportRecoveryPayload | null;
 };
+
+export type { StructuredPayload };
+
+function buildSectionsFromPayload(
+  payload: StructuredPayload,
+  normalizedOverride?: unknown,
+): CvSection[] {
+  const normalized =
+    (normalizedOverride ?? payload?.normalized) as unknown;
+  if (!normalized || typeof normalized !== "object") {
+    return [];
+  }
+  const typed = buildTypedSectionsFromNormalized(normalized as any);
+  const strict = payload?.strict;
+  if (!strict || typed.length === 0) {
+    return typed;
+  }
+  return applyStrictContactToSections(typed, {
+    name: strict.name ?? null,
+    email: strict.email ?? null,
+    phone: strict.phone ?? null,
+    location: strict.location ?? null,
+    desiredPosition: strict.desiredPosition ?? null,
+  });
+}
 
 function readEmptyReasonFromDiagnostics(diagnostics: unknown): string | null {
   if (!diagnostics || typeof diagnostics !== "object") return null;
@@ -86,6 +118,7 @@ export function StructuredUploadButton({
   sections: _sections,
   onApplyToSections,
   onResult,
+  onRecoveryRequired,
   className,
   label,
   ocrLabel,
@@ -427,24 +460,29 @@ export function StructuredUploadButton({
           }
         }
 
-        const normalized = payload?.normalized as unknown;
-        if (normalized && typeof normalized === "object") {
-          const typed = buildTypedSectionsFromNormalized(normalized as any);
-
-          let merged = typed;
-          const strict = payload?.strict;
-          if (strict && Array.isArray(typed) && typed.length > 0) {
-            merged = applyStrictContactToSections(typed, {
-              name: strict.name ?? null,
-              email: strict.email ?? null,
-              phone: strict.phone ?? null,
-              location: strict.location ?? null,
-              desiredPosition: strict.desiredPosition ?? null,
+        const recovery = payload?.recovery;
+        const fullSections = buildSectionsFromPayload(payload);
+        const baseSections =
+          recovery?.reviewNormalized && typeof recovery.reviewNormalized === "object"
+            ? buildSectionsFromPayload(payload, recovery.reviewNormalized)
+            : fullSections;
+        const requiresRecoveryReview = Boolean(
+          recovery?.reviewRequired && recovery.items.length > 0,
+        );
+        if (requiresRecoveryReview && typeof onRecoveryRequired === "function") {
+          try {
+            onRecoveryRequired({
+              baseSections,
+              fullSections,
+              structured: payload,
             });
+          } catch {
+            /* noop */
           }
-          if (typeof onApplyToSections === "function" && merged.length > 0) {
+        } else {
+          if (typeof onApplyToSections === "function" && fullSections.length > 0) {
             try {
-              onApplyToSections(merged);
+              onApplyToSections(fullSections);
             } catch {
               /* noop */
             }
@@ -464,9 +502,14 @@ export function StructuredUploadButton({
         } else {
           setEmptyReason(null);
           try {
-            showToast("Structured extraction completed", {
-              variant: "success",
-            });
+            showToast(
+              requiresRecoveryReview
+                ? `Review ${recovery?.items.length ?? 0} uncertain sections before continuing`
+                : "Structured extraction completed",
+              {
+                variant: requiresRecoveryReview ? "neutral" : "success",
+              },
+            );
           } catch {
             /* noop */
           }
@@ -518,6 +561,7 @@ export function StructuredUploadButton({
     },
     [
       onApplyToSections,
+      onRecoveryRequired,
       onResult,
       showToast,
       structuredAction,

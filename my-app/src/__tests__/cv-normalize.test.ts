@@ -252,3 +252,172 @@ describe("CV auto-title normalization", () => {
     }
   });
 });
+
+describe("Structured recovery normalization", () => {
+  it("normalizes certification structured items and keeps the section strict-safe", () => {
+    const res = normalizeAndValidateCvDocument({
+      title: "Credential CV",
+      sections: [
+        {
+          type: "certifications",
+          title: "Certifications",
+          structuredContent: [
+            {
+              certificationName: "AWS Certified Developer",
+              issuingOrganization: "Amazon Web Services",
+              issueDate: "2024-04-01",
+              expirationDate: null,
+              credentialId: "AWS-123",
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(res.success).toBe(true);
+    if (!res.success) return;
+    const section = res.document.sections.find((entry) => entry.type === "certifications");
+    expect(section?.structuredContent).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          certificationName: "AWS Certified Developer",
+          issuingOrganization: "Amazon Web Services",
+          credentialId: "AWS-123",
+        }),
+      ]),
+    );
+    expect(section?.blocks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          attributes: expect.objectContaining({ linkedStructuredId: expect.any(String) }),
+        }),
+      ]),
+    );
+  });
+
+  it("normalizes affiliation text sections with structured membership items", () => {
+    const res = normalizeAndValidateCvDocument({
+      title: "Membership CV",
+      sections: [
+        {
+          type: "text",
+          title: "Affiliations",
+          structuredContent: [
+            {
+              organizationName: "IEEE",
+              roleOrMembershipType: "Member",
+              startDate: "2022-01-01",
+              isCurrent: true,
+              notes: "Professional chapter member",
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(res.success).toBe(true);
+    if (!res.success) return;
+    const section = res.document.sections.find(
+      (entry) => entry.type === "text" && entry.title === "Affiliations",
+    );
+    expect(section?.structuredContent).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          organizationName: "IEEE",
+          roleOrMembershipType: "Member",
+          isCurrent: true,
+        }),
+      ]),
+    );
+  });
+
+  it("preserves import recovery session metadata for reopened recovery cycles", () => {
+    const res = normalizeAndValidateCvDocument({
+      title: "Recovered CV",
+      metadata: {
+        createdAt: "2026-04-08T10:00:00.000Z",
+        updatedAt: "2026-04-08T10:00:00.000Z",
+        version: 1,
+        importRecoverySession: {
+          status: "completed",
+          updatedAt: "2026-04-08T10:00:00.000Z",
+          overflowCount: 0,
+          reviewLimit: 12,
+          items: [
+            {
+              blockId: "recovery-1",
+              rawText: "Recovered text",
+              cleanedText: "Recovered text",
+              displayTextSource: "cleaned",
+              predictedSection: "summary",
+              confidenceScore: "low",
+              confidenceValue: 0.32,
+              issueFlags: ["weakSectionMatch"],
+              reviewStatus: "accepted",
+              selectedSection: "summary",
+              fragmentAssignments: [],
+            },
+          ],
+          baseSectionsSnapshot: [
+            {
+              id: "summary-1",
+              title: "Summary",
+              type: "summary",
+              blocks: [],
+              structuredContent: [
+                {
+                  id: "summary-item-1",
+                  summary: {
+                    type: "doc",
+                    content: [
+                      {
+                        type: "paragraph",
+                        content: [{ type: "text", text: "Baseline summary" }],
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      },
+      sections: [
+        {
+          id: "summary-1",
+          title: "Summary",
+          type: "summary",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "summary-item-1",
+              summary: {
+                type: "doc",
+                content: [
+                  {
+                    type: "paragraph",
+                    content: [{ type: "text", text: "Recovered summary" }],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(res.success).toBe(true);
+    if (!res.success) return;
+    expect(res.document.metadata.importRecoverySession).toEqual(
+      expect.objectContaining({
+        status: "completed",
+        items: expect.arrayContaining([
+          expect.objectContaining({ blockId: "recovery-1" }),
+        ]),
+        baseSectionsSnapshot: expect.arrayContaining([
+          expect.objectContaining({ title: "Summary" }),
+        ]),
+      }),
+    );
+  });
+});
