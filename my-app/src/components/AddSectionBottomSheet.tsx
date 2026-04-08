@@ -118,15 +118,46 @@ export function AddSectionBottomSheet({
             desc: "Certificates & courses",
           },
           {
-            type: "contact",
-            title: "Contact",
-            desc: "Email, phone, links",
+            type: "additional_information",
+            title: "Additional Information",
+            desc: "Extra details and references",
+            fullSpan: true,
+          },
+          {
+            type: "affiliations",
+            title: "Affiliations",
+            desc: "Memberships and associations",
+          },
+          {
+            type: "hobbies",
+            title: "Hobbies",
+            desc: "Interests and personal activities",
+          },
+          {
+            type: "custom",
+            title: "Add your own",
+            desc: "Create a custom titled section",
             fullSpan: true,
           },
         ]
   ).filter((option) => {
     if (option.type === "achievements") {
       return !hasMeaningfulAchievementsSection;
+    }
+    if (option.type === "custom") {
+      return true;
+    }
+    if (
+      option.type === "additional_information" ||
+      option.type === "affiliations" ||
+      option.type === "hobbies"
+    ) {
+      const existingTextTitles = new Set(
+        sections
+          .filter((section) => String(section.type ?? "") === "text")
+          .map((section) => String(section.title ?? "").trim().toLowerCase()),
+      );
+      return !existingTextTitles.has(option.title.trim().toLowerCase());
     }
     return !existingTypes.has(option.type);
   });

@@ -31,6 +31,43 @@ describe("StorageAdapter persistence", () => {
     );
   });
 
+  it("keeps import recovery session only in the embedded cvDocument payload", async () => {
+    const patchMutation = vi.fn().mockResolvedValue(undefined);
+    const adapter = new ConvexStorageAdapter(patchMutation);
+    const cv = generateCvTemplateV1("Recovery Persistence CV");
+    cv.metadata.importRecoverySession = {
+      status: "completed",
+      updatedAt: new Date().toISOString(),
+      overflowCount: 0,
+      reviewLimit: 12,
+      items: [
+        {
+          blockId: "recovery-1",
+          rawText: "Recovered text",
+          cleanedText: "Recovered text",
+          displayTextSource: "cleaned",
+          predictedSection: "summary",
+          confidenceScore: "low",
+          confidenceValue: 0.25,
+          issueFlags: ["weakSectionMatch"],
+          reviewStatus: "accepted",
+          selectedSection: "summary",
+          fragmentAssignments: [],
+        },
+      ],
+      baseSectionsSnapshot: [],
+    };
+
+    await adapter.save(cv);
+
+    expect(patchMutation).toHaveBeenCalledTimes(1);
+    const payload = patchMutation.mock.calls[0][0].patch;
+    expect(payload.metadata.importRecoverySession).toBeUndefined();
+    expect(payload.cvDocument.metadata.importRecoverySession).toEqual(
+      expect.objectContaining({ status: "completed" }),
+    );
+  });
+
   it("keeps a local snapshot when remote save is unauthorized", async () => {
     const patchMutation = vi
       .fn()

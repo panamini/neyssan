@@ -194,6 +194,31 @@ export const LanguageItemSchema = z
   .passthrough();
 export const LanguageItemSchemaStrict = LanguageItemSchema.strict();
 
+export const CertificationItemSchema = z
+  .object({
+    id: z.string().optional(),
+    certificationName: z.string(),
+    issuingOrganization: z.string().optional(),
+    issueDate: ISODateStringSchema.optional(),
+    expirationDate: ISODateStringSchema.optional().nullable(),
+    credentialId: z.string().optional(),
+  })
+  .passthrough();
+export const CertificationItemSchemaStrict = CertificationItemSchema.strict();
+
+export const AffiliationItemSchema = z
+  .object({
+    id: z.string().optional(),
+    organizationName: z.string(),
+    roleOrMembershipType: z.string().optional(),
+    startDate: ISODateStringSchema.optional(),
+    endDate: ISODateStringSchema.optional().nullable(),
+    isCurrent: z.boolean().optional(),
+    notes: z.union([RemirrorJSONSchema, z.string()]).optional(),
+  })
+  .passthrough();
+export const AffiliationItemSchemaStrict = AffiliationItemSchema.strict();
+
 /* Achievements: structured items { id, text } */
 export const AchievementItemSchema = z
   .object({
@@ -208,6 +233,8 @@ export const StructuredContentSchema = z.union([
   z.array(IExperienceItemSchema),
   z.array(IEducationItemSchema),
   z.array(SkillItemSchema),
+  z.array(CertificationItemSchema),
+  z.array(AffiliationItemSchema),
   z.array(LanguageItemSchema),
   z.array(ProfileItemSchema),
   z.array(SummaryItemSchema),
@@ -218,6 +245,8 @@ export const StructuredContentSchemaStrict = z.union([
   z.array(IExperienceItemSchemaStrict),
   z.array(IEducationItemSchemaStrict),
   z.array(SkillItemSchemaStrict),
+  z.array(CertificationItemSchemaStrict),
+  z.array(AffiliationItemSchemaStrict),
   z.array(LanguageItemSchemaStrict),
   z.array(ProfileItemSchemaStrict),
   z.array(SummaryItemSchemaStrict),
@@ -260,6 +289,17 @@ const _CvMetadataBase = z.object({
   locale: z.string().optional(),
   authorId: z.string().optional(),
   lastEditedBy: z.string().optional(),
+  importRecoverySession: z
+    .object({
+      status: z.enum(["pending", "completed"]),
+      updatedAt: ISODateStringSchema,
+      items: z.array(z.record(z.any())),
+      overflowCount: z.number().int(),
+      reviewLimit: z.number().int(),
+      baseSectionsSnapshot: z.array(CvSectionSchema).optional(),
+    })
+    .passthrough()
+    .optional(),
 });
 export const CvMetadataSchema = _CvMetadataBase.passthrough();
 export const CvMetadataSchemaStrict = _CvMetadataBase.strict();
