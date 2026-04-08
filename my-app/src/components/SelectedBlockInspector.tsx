@@ -289,9 +289,7 @@ export function SelectedBlockInspector({
 
   // Preserve hook order by deferring guard to render phase.
   // Allow render when the block is present; section id will be resolved lazily.
-  // Suppress inspector entirely when a typed modal is requested by the caller.
-  const canRenderInspector =
-    Boolean(block) && !Boolean(selectedInspector?.openTypedModal);
+  const canRenderInspector = Boolean(block);
 
   function handleFieldChange(key: string, value: any) {
     // Only update local staged state here — avoid per-keystroke writes to context.

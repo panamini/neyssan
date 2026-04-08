@@ -33,9 +33,15 @@ export function AchievementsBlock({
   const items = useMemo(() => {
     const normalizedItems: Array<{ id: string; text: string }> = [];
     const seenTexts = new Set<string>();
+    const structuredIds = new Set<string>();
+
+    const normalizeText = (value: unknown) =>
+      String(value ?? "")
+        .replace(/\s+/g, " ")
+        .trim();
 
     const pushItem = (rawText: unknown, rawId?: unknown) => {
-      const text = String(rawText ?? "").trim();
+      const text = normalizeText(rawText);
       if (!text) return;
       const dedupeKey = text.toLowerCase();
       if (seenTexts.has(dedupeKey)) return;
@@ -57,12 +63,23 @@ export function AchievementsBlock({
             return;
           }
           const o = it as { id?: string; text?: string; achievement?: string };
+          if (typeof o.id === "string" && o.id.trim().length > 0) {
+            structuredIds.add(o.id.trim());
+          }
           pushItem(o.text ?? o.achievement ?? "", o.id);
         });
       }
 
-      if (Array.isArray(section.blocks)) {
+      if (normalizedItems.length === 0 && Array.isArray(section.blocks)) {
         section.blocks.forEach((block) => {
+          const linkedStructuredId = String(
+            (block as any)?.attributes?.linkedStructuredId ??
+              (block as any)?.attributes?.linkedstructuredid ??
+              "",
+          ).trim();
+          if (linkedStructuredId && structuredIds.has(linkedStructuredId)) {
+            return;
+          }
           let blockText = "";
           if (typeof (block as any)?.plainText === "string") {
             blockText = (block as any).plainText;
@@ -84,8 +101,7 @@ export function AchievementsBlock({
 
           pushItem(
             blockText,
-            (block as any)?.attributes?.linkedStructuredId ??
-              (block as any)?.id,
+            linkedStructuredId || (block as any)?.id,
           );
         });
       }

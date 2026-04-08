@@ -1,11 +1,17 @@
 import React from "react";
 
+import { Gear } from "@/lib/icons";
+
 type ImportWarningBannerProps = {
   signalCount: number;
   onReview: () => void;
   onDismiss: () => void;
   reviewLabel?: string;
   isExiting?: boolean;
+  recoveryAction?: {
+    label: string;
+    onClick: () => void;
+  } | null;
 };
 
 export default function ImportWarningBanner({
@@ -14,6 +20,7 @@ export default function ImportWarningBanner({
   onDismiss,
   reviewLabel = "Review flagged fields",
   isExiting = false,
+  recoveryAction = null,
 }: ImportWarningBannerProps): JSX.Element {
   const issueLabel = signalCount === 1 ? "issue" : "issues";
 
@@ -41,6 +48,16 @@ export default function ImportWarningBanner({
         >
           {reviewLabel}
         </button>
+        {recoveryAction ? (
+          <button
+            type="button"
+            className="dasti-import-warning-banner__recovery"
+            onClick={recoveryAction.onClick}
+          >
+            <Gear size={14} strokeWidth={1.8} aria-hidden="true" />
+            {recoveryAction.label}
+          </button>
+        ) : null}
         <button
           type="button"
           className="dasti-import-warning-banner__dismiss"

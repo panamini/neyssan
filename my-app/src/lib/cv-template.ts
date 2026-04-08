@@ -1,11 +1,14 @@
 import { v4 as uuidv4 } from "uuid";
 import type {
   CvDocument,
+  CvSection,
   IExperienceItem,
   IEducationItem,
   IProfileItem,
   ISummaryItem,
   ISkillItem,
+  ICertificationItem,
+  IAffiliationItem,
   ILanguageItem,
 } from "../types/cvDocument";
 import { ensureRemirrorDoc } from "../components/remirror-editor/utils/conversion";
@@ -95,6 +98,29 @@ export function makeLanguageItem(): ILanguageItem {
   };
 }
 
+export function makeCertificationItem(): ICertificationItem {
+  return {
+    id: uuidv4(),
+    certificationName: "",
+    issuingOrganization: "",
+    issueDate: undefined,
+    expirationDate: null,
+    credentialId: "",
+  };
+}
+
+export function makeAffiliationItem(): IAffiliationItem {
+  return {
+    id: uuidv4(),
+    organizationName: "",
+    roleOrMembershipType: "",
+    startDate: undefined,
+    endDate: null,
+    isCurrent: false,
+    notes: "",
+  };
+}
+
 /**
  * Achievement item factory
  * Keeps a minimal shape: { id, achievement }
@@ -104,6 +130,51 @@ export function makeAchievementItem() {
   return {
     id: uuidv4(),
     text: "",
+  };
+}
+
+export function makeTextSection(
+  title: string,
+  options?: { includeSeedBlock?: boolean },
+): CvSection {
+  const normalizedTitle = title.trim().toLowerCase();
+  const baseSection = {
+    id: uuidv4(),
+    title,
+    type: "text" as const,
+    collapsed: false,
+  };
+
+  if (normalizedTitle === "hobbies") {
+    return {
+      ...baseSection,
+      blocks: [],
+      structuredContent: [] as ISkillItem[],
+    };
+  }
+
+  if (normalizedTitle === "affiliations") {
+    return {
+      ...baseSection,
+      blocks: [],
+      structuredContent: [] as IAffiliationItem[],
+    };
+  }
+
+  return {
+    ...baseSection,
+    blocks: options?.includeSeedBlock
+      ? [
+          {
+            id: uuidv4(),
+            title,
+            type: "text",
+            content: ensureRemirrorDoc(""),
+            attributes: {},
+          },
+        ]
+      : [],
+    structuredContent: null,
   };
 }
 
@@ -169,6 +240,7 @@ export function generateCvTemplate(title?: string): CvDocument {
   const summaryItem = makeSummaryItem();
   const initialSkillItem = makeSkillItem();
   const initialLanguageItem = makeLanguageItem();
+  const initialCertificationItem = makeCertificationItem();
 
   const sections = [
     {
@@ -249,8 +321,14 @@ export function generateCvTemplate(title?: string): CvDocument {
       id: uuidv4(),
       title: "Certifications",
       type: "certifications" as const,
-      blocks: [makeTextBlock()],
-      structuredContent: null,
+      blocks: [
+        {
+          ...makeTextBlock(undefined),
+          title: "Certification",
+          attributes: { linkedStructuredId: initialCertificationItem.id },
+        },
+      ],
+      structuredContent: [initialCertificationItem],
       collapsed: true,
     },
   ];

@@ -71,11 +71,15 @@ interface BaseModalProps {
 
 interface ExperienceModalProps extends BaseModalProps {
   items: IExperienceItem[];
+  recoveryNotesByItemId?: Record<string, string[]>;
+  onDismissRecoveryNotesByItemId?: (itemId: string) => void;
   onSave: (next: IExperienceItem[]) => void;
 }
 
 interface EducationModalProps extends BaseModalProps {
   items: IEducationItem[];
+  recoveryNotesByItemId?: Record<string, string[]>;
+  onDismissRecoveryNotesByItemId?: (itemId: string) => void;
   onSave: (next: IEducationItem[]) => void;
 }
 
@@ -607,6 +611,8 @@ export function ExperienceModal({
   open,
   onClose,
   items,
+  recoveryNotesByItemId = {},
+  onDismissRecoveryNotesByItemId,
   onSave,
 }: ExperienceModalProps) {
   const runCvSectionAiAction = useAction(
@@ -1071,6 +1077,30 @@ export function ExperienceModal({
                   <Trash className="h-4 w-4" />
                 </button>
               </div>
+              {(recoveryNotesByItemId[String(row.id ?? "")] ?? []).length > 0 ? (
+                <div className="dasti-recovery-note-stack">
+                  <div className="dasti-recovery-note-stack__header">
+                    <span className="dasti-recovery-note__label">Recovered note</span>
+                    {onDismissRecoveryNotesByItemId ? (
+                      <button
+                        type="button"
+                        className="dasti-recovery-inline__dismiss"
+                        aria-label="Dismiss recovered notes"
+                        onClick={() => onDismissRecoveryNotesByItemId(String(row.id ?? ""))}
+                      >
+                        <X className="w-3 h-3" aria-hidden />
+                      </button>
+                    ) : null}
+                  </div>
+                  <div className="dasti-recovery-note-list">
+                  {(recoveryNotesByItemId[String(row.id ?? "")] ?? []).map((note) => (
+                    <div key={`${String(row.id ?? idx)}-${note}`} className="dasti-recovery-note">
+                      <p className="cv-entry-body">{note}</p>
+                    </div>
+                  ))}
+                  </div>
+                </div>
+              ) : null}
 
               <div className="dasti-grid-2">
                 <label className="dasti-field-group">
@@ -1329,6 +1359,8 @@ export function EducationModal({
   open,
   onClose,
   items,
+  recoveryNotesByItemId = {},
+  onDismissRecoveryNotesByItemId,
   onSave,
 }: EducationModalProps) {
   const [local, setLocal] = useState<IEducationItem[]>(() => {
@@ -1572,6 +1604,30 @@ export function EducationModal({
                   <Trash className="h-4 w-4" />
                 </button>
               </div>
+              {(recoveryNotesByItemId[String(row.id ?? "")] ?? []).length > 0 ? (
+                <div className="dasti-recovery-note-stack">
+                  <div className="dasti-recovery-note-stack__header">
+                    <span className="dasti-recovery-note__label">Recovered note</span>
+                    {onDismissRecoveryNotesByItemId ? (
+                      <button
+                        type="button"
+                        className="dasti-recovery-inline__dismiss"
+                        aria-label="Dismiss recovered notes"
+                        onClick={() => onDismissRecoveryNotesByItemId(String(row.id ?? ""))}
+                      >
+                        <X className="w-3 h-3" aria-hidden />
+                      </button>
+                    ) : null}
+                  </div>
+                  <div className="dasti-recovery-note-list">
+                  {(recoveryNotesByItemId[String(row.id ?? "")] ?? []).map((note) => (
+                    <div key={`${String(row.id ?? idx)}-${note}`} className="dasti-recovery-note">
+                      <p className="cv-entry-body">{note}</p>
+                    </div>
+                  ))}
+                  </div>
+                </div>
+              ) : null}
 
               <div className="dasti-grid-2">
                 <label className="dasti-field-group">
