@@ -120,4 +120,22 @@ describe("CvForge workspace preview integration", () => {
       container.querySelector(".dasti-doc-viewer-shell--resume-workspace-page"),
     ).toBeNull();
   });
+
+  it("opens the live style controls when no saved styles exist", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Open resume style controls" }),
+    );
+
+    expect(
+      screen.getByTestId("embedded-style-inspector"),
+    ).toBeInTheDocument();
+  });
 });

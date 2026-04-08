@@ -287,6 +287,12 @@ export function CvForge(): JSX.Element {
     [savedStylePresets, stylePreset],
   );
   const hasAnySavedStylePreset = stylePresetSlots.some(({ preset }) => Boolean(preset));
+  const stylePresetToolbarLabel = hasAnySavedStylePreset
+    ? "Open saved resume styles"
+    : "Open resume style controls";
+  const stylePresetToolbarTooltip = hasAnySavedStylePreset
+    ? "Saved styles"
+    : "Style controls";
   const stylePresetToolbarControl = (
     <div
       ref={presetMenuRef}
@@ -297,12 +303,17 @@ export function CvForge(): JSX.Element {
       <button
         type="button"
         className="dasti-icon-button"
-        aria-label="Open saved resume styles"
-        aria-expanded={isStylePresetMenuOpen}
-        aria-haspopup="menu"
-        data-toolbar-tooltip="Saved styles"
-        disabled={!hasAnySavedStylePreset}
-        onClick={() => setIsStylePresetMenuOpen((current) => !current)}
+        aria-label={stylePresetToolbarLabel}
+        aria-expanded={hasAnySavedStylePreset ? isStylePresetMenuOpen : undefined}
+        aria-haspopup={hasAnySavedStylePreset ? "menu" : undefined}
+        data-toolbar-tooltip={stylePresetToolbarTooltip}
+        onClick={() => {
+          if (!hasAnySavedStylePreset) {
+            setWorkspaceMode("preview");
+            return;
+          }
+          setIsStylePresetMenuOpen((current) => !current);
+        }}
       >
         <Palette size={16} strokeWidth={1.7} aria-hidden="true" />
       </button>

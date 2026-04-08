@@ -81,6 +81,11 @@ function deserialize(payload: string | null): CvDocument | null {
   }
 }
 
+function isUnauthorizedProfileAccessError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /not authorized to access this profile/i.test(message);
+}
+
 export function mapPersistedProfileToCvDocument(
   rawProfile: Record<string, unknown> | null | undefined,
   profileId: string,
@@ -145,10 +150,24 @@ export class ConvexStorageAdapter {
     }
 
     // Convex mutation with backend-shaped payload
-    await this._patchMutation({
-      profileId: cv.id,
-      patch: backendPayload,
-    });
+    try {
+      await this._patchMutation({
+        profileId: cv.id,
+        patch: backendPayload,
+      });
+    } catch (error) {
+      if (!isUnauthorizedProfileAccessError(error)) {
+        throw error;
+      }
+
+      try {
+        dbg("[ConvexStorageAdapter] unauthorized remote save skipped", {
+          docId: cv.id,
+        });
+      } catch {
+        /* noop */
+      }
+    }
 
     // SSR-safe localStorage - cache the original cv (not the backend-mapped payload)
     try {

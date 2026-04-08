@@ -31,6 +31,20 @@ describe("StorageAdapter persistence", () => {
     );
   });
 
+  it("keeps a local snapshot when remote save is unauthorized", async () => {
+    const patchMutation = vi
+      .fn()
+      .mockRejectedValue(new Error("Not authorized to access this profile"));
+    const adapter = new ConvexStorageAdapter(patchMutation);
+    const cv = generateCvTemplateV1("Unauthorized Remote CV");
+
+    await expect(adapter.save(cv)).resolves.toBeUndefined();
+
+    expect(
+      window.localStorage.getItem(`cv:${cv.id}`),
+    ).toContain("Unauthorized Remote CV");
+  });
+
   it("prefers the embedded cvDocument snapshot on remote restore", () => {
     const cv = generateCvTemplateV1("Embedded Remote CV");
 
