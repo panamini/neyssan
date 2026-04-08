@@ -801,56 +801,6 @@ export function ProposalForge(): JSX.Element {
     role: defaultPreviewApplicantHeader.role ?? "",
     contactLine: defaultPreviewContactLine,
   });
-  const proposalHeaderSourceJobTitle =
-    composePreviewValues?.jobTitle?.trim() ||
-    outputSourceComposeDraft?.jobTitle?.trim() ||
-    composeDraftInitialSeed?.jobTitle?.trim() ||
-    storedOutputDraft?.sourceComposeDraft?.jobTitle?.trim() ||
-    prefill?.jobTitle?.trim() ||
-    "";
-  const proposalHeaderSourceDescription =
-    composePreviewValues?.jobDescription?.trim() ||
-    outputSourceComposeDraft?.jobDescription?.trim() ||
-    composeDraftInitialSeed?.jobDescription?.trim() ||
-    storedOutputDraft?.sourceComposeDraft?.jobDescription?.trim() ||
-    prefill?.jobDescription?.trim() ||
-    "";
-  const proposalHeaderSourceSummary = React.useMemo(
-    () =>
-      buildProposalSourceSummary({
-        jobTitle: proposalHeaderSourceJobTitle,
-        jobDescription: proposalHeaderSourceDescription,
-      }),
-    [proposalHeaderSourceDescription, proposalHeaderSourceJobTitle],
-  );
-  const autoProposalRecipientDetails = React.useMemo(
-    () =>
-      buildProposalRecipientPrefill({
-        company: proposalHeaderSourceSummary.company,
-        role: "",
-        address: proposalHeaderSourceSummary.address,
-        email: proposalHeaderSourceSummary.email,
-        city:
-          proposalHeaderSourceSummary.city || proposalHeaderSourceSummary.location,
-      }),
-    [
-      proposalHeaderSourceSummary.address,
-      proposalHeaderSourceSummary.city,
-      proposalHeaderSourceSummary.company,
-      proposalHeaderSourceSummary.email,
-      proposalHeaderSourceSummary.location,
-    ],
-  );
-  const autoProposalLetterDate = React.useMemo(
-    () => getDefaultProposalLetterDate(defaultPreviewApplicantHeader.location),
-    [defaultPreviewApplicantHeader.location],
-  );
-  const lastAutoLetterHeaderRef = React.useRef({
-    recipientDetails: autoProposalRecipientDetails,
-    letterDate: autoProposalLetterDate,
-    salutation: buildProposalSalutation(autoProposalRecipientDetails),
-  });
-
   const handleProposalContactLineChange = React.useCallback((value: string) => {
     setProposalContactLine(value);
   }, []);
@@ -900,46 +850,6 @@ export function ProposalForge(): JSX.Element {
     defaultPreviewApplicantHeader.role,
     defaultPreviewContactLine,
   ]);
-  React.useEffect(() => {
-    const previousAuto = lastAutoLetterHeaderRef.current;
-    const nextAuto = {
-      recipientDetails: autoProposalRecipientDetails,
-      letterDate: autoProposalLetterDate,
-      salutation: buildProposalSalutation(autoProposalRecipientDetails),
-    };
-
-    setProposalRecipientDetails((current) => {
-      const trimmedCurrent = current.trim();
-      if (!trimmedCurrent || trimmedCurrent === previousAuto.recipientDetails) {
-        return nextAuto.recipientDetails;
-      }
-      return current;
-    });
-    setProposalLetterDate((current) => {
-      const trimmedCurrent = current.trim();
-      if (!trimmedCurrent || trimmedCurrent === previousAuto.letterDate) {
-        return nextAuto.letterDate;
-      }
-      return current;
-    });
-    setProposalContent((current) => {
-      if (!current) {
-        return current;
-      }
-
-      const currentSalutation = readProposalSalutation(current);
-      if (!currentSalutation || currentSalutation === previousAuto.salutation) {
-        return replaceProposalSalutation({
-          content: current,
-          salutation: nextAuto.salutation,
-        });
-      }
-
-      return current;
-    });
-
-    lastAutoLetterHeaderRef.current = nextAuto;
-  }, [autoProposalLetterDate, autoProposalRecipientDetails]);
   const [savedProposalContent, setSavedProposalContent] = React.useState<
     string | null
   >(null);
@@ -1022,6 +932,97 @@ export function ProposalForge(): JSX.Element {
       platform: handoffRecord.platform,
     };
   }, [handoffRecord]);
+
+  const proposalHeaderSourceJobTitle =
+    composePreviewValues?.jobTitle?.trim() ||
+    outputSourceComposeDraft?.jobTitle?.trim() ||
+    composeDraftInitialSeed?.jobTitle?.trim() ||
+    storedOutputDraft?.sourceComposeDraft?.jobTitle?.trim() ||
+    prefill?.jobTitle?.trim() ||
+    "";
+  const proposalHeaderSourceDescription =
+    composePreviewValues?.jobDescription?.trim() ||
+    outputSourceComposeDraft?.jobDescription?.trim() ||
+    composeDraftInitialSeed?.jobDescription?.trim() ||
+    storedOutputDraft?.sourceComposeDraft?.jobDescription?.trim() ||
+    prefill?.jobDescription?.trim() ||
+    "";
+  const proposalHeaderSourceSummary = React.useMemo(
+    () =>
+      buildProposalSourceSummary({
+        jobTitle: proposalHeaderSourceJobTitle,
+        jobDescription: proposalHeaderSourceDescription,
+      }),
+    [proposalHeaderSourceDescription, proposalHeaderSourceJobTitle],
+  );
+  const autoProposalRecipientDetails = React.useMemo(
+    () =>
+      buildProposalRecipientPrefill({
+        company: proposalHeaderSourceSummary.company,
+        role: "",
+        address: proposalHeaderSourceSummary.address,
+        email: proposalHeaderSourceSummary.email,
+        city:
+          proposalHeaderSourceSummary.city || proposalHeaderSourceSummary.location,
+      }),
+    [
+      proposalHeaderSourceSummary.address,
+      proposalHeaderSourceSummary.city,
+      proposalHeaderSourceSummary.company,
+      proposalHeaderSourceSummary.email,
+      proposalHeaderSourceSummary.location,
+    ],
+  );
+  const autoProposalLetterDate = React.useMemo(
+    () => getDefaultProposalLetterDate(defaultPreviewApplicantHeader.location),
+    [defaultPreviewApplicantHeader.location],
+  );
+  const lastAutoLetterHeaderRef = React.useRef({
+    recipientDetails: autoProposalRecipientDetails,
+    letterDate: autoProposalLetterDate,
+    salutation: buildProposalSalutation(autoProposalRecipientDetails),
+  });
+
+  React.useEffect(() => {
+    const previousAuto = lastAutoLetterHeaderRef.current;
+    const nextAuto = {
+      recipientDetails: autoProposalRecipientDetails,
+      letterDate: autoProposalLetterDate,
+      salutation: buildProposalSalutation(autoProposalRecipientDetails),
+    };
+
+    setProposalRecipientDetails((current) => {
+      const trimmedCurrent = current.trim();
+      if (!trimmedCurrent || trimmedCurrent === previousAuto.recipientDetails) {
+        return nextAuto.recipientDetails;
+      }
+      return current;
+    });
+    setProposalLetterDate((current) => {
+      const trimmedCurrent = current.trim();
+      if (!trimmedCurrent || trimmedCurrent === previousAuto.letterDate) {
+        return nextAuto.letterDate;
+      }
+      return current;
+    });
+    setProposalContent((current) => {
+      if (!current) {
+        return current;
+      }
+
+      const currentSalutation = readProposalSalutation(current);
+      if (!currentSalutation || currentSalutation === previousAuto.salutation) {
+        return replaceProposalSalutation({
+          content: current,
+          salutation: nextAuto.salutation,
+        });
+      }
+
+      return current;
+    });
+
+    lastAutoLetterHeaderRef.current = nextAuto;
+  }, [autoProposalLetterDate, autoProposalRecipientDetails]);
 
   const consumedHandoffIdRef = React.useRef<string | null>(null);
 
