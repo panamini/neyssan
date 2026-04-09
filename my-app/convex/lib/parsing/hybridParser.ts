@@ -15,6 +15,10 @@ import type { ICVObject } from "./cvMapper";
 import { requestNER, isNEREnabled } from "../parsing_shared/nerClient";
 import type { NEREntity } from "../parsing_shared/nerClient";
 import { injectSkillEntities } from "./skillUtils";
+import {
+  mapCanonicalFamilyToParserFieldKey,
+  resolveCanonicalHeadingFamily,
+} from "./headingResolver";
 
 // pipeline-note: orchestrates LLM + heuristic parsing before canonicalize.ts.
 // Section splitting or metadata fusion tweaks belong here (with helpers) so the
@@ -1107,6 +1111,18 @@ async function callLLMWithTimeout(prompt: string, text: string, timeoutMs: numbe
   return res.text;
 }
 
+export function determineHeuristicFieldKey(line: string): string {
+  const trimmed = String(line ?? "").trim();
+  const md = /^#{1,6}\s*(.+)/.exec(trimmed);
+  const headerText = String(md?.[1] ?? trimmed)
+    .replace(/[:\s]+$/g, "")
+    .trim();
+  if (!headerText) return "unknown";
+  const canonicalFamily = resolveCanonicalHeadingFamily(headerText);
+  if (!canonicalFamily) return "unknown";
+  return mapCanonicalFamilyToParserFieldKey(canonicalFamily);
+}
+
 function parseWithEnhancedHeuristics(text: string): any[] {
   // Normalize common escaped newline sequences so tests that pass literal "\n" strings
   // are handled the same as real newlines.
@@ -1117,21 +1133,6 @@ function parseWithEnhancedHeuristics(text: string): any[] {
   const lines = normalizedText.split('\n');
   const sections: any[] = [];
   let currentSection: any = null;
-
-  // Basic fieldKey determination: keep simple and conservative so unknown/rare headers
-  // map to "other" (mapper will place unknown keys into other bucket).
-  function determineFieldKey(line: string) {
-    const trimmed = String(line ?? '').trim();
-    // Markdown header -> unknown (mapper will route to 'other')
-    const md = /^#{1,6}\s*(.+)/.exec(trimmed);
-    if (md) return "unknown";
-    // Common header-like tokens: "Summary:", "Languages:", "Experience", etc.
-    const token = trimmed.toLowerCase().replace(/[:\s]+$/g, '');
-    if (!token) return "unknown";
-    // Take first word as coarse-grain key
-    const first = token.split(/\s+/)[0];
-    return first || "unknown";
-  }
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -1153,7 +1154,7 @@ function parseWithEnhancedHeuristics(text: string): any[] {
       currentSection = {
         title: String(line || "").trim(),
         content: "",
-        fieldKey: determineFieldKey(line),
+        fieldKey: determineHeuristicFieldKey(line),
         confidence: 0.7, // Base confidence for heuristic parsing
       };
     } else if (currentSection) {

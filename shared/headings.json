@@ -1,4 +1,68 @@
 {
+  "summary": {
+    "en": [
+      "summary",
+      "professional summary",
+      "career summary",
+      "executive summary",
+      "objective"
+    ],
+    "fr": [
+      "profil",
+      "profil professionnel",
+      "resume",
+      "resume professionnel"
+    ],
+    "es": [
+      "resumen",
+      "perfil profesional",
+      "objetivo profesional"
+    ],
+    "de": [
+      "profil",
+      "kurzprofil",
+      "zusammenfassung"
+    ]
+  },
+  "profile": {
+    "en": [
+      "profile",
+      "professional profile",
+      "personal profile",
+      "personal details"
+    ],
+    "fr": [
+      "profil",
+      "informations personnelles"
+    ],
+    "es": [
+      "perfil",
+      "datos personales"
+    ],
+    "de": [
+      "profil",
+      "personliche daten"
+    ]
+  },
+  "contact": {
+    "en": [
+      "contact",
+      "contact information",
+      "contact details"
+    ],
+    "fr": [
+      "coordonnees",
+      "contact"
+    ],
+    "es": [
+      "contacto",
+      "datos de contacto"
+    ],
+    "de": [
+      "kontakt",
+      "kontaktdaten"
+    ]
+  },
   "experience": {
     "en": [
       "experience",
@@ -12,10 +76,10 @@
       "employment"
     ],
     "fr": [
-      "expérience",
-      "expériences",
-      "expérience professionnelle",
-      "expériences professionnelles",
+      "experience",
+      "experiences",
+      "experience professionnelle",
+      "experiences professionnelles",
       "parcours professionnel"
     ],
     "es": [
@@ -43,12 +107,12 @@
     ],
     "fr": [
       "formation",
-      "parcours académique"
+      "parcours academique"
     ],
     "es": [
-      "educación",
-      "formación",
-      "antecedentes académicos"
+      "educacion",
+      "formacion",
+      "antecedentes academicos"
     ],
     "de": [
       "bildung",
@@ -67,17 +131,17 @@
       "skill set"
     ],
     "fr": [
-      "compétences",
-      "compétences techniques",
-      "compétences clés"
+      "competences",
+      "competences techniques",
+      "competences cles"
     ],
     "es": [
       "habilidades",
-      "habilidades técnicas",
+      "habilidades tecnicas",
       "competencias"
     ],
     "de": [
-      "fähigkeiten",
+      "fahigkeiten",
       "kompetenzen",
       "kenntnisse"
     ]
@@ -90,7 +154,7 @@
     ],
     "fr": [
       "langues",
-      "langues parlées"
+      "langues parlees"
     ],
     "es": [
       "idiomas",
@@ -101,31 +165,118 @@
       "sprachkenntnisse"
     ]
   },
+  "projects": {
+    "en": [
+      "projects",
+      "selected projects",
+      "project experience"
+    ],
+    "fr": [
+      "projets"
+    ],
+    "es": [
+      "proyectos"
+    ],
+    "de": [
+      "projekte"
+    ]
+  },
+  "certifications": {
+    "en": [
+      "certifications",
+      "certification",
+      "certificates",
+      "license",
+      "licenses"
+    ],
+    "fr": [
+      "certifications",
+      "certification"
+    ],
+    "es": [
+      "certificaciones",
+      "certificacion"
+    ],
+    "de": [
+      "zertifizierungen",
+      "zertifizierung"
+    ]
+  },
   "achievements": {
     "en": [
       "achievements",
       "accomplishments",
       "awards",
       "career highlights",
-      "certifications",
       "honors"
     ],
     "fr": [
-      "réalisations",
-      "récompenses",
-      "certifications",
-      "projets"
+      "realisations",
+      "recompenses"
     ],
     "es": [
       "logros",
       "reconocimientos",
-      "premios",
-      "certificaciones"
+      "premios"
     ],
     "de": [
       "erfolge",
-      "auszeichnungen",
-      "zertifizierungen"
+      "auszeichnungen"
+    ]
+  },
+  "hobbies": {
+    "en": [
+      "hobbies",
+      "interests",
+      "personal interests"
+    ],
+    "fr": [
+      "centres d interet",
+      "loisirs"
+    ],
+    "es": [
+      "aficiones",
+      "intereses"
+    ],
+    "de": [
+      "hobbys",
+      "interessen"
+    ]
+  },
+  "affiliations": {
+    "en": [
+      "affiliations",
+      "memberships",
+      "associations"
+    ],
+    "fr": [
+      "affiliations",
+      "adhesions"
+    ],
+    "es": [
+      "afiliaciones",
+      "membresias"
+    ],
+    "de": [
+      "mitgliedschaften",
+      "verbande"
+    ]
+  },
+  "additional_information": {
+    "en": [
+      "additional information",
+      "additional info",
+      "other information",
+      "personal dossier"
+    ],
+    "fr": [
+      "informations complementaires"
+    ],
+    "es": [
+      "informacion adicional"
+    ],
+    "de": [
+      "weitere informationen"
     ]
   }
 }

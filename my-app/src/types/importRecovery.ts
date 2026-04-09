@@ -104,6 +104,22 @@ export interface ImportRecoveryPayload {
   overflowCount: number;
   reviewLimit: number;
   reviewNormalized?: Record<string, unknown> | null;
+  diagnostics?: ImportRecoveryRoutingDiagnostics | null;
+}
+
+export interface ImportRecoveryRoutingDiagnostics {
+  sourceSectionCount: number;
+  splitFragmentCount: number;
+  directImportItemCount: number;
+  recoveryItemCount: number;
+  countsByPredictedSection: Partial<Record<ImportRecoverySectionType, number>>;
+  countsByIssueFlag: Partial<Record<ImportRecoveryIssueFlag, number>>;
+  countsByConfidenceBand: Partial<Record<ImportRecoveryConfidenceScore, number>>;
+  unknownResidualCount: number;
+  largeRecoveryBlobCount: number;
+  splitAttempts: number;
+  suppressedTinyFragments: number;
+  processingTimeMs: number;
 }
 
 export interface ImportRecoverySession {

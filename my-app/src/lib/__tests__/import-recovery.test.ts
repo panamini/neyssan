@@ -38,6 +38,70 @@ describe("import-recovery", () => {
     expect(payload?.items[0]?.issueFlags).toEqual(
       expect.arrayContaining(["unknownSection", "duplicate"]),
     );
+    expect(payload?.items[0]?.predictedSection).toBe("custom");
+    expect(payload?.items[0]?.selectedSectionTitle).toBe("Imported Notes");
+  });
+
+  it("keeps strong canonical headings out of recovery even without numeric confidence", () => {
+    const payload = buildImportRecoveryPayload({
+      sourceSections: [
+        {
+          label: "Professional Experience",
+          content: "Senior Developer at Example Corp\n- Led migration\n- Mentored team",
+        },
+        {
+          label: "Technical Skills",
+          content: "TypeScript, React, Node.js",
+        },
+      ],
+      fullResult: { normalized: {} },
+      context: { rawText: "", mode: "text", parserUrl: "https://example.test/parse-cv" },
+    });
+
+    expect(payload?.reviewRequired).toBe(false);
+    expect(payload?.items).toHaveLength(0);
+    expect(payload?.diagnostics).toEqual(
+      expect.objectContaining({
+        directImportItemCount: 2,
+        recoveryItemCount: 0,
+        countsByPredictedSection: expect.objectContaining({ experience: 1, skills: 1 }),
+      }),
+    );
+  });
+
+  it("splits mixed low-confidence blocks into smaller safe fragments instead of one giant recovery blob", () => {
+    const payload = buildImportRecoveryPayload({
+      sourceSections: [
+        {
+          label: "Import block",
+          content: [
+            "Professional Experience",
+            "Senior Developer at Example Corp",
+            "- Built parser diagnostics",
+            "",
+            "Technical Skills",
+            "TypeScript, React, Node.js",
+            "",
+            "ZX-14 OCR shard ??? unclear footer extraction from scan",
+          ].join("\n"),
+          confidence: 0.51,
+        },
+      ],
+      fullResult: { normalized: {} },
+      context: { rawText: "", mode: "ocr", parserUrl: "https://example.test/parse-cv" },
+    });
+
+    expect(payload?.reviewRequired).toBe(false);
+    expect(payload?.items).toHaveLength(0);
+    expect(payload?.diagnostics).toEqual(
+      expect.objectContaining({
+        sourceSectionCount: 1,
+        splitAttempts: 1,
+        splitFragmentCount: 1,
+        directImportItemCount: 2,
+        recoveryItemCount: 0,
+      }),
+    );
   });
 
   it("detects certifications and hobbies headings as dedicated recovery targets", () => {
@@ -50,8 +114,10 @@ describe("import-recovery", () => {
       context: { rawText: "", mode: "text", parserUrl: "https://example.test/parse-cv" },
     });
 
-    expect(payload?.items[0]?.predictedSection).toBe("certifications");
-    expect(payload?.items[1]?.predictedSection).toBe("hobbies");
+    expect(payload?.diagnostics?.countsByPredictedSection).toEqual(
+      expect.objectContaining({ certifications: 1, hobbies: 1 }),
+    );
+    expect(payload?.items.find((item) => item.predictedSection === "hobbies")).toBeTruthy();
   });
 
   it("applies reviewed items into sections with import recovery metadata", () => {

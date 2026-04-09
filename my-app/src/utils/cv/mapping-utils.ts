@@ -16,6 +16,7 @@ import type { CvSection } from "../../types/cvDocument";
 import { ensureRemirrorDoc } from "../../components/remirror-editor/utils/conversion";
 import { CvSectionSchemaStrict } from "../../schemas/cvDocument.schema";
 import languageNames from "../../../../shared/language_names.json";
+import { resolveCanonicalHeadingFamily } from "../../../convex/lib/parsing/headingResolver";
 
 // --- Constants for heuristics and magic numbers ---
 const MIN_AGGREGATED_TEXT_LENGTH = 64;
@@ -94,6 +95,7 @@ interface PartialNormalizedCv {
   contact?: Record<string, unknown>;
   links?: Record<string, unknown>;
   achievements?: Array<{ text: string } | string>;
+  rawSections?: Array<Record<string, unknown>>;
   [key: string]: any; // Allow other properties
 }
 
@@ -182,6 +184,11 @@ export interface OcrDiagnostics {
   fallback_reason?: string | null;
   dpi_used?: number | null;
   paddle_retry_used?: boolean | null;
+  ocr_request_path?: string | null;
+  ocr_provider?: string | null;
+  mistral_model?: string | null;
+  mistral_fallback?: boolean | null;
+  mistral_runtime?: string | null;
 }
 
 export function engineHintFromDiagnostics(
@@ -191,6 +198,11 @@ export function engineHintFromDiagnostics(
     paddle_retry_used?: boolean | null;
     fallback_reason?: string | null;
     fallback_used?: boolean | null;
+    ocr_request_path?: string | null;
+    ocr_provider?: string | null;
+    mistral_model?: string | null;
+    mistral_fallback?: boolean | null;
+    mistral_runtime?: string | null;
   } | null
 ): string | null {
   if (!diag || typeof diag !== "object") return null;
@@ -227,6 +239,92 @@ function toRemirror(content?: unknown) {
     // Fallback to treating content as a plain string
     return ensureRemirrorDoc(String(content ?? "") as any);
   }
+}
+
+type NormalizedRawSection = {
+  label?: string | null;
+  title?: string | null;
+  fieldKey?: string | null;
+  content?: string | null;
+  text?: string | null;
+};
+
+function createTextBlock(title: string, content: string, linkedStructuredId?: string) {
+  return {
+    id: uuidv4(),
+    title,
+    type: "text" as const,
+    content: ensureRemirrorDoc(content),
+    attributes: linkedStructuredId ? { linkedStructuredId } : {},
+  };
+}
+
+function getNormalizedRawSections(normalized: PartialNormalizedCv): NormalizedRawSection[] {
+  return Array.isArray(normalized.rawSections)
+    ? (normalized.rawSections as NormalizedRawSection[])
+    : [];
+}
+
+function getRawSectionText(section: NormalizedRawSection): string {
+  const raw = typeof section.content === "string"
+    ? section.content
+    : typeof section.text === "string"
+      ? section.text
+      : "";
+  return raw.trim();
+}
+
+function resolveRawSectionFamily(section: NormalizedRawSection) {
+  return (
+    resolveCanonicalHeadingFamily(section.fieldKey) ??
+    resolveCanonicalHeadingFamily(section.label) ??
+    resolveCanonicalHeadingFamily(section.title)
+  );
+}
+
+function collectRawSectionBodies(
+  normalized: PartialNormalizedCv,
+  family: ReturnType<typeof resolveCanonicalHeadingFamily>,
+): string[] {
+  if (!family) return [];
+  return getNormalizedRawSections(normalized)
+    .filter((section) => resolveRawSectionFamily(section) === family)
+    .map((section) => getRawSectionText(section))
+    .filter(Boolean);
+}
+
+function parseCertificationEntries(texts: string[]) {
+  const entries: Array<{
+    id: string;
+    certificationName: string;
+    issuingOrganization?: string;
+    credentialId?: string;
+  }> = [];
+  texts.forEach((text) => {
+    const chunks = text
+      .split(/\n{2,}/)
+      .map((chunk) => chunk.trim())
+      .filter(Boolean);
+    const segments = chunks.length > 0 ? chunks : [text.trim()];
+    segments.forEach((segment) => {
+      const lines = segment
+        .split(/\n+/)
+        .map((line) => line.replace(/^[-•*+\d.)\s]+/, "").trim())
+        .filter(Boolean);
+      if (lines.length === 0) return;
+      const certificationName = lines[0] ?? "";
+      if (!certificationName) return;
+      const issuingOrganization = lines.find((line, index) => index > 0 && !/\b(19|20)\d{2}\b/.test(line));
+      const credentialId = segment.match(/(?:credential|license|licence|cert(?:ification)?\s*id)\s*[:#-]?\s*([A-Z0-9-]+)/i)?.[1]?.trim();
+      entries.push({
+        id: `cert-${uuidv4()}`,
+        certificationName,
+        issuingOrganization: issuingOrganization || undefined,
+        credentialId: credentialId || undefined,
+      });
+    });
+  });
+  return entries;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1505,6 +1603,11 @@ export function buildTypedSectionsFromNormalized(normalized: PartialNormalizedCv
   let educationSection: CvSection | null = null;
   let skillsSection: CvSection | null = null;
   let languagesSection: CvSection | null = null;
+  let projectsSection: CvSection | null = null;
+  let certificationsSection: CvSection | null = null;
+  let hobbiesSection: CvSection | null = null;
+  let affiliationsSection: CvSection | null = null;
+  let additionalInformationSection: CvSection | null = null;
 
   // --- Summary ---
   // Avoid falling back to full rawText (too noisy). Only add Summary when provided.
@@ -2044,15 +2147,107 @@ export function buildTypedSectionsFromNormalized(normalized: PartialNormalizedCv
     };
   }
 
-  // Canonical section order: profile → summary → experience → achievements → education → skills → languages
+  const projectBodies = dedupeCaseInsensitive([
+    ...collectRawSectionBodies(normalized, "projects"),
+    ...((Array.isArray((normalized as any).projects)
+      ? (normalized as any).projects.map((entry: any) => {
+          const title = cleanToken(String(entry?.title ?? entry?.name ?? ""));
+          const summary = cleanToken(String(entry?.summary ?? entry?.description ?? ""));
+          return [title, summary].filter(Boolean).join("\n").trim();
+        })
+      : []) as string[]),
+  ]);
+  if (projectBodies.length > 0) {
+    projectsSection = {
+      id: `sec-projects-${uuidv4()}`,
+      title: "Projects",
+      type: "projects",
+      blocks: projectBodies.map((body, index) =>
+        createTextBlock(index === 0 ? "Projects" : `Project ${index + 1}`, body),
+      ),
+      collapsed: false,
+      structuredContent: null,
+    };
+  }
+
+  const certificationEntries = parseCertificationEntries([
+    ...collectRawSectionBodies(normalized, "certifications"),
+    ...((Array.isArray((normalized as any).certifications)
+      ? (normalized as any).certifications.map((entry: any) => [
+          cleanToken(String(entry?.certificationName ?? entry?.name ?? entry?.title ?? "")),
+          cleanToken(String(entry?.issuingOrganization ?? entry?.issuer ?? "")),
+        ].filter(Boolean).join("\n"))
+      : []) as string[]),
+  ]);
+  if (certificationEntries.length > 0) {
+    certificationsSection = {
+      id: `sec-certifications-${uuidv4()}`,
+      title: "Certifications",
+      type: "certifications",
+      blocks: certificationEntries.map((entry) =>
+        createTextBlock(
+          entry.certificationName || "Certification",
+          [entry.certificationName, entry.issuingOrganization].filter(Boolean).join("\n"),
+          entry.id,
+        ),
+      ),
+      collapsed: false,
+      structuredContent: certificationEntries as any,
+    };
+  }
+
+  const hobbyBodies = collectRawSectionBodies(normalized, "hobbies");
+  if (hobbyBodies.length > 0) {
+    hobbiesSection = {
+      id: `sec-hobbies-${uuidv4()}`,
+      title: "Hobbies",
+      type: "text",
+      blocks: hobbyBodies.map((body, index) => createTextBlock(index === 0 ? "Hobbies" : `Hobby ${index + 1}`, body)),
+      collapsed: false,
+      structuredContent: null,
+    };
+  }
+
+  const affiliationBodies = collectRawSectionBodies(normalized, "affiliations");
+  if (affiliationBodies.length > 0) {
+    affiliationsSection = {
+      id: `sec-affiliations-${uuidv4()}`,
+      title: "Affiliations",
+      type: "text",
+      blocks: affiliationBodies.map((body, index) => createTextBlock(index === 0 ? "Affiliations" : `Affiliation ${index + 1}`, body)),
+      collapsed: false,
+      structuredContent: null,
+    };
+  }
+
+  const additionalInformationBodies = collectRawSectionBodies(normalized, "additional_information");
+  if (additionalInformationBodies.length > 0) {
+    additionalInformationSection = {
+      id: `sec-additional-information-${uuidv4()}`,
+      title: "Additional Information",
+      type: "text",
+      blocks: additionalInformationBodies.map((body, index) =>
+        createTextBlock(index === 0 ? "Additional Information" : `Additional Information ${index + 1}`, body),
+      ),
+      collapsed: false,
+      structuredContent: null,
+    };
+  }
+
+  // Canonical section order: profile → summary → experience → projects → achievements → education → certifications → skills → languages → affiliations → hobbies → additional information
   const ordered: CvSection[] = [];
   if (profileSection) ordered.push(profileSection);
   if (summarySection) ordered.push(summarySection);
   if (experienceSection) ordered.push(experienceSection);
+  if (projectsSection) ordered.push(projectsSection);
   if (achievementsSection) ordered.push(achievementsSection);
   if (educationSection) ordered.push(educationSection);
+  if (certificationsSection) ordered.push(certificationsSection);
   if (skillsSection) ordered.push(skillsSection);
   if (languagesSection) ordered.push(languagesSection);
+  if (affiliationsSection) ordered.push(affiliationsSection);
+  if (hobbiesSection) ordered.push(hobbiesSection);
+  if (additionalInformationSection) ordered.push(additionalInformationSection);
 
   return ordered;
 }
@@ -2169,9 +2364,21 @@ export function buildTypedSectionsFromReviewerSections(
     if (k === "introduction" || k === "profile" || k === "about" || k === "objective") return "summary";
     if (t.includes("summary") || t.includes("profile") || t.includes("objective")) return "summary";
 
+    // Explicit direct sections
+    if (k.includes("project")) return "projects";
+    if (t.includes("project")) return "projects";
+    if (k.includes("certif") || k.includes("license") || k.includes("licence")) return "certifications";
+    if (t.includes("certif") || t.includes("license") || t.includes("licence")) return "certifications";
+    if (k.includes("hobb") || k.includes("interest")) return "hobbies";
+    if (t.includes("hobb") || t.includes("interest")) return "hobbies";
+    if (k.includes("affiliation") || k.includes("membership") || k.includes("association")) return "affiliations";
+    if (t.includes("affiliation") || t.includes("membership") || t.includes("association")) return "affiliations";
+    if (k.includes("additional") || k.includes("supplementary") || k.includes("other information")) return "additional_information";
+    if (t.includes("additional") || t.includes("supplementary") || t.includes("other information")) return "additional_information";
+
     // Experience-like
-    if (k.includes("experience") || k.includes("employment") || k.includes("work") || k.includes("projects") || k.includes("project")) return "experience";
-    if (t.includes("experience") || t.includes("employment") || t.includes("work") || t.includes("projects")) return "experience";
+    if (k.includes("experience") || k.includes("employment") || k.includes("work")) return "experience";
+    if (t.includes("experience") || t.includes("employment") || t.includes("work")) return "experience";
 
     // Skills-like (including languages buckets that some parsers map to skills)
     if (k.includes("skill") || k.includes("competence") || k.includes("technical")) return "skills";
@@ -2182,8 +2389,8 @@ export function buildTypedSectionsFromReviewerSections(
     if (t.includes("education") || t.includes("formation") || t.includes("studies") || t.includes("academic")) return "education";
 
     // Achievements-like
-    if (k.includes("achievement") || k.includes("award") || k.includes("certif") || k.includes("publication") || k.includes("hobby")) return "achievements";
-    if (t.includes("achievement") || t.includes("award") || t.includes("certif") || t.includes("publication") || t.includes("hobby")) return "achievements";
+    if (k.includes("achievement") || k.includes("award") || k.includes("publication")) return "achievements";
+    if (t.includes("achievement") || t.includes("award") || t.includes("publication")) return "achievements";
 
     // Languages — keep separate
     if (k.includes("language") || t.includes("language")) return "languages";
@@ -2200,6 +2407,36 @@ export function buildTypedSectionsFromReviewerSections(
 
   if (mapByKey.summary) normalized.summary = cleanSummaryText(mapByKey.summary.join("\n\n"));
   if (mapByKey.skills) normalized.skillsText = mapByKey.skills.join("\n");
+  if (mapByKey.projects) {
+    normalized.rawSections = [
+      ...(Array.isArray(normalized.rawSections) ? normalized.rawSections : []),
+      ...mapByKey.projects.map((content) => ({ label: "Projects", content })),
+    ];
+  }
+  if (mapByKey.certifications) {
+    normalized.rawSections = [
+      ...(Array.isArray(normalized.rawSections) ? normalized.rawSections : []),
+      ...mapByKey.certifications.map((content) => ({ label: "Certifications", content })),
+    ];
+  }
+  if (mapByKey.hobbies) {
+    normalized.rawSections = [
+      ...(Array.isArray(normalized.rawSections) ? normalized.rawSections : []),
+      ...mapByKey.hobbies.map((content) => ({ label: "Hobbies", content })),
+    ];
+  }
+  if (mapByKey.affiliations) {
+    normalized.rawSections = [
+      ...(Array.isArray(normalized.rawSections) ? normalized.rawSections : []),
+      ...mapByKey.affiliations.map((content) => ({ label: "Affiliations", content })),
+    ];
+  }
+  if (mapByKey.additional_information) {
+    normalized.rawSections = [
+      ...(Array.isArray(normalized.rawSections) ? normalized.rawSections : []),
+      ...mapByKey.additional_information.map((content) => ({ label: "Additional Information", content })),
+    ];
+  }
 
   const parseJsonField = (key: "experience" | "education") => {
     if (mapByKey[key]) {
