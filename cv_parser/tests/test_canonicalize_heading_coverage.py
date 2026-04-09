@@ -380,6 +380,63 @@ def test_parse_experience_block_parses_realistic_matrix_after_heading_row_is_con
     assert entries[2]["position"] == "AMC Maintenance technician"
 
 
+def test_parse_experience_block_reconstructs_coarse_ocr_matrix_rows_around_date_anchors() -> None:
+    block = """
+    Name Of
+    City 9
+    Designation
+    From
+    To
+    Duration Reason For
+    Organization
+    Country.
+    Leaving
+    Applied
+    Plant
+    Coimbatore,
+    due to
+    Automation
+    Maintenance
+    02/05/2010 05/11/2010 6 Months Layoff
+    Systems
+    India.
+    technician.
+    power cut.
+    Maintenance
+    Coimbatore,
+    Apprentice
+    LMW (Unit - I)
+    India.
+    work quality
+    24/12/2010 24/12/2011 1 Year
+    Period Over.
+    Inspector
+    AMC
+    Sun Business
+    Trichy,
+    Salary
+    Solutions
+    India.
+    Maintenance
+    05/02/2012 12/08/2012 6 Months
+    Problem.
+    technician.
+    """
+
+    entries = parse_experience_block(block)
+
+    assert 3 <= len(entries) <= 5
+    assert entries[0]["company"] == "Applied Automation Systems"
+    assert entries[0]["position"] == "Plant Maintenance technician."
+    assert entries[0]["location"] == "Coimbatore, India."
+    assert entries[0]["responsibilityBullets"] == ["Reason for leaving: Layoff due to power cut."]
+    assert entries[1]["company"] == "LMW (Unit - I)"
+    assert entries[1]["position"] == "Maintenance work quality Inspector AMC"
+    assert entries[1]["location"] == "Coimbatore, India."
+    assert entries[2]["company"] == "Sun Business Solutions"
+    assert entries[2]["location"] == "Trichy, India."
+
+
 def test_build_education_entries_parses_markdown_education_table_rows() -> None:
     sections = {
         "EDUCATION": [
