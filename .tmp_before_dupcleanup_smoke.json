@@ -1,0 +1,70 @@
+[
+  {
+    "fixture": "cv (13).png",
+    "http_code": 200,
+    "labels": [
+      "BODY",
+      "SKILLS",
+      "ACHIEVEMENTS",
+      "EDUCATION",
+      "LANGUAGES"
+    ],
+    "summary": "Talent professional specializing in microsoft office c language and final year project:.",
+    "skills": [
+      "* Microsoft office",
+      "* C language"
+    ],
+    "languages": [
+      "Hindi",
+      "English",
+      "German"
+    ],
+    "achievements": [
+      "* Played one time National and three times regional in Handball from Kendriya Vidyalaya Mau.\n* Participated in paper presentation in Jaipur National University 2012 at the topic Magnetic refrigeration.\n* Participated in paper presentation in Jaipur National University 2013 at the topic Camless engine with electro mechanical valve actuators.\n| LANGUAGE KNOWN | Read | Write | Speak |\n| --- | --- | --- | --- |\n| Hindi | \u2611 | \u2611 | \u2611 |\n| English | \u2611 | \u2611 | \u2611 |\n| German | \u2611 | \u2610 | \u2610 |"
+    ],
+    "recovery_count": 0
+  },
+  {
+    "fixture": "cv (308).pdf",
+    "http_code": 200,
+    "labels": [
+      "BODY",
+      "EXPERIENCE",
+      "EDUCATION"
+    ],
+    "summary": "Reason for leaving: Layoff due to power cut.",
+    "skills": [],
+    "languages": [],
+    "achievements": [],
+    "recovery_count": 1
+  },
+  {
+    "fixture": "cv (14).pdf",
+    "http_code": 200,
+    "labels": [
+      "BODY",
+      "DETAILS"
+    ],
+    "summary": "",
+    "skills": [],
+    "languages": [],
+    "achievements": [],
+    "recovery_count": 1
+  },
+  {
+    "fixture": "sample_scanned_resume.pdf",
+    "http_code": 200,
+    "labels": [
+      "BODY",
+      "DETAILS",
+      "CERTIFICATIONS",
+      "EXPERIENCE",
+      "EDUCATION"
+    ],
+    "summary": "avril - Present (2 ans 5 mois).",
+    "skills": [],
+    "languages": [],
+    "achievements": [],
+    "recovery_count": 1
+  }
+]
