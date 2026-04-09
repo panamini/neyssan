@@ -37,7 +37,7 @@ describe("llmPostProcessor - French CV mapping", () => {
     // Expect specific mappings to exist
     expect(Object.values(mapping)).toContain("contact");
     expect(Object.values(mapping)).toContain("skills");
-    expect(Object.values(mapping)).toContain("introduction");
+    expect(Object.values(mapping)).toContain("summary");
     expect(Object.values(mapping)).toContain("experience");
     expect(Object.values(mapping)).toContain("education");
   });

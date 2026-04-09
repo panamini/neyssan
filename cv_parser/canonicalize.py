@@ -332,21 +332,26 @@ HEADING_MAP = {
     "PROFILE": "SUMMARY",
     "EXECUTIVE PROFILE": "SUMMARY",
     "PROFESSIONAL SUMMARY": "SUMMARY",
+    "PROFESSIONAL PROFILE": "PROFILE",
     "OBJECTIVE": "SUMMARY",
     "EXPERIENCE": "EXPERIENCE",
     "WORK EXPERIENCE": "EXPERIENCE",
     "PROFESSIONAL EXPERIENCE": "EXPERIENCE",
+    "PERSONAL EXPERIENCE": "EXPERIENCE",
     "EXPERIENCE PROFESSIONNELLE": "EXPERIENCE",
     "EXPERIENCE PROFESSIONELLE": "EXPERIENCE",
     "EXPERIENCIA": "EXPERIENCE",
     "EMPLOYMENT HISTORY": "EXPERIENCE",
     "EDUCATION": "EDUCATION",
+    "ACADEMIC CREDENTIALS": "EDUCATION",
     "ACADEMIC HISTORY": "EDUCATION",
+    "EDUCATION BACKGROUND": "EDUCATION",
     "QUALIFICATIONS": "EDUCATION",
     "EDUCACION": "EDUCATION",
     "FORMACION": "EDUCATION",
     "FORMATION": "EDUCATION",
     "SKILLS": "SKILLS",
+    "PROFESSIONAL SKILLS": "SKILLS",
     "TECHNICAL SKILLS": "SKILLS",
     "CORE SKILLS": "SKILLS",
     "PROJECTS": "PROJECTS",
@@ -367,6 +372,7 @@ HEADING_MAP = {
     "COORDONNEES": "DETAILS",
     "COORDONNEES PERSONNELLES": "DETAILS",
     "PERSONAL DETAILS": "DETAILS",
+    "PERSONAL DOSSIER": "ADDITIONAL INFORMATION",
     "HOBBIES": "HOBBIES",
     "INTERESTS": "HOBBIES",
 }
@@ -531,6 +537,8 @@ NOISE_SINGLETONS = {
 }
 NOISE_EMBLEM_RE = re.compile(r"^o\s+(skills|hobbies)\s+o$", re.IGNORECASE)
 NOISE_STANDALONE_RE = re.compile(r"^(linkedin|pinterest)$", re.IGNORECASE)
+MARKDOWN_HEADING_PREFIX_RE = re.compile(r"^\s{0,3}#{1,6}(?:\s+|$)")
+STANDALONE_MARKDOWN_HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s*$")
 
 def _is_template_noise_line(line: str) -> bool:
     candidate = (line or "").strip()
@@ -549,7 +557,10 @@ def _filter_noise_from_text(raw_text: str) -> Tuple[str, int]:
     removed = 0
     out_lines: List[str] = []
     for raw in (raw_text or "").splitlines():
-        line = collapse_spaced_caps(_scrub_glyphs(raw)).strip()
+        line = _normalize_structural_line(raw)
+        if not line:
+            removed += 1
+            continue
         if _is_template_noise_line(line):
             removed += 1
             continue
@@ -570,6 +581,16 @@ def collapse_spaced_caps(value: str) -> str:
     return compact.strip()
 
 
+def strip_leading_markdown_heading(value: str) -> str:
+    if not value:
+        return ""
+    if STANDALONE_MARKDOWN_HEADING_RE.match(value):
+        return ""
+    if MARKDOWN_HEADING_PREFIX_RE.match(value):
+        return MARKDOWN_HEADING_PREFIX_RE.sub("", value, count=1).strip()
+    return value.strip()
+
+
 def _scrub_glyphs(value: str) -> str:
     if not value:
         return ""
@@ -577,6 +598,10 @@ def _scrub_glyphs(value: str) -> str:
     cleaned = GLYPH_SCRUB_RE.sub(" ", cleaned)
     cleaned = re.sub(r"\s{2,}", " ", cleaned)
     return cleaned.strip()
+
+
+def _normalize_structural_line(value: str) -> str:
+    return collapse_spaced_caps(strip_leading_markdown_heading(_scrub_glyphs(value or ""))).strip()
 
 
 def strip_leading_address_clause(text: str) -> str:
@@ -1391,7 +1416,7 @@ def pick_summary_text(sections: Dict[str, List[str]], fallback_text: str) -> str
     def extract_from_label(label: str) -> Optional[str]:
         for block in sections.get(label, []):
             raw_lines = [
-                collapse_spaced_caps(_scrub_glyphs(line)).strip()
+                _normalize_structural_line(line)
                 for line in block.splitlines()
                 if line.strip()
             ]
@@ -1410,7 +1435,7 @@ def pick_summary_text(sections: Dict[str, List[str]], fallback_text: str) -> str
 
     for block in sections.get("BODY", [])[:5]:
         raw_lines = [
-            collapse_spaced_caps(_scrub_glyphs(line)).strip()
+            _normalize_structural_line(line)
             for line in block.splitlines()
             if line.strip()
         ]
@@ -1422,7 +1447,7 @@ def pick_summary_text(sections: Dict[str, List[str]], fallback_text: str) -> str
             return candidate
 
     fallback_lines = [
-        collapse_spaced_caps(_scrub_glyphs(line)).strip()
+        _normalize_structural_line(line)
         for line in (fallback_text or "").splitlines()[:10]
         if line.strip()
     ]
@@ -1441,7 +1466,7 @@ def detect_heading(line: str) -> Optional[str]:
 def extract_sections(raw_text: str, raw_sections: Optional[List[Dict[str, str]]] = None) -> Dict[str, List[str]]:
     sections: Dict[str, List[str]] = {}
     raw_lines = raw_text.replace("\r", "").split("\n")
-    lines = [collapse_spaced_caps(_scrub_glyphs(line)) for line in raw_lines]
+    lines = [_normalize_structural_line(line) for line in raw_lines]
     current: Optional[str] = None
     buffer: List[str] = []
 
@@ -1467,11 +1492,12 @@ def extract_sections(raw_text: str, raw_sections: Optional[List[Dict[str, str]]]
     if raw_sections:
         for item in raw_sections:
             label = str(item.get("label", "")).strip()
-            content = _scrub_glyphs(str(item.get("content", "")).strip())
+            content = _normalize_structural_line(str(item.get("content", "")).strip())
             if not content:
                 continue
-            heading = detect_heading(label) or collapse_spaced_caps(label.upper())
-            sections.setdefault(heading, []).append(collapse_spaced_caps(content))
+            normalized_label = strip_leading_markdown_heading(label)
+            heading = detect_heading(normalized_label) or collapse_spaced_caps(normalized_label.upper())
+            sections.setdefault(heading, []).append(content)
 
     # Remove empty entries
     cleaned_sections = {key: [entry for entry in values if entry.strip()] for key, values in sections.items()}
@@ -1479,7 +1505,8 @@ def extract_sections(raw_text: str, raw_sections: Optional[List[Dict[str, str]]]
 
 
 def extract_name_and_role(raw_text: str, sections: Dict[str, List[str]]) -> Tuple[Optional[str], Optional[str]]:
-    lines = [collapse_spaced_caps(_scrub_glyphs(line)) for line in raw_text.splitlines() if line.strip()]
+    lines = [_normalize_structural_line(line) for line in raw_text.splitlines() if line.strip()]
+    lines = [line for line in lines if line]
     if not lines:
         return None, None
 
@@ -1923,10 +1950,11 @@ def parse_experience_block(block: str) -> List[Dict[str, object]]:
     parsed_entries: List[Dict[str, object]] = []
     for entry_lines in entries:
         entry_lines = [
-            collapse_spaced_caps(_scrub_glyphs(line.strip()))
+            _normalize_structural_line(line.strip())
             for line in entry_lines
             if line.strip()
         ]
+        entry_lines = [line for line in entry_lines if line]
         if not entry_lines:
             continue
         location = None
@@ -2106,10 +2134,11 @@ def build_experience_entries(sections: Dict[str, List[str]], raw_text: str) -> L
 
 def parse_education_block(block: str) -> Optional[Dict[str, object]]:
     lines = [
-        collapse_spaced_caps(_scrub_glyphs(line.strip("•- ").strip()))
+        _normalize_structural_line(line.strip("•- ").strip())
         for line in block.splitlines()
         if line.strip()
     ]
+    lines = [line for line in lines if line]
     text = " ".join(lines) if lines else _scrub_glyphs(block.strip())
     degree = None
     institution = None

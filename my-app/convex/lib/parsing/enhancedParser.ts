@@ -1,17 +1,26 @@
 // enhancedParser.ts - Improved with real-world header data
 import headingsConfig from "../../../../shared/headings.json";
+import {
+  getCanonicalHeadingAliases,
+  resolveCanonicalHeadingFamily,
+} from "./headingResolver";
 
 type HeadingsConfig = Record<string, Record<string, string[]>>;
 
 type FieldKey =
   | "introduction"
+  | "summary"
   | "contact"
   | "experience"
   | "education"
   | "skills"
   | "languages"
+  | "certifications"
   | "achievements"
   | "projects"
+  | "hobbies"
+  | "affiliations"
+  | "additional_information"
   | "research"
   | "volunteer"
   | "references"
@@ -91,7 +100,6 @@ const LEGACY_FALLBACKS: Record<FieldKey, string[]> = {
     "education",
     "academic",
     "training",
-    "certifications",
     "courses",
     "qualifications",
     "academic background",
@@ -129,7 +137,6 @@ const LEGACY_FALLBACKS: Record<FieldKey, string[]> = {
     "achievements",
     "accomplishments",
     "awards",
-    "certifications",
     "honors",
     "réalisations",
     "récompenses",
@@ -147,6 +154,24 @@ const LEGACY_FALLBACKS: Record<FieldKey, string[]> = {
     "projekten",
     "projecten",
     "项目",
+  ],
+  certifications: [
+    "certifications",
+    "certification",
+    "certificates",
+    "certificate",
+    "license",
+    "licenses",
+    "licence",
+    "licences",
+  ],
+  hobbies: ["hobbies", "hobby", "interests", "interest"],
+  affiliations: ["affiliations", "affiliation", "memberships", "associations"],
+  additional_information: [
+    "additional information",
+    "additional info",
+    "other information",
+    "supplementary information",
   ],
   research: [
     "research",
@@ -204,18 +229,41 @@ function mergeTerms(fieldKey: FieldKey, sharedKey: string | null = fieldKey): st
 
 export const FIELD_KEY_MAP: Record<FieldKey, string[]> = {
   introduction: mergeTerms("introduction", null),
+  summary: mergeTerms("introduction", "summary"),
   contact: mergeTerms("contact", null),
   experience: mergeTerms("experience"),
   education: mergeTerms("education"),
   skills: mergeTerms("skills"),
   languages: mergeTerms("languages"),
+  certifications: mergeTerms("certifications"),
   achievements: mergeTerms("achievements"),
   projects: mergeTerms("projects"),
+  hobbies: mergeTerms("hobbies"),
+  affiliations: mergeTerms("affiliations"),
+  additional_information: mergeTerms("additional_information"),
   research: mergeTerms("research"),
   volunteer: mergeTerms("volunteer"),
   references: mergeTerms("references"),
   other: mergeTerms("other"),
 };
+
+const CANONICAL_HEADER_TERMS = [
+  "summary",
+  "experience",
+  "education",
+  "skills",
+  "languages",
+  "projects",
+  "certifications",
+  "achievements",
+  "hobbies",
+  "affiliations",
+  "additional_information",
+] as const;
+
+const CANONICAL_HEADER_ALIASES = CANONICAL_HEADER_TERMS.flatMap((key) =>
+  getCanonicalHeadingAliases(key).map((alias) => stripDiacritics(alias.toLowerCase())),
+);
 
 export function isPotentialHeader(
   line: string,
@@ -235,6 +283,8 @@ export function isPotentialHeader(
 
   // Check against known header patterns (most efficient check first)
   const normalized = stripDiacritics(trimmed.toLowerCase());
+  const resolvedCanonical = resolveCanonicalHeadingFamily(trimmed);
+  if (resolvedCanonical) return true;
   const isKnownHeader = Object.values(FIELD_KEY_MAP).some((patterns) =>
     patterns.some((pattern) => {
       const normalizedPattern = stripDiacritics(pattern.toLowerCase());
@@ -247,6 +297,16 @@ export function isPotentialHeader(
   );
 
   if (isKnownHeader) return true;
+
+  const canonicalAliasHit = CANONICAL_HEADER_ALIASES.some((normalizedPattern) => {
+    return (
+      normalized === normalizedPattern ||
+      normalized.startsWith(`${normalizedPattern}:`) ||
+      normalized.startsWith(`${normalizedPattern} -`)
+    );
+  });
+
+  if (canonicalAliasHit) return true;
 
   // Structural cues (ordered by reliability)
   const isAllCaps = trimmed.toUpperCase() === trimmed && /[A-Z]{3,}/.test(trimmed) && trimmed.length < 50;

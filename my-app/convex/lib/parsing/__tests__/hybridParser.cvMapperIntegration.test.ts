@@ -98,7 +98,7 @@ describe("hybridParser -> mapSectionsToCV (integration)", () => {
     expect(cv.raw === null || typeof cv.raw === "string").toBe(true);
   });
 
-  it("when provider returns human-readable text, parseCV falls back to heuristics and mapper groups sections into 'other'", async () => {
+  it("when provider returns human-readable text, parseCV falls back to heuristics and keeps recognizable headings canonical", async () => {
     // Force the callLLM test hook that returns human-readable text (non-JSON)
     process.env.TEST_MALFORMED = "1";
     // Clear OPENAI key to keep behavior deterministic
@@ -114,9 +114,9 @@ describe("hybridParser -> mapSectionsToCV (integration)", () => {
 
     const cv = parsed.cv ?? await mapSectionsToCV(parsed.sections, parsed.metadata as any);
 
-    // Heuristic parsing uses unknown headers -> mapper should put them into `other`
+    expect(parsed.sections[0]?.fieldKey).toBe("contact");
     expect(Array.isArray(cv.other)).toBe(true);
-    expect(cv.other.length).toBeGreaterThan(0);
+    expect(cv.other.length).toBe(0);
 
     // Cleanup test hook
     delete process.env.TEST_MALFORMED;

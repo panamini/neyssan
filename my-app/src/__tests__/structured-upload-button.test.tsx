@@ -7,6 +7,7 @@ import StructuredUploadButton from "../components/StructuredUploadButton";
 
 const structuredActionMock = vi.fn();
 const toastMock = vi.fn();
+const consoleInfoMock = vi.spyOn(console, "info").mockImplementation(() => {});
 
 vi.mock("../../convex/_generated/api", () => ({
   api: {
@@ -39,6 +40,7 @@ describe("StructuredUploadButton", () => {
   beforeEach(() => {
     structuredActionMock.mockReset();
     toastMock.mockReset();
+    consoleInfoMock.mockClear();
     Object.defineProperty(File.prototype, "text", {
       configurable: true,
       value: vi.fn().mockResolvedValue("John Doe"),
@@ -103,6 +105,13 @@ describe("StructuredUploadButton", () => {
         achievements: [],
       },
       strict: null,
+      diagnostics: {
+        ocr_request_path: "/mistral-ocr/parse",
+        ocr_engine: "mistral",
+        mistral_model: "mistral-ocr-latest",
+        mistral_fallback: false,
+        mistral_runtime: "mistral",
+      },
     });
 
     const { container } = render(<StructuredUploadButton />);
@@ -120,6 +129,59 @@ describe("StructuredUploadButton", () => {
       mode: "auto",
       useMistral: true,
     });
+    expect(consoleInfoMock).toHaveBeenCalledWith(
+      "[StructuredUploadButton][mistral] evidence",
+      expect.objectContaining({
+        ocr_request_path: "/mistral-ocr/parse",
+        ocr_engine: "mistral",
+        mistral_model: "mistral-ocr-latest",
+        mistral_fallback: false,
+        mistral_runtime: "mistral",
+      }),
+    );
+  });
+
+  it("surfaces top-level Mistral diagnostics to onResult", async () => {
+    const user = userEvent.setup();
+    const onResult = vi.fn();
+    structuredActionMock.mockResolvedValue({
+      normalized: {
+        summary: "Scanned import",
+        experience: [],
+        education: [],
+        skillsText: "",
+        languagesText: "",
+        achievements: [],
+      },
+      strict: null,
+      diagnostics: {
+        ocr_request_path: "/mistral-ocr/parse",
+        ocr_engine: "mistral",
+        mistral_model: "mistral-ocr-latest",
+        mistral_fallback: false,
+        mistral_runtime: "mistral",
+      },
+    });
+
+    const { container } = render(<StructuredUploadButton onResult={onResult} />);
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(["scan"], "scan.png", { type: "image/png" });
+
+    await user.click(screen.getByRole("button", { name: "Scanned PDF / Image" }));
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    await waitFor(() => expect(onResult).toHaveBeenCalledTimes(1));
+    expect(onResult.mock.calls[0][0]).toEqual(
+      expect.objectContaining({
+        diagnostics: expect.objectContaining({
+          ocr_request_path: "/mistral-ocr/parse",
+          ocr_engine: "mistral",
+          mistral_model: "mistral-ocr-latest",
+          mistral_fallback: false,
+          mistral_runtime: "mistral",
+        }),
+      }),
+    );
   });
 
   it("holds low-confidence imports for recovery review instead of auto-applying", async () => {

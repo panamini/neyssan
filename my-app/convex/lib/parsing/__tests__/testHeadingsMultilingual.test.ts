@@ -16,6 +16,10 @@ describe("multilingual heading coverage", () => {
     expect(FIELD_KEY_MAP.languages).toContain("idiomas");
     expect(FIELD_KEY_MAP.languages).toContain("langues");
     expect(FIELD_KEY_MAP.languages).toContain("sprachkenntnisse");
+
+    expect(FIELD_KEY_MAP.certifications).toContain("certificaciones");
+    expect(FIELD_KEY_MAP.hobbies).toContain("intereses");
+    expect(FIELD_KEY_MAP.additional_information).toContain("informacion adicional");
   });
 
   it("maps FR/ES/DE headings to canonical buckets during LLM parsing", () => {
@@ -34,6 +38,9 @@ describe("multilingual heading coverage", () => {
       "",
       "## Auszeichnungen",
       "- Prix de l'innovation 2023",
+      "",
+      "## Certificaciones",
+      "AWS Certified Developer",
     ].join("\n");
 
     const sections = parseLLMSections(document).sections;
@@ -44,6 +51,7 @@ describe("multilingual heading coverage", () => {
     expect(buckets).toContain("skills");
     expect(buckets).toContain("languages");
     expect(buckets).toContain("achievements");
+    expect(buckets).toContain("certifications");
   });
 
   it("identifies localized headings purely with heuristics", () => {
