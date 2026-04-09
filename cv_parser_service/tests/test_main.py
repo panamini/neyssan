@@ -30,10 +30,10 @@ def test_mistral_ocr_parse_surfaces_runtime_evidence(monkeypatch):
     async def fake_call_mistral_ocr(payload, api_key, model_name):
         return ([{"index": 0, "markdown": "# Header\nBody"}], {"model": "mistral-ocr-latest", "pages": 1, "ocr_chars": 12})
 
-    def fake_canonicalize_text(raw_text, diagnostics=None):
+    def fake_canonicalize_text(raw_text, diagnostics=None, raw_sections=None):
         return {
             "normalized": {"rawText": raw_text, "summary": {"text": "Body", "confidence": 0.5}},
-            "rawSections": [{"label": "SUMMARY", "content": "Body"}],
+            "rawSections": list(raw_sections or [{"label": "SUMMARY", "content": "Body"}]),
             "summary": {"text": "Body", "confidence": 0.5},
             "summaryFirstSentence": "Body",
             "diagnostics": dict(diagnostics or {}),
@@ -53,6 +53,11 @@ def test_mistral_ocr_parse_surfaces_runtime_evidence(monkeypatch):
     assert diagnostics["mistral_model"] == "mistral-ocr-latest"
     assert diagnostics["mistral_fallback"] is False
     assert diagnostics["mistral_runtime"] == "mistral"
+    assert diagnostics["ocr_markdown_sections"] == 1
+    assert diagnostics["ocr_markdown_canonical_headings"] == 0
+    assert diagnostics["ocr_markdown_body_only"] is True
+    assert diagnostics["ocr_markdown_use_raw_sections"] is False
+    assert payload["sections"][0]["label"] == "SUMMARY"
 
 
 def test_mistral_ocr_parse_marks_local_fallback_runtime(monkeypatch):
@@ -62,10 +67,10 @@ def test_mistral_ocr_parse_marks_local_fallback_runtime(monkeypatch):
     async def fake_call_mistral_ocr(payload, api_key, model_name):
         return ([{"index": 0, "markdown": "fallback text"}], {"model": "mistral-fallback-dev", "fallback": True, "pages": 1, "ocr_chars": 13})
 
-    def fake_canonicalize_text(raw_text, diagnostics=None):
+    def fake_canonicalize_text(raw_text, diagnostics=None, raw_sections=None):
         return {
             "normalized": {"rawText": raw_text},
-            "rawSections": [{"label": "BODY", "content": raw_text}],
+            "rawSections": list(raw_sections or [{"label": "BODY", "content": raw_text}]),
             "summary": None,
             "summaryFirstSentence": None,
             "diagnostics": dict(diagnostics or {}),
@@ -82,3 +87,250 @@ def test_mistral_ocr_parse_marks_local_fallback_runtime(monkeypatch):
     assert diagnostics["mistral_model"] == "mistral-fallback-dev"
     assert diagnostics["mistral_fallback"] is True
     assert diagnostics["mistral_runtime"] == "local_fallback"
+
+
+def test_mistral_ocr_parse_uses_canonical_ocr_raw_sections_when_present(monkeypatch):
+    monkeypatch.setenv("API_ENABLE_MISTRAL_OCR", "1")
+    monkeypatch.setenv("MISTRAL_API_KEY", "sk-test")
+
+    async def fake_call_mistral_ocr(payload, api_key, model_name):
+        return ([{"index": 0, "markdown": "# Experience\n| Role | Company |\n| --- | --- |\n| Guard | ADT |"}], {"model": "mistral-ocr-latest", "pages": 1, "ocr_chars": 40})
+
+    captured = {}
+
+    def fake_canonicalize_text(raw_text, diagnostics=None, raw_sections=None):
+        captured["raw_sections"] = raw_sections
+        return {
+            "normalized": {"rawText": raw_text},
+            "rawSections": list(raw_sections or []),
+            "summary": None,
+            "summaryFirstSentence": None,
+            "diagnostics": dict(diagnostics or {}),
+        }
+
+    monkeypatch.setattr("cv_parser_service.main._call_mistral_ocr", fake_call_mistral_ocr)
+    monkeypatch.setattr("cv_parser_service.main._canonicalize_text", fake_canonicalize_text)
+
+    upload = UploadFile(filename="scan.pdf", file=BytesIO(b"%PDF-1.4\nmock"))
+    response = asyncio.run(mistral_ocr_parse(file=upload, url=None))
+
+    payload = json.loads(response.body)
+    diagnostics = payload["diagnostics"]
+    assert diagnostics["ocr_markdown_body_only"] is False
+    assert diagnostics["ocr_markdown_use_raw_sections"] is True
+    assert captured["raw_sections"][0]["label"] == "EXPERIENCE"
+
+
+def test_mistral_ocr_parse_carries_through_education_section_when_global_activation_is_disabled(monkeypatch):
+    monkeypatch.setenv("API_ENABLE_MISTRAL_OCR", "1")
+    monkeypatch.setenv("MISTRAL_API_KEY", "sk-test")
+
+    async def fake_call_mistral_ocr(payload, api_key, model_name):
+        return (
+            [
+                {
+                    "index": 0,
+                    "markdown": "# Personal Details\nName: Test User\n\n# Educational Qualifications\n| Qualification | Institution | Year of passing |\n| --- | --- | --- |\n| B.Tech | Jaipur National University | 2014 |",
+                }
+            ],
+            {"model": "mistral-ocr-latest", "pages": 1, "ocr_chars": 120},
+        )
+
+    captured = {}
+
+    def fake_canonicalize_text(raw_text, diagnostics=None, raw_sections=None):
+        captured["raw_sections"] = raw_sections
+        return {
+            "normalized": {"rawText": raw_text},
+            "rawSections": list(raw_sections or []),
+            "summary": None,
+            "summaryFirstSentence": None,
+            "diagnostics": dict(diagnostics or {}),
+        }
+
+    monkeypatch.setattr("cv_parser_service.main._call_mistral_ocr", fake_call_mistral_ocr)
+    monkeypatch.setattr("cv_parser_service.main._canonicalize_text", fake_canonicalize_text)
+
+    upload = UploadFile(filename="scan.pdf", file=BytesIO(b"%PDF-1.4\nmock"))
+    response = asyncio.run(mistral_ocr_parse(file=upload, url=None))
+
+    payload = json.loads(response.body)
+    diagnostics = payload["diagnostics"]
+    assert diagnostics["ocr_markdown_use_raw_sections"] is False
+    assert diagnostics["ocr_markdown_family_carry_through"] == ["EDUCATION"]
+    assert captured["raw_sections"] == [
+        {
+            "label": "EDUCATION",
+            "content": "| Qualification | Institution | Year of passing |\n| --- | --- | --- |\n| B.Tech | Jaipur National University | 2014 |",
+        }
+    ]
+
+
+def test_mistral_ocr_parse_trims_carried_education_block_to_table_region(monkeypatch):
+    monkeypatch.setenv("API_ENABLE_MISTRAL_OCR", "1")
+    monkeypatch.setenv("MISTRAL_API_KEY", "sk-test")
+
+    async def fake_call_mistral_ocr(payload, api_key, model_name):
+        return (
+            [
+                {
+                    "index": 0,
+                    "markdown": "# Personal Details\nName: Test User\n\nACADEMIC QUALIFICATION:\n\n| Qualification | Institution | Percentage of marks | Year of passing |\n| --- | --- | --- | --- |\n| B.Tech | Jaipur National University | 67.4 | 2014 |\n\nSKILLS:\n- Microsoft Office\n\n| LANGUAGE KNOWN | Read | Write | Speak |\n| --- | --- | --- | --- |\n| Hindi | ☑ | ☑ | ☑ |",
+                }
+            ],
+            {"model": "mistral-ocr-latest", "pages": 1, "ocr_chars": 220},
+        )
+
+    captured = {}
+
+    def fake_canonicalize_text(raw_text, diagnostics=None, raw_sections=None):
+        captured["raw_sections"] = raw_sections
+        return {
+            "normalized": {"rawText": raw_text},
+            "rawSections": list(raw_sections or []),
+            "summary": None,
+            "summaryFirstSentence": None,
+            "diagnostics": dict(diagnostics or {}),
+        }
+
+    monkeypatch.setattr("cv_parser_service.main._call_mistral_ocr", fake_call_mistral_ocr)
+    monkeypatch.setattr("cv_parser_service.main._canonicalize_text", fake_canonicalize_text)
+
+    upload = UploadFile(filename="scan.pdf", file=BytesIO(b"%PDF-1.4\nmock"))
+    asyncio.run(mistral_ocr_parse(file=upload, url=None))
+
+    carried = captured["raw_sections"][0]["content"]
+    assert "Qualification | Institution | Percentage of marks | Year of passing" in carried
+    assert "SKILLS:" not in carried
+    assert "LANGUAGE KNOWN" not in carried
+
+
+def test_mistral_ocr_parse_carries_through_language_table_region_when_global_activation_is_disabled(monkeypatch):
+    monkeypatch.setenv("API_ENABLE_MISTRAL_OCR", "1")
+    monkeypatch.setenv("MISTRAL_API_KEY", "sk-test")
+
+    async def fake_call_mistral_ocr(payload, api_key, model_name):
+        return (
+            [
+                {
+                    "index": 0,
+                    "markdown": "# Personal Details\nName: Test User\n\nLANGUAGE KNOWN\n\n| LANGUAGE KNOWN | Read | Write | Speak |\n| --- | --- | --- | --- |\n| Hindi | ☑ | ☑ | ☑ |\n| English | ☑ | ☑ | ☑ |\n\nACHIEVEMENTS:\n- Something else",
+                }
+            ],
+            {"model": "mistral-ocr-latest", "pages": 1, "ocr_chars": 180},
+        )
+
+    captured = {}
+
+    def fake_canonicalize_text(raw_text, diagnostics=None, raw_sections=None):
+        captured["raw_sections"] = raw_sections
+        return {
+            "normalized": {"rawText": raw_text},
+            "rawSections": list(raw_sections or []),
+            "summary": None,
+            "summaryFirstSentence": None,
+            "diagnostics": dict(diagnostics or {}),
+        }
+
+    monkeypatch.setattr("cv_parser_service.main._call_mistral_ocr", fake_call_mistral_ocr)
+    monkeypatch.setattr("cv_parser_service.main._canonicalize_text", fake_canonicalize_text)
+
+    upload = UploadFile(filename="scan.pdf", file=BytesIO(b"%PDF-1.4\nmock"))
+    response = asyncio.run(mistral_ocr_parse(file=upload, url=None))
+
+    payload = json.loads(response.body)
+    diagnostics = payload["diagnostics"]
+    assert diagnostics["ocr_markdown_family_carry_through"] == ["LANGUAGES"]
+    carried = captured["raw_sections"][0]["content"]
+    assert "LANGUAGE KNOWN" in carried
+    assert "ACHIEVEMENTS:" not in carried
+
+
+def test_mistral_ocr_parse_extracts_languages_from_mixed_education_section_when_global_activation_is_disabled(monkeypatch):
+    monkeypatch.setenv("API_ENABLE_MISTRAL_OCR", "1")
+    monkeypatch.setenv("MISTRAL_API_KEY", "sk-test")
+
+    async def fake_call_mistral_ocr(payload, api_key, model_name):
+        return (
+            [
+                {
+                    "index": 0,
+                    "markdown": "Curriculum Vitae\nTest User\n\n# Personal Details\nAddress: Example City\n\nACADEMIC QUALIFICATION:\n\n| Qualification | Institution | Percentage of marks | Year of passing |\n| --- | --- | --- | --- |\n| B.Tech | Jaipur National University | 67.4 | 2014 |\n\nSKILLS:\n- Microsoft Office\n\n| LANGUAGE KNOWN | Read | Write | Speak |\n| --- | --- | --- | --- |\n| Hindi | ☑ | ☑ | ☑ |\n| English | ☑ | ☑ | ☑ |",
+                }
+            ],
+            {"model": "mistral-ocr-latest", "pages": 1, "ocr_chars": 260},
+        )
+
+    captured = {}
+
+    def fake_canonicalize_text(raw_text, diagnostics=None, raw_sections=None):
+        captured["raw_sections"] = raw_sections
+        return {
+            "normalized": {"rawText": raw_text},
+            "rawSections": list(raw_sections or []),
+            "summary": None,
+            "summaryFirstSentence": None,
+            "diagnostics": dict(diagnostics or {}),
+        }
+
+    monkeypatch.setattr("cv_parser_service.main._call_mistral_ocr", fake_call_mistral_ocr)
+    monkeypatch.setattr("cv_parser_service.main._canonicalize_text", fake_canonicalize_text)
+
+    upload = UploadFile(filename="scan.pdf", file=BytesIO(b"%PDF-1.4\nmock"))
+    response = asyncio.run(mistral_ocr_parse(file=upload, url=None))
+
+    payload = json.loads(response.body)
+    diagnostics = payload["diagnostics"]
+    assert diagnostics["ocr_markdown_family_carry_through"] == ["EDUCATION", "LANGUAGES"]
+    assert captured["raw_sections"][1]["label"] == "LANGUAGES"
+    assert "LANGUAGE KNOWN" in captured["raw_sections"][1]["content"]
+    assert "SKILLS:" not in captured["raw_sections"][1]["content"]
+
+
+def test_mistral_ocr_parse_recovers_language_table_region_from_non_languages_section(monkeypatch):
+    monkeypatch.setenv("API_ENABLE_MISTRAL_OCR", "1")
+    monkeypatch.setenv("MISTRAL_API_KEY", "sk-test")
+
+    async def fake_call_mistral_ocr(payload, api_key, model_name):
+        return (
+            [
+                {
+                    "index": 0,
+                    "markdown": "# Personal Details\nName: Test User\n\n# Achievements\nPlayed one time National in Handball.\nParticipated in paper presentation.\n\n| LANGUAGE KNOWN | Read | Write | Speak |\n| --- | --- | --- | --- |\n| Hindi | ☑ | ☑ | ☑ |\n| English | ☑ | ☑ | ☑ |\n| German | ☑ | ☐ | ☐ |\n\nSKILLS:\n- Microsoft Office",
+                }
+            ],
+            {"model": "mistral-ocr-latest", "pages": 1, "ocr_chars": 220},
+        )
+
+    captured = {}
+
+    def fake_canonicalize_text(raw_text, diagnostics=None, raw_sections=None):
+        captured["raw_sections"] = raw_sections
+        return {
+            "normalized": {"rawText": raw_text},
+            "rawSections": list(raw_sections or []),
+            "summary": None,
+            "summaryFirstSentence": None,
+            "diagnostics": dict(diagnostics or {}),
+        }
+
+    monkeypatch.setattr("cv_parser_service.main._call_mistral_ocr", fake_call_mistral_ocr)
+    monkeypatch.setattr("cv_parser_service.main._canonicalize_text", fake_canonicalize_text)
+
+    upload = UploadFile(filename="scan.pdf", file=BytesIO(b"%PDF-1.4\nmock"))
+    response = asyncio.run(mistral_ocr_parse(file=upload, url=None))
+
+    payload = json.loads(response.body)
+    diagnostics = payload["diagnostics"]
+    assert diagnostics["ocr_markdown_use_raw_sections"] is False
+    assert diagnostics["ocr_markdown_family_carry_through"] == ["LANGUAGES"]
+    assert captured["raw_sections"] == [
+        {
+            "label": "LANGUAGES",
+            "content": "| LANGUAGE KNOWN | Read | Write | Speak |\n| --- | --- | --- | --- |\n| Hindi | ☑ | ☑ | ☑ |\n| English | ☑ | ☑ | ☑ |\n| German | ☑ | ☐ | ☐ |",
+        }
+    ]
+    carried = captured["raw_sections"][0]["content"]
+    assert "Played one time National in Handball" not in carried
+    assert "Participated in paper presentation" not in carried
+    assert "SKILLS:" not in carried
