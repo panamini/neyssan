@@ -311,7 +311,11 @@ SOCIAL_TOKENS = {
     "facebook",
     "instagram",
     "portfolio",
+    "x",
     "behance",
+    "upwork",
+    "indeed",
+    "tiktok",
     "dribbble",
     "pinterest",
     "resume templates",
@@ -360,6 +364,7 @@ HEADING_MAP = {
     "ACHIEVEMENTS": "ACHIEVEMENTS",
     "LANGUAGES": "LANGUAGES",
     "LANGUAGE": "LANGUAGES",
+    "LANGUAGE KNOWN": "LANGUAGES",
     "LANGUAGES KNOWN": "LANGUAGES",
     "IDIOMAS": "LANGUAGES",
     "LANGUES": "LANGUAGES",
@@ -397,7 +402,7 @@ SUMMARY_MONTH_PREFIX_RE = re.compile(
     r"^(?:"
     r"jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec|"
     r"enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre|"
-    r"janv|févr|fevr|mars|avril|mai|juin|juillet|aout|août"
+    r"janv|janvier|févr|fevr|fevrier|février|mars|avril|mai|juin|juillet|aout|août|septembre|octobre|novembre|decembre|décembre"
     r")\.?\b",
     re.I,
 )
@@ -407,6 +412,10 @@ SUMMARY_FORBIDDEN_PHRASES = {
     "driving license",
     "linkedin",
     "links o",
+    "reason for leaving",
+    "resume templates",
+    "build this template",
+    "curriculum vitae",
 }
 SUMMARY_SKILL_KEYWORDS = (
     "skills",
@@ -662,11 +671,23 @@ def _clean_summary_text(value: str) -> str:
     return cleaned
 
 
+def _digit_ratio(value: str) -> float:
+    if not value:
+        return 0.0
+    chars = [char for char in value if not char.isspace()]
+    if not chars:
+        return 0.0
+    digits = sum(1 for char in chars if char.isdigit())
+    return digits / len(chars)
+
+
 def _normalize_summary_candidate(value: str) -> Optional[str]:
     if not value:
         return None
     cleaned = _clean_summary_text(value)
     if not cleaned:
+        return None
+    if _looks_like_summary_metadata_fragment(cleaned):
         return None
     lowered = cleaned.lower()
     if any(phrase in lowered for phrase in SUMMARY_FORBIDDEN_PHRASES):
@@ -679,6 +700,43 @@ def _normalize_summary_candidate(value: str) -> Optional[str]:
     if PHONE_EMAIL_URL_RE.search(cleaned) or looks_addressish(cleaned):
         return None
     return cleaned
+
+
+SUMMARY_PAGE_MARKER_RE = re.compile(r"\bpage\s+\d+\s+of\s+\d+\b", re.I)
+SUMMARY_DATE_ONLY_RE = re.compile(
+    r"^(?:(?:[A-Za-zÀ-ÿ]{3,10}\.?\s+)?\d{4})(?:\s*[–—-]\s*(?:present|current|now|to date|actual|actuel|presente|actualidad|(?:[A-Za-zÀ-ÿ]{3,10}\.?\s+)?\d{4}))?(?:\s*\([^)]{0,40}\))?\.?$",
+    re.I,
+)
+
+
+def _looks_like_summary_metadata_fragment(value: str) -> bool:
+    cleaned = (value or "").strip()
+    if not cleaned:
+        return True
+    lowered = strip_accents(cleaned.lower())
+    if SUMMARY_PAGE_MARKER_RE.search(lowered):
+        return True
+    if any(phrase in lowered for phrase in SUMMARY_FORBIDDEN_PHRASES):
+        return True
+    if cleaned.startswith("#"):
+        return True
+    if "//" in cleaned and not SUMMARY_VERB_RE.search(cleaned):
+        return True
+    if SUMMARY_DATE_ONLY_RE.match(cleaned):
+        return True
+    if SUMMARY_MONTH_PREFIX_RE.match(cleaned):
+        if len(cleaned.split()) <= 10 and not SUMMARY_VERB_RE.search(cleaned):
+            return True
+    if _digit_ratio(cleaned) >= 0.25 and not SUMMARY_VERB_RE.search(cleaned):
+        return True
+    if "reason for leaving" in lowered:
+        return True
+    if re.search(r"\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec|january|february|march|april|june|july|august|september|october|november|december)\b", lowered):
+        if len(cleaned.split()) <= 10 and not SUMMARY_VERB_RE.search(cleaned):
+            return True
+    if _looks_like_contact_or_heading(cleaned):
+        return True
+    return False
 
 
 def _valid_summary_candidate(text: str) -> bool:
@@ -728,6 +786,9 @@ def _select_summary_from_lines(lines: List[str]) -> str:
         if not candidate:
             buffer.clear()
             continue
+        if _looks_like_summary_metadata_fragment(candidate):
+            buffer.clear()
+            continue
         if SUMMARY_MONTH_PREFIX_RE.match(candidate):
             buffer.clear()
             continue
@@ -759,6 +820,8 @@ def _summary_from_experience_entries(entries: Sequence[Dict[str, object]]) -> st
                 continue
             lower_cleaned = cleaned.lower()
             if lower_cleaned in {"linkedin", "links", "driving license"}:
+                continue
+            if _looks_like_summary_metadata_fragment(cleaned):
                 continue
             stripped = cleaned.rstrip(".!? ")
             fragments.append(stripped)
@@ -1206,6 +1269,35 @@ NAME_PREFIX_LABELS = {
     "cv",
 }
 
+NAME_PREAMBLE_BLOCKLIST = {
+    "top skills",
+    "principales competences",
+    "principales compétences",
+    "competenze principali",
+    "certifications",
+    "assessment",
+    "the predictive index",
+    "excel with linkedin recruiter",
+    "excel with linkedin recruiter assessment",
+    "honors awards",
+    "honors-awards",
+    "languages",
+}
+
+NON_NAME_DESCRIPTOR_TOKENS = {
+    "recruitment",
+    "recrutement",
+    "talent",
+    "acquisition",
+    "sourcing",
+    "gestion",
+    "project",
+    "projet",
+    "international",
+    "communication",
+    "designer",
+}
+
 MIN_NAME_SCORE = 5
 NAME_TOKEN_RE = re.compile(r"^[A-Z][A-Za-z'-]*$|^[A-Z]+$")
 
@@ -1255,6 +1347,20 @@ def _strip_name_label_prefix(line: str) -> str:
     return candidate
 
 
+def _is_name_preamble_heading(line: str) -> bool:
+    normalized = strip_accents((line or "").lower()).strip()
+    normalized = normalized.rstrip(":")
+    normalized = TOKEN_SANITIZE_RE.sub(" ", normalized)
+    return normalized in NAME_PREAMBLE_BLOCKLIST
+
+
+def _is_page_marker_line(line: str) -> bool:
+    cleaned = (line or "").strip()
+    if not cleaned:
+        return False
+    return bool(SUMMARY_PAGE_MARKER_RE.search(cleaned))
+
+
 def _prepare_name_candidate(line: str) -> str:
     cleaned = collapse_spaced_caps(_scrub_glyphs(_strip_bullet_prefix(str(line or "")))).strip()
     if not cleaned:
@@ -1277,6 +1383,10 @@ def _line_disqualifies_name(line: str) -> bool:
     lowered_trimmed = lowered.rstrip(":")
     if lowered in NAME_LABEL_BLOCKLIST or lowered_trimmed in NAME_LABEL_BLOCKLIST:
         return True
+    if lowered in NAME_PREAMBLE_BLOCKLIST or lowered_trimmed in NAME_PREAMBLE_BLOCKLIST:
+        return True
+    if _is_page_marker_line(candidate):
+        return True
     if candidate.endswith(":"):
         return True
     if "@" in candidate or "://" in candidate:
@@ -1292,6 +1402,9 @@ def _line_disqualifies_name(line: str) -> bool:
     if len(candidate) > 40:
         return True
     if candidate.count(",") > 1 or candidate.count("&") > 1:
+        return True
+    lowered_tokens = {token.strip(":,./-'") for token in lowered.split() if token.strip(":,./-'")}
+    if lowered_tokens & NON_NAME_DESCRIPTOR_TOKENS:
         return True
     if _is_role_phrase(candidate):
         return True
@@ -1492,11 +1605,29 @@ def extract_sections(raw_text: str, raw_sections: Optional[List[Dict[str, str]]]
     if raw_sections:
         for item in raw_sections:
             label = str(item.get("label", "")).strip()
-            content = _normalize_structural_line(str(item.get("content", "")).strip())
-            if not content:
-                continue
+            raw_content = str(item.get("content", "")).strip()
             normalized_label = strip_leading_markdown_heading(label)
             heading = detect_heading(normalized_label) or collapse_spaced_caps(normalized_label.upper())
+            if heading == "EDUCATION" and has_parseable_education_markdown_table(raw_content):
+                normalized_lines = []
+                for line in raw_content.splitlines():
+                    stripped = line.strip()
+                    if not stripped:
+                        continue
+                    normalized_lines.append(_normalize_structural_line(stripped))
+                content = "\n".join(line for line in normalized_lines if line).strip()
+            elif heading == "LANGUAGES" and has_parseable_language_markdown_table(raw_content):
+                normalized_lines = []
+                for line in raw_content.splitlines():
+                    stripped = line.strip()
+                    if not stripped:
+                        continue
+                    normalized_lines.append(_normalize_structural_line(stripped))
+                content = "\n".join(line for line in normalized_lines if line).strip()
+            else:
+                content = _normalize_structural_line(raw_content)
+            if not content:
+                continue
             sections.setdefault(heading, []).append(content)
 
     # Remove empty entries
@@ -1511,11 +1642,34 @@ def extract_name_and_role(raw_text: str, sections: Dict[str, List[str]]) -> Tupl
         return None, None
 
     candidate_lines: List[str] = []
+    saw_identity_candidate = False
     for line in lines:
-        if detect_heading(line):
+        heading = detect_heading(line)
+        prepared = _prepare_name_candidate(line)
+        plausible_name = bool(prepared and not _line_disqualifies_name(prepared))
+        if not saw_identity_candidate:
+            if _is_page_marker_line(line):
+                continue
+            if _is_name_preamble_heading(line):
+                continue
+            if heading in {"DETAILS", "LINKS"}:
+                continue
+            if not heading and _looks_like_contact_or_heading(line):
+                continue
+            if heading and not plausible_name:
+                break
+            if not plausible_name:
+                continue
+            saw_identity_candidate = True
+        if not candidate_lines:
+            candidate_lines.append(line.strip())
+            if len(candidate_lines) >= 14:
+                break
+            continue
+        if heading:
             break
         candidate_lines.append(line.strip())
-        if len(candidate_lines) >= 8:
+        if len(candidate_lines) >= 14:
             break
 
     best_name: Optional[str] = None
@@ -1749,6 +1903,35 @@ def _is_noise_line(text: str) -> bool:
     return False
 
 
+def _dedupe_experience_bullets(bullets: Sequence[str]) -> List[str]:
+    deduped: List[str] = []
+    seen_signatures: List[str] = []
+    for bullet in bullets:
+        cleaned = _normalize_punctuation_spacing((bullet or "").strip())
+        if not cleaned:
+            continue
+        signature = strip_accents(cleaned.lower())
+        signature = re.sub(r"[^a-z0-9]+", " ", signature)
+        signature = re.sub(r"\s+", " ", signature).strip()
+        if not signature:
+            continue
+        duplicate = False
+        for seen in seen_signatures:
+            if signature == seen:
+                duplicate = True
+                break
+            smaller = min(len(signature), len(seen))
+            larger = max(len(signature), len(seen))
+            if smaller >= 32 and smaller / larger >= 0.85 and (signature in seen or seen in signature):
+                duplicate = True
+                break
+        if duplicate:
+            continue
+        seen_signatures.append(signature)
+        deduped.append(cleaned)
+    return deduped
+
+
 def _extract_bullets(lines: List[str], skip: Sequence[str]) -> List[str]:
     bullets: List[str] = []
     skip_set = {(_strip_bullet_prefix(item) or "").lower() for item in skip if item}
@@ -1943,7 +2126,461 @@ def _reorder_text_with_columns(raw_text: str, diagnostics: Optional[Dict[str, ob
     return (merged or raw_text), ("two-column" if left and right else "single")
 
 
+MARKDOWN_TABLE_SEPARATOR_ONLY_RE = re.compile(r"^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*$")
+
+
+def _split_markdown_pipe_row(line: str) -> Optional[List[str]]:
+    stripped = line.strip()
+    if not stripped.startswith("|") or "|" not in stripped[1:]:
+        return None
+    parts = [collapse_spaced_caps(_scrub_glyphs(cell.strip())) for cell in stripped.strip("|").split("|")]
+    if len(parts) < 2:
+        return None
+    return parts
+
+
+def _normalize_table_header_name(value: str) -> str:
+    normalized = strip_accents(value or "").lower()
+    normalized = re.sub(r"[^a-z0-9]+", " ", normalized)
+    return TOKEN_SANITIZE_RE.sub(" ", normalized).strip()
+
+
+def _parse_markdown_table(block: str) -> Optional[Dict[str, object]]:
+    raw_lines = [line.rstrip() for line in (block or "").splitlines() if line.strip()]
+    for index in range(len(raw_lines) - 2):
+        header_cells = _split_markdown_pipe_row(raw_lines[index])
+        if not header_cells:
+            continue
+        separator_line = raw_lines[index + 1]
+        if not MARKDOWN_TABLE_SEPARATOR_ONLY_RE.match(separator_line.strip()):
+            continue
+        rows: List[List[str]] = []
+        cursor = index + 2
+        while cursor < len(raw_lines):
+            row_cells = _split_markdown_pipe_row(raw_lines[cursor])
+            if not row_cells:
+                break
+            if len(row_cells) != len(header_cells):
+                break
+            rows.append(row_cells)
+            cursor += 1
+        if rows:
+            return {
+                "headers": header_cells,
+                "normalized_headers": [_normalize_table_header_name(cell) for cell in header_cells],
+                "rows": rows,
+            }
+    return None
+
+
+def _iter_markdown_tables(block: str) -> List[Dict[str, object]]:
+    raw_lines = [line.rstrip() for line in (block or "").splitlines() if line.strip()]
+    tables: List[Dict[str, object]] = []
+    index = 0
+    while index < len(raw_lines) - 2:
+        if MARKDOWN_TABLE_SEPARATOR_ONLY_RE.match(raw_lines[index].strip()):
+            header_cells = _split_markdown_pipe_row(raw_lines[index + 1])
+            if not header_cells:
+                index += 1
+                continue
+            rows: List[List[str]] = []
+            cursor = index + 2
+            while cursor < len(raw_lines):
+                row_cells = _split_markdown_pipe_row(raw_lines[cursor])
+                if not row_cells or len(row_cells) != len(header_cells):
+                    break
+                rows.append(row_cells)
+                cursor += 1
+            if rows:
+                tables.append(
+                    {
+                        "headers": header_cells,
+                        "normalized_headers": [_normalize_table_header_name(cell) for cell in header_cells],
+                        "rows": rows,
+                        "start_index": index,
+                        "end_index": cursor,
+                    }
+                )
+                index = cursor
+                continue
+            index += 1
+            continue
+        header_cells = _split_markdown_pipe_row(raw_lines[index])
+        if not header_cells:
+            index += 1
+            continue
+        separator_line = raw_lines[index + 1]
+        if not MARKDOWN_TABLE_SEPARATOR_ONLY_RE.match(separator_line.strip()):
+            index += 1
+            continue
+        rows: List[List[str]] = []
+        cursor = index + 2
+        while cursor < len(raw_lines):
+            row_cells = _split_markdown_pipe_row(raw_lines[cursor])
+            if not row_cells or len(row_cells) != len(header_cells):
+                break
+            rows.append(row_cells)
+            cursor += 1
+        if rows:
+            tables.append(
+                {
+                    "headers": header_cells,
+                    "normalized_headers": [_normalize_table_header_name(cell) for cell in header_cells],
+                    "rows": rows,
+                    "start_index": index,
+                    "end_index": cursor,
+                }
+            )
+            index = cursor
+            continue
+        index += 1
+    return tables
+
+
+def _map_experience_table_headers(headers: List[str]) -> Optional[Dict[int, str]]:
+    mapping: Dict[int, str] = {}
+    for index, header in enumerate(headers):
+        if not header:
+            continue
+        if any(token in header for token in ("organization", "company", "employer", "name of organization")):
+            mapping[index] = "company"
+        elif any(token in header for token in ("designation", "role", "position", "job title", "title")):
+            mapping[index] = "position"
+        elif any(token in header for token in ("from", "start")):
+            mapping[index] = "start"
+        elif any(token in header for token in ("to", "end")):
+            mapping[index] = "end"
+        elif "duration" in header:
+            mapping[index] = "duration"
+        elif any(token in header for token in ("city", "country", "location")):
+            mapping[index] = "location"
+        elif "reason" in header and "leav" in header:
+            mapping[index] = "reason"
+    has_company = "company" in mapping.values()
+    has_position = "position" in mapping.values()
+    has_date = "start" in mapping.values() or "end" in mapping.values()
+    if has_company and has_position and has_date:
+        return mapping
+    return None
+
+
+def _map_education_table_headers(headers: List[str]) -> Optional[Dict[int, str]]:
+    mapping: Dict[int, str] = {}
+    for index, header in enumerate(headers):
+        if not header:
+            continue
+        if any(token in header for token in ("qualification", "degree", "course", "exam")):
+            mapping[index] = "degree"
+        elif any(token in header for token in ("institution", "college", "university", "school")):
+            mapping[index] = "institution"
+        elif "board" in header:
+            mapping[index] = "board"
+        elif any(token in header for token in ("year of passing", "year", "date", "dates")):
+            mapping[index] = "year"
+        elif any(token in header for token in ("marks", "percentage", "grade", "gpa")):
+            mapping[index] = "score"
+    has_degree = "degree" in mapping.values()
+    has_school = "institution" in mapping.values() or "board" in mapping.values()
+    has_date = "year" in mapping.values()
+    if has_degree and has_school and has_date:
+        return mapping
+    return None
+
+
+def _score_experience_table(table: Dict[str, object]) -> int:
+    headers = list(table.get("normalized_headers") or [])
+    mapping = _map_experience_table_headers(headers)
+    if not mapping:
+        return -1
+    score = 0
+    values = set(mapping.values())
+    if "company" in values:
+        score += 4
+    if "position" in values:
+        score += 4
+    if "start" in values:
+        score += 3
+    if "end" in values:
+        score += 3
+    if "duration" in values:
+        score += 2
+    if "location" in values:
+        score += 2
+    if "reason" in values:
+        score += 1
+    rows = list(table.get("rows") or [])
+    score += min(len(rows), 10)
+    return score
+
+
+def _score_education_table(table: Dict[str, object]) -> int:
+    headers = list(table.get("normalized_headers") or [])
+    mapping = _map_education_table_headers(headers)
+    if not mapping:
+        return -1
+    score = 0
+    values = set(mapping.values())
+    if "degree" in values:
+        score += 4
+    if "institution" in values or "board" in values:
+        score += 4
+    if "year" in values:
+        score += 3
+    if "score" in values:
+        score += 2
+    rows = list(table.get("rows") or [])
+    score += min(len(rows), 10)
+    return score
+
+
+def _select_experience_markdown_table(block: str) -> Optional[Dict[str, object]]:
+    tables = _iter_markdown_tables(block)
+    if not tables:
+        return None
+    best: Optional[Dict[str, object]] = None
+    best_score = -1
+    for table in tables:
+        score = _score_experience_table(table)
+        if score > best_score:
+            best = table
+            best_score = score
+    if best_score < 0:
+        return None
+    return best
+
+
+def _select_education_markdown_table(block: str) -> Optional[Dict[str, object]]:
+    tables = _iter_markdown_tables(block)
+    if not tables:
+        return None
+    best: Optional[Dict[str, object]] = None
+    best_score = -1
+    for table in tables:
+        score = _score_education_table(table)
+        if score > best_score:
+            best = table
+            best_score = score
+    if best_score < 0:
+        return None
+    return best
+
+
+def extract_education_markdown_table_region(block: str) -> Optional[str]:
+    table = _select_education_markdown_table(block)
+    if not table:
+        return None
+    raw_lines = [line.rstrip() for line in (block or "").splitlines() if line.strip()]
+    start_index = int(table.get("start_index", 0))
+    end_index = int(table.get("end_index", start_index))
+    region = "\n".join(raw_lines[start_index:end_index]).strip()
+    return region or None
+
+
+def _parse_experience_markdown_table(block: str) -> Optional[List[Dict[str, object]]]:
+    table = _select_experience_markdown_table(block)
+    if not table:
+        return None
+    header_map = _map_experience_table_headers(table["normalized_headers"])
+    if not header_map:
+        return None
+
+    rows = table["rows"]
+    parsed_entries: List[Dict[str, object]] = []
+    for row in rows:
+        values = {field: collapse_spaced_caps(_scrub_glyphs(row[idx]).strip()) for idx, field in header_map.items() if idx < len(row)}
+        company = values.get("company") or None
+        position = values.get("position") or None
+        location = values.get("location") or None
+        start_raw = values.get("start") or ""
+        end_raw = values.get("end") or ""
+        duration_raw = values.get("duration") or ""
+        reason_raw = values.get("reason") or ""
+
+        if not company or not position:
+            continue
+        if _looks_like_contact_or_heading(company) or _looks_like_contact_or_heading(position):
+            continue
+        if PHONE_EMAIL_URL_RE.search(company) or PHONE_EMAIL_URL_RE.search(position):
+            continue
+
+        start_date, _, _ = _parse_dates(start_raw)
+        _, end_date, is_current = _parse_dates(end_raw)
+        if not start_date and not end_date:
+            start_date, end_date, is_current = _parse_dates(" ".join(part for part in (start_raw, end_raw, duration_raw) if part))
+
+        bullets: List[str] = []
+        if reason_raw and not _is_noise_line(reason_raw):
+            bullets.append(f"Reason for leaving: {reason_raw}")
+
+        parsed_entries.append(
+            {
+                "id": make_id("exp"),
+                "company": company,
+                "position": _normalize_role_phrase(position).strip(" .") if position else None,
+                "startDate": start_date,
+                "endDate": None if is_current else end_date,
+                "isCurrent": is_current,
+                "location": location,
+                "summary": None,
+                "responsibilities": "\n".join(bullets),
+                "responsibilityBullets": bullets,
+                "achievements": [],
+            }
+        )
+
+    if len(parsed_entries) < 2:
+        return None
+    return parsed_entries
+
+
+def _fallback_experience_entry_from_table_text(block: str) -> List[Dict[str, object]]:
+    cleaned_lines = []
+    for line in (block or "").splitlines():
+        stripped = line.strip()
+        if not stripped or MARKDOWN_TABLE_SEPARATOR_ONLY_RE.match(stripped):
+            continue
+        cleaned_lines.append(_normalize_structural_line(stripped))
+    cleaned_lines = [line for line in cleaned_lines if line]
+    responsibilities = "\n".join(cleaned_lines)
+    return [
+        {
+            "id": make_id("exp"),
+            "company": "Experience",
+            "position": None,
+            "startDate": None,
+            "endDate": None,
+            "isCurrent": None,
+            "location": None,
+            "summary": None,
+            "responsibilities": responsibilities,
+            "responsibilityBullets": [responsibilities] if responsibilities else [],
+            "achievements": [],
+        }
+    ]
+
+
+def _parse_education_markdown_table(block: str) -> Optional[List[Dict[str, object]]]:
+    table = _select_education_markdown_table(block)
+    if not table:
+        return None
+    header_map = _map_education_table_headers(table["normalized_headers"])
+    if not header_map:
+        return None
+
+    rows = table["rows"]
+    parsed_entries: List[Dict[str, object]] = []
+    for row in rows:
+        values = {field: collapse_spaced_caps(_scrub_glyphs(row[idx]).strip()) for idx, field in header_map.items() if idx < len(row)}
+        degree = values.get("degree") or ""
+        institution = values.get("institution") or values.get("board") or ""
+        board = values.get("board") or ""
+        year_raw = values.get("year") or ""
+        score_raw = values.get("score") or ""
+
+        if not degree or not institution:
+            continue
+        if detect_heading(degree):
+            continue
+        if PHONE_EMAIL_URL_RE.search(degree) or PHONE_EMAIL_URL_RE.search(institution):
+            continue
+
+        end_date = None
+        if year_raw:
+            parsed_start, parsed_end, _ = _parse_dates(year_raw)
+            end_date = parsed_end or parsed_start
+
+        summary_parts = []
+        if board and board != institution:
+            summary_parts.append(board)
+        if score_raw:
+            summary_parts.append(score_raw)
+        summary = ", ".join(part for part in summary_parts if part) or f"{degree} at {institution}"
+
+        parsed_entries.append(
+            {
+                "id": make_id("edu"),
+                "institution": institution,
+                "degree": degree,
+                "fieldOfStudy": None,
+                "startDate": None,
+                "endDate": end_date,
+                "isCurrent": None,
+                "location": None,
+                "summary": summary,
+            }
+        )
+
+    if len(parsed_entries) < 2:
+        return None
+    return parsed_entries
+
+
+def has_parseable_education_markdown_table(block: str) -> bool:
+    return _select_education_markdown_table(block) is not None
+
+
+def _select_language_markdown_table(block: str) -> Optional[Dict[str, object]]:
+    tables = _iter_markdown_tables(block)
+    if not tables:
+        return None
+    for table in tables:
+        headers = list(table.get("normalized_headers") or [])
+        if not headers:
+            continue
+        first = headers[0] if headers else ""
+        remaining = headers[1:]
+        if any(token in first for token in ("language", "languages", "langue", "idioma")) and any(
+            any(token in header for token in ("read", "write", "speak", "spoken", "proficiency"))
+            for header in remaining
+        ):
+            return table
+    return None
+
+
+def has_parseable_language_markdown_table(block: str) -> bool:
+    return _select_language_markdown_table(block) is not None
+
+
+def extract_language_markdown_table_region(block: str) -> Optional[str]:
+    table = _select_language_markdown_table(block)
+    if not table:
+        return None
+    raw_lines = [line.rstrip() for line in (block or "").splitlines() if line.strip()]
+    start_index = int(table.get("start_index", 0))
+    end_index = int(table.get("end_index", start_index))
+    region = "\n".join(raw_lines[start_index:end_index]).strip()
+    return region or None
+
+
+def _parse_language_markdown_table(block: str) -> Optional[List[Dict[str, object]]]:
+    table = _select_language_markdown_table(block)
+    if not table:
+        return None
+    rows = list(table.get("rows") or [])
+    parsed_entries: List[Dict[str, object]] = []
+    seen = set()
+    for row in rows:
+        if not row:
+            continue
+        language = normalize_skill_name(collapse_spaced_caps(_scrub_glyphs(row[0]).strip()))
+        if not language:
+            continue
+        key = language.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        parsed_entries.append({"id": make_id("lang"), "name": language})
+    if len(parsed_entries) < 1:
+        return None
+    return parsed_entries
+
+
 def parse_experience_block(block: str) -> List[Dict[str, object]]:
+    table_entries = _parse_experience_markdown_table(block)
+    if table_entries:
+        return table_entries
+    if _iter_markdown_tables(block):
+        return _fallback_experience_entry_from_table_text(block)
     entries = split_experience_entries(block)
     if not entries:
         entries = [block.splitlines()]
@@ -2215,6 +2852,10 @@ def build_education_entries(sections: Dict[str, List[str]], raw_text: str) -> Li
     education_blocks = sections.get("EDUCATION", [])
     entries: List[Dict[str, object]] = []
     for block in education_blocks:
+        table_entries = _parse_education_markdown_table(block)
+        if table_entries:
+            entries.extend(table_entries)
+            continue
         entry = parse_education_block(block)
         if entry:
             entries.append(entry)
@@ -2236,8 +2877,53 @@ def normalize_skill_name(value: str) -> str:
     return value
 
 
+SKILLS_STOP_HEADINGS = {
+    "FINAL YEAR PROJECT",
+    "FINAL YEAR PROJECTS",
+    "PROJECT",
+    "PROJECTS",
+    "ACHIEVEMENT",
+    "ACHIEVEMENTS",
+    "LANGUAGE KNOWN",
+    "LANGUAGES KNOWN",
+    "LANGUAGE",
+    "LANGUAGES",
+}
+
+
+def _normalize_subsection_heading_token(value: str) -> str:
+    normalized = strip_accents(value or "").upper().strip()
+    normalized = re.sub(r"[^A-Z0-9 ]+", " ", normalized)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return normalized
+
+
+def _is_skills_stop_heading(line: str) -> bool:
+    cleaned = _strip_bullet_prefix(_normalize_structural_line(line or ""))
+    if not cleaned:
+        return False
+    token = _normalize_subsection_heading_token(cleaned.rstrip(":"))
+    if token not in SKILLS_STOP_HEADINGS:
+        return False
+    return len(token.split()) <= 4
+
+
+def trim_skills_block(block: str) -> str:
+    kept: List[str] = []
+    for raw_line in (block or "").splitlines():
+        line = _normalize_structural_line(raw_line)
+        if not line:
+            continue
+        if _is_skills_stop_heading(line):
+            break
+        kept.append(line)
+    return "\n".join(kept).strip()
+
+
 def build_skill_entries(sections: Dict[str, List[str]]) -> List[Dict[str, object]]:
-    skills_text = " ".join(sections.get("SKILLS", []))
+    skill_blocks = [trim_skills_block(block) for block in sections.get("SKILLS", [])]
+    skill_blocks = [block for block in skill_blocks if block]
+    skills_text = " ".join(skill_blocks)
     if not skills_text:
         return []
     raw_items = re.split(r"[,\n;•\u2022]", skills_text)
@@ -2257,7 +2943,13 @@ def build_skill_entries(sections: Dict[str, List[str]]) -> List[Dict[str, object
 
 
 def build_language_entries(sections: Dict[str, List[str]]) -> List[Dict[str, object]]:
-    languages_text = " ".join(sections.get("LANGUAGES", []))
+    language_blocks = sections.get("LANGUAGES", [])
+    for block in language_blocks:
+        table_entries = _parse_language_markdown_table(block)
+        if table_entries:
+            return table_entries
+
+    languages_text = " ".join(language_blocks)
     if not languages_text:
         return []
     raw_items = re.split(r"[,\n;•\u2022]", languages_text)
@@ -2273,6 +2965,57 @@ def build_language_entries(sections: Dict[str, List[str]]) -> List[Dict[str, obj
         seen.add(key)
         langs.append({"id": make_id("lang"), "name": name})
     return langs
+
+
+FAMILY_TRIM_SOURCE_LABELS = {"BODY", "SUMMARY", "ACHIEVEMENTS"}
+
+
+def _trim_block_at_family_transition(
+    block: str,
+    current_label: str,
+    available_labels: Set[str],
+) -> str:
+    lines = [line for line in (block or "").splitlines() if line.strip()]
+    kept: List[str] = []
+    for index, raw_line in enumerate(lines):
+        cleaned = _normalize_structural_line(raw_line)
+        if not cleaned:
+            continue
+        heading = detect_heading(cleaned.rstrip(":"))
+        if heading and heading != current_label and heading in available_labels:
+            break
+        remaining = "\n".join(lines[index:]).strip()
+        if (
+            current_label == "ACHIEVEMENTS"
+            and "LANGUAGES" in available_labels
+            and raw_line.lstrip().startswith("|")
+            and has_parseable_language_markdown_table(remaining)
+        ):
+            break
+        kept.append(cleaned)
+    return "\n".join(kept).strip()
+
+
+def _trim_family_local_contamination(sections: Dict[str, List[str]]) -> Dict[str, List[str]]:
+    available_labels = set(sections.keys())
+    if not available_labels:
+        return sections
+    trimmed: Dict[str, List[str]] = {}
+    for label, blocks in sections.items():
+        if label not in FAMILY_TRIM_SOURCE_LABELS:
+            trimmed[label] = blocks
+            continue
+        next_blocks: List[str] = []
+        for block in blocks:
+            cleaned = _trim_block_at_family_transition(block, label, available_labels)
+            if cleaned:
+                next_blocks.append(cleaned)
+        if next_blocks:
+            trimmed[label] = next_blocks
+    for label, blocks in sections.items():
+        if label not in trimmed and blocks:
+            trimmed[label] = blocks
+    return trimmed
 
 
 def ensure_edu_tokens(entries: List[Dict[str, object]], raw_text: str) -> List[Dict[str, object]]:
@@ -2329,6 +3072,10 @@ def canonicalize_cv(
     working_text = original_text.strip()
     collapsed_text = TOKEN_SANITIZE_RE.sub(" ", reordered_text.strip())
     sections = extract_sections(reordered_text, raw_sections)
+    if sections.get("SKILLS"):
+        trimmed_skill_blocks = [trim_skills_block(block) for block in sections.get("SKILLS", [])]
+        sections["SKILLS"] = [block for block in trimmed_skill_blocks if block]
+    sections = _trim_family_local_contamination(sections)
     # Track ordered sections (Prompt 3)
     ordered_section_labels = list(sections.keys())
     name, desired_position = extract_name_and_role(original_text, sections)
@@ -2338,8 +3085,9 @@ def canonicalize_cv(
         summary_candidate = _summary_from_experience_entries(experiences)
     if not summary_candidate:
         summary_candidate = _summary_from_structured_json(reordered_text)
-    if not summary_candidate:
-        summary_candidate = _summary_from_skill_lines(reordered_text)
+    if not summary_candidate and sections.get("SKILLS"):
+        skill_summary_source = "\n".join(sections.get("SKILLS", []))
+        summary_candidate = _summary_from_skill_lines(skill_summary_source)
     summary_sentence = ""
     if summary_candidate:
         sentences = re.split(r"(?<=[.!?])\s+", summary_candidate)
