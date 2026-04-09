@@ -76,14 +76,16 @@ if _DOCTR_SITE_PACKAGES.is_dir():
         logging.getLogger(__name__).debug("Unable to register docTR site-packages path %s", _DOCTR_SITE_PACKAGES, exc_info=True)
 
 from .mistral_ocr import (
+    derive_raw_sections_from_markdown_pages,
     MistralOCRError,
     join_markdown_pages,
     run_mistral_ocr_from_bytes,
     run_mistral_ocr_from_url,
+    should_use_ocr_raw_sections,
 )
 
 
-def _load_canonicalize_via_path():
+def _load_canonicalize_module_via_path():
     """Fallback import loader when cv_parser is missing on sys.path."""
     canon_path = os.path.join(_REPO_ROOT, "cv_parser", "canonicalize.py")
     if not os.path.isfile(canon_path):
@@ -93,13 +95,34 @@ def _load_canonicalize_via_path():
         raise ModuleNotFoundError(f"Cannot create spec for {canon_path}")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)  # type: ignore[attr-defined]
-    return module.canonicalize_cv  # type: ignore[attr-defined]
+    return module
 
 
 try:
-    from cv_parser.canonicalize import canonicalize_cv  # type: ignore
+    from cv_parser.canonicalize import canonicalize_cv, extract_education_markdown_table_region, extract_language_markdown_table_region, has_parseable_education_markdown_table, has_parseable_language_markdown_table  # type: ignore
 except ModuleNotFoundError:
-    canonicalize_cv = _load_canonicalize_via_path()
+    _canonicalize_module = _load_canonicalize_module_via_path()
+    canonicalize_cv = _canonicalize_module.canonicalize_cv  # type: ignore[attr-defined]
+    extract_education_markdown_table_region = getattr(
+        _canonicalize_module,
+        "extract_education_markdown_table_region",
+        lambda _block: None,
+    )
+    extract_language_markdown_table_region = getattr(
+        _canonicalize_module,
+        "extract_language_markdown_table_region",
+        lambda _block: None,
+    )
+    has_parseable_education_markdown_table = getattr(
+        _canonicalize_module,
+        "has_parseable_education_markdown_table",
+        lambda _block: False,
+    )
+    has_parseable_language_markdown_table = getattr(
+        _canonicalize_module,
+        "has_parseable_language_markdown_table",
+        lambda _block: False,
+    )
 
 # FastAPI service that exposes canonical CV parsing for text and PDF inputs.
 
@@ -591,6 +614,15 @@ async def mistral_ocr_parse(
         ROUTE_COUNTER.labels(route="mistral_ocr_failed").inc()
         return _json_error(status.HTTP_502_BAD_GATEWAY, "mistral_ocr_empty")
 
+    ocr_raw_sections, ocr_structure_diag = derive_raw_sections_from_markdown_pages(pages)
+    use_ocr_raw_sections, ocr_activation_diag = should_use_ocr_raw_sections(
+        ocr_raw_sections,
+        ocr_structure_diag,
+    )
+    scoped_ocr_raw_sections, carried_families = _select_family_scoped_ocr_raw_sections(
+        ocr_raw_sections,
+        use_ocr_raw_sections,
+    )
     joined_text = join_markdown_pages(pages)
     if not joined_text.strip():
         ROUTE_COUNTER.labels(route="mistral_ocr_failed").inc()
@@ -607,8 +639,15 @@ async def mistral_ocr_parse(
         "pages": diagnostics.get("pages", len(pages)),
         "ocr_chars": diagnostics.get("ocr_chars", len(joined_text)),
     }
+    forced_diag.update(ocr_structure_diag)
+    forced_diag.update(ocr_activation_diag)
+    forced_diag["ocr_markdown_family_carry_through"] = carried_families
 
-    canonical_payload = _canonicalize_text(joined_text, diagnostics=dict(forced_diag))
+    canonical_payload = _canonicalize_text(
+        joined_text,
+        diagnostics=dict(forced_diag),
+        raw_sections=scoped_ocr_raw_sections,
+    )
     diag_payload = canonical_payload.get("diagnostics")
     if not isinstance(diag_payload, dict):
         diag_payload = {}
@@ -952,15 +991,59 @@ def _resolve_effective_mode(
     return "auto"
 
 
-def _canonicalize_text(raw_text: str, diagnostics: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def _canonicalize_text(
+    raw_text: str,
+    diagnostics: Optional[Dict[str, Any]] = None,
+    raw_sections: Optional[List[Dict[str, str]]] = None,
+) -> Dict[str, Any]:
     try:
-        return canonicalize_cv(raw_text, mode="text", diagnostics=diagnostics)
+        return canonicalize_cv(raw_text, mode="text", diagnostics=diagnostics, raw_sections=raw_sections)
     except Exception as exc:  # pragma: no cover - defensive
         LOGGER.exception("[text] canonicalize failed")
         fallback_diag = dict(diagnostics or {})
         fallback_diag["error"] = str(exc)
         fallback_diag["fallback_used"] = True
-        return canonicalize_cv(raw_text or "", mode="text", diagnostics=fallback_diag)
+        return canonicalize_cv(raw_text or "", mode="text", diagnostics=fallback_diag, raw_sections=raw_sections)
+
+
+def _select_family_scoped_ocr_raw_sections(
+    ocr_raw_sections: List[Dict[str, Any]],
+    use_ocr_raw_sections: bool,
+) -> Tuple[Optional[List[Dict[str, str]]], List[str]]:
+    if use_ocr_raw_sections:
+        return (ocr_raw_sections or None), []
+
+    carried: List[Dict[str, str]] = []
+    carried_families: List[str] = []
+    explicit_language_carried = False
+    for section in ocr_raw_sections or []:
+        label = str(section.get("label") or "").upper().strip()
+        content = str(section.get("content") or "")
+        if label == "EDUCATION" and has_parseable_education_markdown_table(content):
+            region = extract_education_markdown_table_region(content)
+            if not region:
+                continue
+            carried.append({"label": label, "content": region})
+            carried_families.append("EDUCATION")
+        elif label == "LANGUAGES" and has_parseable_language_markdown_table(content):
+            region = extract_language_markdown_table_region(content)
+            if not region:
+                continue
+            carried.append({"label": label, "content": region})
+            carried_families.append("LANGUAGES")
+            explicit_language_carried = True
+    if not explicit_language_carried:
+        for section in ocr_raw_sections or []:
+            content = str(section.get("content") or "")
+            if not has_parseable_language_markdown_table(content):
+                continue
+            region = extract_language_markdown_table_region(content)
+            if not region:
+                continue
+            carried.append({"label": "LANGUAGES", "content": region})
+            carried_families.append("LANGUAGES")
+            break
+    return (carried or None), carried_families
 
 
 def _json_error(status_code: int, error_code: str, message: Optional[str] = None) -> JSONResponse:
