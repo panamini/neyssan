@@ -11,6 +11,7 @@ from cv_parser.canonicalize import (
     trim_skills_block,
     parse_experience_block,
     parse_education_block,
+    split_experience_entries,
     strip_leading_markdown_heading,
 )
 
@@ -242,6 +243,50 @@ def test_parse_experience_block_strips_markdown_heading_markers_from_position() 
     assert "###" not in combined_structured
     assert "Security Guard" in combined_structured
     assert "Badge #1234" in str(entries[0]["responsibilities"])
+
+
+def test_split_experience_entries_keeps_robert_header_dates_and_bullets_in_one_chunk() -> None:
+    block = """
+    Security Guard at ADT Security, Port Washington
+    January 2021 - April 2022
+    Responsible for completing reports by recording information, observations, occurrences,
+    and surveillance activities, including interviewing of witnesses and acquiring signatures.
+    Maintaining environments by monitoring the grounds and equipment controls.
+    Logging into security headquarters on the hour during the day and every 2 hours
+    with the night shift, notifying control of all in order statuses.
+    Utilizing armed force when necessary, to protect company belongings, visitors,
+    employees, and clients when needed.
+    Apprehending suspects in the event of security breaches and detaining them until
+    the police arrive on the scene.
+    Resume Templates
+    Build this template
+    """
+
+    entries = split_experience_entries(block)
+
+    assert len(entries) == 1
+    assert entries[0][0] == "Security Guard at ADT Security, Port Washington"
+    assert "January 2021 - April 2022" in entries[0]
+    assert any("occurrences" in line for line in entries[0])
+    assert any("including interviewing" in line for line in entries[0])
+    assert any("control of all in order statuses" in line for line in entries[0])
+
+
+def test_split_experience_entries_drops_divyank_header_residue_before_real_entry() -> None:
+    block = """
+    CURRICULUM VITAE DIVYANK SINGH
+    Security Guard at Example Corp, Jaipur
+    January 2021 - April 2022
+    Handled patrol duties.
+    """
+
+    entries = split_experience_entries(block)
+
+    assert entries == [[
+        "Security Guard at Example Corp, Jaipur",
+        "January 2021 - April 2022",
+        "Handled patrol duties.",
+    ]]
 
 
 def test_parse_education_block_strips_markdown_heading_markers_from_degree_titles() -> None:
