@@ -6,6 +6,7 @@ import { v, ConvexError } from "convex/values";
 import { recordTelemetry } from "../../config/llmTelemetry";
 import { canonicalizeParserResult, firstSentence } from "../lib/parsing/canonicalize";
 import { buildImportRecoveryPayload } from "../lib/parsing/importRecovery";
+import { filterRecoverySourceSectionsForRedundantHeader } from "../lib/parsing/recoverySourceFilter";
 
 type UResponse = import("undici").Response;
 
@@ -747,6 +748,14 @@ export const structuredUpload = action({
 
           try {
             payload = (await response.json()) as ParserResponse;
+            if (activeUseMistral) {
+              const parserResultForDebug = payload as Record<string, any> | null;
+              console.info("[structuredUpload][mistral] raw parser JSON parserResult.diagnostics=%j parserResult.result?.diagnostics=%j",
+                parserResultForDebug?.diagnostics ?? null,
+                parserResultForDebug?.result && typeof parserResultForDebug.result === "object"
+                ? (parserResultForDebug.result as Record<string, any>)?.diagnostics ?? null
+                : null);
+            }
             if (payload && typeof payload === "object" && !("result" in payload)) {
               const canonical = payload as CanonicalPayload;
               payload = {
@@ -1055,8 +1064,20 @@ export const structuredUpload = action({
       (normalizedResult as any)?.rawSections,
       (normalizedResult as any)?.normalized?.rawSections,
     );
+    const normalized = (normalizedResult?.normalized ?? {}) as Record<string, any>;
+    const filteredRecoverySource = filterRecoverySourceSectionsForRedundantHeader(
+      recoverySourceSections,
+      normalized,
+    );
+    if (filteredRecoverySource.suppressed) {
+      console.info(
+        "[structuredUpload] suppressed redundant top BODY header before recovery label=%s mode=%s",
+        selectedEndpoint.label,
+        resolvedMode,
+      );
+    }
     const recovery = buildImportRecoveryPayload({
-      sourceSections: recoverySourceSections,
+      sourceSections: filteredRecoverySource.sections,
       fullResult: normalizedResult as Record<string, any>,
       context: {
         rawText:
@@ -1068,7 +1089,6 @@ export const structuredUpload = action({
       },
     });
 
-    const normalized = (normalizedResult?.normalized ?? {}) as Record<string, any>;
     const normalizedRawText =
       typeof normalized.rawText === "string" ? normalized.rawText.trim() : "";
     const normalizedSummaryText =
@@ -1264,7 +1284,11 @@ export const structuredUpload = action({
     }
 
     const diagSource = (normalizedResult as any)?.diagnostics;
-    const diag = diagSource && typeof diagSource === "object" ? { ...diagSource } : {};
+    const payloadDiagSource = lastPayload?.diagnostics;
+    const diag = {
+      ...(payloadDiagSource && typeof payloadDiagSource === "object" ? payloadDiagSource : {}),
+      ...(diagSource && typeof diagSource === "object" ? diagSource : {}),
+    } as Record<string, any>;
     const rawEngine = (diag.engine || "").toString().trim().toLowerCase();
     const ocrEngine = (diag.ocr_engine || "").toString().trim().toLowerCase();
     if (rawEngine === "ocr" && ocrEngine) {
@@ -1290,13 +1314,26 @@ export const structuredUpload = action({
         diag.dpi_used = 320;
       }
     }
+    if (activeUseMistral) {
+      console.info("[structuredUpload][mistral] evidence=%j", {
+        parserPath,
+        route: diag.route ?? null,
+        ocr_request_path: diag.ocr_request_path ?? null,
+        ocr_engine: diag.ocr_engine ?? null,
+        mistral_model: diag.mistral_model ?? null,
+        mistral_fallback: diag.mistral_fallback ?? null,
+        mistral_runtime: diag.mistral_runtime ?? null,
+      });
+    }
     (normalizedResult as any).diagnostics = diag;
     if (lastPayload && typeof lastPayload === "object") {
+      lastPayload.diagnostics = diag;
       lastPayload.result = normalizedResult;
     }
 
     return {
       ...normalizedResult,
+      diagnostics: diag,
       recovery,
     };
   },

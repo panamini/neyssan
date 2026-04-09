@@ -26,6 +26,7 @@ const SECTION_MAP = {
   "PROJECTS & ACTIVITIES": "projects",
   "PROJECTS AND ACTIVITIES": "projects",
   ACHIEVEMENTS: "achievements",
+  "ADDITIONAL INFORMATION": "additional_information",
   PROFILE: "profile",
   SUMMARY: "summary",
 } as const;

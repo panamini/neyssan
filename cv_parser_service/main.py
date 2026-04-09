@@ -600,6 +600,8 @@ async def mistral_ocr_parse(
         "engine": "external_ocr",
         "engine_final": "text",
         "ocr_engine": "mistral",
+        "ocr_request_path": "/mistral-ocr/parse",
+        "ocr_provider": "mistral_route",
         "route": "external_ocr",
         "fallback_used": False,
         "pages": diagnostics.get("pages", len(pages)),
@@ -611,11 +613,26 @@ async def mistral_ocr_parse(
     if not isinstance(diag_payload, dict):
         diag_payload = {}
     diag_payload.update(forced_diag)
-    if diagnostics.get("model"):
-        diag_payload["mistral_model"] = diagnostics["model"]
+    mistral_model = diagnostics.get("model")
+    mistral_fallback = bool(diagnostics.get("fallback")) or mistral_model == "mistral-fallback-dev"
+    if mistral_model:
+        diag_payload["mistral_model"] = mistral_model
+    diag_payload["mistral_fallback"] = mistral_fallback
+    diag_payload["mistral_runtime"] = "local_fallback" if mistral_fallback else "mistral"
     if "doc_size_bytes" in diagnostics:
         diag_payload.setdefault("doc_size_bytes", diagnostics["doc_size_bytes"])
     canonical_payload["diagnostics"] = diag_payload
+
+    LOGGER.info(
+        "[mistral-ocr] parse evidence=%s",
+        {
+            "path": "/mistral-ocr/parse",
+            "ocr_engine": diag_payload.get("ocr_engine"),
+            "mistral_model": diag_payload.get("mistral_model"),
+            "mistral_fallback": diag_payload.get("mistral_fallback"),
+            "pages": diag_payload.get("pages"),
+        },
+    )
 
     response_payload = {
         "ok": True,

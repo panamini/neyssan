@@ -451,6 +451,20 @@ export function StructuredUploadButton({
         const diagnosticsEmptyReason = readEmptyReasonFromDiagnostics(
           payload?.diagnostics,
         );
+        if (requestedMode === "mistral" && payload?.diagnostics && typeof payload.diagnostics === "object") {
+          const diagnostics = payload.diagnostics as Record<string, unknown>;
+          console.info("[StructuredUploadButton][mistral] evidence", {
+            ocr_request_path:
+              typeof diagnostics.ocr_request_path === "string" ? diagnostics.ocr_request_path : null,
+            ocr_engine: typeof diagnostics.ocr_engine === "string" ? diagnostics.ocr_engine : null,
+            mistral_model:
+              typeof diagnostics.mistral_model === "string" ? diagnostics.mistral_model : null,
+            mistral_fallback:
+              typeof diagnostics.mistral_fallback === "boolean" ? diagnostics.mistral_fallback : null,
+            mistral_runtime:
+              typeof diagnostics.mistral_runtime === "string" ? diagnostics.mistral_runtime : null,
+          });
+        }
 
         if (typeof onResult === "function") {
           try {

@@ -1,4 +1,8 @@
 import { FIELD_KEY_MAP } from "./enhancedParser";
+import {
+  mapCanonicalFamilyToParserFieldKey,
+  resolveCanonicalHeadingFamily,
+} from "./headingResolver";
 
 /**
  * llmPostProcessor.ts
@@ -155,6 +159,10 @@ function mapHeaderToField(headerRaw: string): string {
     .trim();
 
   if (!cleaned) return "introduction";
+  const canonicalFamily = resolveCanonicalHeadingFamily(cleaned);
+  if (canonicalFamily) {
+    return mapCanonicalFamilyToParserFieldKey(canonicalFamily);
+  }
   const matched = matchKnownHeading(cleaned);
   if (matched) return matched;
 
@@ -176,6 +184,16 @@ function mapHeaderToField(headerRaw: string): string {
   if (contactTokens.some((token) => cleaned.includes(token))) return "contact";
 
   if (/\b(project|projet|projets)\b/.test(cleaned)) return "projects";
+  if (/\b(certification|certifications|certificate|certificates|license|licenses|licence|licences)\b/.test(cleaned)) {
+    return "certifications";
+  }
+  if (/\b(hobbies|hobby|interests|interest)\b/.test(cleaned)) return "hobbies";
+  if (/\b(affiliation|affiliations|membership|memberships|association|associations)\b/.test(cleaned)) {
+    return "affiliations";
+  }
+  if (/\b(additional information|additional info|other information|supplementary information)\b/.test(cleaned)) {
+    return "additional_information";
+  }
   if (/\b(research|recherche)\b/.test(cleaned)) return "research";
   if (/\b(volunteer|benevolat|bénévolat|volontariat|voluntariado)\b/.test(cleaned)) return "volunteer";
   if (/\b(reference|référence|références|referencia|referencias|referenzen)\b/.test(cleaned)) return "references";
