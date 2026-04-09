@@ -223,6 +223,10 @@ const FIELD_TO_BUCKET: Record<string, keyof ICVObject> = {
   achievements: "achievements",
   awards: "achievements",
   projects: "projects",
+  certifications: "other",
+  hobbies: "other",
+  affiliations: "other",
+  additional_information: "other",
   research: "research",
   volunteer: "volunteer",
   references: "references",
@@ -354,6 +358,7 @@ const HEADING_DEFS: HeadingDefinition[] = [
       /^(objective|career objective)$/i,
       /^(biodata)$/i,
       /^(professional profile)$/i,
+      ...buildPatternsForHeadings(headingValuesMap.summary ?? []),
     ],
   },
   ...(["experience", "education", "skills", "languages", "achievements"] as const).map((key) => ({
@@ -367,7 +372,28 @@ const HEADING_DEFS: HeadingDefinition[] = [
     patterns: [
       /^(projects|selected projects)$/i,
       /^(projects & research)$/i,
+      ...buildPatternsForHeadings(headingValuesMap.projects ?? []),
     ],
+  },
+  {
+    fieldKey: "other",
+    title: "Certifications",
+    patterns: buildPatternsForHeadings(headingValuesMap.certifications ?? []),
+  },
+  {
+    fieldKey: "other",
+    title: "Affiliations",
+    patterns: buildPatternsForHeadings(headingValuesMap.affiliations ?? []),
+  },
+  {
+    fieldKey: "other",
+    title: "Hobbies",
+    patterns: buildPatternsForHeadings(headingValuesMap.hobbies ?? []),
+  },
+  {
+    fieldKey: "other",
+    title: "Additional Information",
+    patterns: buildPatternsForHeadings(headingValuesMap.additional_information ?? []),
   },
 ];
 
@@ -684,9 +710,6 @@ export async function mapSectionsToCV(
   const longSummary = pickLongSummary();
   if (longSummary) {
     cv.summary = longSummary;
-  } else {
-    const synth = synthesizeFromExperience();
-    if (synth) cv.summary = synth;
   }
   if (!cv.summary && (buckets["summary"] ?? []).length > 0) {
     const summarySections = buckets["summary"] ?? [];
@@ -695,6 +718,10 @@ export async function mapSectionsToCV(
       const conf = averageConfidence(summarySections.map((s) => s.confidence));
       cv.summary = { text: combined, confidence: conf };
     }
+  }
+  if (!cv.summary) {
+    const synth = synthesizeFromExperience();
+    if (synth) cv.summary = synth;
   }
 
 // If contact metadata missing, try to extract from contact sections (use contactExtractor)
