@@ -1074,6 +1074,8 @@ def _match_multiline_header(lines: List[str]) -> Optional[Tuple[str, str, Option
     role = _strip_bullet_prefix(normalized_lines[0])
     if not role or any(ch.isdigit() for ch in role):
         return None
+    if _match_role_company_line([role]):
+        return None
     if not (_contains_role_keyword(role) or _is_role_phrase(role)):
         return None
     date_line = " ".join(normalized_lines[1:3])
@@ -1728,16 +1730,56 @@ def _split_blocks(text: str) -> List[str]:
     return blocks or ([text.strip()] if text.strip() else [])
 
 
+def _contains_keyword_token(line: str, keywords: Sequence[str]) -> bool:
+    lowered = strip_accents(line.lower())
+    padded = f" {re.sub(r'[^a-z0-9]+', ' ', lowered).strip()} "
+    if padded == "  ":
+        return False
+    for keyword in keywords:
+        normalized = re.sub(r"[^a-z0-9]+", " ", strip_accents(keyword.lower())).strip()
+        if not normalized:
+            continue
+        if f" {normalized} " in padded:
+            return True
+    return False
+
+
+def _looks_like_entry_header_line(line: str) -> bool:
+    cleaned = collapse_spaced_caps(_strip_bullet_prefix(line).strip())
+    if not cleaned:
+        return False
+    if _match_role_company_line([cleaned]):
+        return True
+    if _contains_keyword_token(cleaned, POSITION_KEYWORDS):
+        return True
+    if _contains_keyword_token(cleaned, COMPANY_KEYWORDS):
+        return True
+    return False
+
+
+def _looks_like_header_residue(line: str) -> bool:
+    cleaned = collapse_spaced_caps(_strip_bullet_prefix(line).strip())
+    if not cleaned:
+        return False
+    lowered = strip_accents(cleaned.lower()).strip(" :")
+    if lowered in SECTION_NAME_BLOCKLIST:
+        return True
+    if lowered in {"curriculum vitae", "curriculum", "resume", "cv"}:
+        return True
+    if cleaned.isupper() and not _looks_like_entry_header_line(cleaned):
+        return True
+    return False
+
+
 def _is_probable_entry_start(line: str, current: List[str]) -> bool:
     if not current:
         return False
     stripped = line.lstrip("•- ").strip()
     if not stripped:
         return False
-    lower = stripped.lower()
-    if any(keyword in lower for keyword in COMPANY_KEYWORDS):
+    if _contains_keyword_token(stripped, COMPANY_KEYWORDS) and not _starts_with_verb_phrase(stripped):
         return True
-    if any(keyword in lower for keyword in POSITION_KEYWORDS):
+    if _contains_keyword_token(stripped, POSITION_KEYWORDS) and not _starts_with_verb_phrase(stripped):
         return True
     if stripped.isupper():
         return True
@@ -1769,6 +1811,11 @@ def split_experience_entries(block: str) -> List[List[str]]:
                 entries.append(current)
             current = []
             break
+        if current and re.search(DATE_PATTERN, stripped_line) and _looks_like_entry_header_line(current[0]):
+            current.append(stripped_line)
+            continue
+        if current and _looks_like_header_residue(current[0]) and _looks_like_entry_header_line(stripped_line):
+            current = []
         if _is_probable_entry_start(stripped_line, current):
             if current:
                 entries.append(current)
