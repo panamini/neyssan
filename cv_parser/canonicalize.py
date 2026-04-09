@@ -2506,6 +2506,410 @@ def _fallback_experience_entry_from_table_text(block: str) -> List[Dict[str, obj
     ]
 
 
+MATRIX_HEADER_PHRASES = (
+    "name of organization",
+    "organization",
+    "designation",
+    "city country",
+    "from",
+    "to",
+    "duration",
+    "reason for leaving",
+)
+
+MATRIX_HEADER_TOKENS = {
+    "name",
+    "organization",
+    "designation",
+    "city",
+    "country",
+    "from",
+    "to",
+    "duration",
+    "reason",
+    "leaving",
+}
+
+MATRIX_REASON_TOKENS = {
+    "due",
+    "layoff",
+    "apprentice",
+    "over",
+    "problem",
+    "salary",
+    "visa",
+    "power",
+    "cut",
+    "working",
+    "currently",
+    "current",
+}
+
+MATRIX_ROLE_FRAGMENT_TOKENS = {
+    "maintenance",
+    "plant",
+    "quality",
+    "amc",
+    "planner",
+    "coordinator",
+    "supervisor",
+    "inspector",
+    "technician",
+    "engineer",
+    "operator",
+}
+
+MATRIX_COUNTRY_TOKENS = {
+    "india",
+    "uae",
+    "france",
+    "states",
+    "usa",
+    "uk",
+    "canada",
+}
+
+SLASH_DATE_RE = re.compile(r"\b\d{1,2}[/-]\d{1,2}[/-](?:19|20)\d{2}\b")
+
+
+def _normalize_matrix_fragment(value: str) -> str:
+    return collapse_spaced_caps(_normalize_structural_line(_scrub_glyphs(_strip_bullet_prefix(value or ""))).strip())
+
+
+def _matrix_fragment_tokens(value: str) -> List[str]:
+    normalized = strip_accents((value or "").lower())
+    return [token for token in re.split(r"[^a-z0-9]+", normalized) if token]
+
+
+def _is_matrix_header_fragment(line: str) -> bool:
+    tokens = _matrix_fragment_tokens(line)
+    if not tokens:
+        return False
+    joined = " ".join(tokens)
+    for phrase in MATRIX_HEADER_PHRASES:
+        phrase_tokens = phrase.split()
+        if len(phrase_tokens) == 1:
+            if joined == phrase:
+                return True
+        elif re.search(rf"\b{re.escape(phrase)}\b", joined):
+            return True
+    meaningful = [token for token in tokens if token not in {"9", "0"}]
+    if meaningful and all(token in MATRIX_HEADER_TOKENS for token in meaningful):
+        return True
+    return False
+
+
+def _looks_like_short_ocr_fragment(line: str) -> bool:
+    tokens = [token for token in line.split() if token]
+    if not tokens:
+        return False
+    return len(tokens) <= 4 and len(line) <= 32
+
+
+def _contains_matrix_role_signal(value: str) -> bool:
+    tokens = _matrix_fragment_tokens(value)
+    return any(token in MATRIX_ROLE_FRAGMENT_TOKENS for token in tokens) or _contains_role_keyword(value)
+
+
+def _is_long_narrative_line(line: str) -> bool:
+    stripped = (line or "").strip()
+    if not stripped:
+        return False
+    lowered = strip_accents(stripped.lower())
+    if lowered.startswith("nature of work"):
+        return True
+    if len(stripped.split()) >= 8:
+        return True
+    if len(stripped) >= 65:
+        return True
+    return False
+
+
+def _extract_matrix_date_anchors(lines: Sequence[str]) -> List[int]:
+    anchors: List[int] = []
+    for idx, line in enumerate(lines):
+        slash_dates = SLASH_DATE_RE.findall(line)
+        year_count = len(YEAR_PATTERN.findall(line))
+        lowered = strip_accents(line.lower())
+        has_present = any(term in lowered for term in PRESENT_TOKENS)
+        if len(slash_dates) >= 2 or year_count >= 2 or ((slash_dates or year_count) and has_present):
+            anchors.append(idx)
+    return anchors
+
+
+def _looks_like_experience_matrix_block(lines: Sequence[str], anchors: Sequence[int]) -> bool:
+    if len(anchors) < 2:
+        return False
+    top_region = lines[: min(len(lines), max(anchors[0] + 1, 18))]
+    joined_top = " ".join(strip_accents(line.lower()) for line in top_region)
+    cue_hits = 0
+    if "name of" in joined_top and "organization" in joined_top:
+        cue_hits += 1
+    if "designation" in joined_top:
+        cue_hits += 1
+    if "city" in joined_top and "country" in joined_top:
+        cue_hits += 1
+    if re.search(r"\bfrom\b", joined_top):
+        cue_hits += 1
+    if re.search(r"\bto\b", joined_top):
+        cue_hits += 1
+    if "duration" in joined_top:
+        cue_hits += 1
+    if "reason" in joined_top and "leaving" in joined_top:
+        cue_hits += 1
+    if cue_hits < 2:
+        return False
+
+    region_start = max(0, anchors[0] - 6)
+    region_end = min(len(lines), anchors[-1] + 7)
+    region = [line for line in lines[region_start:region_end] if line.strip()]
+    non_header_region = [line for line in region if not _is_matrix_header_fragment(line)]
+    short_fragments = [line for line in non_header_region if _looks_like_short_ocr_fragment(line)]
+    if len(short_fragments) < 6:
+        return False
+    if len(short_fragments) < max(6, int(len(non_header_region) * 0.6)):
+        return False
+    return True
+
+
+def _classify_matrix_fragment(line: str) -> str:
+    normalized = _normalize_matrix_fragment(line)
+    lower = strip_accents(normalized.lower())
+    tokens = _matrix_fragment_tokens(normalized)
+    if not normalized:
+        return "skip"
+    if _is_matrix_header_fragment(normalized):
+        return "header"
+    if _is_long_narrative_line(normalized):
+        return "narrative"
+    if _normalize_location_candidate(normalized):
+        return "location"
+    if normalized.endswith(",") or any(token in MATRIX_COUNTRY_TOKENS for token in tokens):
+        return "location"
+    if any(token in MATRIX_ROLE_FRAGMENT_TOKENS for token in tokens):
+        return "position"
+    if _contains_role_keyword(normalized) or (normalized.isupper() and _contains_role_keyword(lower)):
+        return "position"
+    if any(token in MATRIX_REASON_TOKENS for token in tokens):
+        return "reason"
+    if any(token in {"month", "months", "year", "years"} for token in tokens):
+        return "duration"
+    if _contains_org_keyword(normalized) or re.search(r"[()]", normalized):
+        return "company"
+    return "company"
+
+
+def _build_matrix_phrase(parts: Sequence[str]) -> Optional[str]:
+    joined = " ".join(part.strip() for part in parts if part and part.strip())
+    joined = _normalize_punctuation_spacing(joined)
+    return joined or None
+
+
+def _clean_matrix_reason(reason_parts: Sequence[str], anchor_reason: Optional[str]) -> Optional[str]:
+    parts = [part.strip() for part in reason_parts if part and part.strip()]
+    if anchor_reason:
+        parts.insert(0, anchor_reason)
+    if not parts:
+        return None
+    joined = _normalize_punctuation_spacing(" ".join(parts))
+    joined = re.sub(r"\bLayoff due to\s+Layoff\b", "Layoff due to", joined, flags=re.IGNORECASE)
+    joined = re.sub(r"\bdue to\s+Layoff\b", "Layoff due to", joined, flags=re.IGNORECASE)
+    joined = re.sub(r"\bLayoff\s+power\s+cut\b", "Layoff due to power cut", joined, flags=re.IGNORECASE)
+    return joined or None
+
+
+def _extract_anchor_tail_parts(anchor_line: str) -> Tuple[Optional[str], Optional[str]]:
+    cleaned = _normalize_matrix_fragment(anchor_line)
+    without_dates = SLASH_DATE_RE.sub(" ", cleaned)
+    without_dates = YEAR_PATTERN.sub(" ", without_dates)
+    without_dates = re.sub(r"\s+", " ", without_dates).strip(" -–—,;:")
+    if not without_dates:
+        return None, None
+    tokens = without_dates.split()
+    duration_tokens: List[str] = []
+    reason_tokens: List[str] = []
+    for token in tokens:
+        lowered = strip_accents(token.lower()).strip(".,")
+        if lowered in PRESENT_TOKENS or lowered in {"month", "months", "year", "years", "till", "now"} or lowered.isdigit():
+            duration_tokens.append(token)
+        else:
+            reason_tokens.append(token)
+    duration = _build_matrix_phrase(duration_tokens)
+    reason = _build_matrix_phrase(reason_tokens)
+    return duration, reason
+
+
+def _score_reconstructed_experience_row(row: Dict[str, object]) -> int:
+    score = 0
+    company = str(row.get("company") or "")
+    position = str(row.get("position") or "")
+    location = str(row.get("location") or "")
+    start_date = row.get("startDate")
+    end_date = row.get("endDate")
+    is_current = row.get("isCurrent")
+    bullets = list(row.get("responsibilityBullets") or [])
+    if company and not _looks_like_contact_or_heading(company) and not _is_matrix_header_fragment(company):
+        score += 2
+    if position and (_contains_matrix_role_signal(position) or _is_role_phrase(position)):
+        score += 2
+    if location and (_normalize_location_candidate(location) or "," in location):
+        score += 1
+    if start_date:
+        score += 2
+    if end_date or is_current:
+        score += 1
+    if bullets:
+        score += 1
+    return score
+
+
+def _parse_experience_matrix_block(block: str) -> Optional[List[Dict[str, object]]]:
+    raw_lines = [_normalize_matrix_fragment(line) for line in (block or "").splitlines() if line.strip()]
+    lines = [line for line in raw_lines if line]
+    if len(lines) < 8:
+        return None
+    anchors = _extract_matrix_date_anchors(lines)
+    if not _looks_like_experience_matrix_block(lines, anchors):
+        return None
+
+    first_anchor = anchors[0]
+    header_cutoff = -1
+    for idx in range(first_anchor):
+        if _is_matrix_header_fragment(lines[idx]):
+            header_cutoff = idx
+
+    parsed_entries: List[Dict[str, object]] = []
+    scores: List[int] = []
+    previous_anchor = None
+    for anchor_index, anchor in enumerate(anchors):
+        next_anchor = anchors[anchor_index + 1] if anchor_index + 1 < len(anchors) else None
+        start = max(header_cutoff + 1, anchor - 6)
+        end = min(len(lines) - 1, anchor + 4)
+        if previous_anchor is not None:
+            start = max(start, previous_anchor + 1)
+        if next_anchor is not None:
+            end = min(end, next_anchor - 1)
+        span = lines[start : end + 1]
+        if not span:
+            previous_anchor = anchor
+            continue
+
+        company_parts_before: List[str] = []
+        company_parts_after: List[str] = []
+        position_parts: List[str] = []
+        location_parts: List[str] = []
+        reason_parts: List[str] = []
+        duration_parts: List[str] = []
+        anchor_reason: Optional[str] = None
+        header_hits = 0
+        narrative_hits = 0
+        fragment_only_hits = 0
+        seen_anchor = False
+        for idx, fragment in enumerate(span):
+            if idx == len(span) - 1 and fragment == lines[anchor]:
+                pass
+            if fragment == lines[anchor]:
+                anchor_duration, anchor_reason = _extract_anchor_tail_parts(fragment)
+                if anchor_duration:
+                    duration_parts.append(anchor_duration)
+                seen_anchor = True
+                continue
+            kind = _classify_matrix_fragment(fragment)
+            if kind == "header":
+                header_hits += 1
+                continue
+            if kind == "narrative":
+                narrative_hits += 1
+                break
+            if kind == "location":
+                location_parts.append(fragment)
+                continue
+            if kind == "position":
+                position_parts.append(fragment)
+                continue
+            if kind == "reason":
+                reason_parts.append(fragment)
+                continue
+            if kind == "duration":
+                duration_parts.append(fragment)
+                continue
+            if kind == "company":
+                if len(fragment.split()) == 1 and len(fragment) <= 4 and not re.search(r"[()]", fragment):
+                    fragment_only_hits += 1
+                if seen_anchor:
+                    company_parts_after.append(fragment)
+                else:
+                    company_parts_before.append(fragment)
+
+        if header_hits >= 2 or narrative_hits >= 1:
+            previous_anchor = anchor
+            continue
+
+        company_parts = list(company_parts_before)
+        if company_parts_before:
+            company_parts.extend(
+                fragment
+                for fragment in company_parts_after
+                if _contains_org_keyword(fragment) or re.search(r"[()]", fragment)
+            )
+        else:
+            company_parts.extend(company_parts_after)
+        company = _build_matrix_phrase(company_parts)
+        position = _build_matrix_phrase(position_parts)
+        location = _build_matrix_phrase(location_parts)
+        reason = _clean_matrix_reason(reason_parts, anchor_reason)
+
+        if position and not (_contains_matrix_role_signal(position) or _is_role_phrase(position)):
+            position = None
+        if location:
+            normalized_location = _normalize_location_candidate(location)
+            if normalized_location:
+                location = normalized_location
+        if company and _is_matrix_header_fragment(company):
+            company = None
+        if company and _looks_like_contact_or_heading(company):
+            company = None
+        if company and _normalize_location_candidate(company):
+            company = None
+        if not company and position_parts:
+            company = _build_matrix_phrase([part for part in company_parts if len(part.split()) > 1])
+
+        if fragment_only_hits >= 3 and not (company and position):
+            previous_anchor = anchor
+            continue
+
+        start_date, end_date, is_current = _parse_dates(lines[anchor])
+        bullets = [f"Reason for leaving: {reason}" for reason in [reason] if reason and not _is_noise_line(reason)]
+        row = {
+            "id": make_id("exp"),
+            "company": company,
+            "position": _normalize_role_phrase(position) if position else None,
+            "startDate": start_date,
+            "endDate": None if is_current else end_date,
+            "isCurrent": is_current,
+            "location": location,
+            "summary": None,
+            "responsibilities": "\n".join(bullets),
+            "responsibilityBullets": bullets,
+            "achievements": [],
+        }
+        score = _score_reconstructed_experience_row(row)
+        if score >= 5 and company:
+            parsed_entries.append(row)
+            scores.append(score)
+        previous_anchor = anchor
+
+    if len(parsed_entries) < 2:
+        return None
+    if sum(scores) / len(scores) < 5:
+        return None
+    if any(score < 5 for score in scores[:2]):
+        return None
+    if sum(1 for row in parsed_entries if row.get("startDate")) < 2:
+        return None
+    return parsed_entries
+
+
 def _parse_education_markdown_table(block: str) -> Optional[List[Dict[str, object]]]:
     table = _select_education_markdown_table(block)
     if not table:
@@ -2626,6 +3030,9 @@ def parse_experience_block(block: str) -> List[Dict[str, object]]:
     table_entries = _parse_experience_markdown_table(block)
     if table_entries:
         return table_entries
+    matrix_entries = _parse_experience_matrix_block(block)
+    if matrix_entries:
+        return matrix_entries
     if _iter_markdown_tables(block):
         return _fallback_experience_entry_from_table_text(block)
     entries = split_experience_entries(block)
