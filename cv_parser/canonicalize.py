@@ -4276,12 +4276,13 @@ def parse_experience_block(block: str) -> List[Dict[str, object]]:
 
 def build_experience_entries(sections: Dict[str, List[str]], raw_text: str) -> List[Dict[str, object]]:
     experiences: List[Dict[str, object]] = []
+    has_experience_sections = bool(sections.get("EXPERIENCE"))
     for block in sections.get("EXPERIENCE", []):
         parsed_entries = parse_experience_block(block)
         experiences.extend(parsed_entries)
     inferred_experience_heading = TEXT_PDF_EXPERIENCE_HEADING_RE.search(strip_accents(raw_text or "")) is not None
     attempted_text_pdf_inference = False
-    if not experiences and not sections.get("EXPERIENCE") and inferred_experience_heading:
+    if not experiences and not has_experience_sections and inferred_experience_heading:
         attempted_text_pdf_inference = True
         inferred_block = _infer_experience_block_from_text_pdf(raw_text)
         if inferred_block:
@@ -4289,7 +4290,7 @@ def build_experience_entries(sections: Dict[str, List[str]], raw_text: str) -> L
             coherent_entries = [entry for entry in inferred_entries if _entry_has_text_pdf_experience_coherence(entry)]
             if coherent_entries:
                 experiences.extend(coherent_entries)
-    if not experiences and not attempted_text_pdf_inference:
+    if not experiences and not attempted_text_pdf_inference and not has_experience_sections:
         # Fallback heuristic: look for capitalized company names directly in raw text
         if inferred_experience_heading:
             sentences = [sentence.strip() for sentence in re.split(r"(?<=[.!?])\s+", raw_text) if sentence.strip()]
@@ -4317,7 +4318,13 @@ def build_experience_entries(sections: Dict[str, List[str]], raw_text: str) -> L
                         }
                     )
                     break
-    if not experiences and raw_text.strip() and inferred_experience_heading and not attempted_text_pdf_inference:
+    if (
+        not experiences
+        and raw_text.strip()
+        and inferred_experience_heading
+        and not attempted_text_pdf_inference
+        and not has_experience_sections
+    ):
         sentence = first_sentence(raw_text)
         experiences.append(
             {
