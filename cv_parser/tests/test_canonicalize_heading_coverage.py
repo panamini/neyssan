@@ -851,6 +851,71 @@ Sewed and altered garments that consistently conformed to the required specifica
     assert not any("Balenciaga experience" in bullet for bullet in entries[1]["responsibilityBullets"])
 
 
+def test_build_experience_entries_fails_closed_when_experience_section_exists_but_contact_body_text_is_present() -> None:
+    janice_multiline_block = """
+2016 - present
+Boutique Facilitator
+Balenciaga Boutique, New York City, NY
+Delivered excellent customer service based on the company values, including welcoming and greeting all clients, analyzing their needs, and offering solutions.
+Supported the Operations Division in maintaining stock order and assisting in cycle count activity.
+Opened and closed cash registers and assisted with handling cash and deposits.
+Answered phone calls to ensure that all client issues are resolved promptly and professionally.
+Maintained the highest professional standards to deliver the ultimate Balenciaga experience to the client.
+Key achievements:
+Increased client-facing time by 30% thanks to superior communication skills.
+Won a prestigious Facilitator of the Year Award presented by the company management to top-scorers in quarterly customer satisfaction surveys.
+2011 - 2013
+Alterations Specialist
+Chloé Store, New York, NY
+Oversaw the completion of requested garment alterations within specified deadlines and to the highest degree of accuracy possible.
+Communicated the Alterations Room workflow and any arising issues to the management team and fashion advisors.
+Cooperated closely with sales associates to close sales and loyalize customers.
+Provide all clients with top-class service and professional advice.
+Contributed to fostering the company culture of open communication and cross-functional collaboration.
+Key achievement:
+Sewed and altered garments that consistently conformed to the required specifications while meeting 99% of deadlines.
+"""
+    sections = {
+        "EXPERIENCE": [janice_multiline_block],
+        "BODY": ["Janice Walton\nPhone"],
+    }
+    raw_text = f"Janice Walton\nPhone\nExperience\n\n{janice_multiline_block}"
+
+    entries = build_experience_entries(sections, raw_text)
+
+    assert len(entries) == 2
+    assert entries[0]["company"] == "Balenciaga Boutique"
+    assert entries[0]["position"] == "Boutique Facilitator"
+    assert entries[0]["startDate"] == "2016-01-01"
+    assert entries[0]["endDate"] is None
+    assert entries[0]["isCurrent"] is True
+    assert entries[1]["company"] == "Chloé Store"
+    assert entries[1]["position"] == "Alterations Specialist"
+    assert entries[1]["startDate"] == "2011-01-01"
+    assert entries[1]["endDate"] == "2013-01-01"
+    assert entries[1]["isCurrent"] is None
+    assert all(str(entry["company"] or "") != "Janice Walton Phone" for entry in entries)
+    assert all(str(entry["company"] or "") != "Experience" for entry in entries)
+
+
+def test_build_experience_entries_does_not_synthesize_contact_experience_when_exp_section_is_present_but_unparseable() -> None:
+    sections = {
+        "EXPERIENCE": ["Key achievements:\nClient service excellence."],
+        "BODY": ["Janice Walton\nPhone"],
+    }
+    raw_text = """
+    Janice Walton
+    Phone
+    Experience
+    Key achievements:
+    Client service excellence.
+    """
+
+    entries = build_experience_entries(sections, raw_text)
+
+    assert entries == []
+
+
 def test_parse_experience_block_rejects_cv308_header_fragments_from_remote_product_path() -> None:
     block = """
     Name Of City , Reason For
