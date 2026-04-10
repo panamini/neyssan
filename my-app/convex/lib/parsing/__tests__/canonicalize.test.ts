@@ -101,6 +101,96 @@ describe("canonicalizeParserResult", () => {
     expect(canonical.diagnostics?.experience_fallback_count).toBe(2);
   });
 
+  it("preserves coherent normalized experience even when raw sections are noisier and more numerous", () => {
+    const parserResult = {
+      normalized: {
+        experience: [
+          {
+            id: "exp-1",
+            company: "ADT Security",
+            position: "Security Guard",
+            startDate: "2021-01-01",
+            endDate: "2022-04-01",
+            location: "Port Washington",
+            responsibilityBullets: [
+              "Maintaining environments by monitoring the grounds and equipment controls.",
+            ],
+          },
+        ],
+        rawSections: [
+          {
+            label: "EXPERIENCE",
+            content:
+              "Security Guard\nADT Security\nJanuary 2021 — April 2022\n\nSecurity Guard\nADT Security • Experience\nJanuary 2021\n\nJanuary 2020 — April 2022 Inspecting restrooms after closing time",
+          },
+        ],
+      },
+    };
+
+    const canonical = canonicalizeParserResult(parserResult, context);
+    const experience = canonical.normalized?.experience ?? [];
+
+    expect(experience).toHaveLength(1);
+    expect(experience[0]?.company).toBe("ADT Security");
+    expect(experience[0]?.position).toBe("Security Guard");
+    expect(experience[0]?.startDate).toBe("2021-01-01");
+    expect(experience[0]?.endDate).toBe("2022-04-01");
+  });
+
+  it("still falls back to raw sections when normalized experience is placeholder-like", () => {
+    const parserResult = {
+      normalized: {
+        experience: [
+          {
+            id: "exp-1",
+            company: "",
+            position: "Professional Experience",
+            responsibilities: "",
+          },
+        ],
+        rawSections: [
+          {
+            label: "EXPERIENCE",
+            content:
+              "Engineer Jan 2020 – Apr 2021\nACME Corp, Seattle, WA\n- Automated deployments",
+          },
+        ],
+      },
+    };
+
+    const canonical = canonicalizeParserResult(parserResult, context);
+    const experience = canonical.normalized?.experience ?? [];
+
+    expect(canonical.diagnostics?.experience_source).toBe("raw_sections");
+    expect(experience.length).toBeGreaterThan(0);
+    expect(experience[0]?.company).toContain("ACME");
+  });
+
+  it("blocks personal-details residue from experience fallback output", () => {
+    const parserResult = {
+      normalized: {
+        experience: [],
+        rawSections: [
+          {
+            label: "EXPERIENCE",
+            content: [
+              "Father S Name Ali Adil",
+              "## PERSONAL DETAILS:",
+              "Jul 1, 1996",
+              "Marital Status : Unmarried",
+            ].join("\n"),
+          },
+        ],
+      },
+    };
+
+    const canonical = canonicalizeParserResult(parserResult, context);
+    const experience = canonical.normalized?.experience ?? [];
+
+    expect(experience).toEqual([]);
+    expect(canonical.diagnostics?.experience_source).toBeUndefined();
+  });
+
   it("normalizes skills text and deduplicates case-insensitively", () => {
     const parserResult = {
       normalized: {
