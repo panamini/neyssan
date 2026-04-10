@@ -2777,6 +2777,63 @@ function canonicalizeExperience(
   normalized: any,
   context: CanonicalizeContext,
 ): ExperienceCanonical {
+  const isPlaceholderExperienceValue = (value: unknown): boolean => {
+    const normalizedValue = coerceString(value);
+    if (!normalizedValue) return true;
+    return /^(experience|professional experience|employment history|work experience|inferred)$/i.test(normalizedValue);
+  };
+
+  const isCoherentNormalizedExperienceEntry = (entry: any): boolean => {
+    const company = coerceString(entry?.company ?? "");
+    const position = coerceString(entry?.position ?? "");
+    const hasCompany = Boolean(company) && !isPlaceholderExperienceValue(company);
+    const hasPosition = Boolean(position) && !isPlaceholderExperienceValue(position);
+    const hasDates = hasExperienceDateSignal(entry);
+    const hasBullets = Array.isArray(entry?.responsibilityBullets) && entry.responsibilityBullets.length > 0;
+    const hasResponsibilities = Boolean(coerceString(entry?.responsibilities ?? ""));
+    const hasAchievements = Array.isArray(entry?.achievements) && entry.achievements.length > 0;
+    const hasLocation = Boolean(coerceString(entry?.location ?? ""));
+    const hasContent = hasBullets || hasResponsibilities || hasAchievements;
+
+    if (hasCompany && hasPosition) {
+      return true;
+    }
+    if (hasCompany && hasPosition && (hasDates || hasContent || hasLocation)) {
+      return true;
+    }
+    if (hasCompany && hasDates && hasContent) {
+      return true;
+    }
+    return false;
+  };
+
+  const isPersonalDetailsTextFallbackEntry = (entry: any): boolean => {
+    const combined = [
+      coerceString(entry?.company ?? ""),
+      coerceString(entry?.position ?? ""),
+      coerceString(entry?.responsibilities ?? ""),
+      ...(Array.isArray(entry?.responsibilityBullets)
+        ? entry.responsibilityBullets.map((value: unknown) => coerceString(value))
+        : []),
+    ]
+      .join(" ")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+    if (!combined) return false;
+    return [
+      "personal details",
+      "father s name",
+      "mother s name",
+      "marital status",
+      "date of birth",
+      "place of birth",
+      "nationality",
+      "passport",
+      "religion",
+    ].some((token) => combined.includes(token));
+  };
+
   let droppedEmpty = 0;
 
   let normalizedEntries = ensureArray<any>(rawValue)
@@ -2824,16 +2881,17 @@ function canonicalizeExperience(
   normalizedEntries = sanitizeExperienceEntries(normalizedEntries);
 
   const fromRaw = filterRawSection(rawSections, "experience", { preserveWhitespace: true });
+  const coherentNormalizedEntries = normalizedEntries.filter((entry) => isCoherentNormalizedExperienceEntry(entry));
 
   const shouldFallback =
     normalizedEntries.length === 0 ||
-    (fromRaw.length > normalizedEntries.length && fromRaw.length > 0) ||
+    (fromRaw.length > 0 && coherentNormalizedEntries.length === 0) ||
     normalizedEntries.every((entry) => {
       const company = coerceString(entry?.company ?? "");
       const position = coerceString(entry?.position ?? "");
       const hasContent = Boolean(entry?.responsibilities || entry?.achievements?.length);
-      const poorCompany = !company || /^inferred$/i.test(company);
-      const poorPosition = /^professional experience$/i.test(position);
+      const poorCompany = isPlaceholderExperienceValue(company);
+      const poorPosition = isPlaceholderExperienceValue(position);
       return (poorCompany || poorPosition) && !hasContent;
     });
 
@@ -2922,6 +2980,13 @@ function canonicalizeExperience(
       if (sanitizedFallback.length) {
         fallbackSource = "text_fallback";
       }
+    }
+  }
+
+  if (fallbackSource === "text_fallback" || fallbackSource === "raw_sections") {
+    sanitizedFallback = sanitizedFallback.filter((item) => !isPersonalDetailsTextFallbackEntry(item));
+    if (!sanitizedFallback.length) {
+      fallbackSource = "none";
     }
   }
 
