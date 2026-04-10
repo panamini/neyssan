@@ -340,6 +340,8 @@ HEADING_MAP = {
     "OBJECTIVE": "SUMMARY",
     "EXPERIENCE": "EXPERIENCE",
     "WORK EXPERIENCE": "EXPERIENCE",
+    "WORKING EXPERIENCE": "EXPERIENCE",
+    "WORKING EXPERINCE": "EXPERIENCE",
     "PROFESSIONAL EXPERIENCE": "EXPERIENCE",
     "PERSONAL EXPERIENCE": "EXPERIENCE",
     "EXPERIENCE PROFESSIONNELLE": "EXPERIENCE",
@@ -458,6 +460,11 @@ POLLUTED_LOCATION_RE = re.compile(
 )
 ROLE_AT_COMPANY_RE = re.compile(
     r"^\s*(?P<role>[^–—\-:,/|]+?)\s+(?:at|@|en|chez)\s+(?P<company>[^–—,|/]+?)(?:\s*[,–—\-|/]\s*(?P<location>.+?))?\s*$",
+    re.IGNORECASE,
+)
+NARRATIVE_WORKED_IN_RE = re.compile(
+    r"^\s*(?:(?:one|two|three|four|five|six|seven|eight|nine|ten|\d+)\s+\w+\s+)?"
+    r"(?:(?:presently|currently)\s+)?(?:worked|working)\s+in\s+(?P<company>.+?)\s+as\s+an?\s+(?P<role>.+?)\s*$",
     re.IGNORECASE,
 )
 GERUND_PREFIX_RE = re.compile(r"^[a-z]{3,}ing\b")
@@ -1144,7 +1151,7 @@ def _match_multiline_header(lines: List[str]) -> Optional[Tuple[str, str, Option
         return None
     if _match_role_company_line([role]):
         return None
-    if not (_contains_role_keyword(role) or _is_role_phrase(role)):
+    if not (_contains_role_keyword(role) or _is_role_phrase(role) or _is_single_role_fragment([role])):
         return None
     date_line = " ".join(normalized_lines[1:3])
     start_date, end_date, is_current = _parse_dates(date_line)
@@ -1173,6 +1180,9 @@ def _match_role_company_line(lines: List[str]) -> Optional[Tuple[str, str, Optio
     for idx, line in enumerate(lines[:3]):
         cleaned = collapse_spaced_caps(_strip_bullet_prefix(line).strip())
         if not cleaned:
+            continue
+        lowered = strip_accents(cleaned.lower())
+        if re.match(r"^\s*(?:(?:one|two|three|four|five|six|seven|eight|nine|ten|\d+)\s+\w+\s+)?(?:(?:presently|currently)\s+)?(?:worked|working)\s+in\b", lowered):
             continue
         match = ROLE_AT_COMPANY_RE.match(cleaned)
         if not match:
@@ -1879,7 +1889,37 @@ def split_experience_entries(block: str) -> List[List[str]]:
                 entries.append(current)
             current = []
             break
-        if current and re.search(DATE_PATTERN, stripped_line) and _looks_like_entry_header_line(current[0]):
+        if current and _is_compact_date_fragment_entry(current) and _is_single_role_fragment([stripped_line]):
+            current.append(stripped_line)
+            continue
+        if current and _is_compact_date_then_role_prefix(current) and _split_company_location_line(stripped_line):
+            current.append(stripped_line)
+            continue
+        if current and _is_date_left_column_header_fragment(current) and not _is_compact_date_anchor_line(stripped_line):
+            current.append(stripped_line)
+            continue
+        if current and _is_compact_date_anchor_line(stripped_line):
+            if (
+                _is_compact_date_fragment_entry(current)
+                or (
+                    len(current) <= 2
+                    and (
+                        _is_single_role_fragment([current[0]])
+                        or _match_role_company_line([current[0]]) is not None
+                    )
+                )
+            ):
+                current.append(stripped_line)
+                continue
+            entries.append(current)
+            current = [stripped_line]
+            continue
+        if (
+            current
+            and re.search(DATE_PATTERN, stripped_line)
+            and len(current) <= 2
+            and (_is_single_role_fragment([current[0]]) or _match_role_company_line([current[0]]) is not None)
+        ):
             current.append(stripped_line)
             continue
         if current and _looks_like_header_residue(current[0]) and _looks_like_entry_header_line(stripped_line):
@@ -1942,6 +1982,35 @@ def _split_company_location_line(line: str) -> Optional[Tuple[str, Optional[str]
         if not location:
             continue
         return collapse_spaced_caps(company_raw), location
+    comma_parts = [part.strip(" ,") for part in cleaned.split(",") if part.strip(" ,")]
+    if len(comma_parts) >= 3:
+        company_raw = ", ".join(comma_parts[:-2]).strip(" ,")
+        location_raw = ", ".join(comma_parts[-2:]).strip(" ,")
+        if (
+            company_raw
+            and location_raw
+            and not _starts_with_reason_for_leaving(company_raw)
+            and not _is_role_phrase(company_raw)
+            and not _starts_with_verb_phrase(company_raw)
+            and not PHONE_EMAIL_URL_RE.search(company_raw)
+        ):
+            location = _normalize_location_candidate(location_raw)
+            if location:
+                return collapse_spaced_caps(company_raw), location
+    if len(comma_parts) == 2:
+        company_raw = comma_parts[0].strip(" ,")
+        location_raw = comma_parts[1].strip(" ,")
+        if (
+            company_raw
+            and location_raw
+            and not _starts_with_reason_for_leaving(company_raw)
+            and not _is_role_phrase(company_raw)
+            and not _starts_with_verb_phrase(company_raw)
+            and not PHONE_EMAIL_URL_RE.search(company_raw)
+        ):
+            location = _normalize_location_candidate(location_raw)
+            if location:
+                return collapse_spaced_caps(company_raw), location
     tokens = [token for token in cleaned.split() if token]
     for start in range(len(tokens) - 2, max(0, len(tokens) - 5), -1):
         company_raw = " ".join(tokens[:start]).strip(" ,")
@@ -1984,12 +2053,198 @@ def _is_single_date_fragment(entry: List[str]) -> bool:
     return bool(start_date or end_date or is_current)
 
 
+def _is_compact_date_anchor_line(line: str) -> bool:
+    cleaned = strip_leading_markdown_heading(line).strip()
+    if not cleaned or _starts_with_verb_phrase(cleaned):
+        return False
+    token_count = len([token for token in re.split(r"\s+", cleaned) if token])
+    if token_count > 4:
+        return False
+    start_date, end_date, is_current = _parse_dates(cleaned)
+    return bool(start_date or end_date or is_current)
+
+
+def _is_compact_date_fragment_entry(entry: List[str]) -> bool:
+    if not entry or len(entry) > 2:
+        return False
+    return all(_is_compact_date_anchor_line(line) for line in entry)
+
+
+def _is_compact_date_then_role_prefix(entry: List[str]) -> bool:
+    if len(entry) < 2 or len(entry) > 3:
+        return False
+    date_lines: List[str] = []
+    index = 0
+    while index < len(entry) and len(date_lines) < 2 and _is_compact_date_anchor_line(entry[index]):
+        date_lines.append(entry[index])
+        index += 1
+    return bool(date_lines and index == len(entry) - 1 and _is_single_role_fragment([entry[index]]))
+
+
+def _join_compact_date_fragment(entry: List[str]) -> str:
+    return collapse_spaced_caps(
+        " ".join(strip_leading_markdown_heading(line).strip() for line in entry if line.strip())
+    )
+
+
+def _entry_starts_with_role_and_company_fragment(entry: List[str]) -> bool:
+    return len(entry) >= 2 and _is_single_role_fragment([entry[0]]) and _split_company_location_line(entry[1]) is not None
+
+
+def _reorder_date_left_column_header_entry(entry: List[str]) -> Optional[List[str]]:
+    if len(entry) < 3:
+        return None
+    date_lines: List[str] = []
+    index = 0
+    while index < len(entry) and len(date_lines) < 2 and _is_compact_date_anchor_line(entry[index]):
+        date_lines.append(entry[index])
+        index += 1
+    if not date_lines or index + 1 >= len(entry):
+        return None
+    role_line = strip_leading_markdown_heading(entry[index]).strip()
+    company_line = strip_leading_markdown_heading(entry[index + 1]).strip()
+    if not _is_single_role_fragment([role_line]):
+        return None
+    compound_company_location = _split_company_location_line(company_line)
+    if not compound_company_location:
+        return None
+    company, location = compound_company_location
+    reordered = [role_line, _join_compact_date_fragment(date_lines), company]
+    if location:
+        reordered.append(location)
+    reordered.extend(entry[index + 2 :])
+    return reordered
+
+
+def _is_date_left_column_header_fragment(entry: List[str]) -> bool:
+    return _reorder_date_left_column_header_entry(entry) is not None
+
+
+def _is_single_narrative_bullet_entry(entry: List[str]) -> bool:
+    if len(entry) != 1:
+        return False
+    line = strip_leading_markdown_heading(entry[0]).strip()
+    return bool(
+        line
+        and not _is_compact_date_anchor_line(line)
+        and not _looks_like_contact_or_heading(line)
+        and len(line.split()) >= 6
+    )
+
+
+def _is_detached_narrative_block(entry: List[str]) -> bool:
+    if not entry:
+        return False
+    if _is_compact_date_fragment_entry(entry):
+        return False
+    if _is_date_left_column_header_fragment(entry):
+        return False
+    if _entry_starts_with_role_and_company_fragment(entry):
+        return False
+    saw_content = False
+    for raw_line in entry:
+        line = strip_leading_markdown_heading(raw_line).strip()
+        if not line:
+            continue
+        if _looks_like_contact_or_heading(line):
+            return False
+        if _is_compact_date_anchor_line(line):
+            return False
+        if _match_role_company_line([line]) is not None:
+            return False
+        if _split_company_location_line(line):
+            return False
+        if _is_single_role_fragment([line]):
+            return False
+        if len(line.split()) >= 3 or line.endswith(":"):
+            saw_content = True
+    return saw_content
+
+
 def _repair_fragmented_experience_entries(entries: List[List[str]]) -> List[List[str]]:
     repaired_entries: List[List[str]] = []
     pending_entries = [list(entry) for entry in entries]
     index = 0
     while index < len(pending_entries):
         current_entry = pending_entries[index]
+        reordered_date_left_entry = _reorder_date_left_column_header_entry(current_entry)
+        if reordered_date_left_entry:
+            merged_entry = list(reordered_date_left_entry)
+            next_index = index + 1
+            while next_index < len(pending_entries):
+                next_entry = pending_entries[next_index]
+                if _is_compact_date_fragment_entry(next_entry) or _is_date_left_column_header_fragment(next_entry):
+                    break
+                if not _is_detached_narrative_block(next_entry):
+                    break
+                merged_entry.extend(next_entry)
+                next_index += 1
+            repaired_entries.append(merged_entry)
+            index = next_index
+            continue
+        if _is_compact_date_fragment_entry(current_entry) and index + 1 < len(pending_entries):
+            joined_date = _join_compact_date_fragment(current_entry)
+            next_entry = pending_entries[index + 1]
+            if _entry_starts_with_role_and_company_fragment(next_entry):
+                merged_entry = [next_entry[0], joined_date]
+                compound_company_location = _split_company_location_line(next_entry[1])
+                if compound_company_location:
+                    inferred_company, inferred_location = compound_company_location
+                    merged_entry.append(inferred_company)
+                    if inferred_location:
+                        merged_entry.append(inferred_location)
+                else:
+                    merged_entry.append(next_entry[1])
+                merged_entry.extend(next_entry[2:])
+                if index + 2 < len(pending_entries) and _is_single_narrative_bullet_entry(pending_entries[index + 2]):
+                    merged_entry.extend(pending_entries[index + 2])
+                    repaired_entries.append(merged_entry)
+                    index += 3
+                    continue
+                repaired_entries.append(merged_entry)
+                index += 2
+                continue
+            if (
+                index + 2 < len(pending_entries)
+                and _is_single_role_fragment(next_entry)
+                and _is_single_company_location_fragment(pending_entries[index + 2])
+            ):
+                merged_entry = [next_entry[0], joined_date]
+                compound_company_location = _split_company_location_line(pending_entries[index + 2][0])
+                if compound_company_location:
+                    inferred_company, inferred_location = compound_company_location
+                    merged_entry.append(inferred_company)
+                    if inferred_location:
+                        merged_entry.append(inferred_location)
+                else:
+                    merged_entry.append(pending_entries[index + 2][0])
+                if index + 3 < len(pending_entries) and _is_single_narrative_bullet_entry(pending_entries[index + 3]):
+                    merged_entry.extend(pending_entries[index + 3])
+                    repaired_entries.append(merged_entry)
+                    index += 4
+                    continue
+                repaired_entries.append(merged_entry)
+                index += 3
+                continue
+            if (
+                index + 2 < len(pending_entries)
+                and _is_single_role_fragment(next_entry)
+                and pending_entries[index + 2]
+                and _split_company_location_line(pending_entries[index + 2][0]) is not None
+            ):
+                merged_entry = [next_entry[0], joined_date]
+                compound_company_location = _split_company_location_line(pending_entries[index + 2][0])
+                if compound_company_location:
+                    inferred_company, inferred_location = compound_company_location
+                    merged_entry.append(inferred_company)
+                    if inferred_location:
+                        merged_entry.append(inferred_location)
+                else:
+                    merged_entry.append(pending_entries[index + 2][0])
+                merged_entry.extend(pending_entries[index + 2][1:])
+                repaired_entries.append(merged_entry)
+                index += 3
+                continue
         if (
             _is_single_role_fragment(current_entry)
             and index + 2 < len(pending_entries)
@@ -2017,6 +2272,15 @@ def _repair_fragmented_experience_entries(entries: List[List[str]]) -> List[List
                         continue
             repaired_entries.append(merged_entry)
             index += 3
+            continue
+        if (
+            _entry_starts_with_role_and_company_fragment(current_entry)
+            and index + 1 < len(pending_entries)
+            and _is_single_narrative_bullet_entry(pending_entries[index + 1])
+        ):
+            next_line = strip_leading_markdown_heading(pending_entries[index + 1][0]).strip()
+            repaired_entries.append([*current_entry, next_line])
+            index += 2
             continue
         if len(current_entry) == 1 and index + 1 < len(pending_entries):
             role_line = strip_leading_markdown_heading(current_entry[0]).strip()
@@ -2478,6 +2742,84 @@ def _entry_has_minimal_experience_coherence(
     if start_date and (end_date or is_current):
         return True
     return False
+
+
+def _parse_worked_in_narrative_line(line: str) -> Optional[Dict[str, object]]:
+    cleaned = collapse_spaced_caps(_strip_bullet_prefix(line).strip())
+    if not cleaned:
+        return None
+    if not re.search(r"\bwork(?:ed|ing)\s+in\b", cleaned, re.IGNORECASE):
+        return None
+    if not re.search(r"\bas\s+an?\b", cleaned, re.IGNORECASE):
+        return None
+
+    match = NARRATIVE_WORKED_IN_RE.match(cleaned)
+    if not match:
+        return None
+
+    company = collapse_spaced_caps((match.group("company") or "").strip(" ,.;:-"))
+    role = collapse_spaced_caps((match.group("role") or "").strip(" ,.;:-"))
+
+    if not company or not role:
+        return None
+
+    role = re.split(r"\b(?:and\s+posted|posted|from)\b", role, maxsplit=1, flags=re.IGNORECASE)[0].strip(" ,.;:-")
+    role = _normalize_role_phrase(role)
+    if not role or not (_contains_role_keyword(role) or _is_role_phrase(role) or _is_single_role_fragment([role])):
+        return None
+
+    lowered_company = strip_accents(company.lower()).strip(" :")
+    if not lowered_company:
+        return None
+    if _looks_like_contact_or_heading(company):
+        return None
+    if looks_addressish(company):
+        return None
+    if PHONE_EMAIL_URL_RE.search(company):
+        return None
+    if _starts_with_verb_phrase(company):
+        return None
+    if VERB_START_RE.match(lowered_company):
+        return None
+    if re.match(r"^[a-z]+ing\b", lowered_company):
+        return None
+    if re.search(r"[.!?]", company):
+        return None
+    if lowered_company in SECTION_NAME_BLOCKLIST:
+        return None
+    if lowered_company in {"curriculum vitae", "curriculum", "resume", "cv"}:
+        return None
+    if lowered_company.endswith("third party roll"):
+        return None
+    if len(company.split()) > 6 and not _contains_org_keyword(company):
+        return None
+
+    start_date, end_date, is_current = _parse_dates(cleaned)
+    bullet = cleaned.strip()
+    bullets = [bullet] if bullet and not _is_noise_line(bullet) else []
+    if not _entry_has_minimal_experience_coherence(
+        company=company,
+        position=role,
+        start_date=start_date,
+        end_date=end_date,
+        is_current=is_current,
+        bullets=bullets,
+    ):
+        return None
+
+    return {
+        "id": make_id("exp"),
+        "company": company,
+        "position": role,
+        "startDate": start_date,
+        "endDate": None if is_current else end_date,
+        "isCurrent": is_current,
+        "location": None,
+        "summary": None,
+        "responsibilities": "\n".join(bullets),
+        "responsibilityBullets": bullets,
+        "achievements": [],
+    }
 
 
 def _extract_bullets(lines: List[str], skip: Sequence[str]) -> List[str]:
@@ -3905,6 +4247,13 @@ def parse_experience_block(block: str) -> List[Dict[str, object]]:
             is_current=is_current,
             bullets=bullets,
         ):
+            narrative_entries = [
+                candidate
+                for candidate in (_parse_worked_in_narrative_line(line) for line in entry_lines)
+                if candidate
+            ]
+            if narrative_entries:
+                parsed_entries.extend(narrative_entries)
             continue
 
         parsed_entries.append(
