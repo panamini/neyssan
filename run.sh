@@ -104,18 +104,37 @@ ensure_parsernet() {
     | grep -q 'inside_ready=200'
 }
 
+parser_uses_workspace_mount() {
+  local mounts=""
+  mounts="$(docker inspect "${PARSER_NAME}" --format '{{range .Mounts}}{{println .Source "->" .Destination}}{{end}}' 2>/dev/null || true)"
+  grep -Fq "${ROOT_DIR} -> /app" <<<"${mounts}"
+}
+
 # ===== Parser (Docker) =====
 start_parser() {
   local OCR="${1:-auto}"           # auto|doctr|paddle|disabled
   local PLATFORM; PLATFORM="$(map_platform)"
+  local PARSER_NEEDS_START=1
 
   if docker ps --format '{{.Names}}' | grep -qx "${PARSER_NAME}"; then
-    echo "[run] parser already running: ${PARSER_NAME}"
-  else
+    if parser_uses_workspace_mount; then
+      echo "[run] parser already running with workspace mount: ${PARSER_NAME}"
+      PARSER_NEEDS_START=0
+    else
+      echo "[run] replacing stale parser without workspace mount: ${PARSER_NAME}"
+      docker stop "${PARSER_NAME}" >/dev/null 2>&1 || true
+    fi
+  fi
+
+  if [[ "${PARSER_NEEDS_START}" -eq 1 ]]; then
     echo "[run] starting parser (${IMAGE_NAME}, OCR=${OCR}) ..."
     local -a envs=(
       -e MALLOC_ARENA_MAX=2
       -e OMP_NUM_THREADS=1
+      -e PYTHONPATH=/app
+    )
+    local -a mounts=(
+      -v "${ROOT_DIR}:/app"
     )
     # Map OCR flag to container env
     case "${OCR}" in
@@ -134,6 +153,7 @@ start_parser() {
       --name "${PARSER_NAME}" \
       --platform "${PLATFORM}" \
       -p 8001:8001 \
+      "${mounts[@]}" \
       "${envs[@]}" \
       "${IMAGE_NAME}" \
       /opt/venv/bin/python -m uvicorn --app-dir /app cv_parser_service.main:app \
