@@ -434,6 +434,89 @@ describe("canonicalizeParserResult", () => {
     expect(canonical.diagnostics?.experience_source).toBeUndefined();
   });
 
+  it("fails closed for the real Divyank fixture text because it has training but no experience section", () => {
+    const rawText = [
+      "CURRICULUM VITAE",
+      "DIVYANK SINGH",
+      "Email: divyank_singh@outlook.com",
+      "CAREER OBJECTIVE:",
+      "Seeking entry level assignments in Engine Research centre Production Maintenance Quality with a growth oriented organisation.",
+      "TRAINING:",
+      "Completed 4 weeks training in TATA Motors Ltd Lucknow.",
+      "Department Trim line 2.",
+      "Topic Lean Manufacture.",
+      "Project description: The project is about reducing motion of operators by implementing Spaghetti diagram.",
+      "CORE STRENGTH:",
+      "Hard working and quick learner",
+      "ACADEMIC QUALIFICATION:",
+      "B.TECH 2014 Engineering and Technology Jaipur National University 67.4",
+      "SKILLS:",
+      "Microsoft office",
+      "ACHIEVEMENTS:",
+      "Played one time National and three times regional in Handball",
+    ].join("\n");
+
+    const canonical = canonicalizeParserResult(
+      {
+        normalized: {
+          rawText,
+          experience: [],
+        },
+      },
+      {
+        ...context,
+        rawText,
+      },
+    );
+
+    expect(canonical.normalized?.experience ?? []).toEqual([]);
+    expect(canonical.diagnostics?.experience_source).toBeUndefined();
+  });
+
+  it("keeps Prasanna-style fragmented rows as surfaced experience entries when normalized experience is empty", () => {
+    const rawExperience = [
+      "Plant Maintenance technician",
+      "Applied Automation Systems • Coimbatore, India.",
+      "Jan 1, 2010",
+      "Reason for leaving: Layoff due to power cut.",
+      "",
+      "Maintenance work quality Inspector",
+      "LMW (Unit - I) • Coimbatore, India.",
+      "Jan 1, 2010",
+      "Reason for leaving: Apprentice Period Over.",
+      "",
+      "AMC Maintenance technician",
+      "Sun Business Solutions • Trichy, India.",
+      "Jan 1, 2012",
+      "Reason for leaving: Salary Problem.",
+    ].join("\n");
+
+    const canonical = canonicalizeParserResult(
+      {
+        normalized: {
+          experience: [],
+          rawText: `Experience\n${rawExperience}`,
+          rawSections: [{ label: "EXPERIENCE", content: rawExperience }],
+        },
+      },
+      {
+        ...context,
+        rawText: `Experience\n${rawExperience}`,
+      },
+    );
+
+    const experience = canonical.normalized?.experience ?? [];
+    expect(experience).toHaveLength(3);
+    expect(String(experience[0]?.company ?? "")).toContain("Applied Automation Systems");
+    expect(experience[0]?.position).toBe("Plant Maintenance technician");
+    expect(String(experience[1]?.company ?? "")).toContain("LMW (Unit - I)");
+    expect(String(experience[2]?.company ?? "")).toContain("Sun Business Solutions");
+
+    const sections = buildTypedSectionsFromNormalized(canonical.normalized ?? {});
+    const experienceSection = sections.find((section) => section.type === "experience");
+    expect(experienceSection?.structuredContent).toHaveLength(3);
+  });
+
   it("normalizes skills text and deduplicates case-insensitively", () => {
     const parserResult = {
       normalized: {

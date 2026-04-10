@@ -24,6 +24,7 @@ parse_experience_block = CANONICALIZE.parse_experience_block
 parse_education_block = CANONICALIZE.parse_education_block
 split_experience_entries = CANONICALIZE.split_experience_entries
 strip_leading_markdown_heading = CANONICALIZE.strip_leading_markdown_heading
+detect_heading = CANONICALIZE.detect_heading
 
 
 def test_extract_sections_promotes_proven_fixture_headings() -> None:
@@ -174,6 +175,11 @@ def test_strip_leading_markdown_heading_is_narrow() -> None:
     assert strip_leading_markdown_heading("#") == ""
     assert strip_leading_markdown_heading("Badge #1234") == "Badge #1234"
     assert strip_leading_markdown_heading("Section #7 responsibilities") == "Section #7 responsibilities"
+
+
+def test_detect_heading_recognizes_working_experience_variants() -> None:
+    assert detect_heading("WORKING EXPERIENCE:") == "EXPERIENCE"
+    assert detect_heading("WORKING EXPERINCE:") == "EXPERIENCE"
 
 
 def test_extract_sections_strips_markdown_heading_markers_without_removing_inline_hashes() -> None:
@@ -354,7 +360,7 @@ def test_build_experience_entries_fails_closed_for_text_pdf_without_experience_h
     assert entries == []
 
 
-def test_build_experience_entries_does_not_emit_name_blob_for_unusable_working_experience_heading() -> None:
+def test_build_experience_entries_parses_farman_working_in_narrative_without_name_blob_pollution() -> None:
     raw_text = """
     Curriculum vitae
     Farman Ali
@@ -368,7 +374,58 @@ def test_build_experience_entries_does_not_emit_name_blob_for_unusable_working_e
 
     entries = build_experience_entries({}, raw_text)
 
-    assert entries == []
+    assert len(entries) >= 1
+    assert any("BMS Operator" in str(entry["position"] or "") for entry in entries)
+    assert any("CBRE" in str(entry["company"] or "") for entry in entries)
+    assert all(str(entry["company"] or "") != "Experience" for entry in entries)
+    assert all(not str(entry["company"] or "").startswith("One year worked") for entry in entries)
+    assert any(entry.get("isCurrent") is True for entry in entries)
+    assert any(
+        any("Presently working in CBRE through Strabag as a BMS Operator" in bullet for bullet in entry["responsibilityBullets"])
+        for entry in entries
+    )
+
+
+def test_parse_experience_block_parses_farman_working_in_narrative_line_fail_closed() -> None:
+    block = """
+    One year worked in ST Microelectronic Greater Noida Honeywell third party roll as a BMS operator.
+    Presently working in CBRE through Strabag as a BMS Operator and posted at a site MetLife global operation support Sec. 135 Noida. From 01stjanuary 2016 to till date.
+    """
+
+    entries = parse_experience_block(block)
+
+    assert len(entries) == 1
+    assert "CBRE" in str(entries[0]["company"] or "")
+    assert str(entries[0]["position"] or "") == "BMS Operator"
+    assert entries[0]["isCurrent"] is True
+    assert entries[0]["endDate"] is None
+    assert entries[0]["responsibilityBullets"] == [
+        "Presently working in CBRE through Strabag as a BMS Operator and posted at a site MetLife global operation support Sec. 135 Noida. From 01stjanuary 2016 to till date."
+    ]
+
+
+def test_extract_sections_routes_farman_working_experince_heading_to_experience() -> None:
+    raw_text = """
+    Curriculum vitae
+    Farman Ali
+    Electrical Engineer
+    WORKING EXPERINCE:
+    One year worked in ST Microelectronic Greater Noida Honeywell third party roll as a BMS operator.
+    Presently working in CBRE through Strabag as a BMS Operator and posted at a site MetLife global operation support Sec. 135 Noida. From 01stjanuary 2016 to till date.
+    ACADEMIC QUALIFICATION :
+    Diploma in Computer certificate application.
+    """
+
+    sections = extract_sections(raw_text)
+
+    assert "EXPERIENCE" in sections
+    assert sections["EXPERIENCE"] == [
+        "One year worked in ST Microelectronic Greater Noida Honeywell third party roll as a BMS operator.\n"
+        "Presently working in CBRE through Strabag as a BMS Operator and posted at a site MetLife global operation support Sec. 135 Noida. From 01stjanuary 2016 to till date."
+    ]
+    body_text = "\n".join(sections.get("BODY", []))
+    assert "WORKING EXPERINCE" not in body_text
+    assert "One year worked in ST Microelectronic" not in body_text
 
 
 def test_parse_experience_block_strips_header_date_and_education_echo_from_university_employer_entry() -> None:
@@ -699,6 +756,99 @@ Reason for leaving: Salary Problem.
     assert entries[2]["position"] == "AMC Maintenance technician"
     assert entries[2]["location"] == "Trichy, India."
     assert entries[2]["responsibilityBullets"] == ["Reason for leaving: Salary Problem"]
+
+
+def test_split_experience_entries_keeps_janice_date_left_column_bullets_attached() -> None:
+    block = """
+2016 - present
+Boutique Facilitator
+Balenciaga Boutique, New York City, NY
+Delivered excellent customer service based on the company values, including welcoming and greeting all clients, analyzing their needs, and offering solutions.
+Supported the Operations Division in maintaining stock order and assisting in cycle count activity.
+Opened and closed cash registers and assisted with handling cash and deposits.
+Answered phone calls to ensure that all client issues are resolved promptly and professionally.
+Maintained the highest professional standards to deliver the ultimate Balenciaga experience to the client.
+Key achievements:
+Increased client-facing time by 30% thanks to superior communication skills.
+Won a prestigious Facilitator of the Year Award presented by the company management to top-scorers in quarterly customer satisfaction surveys.
+2011 - 2013
+Alterations Specialist
+Chloé Store, New York, NY
+Oversaw the completion of requested garment alterations within specified deadlines and to the highest degree of accuracy possible.
+Communicated the Alterations Room workflow and any arising issues to the management team and fashion advisors.
+Cooperated closely with sales associates to close sales and loyalize customers.
+Provide all clients with top-class service and professional advice.
+Contributed to fostering the company culture of open communication and cross-functional collaboration.
+Key achievement:
+Sewed and altered garments that consistently conformed to the required specifications while meeting 99% of deadlines.
+"""
+
+    entries = split_experience_entries(block)
+
+    assert len(entries) == 2
+    assert entries[0][:3] == [
+        "2016 - present",
+        "Boutique Facilitator",
+        "Balenciaga Boutique, New York City, NY",
+    ]
+    assert entries[1][:3] == [
+        "2011 - 2013",
+        "Alterations Specialist",
+        "Chloé Store, New York, NY",
+    ]
+    assert not any(
+        entry and "Delivered excellent customer service" in entry[0] for entry in entries[1:]
+    )
+    assert not any(
+        entry and "Cooperated closely with sales associates" in entry[0] for entry in entries
+    )
+
+
+def test_parse_experience_block_reconstructs_janice_two_date_left_column_entries() -> None:
+    block = """
+2016 - present
+Boutique Facilitator
+Balenciaga Boutique, New York City, NY
+Delivered excellent customer service based on the company values, including welcoming and greeting all clients, analyzing their needs, and offering solutions.
+Supported the Operations Division in maintaining stock order and assisting in cycle count activity.
+Opened and closed cash registers and assisted with handling cash and deposits.
+Answered phone calls to ensure that all client issues are resolved promptly and professionally.
+Maintained the highest professional standards to deliver the ultimate Balenciaga experience to the client.
+Key achievements:
+Increased client-facing time by 30% thanks to superior communication skills.
+Won a prestigious Facilitator of the Year Award presented by the company management to top-scorers in quarterly customer satisfaction surveys.
+2011 - 2013
+Alterations Specialist
+Chloé Store, New York, NY
+Oversaw the completion of requested garment alterations within specified deadlines and to the highest degree of accuracy possible.
+Communicated the Alterations Room workflow and any arising issues to the management team and fashion advisors.
+Cooperated closely with sales associates to close sales and loyalize customers.
+Provide all clients with top-class service and professional advice.
+Contributed to fostering the company culture of open communication and cross-functional collaboration.
+Key achievement:
+Sewed and altered garments that consistently conformed to the required specifications while meeting 99% of deadlines.
+"""
+
+    entries = parse_experience_block(block)
+
+    assert len(entries) == 2
+    assert entries[0]["company"] == "Balenciaga Boutique"
+    assert entries[0]["position"] == "Boutique Facilitator"
+    assert entries[0]["location"] == "New York City, NY"
+    assert entries[0]["startDate"] == "2016-01-01"
+    assert entries[0]["isCurrent"] is True
+    assert any("Delivered excellent customer service" in bullet for bullet in entries[0]["responsibilityBullets"])
+    assert any("Won a prestigious Facilitator of the Year Award" in bullet for bullet in entries[0]["responsibilityBullets"])
+    assert not any("Alterations Room workflow" in bullet for bullet in entries[0]["responsibilityBullets"])
+
+    assert entries[1]["company"] == "Chloé Store"
+    assert entries[1]["position"] == "Alterations Specialist"
+    assert entries[1]["location"] == "New York, NY"
+    assert entries[1]["startDate"] == "2011-01-01"
+    assert entries[1]["endDate"] == "2013-01-01"
+    assert any("Alterations Room workflow" in bullet for bullet in entries[1]["responsibilityBullets"])
+    assert any("Sewed and altered garments" in bullet for bullet in entries[1]["responsibilityBullets"])
+    assert not any("Balenciaga experience" in bullet for bullet in entries[1]["responsibilityBullets"])
 
 
 def test_parse_experience_block_rejects_cv308_header_fragments_from_remote_product_path() -> None:
