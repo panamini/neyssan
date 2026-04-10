@@ -35,6 +35,13 @@ Description courte de l'événement et de son contexte.
 
 Création de l'espace Obsidian LLM Wiki pour le projet twoweeks. Architecture v2 adoptée d'emblée : staging `rawinput/`, gestion temporelle avec statuts et archive.
 
+## [2026-04-10] decision | Refonte du système de tones : 4 tones avec Auto
+**Type** : decision
+**Version** : v1
+**Impact** : [[ai-product-model]], [[product-roadmap]], [[gap-analysis]]
+
+Remplacement des 3 tones initiaux (Balanced/Warm/Formal) par 4 tones : **Auto** (analyse l'offre et choisit automatiquement), **Natural**, **Formal**, **Warm**. Le mode Auto devient le point d'entrée recommandé — il réduit la charge de choix et personnalise selon la lecture de l'offre d'emploi.
+
 ---
 
 *Les entrées suivantes seront ajoutées au fil du projet par le LLM lors des ingests, des décisions documentées, et des pivots.*
