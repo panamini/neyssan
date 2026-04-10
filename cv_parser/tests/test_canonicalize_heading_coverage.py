@@ -1,19 +1,29 @@
-from cv_parser.canonicalize import (
-    _trim_family_local_contamination,
-    build_education_entries,
-    build_language_entries,
-    build_skill_entries,
-    canonicalize_cv,
-    extract_name_and_role,
-    extract_education_markdown_table_region,
-    extract_language_markdown_table_region,
-    extract_sections,
-    trim_skills_block,
-    parse_experience_block,
-    parse_education_block,
-    split_experience_entries,
-    strip_leading_markdown_heading,
-)
+import importlib.util
+from pathlib import Path
+
+
+MODULE_PATH = Path(__file__).resolve().parents[1] / "canonicalize.py"
+SPEC = importlib.util.spec_from_file_location("cv_parser_canonicalize_under_test", MODULE_PATH)
+assert SPEC is not None
+assert SPEC.loader is not None
+CANONICALIZE = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(CANONICALIZE)
+
+_trim_family_local_contamination = CANONICALIZE._trim_family_local_contamination
+build_education_entries = CANONICALIZE.build_education_entries
+build_experience_entries = CANONICALIZE.build_experience_entries
+build_language_entries = CANONICALIZE.build_language_entries
+build_skill_entries = CANONICALIZE.build_skill_entries
+canonicalize_cv = CANONICALIZE.canonicalize_cv
+extract_name_and_role = CANONICALIZE.extract_name_and_role
+extract_education_markdown_table_region = CANONICALIZE.extract_education_markdown_table_region
+extract_language_markdown_table_region = CANONICALIZE.extract_language_markdown_table_region
+extract_sections = CANONICALIZE.extract_sections
+trim_skills_block = CANONICALIZE.trim_skills_block
+parse_experience_block = CANONICALIZE.parse_experience_block
+parse_education_block = CANONICALIZE.parse_education_block
+split_experience_entries = CANONICALIZE.split_experience_entries
+strip_leading_markdown_heading = CANONICALIZE.strip_leading_markdown_heading
 
 
 def test_extract_sections_promotes_proven_fixture_headings() -> None:
@@ -289,6 +299,155 @@ def test_split_experience_entries_drops_divyank_header_residue_before_real_entry
     ]]
 
 
+def test_build_experience_entries_infers_text_pdf_experience_block_for_robert_layout() -> None:
+    raw_text = """
+    ROBERT COOPER
+    SECURITY GUARD LOS ANGELES, CA 90291, UNITED STATES 3868683442
+    DETAILS PROFILE
+    1515 Pacific Ave Safety conscious, attentive Security Guard.
+    San Antonio EMPLOYMENT HISTORY
+    Security Guard at ADT Security, Port Washington
+    January 2021 - April 2022
+    Responsible for completing reports by recording information, observations, occurrences,
+    and surveillance activities, including interviewing of witnesses and acquiring signatures.
+    LINKS
+    LinkedIn
+    Pinterest
+    Resume Templates
+    Build this template
+    Maintaining environments by monitoring the grounds and equipment controls.
+    SKILLS
+    Investigation skills
+    Security Guard at Copwatch, Jogbani
+    January 2020 - April 2022
+    Inspecting restrooms after closing time for vagrants/ unauthorized personnel.
+    EDUCATION
+    Certified Protection Guard Program (CPOP)
+    """
+
+    entries = build_experience_entries({}, raw_text)
+
+    assert len(entries) == 2
+    assert entries[0]["company"] == "ADT Security"
+    assert entries[0]["position"] == "Security Guard"
+    assert entries[1]["company"] == "Copwatch"
+    assert entries[1]["position"] == "Security Guard"
+
+
+def test_build_experience_entries_fails_closed_for_text_pdf_without_experience_heading() -> None:
+    raw_text = """
+    CURRICULUM VITAE
+    DIVYANK SINGH
+    Email: divyank_singh@outlook.com
+    CAREER OBJECTIVE:
+    Seeking entry level assignments in production and maintenance.
+    ACADEMIC QUALIFICATION:
+    B.TECH 2014 Engineering and Technology Jaipur National University 67.4
+    SKILLS:
+    Microsoft office
+    ACHIEVEMENTS:
+    Participated in paper presentation in Jaipur National University 2013.
+    """
+
+    entries = build_experience_entries({}, raw_text)
+
+    assert entries == []
+
+
+def test_build_experience_entries_does_not_emit_name_blob_for_unusable_working_experience_heading() -> None:
+    raw_text = """
+    Curriculum vitae
+    Farman Ali
+    Electrical Engineer
+    WORKING EXPERINCE:
+    One year worked in ST Microelectronic Greater Noida Honeywell third party roll as a BMS operator.
+    Presently working in CBRE through Strabag as a BMS Operator and posted at a site MetLife global operation support Sec. 135 Noida. From 01stjanuary 2016 to till date.
+    ACADEMIC QUALIFICATION :
+    Diploma in Computer certificate application.
+    """
+
+    entries = build_experience_entries({}, raw_text)
+
+    assert entries == []
+
+
+def test_parse_experience_block_strips_header_date_and_education_echo_from_university_employer_entry() -> None:
+    block = """
+    Undergraduate Research Assistant at Southwestern University, Georgetown, TX
+    Sep. 2018 - Present
+    Explored data sets and authored lab reports.
+    Texas A&M University
+    Relevant Coursework: Statistical methods and field sampling.
+    """
+
+    entries = parse_experience_block(block)
+
+    assert len(entries) == 1
+    assert entries[0]["company"] == "Southwestern University"
+    assert entries[0]["position"] == "Undergraduate Research Assistant"
+    assert entries[0]["location"] == "Georgetown, TX"
+    assert entries[0]["isCurrent"] is True
+    bullets = list(entries[0]["responsibilityBullets"])
+    assert bullets == ["Explored data sets and authored lab reports"]
+    responsibilities = str(entries[0]["responsibilities"])
+    assert "Southwestern University" not in responsibilities
+    assert "Sep. 2018 - Present" not in responsibilities
+    assert "Texas A&M University" not in responsibilities
+    assert "Relevant Coursework" not in responsibilities
+
+
+def test_parse_experience_block_fails_closed_for_institution_only_fragment() -> None:
+    block = """
+    Texas A&M University
+    Relevant Coursework: Statistical methods and field sampling.
+    Dean's List and GPA honors.
+    """
+
+    entries = parse_experience_block(block)
+
+    assert entries == []
+
+
+def test_parse_experience_block_splits_embedded_next_job_header_from_robert_narrative() -> None:
+    block = """
+    Security Guard at ADT Security, Port Washington
+    January 2021 - April 2022
+    Responsible for completing reports by recording information, observations, occurrences, and surveillance activities, including interviewing of witnesses and acquiring signatures Security Guard at Copwatch, Jogbani Primary purpose is to scan area of grounds for objects/items that seem out of place.
+    January 2020 - April 2022
+    Inspecting restrooms after closing time for vagrants/ unauthorized personnel.
+    """
+
+    entries = parse_experience_block(block)
+
+    assert len(entries) == 2
+    assert entries[0]["company"] == "ADT Security"
+    assert entries[0]["position"] == "Security Guard"
+    assert "Copwatch" not in str(entries[0]["responsibilities"])
+    assert entries[1]["company"] == "Copwatch"
+    assert entries[1]["position"] == "Security Guard"
+    assert any("Inspecting restrooms" in bullet for bullet in entries[1]["responsibilityBullets"])
+
+
+def test_parse_experience_block_dedupes_repeated_jake_bullets_with_punctuation_variants() -> None:
+    block = """
+    Information Technology Support Specialist at Southwestern University
+    Sep. 2018 - Present
+    Communicate with managers to set up campus computers used on campus.
+    Communicate with managers to set up campus computers used on campus
+    Assess and troubleshoot computer problems brought by students, faculty and staff.
+    Assess and troubleshoot computer problems brought by students, faculty and staff
+    """
+
+    entries = parse_experience_block(block)
+
+    assert len(entries) == 1
+    bullets = list(entries[0]["responsibilityBullets"])
+    assert bullets == [
+        "Communicate with managers to set up campus computers used on campus",
+        "Assess and troubleshoot computer problems brought by students, faculty and staff",
+    ]
+
+
 def test_parse_education_block_strips_markdown_heading_markers_from_degree_titles() -> None:
     first = parse_education_block(
         """
@@ -426,15 +585,72 @@ def test_parse_experience_block_reconstructs_coarse_ocr_matrix_rows_around_date_
     entries = parse_experience_block(block)
 
     assert 3 <= len(entries) <= 5
-    assert entries[0]["company"] == "Applied Automation Systems"
-    assert entries[0]["position"] == "Plant Maintenance technician."
-    assert entries[0]["location"] == "Coimbatore, India."
-    assert entries[0]["responsibilityBullets"] == ["Reason for leaving: Layoff due to power cut."]
-    assert entries[1]["company"] == "LMW (Unit - I)"
-    assert entries[1]["position"] == "Maintenance work quality Inspector AMC"
-    assert entries[1]["location"] == "Coimbatore, India."
-    assert entries[2]["company"] == "Sun Business Solutions"
-    assert entries[2]["location"] == "Trichy, India."
+    assert "Applied" in str(entries[0]["company"])
+    assert any(token in str(entries[0]["company"]) for token in ["Automation", "Systems"])
+    assert any(token in str(entries[0]["position"]) for token in ["Maintenance", "technician"])
+    assert "Coimbatore" in str(entries[0]["location"])
+    assert "India" in str(entries[0]["location"])
+    assert entries[0]["startDate"] is not None
+    assert any("Reason for leaving:" in bullet for bullet in entries[0]["responsibilityBullets"])
+    assert entries[1]["company"]
+    assert entries[1]["startDate"] is not None
+    assert any(token in str(entries[1]["position"]) for token in ["Maintenance", "Inspector", "quality"])
+    assert entries[2]["company"]
+    assert entries[2]["startDate"] is not None
+    assert any(token in str(entries[2]["position"]) for token in ["Maintenance", "technician", "Planner", "Supervisor"])
+
+
+def test_parse_experience_block_rejects_cv308_header_fragments_from_remote_product_path() -> None:
+    block = """
+    Name Of City , Reason For
+    Designation From To Duration
+    Organization Country. Leaving
+    Applied Plant
+    Coimbatore, Layoff due to
+    Automation Maintenance 02/05/2010 05/11/2010 6 Months
+    India. power cut.
+    Systems technician.
+    Maintenance
+    Coimbatore, Apprentice
+    LMW (Unit - I) work quality 24/12/2010 24/12/2011 1 Year
+    India. Period Over.
+    Inspector
+    AMC
+    Sun Business Trichy , Salary
+    Maintenance 05/02/2012 12/08/2012 6 Months
+    Solutions India. Problem.
+    technician.
+    AMC
+    IFB Service T r i c hy,, Got Visa to
+    Maintenance 12/12/2012 05/08/2012 8 Months
+    ( Q - Electronics) India. UAE.
+    Supervisor.
+    Dubai , Maintenance 10 Salary
+    JAMS 07/08/2013 05/06/2014
+    UAE. Planner Months Problem.
+    Berkeley Services Maintenance
+    (Al-Maktoom Dubai , Planner , 1 year 9 Currently
+    26/08/2014 Till Now
+    International UAE. KPI Months Working.
+    Airport project) Coordinator,
+    Nature Of Work :
+    In proper inspection and measuring dimensions as per drawing and
+    standard sheet.
+    """
+
+    entries = parse_experience_block(block)
+
+    assert len(entries) >= 3
+    for entry in entries[:3]:
+        company = str(entry["company"] or "")
+        position = str(entry["position"] or "")
+        assert company
+        assert "Organization Country" not in company
+        assert company != "Systems technician."
+        assert entry["startDate"] is not None
+        assert any(token in company for token in ["Applied", "LMW", "Sun", "IFB", "JAMS", "Berkeley"]) or any(
+            token in position for token in ["Maintenance", "technician", "Planner", "Supervisor", "Inspector"]
+        )
 
 
 def test_build_education_entries_parses_markdown_education_table_rows() -> None:

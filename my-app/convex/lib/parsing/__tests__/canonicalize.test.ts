@@ -137,6 +137,120 @@ describe("canonicalizeParserResult", () => {
     expect(experience[0]?.endDate).toBe("2022-04-01");
   });
 
+  it("falls back to raw sections when normalized experience location echoes the full header line", () => {
+    const parserResult = {
+      normalized: {
+        rawText: [
+          "ROBERT COOPER",
+          "Security Guard at ADT Security, Port Washington",
+          "January 2021 - April 2022",
+          "Responsible for completing reports by recording information, observations, occurrences, and surveillance activities.",
+          "",
+          "Security Guard at Copwatch, Jogbani",
+          "January 2020 - April 2022",
+          "Inspecting restrooms after closing time for vagrants/ unauthorized personnel.",
+        ].join("\n"),
+        experience: [
+          {
+            id: "exp-1",
+            company: "ADT Security",
+            position: "Security Guard",
+            startDate: "2021-01-01",
+            endDate: "2022-04-01",
+            location: "Security Guard at ADT Security, Port Washington",
+            responsibilityBullets: [
+              "Responsible for completing reports by recording information, observations, occurrences, and surveillance activities.",
+            ],
+          },
+          {
+            id: "exp-2",
+            company: "Copwatch",
+            position: "Security Guard",
+            startDate: "2020-01-01",
+            endDate: "2022-04-01",
+            location: "Security Guard at Copwatch, Jogbani",
+            responsibilityBullets: [
+              "Inspecting restrooms after closing time for vagrants/ unauthorized personnel.",
+            ],
+          },
+        ],
+        rawSections: [
+          {
+            label: "EXPERIENCE",
+            content: [
+              "Security Guard at ADT Security, Port Washington",
+              "January 2021 - April 2022",
+              "Responsible for completing reports by recording information, observations, occurrences, and surveillance activities.",
+              "",
+              "Security Guard at Copwatch, Jogbani",
+              "January 2020 - April 2022",
+              "Inspecting restrooms after closing time for vagrants/ unauthorized personnel.",
+            ].join("\n"),
+          },
+        ],
+      },
+    };
+
+    const canonical = canonicalizeParserResult(parserResult, context);
+    const experience = canonical.normalized?.experience ?? [];
+
+    expect(canonical.diagnostics?.experience_source).toBe("raw_sections");
+    expect(experience).toHaveLength(2);
+    expect(experience[0]?.company).toBe("ADT Security");
+    expect(experience[0]?.position).toBe("Security Guard");
+    expect(experience[0]?.location).toBe("Port Washington");
+    expect(experience[1]?.location).toBe("Jogbani");
+    expect(experience.some((entry: any) => /security guard at/i.test(String(entry?.location ?? "")))).toBe(false);
+  });
+
+  it("fails closed on matrix-header residue instead of surfacing a fake experience entry", () => {
+    const matrixBlock = [
+      "Name Of City , Reason For",
+      "Designation From To Duration",
+      "Organization Country. Leaving",
+      "Applied Plant",
+      "Coimbatore, Layoff due to",
+      "Automation Maintenance 02/05/2010 05/11/2010 6 Months",
+      "India. power cut.",
+      "Systems technician.",
+      "Maintenance",
+      "Coimbatore, Apprentice",
+      "LMW (Unit - I) work quality 24/12/2010 24/12/2011 1 Year",
+      "India. Period Over.",
+      "Inspector",
+      "AMC",
+      "Sun Business Trichy , Salary",
+      "Maintenance 05/02/2012 12/08/2012 6 Months",
+      "Solutions India. Problem.",
+      "technician.",
+      "AMC",
+    ].join("\n");
+
+    const parserResult = {
+      normalized: {
+        rawText: matrixBlock,
+        experience: [
+          {
+            id: "exp-1",
+            company: "Organization Country",
+            position: "Designation From To Duration",
+            startDate: "2010-01-01",
+            endDate: "2010-11-05",
+            location: "Name Of City , Reason For",
+            responsibilityBullets: ["Reason for leaving: Layoff due to power cut."],
+          },
+        ],
+        rawSections: [{ label: "EXPERIENCE", content: matrixBlock }],
+      },
+    };
+
+    const canonical = canonicalizeParserResult(parserResult, context);
+    const experience = canonical.normalized?.experience ?? [];
+
+    expect(experience).toEqual([]);
+    expect(canonical.diagnostics?.experience_source).toBeUndefined();
+  });
+
   it("still falls back to raw sections when normalized experience is placeholder-like", () => {
     const parserResult = {
       normalized: {

@@ -467,109 +467,12 @@ function mergeNarrativeIntoExperience(target: any, source: any): boolean {
   return changed;
 }
 
-const EXPERIENCE_FIELD_EXACT_BLOCKLIST = new Set([
-  "curriculum",
-  "curriculum vitae",
-  "resume",
-  "cv",
-  "experience",
-  "professional experience",
-  "work experience",
-  "employment history",
-  "details",
-  "personal details",
-  "contact details",
-  "profile",
-  "summary",
-  "name of organization",
-  "designation",
-  "organization",
-  "city country",
-  "name of city",
-  "reason for leaving",
-]);
-
-const EXPERIENCE_FIELD_FRAGMENT_BLOCKLIST = [
-  "designation from to duration",
-  "name of city reason for",
-  "organization country",
-  "reason for leaving",
-];
-
-function normalizeExperienceStructureText(value: unknown): string {
-  return normalizeCandidateForStoplist(coerceString(value))
-    .replace(/[^a-z0-9]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function isExperienceFieldStructuralFragment(value: unknown): boolean {
-  const normalized = normalizeExperienceStructureText(value);
-  if (!normalized) return false;
-  if (EXPERIENCE_FIELD_EXACT_BLOCKLIST.has(normalized)) {
-    return true;
-  }
-  return EXPERIENCE_FIELD_FRAGMENT_BLOCKLIST.some((phrase) => normalized.includes(phrase));
-}
-
-function hasExperienceStructuralFragmentInPayload(entry: any): boolean {
-  const payload = [
-    coerceString(entry?.responsibilities ?? ""),
-    ...(Array.isArray(entry?.responsibilityBullets)
-      ? entry.responsibilityBullets.map((value: unknown) => coerceString(value))
-      : []),
-  ]
-    .map((value) => value.trim())
-    .filter(Boolean);
-  return payload.some((value) => {
-    const normalized = normalizeExperienceStructureText(value);
-    if (!normalized) return false;
-    return isExperienceFieldStructuralFragment(normalized) || normalized.startsWith("reason for leaving");
-  });
-}
-
-function isExperienceLocationHeaderEcho(location: unknown, company: unknown, position: unknown): boolean {
-  const normalizedLocation = normalizeExperienceStructureText(location);
-  const normalizedCompany = normalizeExperienceStructureText(company);
-  const normalizedPosition = normalizeExperienceStructureText(position);
-  if (!normalizedLocation) return false;
-
-  if (normalizedCompany && normalizedLocation === normalizedCompany) {
-    return true;
-  }
-  if (normalizedPosition && normalizedLocation === normalizedPosition) {
-    return true;
-  }
-  if (
-    normalizedCompany &&
-    normalizedPosition &&
-    normalizedLocation.includes(normalizedCompany) &&
-    normalizedLocation.includes(normalizedPosition)
-  ) {
-    return true;
-  }
-
-  const parsed = splitCompanyPositionFromHeader(coerceString(location));
-  const parsedCompany = normalizeExperienceStructureText(parsed.company);
-  const parsedPosition = normalizeExperienceStructureText(parsed.position);
-  return Boolean(
-    normalizedCompany &&
-      normalizedPosition &&
-      parsedCompany === normalizedCompany &&
-      parsedPosition === normalizedPosition,
-  );
-}
-
 function sanitizeExperienceEntries(entries: any[]): any[] {
   const merged: any[] = [];
   for (const entry of entries) {
     if (!entry) continue;
     const clone = { ...entry };
     let company = coerceString(clone?.company ?? "");
-    if (company && isExperienceFieldStructuralFragment(company)) {
-      clone.company = "";
-    }
-    company = coerceString(clone?.company ?? "");
     if (company && NARRATIVE_VERB_RE.test(company)) {
       clone.company = "";
     }
@@ -580,20 +483,12 @@ function sanitizeExperienceEntries(entries: any[]): any[] {
       }
     }
     company = coerceString(clone?.company ?? "");
-    let position = coerceString(clone?.position ?? "");
-    if (position && isExperienceFieldStructuralFragment(position)) {
-      clone.position = "";
-      position = "";
-    }
+    const position = coerceString(clone?.position ?? "");
     const bullets = Array.isArray(clone?.responsibilityBullets)
       ? clone.responsibilityBullets.map((val: unknown) => coerceString(val)).filter(Boolean)
       : [];
     const textResponsibilities = coerceString(clone?.responsibilities ?? "");
-    let locationText = coerceString(clone?.location ?? "");
-    if (locationText && isExperienceFieldStructuralFragment(locationText)) {
-      clone.location = "";
-      locationText = "";
-    }
+    const locationText = coerceString(clone?.location ?? "");
     let locationNarrative: string[] = [];
     if (locationText) {
       const words = locationText.split(/\s+/).filter(Boolean).length;
@@ -620,7 +515,7 @@ function sanitizeExperienceEntries(entries: any[]): any[] {
     }
 
     if (!hasCompany) {
-      if (hasNarrativePayload && !hasExperienceStructuralFragmentInPayload(clone) && merged.length > 0) {
+      if (hasNarrativePayload && merged.length > 0) {
         const previous = [...merged].reverse().find((candidate) =>
           Boolean(coerceString(candidate?.company ?? "") || coerceString(candidate?.position ?? "")),
         );
@@ -2882,70 +2777,6 @@ function canonicalizeExperience(
   normalized: any,
   context: CanonicalizeContext,
 ): ExperienceCanonical {
-  const isPlaceholderExperienceValue = (value: unknown): boolean => {
-    const normalizedValue = coerceString(value);
-    if (!normalizedValue) return true;
-    return /^(experience|professional experience|employment history|work experience|inferred)$/i.test(normalizedValue);
-  };
-
-  const isCoherentNormalizedExperienceEntry = (entry: any): boolean => {
-    const company = coerceString(entry?.company ?? "");
-    const position = coerceString(entry?.position ?? "");
-    const location = coerceString(entry?.location ?? "");
-    const hasCompany = Boolean(company) && !isPlaceholderExperienceValue(company);
-    const hasPosition = Boolean(position) && !isPlaceholderExperienceValue(position);
-    const hasDates = hasExperienceDateSignal(entry);
-    const hasBullets = Array.isArray(entry?.responsibilityBullets) && entry.responsibilityBullets.length > 0;
-    const hasResponsibilities = Boolean(coerceString(entry?.responsibilities ?? ""));
-    const hasAchievements = Array.isArray(entry?.achievements) && entry.achievements.length > 0;
-    const hasLocation = Boolean(location);
-    const hasContent = hasBullets || hasResponsibilities || hasAchievements;
-    const hasStructuralFieldContamination =
-      isExperienceFieldStructuralFragment(company) ||
-      isExperienceFieldStructuralFragment(position) ||
-      isExperienceFieldStructuralFragment(location);
-    const hasHeaderEchoLocation = isExperienceLocationHeaderEcho(location, company, position);
-
-    if (hasStructuralFieldContamination || hasHeaderEchoLocation) {
-      return false;
-    }
-
-    if (hasCompany && hasPosition) {
-      return true;
-    }
-    if (hasCompany && hasDates && hasContent) {
-      return true;
-    }
-    return false;
-  };
-
-  const isPersonalDetailsTextFallbackEntry = (entry: any): boolean => {
-    const combined = [
-      coerceString(entry?.company ?? ""),
-      coerceString(entry?.position ?? ""),
-      coerceString(entry?.responsibilities ?? ""),
-      ...(Array.isArray(entry?.responsibilityBullets)
-        ? entry.responsibilityBullets.map((value: unknown) => coerceString(value))
-        : []),
-    ]
-      .join(" ")
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, " ")
-      .trim();
-    if (!combined) return false;
-    return [
-      "personal details",
-      "father s name",
-      "mother s name",
-      "marital status",
-      "date of birth",
-      "place of birth",
-      "nationality",
-      "passport",
-      "religion",
-    ].some((token) => combined.includes(token));
-  };
-
   let droppedEmpty = 0;
 
   let normalizedEntries = ensureArray<any>(rawValue)
@@ -2993,17 +2824,16 @@ function canonicalizeExperience(
   normalizedEntries = sanitizeExperienceEntries(normalizedEntries);
 
   const fromRaw = filterRawSection(rawSections, "experience", { preserveWhitespace: true });
-  const coherentNormalizedEntries = normalizedEntries.filter((entry) => isCoherentNormalizedExperienceEntry(entry));
 
   const shouldFallback =
     normalizedEntries.length === 0 ||
-    (fromRaw.length > 0 && coherentNormalizedEntries.length === 0) ||
+    (fromRaw.length > normalizedEntries.length && fromRaw.length > 0) ||
     normalizedEntries.every((entry) => {
       const company = coerceString(entry?.company ?? "");
       const position = coerceString(entry?.position ?? "");
       const hasContent = Boolean(entry?.responsibilities || entry?.achievements?.length);
-      const poorCompany = isPlaceholderExperienceValue(company);
-      const poorPosition = isPlaceholderExperienceValue(position);
+      const poorCompany = !company || /^inferred$/i.test(company);
+      const poorPosition = /^professional experience$/i.test(position);
       return (poorCompany || poorPosition) && !hasContent;
     });
 
@@ -3092,13 +2922,6 @@ function canonicalizeExperience(
       if (sanitizedFallback.length) {
         fallbackSource = "text_fallback";
       }
-    }
-  }
-
-  if (fallbackSource === "text_fallback" || fallbackSource === "raw_sections") {
-    sanitizedFallback = sanitizedFallback.filter((item) => !isPersonalDetailsTextFallbackEntry(item));
-    if (!sanitizedFallback.length) {
-      fallbackSource = "none";
     }
   }
 
