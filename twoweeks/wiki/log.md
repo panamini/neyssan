@@ -22,6 +22,68 @@ grep "^## \[" wiki/log.md | grep "lint"
 
 ---
 
+## [2026-04-10] decision | Refonte système de tones — 4 tones avec Auto
+
+**Agent** : Claude (décision utilisateur)
+**Pages mises à jour** :
+- `wiki/concepts/ai-product-model.md` — nouvelle section tones (Auto/Natural/Formal/Warm)
+- `wiki/concepts/product-roadmap.md` — décision mise à jour, description phase P2 corrigée
+- `wiki/concepts/gap-analysis.md` — keep list mise à jour
+- `wiki/timeline.md` — événement ajouté
+
+Remplacement Balanced → Auto + Natural. Auto analyse l'offre d'emploi et choisit le tone adapté.
+
+---
+
+## [2026-04-10] ingest | Gap Analysis — diagnostic vs ResumeLab, priorités, 3 cycles
+
+**Agent** : Claude
+**Fichiers traités** : `rawinput/3_gap_analysis.md`
+**Pages créées** :
+- `wiki/sources/2026-04-10-gap-analysis.md`
+- `wiki/concepts/gap-analysis.md`
+**Pages mises à jour** :
+- `wiki/concepts/product-roadmap.md` — 3 cycles d'exécution + liens gap-analysis
+- `wiki/overview.md` — diagnostic en une phrase, compteurs, lien gap-analysis
+- `wiki/index.md` — +2 pages, +1 source, statistiques
+**Pages archivées** : aucune
+
+---
+
+## [2026-04-10] ingest | Benchmark Matrix + Success Blueprint — scoring, vision, IA
+
+**Agent** : Claude
+**Fichiers traités** : `rawinput/1_ideal_benchmark_matrix.md`, `rawinput/2_success_blueprint.md`
+**Pages créées** :
+- `wiki/sources/2026-04-10-benchmark-matrix.md`
+- `wiki/sources/2026-04-10-success-blueprint.md`
+- `wiki/concepts/benchmark-matrix.md`
+- `wiki/concepts/product-vision.md`
+- `wiki/concepts/ai-product-model.md`
+**Pages mises à jour** :
+- `wiki/entities/cv-forge.md` — positionnement, 5 objets produit, benchmark
+- `wiki/overview.md` — +3 thèmes, questions ouvertes enrichies, compteurs
+- `wiki/index.md` — +5 pages, +2 sources, statistiques
+**Pages archivées** : aucune
+
+---
+
+## [2026-04-10] ingest | Notion Roadmap CV Forge — phases, KPIs, décisions produit
+
+**Agent** : Claude
+**Fichiers traités** : `rawinput/6_NOTION_ROADMAP.MD`
+**Pages créées** :
+- `wiki/sources/2026-04-10-notion-roadmap-cvforge.md`
+- `wiki/concepts/product-roadmap.md`
+- `wiki/concepts/kpis.md`
+**Pages mises à jour** :
+- `wiki/entities/cv-forge.md` — enrichi avec roadmap phases, stratégie, décisions figées, KPIs
+- `wiki/overview.md` — stratégie produit, phase actuelle, questions ouvertes mises à jour
+- `wiki/index.md` — +3 pages, statistiques mises à jour
+**Pages archivées** : aucune
+
+---
+
 ## [2026-04-09] ingest | Décisions sprint CV Forge — parser, features, bugs
 
 **Agent** : Claude
