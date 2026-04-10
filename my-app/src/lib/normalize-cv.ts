@@ -267,6 +267,15 @@ function normalizeExperienceItem(entry: any, idx: number): IExperienceItem {
     : providedEndPrecision ?? (endIsEmptyString ? startDatePrecision : endParsed.precision);
 
   const responsibilities = normalizeRichField(entry?.responsibilities);
+  const responsibilityBullets = Array.isArray(entry?.responsibilityBullets)
+    ? entry.responsibilityBullets
+        .map((value: unknown) => (typeof value === "string" ? normalizeWhitespace(value) : ""))
+        .filter((value: string) => value.length > 0)
+    : Array.isArray(entry?.responsibilities)
+      ? entry.responsibilities
+          .map((value: unknown) => (typeof value === "string" ? normalizeWhitespace(value) : ""))
+          .filter((value: string) => value.length > 0)
+      : undefined;
 
   const base = {
     id: typeof entry?.id === "string" ? entry.id : generateId("exp", idx),
@@ -281,6 +290,7 @@ function normalizeExperienceItem(entry: any, idx: number): IExperienceItem {
     currentlyWorking: entry?.currentlyWorking ? true : undefined,
     location: typeof entry?.location === "string" ? entry.location : "",
     responsibilities,
+    responsibilityBullets: responsibilityBullets?.length ? responsibilityBullets : undefined,
     achievements: Array.isArray(entry?.achievements) ? entry.achievements.map(String) : [],
   };
   return ExperienceItemSchema.parse(base);
