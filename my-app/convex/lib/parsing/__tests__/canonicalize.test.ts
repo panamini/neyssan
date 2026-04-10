@@ -137,7 +137,7 @@ describe("canonicalizeParserResult", () => {
     expect(experience[0]?.endDate).toBe("2022-04-01");
   });
 
-  it("falls back to raw sections when normalized experience location echoes the full header line", () => {
+  it("keeps normalized experience and repairs header-echo locations when entries are otherwise coherent", () => {
     const parserResult = {
       normalized: {
         rawText: [
@@ -194,13 +194,142 @@ describe("canonicalizeParserResult", () => {
     const canonical = canonicalizeParserResult(parserResult, context);
     const experience = canonical.normalized?.experience ?? [];
 
-    expect(canonical.diagnostics?.experience_source).toBe("raw_sections");
+    expect(canonical.diagnostics?.experience_source).not.toBe("raw_sections");
     expect(experience).toHaveLength(2);
     expect(experience[0]?.company).toBe("ADT Security");
     expect(experience[0]?.position).toBe("Security Guard");
     expect(experience[0]?.location).toBe("Port Washington");
     expect(experience[1]?.location).toBe("Jogbani");
     expect(experience.some((entry: any) => /security guard at/i.test(String(entry?.location ?? "")))).toBe(false);
+  });
+
+  it("keeps the coherent normalized subset instead of falling back to raw sections for the whole experience section", () => {
+    const parserResult = {
+      normalized: {
+        experience: [
+          {
+            id: "exp-1",
+            company: "ADT Security",
+            position: "Security Guard",
+            startDate: "2021-01-01",
+            endDate: "2022-04-01",
+            location: "Security Guard at ADT Security, Port Washington",
+            responsibilityBullets: [
+              "Responsible for completing reports by recording information, observations, occurrences, and surveillance activities.",
+            ],
+          },
+          {
+            id: "exp-2",
+            company: "Southwestern University",
+            position: "",
+            responsibilities: "Communicate with managers to set up campus computers used on campus.",
+          },
+        ],
+        rawSections: [
+          {
+            label: "EXPERIENCE",
+            content: [
+              "Security Guard at ADT Security, Port Washington",
+              "January 2021 - April 2022",
+              "Responsible for completing reports by recording information, observations, occurrences, and surveillance activities.",
+              "",
+              "Information Technology Support Specialist",
+              "Southwestern University",
+              "Sep 1, 2018 — Present",
+              "Communicate with managers to set up campus computers used on campus.",
+            ].join("\n"),
+          },
+        ],
+      },
+    };
+
+    const canonical = canonicalizeParserResult(parserResult, context);
+    const experience = canonical.normalized?.experience ?? [];
+
+    expect(canonical.diagnostics?.experience_source).not.toBe("raw_sections");
+    expect(experience).toHaveLength(1);
+    expect(experience[0]?.company).toBe("ADT Security");
+    expect(experience[0]?.position).toBe("Security Guard");
+    expect(experience[0]?.location).toBe("Port Washington");
+  });
+
+  it("trusts explicit responsibility bullets over a duplicated flattened responsibilities string", () => {
+    const bullets = [
+      "Responsible for completing reports by recording information, observations, occurrences, and surveillance activities, including interviewing of witnesses and acquiring signatures",
+      "Maintaining environments by monitoring the grounds and equipment controls",
+      "Logging into security headquarters on the hour during the day and every 2 hours with the night shift, notifying control of all in order statuses",
+    ];
+    const parserResult = {
+      normalized: {
+        experience: [
+          {
+            id: "exp-1",
+            company: "ADT Security",
+            position: "Security Guard",
+            startDate: "2021-01-01",
+            endDate: "2022-04-01",
+            location: "Port Washington",
+            responsibilityBullets: bullets,
+            responsibilities: `${bullets.join("\n")} ${bullets.join(" ")}`,
+          },
+        ],
+      },
+    };
+
+    const canonical = canonicalizeParserResult(parserResult, context);
+    const experience = canonical.normalized?.experience ?? [];
+
+    expect(canonical.diagnostics?.experience_source).not.toBe("raw_sections");
+    expect(experience).toHaveLength(1);
+    expect(experience[0]?.responsibilityBullets).toEqual(bullets);
+    expect(experience[0]?.responsibilities).toBe(bullets.join("\n"));
+  });
+
+  it("keeps distinct normalized Jake entries without duplicating each responsibility block", () => {
+    const supportBullets = [
+      "Communicate with managers to set up campus computers used on campus",
+      "Assess and troubleshoot computer problems brought by students, faculty and staff",
+      "Maintain upkeep of computers, classroom equipment, and 200 printers across campus",
+    ];
+    const researchBullets = [
+      "Explored methods to generate video game dungeons based off of The Legend of Zelda",
+      "Developed a game in Java to test the generated dungeons",
+      "Contributed 50K+ lines of code to an established codebase via Git",
+    ];
+    const parserResult = {
+      normalized: {
+        experience: [
+          {
+            id: "exp-1",
+            company: "Southwestern University",
+            position: "Information Technology Support Specialist",
+            startDate: "2018-09-01",
+            isCurrent: true,
+            responsibilityBullets: supportBullets,
+            responsibilities: `${supportBullets.join("\n")} ${supportBullets.join(" ")}`,
+          },
+          {
+            id: "exp-2",
+            company: "Southwestern University",
+            position: "Artificial Intelligence Research Assistant",
+            startDate: "2019-05-01",
+            isCurrent: true,
+            responsibilityBullets: researchBullets,
+            responsibilities: `${researchBullets.join("\n")} ${researchBullets.join(" ")}`,
+          },
+        ],
+      },
+    };
+
+    const canonical = canonicalizeParserResult(parserResult, context);
+    const experience = canonical.normalized?.experience ?? [];
+
+    expect(canonical.diagnostics?.experience_source).not.toBe("raw_sections");
+    expect(experience).toHaveLength(2);
+    expect(experience[0]?.responsibilityBullets).toEqual(supportBullets);
+    expect(experience[0]?.responsibilities).toBe(supportBullets.join("\n"));
+    expect(experience[1]?.responsibilityBullets).toEqual(researchBullets);
+    expect(experience[1]?.responsibilities).toBe(researchBullets.join("\n"));
   });
 
   it("fails closed on matrix-header residue instead of surfacing a fake experience entry", () => {

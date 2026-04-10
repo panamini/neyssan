@@ -448,6 +448,64 @@ def test_parse_experience_block_dedupes_repeated_jake_bullets_with_punctuation_v
     ]
 
 
+def test_parse_experience_block_splits_robert_copwatch_ocr_style_responsibilities() -> None:
+    block = """
+    Security Guard at Copwatch, Jogbani
+    January 2020 - April 2022
+    Primary purpose is to scan area of grounds for objects/items that seem out of place and notifying Center management of bags or packages that are unattended Inspecting restrooms after closing time for vagrants/ unauthorized personnel Monitoring selected areas via CCTV app on smart devices Ensure flawless equipment operation by finishing preventive maintenance necessities, reading the manufacturer's instructions, troubleshooting malfunctions, organizing for repairs if needed, and assessing new equipment and techniques
+    """
+
+    entries = parse_experience_block(block)
+
+    assert len(entries) == 1
+    bullets = list(entries[0]["responsibilityBullets"])
+    assert bullets == [
+        "Primary purpose is to scan area of grounds for objects/items that seem out of place and notifying Center management of bags or packages that are unattended",
+        "Inspecting restrooms after closing time for vagrants/ unauthorized personnel",
+        "Monitoring selected areas via CCTV app on smart devices",
+        "Ensure flawless equipment operation by finishing preventive maintenance necessities, reading the manufacturer's instructions, troubleshooting malfunctions, organizing for repairs if needed, and assessing new equipment and techniques",
+    ]
+
+
+def test_parse_experience_block_splits_jake_support_ocr_style_responsibilities() -> None:
+    block = """
+    Information Technology Support Specialist at Southwestern University
+    Sep. 2018 - Present
+    Communicate with managers to set up campus computers used on campus Assess and troubleshoot computer problems brought by students, faculty and staff Maintain upkeep of computers, classroom equipment, and 200 printers across campus
+    """
+
+    entries = parse_experience_block(block)
+
+    assert len(entries) == 1
+    bullets = list(entries[0]["responsibilityBullets"])
+    assert bullets == [
+        "Communicate with managers to set up campus computers used on campus",
+        "Assess and troubleshoot computer problems brought by students, faculty and staff",
+        "Maintain upkeep of computers, classroom equipment, and 200 printers across campus",
+    ]
+
+
+def test_parse_experience_block_splits_jake_research_ocr_style_responsibilities() -> None:
+    block = """
+    Artificial Intelligence Research Assistant at Southwestern University
+    May 2019 - Present
+    Explored methods to generate video game dungeons based off of The Legend of Zelda Developed a game in Java to test the generated dungeons Contributed 50K+ lines of code to an established codebase via Git Conducted a human subject study to determine which video game dungeon generation technique is enjoyable Wrote an 8-page paper and gave multiple presentations on-campus Presented virtually to the World Conference on Computational Intelligence
+    """
+
+    entries = parse_experience_block(block)
+
+    assert len(entries) == 1
+    bullets = list(entries[0]["responsibilityBullets"])
+    assert bullets == [
+        "Explored methods to generate video game dungeons based off of The Legend of Zelda",
+        "Developed a game in Java to test the generated dungeons",
+        "Contributed 50K+ lines of code to an established codebase via Git",
+        "Conducted a human subject study to determine which video game dungeon generation technique is enjoyable",
+        "Wrote an 8-page paper and gave multiple presentations on-campus",
+        "Presented virtually to the World Conference on Computational Intelligence",
+    ]
+
+
 def test_parse_education_block_strips_markdown_heading_markers_from_degree_titles() -> None:
     first = parse_education_block(
         """
@@ -598,6 +656,49 @@ def test_parse_experience_block_reconstructs_coarse_ocr_matrix_rows_around_date_
     assert entries[2]["company"]
     assert entries[2]["startDate"] is not None
     assert any(token in str(entries[2]["position"]) for token in ["Maintenance", "technician", "Planner", "Supervisor"])
+
+
+def test_parse_experience_block_reconstructs_blank_line_fragmented_role_company_date_reason_rows() -> None:
+    block = """
+Plant Maintenance technician
+
+Applied Automation Systems • Coimbatore, India.
+
+Jan 1, 2010
+
+Reason for leaving: Layoff due to power cut.
+Maintenance work quality Inspector
+
+LMW (Unit - I) • Coimbatore, India.
+
+Jan 1, 2010
+
+Reason for leaving: Apprentice Period Over.
+AMC Maintenance technician
+
+Sun Business Solutions • Trichy, India.
+
+Jan 1, 2012
+
+Reason for leaving: Salary Problem.
+"""
+
+    entries = parse_experience_block(block)
+
+    assert len(entries) == 3
+    assert entries[0]["company"] == "Applied Automation Systems"
+    assert entries[0]["position"] == "Plant Maintenance technician"
+    assert entries[0]["location"] == "Coimbatore, India."
+    assert entries[0]["startDate"] is not None
+    assert entries[0]["responsibilityBullets"] == ["Reason for leaving: Layoff due to power cut"]
+    assert entries[1]["company"] == "LMW (Unit - I)"
+    assert entries[1]["position"] == "Maintenance work quality Inspector"
+    assert entries[1]["location"] == "Coimbatore, India."
+    assert entries[1]["responsibilityBullets"] == ["Reason for leaving: Apprentice Period Over"]
+    assert entries[2]["company"] == "Sun Business Solutions"
+    assert entries[2]["position"] == "AMC Maintenance technician"
+    assert entries[2]["location"] == "Trichy, India."
+    assert entries[2]["responsibilityBullets"] == ["Reason for leaving: Salary Problem"]
 
 
 def test_parse_experience_block_rejects_cv308_header_fragments_from_remote_product_path() -> None:

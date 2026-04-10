@@ -110,7 +110,8 @@ const _IExperienceItemBase = z.object({
   /* Back-compat alias retained for old data */
   currentlyWorking: z.boolean().optional(),
   location: z.string().optional(),
-  responsibilities: z.union([RemirrorJSONSchema, z.string()]).optional(),
+  responsibilities: z.union([RemirrorJSONSchema, z.string(), z.array(z.string())]).optional(),
+  responsibilityBullets: z.array(z.string()).optional(),
   achievements: z.array(z.string()).optional(),
 });
 export const IExperienceItemSchema = _IExperienceItemBase.passthrough();
