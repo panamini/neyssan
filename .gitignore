@@ -95,6 +95,7 @@ pdf-ingest.disabled/
 
 # --- Claude Code (sessions locales) ------------------------------
 .claude/
+.kilo/
 
 # --- Backups et données sensibles --------------------------------
 *.sql
