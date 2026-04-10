@@ -537,6 +537,21 @@ SECTION_TERMINATORS = {
     "DRIVING LICENSE",
 }
 
+TEXT_PDF_EXPERIENCE_HEADING_RE = re.compile(
+    r"\b(?:EMPLOYMENT\s+HISTORY|PROFESSIONAL\s+EXPERIENCE|WORK(?:ING)?\s+EXPERI+NCE|EXPERIENCE)\b",
+    re.IGNORECASE,
+)
+
+TEXT_PDF_EXPERIENCE_HARD_STOP_RE = re.compile(
+    r"^(?:EDUCATION|ACADEMIC\s+QUALIFICATIONS?|ACADEMIC\s+CREDENTIALS|ACADEMIC\s+HISTORY|EDUCATION\s+BACKGROUND|QUALIFICATIONS|CERTIFICATIONS|PROJECTS|ACHIEVEMENTS|DECLARATION|PERSONAL\s+DETAILS|DETAILS|PROFILE|SUMMARY)\b",
+    re.IGNORECASE,
+)
+
+TEXT_PDF_EXPERIENCE_SIDEBAR_RE = re.compile(
+    r"^(?:LINKS|SKILLS|LANGUAGES|LANGUAGE\s+KNOWN|HOBBIES|INTERESTS)\b",
+    re.IGNORECASE,
+)
+
 # Template noise filtering (Prompt 4)
 NOISE_SINGLETONS = {
     "resume templates",
@@ -1826,10 +1841,74 @@ def split_experience_entries(block: str) -> List[List[str]]:
     return [entry for entry in entries if any(line.strip() for line in entry)]
 
 
+def _extract_embedded_role_company_segments(line: str) -> Optional[Tuple[str, str, str]]:
+    cleaned = collapse_spaced_caps(_strip_bullet_prefix(line).strip())
+    if not cleaned or _match_role_company_line([cleaned]):
+        return None
+    words = cleaned.split()
+    if len(words) < 8:
+        return None
+    for start in range(1, len(words) - 4):
+        if not words[start][:1].isupper():
+            continue
+        prefix = " ".join(words[:start]).strip()
+        if len(prefix.split()) < 4:
+            continue
+        if _looks_like_contact_or_heading(prefix) or _looks_like_header_residue(prefix):
+            continue
+        if _match_role_company_line([prefix]) or _looks_like_entry_header_line(prefix):
+            continue
+        for end in range(min(len(words), start + 12), start + 3, -1):
+            header = " ".join(words[start:end]).strip(" ,")
+            suffix = " ".join(words[end:]).strip()
+            if len(suffix.split()) < 3:
+                continue
+            if not (suffix[:1].isupper() or suffix[:1].isdigit()):
+                continue
+            if _normalize_location_candidate(suffix) or looks_addressish(suffix):
+                continue
+            match = _match_role_company_line([header])
+            if not match:
+                continue
+            role, _company, _location, _index = match
+            if len(role.split()) > 6 or _starts_with_verb_phrase(role):
+                continue
+            if not (_contains_role_keyword(role) or _is_role_phrase(role)):
+                continue
+            return prefix, header, suffix
+    return None
+
+
+def _split_merged_experience_entry(entry_lines: List[str]) -> List[List[str]]:
+    if len(entry_lines) < 3:
+        return [entry_lines]
+    for idx in range(1, len(entry_lines) - 1):
+        next_line = collapse_spaced_caps(_strip_bullet_prefix(entry_lines[idx + 1]).strip())
+        if not re.search(DATE_PATTERN, next_line):
+            continue
+        split_segments = _extract_embedded_role_company_segments(entry_lines[idx])
+        if not split_segments:
+            continue
+        prefix, header, suffix = split_segments
+        first_entry = [line for line in [*entry_lines[:idx], prefix] if line.strip()]
+        second_entry = [line for line in [header, suffix, *entry_lines[idx + 1 :]] if line.strip()]
+        if first_entry and second_entry:
+            return [first_entry, second_entry]
+    return [entry_lines]
+
+
 def _find_company_candidate(lines: List[str]) -> Optional[str]:
     cleaned_lines = [_strip_bullet_prefix(line) for line in lines if _strip_bullet_prefix(line)]
     header_reject = {"curriculum vitae", "curriculum", "cv", "resume"}
     for line in cleaned_lines:
+        if (
+            _contains_org_keyword(line)
+            and not _is_role_phrase(line)
+            and not _starts_with_verb_phrase(line)
+            and not PHONE_EMAIL_URL_RE.search(line)
+            and not looks_addressish(line)
+        ):
+            return line
         if _looks_like_contact_or_heading(line):
             continue
         if looks_addressish(line):
@@ -1876,7 +1955,21 @@ def _find_company_candidate(lines: List[str]) -> Optional[str]:
         tokens = [token for token in re.split(r"[,\\s]+", line) if token]
         if len(tokens) >= 2:
             return line
-    return cleaned_lines[0] if cleaned_lines else None
+    for line in cleaned_lines:
+        if _looks_like_contact_or_heading(line):
+            continue
+        if looks_addressish(line):
+            continue
+        if _is_role_phrase(line):
+            continue
+        if _starts_with_verb_phrase(line):
+            continue
+        if len(line.split()) >= 6 and re.search(r"[.!?]$", line):
+            continue
+        if PHONE_EMAIL_URL_RE.search(line):
+            continue
+        return line
+    return None
 
 
 def _find_position_candidate(lines: List[str]) -> Optional[str]:
@@ -1935,6 +2028,87 @@ def _parse_dates(text: str) -> Tuple[Optional[str], Optional[str], Optional[bool
     return start_date, end_date if not is_current else None, is_current
 
 
+def _entry_has_text_pdf_experience_coherence(entry: Dict[str, object]) -> bool:
+    company = _strip_bullet_prefix(str(entry.get("company") or "")).strip()
+    position = _strip_bullet_prefix(str(entry.get("position") or "")).strip()
+    bullets = [str(item or "").strip() for item in entry.get("responsibilityBullets") or [] if str(item or "").strip()]
+    start_date = entry.get("startDate")
+    end_date = entry.get("endDate")
+    is_current = entry.get("isCurrent")
+
+    if not company or company.lower() == "experience":
+        return False
+    if _looks_like_contact_or_heading(company):
+        return False
+    if _starts_with_verb_phrase(company):
+        return False
+    lowered_company = strip_accents(company.lower()).strip(" :")
+    if lowered_company in SECTION_NAME_BLOCKLIST:
+        return False
+    if lowered_company in {"curriculum vitae", "curriculum", "resume", "cv"}:
+        return False
+    if position and position.lower() == company.lower():
+        return False
+    if len(company.split()) >= 10:
+        return False
+    if re.search(DATE_PATTERN, company):
+        return False
+    if company.isupper() and len(company.split()) <= 4 and not (_contains_org_keyword(company) or position):
+        return False
+    if position and (_contains_role_keyword(position) or _is_role_phrase(position)):
+        return True
+    if start_date and (end_date or is_current or bullets):
+        return True
+    if _contains_org_keyword(company) and bullets:
+        return True
+    return False
+
+
+def _infer_experience_block_from_text_pdf(raw_text: str) -> Optional[str]:
+    lines = [_normalize_structural_line(line) for line in (raw_text or "").replace("\r", "").split("\n")]
+    lines = [line for line in lines if line]
+    if not lines:
+        return None
+
+    start_index: Optional[int] = None
+    seeded_lines: List[str] = []
+    for idx, line in enumerate(lines):
+        match = TEXT_PDF_EXPERIENCE_HEADING_RE.search(strip_accents(line))
+        if not match:
+            continue
+        start_index = idx
+        trailing = line[match.end() :].strip(" :-|\t")
+        if trailing:
+            seeded_lines.append(trailing)
+        break
+    if start_index is None:
+        return None
+
+    collected: List[str] = list(seeded_lines)
+    in_sidebar = False
+    for line in lines[start_index + 1 :]:
+        ascii_line = strip_accents(line)
+        if TEXT_PDF_EXPERIENCE_HARD_STOP_RE.match(ascii_line):
+            break
+        if TEXT_PDF_EXPERIENCE_SIDEBAR_RE.match(ascii_line):
+            in_sidebar = True
+            continue
+        looks_like_resume_content = bool(
+            _looks_like_entry_header_line(line)
+            or re.search(DATE_PATTERN, line)
+            or line.lstrip().startswith(("•", "-", "*"))
+            or _contains_role_keyword(line)
+        )
+        if in_sidebar and not looks_like_resume_content:
+            continue
+        if in_sidebar and looks_like_resume_content:
+            in_sidebar = False
+        collected.append(line)
+
+    block = "\n".join(line for line in collected if line).strip()
+    return block or None
+
+
 def _is_noise_line(text: str) -> bool:
     candidate = (text or "").strip()
     if not candidate:
@@ -1977,6 +2151,89 @@ def _dedupe_experience_bullets(bullets: Sequence[str]) -> List[str]:
         seen_signatures.append(signature)
         deduped.append(cleaned)
     return deduped
+
+
+def _normalize_experience_line_signature(value: Optional[str]) -> str:
+    cleaned = collapse_spaced_caps(_strip_bullet_prefix(value or "").strip())
+    if not cleaned:
+        return ""
+    normalized = strip_accents(cleaned.lower())
+    normalized = re.sub(r"[^a-z0-9]+", " ", normalized)
+    return re.sub(r"\s+", " ", normalized).strip()
+
+
+def _looks_like_educationish_experience_line(line: str) -> bool:
+    cleaned = collapse_spaced_caps(_strip_bullet_prefix(line).strip())
+    if not cleaned:
+        return False
+    lowered = strip_accents(cleaned.lower()).strip(" :")
+    if lowered.startswith(("relevant coursework", "coursework", "dean's list", "gpa", "cgpa")):
+        return True
+    if (
+        _contains_org_keyword(cleaned)
+        and not _contains_role_keyword(cleaned)
+        and not re.search(DATE_PATTERN, cleaned)
+        and not _starts_with_verb_phrase(cleaned)
+        and len(cleaned.split()) <= 6
+    ):
+        return True
+    return False
+
+
+def _keep_experience_content_line(
+    line: str,
+    *,
+    company: Optional[str],
+    position: Optional[str],
+    location: Optional[str],
+    structural_signatures: Sequence[str],
+) -> bool:
+    cleaned = collapse_spaced_caps(_strip_bullet_prefix(line).strip())
+    if not cleaned:
+        return False
+    signature = _normalize_experience_line_signature(cleaned)
+    if not signature:
+        return False
+    if signature in structural_signatures:
+        return False
+    for candidate in (company, position, location):
+        if signature and signature == _normalize_experience_line_signature(candidate):
+            return False
+    if _looks_like_educationish_experience_line(cleaned):
+        return False
+    if re.search(DATE_PATTERN, cleaned) and len(cleaned.split()) <= 8 and not _starts_with_verb_phrase(cleaned):
+        return False
+    return True
+
+
+def _entry_has_minimal_experience_coherence(
+    *,
+    company: str,
+    position: Optional[str],
+    start_date: Optional[str],
+    end_date: Optional[str],
+    is_current: Optional[bool],
+    bullets: Sequence[str],
+) -> bool:
+    normalized_company = _strip_bullet_prefix(company).strip()
+    if not normalized_company or normalized_company.lower() == "experience":
+        return False
+    lowered_company = strip_accents(normalized_company.lower()).strip(" :")
+    if lowered_company in SECTION_NAME_BLOCKLIST:
+        return False
+    if lowered_company in {"curriculum vitae", "curriculum", "resume", "cv"}:
+        return False
+    if PHONE_EMAIL_URL_RE.search(normalized_company):
+        return False
+    if looks_addressish(normalized_company):
+        return False
+    if not bullets:
+        return False
+    if position and (_contains_role_keyword(position) or _is_role_phrase(position)):
+        return True
+    if start_date and (end_date or is_current):
+        return True
+    return False
 
 
 def _extract_bullets(lines: List[str], skip: Sequence[str]) -> List[str]:
@@ -2548,6 +2805,7 @@ MATRIX_REASON_TOKENS = {
 MATRIX_ROLE_FRAGMENT_TOKENS = {
     "maintenance",
     "plant",
+    "work",
     "quality",
     "amc",
     "planner",
@@ -2567,6 +2825,12 @@ MATRIX_COUNTRY_TOKENS = {
     "usa",
     "uk",
     "canada",
+}
+
+MATRIX_CITY_HINTS = {
+    "coimbatore",
+    "trichy",
+    "dubai",
 }
 
 SLASH_DATE_RE = re.compile(r"\b\d{1,2}[/-]\d{1,2}[/-](?:19|20)\d{2}\b")
@@ -2705,6 +2969,95 @@ def _build_matrix_phrase(parts: Sequence[str]) -> Optional[str]:
     return joined or None
 
 
+def _split_matrix_anchor_line(anchor_line: str) -> Tuple[Optional[str], Optional[str]]:
+    cleaned = _normalize_matrix_fragment(anchor_line)
+    date_matches = list(SLASH_DATE_RE.finditer(cleaned))
+    if not date_matches:
+        return cleaned or None, None
+    first_match = date_matches[0]
+    last_match = date_matches[-1]
+    before = cleaned[: first_match.start()].strip(" -–—,;:")
+    after = cleaned[last_match.end() :].strip(" -–—,;:")
+    return before or None, after or None
+
+
+def _append_matrix_tokens(target: List[str], value: Optional[str]) -> None:
+    normalized = _build_matrix_phrase([value or ""])
+    if normalized:
+        target.append(normalized)
+
+
+def _consume_matrix_fragment(
+    fragment: str,
+    *,
+    company_parts: List[str],
+    position_parts: List[str],
+    location_parts: List[str],
+    reason_parts: List[str],
+) -> None:
+    normalized = _normalize_matrix_fragment(fragment)
+    if not normalized or _is_matrix_header_fragment(normalized) or _is_long_narrative_line(normalized):
+        return
+
+    if "," in normalized:
+        left, right = [part.strip() for part in normalized.split(",", 1)]
+        right_tokens = _matrix_fragment_tokens(right)
+        left_tokens = left.split()
+        if right and any(token in MATRIX_REASON_TOKENS for token in right_tokens):
+            if len(left_tokens) >= 2:
+                _append_matrix_tokens(company_parts, " ".join(left_tokens[:-1]))
+                _append_matrix_tokens(location_parts, left_tokens[-1])
+            elif left:
+                _append_matrix_tokens(location_parts, left)
+            _append_matrix_tokens(reason_parts, right)
+            return
+
+    tokens = normalized.split()
+    lower_tokens = [strip_accents(token.lower()).strip(".,") for token in tokens]
+    if not tokens:
+        return
+
+    role_indexes = [idx for idx, token in enumerate(lower_tokens) if token in MATRIX_ROLE_FRAGMENT_TOKENS]
+    location_indexes = [idx for idx, token in enumerate(lower_tokens) if token in MATRIX_COUNTRY_TOKENS or token in MATRIX_CITY_HINTS]
+    reason_indexes = [idx for idx, token in enumerate(lower_tokens) if token in MATRIX_REASON_TOKENS]
+
+    if role_indexes:
+        first_role = role_indexes[0]
+        if first_role > 0:
+            _append_matrix_tokens(company_parts, " ".join(tokens[:first_role]))
+        _append_matrix_tokens(position_parts, " ".join(tokens[first_role:]))
+        return
+
+    if location_indexes:
+        first_location = location_indexes[0]
+        first_reason = reason_indexes[0] if reason_indexes else None
+        if first_location > 0:
+            _append_matrix_tokens(company_parts, " ".join(tokens[:first_location]))
+        if first_reason is not None and first_reason > first_location:
+            _append_matrix_tokens(location_parts, " ".join(tokens[first_location:first_reason]))
+            _append_matrix_tokens(reason_parts, " ".join(tokens[first_reason:]))
+        else:
+            _append_matrix_tokens(location_parts, " ".join(tokens[first_location:]))
+        return
+
+    if reason_indexes:
+        first_reason = reason_indexes[0]
+        if first_reason > 0:
+            _append_matrix_tokens(company_parts, " ".join(tokens[:first_reason]))
+        _append_matrix_tokens(reason_parts, " ".join(tokens[first_reason:]))
+        return
+
+    if _normalize_location_candidate(normalized):
+        _append_matrix_tokens(location_parts, normalized)
+        return
+
+    if any(token in MATRIX_COUNTRY_TOKENS for token in lower_tokens):
+        _append_matrix_tokens(location_parts, normalized)
+        return
+
+    _append_matrix_tokens(company_parts, normalized)
+
+
 def _clean_matrix_reason(reason_parts: Sequence[str], anchor_reason: Optional[str]) -> Optional[str]:
     parts = [part.strip() for part in reason_parts if part and part.strip()]
     if anchor_reason:
@@ -2805,6 +3158,12 @@ def _parse_experience_matrix_block(block: str) -> Optional[List[Dict[str, object
         narrative_hits = 0
         fragment_only_hits = 0
         seen_anchor = False
+        anchor_before, anchor_after = _split_matrix_anchor_line(lines[anchor])
+        if anchor_index == 0:
+            before_context = [fragment for fragment in lines[start:anchor] if fragment.strip()]
+        else:
+            before_context = [fragment for fragment in lines[max(start, anchor - 2) : anchor] if fragment.strip()]
+        after_context = [fragment for fragment in lines[anchor + 1 : min(end + 1, anchor + 5)] if fragment.strip()]
         for idx, fragment in enumerate(span):
             if idx == len(span) - 1 and fragment == lines[anchor]:
                 pass
@@ -2819,7 +3178,6 @@ def _parse_experience_matrix_block(block: str) -> Optional[List[Dict[str, object
                 header_hits += 1
                 continue
             if kind == "narrative":
-                narrative_hits += 1
                 break
             if kind == "location":
                 location_parts.append(fragment)
@@ -2845,12 +3203,49 @@ def _parse_experience_matrix_block(block: str) -> Optional[List[Dict[str, object
             previous_anchor = anchor
             continue
 
+        company_parts_before = []
+        company_parts_after = []
+        position_parts = []
+        location_parts = []
+        reason_parts = []
+
+        for fragment in before_context:
+            _consume_matrix_fragment(
+                fragment,
+                company_parts=company_parts_before,
+                position_parts=position_parts,
+                location_parts=location_parts,
+                reason_parts=reason_parts,
+            )
+        _consume_matrix_fragment(
+            anchor_before or "",
+            company_parts=company_parts_before,
+            position_parts=position_parts,
+            location_parts=location_parts,
+            reason_parts=reason_parts,
+        )
+        _consume_matrix_fragment(
+            anchor_after or "",
+            company_parts=company_parts_after,
+            position_parts=position_parts,
+            location_parts=location_parts,
+            reason_parts=reason_parts,
+        )
+        for fragment in after_context:
+            _consume_matrix_fragment(
+                fragment,
+                company_parts=company_parts_after,
+                position_parts=position_parts,
+                location_parts=location_parts,
+                reason_parts=reason_parts,
+            )
+
         company_parts = list(company_parts_before)
         if company_parts_before:
             company_parts.extend(
                 fragment
                 for fragment in company_parts_after
-                if _contains_org_keyword(fragment) or re.search(r"[()]", fragment)
+                if _contains_org_keyword(fragment) or re.search(r"[()]", fragment) or len(fragment.split()) == 1
             )
         else:
             company_parts.extend(company_parts_after)
@@ -2871,9 +3266,10 @@ def _parse_experience_matrix_block(block: str) -> Optional[List[Dict[str, object
             company = None
         if company and _normalize_location_candidate(company):
             company = None
+        if company and _is_matrix_header_fragment(company):
+            company = None
         if not company and position_parts:
             company = _build_matrix_phrase([part for part in company_parts if len(part.split()) > 1])
-
         if fragment_only_hits >= 3 and not (company and position):
             previous_anchor = anchor
             continue
@@ -3038,10 +3434,37 @@ def parse_experience_block(block: str) -> List[Dict[str, object]]:
     entries = split_experience_entries(block)
     if not entries:
         entries = [block.splitlines()]
+    repaired_entries: List[List[str]] = []
+    index = 0
+    while index < len(entries):
+        current_entry = entries[index]
+        if len(current_entry) == 1 and index + 1 < len(entries):
+            role_line = strip_leading_markdown_heading(current_entry[0]).strip()
+            next_first = strip_leading_markdown_heading(entries[index + 1][0]).strip()
+            if (
+                role_line
+                and next_first
+                and (_contains_role_keyword(role_line) or _is_role_phrase(role_line))
+                and _contains_org_keyword(next_first)
+            ):
+                repaired_entries.append([current_entry[0], *entries[index + 1]])
+                index += 2
+                continue
+        repaired_entries.append(current_entry)
+        index += 1
+    entries = []
+    pending_entries = repaired_entries[:]
+    while pending_entries:
+        current_entry = pending_entries.pop(0)
+        split_entries = _split_merged_experience_entry(current_entry)
+        if len(split_entries) == 1:
+            entries.append(current_entry)
+            continue
+        pending_entries = split_entries + pending_entries
     parsed_entries: List[Dict[str, object]] = []
     for entry_lines in entries:
         entry_lines = [
-            _normalize_structural_line(line.strip())
+            strip_leading_markdown_heading(_normalize_structural_line(line.strip()))
             for line in entry_lines
             if line.strip()
         ]
@@ -3052,13 +3475,14 @@ def parse_experience_block(block: str) -> List[Dict[str, object]]:
         position = None
         company = None
         consumed_for_dates: Optional[int] = None
+        matched_role_company_index: Optional[int] = None
         header_match = _match_multiline_header(entry_lines)
         if header_match:
             position, company, location, consumed_for_dates = header_match
         else:
             match = _match_role_company_line(entry_lines)
             if match:
-                position, company, location, _ = match
+                position, company, location, matched_role_company_index = match
         normalized_first = _strip_bullet_prefix(entry_lines[0]).strip() if entry_lines else ""
         prefer_role_header = False
         if not header_match:
@@ -3093,24 +3517,89 @@ def parse_experience_block(block: str) -> List[Dict[str, object]]:
         else:
             date_scope = " ".join(entry_lines)
         start_date, end_date, is_current = _parse_dates(date_scope)
+        structural_lines: List[str] = []
+        if header_match and consumed_for_dates:
+            structural_lines.extend(entry_lines[:consumed_for_dates])
+        elif matched_role_company_index is not None:
+            structural_lines.append(entry_lines[matched_role_company_index])
+            date_index = matched_role_company_index + 1
+            if date_index < len(entry_lines) and re.search(DATE_PATTERN, entry_lines[date_index]):
+                structural_lines.append(entry_lines[date_index])
+        structural_signatures = tuple(
+            signature
+            for signature in (
+                _normalize_experience_line_signature(line)
+                for line in structural_lines
+            )
+            if signature
+        )
         skip_items = [company or "", position or ""]
         if location:
             skip_items.append(location)
         bullets = _extract_bullets(entry_lines, skip=skip_items)
         bullets = [bullet for bullet in bullets if not _is_noise_line(bullet)]
+        bullets = [
+            bullet
+            for bullet in bullets
+            if _keep_experience_content_line(
+                bullet,
+                company=company,
+                position=position,
+                location=location,
+                structural_signatures=structural_signatures,
+            )
+        ]
         if not bullets:
-            remaining = [line for line in entry_lines if line not in {company, position}]
+            remaining = [
+                line
+                for line in entry_lines
+                if line not in {company, position}
+                and _keep_experience_content_line(
+                    line,
+                    company=company,
+                    position=position,
+                    location=location,
+                    structural_signatures=structural_signatures,
+                )
+            ]
             if remaining:
                 bullets = [
                     sentence.strip()
                     for sentence in re.split(r"(?<=[.!?])\s+", " ".join(remaining))
-                    if sentence.strip() and not _is_noise_line(sentence)
+                    if sentence.strip()
+                    and not _is_noise_line(sentence)
+                    and _keep_experience_content_line(
+                        sentence,
+                        company=company,
+                        position=position,
+                        location=location,
+                        structural_signatures=structural_signatures,
+                    )
                 ]
         if not bullets:
             fallback_line = entry_lines[-1]
-            bullets = [fallback_line] if not _is_noise_line(fallback_line) else []
+            bullets = [
+                fallback_line
+            ] if not _is_noise_line(fallback_line) and _keep_experience_content_line(
+                fallback_line,
+                company=company,
+                position=position,
+                location=location,
+                structural_signatures=structural_signatures,
+            ) else []
         if not bullets and entry_lines:
-            bullets = [line for line in entry_lines if not _is_noise_line(line)]
+            bullets = [
+                line
+                for line in entry_lines
+                if not _is_noise_line(line)
+                and _keep_experience_content_line(
+                    line,
+                    company=company,
+                    position=position,
+                    location=location,
+                    structural_signatures=structural_signatures,
+                )
+            ]
         company_clean = _strip_bullet_prefix(company or "") or (position or "Experience").split(",")[0].strip()
         original_company = company_clean
         lower_company = company_clean.lower()
@@ -3154,6 +3643,16 @@ def parse_experience_block(block: str) -> List[Dict[str, object]]:
         if position:
             position_lower = position.lower()
             bullets = [bullet for bullet in bullets if bullet.lower() != position_lower]
+        bullets = _dedupe_experience_bullets(bullets)
+        if not _entry_has_minimal_experience_coherence(
+            company=company_clean,
+            position=position,
+            start_date=start_date,
+            end_date=end_date,
+            is_current=is_current,
+            bullets=bullets,
+        ):
+            continue
 
         parsed_entries.append(
             {
@@ -3178,32 +3677,45 @@ def build_experience_entries(sections: Dict[str, List[str]], raw_text: str) -> L
     for block in sections.get("EXPERIENCE", []):
         parsed_entries = parse_experience_block(block)
         experiences.extend(parsed_entries)
-    if not experiences:
+    inferred_experience_heading = TEXT_PDF_EXPERIENCE_HEADING_RE.search(strip_accents(raw_text or "")) is not None
+    attempted_text_pdf_inference = False
+    if not experiences and not sections.get("EXPERIENCE") and inferred_experience_heading:
+        attempted_text_pdf_inference = True
+        inferred_block = _infer_experience_block_from_text_pdf(raw_text)
+        if inferred_block:
+            inferred_entries = parse_experience_block(inferred_block)
+            coherent_entries = [entry for entry in inferred_entries if _entry_has_text_pdf_experience_coherence(entry)]
+            if coherent_entries:
+                experiences.extend(coherent_entries)
+    if not experiences and not attempted_text_pdf_inference:
         # Fallback heuristic: look for capitalized company names directly in raw text
-        sentences = [sentence.strip() for sentence in re.split(r"(?<=[.!?])\s+", raw_text) if sentence.strip()]
-        for sentence in sentences:
-            match = re.search(r"([A-Z][A-Za-z0-9&]+(?:\s+[A-Z][A-Za-z0-9&]+){1,3})", sentence)
-            if match:
-                company = match.group(1).strip()
-                if company.lower().startswith("responsible for"):
+        if inferred_experience_heading:
+            sentences = [sentence.strip() for sentence in re.split(r"(?<=[.!?])\s+", raw_text) if sentence.strip()]
+            for sentence in sentences:
+                if not (re.search(DATE_PATTERN, sentence) or _contains_role_keyword(sentence) or _contains_org_keyword(sentence)):
                     continue
-                experiences.append(
-                    {
-                        "id": make_id("exp"),
-                        "company": company,
-                        "position": None,
-                        "startDate": None,
-                        "endDate": None,
-                        "isCurrent": None,
-                        "location": None,
-                        "summary": None,
-                        "responsibilities": sentence,
-                        "responsibilityBullets": [sentence],
-                        "achievements": [],
-                    }
-                )
-                break
-    if not experiences and raw_text.strip():
+                match = re.search(r"([A-Z][A-Za-z0-9&]+(?:\s+[A-Z][A-Za-z0-9&]+){1,3})", sentence)
+                if match:
+                    company = match.group(1).strip()
+                    if company.lower().startswith("responsible for"):
+                        continue
+                    experiences.append(
+                        {
+                            "id": make_id("exp"),
+                            "company": company,
+                            "position": None,
+                            "startDate": None,
+                            "endDate": None,
+                            "isCurrent": None,
+                            "location": None,
+                            "summary": None,
+                            "responsibilities": sentence,
+                            "responsibilityBullets": [sentence],
+                            "achievements": [],
+                        }
+                    )
+                    break
+    if not experiences and raw_text.strip() and inferred_experience_heading and not attempted_text_pdf_inference:
         sentence = first_sentence(raw_text)
         experiences.append(
             {

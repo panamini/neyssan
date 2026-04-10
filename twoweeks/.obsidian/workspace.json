@@ -41,12 +41,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "CLAUDE.md",
+                "file": "wiki/concepts/gap-analysis.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "CLAUDE"
+              "title": "gap-analysis"
             }
           }
         ],
@@ -123,13 +123,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "CLAUDE.md",
+                "file": "wiki/concepts/gap-analysis.md",
                 "followCursor": true,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of CLAUDE"
+              "title": "Outline of gap-analysis"
             }
           },
           {
@@ -193,8 +193,19 @@
               "icon": "lucide-archive",
               "title": "All properties"
             }
+          },
+          {
+            "id": "bc8b8d5eafa17479",
+            "type": "leaf",
+            "state": {
+              "type": "git-view",
+              "state": {},
+              "icon": "git-pull-request",
+              "title": "Source Control"
+            }
           }
-        ]
+        ],
+        "currentTab": 5
       }
     ],
     "direction": "horizontal",
@@ -217,27 +228,34 @@
   },
   "active": "f26c74e3c5246309",
   "lastOpenFiles": [
-    "wiki/concepts/llm-wiki-pattern.md",
-    "PLUGINS.md",
-    "wiki/outputs/2026-04-09-architecture-v2.md",
-    "wiki/archive/README.md",
+    "wiki/concepts/Untitled Kanban.md",
+    "wiki/concepts/gap-analysis.md",
+    "wiki/concepts/product-roadmap.md",
+    "wiki/concepts/ai-product-model.md",
+    "wiki/concepts/benchmark-matrix.md",
+    "wiki/sources/2026-04-10-gap-analysis.md",
     "wiki/concepts/cv-parsing-pipeline.md",
-    "wiki/concepts/temporal-management.md",
-    "wiki/concepts/cv-families.md",
+    "raw/3_gap_analysis.md",
+    "wiki/concepts/kpis.md",
     "wiki/entities/cv-forge.md",
-    "wiki/sources/2026-04-09-wiki-paste-llm-wiki.md",
-    "wiki/sources/2026-04-09-tweet-karpathy-llm-wiki.md",
-    "wiki/sources/2026-04-09-decisions-cvforge-sprint.md",
-    "CLAUDE.md",
-    "raw/to do.md",
-    "raw/README.md",
-    "rawinput/to do.md",
+    "rawinput/3_gap_analysis.md",
+    "wiki/concepts/product-vision.md",
+    "wiki/concepts/temporal-management.md",
+    "raw/2_success_blueprint.md",
+    "raw/1_ideal_benchmark_matrix.md",
+    "wiki/sources/2026-04-10-success-blueprint.md",
+    "wiki/sources/2026-04-10-benchmark-matrix.md",
+    "rawinput/1_ideal_benchmark_matrix.md",
+    "rawinput/2_success_blueprint.md",
+    "wiki/concepts/cv-families.md",
+    "wiki/overview.md",
+    "wiki/index.md",
+    "wiki/outputs/2026-04-09-architecture-v2.md",
+    "wiki/concepts/llm-wiki-pattern.md",
+    "raw/6_NOTION_ROADMAP.MD",
+    "wiki/sources/2026-04-10-notion-roadmap-cvforge.md",
     "rawinput/feedback.json",
     "ingest-wiki.skill",
-    "review-iteration-1.html",
-    "rawinput/README.md",
-    "wiki/plan en attente.md",
-    "wiki/overview.md",
-    "wiki/index.md"
+    "review-iteration-1.html"
   ]
 }
