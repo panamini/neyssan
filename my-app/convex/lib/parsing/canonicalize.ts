@@ -560,6 +560,40 @@ function isExperienceLocationHeaderEcho(location: unknown, company: unknown, pos
   );
 }
 
+function repairExperienceHeaderEchoLocation(entry: any): any {
+  if (!entry || typeof entry !== "object") return entry;
+
+  const company = coerceString(entry?.company ?? "");
+  const position = coerceString(entry?.position ?? "");
+  const location = coerceString(entry?.location ?? "");
+  if (!company || !position || !location) return entry;
+  if (!isExperienceLocationHeaderEcho(location, company, position)) return entry;
+
+  const parsed = splitCompanyPositionFromHeader(location);
+  const normalizedCompany = normalizeExperienceStructureText(company);
+  const normalizedPosition = normalizeExperienceStructureText(position);
+  const parsedCompany = normalizeExperienceStructureText(parsed.company);
+  const parsedPosition = normalizeExperienceStructureText(parsed.position);
+  const repairedLocation = stripDrivingLicense(parsed.location ?? "");
+
+  if (
+    parsedCompany &&
+    parsedPosition &&
+    parsedCompany === normalizedCompany &&
+    parsedPosition === normalizedPosition
+  ) {
+    return {
+      ...entry,
+      location: repairedLocation,
+    };
+  }
+
+  return {
+    ...entry,
+    location: "",
+  };
+}
+
 function sanitizeExperienceEntries(entries: any[]): any[] {
   const merged: any[] = [];
   for (const entry of entries) {
@@ -2957,12 +2991,15 @@ function canonicalizeExperience(
       const seededBullets = Array.isArray(entry?.responsibilityBullets)
         ? dedupeStringsCaseInsensitive((entry.responsibilityBullets as unknown[]).map((val) => coerceString(val)).filter(Boolean))
         : [];
-      const responsibilityBullets = dedupeStringsCaseInsensitive([
-        ...seededBullets,
-        ...(Array.isArray(rawResponsibilities)
-          ? (rawResponsibilities as unknown[]).map((val) => coerceString(val)).filter(Boolean)
-          : splitResponsibilitiesText(rawResponsibilities ?? summary ?? entry?.content ?? "")),
-      ]);
+      const derivedBullets =
+        seededBullets.length > 0
+          ? seededBullets
+          : dedupeStringsCaseInsensitive(
+              Array.isArray(rawResponsibilities)
+                ? (rawResponsibilities as unknown[]).map((val) => coerceString(val)).filter(Boolean)
+                : splitResponsibilitiesText(rawResponsibilities ?? summary ?? entry?.content ?? ""),
+            );
+      const responsibilityBullets = derivedBullets.length ? derivedBullets : [];
       const normalizedResponsibilities = responsibilityBullets.length
         ? responsibilityBullets.join("\n")
         : coerceString(rawResponsibilities ?? summary ?? entry?.content ?? "") || undefined;
@@ -2990,15 +3027,21 @@ function canonicalizeExperience(
     })
     .filter(Boolean);
 
-  normalizedEntries = sanitizeExperienceEntries(normalizedEntries);
+  normalizedEntries = sanitizeExperienceEntries(normalizedEntries).map((entry) =>
+    repairExperienceHeaderEchoLocation(entry),
+  );
 
   const fromRaw = filterRawSection(rawSections, "experience", { preserveWhitespace: true });
   const coherentNormalizedEntries = normalizedEntries.filter((entry) => isCoherentNormalizedExperienceEntry(entry));
+  const preferredNormalizedEntries =
+    fromRaw.length > 0 && coherentNormalizedEntries.length > 0
+      ? coherentNormalizedEntries
+      : normalizedEntries;
 
   const shouldFallback =
-    normalizedEntries.length === 0 ||
+    preferredNormalizedEntries.length === 0 ||
     (fromRaw.length > 0 && coherentNormalizedEntries.length === 0) ||
-    normalizedEntries.every((entry) => {
+    preferredNormalizedEntries.every((entry) => {
       const company = coerceString(entry?.company ?? "");
       const position = coerceString(entry?.position ?? "");
       const hasContent = Boolean(entry?.responsibilities || entry?.achievements?.length);
@@ -3007,9 +3050,9 @@ function canonicalizeExperience(
       return (poorCompany || poorPosition) && !hasContent;
     });
 
-  if (!shouldFallback && normalizedEntries.length > 0) {
+  if (!shouldFallback && preferredNormalizedEntries.length > 0) {
     return {
-      items: normalizedEntries,
+      items: preferredNormalizedEntries,
       diagnostics: {
         droppedEmpty,
         fallbackCount: 0,

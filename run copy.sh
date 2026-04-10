@@ -28,8 +28,6 @@ STATE_DIR="${ROOT_DIR}/tmp/dev-stack"
 STATE_FILE="${STATE_DIR}/pids.env"
 LOG_DIR="${ROOT_DIR}/tmp"
 VITE_LOG="${LOG_DIR}/vite-dev.log"
-CONVEX_LOG="${LOG_DIR}/convex-dev.log"
-LOCAL_CONVEX_URL="${LOCAL_CONVEX_URL:-}"
 
 mkdir -p "${STATE_DIR}" "${LOG_DIR}"
 
@@ -64,7 +62,7 @@ kill_vite_ports() {
     # macOS & Linux-friendly lsof usage
     pids="$(lsof -ti tcp:$p -sTCP:LISTEN 2>/dev/null || true)"
     if [[ -n "${pids}" ]]; then
-      echo "[run] killing process(es) on :${p} -> ${pids}" >&2
+      echo "[run] killing process(es) on :${p} -> ${pids}"
       kill -9 ${pids} || true
     fi
   done
@@ -75,8 +73,6 @@ write_state() {
   {
     printf 'VITE_PID=%s\n' "${1:-}"
     printf 'PARSER_STARTED=%s\n' "${2:-0}"
-    printf 'CONVEX_PID=%s\n' "${3:-}"
-    printf 'CONVEX_URL=%s\n' "${4:-}"
   } > "${STATE_FILE}"
 }
 
@@ -86,8 +82,6 @@ read_state() {
     case "$k" in
       VITE_PID) VITE_PID="$v" ;;
       PARSER_STARTED) PARSER_STARTED="$v" ;;
-      CONVEX_PID) CONVEX_PID="$v" ;;
-      CONVEX_URL) CONVEX_URL="$v" ;;
     esac
   done < "${STATE_FILE}"
 }
@@ -167,103 +161,9 @@ stop_parser() {
   fi
 }
 
-is_convex_ready() {
-  local url="${1:-}"
-  [[ -z "${url}" ]] && return 1
-  curl -fsS "${url}/instance_name" >/dev/null 2>&1
-}
-
-discover_local_convex_url() {
-  if [[ -n "${LOCAL_CONVEX_URL}" ]]; then
-    echo "${LOCAL_CONVEX_URL}"
-    return 0
-  fi
-
-  if [[ -f "${CONVEX_LOG}" ]]; then
-    local explicit_url
-    explicit_url="$(grep -Eo 'http://127\.0\.0\.1:[0-9]+' "${CONVEX_LOG}" | tail -n1 || true)"
-    if [[ -n "${explicit_url}" ]]; then
-      echo "${explicit_url}"
-      return 0
-    fi
-
-    local port
-    port="$(grep -Eo -- '--port [0-9]+' "${CONVEX_LOG}" | awk '{print $2}' | tail -n1 || true)"
-    if [[ -n "${port}" ]]; then
-      echo "http://127.0.0.1:${port}"
-      return 0
-    fi
-  fi
-
-  local state_config=""
-  state_config="$(find "${HOME}/.convex/convex-backend-state" -maxdepth 3 -name config.json 2>/dev/null | sort | tail -n1 || true)"
-  if [[ -n "${state_config}" ]]; then
-    local state_port
-    state_port="$(grep -Eo '"cloud":[0-9]+' "${state_config}" | head -n1 | cut -d: -f2 || true)"
-    if [[ -n "${state_port}" ]]; then
-      echo "http://127.0.0.1:${state_port}"
-      return 0
-    fi
-  fi
-
-  return 1
-}
-
-start_convex() {
-  CONVEX_PID_RESULT=""
-  CONVEX_URL_RESULT=""
-
-  : > "${CONVEX_LOG}"
-  (
-    cd "${ROOT_DIR}/my-app"
-    export CONVEX_PARSER_URL="http://127.0.0.1:8001"
-    npx convex dev --local --verbose
-  ) >> "${CONVEX_LOG}" 2>&1 &
-  local cpid=$!
-  local actual_url=""
-
-  printf "[run] waiting for local Convex" >&2
-  for i in $(seq 1 60); do
-    if [[ -z "${actual_url}" ]]; then
-      actual_url="$(discover_local_convex_url || true)"
-    fi
-    if [[ -n "${actual_url}" ]] && is_convex_ready "${actual_url}"; then
-      echo >&2
-      CONVEX_PID_RESULT="${cpid}"
-      CONVEX_URL_RESULT="${actual_url}"
-      return 0
-    fi
-    if ! kill -0 "${cpid}" >/dev/null 2>&1; then
-      echo >&2
-      echo "[run] ERROR: local Convex failed to start (see ${CONVEX_LOG})" >&2
-      exit 1
-    fi
-    if [[ "${i}" -ge 10 ]] && grep -q 'Convex functions ready!' "${CONVEX_LOG}" && [[ -z "${actual_url}" ]]; then
-      echo >&2
-      echo "[run] ERROR: Convex reported functions ready but did not expose a local deployment URL or backend port (see ${CONVEX_LOG}). This project/runtime is still behaving as cloud-backed under the current Convex configuration." >&2
-      exit 1
-    fi
-    printf "." >&2
-    sleep 1
-  done
-  echo >&2
-  echo "[run] ERROR: local Convex did not become reachable (see ${CONVEX_LOG})" >&2
-  exit 1
-}
-
-stop_convex() {
-  local CPID="${1:-}"
-  if [[ -n "${CPID}" ]] && kill -0 "${CPID}" >/dev/null 2>&1; then
-    echo "[run] stopping local Convex (PID ${CPID})"
-    kill "${CPID}" >/dev/null 2>&1 || true
-    wait "${CPID}" 2>/dev/null || true
-  fi
-}
-
 # ===== Vite =====
 start_vite() {
   local ORIGIN="${1:?origin required}"
-  local CONVEX_URL="${2:-}"
   kill_vite_ports
   : > "${VITE_LOG}"
   (
@@ -271,10 +171,6 @@ start_vite() {
     export CONVEX_PARSER_URL="${ORIGIN}"
     export VITE_PARSER_URL="${ORIGIN}"
     export VITE_CONVEX_PARSER_URL="${ORIGIN}"
-    if [[ -n "${CONVEX_URL}" ]]; then
-      export VITE_CONVEX_URL="${CONVEX_URL}"
-      export NEXT_PUBLIC_CONVEX_URL="${CONVEX_URL}"
-    fi
     export STRUCTURED_UPLOAD_SKIP_HEALTHCHECK=1
     if [[ "${OPEN_BROWSER}" == "0" ]]; then
       BROWSER=none npx --yes vite --host localhost --port "${VITE_PORT}" --clearScreen false
@@ -342,15 +238,12 @@ up() {
   local START_UI=0
   local USE_LOCAL_ORIGIN=0
   local USE_EDGE_ORIGIN=0
-  local USE_LOCAL_CONVEX=0
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --ui|--with-ui) START_UI=1; shift;;
       --local-origin) USE_LOCAL_ORIGIN=1; shift;;
       --edge-origin)  USE_EDGE_ORIGIN=1; shift;;
-      --local-convex) USE_LOCAL_CONVEX=1; shift;;
-      --cloud-convex) USE_LOCAL_CONVEX=0; shift;;
       --ocr)          OCR="${2:-auto}"; shift 2;;
       --doctr)        OCR="doctr"; shift;;
       --paddle)       OCR="paddle"; shift;;
@@ -375,20 +268,9 @@ up() {
 
   # Optionally start Vite
   local VPID=""
-  local CPID=""
-  local CURL=""
   if [[ "${START_UI}" -eq 1 ]]; then
-    if [[ "${USE_LOCAL_CONVEX}" -eq 1 ]]; then
-      start_convex
-      CPID="${CONVEX_PID_RESULT:-}"
-      CURL="${CONVEX_URL_RESULT:-}"
-    fi
     echo "[run] starting Vite → ${ACTIVE_ORIGIN}"
-    if [[ "${USE_LOCAL_CONVEX}" -eq 1 ]]; then
-      VPID="$(start_vite "${ACTIVE_ORIGIN}" "${CURL}")"
-    else
-      VPID="$(start_vite "${ACTIVE_ORIGIN}")"
-    fi
+    VPID="$(start_vite "${ACTIVE_ORIGIN}")"
     sleep 2
     if ! kill -0 "${VPID}" >/dev/null 2>&1; then
       echo "[run] ERROR: Vite failed to start (see ${VITE_LOG})" >&2
@@ -396,27 +278,18 @@ up() {
     fi
   fi
 
-  write_state "${VPID}" "1" "${CPID}" "${CURL}"
+  write_state "${VPID}" "1"
   echo "----------------- Dev Stack -----------------"
   echo "FE origin: ${ACTIVE_ORIGIN}"
   echo "Parser local: OK (http://127.0.0.1:8001)"
-  if [[ "${USE_LOCAL_CONVEX}" -eq 1 ]]; then
-    echo "Convex local: ${CURL} (log: ${CONVEX_LOG})"
-  else
-    echo "Convex: env/default (cloud unless overridden)"
-    if [[ "${USE_LOCAL_ORIGIN}" -eq 1 ]]; then
-      echo "NOTE: local parser origin is set in Vite, but structured upload actions still follow the configured Convex backend/env."
-    fi
-  fi
   echo "Vite: http://localhost:${VITE_PORT} (log: ${VITE_LOG})"
   echo "---------------------------------------------"
 }
 
 down() {
-  local VITE_PID=""; local PARSER_STARTED="0"; local CONVEX_PID=""; local CONVEX_URL=""
+  local VITE_PID=""; local PARSER_STARTED="0"
   read_state
   stop_vite "${VITE_PID:-}"
-  stop_convex "${CONVEX_PID:-}"
   stop_parser
   rm -f "${STATE_FILE}"
   echo "[run] down: done."
@@ -433,7 +306,7 @@ smoke() {
 help() {
   cat <<'EOF'
 usage:
-  ./run.sh up [--ui] [--edge-origin | --local-origin] [--local-convex | --cloud-convex] [--ocr auto|doctr|paddle|disabled]
+  ./run.sh up [--ui] [--edge-origin | --local-origin] [--ocr auto|doctr|paddle|disabled]
   ./run.sh down
   ./run.sh status
   ./run.sh logs
@@ -444,8 +317,6 @@ usage:
 
 notes:
 - FE origin defaults to PARSER_ORIGIN (edge). Use --local-origin to point FE to http://127.0.0.1:8001.
-- Use --local-convex when you want the app to talk to a local Convex backend discovered from `npx convex dev --local`.
-- Without --local-convex, Convex stays on its configured env/default path (typically cloud), which preserves the existing Cloudflare tunnel flow.
 - MISTRAL is auto-enabled if MISTRAL_API_KEY is present (env or ~/.mistral_key).
 - OCR flag controls local parser engine: auto (default), doctr, paddle, disabled.
 EOF
