@@ -522,6 +522,59 @@ CITY_COUNTRY_RE = re.compile(
     re.IGNORECASE,
 )
 BULLET_STOPWORDS = {"full", "skills", "o"}
+RESPONSIBILITY_CLAUSE_STARTS = {
+    "apprehend",
+    "apprehending",
+    "assess",
+    "assessing",
+    "communicate",
+    "communicating",
+    "conducted",
+    "conducting",
+    "contributed",
+    "contributing",
+    "coordinate",
+    "coordinating",
+    "create",
+    "creating",
+    "deliver",
+    "delivering",
+    "developed",
+    "developing",
+    "ensure",
+    "ensuring",
+    "explored",
+    "exploring",
+    "inspect",
+    "inspecting",
+    "lead",
+    "leading",
+    "log",
+    "logging",
+    "maintain",
+    "maintaining",
+    "manage",
+    "managing",
+    "monitor",
+    "monitoring",
+    "perform",
+    "performing",
+    "prepare",
+    "preparing",
+    "presented",
+    "presenting",
+    "provide",
+    "providing",
+    "support",
+    "supporting",
+    "troubleshoot",
+    "troubleshooting",
+    "utilize",
+    "utilizing",
+    "write",
+    "writing",
+    "wrote",
+}
 
 EDU_TOKENS = ["CPOP", "SOCP", "Course Curriculum"]
 SECTION_TERMINATORS = {
@@ -1841,6 +1894,147 @@ def split_experience_entries(block: str) -> List[List[str]]:
     return [entry for entry in entries if any(line.strip() for line in entry)]
 
 
+def _starts_with_reason_for_leaving(line: str) -> bool:
+    normalized = strip_accents((line or "").lower()).strip(" :")
+    return normalized.startswith("reason for leaving")
+
+
+def _is_single_role_fragment(entry: List[str]) -> bool:
+    if len(entry) != 1:
+        return False
+    line = strip_leading_markdown_heading(entry[0]).strip()
+    if not line:
+        return False
+    if re.search(DATE_PATTERN, line):
+        return False
+    if _starts_with_reason_for_leaving(line):
+        return False
+    if PHONE_EMAIL_URL_RE.search(line) or looks_addressish(line):
+        return False
+    if _contains_org_keyword(line):
+        return False
+    if (_contains_role_keyword(line) or _is_role_phrase(line)) and not _starts_with_verb_phrase(line):
+        return True
+    tokens = [token for token in re.split(r"\s+", line) if token]
+    if not 2 <= len(tokens) <= 8:
+        return False
+    uppercase_initials = sum(1 for token in tokens if token[:1].isupper())
+    return uppercase_initials >= 2 and not _starts_with_verb_phrase(line)
+
+
+def _split_company_location_line(line: str) -> Optional[Tuple[str, Optional[str]]]:
+    cleaned = collapse_spaced_caps(_strip_bullet_prefix(line).strip())
+    if not cleaned or any(char.isdigit() for char in cleaned):
+        return None
+    for separator in (" • ", "•"):
+        if separator not in cleaned:
+            continue
+        company_raw, location_raw = [part.strip(" ,") for part in cleaned.split(separator, 1)]
+        if not company_raw or not location_raw:
+            continue
+        if _starts_with_reason_for_leaving(company_raw):
+            continue
+        if _is_role_phrase(company_raw) or _starts_with_verb_phrase(company_raw):
+            continue
+        if PHONE_EMAIL_URL_RE.search(company_raw):
+            continue
+        location = _normalize_location_candidate(location_raw)
+        if not location:
+            continue
+        return collapse_spaced_caps(company_raw), location
+    tokens = [token for token in cleaned.split() if token]
+    for start in range(len(tokens) - 2, max(0, len(tokens) - 5), -1):
+        company_raw = " ".join(tokens[:start]).strip(" ,")
+        location_raw = " ".join(tokens[start:]).strip(" ,")
+        if not company_raw or not location_raw:
+            continue
+        if _starts_with_reason_for_leaving(company_raw):
+            continue
+        if _is_role_phrase(company_raw) or _starts_with_verb_phrase(company_raw):
+            continue
+        if PHONE_EMAIL_URL_RE.search(company_raw):
+            continue
+        location = _normalize_location_candidate(location_raw)
+        if not location:
+            continue
+        return collapse_spaced_caps(company_raw), location
+    return None
+
+
+def _is_single_company_location_fragment(entry: List[str]) -> bool:
+    if len(entry) != 1:
+        return False
+    line = strip_leading_markdown_heading(entry[0]).strip()
+    if not line or _starts_with_reason_for_leaving(line):
+        return False
+    if _split_company_location_line(line):
+        return True
+    if _contains_org_keyword(line) and not _starts_with_verb_phrase(line) and not re.search(DATE_PATTERN, line):
+        return True
+    return False
+
+
+def _is_single_date_fragment(entry: List[str]) -> bool:
+    if len(entry) != 1:
+        return False
+    line = strip_leading_markdown_heading(entry[0]).strip()
+    if not line:
+        return False
+    start_date, end_date, is_current = _parse_dates(line)
+    return bool(start_date or end_date or is_current)
+
+
+def _repair_fragmented_experience_entries(entries: List[List[str]]) -> List[List[str]]:
+    repaired_entries: List[List[str]] = []
+    pending_entries = [list(entry) for entry in entries]
+    index = 0
+    while index < len(pending_entries):
+        current_entry = pending_entries[index]
+        if (
+            _is_single_role_fragment(current_entry)
+            and index + 2 < len(pending_entries)
+            and _is_single_company_location_fragment(pending_entries[index + 1])
+            and _is_single_date_fragment(pending_entries[index + 2])
+        ):
+            merged_entry = [
+                current_entry[0],
+                pending_entries[index + 1][0],
+                pending_entries[index + 2][0],
+            ]
+            if index + 3 < len(pending_entries):
+                reason_fragment = pending_entries[index + 3]
+                if reason_fragment:
+                    reason_line = strip_leading_markdown_heading(reason_fragment[0]).strip()
+                    if _starts_with_reason_for_leaving(reason_line):
+                        merged_entry.append(reason_fragment[0])
+                        remainder = reason_fragment[1:]
+                        repaired_entries.append(merged_entry)
+                        if remainder:
+                            pending_entries[index + 3] = remainder
+                            index += 3
+                        else:
+                            index += 4
+                        continue
+            repaired_entries.append(merged_entry)
+            index += 3
+            continue
+        if len(current_entry) == 1 and index + 1 < len(pending_entries):
+            role_line = strip_leading_markdown_heading(current_entry[0]).strip()
+            next_first = strip_leading_markdown_heading(pending_entries[index + 1][0]).strip()
+            if (
+                role_line
+                and next_first
+                and (_contains_role_keyword(role_line) or _is_role_phrase(role_line))
+                and _contains_org_keyword(next_first)
+            ):
+                repaired_entries.append([current_entry[0], *pending_entries[index + 1]])
+                index += 2
+                continue
+        repaired_entries.append(current_entry)
+        index += 1
+    return repaired_entries
+
+
 def _extract_embedded_role_company_segments(line: str) -> Optional[Tuple[str, str, str]]:
     cleaned = collapse_spaced_caps(_strip_bullet_prefix(line).strip())
     if not cleaned or _match_role_company_line([cleaned]):
@@ -1901,6 +2095,12 @@ def _find_company_candidate(lines: List[str]) -> Optional[str]:
     cleaned_lines = [_strip_bullet_prefix(line) for line in lines if _strip_bullet_prefix(line)]
     header_reject = {"curriculum vitae", "curriculum", "cv", "resume"}
     for line in cleaned_lines:
+        if _starts_with_reason_for_leaving(line):
+            continue
+        compound_company_location = _split_company_location_line(line)
+        if compound_company_location:
+            company, _location = compound_company_location
+            return company
         if (
             _contains_org_keyword(line)
             and not _is_role_phrase(line)
@@ -1931,6 +2131,8 @@ def _find_company_candidate(lines: List[str]) -> Optional[str]:
         if _contains_org_keyword(line):
             return line
     for line in cleaned_lines:
+        if _starts_with_reason_for_leaving(line):
+            continue
         if _looks_like_contact_or_heading(line):
             continue
         if looks_addressish(line):
@@ -1956,6 +2158,8 @@ def _find_company_candidate(lines: List[str]) -> Optional[str]:
         if len(tokens) >= 2:
             return line
     for line in cleaned_lines:
+        if _starts_with_reason_for_leaving(line):
+            continue
         if _looks_like_contact_or_heading(line):
             continue
         if looks_addressish(line):
@@ -2055,7 +2259,7 @@ def _entry_has_text_pdf_experience_coherence(entry: Dict[str, object]) -> bool:
         return False
     if company.isupper() and len(company.split()) <= 4 and not (_contains_org_keyword(company) or position):
         return False
-    if position and (_contains_role_keyword(position) or _is_role_phrase(position)):
+    if position and (_contains_role_keyword(position) or _is_role_phrase(position) or _is_single_role_fragment([position])):
         return True
     if start_date and (end_date or is_current or bullets):
         return True
@@ -2153,6 +2357,46 @@ def _dedupe_experience_bullets(bullets: Sequence[str]) -> List[str]:
     return deduped
 
 
+def _split_compound_responsibility_bullet(text: str) -> List[str]:
+    cleaned = _normalize_punctuation_spacing((text or "").strip())
+    if not cleaned:
+        return []
+    if len(cleaned) < 80:
+        return [cleaned]
+
+    split_points: List[int] = []
+    for match in re.finditer(r"\b([A-Z][a-z]+)\b", cleaned):
+        start = match.start()
+        if start == 0:
+            continue
+        token = match.group(1).lower()
+        if token not in RESPONSIBILITY_CLAUSE_STARTS:
+            continue
+        prefix = cleaned[(split_points[-1] if split_points else 0):start].strip()
+        suffix = cleaned[start:].strip()
+        if len(prefix) < 24 or len(suffix) < 24:
+            continue
+        if len(prefix.split()) < 4 or len(suffix.split()) < 3:
+            continue
+        split_points.append(start)
+
+    if not split_points:
+        return [cleaned]
+
+    parts: List[str] = []
+    cursor = 0
+    for point in split_points:
+        part = cleaned[cursor:point].strip(" -–—;,")
+        if part:
+            parts.append(_normalize_punctuation_spacing(part))
+        cursor = point
+    tail = cleaned[cursor:].strip(" -–—;,")
+    if tail:
+        parts.append(_normalize_punctuation_spacing(tail))
+
+    return parts or [cleaned]
+
+
 def _normalize_experience_line_signature(value: Optional[str]) -> str:
     cleaned = collapse_spaced_caps(_strip_bullet_prefix(value or "").strip())
     if not cleaned:
@@ -2229,7 +2473,7 @@ def _entry_has_minimal_experience_coherence(
         return False
     if not bullets:
         return False
-    if position and (_contains_role_keyword(position) or _is_role_phrase(position)):
+    if position and (_contains_role_keyword(position) or _is_role_phrase(position) or _is_single_role_fragment([position])):
         return True
     if start_date and (end_date or is_current):
         return True
@@ -2313,6 +2557,10 @@ def _extract_bullets(lines: List[str], skip: Sequence[str]) -> List[str]:
             else:
                 pending = _normalize_punctuation_spacing(f"{pending} {cleaned}")
     _push_pending()
+    segmented_bullets: List[str] = []
+    for bullet in bullets:
+        segmented_bullets.extend(_split_compound_responsibility_bullet(bullet))
+    bullets = segmented_bullets
     deduped: List[str] = []
     seen = set()
     for bullet in bullets:
@@ -3434,24 +3682,7 @@ def parse_experience_block(block: str) -> List[Dict[str, object]]:
     entries = split_experience_entries(block)
     if not entries:
         entries = [block.splitlines()]
-    repaired_entries: List[List[str]] = []
-    index = 0
-    while index < len(entries):
-        current_entry = entries[index]
-        if len(current_entry) == 1 and index + 1 < len(entries):
-            role_line = strip_leading_markdown_heading(current_entry[0]).strip()
-            next_first = strip_leading_markdown_heading(entries[index + 1][0]).strip()
-            if (
-                role_line
-                and next_first
-                and (_contains_role_keyword(role_line) or _is_role_phrase(role_line))
-                and _contains_org_keyword(next_first)
-            ):
-                repaired_entries.append([current_entry[0], *entries[index + 1]])
-                index += 2
-                continue
-        repaired_entries.append(current_entry)
-        index += 1
+    repaired_entries = _repair_fragmented_experience_entries(entries)
     entries = []
     pending_entries = repaired_entries[:]
     while pending_entries:
@@ -3494,10 +3725,20 @@ def parse_experience_block(block: str) -> List[Dict[str, object]]:
             company = collapse_spaced_caps(fallback_company) if fallback_company else None
             fallback_position = _find_position_candidate(entry_lines) if not position else position
             position = _normalize_role_phrase(fallback_position) if fallback_position else None
+            if len(entry_lines) >= 2 and _is_single_role_fragment([entry_lines[0]]):
+                compound_company_location = _split_company_location_line(entry_lines[1])
+                if compound_company_location:
+                    inferred_company, inferred_location = compound_company_location
+                    if not company:
+                        company = inferred_company
+                    if not location:
+                        location = inferred_location
             if company and _starts_with_verb_phrase(company):
                 company = None
             if company and not position:
                 position = _fallback_position_from_lines(entry_lines, company)
+            if not position and entry_lines and _is_single_role_fragment([entry_lines[0]]):
+                position = _normalize_role_phrase(entry_lines[0])
             if position and company and position.lower() == company.lower():
                 position = None
             if company and not position:
@@ -3508,6 +3749,11 @@ def parse_experience_block(block: str) -> List[Dict[str, object]]:
             position = _normalize_role_phrase(position)
         if not location:
             for candidate_line in entry_lines[:3]:
+                compound_company_location = _split_company_location_line(candidate_line)
+                if compound_company_location:
+                    _company_from_line, location = compound_company_location
+                    if location:
+                        break
                 normalized_loc = _normalize_location_candidate(candidate_line)
                 if normalized_loc:
                     location = normalized_loc
@@ -3525,6 +3771,13 @@ def parse_experience_block(block: str) -> List[Dict[str, object]]:
             date_index = matched_role_company_index + 1
             if date_index < len(entry_lines) and re.search(DATE_PATTERN, entry_lines[date_index]):
                 structural_lines.append(entry_lines[date_index])
+        elif (
+            len(entry_lines) >= 3
+            and _is_single_role_fragment([entry_lines[0]])
+            and _split_company_location_line(entry_lines[1])
+            and _is_single_date_fragment([entry_lines[2]])
+        ):
+            structural_lines.extend(entry_lines[:3])
         structural_signatures = tuple(
             signature
             for signature in (

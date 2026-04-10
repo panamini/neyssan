@@ -22,6 +22,9 @@ When making architecture decisions, treat the following as non-authoritative or 
 - For technical decisions: document them under `docs/decisions/`.
 - For implementation plans: save them under `docs/plans/`.
 
+
+## Skills
+@everything-claude-code/skills
 ## Ambiguity Handling
 When uncertainty exists, explicitly classify findings as:
 - active code
