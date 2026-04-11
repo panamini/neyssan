@@ -404,6 +404,24 @@ def test_parse_experience_block_parses_farman_working_in_narrative_line_fail_clo
     ]
 
 
+def test_parse_experience_block_prefers_farman_current_narrative_line_for_canonical_entry() -> None:
+    block = """
+    One year worked in ST Microelectronic Greater Noida Honeywell third party roll as a BMS operator.
+    Presently working in CBRE through Strabag as a BMS Operator in Metlife Gurgaon. From 01stjanuary 2016 to till date.
+    """
+
+    entries = parse_experience_block(block)
+
+    assert len(entries) == 1
+    assert "CBRE" in str(entries[0]["company"] or "")
+    assert str(entries[0]["position"] or "") == "BMS Operator"
+    assert entries[0]["startDate"] == "2016-01-01"
+    assert entries[0]["isCurrent"] is True
+    assert entries[0]["responsibilityBullets"] == [
+        "Presently working in CBRE through Strabag as a BMS Operator in Metlife Gurgaon. From 01stjanuary 2016 to till date."
+    ]
+
+
 def test_extract_sections_routes_farman_working_experince_heading_to_experience() -> None:
     raw_text = """
     Curriculum vitae
@@ -1214,6 +1232,71 @@ def test_trim_family_local_contamination_stops_achievements_before_language_tabl
 
     assert "LANGUAGE KNOWN" not in trimmed["ACHIEVEMENTS"][0]
     assert "Played one time National" in trimmed["ACHIEVEMENTS"][0]
+
+
+def test_trim_family_local_contamination_stops_farman_experience_before_academic_tail() -> None:
+    sections = {
+        "EXPERIENCE": [
+            """
+One year worked in ST Microelectronic Greater Noida Honeywell third party roll as a BMS operator.
+Presently working in CBRE through Strabag as a BMS Operator in Metlife Gurgaon. From 01stjanuary 2016 to till date.
+ACADEMIC QUALIFICATION: SAFETY AND QUALITY RESPONSIBILITIES Maintain standards of safety and comply with Company's Health, Safety & Environment Management System requirements.
+10th Passed From UP Board.
+Graduate Passed from Kanpur University.
+HOBBISS > Surfing Internet browsing.
+DECLARATION: I hereby declare that above written particular are true to the best of my Knowledge and belief.
+"""
+        ],
+        "EDUCATION": ["10th Passed From UP Board."],
+        "SKILLS": ["Working with Honeywell system"],
+    }
+
+    trimmed = _trim_family_local_contamination(sections)
+
+    experience_block = trimmed["EXPERIENCE"][0]
+    assert "ACADEMIC QUALIFICATION" not in experience_block
+    assert "10th Passed" not in experience_block
+    assert "Graduate Passed" not in experience_block
+    assert "HOBBISS" not in experience_block
+    assert "Surfing Internet" not in experience_block
+    assert "DECLARATION" not in experience_block
+    assert "Presently working in CBRE" in experience_block
+
+
+def test_build_experience_entries_trims_farman_non_experience_tail_before_parsing() -> None:
+    sections = {
+        "EXPERIENCE": [
+            """
+One year worked in ST Microelectronic Greater Noida Honeywell third party roll as a BMS operator.
+Presently working in CBRE through Strabag as a BMS Operator in Metlife Gurgaon. From 01stjanuary 2016 to till date.
+ACADEMIC QUALIFICATION: SAFETY AND QUALITY RESPONSIBILITIES Maintain standards of safety and comply with Company's Health, Safety & Environment Management System requirements.
+10th Passed From UP Board.
+Graduate Passed from Kanpur University.
+HOBBISS > Surfing Internet browsing.
+DECLARATION: I hereby declare that above written particular are true to the best of my Knowledge and belief.
+"""
+        ],
+        "EDUCATION": ["10th Passed From UP Board."],
+        "SKILLS": ["Working with Honeywell system"],
+    }
+    raw_text = "\n".join(section[0] for section in sections.values())
+
+    trimmed_sections = _trim_family_local_contamination(sections)
+    entries = build_experience_entries(trimmed_sections, raw_text)
+
+    assert len(entries) == 1
+    entry = entries[0]
+    assert "CBRE" in str(entry["company"] or "")
+    assert entry["position"] == "BMS Operator"
+    assert entry["isCurrent"] is True
+    responsibilities = "\n".join(entry["responsibilityBullets"])
+    assert "ACADEMIC QUALIFICATION" not in responsibilities
+    assert "10th Passed" not in responsibilities
+    assert "Graduate Passed" not in responsibilities
+    assert "DECLARATION" not in responsibilities
+    assert "HOBBISS" not in responsibilities
+    assert "Surfing Internet" not in responsibilities
+    assert "One year worked in ST Microelectronic" not in str(entry["company"] or "")
 
 
 def test_canonicalize_cv_trims_body_and_achievements_cross_family_spillover() -> None:
