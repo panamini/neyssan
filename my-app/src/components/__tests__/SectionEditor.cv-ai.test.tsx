@@ -932,6 +932,48 @@ describe("SectionEditor CV AI flows", () => {
     expect(screen.getByTestId("block-renderer")).toBeInTheDocument();
   });
 
+  it("renders structured projects through the section-level editor path", () => {
+    const projectsSection: CvSection = {
+      id: "projects-structured",
+      title: "Projects",
+      type: "projects",
+      collapsed: false,
+      blocks: [
+        {
+          id: "project-block-1",
+          title: "Gitlytics",
+          type: "text",
+          content: ensureRemirrorDoc(
+            "Python, Flask, React, PostgreSQL, Docker | June 2020 – Present\nBuilt a full-stack app with GitHub OAuth.",
+          ),
+          attributes: { linkedStructuredId: "project-1" },
+        },
+      ],
+      structuredContent: [
+        {
+          id: "project-1",
+          title: "Gitlytics",
+          meta: "Python, Flask, React, PostgreSQL, Docker | June 2020 – Present",
+          description: "Built a full-stack app with GitHub OAuth.",
+        },
+      ] as any,
+    };
+
+    renderSectionEditor(projectsSection);
+
+    expect(screen.getByText("Projects")).toBeInTheDocument();
+    expect(screen.getByText("Gitlytics")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Python, Flask, React, PostgreSQL, Docker | June 2020 – Present",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("block-renderer")).toBeNull();
+    expect(
+      screen.getAllByRole("button", { name: "Edit projects" }).length,
+    ).toBeGreaterThan(0);
+  });
+
   it("renders recovery-created custom sections through the text block branch", () => {
     const customSection = applyImportRecoveryItems([], [
       {

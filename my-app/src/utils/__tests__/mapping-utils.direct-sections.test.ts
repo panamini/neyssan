@@ -6,7 +6,11 @@ describe("buildTypedSectionsFromNormalized direct section materialization", () =
   it("materializes projects, certifications, hobbies, affiliations, and additional information from raw sections", () => {
     const sections = buildTypedSectionsFromNormalized({
       rawSections: [
-        { label: "Projects", content: "Parser reliability sprint\nReduced import recovery volume" },
+        {
+          label: "Projects",
+          content:
+            "Gitlytics | Python, Flask, React, PostgreSQL, Docker | June 2020 – Present Developed a full-stack web application using Flask serving a REST API with React as the frontend",
+        },
         { label: "Certifications", content: "AWS Certified Developer\nAmazon Web Services" },
         { label: "Hobbies", content: "Chess, Hiking" },
         { label: "Affiliations", content: "Member, ACM" },
@@ -23,6 +27,16 @@ describe("buildTypedSectionsFromNormalized direct section materialization", () =
         expect.objectContaining({ type: "text", title: "Additional Information" }),
       ]),
     );
+
+    const projectsSection = sections.find((section) => section.type === "projects");
+    expect(projectsSection?.blocks.map((block) => block.title)).toEqual(["Gitlytics"]);
+    expect(projectsSection?.structuredContent).toEqual([
+      expect.objectContaining({
+        title: "Gitlytics",
+        meta: "Python, Flask, React, PostgreSQL, Docker | June 2020 – Present",
+        description: expect.stringContaining("Developed a full-stack web application"),
+      }),
+    ]);
   });
 
   it("preserves explicit reviewer sections instead of collapsing them into experience or achievements", () => {
@@ -41,6 +55,37 @@ describe("buildTypedSectionsFromNormalized direct section materialization", () =
         expect.objectContaining({ type: "text", title: "Hobbies" }),
         expect.objectContaining({ type: "text", title: "Affiliations" }),
         expect.objectContaining({ type: "text", title: "Additional Information" }),
+      ]),
+    );
+  });
+
+  it("suppresses duplicate structured project blocks when a raw projects body already contains them", () => {
+    const rawProjectsBody =
+      "Gillytics | Python, Flask, React, PostgreSQL, Docker June 2020 – Present - Developed a full-stack web application using with Flask serving a REST API with React as the frontend - Implemented GitHub OAuth to get data from user’s repositories - Visualized GitHub data to show collaboration - Used Celery and Redis for asynchronous tasks Simple Paintball | Spigot API, Java, Maven, TravisCI, Git May 2018 – May 2020 - Developed a Minecraft server plugin to entertain kids during free time for a previous job";
+
+    const sections = buildTypedSectionsFromNormalized({
+      rawSections: [
+        { label: "Projects", content: rawProjectsBody },
+        { label: "Projects", content: rawProjectsBody.replace("–", "-") },
+      ],
+      projects: [
+        {
+          title: "Gillytics | Python, Flask, React, PostgreSQL, Docker June 2020 Present",
+        },
+      ],
+    });
+
+    const projectsSection = sections.find((section) => section.type === "projects");
+    expect(projectsSection).toBeTruthy();
+    expect(projectsSection?.blocks).toHaveLength(1);
+    expect(projectsSection?.blocks.map((block) => block.title)).toEqual(["Gillytics"]);
+    expect(projectsSection?.structuredContent).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          title: "Gillytics",
+          meta: expect.stringContaining("Simple Paintball"),
+          description: expect.stringContaining("Developed a Minecraft server plugin"),
+        }),
       ]),
     );
   });

@@ -420,4 +420,66 @@ describe("Structured recovery normalization", () => {
       }),
     );
   });
+
+  it("accepts structured project items during strict normalization", () => {
+    const res = normalizeAndValidateCvDocument({
+      id: "cv-projects",
+      title: "Projects CV",
+      metadata: {
+        createdAt: "2026-04-11T09:00:00.000Z",
+        updatedAt: "2026-04-11T09:00:00.000Z",
+        version: 1,
+      },
+      sections: [
+        {
+          id: "projects-1",
+          title: "Projects",
+          type: "projects",
+          blocks: [
+            {
+              id: "block-1",
+              title: "Gitlytics",
+              type: "text",
+              content: {
+                type: "doc",
+                content: [
+                  {
+                    type: "paragraph",
+                    content: [
+                      {
+                        type: "text",
+                        text: "Python, Flask, React | June 2020 – Present",
+                      },
+                    ],
+                  },
+                ],
+              },
+              attributes: { linkedStructuredId: "project-1" },
+            },
+          ],
+          structuredContent: [
+            {
+              id: "project-1",
+              title: "Gitlytics",
+              meta: "Python, Flask, React | June 2020 – Present",
+              description: "Built a full-stack web application.",
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(res.success).toBe(true);
+    if (!res.success) return;
+    const section = res.document.sections.find((entry) => entry.type === "projects");
+    expect(section?.structuredContent).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          title: "Gitlytics",
+          meta: "Python, Flask, React | June 2020 – Present",
+          description: "Built a full-stack web application.",
+        }),
+      ]),
+    );
+  });
 });

@@ -6,6 +6,7 @@ import LanguagesDisplay from './LanguagesDisplay';
 import { StrictExtractButton } from '../StrictExtractButton';
 import { useCvLibrary } from '../../contexts/CvLibraryContext';
 import { formatRangeFromItem } from '../../lib/date-utils';
+import { remirrorJsonToString } from '../../lib/utils';
 import { splitResponsibilitiesIntoBullets } from '../../utils/cv/mapping-utils';
 import { isExperienceRenderable, isEducationRenderable } from '../../utils/cv/renderGuards';
 
@@ -33,16 +34,42 @@ export function SectionDisplay({ section }: SectionDisplayProps): JSX.Element {
     : [];
   const isExperience = String(section.type) === 'experience';
   const isEducation = String(section.type) === 'education';
+  const isProjects = String(section.type) === 'projects';
   const renderableStructured = isExperience
     ? structuredList.filter((item) => isExperienceRenderable(item))
     : isEducation
     ? structuredList.filter((item) => isEducationRenderable(item))
+    : isProjects
+    ? structuredList.filter((item) => {
+        const title = typeof item?.title === 'string' ? item.title.trim() : '';
+        const name = typeof item?.name === 'string' ? item.name.trim() : '';
+        const descriptionValue = item?.description ?? item?.summary ?? item?.content;
+        const description =
+          typeof descriptionValue === 'string'
+            ? descriptionValue.trim()
+            : descriptionValue && typeof descriptionValue === 'object'
+            ? remirrorJsonToString(descriptionValue as any).trim()
+            : '';
+        return Boolean(title || name || description);
+      })
     : [];
   const hasRenderableStructured = renderableStructured.length > 0;
   const hasBlocks = Array.isArray(section.blocks) && section.blocks.length > 0;
 
   const toTrimmedString = (value: unknown): string =>
     typeof value === 'string' ? value.trim() : '';
+
+  const toStructuredPlainText = (value: unknown): string => {
+    if (typeof value === 'string') return value.trim();
+    if (value && typeof value === 'object') {
+      try {
+        return remirrorJsonToString(value as any).trim();
+      } catch {
+        return '';
+      }
+    }
+    return '';
+  };
 
   const renderExperienceItem = (rawItem: any, index: number): React.ReactNode => {
     const key = String(rawItem?.id ?? index);
@@ -159,6 +186,48 @@ export function SectionDisplay({ section }: SectionDisplayProps): JSX.Element {
     );
   };
 
+  const renderProjectItem = (rawItem: any, index: number): React.ReactNode => {
+    const key = String(rawItem?.id ?? index);
+    const title =
+      toTrimmedString(rawItem?.title) ||
+      toTrimmedString(rawItem?.name) ||
+      `Project ${index + 1}`;
+    const meta =
+      toTrimmedString(rawItem?.meta) ||
+      toTrimmedString(rawItem?.subtitle);
+    const description = toStructuredPlainText(
+      rawItem?.description ?? rawItem?.summary ?? rawItem?.content,
+    );
+    const descriptionBullets = splitResponsibilitiesIntoBullets(description);
+    const hasBulletList = descriptionBullets.length > 1;
+    const truncatedDescription =
+      !hasBulletList && description.length > 280
+        ? `${description.slice(0, 277).trimEnd()}…`
+        : description;
+
+    return (
+      <article key={key} className="space-y-2">
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold [color:var(--ti)]">{title}</h3>
+          {meta ? (
+            <p className="text-xs [color:var(--tm2)]">{meta}</p>
+          ) : null}
+        </div>
+        {hasBulletList ? (
+          <ul className="ml-4 space-y-1 text-xs list-disc [color:var(--ti)]">
+            {descriptionBullets.slice(0, 4).map((line, bulletIdx) => (
+              <li key={`${key}-project-bullet-${bulletIdx}`} className="leading-snug">
+                {line}
+              </li>
+            ))}
+          </ul>
+        ) : truncatedDescription ? (
+          <p className="text-xs leading-snug [color:var(--ti)]">{truncatedDescription}</p>
+        ) : null}
+      </article>
+    );
+  };
+
   // Best-effort rawText reconstruction from current document (titles, block plainText/content as JSON)
   const getRawText = useCallback((): string | null => {
     try {
@@ -208,7 +277,11 @@ export function SectionDisplay({ section }: SectionDisplayProps): JSX.Element {
   }, [currentCv, importCv]);
 
   const isProfile = String(section.type).toLowerCase() === 'profile';
-  const renderStructuredItem = isExperience ? renderExperienceItem : renderEducationItem;
+  const renderStructuredItem = isExperience
+    ? renderExperienceItem
+    : isEducation
+    ? renderEducationItem
+    : renderProjectItem;
   const renderBlockList = () =>
     (Array.isArray(section.blocks) ? section.blocks : []).map((block, idx) => (
       <BlockRenderer
@@ -259,7 +332,7 @@ export function SectionDisplay({ section }: SectionDisplayProps): JSX.Element {
         </div>
       ) : (
         <div className="space-y-4">
-          {isExperience || isEducation ? (
+          {isExperience || isEducation || isProjects ? (
             hasRenderableStructured ? (
               renderableStructured.map((item, idx) => renderStructuredItem(item, idx))
             ) : hasBlocks ? (
