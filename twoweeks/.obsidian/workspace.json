@@ -55,7 +55,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "wiki/concepts/to do.md",
+                "file": "rawinput/to do.md",
                 "mode": "source",
                 "source": false
               },
@@ -137,7 +137,7 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "wiki/concepts/to do.md",
+                "file": "rawinput/to do.md",
                 "followCursor": true,
                 "showSearch": false,
                 "searchQuery": ""
@@ -243,7 +243,10 @@
   "active": "ce6b4317056c24fd",
   "lastOpenFiles": [
     "wiki/concepts/cv-parsing-pipeline.md",
-    "wiki/concepts/to do.md",
+    "rawinput/to do.md",
+    "rawinput/howto_tunnel.md",
+    "rawinput/README.md",
+    "rawinput/pipeline note.md",
     "wiki/concepts/gap-analysis.md",
     "wiki/concepts/Untitled Kanban.md",
     "wiki/concepts/product-roadmap.md",
@@ -265,9 +268,6 @@
     "wiki/concepts/cv-families.md",
     "wiki/overview.md",
     "wiki/index.md",
-    "wiki/outputs/2026-04-09-architecture-v2.md",
-    "wiki/concepts/llm-wiki-pattern.md",
-    "raw/6_NOTION_ROADMAP.MD",
     "rawinput/feedback.json",
     "ingest-wiki.skill",
     "review-iteration-1.html"
