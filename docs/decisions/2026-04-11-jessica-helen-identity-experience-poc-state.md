@@ -1,16 +1,18 @@
-# Jessica/Helen Identity-Experience-Education POC State
+# Jessica/Helen/Robert Identity-Experience-Education-Languages POC State
 
 Source of truth for this POC is the real browser/live path: `./run.sh up --ui`, frontend local, Convex `cloud/default`, parser base `https://parser.dasti.ai`, Mistral OCR button, route `/mistral-ocr/parse`.
 
 Closed and accepted fixes preserved in this POC: Jessica address/location recovery acceptance fixture, Anne title-as-location guard, Linda normalized location pass-through/materialization, Helen name fix, and Helen desired-position fix. Do not reopen those slices without new live contradiction.
 
-Jessica experience POC result: the `WORK HISTORY` path no longer yields empty experience or malformed merged fallback rows; experience now recovers 3 entries; no fake `Spring Education Group` / `Education Group` row remains; no giant merged responsibilities blob remains; and `desiredPosition` / `contact.desiredPosition` are no longer backfilled from the first recovered experience row. This experience POC remains fixed.
+Jessica experience POC result: the `WORK HISTORY` path no longer yields empty experience or malformed merged fallback rows; experience now recovers 3 entries; no fake `Spring Education Group` / `Education Group` row remains; no giant merged responsibilities blob remains; and `desiredPosition` / `contact.desiredPosition` are no longer backfilled from the first recovered experience row. Experience POC is complete for this slice.
 
-Jessica education POC result: education no longer fragments into institution-only / degree-only garbage rows on the live Mistral OCR path. Live now returns 2 coherent Jessica education entries, so education is POC-fixed and POC-complete for this slice, but not fully enriched yet.
+Jessica education POC result: education no longer fragments into institution-only / degree-only garbage rows on the live Mistral OCR path. Live now returns 2 coherent Jessica education entries. Education POC is complete for this slice, though not fully enriched yet.
 
-Important remaining note: the same-run UI/profile can still show Jessica location while normalized contact fields may not carry `contact.location` / `contact.addressNormalized`. Treat that as a profile/materialization contract inconsistency, not an experience- or education-parsing failure.
+Robert languages POC result: coherent `languages` were preserved and noisy duplicated `languagesRaw` now collapses back to `["English","Spanish","Italian"]` on the live Mistral OCR path. Languages POC is complete for this slice.
 
-Explicitly deferred: Jessica contact-location normalized-contract consistency cleanup, Helen `New York` location recovery, website/linkedin identity work, non-POC families, and deeper education enrichment. Languages are the next family to tackle; skills are not next in this note.
+Important remaining note: the same-run UI/profile can still show Jessica location while normalized contact fields may not carry `contact.location` / `contact.addressNormalized`. Treat that as a profile/materialization contract inconsistency, not an experience-, education-, or languages-parsing failure.
+
+Explicitly deferred: Jessica contact-location normalized-contract consistency cleanup, Helen `New York` location recovery, website/linkedin identity work, non-POC families, deeper education enrichment, and Robert experience oddities. Skills are the next family to tackle. The active next fixture is Anne Lounsberry, where the live issue is markdown skills-table residue materializing as junk skills like `| Machine Learning | |`. Do not reopen Anne's title-as-location guard while working that slice.
 
 Files touched in this POC: `cv_parser_service/mistral_ocr.py`, `cv_parser_service/tests/test_mistral_layout_sections.py`, `my-app/convex/lib/parsing/canonicalize.ts`, `my-app/convex/lib/parsing/__tests__/canonicalize.test.ts`.
 

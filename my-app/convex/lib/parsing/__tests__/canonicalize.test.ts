@@ -962,6 +962,30 @@ describe("canonicalizeParserResult", () => {
     expect(achievements.length).toBe(1);
   });
 
+  it("rewrites Robert-style noisy languagesRaw only when canonical languages are cleaner", () => {
+    const parserResult = {
+      normalized: {
+        languages: [{ name: "English" }, { name: "Spanish" }, { name: "Italian English Spanish Italian" }],
+        languagesRaw: ["English", "Spanish", "Italian English Spanish Italian"],
+        rawSections: [
+          { label: "LANGUAGES", content: "English\nSpanish\nItalian" },
+          { label: "LANGUAGES", content: "English Spanish Italian" },
+        ],
+        rawText: "LANGUAGES\nEnglish\nSpanish\nItalian\nEnglish Spanish Italian",
+      },
+      raw_sections: [
+        { label: "LANGUAGES", content: "English\nSpanish\nItalian" },
+        { label: "LANGUAGES", content: "English Spanish Italian" },
+      ],
+    };
+
+    const canonical = canonicalizeParserResult(parserResult, context);
+    const normalized = canonical.normalized as any;
+
+    expect(normalized.languages.map((entry: any) => entry.name)).toEqual(["English", "Spanish", "Italian"]);
+    expect(normalized.languagesRaw).toEqual(["English", "Spanish", "Italian"]);
+  });
+
   it("keeps Jessica-style OCR education blocks grouped instead of fragmenting institution and degree lines", () => {
     const educationBlock = [
       "Cedarville University",
