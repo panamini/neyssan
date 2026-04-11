@@ -2205,6 +2205,366 @@ function sanitizeContactLocation(normalized: any): void {
   contact.location = sanitized;
 }
 
+function isStructurallyValidEmail(value: unknown): boolean {
+  const email = coerceString(value);
+  if (!email) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function sanitizeSchemaUrlValue(value: unknown): string | undefined {
+  const raw = coerceString(value)
+    .replace(/[),.;:]+$/g, "")
+    .trim();
+  if (!raw) return undefined;
+  return raw;
+}
+
+const DISALLOWED_WEBSITE_HOSTS = new Set([
+  "gmail.com",
+  "googlemail.com",
+  "hotmail.com",
+  "outlook.com",
+  "live.com",
+  "msn.com",
+  "yahoo.com",
+  "ymail.com",
+  "icloud.com",
+  "me.com",
+  "aol.com",
+  "mail.com",
+  "gmx.com",
+  "protonmail.com",
+  "proton.me",
+  "example.com",
+  "example.org",
+  "example.net",
+  "sample.com",
+  "test.com",
+  "domain.com",
+  "yourdomain.com",
+]);
+
+const ALLOWED_BARE_WEBSITE_TLDS = new Set([
+  "com",
+  "net",
+  "org",
+  "io",
+  "dev",
+  "ai",
+  "co",
+  "me",
+  "app",
+  "tech",
+  "info",
+  "biz",
+  "us",
+  "uk",
+  "fr",
+  "de",
+  "in",
+  "ca",
+  "eu",
+]);
+
+function normalizeUrlCandidate(value: unknown): string | undefined {
+  const raw = sanitizeSchemaUrlValue(value);
+  if (!raw) return undefined;
+  if (/^(https?:\/\/)/i.test(raw)) return raw;
+  if (/^www\./i.test(raw)) return `https://${raw}`;
+  if (/^(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/[^\s]*)?$/i.test(raw)) return `https://${raw}`;
+  return undefined;
+}
+
+function parseUrlCandidate(value: unknown): URL | undefined {
+  const normalized = normalizeUrlCandidate(value);
+  if (!normalized) return undefined;
+  try {
+    return new URL(normalized);
+  } catch {
+    return undefined;
+  }
+}
+
+function getNormalizedUrlHost(value: unknown): string | undefined {
+  const parsed = parseUrlCandidate(value);
+  if (!parsed) return undefined;
+  return parsed.hostname.toLowerCase().replace(/^www\./, "");
+}
+
+function getNormalizedUrlPath(value: unknown): string {
+  const parsed = parseUrlCandidate(value);
+  if (!parsed) return "";
+  return parsed.pathname.replace(/\/+$/, "").toLowerCase();
+}
+
+function hasAllowedBareWebsiteTld(value: string): boolean {
+  const normalized = sanitizeSchemaUrlValue(value);
+  if (!normalized) return false;
+  if (/^(https?:\/\/|www\.)/i.test(normalized)) return true;
+  const bareHost = normalized.replace(/\/.*$/, "").toLowerCase();
+  const labels = bareHost.split(".").filter(Boolean);
+  const tld = labels.at(-1);
+  if (!tld) return false;
+  return ALLOWED_BARE_WEBSITE_TLDS.has(tld);
+}
+
+function isDisallowedWebsiteHost(host: string): boolean {
+  const normalized = host.toLowerCase().replace(/^www\./, "");
+  if (DISALLOWED_WEBSITE_HOSTS.has(normalized)) return true;
+  if (/^(?:example|sample|placeholder|yourdomain|domain|test)[.-]/i.test(normalized)) return true;
+  return false;
+}
+
+function looksLikePlaceholderLinkedinPath(pathname: string): boolean {
+  const slug = pathname
+    .replace(/^\/(?:in|pub|company|school)\//i, "")
+    .split(/[/?#]/)[0]
+    .replace(/\/+$/, "")
+    .toLowerCase();
+  if (!slug) return true;
+  if (slug === "...") return true;
+  if (/^(?:your|my|profile|username|user-name|your-profile|yourprofile|example|sample|placeholder)$/i.test(slug)) {
+    return true;
+  }
+  if (/^(?:john|jane|first|last|full)?-?name(?:-[a-z]+)?$/i.test(slug)) {
+    return true;
+  }
+  return false;
+}
+
+function isStructurallyValidWebsite(value: unknown): boolean {
+  const website = normalizeUrlCandidate(value);
+  if (!website) return false;
+  if (/\s/.test(website)) return false;
+  const host = getNormalizedUrlHost(website);
+  if (!host) return false;
+  if (/linkedin\.com$/i.test(host)) return false;
+  if (isDisallowedWebsiteHost(host)) return false;
+  return true;
+}
+
+function isStructurallyValidLinkedin(value: unknown): boolean {
+  const linkedin = normalizeUrlCandidate(value);
+  if (!linkedin) return false;
+  if (/\s/.test(linkedin)) return false;
+  const host = getNormalizedUrlHost(linkedin);
+  if (!host || !/(^|\.)linkedin\.com$/i.test(host)) return false;
+  const path = getNormalizedUrlPath(linkedin);
+  if (!/^\/(?:in|pub|company|school)\/[^/?#]+/i.test(path)) return false;
+  if (looksLikePlaceholderLinkedinPath(path)) return false;
+  return true;
+}
+
+function isStructurallyValidDesiredPosition(value: unknown): boolean {
+  const cleaned = cleanLine(value);
+  if (!cleaned) return false;
+  if (CONTACT_SLUDGE_RE.test(cleaned)) return false;
+  if (isSectionBoundary(cleaned) || isExperienceFieldStructuralFragment(cleaned)) return false;
+  if (looksLikeResponsibilitySentence(cleaned)) return false;
+  if (cleaned.split(/\s+/).length > 6) return false;
+  return Boolean(normalizeRoleCandidate(cleaned));
+}
+
+function isStructurallyValidContactLocationValue(value: unknown): boolean {
+  const cleaned = collapseSpacedCaps(coerceString(value)).replace(/\s{2,}/g, " ").trim();
+  if (!cleaned) return false;
+  if (CONTACT_SLUDGE_RE.test(cleaned)) return false;
+  if (isSectionBoundary(cleaned) || isExperienceFieldStructuralFragment(cleaned)) return false;
+  if (looksLikeResponsibilitySentence(cleaned)) return false;
+  if (cleaned.split(/\s+/).length > 8) return false;
+  return true;
+}
+
+function collectSchemaIdentityContactSources(normalized: any): Record<string, unknown>[] {
+  return [
+    normalized,
+    normalized?.identity,
+    normalized?.profile,
+    normalized?.details,
+    normalized?.contact,
+    normalized?.links,
+  ].filter((value): value is Record<string, unknown> => typeof value === "object" && value !== null);
+}
+
+function pickFirstSchemaValue(
+  sources: Record<string, unknown>[],
+  keys: string[],
+  isValid: (value: unknown) => boolean,
+): string | undefined {
+  for (const source of sources) {
+    for (const key of keys) {
+      const value = source[key];
+      if (!isValid(value)) continue;
+      return coerceString(value);
+    }
+  }
+  return undefined;
+}
+
+function normalizeTypedLinkCandidate(value: unknown, kind: "website" | "linkedin"): string | undefined {
+  const raw = sanitizeSchemaUrlValue(value);
+  if (!raw) return undefined;
+  if (kind === "website" && !hasAllowedBareWebsiteTld(raw)) return undefined;
+  const normalized = normalizeUrlCandidate(raw);
+  if (!normalized) return undefined;
+  if (kind === "linkedin") {
+    return isStructurallyValidLinkedin(normalized) ? normalized : undefined;
+  }
+  return isStructurallyValidWebsite(normalized) ? normalized : undefined;
+}
+
+function collectIdentityContactRawTextSources(
+  normalized: any,
+  rawSections: RawSection[],
+  context: CanonicalizeContext,
+): string[] {
+  const topBlock = (value: unknown): string => {
+    const text = String(value ?? "").trim();
+    if (!text) return "";
+    const lines = text
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    const collected: string[] = [];
+    for (const line of lines.slice(0, 16)) {
+      if (collected.length > 0 && isSectionBoundary(line)) break;
+      collected.push(line);
+    }
+    return collected.join("\n").trim();
+  };
+
+  return dedupeStringsCaseInsensitive(
+    [
+      coerceString(normalized?.contact?.raw ?? ""),
+      coerceString(normalized?.contact?.addressBlock ?? ""),
+      ...filterRawSection(rawSections, "profile", { preserveWhitespace: true }),
+      topBlock(normalized?.rawText ?? ""),
+      topBlock(context.rawText ?? ""),
+    ].filter(Boolean),
+  );
+}
+
+function extractTypedIdentityContactLinksFromRawText(
+  normalized: any,
+  rawSections: RawSection[],
+  context: CanonicalizeContext,
+): {
+  websiteCandidates: string[];
+  linkedinCandidates: string[];
+} {
+  const websiteCandidates: string[] = [];
+  const linkedinCandidates: string[] = [];
+  const explicitUrlRe = /\b(?:https?:\/\/|www\.)[^\s)]+/gi;
+  const bareDomainRe = /\b(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/[^\s)]*)?\b/gi;
+
+  const pushCandidate = (kind: "website" | "linkedin", value: unknown) => {
+    const normalizedCandidate = normalizeTypedLinkCandidate(value, kind);
+    if (!normalizedCandidate) return;
+    if (kind === "linkedin") {
+      linkedinCandidates.push(normalizedCandidate);
+    } else {
+      websiteCandidates.push(normalizedCandidate);
+    }
+  };
+
+  for (const source of collectIdentityContactRawTextSources(normalized, rawSections, context)) {
+    const lines = source
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    for (const rawLine of lines) {
+      const line = rawLine.replace(/^\s*(?:website|site|url|linkedin|linkedin profile)\s*[:\-]\s*/i, "").trim();
+      const lowerLine = rawLine.toLowerCase();
+      const hasWebsiteLabel = /\b(?:website|site|url|portfolio)\b/i.test(lowerLine);
+
+      const explicitMatches = Array.from(rawLine.matchAll(explicitUrlRe)).map((match) => match[0]);
+      explicitMatches.forEach((match) => {
+        if (/linkedin\.com/i.test(match)) {
+          pushCandidate("linkedin", match);
+        } else {
+          pushCandidate("website", match);
+        }
+      });
+
+      if (explicitMatches.length > 0) continue;
+
+      const bareMatches = Array.from(rawLine.matchAll(bareDomainRe))
+        .map((match) => match[0])
+        .filter((match) => !/@/.test(match) && !/\.(pdf|doc|docx|png|jpg|jpeg)$/i.test(match));
+
+      bareMatches.forEach((match) => {
+        if (/linkedin\.com/i.test(match)) {
+          pushCandidate("linkedin", match);
+        } else if (hasWebsiteLabel) {
+          pushCandidate("website", match);
+        }
+      });
+
+      if (!bareMatches.length && hasWebsiteLabel) {
+        pushCandidate("website", line);
+      }
+    }
+  }
+
+  return {
+    websiteCandidates: dedupeStringsCaseInsensitive(websiteCandidates),
+    linkedinCandidates: dedupeStringsCaseInsensitive(linkedinCandidates),
+  };
+}
+
+function buildSchemaFirstIdentityContactCandidate(
+  normalized: any,
+  rawSections: RawSection[],
+  context: CanonicalizeContext,
+): {
+  identity: {
+    name?: string;
+    desiredPosition?: string;
+    location?: string;
+  };
+  contact: {
+    email?: string;
+    phone?: string;
+    website?: string;
+    linkedin?: string;
+  };
+} {
+  const sources = collectSchemaIdentityContactSources(normalized);
+  const rawTypedLinks = extractTypedIdentityContactLinksFromRawText(normalized, rawSections, context);
+  return {
+    identity: {
+      name: pickFirstSchemaValue(sources, ["name", "fullName"], (value) => isUsablePersonName(coerceString(value), coerceString(value))),
+      desiredPosition: pickFirstSchemaValue(
+        sources,
+        ["desiredPosition", "title", "headline", "role"],
+        isStructurallyValidDesiredPosition,
+      ),
+      location: pickFirstSchemaValue(
+        sources,
+        ["location", "addressNormalized", "address"],
+        isStructurallyValidContactLocationValue,
+      ),
+    },
+    contact: {
+      email: pickFirstSchemaValue(sources, ["email", "emailAddress"], isStructurallyValidEmail),
+      phone: pickFirstSchemaValue(sources, ["phone", "phoneRaw", "phoneNumber", "mobile"], (value) => Boolean(sanitizePhoneValue(value))),
+      website:
+        pickFirstSchemaValue(
+          sources,
+          ["website", "url", "site", "portfolio", "portfolioUrl"],
+          isStructurallyValidWebsite,
+        ) ?? rawTypedLinks.websiteCandidates[0],
+      linkedin:
+        pickFirstSchemaValue(
+          sources,
+          ["linkedin", "linkedIn", "linkedinUrl", "linkedinURL", "profileUrl"],
+          isStructurallyValidLinkedin,
+        ) ?? rawTypedLinks.linkedinCandidates[0],
+    },
+  };
+}
+
 function extractRawSections(result: any): RawSection[] {
   const candidates: unknown[] = [];
   if (Array.isArray(result?.normalized?.rawSections)) {
@@ -4562,6 +4922,8 @@ export function canonicalizeParserResult(result: any, context: CanonicalizeConte
     (normalized as any).summaryFirstSentence = firstSentence(uniformSummary.text);
   }
 
+  const schemaFirstIdentityContact = buildSchemaFirstIdentityContactCandidate(normalized, rawSections, context);
+
   if (!normalized.contact || typeof normalized.contact !== "object") {
     normalized.contact = {};
   }
@@ -4596,6 +4958,80 @@ export function canonicalizeParserResult(result: any, context: CanonicalizeConte
     if (normalized.contact) {
       (normalized.contact as any).name = derivedName;
     }
+  }
+
+  (normalized as any).identitySchema = schemaFirstIdentityContact.identity;
+  (normalized as any).contactSchema = schemaFirstIdentityContact.contact;
+
+  const currentContact = normalized.contact as Record<string, any>;
+  const heuristicName = coerceString(normalized.name ?? currentContact.name ?? "");
+  const heuristicDesiredPosition = coerceString(normalized.desiredPosition ?? currentContact.desiredPosition ?? "");
+  const heuristicLocation = coerceString(currentContact.location ?? "");
+  const heuristicEmail = coerceString(currentContact.email ?? "");
+  const heuristicPhone = coerceString(currentContact.phone ?? currentContact.phoneRaw ?? "");
+  const heuristicWebsite = coerceString(currentContact.website ?? currentContact.url ?? "");
+  const heuristicLinkedin = coerceString(currentContact.linkedin ?? currentContact.linkedinUrl ?? "");
+
+  if (
+    schemaFirstIdentityContact.identity.name &&
+    isUsablePersonName(schemaFirstIdentityContact.identity.name, schemaFirstIdentityContact.identity.name) &&
+    !isUsablePersonName(heuristicName, heuristicName)
+  ) {
+    normalized.name = schemaFirstIdentityContact.identity.name;
+    currentContact.name = schemaFirstIdentityContact.identity.name;
+  }
+
+  if (
+    schemaFirstIdentityContact.identity.desiredPosition &&
+    isStructurallyValidDesiredPosition(schemaFirstIdentityContact.identity.desiredPosition) &&
+    !isStructurallyValidDesiredPosition(heuristicDesiredPosition)
+  ) {
+    normalized.desiredPosition = schemaFirstIdentityContact.identity.desiredPosition;
+    currentContact.desiredPosition = schemaFirstIdentityContact.identity.desiredPosition;
+  }
+
+  if (
+    schemaFirstIdentityContact.identity.location &&
+    isStructurallyValidContactLocationValue(schemaFirstIdentityContact.identity.location) &&
+    !isStructurallyValidContactLocationValue(heuristicLocation)
+  ) {
+    currentContact.location = schemaFirstIdentityContact.identity.location;
+  }
+
+  if (
+    schemaFirstIdentityContact.contact.email &&
+    isStructurallyValidEmail(schemaFirstIdentityContact.contact.email) &&
+    !isStructurallyValidEmail(heuristicEmail)
+  ) {
+    currentContact.email = schemaFirstIdentityContact.contact.email;
+  }
+
+  if (
+    schemaFirstIdentityContact.contact.phone &&
+    sanitizePhoneValue(schemaFirstIdentityContact.contact.phone) &&
+    !sanitizePhoneValue(heuristicPhone)
+  ) {
+    const schemaPhone = sanitizePhoneValue(schemaFirstIdentityContact.contact.phone);
+    currentContact.phone = schemaPhone;
+    currentContact.phoneRaw = schemaPhone;
+  }
+
+  if (
+    schemaFirstIdentityContact.contact.website &&
+    isStructurallyValidWebsite(schemaFirstIdentityContact.contact.website) &&
+    !isStructurallyValidWebsite(heuristicWebsite)
+  ) {
+    currentContact.website = sanitizeSchemaUrlValue(schemaFirstIdentityContact.contact.website);
+  }
+
+  if (
+    schemaFirstIdentityContact.contact.linkedin &&
+    isStructurallyValidLinkedin(schemaFirstIdentityContact.contact.linkedin) &&
+    !isStructurallyValidLinkedin(heuristicLinkedin)
+  ) {
+    const schemaLinkedin = sanitizeSchemaUrlValue(schemaFirstIdentityContact.contact.linkedin);
+    currentContact.linkedin = schemaLinkedin;
+    currentContact.linkedinUrl = schemaLinkedin;
   }
 
   const baseDiagnostics = (
