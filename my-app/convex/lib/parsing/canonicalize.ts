@@ -2489,11 +2489,19 @@ function isWeakRawSectionsNarrativeFallback(entry: any): boolean {
 function splitCompanyLocation(line: string): { company: string; location?: string } {
   const raw = collapseSpacedCaps(cleanLine(line));
   if (!raw) return { company: "" };
-  const pieces = raw.split(",");
+  const withoutTrailingRange = raw
+    .replace(
+      /\s*[-–—]\s*(?:(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?\s+)?\d{4}\s*[-–—]\s*(?:Present|Current|(?:(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?\s+)?\d{4})\s*$/i,
+      "",
+    )
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  const normalized = withoutTrailingRange || raw;
+  const pieces = normalized.split(",");
   if (pieces.length <= 1) {
-    return { company: raw };
+    return { company: normalized };
   }
-  const first = pieces.shift()?.trim() ?? raw;
+  const first = pieces.shift()?.trim() ?? normalized;
   const location = pieces.join(",").trim() || undefined;
   return { company: first, location };
 }
