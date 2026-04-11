@@ -1035,6 +1035,67 @@ describe("canonicalizeParserResult", () => {
     );
   });
 
+  it("recovers Jake-style grouped technical skill lines from the skills raw section", () => {
+    const parserResult = {
+      normalized: {
+        skills: [
+          { name: "Languages: Java" },
+          { name: "Python" },
+          { name: "SQL (Postgres)" },
+          { name: "JavaScript" },
+          { name: "R" },
+          { name: "Frameworks: React" },
+          { name: "Flask" },
+          { name: "JUnit" },
+          { name: "WordPress" },
+          { name: "FastAPI" },
+          { name: "Developer Tools: Git" },
+          { name: "Docker" },
+          { name: "TravisCI" },
+          { name: "Eclipse" },
+          { name: "Libraries: pandas" },
+          { name: "NumPy" },
+          { name: "Matplotlib" },
+        ],
+        rawSections: [
+          {
+            label: "SKILLS",
+            content:
+              "Languages: Java, Python, C/C++, SQL (Postgres), JavaScript, HTML/CSS, R\nFrameworks: React, Node.js, Flask, JUnit, WordPress, Material-UI, FastAPI\nDeveloper Tools: Git, Docker, TravisCI, Google Cloud Platform, VS Code, Visual Studio, PyCharm, IntelliJ, Eclipse\nLibraries: pandas, NumPy, Matplotlib",
+          },
+          {
+            label: "SKILLS",
+            content:
+              "Languages: Java, Python, C/C++, SQL (Postgres), JavaScript, HTML/CSS, R Frameworks: React, Node.js, Flask, JUnit, WordPress, Material-UI, FastAPI Developer Tools: Git, Docker, TravisCI, Google Cloud Platform, VS Code, Visual Studio, PyCharm, IntelliJ, Eclipse Libraries: pandas, NumPy, Matplotlib",
+          },
+        ],
+      },
+    };
+
+    const canonical = canonicalizeParserResult(parserResult, context);
+    const skillNames = (canonical.normalized?.skills ?? []).map((item: any) => item.name);
+
+    expect(skillNames).toEqual(
+      expect.arrayContaining([
+        "C/C++",
+        "HTML/CSS",
+        "Node.js",
+        "Material-UI",
+        "Google Cloud Platform",
+        "VS Code",
+        "Visual Studio",
+        "PyCharm",
+        "IntelliJ",
+      ]),
+    );
+    expect(skillNames).not.toContain("R Frameworks: React");
+    expect(skillNames).not.toContain("FastAPI Developer Tools: Git");
+    expect(skillNames).not.toContain("Eclipse Libraries: pandas");
+    expect(skillNames.filter((name: string) => name === "Java")).toHaveLength(1);
+    expect(skillNames.filter((name: string) => name === "Git")).toHaveLength(1);
+    expect(skillNames.filter((name: string) => name === "Eclipse")).toHaveLength(1);
+  });
+
   it("keeps Jessica-style OCR education blocks grouped instead of fragmenting institution and degree lines", () => {
     const educationBlock = [
       "Cedarville University",
