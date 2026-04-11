@@ -961,4 +961,42 @@ describe("canonicalizeParserResult", () => {
     const achievements = Array.isArray(normalized.achievements) ? normalized.achievements : [];
     expect(achievements.length).toBe(1);
   });
+
+  it("keeps Jessica-style OCR education blocks grouped instead of fragmenting institution and degree lines", () => {
+    const educationBlock = [
+      "Cedarville University",
+      "Cedarville, Ohio 08/2013",
+      "**Master of Arts:** Education - Majored in Teacher Leader",
+      "**Bachelor of Arts:** Education",
+      "- Majored in Middle Childhood Education - Minored in Bible",
+      "- Specializations: Social Studies; Reading/Language Arts",
+      "- Graduated with Honors",
+    ].join("\n");
+    const flattenedEducationBlock =
+      "Cedarville University Cedarville, Ohio 08/2013 **Master of Arts:** Education - Majored in Teacher Leader Cedarville University Cedarville, Ohio 05/2007 **Bachelor of Arts:** Education - Majored in Middle Childhood Education - Minored in Bible - Specializations: Social Studies; Reading/Language Arts - Graduated with Honors";
+
+    const canonical = canonicalizeParserResult(
+      {
+        raw_sections: [
+          { label: "EDUCATION", content: educationBlock },
+          { label: "EDUCATION", content: flattenedEducationBlock },
+        ],
+        normalized: {
+          experience: [],
+          rawText: `${educationBlock}\n${flattenedEducationBlock}`,
+          raw: `${educationBlock}\n${flattenedEducationBlock}`,
+        },
+      },
+      context,
+    );
+
+    const education = Array.isArray(canonical.normalized?.education) ? canonical.normalized.education : [];
+    const institutions = education.map((entry: any) => entry?.institution ?? "");
+    const degrees = education.map((entry: any) => entry?.degree ?? "").join(" ");
+
+    expect(education.length).toBeGreaterThan(0);
+    expect(institutions.join(" ")).toContain("Cedarville University");
+    expect(institutions.join(" ")).not.toMatch(/\*\*Master of Arts|\*\*Bachelor of Arts|- Majored in Middle Childhood Education|\bBachelor of Arts:\*\* Education - Majored/i);
+    expect(degrees).toMatch(/Master of Arts/i);
+  });
 });
