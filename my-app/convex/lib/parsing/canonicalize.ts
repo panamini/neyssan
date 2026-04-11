@@ -5439,6 +5439,43 @@ function canonicalizeLanguages(
   }));
 }
 
+function shouldRewriteLanguagesRaw(rawValue: unknown, languages: any[]): boolean {
+  const rawTokens = ensureArray<unknown>(rawValue)
+    .map((token) => coerceString(token))
+    .filter(Boolean);
+  const canonicalNames = ensureArray<any>(languages)
+    .map((entry) => coerceString(entry?.name ?? ""))
+    .filter(Boolean);
+  if (!rawTokens.length || !canonicalNames.length) return false;
+
+  const canonicalSet = new Set(canonicalNames.map((name) => name.toLowerCase()));
+  const hasConcatenatedNoise = rawTokens.some((token) => {
+    const lowered = token.toLowerCase();
+    let hits = 0;
+    for (const name of canonicalNames) {
+      if (new RegExp(`\\b${escapeRegExp(name)}\\b`, "i").test(lowered)) {
+        hits += 1;
+      }
+      if (hits > 1) return true;
+    }
+    return false;
+  });
+  if (hasConcatenatedNoise) return true;
+
+  const normalizedRawTokens = rawTokens
+    .map((token) => normalizeLanguageTokenSync(token))
+    .filter((token): token is string => Boolean(token))
+    .map((token) => token.toLowerCase());
+  const normalizedRawSet = new Set(normalizedRawTokens);
+  const hasNonOneToOneToken =
+    normalizedRawTokens.length !== rawTokens.length ||
+    rawTokens.length !== canonicalNames.length ||
+    normalizedRawSet.size !== canonicalSet.size ||
+    Array.from(canonicalSet).some((token) => !normalizedRawSet.has(token));
+
+  return hasNonOneToOneToken;
+}
+
 function canonicalizeAchievements(rawValue: unknown, normalized: any, rawSections: RawSection[], context: CanonicalizeContext): any[] {
   const arr = ensureArray<any>(rawValue)
     .map((entry, idx) => {
@@ -5595,11 +5632,14 @@ export function canonicalizeParserResult(result: any, context: CanonicalizeConte
   }
   const languages = canonicalizeLanguages(normalized.languages, normalized, rawSections, context);
   normalized.languages = languages;
+  const canonicalLanguageNames = languages.map((entry: any) => entry.name).filter(Boolean);
   if (!normalized.languagesText && languages.length > 0) {
-    normalized.languagesText = languages.map((entry: any) => entry.name).filter(Boolean).join(", ");
+    normalized.languagesText = canonicalLanguageNames.join(", ");
   }
   if (!Array.isArray(normalized.languagesRaw) || normalized.languagesRaw.length === 0) {
-    normalized.languagesRaw = languages.map((entry: any) => entry.name).filter(Boolean);
+    normalized.languagesRaw = canonicalLanguageNames;
+  } else if (shouldRewriteLanguagesRaw(normalized.languagesRaw, languages)) {
+    normalized.languagesRaw = canonicalLanguageNames;
   }
   normalized.projects = canonicalizeProjects(normalized.projects, normalized, rawSections, context);
   normalized.achievements = canonicalizeAchievements(normalized.achievements, normalized, rawSections, context);
