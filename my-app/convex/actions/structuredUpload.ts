@@ -26,6 +26,9 @@ type CanonicalPayload = {
   diagnostics?: Record<string, any>;
   rawSections?: Array<Record<string, any>>;
   sections?: Array<Record<string, any>>;
+  debug?: {
+    rawParser?: unknown;
+  } | null;
 };
 
 type ParserResponse = {
@@ -1519,6 +1522,9 @@ export const structuredUpload = action({
       ...normalizedResult,
       diagnostics: diag,
       recovery,
+      debug: {
+        rawParser: lastPayload,
+      },
     };
   },
 });
