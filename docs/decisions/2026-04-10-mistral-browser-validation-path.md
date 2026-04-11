@@ -50,6 +50,12 @@
 - Parser side had to trim non-experience contamination and prefer the stronger current-job narrative line.
 - App side had to preserve the live source text that reached canonicalization and recover narrative experience from weak raw-section fallbacks.
 
+## Jake experience conclusion
+
+- Jake experience was ultimately an app-side issue, not a parser-side issue.
+- The good raw-sections merged-anchor recovery was already producing the correct experience entries.
+- The winning live bug was source selection / trust order: bad normalized experience entries were incorrectly preferred over the better raw-sections recovery until the coherence guard was tightened.
+
 ## First-upload / restart-gap / button-freeze conclusion
 
 - First-upload failures were a runtime readiness problem, not a parsing-quality problem.

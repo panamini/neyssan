@@ -2401,16 +2401,20 @@ function parseExperienceBlock(content: string, idx: number) {
     normalizedContent = normalizedContent.replace(/\s+([\-•*])\s+/g, "\n$1 ");
     normalizedContent = normalizedContent.replace(/(\d{4})(\s+[A-Z])/g, "$1\n$2");
   }
-  const lines = normalizedContent
+  const initialLines = normalizedContent
     .split(/\r?\n/)
     .map((line) => collapseSpacedCaps(cleanLine(line)))
     .filter(Boolean);
+  const { deferred: deferredResponsibilityLines, remaining: lines } = consumeLeadingResponsibilityLines(initialLines);
   if (lines.length === 0) {
     return null;
   }
 
   let header = lines.shift() ?? "";
   header = header.replace(/^LANGUAGES\s*/i, "").trim();
+  if (looksLikeResponsibilitySentence(header)) {
+    return null;
+  }
   let dateText = (header.match(DATE_RANGE_RE) || [])[0];
   if (dateText) {
     header = cleanLine(header.replace(dateText, ""));
@@ -2519,11 +2523,15 @@ function parseExperienceBlock(content: string, idx: number) {
   if (!narrativeBullets.length && /responsible for/i.test(String(content ?? ""))) {
     narrativeBullets = splitResponsibilitiesText(content);
   }
-  const combinedResponsibilities = [...narrativeBullets, ...responsibilityBullets];
+  const combinedResponsibilities = [...deferredResponsibilityLines, ...narrativeBullets, ...responsibilityBullets];
   const dedupedResponsibilities = dedupeStringsCaseInsensitive(combinedResponsibilities);
   const achievements = dedupeStringsCaseInsensitive(
     dedupedResponsibilities.filter(looksLikeAchievementBullet)
   );
+
+  if (looksLikeResponsibilitySentence(position)) {
+    return null;
+  }
 
   return {
     id: coerceId(null, "exp", idx),
@@ -2548,6 +2556,33 @@ function looksLikeAchievementBullet(text: string): boolean {
   if (/\b\d+%|\b\d{4,}\b/.test(lower)) return true; // "+30%", "reduced by 1200"
   if (/\b(revenue|retention|conversion|productivity|cost|incident|safety|latency|availability)\b/.test(lower)) return true;
   return false;
+}
+
+const RESPONSIBILITY_LEAD_RE =
+  /^(maintain|maintained|maintaining|communicate|communicated|communicating|assess|assessed|assessing|troubleshoot|troubleshot|troubleshooting|support|supported|supporting|contribute|contributed|contributing|explore|explored|exploring|develop|developed|developing|conduct|conducted|conducting|write|wrote|writing|present|presented|presenting|monitor|monitored|monitoring|ensure|ensured|ensuring|manage|managed|managing|provide|provided|providing|assist|assisted|assisting|responsible)\b/i;
+
+function looksLikeResponsibilitySentence(text: string): boolean {
+  const cleaned = cleanLine(text).replace(/^[\-•*\u2022]+\s*/, "");
+  if (!cleaned) return false;
+  if (looksLikeAchievementBullet(cleaned)) return true;
+  const wordCount = cleaned.split(/\s+/).filter(Boolean).length;
+  if (wordCount < 5) return false;
+  return RESPONSIBILITY_LEAD_RE.test(cleaned);
+}
+
+function consumeLeadingResponsibilityLines(lines: string[]): { deferred: string[]; remaining: string[] } {
+  const deferred: string[] = [];
+  let cursor = 0;
+  while (cursor < lines.length) {
+    const candidate = lines[cursor]?.replace(/^[\-•*\u2022]+\s*/, "").trim();
+    if (!candidate || !looksLikeResponsibilitySentence(candidate)) break;
+    deferred.push(candidate);
+    cursor += 1;
+  }
+  return {
+    deferred,
+    remaining: lines.slice(cursor),
+  };
 }
 
 function stripBiographyNoise(t: string): string {
@@ -2575,10 +2610,11 @@ function coerceSummaryObject(textMaybe: string | undefined, fallbackConf = 0.5) 
 
 
 function parseExperienceSegment(content: string, idx: number) {
-  const lines = String(content ?? "")
+  const initialLines = String(content ?? "")
     .split(/\r?\n/)
     .map((line) => collapseSpacedCaps(cleanLine(line)))
     .filter(Boolean);
+  const { deferred: deferredResponsibilityLines, remaining: lines } = consumeLeadingResponsibilityLines(initialLines);
   if (!lines.length) return null;
 
   const headerRaw = lines.shift() ?? "";
@@ -2586,11 +2622,14 @@ function parseExperienceSegment(content: string, idx: number) {
 
   const headerTrimmed = header.trim();
   if (!headerTrimmed || NARRATIVE_VERB_RE.test(headerTrimmed)) {
-    const snippets = [headerTrimmed, ...lines]
+    const snippets = [...deferredResponsibilityLines, headerTrimmed, ...lines]
       .map((line) => line.replace(/^[\-•*\s]+/, "").trim())
       .filter(Boolean);
     if (snippets.length === 0) return null;
     return { __narrative: snippets } as any;
+  }
+  if (looksLikeResponsibilitySentence(headerTrimmed)) {
+    return null;
   }
 
   const { position: headerPosition, company: headerCompany, location: headerLocation } = splitCompanyPositionFromHeader(header);
@@ -2619,7 +2658,7 @@ function parseExperienceSegment(content: string, idx: number) {
       normalizedLines.push(cleaned);
     }
   }
-  for (const line of normalizedLines) {
+  for (const line of [...deferredResponsibilityLines, ...normalizedLines]) {
     const cleaned = line.trim();
     if (!cleaned) continue;
     bulletLines.push(cleaned);
@@ -2645,6 +2684,100 @@ function parseExperienceSegment(content: string, idx: number) {
     responsibilityBullets: dedupedResponsibilitiesSegment.length ? dedupedResponsibilitiesSegment : undefined,
     achievements,
   };
+}
+
+function looksLikeExperienceLocationLine(line: string): boolean {
+  const cleaned = cleanLine(line);
+  if (!cleaned || DATE_RANGE_RE.test(cleaned) || SINGLE_DATE_RE.test(cleaned)) return false;
+  if (looksLikeResponsibilitySentence(cleaned)) return false;
+  if (/^[A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+)*,\s*[A-Z]{2}\b/.test(cleaned)) return true;
+  if (/^[A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){0,3},\s*[A-Z][A-Za-z.'-]+$/.test(cleaned)) return true;
+  return false;
+}
+
+function recoverExperienceEntriesFromMergedAnchors(content: string, idxSeed: number): any[] {
+  const lines = String(content ?? "")
+    .split(/\r?\n/)
+    .map((line) => collapseSpacedCaps(cleanLine(line)))
+    .filter(Boolean);
+  if (lines.length < 8) return [];
+
+  const isRoleAnchor = (line: string): boolean => {
+    const role = normalizeRoleCandidate(line);
+    if (!role || looksLikeResponsibilitySentence(role)) return false;
+    const tokens = role.toLowerCase().split(/\s+/);
+    return tokens.some((token) => ROLE_KEYWORD_HINTS.has(token));
+  };
+
+  const isCompanyAnchor = (line: string): boolean => {
+    const cleaned = cleanLine(line);
+    if (!cleaned || DATE_RANGE_RE.test(cleaned) || SINGLE_DATE_RE.test(cleaned)) return false;
+    if (looksLikeExperienceLocationLine(cleaned)) return false;
+    if (looksLikeResponsibilitySentence(cleaned)) return false;
+    const maybeRole = normalizeRoleCandidate(cleaned);
+    if (maybeRole) {
+      const tokens = maybeRole.toLowerCase().split(/\s+/);
+      if (tokens.some((token) => ROLE_KEYWORD_HINTS.has(token))) return false;
+    }
+    return cleaned.split(/\s+/).length <= 8;
+  };
+
+  const anchorIndices: number[] = [];
+  for (let i = 0; i <= lines.length - 3; i += 1) {
+    if (!isRoleAnchor(lines[i] ?? "")) continue;
+    if (!isCompanyAnchor(lines[i + 1] ?? "")) continue;
+    const dateLine = lines[i + 2] ?? "";
+    if (!(DATE_RANGE_RE.test(dateLine) || SINGLE_DATE_RE.test(dateLine))) continue;
+    anchorIndices.push(i);
+  }
+
+  if (anchorIndices.length < 2) return [];
+
+  const entries: any[] = [];
+  for (let a = 0; a < anchorIndices.length; a += 1) {
+    const start = anchorIndices[a] ?? 0;
+    const end = a + 1 < anchorIndices.length ? anchorIndices[a + 1] ?? lines.length : lines.length;
+    const roleLine = lines[start] ?? "";
+    const companyLine = lines[start + 1] ?? "";
+    const dateLine = lines[start + 2] ?? "";
+    const locationLine = looksLikeExperienceLocationLine(lines[start + 3] ?? "") ? lines[start + 3] ?? "" : "";
+    const payloadStart = start + (locationLine ? 4 : 3);
+    const payloadLines = lines
+      .slice(payloadStart, end)
+      .map((line) => line.replace(/^[\-•*\u2022]+\s*/, "").trim())
+      .filter(Boolean)
+      .filter((line) => !looksLikeExperienceLocationLine(line));
+    if (!payloadLines.length) continue;
+
+    const role = normalizeRoleCandidate(roleLine);
+    const { company, location: companyLocation } = splitCompanyLocation(companyLine);
+    const parsedDates = parseDateRange(dateLine);
+    if (!role || !company) continue;
+    if (!parsedDates.startDate && parsedDates.endDate === undefined && !parsedDates.isCurrent) continue;
+
+    const splitPayload = splitResponsibilitiesText(payloadLines.join("\n"));
+    const responsibilityBullets = dedupeStringsCaseInsensitive(
+      splitPayload.length > 1 ? splitPayload : payloadLines,
+    );
+    if (!responsibilityBullets.length) continue;
+
+    const location = stripDrivingLicense(locationLine || companyLocation || "");
+    entries.push({
+      id: coerceId(null, "exp", idxSeed * 100 + a),
+      company: stripDrivingLicense(company),
+      position: stripDrivingLicense(role),
+      startDate: parsedDates.startDate,
+      endDate: parsedDates.endDate,
+      isCurrent: parsedDates.isCurrent,
+      location,
+      responsibilities: responsibilityBullets.join("\n"),
+      responsibilityBullets,
+      achievements: dedupeStringsCaseInsensitive(responsibilityBullets.filter(looksLikeAchievementBullet)),
+      provenanceTags: ["heuristic:merged_anchor_split"],
+    });
+  }
+
+  return entries;
 }
 
 function parseEducationBlock(content: string, idx: number) {
@@ -3199,8 +3332,12 @@ function canonicalizeExperience(
       isExperienceFieldStructuralFragment(position) ||
       isExperienceFieldStructuralFragment(location);
     const hasHeaderEchoLocation = isExperienceLocationHeaderEcho(location, company, position);
+    const hasNarrativeCompanyOnly =
+      hasCompany &&
+      !hasPosition &&
+      looksLikeResponsibilitySentence(company);
 
-    if (hasStructuralFieldContamination || hasHeaderEchoLocation) {
+    if (hasStructuralFieldContamination || hasHeaderEchoLocation || hasNarrativeCompanyOnly) {
       return false;
     }
 
@@ -3368,6 +3505,14 @@ function canonicalizeExperience(
         entry: parseWorkedInNarrativeEntry(line, key * 10 + idx),
       }))
       .filter((item) => item.entry);
+
+    const mergedAnchorRecovered = sanitizeExperienceEntries(
+      recoverExperienceEntriesFromMergedAnchors(segment, key),
+    );
+    if (mergedAnchorRecovered.length > 1) {
+      fallbackItems.push(...mergedAnchorRecovered);
+      return;
+    }
 
     const parsedBlock = parseExperienceBlock(segment, key);
     if (parsedBlock) {
