@@ -220,6 +220,19 @@ export const AffiliationItemSchema = z
   .passthrough();
 export const AffiliationItemSchemaStrict = AffiliationItemSchema.strict();
 
+export const ProjectItemSchema = z
+  .object({
+    id: z.string().optional(),
+    title: z.string().optional(),
+    name: z.string().optional(),
+    meta: z.string().optional(),
+    subtitle: z.string().optional(),
+    description: z.union([RemirrorJSONSchema, z.string()]).optional(),
+    summary: z.union([RemirrorJSONSchema, z.string()]).optional(),
+  })
+  .passthrough();
+export const ProjectItemSchemaStrict = ProjectItemSchema.strict();
+
 /* Achievements: structured items { id, text } */
 export const AchievementItemSchema = z
   .object({
@@ -236,6 +249,7 @@ export const StructuredContentSchema = z.union([
   z.array(SkillItemSchema),
   z.array(CertificationItemSchema),
   z.array(AffiliationItemSchema),
+  z.array(ProjectItemSchema),
   z.array(LanguageItemSchema),
   z.array(ProfileItemSchema),
   z.array(SummaryItemSchema),
@@ -248,6 +262,7 @@ export const StructuredContentSchemaStrict = z.union([
   z.array(SkillItemSchemaStrict),
   z.array(CertificationItemSchemaStrict),
   z.array(AffiliationItemSchemaStrict),
+  z.array(ProjectItemSchemaStrict),
   z.array(LanguageItemSchemaStrict),
   z.array(ProfileItemSchemaStrict),
   z.array(SummaryItemSchemaStrict),

@@ -546,6 +546,143 @@ function dedupeCaseInsensitive(items: string[]): string[] {
   return out;
 }
 
+function normalizeProjectBodyForComparison(input: string): string {
+  return cleanToken(input)
+    .replace(/[\u2012\u2013\u2014\u2015]/g, "-")
+    .replace(/\s+/g, " ")
+    .toLowerCase()
+    .trim();
+}
+
+function dedupeProjectBodies(items: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const item of items) {
+    const normalized = normalizeProjectBodyForComparison(item);
+    if (!normalized) continue;
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+    out.push(item.trim());
+  }
+  return out;
+}
+
+function isProjectBodySubsumedByRawBody(projectBody: string, rawBodies: string[]): boolean {
+  const normalizedProject = normalizeProjectBodyForComparison(projectBody);
+  if (!normalizedProject || normalizedProject.length < 24) return false;
+  const normalizedProjectTitle = normalizeProjectBodyForComparison(projectBody.split(/\n/, 1)[0] ?? projectBody);
+  const normalizedProjectName = normalizedProjectTitle.split("|", 1)[0]?.trim() ?? "";
+  return rawBodies.some((rawBody) => {
+    const normalizedRaw = normalizeProjectBodyForComparison(rawBody);
+    if (normalizedRaw.length <= normalizedProject.length) return false;
+    if (normalizedRaw.includes(normalizedProject)) return true;
+    if (normalizedProjectTitle && normalizedRaw.includes(normalizedProjectTitle)) return true;
+    if (normalizedProjectName.length >= 6 && normalizedRaw.includes(normalizedProjectName)) return true;
+    return false;
+  });
+}
+
+function looksLikeProjectMeta(text: string): boolean {
+  const cleaned = cleanToken(text);
+  if (!cleaned) return false;
+  if (isLikelyDateish(cleaned)) return true;
+  if (/\b(?:github|docker|react|flask|java|python|postgresql|maven|travisci|redis|api)\b/i.test(cleaned)) {
+    return true;
+  }
+  if (cleaned.includes(",") && cleaned.split(/\s+/).length <= 18) return true;
+  return false;
+}
+
+function splitProjectMetaAndDescription(segment: string): { meta: string; description: string } {
+  const cleaned = cleanToken(segment);
+  if (!cleaned) return { meta: "", description: "" };
+
+  const dateRangePatterns = [
+    /^(.*?\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+\d{4}\s*[–—-]\s*(?:present|current|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+\d{4}|\d{4}))\s+(.+)$/i,
+    /^(.*?\b\d{4}\s*[–—-]\s*(?:present|current|\d{4}))\s+(.+)$/i,
+  ];
+
+  for (const pattern of dateRangePatterns) {
+    const match = cleaned.match(pattern);
+    if (!match) continue;
+    return {
+      meta: cleanToken(match[1]),
+      description: cleanToken(match[2]),
+    };
+  }
+
+  if (looksLikeProjectMeta(cleaned)) {
+    return { meta: cleaned, description: "" };
+  }
+
+  return { meta: "", description: cleaned };
+}
+
+function materializeProjectItem(
+  body: string,
+  index: number,
+): { id: string; title: string; meta?: string; description?: string } {
+  const fallbackTitle = index === 0 ? "Projects" : `Project ${index + 1}`;
+  const normalizedLines = String(body ?? "")
+    .replace(/\r/g, "\n")
+    .split(/\n+/)
+    .map((line) => cleanToken(line))
+    .filter(Boolean);
+
+  if (normalizedLines.length === 0) {
+    return { id: `project-${uuidv4()}`, title: fallbackTitle, description: "" };
+  }
+
+  const firstLine = normalizedLines[0] ?? "";
+  const pipeSegments = firstLine
+    .split("|")
+    .map((segment) => cleanToken(segment))
+    .filter(Boolean);
+
+  if (pipeSegments.length > 3) {
+    return {
+      id: `project-${uuidv4()}`,
+      title: fallbackTitle,
+      description: normalizedLines.join("\n"),
+    };
+  }
+
+  let title = pipeSegments[0] || firstLine || fallbackTitle;
+  const metaParts: string[] = [];
+  const descriptionParts: string[] = normalizedLines.slice(1);
+
+  if (pipeSegments.length >= 2) {
+    const middleSegments = pipeSegments.slice(1, -1);
+    for (const segment of middleSegments) {
+      if (looksLikeProjectMeta(segment)) metaParts.push(segment);
+      else descriptionParts.unshift(segment);
+    }
+
+    const tail = pipeSegments[pipeSegments.length - 1] ?? "";
+    const { meta, description } = splitProjectMetaAndDescription(tail);
+    if (meta) metaParts.push(meta);
+    if (description) descriptionParts.unshift(description);
+  }
+
+  if (pipeSegments.length === 2 && descriptionParts.length === 0) {
+    const secondSegment = pipeSegments[1] ?? "";
+    if (looksLikeProjectMeta(secondSegment)) metaParts.push(secondSegment);
+    else descriptionParts.push(secondSegment);
+  }
+
+  const meta = dedupeCaseInsensitive(metaParts).join(" | ").trim();
+  const description = descriptionParts.join("\n").trim();
+
+  if (!title) title = fallbackTitle;
+
+  return {
+    id: `project-${uuidv4()}`,
+    title,
+    meta: meta || undefined,
+    description: description || undefined,
+  };
+}
+
 function mapLevelString(input?: string): "Beginner" | "Elementary" | "Intermediate" | "Advanced" | "Fluent" {
   const s = String(input ?? "").toLowerCase().trim();
   if (!s) return "Intermediate";
@@ -2147,26 +2284,40 @@ export function buildTypedSectionsFromNormalized(normalized: PartialNormalizedCv
     };
   }
 
-  const projectBodies = dedupeCaseInsensitive([
-    ...collectRawSectionBodies(normalized, "projects"),
-    ...((Array.isArray((normalized as any).projects)
+  const rawProjectBodies = dedupeProjectBodies(collectRawSectionBodies(normalized, "projects"));
+  const structuredProjectBodies = dedupeProjectBodies(
+    ((Array.isArray((normalized as any).projects)
       ? (normalized as any).projects.map((entry: any) => {
           const title = cleanToken(String(entry?.title ?? entry?.name ?? ""));
           const summary = cleanToken(String(entry?.summary ?? entry?.description ?? ""));
           return [title, summary].filter(Boolean).join("\n").trim();
         })
       : []) as string[]),
-  ]);
+  ).filter((body) => !isProjectBodySubsumedByRawBody(body, rawProjectBodies));
+  const projectBodies = dedupeCaseInsensitive([...rawProjectBodies, ...structuredProjectBodies]);
   if (projectBodies.length > 0) {
+    const projectItems = projectBodies.map((body, index) => {
+      const item = materializeProjectItem(body, index);
+      const fallbackBody = cleanToken(body);
+      return {
+        ...item,
+        description: item.description ?? fallbackBody,
+      };
+    });
+
     projectsSection = {
       id: `sec-projects-${uuidv4()}`,
       title: "Projects",
       type: "projects",
-      blocks: projectBodies.map((body, index) =>
-        createTextBlock(index === 0 ? "Projects" : `Project ${index + 1}`, body),
+      blocks: projectItems.map((item, index) =>
+        createTextBlock(
+          item.title || (index === 0 ? "Projects" : `Project ${index + 1}`),
+          [item.meta, item.description].filter(Boolean).join("\n").trim() || projectBodies[index] || "",
+          item.id,
+        ),
       ),
       collapsed: false,
-      structuredContent: null,
+      structuredContent: projectItems as any,
     };
   }
 
