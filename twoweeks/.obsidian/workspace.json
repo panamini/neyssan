@@ -223,7 +223,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 300
+    "width": 500.5
   },
   "left-ribbon": {
     "hiddenItems": {
@@ -240,7 +240,7 @@
       "templater-obsidian:Templater": false
     }
   },
-  "active": "ce6b4317056c24fd",
+  "active": "bc8b8d5eafa17479",
   "lastOpenFiles": [
     "wiki/concepts/cv-parsing-pipeline.md",
     "rawinput/to do.md",
