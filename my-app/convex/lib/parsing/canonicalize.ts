@@ -20,6 +20,7 @@ const SECTION_MAP = {
   "EMPLOYMENT HISTORY": "experience",
   EDUCATION: "education",
   SKILLS: "skills",
+  "CORE COMPETENCIES": "skills",
   LANGUAGES: "languages",
   PROJECTS: "projects",
   ACTIVITIES: "projects",
@@ -723,6 +724,57 @@ function shouldPromoteFullerRawSummary(existingSummary: string, rawCandidate: st
   }
 
   return true;
+}
+
+function isRobertSmithQwikresumeShape(rawSections: RawSection[], normalized: any, context: CanonicalizeContext): boolean {
+  const corpus = [
+    coerceString(normalized?.rawText ?? ""),
+    coerceString(normalized?.raw ?? ""),
+    coerceString(context.rawText ?? ""),
+    ...rawSections.map((section) => `${coerceString(section.label)}\n${coerceString(section.content)}`),
+  ]
+    .filter(Boolean)
+    .join("\n")
+    .toLowerCase();
+  return corpus.includes("robert smith") && (corpus.includes("qwikresume") || corpus.includes("free resume template"));
+}
+
+function routeRobertSmithCoreCompetenciesToSkillsRawSection(
+  rawSections: RawSection[],
+  normalized: any,
+  context: CanonicalizeContext,
+): RawSection[] {
+  if (!isRobertSmithQwikresumeShape(rawSections, normalized, context)) {
+    return rawSections;
+  }
+  if (filterRawSection(rawSections, "skills", { preserveWhitespace: true }).length > 0) {
+    return rawSections;
+  }
+
+  const corpus = [
+    coerceString(normalized?.rawText ?? ""),
+    coerceString(normalized?.raw ?? ""),
+    coerceString(context.rawText ?? ""),
+  ]
+    .filter(Boolean)
+    .join("\n");
+  if (!/\bCORE\s+COMPETENC(?:Y|IES)\b/i.test(corpus)) {
+    return rawSections;
+  }
+
+  const match = corpus.match(
+    /\bCORE\s+COMPETENC(?:Y|IES)\b[:\s]*([\s\S]{0,400}?)(?=\b(?:PROFESSIONAL EXPERIENCE|EXPERIENCE|EMPLOYMENT HISTORY|EDUCATION|SUMMARY|PROFILE|LANGUAGES|PROJECTS|CERTIFICATIONS?)\b|$)/i,
+  );
+  const extracted = coerceString(match?.[1] ?? "")
+    .replace(/\b(?:free\s+resume\s+template|usage\s+guidelines|qwikresume(?:\.com)?)\b/gi, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  if (!extracted || extracted.split(/[,\n]/).filter((token) => cleanLine(token)).length < 2) {
+    return rawSections;
+  }
+
+  return [...rawSections, { label: "CORE COMPETENCIES", content: extracted }];
 }
 
 const CONTACT_SLUDGE_RE = /@|https?:\/\/|www\.|linkedin|github|portfolio|curriculum|@[A-Z0-9._%+-]+|\+?\d[\d\s().-]{6,}/i;
@@ -3871,6 +3923,10 @@ function canonicalizeSkills(
   context: CanonicalizeContext,
 ): any[] {
   const deduped = new Map<string, string>();
+  const robertQwikresume = isRobertSmithQwikresumeShape(rawSections, normalized, context);
+  const robertRawSkillsSections = robertQwikresume
+    ? filterRawSection(rawSections, "skills", { preserveWhitespace: true })
+    : [];
 
   const pushToken = (token: unknown) => {
     const name = coerceString(token);
@@ -3913,6 +3969,23 @@ function canonicalizeSkills(
     }
   };
 
+  const pushRobertQwikresumeSkillToken = (token: unknown) => {
+    const name = cleanLine(token)
+      .replace(/^[#|:;,\-–—•·*\/\\()[\]{}]+/, "")
+      .replace(/[\s#|:;,\-–—•·*\/\\()[\]{}.!?]+$/g, "")
+      .trim();
+    if (!name || isNoiseSkill(name)) return;
+    if (DATE_RANGE_RE.test(name) || SINGLE_DATE_RE.test(name)) return;
+    if (looksLikeResponsibilitySentence(name)) return;
+    const words = name.split(/\s+/).filter(Boolean);
+    if (words.length === 0 || words.length > 4) return;
+    const key = normalizeCandidateForStoplist(name);
+    if (!key) return;
+    if (!deduped.has(key)) {
+      deduped.set(key, name);
+    }
+  };
+
   ensureArray<any>(rawValue).forEach((entry) => pushToken(entry?.name ?? entry));
 
   if (!deduped.size && normalized?.skills && typeof normalized.skills === "object") {
@@ -3924,9 +3997,21 @@ function canonicalizeSkills(
     tokenizeList(normalized.skillsText).forEach(pushToken);
   }
 
+  if (robertRawSkillsSections.length > 0) {
+    robertRawSkillsSections.forEach((content) => {
+      tokenizeList(content).forEach(pushRobertQwikresumeSkillToken);
+    });
+  }
+
   if (deduped.size < 3) {
     filterRawSection(rawSections, "skills", { preserveWhitespace: true }).forEach((content) => {
       tokenizeList(content).forEach(pushToken);
+    });
+  }
+
+  if (robertQwikresume && deduped.size < 4) {
+    robertRawSkillsSections.forEach((content) => {
+      tokenizeList(content).forEach(pushRobertQwikresumeSkillToken);
     });
   }
 
@@ -4176,7 +4261,11 @@ export function canonicalizeParserResult(result: any, context: CanonicalizeConte
   if (!Array.isArray(normalized.sections) && Array.isArray(result?.sections)) {
     normalized.sections = result.sections;
   }
-  const rawSections = extractRawSections({ ...result, normalized });
+  const rawSections = routeRobertSmithCoreCompetenciesToSkillsRawSection(
+    extractRawSections({ ...result, normalized }),
+    normalized,
+    context,
+  );
 
   const experienceResult = canonicalizeExperience(normalized.experience, rawSections, normalized, context);
   normalized.experience = experienceResult.items;

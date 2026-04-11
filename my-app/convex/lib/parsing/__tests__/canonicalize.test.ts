@@ -137,6 +137,54 @@ describe("canonicalizeParserResult", () => {
     expect(experience[0]?.endDate).toBe("2022-04-01");
   });
 
+  it("recovers Robert Smith skills from core competencies without reopening experience recovery", () => {
+    const summarySection =
+      "Cash handling accuracy Excellent multi-tasker Organized Friendly Dependable Reliable Strong communication skills Punctual Flexible schedule Knowledge of MS Office and POS.";
+    const competenciesSection = "Accounting, Data Entry, WindowsXP-8, Technology Management. ##";
+    const experienceSection = [
+      "Lead Customer Advocate",
+      "CitySquare - 2015 – Present",
+      "Worked with men, women and children who were attempting to leave a violent relationship",
+      "",
+      "Advocate",
+      "ABC Corporation - 2011 – 2015",
+    ].join("\n");
+    const educationNoise =
+      "2259 Oak Street\nOld Forge, New York, 13420 This Free Resume Template is the copyright of Qwikresume.com. Usage Guidelines";
+
+    const canonical = canonicalizeParserResult(
+      {
+        raw_sections: [
+          { label: "SUMMARY", content: summarySection },
+          { label: "CORE COMPETENCIES", content: competenciesSection },
+          { label: "EXPERIENCE", content: experienceSection },
+          { label: "EDUCATION", content: educationNoise },
+        ],
+        normalized: {
+          summary: {
+            text: "Worked with men women and children who were attempting to leave a violent relationship",
+          },
+          rawText: [
+            "ROBERT SMITH",
+            "Lead Customer Advocate",
+            "info@qwikresume.com",
+            summarySection,
+            "CORE COMPETENCIES",
+            competenciesSection,
+            experienceSection,
+            educationNoise,
+            "Qwikresume.com",
+          ].join("\n"),
+        },
+      },
+      context,
+    );
+
+    expect(canonical.normalized?.skills?.map((item: any) => item?.name)).toEqual(
+      expect.arrayContaining(["Accounting", "Data Entry", "WindowsXP-8", "Technology Management"]),
+    );
+  });
+
   it("keeps normalized experience and repairs header-echo locations when entries are otherwise coherent", () => {
     const parserResult = {
       normalized: {
