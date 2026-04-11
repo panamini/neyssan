@@ -239,6 +239,12 @@ function buildTouchedSectionRevealState(sections: CvSection[], touchedSectionIds
   );
 }
 
+function coerceDebugPayloadText(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
 /**
  * ProfileReviewCard
  *
@@ -483,6 +489,11 @@ export function ProfileReviewCard({
     useState<boolean>(false);
   const [isImportWarningAutoHidden, setIsImportWarningAutoHidden] =
     useState<boolean>(false);
+  const [latestStructuredPayload, setLatestStructuredPayload] =
+    useState<StructuredPayload | null>(null);
+  const [copyFeedback, setCopyFeedback] = useState<
+    null | "normalized" | "parser" | "rawText"
+  >(null);
   const [isImportWarningExiting, setIsImportWarningExiting] =
     useState<boolean>(false);
   const [isRecoveryResumeBannerHidden, setIsRecoveryResumeBannerHidden] =
@@ -575,12 +586,40 @@ export function ProfileReviewCard({
   const toolbarImportEntryLabel = hasPendingRecoveryEntryPoint
     ? recoveryEntryLabel
     : "Review import changes";
+  const rawTextForCopy =
+    coerceDebugPayloadText((latestStructuredPayload as any)?.rawText) ??
+    coerceDebugPayloadText((latestStructuredPayload?.normalized as any)?.rawText) ??
+    coerceDebugPayloadText((latestStructuredPayload?.debug as any)?.rawParser?.rawText) ??
+    coerceDebugPayloadText((latestStructuredPayload?.debug as any)?.rawParser?.normalized?.rawText);
   const recoveryOutcomeSummary = useMemo<RecoveryCommitSummary | null>(() => {
     if (!pendingRecoveryImport) return null;
     return summarizeRecoveryCommitState(
       pendingRecoveryImport.items.map(normalizeRecoveryItemTargets),
     );
   }, [pendingRecoveryImport]);
+
+  const copyStructuredPayload = React.useCallback(
+    async (kind: "normalized" | "parser" | "rawText") => {
+      const value =
+        kind === "normalized"
+          ? latestStructuredPayload?.normalized
+          : kind === "parser"
+            ? latestStructuredPayload?.debug?.rawParser
+            : rawTextForCopy;
+      if (value == null) {
+        return;
+      }
+      const text =
+        kind === "rawText" ? String(value) : JSON.stringify(value, null, 2);
+      try {
+        await navigator.clipboard.writeText(text);
+        setCopyFeedback(kind);
+      } catch (err) {
+        console.error("[ProfileReviewCard] copy failed", err);
+      }
+    },
+    [latestStructuredPayload, rawTextForCopy],
+  );
 
   useEffect(() => {
     if (!importWarningSessionKey || typeof window === "undefined") {
@@ -608,7 +647,15 @@ export function ProfileReviewCard({
       });
     }
     previousCvIdRef.current = nextCvId;
+    setLatestStructuredPayload(null);
+    setCopyFeedback(null);
   }, [currentCv?.id]);
+
+  useEffect(() => {
+    if (!copyFeedback) return undefined;
+    const timeoutId = window.setTimeout(() => setCopyFeedback(null), 1800);
+    return () => window.clearTimeout(timeoutId);
+  }, [copyFeedback]);
 
   useEffect(() => {
     if (!recoveryResumeBannerSignature) {
@@ -2329,6 +2376,8 @@ export function ProfileReviewCard({
                   }
                 }}
                 onResult={(payload) => {
+                  setLatestStructuredPayload(payload as StructuredPayload);
+                  setCopyFeedback(null);
                   if (
                     typeof window !== "undefined" &&
                     (window as any).__CV_EDITOR_DEBUG__ === true
@@ -2351,6 +2400,45 @@ export function ProfileReviewCard({
             </div>
             {onRequestExport || hasImportReviewEntryPoint ? (
               <div className="dasti-cv-edit-toolbar__group dasti-cv-edit-toolbar__group--actions">
+                {DEBUG_CV_EDITOR && latestStructuredPayload ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => void copyStructuredPayload("normalized")}
+                      className="dasti-button dasti-button--secondary dasti-button--pill dasti-button--sm"
+                      aria-label="Copy normalized JSON"
+                    >
+                      <FileText size={14} strokeWidth={1.6} aria-hidden="true" />
+                      {copyFeedback === "normalized"
+                        ? "Copied normalized JSON"
+                        : "Copy normalized JSON"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void copyStructuredPayload("parser")}
+                      className="dasti-button dasti-button--secondary dasti-button--pill dasti-button--sm"
+                      aria-label="Copy raw parser JSON"
+                      disabled={!latestStructuredPayload?.debug?.rawParser}
+                    >
+                      <FileText size={14} strokeWidth={1.6} aria-hidden="true" />
+                      {copyFeedback === "parser"
+                        ? "Copied raw parser JSON"
+                        : "Copy raw parser JSON"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void copyStructuredPayload("rawText")}
+                      className="dasti-button dasti-button--secondary dasti-button--pill dasti-button--sm"
+                      aria-label="Copy raw text"
+                      disabled={!rawTextForCopy}
+                    >
+                      <FileText size={14} strokeWidth={1.6} aria-hidden="true" />
+                      {copyFeedback === "rawText"
+                        ? "Copied raw text"
+                        : "Copy raw text"}
+                    </button>
+                  </>
+                ) : null}
                 {onRequestExport ? (
                   <button
                     type="button"

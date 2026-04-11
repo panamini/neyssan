@@ -290,6 +290,41 @@ describe("canonicalizeParserResult", () => {
     expect(experience.some((entry: any) => /security guard at/i.test(String(entry?.location ?? "")))).toBe(false);
   });
 
+  it("keeps a real header name over a same-block header location and recovers the location", () => {
+    const rawText = [
+      "HELEN D. KETTER",
+      "New York",
+      "Fashion Writer Turned Designer",
+      "helen@example.com",
+    ].join("\n");
+
+    const canonical = canonicalizeParserResult(
+      {
+        normalized: {
+          rawText,
+          name: "New York",
+          contact: {
+            raw: rawText,
+            name: "New York",
+            email: "helen@example.com",
+          },
+        },
+      },
+      {
+        rawText,
+        mode: "text",
+        parserUrl: "https://parser.dasti.ai/mistral-ocr/parse",
+      },
+    );
+
+    expect(canonical.normalized?.name).toBe("Helen D. Ketter");
+    expect(canonical.normalized?.contact?.name).toBe("Helen D. Ketter");
+    expect(canonical.normalized?.identitySchema?.name).toBe("Helen D. Ketter");
+    expect(canonical.normalized?.desiredPosition).toBe("Fashion Writer Turned Designer");
+    expect(canonical.normalized?.contact?.location).toBe("New York");
+    expect(canonical.normalized?.contact?.addressNormalized).toBe("New York");
+  });
+
   it("keeps the coherent normalized subset instead of falling back to raw sections for the whole experience section", () => {
     const parserResult = {
       normalized: {
