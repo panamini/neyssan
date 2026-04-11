@@ -154,6 +154,16 @@ export interface IAffiliationItem {
   notes?: RemirrorJSON | string;
 }
 
+export interface IProjectItem {
+  id?: string;
+  title?: string;
+  name?: string;
+  meta?: string;
+  subtitle?: string;
+  description?: RemirrorJSON | string;
+  summary?: RemirrorJSON | string;
+}
+
 /** Language item (name + level) */
 export interface ILanguageItem {
   id?: string;
@@ -177,6 +187,7 @@ export type SectionContent =
   | ISkillItem[]
   | ICertificationItem[]
   | IAffiliationItem[]
+  | IProjectItem[]
   | ILanguageItem[]
   | IAchievementItem[]
   | IProfileItem[]
@@ -205,6 +216,7 @@ export interface CvSection {
     | ISkillItem[]
     | ICertificationItem[]
     | IAffiliationItem[]
+    | IProjectItem[]
     | ILanguageItem[]
     | IAchievementItem[]
     | IProfileItem[]
