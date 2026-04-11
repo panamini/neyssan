@@ -5271,6 +5271,42 @@ function canonicalizeSkills(
     }
   };
 
+  const pushGroupedTechnicalSkillToken = (token: unknown) => {
+    const name = coerceString(token);
+    if (!name || isNoiseSkill(name)) return;
+    const cleaned = name
+      .replace(/\([^)]*\)/g, (match) => (match.length <= 20 ? match : ""))
+      .replace(/\s{2,}/g, " ")
+      .trim();
+    if (!cleaned) return;
+    if (looksLikeResponsibilitySentence(cleaned)) return;
+    if (/\b(?:languages|frameworks?|developer tools?|libraries)\s*[:\-\u2013\u2014]/i.test(cleaned)) return;
+    const words = cleaned.split(/\s+/).filter(Boolean);
+    if (words.length === 0 || words.length > 4) return;
+    const key = normalizeCandidateForStoplist(cleaned);
+    if (!key) return;
+    if (!deduped.has(key) || cleaned.length > (deduped.get(key)?.length ?? 0)) {
+      deduped.set(key, cleaned);
+    }
+  };
+
+  const recoverGroupedTechnicalSkillLines = (content: string) => {
+    if (!String(content ?? "").includes("\n")) return;
+    const lines = String(content ?? "")
+      .split(/\r?\n/)
+      .map((line) => cleanLine(line))
+      .filter(Boolean);
+    for (const line of lines) {
+      const match = line.match(/^(languages|frameworks?|developer tools?|libraries)\s*[:\-\u2013\u2014]\s*(.+)$/i);
+      if (!match) continue;
+      const value = coerceString(match[2] ?? "");
+      const nestedHeading = value.search(/\b(?:languages|frameworks?|developer tools?|libraries)\s*[:\-\u2013\u2014]/i);
+      const safeValue = cleanLine(nestedHeading > 0 ? value.slice(0, nestedHeading) : value);
+      if (!safeValue) continue;
+      tokenizeList(safeValue).forEach((token) => pushGroupedTechnicalSkillToken(token));
+    }
+  };
+
   const pushRobertQwikresumeSkillToken = (token: unknown) => {
     const name = cleanLine(token)
       .replace(/^[#|:;,\-–—•·*\/\\()[\]{}]+/, "")
@@ -5305,6 +5341,10 @@ function canonicalizeSkills(
     });
   }
 
+  filterRawSection(rawSections, "skills", { preserveWhitespace: true }).forEach((content) => {
+    recoverGroupedTechnicalSkillLines(content);
+  });
+
   if (deduped.size < 3) {
     filterRawSection(rawSections, "skills", { preserveWhitespace: true }).forEach((content) => {
       tokenizeList(content).forEach(pushToken);
@@ -5329,7 +5369,15 @@ function canonicalizeSkills(
     });
   }
 
-  return Array.from(deduped.values()).map((name, idx) => ({
+  const displayDeduped = new Map<string, string>();
+  Array.from(deduped.values()).forEach((name) => {
+    const displayKey = normalizeCandidateForStoplist(name) || name.toLowerCase();
+    if (!displayDeduped.has(displayKey) || name.length > (displayDeduped.get(displayKey)?.length ?? 0)) {
+      displayDeduped.set(displayKey, name);
+    }
+  });
+
+  return Array.from(displayDeduped.values()).map((name, idx) => ({
     id: coerceId(null, "skill", idx),
     name,
   }));
