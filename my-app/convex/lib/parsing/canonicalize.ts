@@ -847,13 +847,26 @@ function isLeakedEducationEntry(entry: any): boolean {
   const field = coerceString(entry?.fieldOfStudy ?? "");
   const summary = coerceString(entry?.summary ?? "");
   const combined = [institution, degree, field, summary].filter(Boolean).join(" ");
+  const institutionHasEducationSignal = /(university|college|school|academy|institute)/i.test(institution);
+  const degreeHasEducationSignal = /(bachelor|master|degree|diploma|certificate|program|course|education)/i.test(degree);
+  const institutionLooksLikeDegreeFragment =
+    !institutionHasEducationSignal &&
+    /^(?:\*+)?(?:bachelor|master|associate|doctor|ph\.?d|mba|degree|diploma|certificate)\b/i.test(institution);
+  const institutionLooksLikeEducationDetailFragment =
+    !institutionHasEducationSignal &&
+    /\b(?:majored|minored|specializations?|graduated with honors|member of)\b/i.test(institution);
   if (!combined) return true;
   if (isQwikresumeTemplateEducationNoise(combined)) return true;
   if (/\b(old forge|new york|13420)\b/i.test(combined) && /\b\d{3,5}\s+[a-z0-9 .'-]+\b(?:street|st|road|rd|avenue|ave|lane|ln|drive|dr|boulevard|blvd)\b/i.test(combined)) {
     return true;
   }
   if (/\(\d{3}\)\s*\d{3}-\d{4}/.test(combined) || CONTACT_SLUDGE_RE.test(combined)) return true;
-  if (looksLikeResponsibilitySentence(institution) || looksLikeResponsibilitySentence(degree) || looksLikeResponsibilitySentence(summary)) {
+  if (institutionLooksLikeDegreeFragment || institutionLooksLikeEducationDetailFragment) return true;
+  if (
+    (!institutionHasEducationSignal && looksLikeResponsibilitySentence(institution)) ||
+    (!degreeHasEducationSignal && looksLikeResponsibilitySentence(degree)) ||
+    looksLikeResponsibilitySentence(summary)
+  ) {
     return true;
   }
   if (/\b(facilitating|assisting|planning|locating|implementing|worked with men|crisis calls)\b/i.test(combined)) {
@@ -1443,6 +1456,20 @@ function splitSegmentByDegreeTokens(segment: string): string[] {
     }
   }
   return pieces.length ? pieces : [trimmed];
+}
+
+function shouldPreserveAnchoredEducationSegment(segment: string): boolean {
+  const lines = String(segment ?? "")
+    .split(/\r?\n/)
+    .map((line) => stripLeadingLanguagesPrefix(cleanLine(line)))
+    .filter(Boolean);
+  if (lines.length < 2) return false;
+  const institutionLine =
+    /(university|college|academy|school|institute|polytechnic|seminary|conservatory)/i;
+  const degreeLine =
+    /(degree|diploma|program|certificate|certification|bachelor|master|doctor|associate|ph\.?d|mba|ma\b|ms\b|ba\b|bs\b|major|minor|specialization)/i;
+  return lines.some((line) => institutionLine.test(line) && !DATE_RANGE_RE.test(line) && !SINGLE_DATE_RE.test(line)) &&
+    lines.some((line) => degreeLine.test(line) && !DATE_RANGE_RE.test(line) && !SINGLE_DATE_RE.test(line));
 }
 
 function stripLeadingDatePrefix(value: string): string {
@@ -3835,6 +3862,10 @@ function splitEducationEntries(content: string): string[] {
 
   const segments: string[][] = [];
   let current: string[] = [];
+  const EDUCATION_INSTITUTION_RE =
+    /(university|college|academy|school|institute|polytechnic|seminary|conservatory)/i;
+  const EDUCATION_DEGREE_RE =
+    /(degree|diploma|program|certificate|certification|bachelor|master|doctor|associate|ph\.?d|mba|ma\b|ms\b|ba\b|bs\b|major|minor|specialization)/i;
 
   const looksLikeHeader = (line: string): boolean => {
     if (!line) return false;
@@ -3846,7 +3877,75 @@ function splitEducationEntries(content: string): string[] {
     return false;
   };
 
+  const looksLikeInstitutionHeader = (line: string): boolean => {
+    if (!line) return false;
+    if (DATE_RANGE_RE.test(line) || SINGLE_DATE_RE.test(line)) return false;
+    return EDUCATION_INSTITUTION_RE.test(line);
+  };
+
+  const looksLikeDegreeLine = (line: string): boolean => {
+    if (!line) return false;
+    if (DATE_RANGE_RE.test(line) || SINGLE_DATE_RE.test(line)) return false;
+    return EDUCATION_DEGREE_RE.test(line);
+  };
+
+  const looksLikeLocationDateLine = (line: string): boolean => {
+    if (!line) return false;
+    return DATE_RANGE_RE.test(line) ||
+      SINGLE_DATE_RE.test(line) ||
+      /\b\d{1,2}[/-]\d{4}\b/.test(line) ||
+      (/,/.test(line) && /\d/.test(line));
+  };
+
+  const getInstitutionAnchor = (lines: string[]): string[] => {
+    const institutionIndex = lines.findIndex((line) => looksLikeInstitutionHeader(line));
+    if (institutionIndex < 0) return [];
+    const anchor = [lines[institutionIndex] ?? ""].filter(Boolean);
+    const nextLine = lines[institutionIndex + 1] ?? "";
+    if (looksLikeLocationDateLine(nextLine)) {
+      anchor.push(nextLine);
+    }
+    return anchor;
+  };
+
+  const formatAnchoredDegreeSegments = (lines: string[]): string[] => {
+    const institution = lines.find((line) => looksLikeInstitutionHeader(line)) ?? "";
+    const locationDate = lines.find((line) => looksLikeLocationDateLine(line)) ?? "";
+    const degreeLines = lines.filter((line) => looksLikeDegreeLine(line));
+    if (!institution || !degreeLines.length) {
+      return [lines.join("\n").trim()].filter(Boolean);
+    }
+    return degreeLines
+      .map((degreeLine) =>
+        degreeLine
+          .replace(/\s*-\s*(?:majored|minored|specializations?).*$/i, "")
+          .replace(/\s{2,}/g, " ")
+          .trim(),
+      )
+      .filter(Boolean)
+      .map((degreeLine) => [degreeLine, institution, locationDate].filter(Boolean).join(", ").trim())
+      .filter(Boolean);
+  };
+
   for (const line of filteredLines) {
+    const currentAnchor = getInstitutionAnchor(current);
+    const currentHasDegree = current.some((entry) => looksLikeDegreeLine(entry));
+    if (currentAnchor.length && looksLikeLocationDateLine(line)) {
+      current.push(line);
+      continue;
+    }
+    if (currentAnchor.length && currentHasDegree && /^[\-•*]/.test(line)) {
+      continue;
+    }
+    if (currentAnchor.length && looksLikeDegreeLine(line) && !looksLikeInstitutionHeader(line)) {
+      if (currentHasDegree) {
+        segments.push(current);
+        current = [...currentAnchor, line];
+      } else {
+        current.push(line);
+      }
+      continue;
+    }
     if (looksLikeHeader(line) && current.length) {
       segments.push(current);
       current = [line];
@@ -3859,8 +3958,15 @@ function splitEducationEntries(content: string): string[] {
   }
 
   return segments
-    .map((segment) => segment.join("\n").trim())
-    .flatMap((segment) => splitSegmentByDegreeTokens(segment))
+    .map((segment) => segment.map((line) => line.trim()).filter(Boolean))
+    .flatMap((segment) => {
+      const joined = segment.join("\n").trim();
+      if (!joined) return [];
+      if (shouldPreserveAnchoredEducationSegment(joined)) {
+        return formatAnchoredDegreeSegments(segment);
+      }
+      return splitSegmentByDegreeTokens(joined);
+    })
     .map((segment) => segment.trim())
     .filter((segment) => segment.length > 0);
 }
@@ -3871,6 +3977,46 @@ function buildEducationEntry(segment: string, idx: number) {
     .map((line) => stripLeadingLanguagesPrefix(cleanLine(line)))
     .filter((line) => line.length > 0);
   if (!lines.length) return null;
+
+  const institutionFirstLine =
+    /(university|college|academy|school|institute|polytechnic|seminary|conservatory)/i;
+  const degreeSignalLine =
+    /(degree|diploma|program|certificate|certification|bachelor|master|doctor|associate|ph\.?d|mba|ma\b|ms\b|ba\b|bs\b)/i;
+  const numericSingleDate = /\b\d{1,2}[/-]\d{4}\b/;
+
+  if (institutionFirstLine.test(lines[0] ?? "")) {
+    const degreeIndex = lines.findIndex(
+      (line, lineIdx) =>
+        lineIdx > 0 &&
+        degreeSignalLine.test(line) &&
+        !DATE_RANGE_RE.test(line) &&
+        !SINGLE_DATE_RE.test(line),
+    );
+    if (degreeIndex > 0) {
+      const institution = lines[0] ?? "";
+      const locationDateLine = lines.find((line, lineIdx) => lineIdx > 0 && (DATE_RANGE_RE.test(line) || SINGLE_DATE_RE.test(line) || numericSingleDate.test(line))) ?? "";
+      const degree = (lines[degreeIndex] ?? "")
+        .replace(/\s*-\s*(?:majored|minored|specializations?).*$/i, "")
+        .replace(/\*+/g, "")
+        .replace(/\s{2,}/g, " ")
+        .trim();
+      const summary = lines
+        .filter((line, lineIdx) => lineIdx !== 0 && lineIdx !== degreeIndex && line !== locationDateLine)
+        .filter((line) => !/^[\-•*]/.test(line))
+        .join(" ") || undefined;
+
+      return {
+        id: coerceId(null, "edu", idx),
+        institution,
+        degree: degree || undefined,
+        startDate: undefined,
+        endDate: undefined,
+        isCurrent: undefined,
+        location: locationDateLine || undefined,
+        summary,
+      };
+    }
+  }
 
   let header = stripLeadingLanguagesPrefix(lines.shift() ?? "");
   let dateLineIndex = lines.findIndex((line) => DATE_RANGE_RE.test(line) || SINGLE_DATE_RE.test(line));
@@ -3997,6 +4143,9 @@ function explodeCompoundEducationSegment(segment: string): string[] {
   if (!working) return [];
   const trimmed = working.trim();
   if (!trimmed) return [];
+  if (shouldPreserveAnchoredEducationSegment(segment)) {
+    return [String(segment).trim()];
+  }
   const degreePieces = splitSegmentByDegreeTokens(trimmed);
   if (degreePieces.length > 1) {
     return degreePieces;
