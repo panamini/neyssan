@@ -1471,9 +1471,46 @@ function extractAchievementsFromText(text: string): string[] {
 }
 
 function parseProjectLines(lines: string[]): Array<{ title: string; summary?: string }> {
-  const results: Array<{ title: string; summary?: string }> = [];
+  type ProjectLine = { title: string; summary?: string; splitRecovered?: boolean };
+  const results: ProjectLine[] = [];
   let currentTitle = "";
   let summaryParts: string[] = [];
+  const monthToken =
+    "(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)";
+  const dateRangePattern = `${monthToken}\\.?(?:\\s+\\d{4})\\s*[\\-–—]\\s*(?:Present|Current|${monthToken}\\.?(?:\\s+\\d{4}))`;
+  const collapsedProjectAnchorRe = new RegExp(
+    `([A-Z][A-Za-z0-9&+/'().-]*(?:\\s+[A-Z][A-Za-z0-9&+/'().-]*){0,7})\\s*\\|\\s*([^|]{3,120}?)\\s+(${dateRangePattern})`,
+    "g",
+  );
+
+  const buildCollapsedProjectEntries = (input: string): ProjectLine[] => {
+    const text = collapseSpacedCaps(input).replace(/\s{2,}/g, " ").trim();
+    if (!text.includes("|")) return [];
+    const matches = Array.from(text.matchAll(collapsedProjectAnchorRe));
+    if (matches.length < 2) return [];
+    return matches
+      .map((match, idx) => {
+        const nextIndex = matches[idx + 1]?.index ?? text.length;
+        const segmentStart = match.index ?? 0;
+        const segment = text.slice(segmentStart, nextIndex).trim();
+        const projectName = collapseSpacedCaps(match[1] ?? "").replace(/\s{2,}/g, " ").trim();
+        const stack = collapseSpacedCaps(match[2] ?? "").replace(/\s{2,}/g, " ").trim();
+        const dateRange = collapseSpacedCaps(match[3] ?? "").replace(/\s{2,}/g, " ").trim();
+        if (!projectName || !stack || !dateRange) return null;
+        const remainder = segment.slice(match[0].length).trim();
+        const summary = remainder
+          .replace(/\s+[•·●▪◦◆■□▶➤▸◉►]\s+/g, " ")
+          .replace(/\s+-\s+/g, " ")
+          .replace(/\s{2,}/g, " ")
+          .trim();
+        return {
+          title: `${projectName} | ${stack} | ${dateRange}`.replace(/\s{2,}/g, " ").trim(),
+          summary: summary || undefined,
+          splitRecovered: true,
+        };
+      })
+      .filter((entry): entry is ProjectLine => Boolean(entry));
+  };
 
   const flush = () => {
     if (!currentTitle) return;
@@ -1509,6 +1546,12 @@ function parseProjectLines(lines: string[]): Array<{ title: string; summary?: st
     const cleaned = baseLine.replace(/^[•*\-–—\u2022]+\s*/, "").trim();
     if (!cleaned) {
       flush();
+      continue;
+    }
+    const collapsedEntries = buildCollapsedProjectEntries(cleaned);
+    if (collapsedEntries.length > 1) {
+      flush();
+      results.push(...collapsedEntries);
       continue;
     }
     const split = cleaned.split(/\s[-–—:]\s+/, 2);
@@ -3672,31 +3715,57 @@ function canonicalizeProjects(
   rawSections: RawSection[],
   context: CanonicalizeContext,
 ): any[] {
-  type ProjectData = { title: string; summary?: string; sourceId?: string };
+  type ProjectData = {
+    title: string;
+    summary?: string;
+    sourceId?: string;
+    sourceLabel?: "normalized_input" | "raw_sections" | "text_fallback";
+    splitRecovered?: boolean;
+  };
   const collected: ProjectData[] = [];
   const seen = new Set<string>();
+  const getProjectIdentity = (title: string): string => {
+    const normalizedTitle = collapseSpacedCaps(coerceString(title)).replace(/\s{2,}/g, " ").trim();
+    return normalizedTitle.split("|", 1)[0]?.trim().toLowerCase() ?? "";
+  };
 
-  const push = (title: string, summary?: string, sourceId?: string) => {
+  const push = (
+    title: string,
+    summary?: string,
+    sourceId?: string,
+    sourceLabel?: ProjectData["sourceLabel"],
+    splitRecovered?: boolean,
+  ) => {
     const normalizedTitle = collapseSpacedCaps(coerceString(title)).replace(/\s{2,}/g, " ").trim();
     if (!normalizedTitle || normalizedTitle.length < 3) return;
     const normalizedSummary = summary ? collapseSpacedCaps(summary).replace(/\s{2,}/g, " ").trim() : undefined;
     const key = `${normalizedTitle.toLowerCase()}|${(normalizedSummary ?? "").toLowerCase()}`;
     if (seen.has(key)) return;
     seen.add(key);
-    collected.push({ title: normalizedTitle, summary: normalizedSummary, sourceId });
+    collected.push({ title: normalizedTitle, summary: normalizedSummary, sourceId, sourceLabel, splitRecovered });
   };
 
   ensureArray<any>(rawValue).forEach((entry) => {
     const title = coerceString(entry?.title ?? entry?.name ?? entry?.project ?? "");
     const summary = coerceString(entry?.summary ?? entry?.description ?? "");
     if (!title) return;
-    push(title, summary || undefined, entry?.id);
+    const combinedNormalizedSource = [title, summary].filter(Boolean).join(" ").trim();
+    const splitFromNormalized = combinedNormalizedSource
+      ? parseProjectLines([combinedNormalizedSource]).filter((project) => Boolean((project as any).splitRecovered))
+      : [];
+    if (splitFromNormalized.length > 1) {
+      splitFromNormalized.forEach((project) => {
+        push(project.title, project.summary, undefined, "normalized_input", true);
+      });
+      return;
+    }
+    push(title, summary || undefined, entry?.id, "normalized_input", false);
   });
 
   filterRawSection(rawSections, "projects").forEach((content) => {
     const lines = String(content ?? "").split(/\r?\n/);
     parseProjectLines(lines).forEach((project) => {
-      push(project.title, project.summary);
+      push(project.title, project.summary, undefined, "raw_sections", Boolean((project as any).splitRecovered));
     });
   });
 
@@ -3704,9 +3773,26 @@ function canonicalizeProjects(
     const fallbackText = coerceString(normalized?.rawText ?? context.rawText ?? "");
     if (fallbackText) {
       extractProjectsFromTextBlock(fallbackText).forEach((project) => {
-        push(project.title, project.summary);
+        push(project.title, project.summary, undefined, "text_fallback", Boolean((project as any).splitRecovered));
       });
     }
+  }
+
+  const splitRecovered = collected.filter((item) => item.splitRecovered);
+  if (splitRecovered.length >= 2) {
+    const splitNames = splitRecovered
+      .map((item) => getProjectIdentity(item.title))
+      .filter((value, idx, arr) => Boolean(value) && arr.indexOf(value) === idx);
+    const filtered = collected.filter((item) => {
+      if (item.splitRecovered) return true;
+      const haystack = `${item.title} ${item.summary ?? ""}`.toLowerCase();
+      const overlapCount = splitNames.filter((name) => haystack.includes(name)).length;
+      if (overlapCount >= 2) return false;
+      if (overlapCount === 1 && haystack.length <= 220) return false;
+      return true;
+    });
+    collected.length = 0;
+    collected.push(...filtered);
   }
 
   return collected.map((item, idx) => ({
@@ -4243,10 +4329,40 @@ function clipAchievementText(text: string): string {
 }
 
 function canonicalizeRawSections(normalized: any, rawSections: RawSection[]): RawSection[] {
-  if (Array.isArray(normalized?.rawSections) && normalized.rawSections.length > 0) {
-    return normalized.rawSections;
+  const baseSections =
+    Array.isArray(normalized?.rawSections) && normalized.rawSections.length > 0
+      ? normalized.rawSections
+      : rawSections;
+
+  const canonicalProjects = Array.isArray(normalized?.projects) ? normalized.projects : [];
+  if (!canonicalProjects.length) {
+    return baseSections;
   }
-  return rawSections;
+
+  const isProjectsSection = (section: any) => {
+    const token = coerceString(section?.fieldKey ?? section?.label ?? section?.title).trim();
+    if (!token) return false;
+    return PROJECTS_HEADING_RE.test(token) || SECTION_MAP[token.toUpperCase() as keyof typeof SECTION_MAP] === "projects";
+  };
+  const nonProjectSections = ensureArray<any>(baseSections).filter(
+    (section) => !isProjectsSection(section),
+  );
+  const rewrittenProjectSections = canonicalProjects
+    .map((project: any) => {
+      const title = coerceString(project?.title ?? "");
+      const summary = coerceString(project?.summary ?? "");
+      const content = [title, summary].filter(Boolean).join("\n").trim();
+      if (!content) return null;
+      return {
+        label: "Projects",
+        title: "Projects",
+        fieldKey: "projects",
+        content,
+      };
+    })
+    .filter(Boolean);
+
+  return [...nonProjectSections, ...rewrittenProjectSections];
 }
 
 export function canonicalizeParserResult(result: any, context: CanonicalizeContext) {
