@@ -1331,6 +1331,7 @@ function normalizeRoleCandidate(raw: unknown): string | null {
   if (tokens.length === 0 || tokens.length > 6) return null;
   const formatted = tokens
     .map((token) => {
+      if (/^[A-Z]{2,4}$/.test(token)) return token;
       if (token.length <= 2) return token.toUpperCase();
       return token[0].toUpperCase() + token.slice(1).toLowerCase();
     })
@@ -2095,6 +2096,8 @@ const DATE_RANGE_RE =
 const SINGLE_DATE_RE = /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+\d{4}\b/i;
 const BULLET_PREFIX_RE = /^[\-•*]/;
 const NARRATIVE_VERB_RE = /\b(responsible|maintaining|logging|utilizing|apprehending|monitoring|ensur(?:e|ing)|develop(?:ed|ing)|manage(?:d|ment)|coordinating|attending|providing)\b/i;
+const WORKED_IN_NARRATIVE_RE =
+  /^\s*(?:(?:one|two|three|four|five|six|seven|eight|nine|ten|\d+)\s+\w+\s+)?(?:(?:presently|currently)\s+)?work(?:ed|ing)\s+in\s+(?<company>.+?)\s+as\s+an?\s+(?<role>.+?)\s*$/i;
 
 function cleanLine(value: unknown): string {
   return coerceString(value).replace(/\s+/g, " ").trim();
@@ -2156,6 +2159,164 @@ function parseDateRange(rangeText: string | undefined): {
     endDate = parseMonthYear(endToken);
   }
   return { startDate, endDate, isCurrent };
+}
+
+function parseNarrativeExperienceDates(line: string): {
+  startDate?: string;
+  endDate?: string | null;
+  isCurrent?: boolean;
+} {
+  const direct = parseDateRange(line);
+  if (direct.startDate || direct.endDate !== undefined || direct.isCurrent) {
+    return direct;
+  }
+  const working = cleanLine(line);
+  const yearMatch = working.match(/\b(?:from\s+)?(?:\d{1,2}(?:st|nd|rd|th)?\s*)?(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+(\d{4})\b/i)
+    || working.match(/\bfrom\s+(\d{4})\b/i);
+  const startDate = yearMatch?.[1] ? `${yearMatch[1]}-01-01` : undefined;
+  if (!startDate) return {};
+  if (/\b(?:present|current|till\s+date|till\s+now|till\s+present|till\s+today)\b/i.test(working)) {
+    return { startDate, endDate: null, isCurrent: true };
+  }
+  const endYearMatch = working.match(/\b(?:to|until|till)\s+(\d{4})\b/i);
+  return {
+    startDate,
+    endDate: endYearMatch?.[1] ? `${endYearMatch[1]}-01-01` : undefined,
+  };
+}
+
+function scoreWorkedInNarrativeLine(line: string): number {
+  const cleaned = cleanLine(line).toLowerCase();
+  let score = 0;
+  if (/\b(?:presently|currently)\s+working\b/.test(cleaned)) score += 5;
+  if (/\bfrom\b.*\b(?:to\s+till\s+date|till\s+date|till\s+now|present|current)\b/.test(cleaned)) score += 4;
+  else if (/\b(?:to\s+till\s+date|till\s+date|till\s+now|present|current)\b/.test(cleaned)) score += 3;
+  if (/\bwork(?:ed|ing)\s+in\b/.test(cleaned)) score += 1;
+  if (/^\s*(?:(?:one|two|three|four|five|six|seven|eight|nine|ten|\d+)\s+\w+\s+)?worked\s+in\b/.test(cleaned)) score -= 3;
+  return score;
+}
+
+function parseWorkedInNarrativeEntry(line: string, idx: number) {
+  const cleaned = collapseSpacedCaps(
+    cleanLine(line).replace(/^[\-•*\u2022]+\s*/, ""),
+  );
+  if (!cleaned) return null;
+  const match = cleaned.match(WORKED_IN_NARRATIVE_RE);
+  if (!match || !match.groups) return null;
+  const company = stripDrivingLicense(cleanLine(match.groups.company || ""));
+  let role = cleanLine(match.groups.role || "");
+  if (!company || !role) return null;
+
+  const roleWithLocationMatch = cleaned.match(
+    /\bas\s+an?\s+(?<role>.+?)\s+in\s+(?<tail>[^.]+?)(?:\.\s*from\b|\s+from\b|$)/i,
+  );
+  if (roleWithLocationMatch?.groups) {
+    const candidateRole = cleanLine(roleWithLocationMatch.groups.role || "");
+    const tail = cleanLine(roleWithLocationMatch.groups.tail || "");
+    if (
+      candidateRole &&
+      tail &&
+      !/\b(operator|engineer|technician|manager|analyst|specialist|guard|assistant|supervisor|officer|planner)\b/i.test(tail) &&
+      (
+        splitCompanyLocation(tail).location ||
+        /^[A-Z][A-Za-z0-9.'-]*(?:\s+[A-Z][A-Za-z0-9.'-]*){0,3}$/.test(tail)
+      )
+    ) {
+      role = candidateRole;
+    }
+  }
+
+  role = role
+    .replace(/\s+(?:and\s+posted|posted)\b.*$/i, "")
+    .replace(/\.\s*from\b.*$/i, "")
+    .replace(/\s+from\b.*$/i, "")
+    .replace(/\s+till\s+(?:date|now|present|today)\b.*$/i, "")
+    .trim();
+
+  const roleLocationMatch = role.match(/^(?<base>.+?)\s+in\s+(?<tail>[^.]+)$/i);
+  if (roleLocationMatch?.groups) {
+    const tail = cleanLine(roleLocationMatch.groups.tail || "");
+    if (
+      tail &&
+      !/\b(operator|engineer|technician|manager|analyst|specialist|guard|assistant|supervisor|officer|planner)\b/i.test(tail) &&
+      (
+        splitCompanyLocation(tail).location ||
+        /^[A-Z][A-Za-z0-9.'-]*(?:\s+[A-Z][A-Za-z0-9.'-]*){0,3}$/.test(tail)
+      )
+    ) {
+      role = cleanLine(roleLocationMatch.groups.base || role);
+    }
+  }
+
+  const normalizedRole = normalizeRoleCandidate(role);
+  if (!normalizedRole) return null;
+  const dates = parseNarrativeExperienceDates(cleaned);
+  if (!dates.isCurrent && /\b(?:present|current|till\s+date|till\s+now|till\s+present|till\s+today)\b/i.test(cleaned)) {
+    dates.isCurrent = true;
+    dates.endDate = null;
+  }
+
+  return {
+    id: coerceId(null, "exp", idx),
+    company,
+    position: stripDrivingLicense(normalizedRole),
+    startDate: dates.startDate,
+    endDate: dates.isCurrent ? null : dates.endDate,
+    isCurrent: dates.isCurrent,
+    location: undefined,
+    responsibilities: cleaned,
+    responsibilityBullets: [cleaned],
+    achievements: [],
+  };
+}
+
+function normalizeWeakNarrativeField(value: unknown): string {
+  return cleanLine(value).replace(/^[\-•*\u2022]+\s*/, "").trim();
+}
+
+function looksLikeWeakNarrativeExperienceEntry(entry: any): boolean {
+  const company = normalizeWeakNarrativeField(entry?.company ?? "");
+  const position = normalizeWeakNarrativeField(entry?.position ?? "");
+  const combined = `${company} ${position}`.trim();
+  if (!combined) return false;
+  if (!/work(?:ed|ing)\s+in/i.test(combined)) return false;
+  if (company && position && company === position) return true;
+  if (company && position && (company.includes(position) || position.includes(company))) return true;
+  if (/^\s*(?:(?:one|two|three|four|five|six|seven|eight|nine|ten|\d+)\s+\w+\s+)?worked\s+in\b/i.test(position)) {
+    return true;
+  }
+  if (/^\s*(?:(?:one|two|three|four|five|six|seven|eight|nine|ten|\d+)\s+\w+\s+)?worked\s+in\b/i.test(company)) {
+    return true;
+  }
+  if (/^\s*(?:presently|currently)\s+working\s+in\b/i.test(company)) {
+    return true;
+  }
+  return false;
+}
+
+function isWeakRawSectionsNarrativeFallback(entry: any): boolean {
+  if (!entry || typeof entry !== "object") return false;
+  if (looksLikeWeakNarrativeExperienceEntry(entry)) return true;
+
+  const responsibilities = coerceString(entry?.responsibilities ?? "");
+  const bullets = Array.isArray(entry?.responsibilityBullets)
+    ? entry.responsibilityBullets.map((value: unknown) => coerceString(value)).filter(Boolean)
+    : [];
+  const combined = [responsibilities, ...bullets].join(" ").trim();
+  if (!combined) return false;
+
+  const narrativeMatch = /^\s*(?:(?:one|two|three|four|five|six|seven|eight|nine|ten|\d+)\s+\w+\s+)?(?:(?:presently|currently)\s+)?work(?:ed|ing)\s+in\b/i.test(combined);
+  if (!narrativeMatch) return false;
+
+  const company = normalizeWeakNarrativeField(entry?.company ?? "");
+  const position = normalizeWeakNarrativeField(entry?.position ?? "");
+  const hasNarrativeDates = hasExperienceDateSignal(entry);
+  const hasStrongCurrentSignal = /\b(?:presently|currently)\s+working\b|\btill\s+(?:date|now|present|today)\b/i.test(combined);
+
+  if (hasStrongCurrentSignal) return false;
+  if (!company || !position) return true;
+  if (/work(?:ed|ing)\s+in/i.test(company) && /work(?:ed|ing)\s+in/i.test(position)) return true;
+  return !hasNarrativeDates;
 }
 
 function splitCompanyLocation(line: string): { company: string; location?: string } {
@@ -2910,6 +3071,105 @@ function recoverExperienceFromLooseText(normalized: any, context: CanonicalizeCo
   return results;
 }
 
+function recoverBestNarrativeExperienceFromSourceText(
+  normalized: any,
+  rawSections: RawSection[],
+  context: CanonicalizeContext,
+): any[] {
+  const collectNestedStrings = (
+    value: unknown,
+    depth = 0,
+    seen = new Set<unknown>(),
+    path = "root",
+  ): string[] => {
+    if (depth > 6 || value == null) return [];
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      return trimmed ? [trimmed] : [];
+    }
+    if (typeof value !== "object") return [];
+    if (seen.has(value)) return [];
+    seen.add(value);
+
+    if (Array.isArray(value)) {
+      return value.flatMap((item, idx) => collectNestedStrings(item, depth + 1, seen, `${path}[${idx}]`));
+    }
+
+    const record = value as Record<string, unknown>;
+    return Object.entries(record)
+      .filter(([key]) =>
+        !["experience", "education", "skills", "languages", "achievements", "rawText", "raw", "sections"].includes(key),
+      )
+      .flatMap(([key, item]) => collectNestedStrings(item, depth + 1, seen, `${path}.${key}`));
+  };
+
+  const nestedScannedStrings = collectNestedStrings(normalized);
+  const textCandidates = [
+    typeof normalized?.rawText === "string" ? normalized.rawText : "",
+    typeof normalized?.raw === "string" ? normalized.raw : "",
+    typeof context.rawText === "string" ? context.rawText : "",
+    ...(Array.isArray(normalized?.sections)
+      ? normalized.sections
+          .map((section: any) =>
+            coerceString(section?.content ?? section?.text ?? section?.value ?? ""),
+          )
+          .filter(Boolean)
+      : []),
+    ...nestedScannedStrings,
+    ...rawSections
+      .map((section) => coerceString(section?.content ?? ""))
+      .filter(Boolean),
+  ]
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (!textCandidates.length) return [];
+
+  const expandNarrativeWindows = (source: string): string[] => {
+    const lines = source
+      .split(/\r?\n/)
+      .map((line) => cleanLine(line))
+      .filter(Boolean);
+    if (!lines.length) return [];
+
+    const expanded: string[] = [];
+    for (let idx = 0; idx < lines.length; idx += 1) {
+      expanded.push(lines[idx]);
+      for (let span = 2; span <= 6 && idx + span <= lines.length; span += 1) {
+        const merged = lines
+          .slice(idx, idx + span)
+          .join(" ")
+          .replace(/\s+/g, " ")
+          .trim();
+        if (merged && merged.length <= 500) {
+          expanded.push(merged);
+        }
+      }
+    }
+    return expanded;
+  };
+
+  const seenLines = new Set<string>();
+  const narrativeCandidates = textCandidates
+    .flatMap((source) => expandNarrativeWindows(source))
+    .map((line) => cleanLine(line))
+    .filter((line) => {
+      if (!/work(?:ed|ing)\s+in/i.test(line)) return false;
+      const key = line.toLowerCase();
+      if (seenLines.has(key)) return false;
+      seenLines.add(key);
+      return true;
+    })
+    .map((line, idx) => ({
+      score: scoreWorkedInNarrativeLine(line),
+      entry: parseWorkedInNarrativeEntry(line, 9000 + idx),
+    }))
+    .filter((item) => item.entry);
+
+  if (!narrativeCandidates.length) return [];
+  const bestNarrative = [...narrativeCandidates].sort((a, b) => b.score - a.score)[0]?.entry;
+  return bestNarrative ? [bestNarrative] : [];
+}
+
 function canonicalizeExperience(
   rawValue: unknown,
   rawSections: RawSection[],
@@ -3099,10 +3359,34 @@ function canonicalizeExperience(
   };
 
   const handleSegment = (segment: string, key: number) => {
+    const narrativeCandidates = String(segment ?? "")
+      .split(/\r?\n/)
+      .map((line) => cleanLine(line))
+      .filter((line) => /work(?:ed|ing)\s+in/i.test(line))
+      .map((line, idx) => ({
+        score: scoreWorkedInNarrativeLine(line),
+        entry: parseWorkedInNarrativeEntry(line, key * 10 + idx),
+      }))
+      .filter((item) => item.entry);
+
     const parsedBlock = parseExperienceBlock(segment, key);
     if (parsedBlock) {
+      if (looksLikeWeakNarrativeExperienceEntry(parsedBlock) && narrativeCandidates.length) {
+        const bestNarrative = [...narrativeCandidates].sort((a, b) => b.score - a.score)[0]?.entry;
+        if (bestNarrative) {
+          fallbackItems.push(bestNarrative);
+          return;
+        }
+      }
       fallbackItems.push(parsedBlock);
       return;
+    }
+    if (narrativeCandidates.length) {
+      const bestNarrative = [...narrativeCandidates].sort((a, b) => b.score - a.score)[0]?.entry;
+      if (bestNarrative) {
+        fallbackItems.push(bestNarrative);
+        return;
+      }
     }
     const parsedSegment = parseExperienceSegment(segment, key);
     if (!parsedSegment) return;
@@ -3127,6 +3411,21 @@ function canonicalizeExperience(
 
   let sanitizedFallback = sanitizeExperienceEntries(fallbackItems);
   let fallbackSource: ExperienceDiagnostics["source"] = sanitizedFallback.length > 0 ? "raw_sections" : "none";
+
+  const weakRawSectionsFallback =
+    fallbackSource === "raw_sections" &&
+    sanitizedFallback.length > 0 &&
+    sanitizedFallback.every((item) => isWeakRawSectionsNarrativeFallback(item));
+
+  if (weakRawSectionsFallback) {
+    const recoveredNarrative = sanitizeExperienceEntries(
+      recoverBestNarrativeExperienceFromSourceText(normalized, rawSections, context),
+    );
+    if (recoveredNarrative.length > 0) {
+      sanitizedFallback = recoveredNarrative;
+      fallbackSource = "text_fallback";
+    }
+  }
 
   if (!sanitizedFallback.length) {
     const recovered = recoverExperienceFromLooseText(normalized, context);
@@ -3723,6 +4022,15 @@ function canonicalizeRawSections(normalized: any, rawSections: RawSection[]): Ra
 export function canonicalizeParserResult(result: any, context: CanonicalizeContext) {
   const normalizedInput = result?.normalized;
   const normalized = normalizedInput && typeof normalizedInput === "object" ? { ...normalizedInput } : {};
+  if (!normalized.rawText && typeof result?.rawText === "string") {
+    normalized.rawText = result.rawText;
+  }
+  if (!normalized.raw && typeof result?.raw === "string") {
+    normalized.raw = result.raw;
+  }
+  if (!Array.isArray(normalized.sections) && Array.isArray(result?.sections)) {
+    normalized.sections = result.sections;
+  }
   const rawSections = extractRawSections({ ...result, normalized });
 
   const experienceResult = canonicalizeExperience(normalized.experience, rawSections, normalized, context);
