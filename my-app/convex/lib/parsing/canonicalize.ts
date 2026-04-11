@@ -5201,6 +5201,20 @@ function isNoiseSkill(name: string): boolean {
   return false;
 }
 
+function normalizeMarkdownTableSkillToken(token: string): string | null {
+  const raw = coerceString(token);
+  if (!raw.includes("|")) return raw || null;
+  const cells = raw
+    .split("|")
+    .map((cell) => cell.trim())
+    .filter(Boolean);
+  if (!cells.length) return null;
+  const firstCell = cells[0] ?? "";
+  if (!firstCell) return null;
+  if (/^:?-{2,}:?$/.test(firstCell)) return null;
+  return firstCell;
+}
+
 function canonicalizeSkills(
   rawValue: unknown,
   normalized: any,
@@ -5214,7 +5228,9 @@ function canonicalizeSkills(
     : [];
 
   const pushToken = (token: unknown) => {
-    const name = coerceString(token);
+    const rawToken = coerceString(token);
+    const markdownTableCandidate = rawToken.includes("|");
+    const name = normalizeMarkdownTableSkillToken(rawToken);
     if (!name || isNoiseSkill(name)) return;
     const cleaned = name.replace(/^(languages?|skills?|skill set|frameworks?|developer tools?|libraries|competences?|competencias?)[:\s\-]+/i, "").trim();
     const baseSurface = cleaned || name;
@@ -5228,7 +5244,8 @@ function canonicalizeSkills(
     if (/\b(guard|manager|lead|assistant|officer|supervisor|experience|certificate|program|course)\b/i.test(surface)) return;
     const lowerKey = normalizedKey.replace(/\s+/g, " ");
     const alias = skillAliases[lowerKey] ?? lowerKey;
-    if (skillStoplist.has(lowerKey) || skillStoplist.has(alias)) return;
+    const allowMarkdownTableFallback = markdownTableCandidate && words.length <= 3;
+    if ((skillStoplist.has(lowerKey) || skillStoplist.has(alias)) && !allowMarkdownTableFallback) return;
 
     const candidateKeys = new Set<string>();
     candidateKeys.add(alias);
@@ -5243,7 +5260,7 @@ function canonicalizeSkills(
     if (canonicalKey) {
       storeKey = canonicalKey;
     } else {
-      if (!SKILL_FALLBACK_KEYWORD_RE.test(surface)) return;
+      if (!SKILL_FALLBACK_KEYWORD_RE.test(surface) && !allowMarkdownTableFallback) return;
       storeKey = normalizedKey;
     }
 
