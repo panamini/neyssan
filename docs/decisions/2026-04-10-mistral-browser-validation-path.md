@@ -71,3 +71,8 @@
 
 - Temporary diagnostics were used during the Janice/Farman sequence to prove runtime path, source-family presence, and fallback decisions.
 - They should not remain in the durable path unless intentionally reintroduced for a specific incident.
+
+## Live-proof-first rule
+
+- When live behavior contradicts local tests, add one narrow temporary diagnostic at the earliest suspected live boundary on the real workflow, prove the actual winning path/source, patch only that boundary, verify live, then remove the temporary diagnostic after closure.
+- This was the winning pattern for Janice, Farman, and Jake Experience.
