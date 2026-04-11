@@ -2,10 +2,11 @@
 
 ## Source of truth workflow
 
+- Standard validation path is `./run.sh up --ui`.
 - Frontend runs locally.
 - Convex stays on cloud/default unless `--local-convex` is explicitly used.
 - Parser base is `https://parser.dasti.ai`.
-- Standard validation launch path is `./run.sh up --ui`.
+- Validation entrypoint is the Mistral OCR button hitting `/mistral-ocr/parse`.
 
 ## Mistral button path
 
@@ -24,21 +25,43 @@
 
 ## `run.sh` startup gotcha
 
-- The browser failure for Janice was not caused by the parser fix itself.
-- `run.sh up --ui` had been starting `cv-parser-service-dev` from `cv-parser-service:latest` without mounting the workspace at `/app`.
-- That left the real browser flow on stale parser code even when the workspace file `cv_parser/canonicalize.py` was already fixed.
-- `run.sh` now replaces a stale parser container that lacks the `${ROOT_DIR} -> /app` bind mount and restarts it with the workspace mounted.
+- `run.sh up --ui` can leave the browser path on stale parser code if the edge parser container is not bind-mounted to the workspace at `/app`.
+- The live check is the edge parser behind `https://parser.dasti.ai`, not the local parser process.
+- If browser behavior disagrees with local parser tests, verify the bind-mounted runtime first.
+
+## Experience trust ladder
+
+- Trust order is:
+  - parser typed experience
+  - raw-sections fallback
+  - text/narrative fallback
+- Active app-side boundary is:
+  - `canonicalizeParserResult(...)`
+  - `canonicalizeExperience(...)`
 
 ## Janice conclusion
 
 - The Janice parser fix was correct.
 - The real browser failure persisted only because the standard runtime path was stale until `run.sh` startup was fixed.
 
+## Farman conclusion
+
+- Farman required both parser-side and app-side fixes.
+- Parser side had to trim non-experience contamination and prefer the stronger current-job narrative line.
+- App side had to preserve the live source text that reached canonicalization and recover narrative experience from weak raw-section fallbacks.
+
+## First-upload / restart-gap / button-freeze conclusion
+
+- First-upload failures were a runtime readiness problem, not a parsing-quality problem.
+- The real issues were:
+  - restart-gap requests against the edge parser
+  - Mistral probe results being treated as a hard UI disable
+- Durable behavior is:
+  - probe on click
+  - allow server-side retries/recovery
+  - do not freeze the OCR route on transient probe failures
+
 ## Temporary diagnostics
 
-- Temporary Janice diagnostics were added during debugging in:
-  - `my-app/convex/actions/structuredUpload.ts`
-  - `my-app/convex/lib/parsing/canonicalize.ts`
-  - `cv_parser/canonicalize.py`
-- Those temporary diagnostics should not stay as durable behavior after the runtime-path issue is confirmed.
-- They have been removed after validation.
+- Temporary diagnostics were used during the Janice/Farman sequence to prove runtime path, source-family presence, and fallback decisions.
+- They should not remain in the durable path unless intentionally reintroduced for a specific incident.

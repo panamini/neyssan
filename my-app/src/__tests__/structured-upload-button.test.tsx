@@ -6,6 +6,7 @@ import userEvent from "@testing-library/user-event";
 import StructuredUploadButton from "../components/StructuredUploadButton";
 
 const structuredActionMock = vi.fn();
+const probeMistralMock = vi.fn();
 const toastMock = vi.fn();
 const consoleInfoMock = vi.spyOn(console, "info").mockImplementation(() => {});
 
@@ -15,6 +16,9 @@ vi.mock("../../convex/_generated/api", () => ({
       structuredUpload: {
         structuredUpload: "structuredUpload",
       },
+      _probeMistral: {
+        probe: "probeMistral",
+      },
     },
   },
 }))
@@ -23,6 +27,9 @@ vi.mock("convex/react", () => ({
   useAction: (ref: unknown) => {
     if (ref === "structuredUpload") {
       return structuredActionMock;
+    }
+    if (ref === "probeMistral") {
+      return probeMistralMock;
     }
     return undefined;
   },
@@ -39,8 +46,13 @@ vi.mock("../services/pdf/browser-cv-parser", () => ({
 describe("StructuredUploadButton", () => {
   beforeEach(() => {
     structuredActionMock.mockReset();
+    probeMistralMock.mockReset();
     toastMock.mockReset();
     consoleInfoMock.mockClear();
+    probeMistralMock.mockResolvedValue({
+      ready: { status: 200 },
+      parse: { status: 200 },
+    });
     Object.defineProperty(File.prototype, "text", {
       configurable: true,
       value: vi.fn().mockResolvedValue("John Doe"),
@@ -119,6 +131,9 @@ describe("StructuredUploadButton", () => {
     const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
     const file = new File(["scan"], "scan.png", { type: "image/png" });
 
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Scanned PDF / Image" })).toBeEnabled(),
+    );
     await user.click(screen.getByRole("button", { name: "Scanned PDF / Image" }));
     fireEvent.change(fileInput, { target: { files: [file] } });
 
@@ -167,6 +182,9 @@ describe("StructuredUploadButton", () => {
     const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
     const file = new File(["scan"], "scan.png", { type: "image/png" });
 
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Scanned PDF / Image" })).toBeEnabled(),
+    );
     await user.click(screen.getByRole("button", { name: "Scanned PDF / Image" }));
     fireEvent.change(fileInput, { target: { files: [file] } });
 
@@ -253,5 +271,95 @@ describe("StructuredUploadButton", () => {
     expect(onRecoveryRequired.mock.calls[0][0].fullSections).toEqual(
       expect.arrayContaining([expect.objectContaining({ type: "achievements" })]),
     );
+  });
+
+  it("keeps scanned import clickable when the probe says the OCR parse route is unhealthy", async () => {
+    probeMistralMock.mockResolvedValueOnce({
+      ready: { status: 200 },
+      parse: { status: 0 },
+    });
+
+    render(<StructuredUploadButton />);
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Scanned PDF / Image" })).toBeEnabled(),
+    );
+  });
+
+  it("re-probes Mistral on scanned upload instead of trusting stale cached success", async () => {
+    const user = userEvent.setup();
+    structuredActionMock.mockResolvedValue({
+      normalized: {
+        summary: "Scanned import",
+        experience: [],
+        education: [],
+        skillsText: "",
+        languagesText: "",
+        achievements: [],
+      },
+      strict: null,
+      diagnostics: {
+        ocr_request_path: "/mistral-ocr/parse",
+        ocr_engine: "mistral",
+        mistral_model: "mistral-ocr-latest",
+        mistral_fallback: false,
+        mistral_runtime: "mistral",
+      },
+    });
+
+    const { container } = render(<StructuredUploadButton />);
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(["scan"], "scan.png", { type: "image/png" });
+
+    await waitFor(() => expect(probeMistralMock).toHaveBeenCalledTimes(1));
+    await user.click(screen.getByRole("button", { name: "Scanned PDF / Image" }));
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    await waitFor(() => expect(structuredActionMock).toHaveBeenCalledTimes(1));
+    expect(probeMistralMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("continues scanned upload when the click-time probe fails transiently", async () => {
+    const user = userEvent.setup();
+    structuredActionMock.mockResolvedValue({
+      normalized: {
+        summary: "Scanned import",
+        experience: [],
+        education: [],
+        skillsText: "",
+        languagesText: "",
+        achievements: [],
+      },
+      strict: null,
+      diagnostics: {
+        ocr_request_path: "/mistral-ocr/parse",
+        ocr_engine: "mistral",
+        mistral_model: "mistral-ocr-latest",
+        mistral_fallback: false,
+        mistral_runtime: "mistral",
+      },
+    });
+    probeMistralMock
+      .mockResolvedValueOnce({
+        ready: { status: 200 },
+        parse: { status: 200 },
+      })
+      .mockResolvedValueOnce({
+        ready: { status: 200 },
+        parse: { status: 0 },
+      });
+
+    const { container } = render(<StructuredUploadButton />);
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(["scan"], "scan.png", { type: "image/png" });
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Scanned PDF / Image" })).toBeEnabled(),
+    );
+    await user.click(screen.getByRole("button", { name: "Scanned PDF / Image" }));
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    await waitFor(() => expect(structuredActionMock).toHaveBeenCalledTimes(1));
+    expect(probeMistralMock).toHaveBeenCalledTimes(2);
   });
 });

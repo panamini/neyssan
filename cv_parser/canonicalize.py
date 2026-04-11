@@ -2822,6 +2822,70 @@ def _parse_worked_in_narrative_line(line: str) -> Optional[Dict[str, object]]:
     }
 
 
+def _score_worked_in_narrative_line(line: str) -> int:
+    cleaned = collapse_spaced_caps(_strip_bullet_prefix(line).strip())
+    lowered = strip_accents(cleaned.lower())
+    score = 0
+    if re.search(r"\b(?:presently|currently)\s+working\b", lowered):
+        score += 5
+    if re.search(r"\bfrom\b.*\b(?:to\s+till\s+date|till\s+date|till\s+now|present)\b", lowered):
+        score += 4
+    elif re.search(r"\b(?:to\s+till\s+date|till\s+date|till\s+now|present)\b", lowered):
+        score += 3
+    if re.search(DATE_PATTERN, cleaned):
+        score += 1
+    if re.match(
+        r"^\s*(?:(?:one|two|three|four|five|six|seven|eight|nine|ten|\d+)\s+\w+\s+)?worked\s+in\b",
+        lowered,
+    ):
+        score -= 3
+    return score
+
+
+def _refine_worked_in_narrative_candidate(
+    candidate: Dict[str, object],
+    line: str,
+) -> Dict[str, object]:
+    cleaned = collapse_spaced_caps(_strip_bullet_prefix(line).strip())
+    refined = dict(candidate)
+    position = str(refined.get("position") or "").strip()
+    if not cleaned or not position:
+        return refined
+
+    role_with_in_match = re.search(
+        r"\bas\s+an?\s+(?P<role>.+?)\s+in\s+(?P<tail>[^.]+?)(?:\.\s*from\b|\s+from\b|$)",
+        cleaned,
+        re.IGNORECASE,
+    )
+    if role_with_in_match:
+        refined_role = _normalize_role_phrase(role_with_in_match.group("role") or "")
+        tail = collapse_spaced_caps((role_with_in_match.group("tail") or "").strip(" ,.;:-"))
+        if refined_role and tail and not _contains_role_keyword(tail):
+            if (
+                _normalize_location_candidate(tail)
+                or looks_addressish(tail)
+                or (
+                    len(tail.split()) <= 4
+                    and all(token[:1].isupper() for token in tail.split() if token[:1].isalnum())
+                )
+            ):
+                refined["position"] = refined_role
+                return refined
+
+    role_before_site_match = re.search(
+        r"\bas\s+an?\s+(?P<role>.+?)(?:\s+and\s+posted\b|\s+posted\b|\s+from\b|\s+till\s+date\b|\s+to\s+till\s+date\b|\s+till\s+now\b)",
+        cleaned,
+        re.IGNORECASE,
+    )
+    if role_before_site_match:
+        refined_role = _normalize_role_phrase(role_before_site_match.group("role") or "")
+        if refined_role:
+            refined["position"] = refined_role
+        return refined
+
+    return refined
+
+
 def _extract_bullets(lines: List[str], skip: Sequence[str]) -> List[str]:
     bullets: List[str] = []
     skip_set = {(_strip_bullet_prefix(item) or "").lower() for item in skip if item}
@@ -4247,13 +4311,16 @@ def parse_experience_block(block: str) -> List[Dict[str, object]]:
             is_current=is_current,
             bullets=bullets,
         ):
-            narrative_entries = [
-                candidate
-                for candidate in (_parse_worked_in_narrative_line(line) for line in entry_lines)
-                if candidate
-            ]
-            if narrative_entries:
-                parsed_entries.extend(narrative_entries)
+            narrative_candidates: List[Tuple[int, int, Dict[str, object]]] = []
+            for index, line in enumerate(entry_lines):
+                candidate = _parse_worked_in_narrative_line(line)
+                if not candidate:
+                    continue
+                candidate = _refine_worked_in_narrative_candidate(candidate, line)
+                narrative_candidates.append((_score_worked_in_narrative_line(line), index, candidate))
+            if narrative_candidates:
+                _score, _index, best_candidate = max(narrative_candidates, key=lambda item: (item[0], item[1]))
+                parsed_entries.append(best_candidate)
             continue
 
         parsed_entries.append(
@@ -4542,7 +4609,7 @@ def build_language_entries(sections: Dict[str, List[str]]) -> List[Dict[str, obj
     return langs
 
 
-FAMILY_TRIM_SOURCE_LABELS = {"BODY", "SUMMARY", "ACHIEVEMENTS"}
+FAMILY_TRIM_SOURCE_LABELS = {"BODY", "SUMMARY", "ACHIEVEMENTS", "EXPERIENCE"}
 
 
 def _trim_block_at_family_transition(
@@ -4556,6 +4623,11 @@ def _trim_block_at_family_transition(
         cleaned = _normalize_structural_line(raw_line)
         if not cleaned:
             continue
+        if current_label == "EXPERIENCE":
+            if TEXT_PDF_EXPERIENCE_HARD_STOP_RE.match(cleaned):
+                break
+            if TEXT_PDF_EXPERIENCE_SIDEBAR_RE.match(cleaned):
+                break
         heading = detect_heading(cleaned.rstrip(":"))
         if heading and heading != current_label and heading in available_labels:
             break
