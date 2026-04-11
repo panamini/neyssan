@@ -986,6 +986,55 @@ describe("canonicalizeParserResult", () => {
     expect(normalized.languagesRaw).toEqual(["English", "Spanish", "Italian"]);
   });
 
+  it("cleans Anne-style markdown table skills into left-column skill names only", () => {
+    const parserResult = {
+      normalized: {
+        skills: [
+          { name: "| Machine Learning | |" },
+          { name: "| --- | --- |" },
+          { name: "| Data Visualization | |" },
+          { name: "| Big Data | |" },
+          { name: "| Data Mining | |" },
+          { name: "| Python | |" },
+          { name: "| R | |" },
+          { name: "| Java | |" },
+          { name: "| Scala | |" },
+          { name: "| PERL | |" },
+          { name: "| Problem-Solving | |" },
+          { name: "| Active Learning | |" },
+          { name: "| Risk Analysis | | | Machine Learning | | | --- | --- | | Data Visualization | |" },
+        ],
+        rawSections: [
+          {
+            label: "SKILLS",
+            content: "| Machine Learning | |\n| --- | --- |\n| Data Visualization | |\n| Big Data | |\n| Data Mining | |\n| Python | |\n| R | |\n| Java | |\n| Scala | |\n| PERL | |\n| Problem-Solving | |\n| Active Learning | |\n| Risk Analysis | |",
+          },
+        ],
+      },
+    };
+
+    const canonical = canonicalizeParserResult(parserResult, context);
+    const skillNames = (canonical.normalized?.skills ?? []).map((item: any) => item.name);
+
+    expect(skillNames).not.toEqual(expect.arrayContaining(["| Machine Learning | |", "| --- | --- |"]));
+    expect(skillNames).toEqual(
+      expect.arrayContaining([
+        "Machine Learning",
+        "Data Visualization",
+        "Big Data",
+        "Data Mining",
+        "Python",
+        "R",
+        "Java",
+        "Scala",
+        "PERL",
+        "Problem-Solving",
+        "Active Learning",
+        "Risk Analysis",
+      ]),
+    );
+  });
+
   it("keeps Jessica-style OCR education blocks grouped instead of fragmenting institution and degree lines", () => {
     const educationBlock = [
       "Cedarville University",
