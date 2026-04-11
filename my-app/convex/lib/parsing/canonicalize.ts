@@ -105,6 +105,21 @@ function dedupeStringsCaseInsensitive(values: string[]): string[] {
   return out;
 }
 
+function dedupeSourceBlocksPreserveWhitespace(values: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of values) {
+    if (typeof raw !== "string") continue;
+    const value = raw.trim();
+    if (!value) continue;
+    const key = value.replace(/\s+/g, " ").trim().toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(value);
+  }
+  return out;
+}
+
 function normalizeDedupeString(value: unknown): string {
   return coerceString(value)
     .replace(/[*_`#]+/g, " ")
@@ -2375,6 +2390,192 @@ function isStructurallyValidContactLocationValue(value: unknown): boolean {
   return true;
 }
 
+function stripLeadingLocationLabel(value: unknown): string {
+  return collapseSpacedCaps(coerceString(value))
+    .replace(/^\s*(?:location|address|based in|located in)\s*[:\-]\s*/i, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function normalizeIdentityContactBlockLine(value: unknown): string {
+  return stripLeadingLocationLabel(
+    coerceString(value)
+      .replace(/^\s*[#>*]+\s*/, "")
+      .replace(/^\s*[-•\u2022]+\s*/, ""),
+  );
+}
+
+function splitIdentityContactBlockLines(source: unknown): string[] {
+  const text = source == null ? "" : String(source);
+  if (!text) return [];
+
+  const segments = text
+    .replace(/\r/g, "\n")
+    .split(/\n+/)
+    .flatMap((line) => line.split(/\s+(?:\||•|·|-)\s+/))
+    .map((line) => normalizeIdentityContactBlockLine(line))
+    .filter(Boolean);
+
+  const collected: string[] = [];
+  for (const line of segments) {
+    if (isSectionBoundary(line)) break;
+    collected.push(line);
+    if (collected.length >= 16) break;
+  }
+  return collected;
+}
+
+function isLikelyContactHeaderSourceBlock(source: string): boolean {
+  const text = source == null ? "" : String(source);
+  if (!text) return false;
+  if (/\b(qwikresume|free resume template|usage guidelines|copyright)\b/i.test(text)) {
+    return false;
+  }
+  const lines = splitIdentityContactBlockLines(text).slice(0, 10);
+  if (!lines.length) return false;
+  return lines.some((line) => looksLikeContactLine(line) || isUsablePersonName(line, line));
+}
+
+function looksLikeRecoverableIdentityContactLocation(value: unknown): boolean {
+  const cleaned = stripLeadingLocationLabel(value);
+  if (!cleaned) return false;
+  if (CONTACT_SLUDGE_RE.test(cleaned)) return false;
+  if (isSectionBoundary(cleaned) || isExperienceFieldStructuralFragment(cleaned)) return false;
+  if (looksLikeResponsibilitySentence(cleaned)) return false;
+  if (cleaned.split(/\s+/).length > 10) return false;
+  if (/\b(qwikresume|free resume template|usage guidelines|copyright)\b/i.test(cleaned)) return false;
+  if (/\b(university|college|school|academy|bachelor|master|degree|diploma|curriculum vitae)\b/i.test(cleaned)) {
+    return false;
+  }
+  if (/\b(experience|employment|deliverables|responsibilities|summary|profile|project|skills?|education)\b/i.test(cleaned)) {
+    return false;
+  }
+  if (/[•\u2022]/.test(cleaned)) return false;
+  if (/\b(certified|scientist|engineer|manager|developer|analyst|specialist|consultant)\b/i.test(cleaned.split(",").slice(1).join(" "))) {
+    return false;
+  }
+
+  const commaParts = cleaned.split(",").map((part) => part.trim()).filter(Boolean);
+  const firstPart = commaParts[0] ?? "";
+  const secondPart = commaParts[1] ?? "";
+  const normalizedSecondPart = secondPart.replace(/\s+\d{4,6}(?:-\d{4})?$/, "").trim().toLowerCase();
+  const knownGeoSuffixes = new Set([
+    "alabama",
+    "alaska",
+    "arizona",
+    "arkansas",
+    "california",
+    "colorado",
+    "connecticut",
+    "delaware",
+    "florida",
+    "georgia",
+    "hawaii",
+    "idaho",
+    "illinois",
+    "indiana",
+    "iowa",
+    "kansas",
+    "kentucky",
+    "louisiana",
+    "maine",
+    "maryland",
+    "massachusetts",
+    "michigan",
+    "minnesota",
+    "mississippi",
+    "missouri",
+    "montana",
+    "nebraska",
+    "nevada",
+    "new hampshire",
+    "new jersey",
+    "new mexico",
+    "new york",
+    "north carolina",
+    "north dakota",
+    "ohio",
+    "oklahoma",
+    "oregon",
+    "pennsylvania",
+    "rhode island",
+    "south carolina",
+    "south dakota",
+    "tennessee",
+    "texas",
+    "utah",
+    "vermont",
+    "virginia",
+    "washington",
+    "west virginia",
+    "wisconsin",
+    "wyoming",
+    "district of columbia",
+    "united states",
+    "usa",
+    "us",
+    "canada",
+    "united kingdom",
+    "uk",
+    "france",
+    "germany",
+    "india",
+    "australia",
+    "singapore",
+    "ireland",
+    "spain",
+    "italy",
+    "belgium",
+    "switzerland",
+    "netherlands",
+    "mexico",
+    "brazil",
+  ]);
+
+  const hasStreetAddress =
+    /\b\d{1,5}\s+[a-z0-9 .'-]+\b(?:street|st|road|rd|avenue|ave|lane|ln|drive|dr|boulevard|blvd|way|court|ct|circle|cir|place|pl|parkway|pkwy)\b/i.test(
+      cleaned,
+    );
+  const hasCityStatePattern =
+    /^[A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){0,3},\s*[A-Z]{2}(?:\s+\d{4,6}(?:-\d{4})?)?$/.test(
+      cleaned,
+    );
+  const hasCityKnownGeoSuffixPattern =
+    commaParts.length === 2 &&
+    /^[A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){0,3}$/.test(firstPart) &&
+    knownGeoSuffixes.has(normalizedSecondPart);
+  const hasStreetWithCityRegion =
+    /\b(?:street|st|road|rd|avenue|ave|lane|ln|drive|dr|boulevard|blvd|way|court|ct|circle|cir|place|pl|parkway|pkwy)\b/i.test(
+      cleaned,
+    ) && /,\s*[A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){0,3},\s*[A-Z]{2}(?:\s+\d{4,6}(?:-\d{4})?)?$/.test(cleaned);
+
+  return hasStreetAddress || hasCityStatePattern || hasCityKnownGeoSuffixPattern || hasStreetWithCityRegion;
+}
+
+function extractRecoverableLocationFromSourceBlock(source: unknown): string | undefined {
+  const text = source == null ? "" : String(source);
+  if (!text) return undefined;
+  if (/\b(qwikresume|free resume template|usage guidelines|copyright)\b/i.test(text)) {
+    return undefined;
+  }
+  const lines = splitIdentityContactBlockLines(text).slice(0, 12);
+
+  for (let idx = 0; idx < lines.length; idx += 1) {
+    const line = lines[idx];
+    if (looksLikeRecoverableIdentityContactLocation(line)) {
+      return line;
+    }
+    const next = lines[idx + 1] ?? "";
+    if (!line || looksLikeContactLine(line)) continue;
+    const combined = [line, next].filter(Boolean).join(", ").replace(/\s{2,}/g, " ").trim();
+    if (next && looksLikeRecoverableIdentityContactLocation(combined)) {
+      return combined;
+    }
+  }
+
+  return undefined;
+}
+
 function collectSchemaIdentityContactSources(normalized: any): Record<string, unknown>[] {
   return [
     normalized,
@@ -2433,10 +2634,10 @@ function collectIdentityContactRawTextSources(
     return collected.join("\n").trim();
   };
 
-  return dedupeStringsCaseInsensitive(
+  return dedupeSourceBlocksPreserveWhitespace(
     [
-      coerceString(normalized?.contact?.raw ?? ""),
-      coerceString(normalized?.contact?.addressBlock ?? ""),
+      typeof normalized?.contact?.raw === "string" ? normalized.contact.raw.trim() : "",
+      typeof normalized?.contact?.addressBlock === "string" ? normalized.contact.addressBlock.trim() : "",
       ...filterRawSection(rawSections, "profile", { preserveWhitespace: true }),
       topBlock(normalized?.rawText ?? ""),
       topBlock(context.rawText ?? ""),
@@ -2513,6 +2714,74 @@ function extractTypedIdentityContactLinksFromRawText(
   };
 }
 
+function extractTypedIdentityContactLocationFromRawText(
+  normalized: any,
+  rawSections: RawSection[],
+  context: CanonicalizeContext,
+): string | undefined {
+  const prioritizedSources = [
+    typeof normalized?.contact?.raw === "string" ? normalized.contact.raw.trim() : "",
+    typeof normalized?.contact?.addressBlock === "string" ? normalized.contact.addressBlock.trim() : "",
+    ...collectIdentityContactRawTextSources(normalized, rawSections, context),
+  ].filter(Boolean);
+
+  for (const source of dedupeSourceBlocksPreserveWhitespace(prioritizedSources)) {
+    const candidate = extractRecoverableLocationFromSourceBlock(source);
+    if (candidate) {
+      return candidate;
+    }
+  }
+  return undefined;
+}
+
+function extractConservativeHeaderContactLocation(normalized: any, context: CanonicalizeContext): string | undefined {
+  const topBlock = (value: unknown): string => {
+    const text = value == null ? "" : String(value).trim();
+    if (!text) return "";
+    const lines = text
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .slice(0, 16);
+    return lines.join("\n").trim();
+  };
+
+  const sources = dedupeSourceBlocksPreserveWhitespace(
+    [
+      typeof normalized?.contact?.raw === "string" ? normalized.contact.raw.trim() : "",
+      typeof normalized?.contact?.addressBlock === "string" ? normalized.contact.addressBlock.trim() : "",
+      topBlock(normalized?.rawText ?? ""),
+      topBlock(context.rawText ?? ""),
+    ].filter(Boolean),
+  );
+
+  for (const source of sources) {
+    if (/\b(qwikresume|free resume template|usage guidelines|copyright)\b/i.test(source)) {
+      continue;
+    }
+    const lines = splitIdentityContactBlockLines(source).slice(0, 12);
+
+    for (const line of lines) {
+      if (looksLikeRecoverableIdentityContactLocation(line)) return line;
+    }
+  }
+
+  return undefined;
+}
+
+function extractDirectHeaderContactLocationLine(source: unknown): string | undefined {
+  const text = source == null ? "" : String(source);
+  if (!text) return undefined;
+  if (/\b(qwikresume|free resume template|usage guidelines|copyright)\b/i.test(text)) return undefined;
+  const lines = splitIdentityContactBlockLines(text).slice(0, 12);
+
+  for (const line of lines) {
+    if (looksLikeRecoverableIdentityContactLocation(line)) return line;
+  }
+
+  return undefined;
+}
+
 function buildSchemaFirstIdentityContactCandidate(
   normalized: any,
   rawSections: RawSection[],
@@ -2532,6 +2801,7 @@ function buildSchemaFirstIdentityContactCandidate(
 } {
   const sources = collectSchemaIdentityContactSources(normalized);
   const rawTypedLinks = extractTypedIdentityContactLinksFromRawText(normalized, rawSections, context);
+  const rawTypedLocation = extractTypedIdentityContactLocationFromRawText(normalized, rawSections, context);
   return {
     identity: {
       name: pickFirstSchemaValue(sources, ["name", "fullName"], (value) => isUsablePersonName(coerceString(value), coerceString(value))),
@@ -2544,7 +2814,7 @@ function buildSchemaFirstIdentityContactCandidate(
         sources,
         ["location", "addressNormalized", "address"],
         isStructurallyValidContactLocationValue,
-      ),
+      ) ?? rawTypedLocation,
     },
     contact: {
       email: pickFirstSchemaValue(sources, ["email", "emailAddress"], isStructurallyValidEmail),
@@ -3850,6 +4120,45 @@ function canonicalizeExperience(
     return /^(experience|professional experience|employment history|work experience|inferred)$/i.test(normalizedValue);
   };
 
+  const looksLikeEmployerName = (value: string): boolean => {
+    const cleaned = cleanLine(value);
+    if (!cleaned) return false;
+    if (/[,&@]/.test(cleaned)) return true;
+    if (/\b(inc|corp|corporation|llc|ltd|limited|company|co|group|partners|holdings|solutions|technologies|systems|services|university|college|school|academy|hospital|clinic|bank|restaurant|hotel|ministry|department|office|agency|association|foundation)\b\.?/i.test(cleaned)) {
+      return true;
+    }
+    const tokens = cleaned.split(/\s+/).filter(Boolean);
+    const acronymTokens = tokens.filter((token) => /^[A-Z0-9&.'-]{2,}$/.test(token));
+    return acronymTokens.length >= Math.max(1, Math.floor(tokens.length / 2));
+  };
+
+  const looksLikeNonEmployerCompanyField = (company: string, position: string): boolean => {
+    const cleanedCompany = cleanLine(company);
+    if (!cleanedCompany) return false;
+    if (/^(key deliverables?|responsibilities?|professional experience|experience|employment history|work experience)\b:?$/i.test(cleanedCompany)) {
+      return true;
+    }
+    if (isSectionBoundary(cleanedCompany) || isExperienceFieldStructuralFragment(cleanedCompany)) {
+      return true;
+    }
+    if (looksLikeResponsibilitySentence(cleanedCompany)) {
+      return true;
+    }
+    if (cleanedCompany.split(/\s+/).length > 10 && !looksLikeEmployerName(cleanedCompany)) {
+      return true;
+    }
+    const normalizedRole = normalizeRoleCandidate(cleanedCompany);
+    if (
+      normalizedRole &&
+      normalizedRole.toLowerCase() === cleanedCompany.toLowerCase() &&
+      !looksLikeEmployerName(cleanedCompany) &&
+      (!position || normalizeRoleCandidate(position)?.toLowerCase() !== cleanedCompany.toLowerCase())
+    ) {
+      return true;
+    }
+    return false;
+  };
+
   const isCoherentNormalizedExperienceEntry = (entry: any): boolean => {
     const company = coerceString(entry?.company ?? "");
     const position = coerceString(entry?.position ?? "");
@@ -3871,8 +4180,9 @@ function canonicalizeExperience(
       hasCompany &&
       !hasPosition &&
       looksLikeResponsibilitySentence(company);
+    const hasNonEmployerCompanyField = hasCompany && looksLikeNonEmployerCompanyField(company, position);
 
-    if (hasStructuralFieldContamination || hasHeaderEchoLocation || hasNarrativeCompanyOnly) {
+    if (hasStructuralFieldContamination || hasHeaderEchoLocation || hasNarrativeCompanyOnly || hasNonEmployerCompanyField) {
       return false;
     }
 
@@ -4971,6 +5281,10 @@ export function canonicalizeParserResult(result: any, context: CanonicalizeConte
   const heuristicPhone = coerceString(currentContact.phone ?? currentContact.phoneRaw ?? "");
   const heuristicWebsite = coerceString(currentContact.website ?? currentContact.url ?? "");
   const heuristicLinkedin = coerceString(currentContact.linkedin ?? currentContact.linkedinUrl ?? "");
+  const headerContactLocation =
+    extractDirectHeaderContactLocationLine(currentContact.raw ?? "") ||
+    extractDirectHeaderContactLocationLine(currentContact.addressBlock ?? "") ||
+    extractConservativeHeaderContactLocation(normalized, context);
 
   if (
     schemaFirstIdentityContact.identity.name &&
@@ -4996,6 +5310,17 @@ export function canonicalizeParserResult(result: any, context: CanonicalizeConte
     !isStructurallyValidContactLocationValue(heuristicLocation)
   ) {
     currentContact.location = schemaFirstIdentityContact.identity.location;
+  } else if (headerContactLocation && !isStructurallyValidContactLocationValue(heuristicLocation)) {
+    currentContact.location = headerContactLocation;
+  }
+
+  const finalRecoveredLocation = coerceString(currentContact.location ?? "");
+  const previousAddressNormalized = coerceString(currentContact.addressNormalized ?? "");
+  const shouldWriteAddressNormalized =
+    Boolean(finalRecoveredLocation) &&
+    !isStructurallyValidContactLocationValue(previousAddressNormalized);
+  if (shouldWriteAddressNormalized) {
+    currentContact.addressNormalized = finalRecoveredLocation;
   }
 
   if (

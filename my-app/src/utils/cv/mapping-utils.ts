@@ -1116,6 +1116,49 @@ function sanitizeUpstreamProfileLocation(value: unknown): string | undefined {
   return cleaned;
 }
 
+function sanitizeNormalizedProfileLocationValue(value: unknown): string | undefined {
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  const raw = String(value);
+  const cleaned = cleanLocationOverlay(raw).replace(/^[,;:()\[\]{}]+|[,;:()\[\]{}]+$/g, "").trim();
+  if (!cleaned) return undefined;
+  if (cleaned.length < 3 || cleaned.length > 120) return undefined;
+  if (/^\s*[#>*`|]/.test(raw)) return undefined;
+  if (/@|https?:\/\/|www\./i.test(raw)) return undefined;
+
+  const normalized = normalizeFallbackNameValue(cleaned);
+  if (!normalized) return undefined;
+  if (PROFILE_NAME_PHRASE_BLOCKLIST.has(normalized)) return undefined;
+  if (UPSTREAM_DESIRED_POSITION_BLOCKLIST.has(normalized)) return undefined;
+  if (UPSTREAM_LOCATION_BLOCKLIST.has(normalized)) return undefined;
+  if (/\b(name of city|reason for|designation from to duration|organization country leaving)\b/i.test(cleaned)) {
+    return undefined;
+  }
+
+  return cleaned;
+}
+
+function resolveMaterializedProfileLocation(normalized: PartialNormalizedCv): string | undefined {
+  const orderedCandidates = [
+    (normalized.profile as Record<string, unknown> | undefined)?.location,
+    (normalized.details as Record<string, unknown> | undefined)?.location,
+    (normalized as Record<string, unknown> | undefined)?.location,
+    (normalized.contact as Record<string, unknown> | undefined)?.location,
+    (normalized.contact as Record<string, unknown> | undefined)?.addressNormalized,
+    (normalized.contact as Record<string, unknown> | undefined)?.address,
+    (normalized as Record<string, unknown> | undefined)?.identitySchema &&
+      typeof (normalized as Record<string, unknown>).identitySchema === "object"
+      ? ((normalized as Record<string, unknown>).identitySchema as Record<string, unknown>).location
+      : undefined,
+  ];
+
+  for (const candidate of orderedCandidates) {
+    const sanitized = sanitizeNormalizedProfileLocationValue(candidate);
+    if (sanitized) return sanitized;
+  }
+
+  return undefined;
+}
+
 /** Recursively aggregate short text fragments from a nested object. */
 function aggregateStringsFromObject(input: unknown): string {
   const out: string[] = [];
@@ -1239,6 +1282,17 @@ function extractProfileFromText(text: string) {
   if (!text.trim()) return out;
 
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const isSectionBoundaryLine = (line: string): boolean => {
+    const cleaned = line.replace(/^#+\s*/, "").trim();
+    const family = resolveCanonicalHeadingFamily(cleaned);
+    return Boolean(family && family !== "profile");
+  };
+  const topHeaderLines: string[] = [];
+  for (const line of lines.slice(0, 12)) {
+    if (topHeaderLines.length > 0 && isSectionBoundaryLine(line)) break;
+    topHeaderLines.push(line);
+  }
+  const topHeaderText = topHeaderLines.join("\n");
 
   // Name: conservative top-of-document fallback only. Prefer missing name over noisy headings/roles/locations.
   const nameSearchLines = lines.slice(0, PROFILE_NAME_LINE_SCAN_LIMIT);
@@ -1308,21 +1362,16 @@ function extractProfileFromText(text: string) {
     }
   }
   if (!out.location) {
-    // Broader city/state/country header-style matches
-    const headerMatch = text.match(
+    // Broader city/state/country header-style matches, but only within the top contact/header block.
+    const headerMatch = topHeaderText.match(
       /([A-Z][A-Za-z]+|[A-Z]{2,})(?: [A-Z][A-Za-z]+| [A-Z]{2,})*,\s*[A-Z]{2}(?:\s+\d{4,6})?(?:,\s*(United States|USA|U\.S\.A\.|United Kingdom|UK|Canada|France|Germany|Italy|Spain|Portugal|Netherlands|Belgium|Switzerland|India))?/i
     );
     if (headerMatch) out.location = sanitizeToken((headerMatch[0] ?? "").trim());
   }
   if (!out.location) {
-    // "Based in X" / "Location: X" / "Address: X"
-    const basedMatch = text.match(/\b(?:based in|location:|address:)\s*([A-Z][A-Za-z\s,]+(?:\d{5})?)/i);
+    // "Based in X" / "Location: X" / "Address: X" within the top contact/header block only.
+    const basedMatch = topHeaderText.match(/\b(?:based in|location:|address:)\s*([A-Z][A-Za-z\s,]+(?:\d{5})?)/i);
     if (basedMatch) out.location = sanitizeToken((basedMatch[1] ?? "").trim());
-  }
-  if (!out.location && lines.length > 0) {
-    // Footer scan: last 3 lines for a location-looking string
-    const foot = lines.slice(-3).find((l) => isLikelyLocation(l));
-    if (foot) out.location = sanitizeToken(foot);
   }
 
   return out;
@@ -2214,7 +2263,7 @@ export function buildTypedSectionsFromNormalized(normalized: PartialNormalizedCv
       linkedin: findFirstValue(["linkedin", "linkedIn"], profileSources.filter(s => String((s as any).linkedin ?? (s as any).linkedIn).includes('linkedin.com'))),
       website: findFirstValue(["website", "url", "site"], profileSources.filter(s => !String((s as any).website ?? (s as any).url).includes('linkedin.com'))),
       desiredPosition: sanitizeUpstreamDesiredPosition(findFirstValue(["desiredPosition", "title"], profileSources)),
-      location: sanitizeUpstreamProfileLocation(findFirstValue(["location", "address"], profileSources)),
+      location: resolveMaterializedProfileLocation(normalized),
   };
   
   // Fallback profile extraction from raw text with guards
@@ -2243,12 +2292,6 @@ export function buildTypedSectionsFromNormalized(normalized: PartialNormalizedCv
     if (!profileItem.location && extracted.location) {
       profileItem.location = sanitizeUpstreamProfileLocation(extracted.location) ?? profileItem.location;
     }
-  }
-  
-  // Fallback for location from any experience item with a non-empty location
-  if (!profileItem.location && expItems.length > 0) {
-    const firstExpLoc = expItems.find((e: any) => typeof e?.location === "string" && e.location.trim())?.location;
-    if (firstExpLoc) profileItem.location = sanitizeUpstreamProfileLocation(firstExpLoc) ?? profileItem.location;
   }
   
   const profileFieldCount = Object.values(profileItem).filter(v => typeof v === 'string' && v.trim()).length;
