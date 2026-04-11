@@ -12,7 +12,7 @@ Robert languages POC result: coherent `languages` were preserved and noisy dupli
 
 Important remaining note: the same-run UI/profile can still show Jessica location while normalized contact fields may not carry `contact.location` / `contact.addressNormalized`. Treat that as a profile/materialization contract inconsistency, not an experience-, education-, or languages-parsing failure.
 
-Explicitly deferred: Jessica contact-location normalized-contract consistency cleanup, Helen `New York` location recovery, website/linkedin identity work, non-POC families, deeper education enrichment, and Robert experience oddities. Skills are the next family to tackle. The active next fixture is Anne Lounsberry, where the live issue is markdown skills-table residue materializing as junk skills like `| Machine Learning | |`. Do not reopen Anne's title-as-location guard while working that slice.
+Explicitly deferred: Jessica contact-location normalized-contract consistency cleanup, Helen `New York` location recovery, website/linkedin identity work, non-POC families, deeper education enrichment, and Robert experience oddities. Skills are the active family. The active next fixture is Anne Lounsberry, where the live issue is markdown skills-table residue materializing as junk skills like `| Machine Learning | |`. Do not reopen Anne's title-as-location guard while working that slice.
 
 Files touched in this POC: `cv_parser_service/mistral_ocr.py`, `cv_parser_service/tests/test_mistral_layout_sections.py`, `my-app/convex/lib/parsing/canonicalize.ts`, `my-app/convex/lib/parsing/__tests__/canonicalize.test.ts`.
 
