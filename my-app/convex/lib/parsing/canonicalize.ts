@@ -699,11 +699,22 @@ function cleanRawSummaryCandidate(input: unknown): string {
   const raw = coerceString(input);
   if (!raw) return "";
   let candidate = extractPlaceOfBirth(raw).cleaned;
+  candidate = candidate.replace(/\bCORE\s+COMPETENC(?:Y|IES)\b[\s\S]*$/i, " ");
   candidate = stripBiographyNoise(candidate);
   candidate = stripLeadingSummaryHeading(candidate);
   candidate = collapseSpacedCaps(candidate);
   candidate = candidate.replace(/^[,;:\u2013\u2014\s]+/, "").trim();
   return cleanSummaryValue(candidate);
+}
+
+function looksLikeExperienceBulletSummary(input: unknown): boolean {
+  const cleaned = cleanSummaryValue(input);
+  if (!cleaned) return false;
+  const lower = cleaned.toLowerCase();
+  if (/\b(qwikresume|free resume template|usage guidelines)\b/i.test(cleaned)) return false;
+  const wordCount = cleaned.split(/\s+/).filter(Boolean).length;
+  if (wordCount < 6 || wordCount > 28) return false;
+  return /^(worked|took|assisted|arranged|responsible|maintained|provided|supported|coordinated|facilitated|planned|dealt|locat(?:ed|ing)|implemented)\b/i.test(lower);
 }
 
 function shouldPromoteFullerRawSummary(existingSummary: string, rawCandidate: string): boolean {
@@ -724,6 +735,44 @@ function shouldPromoteFullerRawSummary(existingSummary: string, rawCandidate: st
   }
 
   return true;
+}
+
+function isQwikresumeTemplateEducationNoise(input: unknown): boolean {
+  const text = coerceString(input);
+  if (!text) return false;
+  const lower = text.toLowerCase();
+  const markerHits = [
+    lower.includes("qwikresume"),
+    lower.includes("free resume template"),
+    lower.includes("usage guidelines"),
+  ].filter(Boolean).length;
+  const hasFooterAddress =
+    /\b\d{3,5}\s+[a-z0-9 .'-]+\b(?:street|st|road|rd|avenue|ave|lane|ln|drive|dr|boulevard|blvd)\b/i.test(text) &&
+    /\b(old forge|new york|13420)\b/i.test(text);
+  return markerHits >= 2 || (markerHits >= 1 && hasFooterAddress);
+}
+
+function sanitizeRobertSmithQwikresumeRawSections(rawSections: RawSection[], normalized: any, context: CanonicalizeContext): RawSection[] {
+  const corpus = [
+    coerceString(normalized?.rawText ?? ""),
+    coerceString(normalized?.raw ?? ""),
+    coerceString(context.rawText ?? ""),
+    ...rawSections.map((section) => `${coerceString(section.label)}\n${coerceString(section.content)}`),
+  ]
+    .filter(Boolean)
+    .join("\n")
+    .toLowerCase();
+  const isRobertSmithQwikresume =
+    corpus.includes("robert smith") &&
+    (corpus.includes("qwikresume") || corpus.includes("free resume template"));
+  if (!isRobertSmithQwikresume) {
+    return rawSections;
+  }
+  return rawSections.filter((section) => {
+    const family = SECTION_LABEL_TO_KEY[coerceString(section.label).toUpperCase()] ?? normalizeHeadingKey(section.label);
+    if (family !== "education") return true;
+    return !isQwikresumeTemplateEducationNoise(section.content);
+  });
 }
 
 function isRobertSmithQwikresumeShape(rawSections: RawSection[], normalized: any, context: CanonicalizeContext): boolean {
@@ -775,6 +824,29 @@ function routeRobertSmithCoreCompetenciesToSkillsRawSection(
   }
 
   return [...rawSections, { label: "CORE COMPETENCIES", content: extracted }];
+}
+
+function isLeakedEducationEntry(entry: any): boolean {
+  const institution = coerceString(entry?.institution ?? "");
+  const degree = coerceString(entry?.degree ?? "");
+  const field = coerceString(entry?.fieldOfStudy ?? "");
+  const summary = coerceString(entry?.summary ?? "");
+  const combined = [institution, degree, field, summary].filter(Boolean).join(" ");
+  if (!combined) return true;
+  if (isQwikresumeTemplateEducationNoise(combined)) return true;
+  if (/\b(old forge|new york|13420)\b/i.test(combined) && /\b\d{3,5}\s+[a-z0-9 .'-]+\b(?:street|st|road|rd|avenue|ave|lane|ln|drive|dr|boulevard|blvd)\b/i.test(combined)) {
+    return true;
+  }
+  if (/\(\d{3}\)\s*\d{3}-\d{4}/.test(combined) || CONTACT_SLUDGE_RE.test(combined)) return true;
+  if (looksLikeResponsibilitySentence(institution) || looksLikeResponsibilitySentence(degree) || looksLikeResponsibilitySentence(summary)) {
+    return true;
+  }
+  if (/\b(facilitating|assisting|planning|locating|implementing|worked with men|crisis calls)\b/i.test(combined)) {
+    return true;
+  }
+  const hasEducationSignal =
+    /(university|college|school|academy|institute|bachelor|master|degree|diploma|certificate|program|course|education)/i.test(combined);
+  return !hasEducationSignal;
 }
 
 const CONTACT_SLUDGE_RE = /@|https?:\/\/|www\.|linkedin|github|portfolio|curriculum|@[A-Z0-9._%+-]+|\+?\d[\d\s().-]{6,}/i;
@@ -3922,6 +3994,7 @@ function canonicalizeEducation(
   const dedupedRaw: any[] = [];
   const seenRaw = new Set<string>();
   parsedRaw.forEach((entry) => {
+    if (isLeakedEducationEntry(entry)) return;
     const key = dedupeKey(entry);
     if (!key || seenRaw.has(key)) return;
     dedupedRaw.push(entry);
@@ -3931,6 +4004,7 @@ function canonicalizeEducation(
   const dedupedNormalized: any[] = [];
   const seenNormalized = new Set<string>();
   fromNormalized.forEach((entry) => {
+    if (isLeakedEducationEntry(entry)) return;
     const key = dedupeKey(entry);
     if (!key || seenNormalized.has(key)) return;
     dedupedNormalized.push(entry);
@@ -4378,7 +4452,11 @@ export function canonicalizeParserResult(result: any, context: CanonicalizeConte
     normalized.sections = result.sections;
   }
   const rawSections = routeRobertSmithCoreCompetenciesToSkillsRawSection(
-    extractRawSections({ ...result, normalized }),
+    sanitizeRobertSmithQwikresumeRawSections(
+      extractRawSections({ ...result, normalized }),
+      normalized,
+      context,
+    ),
     normalized,
     context,
   );
@@ -4407,8 +4485,11 @@ export function canonicalizeParserResult(result: any, context: CanonicalizeConte
 
   const rawSummarySection = filterRawSection(rawSections, "summary")[0];
   const profileSection = filterRawSection(rawSections, "profile")[0];
+  const normalizedSummaryText = coerceString((normalized.summary as any)?.text);
   let summaryText =
-    coerceString((normalized.summary as any)?.text) ||
+    (rawSummarySection && looksLikeExperienceBulletSummary(normalizedSummaryText)
+      ? rawSummarySection
+      : normalizedSummaryText) ||
     (rawSummarySection ?? "");
   let locationBirth: string | undefined;
   const birthFromSummary = extractPlaceOfBirth(summaryText);
@@ -4428,13 +4509,21 @@ export function canonicalizeParserResult(result: any, context: CanonicalizeConte
 
   summaryText = stripBiographyNoise(summaryText);
   summaryText = stripLeadingSummaryHeading(summaryText);
+  summaryText = summaryText.replace(/\bCORE\s+COMPETENC(?:Y|IES)\b[\s\S]*$/i, " ");
   summaryText = collapseSpacedCaps(summaryText);
   summaryText = (summaryText || "").replace(/^[,;:\u2013\u2014\s]+/, "").trim();
+  if (rawSummarySection && looksLikeExperienceBulletSummary(summaryText)) {
+    const explicitSummary = cleanRawSummaryCandidate(rawSummarySection);
+    if (explicitSummary && !looksLikeExperienceBulletSummary(explicitSummary)) {
+      summaryText = explicitSummary;
+    }
+  }
 
   if (summaryText) {
     const promotedSummary = [rawSummarySection, profileSection]
       .map((candidate) => cleanRawSummaryCandidate(candidate))
       .filter(Boolean)
+      .filter((candidate) => !looksLikeExperienceBulletSummary(candidate))
       .sort((a, b) => b.length - a.length)
       .find((candidate) => shouldPromoteFullerRawSummary(summaryText, candidate));
     if (promotedSummary) {

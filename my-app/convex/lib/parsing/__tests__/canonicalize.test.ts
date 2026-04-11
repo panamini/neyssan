@@ -162,7 +162,7 @@ describe("canonicalizeParserResult", () => {
     expect(projects[1]?.summary).toContain("Published plugin to websites gaining 2K+ downloads");
   });
 
-  it("recovers Robert Smith skills from core competencies without reopening experience recovery", () => {
+  it("filters Qwikresume footer education noise, keeps summary on the explicit summary section, and recovers skills from core competencies without reopening experience recovery", () => {
     const summarySection =
       "Cash handling accuracy Excellent multi-tasker Organized Friendly Dependable Reliable Strong communication skills Punctual Flexible schedule Knowledge of MS Office and POS.";
     const competenciesSection = "Accounting, Data Entry, WindowsXP-8, Technology Management. ##";
@@ -173,6 +173,9 @@ describe("canonicalizeParserResult", () => {
       "",
       "Advocate",
       "ABC Corporation - 2011 – 2015",
+      "45133 (937) 393-8118 Facilitating groups such as, Anger Management, Mens Domestic Violence Offender Program, Teen Anger Management, Parenting/Child Abuse and Youth Violence Prevention",
+      "Assisting victims of domestic violence through court advocacy, safety planning, housing referral and crisis intervention",
+      "Planning and facilitating school/youth success programs that target at-risk youth",
     ].join("\n");
     const educationNoise =
       "2259 Oak Street\nOld Forge, New York, 13420 This Free Resume Template is the copyright of Qwikresume.com. Usage Guidelines";
@@ -189,6 +192,14 @@ describe("canonicalizeParserResult", () => {
           summary: {
             text: "Worked with men women and children who were attempting to leave a violent relationship",
           },
+          experience: [
+            {
+              company: "CitySquare",
+              position: "Lead Customer Advocate",
+              startDate: "2015-01-01",
+              isCurrent: true,
+            },
+          ],
           rawText: [
             "ROBERT SMITH",
             "Lead Customer Advocate",
@@ -205,9 +216,12 @@ describe("canonicalizeParserResult", () => {
       context,
     );
 
+    expect(canonical.normalized?.summary?.text).toBe(summarySection);
+    expect(canonical.normalized?.education ?? []).toHaveLength(0);
     expect(canonical.normalized?.skills?.map((item: any) => item?.name)).toEqual(
       expect.arrayContaining(["Accounting", "Data Entry", "WindowsXP-8", "Technology Management"]),
     );
+    expect((canonical.normalized?.rawSections ?? []).some((section: any) => /Qwikresume/i.test(String(section?.content ?? "")))).toBe(false);
   });
 
   it("keeps normalized experience and repairs header-echo locations when entries are otherwise coherent", () => {
