@@ -144,7 +144,7 @@ def _resolve_markdown_heading_to_canonical_label(value: str) -> Optional[str]:
     normalized = re.sub(r"\s+", " ", normalized).strip()
 
     fallback_patterns = [
-        (r"\b(EXPERIENCE|EMPLOYMENT|WORKING EXPERIENCE|WORK EXPERIENCE|PROFESSIONAL EXPERIENCE|EXPERIENCE)\b", "EXPERIENCE"),
+        (r"\b(EXPERIENCE|EMPLOYMENT|EMPLOYMENT HISTORY|WORK HISTORY|WORKING EXPERIENCE|WORK EXPERIENCE|PROFESSIONAL EXPERIENCE|EXPERIENCE)\b", "EXPERIENCE"),
         (r"\b(EDUCATION|ACADEMIC|QUALIFICATION|QUALIFICATIONS|FORMATION|TRAINING)\b", "EDUCATION"),
         (r"\b(SKILL|SKILLS|COMPETENC|STRENGTH)\b", "SKILLS"),
         (r"\b(LANGUAGE|LANGUAGES|LANGUES|IDIOMAS)\b", "LANGUAGES"),
@@ -217,6 +217,10 @@ def derive_raw_sections_from_markdown_pages(
                 if heading_text:
                     heading_count += 1
                     canonical_label = _resolve_markdown_heading_to_canonical_label(heading_text)
+                    heading_level = len(heading_match.group(0).lstrip().split(maxsplit=1)[0])
+                    if current_label == "EXPERIENCE" and heading_level > 1 and canonical_label == "EDUCATION":
+                        current_lines.append(heading_text)
+                        continue
                     if canonical_label and canonical_label in NON_CANONICAL_HEADING_FAMILIES:
                         flush()
                         current_label = canonical_label

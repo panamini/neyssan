@@ -1,3 +1,19 @@
+import sys
+import types
+
+if "mistralai" not in sys.modules:
+    mistralai_module = types.ModuleType("mistralai")
+    mistralai_module.models = types.SimpleNamespace(
+        File=object,
+        FileChunk=object,
+        DocumentURLChunk=object,
+        OCRResponse=object,
+    )
+    sys.modules["mistralai"] = mistralai_module
+    sdk_module = types.ModuleType("mistralai.sdk")
+    sdk_module.Mistral = object
+    sys.modules["mistralai.sdk"] = sdk_module
+
 from cv_parser_service.mistral_ocr import (
     derive_raw_sections_from_markdown_pages,
     should_use_ocr_raw_sections,
@@ -110,6 +126,57 @@ ACADEMIC QUALIFICATION:
     assert [section["label"] for section in raw_sections] == ["EDUCATION"]
     assert "| EXAM/DEGREE | YEAR | NAME OF INSTITUTION | UNIVERSITY/BOARD | PERCENTAGE % |" in raw_sections[0]["content"]
     assert diagnostics["ocr_markdown_canonical_headings"] == 1
+
+
+def test_derive_raw_sections_recognizes_work_history_as_experience_boundary() -> None:
+    pages = [
+        {
+            "index": 0,
+            "markdown": """
+# Skills
+Pattern making
+
+# WORK HISTORY
+Senior Designer
+Maison Example
+
+# Education
+Fashion Institute
+""",
+        }
+    ]
+
+    raw_sections, diagnostics = derive_raw_sections_from_markdown_pages(pages)
+
+    assert [section["label"] for section in raw_sections] == ["SKILLS", "EXPERIENCE", "EDUCATION"]
+    assert "Senior Designer" in raw_sections[1]["content"]
+    assert "Maison Example" in raw_sections[1]["content"]
+    assert diagnostics["ocr_markdown_canonical_headings"] == 3
+
+
+def test_derive_raw_sections_keeps_nested_work_history_job_heading_inside_experience() -> None:
+    pages = [
+        {
+            "index": 0,
+            "markdown": """
+# SKILLS
+- Differentiated instruction
+
+# WORK HISTORY
+## Spring Education Group - Middle School Language Arts Teacher
+Issaquah, WA 08/2010 - Current
+- Taught all levels of English language arts
+""",
+        }
+    ]
+
+    raw_sections, diagnostics = derive_raw_sections_from_markdown_pages(pages)
+
+    assert [section["label"] for section in raw_sections] == ["SKILLS", "EXPERIENCE"]
+    assert "Spring Education Group - Middle School Language Arts Teacher" in raw_sections[1]["content"]
+    assert "Issaquah, WA 08/2010 - Current" in raw_sections[1]["content"]
+    assert all(section["label"] != "EDUCATION" for section in raw_sections)
+    assert diagnostics["ocr_markdown_canonical_headings"] == 2
 
 
 def test_should_use_ocr_raw_sections_skips_when_body_and_details_dominate() -> None:
