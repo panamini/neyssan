@@ -97,6 +97,7 @@ function readEmptyReasonFromDiagnostics(diagnostics: unknown): string | null {
 const MAX_BYTES = 5 * 1024 * 1024;
 const DEFAULT_ACCEPT = ".pdf,.txt";
 const OCR_ACCEPT = ".pdf,.png,.jpg,.jpeg";
+const MISTRAL_PROBE_TTL_MS = 10_000;
 
 function isPdfUpload(file: File): boolean {
   const ext = (file.name.split(".").pop() || "").toLowerCase();
@@ -195,28 +196,60 @@ export function StructuredUploadButton({
   );
   const [mistralOk, setMistralOk] = useState<boolean | null>(null);
   const [isDropTargeted, setIsDropTargeted] = useState(false);
+  const mistralProbePromiseRef = useRef<Promise<boolean> | null>(null);
+  const mistralProbeCheckedAtRef = useRef(0);
 
-  useEffect(() => {
+  const resolveMistralProbeOk = useCallback((result: any): boolean => {
+    const readyStatus = result?.ready?.status;
+    const parseStatus = result?.parse?.status;
+    return readyStatus === 200 && parseStatus === 200;
+  }, []);
+
+  const ensureMistralReady = useCallback(async (options?: { force?: boolean }): Promise<boolean> => {
+    const force = options?.force === true;
     if (typeof probeMistral !== "function") {
       setMistralOk(true);
-      return;
+      return true;
     }
-    let mounted = true;
-    probeMistral({})
-      .then((result: any) => {
-        if (!mounted) return;
-        setMistralOk(result?.ready?.status === 200);
-      })
-      .catch(() => {
-        if (!mounted) return;
-        setMistralOk(true);
-      });
-    return () => {
-      mounted = false;
-    };
-  }, [probeMistral]);
+    const probeAgeMs = Date.now() - mistralProbeCheckedAtRef.current;
+    if (!force && mistralOk === true && probeAgeMs < MISTRAL_PROBE_TTL_MS) {
+      return true;
+    }
+    if (!force && mistralOk === false) {
+      return false;
+    }
+    if (!mistralProbePromiseRef.current) {
+      mistralProbePromiseRef.current = probeMistral({})
+        .then((result: any) => {
+          const ok = resolveMistralProbeOk(result);
+          mistralProbeCheckedAtRef.current = Date.now();
+          if (mountedRef.current) {
+            setMistralOk(ok);
+          }
+          return ok;
+        })
+        .catch(() => {
+          mistralProbeCheckedAtRef.current = Date.now();
+          if (mountedRef.current) {
+            setMistralOk(false);
+          }
+          return false;
+        })
+        .finally(() => {
+          mistralProbePromiseRef.current = null;
+        });
+    }
+    return await mistralProbePromiseRef.current;
+  }, [mistralOk, probeMistral, resolveMistralProbeOk]);
 
-  const mistralAvailable = enableMistral && mistralOk !== false;
+  useEffect(() => {
+    void ensureMistralReady();
+    return () => {
+      mistralProbePromiseRef.current = null;
+    };
+  }, [ensureMistralReady]);
+
+  const mistralAvailable = enableMistral;
   const isBusy = status === "reading" || status === "calling";
 
   useEffect(() => {
@@ -361,8 +394,14 @@ export function StructuredUploadButton({
         const submission = await buildSubmission(file);
         if (!isCurrentRequest()) return;
 
-        if (requestedMode === "mistral" && !mistralAvailable) {
-          throw new Error("Mistral OCR is unavailable in this environment.");
+        if (requestedMode === "mistral") {
+          const probeOk = await ensureMistralReady({ force: true });
+          if (!isCurrentRequest()) return;
+          if (!probeOk) {
+            console.warn(
+              "[StructuredUploadButton][mistral] live probe failed; continuing with upload and relying on server-side retries",
+            );
+          }
         }
 
         if (requestedMode === "default" && isImageUpload(file)) {
@@ -580,6 +619,7 @@ export function StructuredUploadButton({
       showToast,
       structuredAction,
       mistralAvailable,
+      ensureMistralReady,
     ],
   );
 
@@ -750,7 +790,7 @@ export function StructuredUploadButton({
                 type="button"
                 className="dasti-menu-option dasti-menu-option--import-route"
                 onClick={() => startMenuImport("mistral")}
-                disabled={!mistralAvailable}
+                disabled={!enableMistral}
               >
                 <div className="dasti-menu-option__row">
                   <div className="dasti-menu-option__icons" aria-hidden>
@@ -813,7 +853,7 @@ export function StructuredUploadButton({
                 : "Scanned/image OCR upload is unavailable in this environment."
             }
             onClick={() => trigger("mistral")}
-            disabled={disabled || isBusy || !mistralAvailable}
+            disabled={disabled || isBusy || !enableMistral}
             className="inline-flex items-center"
             variant="secondary"
             size={size}

@@ -19,11 +19,13 @@ type ParserRunnerMeta = {
 
 type CanonicalPayload = {
   rawText?: string;
+  raw?: string;
   normalized?: Record<string, any>;
   summary?: any;
   summaryFirstSentence?: string;
   diagnostics?: Record<string, any>;
   rawSections?: Array<Record<string, any>>;
+  sections?: Array<Record<string, any>>;
 };
 
 type ParserResponse = {
@@ -31,6 +33,87 @@ type ParserResponse = {
   runner?: ParserRunnerMeta;
   source_kind?: string;
 } & CanonicalPayload;
+
+export function buildCanonicalizeInput(payload: ParserResponse): CanonicalPayload {
+  const resultPayload =
+    payload?.result && typeof payload.result === "object" ? payload.result : {};
+  const topNormalized =
+    payload?.normalized && typeof payload.normalized === "object" ? payload.normalized : {};
+  const resultNormalized =
+    (resultPayload as any)?.normalized && typeof (resultPayload as any).normalized === "object"
+      ? (resultPayload as any).normalized
+      : {};
+
+  const mergedRawText =
+    typeof (topNormalized as any)?.rawText === "string" && (topNormalized as any).rawText.trim()
+      ? (topNormalized as any).rawText
+      : typeof payload?.rawText === "string" && payload.rawText.trim()
+        ? payload.rawText
+        : typeof resultNormalized?.rawText === "string" && resultNormalized.rawText.trim()
+          ? resultNormalized.rawText
+          : typeof (resultPayload as any)?.rawText === "string" && (resultPayload as any).rawText.trim()
+            ? (resultPayload as any).rawText
+            : "";
+
+  const mergedRaw =
+    typeof (topNormalized as any)?.raw === "string" && (topNormalized as any).raw.trim()
+      ? (topNormalized as any).raw
+      : typeof payload?.raw === "string" && payload.raw.trim()
+        ? payload.raw
+        : typeof resultNormalized?.raw === "string" && resultNormalized.raw.trim()
+          ? resultNormalized.raw
+          : typeof (resultPayload as any)?.raw === "string" && (resultPayload as any).raw.trim()
+            ? (resultPayload as any).raw
+            : "";
+
+  const mergedRawSections =
+    Array.isArray((topNormalized as any)?.rawSections) && (topNormalized as any).rawSections.length > 0
+      ? (topNormalized as any).rawSections
+      : Array.isArray((payload as any)?.rawSections) && (payload as any).rawSections.length > 0
+        ? (payload as any).rawSections
+        : Array.isArray((payload as any)?.sections) && (payload as any).sections.length > 0
+          ? (payload as any).sections
+          : Array.isArray(resultNormalized?.rawSections) && resultNormalized.rawSections.length > 0
+            ? resultNormalized.rawSections
+            : Array.isArray((resultPayload as any)?.rawSections) && (resultPayload as any).rawSections.length > 0
+            ? (resultPayload as any).rawSections
+            : [];
+
+  const mergedSections =
+    Array.isArray((topNormalized as any)?.sections) && (topNormalized as any).sections.length > 0
+      ? (topNormalized as any).sections
+      : Array.isArray((payload as any)?.sections) && (payload as any).sections.length > 0
+        ? (payload as any).sections
+        : Array.isArray(resultNormalized?.sections) && resultNormalized.sections.length > 0
+          ? resultNormalized.sections
+          : Array.isArray((resultPayload as any)?.sections) && (resultPayload as any).sections.length > 0
+            ? (resultPayload as any).sections
+            : [];
+
+  return {
+    ...resultPayload,
+    rawText: mergedRawText || (resultPayload as any).rawText,
+    raw: mergedRaw || (resultPayload as any).raw,
+    rawSections: mergedRawSections,
+    sections: mergedSections,
+    normalized: {
+      ...resultNormalized,
+      ...topNormalized,
+      rawText: mergedRawText || resultNormalized?.rawText || (topNormalized as any)?.rawText,
+      raw: mergedRaw || resultNormalized?.raw || (topNormalized as any)?.raw,
+      rawSections: mergedRawSections,
+      sections: mergedSections,
+    },
+  };
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isTransientParserStatus(status: number): boolean {
+  return status >= 500 && status < 600;
+}
 
 type ParserAttempt = {
   endpoint: URL;
@@ -200,6 +283,44 @@ async function ensureParserReachable(
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function waitForParserRecovery(
+  endpoint: URL,
+  accessHeaders?: Record<string, string> | null,
+  maxWaitMs = 15_000,
+): Promise<boolean> {
+  const startedAt = Date.now();
+  let attempt = 0;
+
+  while (Date.now() - startedAt < maxWaitMs) {
+    attempt += 1;
+    try {
+      await ensureParserReachable(endpoint, accessHeaders);
+      console.info(
+        "[structuredUpload] parser recovery check succeeded url=%s attempt=%d waitedMs=%d",
+        endpoint.toString(),
+        attempt,
+        Date.now() - startedAt,
+      );
+      return true;
+    } catch (err: any) {
+      const waitedMs = Date.now() - startedAt;
+      console.warn(
+        "[structuredUpload] parser recovery check pending url=%s attempt=%d waitedMs=%d error=%s",
+        endpoint.toString(),
+        attempt,
+        waitedMs,
+        err?.message ?? err,
+      );
+      if (waitedMs >= maxWaitMs) {
+        break;
+      }
+      await sleep(Math.min(1_500 * attempt, 3_000));
+    }
+  }
+
+  return false;
 }
 
 export const structuredUpload = action({
@@ -384,7 +505,6 @@ export const structuredUpload = action({
       parserAttempts.length,
       activeUseMistral,
     );
-
     const aggregatedErrors: string[] = [];
     let lastResponse: UResponse | null = null;
     let lastPayload: ParserResponse | null = null;
@@ -626,7 +746,8 @@ export const structuredUpload = action({
 
       const performFetch = async (formData: FormData, retryIndex: number, modeUsed: ParserMode) => {
         const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 90_000);
+        const parserFetchTimeoutMs = activeUseMistral ? 240_000 : 90_000;
+        const timer = setTimeout(() => controller.abort(), parserFetchTimeoutMs);
         try {
           const targetOrigin = (() => {
             try {
@@ -669,25 +790,52 @@ export const structuredUpload = action({
         let response: UResponse | null = null;
         let payload: ParserResponse | null = null;
 
-        for (let retryIndex = 0; retryIndex < 2; retryIndex++) {
+        const maxRetries = activeUseMistral ? 3 : 2;
+        for (let retryIndex = 0; retryIndex < maxRetries; retryIndex++) {
           const form = buildFormData(modeVariant);
           try {
             response = await performFetch(form, retryIndex, modeVariant);
           } catch (err: any) {
             const isAbort = err?.name === "AbortError";
             const message = err?.message ?? String(err);
-            const errorNote = isAbort ? `timeout after 60s (${message})` : message;
+            const errorNote = isAbort
+              ? `timeout after ${Math.round(parserFetchTimeoutMs / 1000)}s (${message})`
+              : message;
+            const willRetry = retryIndex + 1 < maxRetries;
             aggregatedErrors.push(
               `${attempt.label}:${modeVariant} network error (retry ${retryIndex + 1}) (${endpointForLog}): ${errorNote}`,
             );
-            console.error(
-              "[structuredUpload] network error label=%s mode=%s retry=%d url=%s error=%s",
-              attempt.label,
-              modeVariant,
-              retryIndex + 1,
-              endpointForLog,
-              err?.stack ?? err,
-            );
+            if (willRetry) {
+              console.warn(
+                "[structuredUpload] transient network error label=%s mode=%s retry=%d url=%s error=%s",
+                attempt.label,
+                modeVariant,
+                retryIndex + 1,
+                endpointForLog,
+                err?.stack ?? err,
+              );
+              const recovered = await waitForParserRecovery(
+                parserEndpoint,
+                parserAccessHeaders,
+                activeUseMistral ? 20_000 : 8_000,
+              );
+              console.info(
+                "[structuredUpload] retrying after network error label=%s mode=%s retry=%d recovered=%s",
+                attempt.label,
+                modeVariant,
+                retryIndex + 2,
+                recovered,
+              );
+            } else {
+              console.error(
+                "[structuredUpload] network error label=%s mode=%s retry=%d url=%s error=%s",
+                attempt.label,
+                modeVariant,
+                retryIndex + 1,
+                endpointForLog,
+                err?.stack ?? err,
+              );
+            }
             response = null;
             continue;
           }
@@ -723,16 +871,44 @@ export const structuredUpload = action({
             aggregatedErrors.push(
               `${attempt.label}:${modeVariant} responded ${response.status} ${response.statusText} (retry ${retryIndex + 1}) (${endpointForLog}): ${errorMessage}`,
             );
-            console.error(
-              "[structuredUpload] parser responded error status=%d label=%s mode=%s retry=%d url=%s cfRay=%s detail=%s",
-              response.status,
-              attempt.label,
-              modeVariant,
-              retryIndex + 1,
-              endpointForLog,
-              cfRay,
-              errorMessage,
-            );
+            const isTransient = isTransientParserStatus(response.status);
+            const willRetry = isTransient && retryIndex + 1 < maxRetries;
+            if (willRetry) {
+              console.warn(
+                "[structuredUpload] transient parser error status=%d label=%s mode=%s retry=%d url=%s cfRay=%s detail=%s",
+                response.status,
+                attempt.label,
+                modeVariant,
+                retryIndex + 1,
+                endpointForLog,
+                cfRay,
+                errorMessage,
+              );
+              const recovered = await waitForParserRecovery(
+                parserEndpoint,
+                parserAccessHeaders,
+                activeUseMistral ? 20_000 : 8_000,
+              );
+              console.info(
+                "[structuredUpload] retrying after transient parser error status=%d label=%s mode=%s retry=%d recovered=%s",
+                response.status,
+                attempt.label,
+                modeVariant,
+                retryIndex + 2,
+                recovered,
+              );
+            } else {
+              console.error(
+                "[structuredUpload] parser responded error status=%d label=%s mode=%s retry=%d url=%s cfRay=%s detail=%s",
+                response.status,
+                attempt.label,
+                modeVariant,
+                retryIndex + 1,
+                endpointForLog,
+                cfRay,
+                errorMessage,
+              );
+            }
             response = null;
             continue;
           }
@@ -1017,8 +1193,16 @@ export const structuredUpload = action({
       });
     }
 
-    const normalizedResult = canonicalizeParserResult(lastPayload.result, {
-      rawText: hasRawText ? trimmed : lastPayload.result?.normalized?.raw ?? "",
+    const canonicalizeInput = buildCanonicalizeInput(lastPayload);
+    const normalizedResult = canonicalizeParserResult(canonicalizeInput, {
+      rawText:
+        hasRawText
+          ? trimmed
+          : typeof canonicalizeInput?.normalized?.rawText === "string" && canonicalizeInput.normalized.rawText.trim()
+            ? canonicalizeInput.normalized.rawText
+            : typeof canonicalizeInput?.normalized?.raw === "string"
+              ? canonicalizeInput.normalized.raw
+              : "",
       mode: resolvedMode,
       parserUrl,
     });
