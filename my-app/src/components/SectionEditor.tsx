@@ -61,6 +61,7 @@ import {
   AffiliationModal,
   CertificationModal,
 } from "./structured-blocks/CertificationAffiliationModal";
+import { ProjectsModal } from "./structured-blocks/ProjectsModal";
 import FloatingAiToolbar, {
   type InlineAiActionId,
 } from "./FloatingAiToolbar";
@@ -92,6 +93,7 @@ import type {
   ICertificationItem,
   IExperienceItem,
   IEducationItem,
+  IProjectItem,
   IProfileItem,
   ISummaryItem,
   ISkillItem,
@@ -1801,6 +1803,8 @@ export default function SectionEditor({
   const [isExperienceModalOpen, setExperienceModalOpen] =
     useState<boolean>(false);
   const [isEducationModalOpen, setEducationModalOpen] =
+    useState<boolean>(false);
+  const [isProjectsModalOpen, setProjectsModalOpen] =
     useState<boolean>(false);
   const [expandedStructuredPreviewIds, setExpandedStructuredPreviewIds] =
     useState<Record<string, boolean>>({});
@@ -3748,7 +3752,10 @@ export default function SectionEditor({
     );
   }
 
-  if (sectionType === "text" || sectionType === "projects") {
+  if (
+    sectionType === "text" ||
+    (sectionType === "projects" && !Array.isArray(structured))
+  ) {
     const blocks = Array.isArray(section.blocks) ? section.blocks : [];
     const previewText = blocks
       .map((block) => plainTextFromBlockValue(block))
@@ -4177,7 +4184,9 @@ export default function SectionEditor({
 
   if (
     Array.isArray(structured) &&
-    (sectionType === "experience" || sectionType === "education")
+    (sectionType === "experience" ||
+      sectionType === "education" ||
+      sectionType === "projects")
   ) {
     // Use block-based rendering (compact cards + inspector) for typed structured sections.
     // This delegates detailed editing to BlockRenderer + SelectedBlockInspector which rely on
@@ -4314,7 +4323,16 @@ export default function SectionEditor({
     const guard =
       sectionType === "experience"
         ? isExperienceRenderable
-        : isEducationRenderable;
+        : sectionType === "education"
+          ? isEducationRenderable
+          : (item: any) => {
+              const title = String(item?.title ?? item?.name ?? "").trim();
+              const meta = String(item?.meta ?? item?.subtitle ?? "").trim();
+              const description = plainTextFromStructuredValue(
+                item?.description ?? item?.summary,
+              );
+              return Boolean(title || meta || description);
+            };
     const renderableStructured = structuredList.filter((item) => guard(item));
     const hasRenderableStructured = renderableStructured.length > 0;
     const hasBlocks =
@@ -4383,6 +4401,7 @@ export default function SectionEditor({
       try {
         if (sectionType === "experience") setExperienceModalOpen(true);
         else if (sectionType === "education") setEducationModalOpen(true);
+        else if (sectionType === "projects") setProjectsModalOpen(true);
       } catch {
         /* noop */
       }
@@ -4405,7 +4424,9 @@ export default function SectionEditor({
     const emptyStructuredPlaceholder =
       sectionType === "experience"
         ? "Add role, company, dates, and bullet points"
-        : "Add degree, school, and dates";
+        : sectionType === "education"
+          ? "Add degree, school, and dates"
+          : "Add project title, stack, dates, and summary";
 
     function commitStructuredSection(updatedSection: CvSection) {
       try {
@@ -4596,6 +4617,72 @@ export default function SectionEditor({
               />
             ) : null}
             {canToggleBullets ? (
+              <div className="cv-disclosure-row">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setExpandedStructuredPreviewIds((prev) => ({
+                      ...prev,
+                      [structuredId]: !prev[structuredId],
+                    }));
+                  }}
+                  className="dasti-icon-button dasti-icon-button--compact"
+                  aria-label={
+                    previewExpanded ? "Show fewer details" : "Show more details"
+                  }
+                  title={previewExpanded ? "Show less" : "Show more"}
+                >
+                  {previewExpanded ? (
+                    <ChevronDown className="w-3.5 h-3.5" aria-hidden />
+                  ) : (
+                    <ChevronUp className="w-3.5 h-3.5" aria-hidden />
+                  )}
+                </button>
+              </div>
+            ) : null}
+          </div>
+        );
+      }
+
+      if (sectionType === "projects") {
+        const title = trim(rawItem?.title) || trim(rawItem?.name) || "Project";
+        const meta = trim(rawItem?.meta) || trim(rawItem?.subtitle);
+        const recoveryNotes = recoveryNotesByStructuredId.get(structuredId) ?? [];
+        const description = plainTextFromStructuredValue(
+          rawItem?.description ?? rawItem?.summary,
+        );
+        const truncatedDescription =
+          variant === "compact" && !previewExpanded && description.length > 220
+            ? `${description.slice(0, 217).trimEnd()}…`
+            : description;
+        const canToggleDescription =
+          variant === "compact" && description.length > 220;
+
+        return (
+          <div key={structuredId} className="py-3">
+            <div className="cv-entry-summary">
+              <div className="cv-entry-summary__main">
+                <p className="cv-entry-title cv-entry-title--truncate">{title}</p>
+                {meta ? (
+                  <p className="cv-entry-subtitle cv-entry-subtitle--truncate">
+                    {meta}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+            {truncatedDescription ? (
+              <p className="cv-entry-body">{truncatedDescription}</p>
+            ) : null}
+            <RecoveryNotes
+              notes={recoveryNotes}
+              onDismiss={() => {
+                onChange(index, stripRecoveryNoteBlocks(section, {
+                  linkedStructuredId: structuredId,
+                }) as any);
+              }}
+            />
+            {canToggleDescription ? (
               <div className="cv-disclosure-row">
                 <button
                   type="button"
@@ -5043,6 +5130,54 @@ export default function SectionEditor({
                 setStructuredPreviewOverride(updatedSection);
                 commitStructuredSection(updatedSection);
                 setEducationModalOpen(false);
+              } catch {
+                /* noop */
+              }
+            }}
+          />
+        ) : null}
+        {sectionType === "projects" ? (
+          <ProjectsModal
+            open={isProjectsModalOpen}
+            onClose={() => setProjectsModalOpen(false)}
+            items={
+              (Array.isArray(structuredSection.structuredContent)
+                ? (structuredSection.structuredContent as any)
+                : []) as IProjectItem[]
+            }
+            onSave={(next) => {
+              try {
+                const syncedBlocks = syncRepresentativeBlocks(
+                  next,
+                  (it: IProjectItem, existing?: any) => ({
+                    ...(existing ?? {}),
+                    id: String((existing as any)?.id ?? uuidv4()),
+                    title: String(it.title ?? it.name ?? "Project"),
+                    type: "text" as const,
+                    content: ensureRemirrorDoc(
+                      [it.meta ?? it.subtitle, it.description ?? it.summary]
+                        .filter((value) => {
+                          if (typeof value === "string") return value.trim().length > 0;
+                          return value != null;
+                        })
+                        .join("\n"),
+                    ),
+                    attributes: {
+                      ...((existing as any)?.attributes ?? {}),
+                      linkedStructuredId: String(it.id ?? ""),
+                    },
+                  }),
+                );
+
+                const updatedSection = {
+                  ...structuredSection,
+                  structuredContent: next as any,
+                  blocks: syncedBlocks as any,
+                } as CvSection;
+
+                setStructuredPreviewOverride(updatedSection);
+                commitStructuredSection(updatedSection);
+                setProjectsModalOpen(false);
               } catch {
                 /* noop */
               }
