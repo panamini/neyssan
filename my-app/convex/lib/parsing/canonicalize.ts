@@ -1891,6 +1891,12 @@ function isUsablePersonName(value: string | null | undefined, rawCandidate?: str
   return true;
 }
 
+type HeaderIdentitySignals = {
+  primaryName?: string;
+  conflictingNameKeys: Set<string>;
+  location?: string;
+};
+
 function computeNameScore(
   candidate: string,
   tokens: string[],
@@ -1941,8 +1947,22 @@ function collectContactLines(lines: string[], email?: string, phone?: string, li
 }
 
 function deriveNameFromContext(normalized: any, context: CanonicalizeContext): string | undefined {
+  const headerSignals = resolveHeaderIdentitySignals(normalized, context);
+  const headerPrimaryName = headerSignals.primaryName;
+  const headerPrimaryKey = normalizeCandidateForStoplist(headerPrimaryName ?? "");
   const existing = coerceString(normalized?.name ?? normalized?.contact?.name ?? "");
-  if (existing && isUsablePersonName(existing, existing)) return existing;
+  if (existing && isUsablePersonName(existing, existing)) {
+    const existingKey = normalizeCandidateForStoplist(existing);
+    if (
+      headerPrimaryName &&
+      existingKey &&
+      (existingKey === headerPrimaryKey || headerSignals.conflictingNameKeys.has(existingKey))
+    ) {
+      return headerPrimaryName;
+    }
+    return existing;
+  }
+  if (headerPrimaryName) return headerPrimaryName;
   const skillTokens = collectSkillTokens(normalized);
 
   const email = coerceString(normalized?.contact?.email ?? "") || undefined;
@@ -2645,6 +2665,158 @@ function collectIdentityContactRawTextSources(
   );
 }
 
+function formatHeaderPersonNameCandidate(line: string): string | undefined {
+  const tokens = tokenizeNameCandidate(line);
+  const normalizedTokens = normalizeAndValidateNameTokens(tokens, line);
+  if (!normalizedTokens) return undefined;
+  const formatted = formatNameFromTokens(normalizedTokens);
+  return isUsablePersonName(formatted, line) ? formatted : undefined;
+}
+
+function looksLikeStandaloneHeaderLocationLine(value: unknown): boolean {
+  const cleaned = stripLeadingLocationLabel(value);
+  if (!cleaned) return false;
+  if (looksLikeRecoverableIdentityContactLocation(cleaned)) return true;
+  if (CONTACT_SLUDGE_RE.test(cleaned)) return false;
+  if (looksLikeContactLine(cleaned)) return false;
+  if (isSectionBoundary(cleaned) || isExperienceFieldStructuralFragment(cleaned)) return false;
+  if (looksLikeResponsibilitySentence(cleaned)) return false;
+
+  const tokens = cleaned.split(/\s+/).filter(Boolean);
+  if (tokens.length < 1 || tokens.length > 4) return false;
+  if (tokens.some((token) => /[@\d]/.test(token))) return false;
+  if (tokens.some((token) => !/^[A-Za-zÀ-ÖØ-öø-ÿ'’.-]+$/.test(token))) return false;
+
+  const formattedTokens = formatLooseNameTokens(tokens);
+  const normalizedTokens = formattedTokens
+    .map((token) => normalizeCandidateForStoplist(token))
+    .filter(Boolean) as string[];
+  if (!normalizedTokens.length) return false;
+  if (normalizedTokens.some((token) => isHeaderStopword(token) || ROLEISH_NAME_TOKENS.has(token))) return false;
+
+  const titleCaseCount = formattedTokens.filter(
+    (token) => isTitleCaseToken(token) || (/^[A-ZÀ-ÖØ-Þ]{2,}$/.test(token) && token.length <= 3),
+  ).length;
+  if (titleCaseCount < Math.max(1, Math.floor(formattedTokens.length * 0.75))) return false;
+
+  return true;
+}
+
+function extractHeaderIdentitySignalsFromSourceBlock(source: unknown): HeaderIdentitySignals | undefined {
+  const text = source == null ? "" : String(source);
+  if (!text) return undefined;
+  if (/\b(qwikresume|free resume template|usage guidelines|copyright)\b/i.test(text)) return undefined;
+
+  const lines = splitIdentityContactBlockLines(text).slice(0, 8);
+  if (!lines.length) return undefined;
+
+  let primaryName: string | undefined;
+  let primaryNameIndex = -1;
+  const conflictingNameKeys = new Set<string>();
+
+  for (let idx = 0; idx < lines.length; idx += 1) {
+    const formatted = formatHeaderPersonNameCandidate(lines[idx] ?? "");
+    if (!formatted) continue;
+    const formattedKey = normalizeCandidateForStoplist(formatted);
+    if (!formattedKey) continue;
+    if (!primaryName) {
+      primaryName = formatted;
+      primaryNameIndex = idx;
+      continue;
+    }
+    if (formattedKey !== normalizeCandidateForStoplist(primaryName)) {
+      conflictingNameKeys.add(formattedKey);
+    }
+  }
+
+  if (!primaryName || primaryNameIndex < 0 || primaryNameIndex > 1) {
+    return undefined;
+  }
+
+  let location: string | undefined;
+  const locationCandidate = lines[primaryNameIndex + 1] ?? "";
+  if (looksLikeStandaloneHeaderLocationLine(locationCandidate)) {
+    const anchors = lines.slice(primaryNameIndex + 2, Math.min(lines.length, primaryNameIndex + 5));
+    const hasAnchor = anchors.some(
+      (line) => isStructurallyValidDesiredPosition(line) || looksLikeContactLine(line),
+    );
+    if (hasAnchor) {
+      location = stripLeadingLocationLabel(locationCandidate);
+      const locationKey = normalizeCandidateForStoplist(location);
+      if (locationKey) {
+        conflictingNameKeys.add(locationKey);
+      }
+    }
+  }
+
+  return { primaryName, conflictingNameKeys, location };
+}
+
+function resolveHeaderIdentitySignals(normalized: any, context: CanonicalizeContext): HeaderIdentitySignals {
+  const sources = dedupeSourceBlocksPreserveWhitespace(
+    [
+      typeof normalized?.contact?.raw === "string" ? normalized.contact.raw.trim() : "",
+      typeof normalized?.contact?.addressBlock === "string" ? normalized.contact.addressBlock.trim() : "",
+      ...collectIdentityContactRawTextSources(normalized, [], context),
+    ].filter(Boolean),
+  );
+
+  let primaryName: string | undefined;
+  let location: string | undefined;
+  const conflictingNameKeys = new Set<string>();
+
+  for (const source of sources) {
+    const signals = extractHeaderIdentitySignalsFromSourceBlock(source);
+    if (!signals) continue;
+    if (!primaryName && signals.primaryName) {
+      primaryName = signals.primaryName;
+    }
+    if (!location && signals.location) {
+      location = signals.location;
+    }
+    for (const key of signals.conflictingNameKeys) {
+      conflictingNameKeys.add(key);
+    }
+    if (primaryName && location) break;
+  }
+
+  return { primaryName, conflictingNameKeys, location };
+}
+
+function extractImmediateHeaderLocationForResolvedName(
+  normalized: any,
+  rawSections: RawSection[],
+  context: CanonicalizeContext,
+  resolvedName: string | undefined,
+): string | undefined {
+  const resolvedNameKey = normalizeCandidateForStoplist(resolvedName ?? "");
+  if (!resolvedNameKey) return undefined;
+
+  for (const source of collectIdentityContactRawTextSources(normalized, rawSections, context)) {
+    const lines = splitIdentityContactBlockLines(source).slice(0, 8);
+    if (!lines.length) continue;
+
+    const nameIndex = lines.findIndex((line) => {
+      const formatted = formatHeaderPersonNameCandidate(line);
+      return Boolean(formatted) && normalizeCandidateForStoplist(formatted) === resolvedNameKey;
+    });
+    if (nameIndex < 0 || nameIndex > 1) continue;
+
+    const candidate = lines[nameIndex + 1] ?? "";
+    if (!looksLikeStandaloneHeaderLocationLine(candidate)) continue;
+
+    const anchors = lines.slice(nameIndex + 2, Math.min(lines.length, nameIndex + 5));
+    const hasAnchor = anchors.some(
+      (line) => isStructurallyValidDesiredPosition(line) || looksLikeContactLine(line),
+    );
+    if (!hasAnchor) continue;
+
+    return stripLeadingLocationLabel(candidate);
+  }
+
+  return undefined;
+}
+
 function extractTypedIdentityContactLinksFromRawText(
   normalized: any,
   rawSections: RawSection[],
@@ -2800,11 +2972,32 @@ function buildSchemaFirstIdentityContactCandidate(
   };
 } {
   const sources = collectSchemaIdentityContactSources(normalized);
+  const headerSignals = resolveHeaderIdentitySignals(normalized, context);
   const rawTypedLinks = extractTypedIdentityContactLinksFromRawText(normalized, rawSections, context);
   const rawTypedLocation = extractTypedIdentityContactLocationFromRawText(normalized, rawSections, context);
+  const schemaName = pickFirstSchemaValue(
+    sources,
+    ["name", "fullName"],
+    (value) => isUsablePersonName(coerceString(value), coerceString(value)),
+  );
+  const schemaNameKey = normalizeCandidateForStoplist(schemaName ?? "");
+  const headerPrimaryKey = normalizeCandidateForStoplist(headerSignals.primaryName ?? "");
+  const identityName =
+    headerSignals.primaryName &&
+    (!schemaName ||
+      (schemaNameKey &&
+        (schemaNameKey === headerPrimaryKey || headerSignals.conflictingNameKeys.has(schemaNameKey))))
+      ? headerSignals.primaryName
+      : schemaName;
+  const headerResolvedLocation = extractImmediateHeaderLocationForResolvedName(
+    normalized,
+    rawSections,
+    context,
+    identityName,
+  );
   return {
     identity: {
-      name: pickFirstSchemaValue(sources, ["name", "fullName"], (value) => isUsablePersonName(coerceString(value), coerceString(value))),
+      name: identityName,
       desiredPosition: pickFirstSchemaValue(
         sources,
         ["desiredPosition", "title", "headline", "role"],
@@ -2814,7 +3007,7 @@ function buildSchemaFirstIdentityContactCandidate(
         sources,
         ["location", "addressNormalized", "address"],
         isStructurallyValidContactLocationValue,
-      ) ?? rawTypedLocation,
+      ) ?? rawTypedLocation ?? headerResolvedLocation,
     },
     contact: {
       email: pickFirstSchemaValue(sources, ["email", "emailAddress"], isStructurallyValidEmail),
