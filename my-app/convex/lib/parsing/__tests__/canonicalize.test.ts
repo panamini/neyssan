@@ -639,6 +639,161 @@ describe("canonicalizeParserResult", () => {
     expect(experienceSection?.structuredContent).toHaveLength(3);
   });
 
+  it("fails closed on Jessica-style merged OCR experience blocks instead of emitting malformed fallback rows", () => {
+    const rawExperience = [
+      "Spring Education Group - Middle School Language Arts Teacher Issaquah, WA 08/2010 - Current - Taught all levels of English language arts including intensive, regular, and advanced students - Taught seventh and eight grade students - Instructed English language learners, students with disabilities, and gifted students - Taught special education students in an inclusion classroom - Analyzes and uses student data to drive instruction - Participating teacher in Collier County's Instruction through Digital Innovation Program - Coaches school scholar bowl team in which students compete against other private and public school teams to answer questions from the areas of mathematics, science, language arts, social studies, current events, and fine arts - Master teacher of Florida Teaching Evaluation Model - Seventh grade team leader for three years - Plans grade level field trips and leads grade level meetings - Served on the principal's advisory council - Host for college student observers - Served on the sunshine committee responsible for planning socials and showing appreciation to staff",
+      "Falcon School District 49 - Elementary School Teacher Peyton, CO 08/2008 - 06/2010 - Gained experience teaching in a Title I school with a diverse student population including migrant students and English language learners - Taught three subject areas - Taught sixth grade - Collaborated with administrators, special education teachers, language tutors, and other support personnel to ensure success of English language learners, migrant students, students with disabilities, low achieving students, and at-risk students - Completed Sheltered Instruction Observation Protocol (SIOP) training which helps prepare all students, especially English learners for college and careers - Modified general education curriculum for English language learners using various instructional techniques and technologies - Organized and led safety patrol",
+      "Falcon School District 49 - Elementary School Teacher Peyton, CO 08/2007 - 06/2008 - Taught five subject areas - Taught fourth grade - Integrated a biblical worldview into all subject areas and lessons - Taught Bible classes - Led staff devotions - Established and maintained rapport with other staff, students, and parents to facilitate communication and academic progress - Built positive relationships with parents to involve families in educational process",
+      "ACCOMPLISHMENTS - Interviewed and selected to be the attending teacher of an instructional residency program with another school district in state of Florida. Led virtual PLC meetings in which principals and lead teachers from another district learned from my instructional practice",
+    ].join(" ");
+
+    const canonical = canonicalizeParserResult(
+      {
+        normalized: {
+          experience: [],
+          rawText: rawExperience,
+          rawSections: [{ label: "EXPERIENCE", content: rawExperience }],
+        },
+      },
+      {
+        ...context,
+        rawText: rawExperience,
+      },
+    );
+
+    const experience = canonical.normalized?.experience ?? [];
+
+    expect(experience).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          position: "Spring Education Group",
+          company: "Education Group",
+        }),
+      ]),
+    );
+    expect(
+      experience.some((entry: any) => {
+        const responsibilities = String(entry?.responsibilities ?? "");
+        return (
+          responsibilities.includes("Spring Education Group - Middle School Language Arts Teacher") &&
+          responsibilities.includes("Falcon School District 49 - Elementary School Teacher")
+        );
+      }),
+    ).toBe(false);
+
+    const signatures = experience.map(
+      (entry: any) =>
+        `${String(entry?.company ?? "")}|${String(entry?.position ?? "")}|${String(entry?.startDate ?? "")}|${String(entry?.endDate ?? "")}`,
+    );
+    expect(new Set(signatures).size).toBe(signatures.length);
+  });
+
+  it("recovers non-empty Jessica-style experience entries without the malformed single-row fallback", () => {
+    const rawExperience = [
+      "Spring Education Group - Middle School Language Arts Teacher Issaquah, WA 08/2010 - Current - Taught all levels of English language arts including intensive, regular, and advanced students - Taught seventh and eight grade students - Instructed English language learners, students with disabilities, and gifted students - Taught special education students in an inclusion classroom - Analyzes and uses student data to drive instruction - Participating teacher in Collier County's Instruction through Digital Innovation Program - Coaches school scholar bowl team in which students compete against other private and public school teams to answer questions from the areas of mathematics, science, language arts, social studies, current events, and fine arts - Master teacher of Florida Teaching Evaluation Model - Seventh grade team leader for three years - Plans grade level field trips and leads grade level meetings - Served on the principal's advisory council - Host for college student observers - Served on the sunshine committee responsible for planning socials and showing appreciation to staff",
+      "Falcon School District 49 - Elementary School Teacher Peyton, CO 08/2008 - 06/2010 - Gained experience teaching in a Title I school with a diverse student population including migrant students and English language learners - Taught three subject areas - Taught sixth grade - Collaborated with administrators, special education teachers, language tutors, and other support personnel to ensure success of English language learners, migrant students, students with disabilities, low achieving students, and at-risk students - Completed Sheltered Instruction Observation Protocol (SIOP) training which helps prepare all students, especially English learners for college and careers - Modified general education curriculum for English language learners using various instructional techniques and technologies - Organized and led safety patrol",
+      "Falcon School District 49 - Elementary School Teacher Peyton, CO 08/2007 - 06/2008 - Taught five subject areas - Taught fourth grade - Integrated a biblical worldview into all subject areas and lessons - Taught Bible classes - Led staff devotions - Established and maintained rapport with other staff, students, and parents to facilitate communication and academic progress - Built positive relationships with parents to involve families in educational process",
+      "ACCOMPLISHMENTS - Interviewed and selected to be the attending teacher of an instructional residency program with another school district in state of Florida. Led virtual PLC meetings in which principals and lead teachers from another district learned from my instructional practice",
+    ].join(" ");
+
+    const canonical = canonicalizeParserResult(
+      {
+        normalized: {
+          experience: [],
+          rawText: rawExperience,
+          rawSections: [{ label: "EXPERIENCE", content: rawExperience }],
+        },
+      },
+      {
+        ...context,
+        rawText: rawExperience,
+      },
+    );
+
+    const experience = canonical.normalized?.experience ?? [];
+
+    expect(experience.length).toBeGreaterThan(0);
+    expect(experience).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          position: "Spring Education Group",
+          company: "Education Group",
+        }),
+      ]),
+    );
+  });
+
+  it("does not backfill desired position from Jessica's recovered first experience row", () => {
+    const canonical = canonicalizeParserResult(
+      {
+        normalized: {
+          rawText: [
+            "Jessica Claire",
+            "Montgomery Street, San Francisco, CA 94105",
+            "jessica@example.com",
+          ].join("\n"),
+          contact: {
+            raw: [
+              "Jessica Claire",
+              "Montgomery Street, San Francisco, CA 94105",
+              "jessica@example.com",
+            ].join("\n"),
+            name: "Jessica Claire",
+            email: "jessica@example.com",
+            location: "Montgomery Street, San Francisco, CA 94105",
+            addressNormalized: "Montgomery Street, San Francisco, CA 94105",
+          },
+          experience: [
+            {
+              id: "exp-1",
+              company: "Spring Education Group",
+              position: "Middle School Language Arts Teacher",
+              startDate: "2010-01-01",
+              endDate: null,
+              isCurrent: true,
+              location: "Issaquah, WA",
+              responsibilityBullets: [
+                "Taught all levels of English language arts including intensive, regular, and advanced students",
+              ],
+            },
+            {
+              id: "exp-2",
+              company: "Falcon School District 49",
+              position: "Elementary School Teacher",
+              startDate: "2008-01-01",
+              endDate: "2010-01-01",
+              location: "Peyton, CO",
+              responsibilityBullets: ["Taught sixth grade"],
+            },
+            {
+              id: "exp-3",
+              company: "Falcon School District 49",
+              position: "Elementary School Teacher",
+              startDate: "2007-01-01",
+              endDate: "2008-01-01",
+              location: "Peyton, CO",
+              responsibilityBullets: ["Taught fourth grade"],
+            },
+          ],
+        },
+      },
+      {
+        ...context,
+        rawText: [
+          "Jessica Claire",
+          "Montgomery Street, San Francisco, CA 94105",
+          "jessica@example.com",
+        ].join("\n"),
+      },
+    );
+
+    expect(canonical.normalized?.experience).toHaveLength(3);
+    expect(canonical.normalized?.desiredPosition).not.toBe("Middle School Language Arts Teacher");
+    expect(canonical.normalized?.contact?.desiredPosition).not.toBe("Middle School Language Arts Teacher");
+    expect(canonical.normalized?.contact?.location).toBe("Montgomery Street, San Francisco, CA 94105");
+    expect(canonical.normalized?.contact?.addressNormalized).toBe("Montgomery Street, San Francisco, CA 94105");
+  });
+
   it("normalizes skills text and deduplicates case-insensitively", () => {
     const parserResult = {
       normalized: {

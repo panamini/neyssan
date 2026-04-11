@@ -2139,11 +2139,6 @@ function deriveDesiredPosition(normalized: any, context: CanonicalizeContext): s
     });
   }
 
-  const firstExperience = ensureArray<any>(normalized?.experience)[0];
-  if (firstExperience?.position) {
-    considerCandidate(firstExperience.position, 2.5);
-  }
-
   const contactRawFallback = typeof normalized?.contact?.raw === "string" ? normalized.contact.raw : "";
   let fallbackRole: string | undefined;
   if (contactRawFallback) {
@@ -4533,6 +4528,109 @@ function canonicalizeExperience(
     }
   };
 
+  const countMatches = (value: string, pattern: RegExp): number => {
+    const normalizedValue = String(value ?? "");
+    if (!normalizedValue) return 0;
+    const flags = pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`;
+    return [...normalizedValue.matchAll(new RegExp(pattern.source, flags))].length;
+  };
+
+  const countDateAnchors = (value: string): number =>
+    countMatches(value, DATE_RANGE_RE) +
+    countMatches(
+      value,
+      /\b\d{2}\/\d{4}\s*(?:[\u2012\u2013\u2014\u2015\-]|to)\s*(?:\d{2}\/\d{4}|present|current)\b/gi,
+    );
+
+  const countEmployerRoleAnchors = (value: string): number => {
+    const normalizedValue = String(value ?? "").replace(/\s+/g, " ").trim();
+    if (!normalizedValue) return 0;
+    return [
+      ...normalizedValue.matchAll(
+        /\b[A-Z][A-Za-z0-9&.'-]+(?:\s+[A-Z][A-Za-z0-9&.'-]+){0,5}\s+-\s+[A-Z][A-Za-z0-9/&.'-]+(?:\s+[A-Z][A-Za-z0-9/&.'-]+){0,8}(?=\s+(?:[A-Z][A-Za-z.'-]+,\s*[A-Z]{2}\b|\d{2}\/\d{4}\b))/g,
+      ),
+    ].length;
+  };
+
+  const hasFusedHeaderBodyText = (value: string): boolean => {
+    const rawValue = String(value ?? "");
+    if (!rawValue || /\r?\n/.test(rawValue)) return false;
+    const normalizedValue = rawValue.replace(/\s+/g, " ").trim();
+    if (!normalizedValue) return false;
+    const narrativeDashCount = countMatches(
+      normalizedValue,
+      /\s-\s(?:taught|managed|led|built|developed|coordinated|served|organized|completed|analyzes|instructed|collaborated|modified)\b/gi,
+    );
+    return (
+      narrativeDashCount >= 6 &&
+      /(?:accomplishments|additional information)\b/i.test(normalizedValue) &&
+      countDateAnchors(normalizedValue) >= 1
+    );
+  };
+
+  const hasStrongMergedMultiEntrySignal = (value: string): boolean =>
+    countDateAnchors(value) > 1 || countEmployerRoleAnchors(value) > 1 || hasFusedHeaderBodyText(value);
+
+  const recoverEntriesFromFusedRawSection = (value: string, idxSeed: number): any[] => {
+    const normalizedValue = String(value ?? "").replace(/\s+/g, " ").trim();
+    if (!normalizedValue || !hasStrongMergedMultiEntrySignal(normalizedValue)) {
+      return [];
+    }
+
+    const fusedEntryHeaderRe =
+      /([A-Z0-9][A-Za-z0-9&.'-]*(?:\s+[A-Z0-9][A-Za-z0-9&.'-]*){0,5})\s+-\s+([A-Z][A-Za-z0-9/&.'-]+(?:\s+[A-Z][A-Za-z0-9/&.'-]+){0,8})\s+([A-Z][A-Za-z.'-]+,\s*[A-Z]{2})\s+(\d{2}\/\d{4}\s*(?:[\u2012\u2013\u2014\u2015\-]|to)\s*(?:\d{2}\/\d{4}|Current|Present))/g;
+    const matches = [...normalizedValue.matchAll(fusedEntryHeaderRe)];
+    if (matches.length < 2) {
+      return [];
+    }
+
+    const entries = matches
+      .map((match, entryIdx) => {
+        const startIdx = (match.index ?? 0) + match[0].length;
+        const endIdx = entryIdx + 1 < matches.length ? matches[entryIdx + 1]?.index ?? normalizedValue.length : normalizedValue.length;
+        const payload = normalizedValue
+          .slice(startIdx, endIdx)
+          .replace(/^\s*-\s*/, "")
+          .replace(/\b(?:ACCOMPLISHMENTS|ADDITIONAL INFORMATION)\b[\s\S]*$/i, "")
+          .trim();
+
+        const inlineBullets = payload
+          .split(/\s+-\s+(?=[A-Z])/)
+          .map((line) => line.replace(/^[\-•*\s]+/, "").trim())
+          .filter(Boolean);
+        const responsibilityBullets = dedupeStringsCaseInsensitive(
+          (inlineBullets.length > 1 ? inlineBullets : splitResponsibilitiesText(payload))
+            .map((line) => line.replace(/^[\-•*\s]+/, "").trim())
+            .filter(Boolean)
+            .filter((line) => !/^(accomplishments|additional information)\b/i.test(line)),
+        );
+
+        if (!responsibilityBullets.length) {
+          return null;
+        }
+
+        const parsedDates = parseDateRange(match[4]);
+        return {
+          id: coerceId(null, "exp", idxSeed * 100 + entryIdx),
+          company: stripDrivingLicense(cleanLine(match[1] ?? "")),
+          position: stripDrivingLicense(cleanLine(match[2] ?? "")),
+          startDate: parsedDates.startDate,
+          endDate: parsedDates.endDate,
+          isCurrent: parsedDates.isCurrent,
+          location: stripDrivingLicense(cleanLine(match[3] ?? "")),
+          responsibilities: responsibilityBullets.join("\n"),
+          responsibilityBullets,
+          achievements: dedupeStringsCaseInsensitive(
+            responsibilityBullets.filter(looksLikeAchievementBullet),
+          ),
+          provenanceTags: ["heuristic:fused_raw_section_split"],
+        };
+      })
+      .filter(Boolean);
+
+    return sanitizeExperienceEntries(entries as any[]);
+  };
+
   const handleSegment = (segment: string, key: number) => {
     const narrativeCandidates = String(segment ?? "")
       .split(/\r?\n/)
@@ -4549,6 +4647,13 @@ function canonicalizeExperience(
     );
     if (mergedAnchorRecovered.length > 1) {
       fallbackItems.push(...mergedAnchorRecovered);
+      return;
+    }
+    if (hasStrongMergedMultiEntrySignal(segment)) {
+      const fusedRecovered = recoverEntriesFromFusedRawSection(segment, key);
+      if (fusedRecovered.length > 0) {
+        fallbackItems.push(...fusedRecovered);
+      }
       return;
     }
 
