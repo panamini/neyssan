@@ -79,6 +79,112 @@ describe("canonicalizeParserResult", () => {
     expect(normalized.achievements[0]?.text).toBe("Closed $1M deal");
   });
 
+  it("realigns top-level convenience fields from normalized.sections when typed sections are already present", () => {
+    const parserResult = {
+      normalized: {
+        summary: { text: "", confidence: 0 },
+        experience: [{ id: "legacy-exp", company: "Wrong Corp", position: "Wrong Role" }],
+        education: [],
+        skills: [{ id: "legacy-skill", name: "Wrong Skill" }],
+        sections: [
+          {
+            id: "sec-summary",
+            title: "Summary",
+            type: "summary",
+            blocks: [],
+            structuredContent: [
+              {
+                id: "sum-1",
+                summary: {
+                  type: "doc",
+                  content: [{ type: "paragraph", content: [{ type: "text", text: "Anne summary from section." }] }],
+                },
+              },
+            ],
+          },
+          {
+            id: "sec-experience",
+            title: "Experience",
+            type: "experience",
+            blocks: [],
+            structuredContent: [
+              {
+                id: "exp-1",
+                company: "First Company",
+                position: "Analyst",
+                startDate: "2020-01-01",
+              },
+              {
+                id: "exp-2",
+                company: "Second Company",
+                position: "Senior Analyst",
+                startDate: "2022-01-01",
+              },
+            ],
+          },
+          {
+            id: "sec-education",
+            title: "Education",
+            type: "education",
+            blocks: [],
+            structuredContent: [
+              {
+                id: "edu-1",
+                institution: "Université Example",
+                degree: "Master",
+                fieldOfStudy: "Data Science",
+              },
+            ],
+          },
+          {
+            id: "sec-skills",
+            title: "Skills",
+            type: "skills",
+            blocks: [],
+            structuredContent: [
+              { id: "skill-1", name: "Python", level: "Advanced" },
+              { id: "skill-2", name: "SQL", level: "Advanced" },
+            ],
+          },
+        ],
+      },
+    };
+
+    const canonical = canonicalizeParserResult(parserResult, context);
+    const normalized = canonical.normalized ?? {};
+
+    expect(normalized.summary?.text).toBe("Anne summary from section.");
+    expect(normalized.summaryFirstSentence).toBe("Anne summary from section.");
+    expect(normalized.experience).toHaveLength(2);
+    expect(normalized.experience[0]?.company).toBe("First Company");
+    expect(normalized.education).toHaveLength(1);
+    expect(normalized.education[0]?.institution).toBe("Université Example");
+    expect(normalized.skills).toHaveLength(2);
+    expect(normalized.skills.map((item: any) => item?.name)).toEqual(["Python", "SQL"]);
+    expect(normalized.skillsText).toBe("Python, SQL");
+  });
+
+  it("keeps legacy canonicalization behavior when normalized.sections are absent", () => {
+    const parserResult = {
+      normalized: {
+        summary: { text: "", confidence: 0 },
+        experience: [],
+        education: [],
+        skills: [],
+      },
+      raw_sections: [
+        { label: "EXPERIENCE", content: "ACME Corp — Engineer" },
+        { label: "SKILLS", content: "TypeScript, React" },
+      ],
+    };
+
+    const canonical = canonicalizeParserResult(parserResult, context);
+    const normalized = canonical.normalized ?? {};
+
+    expect(normalized.experience.length).toBeGreaterThan(0);
+    expect(normalized.skills.map((item: any) => item?.name)).toContain("TypeScript");
+  });
+
   it("splits raw experience sections into discrete entries", () => {
     const parserResult = {
       raw_sections: [
