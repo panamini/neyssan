@@ -20,6 +20,7 @@ if "mistralai" not in sys.modules:
     sys.modules["mistralai.sdk"] = sdk_module
 
 from cv_parser_service.main import mistral_ocr_parse
+from cv_parser_service.mistral_resume_v3 import INTERNAL_CANONICAL_PAYLOAD_DIAGNOSTIC_KEY
 
 
 def test_mistral_ocr_parse_surfaces_runtime_evidence(monkeypatch):
@@ -58,6 +59,117 @@ def test_mistral_ocr_parse_surfaces_runtime_evidence(monkeypatch):
     assert diagnostics["ocr_markdown_body_only"] is True
     assert diagnostics["ocr_markdown_use_raw_sections"] is False
     assert payload["sections"][0]["label"] == "SUMMARY"
+
+
+def test_mistral_ocr_parse_preserves_precomputed_v3_payload(monkeypatch):
+    monkeypatch.setenv("API_ENABLE_MISTRAL_OCR", "1")
+    monkeypatch.setenv("MISTRAL_API_KEY", "sk-test")
+    monkeypatch.setenv("MISTRAL_OCR_MODEL", "mistral-ocr-latest")
+
+    precomputed_payload = {
+        "rawText": "Anne Lounsberry",
+        "normalized": {
+            "name": "Anne Lounsberry",
+            "contact": {
+                "name": "Anne Lounsberry",
+                "desiredPosition": "Data Scientist",
+                "email": "anne.c.lounsberry@gmail.com",
+                "phone": "523-299-0012",
+                "linkedinUrl": "linkedin.com/in/annelounsberry12",
+                "addressBlock": None,
+                "addressNormalized": None,
+            },
+            "summary": {
+                "text": "Microsoft Certified Data Scientist with 10+ years of experience in Python, R, Java, and Scala.",
+                "confidence": 0.95,
+            },
+            "experience": [
+                {
+                    "id": "exp-1",
+                    "company": "ACB Inc.",
+                    "position": "Senior Data Scientist",
+                    "startDate": "2013-01-01",
+                    "endDate": "2019-01-01",
+                    "isCurrent": None,
+                    "location": "Los Angeles, CA",
+                    "summary": None,
+                    "responsibilities": "Developed end-to-end machine learning prototypes.",
+                    "responsibilityBullets": [
+                        "Developed end-to-end machine learning prototypes."
+                    ],
+                    "achievements": [
+                        "Applied data mining to analyze procurement processes resulting in savings of $420,000 a year."
+                    ],
+                }
+            ],
+            "education": [
+                {
+                    "id": "edu-1",
+                    "institution": "UCLA",
+                    "degree": "MSc in Statistics",
+                    "fieldOfStudy": None,
+                    "startDate": "2005-01-01",
+                    "endDate": None,
+                    "isCurrent": None,
+                    "location": "Los Angeles, CA",
+                    "summary": None,
+                }
+            ],
+            "skills": [
+                {"id": "skill-1", "name": "Machine Learning"},
+                {"id": "skill-2", "name": "Python"},
+            ],
+            "languages": [],
+            "languagesRaw": [],
+            "achievements": [],
+            "projects": [],
+            "research": [],
+            "volunteer": [],
+            "references": [],
+            "other": [],
+            "summaryFirstSentence": "Microsoft Certified Data Scientist with 10+ years of experience in Python, R, Java, and Scala.",
+            "raw": "Anne Lounsberry",
+            "rawText": "Anne Lounsberry",
+            "rawSections": [
+                {"label": "SUMMARY", "content": "Microsoft Certified Data Scientist with 10+ years of experience in Python, R, Java, and Scala."}
+            ],
+        },
+        "summary": {
+            "text": "Microsoft Certified Data Scientist with 10+ years of experience in Python, R, Java, and Scala.",
+            "confidence": 0.95,
+        },
+        "summaryFirstSentence": "Microsoft Certified Data Scientist with 10+ years of experience in Python, R, Java, and Scala.",
+        "rawSections": [
+            {"label": "SUMMARY", "content": "Microsoft Certified Data Scientist with 10+ years of experience in Python, R, Java, and Scala."}
+        ],
+        "diagnostics": {"mistral_parser_status": "success"},
+    }
+
+    async def fake_call_mistral_ocr(payload, api_key, model_name):
+        return (
+            [{"index": 0, "markdown": "# Anne Lounsberry\n\n## Data Scientist, Microsoft Certified"}],
+            {
+                "model": "mistral-ocr-latest",
+                "pages": 1,
+                "ocr_chars": 64,
+                INTERNAL_CANONICAL_PAYLOAD_DIAGNOSTIC_KEY: precomputed_payload,
+            },
+        )
+
+    monkeypatch.setattr("cv_parser_service.main._call_mistral_ocr", fake_call_mistral_ocr)
+
+    upload = UploadFile(filename="anne.png", file=BytesIO(b"mock-image"))
+    response = asyncio.run(mistral_ocr_parse(file=upload, url=None))
+
+    payload = json.loads(response.body)
+    normalized = payload["normalized"]
+    assert normalized["contact"]["desiredPosition"] == "Data Scientist"
+    assert normalized["summary"]["text"].startswith("Microsoft Certified Data Scientist")
+    assert [item["name"] for item in normalized["skills"]] == ["Machine Learning", "Python"]
+    assert len(normalized["education"]) == 1
+    assert normalized["experience"][0]["achievements"] == [
+        "Applied data mining to analyze procurement processes resulting in savings of $420,000 a year."
+    ]
 
 
 def test_mistral_ocr_parse_marks_local_fallback_runtime(monkeypatch):

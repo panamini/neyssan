@@ -628,7 +628,8 @@ async def mistral_ocr_parse(
         ROUTE_COUNTER.labels(route="mistral_ocr_failed").inc()
         return _json_error(status.HTTP_502_BAD_GATEWAY, "mistral_ocr_empty_text")
 
-    forced_diag = {
+    forced_diag = dict(diagnostics or {})
+    forced_diag.update({
         "engine": "external_ocr",
         "engine_final": "text",
         "ocr_engine": "mistral",
@@ -638,7 +639,7 @@ async def mistral_ocr_parse(
         "fallback_used": False,
         "pages": diagnostics.get("pages", len(pages)),
         "ocr_chars": diagnostics.get("ocr_chars", len(joined_text)),
-    }
+    })
     forced_diag.update(ocr_structure_diag)
     forced_diag.update(ocr_activation_diag)
     forced_diag["ocr_markdown_family_carry_through"] = carried_families

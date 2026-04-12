@@ -89,4 +89,45 @@ describe("buildTypedSectionsFromNormalized direct section materialization", () =
       ]),
     );
   });
+
+  it("returns explicit normalized.sections directly so custom text section titles survive", () => {
+    const sections = buildTypedSectionsFromNormalized({
+      sections: [
+        {
+          id: "sec-profile",
+          title: "Profile",
+          type: "profile",
+          blocks: [],
+          structuredContent: [{ id: "profile-1", name: "Jane Doe", email: "jane@example.com" }],
+        },
+        {
+          id: "sec-publications",
+          title: "Publications",
+          type: "text",
+          blocks: [
+            {
+              id: "block-publications",
+              title: "Publications",
+              type: "text",
+              content: {
+                type: "doc",
+                content: [
+                  {
+                    type: "paragraph",
+                    content: [{ type: "text", text: "Research Paper A" }],
+                  },
+                ],
+              },
+            },
+          ],
+          structuredContent: null,
+        },
+      ],
+    } as any);
+
+    expect(sections).toHaveLength(2);
+    expect(sections[0]).toMatchObject({ type: "profile", title: "Profile" });
+    expect(sections[1]).toMatchObject({ type: "text", title: "Publications" });
+    expect(sections[1]?.blocks?.[0]).toMatchObject({ title: "Publications", type: "text" });
+  });
 });

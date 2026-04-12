@@ -1760,6 +1760,13 @@ function findFirstValue(keyAliases: string[], sources: object[]): string | undef
 export function buildTypedSectionsFromNormalized(normalized: PartialNormalizedCv): CvSection[] {
   if (!normalized || typeof normalized !== "object") return [];
 
+  const directSections = validateSectionsStrict(
+    Array.isArray((normalized as any).sections) ? ((normalized as any).sections as unknown[]) : []
+  );
+  if (directSections.length > 0) {
+    return directSections;
+  }
+
   const educationSpillover: string[] = [];
   const educationSpillSet = new Set<string>();
 
