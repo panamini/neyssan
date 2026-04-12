@@ -251,3 +251,61 @@ def test_normalize_extraction_swaps_school_and_city_for_helen_style_education() 
     assert normalized.education[0].institution == "Art & Design High School"
     assert normalized.education[0].location == "New York"
     assert normalized.education[0].degree is None
+
+
+def test_normalize_extraction_drops_template_branding_and_address_noise_for_robertsmith() -> None:
+    extraction = parse_document_annotation(
+        {
+            "identity": {
+                "name": "ROBERT SMITH",
+                "desiredPosition": "Lead Customer Advocate",
+            },
+            "contact": {
+                "email": "info@qwikresume.com",
+                "website": "Qwikresume.com",
+                "phone": "(0123)-456-789",
+            },
+            "summary": {
+                "text": (
+                    "Cash handling accuracy Excellent multi-tasker Organized Friendly Dependable "
+                    "Reliable Strong communication skills Punctual Flexible schedule Knowledge of MS office and POS."
+                )
+            },
+            "education": [
+                {
+                    "institution": "2259 Oak Street, Old Forge, New York, 13420",
+                }
+            ],
+            "otherSections": [
+                {
+                    "title": "© This Free Resume Template is the copyright of Qwikresume.com. Usage Guidelines",
+                    "content": "© This Free Resume Template is the copyright of Qwikresume.com. Usage Guidelines",
+                }
+            ],
+        }
+    )
+
+    normalized = normalize_extraction(
+        extraction,
+        raw_text=(
+            "ROBERT SMITH\n"
+            "Lead Customer Advocate\n"
+            "info@qwikresume.com\n"
+            "2259 Oak Street, Old Forge, New York, 13420 This Free Resume Template is the copyright of "
+            "Qwikresume.com. Usage Guidelines\n"
+        ),
+        page_count=1,
+        document_name="robertsmith.jpg",
+    )
+
+    assert normalized.contact.email is None
+    assert normalized.contact.website is None
+    assert normalized.summary.text == "Lead Customer Advocate"
+    assert normalized.education == []
+    assert normalized.textSections == []
+    warning_codes = [warning.code for warning in normalized.warnings]
+    assert "email_dropped" in warning_codes
+    assert "link_dropped" in warning_codes
+    assert "summary_dropped" in warning_codes
+    assert "education_dropped" in warning_codes
+    assert "text_section_dropped" in warning_codes
