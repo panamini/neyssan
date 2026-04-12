@@ -14,7 +14,7 @@
 import { v4 as uuidv4 } from "uuid";
 import type { CvSection } from "../../types/cvDocument";
 import { ensureRemirrorDoc } from "../../components/remirror-editor/utils/conversion";
-import { CvSectionSchemaStrict } from "../../schemas/cvDocument.schema";
+import { CvSectionSchema, CvSectionSchemaStrict } from "../../schemas/cvDocument.schema";
 import languageNames from "../../../../shared/language_names.json";
 import { resolveCanonicalHeadingFamily } from "../../../convex/lib/parsing/headingResolver";
 
@@ -1760,10 +1760,11 @@ function findFirstValue(keyAliases: string[], sources: object[]): string | undef
 export function buildTypedSectionsFromNormalized(normalized: PartialNormalizedCv): CvSection[] {
   if (!normalized || typeof normalized !== "object") return [];
 
-  const directSections = validateSectionsStrict(
-    Array.isArray((normalized as any).sections) ? ((normalized as any).sections as unknown[]) : []
-  );
-  if (directSections.length > 0) {
+  const providedSections = Array.isArray((normalized as any).sections)
+    ? ((normalized as any).sections as unknown[])
+    : [];
+  const directSections = validateSectionsLenient(providedSections);
+  if (providedSections.length > 0 && directSections.length === providedSections.length) {
     return directSections;
   }
 
@@ -2686,6 +2687,17 @@ function validateSectionsStrict(input: unknown[]): CvSection[] {
     const res = CvSectionSchemaStrict.safeParse(candidate);
     if (res.success) {
       // The strict schema strips unknown keys and ensures shape; cast to the TS interface for app use.
+      out.push(res.data as unknown as CvSection);
+    }
+  }
+  return out;
+}
+
+function validateSectionsLenient(input: unknown[]): CvSection[] {
+  const out: CvSection[] = [];
+  for (const candidate of input) {
+    const res = CvSectionSchema.safeParse(candidate);
+    if (res.success) {
       out.push(res.data as unknown as CvSection);
     }
   }
