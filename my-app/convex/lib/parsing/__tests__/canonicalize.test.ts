@@ -1092,6 +1092,34 @@ describe("canonicalizeParserResult", () => {
     expect(normalized.languagesRaw).toEqual(["English", "Spanish", "Italian"]);
   });
 
+  it("derives languagesText from normalized.sections when languages sections are the source of truth", () => {
+    const parserResult = {
+      normalized: {
+        languages: [{ name: "Wrong Language" }],
+        languagesText: "Wrong Language",
+        sections: [
+          {
+            id: "sec-languages",
+            title: "Languages",
+            type: "languages",
+            blocks: [],
+            structuredContent: [
+              { id: "lang-1", name: "English", level: "Fluent" },
+              { id: "lang-2", name: "French", level: "Intermediate" },
+            ],
+          },
+        ],
+      },
+    };
+
+    const canonical = canonicalizeParserResult(parserResult, context);
+    const normalized = canonical.normalized as any;
+
+    expect(normalized.languages.map((entry: any) => entry.name)).toEqual(["English", "French"]);
+    expect(normalized.languagesText).toBe("English, French");
+    expect(normalized.languagesRaw).toEqual(["English — Fluent", "French — Intermediate"]);
+  });
+
   it("cleans Anne-style markdown table skills into left-column skill names only", () => {
     const parserResult = {
       normalized: {
