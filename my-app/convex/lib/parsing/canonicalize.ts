@@ -3726,6 +3726,10 @@ function deriveNormalizedConvenienceFieldsFromSections(
   const languageItems = collectStructuredByType("languages");
   if (languageItems.length > 0) {
     aligned.languages = languageItems.map((item) => ({ ...item }));
+    aligned.languagesText = languageItems
+      .map((item) => coerceString((item as any)?.name))
+      .filter(Boolean)
+      .join(", ");
     aligned.languagesRaw = languageItems
       .map((item) => {
         const name = coerceString((item as any)?.name);
