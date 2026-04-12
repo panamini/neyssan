@@ -85,10 +85,10 @@ export function buildCanonicalizeInput(payload: ParserResponse): CanonicalPayloa
   const mergedSections =
     Array.isArray((topNormalized as any)?.sections) && (topNormalized as any).sections.length > 0
       ? (topNormalized as any).sections
-      : Array.isArray((payload as any)?.sections) && (payload as any).sections.length > 0
-        ? (payload as any).sections
-        : Array.isArray(resultNormalized?.sections) && resultNormalized.sections.length > 0
+      : Array.isArray(resultNormalized?.sections) && resultNormalized.sections.length > 0
           ? resultNormalized.sections
+        : Array.isArray((payload as any)?.sections) && (payload as any).sections.length > 0
+          ? (payload as any).sections
           : Array.isArray((resultPayload as any)?.sections) && (resultPayload as any).sections.length > 0
             ? (resultPayload as any).sections
             : [];
