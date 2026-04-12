@@ -208,6 +208,28 @@ def test_normalize_extraction_keeps_helen_noisy_but_explicit_email() -> None:
     assert normalized.contact.email == "hellenketter@gmail.com"
 
 
+def test_normalize_extraction_maps_helen_social_links_conservatively() -> None:
+    extraction = parse_document_annotation(
+        {
+            "contact": {
+                "linkedin": "instagram.com/_hellenk_",
+                "website": "www.enhancv.com",
+            }
+        }
+    )
+
+    normalized = normalize_extraction(
+        extraction,
+        raw_text="HELEN D. KETTER\ninstagram.com/_hellenk_\nwww.enhancv.com",
+        page_count=1,
+        document_name="helenketter.jpg",
+    )
+
+    assert normalized.contact.linkedin is None
+    assert normalized.contact.website is None
+    assert normalized.contact.portfolio == "https://instagram.com/_hellenk_"
+
+
 def test_normalize_extraction_uses_short_explicit_headline_as_summary_fallback() -> None:
     extraction = parse_document_annotation(
         {
@@ -309,3 +331,25 @@ def test_normalize_extraction_drops_template_branding_and_address_noise_for_robe
     assert "summary_dropped" in warning_codes
     assert "education_dropped" in warning_codes
     assert "text_section_dropped" in warning_codes
+
+
+def test_normalize_extraction_keeps_explicit_anne_professional_links() -> None:
+    extraction = parse_document_annotation(
+        {
+            "contact": {
+                "linkedin": "linkedin.com/in/annelounsberry12",
+                "github": "github.com/annecarollounsberry",
+            }
+        }
+    )
+
+    normalized = normalize_extraction(
+        extraction,
+        raw_text="Anne Lounsberry\nlinkedin.com/in/annelounsberry12\ngithub.com/annecarollounsberry",
+        page_count=1,
+        document_name="anne.png",
+    )
+
+    assert normalized.contact.linkedin == "https://linkedin.com/in/annelounsberry12"
+    assert normalized.contact.github == "https://github.com/annecarollounsberry"
+    assert normalized.contact.portfolio is None

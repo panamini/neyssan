@@ -36,7 +36,7 @@ DOMAINISH_RE = re.compile(r"^[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?:/[\w./#?=&%-]+)?$")
 HANDLE_RE = re.compile(r"^@?[A-Za-z0-9._/-]{2,100}$")
 BULLETISH_RE = re.compile(r"^\s*(?:[-*•·●▪◦]|(?:\d+[.)]))\s+")
 TEMPLATE_BRANDING_RE = re.compile(
-    r"\b(qwikresume(?:\.com)?|free resume template|usage guidelines|resume templates?|build this template|copyright)\b",
+    r"\b(enhancv(?:\.com)?|qwikresume(?:\.com)?|free resume template|usage guidelines|resume templates?|build this template|copyright)\b",
     re.IGNORECASE,
 )
 ADDRESSISH_STREET_RE = re.compile(
@@ -75,6 +75,17 @@ SUMMARY_VERBISH_RE = re.compile(
     r"\b(with|over|years?|experienced|experience|specializ|specialis|focused|passionate|dedicated|driven|"
     r"writer|designer|engineer|manager|developer|consultant|analyst|teacher|nurse|architect|leader)\b",
     re.IGNORECASE,
+)
+SOCIAL_PORTFOLIO_DOMAINS = (
+    "instagram.com",
+    "threads.net",
+    "tiktok.com",
+    "x.com",
+    "twitter.com",
+    "behance.net",
+    "dribbble.com",
+    "youtube.com",
+    "facebook.com",
 )
 
 
@@ -212,7 +223,7 @@ def _normalize_link(value: Optional[str], kind: str) -> Optional[str]:
     if lowered in {kind, kind.replace("_", " "), "link", "url", "website"}:
         return None
 
-    if kind in {"linkedin", "github"} and HANDLE_RE.match(cleaned) and "." not in cleaned:
+    if kind in {"linkedin", "github"} and HANDLE_RE.match(cleaned) and "." not in cleaned and "/" not in cleaned:
         return cleaned
 
     candidate = cleaned
@@ -225,16 +236,42 @@ def _normalize_link(value: Optional[str], kind: str) -> Optional[str]:
         return None
 
     if kind == "linkedin":
-        if "linkedin.com" in candidate.lower() or HANDLE_RE.match(cleaned):
+        if "linkedin.com" in candidate.lower():
+            return candidate
+        if HANDLE_RE.match(cleaned) and "." not in cleaned and "/" not in cleaned:
             return candidate
         return None
     if kind == "github":
-        if "github.com" in candidate.lower() or HANDLE_RE.match(cleaned):
+        if "github.com" in candidate.lower():
+            return candidate
+        if HANDLE_RE.match(cleaned) and "." not in cleaned and "/" not in cleaned:
             return candidate
         return None
     if kind in {"website", "portfolio"}:
         return candidate if URL_RE.search(candidate) else None
     return candidate
+
+
+def _normalize_social_portfolio_fallback(value: Optional[str]) -> Optional[str]:
+    cleaned = _clean_inline_text(value)
+    if not cleaned or TEMPLATE_BRANDING_RE.search(cleaned):
+        return None
+
+    candidate = cleaned
+    if candidate.startswith("www."):
+        candidate = f"https://{candidate}"
+    elif DOMAINISH_RE.match(candidate):
+        candidate = f"https://{candidate}"
+
+    if not URL_RE.search(candidate):
+        return None
+
+    lowered = candidate.lower()
+    if "linkedin.com" in lowered or "github.com" in lowered:
+        return None
+    if any(domain in lowered for domain in SOCIAL_PORTFOLIO_DOMAINS):
+        return candidate
+    return None
 
 
 def _normalize_phone(value: Optional[str]) -> Optional[str]:
@@ -757,14 +794,30 @@ def normalize_extraction(
         warnings=warnings,
     )
 
+    linkedin_link = _normalize_link(extraction.contact.linkedin if extraction.contact else None, "linkedin")
+    website_link = _normalize_link(extraction.contact.website if extraction.contact else None, "website")
+    github_link = _normalize_link(extraction.contact.github if extraction.contact else None, "github")
+    portfolio_link = _normalize_link(extraction.contact.portfolio if extraction.contact else None, "portfolio")
+    if not portfolio_link:
+        for candidate in (
+            extraction.contact.portfolio if extraction.contact else None,
+            extraction.contact.linkedin if extraction.contact else None,
+            extraction.contact.website if extraction.contact else None,
+            extraction.contact.github if extraction.contact else None,
+        ):
+            social_fallback = _normalize_social_portfolio_fallback(candidate)
+            if social_fallback:
+                portfolio_link = social_fallback
+                break
+
     contact = NormalizedContact(
         email=_normalize_email(extraction.contact.email if extraction.contact else None),
         phone=_normalize_phone(extraction.contact.phone if extraction.contact else None),
         address=_clean_text(extraction.contact.address if extraction.contact else None),
-        linkedin=_normalize_link(extraction.contact.linkedin if extraction.contact else None, "linkedin"),
-        website=_normalize_link(extraction.contact.website if extraction.contact else None, "website"),
-        github=_normalize_link(extraction.contact.github if extraction.contact else None, "github"),
-        portfolio=_normalize_link(extraction.contact.portfolio if extraction.contact else None, "portfolio"),
+        linkedin=linkedin_link,
+        website=website_link,
+        github=github_link,
+        portfolio=portfolio_link,
         location=identity_location,
         addressNormalized=_clean_inline_text(extraction.contact.address if extraction.contact else None),
     )
