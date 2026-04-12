@@ -130,4 +130,60 @@ describe("buildTypedSectionsFromNormalized direct section materialization", () =
     expect(sections[1]).toMatchObject({ type: "text", title: "Publications" });
     expect(sections[1]?.blocks?.[0]).toMatchObject({ title: "Publications", type: "text" });
   });
+
+  it("keeps all direct normalized.sections when experience items include passthrough fields like description", () => {
+    const sections = buildTypedSectionsFromNormalized({
+      sections: [
+        {
+          id: "sec-profile",
+          title: "Profile",
+          type: "profile",
+          blocks: [],
+          structuredContent: [{ id: "profile-1", name: "Robert Cooper", email: "robert@example.com" }],
+        },
+        {
+          id: "sec-experience",
+          title: "Experience",
+          type: "experience",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "exp-1",
+              company: "ADT Security",
+              position: "Security Guard",
+              startDate: "2021-01-01",
+              description: {
+                type: "doc",
+                content: [
+                  {
+                    type: "paragraph",
+                    content: [{ type: "text", text: "Maintained site security." }],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+        {
+          id: "sec-skills",
+          title: "Skills",
+          type: "skills",
+          blocks: [],
+          structuredContent: [{ id: "skill-1", name: "Surveillance", level: "Advanced" }],
+        },
+      ],
+    } as any);
+
+    expect(sections).toHaveLength(3);
+    expect(sections.map((section) => section.type)).toEqual(["profile", "experience", "skills"]);
+    expect(sections.find((section) => section.type === "experience")?.structuredContent).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          company: "ADT Security",
+          position: "Security Guard",
+          description: expect.any(Object),
+        }),
+      ]),
+    );
+  });
 });

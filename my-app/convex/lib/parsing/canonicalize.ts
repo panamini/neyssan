@@ -3628,6 +3628,151 @@ function coerceSummaryObject(textMaybe: string | undefined, fallbackConf = 0.5) 
   return { text: txt, confidence: fallbackConf };
 }
 
+function structuredValueToPlainText(value: unknown): string {
+  const parts: string[] = [];
+  const seen = new Set<unknown>();
+
+  const walk = (node: unknown) => {
+    if (node == null || seen.has(node)) return;
+    if (typeof node === "object") {
+      seen.add(node);
+    }
+    if (typeof node === "string") {
+      const trimmed = node.trim();
+      if (trimmed) parts.push(trimmed);
+      return;
+    }
+    if (Array.isArray(node)) {
+      node.forEach(walk);
+      return;
+    }
+    if (typeof node === "object") {
+      const record = node as Record<string, unknown>;
+      if (typeof record.text === "string") walk(record.text);
+      if ("content" in record) walk(record.content);
+      if ("summary" in record) walk(record.summary);
+      if ("description" in record) walk(record.description);
+      if ("responsibilities" in record) walk(record.responsibilities);
+    }
+  };
+
+  walk(value);
+  return parts.join(" ").replace(/\s+/g, " ").trim();
+}
+
+function deriveNormalizedConvenienceFieldsFromSections(
+  sections: unknown,
+  normalized: Record<string, any>,
+): Record<string, any> | null {
+  if (!Array.isArray(sections) || sections.length === 0) return null;
+
+  const typedSections = sections.filter((section) => {
+    if (!section || typeof section !== "object") return false;
+    const record = section as Record<string, unknown>;
+    return typeof record.type === "string" && Array.isArray(record.structuredContent);
+  }) as Array<Record<string, any>>;
+
+  if (typedSections.length === 0) return null;
+
+  const collectStructuredByType = (type: string): any[] => {
+    return typedSections
+      .filter((section) => String(section.type || "").trim().toLowerCase() === type)
+      .flatMap((section) =>
+        Array.isArray(section.structuredContent)
+          ? (section.structuredContent as any[]).filter(Boolean)
+          : [],
+      );
+  };
+
+  const aligned: Record<string, any> = {};
+
+  const summaryItems = collectStructuredByType("summary");
+  if (summaryItems.length > 0) {
+    const summaryText = structuredValueToPlainText((summaryItems[0] as any)?.summary);
+    if (summaryText) {
+      aligned.summary = {
+        text: summaryText,
+        confidence:
+          typeof normalized?.summary?.confidence === "number"
+            ? normalized.summary.confidence
+            : 0.5,
+      };
+      aligned.summaryFirstSentence = firstSentence(summaryText);
+    } else {
+      aligned.summary = { text: "", confidence: 0 };
+      aligned.summaryFirstSentence = "";
+    }
+  }
+
+  const experienceItems = collectStructuredByType("experience");
+  if (experienceItems.length > 0) {
+    aligned.experience = experienceItems.map((item) => ({ ...item }));
+  }
+
+  const educationItems = collectStructuredByType("education");
+  if (educationItems.length > 0) {
+    aligned.education = educationItems.map((item) => ({ ...item }));
+  }
+
+  const skillItems = collectStructuredByType("skills");
+  if (skillItems.length > 0) {
+    aligned.skills = skillItems.map((item) => ({ ...item }));
+    aligned.skillsText = skillItems
+      .map((item) => coerceString((item as any)?.name))
+      .filter(Boolean)
+      .join(", ");
+  }
+
+  const languageItems = collectStructuredByType("languages");
+  if (languageItems.length > 0) {
+    aligned.languages = languageItems.map((item) => ({ ...item }));
+    aligned.languagesRaw = languageItems
+      .map((item) => {
+        const name = coerceString((item as any)?.name);
+        const level = coerceString((item as any)?.level);
+        return [name, level].filter(Boolean).join(" — ");
+      })
+      .filter(Boolean);
+  }
+
+  const projectItems = collectStructuredByType("projects");
+  if (projectItems.length > 0) {
+    aligned.projects = projectItems.map((item) => ({ ...item }));
+  }
+
+  const certificationItems = collectStructuredByType("certifications");
+  if (certificationItems.length > 0) {
+    aligned.certifications = certificationItems.map((item) => ({ ...item }));
+  }
+
+  const achievementItems = collectStructuredByType("achievements");
+  if (achievementItems.length > 0) {
+    aligned.achievements = achievementItems.map((item) => ({ ...item }));
+  }
+
+  const profileItems = collectStructuredByType("profile");
+  if (profileItems.length > 0) {
+    const firstProfile = { ...(profileItems[0] as Record<string, any>) };
+    aligned.profile = {
+      ...(normalized.profile && typeof normalized.profile === "object" ? normalized.profile : {}),
+      ...firstProfile,
+    };
+    aligned.contact = {
+      ...(normalized.contact && typeof normalized.contact === "object" ? normalized.contact : {}),
+      name: coerceString(firstProfile.name) || normalized?.contact?.name,
+      desiredPosition:
+        coerceString(firstProfile.desiredPosition) || normalized?.contact?.desiredPosition,
+      email: coerceString(firstProfile.email) || normalized?.contact?.email,
+      phone: coerceString(firstProfile.phone) || normalized?.contact?.phone,
+      linkedin: coerceString(firstProfile.linkedin) || normalized?.contact?.linkedin,
+      website: coerceString(firstProfile.website) || normalized?.contact?.website,
+      location: coerceString(firstProfile.location) || normalized?.contact?.location,
+    };
+  }
+
+  return Object.keys(aligned).length > 0 ? aligned : null;
+}
+
 
 function parseExperienceSegment(content: string, idx: number) {
   const initialLines = String(content ?? "")
@@ -5923,6 +6068,14 @@ export function canonicalizeParserResult(result: any, context: CanonicalizeConte
     baseDiagnostics.experience_dropped_empty = experienceDiagnostics.droppedEmpty;
     baseDiagnostics.experience_fallback_count = experienceDiagnostics.fallbackCount;
     baseDiagnostics.experience_source = experienceDiagnostics.source;
+  }
+
+  const alignedFromSections = deriveNormalizedConvenienceFieldsFromSections(
+    normalized.sections,
+    normalized,
+  );
+  if (alignedFromSections) {
+    Object.assign(normalized, alignedFromSections);
   }
 
   return {
