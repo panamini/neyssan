@@ -35,6 +35,16 @@ EMAIL_FRAGMENT_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"
 DOMAINISH_RE = re.compile(r"^[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?:/[\w./#?=&%-]+)?$")
 HANDLE_RE = re.compile(r"^@?[A-Za-z0-9._/-]{2,100}$")
 BULLETISH_RE = re.compile(r"^\s*(?:[-*•·●▪◦]|(?:\d+[.)]))\s+")
+TEMPLATE_BRANDING_RE = re.compile(
+    r"\b(qwikresume(?:\.com)?|free resume template|usage guidelines|resume templates?|build this template|copyright)\b",
+    re.IGNORECASE,
+)
+ADDRESSISH_STREET_RE = re.compile(
+    r"\b\d{1,6}\s+[A-Za-z0-9.'-]+(?:\s+[A-Za-z0-9.'-]+){0,6}\s+"
+    r"(?:street|st\.?|avenue|ave\.?|road|rd\.?|drive|dr\.?|boulevard|blvd\.?|lane|ln\.?|court|ct\.?|way)\b",
+    re.IGNORECASE,
+)
+ZIPISH_RE = re.compile(r"\b\d{5}(?:-\d{4})?\b")
 DEGREE_TOKEN_RE = re.compile(
     r"\b(bachelor|master|msc|bsc|mba|phd|doctorate|diploma|degree|universit|college|school|lyc[ée]e|licence|formation|bts|dut)\b",
     re.IGNORECASE,
@@ -59,6 +69,11 @@ ACHIEVEMENT_RESULT_RE = re.compile(
 )
 ACHIEVEMENT_AWARD_RE = re.compile(
     r"\b(award|awarded|honor|honour|recognition|scholarship|certification|certificate|credential|license|licence|medal|winner)\b",
+    re.IGNORECASE,
+)
+SUMMARY_VERBISH_RE = re.compile(
+    r"\b(with|over|years?|experienced|experience|specializ|specialis|focused|passionate|dedicated|driven|"
+    r"writer|designer|engineer|manager|developer|consultant|analyst|teacher|nurse|architect|leader)\b",
     re.IGNORECASE,
 )
 
@@ -191,6 +206,8 @@ def _normalize_link(value: Optional[str], kind: str) -> Optional[str]:
     cleaned = _clean_inline_text(value)
     if not cleaned:
         return None
+    if TEMPLATE_BRANDING_RE.search(cleaned):
+        return None
     lowered = cleaned.lower().rstrip(":")
     if lowered in {kind, kind.replace("_", " "), "link", "url", "website"}:
         return None
@@ -235,7 +252,7 @@ def _normalize_email(value: Optional[str]) -> Optional[str]:
     if not cleaned:
         return None
     candidate = cleaned.strip(" \t<>[](){}'\";,.:")
-    if EMAIL_RE.match(candidate):
+    if EMAIL_RE.match(candidate) and not TEMPLATE_BRANDING_RE.search(candidate):
         return candidate
     matches = EMAIL_FRAGMENT_RE.findall(candidate)
     unique_matches = []
@@ -246,7 +263,7 @@ def _normalize_email(value: Optional[str]) -> Optional[str]:
             continue
         seen.add(lowered)
         unique_matches.append(match)
-    if len(unique_matches) == 1 and EMAIL_RE.match(unique_matches[0]):
+    if len(unique_matches) == 1 and EMAIL_RE.match(unique_matches[0]) and not TEMPLATE_BRANDING_RE.search(unique_matches[0]):
         return unique_matches[0]
     return None
 
@@ -322,6 +339,54 @@ def _normalize_education_fields(
     ):
         return normalized_degree, None, normalized_institution
     return normalized_institution, normalized_degree, normalized_location
+
+
+def _looks_like_address_education_noise(
+    *,
+    institution: Optional[str],
+    degree: Optional[str],
+    field_of_study: Optional[str],
+    details: Sequence[str],
+) -> bool:
+    institution_text = _clean_inline_text(institution)
+    if not institution_text:
+        return False
+    if degree or field_of_study or any(_clean_inline_text(item) for item in details):
+        return False
+    if ADDRESSISH_STREET_RE.search(institution_text):
+        return True
+    if ZIPISH_RE.search(institution_text) and institution_text.count(",") >= 2:
+        return True
+    return False
+
+
+def _looks_like_template_skill_blob_summary(value: str, raw_text: str) -> bool:
+    cleaned = _clean_inline_text(value)
+    if not cleaned or not TEMPLATE_BRANDING_RE.search(raw_text or ""):
+        return False
+    normalized = _normalize_lookup(cleaned)
+    if SUMMARY_VERBISH_RE.search(normalized):
+        return False
+    signals = [
+        "cash handling",
+        "multi tasker",
+        "organized",
+        "friendly",
+        "dependable",
+        "reliable",
+        "communication skills",
+        "punctual",
+        "flexible schedule",
+        "knowledge of",
+        "ms office",
+        "pos",
+    ]
+    matches = sum(1 for signal in signals if signal in normalized)
+    if matches >= 3:
+        return True
+    words = re.findall(r"[A-Za-z][A-Za-z&/-]*", cleaned)
+    capitalized = sum(1 for word in words if word[:1].isupper())
+    return len(words) >= 10 and bool(words) and capitalized / len(words) >= 0.6
 
 
 def _normalize_language_name(value: Optional[str]) -> Optional[str]:
@@ -618,6 +683,19 @@ def normalize_extraction(
             endDate=_clean_inline_text(entry.endDate),
             details=_clean_list(entry.details),
         )
+        if _looks_like_address_education_noise(
+            institution=normalized.institution,
+            degree=normalized.degree,
+            field_of_study=normalized.fieldOfStudy,
+            details=normalized.details,
+        ):
+            _warning(
+                warnings,
+                "education_dropped",
+                "Dropped education entry that looked like an address or template footer.",
+                "education",
+            )
+            continue
         if normalized.location:
             education_locations.append(normalized.location)
         if normalized.institution or normalized.degree or normalized.fieldOfStudy or normalized.details:
@@ -664,6 +742,9 @@ def normalize_extraction(
     summary_text = _clean_text(extraction.summary.text if extraction.summary else None)
     if summary_text and _looks_like_role_summary_misuse(summary_text):
         _warning(warnings, "summary_dropped", "Dropped summary text that looked like role bullets or responsibilities.", "summary.text")
+        summary_text = None
+    if summary_text and _looks_like_template_skill_blob_summary(summary_text, raw_text):
+        _warning(warnings, "summary_dropped", "Dropped summary text that looked like template competency filler.", "summary.text")
         summary_text = None
     if not summary_text:
         summary_text = _normalize_headline_summary(extraction.identity.desiredPosition if extraction.identity else None)
@@ -739,6 +820,14 @@ def normalize_extraction(
         if rendered:
             text_sections.append(rendered)
     for item in extraction.otherSections:
+        if TEMPLATE_BRANDING_RE.search(_clean_inline_text(item.title) or "") or TEMPLATE_BRANDING_RE.search(_clean_text(item.content) or ""):
+            _warning(
+                warnings,
+                "text_section_dropped",
+                "Dropped text section that looked like template branding or legal boilerplate.",
+                "otherSections",
+            )
+            continue
         rendered = _render_other_section(item)
         if rendered:
             text_sections.append(rendered)
