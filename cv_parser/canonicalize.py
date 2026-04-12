@@ -4705,12 +4705,53 @@ def adjust_diagnostics(diagnostics: Optional[Dict[str, object]], mode: str) -> D
     return diag
 
 
+def _consume_precomputed_mistral_payload(
+    raw_text: str,
+    diagnostics: Optional[Dict[str, object]],
+    raw_sections: Optional[List[Dict[str, str]]],
+) -> Optional[Dict[str, object]]:
+    if not isinstance(diagnostics, dict):
+        return None
+
+    payload = diagnostics.get("_mistral_resume_v3_canonical_payload")
+    if not isinstance(payload, dict):
+        return None
+
+    out = dict(payload)
+    payload_diag = dict(out.get("diagnostics") or {})
+    incoming_diag = {
+        key: value
+        for key, value in diagnostics.items()
+        if key != "_mistral_resume_v3_canonical_payload"
+    }
+    payload_diag.update(incoming_diag)
+    out["diagnostics"] = payload_diag
+
+    if raw_text and not out.get("rawText"):
+        out["rawText"] = raw_text
+    normalized = dict(out.get("normalized") or {})
+    if raw_text and not normalized.get("rawText"):
+        normalized["rawText"] = raw_text
+    if raw_text and not normalized.get("raw"):
+        normalized["raw"] = raw_text
+    if raw_sections and not out.get("rawSections"):
+        out["rawSections"] = [dict(section) for section in raw_sections]
+    if raw_sections and not normalized.get("rawSections"):
+        normalized["rawSections"] = [dict(section) for section in raw_sections]
+    out["normalized"] = normalized
+    return out
+
+
 def canonicalize_cv(
     raw_text: str,
     mode: str,
     diagnostics: Optional[Dict[str, object]] = None,
     raw_sections: Optional[List[Dict[str, str]]] = None,
 ) -> Dict[str, object]:
+    precomputed_payload = _consume_precomputed_mistral_payload(raw_text, diagnostics, raw_sections)
+    if precomputed_payload is not None:
+        return precomputed_payload
+
     # Noise filtering first (Prompt 4)
     original_text = raw_text or ""
     filtered_text, removed_count = _filter_noise_from_text(original_text)
