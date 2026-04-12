@@ -3,16 +3,18 @@ from __future__ import annotations
 import logging
 import io
 import re
-from functools import lru_cache
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 from urllib.parse import urlparse
 
 import pdfplumber
 import requests
-from mistralai import models
-from mistralai.sdk import Mistral
 
 from cv_parser.canonicalize import detect_heading, strip_accents
+from cv_parser_service.mistral_resume_v3 import (
+    INTERNAL_CANONICAL_PAYLOAD_DIAGNOSTIC_KEY,
+    run_resume_pipeline_from_bytes,
+    run_resume_pipeline_from_url,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -49,43 +51,12 @@ NOISY_OCR_SECTION_FAMILIES = {"BODY", "DETAILS"}
 class MistralOCRError(RuntimeError):
     """Raised when a Mistral OCR request fails."""
 
-
-@lru_cache(maxsize=4)
-def _client_for_key(api_key: str) -> Mistral:
-    return Mistral(api_key=api_key, timeout_ms=120_000)
-
-
 def _safe_filename(name: Optional[str], fallback: str = "upload.pdf") -> str:
     if name:
         candidate = name.strip()
         if candidate:
             return candidate
     return fallback
-
-
-def _collect_pages(response: models.OCRResponse) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
-    pages: List[Dict[str, Any]] = []
-    total_chars = 0
-    for page in response.pages or []:
-        markdown = page.markdown or ""
-        total_chars += len(markdown)
-        pages.append(
-            {
-                "index": int(page.index),
-                "markdown": markdown,
-            }
-        )
-
-    usage_info = response.usage_info
-    page_count = getattr(usage_info, "pages_processed", None) or len(pages)
-    diagnostics = {
-        "model": response.model,
-        "pages": page_count,
-        "ocr_chars": total_chars,
-    }
-    if usage_info and getattr(usage_info, "doc_size_bytes", None):
-        diagnostics["doc_size_bytes"] = usage_info.doc_size_bytes
-    return pages, diagnostics
 
 
 def _fallback_pages_from_pdf_bytes(data: bytes, document_name: Optional[str]) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
@@ -108,6 +79,7 @@ def _fallback_pages_from_pdf_bytes(data: bytes, document_name: Optional[str]) ->
     diagnostics = {
         "model": "mistral-fallback-dev",
         "pages": len(pages),
+        "page_count": len(pages),
         "ocr_chars": total_chars,
         "document": _safe_filename(document_name),
         "fallback": True,
@@ -218,7 +190,13 @@ def derive_raw_sections_from_markdown_pages(
                     heading_count += 1
                     canonical_label = _resolve_markdown_heading_to_canonical_label(heading_text)
                     heading_level = len(heading_match.group(0).lstrip().split(maxsplit=1)[0])
-                    if current_label == "EXPERIENCE" and heading_level > 1 and canonical_label == "EDUCATION":
+                    normalized_heading = strip_accents(heading_text).upper()
+                    if (
+                        current_label == "EXPERIENCE"
+                        and heading_level > 1
+                        and canonical_label == "EDUCATION"
+                        and normalized_heading not in {"EDUCATION", "FORMATION", "ACADEMIC QUALIFICATION", "ACADEMIC QUALIFICATIONS", "EDUCATIONAL QUALIFICATION", "EDUCATIONAL QUALIFICATIONS"}
+                    ):
                         current_lines.append(heading_text)
                         continue
                     if canonical_label and canonical_label in NON_CANONICAL_HEADING_FAMILIES:
@@ -300,6 +278,15 @@ def should_use_ocr_raw_sections(
     return decision, decision_diag
 
 
+def _pages_and_diagnostics_from_pipeline_result(result: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    pages = list(result.get("pages") or [])
+    diagnostics = dict(result.get("diagnostics") or {})
+    canonical_payload = result.get("canonical_payload")
+    if isinstance(canonical_payload, dict) and not result.get("fallback_to_legacy"):
+        diagnostics[INTERNAL_CANONICAL_PAYLOAD_DIAGNOSTIC_KEY] = canonical_payload
+    return pages, diagnostics
+
+
 def run_mistral_ocr_from_bytes(
     *,
     file_name: Optional[str],
@@ -311,36 +298,22 @@ def run_mistral_ocr_from_bytes(
     if not data:
         raise MistralOCRError("empty file payload")
 
-    client = _client_for_key(api_key)
     normalized_name = _safe_filename(file_name)
-
-    file_id: Optional[str] = None
     try:
-        upload = client.files.upload(
-            file=models.File(
-                file_name=normalized_name,
-                content=data,
-                content_type=content_type,
-            ),
-            purpose="ocr",
+        result = run_resume_pipeline_from_bytes(
+            file_name=normalized_name,
+            content_type=content_type,
+            data=data,
+            api_key=api_key,
+            model_name=model_name,
         )
-        file_id = upload.id
-        document = models.FileChunk(file_id=file_id)
-        response = client.ocr.process(
-            model=model_name,
-            document=document,
-        )
-        pages, diagnostics = _collect_pages(response)
-        return pages, diagnostics
+        pages, diagnostics = _pages_and_diagnostics_from_pipeline_result(result)
+        if pages:
+            return pages, diagnostics
+        raise MistralOCRError("mistral_ocr_empty")
     except Exception as exc:  # pragma: no cover - network / API failure
-        LOGGER.warning("Mistral OCR (file) failed; falling back to local extraction: %s", exc)
+        LOGGER.warning("Mistral OCR annotation pipeline (file) failed; falling back to local extraction: %s", exc)
         return _fallback_pages_from_pdf_bytes(data, normalized_name)
-    finally:
-        if file_id:
-            try:
-                client.files.delete(file_id=file_id)
-            except Exception:  # pragma: no cover - best effort cleanup
-                LOGGER.debug("Failed to delete uploaded file %s after OCR", file_id)
 
 
 def run_mistral_ocr_from_url(
@@ -350,19 +323,18 @@ def run_mistral_ocr_from_url(
     model_name: Optional[str],
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     document_name = _document_name_from_url(url)
-    document = models.DocumentURLChunk(
-        document_url=url,
-        document_name=document_name,
-    )
-    client = _client_for_key(api_key)
     try:
-        response = client.ocr.process(
-            model=model_name,
-            document=document,
+        result = run_resume_pipeline_from_url(
+            url=url,
+            api_key=api_key,
+            model_name=model_name,
         )
-        return _collect_pages(response)
+        pages, diagnostics = _pages_and_diagnostics_from_pipeline_result(result)
+        if pages:
+            return pages, diagnostics
+        raise MistralOCRError("mistral_ocr_empty")
     except Exception as exc:  # pragma: no cover - network / API failure
-        LOGGER.warning("Mistral OCR (url) failed; attempting fallback: %s", exc)
+        LOGGER.warning("Mistral OCR annotation pipeline (url) failed; attempting fallback: %s", exc)
         try:
             resp = requests.get(url, timeout=30)
             resp.raise_for_status()
