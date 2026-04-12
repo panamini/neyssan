@@ -31,6 +31,7 @@ from .normalized_schema import (
 
 URL_RE = re.compile(r"(https?://|www\.)", re.IGNORECASE)
 EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+EMAIL_FRAGMENT_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 DOMAINISH_RE = re.compile(r"^[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?:/[\w./#?=&%-]+)?$")
 HANDLE_RE = re.compile(r"^@?[A-Za-z0-9._/-]{2,100}$")
 BULLETISH_RE = re.compile(r"^\s*(?:[-*•·●▪◦]|(?:\d+[.)]))\s+")
@@ -44,6 +45,22 @@ CERTIFICATION_TOKEN_RE = re.compile(
 )
 ORGISH_RE = re.compile(r"\b(inc|llc|ltd|corp|company|university|college|school|academy|institute)\b", re.IGNORECASE)
 HEADER_SCAN_LIMIT = 1200
+STRONG_DEGREE_TOKEN_RE = re.compile(
+    r"\b(bachelor|master|associate|doctorate|phd|mba|msc|bsc|diploma|degree|major|minor|thesis|coursework)\b",
+    re.IGNORECASE,
+)
+STRONG_CERTIFICATION_TOKEN_RE = re.compile(
+    r"\b(certif|certificate|certified|credential|licen[sc]e|training program|course completion|bootcamp|permit|cpo)\b",
+    re.IGNORECASE,
+)
+ACHIEVEMENT_RESULT_RE = re.compile(
+    r"\b(increased|reduced|improved|saved|grew|generated|achieved|awarded|won|delivered|launched|led|recognized|recognised|promoted)\b",
+    re.IGNORECASE,
+)
+ACHIEVEMENT_AWARD_RE = re.compile(
+    r"\b(award|awarded|honor|honour|recognition|scholarship|certification|certificate|credential|license|licence|medal|winner)\b",
+    re.IGNORECASE,
+)
 
 
 def _normalize_lookup(value: str) -> str:
@@ -217,7 +234,94 @@ def _normalize_email(value: Optional[str]) -> Optional[str]:
     cleaned = _clean_inline_text(value)
     if not cleaned:
         return None
-    return cleaned if EMAIL_RE.match(cleaned) else None
+    candidate = cleaned.strip(" \t<>[](){}'\";,.:")
+    if EMAIL_RE.match(candidate):
+        return candidate
+    matches = EMAIL_FRAGMENT_RE.findall(candidate)
+    unique_matches = []
+    seen: set[str] = set()
+    for match in matches:
+        lowered = match.lower()
+        if lowered in seen:
+            continue
+        seen.add(lowered)
+        unique_matches.append(match)
+    if len(unique_matches) == 1 and EMAIL_RE.match(unique_matches[0]):
+        return unique_matches[0]
+    return None
+
+
+def _normalize_headline_summary(value: Optional[str]) -> Optional[str]:
+    cleaned = _clean_inline_text(value)
+    if not cleaned:
+        return None
+    if BULLETISH_RE.match(cleaned):
+        return None
+    if URL_RE.search(cleaned) or EMAIL_RE.search(cleaned):
+        return None
+    normalized = _normalize_lookup(cleaned)
+    if normalized in {
+        "linkedin",
+        "skills",
+        "summary",
+        "profile",
+        "experience",
+        "education",
+        "contact",
+        "details",
+        "website",
+        "portfolio",
+        "github",
+    }:
+        return None
+    token_count = len(cleaned.split())
+    if token_count < 2 or token_count > 8:
+        return None
+    return cleaned
+
+
+def _looks_like_school_name(value: Optional[str]) -> bool:
+    cleaned = _clean_inline_text(value)
+    if not cleaned:
+        return False
+    lowered = _normalize_lookup(cleaned)
+    if any(token in lowered for token in ("high school", "school", "academy", "college", "university", "institute")):
+        return True
+    return False
+
+
+def _looks_like_location_fragment(value: Optional[str]) -> bool:
+    cleaned = _clean_inline_text(value)
+    if not cleaned:
+        return False
+    if URL_RE.search(cleaned) or EMAIL_RE.search(cleaned):
+        return False
+    lowered = _normalize_lookup(cleaned)
+    if any(token in lowered for token in ("school", "academy", "college", "university", "institute", "bachelor", "master", "certified")):
+        return False
+    tokens = cleaned.split()
+    if len(tokens) > 4:
+        return False
+    return True
+
+
+def _normalize_education_fields(
+    *,
+    institution: Optional[str],
+    degree: Optional[str],
+    location: Optional[str],
+) -> tuple[Optional[str], Optional[str], Optional[str]]:
+    normalized_institution = _clean_inline_text(institution)
+    normalized_degree = _clean_inline_text(degree)
+    normalized_location = _clean_inline_text(location)
+    if (
+        not normalized_location
+        and _looks_like_location_fragment(normalized_institution)
+        and _looks_like_school_name(normalized_degree)
+        and not STRONG_DEGREE_TOKEN_RE.search(normalized_degree or "")
+    ):
+        return normalized_degree, None, normalized_institution
+    return normalized_institution, normalized_degree, normalized_location
 
 
 def _normalize_language_name(value: Optional[str]) -> Optional[str]:
@@ -251,6 +355,64 @@ def _map_level(level_raw: Optional[str]) -> Optional[str]:
     if any(token in level for token in ("beginner", "debut", "debutant")):
         return "Beginner"
     return None
+
+
+def _stable_key(*parts: object) -> str:
+    return "||".join(_normalize_lookup(_clean_inline_text(part) or "") for part in parts)
+
+
+def _dedupe_preserve_order(items: Iterable[object], *, key_fn) -> List[object]:
+    seen: set[str] = set()
+    output: List[object] = []
+    for item in items:
+        key = key_fn(item)
+        if key in seen:
+            continue
+        seen.add(key)
+        output.append(item)
+    return output
+
+
+def _looks_like_narrative_achievement(value: str) -> bool:
+    cleaned = _clean_inline_text(value)
+    if not cleaned:
+        return False
+    if ACHIEVEMENT_AWARD_RE.search(cleaned):
+        return False
+    if ACHIEVEMENT_RESULT_RE.search(cleaned):
+        return False
+    if re.search(r"[$%]|\b\d+(?:\.\d+)?\b", cleaned):
+        return False
+    token_count = len(cleaned.split())
+    if token_count < 8 and len(cleaned) < 60:
+        return False
+    return True
+
+
+def _reclassify_experience_achievement_text(
+    *,
+    summary: Optional[str],
+    bullets: List[str],
+    achievements: List[str],
+) -> Tuple[Optional[str], List[str], List[str]]:
+    kept_achievements: List[str] = []
+    narrative_items: List[str] = []
+    for item in achievements:
+        if _looks_like_narrative_achievement(item):
+            narrative_items.append(item)
+        else:
+            kept_achievements.append(item)
+
+    normalized_summary = _clean_text(summary)
+    normalized_bullets = list(bullets)
+    for index, item in enumerate(narrative_items):
+        if not normalized_summary:
+            normalized_summary = item
+            continue
+        if item not in normalized_bullets:
+            normalized_bullets.append(item)
+
+    return normalized_summary, normalized_bullets, kept_achievements
 
 
 def _render_award(entry: ExtractionAward) -> Optional[str]:
@@ -321,8 +483,8 @@ def _reclassify_education_and_certifications(
         degree = _clean_inline_text(item.degree)
         institution = _clean_inline_text(item.institution)
         detail_blob = " ".join(_clean_list(item.details))
-        combined = " ".join(part for part in [degree, institution, detail_blob] if part)
-        if CERTIFICATION_TOKEN_RE.search(combined) and not DEGREE_TOKEN_RE.search(combined):
+        combined_main = " ".join(part for part in [degree, detail_blob] if part)
+        if STRONG_CERTIFICATION_TOKEN_RE.search(combined_main) and not STRONG_DEGREE_TOKEN_RE.search(combined_main):
             name = degree or institution
             if name:
                 kept_certifications.append(
@@ -344,12 +506,12 @@ def _reclassify_education_and_certifications(
     final_education = list(kept_education)
     final_certifications: List[NormalizedCertification] = []
     for item in kept_certifications:
-        blob = " ".join(part for part in [_clean_inline_text(item.name), _clean_inline_text(item.issuer)] if part)
-        if DEGREE_TOKEN_RE.search(blob) and not CERTIFICATION_TOKEN_RE.search(blob):
+        name_blob = _clean_inline_text(item.name)
+        if name_blob and STRONG_DEGREE_TOKEN_RE.search(name_blob) and not STRONG_CERTIFICATION_TOKEN_RE.search(name_blob):
             final_education.append(
                 NormalizedEducation(
                     institution=_clean_inline_text(item.issuer),
-                    degree=_clean_inline_text(item.name),
+                    degree=name_blob,
                     startDate=None,
                     endDate=item.date,
                 )
@@ -363,7 +525,27 @@ def _reclassify_education_and_certifications(
             continue
         final_certifications.append(item)
 
-    return final_education, final_certifications
+    deduped_education = _dedupe_preserve_order(
+        final_education,
+        key_fn=lambda item: _stable_key(
+            item.institution,
+            item.degree,
+            item.fieldOfStudy,
+            item.startDate,
+            item.endDate,
+            *item.details,
+        ),
+    )
+    deduped_certifications = _dedupe_preserve_order(
+        final_certifications,
+        key_fn=lambda item: _stable_key(
+            item.name,
+            item.issuer,
+            item.credentialId,
+        ),
+    )
+
+    return deduped_education, deduped_certifications
 
 
 def _has_meaningful_content(resume: NormalizedResume) -> bool:
@@ -397,6 +579,12 @@ def normalize_extraction(
     for entry in extraction.experience:
         bullets = _clean_list(entry.responsibilityBullets)
         achievements = _clean_list(entry.achievements)
+        summary = _clean_text(entry.summary)
+        summary, bullets, achievements = _reclassify_experience_achievement_text(
+            summary=summary,
+            bullets=bullets,
+            achievements=achievements,
+        )
         normalized = NormalizedExperience(
             company=_clean_inline_text(entry.company),
             position=_clean_inline_text(entry.position),
@@ -404,7 +592,7 @@ def normalize_extraction(
             startDate=_clean_inline_text(entry.startDate),
             endDate=_clean_inline_text(entry.endDate),
             isCurrent=entry.isCurrent,
-            summary=_clean_text(entry.summary),
+            summary=summary,
             responsibilityBullets=bullets,
             achievements=achievements,
         )
@@ -416,11 +604,16 @@ def normalize_extraction(
     education: List[NormalizedEducation] = []
     education_locations: List[str] = []
     for entry in extraction.education:
+        institution, degree, location = _normalize_education_fields(
+            institution=entry.institution,
+            degree=entry.degree,
+            location=entry.location,
+        )
         normalized = NormalizedEducation(
-            institution=_clean_inline_text(entry.institution),
-            degree=_clean_inline_text(entry.degree),
+            institution=institution,
+            degree=degree,
             fieldOfStudy=_clean_inline_text(entry.fieldOfStudy),
-            location=_clean_inline_text(entry.location),
+            location=location,
             startDate=_clean_inline_text(entry.startDate),
             endDate=_clean_inline_text(entry.endDate),
             details=_clean_list(entry.details),
@@ -472,6 +665,8 @@ def normalize_extraction(
     if summary_text and _looks_like_role_summary_misuse(summary_text):
         _warning(warnings, "summary_dropped", "Dropped summary text that looked like role bullets or responsibilities.", "summary.text")
         summary_text = None
+    if not summary_text:
+        summary_text = _normalize_headline_summary(extraction.identity.desiredPosition if extraction.identity else None)
 
     identity_location = _validate_identity_location(
         extraction.identity.location if extraction.identity else None,

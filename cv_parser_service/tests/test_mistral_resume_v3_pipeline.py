@@ -102,3 +102,152 @@ def test_canonicalize_cv_passthroughs_precomputed_v3_payload() -> None:
     assert result["normalized"]["sections"][0]["title"] == "Publications"
     assert result["diagnostics"]["ocr_engine"] == "mistral"
     assert INTERNAL_CANONICAL_PAYLOAD_DIAGNOSTIC_KEY not in result["diagnostics"]
+
+
+def test_normalize_extraction_reclassifies_robert_like_education_and_certifications_conservatively() -> None:
+    extraction = parse_document_annotation(
+        {
+            "education": [
+                {
+                    "institution": "Security Training School",
+                    "degree": "Certified Protection Officer",
+                    "details": ["Executive protection program"],
+                }
+            ],
+            "certifications": [
+                {
+                    "name": "Certified Protection Officer",
+                    "issuer": "Security Training School",
+                    "date": "2020",
+                },
+                {
+                    "name": "Bachelor of Criminal Justice",
+                    "issuer": "State University",
+                    "date": "2018",
+                },
+                {
+                    "name": "Certified Security Professional",
+                    "issuer": "Defence School",
+                    "date": "2021",
+                },
+            ],
+        }
+    )
+
+    normalized = normalize_extraction(
+        extraction,
+        raw_text="Robert Cooper",
+        page_count=1,
+        document_name="robertcooper.pdf",
+    )
+
+    assert len(normalized.education) == 1
+    assert normalized.education[0].degree == "Bachelor of Criminal Justice"
+    assert normalized.education[0].institution == "State University"
+
+    certification_names = [item.name for item in normalized.certifications]
+    assert certification_names == [
+        "Certified Protection Officer",
+        "Certified Security Professional",
+    ]
+
+
+def test_normalize_extraction_moves_narrative_achievement_into_experience_summary() -> None:
+    extraction = parse_document_annotation(
+        {
+            "experience": [
+                {
+                    "company": "Executive Security Team",
+                    "position": "Security Guard",
+                    "responsibilityBullets": [
+                        "Observed surroundings and immediate settings for possible threats."
+                    ],
+                    "achievements": [
+                        "Safety conscious, attentive Security Guard with eight years experience in protecting and guarding VIP individuals in the military and defense sectors.",
+                        "Awarded Employee of the Month",
+                    ],
+                }
+            ]
+        }
+    )
+
+    normalized = normalize_extraction(
+        extraction,
+        raw_text="Robert Cooper",
+        page_count=1,
+        document_name="robertcooper.pdf",
+    )
+
+    experience = normalized.experience[0]
+    assert experience.summary == (
+        "Safety conscious, attentive Security Guard with eight years experience in protecting and guarding VIP "
+        "individuals in the military and defense sectors."
+    )
+    assert experience.achievements == ["Awarded Employee of the Month"]
+    assert experience.responsibilityBullets == [
+        "Observed surroundings and immediate settings for possible threats."
+    ]
+
+
+def test_normalize_extraction_keeps_helen_noisy_but_explicit_email() -> None:
+    extraction = parse_document_annotation(
+        {
+            "contact": {
+                "email": "f hellenketter@gmail.com",
+            }
+        }
+    )
+
+    normalized = normalize_extraction(
+        extraction,
+        raw_text="HELEN D. KETTER\nf hellenketter@gmail.com",
+        page_count=1,
+        document_name="helenketter.jpg",
+    )
+
+    assert normalized.contact.email == "hellenketter@gmail.com"
+
+
+def test_normalize_extraction_uses_short_explicit_headline_as_summary_fallback() -> None:
+    extraction = parse_document_annotation(
+        {
+            "identity": {
+                "desiredPosition": "Fashion writer turned designer",
+            }
+        }
+    )
+
+    normalized = normalize_extraction(
+        extraction,
+        raw_text="HELEN D. KETTER\nFashion writer turned designer",
+        page_count=1,
+        document_name="helenketter.jpg",
+    )
+
+    assert normalized.summary.text == "Fashion writer turned designer"
+
+
+def test_normalize_extraction_swaps_school_and_city_for_helen_style_education() -> None:
+    extraction = parse_document_annotation(
+        {
+            "education": [
+                {
+                    "institution": "New York",
+                    "degree": "Art & Design High School",
+                    "details": ["GPA 3.9 / 4.0"],
+                }
+            ]
+        }
+    )
+
+    normalized = normalize_extraction(
+        extraction,
+        raw_text="Helen Ketter",
+        page_count=1,
+        document_name="helenketter.jpg",
+    )
+
+    assert len(normalized.education) == 1
+    assert normalized.education[0].institution == "Art & Design High School"
+    assert normalized.education[0].location == "New York"
+    assert normalized.education[0].degree is None
