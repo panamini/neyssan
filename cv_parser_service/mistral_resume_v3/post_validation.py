@@ -49,6 +49,11 @@ ADDRESSISH_STREET_RE = re.compile(
     r"(?:street|st\.?|avenue|ave\.?|road|rd\.?|drive|dr\.?|boulevard|blvd\.?|lane|ln\.?|court|ct\.?|way)\b",
     re.IGNORECASE,
 )
+ADDRESSISH_STREET_FRAGMENT_RE = re.compile(
+    r"\b[A-Za-z0-9.'-]+(?:\s+[A-Za-z0-9.'-]+){0,5}\s+"
+    r"(?:street|st\.?|avenue|ave\.?|road|rd\.?|drive|dr\.?|boulevard|blvd\.?|lane|ln\.?|court|ct\.?|way)\b",
+    re.IGNORECASE,
+)
 ZIPISH_RE = re.compile(r"\b\d{5}(?:-\d{4})?\b")
 DEGREE_TOKEN_RE = re.compile(
     r"\b(bachelor|master|msc|bsc|mba|phd|doctorate|diploma|degree|universit|college|school|lyc[ée]e|licence|formation|bts|dut)\b",
@@ -347,7 +352,53 @@ def _normalize_headline_summary(value: Optional[str]) -> Optional[str]:
     return cleaned
 
 
-def _validate_desired_position(value: Optional[str], warnings: List[ParserWarning]) -> Optional[str]:
+def _contains_address_or_contact_header_signal(value: str) -> bool:
+    digits = re.sub(r"\D", "", value)
+    return bool(
+        ADDRESSISH_STREET_RE.search(value)
+        or ADDRESSISH_STREET_FRAGMENT_RE.search(value)
+        or ZIPISH_RE.search(value)
+        or EMAIL_FRAGMENT_RE.search(value)
+        or URL_RE.search(value)
+        or len(digits) >= 7
+    )
+
+
+def _has_strong_header_fragment_overlap(candidate: str, container: Optional[str]) -> bool:
+    if not container:
+        return False
+    normalized_candidate = _normalize_lookup(candidate)
+    normalized_container = _normalize_lookup(container)
+    compact_candidate = normalized_candidate.replace(" ", "")
+    if len(compact_candidate) < 6:
+        return False
+    return normalized_candidate == normalized_container or normalized_candidate in normalized_container
+
+
+def _looks_like_desired_position_header_noise(
+    value: str,
+    *,
+    raw_text: str,
+    contact_address: Optional[str],
+) -> bool:
+    if _has_strong_header_fragment_overlap(value, contact_address):
+        return True
+    for raw_line in (raw_text or "")[:HEADER_SCAN_LIMIT].splitlines():
+        line = _clean_inline_text(raw_line)
+        if not line or not _contains_address_or_contact_header_signal(line):
+            continue
+        if _has_strong_header_fragment_overlap(value, line):
+            return True
+    return False
+
+
+def _validate_desired_position(
+    value: Optional[str],
+    warnings: List[ParserWarning],
+    *,
+    raw_text: str,
+    contact_address: Optional[str],
+) -> Optional[str]:
     cleaned = _clean_inline_text(value)
     if not cleaned:
         return None
@@ -359,11 +410,23 @@ def _validate_desired_position(value: Optional[str], warnings: List[ParserWarnin
             "identity.desiredPosition",
         )
         return None
-    if ADDRESSISH_STREET_RE.search(cleaned) or ZIPISH_RE.search(cleaned):
+    if ADDRESSISH_STREET_RE.search(cleaned) or ADDRESSISH_STREET_FRAGMENT_RE.search(cleaned) or ZIPISH_RE.search(cleaned):
         _warning(
             warnings,
             "desired_position_dropped",
             "Dropped invalid desiredPosition value because it looked like an address.",
+            "identity.desiredPosition",
+        )
+        return None
+    if _looks_like_desired_position_header_noise(
+        cleaned,
+        raw_text=raw_text,
+        contact_address=contact_address,
+    ):
+        _warning(
+            warnings,
+            "desired_position_dropped",
+            "Dropped invalid desiredPosition value because it overlapped address or contact header content.",
             "identity.desiredPosition",
         )
         return None
@@ -512,15 +575,22 @@ def _normalize_section_order(
 ) -> List[NormalizedSectionOrderItem]:
     output: List[NormalizedSectionOrderItem] = []
     seen: set[tuple[str, int]] = set()
+    next_family_ordinals: dict[str, int] = {}
     for item in items:
         family = item.family
+        family_count = available_counts.get(family, 0)
+        if family_count <= 0:
+            continue
         ordinal = int(item.ordinal)
-        if ordinal < 0 or ordinal >= available_counts.get(family, 0):
+        if ordinal < 0 or ordinal >= family_count:
+            ordinal = next_family_ordinals.get(family, 0)
+        if ordinal < 0 or ordinal >= family_count:
             continue
         key = (family, ordinal)
         if key in seen:
             continue
         seen.add(key)
+        next_family_ordinals[family] = max(next_family_ordinals.get(family, 0), ordinal + 1)
         title = _clean_inline_text(item.title)
         if family == "other" and not title and ordinal < len(text_sections):
             title = text_sections[ordinal].title
@@ -854,6 +924,8 @@ def normalize_extraction(
     desired_position = _validate_desired_position(
         extraction.identity.desiredPosition if extraction.identity else None,
         warnings,
+        raw_text=raw_text,
+        contact_address=extraction.contact.address if extraction.contact else None,
     )
     if not summary_text:
         summary_text = desired_position
