@@ -46,6 +46,7 @@
     "axios": "^1.7.9",
     "clsx": "^2.1.1",
     "convex": "^1.27.3",
+    "docx": "^9.6.1",
     "dompurify": "^3.2.6",
     "framer-motion": "^12.38.0",
     "geist": "^1.7.0",
