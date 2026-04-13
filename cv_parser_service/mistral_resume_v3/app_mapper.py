@@ -765,7 +765,6 @@ def build_compatibility_normalized(resume: NormalizedResume, app_document: CvDoc
         },
         "contact": {
             "name": resume.identity.name,
-            "desiredPosition": resume.identity.desiredPosition,
             "email": resume.contact.email,
             "phone": resume.contact.phone,
             "linkedin": resume.contact.linkedin,
