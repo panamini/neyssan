@@ -2432,7 +2432,6 @@ export function ProfileReviewCard({
                 setLatestStructuredPayload(payload as StructuredPayload);
                 setCopyFeedback(null);
               }}
-              renderAs="dropdown"
             />
             <button
               type="button"
@@ -2667,7 +2666,6 @@ export function ProfileReviewCard({
                     }
                   }
                 }}
-                renderAs="dropdown"
               />
             </div>
             {onRequestExport ||
