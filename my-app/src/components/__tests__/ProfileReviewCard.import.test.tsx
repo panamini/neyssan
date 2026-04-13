@@ -101,6 +101,20 @@ describe("ProfileReviewCard import", () => {
         achievements: [],
       },
       strict: null,
+      authoritativeResume: {
+        source: "mistral_v3",
+        trusted: true,
+        fallbackToLegacy: false,
+        normalized: {
+          profile: {
+            name: "Jane Doe",
+            desiredPosition: "Product Manager",
+          },
+          summary: {
+            text: "Summary text",
+          },
+        },
+      },
     });
 
     const { container } = render(<ProfileReviewCard />);
@@ -124,6 +138,13 @@ describe("ProfileReviewCard import", () => {
     await waitFor(() => expect(importCvMock).toHaveBeenCalledTimes(1));
     expect(importCvMock.mock.calls[0][0]).toMatchObject({
       title: "Jane Doe — Product Manager",
+      metadata: expect.objectContaining({
+        authoritativeResume: expect.objectContaining({
+          source: "mistral_v3",
+          trusted: true,
+          fallbackToLegacy: false,
+        }),
+      }),
     });
     expect(importCvMock.mock.calls[0][0].sections).toEqual(
       expect.arrayContaining([

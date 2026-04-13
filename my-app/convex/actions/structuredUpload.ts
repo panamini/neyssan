@@ -7,6 +7,7 @@ import { recordTelemetry } from "../../config/llmTelemetry";
 import { canonicalizeParserResult, firstSentence } from "../lib/parsing/canonicalize";
 import { buildImportRecoveryPayload } from "../lib/parsing/importRecovery";
 import { filterRecoverySourceSectionsForRedundantHeader } from "../lib/parsing/recoverySourceFilter";
+import type { AuthoritativeResume } from "../../src/lib/authoritative-resume";
 
 type UResponse = import("undici").Response;
 
@@ -36,6 +37,9 @@ type ParserResponse = {
   runner?: ParserRunnerMeta;
   source_kind?: string;
 } & CanonicalPayload;
+
+const INTERNAL_MISTRAL_V3_CANONICAL_PAYLOAD_KEY =
+  "_mistral_resume_v3_canonical_payload";
 
 export function buildCanonicalizeInput(payload: ParserResponse): CanonicalPayload {
   const resultPayload =
@@ -107,6 +111,76 @@ export function buildCanonicalizeInput(payload: ParserResponse): CanonicalPayloa
       rawSections: mergedRawSections,
       sections: mergedSections,
     },
+  };
+}
+
+function buildDiagnosticsEnvelope(payload: ParserResponse | null | undefined): Record<string, any> {
+  const payloadDiagnostics =
+    payload?.diagnostics && typeof payload.diagnostics === "object"
+      ? payload.diagnostics
+      : {};
+  const resultDiagnostics =
+    payload?.result?.diagnostics && typeof payload.result.diagnostics === "object"
+      ? payload.result.diagnostics
+      : {};
+
+  return {
+    ...payloadDiagnostics,
+    ...resultDiagnostics,
+  } as Record<string, any>;
+}
+
+function extractPrecomputedMistralPayload(
+  payload: ParserResponse | null | undefined,
+): CanonicalPayload | null {
+  const payloadDiagnosticValue =
+    payload?.diagnostics &&
+    typeof payload.diagnostics === "object" &&
+    (payload.diagnostics as Record<string, unknown>)[
+      INTERNAL_MISTRAL_V3_CANONICAL_PAYLOAD_KEY
+    ];
+  if (payloadDiagnosticValue && typeof payloadDiagnosticValue === "object") {
+    return payloadDiagnosticValue as CanonicalPayload;
+  }
+
+  const resultDiagnosticValue =
+    payload?.result?.diagnostics &&
+    typeof payload.result.diagnostics === "object" &&
+    (payload.result.diagnostics as Record<string, unknown>)[
+      INTERNAL_MISTRAL_V3_CANONICAL_PAYLOAD_KEY
+    ];
+  if (resultDiagnosticValue && typeof resultDiagnosticValue === "object") {
+    return resultDiagnosticValue as CanonicalPayload;
+  }
+
+  return null;
+}
+
+export function buildAuthoritativeResumeEnvelope(
+  payload: ParserResponse | null | undefined,
+): AuthoritativeResume | null {
+  const diagnostics = buildDiagnosticsEnvelope(payload);
+  const routeLooksLikeMistral =
+    String(diagnostics.ocr_engine ?? "").trim().toLowerCase() === "mistral" ||
+    String(diagnostics.mistral_runtime ?? "").trim().toLowerCase() === "mistral" ||
+    String(diagnostics.mistral_runtime ?? "").trim().toLowerCase() ===
+      "local_fallback";
+  if (!routeLooksLikeMistral) {
+    return null;
+  }
+
+  const fallbackToLegacy = diagnostics.mistral_fallback === true;
+  const precomputedPayload = extractPrecomputedMistralPayload(payload);
+  const normalized =
+    precomputedPayload?.normalized && typeof precomputedPayload.normalized === "object"
+      ? (precomputedPayload.normalized as Record<string, unknown>)
+      : null;
+
+  return {
+    source: "mistral_v3",
+    trusted: fallbackToLegacy !== true && Boolean(normalized),
+    fallbackToLegacy,
+    normalized: fallbackToLegacy ? null : normalized,
   };
 }
 
@@ -1518,9 +1592,12 @@ export const structuredUpload = action({
       lastPayload.result = normalizedResult;
     }
 
+    const authoritativeResume = buildAuthoritativeResumeEnvelope(lastPayload);
+
     return {
       ...normalizedResult,
       diagnostics: diag,
+      ...(authoritativeResume ? { authoritativeResume } : {}),
       recovery,
       debug: {
         rawParser: lastPayload,

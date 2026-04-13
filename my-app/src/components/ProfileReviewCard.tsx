@@ -56,6 +56,10 @@ import {
   inspectCvImportSignals,
   type CvImportSignal,
 } from "../lib/cv-import-signals";
+import {
+  coerceAuthoritativeResume,
+  type AuthoritativeResume,
+} from "../lib/authoritative-resume";
 import type {
   ImportRecoveryItem,
   ImportRecoverySession,
@@ -142,6 +146,7 @@ type PendingRecoveryImport = {
   target: RecoveryImportTarget;
   baseSections: CvSection[];
   fullSections: CvSection[];
+  authoritativeResume?: AuthoritativeResume | null;
   items: ImportRecoveryItem[];
   overflowCount: number;
   reviewLimit: number;
@@ -243,6 +248,29 @@ function coerceDebugPayloadText(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
+}
+
+function readStructuredAuthoritativeResume(
+  payload: StructuredPayload | null | undefined,
+): AuthoritativeResume | null {
+  return coerceAuthoritativeResume(payload?.authoritativeResume ?? null);
+}
+
+function mergeImportedAuthoritativeResume(
+  metadata: CvDocument["metadata"],
+  payload: StructuredPayload | null | undefined,
+): CvDocument["metadata"] {
+  const nextMetadata = { ...(metadata ?? {}) } as CvDocument["metadata"];
+  if (payload === undefined) {
+    return nextMetadata;
+  }
+  const authoritativeResume = readStructuredAuthoritativeResume(payload);
+  if (authoritativeResume) {
+    nextMetadata.authoritativeResume = authoritativeResume;
+  } else {
+    delete (nextMetadata as { authoritativeResume?: unknown }).authoritativeResume;
+  }
+  return nextMetadata;
 }
 
 /**
@@ -970,7 +998,10 @@ export function ProfileReviewCard({
     pushToast("CV title updated");
   }
 
-  async function importSectionsIntoFreshCv(updated: CvSection[]) {
+  async function importSectionsIntoFreshCv(
+    updated: CvSection[],
+    structured?: StructuredPayload | null,
+  ) {
     if (!Array.isArray(updated) || updated.length === 0) {
       pushToast("No importable sections were found");
       return;
@@ -980,11 +1011,14 @@ export function ProfileReviewCard({
     const importedDoc: CvDocument = {
       id: uuidv4(),
       title: deriveCvTitleFromSections(updated as any, "Imported CV"),
-      metadata: {
-        createdAt: now,
-        updatedAt: now,
-        version: 1,
-      },
+      metadata: mergeImportedAuthoritativeResume(
+        {
+          createdAt: now,
+          updatedAt: now,
+          version: 1,
+        },
+        structured,
+      ),
       sections: updated as any,
     };
 
@@ -1005,6 +1039,7 @@ export function ProfileReviewCard({
     updatedSections: CvSection[];
     target: RecoveryImportTarget;
     pendingSession?: ImportRecoverySession | null;
+    structured?: StructuredPayload | null;
   }): CvDocument {
     const now = new Date().toISOString();
     const pendingSession = args.pendingSession?.items.length
@@ -1015,23 +1050,29 @@ export function ProfileReviewCard({
       return {
         id: uuidv4(),
         title: deriveCvTitleFromSections(args.updatedSections as any, "Imported CV"),
-        metadata: {
-          createdAt: now,
-          updatedAt: now,
-          version: 1,
-          ...(pendingSession ? { importRecoverySession: pendingSession } : {}),
-        } as CvDocument["metadata"],
+        metadata: mergeImportedAuthoritativeResume(
+          {
+            createdAt: now,
+            updatedAt: now,
+            version: 1,
+            ...(pendingSession ? { importRecoverySession: pendingSession } : {}),
+          } as CvDocument["metadata"],
+          args.structured,
+        ),
         sections: args.updatedSections as any,
       };
     }
 
-    const nextMetadata = {
+    const nextMetadata = mergeImportedAuthoritativeResume(
+      {
       ...(currentCv.metadata ?? {}),
       updatedAt: now,
       ...(pendingSession
         ? { importRecoverySession: pendingSession }
         : { importRecoverySession: undefined }),
-    } as CvDocument["metadata"];
+      } as CvDocument["metadata"],
+      args.structured,
+    );
     if (!pendingSession) {
       delete (nextMetadata as { importRecoverySession?: unknown }).importRecoverySession;
     }
@@ -1047,11 +1088,13 @@ export function ProfileReviewCard({
     updated: CvSection[],
     target: RecoveryImportTarget,
     pendingSession?: ImportRecoverySession | null,
+    structured?: StructuredPayload | null,
   ): Promise<boolean> {
     const nextDoc = buildRecoveryTargetDocument({
       updatedSections: updated,
       target,
       pendingSession,
+      structured,
     });
     try {
       await importCv(nextDoc);
@@ -1112,7 +1155,7 @@ export function ProfileReviewCard({
 
     if (!recovery || !recovery.reviewRequired || recovery.items.length === 0) {
       resetRecoveryUiState();
-      void applyImportedSections(request.fullSections, target);
+      void applyImportedSections(request.fullSections, target, undefined, request.structured);
       return;
     }
 
@@ -1130,6 +1173,7 @@ export function ProfileReviewCard({
       target,
       baseSections: request.baseSections,
       fullSections: request.fullSections,
+      authoritativeResume: readStructuredAuthoritativeResume(request.structured),
       items: recovery.items.map((item) =>
         normalizeRecoveryItemTargets({
           ...item,
@@ -1377,6 +1421,7 @@ export function ProfileReviewCard({
       sectionsToApply,
       pendingRecoveryImport.target,
       persistedSession,
+      { authoritativeResume: pendingRecoveryImport.authoritativeResume ?? null },
     );
   }
 
@@ -1431,6 +1476,7 @@ export function ProfileReviewCard({
       revealedSections,
       pendingRecoveryImport.target,
       persistedSession,
+      { authoritativeResume: pendingRecoveryImport.authoritativeResume ?? null },
     );
     if (didApply) {
       setPendingTouchedRecoverySectionIds(touchedSectionIds);
@@ -2179,8 +2225,8 @@ export function ProfileReviewCard({
             <StructuredUploadButton
               contextKey="cvforge-empty-state"
               label="Import CV"
-              onApplyToSections={(updated) => {
-                void importSectionsIntoFreshCv(updated);
+              onApplyToSections={(updated, structured) => {
+                void importSectionsIntoFreshCv(updated, structured as StructuredPayload | undefined);
               }}
               onRecoveryRequired={(request) => {
                 void beginRecoveryImport(request, "fresh");
@@ -2368,12 +2414,13 @@ export function ProfileReviewCard({
                 sections={
                   sections as unknown as import("../types/cvDocument").CvSection[]
                 }
-                onApplyToSections={(updated) => {
-                  try {
-                    reorderSections(updated as any);
-                  } catch {
-                    /* noop */
-                  }
+                onApplyToSections={(updated, structured) => {
+                  void applyImportedSections(
+                    updated,
+                    "existing",
+                    undefined,
+                    structured as StructuredPayload | undefined,
+                  );
                 }}
                 onResult={(payload) => {
                   setLatestStructuredPayload(payload as StructuredPayload);
