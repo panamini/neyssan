@@ -137,6 +137,30 @@ describe("authoritative resume projection", () => {
     expect(model?.hobbies).toEqual([]);
   });
 
+  it("accepts canonical trusted hobbies as plain strings and experience description explicitly", () => {
+    const model = buildAuthoritativeResumeExportModel({
+      source: "mistral_v3",
+      trusted: true,
+      fallbackToLegacy: false,
+      normalized: {
+        profile: { name: "Jane Doe" },
+        experience: [
+          {
+            company: "Northline",
+            position: "Staff PM",
+            description: "Opened the role with narrative prose.",
+            responsibilityBullets: ["Scaled the roadmap process"],
+          },
+        ],
+        hobbies: ["Chess", "Running"],
+      },
+    });
+
+    expect(model?.experience[0]?.description).toBe("Opened the role with narrative prose.");
+    expect(model?.experience[0]?.responsibilityBullets).toEqual(["Scaled the roadmap process"]);
+    expect(model?.hobbies).toEqual(["Chess", "Running"]);
+  });
+
   it("rejects untrusted or fallback payloads", () => {
     expect(
       hasTrustedAuthoritativeResume({

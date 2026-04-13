@@ -21,13 +21,17 @@ from .app_schema import (
     ISummaryItem,
 )
 from .normalized_schema import (
+    NormalizedAward,
     NormalizedCertification,
     NormalizedEducation,
     NormalizedExperience,
     NormalizedLanguage,
+    NormalizedPublication,
     NormalizedProject,
     NormalizedResume,
+    NormalizedSectionOrderItem,
     RawSectionRecord,
+    NormalizedVolunteering,
 )
 
 
@@ -63,6 +67,24 @@ def _join_nonempty(parts: Iterable[Optional[str]], separator: str = "\n") -> str
     return separator.join(part for part in parts if part)
 
 
+def _title_override(resume: NormalizedResume, family: str, default: str) -> str:
+    for item in resume.sectionOrder:
+        if item.family == family and item.title:
+            return item.title
+    return default
+
+
+def _text_section(title: str, text: str) -> CvSection:
+    return CvSection(
+        id=_uuid("sec-text"),
+        title=title,
+        type="text",
+        blocks=[_text_block(title, text, 0)],
+        structuredContent=None,
+        collapsed=False,
+    )
+
+
 def _map_experience(items: List[NormalizedExperience]) -> Optional[CvSection]:
     if not items:
         return None
@@ -71,7 +93,7 @@ def _map_experience(items: List[NormalizedExperience]) -> Optional[CvSection]:
     for index, item in enumerate(items):
         item_id = _uuid("exp")
         bullets = list(item.responsibilityBullets)
-        responsibilities_text = _join_nonempty([item.summary, *bullets], "\n")
+        responsibilities_text = _join_nonempty([item.description, *bullets], "\n")
         structured.append(
             IExperienceItem(
                 id=item_id,
@@ -83,7 +105,7 @@ def _map_experience(items: List[NormalizedExperience]) -> Optional[CvSection]:
                 location=item.location,
                 responsibilities=responsibilities_text or None,
                 responsibilityBullets=bullets or None,
-                description=_remirror_doc(item.summary or responsibilities_text or "") if (item.summary or responsibilities_text) else None,
+                description=_remirror_doc(item.description or "") if item.description else None,
                 achievements=item.achievements or None,
                 currentlyWorking=item.isCurrent,
             )
@@ -238,6 +260,81 @@ def _map_achievements(items: List[str]) -> Optional[CvSection]:
     )
 
 
+def _map_hobbies(title: str, items: List[str]) -> Optional[CvSection]:
+    if not items:
+        return None
+    return _text_section(title, "\n".join(items))
+
+
+def _map_affiliations(title: str, items: List[str]) -> Optional[CvSection]:
+    if not items:
+        return None
+    return _text_section(title, "\n".join(items))
+
+
+def _map_additional_information(title: str, items: List[str]) -> Optional[CvSection]:
+    if not items:
+        return None
+    return _text_section(title, "\n".join(items))
+
+
+def _map_awards(title: str, items: List[NormalizedAward]) -> Optional[CvSection]:
+    if not items:
+        return None
+    blocks = [
+        _join_nonempty(
+            [
+                item.title,
+                " — ".join(part for part in [item.issuer, item.date] if part) or None,
+                _join_nonempty(item.details),
+            ]
+        )
+        for item in items
+    ]
+    content = "\n\n".join(block for block in blocks if block)
+    return _text_section(title, content) if content else None
+
+
+def _map_publications(title: str, items: List[NormalizedPublication]) -> Optional[CvSection]:
+    if not items:
+        return None
+    blocks = [
+        _join_nonempty(
+            [
+                item.title,
+                " | ".join(part for part in [item.venue, item.date] if part) or None,
+                _join_nonempty(item.details),
+            ]
+        )
+        for item in items
+    ]
+    content = "\n\n".join(block for block in blocks if block)
+    return _text_section(title, content) if content else None
+
+
+def _map_volunteering(title: str, items: List[NormalizedVolunteering]) -> Optional[CvSection]:
+    if not items:
+        return None
+    blocks = []
+    for item in items:
+        header = " — ".join(part for part in [item.organization, item.role] if part)
+        meta = " | ".join(
+            part
+            for part in [
+                item.location,
+                item.startDate,
+                "Present" if item.isCurrent else item.endDate,
+            ]
+            if part
+        )
+        body = _join_nonempty([item.description, *item.bullets], "\n")
+        block = _join_nonempty([header, meta, body], "\n")
+        if block:
+            blocks.append(block)
+    content = "\n\n".join(blocks)
+    return _text_section(title, content) if content else None
+
+
 def _map_profile(resume: NormalizedResume) -> Optional[CvSection]:
     profile = IProfileItem(
         id=_uuid("profile"),
@@ -292,6 +389,50 @@ def _map_text_sections(text_sections: List[tuple[str, str]]) -> List[CvSection]:
     return sections
 
 
+DEFAULT_SECTION_FAMILY_ORDER = [
+    "profile",
+    "summary",
+    "experience",
+    "projects",
+    "achievements",
+    "awards",
+    "publications",
+    "volunteering",
+    "education",
+    "certifications",
+    "skills",
+    "languages",
+    "hobbies",
+    "affiliations",
+    "additionalInformation",
+    "other",
+]
+
+
+def _ordered_app_sections(
+    resume: NormalizedResume,
+    family_sections: Dict[str, List[CvSection]],
+) -> List[CvSection]:
+    ordered_sections: List[CvSection] = []
+    consumed: set[tuple[str, int]] = set()
+
+    for item in resume.sectionOrder:
+        family = item.family
+        index = item.ordinal
+        bucket = family_sections.get(family) or []
+        if 0 <= index < len(bucket):
+            consumed.add((family, index))
+            ordered_sections.append(bucket[index])
+
+    for family in DEFAULT_SECTION_FAMILY_ORDER:
+        for index, section in enumerate(family_sections.get(family) or []):
+            if (family, index) in consumed:
+                continue
+            ordered_sections.append(section)
+
+    return ordered_sections
+
+
 def _document_title(resume: NormalizedResume) -> str:
     if resume.identity.name:
         return resume.identity.name
@@ -301,22 +442,42 @@ def _document_title(resume: NormalizedResume) -> str:
 
 
 def map_normalized_to_app_document(resume: NormalizedResume) -> CvDocument:
-    sections: List[CvSection] = []
-    ordered = [
-        _map_profile(resume),
-        _map_summary(resume.summary.text),
-        _map_experience(resume.experience),
-        _map_projects(resume.projects),
-        _map_achievements(resume.achievements),
-        _map_education(resume.education),
-        _map_certifications(resume.certifications),
-        _map_skills([item.name for item in resume.skills]),
-        _map_languages(resume.languages),
-    ]
-    for section in ordered:
-        if section:
-            sections.append(section)
-    sections.extend(_map_text_sections([(item.title, item.content) for item in resume.textSections]))
+    family_sections: Dict[str, List[CvSection]] = {
+        "profile": [section] if (section := _map_profile(resume)) else [],
+        "summary": [section] if (section := _map_summary(resume.summary.text)) else [],
+        "experience": [section] if (section := _map_experience(resume.experience)) else [],
+        "projects": [section] if (section := _map_projects(resume.projects)) else [],
+        "achievements": [section] if (section := _map_achievements(resume.achievements)) else [],
+        "awards": [section]
+        if (section := _map_awards(_title_override(resume, "awards", "Awards"), resume.awards))
+        else [],
+        "publications": [section]
+        if (section := _map_publications(_title_override(resume, "publications", "Publications"), resume.publications))
+        else [],
+        "volunteering": [section]
+        if (section := _map_volunteering(_title_override(resume, "volunteering", "Volunteering"), resume.volunteering))
+        else [],
+        "education": [section] if (section := _map_education(resume.education)) else [],
+        "certifications": [section] if (section := _map_certifications(resume.certifications)) else [],
+        "skills": [section] if (section := _map_skills([item.name for item in resume.skills])) else [],
+        "languages": [section] if (section := _map_languages(resume.languages)) else [],
+        "hobbies": [section]
+        if (section := _map_hobbies(_title_override(resume, "hobbies", "Hobbies"), resume.hobbies))
+        else [],
+        "affiliations": [section]
+        if (section := _map_affiliations(_title_override(resume, "affiliations", "Affiliations"), resume.affiliations))
+        else [],
+        "additionalInformation": [section]
+        if (
+            section := _map_additional_information(
+                _title_override(resume, "additionalInformation", "Additional Information"),
+                resume.additionalInformation,
+            )
+        )
+        else [],
+        "other": _map_text_sections([(item.title, item.content) for item in resume.textSections]),
+    }
+    sections = _ordered_app_sections(resume, family_sections)
     for index, section in enumerate(sections):
         section.order = index
     now = _now_iso()
@@ -355,7 +516,7 @@ def _render_experience_raw(items: List[NormalizedExperience]) -> Optional[RawSec
     blocks = []
     for item in items:
         header = " — ".join(part for part in [item.position, item.company, item.location] if part)
-        body = _join_nonempty([item.summary, *item.responsibilityBullets, *item.achievements])
+        body = _join_nonempty([item.description, *item.responsibilityBullets, *item.achievements])
         block = _join_nonempty([header, body], "\n")
         if block:
             blocks.append(block)
@@ -420,21 +581,171 @@ def _render_achievements_raw(items: List[str]) -> Optional[RawSectionRecord]:
     return RawSectionRecord(label="Achievements", fieldKey="achievements", title="Achievements", content="\n".join(items))
 
 
+def _render_hobbies_raw(items: List[str], title: str = "Hobbies") -> Optional[RawSectionRecord]:
+    if not items:
+        return None
+    return RawSectionRecord(label=title, fieldKey="hobbies", title=title, content="\n".join(items))
+
+
+def _render_affiliations_raw(items: List[str], title: str = "Affiliations") -> Optional[RawSectionRecord]:
+    if not items:
+        return None
+    return RawSectionRecord(label=title, fieldKey="affiliations", title=title, content="\n".join(items))
+
+
+def _render_additional_information_raw(
+    items: List[str],
+    title: str = "Additional Information",
+) -> Optional[RawSectionRecord]:
+    if not items:
+        return None
+    return RawSectionRecord(
+        label=title,
+        fieldKey="additionalInformation",
+        title=title,
+        content="\n".join(items),
+    )
+
+
+def _render_awards_raw(items: List[NormalizedAward], title: str = "Awards") -> Optional[RawSectionRecord]:
+    blocks = []
+    for item in items:
+        body = _join_nonempty(
+            [
+                item.title,
+                " — ".join(part for part in [item.issuer, item.date] if part) or None,
+                _join_nonempty(item.details),
+            ]
+        )
+        if body:
+            blocks.append(body)
+    if not blocks:
+        return None
+    return RawSectionRecord(label=title, fieldKey="awards", title=title, content="\n\n".join(blocks))
+
+
+def _render_publications_raw(
+    items: List[NormalizedPublication],
+    title: str = "Publications",
+) -> Optional[RawSectionRecord]:
+    blocks = []
+    for item in items:
+        body = _join_nonempty(
+            [
+                item.title,
+                " | ".join(part for part in [item.venue, item.date] if part) or None,
+                _join_nonempty(item.details),
+            ]
+        )
+        if body:
+            blocks.append(body)
+    if not blocks:
+        return None
+    return RawSectionRecord(label=title, fieldKey="publications", title=title, content="\n\n".join(blocks))
+
+
+def _render_volunteering_raw(
+    items: List[NormalizedVolunteering],
+    title: str = "Volunteering",
+) -> Optional[RawSectionRecord]:
+    blocks = []
+    for item in items:
+        header = " — ".join(part for part in [item.organization, item.role] if part)
+        meta = " | ".join(
+            part
+            for part in [item.location, item.startDate, "Present" if item.isCurrent else item.endDate]
+            if part
+        )
+        body = _join_nonempty([item.description, *item.bullets], "\n")
+        block = _join_nonempty([header, meta, body], "\n")
+        if block:
+            blocks.append(block)
+    if not blocks:
+        return None
+    return RawSectionRecord(label=title, fieldKey="volunteering", title=title, content="\n\n".join(blocks))
+
+
+def _ordered_raw_sections(
+    resume: NormalizedResume,
+    family_records: Dict[str, List[RawSectionRecord]],
+) -> List[RawSectionRecord]:
+    ordered_records: List[RawSectionRecord] = []
+    consumed: set[tuple[str, int]] = set()
+
+    for item in resume.sectionOrder:
+        family = item.family
+        index = item.ordinal
+        bucket = family_records.get(family) or []
+        if 0 <= index < len(bucket):
+            consumed.add((family, index))
+            ordered_records.append(bucket[index])
+
+    for family in DEFAULT_SECTION_FAMILY_ORDER:
+        for index, record in enumerate(family_records.get(family) or []):
+            if (family, index) in consumed:
+                continue
+            ordered_records.append(record)
+
+    return ordered_records
+
+
 def build_raw_sections(resume: NormalizedResume) -> List[Dict[str, Any]]:
-    text_sections = [RawSectionRecord(label=item.title, fieldKey=None, title=item.title, content=item.content) for item in resume.textSections]
-    records = [
-        _render_profile_raw(resume),
-        _render_summary_raw(resume.summary.text),
-        _render_experience_raw(resume.experience),
-        _render_projects_raw(resume.projects),
-        _render_achievements_raw(resume.achievements),
-        _render_education_raw(resume.education),
-        _render_certifications_raw(resume.certifications),
-        _render_skills_raw([item.name for item in resume.skills]),
-        _render_languages_raw(resume.languages),
-        *text_sections,
+    text_sections = [
+        RawSectionRecord(label=item.title, fieldKey=None, title=item.title, content=item.content)
+        for item in resume.textSections
     ]
-    return [record.model_dump(exclude_none=True) for record in records if record]
+    family_records: Dict[str, List[RawSectionRecord]] = {
+        "profile": [record] if (record := _render_profile_raw(resume)) else [],
+        "summary": [record] if (record := _render_summary_raw(resume.summary.text)) else [],
+        "experience": [record] if (record := _render_experience_raw(resume.experience)) else [],
+        "projects": [record] if (record := _render_projects_raw(resume.projects)) else [],
+        "achievements": [record] if (record := _render_achievements_raw(resume.achievements)) else [],
+        "awards": [record]
+        if (record := _render_awards_raw(resume.awards, _title_override(resume, "awards", "Awards")))
+        else [],
+        "publications": [record]
+        if (
+            record := _render_publications_raw(
+                resume.publications,
+                _title_override(resume, "publications", "Publications"),
+            )
+        )
+        else [],
+        "volunteering": [record]
+        if (
+            record := _render_volunteering_raw(
+                resume.volunteering,
+                _title_override(resume, "volunteering", "Volunteering"),
+            )
+        )
+        else [],
+        "education": [record] if (record := _render_education_raw(resume.education)) else [],
+        "certifications": [record] if (record := _render_certifications_raw(resume.certifications)) else [],
+        "skills": [record] if (record := _render_skills_raw([item.name for item in resume.skills])) else [],
+        "languages": [record] if (record := _render_languages_raw(resume.languages)) else [],
+        "hobbies": [record]
+        if (record := _render_hobbies_raw(resume.hobbies, _title_override(resume, "hobbies", "Hobbies")))
+        else [],
+        "affiliations": [record]
+        if (
+            record := _render_affiliations_raw(
+                resume.affiliations,
+                _title_override(resume, "affiliations", "Affiliations"),
+            )
+        )
+        else [],
+        "additionalInformation": [record]
+        if (
+            record := _render_additional_information_raw(
+                resume.additionalInformation,
+                _title_override(resume, "additionalInformation", "Additional Information"),
+            )
+        )
+        else [],
+        "other": text_sections,
+    }
+    records = _ordered_raw_sections(resume, family_records)
+    return [record.model_dump(exclude_none=True) for record in records]
 
 
 def build_compatibility_normalized(resume: NormalizedResume, app_document: CvDocument, raw_sections: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -475,8 +786,9 @@ def build_compatibility_normalized(resume: NormalizedResume, app_document: CvDoc
                 "endDate": None if item.isCurrent else item.endDate,
                 "isCurrent": item.isCurrent,
                 "location": item.location,
-                "summary": item.summary,
-                "responsibilities": _join_nonempty([item.summary, *item.responsibilityBullets], "\n") or None,
+                "description": item.description,
+                "summary": item.description,
+                "responsibilities": _join_nonempty([item.description, *item.responsibilityBullets], "\n") or None,
                 "responsibilityBullets": item.responsibilityBullets,
                 "achievements": item.achievements,
             }
@@ -521,6 +833,42 @@ def build_compatibility_normalized(resume: NormalizedResume, app_document: CvDoc
             for item in resume.certifications
         ],
         "achievements": [{"text": item} for item in resume.achievements],
+        "hobbies": [{"text": item} for item in resume.hobbies],
+        "awards": [
+            {
+                "title": item.title,
+                "issuer": item.issuer,
+                "date": item.date,
+                "details": item.details,
+            }
+            for item in resume.awards
+        ],
+        "publications": [
+            {
+                "title": item.title,
+                "venue": item.venue,
+                "date": item.date,
+                "details": item.details,
+            }
+            for item in resume.publications
+        ],
+        "volunteering": [
+            {
+                "organization": item.organization,
+                "role": item.role,
+                "location": item.location,
+                "startDate": item.startDate,
+                "endDate": None if item.isCurrent else item.endDate,
+                "isCurrent": item.isCurrent,
+                "description": item.description,
+                "summary": item.description,
+                "bullets": item.bullets,
+            }
+            for item in resume.volunteering
+        ],
+        "affiliations": [{"text": item} for item in resume.affiliations],
+        "additionalInformation": [{"text": item} for item in resume.additionalInformation],
+        "sectionOrder": [item.model_dump(exclude_none=True) for item in resume.sectionOrder],
         "summaryFirstSentence": _join_nonempty([resume.summary.text and resume.summary.text.splitlines()[0]], ""),
         "raw": resume.rawText,
         "rawText": resume.rawText,
