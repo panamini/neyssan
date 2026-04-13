@@ -68,6 +68,7 @@ describe("authoritative resume projection", () => {
           },
         ],
         achievements: [{ text: "Promoted twice in three years" }],
+        hobbies: [{ text: "Chess" }],
         raw: "ignore",
         rawText: "ignore",
         rawSections: [{ label: "BODY", content: "ignore" }],
@@ -93,11 +94,12 @@ describe("authoritative resume projection", () => {
       skills: [{ name: "Product strategy" }],
       languages: [{ name: "English", level: "Fluent" }],
       achievements: ["Promoted twice in three years"],
+      hobbies: ["Chess"],
     });
     expect(model?.experience[0]).toEqual({
       company: "Northline",
       position: "Staff PM",
-      summary: "Owned product strategy.",
+      description: "Owned product strategy.",
       responsibilityBullets: [
         "Launched a multi-market platform",
         "Scaled the roadmap process",
@@ -117,6 +119,22 @@ describe("authoritative resume projection", () => {
     expect(model).not.toHaveProperty("rawText");
     expect(model).not.toHaveProperty("rawSections");
     expect(model).not.toHaveProperty("sections");
+  });
+
+  it("does not recover hobbies from compatibility or raw fields when trusted normalized hobbies are absent", () => {
+    const model = buildAuthoritativeResumeExportModel({
+      source: "mistral_v3",
+      trusted: true,
+      fallbackToLegacy: false,
+      normalized: {
+        profile: { name: "Jane Doe" },
+        rawText: "HOBBIES\nChess",
+        rawSections: [{ label: "HOBBIES", content: "Chess" }],
+        sections: [{ title: "Hobbies", type: "text", blocks: [] }],
+      },
+    });
+
+    expect(model?.hobbies).toEqual([]);
   });
 
   it("rejects untrusted or fallback payloads", () => {

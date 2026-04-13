@@ -32,21 +32,62 @@ vi.mock("convex/react", () => ({
 vi.mock("../../components/ProfileReviewCard", () => ({
   ProfileReviewCard: ({
     cvId,
+    exportStatusDescription,
+    exportStatusLabel,
+    exportStatusTone,
+    onRequestExport,
     toolbarLeadControl,
     toolbarPrimaryControl,
   }: {
     cvId?: string;
+    exportStatusDescription?: string;
+    exportStatusLabel?: string;
+    exportStatusTone?: "standard" | "trusted";
+    onRequestExport?: (format: "pdf" | "docx" | "markdown" | "json") => void;
     toolbarLeadControl?: React.ReactNode;
     toolbarPrimaryControl?: React.ReactNode;
-  }) => (
-    <div>
-      <div className="dasti-workbench-top-left-slot--cv">
-        <div className="dasti-cv-workbench-toggle">{toolbarLeadControl}</div>
+  }) => {
+    const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+
+    return (
+      <div>
+        <div className="dasti-workbench-top-left-slot--cv">
+          <div className="dasti-cv-workbench-toggle">{toolbarLeadControl}</div>
+        </div>
+        <div>Mock profile editor {cvId ?? "none"}</div>
+        {toolbarPrimaryControl}
+        {onRequestExport ? (
+          <div>
+            <button type="button" aria-label="Export PDF" onClick={() => onRequestExport("pdf")}>
+              Export PDF
+            </button>
+            <button
+              type="button"
+              aria-label="More export formats"
+              onClick={() => setIsMenuOpen((current) => !current)}
+            >
+              More export formats
+            </button>
+            <span>{exportStatusLabel ?? "Standard Export"}</span>
+            {isMenuOpen ? (
+              <div role="menu" aria-label="Export resume formats">
+                <button type="button" role="menuitem" onClick={() => onRequestExport("docx")}>
+                  Export DOCX
+                </button>
+                <button type="button" role="menuitem" onClick={() => onRequestExport("markdown")}>
+                  Export Markdown
+                </button>
+                <button type="button" role="menuitem" onClick={() => onRequestExport("json")}>
+                  Export JSON
+                </button>
+                <span>{exportStatusDescription ?? "Not ATS-verified"}</span>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
-      <div>Mock profile editor {cvId ?? "none"}</div>
-      {toolbarPrimaryControl}
-    </div>
-  ),
+    );
+  },
 }));
 
 vi.mock("../../features/verbati/VerbatiCvPreviewPanel", () => ({
@@ -150,9 +191,20 @@ describe("CvForge export status", () => {
 
     expect(screen.getByText("ATS Ready")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Export resume" }));
+    expect(screen.getByRole("button", { name: "Export PDF" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "More export formats" }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "More export formats" }));
     expect(screen.getAllByText("Trusted Mistral v3").length).toBeGreaterThan(0);
-    await user.click(screen.getByRole("menuitem", { name: /Export PDF/i }));
+    expect(screen.getByRole("menuitem", { name: /Export DOCX/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", { name: /Export Markdown/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /Export JSON/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Export PDF" }));
 
     expect(downloadAuthoritativeResumeExportMock).toHaveBeenCalledWith({
       authoritativeResume: expect.objectContaining({
@@ -192,9 +244,20 @@ describe("CvForge export status", () => {
     expect(screen.getByText("Standard Export")).toBeInTheDocument();
     expect(screen.queryByText("ATS Ready")).toBeNull();
 
-    await user.click(screen.getByRole("button", { name: "Export resume" }));
+    expect(screen.getByRole("button", { name: "Export PDF" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "More export formats" }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "More export formats" }));
     expect(screen.getAllByText("Not ATS-verified").length).toBeGreaterThan(0);
-    await user.click(screen.getByRole("menuitem", { name: /Export PDF/i }));
+    expect(screen.getByRole("menuitem", { name: /Export DOCX/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", { name: /Export Markdown/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /Export JSON/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Export PDF" }));
 
     expect(downloadStandardResumeExportMock).toHaveBeenCalledWith({
       document: expect.objectContaining({
