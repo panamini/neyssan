@@ -5,14 +5,24 @@ import userEvent from "@testing-library/user-event";
 import StructuredUploadButton from "../StructuredUploadButton";
 
 const mockAction = vi.fn();
+const probeMistralMock = vi.fn();
 
 vi.mock("../../../convex/_generated/api", () => ({
-  api: { actions: { structuredUpload: { structuredUpload: "structuredUploadAction" } } },
+  api: {
+    actions: {
+      structuredUpload: { structuredUpload: "structuredUploadAction" },
+      _probeMistral: { probe: "probeMistralAction" },
+    },
+  },
 }));
 
 vi.mock("convex/react", () => ({
   useAction: (ref: unknown) =>
-    ref === "structuredUploadAction" ? mockAction : undefined,
+    ref === "structuredUploadAction"
+      ? mockAction
+      : ref === "probeMistralAction"
+        ? probeMistralMock
+        : undefined,
 }));
 
 const showToast = vi.fn();
@@ -31,7 +41,12 @@ vi.mock("../types/cvDocument", () => ({}));
 describe("StructuredUploadButton empty preview", () => {
   beforeEach(() => {
     mockAction.mockReset();
+    probeMistralMock.mockReset();
     showToast.mockReset();
+    probeMistralMock.mockResolvedValue({
+      ready: { status: 200 },
+      parse: { status: 200 },
+    });
     Object.defineProperty(window, "__CV_EDITOR_DEBUG__", {
       configurable: true,
       writable: true,
@@ -56,15 +71,23 @@ describe("StructuredUploadButton empty preview", () => {
       },
       diagnostics: { empty_reason: "paddle_empty_pdfplumber" },
       strict: null,
+      authoritativeResume: {
+        source: "mistral_v3",
+        trusted: true,
+        fallbackToLegacy: false,
+        normalized: {
+          summary: { text: "" },
+        },
+      },
     });
 
-    const { container } = render(<StructuredUploadButton />);
-
-    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    render(<StructuredUploadButton />);
     const file = new File(["dummy"], "resume.pdf", { type: "application/pdf" });
+    const importButton = await screen.findByRole("button", {
+      name: "Scanned PDF / Image",
+    });
 
-    await user.click(screen.getByRole("button", { name: "Upload CV" }));
-    fireEvent.change(input, { target: { files: [file] } });
+    fireEvent.drop(importButton, { dataTransfer: { files: [file] } });
 
     await waitFor(() => {
       expect(mockAction).toHaveBeenCalledTimes(1);
@@ -91,6 +114,16 @@ describe("StructuredUploadButton empty preview", () => {
       },
       diagnostics: {},
       strict: null,
+      authoritativeResume: {
+        source: "mistral_v3",
+        trusted: true,
+        fallbackToLegacy: false,
+        normalized: {
+          profile: {
+            name: "Jane Debug",
+          },
+        },
+      },
       debug: {
         rawParser: {
           result: { normalized: { name: "Jane Debug" } },
@@ -98,13 +131,13 @@ describe("StructuredUploadButton empty preview", () => {
       },
     });
 
-    const { container } = render(<StructuredUploadButton />);
-
-    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    render(<StructuredUploadButton />);
     const file = new File(["dummy"], "resume.pdf", { type: "application/pdf" });
+    const importButton = await screen.findByRole("button", {
+      name: "Scanned PDF / Image",
+    });
 
-    await user.click(screen.getByRole("button", { name: "Upload CV" }));
-    fireEvent.change(input, { target: { files: [file] } });
+    fireEvent.drop(importButton, { dataTransfer: { files: [file] } });
 
     const normalizedButton = await screen.findByRole("button", {
       name: /copy normalized json/i,
