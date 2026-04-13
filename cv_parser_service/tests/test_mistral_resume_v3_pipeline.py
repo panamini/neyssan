@@ -24,7 +24,7 @@ def test_parse_document_annotation_accepts_json_string() -> None:
     assert extraction.summary.text == "Product designer with multilingual experience."
 
 
-def test_v3_payload_builds_real_text_section_for_non_first_class_content() -> None:
+def test_v3_payload_preserves_supported_and_generic_sections() -> None:
     extraction = parse_document_annotation(
         {
             "identity": {"name": "Jane Example", "location": "Paris, France"},
@@ -32,6 +32,7 @@ def test_v3_payload_builds_real_text_section_for_non_first_class_content() -> No
             "summary": {"text": "Product designer with multilingual experience."},
             "skills": [{"name": "Figma"}],
             "languages": [{"name": "French", "levelRaw": "Native"}],
+            "hobbies": ["Climbing", "Chess"],
             "publications": [
                 {
                     "title": "Designing collaborative interfaces",
@@ -42,9 +43,14 @@ def test_v3_payload_builds_real_text_section_for_non_first_class_content() -> No
             ],
             "otherSections": [
                 {
-                    "title": "Volunteering",
+                    "title": "Community",
                     "content": "Mentor, Women in Product",
                 }
+            ],
+            "sectionOrder": [
+                {"family": "publications", "ordinal": 0, "title": "Publications"},
+                {"family": "hobbies", "ordinal": 0, "title": "Interests"},
+                {"family": "other", "ordinal": 0, "title": "Community"},
             ],
         }
     )
@@ -59,11 +65,16 @@ def test_v3_payload_builds_real_text_section_for_non_first_class_content() -> No
     app_sections = payload["appDocument"]["sections"]
     section_titles = [section["title"] for section in app_sections]
     assert "Publications" in section_titles
-    assert "Volunteering" in section_titles
+    assert "Interests" in section_titles
+    assert "Community" in section_titles
 
-    normalized_sections = payload["normalized"]["sections"]
-    assert any(section["title"] == "Publications" and section["type"] == "text" for section in normalized_sections)
-    assert any(section["title"] == "Volunteering" and section["type"] == "text" for section in normalized_sections)
+    assert payload["normalized"]["publications"][0]["title"] == "Designing collaborative interfaces"
+    assert payload["normalized"]["hobbies"] == [{"text": "Climbing"}, {"text": "Chess"}]
+    assert payload["normalized"]["sectionOrder"] == [
+        {"family": "publications", "ordinal": 0, "title": "Publications"},
+        {"family": "hobbies", "ordinal": 0, "title": "Interests"},
+        {"family": "other", "ordinal": 0, "title": "Community"},
+    ]
 
 
 def test_canonicalize_cv_passthroughs_precomputed_v3_payload() -> None:
@@ -152,7 +163,7 @@ def test_normalize_extraction_reclassifies_robert_like_education_and_certificati
     ]
 
 
-def test_normalize_extraction_moves_narrative_achievement_into_experience_summary() -> None:
+def test_normalize_extraction_moves_narrative_achievement_into_experience_description() -> None:
     extraction = parse_document_annotation(
         {
             "experience": [
@@ -179,13 +190,58 @@ def test_normalize_extraction_moves_narrative_achievement_into_experience_summar
     )
 
     experience = normalized.experience[0]
-    assert experience.summary == (
+    assert experience.description == (
         "Safety conscious, attentive Security Guard with eight years experience in protecting and guarding VIP "
         "individuals in the military and defense sectors."
     )
     assert experience.achievements == ["Awarded Employee of the Month"]
     assert experience.responsibilityBullets == [
         "Observed surroundings and immediate settings for possible threats."
+    ]
+
+
+def test_normalize_extraction_preserves_experience_description_and_bullets_structure() -> None:
+    extraction = parse_document_annotation(
+        {
+            "experience": [
+                {
+                    "company": "Northline",
+                    "position": "Analyst",
+                    "description": "Opened with narrative prose only.",
+                },
+                {
+                    "company": "Northline",
+                    "position": "Operator",
+                    "responsibilityBullets": ["Built reporting tooling", "Reduced review latency"],
+                },
+                {
+                    "company": "Northline",
+                    "position": "Lead",
+                    "description": "Introduced the role with narrative prose.",
+                    "responsibilityBullets": ["Launched the operating cadence", "Mentored new hires"],
+                },
+            ]
+        }
+    )
+
+    normalized = normalize_extraction(
+        extraction,
+        raw_text="Northline",
+        page_count=1,
+        document_name="northline.pdf",
+    )
+
+    assert normalized.experience[0].description == "Opened with narrative prose only."
+    assert normalized.experience[0].responsibilityBullets == []
+    assert normalized.experience[1].description is None
+    assert normalized.experience[1].responsibilityBullets == [
+        "Built reporting tooling",
+        "Reduced review latency",
+    ]
+    assert normalized.experience[2].description == "Introduced the role with narrative prose."
+    assert normalized.experience[2].responsibilityBullets == [
+        "Launched the operating cadence",
+        "Mentored new hires",
     ]
 
 
@@ -247,6 +303,94 @@ def test_normalize_extraction_uses_short_explicit_headline_as_summary_fallback()
     )
 
     assert normalized.summary.text == "Fashion writer turned designer"
+
+
+def test_normalize_extraction_drops_invalid_desired_position_contact_noise() -> None:
+    extraction = parse_document_annotation(
+        {
+            "identity": {
+                "desiredPosition": "2259 Oak Street, Old Forge, New York, 13420",
+            }
+        }
+    )
+
+    normalized = normalize_extraction(
+        extraction,
+        raw_text="ROBERT SMITH\n2259 Oak Street, Old Forge, New York, 13420\n",
+        page_count=1,
+        document_name="robertsmith.jpg",
+    )
+
+    assert normalized.identity.desiredPosition is None
+    assert normalized.summary.text is None
+    assert "desired_position_dropped" in [warning.code for warning in normalized.warnings]
+    
+
+def test_normalize_extraction_preserves_supported_sections_and_source_order() -> None:
+    extraction = parse_document_annotation(
+        {
+            "awards": [
+                {"title": "Operator of the Year", "issuer": "Northline", "date": "2024"}
+            ],
+            "achievements": ["Delivered a 32% reduction in review time."],
+            "hobbies": ["Chess", "Trail running"],
+            "publications": [
+                {"title": "Designing collaborative interfaces", "venue": "UX Journal", "date": "2024"}
+            ],
+            "volunteering": [
+                {
+                    "organization": "Women in Product",
+                    "role": "Mentor",
+                    "summary": "Mentored early-career product managers.",
+                    "bullets": ["Ran monthly office hours"],
+                }
+            ],
+            "affiliations": ["Product Leadership Council"],
+            "additionalInformation": ["EU work authorization"],
+            "otherSections": [{"title": "Patents", "content": "Collaborative editor patent pending"}],
+            "sectionOrder": [
+                {"family": "achievements", "ordinal": 0, "title": "Achievements"},
+                {"family": "hobbies", "ordinal": 0, "title": "Interests"},
+                {"family": "publications", "ordinal": 0, "title": "Publications"},
+                {"family": "other", "ordinal": 0, "title": "Patents"},
+                {"family": "affiliations", "ordinal": 0, "title": "Affiliations"},
+                {"family": "additionalInformation", "ordinal": 0, "title": "Additional Information"},
+            ],
+        }
+    )
+
+    normalized = normalize_extraction(
+        extraction,
+        raw_text="Jane Example",
+        page_count=1,
+        document_name="jane_example.pdf",
+    )
+    payload = build_canonical_payload(normalized)
+
+    assert normalized.achievements == ["Delivered a 32% reduction in review time."]
+    assert normalized.hobbies == ["Chess", "Trail running"]
+    assert normalized.awards[0].title == "Operator of the Year"
+    assert normalized.publications[0].title == "Designing collaborative interfaces"
+    assert normalized.volunteering[0].description == "Mentored early-career product managers."
+    assert normalized.affiliations == ["Product Leadership Council"]
+    assert normalized.additionalInformation == ["EU work authorization"]
+    assert normalized.textSections[0].title == "Patents"
+    assert [item.family for item in normalized.sectionOrder] == [
+        "achievements",
+        "hobbies",
+        "publications",
+        "other",
+        "affiliations",
+        "additionalInformation",
+    ]
+    assert [section["label"] for section in payload["rawSections"][:6]] == [
+        "Achievements",
+        "Interests",
+        "Publications",
+        "Patents",
+        "Affiliations",
+        "Additional Information",
+    ]
 
 
 def test_normalize_extraction_swaps_school_and_city_for_helen_style_education() -> None:

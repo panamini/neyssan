@@ -72,7 +72,7 @@ class NormalizedExperience(NormalizedBaseModel):
     startDate: Optional[str] = None
     endDate: Optional[str] = None
     isCurrent: Optional[bool] = None
-    summary: Optional[str] = None
+    description: Optional[str] = None
     responsibilityBullets: List[str] = Field(default_factory=list)
     achievements: List[str] = Field(default_factory=list)
 
@@ -105,10 +105,62 @@ class NormalizedProject(NormalizedBaseModel):
     bullets: List[str] = Field(default_factory=list)
 
 
+class NormalizedAward(NormalizedBaseModel):
+    title: str
+    issuer: Optional[str] = None
+    date: Optional[str] = None
+    details: List[str] = Field(default_factory=list)
+
+
+class NormalizedPublication(NormalizedBaseModel):
+    title: str
+    venue: Optional[str] = None
+    date: Optional[str] = None
+    details: List[str] = Field(default_factory=list)
+
+
+class NormalizedVolunteering(NormalizedBaseModel):
+    organization: str
+    role: Optional[str] = None
+    location: Optional[str] = None
+    startDate: Optional[str] = None
+    endDate: Optional[str] = None
+    isCurrent: Optional[bool] = None
+    description: Optional[str] = None
+    bullets: List[str] = Field(default_factory=list)
+
+
+SectionFamily = Literal[
+    "profile",
+    "summary",
+    "skills",
+    "languages",
+    "experience",
+    "education",
+    "certifications",
+    "projects",
+    "achievements",
+    "hobbies",
+    "awards",
+    "publications",
+    "volunteering",
+    "affiliations",
+    "additionalInformation",
+    "other",
+]
+
+
+class NormalizedSectionOrderItem(NormalizedBaseModel):
+    family: SectionFamily
+    ordinal: int = 0
+    title: Optional[str] = None
+
+
 class NormalizedTextSection(NormalizedBaseModel):
     title: str
     content: str
     family: Optional[str] = None
+    order: Optional[int] = None
 
 
 class NormalizedResume(NormalizedBaseModel):
@@ -130,5 +182,12 @@ class NormalizedResume(NormalizedBaseModel):
     certifications: List[NormalizedCertification] = Field(default_factory=list)
     projects: List[NormalizedProject] = Field(default_factory=list)
     achievements: List[str] = Field(default_factory=list)
+    hobbies: List[str] = Field(default_factory=list)
+    awards: List[NormalizedAward] = Field(default_factory=list)
+    publications: List[NormalizedPublication] = Field(default_factory=list)
+    volunteering: List[NormalizedVolunteering] = Field(default_factory=list)
+    affiliations: List[str] = Field(default_factory=list)
+    additionalInformation: List[str] = Field(default_factory=list)
+    sectionOrder: List[NormalizedSectionOrderItem] = Field(default_factory=list)
     textSections: List[NormalizedTextSection] = Field(default_factory=list)
     rawSections: List[RawSectionRecord] = Field(default_factory=list)

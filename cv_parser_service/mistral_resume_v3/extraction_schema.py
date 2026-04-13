@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 
 class ExtractionBaseModel(BaseModel):
@@ -103,13 +103,14 @@ class ExtractionExperience(ExtractionBaseModel):
         default=None,
         description="Set true only when explicitly supported by words like Present, Current, Now, or equivalent. If unclear, return null rather than false.",
     )
-    summary: Optional[str] = Field(
+    description: Optional[str] = Field(
         default=None,
-        description="Populate only when explicit non-bullet summary prose exists for that role. Otherwise return null.",
+        validation_alias=AliasChoices("description", "summary"),
+        description="Populate only when explicit non-bullet narrative prose exists for that role and appears before any bullet list. Do not convert prose into bullets.",
     )
     responsibilityBullets: List[str] = Field(
         default_factory=list,
-        description="Atomic responsibility/task bullets only. Preserve source order. Keep bullets separate and concise.",
+        description="Atomic explicit responsibility/task bullets only. Preserve source order exactly. Do not invent bullets from prose.",
     )
     achievements: List[str] = Field(
         default_factory=list,
@@ -280,6 +281,35 @@ class ExtractionOtherSection(ExtractionBaseModel):
     )
 
 
+class ExtractionSectionOrderItem(ExtractionBaseModel):
+    family: Literal[
+        "profile",
+        "summary",
+        "skills",
+        "languages",
+        "experience",
+        "education",
+        "certifications",
+        "projects",
+        "achievements",
+        "hobbies",
+        "awards",
+        "publications",
+        "volunteering",
+        "affiliations",
+        "additionalInformation",
+        "other",
+    ] = Field(description="Canonical section family for a visible source section heading.")
+    ordinal: int = Field(
+        description="Zero-based occurrence index for this family in the source document.",
+        ge=0,
+    )
+    title: Optional[str] = Field(
+        default=None,
+        description="Original source heading/title for this section when explicitly present.",
+    )
+
+
 class ResumeExtraction(ExtractionBaseModel):
     identity: Optional[ExtractionIdentity] = None
     contact: Optional[ExtractionContact] = None
@@ -290,10 +320,15 @@ class ResumeExtraction(ExtractionBaseModel):
     education: List[ExtractionEducation] = Field(default_factory=list)
     certifications: List[ExtractionCertification] = Field(default_factory=list)
     projects: List[ExtractionProject] = Field(default_factory=list)
+    achievements: List[str] = Field(default_factory=list)
+    hobbies: List[str] = Field(default_factory=list)
     awards: List[ExtractionAward] = Field(default_factory=list)
     publications: List[ExtractionPublication] = Field(default_factory=list)
     volunteering: List[ExtractionVolunteering] = Field(default_factory=list)
+    affiliations: List[str] = Field(default_factory=list)
+    additionalInformation: List[str] = Field(default_factory=list)
     otherSections: List[ExtractionOtherSection] = Field(default_factory=list)
+    sectionOrder: List[ExtractionSectionOrderItem] = Field(default_factory=list)
 
 
 def build_document_annotation_format() -> dict:
