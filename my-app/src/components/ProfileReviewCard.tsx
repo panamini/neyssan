@@ -57,9 +57,11 @@ import {
   type CvImportSignal,
 } from "../lib/cv-import-signals";
 import {
+  buildAuthoritativeResumeDebugSnapshot,
   coerceAuthoritativeResume,
   type AuthoritativeResume,
 } from "../lib/authoritative-resume";
+import dbg from "../lib/cv-debug";
 import type {
   ImportRecoveryItem,
   ImportRecoverySession,
@@ -265,6 +267,22 @@ function mergeImportedAuthoritativeResume(
     return nextMetadata;
   }
   const authoritativeResume = readStructuredAuthoritativeResume(payload);
+  if (authoritativeResume) {
+    nextMetadata.authoritativeResume = authoritativeResume;
+  } else {
+    delete (nextMetadata as { authoritativeResume?: unknown }).authoritativeResume;
+  }
+  return nextMetadata;
+}
+
+function mergeExplicitAuthoritativeResume(
+  metadata: CvDocument["metadata"],
+  authoritativeResume: AuthoritativeResume | null | undefined,
+): CvDocument["metadata"] {
+  const nextMetadata = { ...(metadata ?? {}) } as CvDocument["metadata"];
+  if (authoritativeResume === undefined) {
+    return nextMetadata;
+  }
   if (authoritativeResume) {
     nextMetadata.authoritativeResume = authoritativeResume;
   } else {
@@ -1023,6 +1041,15 @@ export function ProfileReviewCard({
     };
 
     try {
+      dbg(
+        "[ProfileReviewCard] importSectionsIntoFreshCv authoritative snapshot",
+        buildAuthoritativeResumeDebugSnapshot({
+          authoritativeResume: importedDoc.metadata?.authoritativeResume,
+          metadataAuthoritativeResumePresent: Boolean(
+            importedDoc.metadata?.authoritativeResume,
+          ),
+        }),
+      );
       await importCv(importedDoc);
       const importedSignals = inspectCvImportSignals(importedDoc);
       if (shouldPromptForImportedTitleRename(importedDoc, importedSignals)) {
@@ -1040,6 +1067,7 @@ export function ProfileReviewCard({
     target: RecoveryImportTarget;
     pendingSession?: ImportRecoverySession | null;
     structured?: StructuredPayload | null;
+    authoritativeResume?: AuthoritativeResume | null;
   }): CvDocument {
     const now = new Date().toISOString();
     const pendingSession = args.pendingSession?.items.length
@@ -1050,28 +1078,34 @@ export function ProfileReviewCard({
       return {
         id: uuidv4(),
         title: deriveCvTitleFromSections(args.updatedSections as any, "Imported CV"),
-        metadata: mergeImportedAuthoritativeResume(
-          {
-            createdAt: now,
-            updatedAt: now,
-            version: 1,
-            ...(pendingSession ? { importRecoverySession: pendingSession } : {}),
-          } as CvDocument["metadata"],
-          args.structured,
+        metadata: mergeExplicitAuthoritativeResume(
+          mergeImportedAuthoritativeResume(
+            {
+              createdAt: now,
+              updatedAt: now,
+              version: 1,
+              ...(pendingSession ? { importRecoverySession: pendingSession } : {}),
+            } as CvDocument["metadata"],
+            args.structured,
+          ),
+          args.authoritativeResume,
         ),
         sections: args.updatedSections as any,
       };
     }
 
-    const nextMetadata = mergeImportedAuthoritativeResume(
-      {
-      ...(currentCv.metadata ?? {}),
-      updatedAt: now,
-      ...(pendingSession
-        ? { importRecoverySession: pendingSession }
-        : { importRecoverySession: undefined }),
-      } as CvDocument["metadata"],
-      args.structured,
+    const nextMetadata = mergeExplicitAuthoritativeResume(
+      mergeImportedAuthoritativeResume(
+        {
+          ...(currentCv.metadata ?? {}),
+          updatedAt: now,
+          ...(pendingSession
+            ? { importRecoverySession: pendingSession }
+            : { importRecoverySession: undefined }),
+        } as CvDocument["metadata"],
+        args.structured,
+      ),
+      args.authoritativeResume,
     );
     if (!pendingSession) {
       delete (nextMetadata as { importRecoverySession?: unknown }).importRecoverySession;
@@ -1089,14 +1123,25 @@ export function ProfileReviewCard({
     target: RecoveryImportTarget,
     pendingSession?: ImportRecoverySession | null,
     structured?: StructuredPayload | null,
+    authoritativeResume?: AuthoritativeResume | null,
   ): Promise<boolean> {
     const nextDoc = buildRecoveryTargetDocument({
       updatedSections: updated,
       target,
       pendingSession,
       structured,
+      authoritativeResume,
     });
     try {
+      dbg(
+        "[ProfileReviewCard] applyImportedSections authoritative snapshot",
+        buildAuthoritativeResumeDebugSnapshot({
+          authoritativeResume: nextDoc.metadata?.authoritativeResume,
+          metadataAuthoritativeResumePresent: Boolean(
+            nextDoc.metadata?.authoritativeResume,
+          ),
+        }),
+      );
       await importCv(nextDoc);
       try {
         window.sessionStorage.removeItem(importRecoveryDraftSessionKey);
@@ -1421,7 +1466,8 @@ export function ProfileReviewCard({
       sectionsToApply,
       pendingRecoveryImport.target,
       persistedSession,
-      { authoritativeResume: pendingRecoveryImport.authoritativeResume ?? null },
+      undefined,
+      pendingRecoveryImport.authoritativeResume ?? null,
     );
   }
 
@@ -1476,7 +1522,8 @@ export function ProfileReviewCard({
       revealedSections,
       pendingRecoveryImport.target,
       persistedSession,
-      { authoritativeResume: pendingRecoveryImport.authoritativeResume ?? null },
+      undefined,
+      pendingRecoveryImport.authoritativeResume ?? null,
     );
     if (didApply) {
       setPendingTouchedRecoverySectionIds(touchedSectionIds);

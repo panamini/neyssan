@@ -142,4 +142,37 @@ describe("experience responsibility bullet preservation", () => {
     const normalizedItem = (normalizedExperienceSection?.structuredContent as any[])?.[0];
     expect(normalizedItem?.responsibilityBullets).toBeUndefined();
   });
+
+  it("preserves authoritative resume metadata passthrough during normalization", () => {
+    const result = normalizeAndValidateCvDocument({
+      id: "cv_authoritative_meta",
+      title: "Imported CV",
+      metadata: {
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        version: 1,
+        authoritativeResume: {
+          source: "mistral_v3",
+          trusted: true,
+          fallbackToLegacy: false,
+          normalized: {
+            profile: { name: "Jane Doe" },
+          },
+        },
+      },
+      sections: [],
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+
+    expect(result.document.metadata.authoritativeResume).toEqual({
+      source: "mistral_v3",
+      trusted: true,
+      fallbackToLegacy: false,
+      normalized: {
+        profile: { name: "Jane Doe" },
+      },
+    });
+  });
 });
