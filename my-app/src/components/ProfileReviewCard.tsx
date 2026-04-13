@@ -3,7 +3,6 @@ import { v4 as uuidv4 } from "uuid";
 import {
   Check,
   ChevronDown,
-  FilePdf,
   FileText,
   GripHorizontal,
   SealWarning,
@@ -35,6 +34,8 @@ import StructuredUploadButton, {
 import ImportWarningBanner from "./ImportWarningBanner";
 import CvRenameDialog from "./CvRenameDialog";
 import ImportRecoveryPanel from "./ImportRecoveryPanel";
+import ResumeExportControl from "./ResumeExportControl";
+import type { ResumeExportFormat } from "../lib/cv-export";
 import type {
   CvDocument,
   CvSection,
@@ -75,7 +76,10 @@ import { makeTextSection } from "../lib/cv-template";
 interface Props {
   cvId?: string;
   profile?: unknown;
-  onRequestExport?: () => void;
+  onRequestExport?: (format: ResumeExportFormat) => void;
+  exportStatusDescription?: string;
+  exportStatusLabel?: string;
+  exportStatusTone?: "standard" | "trusted";
   toolbarLeadControl?: React.ReactNode;
   toolbarPrimaryControl?: React.ReactNode;
 }
@@ -303,6 +307,9 @@ export function ProfileReviewCard({
   cvId,
   profile,
   onRequestExport,
+  exportStatusDescription = "Not ATS-verified",
+  exportStatusLabel = "Standard Export",
+  exportStatusTone = "standard",
   toolbarLeadControl,
   toolbarPrimaryControl,
 }: Props) {
@@ -994,14 +1001,14 @@ export function ProfileReviewCard({
     setIsRenameDialogOpen(false);
   }
 
-  function handleExportClick() {
+  function handleExportClick(format: ResumeExportFormat) {
     if (importSignals.length > 0 && !isImportReviewAcknowledged) {
       handleImportReviewEntryPoint();
       pushToast("Review the flagged fields before exporting this CV.");
       return;
     }
 
-    onRequestExport?.();
+    onRequestExport?.(format);
   }
 
   function handleRenameSave(nextTitle: string) {
@@ -2534,15 +2541,13 @@ export function ProfileReviewCard({
                   </>
                 ) : null}
                 {onRequestExport ? (
-                  <button
-                    type="button"
-                    onClick={handleExportClick}
-                    className="dasti-button dasti-button--secondary dasti-button--pill dasti-button--sm dasti-cv-edit-toolbar__export"
-                    aria-label="Export CV as PDF"
-                  >
-                    <FilePdf size={14} strokeWidth={1.6} aria-hidden="true" />
-                    Export PDF
-                  </button>
+                  <ResumeExportControl
+                    exportingFormat={null}
+                    onExport={handleExportClick}
+                    statusDescription={exportStatusDescription}
+                    statusLabel={exportStatusLabel}
+                    statusTone={exportStatusTone}
+                  />
                 ) : null}
                 {hasImportReviewEntryPoint ? (
                   <button

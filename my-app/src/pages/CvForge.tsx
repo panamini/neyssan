@@ -1,9 +1,10 @@
 import React from "react";
 import { useQuery } from "convex/react";
 import { useLocation } from "react-router-dom";
-import { Check, Eye, FilePdf, Palette, X } from "@/lib/icons";
+import { Check, Eye, Palette, X } from "@/lib/icons";
 import { api } from "../../convex/_generated/api";
 import { ProfileReviewCard } from "../components/ProfileReviewCard";
+import ResumeExportControl from "../components/ResumeExportControl";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import { VerbatiCvPreviewPanel } from "../features/verbati/VerbatiCvPreviewPanel";
 import { useBoundVerbatiCvStyle } from "../features/verbati/useBoundVerbatiCvStyle";
@@ -56,16 +57,6 @@ function readStoredCvForgeWorkspaceMode(): CvForgeWorkspaceMode {
     ? "preview"
     : "edit";
 }
-
-const EXPORT_MENU_ITEMS: ReadonlyArray<{
-  format: ResumeExportFormat;
-  label: string;
-}> = [
-  { format: "pdf", label: "Export PDF" },
-  { format: "docx", label: "Export DOCX" },
-  { format: "markdown", label: "Export Markdown" },
-  { format: "json", label: "Export JSON" },
-];
 
 function normalizePresetSlot(
   value: unknown,
@@ -134,7 +125,6 @@ export function CvForge(): JSX.Element {
   const { search } = useLocation();
   const { currentCv, importCv } = useCvLibrary();
   const presetMenuRef = React.useRef<HTMLDivElement | null>(null);
-  const exportMenuRef = React.useRef<HTMLDivElement | null>(null);
   const [viewportWidth, setViewportWidth] = React.useState(() =>
     typeof window === "undefined" ? 1440 : window.innerWidth,
   );
@@ -152,7 +142,6 @@ export function CvForge(): JSX.Element {
   const [isStylePresetMenuOpen, setIsStylePresetMenuOpen] = React.useState(
     false,
   );
-  const [isExportMenuOpen, setIsExportMenuOpen] = React.useState(false);
   const [exportingFormat, setExportingFormat] =
     React.useState<ResumeExportFormat | null>(null);
   const { showToast } = useToast();
@@ -217,33 +206,6 @@ export function CvForge(): JSX.Element {
     };
   }, [isStylePresetMenuOpen]);
 
-  React.useEffect(() => {
-    if (!isExportMenuOpen) {
-      return undefined;
-    }
-
-    const handlePointerDown = (event: MouseEvent) => {
-      const target = event.target as Node | null;
-      if (target && !exportMenuRef.current?.contains(target)) {
-        setIsExportMenuOpen(false);
-      }
-    };
-
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setIsExportMenuOpen(false);
-      }
-    };
-
-    window.addEventListener("mousedown", handlePointerDown);
-    window.addEventListener("keydown", handleEscape);
-
-    return () => {
-      window.removeEventListener("mousedown", handlePointerDown);
-      window.removeEventListener("keydown", handleEscape);
-    };
-  }, [isExportMenuOpen]);
-
   const authoritativeResume = React.useMemo(
     () => readAuthoritativeResumeFromCv(currentCv),
     [currentCv],
@@ -257,13 +219,9 @@ export function CvForge(): JSX.Element {
   const exportStatusDescription = hasTrustedExport
     ? "Trusted Mistral v3"
     : "Not ATS-verified";
-  const exportTooltip = hasTrustedExport
-    ? "Export ATS-ready resume"
-    : "Export standard resume";
 
   const handleResumeExport = React.useCallback(
     async (format: ResumeExportFormat) => {
-      setIsExportMenuOpen(false);
       dbg(
         "[CvForge] export authoritative snapshot",
         buildAuthoritativeResumeDebugSnapshot({
@@ -432,71 +390,14 @@ export function CvForge(): JSX.Element {
     </button>
   );
   const resumeExportControl = (
-    <div
-      ref={exportMenuRef}
-      className="dasti-import-dropdown dasti-cv-style-presets"
-      data-open={isExportMenuOpen ? "true" : "false"}
-      style={{
-        flex: "0 0 auto",
-        display: "inline-flex",
-        alignItems: "center",
-        gap: "var(--space-2)",
-      }}
-    >
-      <button
-        type="button"
-        className="dasti-icon-button"
-        aria-label="Export resume"
-        aria-expanded={isExportMenuOpen}
-        aria-haspopup="menu"
-        data-toolbar-tooltip={exportTooltip}
-        data-no-pan="true"
-        onClick={() => {
-          if (exportingFormat) {
-            return;
-          }
-          setIsExportMenuOpen((current) => !current);
-        }}
-      >
-        <FilePdf size={15} strokeWidth={1.7} aria-hidden="true" />
-      </button>
-      <span
-        className={
-          hasTrustedExport ? "dasti-pill dasti-pill--success" : "dasti-pill"
-        }
-      >
-        {exportStatusLabel}
-      </span>
-      {isExportMenuOpen ? (
-        <div
-          className="dasti-import-dropdown__menu dasti-import-dropdown__menu--compact dasti-toolbar-drawer-surface dasti-cv-style-presets__menu"
-          role="menu"
-          aria-label="Export resume"
-        >
-          {EXPORT_MENU_ITEMS.map((item) => (
-            <button
-              key={item.format}
-              type="button"
-              role="menuitem"
-              className="dasti-cv-style-presets__option"
-              onClick={() => {
-                void handleResumeExport(item.format);
-              }}
-              disabled={exportingFormat !== null}
-            >
-              <span className="dasti-cv-style-presets__option-copy">
-                <span className="dasti-cv-style-presets__option-title">
-                  {item.label}
-                </span>
-                <span className="dasti-cv-style-presets__option-description">
-                  {exportStatusDescription}
-                </span>
-              </span>
-            </button>
-          ))}
-        </div>
-      ) : null}
-    </div>
+    <ResumeExportControl
+      exportingFormat={exportingFormat}
+      menuLabel="More export formats"
+      onExport={handleResumeExport}
+      statusDescription={exportStatusDescription}
+      statusLabel={exportStatusLabel}
+      statusTone={hasTrustedExport ? "trusted" : "standard"}
+    />
   );
   const cvWorkbenchShellStyle: React.CSSProperties = {
     width: "100%",
@@ -569,11 +470,12 @@ export function CvForge(): JSX.Element {
               >
                 <ProfileReviewCard
                   cvId={requestedCvId}
+                  exportStatusDescription={exportStatusDescription}
+                  exportStatusLabel={exportStatusLabel}
+                  exportStatusTone={hasTrustedExport ? "trusted" : "standard"}
                   toolbarLeadControl={editModeToggle}
                   toolbarPrimaryControl={stylePresetToolbarControl}
-                  onRequestExport={() => {
-                    void handleResumeExport("pdf");
-                  }}
+                  onRequestExport={handleResumeExport}
                 />
                 <div
                   className={
@@ -585,7 +487,6 @@ export function CvForge(): JSX.Element {
                   <VerbatiCvPreviewPanel
                     layoutMode={isSplitCanvas ? "rail" : "stacked"}
                     hostMode="panel"
-                    railTrailingControl={resumeExportControl}
                     stylePreset={stylePreset}
                     onStylePresetChange={setStylePreset}
                   />

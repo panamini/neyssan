@@ -6306,6 +6306,20 @@ html:not(.dark) .dasti-proposal-submit {
   flex: 0 0 auto;
 }
 
+.dasti-resume-export-control {
+  flex: 0 0 auto;
+}
+
+.dasti-resume-export-control__cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.dasti-resume-export-control__primary {
+  white-space: nowrap;
+}
+
 .dasti-import-review-trigger {
   display: inline-flex;
   align-items: center;

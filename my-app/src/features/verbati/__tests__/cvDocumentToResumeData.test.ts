@@ -58,6 +58,8 @@ describe("mapCvDocumentToResumeData", () => {
               startDate: "2021-01-01T00:00:00.000Z",
               startDatePrecision: "year",
               isCurrent: true,
+              description:
+                "Led the design vision across a portfolio of editorial products.",
               responsibilityBullets: [
                 "Defined a reusable design system",
                 "Improved implementation quality across squads",
@@ -122,6 +124,16 @@ describe("mapCvDocumentToResumeData", () => {
             },
           ],
         },
+        {
+          id: "hobbies",
+          title: "Hobbies",
+          type: "text",
+          blocks: [],
+          structuredContent: [
+            { id: "hobby-1", name: "Chess", level: "Advanced" },
+            { id: "hobby-2", name: "Running", level: "Intermediate" },
+          ],
+        },
       ],
     };
 
@@ -141,6 +153,9 @@ describe("mapCvDocumentToResumeData", () => {
       { label: "LinkedIn", value: "linkedin.com/in/elenamarlowe" },
     ]);
     expect(mapped.experience[0].period).toBe("2021 — Present");
+    expect(mapped.experience[0].description).toBe(
+      "Led the design vision across a portfolio of editorial products.",
+    );
     expect(mapped.experience[0].bullets).toEqual([
       "Defined a reusable design system",
       "Improved implementation quality across squads",
@@ -161,6 +176,51 @@ describe("mapCvDocumentToResumeData", () => {
     expect(mapped.achievements).toEqual([
       "Scaled a multi-squad design language.",
     ]);
+    expect(mapped.hobbies).toEqual(["Chess", "Running"]);
     expect(hasRenderableResumeData(mapped)).toBe(true);
+  });
+
+  it("keeps prose-only experience entries as description without synthesizing bullets", () => {
+    const doc: CvDocument = {
+      id: "cv-2",
+      title: "Operations Lead",
+      metadata: {
+        createdAt: "2026-03-25T00:00:00.000Z",
+        updatedAt: "2026-03-25T00:00:00.000Z",
+        version: 1,
+      },
+      sections: [
+        {
+          id: "experience",
+          title: "Experience",
+          type: "experience",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "exp-2",
+              company: "Northline Studio",
+              position: "Operations Lead",
+              location: "Paris",
+              description:
+                "Owned the operating cadence and introduced a clearer delivery rhythm across the team.",
+            },
+          ],
+        },
+      ],
+    };
+
+    const mapped = mapCvDocumentToResumeData(doc);
+
+    expect(mapped.experience).toEqual([
+      {
+        role: "Operations Lead",
+        company: "Northline Studio",
+        period: "Dates not set",
+        location: "Paris",
+        description:
+          "Owned the operating cadence and introduced a clearer delivery rhythm across the team.",
+        bullets: [],
+      },
+    ]);
   });
 });

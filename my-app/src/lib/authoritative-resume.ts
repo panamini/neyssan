@@ -36,7 +36,7 @@ export type AuthoritativeResumeExperience = {
   startDate?: string;
   endDate?: string | null;
   isCurrent?: boolean;
-  summary?: string;
+  description?: string;
   responsibilityBullets: string[];
   achievements: string[];
 };
@@ -84,6 +84,7 @@ export type AuthoritativeResumeExportModel = {
   projects: AuthoritativeResumeProject[];
   certifications: AuthoritativeResumeCertification[];
   achievements: string[];
+  hobbies: string[];
 };
 
 function asRecord(value: unknown): UnknownRecord | null {
@@ -111,6 +112,15 @@ function cleanOptionalString(value: unknown): string | undefined {
 function cleanStringArray(value: unknown): string[] {
   return asArray(value)
     .map((entry) => cleanString(entry))
+    .filter(Boolean);
+}
+
+function cleanNamedStringArray(value: unknown): string[] {
+  return asArray(value)
+    .map((entry) => {
+      const record = asRecord(entry);
+      return cleanString(record?.name ?? record?.text ?? entry);
+    })
     .filter(Boolean);
 }
 
@@ -253,9 +263,17 @@ export function buildAuthoritativeResumeExportModel(
       const position = readOptionalString(record, "position");
       const bullets = cleanStringArray(record.responsibilityBullets);
       const achievements = cleanStringArray(record.achievements);
-      const summaryText = readOptionalString(record, "summary");
+      const description =
+        readOptionalString(record, "description") ??
+        readOptionalString(record, "summary");
 
-      if (!company && !position && bullets.length === 0 && achievements.length === 0 && !summaryText) {
+      if (
+        !company &&
+        !position &&
+        bullets.length === 0 &&
+        achievements.length === 0 &&
+        !description
+      ) {
         return null;
       }
 
@@ -266,7 +284,7 @@ export function buildAuthoritativeResumeExportModel(
         startDate: readOptionalString(record, "startDate"),
         endDate: readOptionalString(record, "endDate") ?? null,
         isCurrent: record.isCurrent === true,
-        summary: summaryText,
+        description,
         responsibilityBullets: bullets,
         achievements,
       } satisfies AuthoritativeResumeExperience;
@@ -377,5 +395,6 @@ export function buildAuthoritativeResumeExportModel(
     projects,
     certifications,
     achievements: toAchievementTextList(normalized.achievements),
+    hobbies: cleanNamedStringArray((normalized as UnknownRecord).hobbies),
   };
 }
