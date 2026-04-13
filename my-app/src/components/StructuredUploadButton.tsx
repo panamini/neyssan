@@ -9,9 +9,6 @@ import {
   Loader2,
   ScanLine,
   Paperclip,
-  ChevronDown,
-  FilePdf,
-  FileImage,
 } from "@/lib/icons";
 import { useToast } from "./ui/toast";
 import type { CvSection } from "../types/cvDocument";
@@ -181,15 +178,12 @@ export function StructuredUploadButton({
   );
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [emptyReason, setEmptyReason] = useState<string | null>(null);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [latestPayload, setLatestPayload] = useState<StructuredPayload | null>(null);
   const [copyFeedback, setCopyFeedback] = useState<null | "normalized" | "parser" | "rawText">(null);
   const { showToast } = useToast();
   const mountedRef = useRef(true);
   const requestIdRef = useRef(0);
   const scopeKeyRef = useRef<string>(contextKey ?? "");
-  const dropdownRef = useRef<HTMLDivElement | null>(null);
-  const droppedFileRef = useRef<File | null>(null);
   const pickerRef = useRef<{
     mode: "default" | "mistral";
     scopeKey: string;
@@ -315,7 +309,6 @@ export function StructuredUploadButton({
       mountedRef.current = false;
       requestIdRef.current += 1;
       pickerRef.current = null;
-      droppedFileRef.current = null;
     };
   }, []);
 
@@ -329,10 +322,8 @@ export function StructuredUploadButton({
     setActiveMode(null);
     setErrorMsg(null);
     setEmptyReason(null);
-    setIsMenuOpen(false);
     setLatestPayload(null);
     setCopyFeedback(null);
-    droppedFileRef.current = null;
     if (inputRef.current) {
       inputRef.current.value = "";
     }
@@ -344,28 +335,12 @@ export function StructuredUploadButton({
     return () => window.clearTimeout(timeoutId);
   }, [copyFeedback]);
 
-  useEffect(() => {
-    if (!isMenuOpen) return undefined;
-
-    const handleDocumentClick = (event: MouseEvent) => {
-      if (dropdownRef.current?.contains(event.target as Node)) return;
-      setIsMenuOpen(false);
-      droppedFileRef.current = null;
-    };
-
-    document.addEventListener("mousedown", handleDocumentClick);
-    return () => {
-      document.removeEventListener("mousedown", handleDocumentClick);
-    };
-  }, [isMenuOpen]);
-
   const trigger = useCallback(
     (mode: "default" | "mistral") => {
       if (disabled || isBusy) return;
       setErrorMsg(null);
       setEmptyReason(null);
       setPendingMode(mode);
-      setIsMenuOpen(false);
       pickerRef.current = { mode, scopeKey: scopeKeyRef.current };
       if (inputRef.current) {
         inputRef.current.accept =
@@ -477,7 +452,7 @@ export function StructuredUploadButton({
 
         if (requestedMode === "mistral" && submission.kind === "text") {
           throw new Error(
-            "Mistral OCR is for scanned PDFs and images. Use StructuredUpload for text files.",
+            "Scanned import is only available for scanned PDFs and images. Text/PDF/TXT import is no longer exposed in this UI.",
           );
         }
 
@@ -703,7 +678,6 @@ export function StructuredUploadButton({
         if (inputRef.current) inputRef.current.value = "";
         setPendingMode("default");
         pickerRef.current = null;
-        droppedFileRef.current = null;
         if (isCurrentRequest()) {
           setStatus("idle");
           setActiveMode(null);
@@ -749,9 +723,8 @@ export function StructuredUploadButton({
       setIsDropTargeted(false);
       setEmptyReason(null);
       if (renderAs === "dropdown") {
-        droppedFileRef.current = file;
         setErrorMsg(null);
-        setIsMenuOpen(true);
+        void processFile(file, "mistral", scopeKeyRef.current);
         return;
       }
       void processFile(
@@ -770,9 +743,7 @@ export function StructuredUploadButton({
     ocrHelperText ??
     "Use for scanned PDFs, photos, or image files. OCR results may need review.";
   const structuredHelperText =
-    "Use StructuredUpload for selectable/text PDFs and TXT exports.";
-  const dropdownHelperText =
-    "Choose the import route: text PDFs and TXT for structured parsing, scanned PDFs and images for OCR.";
+    "Use for scanned PDFs, photos, or image files. OCR results may need review.";
   useEffect(() => {
     if (typeof window !== "undefined") {
       console.info("[UI_FLAG] mistral=", enableMistral);
@@ -787,19 +758,6 @@ export function StructuredUploadButton({
       className="hidden"
       onChange={handleChange}
     />
-  );
-
-  const startMenuImport = useCallback(
-    (mode: "default" | "mistral") => {
-      const droppedFile = droppedFileRef.current;
-      if (droppedFile) {
-        setIsMenuOpen(false);
-        void processFile(droppedFile, mode, scopeKeyRef.current);
-        return;
-      }
-      trigger(mode);
-    },
-    [processFile, trigger],
   );
 
   const copyPayload = useCallback(
@@ -876,105 +834,49 @@ export function StructuredUploadButton({
       <>
         {fileInput}
         <div className="flex flex-wrap items-center gap-2">
-          <div
-            ref={dropdownRef}
-            className="dasti-import-dropdown"
-            data-open={isMenuOpen ? "true" : "false"}
+          <button
+            type="button"
+            disabled={disabled || isBusy || !enableMistral}
+            className={`dasti-button dasti-button--secondary dasti-button--sm dasti-import-button${
+              hasActiveDropState ? " dasti-import-button--drop" : ""
+            }`}
+            title={
+              mistralAvailable
+                ? hasActiveDropState
+                  ? "Drop a scanned PDF or image here to import with Mistral OCR."
+                  : secondaryHelperText
+                : "Scanned/image OCR upload is unavailable in this environment."
+            }
+            onClick={() => trigger("mistral")}
+            onDragEnter={(event) => {
+              event.preventDefault();
+              setIsDropTargeted(true);
+            }}
+            onDragOver={(event) => {
+              event.preventDefault();
+              event.dataTransfer.dropEffect = "copy";
+              setIsDropTargeted(true);
+            }}
+            onDragLeave={(event) => {
+              event.preventDefault();
+              if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+                setIsDropTargeted(false);
+              }
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              handleDroppedFiles(event.dataTransfer.files);
+            }}
           >
-            <button
-              type="button"
-              disabled={disabled || isBusy}
-              className={`dasti-button dasti-button--secondary dasti-button--sm dasti-import-button${
-                hasActiveDropState ? " dasti-import-button--drop" : ""
-              }`}
-              title={
-                hasActiveDropState
-                  ? "Drop a file here, then choose StructuredUpload or Mistral OCR."
-                  : dropdownHelperText
-              }
-              onClick={() =>
-                setIsMenuOpen((value) => {
-                  const nextValue = !value;
-                  if (!nextValue) {
-                    droppedFileRef.current = null;
-                  }
-                  return nextValue;
-                })
-              }
-              onDragEnter={(event) => {
-                event.preventDefault();
-                setIsDropTargeted(true);
-              }}
-              onDragOver={(event) => {
-                event.preventDefault();
-                event.dataTransfer.dropEffect = "copy";
-                setIsDropTargeted(true);
-              }}
-              onDragLeave={(event) => {
-                event.preventDefault();
-                if (!event.currentTarget.contains(event.relatedTarget as Node)) {
-                  setIsDropTargeted(false);
-                }
-              }}
-              onDrop={(event) => {
-                event.preventDefault();
-                handleDroppedFiles(event.dataTransfer.files);
-              }}
-            >
-              {isBusy ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : hasActiveDropState ? (
-                <Paperclip size={14} />
-              ) : (
-                <Upload size={14} />
-              )}
-              <span>
-                {hasActiveDropState ? "Choose import route" : compactImportLabel}
-              </span>
-              <ChevronDown size={14} aria-hidden />
-            </button>
-            {isMenuOpen ? (
-              <div className="dasti-import-dropdown__menu dasti-import-dropdown__menu--compact dasti-toolbar-drawer-surface">
-                <button
-                  type="button"
-                  className="dasti-menu-option dasti-menu-option--import-route"
-                  onClick={() => startMenuImport("default")}
-                >
-                  <div className="dasti-menu-option__row">
-                    <div className="dasti-menu-option__icons" aria-hidden>
-                      <span className="dasti-menu-option__icon">
-                        <FilePdf size={15} strokeWidth={1.6} />
-                      </span>
-                    </div>
-                    <div className="dasti-menu-option__copy">
-                      <div className="dasti-menu-option__title">
-                        Import text PDF or TXT
-                      </div>
-                    </div>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  className="dasti-menu-option dasti-menu-option--import-route"
-                  onClick={() => startMenuImport("mistral")}
-                  disabled={!enableMistral}
-                >
-                  <div className="dasti-menu-option__row">
-                    <div className="dasti-menu-option__icons" aria-hidden>
-                      <span className="dasti-menu-option__icon">
-                        <FileImage size={15} strokeWidth={1.6} />
-                      </span>
-                    </div>
-                    <div className="dasti-menu-option__copy">
-                      <div className="dasti-menu-option__title">
-                        Import scanned PDF or image
-                      </div>
-                    </div>
-                  </div>
-                </button>
-              </div>
-            ) : null}
-          </div>
+            {isBusy ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : hasActiveDropState ? (
+              <Paperclip size={14} />
+            ) : (
+              <ScanLine size={14} />
+            )}
+            <span>{compactImportLabel}</span>
+          </button>
           {debugCopyControls}
         </div>
         {errorMsg && (
