@@ -20,10 +20,11 @@ import {
   applyStrictContactToSections,
 } from "../utils/cv/mapping-utils";
 import type { ImportRecoveryPayload } from "../types/importRecovery";
+import type { AuthoritativeResume } from "../lib/authoritative-resume";
 
 export interface StructuredUploadButtonProps {
   sections?: CvSection[];
-  onApplyToSections?: (updated: CvSection[]) => void;
+  onApplyToSections?: (updated: CvSection[], payload?: StructuredPayload) => void;
   onResult?: (payload: unknown) => void;
   onRecoveryRequired?: (payload: {
     baseSections: CvSection[];
@@ -44,6 +45,7 @@ export interface StructuredUploadButtonProps {
 
 type StructuredPayload = {
   normalized?: unknown;
+  authoritativeResume?: AuthoritativeResume | null;
   strict?: {
     name?: string | null;
     email?: string | null;
@@ -567,7 +569,7 @@ export function StructuredUploadButton({
         } else {
           if (typeof onApplyToSections === "function" && fullSections.length > 0) {
             try {
-              onApplyToSections(fullSections);
+              onApplyToSections(fullSections, payload);
             } catch {
               /* noop */
             }
