@@ -185,6 +185,27 @@ type ParserAttempt = {
   label: string;
 };
 
+type ParserResolutionOptions = {
+  env?: Record<string, string | undefined>;
+  preferLoopback?: boolean;
+};
+
+type LocalParserProbeResult = {
+  checkedAt: number;
+  origin: string | null;
+};
+
+const LOCAL_PARSER_ORIGINS = [
+  "http://127.0.0.1:8000",
+  "http://localhost:8000",
+] as const;
+const LOCAL_PARSER_PROBE_TTL_MS = 5_000;
+let cachedLocalParserProbe: LocalParserProbeResult | null = null;
+
+export function resetLocalParserProbeCacheForTest(): void {
+  cachedLocalParserProbe = null;
+}
+
 function normalizeOrigin(value?: string | null): string | null {
   if (!value) return null;
   const trimmed = String(value).trim();
@@ -217,9 +238,55 @@ function isLoopbackUrl(value: string | undefined | null): boolean {
   }
 }
 
-function resolveParserEndpoints(targetPath = "/parse-cv"): ParserAttempt[] {
+export async function detectHealthyLocalParserOrigin(
+  accessHeaders?: Record<string, string> | null,
+): Promise<string | null> {
+  const now = Date.now();
+  if (
+    cachedLocalParserProbe &&
+    now - cachedLocalParserProbe.checkedAt < LOCAL_PARSER_PROBE_TTL_MS
+  ) {
+    return cachedLocalParserProbe.origin;
+  }
+
+  for (const origin of LOCAL_PARSER_ORIGINS) {
+    const readyUrl = new URL("/ready", origin);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 400);
+    try {
+      const headers: Record<string, string> = { Accept: "application/json" };
+      if (accessHeaders) {
+        Object.assign(headers, accessHeaders);
+      }
+      const res = await fetch(readyUrl, {
+        method: "GET",
+        headers,
+        signal: controller.signal,
+      });
+      if (res.ok) {
+        cachedLocalParserProbe = { checkedAt: now, origin };
+        return origin;
+      }
+    } catch {
+      // Ignore; this probe only decides whether loopback should win locally.
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  cachedLocalParserProbe = { checkedAt: now, origin: null };
+  return null;
+}
+
+export function resolveParserEndpoints(
+  targetPath = "/parse-cv",
+  options?: ParserResolutionOptions,
+): ParserAttempt[] {
   const attempts: ParserAttempt[] = [];
   const seen = new Set<string>();
+  const env = options?.env ?? ((process as any).env as Record<string, string | undefined> | undefined) ?? {};
+  const preferLoopback = options?.preferLoopback === true;
+  const normalizedTarget = targetPath.startsWith("/") ? targetPath : `/${targetPath}`;
 
   const pushCandidate = (raw: string | undefined | null, label: string) => {
     const value = raw?.trim();
@@ -246,7 +313,6 @@ function resolveParserEndpoints(targetPath = "/parse-cv"): ParserAttempt[] {
       );
       return;
     }
-    const normalizedTarget = targetPath.startsWith("/") ? targetPath : `/${targetPath}`;
     const resolved = new URL(normalizedTarget, endpoint);
     resolved.search = "";
     resolved.hash = "";
@@ -266,44 +332,53 @@ function resolveParserEndpoints(targetPath = "/parse-cv"): ParserAttempt[] {
   };
 
   const envCandidatesRaw: Array<[string | null, string]> = [
-    [normalizeOrigin(process.env.CONVEX_PARSER_URL), "env:CONVEX_PARSER_URL"],
-    [normalizeOrigin(process.env.PARSER_ORIGIN), "env:PARSER_ORIGIN"],
-    [normalizeOrigin(process.env.VITE_CONVEX_PARSER_URL), "env:VITE_CONVEX_PARSER_URL"],
-    [normalizeOrigin(process.env.VITE_PARSER_URL), "env:VITE_PARSER_URL"],
+    [normalizeOrigin(env.CONVEX_PARSER_URL), "env:CONVEX_PARSER_URL"],
+    [normalizeOrigin(env.PARSER_ORIGIN), "env:PARSER_ORIGIN"],
+    [normalizeOrigin(env.VITE_CONVEX_PARSER_URL), "env:VITE_CONVEX_PARSER_URL"],
+    [normalizeOrigin(env.VITE_PARSER_URL), "env:VITE_PARSER_URL"],
   ];
   const envCandidates = envCandidatesRaw
     .map(([origin, label]) => ({ origin, label }))
     .filter((entry): entry is { origin: string; label: string } => Boolean(entry.origin) && !isQuickTunnel(entry.origin!));
 
   console.debug(
-    "[structuredUpload] ENV CONVEX_PARSER_URL=%s candidates=%j",
-    process.env.CONVEX_PARSER_URL ?? "<unset>",
+    "[structuredUpload] parser env candidates preferLoopback=%s CONVEX_PARSER_URL=%s candidates=%j",
+    preferLoopback,
+    env.CONVEX_PARSER_URL ?? "<unset>",
     envCandidates.map((entry) => entry.label),
   );
 
-  if (envCandidates.length === 0) {
+  if (preferLoopback) {
+    pushCandidate(`http://127.0.0.1:8000${normalizedTarget}`, "prefer:loopback");
+    pushCandidate(`http://localhost:8000${normalizedTarget}`, "prefer:localhost");
+  }
+
+  if (envCandidates.length === 0 && !preferLoopback) {
     throw new Error(
       "structuredUpload requires CONVEX_PARSER_URL (or PARSER_ORIGIN) configured with a non-trycloudflare origin. Set it via `npx convex env set CONVEX_PARSER_URL https://parser.dasti.ai`.",
     );
   }
 
-  const primaryOrigin = envCandidates[0].origin;
-  pushCandidate(primaryOrigin, envCandidates[0].label);
+  const primaryOrigin = envCandidates[0]?.origin ?? "";
+  const primaryLabel = envCandidates[0]?.label ?? "";
+  if (primaryOrigin) {
+    pushCandidate(primaryOrigin, primaryLabel);
+  }
 
-  const allowLocalFallback = process.env.STRUCTURED_UPLOAD_ALLOW_LOOPBACK_FALLBACK === "1";
-  if (isLoopbackUrl(primaryOrigin)) {
+  const allowLocalFallback = env.STRUCTURED_UPLOAD_ALLOW_LOOPBACK_FALLBACK === "1";
+  if (!preferLoopback && isLoopbackUrl(primaryOrigin)) {
     console.warn(
       "[structuredUpload] CONVEX_PARSER_URL points to loopback (%s); local fallbacks will be used.",
       primaryOrigin,
     );
-    pushCandidate(`http://127.0.0.1:8000${targetPath.startsWith("/") ? targetPath : `/${targetPath}`}`, "fallback:loopback");
-    pushCandidate(`http://localhost:8000${targetPath.startsWith("/") ? targetPath : `/${targetPath}`}`, "fallback:localhost");
+    pushCandidate(`http://127.0.0.1:8000${normalizedTarget}`, "fallback:loopback");
+    pushCandidate(`http://localhost:8000${normalizedTarget}`, "fallback:localhost");
   } else if (allowLocalFallback) {
     console.info(
       "[structuredUpload] STRUCTURED_UPLOAD_ALLOW_LOOPBACK_FALLBACK enabled; adding local fallbacks as a last resort.",
     );
-    pushCandidate(`http://127.0.0.1:8000${targetPath.startsWith("/") ? targetPath : `/${targetPath}`}`, "fallback:loopback");
-    pushCandidate(`http://localhost:8000${targetPath.startsWith("/") ? targetPath : `/${targetPath}`}`, "fallback:localhost");
+    pushCandidate(`http://127.0.0.1:8000${normalizedTarget}`, "fallback:loopback");
+    pushCandidate(`http://localhost:8000${normalizedTarget}`, "fallback:localhost");
   }
 
   if (attempts.length === 0) {
@@ -537,11 +612,17 @@ export const structuredUpload = action({
       return baseParserUrl.replace(/\/+$/, "");
     })();
     const baseOrigin = baseOriginRaw && !isQuickTunnel(baseOriginRaw) ? baseOriginRaw : "";
-    // Ensure resolveParserEndpoints sees the normalized origin only
-    if (baseOrigin) {
-      try { (process as any).env.CONVEX_PARSER_URL = baseOrigin; } catch { /* noop */ }
-    }
-    const parserAttempts = resolveParserEndpoints(parserPath);
+    const envPreferLoopback = process.env.STRUCTURED_UPLOAD_PREFER_LOOPBACK === "1";
+    const healthyLocalParserOrigin = await detectHealthyLocalParserOrigin(parserAccessHeaders);
+    const preferLoopback = envPreferLoopback || Boolean(healthyLocalParserOrigin);
+    const parserEnv: Record<string, string | undefined> = {
+      ...((process as any).env ?? {}),
+      CONVEX_PARSER_URL: baseOrigin || undefined,
+    };
+    const parserAttempts = resolveParserEndpoints(parserPath, {
+      env: parserEnv,
+      preferLoopback,
+    });
     const primaryUrl = (() => {
       try {
         const origin = parserAttempts[0]?.endpoint?.origin || baseOrigin || "http://127.0.0.1:8000";
@@ -551,12 +632,21 @@ export const structuredUpload = action({
       }
     })();
     const chosenOrigin = parserAttempts[0]?.endpoint?.origin || baseOrigin || "";
-    console.info("[structuredUpload] route", {
-      origin: chosenOrigin,
+    console.info("[structuredUpload] parser target selection", {
+      selectedBaseUrl: chosenOrigin,
+      selectedUrl: primaryUrl,
+      selectedLabel: parserAttempts[0]?.label ?? null,
+      selectedModeSource: envPreferLoopback
+        ? "prefer_loopback_local_dev"
+        : healthyLocalParserOrigin
+          ? "healthy_loopback_auto"
+          : "env_first",
+      isLocalTarget: isLoopbackUrl(chosenOrigin),
+      healthyLocalParserOrigin,
       path: parserPath,
-      url: primaryUrl,
       useMistral: activeUseMistral,
       useAccessHeaders,
+      candidateLabels: parserAttempts.map((attempt) => attempt.label),
     });
     const skipHealth = process.env.STRUCTURED_UPLOAD_SKIP_HEALTHCHECK === "1" || activeUseMistral;
 

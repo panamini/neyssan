@@ -183,6 +183,24 @@ export function hasTrustedAuthoritativeResume(
   );
 }
 
+export function hasTrustedAuthoritativeMistralImport(args: {
+  authoritativeResume?: unknown;
+  mistralFallback?: unknown;
+  mistralRuntime?: unknown;
+}): boolean {
+  const authoritativeResume = coerceAuthoritativeResume(
+    args.authoritativeResume,
+  );
+  return Boolean(
+    authoritativeResume &&
+      authoritativeResume.trusted === true &&
+      authoritativeResume.fallbackToLegacy === false &&
+      authoritativeResume.normalized &&
+      args.mistralFallback !== true &&
+      args.mistralRuntime !== "local_fallback",
+  );
+}
+
 export function readAuthoritativeResumeFromCv(
   doc: CvDocument | null | undefined,
 ): AuthoritativeResume | null {
