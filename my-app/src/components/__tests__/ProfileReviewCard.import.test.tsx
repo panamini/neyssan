@@ -86,6 +86,10 @@ describe("ProfileReviewCard import", () => {
       configurable: true,
       value: vi.fn().mockResolvedValue("Imported CV text"),
     });
+    Object.defineProperty(File.prototype, "arrayBuffer", {
+      configurable: true,
+      value: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
+    });
   });
 
   afterEach(() => {
@@ -171,17 +175,7 @@ describe("ProfileReviewCard import", () => {
 
     structuredActionMock.mockResolvedValue({
       normalized: {
-        profile: {
-          name: "Jane Doe",
-          email: "jane@example.com",
-          title: "Product Manager",
-        },
-        summary: "Summary text",
-        experience: [],
-        education: [],
-        skillsText: "",
-        languagesText: "",
-        achievements: [],
+        summary: "Fallback normalized should stay debug-only",
       },
       diagnostics: {
         ocr_request_path: "/mistral-ocr/parse",
@@ -196,6 +190,11 @@ describe("ProfileReviewCard import", () => {
         normalized: {
           profile: {
             name: "Jane Doe",
+            email: "jane@example.com",
+            title: "Product Manager",
+          },
+          summary: {
+            text: "Trusted OCR summary",
           },
         },
       },
@@ -205,7 +204,7 @@ describe("ProfileReviewCard import", () => {
 
     await user.click(screen.getByRole("button", { name: "Import CV" }));
     await user.click(
-      screen.getByRole("button", { name: /Import text PDF or TXT/i }),
+      screen.getByRole("button", { name: /Import scanned PDF or image/i }),
     );
 
     const input = view.container.querySelector(
@@ -215,7 +214,7 @@ describe("ProfileReviewCard import", () => {
 
     fireEvent.change(input as HTMLInputElement, {
       target: {
-        files: [new File(["Imported CV text"], "resume.txt", { type: "text/plain" })],
+        files: [new File(["scanned CV"], "resume.png", { type: "image/png" })],
       },
     });
 
@@ -231,7 +230,7 @@ describe("ProfileReviewCard import", () => {
     });
     expect(
       within(trustedDebugStatus).getAllByText(
-        /Trusted authoritative-backed import/i,
+        /Trusted Mistral import/i,
       ).length,
     ).toBeGreaterThan(0);
     expect(
@@ -250,7 +249,7 @@ describe("ProfileReviewCard import", () => {
     expect(
       within(
         screen.getByRole("status", { name: "Import runtime debug" }),
-      ).getAllByText(/Trusted authoritative-backed import/i).length,
+      ).getAllByText(/Trusted Mistral import/i).length,
     ).toBeGreaterThan(0);
   });
 
@@ -289,7 +288,7 @@ describe("ProfileReviewCard import", () => {
 
     await user.click(screen.getByRole("button", { name: "Import CV" }));
     await user.click(
-      screen.getByRole("button", { name: /Import text PDF or TXT/i }),
+      screen.getByRole("button", { name: /Import scanned PDF or image/i }),
     );
 
     const input = container.querySelector(
@@ -299,16 +298,20 @@ describe("ProfileReviewCard import", () => {
 
     fireEvent.change(input as HTMLInputElement, {
       target: {
-        files: [new File(["Imported CV text"], "resume.txt", { type: "text/plain" })],
+        files: [new File(["scanned CV"], "resume.png", { type: "image/png" })],
       },
     });
 
-    await waitFor(() => expect(importCvMock).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(
+        screen.getByRole("status", { name: "Import runtime debug" }),
+      ).toBeInTheDocument(),
+    );
     const debugStatus = screen.getByRole("status", {
       name: "Import runtime debug",
     });
     expect(
-      within(debugStatus).getAllByText(/Fallback\/legacy normalized import/i)
+      within(debugStatus).getAllByText(/OCR import rejected \(fallback\/untrusted\)/i)
         .length,
     ).toBeGreaterThan(0);
     expect(within(debugStatus).getByText("local_fallback")).toBeInTheDocument();
@@ -317,14 +320,7 @@ describe("ProfileReviewCard import", () => {
     ).toBeInTheDocument();
     expect(within(debugStatus).getByText("true")).toBeInTheDocument();
     expect(within(debugStatus).getByText("false")).toBeInTheDocument();
-    expect(importCvMock.mock.calls[0][0]).toMatchObject({
-      metadata: expect.objectContaining({
-        authoritativeResume: expect.objectContaining({
-          trusted: false,
-          fallbackToLegacy: true,
-        }),
-      }),
-    });
+    expect(importCvMock).not.toHaveBeenCalled();
   });
 
   it("keeps the import drawer compact with one icon per route and no subtitles", async () => {

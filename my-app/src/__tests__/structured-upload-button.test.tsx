@@ -124,6 +124,19 @@ describe("StructuredUploadButton", () => {
         mistral_fallback: false,
         mistral_runtime: "mistral",
       },
+      authoritativeResume: {
+        source: "mistral_v3",
+        trusted: true,
+        fallbackToLegacy: false,
+        normalized: {
+          profile: {
+            name: "Scan Candidate",
+          },
+          summary: {
+            text: "Scanned import",
+          },
+        },
+      },
     });
 
     const { container } = render(<StructuredUploadButton />);
@@ -175,6 +188,16 @@ describe("StructuredUploadButton", () => {
         mistral_model: "mistral-ocr-latest",
         mistral_fallback: false,
         mistral_runtime: "mistral",
+      },
+      authoritativeResume: {
+        source: "mistral_v3",
+        trusted: true,
+        fallbackToLegacy: false,
+        normalized: {
+          profile: {
+            name: "Scan Candidate",
+          },
+        },
       },
     });
 
@@ -273,6 +296,135 @@ describe("StructuredUploadButton", () => {
     );
   });
 
+  it("imports scanned OCR only from trusted authoritative Mistral output", async () => {
+    const user = userEvent.setup();
+    const onApply = vi.fn();
+    structuredActionMock.mockResolvedValue({
+      normalized: {
+        summary: "Fallback normalized should stay debug-only",
+      },
+      strict: {
+        email: "scan@example.com",
+      },
+      diagnostics: {
+        ocr_request_path: "/mistral-ocr/parse",
+        ocr_engine: "mistral",
+        mistral_model: "mistral-ocr-latest",
+        mistral_fallback: false,
+        mistral_runtime: "mistral",
+      },
+      authoritativeResume: {
+        source: "mistral_v3",
+        trusted: true,
+        fallbackToLegacy: false,
+        normalized: {
+          profile: {
+            name: "Trusted Scan",
+            email: "scan@example.com",
+          },
+          summary: {
+            text: "Trusted OCR summary",
+          },
+        },
+      },
+    });
+
+    const { container } = render(
+      <StructuredUploadButton onApplyToSections={onApply} />,
+    );
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(["scan"], "scan.png", { type: "image/png" });
+
+    await user.click(screen.getByRole("button", { name: "Scanned PDF / Image" }));
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    await waitFor(() => expect(onApply).toHaveBeenCalledTimes(1));
+    expect(onApply.mock.calls[0][0]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "profile" }),
+        expect.objectContaining({ type: "summary" }),
+      ]),
+    );
+    expect(
+      screen.queryByText(/OCR import rejected \(fallback\/untrusted\)/i),
+    ).toBeNull();
+  });
+
+  it("rejects fallback OCR payloads instead of importing normalized sections or opening recovery", async () => {
+    const user = userEvent.setup();
+    const onApply = vi.fn();
+    const onRecoveryRequired = vi.fn();
+    structuredActionMock.mockResolvedValue({
+      normalized: {
+        profile: {
+          name: "Fallback Candidate",
+        },
+        summary: "Broken fallback normalized payload",
+        achievements: [{ text: "Fragmented item" }],
+      },
+      strict: null,
+      diagnostics: {
+        ocr_request_path: "/mistral-ocr/parse",
+        ocr_engine: "mistral",
+        mistral_model: "mistral-ocr-latest",
+        mistral_fallback: true,
+        mistral_runtime: "local_fallback",
+      },
+      recovery: {
+        reviewRequired: true,
+        items: [
+          {
+            blockId: "ocr-recovery-1",
+            rawText: "Fragmented item",
+            cleanedText: "Fragmented item",
+            displayTextSource: "cleaned",
+            predictedSection: "achievements",
+            selectedSection: "achievements",
+            confidenceScore: "low",
+            confidenceValue: 0.4,
+            issueFlags: ["weakSectionMatch"],
+            reviewStatus: "pending",
+            sourceSectionTitle: "Achievements",
+            sourceFieldKey: "achievements",
+            fragmentAssignments: [],
+          },
+        ],
+        totalItems: 1,
+        overflowCount: 0,
+        reviewLimit: 12,
+        reviewNormalized: {
+          summary: "Fallback base summary",
+        },
+      },
+      authoritativeResume: {
+        source: "mistral_v3",
+        trusted: false,
+        fallbackToLegacy: true,
+        normalized: null,
+      },
+    });
+
+    const { container } = render(
+      <StructuredUploadButton
+        onApplyToSections={onApply}
+        onRecoveryRequired={onRecoveryRequired}
+      />,
+    );
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(["scan"], "scan.png", { type: "image/png" });
+
+    await user.click(screen.getByRole("button", { name: "Scanned PDF / Image" }));
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(/OCR import rejected \(fallback\/untrusted\)/i),
+      ).toBeInTheDocument(),
+    );
+    expect(onApply).not.toHaveBeenCalled();
+    expect(onRecoveryRequired).not.toHaveBeenCalled();
+  });
+
   it("keeps scanned import clickable when the probe says the OCR parse route is unhealthy", async () => {
     probeMistralMock.mockResolvedValueOnce({
       ready: { status: 200 },
@@ -304,6 +456,16 @@ describe("StructuredUploadButton", () => {
         mistral_model: "mistral-ocr-latest",
         mistral_fallback: false,
         mistral_runtime: "mistral",
+      },
+      authoritativeResume: {
+        source: "mistral_v3",
+        trusted: true,
+        fallbackToLegacy: false,
+        normalized: {
+          summary: {
+            text: "Scanned import",
+          },
+        },
       },
     });
 
@@ -337,6 +499,16 @@ describe("StructuredUploadButton", () => {
         mistral_model: "mistral-ocr-latest",
         mistral_fallback: false,
         mistral_runtime: "mistral",
+      },
+      authoritativeResume: {
+        source: "mistral_v3",
+        trusted: true,
+        fallbackToLegacy: false,
+        normalized: {
+          summary: {
+            text: "Scanned import",
+          },
+        },
       },
     });
     probeMistralMock

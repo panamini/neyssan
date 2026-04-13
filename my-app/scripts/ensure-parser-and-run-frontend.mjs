@@ -16,6 +16,10 @@ const startParserScript = path.join(repoRoot, "scripts", "start-parser-service.s
 const isProduction = process.env.NODE_ENV === "production";
 
 const CONTEXT = "[structuredUpload:dev]";
+const LOCAL_PARSER_CANDIDATES = [
+  "http://127.0.0.1:8000",
+  "http://localhost:8000",
+];
 
 function isLoopbackHost(hostname) {
   if (!hostname) return false;
@@ -81,6 +85,13 @@ async function ensureParserUrl() {
       throw new Error(`${CONTEXT} CONVEX_PARSER_URL must be provided explicitly in production.`);
     }
     return existing;
+  }
+
+  for (const candidate of LOCAL_PARSER_CANDIDATES) {
+    if (await checkHealthz(candidate)) {
+      console.info(`${CONTEXT} Using local parser URL: ${candidate}`);
+      return candidate;
+    }
   }
 
   const envParserUrl = (process.env.CONVEX_PARSER_URL || "").trim();
@@ -212,6 +223,7 @@ async function main() {
     childEnv.CONVEX_PARSER_URL = parserUrl;
     childEnv.VITE_PARSER_URL = parserUrl;
     childEnv.VITE_CONVEX_PARSER_URL = parserUrl;
+    childEnv.STRUCTURED_UPLOAD_PREFER_LOOPBACK = "1";
     delete childEnv.STRUCTURED_UPLOAD_SKIP_HEALTHCHECK;
 
     const child = spawn(cmd, ["run", "dev:frontend:raw"], {

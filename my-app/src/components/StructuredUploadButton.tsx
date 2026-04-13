@@ -20,7 +20,11 @@ import {
   applyStrictContactToSections,
 } from "../utils/cv/mapping-utils";
 import type { ImportRecoveryPayload } from "../types/importRecovery";
-import type { AuthoritativeResume } from "../lib/authoritative-resume";
+import {
+  coerceAuthoritativeResume,
+  hasTrustedAuthoritativeMistralImport,
+  type AuthoritativeResume,
+} from "../lib/authoritative-resume";
 
 export interface StructuredUploadButtonProps {
   sections?: CvSection[];
@@ -63,17 +67,14 @@ type StructuredPayload = {
 
 export type { StructuredPayload };
 
-function buildSectionsFromPayload(
-  payload: StructuredPayload,
-  normalizedOverride?: unknown,
+function buildSectionsFromNormalized(
+  normalized: unknown,
+  strict?: StructuredPayload["strict"],
 ): CvSection[] {
-  const normalized =
-    (normalizedOverride ?? payload?.normalized) as unknown;
   if (!normalized || typeof normalized !== "object") {
     return [];
   }
   const typed = buildTypedSectionsFromNormalized(normalized as any);
-  const strict = payload?.strict;
   if (!strict || typed.length === 0) {
     return typed;
   }
@@ -84,6 +85,38 @@ function buildSectionsFromPayload(
     location: strict.location ?? null,
     desiredPosition: strict.desiredPosition ?? null,
   });
+}
+
+function readStructuredDiagnostics(
+  payload: StructuredPayload | null | undefined,
+): Record<string, unknown> | null {
+  return payload?.diagnostics && typeof payload.diagnostics === "object"
+    ? (payload.diagnostics as Record<string, unknown>)
+    : null;
+}
+
+function readStructuredAuthoritativeResume(
+  payload: StructuredPayload | null | undefined,
+): AuthoritativeResume | null {
+  return coerceAuthoritativeResume(payload?.authoritativeResume ?? null);
+}
+
+function buildRejectedOcrStatusMessage(
+  payload: StructuredPayload | null | undefined,
+): string {
+  const diagnostics = readStructuredDiagnostics(payload);
+  const mistralRuntime =
+    typeof diagnostics?.mistral_runtime === "string"
+      ? diagnostics.mistral_runtime
+      : null;
+  const mistralFallback = diagnostics?.mistral_fallback === true;
+  if (mistralRuntime === "local_fallback") {
+    return "OCR import rejected (fallback/untrusted). Local fallback output is debug-only.";
+  }
+  if (mistralFallback) {
+    return "OCR import rejected (fallback/untrusted). Fallback OCR output is debug-only.";
+  }
+  return "OCR import rejected (fallback/untrusted). Trusted authoritative Mistral result required.";
 }
 
 function readEmptyReasonFromDiagnostics(diagnostics: unknown): string | null {
@@ -521,11 +554,12 @@ export function StructuredUploadButton({
         if (!isCurrentRequest()) return;
         setLatestPayload(payload);
         setCopyFeedback(null);
+        const diagnostics = readStructuredDiagnostics(payload);
+        const authoritativeResume = readStructuredAuthoritativeResume(payload);
         const diagnosticsEmptyReason = readEmptyReasonFromDiagnostics(
           payload?.diagnostics,
         );
-        if (requestedMode === "mistral" && payload?.diagnostics && typeof payload.diagnostics === "object") {
-          const diagnostics = payload.diagnostics as Record<string, unknown>;
+        if (requestedMode === "mistral" && diagnostics) {
           console.info("[StructuredUploadButton][mistral] evidence", {
             ocr_request_path:
               typeof diagnostics.ocr_request_path === "string" ? diagnostics.ocr_request_path : null,
@@ -547,15 +581,43 @@ export function StructuredUploadButton({
           }
         }
 
-        const recovery = payload?.recovery;
-        const fullSections = buildSectionsFromPayload(payload);
+        const isTrustedOcrImport =
+          requestedMode === "mistral" &&
+          hasTrustedAuthoritativeMistralImport({
+            authoritativeResume,
+            mistralFallback: diagnostics?.mistral_fallback,
+            mistralRuntime: diagnostics?.mistral_runtime,
+          });
+        const recovery = requestedMode === "mistral" ? null : payload?.recovery;
+        const fullSections =
+          requestedMode === "mistral"
+            ? isTrustedOcrImport
+              ? buildSectionsFromNormalized(
+                  authoritativeResume?.normalized ?? null,
+                  payload?.strict,
+                )
+              : []
+            : buildSectionsFromNormalized(payload?.normalized, payload?.strict);
         const baseSections =
           recovery?.reviewNormalized && typeof recovery.reviewNormalized === "object"
-            ? buildSectionsFromPayload(payload, recovery.reviewNormalized)
+            ? buildSectionsFromNormalized(
+                recovery.reviewNormalized,
+                payload?.strict,
+              )
             : fullSections;
         const requiresRecoveryReview = Boolean(
           recovery?.reviewRequired && recovery.items.length > 0,
         );
+        if (requestedMode === "mistral" && !isTrustedOcrImport) {
+          const rejectionMessage = buildRejectedOcrStatusMessage(payload);
+          setEmptyReason(rejectionMessage);
+          try {
+            showToast(rejectionMessage, { variant: "warning" });
+          } catch {
+            /* noop */
+          }
+          return;
+        }
         if (requiresRecoveryReview && typeof onRecoveryRequired === "function") {
           try {
             onRecoveryRequired({
@@ -577,7 +639,9 @@ export function StructuredUploadButton({
         }
         if (!isCurrentRequest()) return;
         if (diagnosticsEmptyReason) {
-          setEmptyReason(diagnosticsEmptyReason);
+          setEmptyReason(
+            `Parser returned empty result: ${diagnosticsEmptyReason}`,
+          );
           try {
             showToast(
               `Parser returned empty result: ${diagnosticsEmptyReason}`,
@@ -920,7 +984,7 @@ export function StructuredUploadButton({
         )}
         {emptyReason ? (
           <div className="dasti-import-empty-reason" role="status" aria-live="polite">
-            Empty reason: {emptyReason}
+            {emptyReason}
           </div>
         ) : null}
       </>
@@ -978,7 +1042,7 @@ export function StructuredUploadButton({
         ) : null}
         {emptyReason ? (
           <div className="dasti-import-empty-reason" role="status" aria-live="polite">
-            Empty reason: {emptyReason}
+            {emptyReason}
           </div>
         ) : null}
         {debugCopyControls}
