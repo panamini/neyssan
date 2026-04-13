@@ -498,6 +498,16 @@ describe("ProfileReviewCard import", () => {
         achievements: [],
       },
       strict: null,
+      authoritativeResume: {
+        source: "mistral_v3",
+        trusted: true,
+        fallbackToLegacy: false,
+        normalized: {
+          profile: {
+            name: "Jane Doe",
+          },
+        },
+      },
       recovery: {
         reviewRequired: true,
         items: [
@@ -549,6 +559,13 @@ describe("ProfileReviewCard import", () => {
     const importedDoc = importCvMock.mock.calls[0][0];
     expect(importedDoc.sections).toEqual(
       expect.arrayContaining([expect.objectContaining({ type: "experience" })]),
+    );
+    expect(importedDoc.metadata.authoritativeResume).toEqual(
+      expect.objectContaining({
+        source: "mistral_v3",
+        trusted: true,
+        fallbackToLegacy: false,
+      }),
     );
     expect(JSON.stringify(importedDoc.sections)).toContain("importRecovery");
     expect(screen.getByText("Saved 1 accepted block")).toBeInTheDocument();

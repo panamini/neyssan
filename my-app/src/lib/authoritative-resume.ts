@@ -9,6 +9,14 @@ export type AuthoritativeResume = {
   normalized: UnknownRecord | null;
 };
 
+export type AuthoritativeResumeDebugSnapshot = {
+  source: AuthoritativeResume["source"] | null;
+  trusted: boolean | null;
+  fallbackToLegacy: boolean | null;
+  normalizedPresent: boolean;
+  metadataAuthoritativeResumePresent: boolean;
+};
+
 export type AuthoritativeResumeProfile = {
   name: string;
   desiredPosition?: string;
@@ -169,6 +177,22 @@ export function readAuthoritativeResumeFromCv(
   doc: CvDocument | null | undefined,
 ): AuthoritativeResume | null {
   return coerceAuthoritativeResume(doc?.metadata?.authoritativeResume);
+}
+
+export function buildAuthoritativeResumeDebugSnapshot(args: {
+  authoritativeResume?: unknown;
+  metadataAuthoritativeResumePresent?: boolean;
+}): AuthoritativeResumeDebugSnapshot {
+  const authoritativeResume = coerceAuthoritativeResume(args.authoritativeResume);
+
+  return {
+    source: authoritativeResume?.source ?? null,
+    trusted: authoritativeResume?.trusted ?? null,
+    fallbackToLegacy: authoritativeResume?.fallbackToLegacy ?? null,
+    normalizedPresent: Boolean(authoritativeResume?.normalized),
+    metadataAuthoritativeResumePresent:
+      args.metadataAuthoritativeResumePresent === true,
+  };
 }
 
 export function buildAuthoritativeResumeExportModel(

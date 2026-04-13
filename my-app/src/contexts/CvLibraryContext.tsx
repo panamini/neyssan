@@ -18,6 +18,7 @@ import {
   normalizeAndValidateCvDocument,
   ensureRepresentativeBlocks,
 } from "../lib/normalize-cv";
+import { buildAuthoritativeResumeDebugSnapshot } from "../lib/authoritative-resume";
 // Toggle verbose debug logging for editor flows. Enable by setting window.__CV_EDITOR_DEBUG__ = true in the dev console.
 import { isV1SectionsEnabled } from "../lib/flags";
 import dbg from "../lib/cv-debug";
@@ -1501,6 +1502,15 @@ const flushPendingEdits = useCallback((): void => {
           version: (normalizedCore.metadata?.version ?? 0) + 1,
         },
       };
+      dbg(
+        "[CvLibraryContext] performSave authoritative snapshot",
+        buildAuthoritativeResumeDebugSnapshot({
+          authoritativeResume: docCopy.metadata?.authoritativeResume,
+          metadataAuthoritativeResumePresent: Boolean(
+            docCopy.metadata?.authoritativeResume,
+          ),
+        }),
+      );
 
       try {
         const stack = (new Error("save-call-stack")).stack?.split("\n").slice(0, 4).map((s) => s.trim());
@@ -1776,6 +1786,15 @@ const flushPendingEdits = useCallback((): void => {
 
         const docV1 = normalizeToV1Document(doc as CvDocument);
         const docNorm = ensureRepresentativeBlocks(docV1 as CvDocument);
+        dbg(
+          "[CvLibraryContext] loadCv in-memory authoritative snapshot",
+          buildAuthoritativeResumeDebugSnapshot({
+            authoritativeResume: docNorm.metadata?.authoritativeResume,
+            metadataAuthoritativeResumePresent: Boolean(
+              docNorm.metadata?.authoritativeResume,
+            ),
+          }),
+        );
 
         safeSetCurrentCv(docNorm);
         setCvs((prev) => {
@@ -1829,6 +1848,15 @@ const flushPendingEdits = useCallback((): void => {
 
         const docV1 = normalizeToV1Document(doc as CvDocument);
         const docNorm = ensureRepresentativeBlocks(docV1 as CvDocument);
+        dbg(
+          "[CvLibraryContext] loadCv cached authoritative snapshot",
+          buildAuthoritativeResumeDebugSnapshot({
+            authoritativeResume: docNorm.metadata?.authoritativeResume,
+            metadataAuthoritativeResumePresent: Boolean(
+              docNorm.metadata?.authoritativeResume,
+            ),
+          }),
+        );
 
         safeSetCurrentCv(docNorm);
         setCvs((prev) => {
@@ -1852,6 +1880,15 @@ const flushPendingEdits = useCallback((): void => {
             }
             const remoteV1 = normalizeToV1Document(migratedRemote as CvDocument);
             const remoteNorm = ensureRepresentativeBlocks(remoteV1 as CvDocument);
+            dbg(
+              "[CvLibraryContext] loadCv remote authoritative snapshot",
+              buildAuthoritativeResumeDebugSnapshot({
+                authoritativeResume: remoteNorm.metadata?.authoritativeResume,
+                metadataAuthoritativeResumePresent: Boolean(
+                  remoteNorm.metadata?.authoritativeResume,
+                ),
+              }),
+            );
             if (!shouldApplyBackgroundRefresh(targetId, docNorm, remoteNorm)) {
               return;
             }
@@ -1930,6 +1967,15 @@ const flushPendingEdits = useCallback((): void => {
           if (remoteDoc) {
             const docV1 = normalizeToV1Document(remoteDoc as CvDocument);
             const docNorm = ensureRepresentativeBlocks(docV1 as CvDocument);
+            dbg(
+              "[CvLibraryContext] loadCv async authoritative snapshot",
+              buildAuthoritativeResumeDebugSnapshot({
+                authoritativeResume: docNorm.metadata?.authoritativeResume,
+                metadataAuthoritativeResumePresent: Boolean(
+                  docNorm.metadata?.authoritativeResume,
+                ),
+              }),
+            );
             safeSetCurrentCv(docNorm);
             setCvs((prev) => {
               const exists = prev.some((c) => c.id === docNorm.id);
@@ -2264,6 +2310,15 @@ const flushPendingEdits = useCallback((): void => {
       const validatedReordered = { ...validated, sections: reorderedSections } as CvDocument;
 
       const validatedWithReps = applyAutoTitleIfPlaceholder(ensureRepresentativeBlocks(validatedReordered));
+      dbg(
+        "[CvLibraryContext] importCv authoritative snapshot",
+        buildAuthoritativeResumeDebugSnapshot({
+          authoritativeResume: validatedWithReps.metadata?.authoritativeResume,
+          metadataAuthoritativeResumePresent: Boolean(
+            validatedWithReps.metadata?.authoritativeResume,
+          ),
+        }),
+      );
 
       // Replace current CV atomically with validated document
       safeSetCurrentCv(validatedWithReps);

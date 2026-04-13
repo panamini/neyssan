@@ -3,17 +3,17 @@ import { describe, expect, it } from "vitest";
 import { buildAuthoritativeResumeEnvelope } from "../structuredUpload";
 
 describe("buildAuthoritativeResumeEnvelope", () => {
-  it("marks a precomputed non-fallback Mistral v3 payload as trusted", () => {
+  it("marks a non-fallback Mistral v3 route payload as trusted", () => {
     const envelope = buildAuthoritativeResumeEnvelope({
       diagnostics: {
         ocr_engine: "mistral",
         mistral_runtime: "mistral",
         mistral_fallback: false,
-        _mistral_resume_v3_canonical_payload: {
-          normalized: {
-            profile: { name: "Jane Doe" },
-            summary: { text: "Summary text" },
-          },
+      },
+      result: {
+        normalized: {
+          profile: { name: "Jane Doe" },
+          summary: { text: "Summary text" },
         },
       },
     });
@@ -58,6 +58,28 @@ describe("buildAuthoritativeResumeEnvelope", () => {
       trusted: false,
       fallbackToLegacy: false,
       normalized: null,
+    });
+  });
+
+  it("accepts top-level normalized content from the live route payload when result.normalized is absent", () => {
+    const envelope = buildAuthoritativeResumeEnvelope({
+      diagnostics: {
+        ocr_request_path: "/mistral-ocr/parse",
+        mistral_runtime: "mistral",
+        mistral_fallback: false,
+      },
+      normalized: {
+        profile: { name: "Jane Doe" },
+      },
+    });
+
+    expect(envelope).toEqual({
+      source: "mistral_v3",
+      trusted: true,
+      fallbackToLegacy: false,
+      normalized: {
+        profile: { name: "Jane Doe" },
+      },
     });
   });
 });
