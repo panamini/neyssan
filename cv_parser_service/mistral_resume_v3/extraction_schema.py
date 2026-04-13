@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
@@ -331,10 +331,27 @@ class ResumeExtraction(ExtractionBaseModel):
     sectionOrder: List[ExtractionSectionOrderItem] = Field(default_factory=list)
 
 
-def build_document_annotation_format() -> dict:
-    from mistralai.extra import response_format_from_pydantic_model
+def _strict_json_schema_node(schema_node: Any) -> Any:
+    if isinstance(schema_node, (str, int, float, bool)) or schema_node is None:
+        return schema_node
+    if isinstance(schema_node, dict):
+        normalized: Dict[str, Any] = {
+            str(key): _strict_json_schema_node(value) for key, value in schema_node.items()
+        }
+        if normalized.get("type") == "object":
+            normalized["additionalProperties"] = False
+        return normalized
+    if isinstance(schema_node, list):
+        return [_strict_json_schema_node(value) for value in schema_node]
+    raise TypeError(f"unsupported_json_schema_node:{type(schema_node).__name__}")
 
-    return response_format_from_pydantic_model(ResumeExtraction).model_dump(
-        by_alias=True,
-        exclude_none=True,
-    )
+
+def build_document_annotation_format() -> dict:
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": ResumeExtraction.__name__,
+            "schema": _strict_json_schema_node(ResumeExtraction.model_json_schema()),
+            "strict": True,
+        },
+    }
