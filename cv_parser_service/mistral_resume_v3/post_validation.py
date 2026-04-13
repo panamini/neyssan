@@ -10,21 +10,26 @@ from .extraction_schema import (
     ExtractionAward,
     ExtractionOtherSection,
     ExtractionPublication,
+    ExtractionSectionOrderItem,
     ExtractionVolunteering,
     ResumeExtraction,
 )
 from .normalized_schema import (
+    NormalizedAward,
     NormalizedCertification,
     NormalizedContact,
     NormalizedEducation,
     NormalizedExperience,
     NormalizedIdentity,
     NormalizedLanguage,
+    NormalizedPublication,
     NormalizedProject,
     NormalizedResume,
+    NormalizedSectionOrderItem,
     NormalizedSkill,
     NormalizedSummary,
     NormalizedTextSection,
+    NormalizedVolunteering,
     ParserWarning,
 )
 
@@ -155,6 +160,14 @@ def _clean_list(values: Iterable[object]) -> List[str]:
         seen.add(key)
         output.append(cleaned)
     return output
+
+
+def _append_paragraph(existing: Optional[str], addition: Optional[str]) -> Optional[str]:
+    left = _clean_text(existing)
+    right = _clean_text(addition)
+    if left and right:
+        return f"{left}\n\n{right}"
+    return left or right
 
 
 def _first_sentence(value: Optional[str]) -> str:
@@ -334,6 +347,38 @@ def _normalize_headline_summary(value: Optional[str]) -> Optional[str]:
     return cleaned
 
 
+def _validate_desired_position(value: Optional[str], warnings: List[ParserWarning]) -> Optional[str]:
+    cleaned = _clean_inline_text(value)
+    if not cleaned:
+        return None
+    if not _normalize_headline_summary(cleaned):
+        _warning(
+            warnings,
+            "desired_position_dropped",
+            "Dropped invalid desiredPosition value because it did not look like an explicit headline.",
+            "identity.desiredPosition",
+        )
+        return None
+    if ADDRESSISH_STREET_RE.search(cleaned) or ZIPISH_RE.search(cleaned):
+        _warning(
+            warnings,
+            "desired_position_dropped",
+            "Dropped invalid desiredPosition value because it looked like an address.",
+            "identity.desiredPosition",
+        )
+        return None
+    digits = re.sub(r"\D", "", cleaned)
+    if len(digits) >= 7:
+        _warning(
+            warnings,
+            "desired_position_dropped",
+            "Dropped invalid desiredPosition value because it looked like contact information.",
+            "identity.desiredPosition",
+        )
+        return None
+    return cleaned
+
+
 def _looks_like_school_name(value: Optional[str]) -> bool:
     cleaned = _clean_inline_text(value)
     if not cleaned:
@@ -459,6 +504,36 @@ def _map_level(level_raw: Optional[str]) -> Optional[str]:
     return None
 
 
+def _normalize_section_order(
+    items: Sequence[ExtractionSectionOrderItem],
+    *,
+    available_counts: dict[str, int],
+    text_sections: Sequence[NormalizedTextSection],
+) -> List[NormalizedSectionOrderItem]:
+    output: List[NormalizedSectionOrderItem] = []
+    seen: set[tuple[str, int]] = set()
+    for item in items:
+        family = item.family
+        ordinal = int(item.ordinal)
+        if ordinal < 0 or ordinal >= available_counts.get(family, 0):
+            continue
+        key = (family, ordinal)
+        if key in seen:
+            continue
+        seen.add(key)
+        title = _clean_inline_text(item.title)
+        if family == "other" and not title and ordinal < len(text_sections):
+            title = text_sections[ordinal].title
+        output.append(
+            NormalizedSectionOrderItem(
+                family=family,
+                ordinal=ordinal,
+                title=title,
+            )
+        )
+    return output
+
+
 def _stable_key(*parts: object) -> str:
     return "||".join(_normalize_lookup(_clean_inline_text(part) or "") for part in parts)
 
@@ -493,7 +568,7 @@ def _looks_like_narrative_achievement(value: str) -> bool:
 
 def _reclassify_experience_achievement_text(
     *,
-    summary: Optional[str],
+    description: Optional[str],
     bullets: List[str],
     achievements: List[str],
 ) -> Tuple[Optional[str], List[str], List[str]]:
@@ -505,64 +580,51 @@ def _reclassify_experience_achievement_text(
         else:
             kept_achievements.append(item)
 
-    normalized_summary = _clean_text(summary)
-    normalized_bullets = list(bullets)
-    for index, item in enumerate(narrative_items):
-        if not normalized_summary:
-            normalized_summary = item
-            continue
-        if item not in normalized_bullets:
-            normalized_bullets.append(item)
+    normalized_description = _clean_text(description)
+    for item in narrative_items:
+        normalized_description = _append_paragraph(normalized_description, item)
 
-    return normalized_summary, normalized_bullets, kept_achievements
+    return normalized_description, list(bullets), kept_achievements
 
 
-def _render_award(entry: ExtractionAward) -> Optional[str]:
-    parts = [
-        _clean_inline_text(entry.title),
-        _clean_inline_text(entry.issuer),
-        _clean_inline_text(entry.date),
-        "; ".join(_clean_list(entry.details)),
-    ]
-    rendered = " — ".join(part for part in parts if part)
-    return rendered or None
-
-
-def _render_publication(entry: ExtractionPublication) -> Optional[NormalizedTextSection]:
+def _render_award(entry: ExtractionAward) -> Optional[NormalizedAward]:
     title = _clean_inline_text(entry.title)
     if not title:
         return None
-    lines = [title]
-    meta = " | ".join(part for part in [_clean_inline_text(entry.venue), _clean_inline_text(entry.date)] if part)
-    if meta:
-        lines.append(meta)
-    lines.extend(_clean_list(entry.details))
-    return NormalizedTextSection(title="Publications", content="\n".join(lines), family="publications")
+    return NormalizedAward(
+        title=title,
+        issuer=_clean_inline_text(entry.issuer),
+        date=_clean_inline_text(entry.date),
+        details=_clean_list(entry.details),
+    )
 
 
-def _render_volunteering(entry: ExtractionVolunteering) -> Optional[NormalizedTextSection]:
-    title = _clean_inline_text(entry.organization)
+def _render_publication(entry: ExtractionPublication) -> Optional[NormalizedPublication]:
+    title = _clean_inline_text(entry.title)
     if not title:
         return None
-    line_one = " — ".join(part for part in [_clean_inline_text(entry.organization), _clean_inline_text(entry.role)] if part)
-    meta = " | ".join(
-        part
-        for part in [
-            _clean_inline_text(entry.location),
-            "Present" if entry.isCurrent else None,
-            _clean_inline_text(entry.startDate),
-            _clean_inline_text(entry.endDate),
-        ]
-        if part
+    return NormalizedPublication(
+        title=title,
+        venue=_clean_inline_text(entry.venue),
+        date=_clean_inline_text(entry.date),
+        details=_clean_list(entry.details),
     )
-    lines = [line_one or title]
-    if meta:
-        lines.append(meta)
-    summary = _clean_inline_text(entry.summary)
-    if summary:
-        lines.append(summary)
-    lines.extend(_clean_list(entry.bullets))
-    return NormalizedTextSection(title="Volunteering", content="\n".join(lines), family="volunteering")
+
+
+def _render_volunteering(entry: ExtractionVolunteering) -> Optional[NormalizedVolunteering]:
+    organization = _clean_inline_text(entry.organization)
+    if not organization:
+        return None
+    return NormalizedVolunteering(
+        organization=organization,
+        role=_clean_inline_text(entry.role),
+        location=_clean_inline_text(entry.location),
+        startDate=_clean_inline_text(entry.startDate),
+        endDate=_clean_inline_text(entry.endDate),
+        isCurrent=entry.isCurrent,
+        description=_clean_text(entry.summary),
+        bullets=_clean_list(entry.bullets),
+    )
 
 
 def _render_other_section(entry: ExtractionOtherSection) -> Optional[NormalizedTextSection]:
@@ -662,6 +724,12 @@ def _has_meaningful_content(resume: NormalizedResume) -> bool:
             bool(resume.projects),
             bool(resume.certifications),
             bool(resume.achievements),
+            bool(resume.hobbies),
+            bool(resume.awards),
+            bool(resume.publications),
+            bool(resume.volunteering),
+            bool(resume.affiliations),
+            bool(resume.additionalInformation),
             bool(resume.textSections),
         ]
     )
@@ -681,9 +749,9 @@ def normalize_extraction(
     for entry in extraction.experience:
         bullets = _clean_list(entry.responsibilityBullets)
         achievements = _clean_list(entry.achievements)
-        summary = _clean_text(entry.summary)
-        summary, bullets, achievements = _reclassify_experience_achievement_text(
-            summary=summary,
+        description = _clean_text(entry.description)
+        description, bullets, achievements = _reclassify_experience_achievement_text(
+            description=description,
             bullets=bullets,
             achievements=achievements,
         )
@@ -694,13 +762,13 @@ def normalize_extraction(
             startDate=_clean_inline_text(entry.startDate),
             endDate=_clean_inline_text(entry.endDate),
             isCurrent=entry.isCurrent,
-            summary=summary,
+            description=description,
             responsibilityBullets=bullets,
             achievements=achievements,
         )
         if normalized.location:
             experience_locations.append(normalized.location)
-        if normalized.company or normalized.position or normalized.responsibilityBullets or normalized.summary:
+        if normalized.company or normalized.position or normalized.responsibilityBullets or normalized.description:
             experience.append(normalized)
 
     education: List[NormalizedEducation] = []
@@ -783,8 +851,12 @@ def normalize_extraction(
     if summary_text and _looks_like_template_skill_blob_summary(summary_text, raw_text):
         _warning(warnings, "summary_dropped", "Dropped summary text that looked like template competency filler.", "summary.text")
         summary_text = None
+    desired_position = _validate_desired_position(
+        extraction.identity.desiredPosition if extraction.identity else None,
+        warnings,
+    )
     if not summary_text:
-        summary_text = _normalize_headline_summary(extraction.identity.desiredPosition if extraction.identity else None)
+        summary_text = desired_position
 
     identity_location = _validate_identity_location(
         extraction.identity.location if extraction.identity else None,
@@ -839,7 +911,7 @@ def normalize_extraction(
     identity = NormalizedIdentity(
         name=_clean_inline_text(extraction.identity.name if extraction.identity else None),
         location=identity_location,
-        desiredPosition=_clean_inline_text(extraction.identity.desiredPosition if extraction.identity else None),
+        desiredPosition=desired_position,
     )
 
     skills = [NormalizedSkill(name=name) for name in _clean_list(skill.name for skill in extraction.skills)]
@@ -861,17 +933,15 @@ def normalize_extraction(
             )
         )
 
-    achievements = [value for value in (_render_award(item) for item in extraction.awards) if value]
+    achievements = _clean_list(extraction.achievements)
+    hobbies = _clean_list(extraction.hobbies)
+    affiliations = _clean_list(extraction.affiliations)
+    additional_information = _clean_list(extraction.additionalInformation)
+    awards = [value for value in (_render_award(item) for item in extraction.awards) if value]
+    publications = [value for value in (_render_publication(item) for item in extraction.publications) if value]
+    volunteering = [value for value in (_render_volunteering(item) for item in extraction.volunteering) if value]
 
     text_sections: List[NormalizedTextSection] = []
-    for item in extraction.publications:
-        rendered = _render_publication(item)
-        if rendered:
-            text_sections.append(rendered)
-    for item in extraction.volunteering:
-        rendered = _render_volunteering(item)
-        if rendered:
-            text_sections.append(rendered)
     for item in extraction.otherSections:
         if TEMPLATE_BRANDING_RE.search(_clean_inline_text(item.title) or "") or TEMPLATE_BRANDING_RE.search(_clean_text(item.content) or ""):
             _warning(
@@ -884,6 +954,33 @@ def normalize_extraction(
         rendered = _render_other_section(item)
         if rendered:
             text_sections.append(rendered)
+
+    available_counts = {
+        "profile": 1 if any([identity.name, contact.email, contact.phone, contact.linkedin, contact.website, contact.github, contact.portfolio, contact.address, identity.location, identity.desiredPosition]) else 0,
+        "summary": 1 if summary_text else 0,
+        "skills": 1 if skills else 0,
+        "languages": 1 if languages else 0,
+        "experience": 1 if experience else 0,
+        "education": 1 if education else 0,
+        "certifications": 1 if certifications else 0,
+        "projects": 1 if projects else 0,
+        "achievements": 1 if achievements else 0,
+        "hobbies": 1 if hobbies else 0,
+        "awards": 1 if awards else 0,
+        "publications": 1 if publications else 0,
+        "volunteering": 1 if volunteering else 0,
+        "affiliations": 1 if affiliations else 0,
+        "additionalInformation": 1 if additional_information else 0,
+        "other": len(text_sections),
+    }
+    section_order = _normalize_section_order(
+        extraction.sectionOrder,
+        available_counts=available_counts,
+        text_sections=text_sections,
+    )
+    for order_index, item in enumerate(section_order):
+        if item.family == "other" and item.ordinal < len(text_sections):
+            text_sections[item.ordinal].order = order_index
 
     status = "partial" if warnings else "success"
     resume = NormalizedResume(
@@ -901,6 +998,13 @@ def normalize_extraction(
         certifications=certifications,
         projects=projects,
         achievements=achievements,
+        hobbies=hobbies,
+        awards=awards,
+        publications=publications,
+        volunteering=volunteering,
+        affiliations=affiliations,
+        additionalInformation=additional_information,
+        sectionOrder=section_order,
         textSections=text_sections,
         warnings=warnings,
     )
