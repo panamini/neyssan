@@ -26,6 +26,8 @@ import type { RemirrorJSON } from "remirror";
 import { ensureRemirrorDoc } from "../components/remirror-editor/utils/conversion";
 import { v4 as uuidv4 } from "uuid";
 import { generateCvTemplate } from "./cv-template";
+import dbg from "./cv-debug";
+import { buildAuthoritativeResumeDebugSnapshot } from "./authoritative-resume";
 
 /* -------------------------------------------------------------------------- */
 /* Result Types                                                               */
@@ -849,6 +851,7 @@ export function normalizeAndValidateCvDocument(
     // Metadata
     const meta = (loose as any).metadata ?? {};
     const metadata = {
+      ...(meta && typeof meta === "object" ? meta : {}),
       createdAt: String(meta.createdAt ?? now),
       updatedAt: String(meta.updatedAt ?? now),
       version: typeof meta.version === "number" ? meta.version : 1,
@@ -860,6 +863,19 @@ export function normalizeAndValidateCvDocument(
           ? meta.importRecoverySession
           : undefined,
     };
+    dbg(
+      "[normalize-cv] authoritative metadata snapshot",
+      {
+        before: buildAuthoritativeResumeDebugSnapshot({
+          authoritativeResume: meta?.authoritativeResume,
+          metadataAuthoritativeResumePresent: Boolean(meta?.authoritativeResume),
+        }),
+        after: buildAuthoritativeResumeDebugSnapshot({
+          authoritativeResume: metadata.authoritativeResume,
+          metadataAuthoritativeResumePresent: Boolean(metadata.authoritativeResume),
+        }),
+      },
+    );
 
     // Canonical template
     const template = generateCvTemplate(titleFallback ?? (loose as any).title ?? undefined);

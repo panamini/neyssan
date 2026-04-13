@@ -17,13 +17,16 @@ import type { VerbatiFontPairId } from "../features/verbati/fontCatalog";
 import type { VerbatiStylePreset } from "../features/verbati/types";
 import { useToast } from "../components/ui/toast";
 import {
+  buildAuthoritativeResumeDebugSnapshot,
   buildAuthoritativeResumeExportModel,
   readAuthoritativeResumeFromCv,
 } from "../lib/authoritative-resume";
 import {
   downloadAuthoritativeResumeExport,
+  downloadStandardResumeExport,
   type ResumeExportFormat,
 } from "../lib/cv-export";
+import dbg from "../lib/cv-debug";
 
 type CvForgeWorkspaceMode = "edit" | "preview";
 type PresetSlotIndex = 1 | 2 | 3;
@@ -249,31 +252,46 @@ export function CvForge(): JSX.Element {
     () => buildAuthoritativeResumeExportModel(authoritativeResume),
     [authoritativeResume],
   );
-
-  const notifyExportUnavailable = React.useCallback(() => {
-    showToast(
-      "Trusted Mistral v3 export is unavailable for this CV. Re-import with Scanned PDF / Image to enable export.",
-      {
-        variant: "warning",
-      },
-    );
-  }, [showToast]);
+  const hasTrustedExport = authoritativeExportModel !== null;
+  const exportStatusLabel = hasTrustedExport ? "ATS Ready" : "Standard Export";
+  const exportStatusDescription = hasTrustedExport
+    ? "Trusted Mistral v3"
+    : "Not ATS-verified";
+  const exportTooltip = hasTrustedExport
+    ? "Export ATS-ready resume"
+    : "Export standard resume";
 
   const handleResumeExport = React.useCallback(
     async (format: ResumeExportFormat) => {
       setIsExportMenuOpen(false);
+      dbg(
+        "[CvForge] export authoritative snapshot",
+        buildAuthoritativeResumeDebugSnapshot({
+          authoritativeResume,
+          metadataAuthoritativeResumePresent: Boolean(
+            currentCv?.metadata?.authoritativeResume,
+          ),
+        }),
+      );
 
-      if (!authoritativeResume || !authoritativeExportModel) {
-        notifyExportUnavailable();
+      if (!currentCv) {
+        showToast("Open or create a CV before exporting", {
+          variant: "warning",
+        });
         return;
       }
 
       setExportingFormat(format);
       try {
-        const exported = await downloadAuthoritativeResumeExport({
-          authoritativeResume,
-          format,
-        });
+        const exported = hasTrustedExport && authoritativeResume
+          ? await downloadAuthoritativeResumeExport({
+              authoritativeResume,
+              format,
+            })
+          : await downloadStandardResumeExport({
+              document: currentCv,
+              format,
+            });
         showToast(`Exported ${exported.filename}`, { variant: "success" });
       } catch (error) {
         console.error("[CvForge] export failed", error);
@@ -282,7 +300,7 @@ export function CvForge(): JSX.Element {
         setExportingFormat(null);
       }
     },
-    [authoritativeExportModel, authoritativeResume, notifyExportUnavailable, showToast],
+    [authoritativeResume, currentCv, hasTrustedExport, showToast],
   );
 
   const stylePresetSlots = React.useMemo(
@@ -418,7 +436,12 @@ export function CvForge(): JSX.Element {
       ref={exportMenuRef}
       className="dasti-import-dropdown dasti-cv-style-presets"
       data-open={isExportMenuOpen ? "true" : "false"}
-      style={{ flex: "0 0 auto" }}
+      style={{
+        flex: "0 0 auto",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "var(--space-2)",
+      }}
     >
       <button
         type="button"
@@ -426,7 +449,7 @@ export function CvForge(): JSX.Element {
         aria-label="Export resume"
         aria-expanded={isExportMenuOpen}
         aria-haspopup="menu"
-        data-toolbar-tooltip="Export resume"
+        data-toolbar-tooltip={exportTooltip}
         data-no-pan="true"
         onClick={() => {
           if (exportingFormat) {
@@ -437,6 +460,13 @@ export function CvForge(): JSX.Element {
       >
         <FilePdf size={15} strokeWidth={1.7} aria-hidden="true" />
       </button>
+      <span
+        className={
+          hasTrustedExport ? "dasti-pill dasti-pill--success" : "dasti-pill"
+        }
+      >
+        {exportStatusLabel}
+      </span>
       {isExportMenuOpen ? (
         <div
           className="dasti-import-dropdown__menu dasti-import-dropdown__menu--compact dasti-toolbar-drawer-surface dasti-cv-style-presets__menu"
@@ -459,9 +489,7 @@ export function CvForge(): JSX.Element {
                   {item.label}
                 </span>
                 <span className="dasti-cv-style-presets__option-description">
-                  {authoritativeExportModel
-                    ? "Trusted Mistral v3"
-                    : "Unavailable for legacy or fallback imports"}
+                  {exportStatusDescription}
                 </span>
               </span>
             </button>
@@ -557,6 +585,7 @@ export function CvForge(): JSX.Element {
                   <VerbatiCvPreviewPanel
                     layoutMode={isSplitCanvas ? "rail" : "stacked"}
                     hostMode="panel"
+                    railTrailingControl={resumeExportControl}
                     stylePreset={stylePreset}
                     onStylePresetChange={setStylePreset}
                   />

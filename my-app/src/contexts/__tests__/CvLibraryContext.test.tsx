@@ -791,6 +791,80 @@ describe('CvLibraryContext', () => {
     expect(ctx.cvs[0].title).toBe('Jane Doe — Product Manager');
   });
 
+  it('preserves authoritative resume metadata through import, save, and load', async () => {
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+    await waitFor(() => expect(ctx).toBeDefined());
+
+    const authoritativeResume = {
+      source: 'mistral_v3',
+      trusted: true,
+      fallbackToLegacy: false,
+      normalized: {
+        profile: {
+          name: 'Jane Doe',
+        },
+      },
+    };
+
+    await act(async () => {
+      await ctx.importCv({
+        id: 'imported-cv-authoritative',
+        title: 'Imported CV',
+        metadata: {
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          version: 1,
+          authoritativeResume,
+        },
+        sections: [
+          {
+            id: 'sec-profile-1',
+            title: 'Profile',
+            type: 'profile',
+            blocks: [],
+            structuredContent: [
+              {
+                id: 'profile-1',
+                name: 'Jane Doe',
+                desiredPosition: 'Product Manager',
+              },
+            ],
+            collapsed: false,
+          },
+        ],
+      });
+    });
+
+    await waitFor(() => expect(ctx.currentCv?.metadata?.authoritativeResume).toEqual(authoritativeResume));
+
+    const cachedDocument = JSON.parse(
+      mockLocalStorage.getItem('cv:imported-cv-authoritative') as string,
+    );
+    expect(cachedDocument.metadata.authoritativeResume).toEqual(authoritativeResume);
+
+    cleanup();
+
+    let reloadedCtx: any;
+    mockLocalStorage.setItem('cvActiveId', 'imported-cv-authoritative');
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (reloadedCtx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(reloadedCtx).toBeDefined());
+    await waitFor(() =>
+      expect(reloadedCtx.currentCv?.metadata?.authoritativeResume).toEqual(
+        authoritativeResume,
+      ),
+    );
+  });
+
   it('auto-retitles a blank CV when uploaded sections provide profile metadata', async () => {
     let ctx: any;
     render(

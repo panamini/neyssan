@@ -18,6 +18,9 @@ import type {
   AuthoritativeResumeProject,
 } from "./authoritative-resume";
 import { buildAuthoritativeResumeExportModel } from "./authoritative-resume";
+import type { CvDocument } from "../types/cvDocument";
+import type { ResumeData } from "../features/verbati/resume/resume.types";
+import { mapCvDocumentToResumeData } from "../features/verbati/cvDocumentToResumeData";
 
 export type ResumeExportFormat = "pdf" | "docx" | "markdown" | "json";
 
@@ -54,6 +57,13 @@ export function buildAuthoritativeResumeFilename(
   if (format === "markdown") return `${base}.md`;
   if (format === "docx") return `${base}.docx`;
   return `${base}.pdf`;
+}
+
+export function buildStandardResumeFilename(format: ResumeExportFormat): string {
+  if (format === "json") return "resume.json";
+  if (format === "markdown") return "resume.md";
+  if (format === "docx") return "resume.docx";
+  return "resume.pdf";
 }
 
 function formatStructuredDateToken(raw: string | null | undefined): string {
@@ -270,6 +280,93 @@ export function serializeAuthoritativeResumeMarkdown(
   serializeProjectsMarkdown(lines, model.projects);
   serializeCertificationsMarkdown(lines, model.certifications);
   serializeNamedListMarkdown(lines, "Achievements", model.achievements);
+
+  return `${lines.join("\n").trim()}\n`;
+}
+
+export function serializeStandardResumeJson(data: ResumeData): string {
+  return `${JSON.stringify(data, null, 2)}\n`;
+}
+
+export function serializeStandardResumeMarkdown(data: ResumeData): string {
+  const lines: string[] = [`# ${cleanString(data.name) || "Candidate"}`];
+  addLines(
+    lines,
+    cleanString(data.title),
+    data.contact.map((item) => `${item.label}: ${item.value}`).join(" | "),
+  );
+
+  if (cleanString(data.summary)) {
+    lines.push("", "## Summary", "", cleanString(data.summary));
+  }
+
+  if (data.experience.length > 0) {
+    lines.push("", "## Experience");
+    data.experience.forEach((item) => {
+      lines.push(
+        "",
+        `### ${cleanString(item.role) || cleanString(item.company) || "Experience"}`,
+      );
+      addLines(
+        lines,
+        [cleanString(item.company), cleanString(item.location), cleanString(item.period)]
+          .filter(Boolean)
+          .join(" | "),
+      );
+      item.bullets
+        .map((bullet) => cleanString(bullet))
+        .filter(Boolean)
+        .forEach((bullet) => lines.push(`- ${bullet}`));
+    });
+  }
+
+  if (data.education.length > 0) {
+    lines.push("", "## Education");
+    data.education.forEach((item) => {
+      lines.push(
+        "",
+        `### ${cleanString(item.degree) || cleanString(item.school) || "Education"}`,
+      );
+      addLines(
+        lines,
+        [cleanString(item.school), cleanString(item.period)]
+          .filter(Boolean)
+          .join(" | "),
+      );
+    });
+  }
+
+  serializeNamedListMarkdown(
+    lines,
+    "Skills",
+    data.skills.map((skill) => cleanString(skill)).filter(Boolean),
+  );
+
+  if (data.languages.length > 0) {
+    lines.push("", "## Languages");
+    data.languages.forEach((item) => {
+      const value = cleanString(item.level)
+        ? `${cleanString(item.name)} (${cleanString(item.level)})`
+        : cleanString(item.name);
+      if (value) {
+        lines.push(`- ${value}`);
+      }
+    });
+  }
+
+  if (data.projects.length > 0) {
+    lines.push("", "## Projects");
+    data.projects.forEach((item) => {
+      lines.push("", `### ${cleanString(item.name) || "Project"}`);
+      addLines(lines, cleanString(item.meta), cleanString(item.description));
+    });
+  }
+
+  serializeNamedListMarkdown(
+    lines,
+    "Achievements",
+    (data.achievements ?? []).map((item) => cleanString(item)).filter(Boolean),
+  );
 
   return `${lines.join("\n").trim()}\n`;
 }
@@ -644,6 +741,358 @@ export function buildAuthoritativeResumePdf(
   return pdf.output("blob");
 }
 
+export async function buildStandardResumeDocx(
+  data: ResumeData,
+): Promise<Blob> {
+  const children: Paragraph[] = [
+    new Paragraph({
+      heading: HeadingLevel.TITLE,
+      children: [new TextRun({ text: cleanString(data.name) || "Candidate", bold: true })],
+    }),
+  ];
+
+  if (cleanString(data.title)) {
+    children.push(paragraph(cleanString(data.title)));
+  }
+
+  const contactLine = data.contact
+    .map((item) => [cleanString(item.label), cleanString(item.value)].filter(Boolean).join(": "))
+    .filter(Boolean)
+    .join(" | ");
+  if (contactLine) {
+    children.push(paragraph(contactLine));
+  }
+
+  if (cleanString(data.summary)) {
+    children.push(
+      new Paragraph({
+        heading: HeadingLevel.HEADING_1,
+        children: [new TextRun({ text: "Summary", bold: true })],
+      }),
+      paragraph(cleanString(data.summary)),
+    );
+  }
+
+  if (data.experience.length > 0) {
+    children.push(
+      new Paragraph({
+        heading: HeadingLevel.HEADING_1,
+        children: [new TextRun({ text: "Experience", bold: true })],
+      }),
+    );
+    data.experience.forEach((item) => {
+      children.push(
+        new Paragraph({
+          heading: HeadingLevel.HEADING_2,
+          children: [
+            new TextRun({
+              text:
+                cleanString(item.role) || cleanString(item.company) || "Experience",
+              bold: true,
+            }),
+          ],
+        }),
+      );
+      const meta = [
+        cleanString(item.company),
+        cleanString(item.location),
+        cleanString(item.period),
+      ]
+        .filter(Boolean)
+        .join(" | ");
+      if (meta) {
+        children.push(paragraph(meta));
+      }
+      item.bullets
+        .map((bullet) => cleanString(bullet))
+        .filter(Boolean)
+        .forEach((bullet) => {
+          children.push(
+            new Paragraph({
+              text: bullet,
+              bullet: { level: 0 },
+            }),
+          );
+        });
+    });
+  }
+
+  if (data.education.length > 0) {
+    children.push(
+      new Paragraph({
+        heading: HeadingLevel.HEADING_1,
+        children: [new TextRun({ text: "Education", bold: true })],
+      }),
+    );
+    data.education.forEach((item) => {
+      children.push(
+        new Paragraph({
+          heading: HeadingLevel.HEADING_2,
+          children: [
+            new TextRun({
+              text: cleanString(item.degree) || cleanString(item.school) || "Education",
+              bold: true,
+            }),
+          ],
+        }),
+      );
+      const meta = [cleanString(item.school), cleanString(item.period)]
+        .filter(Boolean)
+        .join(" | ");
+      if (meta) {
+        children.push(paragraph(meta));
+      }
+    });
+  }
+
+  if (data.skills.length > 0) {
+    children.push(
+      new Paragraph({
+        heading: HeadingLevel.HEADING_1,
+        children: [new TextRun({ text: "Skills", bold: true })],
+      }),
+      paragraph(data.skills.map((skill) => cleanString(skill)).filter(Boolean).join(", ")),
+    );
+  }
+
+  if (data.languages.length > 0) {
+    children.push(
+      new Paragraph({
+        heading: HeadingLevel.HEADING_1,
+        children: [new TextRun({ text: "Languages", bold: true })],
+      }),
+    );
+    data.languages.forEach((item) => {
+      const label = cleanString(item.level)
+        ? `${cleanString(item.name)} (${cleanString(item.level)})`
+        : cleanString(item.name);
+      if (label) {
+        children.push(
+          new Paragraph({
+            text: label,
+            bullet: { level: 0 },
+          }),
+        );
+      }
+    });
+  }
+
+  if (data.projects.length > 0) {
+    children.push(
+      new Paragraph({
+        heading: HeadingLevel.HEADING_1,
+        children: [new TextRun({ text: "Projects", bold: true })],
+      }),
+    );
+    data.projects.forEach((item) => {
+      children.push(
+        new Paragraph({
+          heading: HeadingLevel.HEADING_2,
+          children: [new TextRun({ text: cleanString(item.name) || "Project", bold: true })],
+        }),
+      );
+      if (cleanString(item.meta)) {
+        children.push(paragraph(cleanString(item.meta)));
+      }
+      if (cleanString(item.description)) {
+        children.push(paragraph(cleanString(item.description)));
+      }
+    });
+  }
+
+  if ((data.achievements ?? []).length > 0) {
+    children.push(
+      new Paragraph({
+        heading: HeadingLevel.HEADING_1,
+        children: [new TextRun({ text: "Achievements", bold: true })],
+      }),
+    );
+    (data.achievements ?? [])
+      .map((item) => cleanString(item))
+      .filter(Boolean)
+      .forEach((item) => {
+        children.push(
+          new Paragraph({
+            text: item,
+            bullet: { level: 0 },
+          }),
+        );
+      });
+  }
+
+  const document = new Document({
+    sections: [
+      {
+        properties: {},
+        children,
+      },
+    ],
+  });
+
+  return Packer.toBlob(document);
+}
+
+export function buildStandardResumePdf(data: ResumeData): Blob {
+  const pdf = new jsPDF({
+    unit: "pt",
+    format: "a4",
+    compress: true,
+  });
+
+  const margin = 44;
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const contentWidth = pageWidth - margin * 2;
+  const bottomLimit = pageHeight - margin;
+  let y = margin;
+
+  const ensureSpace = (height: number) => {
+    if (y + height <= bottomLimit) return;
+    pdf.addPage();
+    y = margin;
+  };
+
+  const writeText = (
+    text: string,
+    options?: {
+      size?: number;
+      bold?: boolean;
+      indent?: number;
+      spacingAfter?: number;
+    },
+  ) => {
+    const cleaned = cleanString(text);
+    if (!cleaned) return;
+    const size = options?.size ?? 11;
+    const indent = options?.indent ?? 0;
+    const lines = pdf.splitTextToSize(cleaned, contentWidth - indent) as string[];
+    const lineHeight = Math.max(13, size * 1.25);
+    ensureSpace(lines.length * lineHeight + (options?.spacingAfter ?? 4));
+    pdf.setFont("helvetica", options?.bold ? "bold" : "normal");
+    pdf.setFontSize(size);
+    pdf.text(lines, margin + indent, y);
+    y += lines.length * lineHeight + (options?.spacingAfter ?? 4);
+  };
+
+  const writeBullet = (text: string) => {
+    const cleaned = cleanString(text);
+    if (!cleaned) return;
+    ensureSpace(18);
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(11);
+    pdf.text("•", margin, y);
+    const lines = pdf.splitTextToSize(cleaned, contentWidth - 16) as string[];
+    pdf.text(lines, margin + 16, y);
+    y += lines.length * 14 + 4;
+  };
+
+  const writeSectionHeading = (title: string) => {
+    ensureSpace(30);
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(14);
+    pdf.text(title, margin, y);
+    y += 18;
+  };
+
+  writeText(cleanString(data.name) || "Candidate", {
+    size: 24,
+    bold: true,
+    spacingAfter: 8,
+  });
+  writeText(cleanString(data.title), { size: 12, spacingAfter: 6 });
+  writeText(
+    data.contact
+      .map((item) => [cleanString(item.label), cleanString(item.value)].filter(Boolean).join(": "))
+      .filter(Boolean)
+      .join(" | "),
+    { size: 10, spacingAfter: 10 },
+  );
+
+  if (cleanString(data.summary)) {
+    writeSectionHeading("Summary");
+    writeText(cleanString(data.summary), { spacingAfter: 8 });
+  }
+
+  if (data.experience.length > 0) {
+    writeSectionHeading("Experience");
+    data.experience.forEach((item) => {
+      writeText(
+        cleanString(item.role) || cleanString(item.company) || "Experience",
+        { size: 11.5, bold: true, spacingAfter: 2 },
+      );
+      writeText(
+        [cleanString(item.company), cleanString(item.location), cleanString(item.period)]
+          .filter(Boolean)
+          .join(" | "),
+        { size: 10, spacingAfter: 4 },
+      );
+      item.bullets
+        .map((bullet) => cleanString(bullet))
+        .filter(Boolean)
+        .forEach(writeBullet);
+      y += 4;
+    });
+  }
+
+  if (data.education.length > 0) {
+    writeSectionHeading("Education");
+    data.education.forEach((item) => {
+      writeText(
+        cleanString(item.degree) || cleanString(item.school) || "Education",
+        { size: 11.5, bold: true, spacingAfter: 2 },
+      );
+      writeText(
+        [cleanString(item.school), cleanString(item.period)]
+          .filter(Boolean)
+          .join(" | "),
+        { size: 10, spacingAfter: 6 },
+      );
+    });
+  }
+
+  if (data.skills.length > 0) {
+    writeSectionHeading("Skills");
+    writeText(
+      data.skills.map((skill) => cleanString(skill)).filter(Boolean).join(", "),
+      { spacingAfter: 8 },
+    );
+  }
+
+  if (data.languages.length > 0) {
+    writeSectionHeading("Languages");
+    data.languages.forEach((item) => {
+      const label = cleanString(item.level)
+        ? `${cleanString(item.name)} (${cleanString(item.level)})`
+        : cleanString(item.name);
+      writeBullet(label);
+    });
+    y += 4;
+  }
+
+  if (data.projects.length > 0) {
+    writeSectionHeading("Projects");
+    data.projects.forEach((item) => {
+      writeText(cleanString(item.name) || "Project", {
+        size: 11.5,
+        bold: true,
+        spacingAfter: 2,
+      });
+      writeText(cleanString(item.meta), { size: 10, spacingAfter: 3 });
+      writeText(cleanString(item.description), { spacingAfter: 6 });
+    });
+  }
+
+  if ((data.achievements ?? []).length > 0) {
+    writeSectionHeading("Achievements");
+    (data.achievements ?? [])
+      .map((item) => cleanString(item))
+      .filter(Boolean)
+      .forEach(writeBullet);
+  }
+
+  return pdf.output("blob");
+}
+
 function triggerDownload(blob: Blob, filename: string): void {
   const url = window.URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -694,4 +1143,40 @@ export async function downloadAuthoritativeResumeExport(args: {
 
   triggerDownload(buildAuthoritativeResumePdf(model), filename);
   return { filename, model };
+}
+
+export async function downloadStandardResumeExport(args: {
+  document: CvDocument;
+  format: ResumeExportFormat;
+}): Promise<{ filename: string; data: ResumeData }> {
+  const data = mapCvDocumentToResumeData(args.document);
+  const filename = buildStandardResumeFilename(args.format);
+
+  if (args.format === "json") {
+    triggerDownload(
+      new Blob([serializeStandardResumeJson(data)], {
+        type: "application/json;charset=utf-8",
+      }),
+      filename,
+    );
+    return { filename, data };
+  }
+
+  if (args.format === "markdown") {
+    triggerDownload(
+      new Blob([serializeStandardResumeMarkdown(data)], {
+        type: "text/markdown;charset=utf-8",
+      }),
+      filename,
+    );
+    return { filename, data };
+  }
+
+  if (args.format === "docx") {
+    triggerDownload(await buildStandardResumeDocx(data), filename);
+    return { filename, data };
+  }
+
+  triggerDownload(buildStandardResumePdf(data), filename);
+  return { filename, data };
 }

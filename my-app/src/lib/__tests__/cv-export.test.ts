@@ -3,9 +3,13 @@ import { describe, expect, it } from "vitest";
 import {
   buildAuthoritativeResumeFilename,
   buildAuthoritativeResumePdf,
+  buildStandardResumeFilename,
+  buildStandardResumePdf,
   serializeAuthoritativeResumeMarkdown,
+  serializeStandardResumeMarkdown,
 } from "../cv-export";
 import type { AuthoritativeResumeExportModel } from "../authoritative-resume";
+import type { ResumeData } from "../../features/verbati/resume/resume.types";
 
 const baseModel: AuthoritativeResumeExportModel = {
   schemaVersion: 1,
@@ -32,6 +36,28 @@ const baseModel: AuthoritativeResumeExportModel = {
   languages: [{ name: "English", level: "Fluent" }],
   projects: [],
   certifications: [],
+  achievements: [],
+};
+
+const standardResume: ResumeData = {
+  name: "Editor Name",
+  title: "Editor Title",
+  summary: "Editable summary",
+  metadata: [{ label: "Location", value: "Paris" }],
+  contact: [{ label: "Email", value: "editor@example.com" }],
+  skills: ["Research"],
+  languages: [{ name: "French", level: "Native" }],
+  experience: [
+    {
+      role: "Designer",
+      company: "Studio",
+      period: "Apr 2022 - Jun 2024",
+      location: "Paris",
+      bullets: ["Owned the design system"],
+    },
+  ],
+  projects: [],
+  education: [],
   achievements: [],
 };
 
@@ -62,6 +88,22 @@ describe("authoritative resume export serializers", () => {
 
   it("builds a PDF blob from the authoritative model", () => {
     const blob = buildAuthoritativeResumePdf(baseModel);
+    expect(blob).toBeInstanceOf(Blob);
+    expect(blob.size).toBeGreaterThan(0);
+  });
+
+  it("uses stable generic filenames for standard exports", () => {
+    expect(buildStandardResumeFilename("pdf")).toBe("resume.pdf");
+    expect(buildStandardResumeFilename("docx")).toBe("resume.docx");
+  });
+
+  it("renders markdown and PDF for standard exports without using UI titles", () => {
+    const markdown = serializeStandardResumeMarkdown(standardResume);
+    expect(markdown).toContain("# Editor Name");
+    expect(markdown).toContain("## Experience");
+    expect(markdown).toContain("- Owned the design system");
+
+    const blob = buildStandardResumePdf(standardResume);
     expect(blob).toBeInstanceOf(Blob);
     expect(blob.size).toBeGreaterThan(0);
   });
