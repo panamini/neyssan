@@ -6,8 +6,7 @@ import React from "react";
  * Small development-only floating toggle that enables/disables the CV editor
  * debug logs without having to type into the browser console. It stores the
  * preference in localStorage under "cv_editor_debug" and sets the global
- * window.__CV_EDITOR_DEBUG__ flag then reloads the page so modules read the
- * flag at load-time.
+ * window.__CV_EDITOR_DEBUG__ flag.
  *
  * Usage: Render this component somewhere high in the app (we mount it inside
  * CvLibraryProvider). It intentionally forces a reload after changing the flag
@@ -48,7 +47,8 @@ export function DebugToggle() {
       <button
         type="button"
         onClick={toggle}
-        title="Toggle CV editor debug (persists to localStorage and reloads)"
+        aria-label="Toggle CV editor debug"
+        title="Toggle CV editor debug"
         className={`inline-flex items-center px-3 py-2 rounded-md text-sm font-medium shadow ${
           enabled ? "bg-red-600 text-white" : "[background:var(--sf2)] [color:var(--ti)]"
         }`}

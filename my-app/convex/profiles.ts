@@ -263,12 +263,14 @@ export const patch = mutation({
           importedAt?: number;
           confidence?: number;
           filename?: string;
+          authoritativeResume?: unknown;
           updatedAt?: any;
           version?: any;
         }
         const md = { ...updates.metadata } as Metadata;
         delete md.updatedAt;
         delete md.version;
+        delete md.authoritativeResume;
         updates.metadata = md;
       }
 
