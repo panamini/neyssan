@@ -93,6 +93,17 @@ type ManualSectionOption = {
   isCustom?: boolean;
 };
 
+type ImportRuntimeDebugSnapshot = {
+  ocrEngine: string | null;
+  mistralRuntime: string | null;
+  mistralFallback: boolean | null;
+  ocrRequestPath: string | null;
+  authoritativeTrusted: boolean | null;
+  normalizedPresent: boolean;
+  importModeLabel: string;
+  importModeTone: "trusted" | "warning";
+};
+
 const IMPORT_WARNING_SESSION_KEY_PREFIX = "dasti:cv-import-warning-banner:";
 const IMPORT_REVIEW_SESSION_KEY_PREFIX = "dasti:cv-import-review:";
 const IMPORT_RENAME_PROMPT_SESSION_KEY_PREFIX = "dasti:cv-import-rename:";
@@ -293,6 +304,193 @@ function mergeExplicitAuthoritativeResume(
     delete (nextMetadata as { authoritativeResume?: unknown }).authoritativeResume;
   }
   return nextMetadata;
+}
+
+function buildImportRuntimeDebugSnapshot(
+  payload: StructuredPayload | null | undefined,
+): ImportRuntimeDebugSnapshot | null {
+  if (!payload) {
+    return null;
+  }
+
+  const diagnostics =
+    payload.diagnostics && typeof payload.diagnostics === "object"
+      ? (payload.diagnostics as Record<string, unknown>)
+      : null;
+  const authoritativeResume = readStructuredAuthoritativeResume(payload);
+  const normalizedPresent = Boolean(
+    payload.normalized && typeof payload.normalized === "object",
+  );
+  const isTrustedAuthoritativeImport = Boolean(
+    authoritativeResume &&
+      authoritativeResume.trusted === true &&
+      authoritativeResume.fallbackToLegacy === false &&
+      authoritativeResume.normalized,
+  );
+
+  return {
+    ocrEngine:
+      typeof diagnostics?.ocr_engine === "string"
+        ? diagnostics.ocr_engine
+        : null,
+    mistralRuntime:
+      typeof diagnostics?.mistral_runtime === "string"
+        ? diagnostics.mistral_runtime
+        : null,
+    mistralFallback:
+      typeof diagnostics?.mistral_fallback === "boolean"
+        ? diagnostics.mistral_fallback
+        : null,
+    ocrRequestPath:
+      typeof diagnostics?.ocr_request_path === "string"
+        ? diagnostics.ocr_request_path
+        : null,
+    authoritativeTrusted: authoritativeResume?.trusted ?? null,
+    normalizedPresent,
+    importModeLabel: isTrustedAuthoritativeImport
+      ? "Trusted authoritative-backed import"
+      : normalizedPresent
+        ? "Fallback/legacy normalized import"
+        : "No normalized import payload",
+    importModeTone: isTrustedAuthoritativeImport ? "trusted" : "warning",
+  };
+}
+
+function ImportRuntimeDebugControls(props: {
+  copyFeedback: null | "normalized" | "parser" | "rawText";
+  onCopyPayload: (kind: "normalized" | "parser" | "rawText") => void;
+  payload: StructuredPayload;
+  rawTextForCopy: string | null;
+  runtimeDebug: ImportRuntimeDebugSnapshot | null;
+}): JSX.Element {
+  const {
+    copyFeedback,
+    onCopyPayload,
+    payload,
+    rawTextForCopy,
+    runtimeDebug,
+  } = props;
+
+  return (
+    <>
+      {runtimeDebug ? (
+        <div
+          role="status"
+          aria-label="Import runtime debug"
+          style={{
+            display: "grid",
+            gap: "0.35rem",
+            padding: "0.65rem 0.85rem",
+            borderRadius: "14px",
+            border: "1px solid var(--color-border)",
+            background: "var(--sfr)",
+            minWidth: "min(100%, 24rem)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              flexWrap: "wrap",
+            }}
+          >
+            <span
+              className={
+                runtimeDebug.importModeTone === "trusted"
+                  ? "dasti-pill dasti-pill--success"
+                  : "dasti-pill"
+              }
+            >
+              {runtimeDebug.importModeLabel}
+            </span>
+            <span
+              style={{
+                fontSize: "0.75rem",
+                color: "var(--tm)",
+              }}
+            >
+              Latest parse runtime
+            </span>
+          </div>
+          <div
+            style={{
+              display: "grid",
+              gap: "0.2rem",
+              fontSize: "0.8rem",
+              color: "var(--ti)",
+            }}
+          >
+            <div>
+              <strong>ocr_engine:</strong>{" "}
+              <code>{runtimeDebug.ocrEngine ?? "null"}</code>
+            </div>
+            <div>
+              <strong>mistral_runtime:</strong>{" "}
+              <code>{runtimeDebug.mistralRuntime ?? "null"}</code>
+            </div>
+            <div>
+              <strong>mistral_fallback:</strong>{" "}
+              <code>
+                {runtimeDebug.mistralFallback == null
+                  ? "null"
+                  : String(runtimeDebug.mistralFallback)}
+              </code>
+            </div>
+            <div>
+              <strong>ocr_request_path:</strong>{" "}
+              <code>{runtimeDebug.ocrRequestPath ?? "null"}</code>
+            </div>
+            <div>
+              <strong>authoritativeResume.trusted:</strong>{" "}
+              <code>
+                {runtimeDebug.authoritativeTrusted == null
+                  ? "null"
+                  : String(runtimeDebug.authoritativeTrusted)}
+              </code>
+            </div>
+            <div>
+              <strong>import payload:</strong>{" "}
+              <code>{runtimeDebug.importModeLabel}</code>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      <button
+        type="button"
+        onClick={() => void onCopyPayload("normalized")}
+        className="dasti-button dasti-button--secondary dasti-button--pill dasti-button--sm"
+        aria-label="Copy normalized JSON"
+      >
+        <FileText size={14} strokeWidth={1.6} aria-hidden="true" />
+        {copyFeedback === "normalized"
+          ? "Copied normalized JSON"
+          : "Copy normalized JSON"}
+      </button>
+      <button
+        type="button"
+        onClick={() => void onCopyPayload("parser")}
+        className="dasti-button dasti-button--secondary dasti-button--pill dasti-button--sm"
+        aria-label="Copy raw parser JSON"
+        disabled={!payload?.debug?.rawParser}
+      >
+        <FileText size={14} strokeWidth={1.6} aria-hidden="true" />
+        {copyFeedback === "parser"
+          ? "Copied raw parser JSON"
+          : "Copy raw parser JSON"}
+      </button>
+      <button
+        type="button"
+        onClick={() => void onCopyPayload("rawText")}
+        className="dasti-button dasti-button--secondary dasti-button--pill dasti-button--sm"
+        aria-label="Copy raw text"
+        disabled={!rawTextForCopy}
+      >
+        <FileText size={14} strokeWidth={1.6} aria-hidden="true" />
+        {copyFeedback === "rawText" ? "Copied raw text" : "Copy raw text"}
+      </button>
+    </>
+  );
 }
 
 /**
@@ -644,6 +842,10 @@ export function ProfileReviewCard({
     coerceDebugPayloadText((latestStructuredPayload?.normalized as any)?.rawText) ??
     coerceDebugPayloadText((latestStructuredPayload?.debug as any)?.rawParser?.rawText) ??
     coerceDebugPayloadText((latestStructuredPayload?.debug as any)?.rawParser?.normalized?.rawText);
+  const latestImportRuntimeDebug = useMemo(
+    () => buildImportRuntimeDebugSnapshot(latestStructuredPayload),
+    [latestStructuredPayload],
+  );
   const recoveryOutcomeSummary = useMemo<RecoveryCommitSummary | null>(() => {
     if (!pendingRecoveryImport) return null;
     return summarizeRecoveryCommitState(
@@ -700,7 +902,6 @@ export function ProfileReviewCard({
       });
     }
     previousCvIdRef.current = nextCvId;
-    setLatestStructuredPayload(null);
     setCopyFeedback(null);
   }, [currentCv?.id]);
 
@@ -2282,6 +2483,10 @@ export function ProfileReviewCard({
               onApplyToSections={(updated, structured) => {
                 void importSectionsIntoFreshCv(updated, structured as StructuredPayload | undefined);
               }}
+              onResult={(payload) => {
+                setLatestStructuredPayload(payload as StructuredPayload);
+                setCopyFeedback(null);
+              }}
               onRecoveryRequired={(request) => {
                 void beginRecoveryImport(request, "fresh");
               }}
@@ -2304,6 +2509,27 @@ export function ProfileReviewCard({
               Open library
             </button>
           </div>
+          {DEBUG_CV_EDITOR && latestStructuredPayload ? (
+            <div
+              style={{
+                display: "flex",
+                gap: "var(--s2)",
+                flexWrap: "wrap",
+                justifyContent: "center",
+                marginTop: "var(--s3)",
+              }}
+            >
+              <ImportRuntimeDebugControls
+                copyFeedback={copyFeedback}
+                onCopyPayload={(kind) => {
+                  void copyStructuredPayload(kind);
+                }}
+                payload={latestStructuredPayload}
+                rawTextForCopy={rawTextForCopy}
+                runtimeDebug={latestImportRuntimeDebug}
+              />
+            </div>
+          ) : null}
         </div>
       )}
 
@@ -2485,6 +2711,12 @@ export function ProfileReviewCard({
                   ) {
                     try {
                       console.debug(
+                        "[ProfileReviewCard] structured runtime status",
+                        buildImportRuntimeDebugSnapshot(
+                          payload as StructuredPayload,
+                        ),
+                      );
+                      console.debug(
                         "[ProfileReviewCard] structured payload",
                         payload,
                       );
@@ -2499,46 +2731,20 @@ export function ProfileReviewCard({
                 renderAs="dropdown"
               />
             </div>
-            {onRequestExport || hasImportReviewEntryPoint ? (
+            {onRequestExport ||
+            hasImportReviewEntryPoint ||
+            (DEBUG_CV_EDITOR && latestStructuredPayload) ? (
               <div className="dasti-cv-edit-toolbar__group dasti-cv-edit-toolbar__group--actions">
                 {DEBUG_CV_EDITOR && latestStructuredPayload ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => void copyStructuredPayload("normalized")}
-                      className="dasti-button dasti-button--secondary dasti-button--pill dasti-button--sm"
-                      aria-label="Copy normalized JSON"
-                    >
-                      <FileText size={14} strokeWidth={1.6} aria-hidden="true" />
-                      {copyFeedback === "normalized"
-                        ? "Copied normalized JSON"
-                        : "Copy normalized JSON"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void copyStructuredPayload("parser")}
-                      className="dasti-button dasti-button--secondary dasti-button--pill dasti-button--sm"
-                      aria-label="Copy raw parser JSON"
-                      disabled={!latestStructuredPayload?.debug?.rawParser}
-                    >
-                      <FileText size={14} strokeWidth={1.6} aria-hidden="true" />
-                      {copyFeedback === "parser"
-                        ? "Copied raw parser JSON"
-                        : "Copy raw parser JSON"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void copyStructuredPayload("rawText")}
-                      className="dasti-button dasti-button--secondary dasti-button--pill dasti-button--sm"
-                      aria-label="Copy raw text"
-                      disabled={!rawTextForCopy}
-                    >
-                      <FileText size={14} strokeWidth={1.6} aria-hidden="true" />
-                      {copyFeedback === "rawText"
-                        ? "Copied raw text"
-                        : "Copy raw text"}
-                    </button>
-                  </>
+                  <ImportRuntimeDebugControls
+                    copyFeedback={copyFeedback}
+                    onCopyPayload={(kind) => {
+                      void copyStructuredPayload(kind);
+                    }}
+                    payload={latestStructuredPayload}
+                    rawTextForCopy={rawTextForCopy}
+                    runtimeDebug={latestImportRuntimeDebug}
+                  />
                 ) : null}
                 {onRequestExport ? (
                   <ResumeExportControl
