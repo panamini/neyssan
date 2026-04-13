@@ -27,7 +27,7 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { generateCvTemplate, generateCvTemplateV1 } from "../lib/cv-template";
-import { isV1SectionsEnabled } from "../lib/flags";
+import { isCvEditorDebugUiEnabled, isV1SectionsEnabled } from "../lib/flags";
 import StructuredUploadButton, {
   type StructuredPayload,
 } from "./StructuredUploadButton";
@@ -60,6 +60,7 @@ import {
 import {
   buildAuthoritativeResumeDebugSnapshot,
   coerceAuthoritativeResume,
+  hasTrustedAuthoritativeMistralImport,
   type AuthoritativeResume,
 } from "../lib/authoritative-resume";
 import dbg from "../lib/cv-debug";
@@ -318,40 +319,54 @@ function buildImportRuntimeDebugSnapshot(
       ? (payload.diagnostics as Record<string, unknown>)
       : null;
   const authoritativeResume = readStructuredAuthoritativeResume(payload);
+  const ocrEngine =
+    typeof diagnostics?.ocr_engine === "string"
+      ? diagnostics.ocr_engine
+      : null;
+  const mistralRuntime =
+    typeof diagnostics?.mistral_runtime === "string"
+      ? diagnostics.mistral_runtime
+      : null;
+  const mistralFallback =
+    typeof diagnostics?.mistral_fallback === "boolean"
+      ? diagnostics.mistral_fallback
+      : null;
+  const ocrRequestPath =
+    typeof diagnostics?.ocr_request_path === "string"
+      ? diagnostics.ocr_request_path
+      : null;
   const normalizedPresent = Boolean(
     payload.normalized && typeof payload.normalized === "object",
   );
-  const isTrustedAuthoritativeImport = Boolean(
-    authoritativeResume &&
-      authoritativeResume.trusted === true &&
-      authoritativeResume.fallbackToLegacy === false &&
-      authoritativeResume.normalized,
+  const hasOcrRuntimeEvidence = Boolean(
+    ocrEngine ||
+      mistralRuntime ||
+      mistralFallback !== null ||
+      ocrRequestPath ||
+      authoritativeResume,
   );
+  const isTrustedAuthoritativeImport = hasTrustedAuthoritativeMistralImport({
+    authoritativeResume,
+    mistralFallback,
+    mistralRuntime,
+  });
+
+  const importModeLabel = hasOcrRuntimeEvidence
+    ? isTrustedAuthoritativeImport
+      ? "Trusted Mistral import"
+      : "OCR import rejected (fallback/untrusted)"
+    : normalizedPresent
+      ? "Structured import"
+      : "No normalized import payload";
 
   return {
-    ocrEngine:
-      typeof diagnostics?.ocr_engine === "string"
-        ? diagnostics.ocr_engine
-        : null,
-    mistralRuntime:
-      typeof diagnostics?.mistral_runtime === "string"
-        ? diagnostics.mistral_runtime
-        : null,
-    mistralFallback:
-      typeof diagnostics?.mistral_fallback === "boolean"
-        ? diagnostics.mistral_fallback
-        : null,
-    ocrRequestPath:
-      typeof diagnostics?.ocr_request_path === "string"
-        ? diagnostics.ocr_request_path
-        : null,
+    ocrEngine,
+    mistralRuntime,
+    mistralFallback,
+    ocrRequestPath,
     authoritativeTrusted: authoritativeResume?.trusted ?? null,
     normalizedPresent,
-    importModeLabel: isTrustedAuthoritativeImport
-      ? "Trusted authoritative-backed import"
-      : normalizedPresent
-        ? "Fallback/legacy normalized import"
-        : "No normalized import payload",
+    importModeLabel,
     importModeTone: isTrustedAuthoritativeImport ? "trusted" : "warning",
   };
 }
@@ -725,8 +740,9 @@ export function ProfileReviewCard({
   }, [sections]);
   const sensors = useSensors(useSensor(PointerSensor));
   const DEBUG_CV_EDITOR =
-    typeof window !== "undefined" &&
-    (window as any).__CV_EDITOR_DEBUG__ === true;
+    isCvEditorDebugUiEnabled() ||
+    (typeof window !== "undefined" &&
+      (window as any).__CV_EDITOR_DEBUG__ === true);
   // TEMPORARILY DISABLE DnD GLOBALLY to stabilize inspector flow. Re-enable after DnD refactor.
   const DISABLE_DND_FOR_DEBUG = true;
 

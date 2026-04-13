@@ -13,6 +13,7 @@ cd "${ROOT_DIR}"
 # Load overrides
 if [[ -f "${ROOT_DIR}/.env" ]]; then set -a; source "${ROOT_DIR}/.env"; set +a; fi
 if [[ -f "${ROOT_DIR}/.env.local" ]]; then set -a; source "${ROOT_DIR}/.env.local"; set +a; fi
+if [[ -f "${ROOT_DIR}/my-app/.env" ]]; then set -a; source "${ROOT_DIR}/my-app/.env"; set +a; fi
 
 # Defaults
 : "${PARSER_ORIGIN:=https://parser.dasti.ai}"   # Edge origin (Cloudflare Zero Trust)
@@ -30,8 +31,12 @@ LOG_DIR="${ROOT_DIR}/tmp"
 VITE_LOG="${LOG_DIR}/vite-dev.log"
 CONVEX_LOG="${LOG_DIR}/convex-dev.log"
 LOCAL_CONVEX_URL="${LOCAL_CONVEX_URL:-}"
+LOCAL_CONVEX_CLOUD_PORT="${LOCAL_CONVEX_CLOUD_PORT:-3210}"
+LOCAL_CONVEX_SITE_PORT="${LOCAL_CONVEX_SITE_PORT:-3211}"
+CONVEX_TMPDIR="${CONVEX_TMPDIR:-${ROOT_DIR}/tmp/convex-tmp}"
 
 mkdir -p "${STATE_DIR}" "${LOG_DIR}"
+mkdir -p "${CONVEX_TMPDIR}"
 
 # Auto-load Mistral key from file if not set
 if [[ -z "${MISTRAL_API_KEY:-}" && -f "${HOME}/.mistral_key" ]]; then
@@ -108,6 +113,76 @@ parser_uses_workspace_mount() {
   local mounts=""
   mounts="$(docker inspect "${PARSER_NAME}" --format '{{range .Mounts}}{{println .Source "->" .Destination}}{{end}}' 2>/dev/null || true)"
   grep -Fq "${ROOT_DIR} -> /app" <<<"${mounts}"
+}
+
+resolve_convex_project_binding() {
+  local candidate_files=(
+    "${ROOT_DIR}/my-app/.env.local"
+    "${ROOT_DIR}/my-app/.env"
+  )
+  local file=""
+  local line=""
+  for file in "${candidate_files[@]}"; do
+    [[ -f "${file}" ]] || continue
+    line="$(grep -E '^CONVEX_DEPLOYMENT=.*# team: [^,]+, project: [^[:space:]]+' "${file}" | tail -n1 || true)"
+    if [[ -n "${line}" ]]; then
+      if [[ "${line}" =~ \#\ team:\ ([^,]+),\ project:\ ([^[:space:]]+) ]]; then
+        CONVEX_TEAM_RESULT="${BASH_REMATCH[1]}"
+        CONVEX_PROJECT_RESULT="${BASH_REMATCH[2]}"
+        return 0
+      fi
+    fi
+  done
+  return 1
+}
+
+sync_local_convex_env() {
+  local -a env_names=(
+    API_ENABLE_MISTRAL_OCR
+    CF_ACCESS_CLIENT_ID
+    CF_ACCESS_CLIENT_SECRET
+    CLERK_JWT_ISSUER_DOMAIN
+    CLIENT_ORIGIN_WHITELIST
+    CONVEX_PARSER_URL
+    COVER_LETTER_PREMIUM_PATH_V1
+    DEV_NO_LLM
+    ENABLE_COVER_LETTER_PREMIUM_PATH_V1
+    ENABLE_NER
+    EXTENSION_ORIGIN
+    MISTRAL_API_KEY
+    NER_SERVICE_KEY
+    NER_SERVICE_URL
+    OPENAI_API_KEY
+    STRUCTURED_UPLOAD_DEBUG
+    STRUCTURED_UPLOAD_SKIP_HEALTHCHECK
+    STRUCTURED_UPLOAD_STRICT
+    STRUCTURED_UPLOAD_USE_CF_ACCESS
+    UI_ENABLE_MISTRAL_OCR
+    VITE_CLERK_PUBLISHABLE_KEY
+    VITE_PUBLIC_CLERK_PUBLISHABLE_KEY
+    VITE_UI_ENABLE_MISTRAL_OCR
+    cover_letter_premium_path_v1
+  )
+  local name=""
+  local value=""
+  echo "[run] syncing local Convex env" >&2
+  (
+    cd "${ROOT_DIR}/my-app"
+    unset CONVEX_DEPLOYMENT
+    unset CONVEX_DEPLOY_KEY
+    unset CONVEX_SELF_HOSTED_URL
+    unset CONVEX_SELF_HOSTED_ADMIN_KEY
+    export CONVEX_TMPDIR="${CONVEX_TMPDIR}"
+    for name in "${env_names[@]}"; do
+      if [[ "${name}" == "CONVEX_PARSER_URL" ]]; then
+        value="http://127.0.0.1:8001"
+      else
+        value="${!name:-}"
+      fi
+      [[ -n "${value}" ]] || continue
+      npx convex env set "${name}" "${value}" >/dev/null
+    done
+  ) >> "${CONVEX_LOG}" 2>&1
 }
 
 # ===== Parser (Docker) =====
@@ -233,20 +308,81 @@ start_convex() {
   CONVEX_PID_RESULT=""
   CONVEX_URL_RESULT=""
 
+  local convex_team=""
+  local convex_project=""
+  if ! resolve_convex_project_binding; then
+    echo "[run] ERROR: could not determine Convex team/project from my-app/.env.local comment. Expected: CONVEX_DEPLOYMENT=... # team: <team>, project: <project>" >&2
+    exit 1
+  fi
+  convex_team="${CONVEX_TEAM_RESULT}"
+  convex_project="${CONVEX_PROJECT_RESULT}"
+
   : > "${CONVEX_LOG}"
+  echo "[run] bootstrapping local Convex deployment (${convex_team}/${convex_project})" >&2
   (
     cd "${ROOT_DIR}/my-app"
+    unset CONVEX_DEPLOYMENT
+    unset CONVEX_DEPLOY_KEY
+    unset CONVEX_SELF_HOSTED_URL
+    unset CONVEX_SELF_HOSTED_ADMIN_KEY
+    unset VITE_CONVEX_URL
+    unset NEXT_PUBLIC_CONVEX_URL
     export CONVEX_PARSER_URL="http://127.0.0.1:8001"
-    npx convex dev --local --verbose
-  ) >> "${CONVEX_LOG}" 2>&1 &
-  local cpid=$!
-  local actual_url=""
+    export STRUCTURED_UPLOAD_PREFER_LOOPBACK=1
+    export CONVEX_TMPDIR="${CONVEX_TMPDIR}"
+    npx convex dev \
+      --configure existing \
+      --team "${convex_team}" \
+      --project "${convex_project}" \
+      --dev-deployment local \
+      --once \
+      --skip-push \
+      --verbose \
+      --tail-logs disable \
+      --local-cloud-port "${LOCAL_CONVEX_CLOUD_PORT}" \
+      --local-site-port "${LOCAL_CONVEX_SITE_PORT}"
+  ) >> "${CONVEX_LOG}" 2>&1
 
+  local actual_url="${LOCAL_CONVEX_URL:-http://127.0.0.1:${LOCAL_CONVEX_CLOUD_PORT}}"
+  if ! is_convex_ready "${actual_url}"; then
+    echo "[run] ERROR: local Convex bootstrap did not leave a reachable backend at ${actual_url} (see ${CONVEX_LOG})" >&2
+    exit 1
+  fi
+
+  sync_local_convex_env
+
+  local convex_pid_file="${STATE_DIR}/convex.pid"
+  rm -f "${convex_pid_file}"
+  (
+    cd "${ROOT_DIR}/my-app"
+    unset CONVEX_DEPLOYMENT
+    unset CONVEX_DEPLOY_KEY
+    unset CONVEX_SELF_HOSTED_URL
+    unset CONVEX_SELF_HOSTED_ADMIN_KEY
+    unset VITE_CONVEX_URL
+    unset NEXT_PUBLIC_CONVEX_URL
+    unset VITE_CONVEX_URL
+    unset NEXT_PUBLIC_CONVEX_URL
+    export CONVEX_PARSER_URL="http://127.0.0.1:8001"
+    export STRUCTURED_UPLOAD_PREFER_LOOPBACK=1
+    export CONVEX_TMPDIR="${CONVEX_TMPDIR}"
+    nohup npx convex dev \
+      --local \
+      --verbose \
+      --tail-logs disable \
+      --local-cloud-port "${LOCAL_CONVEX_CLOUD_PORT}" \
+      --local-site-port "${LOCAL_CONVEX_SITE_PORT}" >> "${CONVEX_LOG}" 2>&1 < /dev/null &
+    echo $! > "${convex_pid_file}"
+  )
+  local cpid=""
+  cpid="$(cat "${convex_pid_file}" 2>/dev/null || true)"
+  rm -f "${convex_pid_file}"
+  if [[ -z "${cpid}" ]]; then
+    echo "[run] ERROR: failed to launch local Convex process" >&2
+    exit 1
+  fi
   printf "[run] waiting for local Convex" >&2
   for i in $(seq 1 60); do
-    if [[ -z "${actual_url}" ]]; then
-      actual_url="$(discover_local_convex_url || true)"
-    fi
     if [[ -n "${actual_url}" ]] && is_convex_ready "${actual_url}"; then
       echo >&2
       CONVEX_PID_RESULT="${cpid}"
@@ -258,10 +394,14 @@ start_convex() {
       echo "[run] ERROR: local Convex failed to start (see ${CONVEX_LOG})" >&2
       exit 1
     fi
-    if [[ "${i}" -ge 10 ]] && grep -q 'Convex functions ready!' "${CONVEX_LOG}" && [[ -z "${actual_url}" ]]; then
-      echo >&2
-      echo "[run] ERROR: Convex reported functions ready but did not expose a local deployment URL or backend port (see ${CONVEX_LOG}). This project/runtime is still behaving as cloud-backed under the current Convex configuration." >&2
-      exit 1
+    if [[ "${i}" -ge 10 ]] && grep -q 'Started running a deployment locally at http://127.0.0.1:' "${CONVEX_LOG}"; then
+      actual_url="$(grep -Eo 'Started running a deployment locally at http://127\.0\.0\.1:[0-9]+' "${CONVEX_LOG}" | tail -n1 | awk '{print $NF}' || true)"
+      if [[ -n "${actual_url}" ]] && is_convex_ready "${actual_url}"; then
+        echo >&2
+        CONVEX_PID_RESULT="${cpid}"
+        CONVEX_URL_RESULT="${actual_url}"
+        return 0
+      fi
     fi
     printf "." >&2
     sleep 1
@@ -286,6 +426,8 @@ start_vite() {
   local CONVEX_URL="${2:-}"
   kill_vite_ports
   : > "${VITE_LOG}"
+  local vite_pid_file="${STATE_DIR}/vite.pid"
+  rm -f "${vite_pid_file}"
   (
     cd "${ROOT_DIR}/my-app"
     export CONVEX_PARSER_URL="${ORIGIN}"
@@ -297,12 +439,14 @@ start_vite() {
     fi
     export STRUCTURED_UPLOAD_SKIP_HEALTHCHECK=1
     if [[ "${OPEN_BROWSER}" == "0" ]]; then
-      BROWSER=none npx --yes vite --host localhost --port "${VITE_PORT}" --clearScreen false
+      nohup env BROWSER=none npx --yes vite --host localhost --port "${VITE_PORT}" --clearScreen false >> "${VITE_LOG}" 2>&1 < /dev/null &
     else
-      npx --yes vite --host localhost --port "${VITE_PORT}" --open --clearScreen false
+      nohup npx --yes vite --host localhost --port "${VITE_PORT}" --open --clearScreen false >> "${VITE_LOG}" 2>&1 < /dev/null &
     fi
-  ) >> "${VITE_LOG}" 2>&1 &
-  echo $!
+    echo $! > "${vite_pid_file}"
+  )
+  cat "${vite_pid_file}"
+  rm -f "${vite_pid_file}"
 }
 
 stop_vite() {
@@ -422,6 +566,7 @@ up() {
   echo "Parser local: OK (http://127.0.0.1:8001)"
   if [[ "${USE_LOCAL_CONVEX}" -eq 1 ]]; then
     echo "Convex local: ${CURL} (log: ${CONVEX_LOG})"
+    echo "Frontend target mode: local Convex + $( [[ "${USE_LOCAL_ORIGIN}" -eq 1 ]] && echo local parser || echo edge parser )"
   else
     echo "Convex: env/default (cloud unless overridden)"
     if [[ "${USE_LOCAL_ORIGIN}" -eq 1 ]]; then

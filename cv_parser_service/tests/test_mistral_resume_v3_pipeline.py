@@ -4,6 +4,9 @@ from cv_parser.canonicalize import canonicalize_cv
 from cv_parser_service.mistral_resume_v3 import INTERNAL_CANONICAL_PAYLOAD_DIAGNOSTIC_KEY
 from cv_parser_service.mistral_resume_v3.annotation_parser import parse_document_annotation
 from cv_parser_service.mistral_resume_v3.app_mapper import build_canonical_payload
+from cv_parser_service.mistral_resume_v3.extraction_schema import build_document_annotation_format
+from cv_parser_service.mistral_resume_v3.ocr_client import OCRAnnotationResult
+from cv_parser_service.mistral_resume_v3.pipeline import run_resume_pipeline_from_bytes
 from cv_parser_service.mistral_resume_v3.post_validation import normalize_extraction
 
 
@@ -22,6 +25,64 @@ def test_parse_document_annotation_accepts_json_string() -> None:
     assert extraction.identity.name == "Jane Example"
     assert extraction.summary is not None
     assert extraction.summary.text == "Product designer with multilingual experience."
+
+
+def test_build_document_annotation_format_handles_numeric_schema_constraints() -> None:
+    response_format = build_document_annotation_format()
+
+    assert response_format["type"] == "json_schema"
+    schema = response_format["json_schema"]["schema"]
+    ordinal_schema = schema["$defs"]["ExtractionSectionOrderItem"]["properties"]["ordinal"]
+    assert ordinal_schema["minimum"] == 0
+    assert schema["additionalProperties"] is False
+    assert schema["$defs"]["ExtractionSectionOrderItem"]["additionalProperties"] is False
+
+
+def test_run_resume_pipeline_from_bytes_returns_authoritative_payload_when_annotation_is_valid(monkeypatch) -> None:
+    def fake_annotated_ocr_from_bytes(**_: object) -> OCRAnnotationResult:
+        return OCRAnnotationResult(
+            pages=[{"index": 0, "markdown": "# Summary\nTrusted Mistral OCR output"}],
+            page_count=1,
+            diagnostics={
+                "model": "mistral-ocr-latest",
+                "page_count": 1,
+                "pages": 1,
+                "ocr_chars": 32,
+                "document_name": "robertcooper.pdf",
+            },
+            annotation_raw={
+                "identity": {"name": "Robert Cooper"},
+                "summary": {"text": "Security guard with executive protection experience."},
+                "experience": [
+                    {
+                        "company": "Executive Security Team",
+                        "position": "Protection Guard",
+                        "responsibilityBullets": ["Protected VIP principals"],
+                    }
+                ],
+            },
+            response_payload={"document_annotation": {"identity": {"name": "Robert Cooper"}}},
+        )
+
+    monkeypatch.setattr(
+        "cv_parser_service.mistral_resume_v3.pipeline.run_annotated_ocr_from_bytes",
+        fake_annotated_ocr_from_bytes,
+    )
+
+    result = run_resume_pipeline_from_bytes(
+        file_name="robertcooper.pdf",
+        content_type="application/pdf",
+        data=b"fake-pdf",
+        api_key="test-key",
+        model_name="mistral-ocr-latest",
+    )
+
+    assert result["fallback_to_legacy"] is False
+    assert result["status"] == "success"
+    diagnostics = result["diagnostics"]
+    assert diagnostics["mistral_parser_status"] == "success"
+    assert diagnostics["model"] == "mistral-ocr-latest"
+    assert result["canonical_payload"]["normalized"]["name"] == "Robert Cooper"
 
 
 def test_v3_payload_preserves_supported_and_generic_sections() -> None:
