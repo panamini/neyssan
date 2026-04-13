@@ -13,6 +13,7 @@ export type ResumeExperienceItem = {
   company: string;
   period: string;
   location: string;
+  description?: string;
   bullets: string[];
 };
 
@@ -41,6 +42,7 @@ export type ResumeData = {
   projects: ResumeProjectItem[];
   education: ResumeEducationItem[];
   achievements?: string[];
+  hobbies: string[];
 };
 
 export type ResumeLayoutVariantId =

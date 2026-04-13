@@ -23,12 +23,12 @@ const baseModel: AuthoritativeResumeExportModel = {
     {
       company: "Northline",
       position: "Staff PM",
+      description: "Opened the role with a narrative summary.",
       responsibilityBullets: [
         "Launched a multi-market platform",
         "Scaled the roadmap process",
       ],
       achievements: ["Hit annual growth targets"],
-      summary: "This summary should not render when bullets exist.",
     },
   ],
   education: [],
@@ -36,7 +36,8 @@ const baseModel: AuthoritativeResumeExportModel = {
   languages: [{ name: "English", level: "Fluent" }],
   projects: [],
   certifications: [],
-  achievements: [],
+  achievements: ["Won regional operator award"],
+  hobbies: [],
 };
 
 const standardResume: ResumeData = {
@@ -53,12 +54,14 @@ const standardResume: ResumeData = {
       company: "Studio",
       period: "Apr 2022 - Jun 2024",
       location: "Paris",
+      description: "Built out the initial design operating model.",
       bullets: ["Owned the design system"],
     },
   ],
   projects: [],
   education: [],
-  achievements: [],
+  achievements: ["Shipped the new brand system"],
+  hobbies: ["Chess", "Running"],
 };
 
 describe("authoritative resume export serializers", () => {
@@ -75,15 +78,15 @@ describe("authoritative resume export serializers", () => {
     ).toBe("resume.json");
   });
 
-  it("renders markdown from the authoritative model without experience summary duplication", () => {
+  it("renders markdown from the authoritative model with intro prose, bullets, and achievements", () => {
     const markdown = serializeAuthoritativeResumeMarkdown(baseModel);
 
     expect(markdown).toContain("# Jane Doe");
     expect(markdown).toContain("## Experience");
+    expect(markdown).toContain("Opened the role with a narrative summary.");
     expect(markdown).toContain("- Launched a multi-market platform");
-    expect(markdown).not.toContain(
-      "This summary should not render when bullets exist.",
-    );
+    expect(markdown).toContain("- Hit annual growth targets");
+    expect(markdown).toContain("## Achievements");
   });
 
   it("builds a PDF blob from the authoritative model", () => {
@@ -101,7 +104,10 @@ describe("authoritative resume export serializers", () => {
     const markdown = serializeStandardResumeMarkdown(standardResume);
     expect(markdown).toContain("# Editor Name");
     expect(markdown).toContain("## Experience");
+    expect(markdown).toContain("Built out the initial design operating model.");
     expect(markdown).toContain("- Owned the design system");
+    expect(markdown).toContain("## Hobbies");
+    expect(markdown).toContain("- Chess");
 
     const blob = buildStandardResumePdf(standardResume);
     expect(blob).toBeInstanceOf(Blob);
