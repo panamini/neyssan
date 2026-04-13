@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from cv_parser.canonicalize import canonicalize_cv
 from cv_parser_service.mistral_resume_v3 import INTERNAL_CANONICAL_PAYLOAD_DIAGNOSTIC_KEY
 from cv_parser_service.mistral_resume_v3.annotation_parser import parse_document_annotation
@@ -83,6 +85,41 @@ def test_run_resume_pipeline_from_bytes_returns_authoritative_payload_when_annot
     assert diagnostics["mistral_parser_status"] == "success"
     assert diagnostics["model"] == "mistral-ocr-latest"
     assert result["canonical_payload"]["normalized"]["name"] == "Robert Cooper"
+
+
+def test_run_resume_pipeline_from_bytes_keeps_fallback_behavior_when_annotation_parse_fails(monkeypatch) -> None:
+    def fake_annotated_ocr_from_bytes(**_: object) -> OCRAnnotationResult:
+        return OCRAnnotationResult(
+            pages=[{"index": 0, "markdown": "# Profile\nBroken annotation"}],
+            page_count=1,
+            diagnostics={
+                "model": "mistral-ocr-latest",
+                "page_count": 1,
+                "pages": 1,
+                "ocr_chars": 25,
+                "document_name": "broken.pdf",
+            },
+            annotation_raw=None,
+            response_payload={},
+        )
+
+    monkeypatch.setattr(
+        "cv_parser_service.mistral_resume_v3.pipeline.run_annotated_ocr_from_bytes",
+        fake_annotated_ocr_from_bytes,
+    )
+
+    result = run_resume_pipeline_from_bytes(
+        file_name="broken.pdf",
+        content_type="application/pdf",
+        data=b"fake-pdf",
+        api_key="test-key",
+        model_name="mistral-ocr-latest",
+    )
+
+    assert result["fallback_to_legacy"] is True
+    assert result["status"] == "failed"
+    assert result["stage"] == "annotation_parse"
+    assert result["errorType"] == "annotation_parse_failed"
 
 
 def test_v3_payload_preserves_supported_and_generic_sections() -> None:
@@ -176,7 +213,7 @@ def test_canonicalize_cv_passthroughs_precomputed_v3_payload() -> None:
     assert INTERNAL_CANONICAL_PAYLOAD_DIAGNOSTIC_KEY not in result["diagnostics"]
 
 
-def test_normalize_extraction_reclassifies_robert_like_education_and_certifications_conservatively() -> None:
+def test_normalize_extraction_reclassifies_certification_like_education_entries_conservatively() -> None:
     extraction = parse_document_annotation(
         {
             "education": [
@@ -208,9 +245,9 @@ def test_normalize_extraction_reclassifies_robert_like_education_and_certificati
 
     normalized = normalize_extraction(
         extraction,
-        raw_text="Robert Cooper",
+        raw_text="Security Training School",
         page_count=1,
-        document_name="robertcooper.pdf",
+        document_name="security_training_mix.pdf",
     )
 
     assert len(normalized.education) == 1
@@ -366,26 +403,162 @@ def test_normalize_extraction_uses_short_explicit_headline_as_summary_fallback()
     assert normalized.summary.text == "Fashion writer turned designer"
 
 
-def test_normalize_extraction_drops_invalid_desired_position_contact_noise() -> None:
+@pytest.mark.parametrize(
+    "desired_position",
+    [
+        "1515 Pacific Ave",
+        "Pacific Ave",
+        "Old Forge, New York",
+        "United States",
+    ],
+)
+def test_normalize_extraction_drops_invalid_desired_position_contact_noise(desired_position: str) -> None:
     extraction = parse_document_annotation(
         {
             "identity": {
-                "desiredPosition": "2259 Oak Street, Old Forge, New York, 13420",
-            }
+                "desiredPosition": desired_position,
+            },
+            "contact": {
+                "address": "1515 Pacific Ave, Old Forge, New York, 13420, United States",
+            },
         }
     )
 
     normalized = normalize_extraction(
         extraction,
-        raw_text="ROBERT SMITH\n2259 Oak Street, Old Forge, New York, 13420\n",
+        raw_text="Jordan Example\n1515 Pacific Ave, Old Forge, New York, 13420\nUnited States\njordan@example.com\n",
         page_count=1,
-        document_name="robertsmith.jpg",
+        document_name="jordan_example.pdf",
     )
+    payload = build_canonical_payload(normalized)
 
     assert normalized.identity.desiredPosition is None
     assert normalized.summary.text is None
+    assert payload["normalized"]["profile"]["desiredPosition"] is None
+    assert payload["normalized"]["contact"]["desiredPosition"] is None
     assert "desired_position_dropped" in [warning.code for warning in normalized.warnings]
-    
+
+
+def test_build_canonical_payload_preserves_explicit_achievements_with_non_exhaustive_section_order() -> None:
+    extraction = parse_document_annotation(
+        {
+            "summary": {"text": "Security specialist with incident response experience."},
+            "skills": [{"name": "Threat assessment"}],
+            "achievements": [
+                "Protected 50+ high-profile events without incident.",
+                "Reduced unauthorized entry by 70% through access-control updates.",
+            ],
+            "sectionOrder": [
+                {"family": "achievements", "ordinal": 0, "title": "ACHIEVEMENTS"},
+            ],
+        }
+    )
+
+    normalized = normalize_extraction(
+        extraction,
+        raw_text=(
+            "ACHIEVEMENTS\n"
+            "Protected 50+ high-profile events without incident.\n"
+            "Reduced unauthorized entry by 70% through access-control updates.\n"
+        ),
+        page_count=1,
+        document_name="security_profile.pdf",
+    )
+    payload = build_canonical_payload(normalized)
+
+    assert payload["normalized"]["sectionOrder"] == [
+        {"family": "achievements", "ordinal": 0, "title": "ACHIEVEMENTS"}
+    ]
+    assert payload["normalized"]["achievements"] == [
+        {"text": "Protected 50+ high-profile events without incident."},
+        {"text": "Reduced unauthorized entry by 70% through access-control updates."},
+    ]
+    assert payload["rawSections"][0]["fieldKey"] == "achievements"
+    assert payload["rawSections"][0]["content"] == (
+        "Protected 50+ high-profile events without incident.\n"
+        "Reduced unauthorized entry by 70% through access-control updates."
+    )
+    achievement_section = next(
+        section for section in payload["appDocument"]["sections"] if section["type"] == "achievements"
+    )
+    assert [item["text"] for item in achievement_section["structuredContent"]] == [
+        "Protected 50+ high-profile events without incident.",
+        "Reduced unauthorized entry by 70% through access-control updates.",
+    ]
+    assert any(section["type"] == "summary" for section in payload["appDocument"]["sections"])
+    assert any(section["type"] == "skills" for section in payload["appDocument"]["sections"])
+
+
+def test_normalize_extraction_recovers_global_section_positions_into_family_ordinals() -> None:
+    extraction = parse_document_annotation(
+        {
+            "identity": {"name": "Robert Cooper"},
+            "summary": {"text": "Security guard with executive protection experience."},
+            "skills": [{"name": "Investigation skills"}],
+            "languages": [{"name": "English"}],
+            "experience": [
+                {
+                    "company": "ADT Security",
+                    "position": "Security Guard",
+                    "responsibilityBullets": ["Protected VIP principals"],
+                }
+            ],
+            "education": [
+                {
+                    "institution": "International Foundation for Protection Guards",
+                    "fieldOfStudy": "Certified Protection Guard Program (CPOP)",
+                }
+            ],
+            "hobbies": ["Running, Mtb, Enduro"],
+            "otherSections": [
+                {"title": "DETAILS", "content": "1515 Pacific Ave"},
+                {"title": "LINKS", "content": "LinkedIn\nPinterest"},
+            ],
+            "sectionOrder": [
+                {"family": "profile", "ordinal": 0, "title": None},
+                {"family": "skills", "ordinal": 1, "title": "SKILLS"},
+                {"family": "languages", "ordinal": 2, "title": "LANGUAGES"},
+                {"family": "summary", "ordinal": 3, "title": "PROFILE"},
+                {"family": "experience", "ordinal": 4, "title": "EMPLOYMENT HISTORY"},
+                {"family": "education", "ordinal": 5, "title": "EDUCATION"},
+                {"family": "hobbies", "ordinal": 6, "title": "HOBBIES"},
+                {"family": "other", "ordinal": 7, "title": "DETAILS"},
+                {"family": "other", "ordinal": 8, "title": "LINKS"},
+            ],
+        }
+    )
+
+    normalized = normalize_extraction(
+        extraction,
+        raw_text="ROBERT COOPER\n1515 Pacific Ave\nLinkedIn\nPinterest",
+        page_count=1,
+        document_name="robertcooper.pdf",
+    )
+    payload = build_canonical_payload(normalized)
+
+    assert payload["normalized"]["sectionOrder"] == [
+        {"family": "profile", "ordinal": 0},
+        {"family": "skills", "ordinal": 0, "title": "SKILLS"},
+        {"family": "languages", "ordinal": 0, "title": "LANGUAGES"},
+        {"family": "summary", "ordinal": 0, "title": "PROFILE"},
+        {"family": "experience", "ordinal": 0, "title": "EMPLOYMENT HISTORY"},
+        {"family": "education", "ordinal": 0, "title": "EDUCATION"},
+        {"family": "hobbies", "ordinal": 0, "title": "HOBBIES"},
+        {"family": "other", "ordinal": 0, "title": "DETAILS"},
+        {"family": "other", "ordinal": 1, "title": "LINKS"},
+    ]
+    assert [section["title"] for section in payload["appDocument"]["sections"][:9]] == [
+        "Profile",
+        "Skills",
+        "Languages",
+        "Summary",
+        "Experience",
+        "Education",
+        "HOBBIES",
+        "DETAILS",
+        "LINKS",
+    ]
+
 
 def test_normalize_extraction_preserves_supported_sections_and_source_order() -> None:
     extraction = parse_document_annotation(
