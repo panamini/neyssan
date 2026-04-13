@@ -74,7 +74,7 @@ describe("StructuredUploadButton empty preview", () => {
       );
     });
 
-    const banner = await screen.findByText(/Empty reason:/i);
+    const banner = await screen.findByText(/Parser returned empty result:/i);
     expect(banner.textContent).toContain("paddle_empty_pdfplumber");
 
     const previewPlaceholder = screen.queryByText(/Pdf Bytes=/i);

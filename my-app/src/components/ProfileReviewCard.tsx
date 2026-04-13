@@ -1411,77 +1411,6 @@ export function ProfileReviewCard({
     });
   }
 
-  async function beginRecoveryImport(
-    request: {
-      baseSections: CvSection[];
-      fullSections: CvSection[];
-      structured: StructuredPayload;
-    },
-    target: RecoveryImportTarget,
-  ) {
-    const recovery = request.structured.recovery;
-    const previousPersistedRecoverySession = currentCv?.metadata?.importRecoverySession;
-
-    if (!recovery || !recovery.reviewRequired || recovery.items.length === 0) {
-      resetRecoveryUiState();
-      void applyImportedSections(request.fullSections, target, undefined, request.structured);
-      return;
-    }
-
-    try {
-      console.info("[importRecovery] review_required", {
-        target,
-        itemCount: recovery.items.length,
-      });
-    } catch {
-      /* noop */
-    }
-
-    const nextPendingRecoveryImport: PendingRecoveryImport = {
-      cycleId: uuidv4(),
-      target,
-      baseSections: request.baseSections,
-      fullSections: request.fullSections,
-      authoritativeResume: readStructuredAuthoritativeResume(request.structured),
-      items: recovery.items.map((item) =>
-        normalizeRecoveryItemTargets({
-          ...item,
-          displayTextSource: item.displayTextSource ?? "cleaned",
-          reviewStatus: item.reviewStatus ?? "pending",
-          selectedSection: item.selectedSection ?? item.predictedSection,
-          selectedSectionTitle: item.selectedSectionTitle ?? null,
-          fragmentAssignments: item.fragmentAssignments ?? [],
-        }),
-      ),
-      overflowCount: recovery.overflowCount,
-      reviewLimit: recovery.reviewLimit,
-    };
-
-    setPendingTouchedRecoverySectionIds([]);
-    previousRecoveryOpenRef.current = false;
-    setSavedRecoveryDraft(null);
-    clearRecoveryDraftStorage();
-    setPendingRecoveryImport(nextPendingRecoveryImport);
-
-    if (previousPersistedRecoverySession && currentCv) {
-      const nextMetadata = { ...(currentCv.metadata ?? {}) } as CvDocument["metadata"];
-      delete (nextMetadata as { importRecoverySession?: unknown }).importRecoverySession;
-      try {
-        console.info("[importRecovery] replacing_open_cycle", {
-          nextCycleId: nextPendingRecoveryImport.cycleId,
-        });
-      } catch {
-        /* noop */
-      }
-      void importCv({
-        ...currentCv,
-        metadata: nextMetadata,
-      }).catch(() => {
-        pushToast("Failed to reset previous recovery state");
-      });
-    }
-  }
-
   function updateRecoveryItem(
     blockId: string,
     updates: Partial<ImportRecoveryItem>,
@@ -2503,9 +2432,6 @@ export function ProfileReviewCard({
                 setLatestStructuredPayload(payload as StructuredPayload);
                 setCopyFeedback(null);
               }}
-              onRecoveryRequired={(request) => {
-                void beginRecoveryImport(request, "fresh");
-              }}
               renderAs="dropdown"
             />
             <button
@@ -2740,9 +2666,6 @@ export function ProfileReviewCard({
                       /* noop */
                     }
                   }
-                }}
-                onRecoveryRequired={(request) => {
-                  void beginRecoveryImport(request, "existing");
                 }}
                 renderAs="dropdown"
               />
