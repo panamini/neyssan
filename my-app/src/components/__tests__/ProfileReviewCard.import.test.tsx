@@ -76,11 +76,21 @@ describe("ProfileReviewCard import", () => {
     renameCvMock.mockReset();
     exportCvMock.mockReset();
     cvLibraryState.currentCv = null;
+    Object.defineProperty(window, "__CV_EDITOR_DEBUG__", {
+      configurable: true,
+      writable: true,
+      value: false,
+    });
     window.sessionStorage.clear();
     Object.defineProperty(File.prototype, "text", {
       configurable: true,
       value: vi.fn().mockResolvedValue("Imported CV text"),
     });
+  });
+
+  afterEach(() => {
+    delete (window as Window & { __CV_EDITOR_DEBUG__?: boolean })
+      .__CV_EDITOR_DEBUG__;
   });
 
   it("imports into a fresh CV when the workspace is empty", async () => {
@@ -152,6 +162,169 @@ describe("ProfileReviewCard import", () => {
         expect.objectContaining({ type: "summary" }),
       ]),
     );
+  });
+
+  it("shows trusted Mistral runtime status in local debug mode and keeps it visible after import", async () => {
+    const user = userEvent.setup();
+    (window as Window & { __CV_EDITOR_DEBUG__?: boolean }).__CV_EDITOR_DEBUG__ =
+      true;
+
+    structuredActionMock.mockResolvedValue({
+      normalized: {
+        profile: {
+          name: "Jane Doe",
+          email: "jane@example.com",
+          title: "Product Manager",
+        },
+        summary: "Summary text",
+        experience: [],
+        education: [],
+        skillsText: "",
+        languagesText: "",
+        achievements: [],
+      },
+      diagnostics: {
+        ocr_request_path: "/mistral-ocr/parse",
+        ocr_engine: "mistral",
+        mistral_fallback: false,
+        mistral_runtime: "mistral",
+      },
+      authoritativeResume: {
+        source: "mistral_v3",
+        trusted: true,
+        fallbackToLegacy: false,
+        normalized: {
+          profile: {
+            name: "Jane Doe",
+          },
+        },
+      },
+    });
+
+    const view = render(<ProfileReviewCard />);
+
+    await user.click(screen.getByRole("button", { name: "Import CV" }));
+    await user.click(
+      screen.getByRole("button", { name: /Import text PDF or TXT/i }),
+    );
+
+    const input = view.container.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement | null;
+    expect(input).not.toBeNull();
+
+    fireEvent.change(input as HTMLInputElement, {
+      target: {
+        files: [new File(["Imported CV text"], "resume.txt", { type: "text/plain" })],
+      },
+    });
+
+    await waitFor(() => expect(importCvMock).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(
+        screen.getByRole("status", { name: "Import runtime debug" }),
+      ).toBeInTheDocument(),
+    );
+
+    const trustedDebugStatus = screen.getByRole("status", {
+      name: "Import runtime debug",
+    });
+    expect(
+      within(trustedDebugStatus).getAllByText(
+        /Trusted authoritative-backed import/i,
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(
+      within(trustedDebugStatus).getByText("/mistral-ocr/parse"),
+    ).toBeInTheDocument();
+    expect(within(trustedDebugStatus).getAllByText("mistral").length).toBeGreaterThan(0);
+    expect(within(trustedDebugStatus).getByText("false")).toBeInTheDocument();
+    expect(within(trustedDebugStatus).getByText("true")).toBeInTheDocument();
+
+    cvLibraryState.currentCv = importCvMock.mock.calls[0][0];
+    view.rerender(<ProfileReviewCard />);
+
+    expect(
+      screen.getByRole("status", { name: "Import runtime debug" }),
+    ).toBeInTheDocument();
+    expect(
+      within(
+        screen.getByRole("status", { name: "Import runtime debug" }),
+      ).getAllByText(/Trusted authoritative-backed import/i).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("shows fallback runtime status when the parse falls back to legacy-style normalized output", async () => {
+    const user = userEvent.setup();
+    (window as Window & { __CV_EDITOR_DEBUG__?: boolean }).__CV_EDITOR_DEBUG__ =
+      true;
+
+    structuredActionMock.mockResolvedValue({
+      normalized: {
+        profile: {
+          name: "Fallback Candidate",
+        },
+        summary: "Fallback summary",
+        experience: [],
+        education: [],
+        skillsText: "",
+        languagesText: "",
+        achievements: [],
+      },
+      diagnostics: {
+        ocr_request_path: "/mistral-ocr/parse",
+        ocr_engine: "mistral",
+        mistral_fallback: true,
+        mistral_runtime: "local_fallback",
+      },
+      authoritativeResume: {
+        source: "mistral_v3",
+        trusted: false,
+        fallbackToLegacy: true,
+        normalized: null,
+      },
+    });
+
+    const { container } = render(<ProfileReviewCard />);
+
+    await user.click(screen.getByRole("button", { name: "Import CV" }));
+    await user.click(
+      screen.getByRole("button", { name: /Import text PDF or TXT/i }),
+    );
+
+    const input = container.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement | null;
+    expect(input).not.toBeNull();
+
+    fireEvent.change(input as HTMLInputElement, {
+      target: {
+        files: [new File(["Imported CV text"], "resume.txt", { type: "text/plain" })],
+      },
+    });
+
+    await waitFor(() => expect(importCvMock).toHaveBeenCalledTimes(1));
+    const debugStatus = screen.getByRole("status", {
+      name: "Import runtime debug",
+    });
+    expect(
+      within(debugStatus).getAllByText(/Fallback\/legacy normalized import/i)
+        .length,
+    ).toBeGreaterThan(0);
+    expect(within(debugStatus).getByText("local_fallback")).toBeInTheDocument();
+    expect(
+      within(debugStatus).getByText("/mistral-ocr/parse"),
+    ).toBeInTheDocument();
+    expect(within(debugStatus).getByText("true")).toBeInTheDocument();
+    expect(within(debugStatus).getByText("false")).toBeInTheDocument();
+    expect(importCvMock.mock.calls[0][0]).toMatchObject({
+      metadata: expect.objectContaining({
+        authoritativeResume: expect.objectContaining({
+          trusted: false,
+          fallbackToLegacy: true,
+        }),
+      }),
+    });
   });
 
   it("keeps the import drawer compact with one icon per route and no subtitles", async () => {
