@@ -122,6 +122,81 @@ def test_run_resume_pipeline_from_bytes_keeps_fallback_behavior_when_annotation_
     assert result["errorType"] == "annotation_parse_failed"
 
 
+def test_run_resume_pipeline_from_bytes_preserves_explicit_achievements_from_ocr_markdown_when_annotation_omits_field(
+    monkeypatch,
+) -> None:
+    def fake_annotated_ocr_from_bytes(**_: object) -> OCRAnnotationResult:
+        return OCRAnnotationResult(
+            pages=[
+                {
+                    "index": 0,
+                    "markdown": (
+                        "# ROBERT COOPER\n\n"
+                        "## EMPLOYMENT HISTORY\n\n"
+                        "### Security Guard at ADT Security\n"
+                        "- Protected VIP principals.\n"
+                    ),
+                },
+                {
+                    "index": 1,
+                    "markdown": (
+                        "# ACHIEVEMENTS\n\n"
+                        "- Decreased theft by 73% through improved vigilance strategies.\n"
+                        "- Reduced unauthorized entry by 26% using a visitor notification app.\n"
+                    ),
+                },
+            ],
+            page_count=2,
+            diagnostics={
+                "model": "mistral-ocr-latest",
+                "page_count": 2,
+                "pages": 2,
+                "ocr_chars": 220,
+                "document_name": "sample_textpdf_resume.pdf",
+            },
+            annotation_raw="""
+            {
+              "identity": {"name": "Robert Cooper"},
+              "experience": [
+                {
+                  "company": "ADT Security",
+                  "position": "Security Guard",
+                  "responsibilityBullets": ["Protected VIP principals."]
+                }
+              ],
+              "sectionOrder": [
+                {"family": "experience", "ordinal": 0, "title": "EMPLOYMENT HISTORY"},
+                {"family": "achievements", "ordinal": 1, "title": "ACHIEVEMENTS"}
+              ]
+            }
+            """,
+            response_payload={},
+        )
+
+    monkeypatch.setattr(
+        "cv_parser_service.mistral_resume_v3.pipeline.run_annotated_ocr_from_bytes",
+        fake_annotated_ocr_from_bytes,
+    )
+
+    result = run_resume_pipeline_from_bytes(
+        file_name="sample_textpdf_resume.pdf",
+        content_type="application/pdf",
+        data=b"fake-pdf",
+        api_key="test-key",
+        model_name="mistral-ocr-latest",
+    )
+
+    assert result["fallback_to_legacy"] is False
+    assert result["canonical_payload"]["normalized"]["achievements"] == [
+        {"text": "Decreased theft by 73% through improved vigilance strategies."},
+        {"text": "Reduced unauthorized entry by 26% using a visitor notification app."},
+    ]
+    assert result["canonical_payload"]["normalized"]["sectionOrder"] == [
+        {"family": "experience", "ordinal": 0, "title": "EMPLOYMENT HISTORY"},
+        {"family": "achievements", "ordinal": 0, "title": "ACHIEVEMENTS"},
+    ]
+
+
 def test_v3_payload_preserves_supported_and_generic_sections() -> None:
     extraction = parse_document_annotation(
         {
@@ -399,8 +474,15 @@ def test_normalize_extraction_uses_short_explicit_headline_as_summary_fallback()
         page_count=1,
         document_name="helenketter.jpg",
     )
+    payload = build_canonical_payload(normalized)
 
     assert normalized.summary.text == "Fashion writer turned designer"
+    assert normalized.identity.desiredPosition == "Fashion writer turned designer"
+    assert payload["normalized"]["identitySchema"]["desiredPosition"] == "Fashion writer turned designer"
+    assert payload["normalized"]["profile"]["desiredPosition"] == "Fashion writer turned designer"
+    assert "desiredPosition" not in payload["normalized"]["contact"]
+    profile_section = next(section for section in payload["appDocument"]["sections"] if section["type"] == "profile")
+    assert profile_section["structuredContent"][0]["desiredPosition"] == "Fashion writer turned designer"
 
 
 @pytest.mark.parametrize(
@@ -434,8 +516,9 @@ def test_normalize_extraction_drops_invalid_desired_position_contact_noise(desir
 
     assert normalized.identity.desiredPosition is None
     assert normalized.summary.text is None
+    assert "desiredPosition" not in payload["normalized"]["identitySchema"]
     assert payload["normalized"]["profile"]["desiredPosition"] is None
-    assert payload["normalized"]["contact"]["desiredPosition"] is None
+    assert "desiredPosition" not in payload["normalized"]["contact"]
     assert "desired_position_dropped" in [warning.code for warning in normalized.warnings]
 
 
