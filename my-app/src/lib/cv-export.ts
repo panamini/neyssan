@@ -162,16 +162,94 @@ function serializeExperienceMarkdown(
     if (meta) {
       lines.push(meta);
     }
-    if (item.responsibilityBullets.length > 0) {
-      item.responsibilityBullets.forEach((bullet) => {
-        lines.push(`- ${bullet}`);
-      });
-      return;
-    }
-    addLines(lines, item.summary);
+    addLines(lines, item.description);
+    item.responsibilityBullets.forEach((bullet) => {
+      lines.push(`- ${bullet}`);
+    });
     item.achievements.forEach((achievement) => {
       lines.push(`- ${achievement}`);
     });
+  });
+}
+
+function serializeStandardExperienceMarkdown(
+  lines: string[],
+  items: ResumeData["experience"],
+): void {
+  if (items.length === 0) return;
+  lines.push("", "## Experience");
+  items.forEach((item) => {
+    lines.push(
+      "",
+      `### ${cleanString(item.role) || cleanString(item.company) || "Experience"}`,
+    );
+    addLines(
+      lines,
+      [cleanString(item.company), cleanString(item.location), cleanString(item.period)]
+        .filter(Boolean)
+        .join(" | "),
+    );
+    addLines(lines, cleanString(item.description));
+    item.bullets
+      .map((bullet) => cleanString(bullet))
+      .filter(Boolean)
+      .forEach((bullet) => lines.push(`- ${bullet}`));
+  });
+}
+
+function serializeStandardEducationMarkdown(
+  lines: string[],
+  items: ResumeData["education"],
+): void {
+  if (items.length === 0) return;
+  lines.push("", "## Education");
+  items.forEach((item) => {
+    lines.push(
+      "",
+      `### ${cleanString(item.degree) || cleanString(item.school) || "Education"}`,
+    );
+    addLines(
+      lines,
+      [cleanString(item.school), cleanString(item.period)]
+        .filter(Boolean)
+        .join(" | "),
+    );
+  });
+}
+
+function serializeStandardProjectsMarkdown(
+  lines: string[],
+  items: ResumeData["projects"],
+): void {
+  if (items.length === 0) return;
+  lines.push("", "## Projects");
+  items.forEach((item) => {
+    lines.push("", `### ${cleanString(item.name) || "Project"}`);
+    addLines(lines, cleanString(item.meta), cleanString(item.description));
+  });
+}
+
+function serializeStandardLanguagesMarkdown(
+  lines: string[],
+  items: ResumeData["languages"],
+): void {
+  if (items.length === 0) return;
+  lines.push("", "## Languages");
+  items.forEach((item) => {
+    const value = cleanString(item.level)
+      ? `${cleanString(item.name)} (${cleanString(item.level)})`
+      : cleanString(item.name);
+    if (value) {
+      lines.push(`- ${value}`);
+    }
+  });
+}
+
+function serializeHobbiesMarkdown(lines: string[], values: string[]): void {
+  if (values.length === 0) return;
+  lines.push("", "## Hobbies");
+  values.forEach((value) => {
+    lines.push(`- ${value}`);
   });
 }
 
@@ -300,41 +378,8 @@ export function serializeStandardResumeMarkdown(data: ResumeData): string {
     lines.push("", "## Summary", "", cleanString(data.summary));
   }
 
-  if (data.experience.length > 0) {
-    lines.push("", "## Experience");
-    data.experience.forEach((item) => {
-      lines.push(
-        "",
-        `### ${cleanString(item.role) || cleanString(item.company) || "Experience"}`,
-      );
-      addLines(
-        lines,
-        [cleanString(item.company), cleanString(item.location), cleanString(item.period)]
-          .filter(Boolean)
-          .join(" | "),
-      );
-      item.bullets
-        .map((bullet) => cleanString(bullet))
-        .filter(Boolean)
-        .forEach((bullet) => lines.push(`- ${bullet}`));
-    });
-  }
-
-  if (data.education.length > 0) {
-    lines.push("", "## Education");
-    data.education.forEach((item) => {
-      lines.push(
-        "",
-        `### ${cleanString(item.degree) || cleanString(item.school) || "Education"}`,
-      );
-      addLines(
-        lines,
-        [cleanString(item.school), cleanString(item.period)]
-          .filter(Boolean)
-          .join(" | "),
-      );
-    });
-  }
+  serializeStandardExperienceMarkdown(lines, data.experience);
+  serializeStandardEducationMarkdown(lines, data.education);
 
   serializeNamedListMarkdown(
     lines,
@@ -342,30 +387,17 @@ export function serializeStandardResumeMarkdown(data: ResumeData): string {
     data.skills.map((skill) => cleanString(skill)).filter(Boolean),
   );
 
-  if (data.languages.length > 0) {
-    lines.push("", "## Languages");
-    data.languages.forEach((item) => {
-      const value = cleanString(item.level)
-        ? `${cleanString(item.name)} (${cleanString(item.level)})`
-        : cleanString(item.name);
-      if (value) {
-        lines.push(`- ${value}`);
-      }
-    });
-  }
-
-  if (data.projects.length > 0) {
-    lines.push("", "## Projects");
-    data.projects.forEach((item) => {
-      lines.push("", `### ${cleanString(item.name) || "Project"}`);
-      addLines(lines, cleanString(item.meta), cleanString(item.description));
-    });
-  }
+  serializeStandardLanguagesMarkdown(lines, data.languages);
+  serializeStandardProjectsMarkdown(lines, data.projects);
 
   serializeNamedListMarkdown(
     lines,
     "Achievements",
     (data.achievements ?? []).map((item) => cleanString(item)).filter(Boolean),
+  );
+  serializeHobbiesMarkdown(
+    lines,
+    data.hobbies.map((item) => cleanString(item)).filter(Boolean),
   );
 
   return `${lines.join("\n").trim()}\n`;
@@ -430,28 +462,25 @@ export async function buildAuthoritativeResumeDocx(
       if (meta) {
         children.push(paragraph(meta));
       }
-      if (item.responsibilityBullets.length > 0) {
-        item.responsibilityBullets.forEach((bullet) => {
-          children.push(
-            new Paragraph({
-              text: bullet,
-              bullet: { level: 0 },
-            }),
-          );
-        });
-      } else {
-        if (item.summary) {
-          children.push(paragraph(item.summary));
-        }
-        item.achievements.forEach((achievement) => {
-          children.push(
-            new Paragraph({
-              text: achievement,
-              bullet: { level: 0 },
-            }),
-          );
-        });
+      if (item.description) {
+        children.push(paragraph(item.description));
       }
+      item.responsibilityBullets.forEach((bullet) => {
+        children.push(
+          new Paragraph({
+            text: bullet,
+            bullet: { level: 0 },
+          }),
+        );
+      });
+      item.achievements.forEach((achievement) => {
+        children.push(
+          new Paragraph({
+            text: achievement,
+            bullet: { level: 0 },
+          }),
+        );
+      });
     });
   }
 
@@ -578,6 +607,23 @@ export async function buildAuthoritativeResumeDocx(
     });
   }
 
+  if (model.hobbies.length > 0) {
+    children.push(
+      new Paragraph({
+        heading: HeadingLevel.HEADING_1,
+        children: [new TextRun({ text: "Hobbies", bold: true })],
+      }),
+    );
+    model.hobbies.forEach((item) => {
+      children.push(
+        new Paragraph({
+          text: item,
+          bullet: { level: 0 },
+        }),
+      );
+    });
+  }
+
   const document = new Document({
     sections: [
       {
@@ -671,12 +717,9 @@ export function buildAuthoritativeResumePdf(
         .join(" | ");
       writeText(header || "Experience", { size: 11.5, bold: true, spacingAfter: 2 });
       writeText(meta, { size: 10, spacingAfter: 4 });
-      if (item.responsibilityBullets.length > 0) {
-        item.responsibilityBullets.forEach(writeBullet);
-      } else {
-        writeText(item.summary ?? "", { spacingAfter: 4 });
-        item.achievements.forEach(writeBullet);
-      }
+      writeText(item.description ?? "", { spacingAfter: item.description ? 4 : 0 });
+      item.responsibilityBullets.forEach(writeBullet);
+      item.achievements.forEach(writeBullet);
       y += 4;
     });
   }
@@ -736,6 +779,11 @@ export function buildAuthoritativeResumePdf(
   if (model.achievements.length > 0) {
     writeSectionHeading("Achievements");
     model.achievements.forEach(writeBullet);
+  }
+
+  if (model.hobbies.length > 0) {
+    writeSectionHeading("Hobbies");
+    model.hobbies.forEach(writeBullet);
   }
 
   return pdf.output("blob");
@@ -802,6 +850,9 @@ export async function buildStandardResumeDocx(
         .join(" | ");
       if (meta) {
         children.push(paragraph(meta));
+      }
+      if (cleanString(item.description)) {
+        children.push(paragraph(cleanString(item.description)));
       }
       item.bullets
         .map((bullet) => cleanString(bullet))
@@ -920,6 +971,26 @@ export async function buildStandardResumeDocx(
       });
   }
 
+  if (data.hobbies.length > 0) {
+    children.push(
+      new Paragraph({
+        heading: HeadingLevel.HEADING_1,
+        children: [new TextRun({ text: "Hobbies", bold: true })],
+      }),
+    );
+    data.hobbies
+      .map((item) => cleanString(item))
+      .filter(Boolean)
+      .forEach((item) => {
+        children.push(
+          new Paragraph({
+            text: item,
+            bullet: { level: 0 },
+          }),
+        );
+      });
+  }
+
   const document = new Document({
     sections: [
       {
@@ -1026,6 +1097,9 @@ export function buildStandardResumePdf(data: ResumeData): Blob {
           .join(" | "),
         { size: 10, spacingAfter: 4 },
       );
+      writeText(cleanString(item.description), {
+        spacingAfter: cleanString(item.description) ? 4 : 0,
+      });
       item.bullets
         .map((bullet) => cleanString(bullet))
         .filter(Boolean)
@@ -1085,6 +1159,14 @@ export function buildStandardResumePdf(data: ResumeData): Blob {
   if ((data.achievements ?? []).length > 0) {
     writeSectionHeading("Achievements");
     (data.achievements ?? [])
+      .map((item) => cleanString(item))
+      .filter(Boolean)
+      .forEach(writeBullet);
+  }
+
+  if (data.hobbies.length > 0) {
+    writeSectionHeading("Hobbies");
+    data.hobbies
       .map((item) => cleanString(item))
       .filter(Boolean)
       .forEach(writeBullet);

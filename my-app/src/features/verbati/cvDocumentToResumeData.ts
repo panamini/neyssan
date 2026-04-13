@@ -13,11 +13,19 @@ import type {
   ISkillItem,
   ISummaryItem,
 } from "../../types/cvDocument";
-import { splitResponsibilitiesIntoBullets } from "../../utils/cv/mapping-utils";
 import type { ResumeData, ResumeMetaItem } from "./resume/resume.types";
 
 function findSection(doc: CvDocument, type: CvSection["type"]): CvSection | undefined {
   return doc.sections.find((section) => section.type === type);
+}
+
+function findTextSectionByTitle(doc: CvDocument, title: string): CvSection | undefined {
+  const normalizedTitle = title.trim().toLowerCase();
+  return doc.sections.find(
+    (section) =>
+      String(section.type ?? "") === "text" &&
+      String(section.title ?? "").trim().toLowerCase() === normalizedTitle,
+  );
 }
 
 function readStructured<T>(section?: CvSection): T[] {
@@ -126,28 +134,18 @@ function mapSummary(doc: CvDocument): string {
 function mapExperience(doc: CvDocument): ResumeData["experience"] {
   return readStructured<IExperienceItem>(findSection(doc, "experience"))
     .map((item) => {
-      const bullets =
-        Array.isArray(item.responsibilityBullets) && item.responsibilityBullets.length > 0
-          ? item.responsibilityBullets
-              .map((value) => String(value ?? "").trim())
-              .filter(Boolean)
-          : splitResponsibilitiesIntoBullets(
-              typeof item.responsibilities === "string"
-                ? item.responsibilities
-                : toPlainText(item.responsibilities),
-            );
-
-      const achievements = Array.isArray(item.achievements)
-        ? item.achievements.map((value) => String(value ?? "").trim()).filter(Boolean)
+      const bullets = Array.isArray(item.responsibilityBullets)
+        ? item.responsibilityBullets
+            .map((value) => String(value ?? "").trim())
+            .filter(Boolean)
         : [];
-
-      const normalizedBullets = (bullets.length > 0 ? bullets : achievements).slice(0, 6);
+      const description = toPlainText(item.description);
       const role = String(item.position ?? "").trim();
       const company = String(item.company ?? "").trim();
       const location = String(item.location ?? "").trim();
       const period = formatRangeFromItem(item);
 
-      if (!role && !company && normalizedBullets.length === 0) {
+      if (!role && !company && bullets.length === 0 && !description) {
         return null;
       }
 
@@ -156,10 +154,8 @@ function mapExperience(doc: CvDocument): ResumeData["experience"] {
         company: company || role || "Experience",
         period: period || "Dates not set",
         location: location || "Location not set",
-        bullets:
-          normalizedBullets.length > 0
-            ? normalizedBullets
-            : ["Add responsibilities in CvForge to populate this section."],
+        ...(description ? { description } : {}),
+        bullets,
       };
     })
     .filter((item): item is ResumeData["experience"][number] => item !== null);
@@ -286,6 +282,23 @@ function mapAchievements(doc: CvDocument): string[] {
   return toSentenceList(fallbackSectionText(achievementSection));
 }
 
+function mapHobbies(doc: CvDocument): string[] {
+  const hobbiesSection = findTextSectionByTitle(doc, "Hobbies");
+  if (!hobbiesSection) {
+    return [];
+  }
+
+  const structuredHobbies = readStructured<Record<string, unknown>>(hobbiesSection)
+    .map((item) => readRecordText(item, "name", "text"))
+    .filter(Boolean);
+
+  if (structuredHobbies.length > 0) {
+    return structuredHobbies;
+  }
+
+  return toSentenceList(fallbackSectionText(hobbiesSection));
+}
+
 export function mapCvDocumentToResumeData(doc: CvDocument): ResumeData {
   const profile = mapProfile(doc);
   const summary = mapSummary(doc);
@@ -319,6 +332,7 @@ export function mapCvDocumentToResumeData(doc: CvDocument): ResumeData {
     projects: mapProjects(doc),
     education: mapEducation(doc),
     achievements: mapAchievements(doc),
+    hobbies: mapHobbies(doc),
   };
 }
 

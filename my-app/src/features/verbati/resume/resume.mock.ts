@@ -83,6 +83,7 @@ export const resumeMock: ResumeData = {
   "Improved clarity across dense workflows and editorially structured pages.",
   "Bridged product design and engineering with production-ready UI patterns.",
 ],
+  hobbies: ["Running", "Film photography"],
 
   education: [
     {
@@ -153,6 +154,7 @@ export const resumeMock: ResumeData = {
     "Reduced production time for new screens through a reusable design system.",
     "Improved clarity across dense workflows and editorial structures.",
   ],
+  hobbies: ["Running", "Film photography"],
   education: [
     {
       degree: "MA, Information Design",

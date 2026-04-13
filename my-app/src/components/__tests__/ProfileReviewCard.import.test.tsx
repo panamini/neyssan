@@ -340,7 +340,7 @@ describe("ProfileReviewCard import", () => {
 
     render(<ProfileReviewCard onRequestExport={exportCvMock} />);
 
-    await user.click(screen.getByRole("button", { name: "Export CV as PDF" }));
+    await user.click(screen.getByRole("button", { name: "Export PDF" }));
 
     expect(exportCvMock).not.toHaveBeenCalled();
     expect(
@@ -1706,7 +1706,7 @@ describe("ProfileReviewCard import", () => {
 
     expect(actionGroup).not.toBeNull();
     expect(
-      actionGroup?.querySelector('[aria-label="Export CV as PDF"]'),
+      actionGroup?.querySelector('[aria-label="Export PDF"]'),
     ).not.toBeNull();
     expect(
       actionGroup?.querySelector('[aria-label="Review import changes"]'),
