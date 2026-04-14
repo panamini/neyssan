@@ -68,6 +68,44 @@ describe("StorageAdapter persistence", () => {
     );
   });
 
+  it("strips authoritativeResume from backend metadata but keeps it in the runtime snapshot", async () => {
+    const patchMutation = vi.fn().mockResolvedValue(undefined);
+    const adapter = new ConvexStorageAdapter(patchMutation);
+    const cv = generateCvTemplateV1("Trusted Runtime CV");
+    cv.metadata.authoritativeResume = {
+      source: "mistral_v3",
+      trusted: false,
+      fallbackToLegacy: true,
+      normalized: null,
+    };
+
+    await expect(adapter.save(cv)).resolves.toBeUndefined();
+
+    expect(patchMutation).toHaveBeenCalledTimes(1);
+    const payload = patchMutation.mock.calls[0][0].patch;
+    expect(payload.metadata.authoritativeResume).toBeUndefined();
+    expect(payload.cvDocument.metadata.authoritativeResume).toEqual(
+      expect.objectContaining({
+        source: "mistral_v3",
+        trusted: false,
+        fallbackToLegacy: true,
+        normalized: null,
+      }),
+    );
+
+    const cachedDocument = JSON.parse(
+      window.localStorage.getItem(`cv:${cv.id}`) as string,
+    );
+    expect(cachedDocument.metadata.authoritativeResume).toEqual(
+      expect.objectContaining({
+        source: "mistral_v3",
+        trusted: false,
+        fallbackToLegacy: true,
+        normalized: null,
+      }),
+    );
+  });
+
   it("keeps a local snapshot when remote save is unauthorized", async () => {
     const patchMutation = vi
       .fn()

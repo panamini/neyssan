@@ -3,7 +3,6 @@ import { v4 as uuidv4 } from "uuid";
 import {
   Check,
   ChevronDown,
-  FilePdf,
   FileText,
   GripHorizontal,
   SealWarning,
@@ -28,13 +27,15 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { generateCvTemplate, generateCvTemplateV1 } from "../lib/cv-template";
-import { isV1SectionsEnabled } from "../lib/flags";
+import { isCvEditorDebugUiEnabled, isV1SectionsEnabled } from "../lib/flags";
 import StructuredUploadButton, {
   type StructuredPayload,
 } from "./StructuredUploadButton";
 import ImportWarningBanner from "./ImportWarningBanner";
 import CvRenameDialog from "./CvRenameDialog";
 import ImportRecoveryPanel from "./ImportRecoveryPanel";
+import ResumeExportControl from "./ResumeExportControl";
+import type { ResumeExportFormat } from "../lib/cv-export";
 import type {
   CvDocument,
   CvSection,
@@ -56,6 +57,13 @@ import {
   inspectCvImportSignals,
   type CvImportSignal,
 } from "../lib/cv-import-signals";
+import {
+  buildAuthoritativeResumeDebugSnapshot,
+  coerceAuthoritativeResume,
+  hasTrustedAuthoritativeMistralImport,
+  type AuthoritativeResume,
+} from "../lib/authoritative-resume";
+import dbg from "../lib/cv-debug";
 import type {
   ImportRecoveryItem,
   ImportRecoverySession,
@@ -69,7 +77,10 @@ import { makeTextSection } from "../lib/cv-template";
 interface Props {
   cvId?: string;
   profile?: unknown;
-  onRequestExport?: () => void;
+  onRequestExport?: (format: ResumeExportFormat) => void;
+  exportStatusDescription?: string;
+  exportStatusLabel?: string;
+  exportStatusTone?: "standard" | "trusted";
   toolbarLeadControl?: React.ReactNode;
   toolbarPrimaryControl?: React.ReactNode;
 }
@@ -81,6 +92,17 @@ type ManualSectionOption = {
   sectionType: string;
   sectionTitle?: string;
   isCustom?: boolean;
+};
+
+type ImportRuntimeDebugSnapshot = {
+  ocrEngine: string | null;
+  mistralRuntime: string | null;
+  mistralFallback: boolean | null;
+  ocrRequestPath: string | null;
+  authoritativeTrusted: boolean | null;
+  normalizedPresent: boolean;
+  importModeLabel: string;
+  importModeTone: "trusted" | "warning";
 };
 
 const IMPORT_WARNING_SESSION_KEY_PREFIX = "dasti:cv-import-warning-banner:";
@@ -142,6 +164,7 @@ type PendingRecoveryImport = {
   target: RecoveryImportTarget;
   baseSections: CvSection[];
   fullSections: CvSection[];
+  authoritativeResume?: AuthoritativeResume | null;
   items: ImportRecoveryItem[];
   overflowCount: number;
   reviewLimit: number;
@@ -245,6 +268,246 @@ function coerceDebugPayloadText(value: unknown): string | null {
   return trimmed ? trimmed : null;
 }
 
+function readStructuredAuthoritativeResume(
+  payload: StructuredPayload | null | undefined,
+): AuthoritativeResume | null {
+  return coerceAuthoritativeResume(payload?.authoritativeResume ?? null);
+}
+
+function mergeImportedAuthoritativeResume(
+  metadata: CvDocument["metadata"],
+  payload: StructuredPayload | null | undefined,
+): CvDocument["metadata"] {
+  const nextMetadata = { ...(metadata ?? {}) } as CvDocument["metadata"];
+  if (payload === undefined) {
+    return nextMetadata;
+  }
+  const authoritativeResume = readStructuredAuthoritativeResume(payload);
+  if (authoritativeResume) {
+    nextMetadata.authoritativeResume = authoritativeResume;
+  } else {
+    delete (nextMetadata as { authoritativeResume?: unknown }).authoritativeResume;
+  }
+  return nextMetadata;
+}
+
+function mergeExplicitAuthoritativeResume(
+  metadata: CvDocument["metadata"],
+  authoritativeResume: AuthoritativeResume | null | undefined,
+): CvDocument["metadata"] {
+  const nextMetadata = { ...(metadata ?? {}) } as CvDocument["metadata"];
+  if (authoritativeResume === undefined) {
+    return nextMetadata;
+  }
+  if (authoritativeResume) {
+    nextMetadata.authoritativeResume = authoritativeResume;
+  } else {
+    delete (nextMetadata as { authoritativeResume?: unknown }).authoritativeResume;
+  }
+  return nextMetadata;
+}
+
+function buildImportRuntimeDebugSnapshot(
+  payload: StructuredPayload | null | undefined,
+): ImportRuntimeDebugSnapshot | null {
+  if (!payload) {
+    return null;
+  }
+
+  const diagnostics =
+    payload.diagnostics && typeof payload.diagnostics === "object"
+      ? (payload.diagnostics as Record<string, unknown>)
+      : null;
+  const authoritativeResume = readStructuredAuthoritativeResume(payload);
+  const ocrEngine =
+    typeof diagnostics?.ocr_engine === "string"
+      ? diagnostics.ocr_engine
+      : null;
+  const mistralRuntime =
+    typeof diagnostics?.mistral_runtime === "string"
+      ? diagnostics.mistral_runtime
+      : null;
+  const mistralFallback =
+    typeof diagnostics?.mistral_fallback === "boolean"
+      ? diagnostics.mistral_fallback
+      : null;
+  const ocrRequestPath =
+    typeof diagnostics?.ocr_request_path === "string"
+      ? diagnostics.ocr_request_path
+      : null;
+  const normalizedPresent = Boolean(
+    payload.normalized && typeof payload.normalized === "object",
+  );
+  const hasOcrRuntimeEvidence = Boolean(
+    ocrEngine ||
+      mistralRuntime ||
+      mistralFallback !== null ||
+      ocrRequestPath ||
+      authoritativeResume,
+  );
+  const isTrustedAuthoritativeImport = hasTrustedAuthoritativeMistralImport({
+    authoritativeResume,
+    mistralFallback,
+    mistralRuntime,
+  });
+
+  const importModeLabel = hasOcrRuntimeEvidence
+    ? isTrustedAuthoritativeImport
+      ? "Trusted Mistral import"
+      : "OCR import rejected (fallback/untrusted)"
+    : normalizedPresent
+      ? "Structured import"
+      : "No normalized import payload";
+
+  return {
+    ocrEngine,
+    mistralRuntime,
+    mistralFallback,
+    ocrRequestPath,
+    authoritativeTrusted: authoritativeResume?.trusted ?? null,
+    normalizedPresent,
+    importModeLabel,
+    importModeTone: isTrustedAuthoritativeImport ? "trusted" : "warning",
+  };
+}
+
+function ImportRuntimeDebugControls(props: {
+  copyFeedback: null | "normalized" | "parser" | "rawText";
+  onCopyPayload: (kind: "normalized" | "parser" | "rawText") => void;
+  payload: StructuredPayload;
+  rawTextForCopy: string | null;
+  runtimeDebug: ImportRuntimeDebugSnapshot | null;
+}): JSX.Element {
+  const {
+    copyFeedback,
+    onCopyPayload,
+    payload,
+    rawTextForCopy,
+    runtimeDebug,
+  } = props;
+
+  return (
+    <>
+      {runtimeDebug ? (
+        <div
+          role="status"
+          aria-label="Import runtime debug"
+          style={{
+            display: "grid",
+            gap: "0.35rem",
+            padding: "0.65rem 0.85rem",
+            borderRadius: "14px",
+            border: "1px solid var(--color-border)",
+            background: "var(--sfr)",
+            minWidth: "min(100%, 24rem)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              flexWrap: "wrap",
+            }}
+          >
+            <span
+              className={
+                runtimeDebug.importModeTone === "trusted"
+                  ? "dasti-pill dasti-pill--success"
+                  : "dasti-pill"
+              }
+            >
+              {runtimeDebug.importModeLabel}
+            </span>
+            <span
+              style={{
+                fontSize: "0.75rem",
+                color: "var(--tm)",
+              }}
+            >
+              Latest parse runtime
+            </span>
+          </div>
+          <div
+            style={{
+              display: "grid",
+              gap: "0.2rem",
+              fontSize: "0.8rem",
+              color: "var(--ti)",
+            }}
+          >
+            <div>
+              <strong>ocr_engine:</strong>{" "}
+              <code>{runtimeDebug.ocrEngine ?? "null"}</code>
+            </div>
+            <div>
+              <strong>mistral_runtime:</strong>{" "}
+              <code>{runtimeDebug.mistralRuntime ?? "null"}</code>
+            </div>
+            <div>
+              <strong>mistral_fallback:</strong>{" "}
+              <code>
+                {runtimeDebug.mistralFallback == null
+                  ? "null"
+                  : String(runtimeDebug.mistralFallback)}
+              </code>
+            </div>
+            <div>
+              <strong>ocr_request_path:</strong>{" "}
+              <code>{runtimeDebug.ocrRequestPath ?? "null"}</code>
+            </div>
+            <div>
+              <strong>authoritativeResume.trusted:</strong>{" "}
+              <code>
+                {runtimeDebug.authoritativeTrusted == null
+                  ? "null"
+                  : String(runtimeDebug.authoritativeTrusted)}
+              </code>
+            </div>
+            <div>
+              <strong>import payload:</strong>{" "}
+              <code>{runtimeDebug.importModeLabel}</code>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      <button
+        type="button"
+        onClick={() => void onCopyPayload("normalized")}
+        className="dasti-button dasti-button--secondary dasti-button--pill dasti-button--sm"
+        aria-label="Copy normalized JSON"
+      >
+        <FileText size={14} strokeWidth={1.6} aria-hidden="true" />
+        {copyFeedback === "normalized"
+          ? "Copied normalized JSON"
+          : "Copy normalized JSON"}
+      </button>
+      <button
+        type="button"
+        onClick={() => void onCopyPayload("parser")}
+        className="dasti-button dasti-button--secondary dasti-button--pill dasti-button--sm"
+        aria-label="Copy raw parser JSON"
+        disabled={!payload?.debug?.rawParser}
+      >
+        <FileText size={14} strokeWidth={1.6} aria-hidden="true" />
+        {copyFeedback === "parser"
+          ? "Copied raw parser JSON"
+          : "Copy raw parser JSON"}
+      </button>
+      <button
+        type="button"
+        onClick={() => void onCopyPayload("rawText")}
+        className="dasti-button dasti-button--secondary dasti-button--pill dasti-button--sm"
+        aria-label="Copy raw text"
+        disabled={!rawTextForCopy}
+      >
+        <FileText size={14} strokeWidth={1.6} aria-hidden="true" />
+        {copyFeedback === "rawText" ? "Copied raw text" : "Copy raw text"}
+      </button>
+    </>
+  );
+}
+
 /**
  * ProfileReviewCard
  *
@@ -257,6 +520,9 @@ export function ProfileReviewCard({
   cvId,
   profile,
   onRequestExport,
+  exportStatusDescription = "Not ATS-verified",
+  exportStatusLabel = "Standard Export",
+  exportStatusTone = "standard",
   toolbarLeadControl,
   toolbarPrimaryControl,
 }: Props) {
@@ -474,8 +740,9 @@ export function ProfileReviewCard({
   }, [sections]);
   const sensors = useSensors(useSensor(PointerSensor));
   const DEBUG_CV_EDITOR =
-    typeof window !== "undefined" &&
-    (window as any).__CV_EDITOR_DEBUG__ === true;
+    isCvEditorDebugUiEnabled() ||
+    (typeof window !== "undefined" &&
+      (window as any).__CV_EDITOR_DEBUG__ === true);
   // TEMPORARILY DISABLE DnD GLOBALLY to stabilize inspector flow. Re-enable after DnD refactor.
   const DISABLE_DND_FOR_DEBUG = true;
 
@@ -591,6 +858,10 @@ export function ProfileReviewCard({
     coerceDebugPayloadText((latestStructuredPayload?.normalized as any)?.rawText) ??
     coerceDebugPayloadText((latestStructuredPayload?.debug as any)?.rawParser?.rawText) ??
     coerceDebugPayloadText((latestStructuredPayload?.debug as any)?.rawParser?.normalized?.rawText);
+  const latestImportRuntimeDebug = useMemo(
+    () => buildImportRuntimeDebugSnapshot(latestStructuredPayload),
+    [latestStructuredPayload],
+  );
   const recoveryOutcomeSummary = useMemo<RecoveryCommitSummary | null>(() => {
     if (!pendingRecoveryImport) return null;
     return summarizeRecoveryCommitState(
@@ -647,7 +918,6 @@ export function ProfileReviewCard({
       });
     }
     previousCvIdRef.current = nextCvId;
-    setLatestStructuredPayload(null);
     setCopyFeedback(null);
   }, [currentCv?.id]);
 
@@ -948,14 +1218,14 @@ export function ProfileReviewCard({
     setIsRenameDialogOpen(false);
   }
 
-  function handleExportClick() {
+  function handleExportClick(format: ResumeExportFormat) {
     if (importSignals.length > 0 && !isImportReviewAcknowledged) {
       handleImportReviewEntryPoint();
       pushToast("Review the flagged fields before exporting this CV.");
       return;
     }
 
-    onRequestExport?.();
+    onRequestExport?.(format);
   }
 
   function handleRenameSave(nextTitle: string) {
@@ -970,7 +1240,10 @@ export function ProfileReviewCard({
     pushToast("CV title updated");
   }
 
-  async function importSectionsIntoFreshCv(updated: CvSection[]) {
+  async function importSectionsIntoFreshCv(
+    updated: CvSection[],
+    structured?: StructuredPayload | null,
+  ) {
     if (!Array.isArray(updated) || updated.length === 0) {
       pushToast("No importable sections were found");
       return;
@@ -980,15 +1253,27 @@ export function ProfileReviewCard({
     const importedDoc: CvDocument = {
       id: uuidv4(),
       title: deriveCvTitleFromSections(updated as any, "Imported CV"),
-      metadata: {
-        createdAt: now,
-        updatedAt: now,
-        version: 1,
-      },
+      metadata: mergeImportedAuthoritativeResume(
+        {
+          createdAt: now,
+          updatedAt: now,
+          version: 1,
+        },
+        structured,
+      ),
       sections: updated as any,
     };
 
     try {
+      dbg(
+        "[ProfileReviewCard] importSectionsIntoFreshCv authoritative snapshot",
+        buildAuthoritativeResumeDebugSnapshot({
+          authoritativeResume: importedDoc.metadata?.authoritativeResume,
+          metadataAuthoritativeResumePresent: Boolean(
+            importedDoc.metadata?.authoritativeResume,
+          ),
+        }),
+      );
       await importCv(importedDoc);
       const importedSignals = inspectCvImportSignals(importedDoc);
       if (shouldPromptForImportedTitleRename(importedDoc, importedSignals)) {
@@ -1005,6 +1290,8 @@ export function ProfileReviewCard({
     updatedSections: CvSection[];
     target: RecoveryImportTarget;
     pendingSession?: ImportRecoverySession | null;
+    structured?: StructuredPayload | null;
+    authoritativeResume?: AuthoritativeResume | null;
   }): CvDocument {
     const now = new Date().toISOString();
     const pendingSession = args.pendingSession?.items.length
@@ -1015,23 +1302,35 @@ export function ProfileReviewCard({
       return {
         id: uuidv4(),
         title: deriveCvTitleFromSections(args.updatedSections as any, "Imported CV"),
-        metadata: {
-          createdAt: now,
-          updatedAt: now,
-          version: 1,
-          ...(pendingSession ? { importRecoverySession: pendingSession } : {}),
-        } as CvDocument["metadata"],
+        metadata: mergeExplicitAuthoritativeResume(
+          mergeImportedAuthoritativeResume(
+            {
+              createdAt: now,
+              updatedAt: now,
+              version: 1,
+              ...(pendingSession ? { importRecoverySession: pendingSession } : {}),
+            } as CvDocument["metadata"],
+            args.structured,
+          ),
+          args.authoritativeResume,
+        ),
         sections: args.updatedSections as any,
       };
     }
 
-    const nextMetadata = {
-      ...(currentCv.metadata ?? {}),
-      updatedAt: now,
-      ...(pendingSession
-        ? { importRecoverySession: pendingSession }
-        : { importRecoverySession: undefined }),
-    } as CvDocument["metadata"];
+    const nextMetadata = mergeExplicitAuthoritativeResume(
+      mergeImportedAuthoritativeResume(
+        {
+          ...(currentCv.metadata ?? {}),
+          updatedAt: now,
+          ...(pendingSession
+            ? { importRecoverySession: pendingSession }
+            : { importRecoverySession: undefined }),
+        } as CvDocument["metadata"],
+        args.structured,
+      ),
+      args.authoritativeResume,
+    );
     if (!pendingSession) {
       delete (nextMetadata as { importRecoverySession?: unknown }).importRecoverySession;
     }
@@ -1047,13 +1346,26 @@ export function ProfileReviewCard({
     updated: CvSection[],
     target: RecoveryImportTarget,
     pendingSession?: ImportRecoverySession | null,
+    structured?: StructuredPayload | null,
+    authoritativeResume?: AuthoritativeResume | null,
   ): Promise<boolean> {
     const nextDoc = buildRecoveryTargetDocument({
       updatedSections: updated,
       target,
       pendingSession,
+      structured,
+      authoritativeResume,
     });
     try {
+      dbg(
+        "[ProfileReviewCard] applyImportedSections authoritative snapshot",
+        buildAuthoritativeResumeDebugSnapshot({
+          authoritativeResume: nextDoc.metadata?.authoritativeResume,
+          metadataAuthoritativeResumePresent: Boolean(
+            nextDoc.metadata?.authoritativeResume,
+          ),
+        }),
+      );
       await importCv(nextDoc);
       try {
         window.sessionStorage.removeItem(importRecoveryDraftSessionKey);
@@ -1097,76 +1409,6 @@ export function ProfileReviewCard({
       overflowCount: session.overflowCount,
       reviewLimit: session.reviewLimit,
     });
-  }
-
-  async function beginRecoveryImport(
-    request: {
-      baseSections: CvSection[];
-      fullSections: CvSection[];
-      structured: StructuredPayload;
-    },
-    target: RecoveryImportTarget,
-  ) {
-    const recovery = request.structured.recovery;
-    const previousPersistedRecoverySession = currentCv?.metadata?.importRecoverySession;
-
-    if (!recovery || !recovery.reviewRequired || recovery.items.length === 0) {
-      resetRecoveryUiState();
-      void applyImportedSections(request.fullSections, target);
-      return;
-    }
-
-    try {
-      console.info("[importRecovery] review_required", {
-        target,
-        itemCount: recovery.items.length,
-      });
-    } catch {
-      /* noop */
-    }
-
-    const nextPendingRecoveryImport: PendingRecoveryImport = {
-      cycleId: uuidv4(),
-      target,
-      baseSections: request.baseSections,
-      fullSections: request.fullSections,
-      items: recovery.items.map((item) =>
-        normalizeRecoveryItemTargets({
-          ...item,
-          displayTextSource: item.displayTextSource ?? "cleaned",
-          reviewStatus: item.reviewStatus ?? "pending",
-          selectedSection: item.selectedSection ?? item.predictedSection,
-          selectedSectionTitle: item.selectedSectionTitle ?? null,
-          fragmentAssignments: item.fragmentAssignments ?? [],
-        }),
-      ),
-      overflowCount: recovery.overflowCount,
-      reviewLimit: recovery.reviewLimit,
-    };
-
-    setPendingTouchedRecoverySectionIds([]);
-    previousRecoveryOpenRef.current = false;
-    setSavedRecoveryDraft(null);
-    clearRecoveryDraftStorage();
-    setPendingRecoveryImport(nextPendingRecoveryImport);
-
-    if (previousPersistedRecoverySession && currentCv) {
-      const nextMetadata = { ...(currentCv.metadata ?? {}) } as CvDocument["metadata"];
-      delete (nextMetadata as { importRecoverySession?: unknown }).importRecoverySession;
-      try {
-        console.info("[importRecovery] replacing_open_cycle", {
-          nextCycleId: nextPendingRecoveryImport.cycleId,
-        });
-      } catch {
-        /* noop */
-      }
-      void importCv({
-        ...currentCv,
-        metadata: nextMetadata,
-      }).catch(() => {
-        pushToast("Failed to reset previous recovery state");
-      });
-    }
   }
 
   function updateRecoveryItem(
@@ -1377,6 +1619,8 @@ export function ProfileReviewCard({
       sectionsToApply,
       pendingRecoveryImport.target,
       persistedSession,
+      undefined,
+      pendingRecoveryImport.authoritativeResume ?? null,
     );
   }
 
@@ -1431,6 +1675,8 @@ export function ProfileReviewCard({
       revealedSections,
       pendingRecoveryImport.target,
       persistedSession,
+      undefined,
+      pendingRecoveryImport.authoritativeResume ?? null,
     );
     if (didApply) {
       setPendingTouchedRecoverySectionIds(touchedSectionIds);
@@ -2179,13 +2425,13 @@ export function ProfileReviewCard({
             <StructuredUploadButton
               contextKey="cvforge-empty-state"
               label="Import CV"
-              onApplyToSections={(updated) => {
-                void importSectionsIntoFreshCv(updated);
+              onApplyToSections={(updated, structured) => {
+                void importSectionsIntoFreshCv(updated, structured as StructuredPayload | undefined);
               }}
-              onRecoveryRequired={(request) => {
-                void beginRecoveryImport(request, "fresh");
+              onResult={(payload) => {
+                setLatestStructuredPayload(payload as StructuredPayload);
+                setCopyFeedback(null);
               }}
-              renderAs="dropdown"
             />
             <button
               type="button"
@@ -2204,6 +2450,27 @@ export function ProfileReviewCard({
               Open library
             </button>
           </div>
+          {DEBUG_CV_EDITOR && latestStructuredPayload ? (
+            <div
+              style={{
+                display: "flex",
+                gap: "var(--s2)",
+                flexWrap: "wrap",
+                justifyContent: "center",
+                marginTop: "var(--s3)",
+              }}
+            >
+              <ImportRuntimeDebugControls
+                copyFeedback={copyFeedback}
+                onCopyPayload={(kind) => {
+                  void copyStructuredPayload(kind);
+                }}
+                payload={latestStructuredPayload}
+                rawTextForCopy={rawTextForCopy}
+                runtimeDebug={latestImportRuntimeDebug}
+              />
+            </div>
+          ) : null}
         </div>
       )}
 
@@ -2368,12 +2635,13 @@ export function ProfileReviewCard({
                 sections={
                   sections as unknown as import("../types/cvDocument").CvSection[]
                 }
-                onApplyToSections={(updated) => {
-                  try {
-                    reorderSections(updated as any);
-                  } catch {
-                    /* noop */
-                  }
+                onApplyToSections={(updated, structured) => {
+                  void applyImportedSections(
+                    updated,
+                    "existing",
+                    undefined,
+                    structured as StructuredPayload | undefined,
+                  );
                 }}
                 onResult={(payload) => {
                   setLatestStructuredPayload(payload as StructuredPayload);
@@ -2384,6 +2652,12 @@ export function ProfileReviewCard({
                   ) {
                     try {
                       console.debug(
+                        "[ProfileReviewCard] structured runtime status",
+                        buildImportRuntimeDebugSnapshot(
+                          payload as StructuredPayload,
+                        ),
+                      );
+                      console.debug(
                         "[ProfileReviewCard] structured payload",
                         payload,
                       );
@@ -2392,63 +2666,31 @@ export function ProfileReviewCard({
                     }
                   }
                 }}
-                onRecoveryRequired={(request) => {
-                  void beginRecoveryImport(request, "existing");
-                }}
-                renderAs="dropdown"
               />
             </div>
-            {onRequestExport || hasImportReviewEntryPoint ? (
+            {onRequestExport ||
+            hasImportReviewEntryPoint ||
+            (DEBUG_CV_EDITOR && latestStructuredPayload) ? (
               <div className="dasti-cv-edit-toolbar__group dasti-cv-edit-toolbar__group--actions">
                 {DEBUG_CV_EDITOR && latestStructuredPayload ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => void copyStructuredPayload("normalized")}
-                      className="dasti-button dasti-button--secondary dasti-button--pill dasti-button--sm"
-                      aria-label="Copy normalized JSON"
-                    >
-                      <FileText size={14} strokeWidth={1.6} aria-hidden="true" />
-                      {copyFeedback === "normalized"
-                        ? "Copied normalized JSON"
-                        : "Copy normalized JSON"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void copyStructuredPayload("parser")}
-                      className="dasti-button dasti-button--secondary dasti-button--pill dasti-button--sm"
-                      aria-label="Copy raw parser JSON"
-                      disabled={!latestStructuredPayload?.debug?.rawParser}
-                    >
-                      <FileText size={14} strokeWidth={1.6} aria-hidden="true" />
-                      {copyFeedback === "parser"
-                        ? "Copied raw parser JSON"
-                        : "Copy raw parser JSON"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void copyStructuredPayload("rawText")}
-                      className="dasti-button dasti-button--secondary dasti-button--pill dasti-button--sm"
-                      aria-label="Copy raw text"
-                      disabled={!rawTextForCopy}
-                    >
-                      <FileText size={14} strokeWidth={1.6} aria-hidden="true" />
-                      {copyFeedback === "rawText"
-                        ? "Copied raw text"
-                        : "Copy raw text"}
-                    </button>
-                  </>
+                  <ImportRuntimeDebugControls
+                    copyFeedback={copyFeedback}
+                    onCopyPayload={(kind) => {
+                      void copyStructuredPayload(kind);
+                    }}
+                    payload={latestStructuredPayload}
+                    rawTextForCopy={rawTextForCopy}
+                    runtimeDebug={latestImportRuntimeDebug}
+                  />
                 ) : null}
                 {onRequestExport ? (
-                  <button
-                    type="button"
-                    onClick={handleExportClick}
-                    className="dasti-button dasti-button--secondary dasti-button--pill dasti-button--sm dasti-cv-edit-toolbar__export"
-                    aria-label="Export CV as PDF"
-                  >
-                    <FilePdf size={14} strokeWidth={1.6} aria-hidden="true" />
-                    Export PDF
-                  </button>
+                  <ResumeExportControl
+                    exportingFormat={null}
+                    onExport={handleExportClick}
+                    statusDescription={exportStatusDescription}
+                    statusLabel={exportStatusLabel}
+                    statusTone={exportStatusTone}
+                  />
                 ) : null}
                 {hasImportReviewEntryPoint ? (
                   <button
