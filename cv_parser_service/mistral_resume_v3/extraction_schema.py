@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 
 class ExtractionBaseModel(BaseModel):
@@ -103,13 +103,14 @@ class ExtractionExperience(ExtractionBaseModel):
         default=None,
         description="Set true only when explicitly supported by words like Present, Current, Now, or equivalent. If unclear, return null rather than false.",
     )
-    summary: Optional[str] = Field(
+    description: Optional[str] = Field(
         default=None,
-        description="Populate only when explicit non-bullet summary prose exists for that role. Otherwise return null.",
+        validation_alias=AliasChoices("description", "summary"),
+        description="Populate only when explicit non-bullet narrative prose exists for that role and appears before any bullet list. Do not convert prose into bullets.",
     )
     responsibilityBullets: List[str] = Field(
         default_factory=list,
-        description="Atomic responsibility/task bullets only. Preserve source order. Keep bullets separate and concise.",
+        description="Atomic explicit responsibility/task bullets only. Preserve source order exactly. Do not invent bullets from prose.",
     )
     achievements: List[str] = Field(
         default_factory=list,
@@ -280,6 +281,35 @@ class ExtractionOtherSection(ExtractionBaseModel):
     )
 
 
+class ExtractionSectionOrderItem(ExtractionBaseModel):
+    family: Literal[
+        "profile",
+        "summary",
+        "skills",
+        "languages",
+        "experience",
+        "education",
+        "certifications",
+        "projects",
+        "achievements",
+        "hobbies",
+        "awards",
+        "publications",
+        "volunteering",
+        "affiliations",
+        "additionalInformation",
+        "other",
+    ] = Field(description="Canonical section family for a visible source section heading.")
+    ordinal: int = Field(
+        description="Zero-based occurrence index for this family in the source document.",
+        ge=0,
+    )
+    title: Optional[str] = Field(
+        default=None,
+        description="Original source heading/title for this section when explicitly present.",
+    )
+
+
 class ResumeExtraction(ExtractionBaseModel):
     identity: Optional[ExtractionIdentity] = None
     contact: Optional[ExtractionContact] = None
@@ -290,16 +320,38 @@ class ResumeExtraction(ExtractionBaseModel):
     education: List[ExtractionEducation] = Field(default_factory=list)
     certifications: List[ExtractionCertification] = Field(default_factory=list)
     projects: List[ExtractionProject] = Field(default_factory=list)
+    achievements: List[str] = Field(default_factory=list)
+    hobbies: List[str] = Field(default_factory=list)
     awards: List[ExtractionAward] = Field(default_factory=list)
     publications: List[ExtractionPublication] = Field(default_factory=list)
     volunteering: List[ExtractionVolunteering] = Field(default_factory=list)
+    affiliations: List[str] = Field(default_factory=list)
+    additionalInformation: List[str] = Field(default_factory=list)
     otherSections: List[ExtractionOtherSection] = Field(default_factory=list)
+    sectionOrder: List[ExtractionSectionOrderItem] = Field(default_factory=list)
+
+
+def _strict_json_schema_node(schema_node: Any) -> Any:
+    if isinstance(schema_node, (str, int, float, bool)) or schema_node is None:
+        return schema_node
+    if isinstance(schema_node, dict):
+        normalized: Dict[str, Any] = {
+            str(key): _strict_json_schema_node(value) for key, value in schema_node.items()
+        }
+        if normalized.get("type") == "object":
+            normalized["additionalProperties"] = False
+        return normalized
+    if isinstance(schema_node, list):
+        return [_strict_json_schema_node(value) for value in schema_node]
+    raise TypeError(f"unsupported_json_schema_node:{type(schema_node).__name__}")
 
 
 def build_document_annotation_format() -> dict:
-    from mistralai.extra import response_format_from_pydantic_model
-
-    return response_format_from_pydantic_model(ResumeExtraction).model_dump(
-        by_alias=True,
-        exclude_none=True,
-    )
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": ResumeExtraction.__name__,
+            "schema": _strict_json_schema_node(ResumeExtraction.model_json_schema()),
+            "strict": True,
+        },
+    }

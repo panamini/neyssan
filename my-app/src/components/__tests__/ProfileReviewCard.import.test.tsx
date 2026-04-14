@@ -76,11 +76,25 @@ describe("ProfileReviewCard import", () => {
     renameCvMock.mockReset();
     exportCvMock.mockReset();
     cvLibraryState.currentCv = null;
+    Object.defineProperty(window, "__CV_EDITOR_DEBUG__", {
+      configurable: true,
+      writable: true,
+      value: false,
+    });
     window.sessionStorage.clear();
     Object.defineProperty(File.prototype, "text", {
       configurable: true,
       value: vi.fn().mockResolvedValue("Imported CV text"),
     });
+    Object.defineProperty(File.prototype, "arrayBuffer", {
+      configurable: true,
+      value: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
+    });
+  });
+
+  afterEach(() => {
+    delete (window as Window & { __CV_EDITOR_DEBUG__?: boolean })
+      .__CV_EDITOR_DEBUG__;
   });
 
   it("imports into a fresh CV when the workspace is empty", async () => {
@@ -88,19 +102,23 @@ describe("ProfileReviewCard import", () => {
 
     structuredActionMock.mockResolvedValue({
       normalized: {
-        profile: {
-          name: "Jane Doe",
-          email: "jane@example.com",
-          title: "Product Manager",
-        },
-        summary: "Summary text",
-        experience: [],
-        education: [],
-        skillsText: "",
-        languagesText: "",
-        achievements: [],
+        summary: "Fallback normalized should stay debug-only",
       },
       strict: null,
+      authoritativeResume: {
+        source: "mistral_v3",
+        trusted: true,
+        fallbackToLegacy: false,
+        normalized: {
+          profile: {
+            name: "Jane Doe",
+            desiredPosition: "Product Manager",
+          },
+          summary: {
+            text: "Summary text",
+          },
+        },
+      },
     });
 
     const { container } = render(<ProfileReviewCard />);
@@ -108,15 +126,12 @@ describe("ProfileReviewCard import", () => {
     expect(screen.getByRole("button", { name: "Import CV" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Import CV" }));
-    await user.click(
-      screen.getByRole("button", { name: /Import text PDF or TXT/i }),
-    );
     const input = container.querySelector(
       'input[type="file"]',
     ) as HTMLInputElement | null;
     expect(input).not.toBeNull();
-    const file = new File(["Imported CV text"], "resume.txt", {
-      type: "text/plain",
+    const file = new File(["scanned CV"], "resume.png", {
+      type: "image/png",
     });
 
     fireEvent.change(input as HTMLInputElement, { target: { files: [file] } });
@@ -124,6 +139,13 @@ describe("ProfileReviewCard import", () => {
     await waitFor(() => expect(importCvMock).toHaveBeenCalledTimes(1));
     expect(importCvMock.mock.calls[0][0]).toMatchObject({
       title: "Jane Doe — Product Manager",
+      metadata: expect.objectContaining({
+        authoritativeResume: expect.objectContaining({
+          source: "mistral_v3",
+          trusted: true,
+          fallbackToLegacy: false,
+        }),
+      }),
     });
     expect(importCvMock.mock.calls[0][0].sections).toEqual(
       expect.arrayContaining([
@@ -133,29 +155,173 @@ describe("ProfileReviewCard import", () => {
     );
   });
 
-  it("keeps the import drawer compact with one icon per route and no subtitles", async () => {
+  it("shows trusted Mistral runtime status in local debug mode and keeps it visible after import", async () => {
+    const user = userEvent.setup();
+    (window as Window & { __CV_EDITOR_DEBUG__?: boolean }).__CV_EDITOR_DEBUG__ =
+      true;
+
+    structuredActionMock.mockResolvedValue({
+      normalized: {
+        summary: "Fallback normalized should stay debug-only",
+      },
+      diagnostics: {
+        ocr_request_path: "/mistral-ocr/parse",
+        ocr_engine: "mistral",
+        mistral_fallback: false,
+        mistral_runtime: "mistral",
+      },
+      authoritativeResume: {
+        source: "mistral_v3",
+        trusted: true,
+        fallbackToLegacy: false,
+        normalized: {
+          profile: {
+            name: "Jane Doe",
+            email: "jane@example.com",
+            title: "Product Manager",
+          },
+          summary: {
+            text: "Trusted OCR summary",
+          },
+        },
+      },
+    });
+
+    const view = render(<ProfileReviewCard />);
+
+    await user.click(screen.getByRole("button", { name: "Import CV" }));
+
+    const input = view.container.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement | null;
+    expect(input).not.toBeNull();
+
+    fireEvent.change(input as HTMLInputElement, {
+      target: {
+        files: [new File(["scanned CV"], "resume.png", { type: "image/png" })],
+      },
+    });
+
+    await waitFor(() => expect(importCvMock).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(
+        screen.getByRole("status", { name: "Import runtime debug" }),
+      ).toBeInTheDocument(),
+    );
+
+    const trustedDebugStatus = screen.getByRole("status", {
+      name: "Import runtime debug",
+    });
+    expect(
+      within(trustedDebugStatus).getAllByText(
+        /Trusted Mistral import/i,
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(
+      within(trustedDebugStatus).getByText("/mistral-ocr/parse"),
+    ).toBeInTheDocument();
+    expect(within(trustedDebugStatus).getAllByText("mistral").length).toBeGreaterThan(0);
+    expect(within(trustedDebugStatus).getByText("false")).toBeInTheDocument();
+    expect(within(trustedDebugStatus).getByText("true")).toBeInTheDocument();
+
+    cvLibraryState.currentCv = importCvMock.mock.calls[0][0];
+    view.rerender(<ProfileReviewCard />);
+
+    expect(
+      screen.getByRole("status", { name: "Import runtime debug" }),
+    ).toBeInTheDocument();
+    expect(
+      within(
+        screen.getByRole("status", { name: "Import runtime debug" }),
+      ).getAllByText(/Trusted Mistral import/i).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("shows fallback runtime status when the parse falls back to legacy-style normalized output", async () => {
+    const user = userEvent.setup();
+    (window as Window & { __CV_EDITOR_DEBUG__?: boolean }).__CV_EDITOR_DEBUG__ =
+      true;
+
+    structuredActionMock.mockResolvedValue({
+      normalized: {
+        profile: {
+          name: "Fallback Candidate",
+        },
+        summary: "Fallback summary",
+        experience: [],
+        education: [],
+        skillsText: "",
+        languagesText: "",
+        achievements: [],
+      },
+      diagnostics: {
+        ocr_request_path: "/mistral-ocr/parse",
+        ocr_engine: "mistral",
+        mistral_fallback: true,
+        mistral_runtime: "local_fallback",
+      },
+      authoritativeResume: {
+        source: "mistral_v3",
+        trusted: false,
+        fallbackToLegacy: true,
+        normalized: null,
+      },
+    });
+
+    const { container } = render(<ProfileReviewCard />);
+
+    await user.click(screen.getByRole("button", { name: "Import CV" }));
+
+    const input = container.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement | null;
+    expect(input).not.toBeNull();
+
+    fireEvent.change(input as HTMLInputElement, {
+      target: {
+        files: [new File(["scanned CV"], "resume.png", { type: "image/png" })],
+      },
+    });
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("status", { name: "Import runtime debug" }),
+      ).toBeInTheDocument(),
+    );
+    const debugStatus = screen.getByRole("status", {
+      name: "Import runtime debug",
+    });
+    expect(
+      within(debugStatus).getAllByText(/OCR import rejected \(fallback\/untrusted\)/i)
+        .length,
+    ).toBeGreaterThan(0);
+    expect(within(debugStatus).getByText("local_fallback")).toBeInTheDocument();
+    expect(
+      within(debugStatus).getByText("/mistral-ocr/parse"),
+    ).toBeInTheDocument();
+    expect(within(debugStatus).getByText("true")).toBeInTheDocument();
+    expect(within(debugStatus).getByText("false")).toBeInTheDocument();
+    expect(importCvMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps the import action collapsed to a single direct scanned-import trigger", async () => {
     const user = userEvent.setup();
 
     const { container } = render(<ProfileReviewCard />);
 
     await user.click(screen.getByRole("button", { name: "Import CV" }));
 
-    const menu = container.querySelector(".dasti-import-dropdown__menu");
-
     expect(
-      screen.getByRole("button", { name: /Import text PDF or TXT/i }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /Import scanned PDF or image/i }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: /Import text PDF or TXT/i }),
+    ).toBeNull();
+    expect(container.querySelector(".dasti-import-dropdown__menu")).toBeNull();
     expect(
       screen.queryByText(/Selectable PDF or plain text resume/i),
     ).toBeNull();
     expect(
       screen.queryByText(/Image-based PDF, screenshot, or photo/i),
     ).toBeNull();
-    expect(menu).toHaveClass("dasti-import-dropdown__menu--compact");
-    expect(container.querySelectorAll(".dasti-menu-option__icon")).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Import CV" })).toBeInTheDocument();
   });
 
   it("shows a dismissible import warning banner before the inline review list", async () => {
@@ -319,7 +485,7 @@ describe("ProfileReviewCard import", () => {
 
     render(<ProfileReviewCard onRequestExport={exportCvMock} />);
 
-    await user.click(screen.getByRole("button", { name: "Export CV as PDF" }));
+    await user.click(screen.getByRole("button", { name: "Export PDF" }));
 
     expect(exportCvMock).not.toHaveBeenCalled();
     expect(
@@ -395,214 +561,6 @@ describe("ProfileReviewCard import", () => {
       "data-collapsed",
       "true",
     );
-  });
-
-  it("holds low-confidence imports behind the recovery gate and caps the visible review list", async () => {
-    const user = userEvent.setup();
-
-    const recoveryItems = Array.from({ length: 13 }, (_, index) => ({
-      blockId: `recovery-${index + 1}`,
-      rawText: `Low confidence section ${index + 1}`,
-      cleanedText: `Low confidence section ${index + 1}`,
-      displayTextSource: "cleaned",
-      predictedSection: "summary",
-      selectedSection: "summary",
-      confidenceScore: "low",
-      confidenceValue: 0.42,
-      issueFlags: ["weakSectionMatch"],
-      reviewStatus: "pending",
-      sourceSectionTitle: `Section ${index + 1}`,
-      sourceFieldKey: "summary",
-      fragmentAssignments: [],
-    }));
-
-    structuredActionMock.mockResolvedValue({
-      normalized: {
-        summary: "Summary text",
-        experience: [],
-        education: [],
-        skillsText: "",
-        languagesText: "",
-        achievements: [],
-      },
-      strict: null,
-      recovery: {
-        reviewRequired: true,
-        items: recoveryItems,
-        totalItems: 13,
-        overflowCount: 1,
-        reviewLimit: 12,
-        reviewNormalized: {
-          summary: "Summary text",
-          experience: [],
-          education: [],
-          skillsText: "",
-          languagesText: "",
-          achievements: [],
-        },
-      },
-    });
-
-    const { container } = render(<ProfileReviewCard />);
-
-    await user.click(screen.getByRole("button", { name: "Import CV" }));
-    await user.click(screen.getByRole("button", { name: /Import text PDF or TXT/i }));
-    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
-
-    fireEvent.change(input, {
-      target: { files: [new File(["Imported CV text"], "resume.txt", { type: "text/plain" })] },
-    });
-
-    await waitFor(() => {
-      expect(importCvMock).not.toHaveBeenCalled();
-      expect(screen.getByLabelText("Import recovery review")).toBeInTheDocument();
-    });
-
-    expect(screen.getAllByRole("listitem")).toHaveLength(12);
-    expect(
-      screen.getByText(/Showing the first 12/i),
-    ).toBeInTheDocument();
-  });
-
-  it("accepts a low-confidence item into its predicted section before import", async () => {
-    const user = userEvent.setup();
-
-    structuredActionMock.mockResolvedValue({
-      normalized: {
-        summary: "Summary text",
-        experience: [],
-        education: [],
-        skillsText: "",
-        languagesText: "",
-        achievements: [],
-      },
-      strict: null,
-      recovery: {
-        reviewRequired: true,
-        items: [
-          {
-            blockId: "recovery-1",
-            rawText: "Bachelor of Science, State University\n2018 - 2022",
-            cleanedText: "Bachelor of Science, State University\n2018 - 2022",
-            displayTextSource: "cleaned",
-            predictedSection: "experience",
-            selectedSection: "experience",
-            confidenceScore: "low",
-            confidenceValue: 0.31,
-            issueFlags: ["weakSectionMatch"],
-            reviewStatus: "pending",
-            sourceSectionTitle: "Career section",
-            sourceFieldKey: "experience",
-            fragmentAssignments: [],
-          },
-        ],
-        totalItems: 1,
-        overflowCount: 0,
-        reviewLimit: 12,
-        reviewNormalized: {
-          summary: "Summary text",
-          experience: [],
-          education: [],
-          skillsText: "",
-          languagesText: "",
-          achievements: [],
-        },
-      },
-    });
-
-    const { container } = render(<ProfileReviewCard />);
-
-    await user.click(screen.getByRole("button", { name: "Import CV" }));
-    await user.click(screen.getByRole("button", { name: /Import text PDF or TXT/i }));
-    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
-
-    fireEvent.change(input, {
-      target: { files: [new File(["Imported CV text"], "resume.txt", { type: "text/plain" })] },
-    });
-
-    const acceptButton = await screen.findByRole("button", { name: "Accept block" });
-    await user.click(acceptButton);
-    await user.click(screen.getByRole("button", { name: "Save reviewed work" }));
-
-    await waitFor(() => expect(importCvMock).toHaveBeenCalledTimes(1));
-    const importedDoc = importCvMock.mock.calls[0][0];
-    expect(importedDoc.sections).toEqual(
-      expect.arrayContaining([expect.objectContaining({ type: "experience" })]),
-    );
-    expect(JSON.stringify(importedDoc.sections)).toContain("importRecovery");
-    expect(screen.getByText("Saved 1 accepted block")).toBeInTheDocument();
-  });
-
-  it("keeps the chosen remaining action visibly active and exposes expanded recovery targets in the drawer", async () => {
-    const user = userEvent.setup();
-
-    structuredActionMock.mockResolvedValue({
-      normalized: {
-        summary: "Summary text",
-        experience: [],
-        education: [],
-        skillsText: "",
-        languagesText: "",
-        achievements: [],
-      },
-      strict: null,
-      recovery: {
-        reviewRequired: true,
-        items: [
-          {
-            blockId: "recovery-1",
-            rawText: "Mixed content block",
-            cleanedText: "Mixed content block",
-            displayTextSource: "cleaned",
-            predictedSection: "summary",
-            selectedSection: "summary",
-            confidenceScore: "low",
-            confidenceValue: 0.28,
-            issueFlags: ["weakSectionMatch"],
-            reviewStatus: "pending",
-            sourceSectionTitle: "Mixed block",
-            sourceFieldKey: "summary",
-            fragmentAssignments: [],
-          },
-        ],
-        totalItems: 1,
-        overflowCount: 0,
-        reviewLimit: 12,
-        reviewNormalized: {
-          summary: "Summary text",
-          experience: [],
-          education: [],
-          skillsText: "",
-          languagesText: "",
-          achievements: [],
-        },
-      },
-    });
-
-    const { container } = render(<ProfileReviewCard />);
-
-    await user.click(screen.getByRole("button", { name: "Import CV" }));
-    await user.click(screen.getByRole("button", { name: /Import text PDF or TXT/i }));
-    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
-
-    fireEvent.change(input, {
-      target: { files: [new File(["Imported CV text"], "resume.txt", { type: "text/plain" })] },
-    });
-
-    const acceptButton = await screen.findByRole("button", { name: "Accept block" });
-    await user.click(acceptButton);
-
-    expect(screen.getByRole("button", { name: "Accept block" })).toBeInTheDocument();
-    expect(screen.getByText("Reviewing 1 / 1")).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "Open recovery drawer" }));
-    const drawer = screen.getByLabelText("Recovery drawer for section 1");
-    expect(within(drawer).getByRole("option", { name: "Certifications" })).toBeInTheDocument();
-    expect(within(drawer).getByRole("option", { name: "Additional Information" })).toBeInTheDocument();
-    expect(within(drawer).getByRole("option", { name: "Affiliations" })).toBeInTheDocument();
-    expect(within(drawer).getByRole("option", { name: "Hobbies" })).toBeInTheDocument();
-    expect(within(drawer).getByRole("option", { name: "Add your own" })).toBeInTheDocument();
-    expect(within(drawer).queryByRole("option", { name: "Contact" })).toBeNull();
   });
 
   it("routes the review trigger to recovery when metadata recovery is pending", async () => {
@@ -817,108 +775,6 @@ describe("ProfileReviewCard import", () => {
     expect(screen.getAllByRole("button", { name: "Reopen recovery workspace" }).length).toBeGreaterThan(0);
   });
 
-  it("replaces an already open recovery workspace with the new import cycle", async () => {
-    const user = userEvent.setup();
-    importCvMock.mockImplementation(async (doc) => {
-      cvLibraryState.currentCv = doc;
-    });
-
-    cvLibraryState.currentCv = {
-      id: "cv_replace_open_recovery",
-      title: "Imported CV",
-      metadata: {
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        version: 1,
-        importRecoverySession: {
-          status: "completed",
-          updatedAt: new Date().toISOString(),
-          reviewLimit: 12,
-          overflowCount: 0,
-          items: [
-            {
-              blockId: "recovery-old-1",
-              rawText: "Old recovery block",
-              cleanedText: "Old recovery block",
-              displayTextSource: "cleaned",
-              predictedSection: "summary",
-              confidenceScore: "low",
-              confidenceValue: 0.42,
-              issueFlags: ["weakSectionMatch"],
-              reviewStatus: "accepted",
-              selectedSection: "summary",
-              selectedSectionTitle: null,
-              fragmentAssignments: [],
-            },
-          ],
-          baseSectionsSnapshot: [],
-        },
-      },
-      sections: [],
-    } as any;
-
-    structuredActionMock.mockResolvedValue({
-      normalized: {
-        summary: "Summary text",
-        experience: [],
-        education: [],
-        skillsText: "",
-        languagesText: "",
-        achievements: [],
-      },
-      strict: null,
-      recovery: {
-        reviewRequired: true,
-        items: [
-          {
-            blockId: "recovery-fresh-open-1",
-            rawText: "Fresh import block",
-            cleanedText: "Fresh import block",
-            displayTextSource: "cleaned",
-            predictedSection: "summary",
-            selectedSection: "summary",
-            selectedSectionTitle: null,
-            confidenceScore: "low",
-            confidenceValue: 0.28,
-            issueFlags: ["weakSectionMatch"],
-            reviewStatus: "pending",
-            sourceSectionTitle: "Fresh block",
-            sourceFieldKey: "summary",
-            fragmentAssignments: [],
-          },
-        ],
-        totalItems: 1,
-        overflowCount: 0,
-        reviewLimit: 12,
-        reviewNormalized: {
-          summary: "Summary text",
-          experience: [],
-          education: [],
-          skillsText: "",
-          languagesText: "",
-          achievements: [],
-        },
-      },
-    });
-
-    const { container } = render(<ProfileReviewCard />);
-
-    await user.click(screen.getAllByRole("button", { name: "Reopen recovery workspace" })[0]);
-    expect(screen.getByText("Old recovery block")).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "Import" }));
-    await user.click(screen.getByRole("button", { name: /Import text PDF or TXT/i }));
-    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
-
-    fireEvent.change(input, {
-      target: { files: [new File(["Imported CV text"], "resume.txt", { type: "text/plain" })] },
-    });
-
-    await waitFor(() => expect(screen.getByText("Fresh import block")).toBeInTheDocument());
-    expect(screen.queryByText("Old recovery block")).toBeNull();
-    expect(screen.getByLabelText("Import recovery review")).toBeInTheDocument();
-  });
-
   it("clears local recovery UI when switching to a brand-new resume", async () => {
     const user = userEvent.setup();
 
@@ -1028,341 +884,6 @@ describe("ProfileReviewCard import", () => {
     view.rerender(<ProfileReviewCard />);
 
     expect(screen.queryByRole("button", { name: "Reopen recovery workspace" })).toBeNull();
-  });
-
-  it("starts a new import with a fresh recovery cycle instead of reusing the old one", async () => {
-    const user = userEvent.setup();
-    importCvMock.mockImplementation(async (doc) => {
-      cvLibraryState.currentCv = doc;
-    });
-
-    cvLibraryState.currentCv = {
-      id: "cv_same_resume",
-      title: "Imported CV",
-      metadata: {
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        version: 1,
-        importRecoverySession: {
-          status: "completed",
-          updatedAt: new Date().toISOString(),
-          reviewLimit: 12,
-          overflowCount: 0,
-          items: [
-            {
-              blockId: "recovery-old-1",
-              rawText: "Old recovery block",
-              cleanedText: "Old recovery block",
-              displayTextSource: "cleaned",
-              predictedSection: "summary",
-              confidenceScore: "low",
-              confidenceValue: 0.4,
-              issueFlags: ["weakSectionMatch"],
-              reviewStatus: "accepted",
-              selectedSection: "summary",
-              selectedSectionTitle: null,
-              fragmentAssignments: [],
-            },
-          ],
-          baseSectionsSnapshot: [],
-        },
-      },
-      sections: [],
-    } as any;
-
-    structuredActionMock.mockResolvedValue({
-      normalized: {
-        summary: "Summary text",
-        experience: [],
-        education: [],
-        skillsText: "",
-        languagesText: "",
-        achievements: [],
-      },
-      strict: null,
-      recovery: {
-        reviewRequired: true,
-        items: [
-          {
-            blockId: "recovery-fresh-1",
-            rawText: "Fresh import block",
-            cleanedText: "Fresh import block",
-            displayTextSource: "cleaned",
-            predictedSection: "summary",
-            selectedSection: "summary",
-            selectedSectionTitle: null,
-            confidenceScore: "low",
-            confidenceValue: 0.28,
-            issueFlags: ["weakSectionMatch"],
-            reviewStatus: "pending",
-            sourceSectionTitle: "Fresh block",
-            sourceFieldKey: "summary",
-            fragmentAssignments: [],
-          },
-        ],
-        totalItems: 1,
-        overflowCount: 0,
-        reviewLimit: 12,
-        reviewNormalized: {
-          summary: "Summary text",
-          experience: [],
-          education: [],
-          skillsText: "",
-          languagesText: "",
-          achievements: [],
-        },
-      },
-    });
-
-    const { container, rerender } = render(<ProfileReviewCard />);
-
-    await user.click(screen.getByRole("button", { name: "Import" }));
-    await user.click(screen.getByRole("button", { name: /Import text PDF or TXT/i }));
-    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
-
-    fireEvent.change(input, {
-      target: { files: [new File(["Imported CV text"], "resume.txt", { type: "text/plain" })] },
-    });
-
-    await waitFor(() => expect(importCvMock).toHaveBeenCalledTimes(1));
-    rerender(<ProfileReviewCard />);
-
-    expect(screen.getByText("Fresh import block")).toBeInTheDocument();
-    expect(screen.queryByText("Old recovery block")).toBeNull();
-  });
-
-  it("persists reviewed additional information into a plain text section on save", async () => {
-    const user = userEvent.setup();
-
-    structuredActionMock.mockResolvedValue({
-      normalized: {
-        summary: "Summary text",
-        experience: [],
-        education: [],
-        skillsText: "",
-        languagesText: "",
-        achievements: [],
-      },
-      strict: null,
-      recovery: {
-        reviewRequired: true,
-        items: [
-          {
-            blockId: "recovery-additional-information",
-            rawText: "Available for travel and relocation",
-            cleanedText: "Available for travel and relocation",
-            displayTextSource: "cleaned",
-            predictedSection: "summary",
-            selectedSection: "additional_information",
-            selectedSectionTitle: null,
-            confidenceScore: "low",
-            confidenceValue: 0.28,
-            issueFlags: ["weakSectionMatch"],
-            reviewStatus: "reassigned",
-            sourceSectionTitle: "Additional details",
-            sourceFieldKey: "summary",
-            fragmentAssignments: [],
-          },
-        ],
-        totalItems: 1,
-        overflowCount: 0,
-        reviewLimit: 12,
-        reviewNormalized: {
-          summary: "Summary text",
-          experience: [],
-          education: [],
-          skillsText: "",
-          languagesText: "",
-          achievements: [],
-        },
-      },
-    });
-
-    const { container } = render(<ProfileReviewCard />);
-
-    await user.click(screen.getByRole("button", { name: "Import CV" }));
-    await user.click(screen.getByRole("button", { name: /Import text PDF or TXT/i }));
-    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
-
-    fireEvent.change(input, {
-      target: { files: [new File(["Imported CV text"], "resume.txt", { type: "text/plain" })] },
-    });
-
-    await user.click(await screen.findByRole("button", { name: "Save reviewed work" }));
-
-    await waitFor(() => expect(importCvMock).toHaveBeenCalledTimes(1));
-    const importedDoc = importCvMock.mock.calls[0][0];
-    expect(importedDoc.metadata.importRecoverySession).toEqual(
-      expect.objectContaining({
-        status: "completed",
-        items: expect.arrayContaining([
-          expect.objectContaining({
-            reviewStatus: "reassigned",
-            selectedSection: "additional_information",
-          }),
-        ]),
-      }),
-    );
-    expect(importedDoc.sections).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          type: "text",
-          title: "Additional Information",
-          blocks: expect.any(Array),
-        }),
-      ]),
-    );
-    expect(JSON.stringify(importedDoc.sections)).toContain(
-      "Available for travel and relocation",
-    );
-  });
-
-  it("preserves a completed recovery session when importing as-is", async () => {
-    const user = userEvent.setup();
-
-    structuredActionMock.mockResolvedValue({
-      normalized: {
-        summary: "Summary text",
-        experience: [],
-        education: [],
-        skillsText: "",
-        languagesText: "",
-        achievements: [],
-      },
-      strict: null,
-      recovery: {
-        reviewRequired: true,
-        items: [
-          {
-            blockId: "recovery-summary-1",
-            rawText: "Recovered summary line",
-            cleanedText: "Recovered summary line",
-            displayTextSource: "cleaned",
-            predictedSection: "summary",
-            selectedSection: "summary",
-            selectedSectionTitle: null,
-            confidenceScore: "low",
-            confidenceValue: 0.31,
-            issueFlags: ["weakSectionMatch"],
-            reviewStatus: "pending",
-            sourceSectionTitle: "Summary",
-            sourceFieldKey: "summary",
-            fragmentAssignments: [],
-          },
-        ],
-        totalItems: 1,
-        overflowCount: 0,
-        reviewLimit: 12,
-        reviewNormalized: {
-          summary: "Summary text",
-          experience: [],
-          education: [],
-          skillsText: "",
-          languagesText: "",
-          achievements: [],
-        },
-      },
-    });
-
-    const { container } = render(<ProfileReviewCard />);
-
-    await user.click(screen.getByRole("button", { name: "Import CV" }));
-    await user.click(screen.getByRole("button", { name: /Import text PDF or TXT/i }));
-    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
-
-    fireEvent.change(input, {
-      target: { files: [new File(["Imported CV text"], "resume.txt", { type: "text/plain" })] },
-    });
-
-    await user.click(await screen.findByRole("button", { name: "Import as-is" }));
-
-    await waitFor(() => expect(importCvMock).toHaveBeenCalledTimes(1));
-    const importedDoc = importCvMock.mock.calls[0][0];
-    expect(importedDoc.metadata.importRecoverySession).toEqual(
-      expect.objectContaining({
-        status: "completed",
-        items: expect.arrayContaining([
-          expect.objectContaining({ blockId: "recovery-summary-1" }),
-        ]),
-        baseSectionsSnapshot: expect.any(Array),
-      }),
-    );
-  });
-
-  it("persists reviewed hobbies into a structured hobbies section on save", async () => {
-    const user = userEvent.setup();
-
-    structuredActionMock.mockResolvedValue({
-      normalized: {
-        summary: "Summary text",
-        experience: [],
-        education: [],
-        skillsText: "",
-        languagesText: "",
-        achievements: [],
-      },
-      strict: null,
-      recovery: {
-        reviewRequired: true,
-        items: [
-          {
-            blockId: "recovery-hobbies",
-            rawText: "Chess, Hiking",
-            cleanedText: "Chess, Hiking",
-            displayTextSource: "cleaned",
-            predictedSection: "summary",
-            selectedSection: "hobbies",
-            selectedSectionTitle: null,
-            confidenceScore: "low",
-            confidenceValue: 0.28,
-            issueFlags: ["weakSectionMatch"],
-            reviewStatus: "reassigned",
-            sourceSectionTitle: "Additional details",
-            sourceFieldKey: "summary",
-            fragmentAssignments: [],
-          },
-        ],
-        totalItems: 1,
-        overflowCount: 0,
-        reviewLimit: 12,
-        reviewNormalized: {
-          summary: "Summary text",
-          experience: [],
-          education: [],
-          skillsText: "",
-          languagesText: "",
-          achievements: [],
-        },
-      },
-    });
-
-    const { container } = render(<ProfileReviewCard />);
-
-    await user.click(screen.getByRole("button", { name: "Import CV" }));
-    await user.click(screen.getByRole("button", { name: /Import text PDF or TXT/i }));
-    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
-
-    fireEvent.change(input, {
-      target: { files: [new File(["Imported CV text"], "resume.txt", { type: "text/plain" })] },
-    });
-
-    await user.click(await screen.findByRole("button", { name: "Save reviewed work" }));
-
-    await waitFor(() => expect(importCvMock).toHaveBeenCalledTimes(1));
-    const importedDoc = importCvMock.mock.calls[0][0];
-    expect(importedDoc.sections).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          type: "text",
-          title: "Hobbies",
-          structuredContent: expect.arrayContaining([
-            expect.objectContaining({ name: "Chess" }),
-            expect.objectContaining({ name: "Hiking" }),
-          ]),
-          collapsed: false,
-        }),
-      ]),
-    );
   });
 
   it("includes the new text-backed sections in the add sections drawer", () => {
@@ -1668,7 +1189,7 @@ describe("ProfileReviewCard import", () => {
 
     expect(actionGroup).not.toBeNull();
     expect(
-      actionGroup?.querySelector('[aria-label="Export CV as PDF"]'),
+      actionGroup?.querySelector('[aria-label="Export PDF"]'),
     ).not.toBeNull();
     expect(
       actionGroup?.querySelector('[aria-label="Review import changes"]'),
