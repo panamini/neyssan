@@ -129,6 +129,15 @@ build_runtime_image() {
   printf '%s' "${sig}" > "${DOCKER_STATE_DIR}/last-runtime-hash"
 }
 
+ensure_runtime_image_exists() {
+  if docker image inspect "${IMAGE_NAME}" >/dev/null 2>&1; then
+    echo "[run] runtime image available (${IMAGE_NAME})"
+    return 0
+  fi
+  echo "[run] runtime image missing; building ${IMAGE_NAME}"
+  build_runtime_image
+}
+
 kill_vite_ports() {
   # Kill any dev servers lingering on 5173–5215
   for p in $(seq 5173 5215); do
@@ -149,6 +158,7 @@ write_state() {
     printf 'CONVEX_PID=%s\n' "${3:-}"
     printf 'CONVEX_URL=%s\n' "${4:-}"
     printf 'TUNNEL_STARTED=%s\n' "${5:-0}"
+    printf 'STACK_MODE=%s\n' "${6:-}"
   } > "${STATE_FILE}"
 }
 
@@ -161,6 +171,7 @@ read_state() {
       CONVEX_PID) CONVEX_PID="$v" ;;
       CONVEX_URL) CONVEX_URL="$v" ;;
       TUNNEL_STARTED) TUNNEL_STARTED="$v" ;;
+      STACK_MODE) STACK_MODE="$v" ;;
     esac
   done < "${STATE_FILE}"
 }
@@ -203,14 +214,30 @@ print_command_banner() {
   cat <<'EOF'
 
 Commands:
-  ./run.sh local         local parser + working export runtime
-  ./run.sh local-convex  local parser + local Convex
-  ./run.sh tunnel        tunnel / edge workflow
-  ./run.sh down          normal stop
-  ./run.sh reset         stronger cleanup
-  ./run.sh status        quick stack status
-  ./run.sh logs          parser logs
+  ./run.sh tunnel          stable full workflow
+  ./run.sh local-fast      fast full-app parser development
+  ./run.sh parser-dev      parser-only hacking
+  ./run.sh rebuild-docker  rebuild runtime / Docker stack
+  ./run.sh down            normal stop
+  ./run.sh reset           stronger cleanup
+  ./run.sh status          quick stack status
+  ./run.sh logs            parser logs
 EOF
+}
+
+ensure_workspace_runtime_surface() {
+  local diagnostic=""
+  diagnostic="$(
+    docker exec "${PARSER_NAME}" node -e 'const fs = require("fs"); const platformTag = `${process.platform}-${process.arch}`; const checks = [["tsx loader", "/app/my-app/node_modules/tsx/dist/esm/index.mjs"], ["playwright package", "/app/node_modules/playwright"], ["playwright browsers", "/ms-playwright"], [`esbuild package (${platformTag})`, `/app/my-app/node_modules/@esbuild/${platformTag}`]]; const missing = checks.filter(([, path]) => !fs.existsSync(path)); if (missing.length) { console.error(missing.map(([label, path]) => `${label}: ${path}`).join("\n")); process.exit(1); }' 2>&1
+  )" || {
+    echo "[run] ERROR: workspace parser runtime is missing export dependencies." >&2
+    if [[ -n "${diagnostic}" ]]; then
+      echo "${diagnostic}" >&2
+    fi
+    echo "[run] Run \`./run.sh rebuild-docker\` to refresh the parser/export runtime image, then retry \`./run.sh local-fast\`." >&2
+    docker stop "${PARSER_NAME}" >/dev/null 2>&1 || true
+    exit 1
+  }
 }
 
 resolve_convex_project_binding() {
@@ -227,11 +254,133 @@ resolve_convex_project_binding() {
       if [[ "${line}" =~ \#\ team:\ ([^,]+),\ project:\ ([^[:space:]]+) ]]; then
         CONVEX_TEAM_RESULT="${BASH_REMATCH[1]}"
         CONVEX_PROJECT_RESULT="${BASH_REMATCH[2]}"
+        if [[ "${line}" =~ ^CONVEX_DEPLOYMENT=local:([^[:space:]#]+) ]]; then
+          CONVEX_DEPLOYMENT_NAME_RESULT="${BASH_REMATCH[1]}"
+        else
+          CONVEX_DEPLOYMENT_NAME_RESULT=""
+        fi
         return 0
       fi
     fi
   done
   return 1
+}
+
+json_number_field() {
+  local file="${1:-}"
+  local field="${2:-}"
+  [[ -n "${file}" && -n "${field}" && -f "${file}" ]] || return 1
+  grep -Eo "\"${field}\":[0-9]+" "${file}" | head -n1 | cut -d: -f2
+}
+
+local_convex_deployments_disabled() {
+  local config_file="${HOME}/.convex/config.json"
+  [[ -f "${config_file}" ]] || return 1
+  grep -Eq '"optOutOfLocalDevDeploymentsUntilBetaOver"[[:space:]]*:[[:space:]]*true' "${config_file}"
+}
+
+resolve_local_convex_runtime() {
+  local deployment_name="${1:-}"
+  LOCAL_CONVEX_STATE_CONFIG_RESULT=""
+  LOCAL_CONVEX_CLOUD_PORT_RESULT="${LOCAL_CONVEX_CLOUD_PORT}"
+  LOCAL_CONVEX_SITE_PORT_RESULT="${LOCAL_CONVEX_SITE_PORT}"
+
+  if [[ -n "${deployment_name}" ]]; then
+    local config_file="${HOME}/.convex/convex-backend-state/${deployment_name}/config.json"
+    if [[ -f "${config_file}" ]]; then
+      LOCAL_CONVEX_STATE_CONFIG_RESULT="${config_file}"
+      LOCAL_CONVEX_CLOUD_PORT_RESULT="$(json_number_field "${config_file}" cloud || true)"
+      LOCAL_CONVEX_SITE_PORT_RESULT="$(json_number_field "${config_file}" site || true)"
+      [[ -n "${LOCAL_CONVEX_CLOUD_PORT_RESULT}" ]] || LOCAL_CONVEX_CLOUD_PORT_RESULT="${LOCAL_CONVEX_CLOUD_PORT}"
+      [[ -n "${LOCAL_CONVEX_SITE_PORT_RESULT}" ]] || LOCAL_CONVEX_SITE_PORT_RESULT="${LOCAL_CONVEX_SITE_PORT}"
+    fi
+  fi
+
+  if [[ -n "${LOCAL_CONVEX_URL}" ]]; then
+    LOCAL_CONVEX_URL_RESULT="${LOCAL_CONVEX_URL}"
+  else
+    LOCAL_CONVEX_URL_RESULT="http://127.0.0.1:${LOCAL_CONVEX_CLOUD_PORT_RESULT}"
+  fi
+}
+
+local_convex_instance_name() {
+  local url="${1:-}"
+  [[ -n "${url}" ]] || return 1
+  curl -fsS "${url}/instance_name" 2>/dev/null || true
+}
+
+port_listener_details() {
+  local port="${1:-}"
+  [[ -n "${port}" ]] || return 1
+  lsof -nP -iTCP:"${port}" -sTCP:LISTEN 2>/dev/null || true
+}
+
+ensure_local_convex_preflight() {
+  local deployment_name="${1:-}"
+  local convex_url="${2:-}"
+  local cloud_port="${3:-}"
+  local site_port="${4:-}"
+
+  if local_convex_deployments_disabled; then
+    echo "[run] ERROR: Convex local deployments are disabled on this machine." >&2
+    echo "[run] Run \`cd my-app && npx convex disable-local-deployments --undo-global\` and retry local-fast." >&2
+    exit 1
+  fi
+
+  local active_name=""
+  active_name="$(local_convex_instance_name "${convex_url}")"
+  if [[ -n "${active_name}" ]]; then
+    if [[ -n "${deployment_name}" && "${active_name}" != "${deployment_name}" ]]; then
+      echo "[run] ERROR: a different local Convex backend (${active_name}) is already running at ${convex_url}." >&2
+      echo "[run] Use ./run.sh down or ./run.sh reset for this repo, or stop the conflicting backend before retrying." >&2
+      exit 1
+    fi
+    echo "[run] ERROR: local Convex backend ${active_name} is already running at ${convex_url}, but it is not tracked by this run.sh state." >&2
+    echo "[run] Stop it with ./run.sh reset or terminate the existing \`convex dev\` process before retrying." >&2
+    exit 1
+  fi
+
+  local cloud_listener=""
+  local site_listener=""
+  cloud_listener="$(port_listener_details "${cloud_port}")"
+  if [[ -n "${cloud_listener}" ]]; then
+    echo "[run] ERROR: local Convex cloud port ${cloud_port} is already occupied by a non-Convex listener." >&2
+    echo "${cloud_listener}" >&2
+    exit 1
+  fi
+  site_listener="$(port_listener_details "${site_port}")"
+  if [[ -n "${site_listener}" ]]; then
+    echo "[run] ERROR: local Convex site port ${site_port} is already occupied by another listener." >&2
+    echo "${site_listener}" >&2
+    exit 1
+  fi
+}
+
+reuse_running_local_convex_from_state() {
+  local expected_name="${1:-}"
+  local VITE_PID=""; local PARSER_STARTED="0"; local CONVEX_PID=""; local CONVEX_URL=""; local TUNNEL_STARTED="0"; local STACK_MODE=""
+  read_state
+
+  if [[ -z "${CONVEX_PID:-}" || -z "${CONVEX_URL:-}" ]]; then
+    return 1
+  fi
+  if ! kill -0 "${CONVEX_PID}" >/dev/null 2>&1; then
+    return 1
+  fi
+  if ! is_convex_ready "${CONVEX_URL}"; then
+    return 1
+  fi
+
+  local active_name=""
+  active_name="$(local_convex_instance_name "${CONVEX_URL}")"
+  if [[ -n "${expected_name}" && -n "${active_name}" && "${active_name}" != "${expected_name}" ]]; then
+    return 1
+  fi
+
+  echo "[run] reusing tracked local Convex backend ${active_name:-unknown} at ${CONVEX_URL}" >&2
+  CONVEX_PID_RESULT="${CONVEX_PID}"
+  CONVEX_URL_RESULT="${CONVEX_URL}"
+  return 0
 }
 
 sync_local_convex_env() {
@@ -266,6 +415,11 @@ sync_local_convex_env() {
   echo "[run] syncing local Convex env" >&2
   (
     cd "${ROOT_DIR}/my-app"
+    local convex_bin="./node_modules/.bin/convex"
+    if [[ ! -x "${convex_bin}" ]]; then
+      echo "[run] ERROR: missing Convex CLI at ${ROOT_DIR}/my-app/${convex_bin}" >&2
+      exit 1
+    fi
     unset CONVEX_DEPLOYMENT
     unset CONVEX_DEPLOY_KEY
     unset CONVEX_SELF_HOSTED_URL
@@ -278,7 +432,7 @@ sync_local_convex_env() {
         value="${!name:-}"
       fi
       [[ -n "${value}" ]] || continue
-      npx convex env set "${name}" "${value}" >/dev/null
+      "${convex_bin}" env set "${name}" "${value}" >/dev/null
     done
   ) >> "${CONVEX_LOG}" 2>&1
 }
@@ -287,6 +441,7 @@ sync_local_convex_env() {
 start_parser() {
   local OCR="${1:-auto}"           # auto|doctr|paddle|disabled
   local RUNTIME_MODE="${2:-${PARSER_RUNTIME_MODE}}"
+  local RELOAD="${3:-0}"
   local PLATFORM; PLATFORM="$(map_platform)"
   local PARSER_NEEDS_START=1
 
@@ -313,7 +468,11 @@ start_parser() {
     )
     local -a mounts=()
     if [[ "${RUNTIME_MODE}" == "workspace" ]]; then
-      mounts=(-v "${ROOT_DIR}:/app")
+      mounts=(
+        -v "${ROOT_DIR}:/app"
+        -v /app/node_modules
+        -v /app/my-app/node_modules
+      )
     fi
     # Map OCR flag to container env
     case "${OCR}" in
@@ -338,7 +497,8 @@ start_parser() {
         "${envs[@]}" \
         "${IMAGE_NAME}" \
         /opt/venv/bin/python -m uvicorn --app-dir /app cv_parser_service.main:app \
-        --host 0.0.0.0 --port 8001 --workers 1 --http h11 \
+        --host 0.0.0.0 --port 8001 --http h11 \
+        $( [[ "${RELOAD}" == "1" ]] && printf '%s' '--reload' || printf '%s' '--workers 1' ) \
         --timeout-keep-alive 5 --timeout-graceful-shutdown 5 --limit-concurrency 64 >/dev/null
     else
       docker run -d --rm \
@@ -365,6 +525,10 @@ start_parser() {
       exit 1
     fi
   done
+
+  if [[ "${RUNTIME_MODE}" == "workspace" ]]; then
+    ensure_workspace_runtime_surface
+  fi
 
   # Make sure connector net can reach it
   if ! ensure_parsernet; then
@@ -404,12 +568,12 @@ stop_tunnel() {
 
 kill_stale_convex() {
   local pids=""
-  pids="$(pgrep -f 'npx convex dev|convex.*dev --local' 2>/dev/null || true)"
+  pids="$(pgrep -f 'node .*/node_modules/\.bin/convex dev|npm exec convex dev|convex-local-backend .*--instance-name' 2>/dev/null || true)"
   if [[ -n "${pids}" ]]; then
     echo "[run] killing stale Convex process(es): ${pids}"
     kill ${pids} >/dev/null 2>&1 || true
     sleep 1
-    pids="$(pgrep -f 'npx convex dev|convex.*dev --local' 2>/dev/null || true)"
+    pids="$(pgrep -f 'node .*/node_modules/\.bin/convex dev|npm exec convex dev|convex-local-backend .*--instance-name' 2>/dev/null || true)"
     [[ -n "${pids}" ]] && kill -9 ${pids} >/dev/null 2>&1 || true
   fi
 }
@@ -432,6 +596,16 @@ discover_local_convex_url() {
     return 0
   fi
 
+  if [[ -z "${CONVEX_DEPLOYMENT_NAME_RESULT:-}" ]]; then
+    resolve_convex_project_binding >/dev/null 2>&1 || true
+  fi
+  local deployment_name="${CONVEX_DEPLOYMENT_NAME_RESULT:-}"
+  resolve_local_convex_runtime "${deployment_name}"
+  if [[ -n "${LOCAL_CONVEX_URL_RESULT:-}" ]]; then
+    echo "${LOCAL_CONVEX_URL_RESULT}"
+    return 0
+  fi
+
   if [[ -f "${CONVEX_LOG}" ]]; then
     local explicit_url
     explicit_url="$(grep -Eo 'http://127\.0\.0\.1:[0-9]+' "${CONVEX_LOG}" | tail -n1 || true)"
@@ -448,18 +622,8 @@ discover_local_convex_url() {
     fi
   fi
 
-  local state_config=""
-  state_config="$(find "${HOME}/.convex/convex-backend-state" -maxdepth 3 -name config.json 2>/dev/null | sort | tail -n1 || true)"
-  if [[ -n "${state_config}" ]]; then
-    local state_port
-    state_port="$(grep -Eo '"cloud":[0-9]+' "${state_config}" | head -n1 | cut -d: -f2 || true)"
-    if [[ -n "${state_port}" ]]; then
-      echo "http://127.0.0.1:${state_port}"
-      return 0
-    fi
-  fi
-
-  return 1
+  echo "http://127.0.0.1:${LOCAL_CONVEX_CLOUD_PORT}"
+  return 0
 }
 
 start_convex() {
@@ -474,45 +638,32 @@ start_convex() {
   fi
   convex_team="${CONVEX_TEAM_RESULT}"
   convex_project="${CONVEX_PROJECT_RESULT}"
+  local convex_deployment_name="${CONVEX_DEPLOYMENT_NAME_RESULT:-}"
+  resolve_local_convex_runtime "${convex_deployment_name}"
+  local convex_cloud_port="${LOCAL_CONVEX_CLOUD_PORT_RESULT:-${LOCAL_CONVEX_CLOUD_PORT}}"
+  local convex_site_port="${LOCAL_CONVEX_SITE_PORT_RESULT:-${LOCAL_CONVEX_SITE_PORT}}"
+  local actual_url="${LOCAL_CONVEX_URL_RESULT:-http://127.0.0.1:${convex_cloud_port}}"
+
+  if reuse_running_local_convex_from_state "${convex_deployment_name}"; then
+    return 0
+  fi
+  ensure_local_convex_preflight "${convex_deployment_name}" "${actual_url}" "${convex_cloud_port}" "${convex_site_port}"
 
   : > "${CONVEX_LOG}"
-  echo "[run] bootstrapping local Convex deployment (${convex_team}/${convex_project})" >&2
-  (
-    cd "${ROOT_DIR}/my-app"
-    unset CONVEX_DEPLOYMENT
-    unset CONVEX_DEPLOY_KEY
-    unset CONVEX_SELF_HOSTED_URL
-    unset CONVEX_SELF_HOSTED_ADMIN_KEY
-    unset VITE_CONVEX_URL
-    unset NEXT_PUBLIC_CONVEX_URL
-    export CONVEX_PARSER_URL="http://127.0.0.1:8001"
-    export STRUCTURED_UPLOAD_PREFER_LOOPBACK=1
-    export CONVEX_TMPDIR="${CONVEX_TMPDIR}"
-    npx convex dev \
-      --configure existing \
-      --team "${convex_team}" \
-      --project "${convex_project}" \
-      --dev-deployment local \
-      --once \
-      --skip-push \
-      --verbose \
-      --tail-logs disable \
-      --local-cloud-port "${LOCAL_CONVEX_CLOUD_PORT}" \
-      --local-site-port "${LOCAL_CONVEX_SITE_PORT}"
-  ) >> "${CONVEX_LOG}" 2>&1
-
-  local actual_url="${LOCAL_CONVEX_URL:-http://127.0.0.1:${LOCAL_CONVEX_CLOUD_PORT}}"
-  if ! is_convex_ready "${actual_url}"; then
-    echo "[run] ERROR: local Convex bootstrap did not leave a reachable backend at ${actual_url} (see ${CONVEX_LOG})" >&2
-    exit 1
+  if [[ -n "${LOCAL_CONVEX_STATE_CONFIG_RESULT:-}" ]]; then
+    echo "[run] discovered local Convex state ${LOCAL_CONVEX_STATE_CONFIG_RESULT} -> ${actual_url}" >&2
   fi
-
-  sync_local_convex_env
+  echo "[run] starting local Convex deployment (${convex_team}/${convex_project})" >&2
 
   local convex_pid_file="${STATE_DIR}/convex.pid"
   rm -f "${convex_pid_file}"
   (
     cd "${ROOT_DIR}/my-app"
+    local convex_bin="./node_modules/.bin/convex"
+    if [[ ! -x "${convex_bin}" ]]; then
+      echo "[run] ERROR: missing Convex CLI at ${ROOT_DIR}/my-app/${convex_bin}" >&2
+      exit 1
+    fi
     unset CONVEX_DEPLOYMENT
     unset CONVEX_DEPLOY_KEY
     unset CONVEX_SELF_HOSTED_URL
@@ -524,13 +675,26 @@ start_convex() {
     export CONVEX_PARSER_URL="http://127.0.0.1:8001"
     export STRUCTURED_UPLOAD_PREFER_LOOPBACK=1
     export CONVEX_TMPDIR="${CONVEX_TMPDIR}"
-    nohup npx convex dev \
-      --local \
-      --verbose \
-      --tail-logs disable \
-      --local-cloud-port "${LOCAL_CONVEX_CLOUD_PORT}" \
-      --local-site-port "${LOCAL_CONVEX_SITE_PORT}" >> "${CONVEX_LOG}" 2>&1 < /dev/null &
-    echo $! > "${convex_pid_file}"
+    local -a convex_cmd=("${convex_bin}" dev --verbose --tail-logs always --local-cloud-port "${convex_cloud_port}" --local-site-port "${convex_site_port}" --local-force-upgrade)
+    if [[ -n "${convex_deployment_name}" ]]; then
+      convex_cmd+=(--local)
+    else
+      convex_cmd+=(--configure existing --team "${convex_team}" --project "${convex_project}" --dev-deployment local)
+    fi
+    node -e '
+const fs = require("node:fs");
+const { spawn } = require("node:child_process");
+const [pidFile, logFile, cmd, ...args] = process.argv.slice(1);
+const logFd = fs.openSync(logFile, "a");
+const child = spawn(cmd, args, {
+  cwd: process.cwd(),
+  env: process.env,
+  detached: true,
+  stdio: ["ignore", logFd, logFd],
+});
+fs.writeFileSync(pidFile, String(child.pid));
+child.unref();
+' "${convex_pid_file}" "${CONVEX_LOG}" "${convex_cmd[@]}"
   )
   local cpid=""
   cpid="$(cat "${convex_pid_file}" 2>/dev/null || true)"
@@ -543,6 +707,7 @@ start_convex() {
   for i in $(seq 1 60); do
     if [[ -n "${actual_url}" ]] && is_convex_ready "${actual_url}"; then
       echo >&2
+      sync_local_convex_env
       CONVEX_PID_RESULT="${cpid}"
       CONVEX_URL_RESULT="${actual_url}"
       return 0
@@ -556,6 +721,7 @@ start_convex() {
       actual_url="$(grep -Eo 'Started running a deployment locally at http://127\.0\.0\.1:[0-9]+' "${CONVEX_LOG}" | tail -n1 | awk '{print $NF}' || true)"
       if [[ -n "${actual_url}" ]] && is_convex_ready "${actual_url}"; then
         echo >&2
+        sync_local_convex_env
         CONVEX_PID_RESULT="${cpid}"
         CONVEX_URL_RESULT="${actual_url}"
         return 0
@@ -606,19 +772,22 @@ start_vite() {
       vite_cmd+=(--open)
     fi
     if [[ "${OPEN_BROWSER}" == "0" ]]; then
-      if command -v setsid >/dev/null 2>&1; then
-        setsid env BROWSER=none "${vite_cmd[@]}" >> "${VITE_LOG}" 2>&1 < /dev/null &
-      else
-        nohup env BROWSER=none "${vite_cmd[@]}" >> "${VITE_LOG}" 2>&1 < /dev/null &
-      fi
-    else
-      if command -v setsid >/dev/null 2>&1; then
-        setsid "${vite_cmd[@]}" >> "${VITE_LOG}" 2>&1 < /dev/null &
-      else
-        nohup "${vite_cmd[@]}" >> "${VITE_LOG}" 2>&1 < /dev/null &
-      fi
+      export BROWSER=none
     fi
-    echo $! > "${vite_pid_file}"
+    node -e '
+const fs = require("node:fs");
+const { spawn } = require("node:child_process");
+const [pidFile, logFile, cmd, ...args] = process.argv.slice(1);
+const logFd = fs.openSync(logFile, "a");
+const child = spawn(cmd, args, {
+  cwd: process.cwd(),
+  env: process.env,
+  detached: true,
+  stdio: ["ignore", logFd, logFd],
+});
+fs.writeFileSync(pidFile, String(child.pid));
+child.unref();
+' "${vite_pid_file}" "${VITE_LOG}" "${vite_cmd[@]}"
   )
   cat "${vite_pid_file}"
   rm -f "${vite_pid_file}"
@@ -667,11 +836,20 @@ assert_ocr() {
 }
 
 status() {
+  local VITE_PID=""; local PARSER_STARTED="0"; local CONVEX_PID=""; local CONVEX_URL=""; local TUNNEL_STARTED="0"; local STACK_MODE=""
+  read_state
   echo "== status =="
   echo -n "local /ready: "
   curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8001/ready || true
   echo -n "edge  /ready: "
   curl -s -o /dev/null -w '%{http_code}\n' "$(normalize_origin "${PARSER_ORIGIN}")/ready" || true
+  local convex_url=""
+  convex_url="$(discover_local_convex_url)"
+  if [[ -n "${convex_url}" ]] && is_convex_ready "${convex_url}"; then
+    echo "convex local:   ${convex_url}"
+  else
+    echo "convex local:   stopped"
+  fi
   if docker ps --format '{{.Names}}' | grep -qx "${PARSER_NAME}"; then
     echo "parser runtime: $(parser_runtime_mode)"
     echo "parser image:   $(parser_image_id)"
@@ -682,6 +860,9 @@ status() {
     echo "tunnel:         running"
   else
     echo "tunnel:         stopped"
+  fi
+  if [[ -n "${STACK_MODE:-}" ]]; then
+    echo "stack mode:     ${STACK_MODE}"
   fi
   echo "Vite log: ${VITE_LOG}"
   print_command_banner
@@ -695,6 +876,7 @@ up() {
   local USE_EDGE_ORIGIN=0
   local USE_LOCAL_CONVEX=0
   local RUNTIME_MODE="${PARSER_RUNTIME_MODE}"
+  local PARSER_RELOAD="0"
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -705,6 +887,7 @@ up() {
       --cloud-convex) USE_LOCAL_CONVEX=0; shift;;
       --workspace-mount) RUNTIME_MODE="workspace"; shift;;
       --image-runtime) RUNTIME_MODE="image"; shift;;
+      --parser-reload) PARSER_RELOAD="1"; shift;;
       --rebuild|--force-rebuild) FORCE_REBUILD="true"; shift;;
       --ocr)          OCR="${2:-auto}"; shift 2;;
       --doctr)        OCR="doctr"; shift;;
@@ -719,13 +902,21 @@ up() {
     exit 2
   fi
   if [[ "${RUNTIME_MODE}" == "image" ]]; then
-    build_runtime_image
+    if [[ "$(to_bool "${FORCE_REBUILD}")" == "true" ]]; then
+      build_runtime_image
+    else
+      ensure_runtime_image_exists
+    fi
   else
-    echo "[run] WARNING: workspace parser runtime requested explicitly; export runtime parity is not guaranteed"
+    if [[ "${START_UI}" -eq 1 && "${USE_LOCAL_CONVEX}" -eq 1 && "${USE_LOCAL_ORIGIN}" -eq 1 && "${PARSER_RELOAD}" == "1" ]]; then
+      echo "[run] local-fast: workspace parser runtime with autoreload enabled"
+    else
+      echo "[run] WARNING: workspace parser runtime requested explicitly; export runtime parity is not guaranteed"
+    fi
   fi
 
   # Start local parser (even if FE points to edge; useful for local testing)
-  start_parser "${OCR}" "${RUNTIME_MODE}"
+  start_parser "${OCR}" "${RUNTIME_MODE}" "${PARSER_RELOAD}"
 
   # Decide FE origin
   local ACTIVE_ORIGIN
@@ -761,8 +952,24 @@ up() {
     fi
   fi
 
-  write_state "${VPID}" "1" "${CPID}" "${CURL}" "0"
+  local stack_mode="parser-only"
+  if [[ "${START_UI}" -eq 1 ]]; then
+    if [[ "${USE_LOCAL_CONVEX}" -eq 1 && "${USE_LOCAL_ORIGIN}" -eq 1 && "${RUNTIME_MODE}" == "workspace" && "${PARSER_RELOAD}" == "1" ]]; then
+      stack_mode="local-fast"
+    elif [[ "${USE_LOCAL_CONVEX}" -eq 1 ]]; then
+      stack_mode="local-convex"
+    elif [[ "${USE_LOCAL_ORIGIN}" -eq 1 ]]; then
+      stack_mode="local"
+    else
+      stack_mode="up"
+    fi
+  elif [[ "${RUNTIME_MODE}" == "workspace" && "${PARSER_RELOAD}" == "1" ]]; then
+    stack_mode="parser-dev"
+  fi
+
+  write_state "${VPID}" "1" "${CPID}" "${CURL}" "0" "${stack_mode}"
   echo "----------------- Dev Stack -----------------"
+  echo "Mode: ${stack_mode}"
   echo "FE origin: ${ACTIVE_ORIGIN}"
   echo "Parser local: OK (http://127.0.0.1:8001, runtime=${RUNTIME_MODE})"
   if [[ "${USE_LOCAL_CONVEX}" -eq 1 ]]; then
@@ -780,7 +987,7 @@ up() {
 }
 
 down() {
-  local VITE_PID=""; local PARSER_STARTED="0"; local CONVEX_PID=""; local CONVEX_URL=""; local TUNNEL_STARTED="0"
+  local VITE_PID=""; local PARSER_STARTED="0"; local CONVEX_PID=""; local CONVEX_URL=""; local TUNNEL_STARTED="0"; local STACK_MODE=""
   read_state
   stop_vite "${VITE_PID:-}"
   stop_convex "${CONVEX_PID:-}"
@@ -796,7 +1003,7 @@ down() {
 }
 
 reset() {
-  local VITE_PID=""; local PARSER_STARTED="0"; local CONVEX_PID=""; local CONVEX_URL=""; local TUNNEL_STARTED="0"
+  local VITE_PID=""; local PARSER_STARTED="0"; local CONVEX_PID=""; local CONVEX_URL=""; local TUNNEL_STARTED="0"; local STACK_MODE=""
   read_state
   down >/dev/null 2>&1 || true
   stop_tunnel || true
@@ -814,16 +1021,99 @@ local_stack() {
 }
 
 local_convex_stack() {
-  up --ui --local-origin --local-convex "$@"
+  echo "[run] local-convex is a legacy alias; using local-fast"
+  local_fast_stack "$@"
+}
+
+local_fast_stack() {
+  up --ui --local-origin --local-convex --workspace-mount --parser-reload "$@"
 }
 
 tunnel_stack() {
   up --ui --edge-origin --cloud-convex "$@"
-  local VITE_PID=""; local PARSER_STARTED="0"; local CONVEX_PID=""; local CONVEX_URL=""; local TUNNEL_STARTED="0"
+  local VITE_PID=""; local PARSER_STARTED="0"; local CONVEX_PID=""; local CONVEX_URL=""; local TUNNEL_STARTED="0"; local STACK_MODE=""
   read_state
   start_tunnel
-  write_state "${VITE_PID:-}" "${PARSER_STARTED:-1}" "${CONVEX_PID:-}" "${CONVEX_URL:-}" "1"
+  write_state "${VITE_PID:-}" "${PARSER_STARTED:-1}" "${CONVEX_PID:-}" "${CONVEX_URL:-}" "1" "tunnel"
   echo "[run] tunnel: cloudflared active via ${PARSER_ORIGIN}"
+}
+
+parser_dev_stack() {
+  local OCR="auto"
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --ocr) OCR="${2:-auto}"; shift 2 ;;
+      --doctr) OCR="doctr"; shift ;;
+      --paddle) OCR="paddle"; shift ;;
+      --ocr-disabled|--no-ocr) OCR="disabled"; shift ;;
+      *) echo "unknown option: $1" >&2; exit 2 ;;
+    esac
+  done
+
+  ensure_runtime_image_exists
+  start_parser "${OCR}" "workspace" "1"
+  write_state "" "1" "" "" "0" "parser-dev"
+  echo "----------------- Parser Dev ----------------"
+  echo "Parser local: OK (http://127.0.0.1:8001, runtime=workspace)"
+  echo "Mode: dev-only Python parser hacking with workspace mount"
+  echo "Reload: uvicorn --reload is enabled for Python changes"
+  echo "Use this for fast parser iteration, not stable export/runtime validation."
+  echo "---------------------------------------------"
+  print_command_banner
+}
+
+rebuild_docker_stack() {
+  local VITE_PID=""; local PARSER_STARTED="0"; local CONVEX_PID=""; local CONVEX_URL=""; local TUNNEL_STARTED="0"; local STACK_MODE=""
+  local restart_mode="parser-only"
+  read_state
+  if [[ -n "${STACK_MODE:-}" ]]; then
+    restart_mode="${STACK_MODE}"
+  elif [[ "${TUNNEL_STARTED:-0}" == "1" ]]; then
+    restart_mode="tunnel"
+  elif [[ -n "${VITE_PID:-}" && -n "${CONVEX_PID:-}" ]]; then
+    restart_mode="local-convex"
+  elif [[ -n "${VITE_PID:-}" ]]; then
+    restart_mode="local"
+  fi
+
+  echo "[run] rebuild-docker: rebuilding parser/runtime image"
+  down >/dev/null 2>&1 || true
+  FORCE_REBUILD="true"
+  build_runtime_image
+
+  case "${restart_mode}" in
+    tunnel)
+      OPEN_BROWSER="${OPEN_BROWSER}" tunnel_stack
+      ;;
+    local-fast|local-convex)
+      OPEN_BROWSER="${OPEN_BROWSER}" up --ui --local-origin --local-convex --image-runtime
+      ;;
+    local)
+      OPEN_BROWSER="${OPEN_BROWSER}" local_stack
+      ;;
+    *)
+      start_parser "auto" "image"
+      write_state "" "1" "" "" "0" "parser-only"
+      ;;
+  esac
+
+  if curl -fsS http://127.0.0.1:8001/ready >/dev/null 2>&1; then
+    echo "[run] rebuild-docker: local parser ready"
+  else
+    echo "[run] rebuild-docker: local parser failed readiness" >&2
+    exit 1
+  fi
+  if [[ "${restart_mode}" == "tunnel" ]]; then
+    if curl -fsS "$(normalize_origin "${PARSER_ORIGIN}")/ready" >/dev/null 2>&1; then
+      echo "[run] rebuild-docker: edge ready"
+    else
+      echo "[run] rebuild-docker: edge readiness check failed" >&2
+      exit 1
+    fi
+  fi
+
+  echo "[run] rebuild-docker: done (${restart_mode})"
+  print_command_banner
 }
 
 logs() {
@@ -838,9 +1128,12 @@ smoke() {
 help() {
   cat <<'EOF'
 usage:
+  ./run.sh local-fast [--ocr auto|doctr|paddle|disabled]
   ./run.sh local [--ocr auto|doctr|paddle|disabled]
   ./run.sh local-convex [--ocr auto|doctr|paddle|disabled]
   ./run.sh tunnel [--ocr auto|doctr|paddle|disabled]
+  ./run.sh parser-dev [--ocr auto|doctr|paddle|disabled]
+  ./run.sh rebuild-docker
   ./run.sh down
   ./run.sh reset
   ./run.sh up [--ui] [--edge-origin | --local-origin] [--local-convex | --cloud-convex] [--ocr auto|doctr|paddle|disabled]
@@ -852,15 +1145,19 @@ usage:
   ./run.sh kill-vite-ports
 
 notes:
+- local-fast = recommended fast full-app parser workflow: local parser + local Convex + Vite + autoreload, with export/runtime deps preserved inside the container.
+- tunnel = stable validation mode on the validated image runtime.
 - local = local parser + export-capable image runtime + Vite pointed at http://127.0.0.1:8001.
-- local-convex = local parser + local Convex + Vite pointed at http://127.0.0.1:8001.
-- tunnel = local parser + export-capable image runtime + cloudflared + Vite pointed at PARSER_ORIGIN.
+- local-convex = legacy alias for local-fast.
+- parser-dev = parser-only / advanced workspace-mounted parser with autoreload; fast Python iteration, not stable runtime validation.
+- rebuild-docker = explicit rebuild for parser/export Docker runtime, then clean restart + readiness checks.
 - down stops only the processes/containers tracked as started by run.sh and keeps images/caches intact.
 - reset does down plus stale process/container cleanup and clears tmp/dev-stack state and stale temp logs.
 - workspace mount mode is explicit-only via --workspace-mount and is not the default runtime.
 - FE origin defaults to PARSER_ORIGIN (edge). Use --local-origin to point FE to http://127.0.0.1:8001.
-- Use --local-convex when you want the app to talk to a local Convex backend discovered from `npx convex dev --local`.
+- Use --local-convex when you want the app to talk to the local Convex backend managed by run.sh.
 - Without --local-convex, Convex stays on its configured env/default path (typically cloud), which preserves the existing Cloudflare tunnel flow.
+- In local-fast, both Vite and server-side structuredUpload resolve the local parser at http://127.0.0.1:8001, and export worker dependencies come from the container image instead of host node_modules.
 - MISTRAL is auto-enabled if MISTRAL_API_KEY is present (env or ~/.mistral_key).
 - OCR flag controls local parser engine: auto (default), doctr, paddle, disabled.
 EOF
@@ -871,9 +1168,12 @@ EOF
 trap 'echo "[run] interrupt -> down"; down >/dev/null 2>&1 || true; exit 130' INT TERM
 
 case "${CMD}" in
+  local-fast) local_fast_stack "$@";;
   local) local_stack "$@";;
   local-convex) local_convex_stack "$@";;
   tunnel) tunnel_stack "$@";;
+  parser-dev) parser_dev_stack "$@";;
+  rebuild-docker) rebuild_docker_stack;;
   up) up "$@";;
   down) down;;
   reset) reset;;
