@@ -31,6 +31,7 @@ SMOKE="${SMOKE:-0}"                         # optional tiny smoke via convex act
 OPEN_BROWSER="${OPEN_BROWSER:-1}"           # open vite browser tab (1=yes)
 VITE_LOG_FILE="${ROOT_DIR}/tmp/vite-dev.log"
 STRUCTURED_LOG="${ROOT_DIR}/tmp/structured_upload.log"
+FORCE_REBUILD="${FORCE_REBUILD:-false}"
 
 # cloudflare service token (for probe-edge)
 CF_ACCESS_CLIENT_ID="${CF_ACCESS_CLIENT_ID:-}"
@@ -102,8 +103,18 @@ build_deps_if_needed() {
 }
 
 build_runtime_image() {
-  if docker image inspect "${IMAGE_NAME}" >/dev/null 2>&1; then
-    log "runtime image present (${IMAGE_NAME}); skipping rebuild"
+  local runtime_dockerfile root_pkg root_lock app_pkg app_lock self_hash sig last
+  runtime_dockerfile="$(hash_file cv_parser_service/Dockerfile)"
+  root_pkg="$(hash_file package.json)"
+  root_lock="$(hash_file package-lock.json)"
+  app_pkg="$(hash_file my-app/package.json)"
+  app_lock="$(hash_file my-app/package-lock.json)"
+  self_hash="$(hash_file scripts/start-dev.sh)"
+  sig="${runtime_dockerfile}_${root_pkg}_${root_lock}_${app_pkg}_${app_lock}_${self_hash}_${DOCKER_DEFAULT_PLATFORM}"
+  last="$(cat "${DOCKER_STATE_DIR}/last-runtime-hash" 2>/dev/null || true)"
+
+  if [[ "$(to_bool "${FORCE_REBUILD}")" != "true" ]] && docker image inspect "${IMAGE_NAME}" >/dev/null 2>&1 && [[ "${last}" == "${sig}" ]]; then
+    log "runtime image up-to-date (${IMAGE_NAME})"
     return
   fi
   log "building runtime image (${IMAGE_NAME})..."
@@ -116,6 +127,7 @@ build_runtime_image() {
     --cache-to=type=local,dest="${CACHE_DIR}",mode=max \
     -t "${IMAGE_NAME}" \
     --load .
+  printf '%s' "${sig}" > "${DOCKER_STATE_DIR}/last-runtime-hash"
 }
 
 ensure_paddle_volume() {
@@ -289,6 +301,7 @@ while [[ $# -gt 0 ]]; do
     --tail-logs)    TAIL_LOGS="true"; shift;;
     --no-tail-logs) TAIL_LOGS="false"; shift;;
     --smoke)        SMOKE="1"; shift;;
+    --rebuild|--force-rebuild) FORCE_REBUILD="true"; shift;;
     --open)         OPEN_BROWSER="1"; shift;;
     --no-open)      OPEN_BROWSER="0"; shift;;
     *) log "unknown option: $1"; exit 2;;

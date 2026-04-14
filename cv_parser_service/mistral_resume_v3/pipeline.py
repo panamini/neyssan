@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import mimetypes
+import re
 import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -19,6 +20,84 @@ from .post_validation import normalize_extraction
 
 
 INTERNAL_CANONICAL_PAYLOAD_DIAGNOSTIC_KEY = "_mistral_resume_v3_canonical_payload"
+MARKDOWN_HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s+(.+?)\s*$")
+
+
+def _coerce_annotation_for_repair(raw: Any) -> Optional[Dict[str, Any]]:
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str):
+        candidate = raw.strip()
+        if not candidate:
+            return None
+        try:
+            parsed = json.loads(candidate)
+        except json.JSONDecodeError:
+            return None
+        if isinstance(parsed, dict):
+            return parsed
+    return None
+
+
+def _extract_explicit_achievements_from_pages(pages: list[dict[str, Any]]) -> list[str]:
+    items: list[str] = []
+    current_item: Optional[str] = None
+    inside_achievements = False
+
+    def flush_item() -> None:
+        nonlocal current_item
+        if current_item:
+            normalized = " ".join(current_item.split()).strip()
+            if normalized:
+                items.append(normalized)
+        current_item = None
+
+    for page in pages:
+        markdown = str(page.get("markdown") or "")
+        for raw_line in markdown.replace("\r", "").split("\n"):
+            stripped = raw_line.strip()
+            heading_match = MARKDOWN_HEADING_RE.match(raw_line)
+            if heading_match:
+                heading = heading_match.group(1).strip().strip(" -:").upper()
+                if heading == "ACHIEVEMENTS":
+                    flush_item()
+                    inside_achievements = True
+                    continue
+                if inside_achievements:
+                    flush_item()
+                    return items
+                continue
+            if not inside_achievements:
+                continue
+            if not stripped:
+                flush_item()
+                continue
+            bullet_text = stripped.lstrip("-*•").strip() if stripped[:1] in {"-", "*", "•"} else None
+            if bullet_text is not None:
+                flush_item()
+                current_item = bullet_text
+                continue
+            if current_item:
+                current_item = f"{current_item} {stripped}"
+            else:
+                current_item = stripped
+
+    flush_item()
+    return items
+
+
+def _repair_annotation_from_ocr_pages(annotation_raw: Any, pages: list[dict[str, Any]]) -> Any:
+    annotation_payload = _coerce_annotation_for_repair(annotation_raw)
+    if annotation_payload is None:
+        return annotation_raw
+    if annotation_payload.get("achievements"):
+        return annotation_payload
+    achievements = _extract_explicit_achievements_from_pages(pages)
+    if not achievements:
+        return annotation_payload
+    repaired = dict(annotation_payload)
+    repaired["achievements"] = achievements
+    return repaired
 
 
 def _join_markdown_pages(pages: list[dict[str, Any]], delimiter: str = "\n\n---\n\n") -> str:
@@ -57,8 +136,9 @@ def _build_failure_payload(
 
 def _run_resume_pipeline_from_ocr_result(ocr_result: OCRAnnotationResult) -> Dict[str, Any]:
     raw_text = _join_markdown_pages(ocr_result.pages)
+    annotation_raw = _repair_annotation_from_ocr_pages(ocr_result.annotation_raw, ocr_result.pages)
     try:
-        extraction = parse_document_annotation(ocr_result.annotation_raw)
+        extraction = parse_document_annotation(annotation_raw)
     except AnnotationParserError as exc:
         return _build_failure_payload(
             status="failed",

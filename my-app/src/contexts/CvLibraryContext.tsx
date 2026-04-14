@@ -18,8 +18,9 @@ import {
   normalizeAndValidateCvDocument,
   ensureRepresentativeBlocks,
 } from "../lib/normalize-cv";
+import { buildAuthoritativeResumeDebugSnapshot } from "../lib/authoritative-resume";
 // Toggle verbose debug logging for editor flows. Enable by setting window.__CV_EDITOR_DEBUG__ = true in the dev console.
-import { isV1SectionsEnabled } from "../lib/flags";
+import { isCvEditorDebugUiEnabled, isV1SectionsEnabled } from "../lib/flags";
 import dbg from "../lib/cv-debug";
 import DebugPanel from "../components/dev/debug-panel";
 import { api } from "../../convex/_generated/api";
@@ -43,6 +44,22 @@ import {
 function deepEqual(a: unknown, b: unknown): boolean {
   try {
     return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
+}
+
+function readCvEditorDebugEnabled(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  try {
+    if ((window as any).__CV_EDITOR_DEBUG__ === true) {
+      return true;
+    }
+
+    return window.localStorage?.getItem("cv_editor_debug") === "true";
   } catch {
     return false;
   }
@@ -617,6 +634,9 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({ children 
   });
 
   const [currentCv, setCurrentCv] = useState<CvDocument | null>(null);
+  const [isDebugPanelVisible, setIsDebugPanelVisible] = useState<boolean>(() =>
+    readCvEditorDebugEnabled(),
+  );
   const hasHydratedActiveCvRef = useRef(false);
   const hasHydratedRemoteLibraryRef = useRef(false);
   const pendingActiveRestoreIdRef = useRef<string | null>(null);
@@ -647,6 +667,25 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({ children 
   useEffect(() => {
     cvsRef.current = cvs;
   }, [cvs]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+
+    const syncDebugVisibility = () => {
+      setIsDebugPanelVisible(readCvEditorDebugEnabled());
+    };
+
+    syncDebugVisibility();
+    window.addEventListener("cv-debug-toggle", syncDebugVisibility as EventListener);
+    window.addEventListener("storage", syncDebugVisibility);
+
+    return () => {
+      window.removeEventListener("cv-debug-toggle", syncDebugVisibility as EventListener);
+      window.removeEventListener("storage", syncDebugVisibility);
+    };
+  }, []);
 
   useEffect(() => {
     if (!isSignedIn) {
@@ -1501,6 +1540,15 @@ const flushPendingEdits = useCallback((): void => {
           version: (normalizedCore.metadata?.version ?? 0) + 1,
         },
       };
+      dbg(
+        "[CvLibraryContext] performSave authoritative snapshot",
+        buildAuthoritativeResumeDebugSnapshot({
+          authoritativeResume: docCopy.metadata?.authoritativeResume,
+          metadataAuthoritativeResumePresent: Boolean(
+            docCopy.metadata?.authoritativeResume,
+          ),
+        }),
+      );
 
       try {
         const stack = (new Error("save-call-stack")).stack?.split("\n").slice(0, 4).map((s) => s.trim());
@@ -1776,6 +1824,15 @@ const flushPendingEdits = useCallback((): void => {
 
         const docV1 = normalizeToV1Document(doc as CvDocument);
         const docNorm = ensureRepresentativeBlocks(docV1 as CvDocument);
+        dbg(
+          "[CvLibraryContext] loadCv in-memory authoritative snapshot",
+          buildAuthoritativeResumeDebugSnapshot({
+            authoritativeResume: docNorm.metadata?.authoritativeResume,
+            metadataAuthoritativeResumePresent: Boolean(
+              docNorm.metadata?.authoritativeResume,
+            ),
+          }),
+        );
 
         safeSetCurrentCv(docNorm);
         setCvs((prev) => {
@@ -1829,6 +1886,15 @@ const flushPendingEdits = useCallback((): void => {
 
         const docV1 = normalizeToV1Document(doc as CvDocument);
         const docNorm = ensureRepresentativeBlocks(docV1 as CvDocument);
+        dbg(
+          "[CvLibraryContext] loadCv cached authoritative snapshot",
+          buildAuthoritativeResumeDebugSnapshot({
+            authoritativeResume: docNorm.metadata?.authoritativeResume,
+            metadataAuthoritativeResumePresent: Boolean(
+              docNorm.metadata?.authoritativeResume,
+            ),
+          }),
+        );
 
         safeSetCurrentCv(docNorm);
         setCvs((prev) => {
@@ -1852,6 +1918,15 @@ const flushPendingEdits = useCallback((): void => {
             }
             const remoteV1 = normalizeToV1Document(migratedRemote as CvDocument);
             const remoteNorm = ensureRepresentativeBlocks(remoteV1 as CvDocument);
+            dbg(
+              "[CvLibraryContext] loadCv remote authoritative snapshot",
+              buildAuthoritativeResumeDebugSnapshot({
+                authoritativeResume: remoteNorm.metadata?.authoritativeResume,
+                metadataAuthoritativeResumePresent: Boolean(
+                  remoteNorm.metadata?.authoritativeResume,
+                ),
+              }),
+            );
             if (!shouldApplyBackgroundRefresh(targetId, docNorm, remoteNorm)) {
               return;
             }
@@ -1930,6 +2005,15 @@ const flushPendingEdits = useCallback((): void => {
           if (remoteDoc) {
             const docV1 = normalizeToV1Document(remoteDoc as CvDocument);
             const docNorm = ensureRepresentativeBlocks(docV1 as CvDocument);
+            dbg(
+              "[CvLibraryContext] loadCv async authoritative snapshot",
+              buildAuthoritativeResumeDebugSnapshot({
+                authoritativeResume: docNorm.metadata?.authoritativeResume,
+                metadataAuthoritativeResumePresent: Boolean(
+                  docNorm.metadata?.authoritativeResume,
+                ),
+              }),
+            );
             safeSetCurrentCv(docNorm);
             setCvs((prev) => {
               const exists = prev.some((c) => c.id === docNorm.id);
@@ -2264,6 +2348,15 @@ const flushPendingEdits = useCallback((): void => {
       const validatedReordered = { ...validated, sections: reorderedSections } as CvDocument;
 
       const validatedWithReps = applyAutoTitleIfPlaceholder(ensureRepresentativeBlocks(validatedReordered));
+      dbg(
+        "[CvLibraryContext] importCv authoritative snapshot",
+        buildAuthoritativeResumeDebugSnapshot({
+          authoritativeResume: validatedWithReps.metadata?.authoritativeResume,
+          metadataAuthoritativeResumePresent: Boolean(
+            validatedWithReps.metadata?.authoritativeResume,
+          ),
+        }),
+      );
 
       // Replace current CV atomically with validated document
       safeSetCurrentCv(validatedWithReps);
@@ -3059,10 +3152,8 @@ function redoCtx(): void {
     <CvLibraryContext.Provider value={value}>
       <>
         {children}
-        {/* Development-only debug toggle — only shown in dev mode with ?debug=1 in URL */}
-        {import.meta.env.DEV && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("debug") === "1" && <DebugToggle />}
-        {/* Development-only live debug panel for CV editor logs */}
-        {typeof window !== "undefined" && (window as any).__CV_EDITOR_DEBUG__ ? <DebugPanel /> : null}
+        {isCvEditorDebugUiEnabled() ? <DebugToggle /> : null}
+        {isDebugPanelVisible ? <DebugPanel /> : null}
       </>
     </CvLibraryContext.Provider>
   );

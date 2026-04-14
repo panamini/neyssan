@@ -104,7 +104,8 @@ ENV PYTHONUNBUFFERED=1 \
     OPENBLAS_NUM_THREADS=1 \
     MKL_NUM_THREADS=1 \
     NUMEXPR_NUM_THREADS=1 \
-    CUDA_VISIBLE_DEVICES=""
+    CUDA_VISIBLE_DEVICES="" \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 # OS libs only
 RUN if [ -f /etc/apt/sources.list ]; then sed -i 's|http://deb.debian.org/debian|http://cdn-aws.deb.debian.org/debian|g' /etc/apt/sources.list; fi && \
@@ -116,7 +117,9 @@ RUN if [ -f /etc/apt/sources.list ]; then sed -i 's|http://deb.debian.org/debian
       libgfortran5 \
       libopenblas0-openmp \
       liblapack3 \
-      curl && \
+      curl \
+      nodejs \
+      npm && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -127,9 +130,14 @@ COPY --from=deps /opt/venv /opt/venv
 # App code last for faster rebuilds
 COPY . /app
 
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci && \
+    npm ci --prefix /app/my-app && \
+    PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH}" npx playwright install --with-deps chromium
+
 # Non-root user & writable caches
 RUN useradd -m -u 10001 -s /usr/sbin/nologin app && \
-    chown -R app:app /app /opt/venv
+    chown -R app:app /app /opt/venv "${PLAYWRIGHT_BROWSERS_PATH}"
 USER app
 
 RUN mkdir -p "${PADDLEOCR_HOME}" "${HF_HOME}"

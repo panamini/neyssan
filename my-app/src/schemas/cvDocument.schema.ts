@@ -305,6 +305,14 @@ const _CvMetadataBase = z.object({
   locale: z.string().optional(),
   authorId: z.string().optional(),
   lastEditedBy: z.string().optional(),
+  authoritativeResume: z
+    .object({
+      source: z.literal("mistral_v3"),
+      trusted: z.boolean(),
+      fallbackToLegacy: z.boolean(),
+      normalized: z.record(z.unknown()).nullable(),
+    })
+    .optional(),
   importRecoverySession: z
     .object({
       status: z.enum(["pending", "completed"]),

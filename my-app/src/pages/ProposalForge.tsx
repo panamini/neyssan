@@ -6,11 +6,11 @@ import {
   Check,
   ChevronDown,
   ClipboardText,
-  FilePdf,
   FloppyDisk,
   Trash,
   X,
 } from "@/lib/icons";
+import ProposalExportActions from "../components/ProposalExportActions";
 import ProposalInputForm, {
   type ProposalGenerateControl,
 } from "../components/ProposalInputForm";
@@ -52,7 +52,6 @@ import {
   type StoredProposalComposeDraft,
 } from "../lib/proposal-workspace-state";
 import { readStoredSavedProposalFixtures } from "../lib/proposal-saved-fixtures";
-import { downloadFirstMatchingNodeAsPdf } from "../lib/document-export";
 import type { ProposalTemplateId } from "../../convex/lib/proposals/renderTemplates";
 import {
   getProposalTwinTemplateId,
@@ -104,6 +103,8 @@ import {
   resolveProposalHeaderVisibility,
   type ProposalHeaderVisibility,
 } from "../lib/proposal-header";
+import { buildProposalExportSource } from "../lib/document-export-models";
+import { exportDocumentFile } from "../lib/exportDocumentFile";
 
 type ProposalForgePrefill = {
   handoffId: string;
@@ -746,9 +747,6 @@ export function ProposalForge(): JSX.Element {
   const [copyFeedback, setCopyFeedback] = React.useState<"idle" | "copied">(
     "idle",
   );
-  const [pendingExportTarget, setPendingExportTarget] = React.useState<
-    { target: "compose" | "saved" } | null
-  >(null);
   const [composeFormInstanceKey, setComposeFormInstanceKey] = React.useState(0);
   const [isCvPickerOpen, setIsCvPickerOpen] = React.useState(false);
   const [isComposePanelVisible, setIsComposePanelVisible] = React.useState(true);
@@ -769,8 +767,6 @@ export function ProposalForge(): JSX.Element {
     });
   const [cvPickerRequestKey, setCvPickerRequestKey] = React.useState(0);
   const composeGenerateTriggerRef = React.useRef<(() => void) | null>(null);
-  const composeProposalExportRef = React.useRef<HTMLDivElement | null>(null);
-  const savedProposalExportRef = React.useRef<HTMLElement | null>(null);
   const [composeGenerateControl, setComposeGenerateControl] = React.useState<
     Omit<ProposalGenerateControl, "trigger">
   >({
@@ -2634,128 +2630,6 @@ export function ProposalForge(): JSX.Element {
     showToast,
   ]);
 
-  const downloadProposalFromMountedPreview = React.useCallback(
-    async (target: "compose" | "saved") => {
-      const container =
-        target === "saved"
-          ? savedProposalExportRef.current
-          : composeProposalExportRef.current;
-
-      return downloadFirstMatchingNodeAsPdf({
-        container,
-        selectors: [
-          ".dasti-proposal-document",
-          ".dasti-proposal-sheet__preview-stage[data-document-stage='true']",
-          ".dasti-proposal-sheet__preview-page[data-document-page='true']",
-          ".dasti-document-stage__canvas[data-document-page='true']",
-        ],
-        title:
-          (target === "saved"
-            ? savedProposalDocumentTitle
-            : proposalDocumentTitle
-          ).trim() || "Proposal",
-      });
-    },
-    [proposalDocumentTitle, savedProposalDocumentTitle],
-  );
-
-  React.useEffect(() => {
-    if (!pendingExportTarget) {
-      return undefined;
-    }
-
-    const previewReady =
-      pendingExportTarget.target === "saved"
-        ? savedProposalOutputMode === "preview"
-        : proposalOutputMode === "preview";
-    if (!previewReady) {
-      return undefined;
-    }
-
-    let settleFrameId = 0;
-    let initialFrameId = 0;
-    let cancelled = false;
-    let attemptCount = 0;
-    const maxExportSettleAttempts = 8;
-
-    const tryExport = async () => {
-      if (cancelled) {
-        return;
-      }
-
-      const exported = await downloadProposalFromMountedPreview(
-        pendingExportTarget.target,
-      );
-      if (cancelled) {
-        return;
-      }
-      if (exported) {
-        setPendingExportTarget(null);
-        return;
-      }
-
-      attemptCount += 1;
-      if (attemptCount < maxExportSettleAttempts) {
-        settleFrameId = window.requestAnimationFrame(() => {
-          void tryExport();
-        });
-        return;
-      }
-
-      showToast("PDF export unavailable", {
-        variant: "error",
-        description: "Open a generated proposal preview before exporting.",
-      });
-      setPendingExportTarget(null);
-    };
-
-    initialFrameId = window.requestAnimationFrame(() => {
-      settleFrameId = window.requestAnimationFrame(() => {
-        void tryExport();
-      });
-    });
-
-    return () => {
-      cancelled = true;
-      window.cancelAnimationFrame(initialFrameId);
-      window.cancelAnimationFrame(settleFrameId);
-    };
-  }, [
-    downloadProposalFromMountedPreview,
-    pendingExportTarget,
-    proposalOutputMode,
-    savedProposalOutputMode,
-    showToast,
-  ]);
-
-  const handleExportProposal = React.useCallback(async () => {
-    const exportTarget = openedSavedProposal ? "saved" : "compose";
-    const currentMode =
-      exportTarget === "saved" ? savedProposalOutputMode : proposalOutputMode;
-
-    if (currentMode !== "preview") {
-      if (exportTarget === "saved") {
-        setSavedProposalOutputMode("preview");
-      } else {
-        setProposalOutputMode("preview");
-      }
-      setPendingExportTarget({ target: exportTarget });
-      return;
-    }
-
-    const exported = await downloadProposalFromMountedPreview(exportTarget);
-    if (exported) {
-      return;
-    }
-
-    setPendingExportTarget({ target: exportTarget });
-  }, [
-    downloadProposalFromMountedPreview,
-    openedSavedProposal,
-    proposalOutputMode,
-    savedProposalOutputMode,
-  ]);
-
   const handleCopySavedProposalToDraft = React.useCallback(() => {
     if (!openedSavedProposal || !savedProposalContent) {
       return;
@@ -3130,6 +3004,152 @@ export function ProposalForge(): JSX.Element {
   const proposalSalutationPlaceholder = React.useMemo(
     () => buildProposalSalutation(proposalRecipientDetails || autoProposalRecipientDetails),
     [autoProposalRecipientDetails, proposalRecipientDetails],
+  );
+  const exportComposeProposalSource = React.useCallback(
+    () =>
+      buildProposalExportSource({
+        content: proposalContent,
+        proposalType,
+        documentTitle:
+          proposalDocumentTitle ||
+          buildProfessionalApplicationSubject({
+            jobTitle: composePreviewValues?.jobTitle ?? "",
+            jobDescription: composePreviewValues?.jobDescription ?? "",
+            proposalType,
+          }),
+        documentMeta:
+          proposalDocumentMeta || proposalDisplayApplicantHeader.email || "",
+        contactLine: proposalContactLine,
+        letterDate: proposalLetterDate,
+        recipientDetails: proposalRecipientDetails,
+        applicantHeader: proposalDisplayApplicantHeader,
+        headerVisibility: proposalHeaderVisibility,
+        templateId:
+          proposalRenderMetadata?.templateId ??
+          effectiveProposalTemplateId ??
+          fallbackProposalTemplateId,
+      }),
+    [
+      composePreviewValues?.jobDescription,
+      composePreviewValues?.jobTitle,
+      effectiveProposalTemplateId,
+      fallbackProposalTemplateId,
+      proposalContactLine,
+      proposalDisplayApplicantHeader,
+      proposalDocumentMeta,
+      proposalDocumentTitle,
+      proposalHeaderVisibility,
+      proposalLetterDate,
+      proposalRecipientDetails,
+      proposalRenderMetadata?.templateId,
+      proposalType,
+      proposalContent,
+    ],
+  );
+  const exportSavedProposalSource = React.useCallback(() => {
+    if (!openedSavedProposal || !savedProposalContent) {
+      return null;
+    }
+
+    const savedMetadata = openedSavedProposal.metadata;
+    const savedApplicantHeader = {
+      ...defaultPreviewApplicantHeader,
+      name:
+        savedMetadata?.applicantName?.trim() ||
+        defaultPreviewApplicantHeader.name ||
+        "",
+      role:
+        savedMetadata?.applicantRole?.trim() ||
+        defaultPreviewApplicantHeader.role ||
+        "",
+    };
+
+    return buildProposalExportSource({
+      content: savedProposalContent,
+      proposalType: savedProposalType,
+      documentTitle:
+        savedProposalDocumentTitle.trim() ||
+        openedSavedProposal.title ||
+        "Proposal",
+      documentMeta: savedProposalDocumentMeta,
+      contactLine:
+        savedMetadata?.contactLine ??
+        buildProposalApplicantContactLine(savedApplicantHeader),
+      letterDate:
+        savedMetadata?.letterDate ??
+        getDefaultProposalLetterDate(savedApplicantHeader.location),
+      recipientDetails: savedMetadata?.recipientDetails ?? "",
+      applicantHeader: savedApplicantHeader,
+      headerVisibility: resolveProposalHeaderVisibility({
+        showSender: savedMetadata?.headerShowSender,
+        showDate: savedMetadata?.headerShowDate,
+        showSubject: savedMetadata?.headerShowSubject,
+        showRecipient: savedMetadata?.headerShowRecipient,
+        showRecipientDetails: savedMetadata?.headerShowRecipientDetails,
+      }),
+      templateId: savedProposalTemplateId,
+    });
+  }, [
+    defaultPreviewApplicantHeader,
+    openedSavedProposal,
+    savedProposalContent,
+    savedProposalDocumentMeta,
+    savedProposalDocumentTitle,
+    savedProposalTemplateId,
+    savedProposalType,
+  ]);
+  const handleExportProposalFile = React.useCallback(
+    async (args: {
+      target: "compose" | "saved";
+      format: "pdf" | "docx";
+      mode?: "ats" | "styled";
+    }) => {
+      const source =
+        args.target === "saved"
+          ? exportSavedProposalSource()
+          : exportComposeProposalSource();
+
+      if (!source || source.body.length === 0) {
+        showToast("Proposal export unavailable", {
+          variant: "warning",
+          description: "Generate or open a proposal before exporting.",
+        });
+        return;
+      }
+
+      try {
+        const exported = await exportDocumentFile({
+          kind: "proposal",
+          format: args.format,
+          mode: args.format === "pdf" ? args.mode : undefined,
+          data: source,
+          stylePreset:
+            args.format === "pdf" && args.mode === "styled"
+              ? args.target === "saved"
+                ? savedProposalStylePreset
+                : effectiveProposalStylePresetWithPalette
+              : undefined,
+          fileNameBase:
+            args.format === "docx"
+              ? "Proposal - Editable"
+              : args.mode === "ats"
+                ? "Proposal - ATS"
+                : "Proposal - Styled",
+        });
+
+        showToast(`Exported ${exported.filename}`, { variant: "success" });
+      } catch (error) {
+        console.error("[ProposalForge] export failed", error);
+        showToast("Proposal export failed", { variant: "error" });
+      }
+    },
+    [
+      effectiveProposalStylePresetWithPalette,
+      exportComposeProposalSource,
+      exportSavedProposalSource,
+      savedProposalStylePreset,
+      showToast,
+    ],
   );
   const briefJobTitle =
     composePreviewValues?.jobTitle?.trim() ||
@@ -3561,7 +3581,7 @@ export function ProposalForge(): JSX.Element {
         }
       >
         {isSavedView ? (
-          <section aria-hidden={false} ref={savedProposalExportRef}>
+          <section aria-hidden={false}>
             <ProposalsList
               selectedProposalId={selectedProposalId}
               onSelectedProposalIdChange={(id) =>
@@ -3592,16 +3612,22 @@ export function ProposalForge(): JSX.Element {
                   >
                     <ClipboardText size={16} strokeWidth={1.6} />
                   </button>
-                  <button
-                    type="button"
-                    className="dasti-icon-button"
-                    data-toolbar-tooltip="Export PDF"
-                    onClick={handleExportProposal}
+                  <ProposalExportActions
                     disabled={!openedSavedProposal || !savedProposalContent}
-                    aria-label="Export proposal as PDF"
-                  >
-                    <FilePdf size={16} strokeWidth={1.7} />
-                  </button>
+                    onExportPdf={(mode) => {
+                      void handleExportProposalFile({
+                        target: "saved",
+                        format: "pdf",
+                        mode,
+                      });
+                    }}
+                    onExportDocx={() => {
+                      void handleExportProposalFile({
+                        target: "saved",
+                        format: "docx",
+                      });
+                    }}
+                  />
                 </div>
               }
             />
@@ -3758,7 +3784,6 @@ export function ProposalForge(): JSX.Element {
                     } as React.CSSProperties
                   }
                   className="dasti-proposal-output-shell dasti-proposal-output-shell--workspace"
-                  ref={composeProposalExportRef}
                 >
                   <ProposalDisplay
                     proposalContent={proposalContent}
@@ -3891,15 +3916,21 @@ export function ProposalForge(): JSX.Element {
                     actions={
                       proposalContent && !loading && !error ? (
                         <span className="dasti-icon-cluster dasti-icon-cluster--tight">
-                          <button
-                            type="button"
-                            className="dasti-icon-button"
-                            aria-label="Export proposal as PDF"
-                            data-toolbar-tooltip="Export PDF"
-                            onClick={handleExportProposal}
-                          >
-                            <FilePdf size={16} strokeWidth={1.7} />
-                          </button>
+                          <ProposalExportActions
+                            onExportPdf={(mode) => {
+                              void handleExportProposalFile({
+                                target: "compose",
+                                format: "pdf",
+                                mode,
+                              });
+                            }}
+                            onExportDocx={() => {
+                              void handleExportProposalFile({
+                                target: "compose",
+                                format: "docx",
+                              });
+                            }}
+                          />
                           <button
                             type="button"
                             className="dasti-icon-button"

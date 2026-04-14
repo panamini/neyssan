@@ -63,50 +63,7 @@ describe("StructuredUploadButton", () => {
     });
   });
 
-  it("calls structured upload action and surfaces sections", async () => {
-    const user = userEvent.setup();
-    structuredActionMock.mockResolvedValue({
-      normalized: {
-        summary: "Summary text",
-        experience: [],
-        education: [],
-        skillsText: "",
-        languagesText: "",
-        achievements: [],
-      },
-      strict: {
-        email: "john@example.com",
-      },
-    });
-
-    const onApply = vi.fn();
-
-    const { container } = render(
-      <StructuredUploadButton
-        onApplyToSections={onApply}
-        onResult={() => {}}
-      />
-    );
-
-    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
-    const file = new File(["John Doe"], "resume.txt", { type: "text/plain" });
-
-    await user.click(screen.getByRole("button", { name: "Upload CV" }));
-    fireEvent.change(fileInput, { target: { files: [file] } });
-
-    await waitFor(() => expect(structuredActionMock).toHaveBeenCalledTimes(1));
-    expect(structuredActionMock.mock.calls[0][0]).toEqual({
-      rawText: "John Doe",
-      mode: "text",
-      useMistral: false,
-    });
-
-    await waitFor(() => expect(onApply).toHaveBeenCalled());
-    expect(toastMock).toHaveBeenCalled();
-  });
-
   it("calls OCR import when the scanned route is selected", async () => {
-    const user = userEvent.setup();
     structuredActionMock.mockResolvedValue({
       normalized: {
         summary: "Scanned import",
@@ -124,18 +81,28 @@ describe("StructuredUploadButton", () => {
         mistral_fallback: false,
         mistral_runtime: "mistral",
       },
+      authoritativeResume: {
+        source: "mistral_v3",
+        trusted: true,
+        fallbackToLegacy: false,
+        normalized: {
+          profile: {
+            name: "Scan Candidate",
+          },
+          summary: {
+            text: "Scanned import",
+          },
+        },
+      },
     });
 
-    const { container } = render(<StructuredUploadButton />);
-
-    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    render(<StructuredUploadButton />);
     const file = new File(["scan"], "scan.png", { type: "image/png" });
+    const importButton = await screen.findByRole("button", {
+      name: "Scanned PDF / Image",
+    });
 
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Scanned PDF / Image" })).toBeEnabled(),
-    );
-    await user.click(screen.getByRole("button", { name: "Scanned PDF / Image" }));
-    fireEvent.change(fileInput, { target: { files: [file] } });
+    fireEvent.drop(importButton, { dataTransfer: { files: [file] } });
 
     await waitFor(() => expect(structuredActionMock).toHaveBeenCalledTimes(1));
     expect(structuredActionMock.mock.calls[0][0]).toMatchObject({
@@ -157,7 +124,6 @@ describe("StructuredUploadButton", () => {
   });
 
   it("surfaces top-level Mistral diagnostics to onResult", async () => {
-    const user = userEvent.setup();
     const onResult = vi.fn();
     structuredActionMock.mockResolvedValue({
       normalized: {
@@ -176,17 +142,25 @@ describe("StructuredUploadButton", () => {
         mistral_fallback: false,
         mistral_runtime: "mistral",
       },
+      authoritativeResume: {
+        source: "mistral_v3",
+        trusted: true,
+        fallbackToLegacy: false,
+        normalized: {
+          profile: {
+            name: "Scan Candidate",
+          },
+        },
+      },
     });
 
-    const { container } = render(<StructuredUploadButton onResult={onResult} />);
-    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    render(<StructuredUploadButton onResult={onResult} />);
     const file = new File(["scan"], "scan.png", { type: "image/png" });
+    const importButton = await screen.findByRole("button", {
+      name: "Scanned PDF / Image",
+    });
 
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Scanned PDF / Image" })).toBeEnabled(),
-    );
-    await user.click(screen.getByRole("button", { name: "Scanned PDF / Image" }));
-    fireEvent.change(fileInput, { target: { files: [file] } });
+    fireEvent.drop(importButton, { dataTransfer: { files: [file] } });
 
     await waitFor(() => expect(onResult).toHaveBeenCalledTimes(1));
     expect(onResult.mock.calls[0][0]).toEqual(
@@ -202,25 +176,83 @@ describe("StructuredUploadButton", () => {
     );
   });
 
-  it("holds low-confidence imports for recovery review instead of auto-applying", async () => {
-    const user = userEvent.setup();
+  it("imports scanned OCR only from trusted authoritative Mistral output", async () => {
+    const onApply = vi.fn();
     structuredActionMock.mockResolvedValue({
       normalized: {
-        summary: "Full summary",
-        experience: [],
-        education: [],
-        skillsText: "",
-        languagesText: "",
-        achievements: [{ text: "Recovered achievement" }],
+        summary: "Fallback normalized should stay debug-only",
+      },
+      strict: {
+        email: "scan@example.com",
+      },
+      diagnostics: {
+        ocr_request_path: "/mistral-ocr/parse",
+        ocr_engine: "mistral",
+        mistral_model: "mistral-ocr-latest",
+        mistral_fallback: false,
+        mistral_runtime: "mistral",
+      },
+      authoritativeResume: {
+        source: "mistral_v3",
+        trusted: true,
+        fallbackToLegacy: false,
+        normalized: {
+          profile: {
+            name: "Trusted Scan",
+            email: "scan@example.com",
+          },
+          summary: {
+            text: "Trusted OCR summary",
+          },
+        },
+      },
+    });
+
+    render(<StructuredUploadButton onApplyToSections={onApply} />);
+    const file = new File(["scan"], "scan.png", { type: "image/png" });
+    const importButton = await screen.findByRole("button", {
+      name: "Scanned PDF / Image",
+    });
+
+    fireEvent.drop(importButton, { dataTransfer: { files: [file] } });
+
+    await waitFor(() => expect(onApply).toHaveBeenCalledTimes(1));
+    expect(onApply.mock.calls[0][0]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "profile" }),
+        expect.objectContaining({ type: "summary" }),
+      ]),
+    );
+    expect(
+      screen.queryByText(/OCR import rejected \(fallback\/untrusted\)/i),
+    ).toBeNull();
+  });
+
+  it("rejects fallback OCR payloads instead of importing normalized sections or opening recovery", async () => {
+    const onApply = vi.fn();
+    structuredActionMock.mockResolvedValue({
+      normalized: {
+        profile: {
+          name: "Fallback Candidate",
+        },
+        summary: "Broken fallback normalized payload",
+        achievements: [{ text: "Fragmented item" }],
       },
       strict: null,
+      diagnostics: {
+        ocr_request_path: "/mistral-ocr/parse",
+        ocr_engine: "mistral",
+        mistral_model: "mistral-ocr-latest",
+        mistral_fallback: true,
+        mistral_runtime: "local_fallback",
+      },
       recovery: {
         reviewRequired: true,
         items: [
           {
-            blockId: "recovery-1",
-            rawText: "Recovered achievement",
-            cleanedText: "Recovered achievement",
+            blockId: "ocr-recovery-1",
+            rawText: "Fragmented item",
+            cleanedText: "Fragmented item",
             displayTextSource: "cleaned",
             predictedSection: "achievements",
             selectedSection: "achievements",
@@ -237,40 +269,31 @@ describe("StructuredUploadButton", () => {
         overflowCount: 0,
         reviewLimit: 12,
         reviewNormalized: {
-          summary: "Base summary",
-          experience: [],
-          education: [],
-          skillsText: "",
-          languagesText: "",
-          achievements: [],
+          summary: "Fallback base summary",
         },
+      },
+      authoritativeResume: {
+        source: "mistral_v3",
+        trusted: false,
+        fallbackToLegacy: true,
+        normalized: null,
       },
     });
 
-    const onApply = vi.fn();
-    const onRecoveryRequired = vi.fn();
+    render(<StructuredUploadButton onApplyToSections={onApply} />);
+    const file = new File(["scan"], "scan.png", { type: "image/png" });
+    const importButton = await screen.findByRole("button", {
+      name: "Scanned PDF / Image",
+    });
 
-    const { container } = render(
-      <StructuredUploadButton
-        onApplyToSections={onApply}
-        onRecoveryRequired={onRecoveryRequired}
-      />,
+    fireEvent.drop(importButton, { dataTransfer: { files: [file] } });
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(/OCR import rejected \(fallback\/untrusted\)/i),
+      ).toBeInTheDocument(),
     );
-
-    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
-    const file = new File(["John Doe"], "resume.txt", { type: "text/plain" });
-
-    await user.click(screen.getByRole("button", { name: "Upload CV" }));
-    fireEvent.change(fileInput, { target: { files: [file] } });
-
-    await waitFor(() => expect(onRecoveryRequired).toHaveBeenCalledTimes(1));
     expect(onApply).not.toHaveBeenCalled();
-    expect(onRecoveryRequired.mock.calls[0][0].baseSections).toEqual(
-      expect.arrayContaining([expect.objectContaining({ type: "summary" })]),
-    );
-    expect(onRecoveryRequired.mock.calls[0][0].fullSections).toEqual(
-      expect.arrayContaining([expect.objectContaining({ type: "achievements" })]),
-    );
   });
 
   it("keeps scanned import clickable when the probe says the OCR parse route is unhealthy", async () => {
@@ -287,7 +310,6 @@ describe("StructuredUploadButton", () => {
   });
 
   it("re-probes Mistral on scanned upload instead of trusting stale cached success", async () => {
-    const user = userEvent.setup();
     structuredActionMock.mockResolvedValue({
       normalized: {
         summary: "Scanned import",
@@ -305,22 +327,31 @@ describe("StructuredUploadButton", () => {
         mistral_fallback: false,
         mistral_runtime: "mistral",
       },
+      authoritativeResume: {
+        source: "mistral_v3",
+        trusted: true,
+        fallbackToLegacy: false,
+        normalized: {
+          summary: {
+            text: "Scanned import",
+          },
+        },
+      },
     });
 
-    const { container } = render(<StructuredUploadButton />);
-    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    render(<StructuredUploadButton />);
     const file = new File(["scan"], "scan.png", { type: "image/png" });
 
     await waitFor(() => expect(probeMistralMock).toHaveBeenCalledTimes(1));
-    await user.click(screen.getByRole("button", { name: "Scanned PDF / Image" }));
-    fireEvent.change(fileInput, { target: { files: [file] } });
+    fireEvent.drop(screen.getByRole("button", { name: "Scanned PDF / Image" }), {
+      dataTransfer: { files: [file] },
+    });
 
     await waitFor(() => expect(structuredActionMock).toHaveBeenCalledTimes(1));
     expect(probeMistralMock).toHaveBeenCalledTimes(2);
   });
 
   it("continues scanned upload when the click-time probe fails transiently", async () => {
-    const user = userEvent.setup();
     structuredActionMock.mockResolvedValue({
       normalized: {
         summary: "Scanned import",
@@ -337,6 +368,16 @@ describe("StructuredUploadButton", () => {
         mistral_model: "mistral-ocr-latest",
         mistral_fallback: false,
         mistral_runtime: "mistral",
+      },
+      authoritativeResume: {
+        source: "mistral_v3",
+        trusted: true,
+        fallbackToLegacy: false,
+        normalized: {
+          summary: {
+            text: "Scanned import",
+          },
+        },
       },
     });
     probeMistralMock
@@ -349,15 +390,15 @@ describe("StructuredUploadButton", () => {
         parse: { status: 0 },
       });
 
-    const { container } = render(<StructuredUploadButton />);
-    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    render(<StructuredUploadButton />);
     const file = new File(["scan"], "scan.png", { type: "image/png" });
 
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Scanned PDF / Image" })).toBeEnabled(),
     );
-    await user.click(screen.getByRole("button", { name: "Scanned PDF / Image" }));
-    fireEvent.change(fileInput, { target: { files: [file] } });
+    fireEvent.drop(screen.getByRole("button", { name: "Scanned PDF / Image" }), {
+      dataTransfer: { files: [file] },
+    });
 
     await waitFor(() => expect(structuredActionMock).toHaveBeenCalledTimes(1));
     expect(probeMistralMock).toHaveBeenCalledTimes(2);

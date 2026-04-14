@@ -1,21 +1,15 @@
 import React from "react";
 import { useQuery } from "convex/react";
 import { useLocation } from "react-router-dom";
-import { Check, Eye, FilePdf, Palette, X } from "@/lib/icons";
+import { Check, Eye, Palette, X } from "@/lib/icons";
 import { api } from "../../convex/_generated/api";
 import { ProfileReviewCard } from "../components/ProfileReviewCard";
+import ResumeExportControl from "../components/ResumeExportControl";
+import type { ResumeExportRequest } from "../components/ResumeExportControl";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import { VerbatiCvPreviewPanel } from "../features/verbati/VerbatiCvPreviewPanel";
 import { useBoundVerbatiCvStyle } from "../features/verbati/useBoundVerbatiCvStyle";
 import { resolveVerbatiStyle } from "../features/verbati/style";
-import {
-  printFirstMatchingNodeAsPdf,
-  type DocumentExportCloneContext,
-} from "../lib/document-export";
-import {
-  A4_PAGE_HEIGHT_PX,
-  A4_PAGE_WIDTH_PX,
-} from "../lib/document-stage";
 import {
   getProposalStyleDefinition,
   type ProposalStyleChoice,
@@ -23,6 +17,19 @@ import {
 import type { ProposalPaletteId } from "../lib/proposal-style-display";
 import type { VerbatiFontPairId } from "../features/verbati/fontCatalog";
 import type { VerbatiStylePreset } from "../features/verbati/types";
+import { useToast } from "../components/ui/toast";
+import {
+  buildAuthoritativeResumeDebugSnapshot,
+  buildAuthoritativeResumeExportModel,
+  readAuthoritativeResumeFromCv,
+} from "../lib/authoritative-resume";
+import {
+  downloadAuthoritativeResumeExport,
+  downloadStandardResumeExport,
+} from "../lib/cv-export";
+import dbg from "../lib/cv-debug";
+import { buildResumeExportSource } from "../lib/document-export-models";
+import { exportDocumentFile } from "../lib/exportDocumentFile";
 
 type CvForgeWorkspaceMode = "edit" | "preview";
 type PresetSlotIndex = 1 | 2 | 3;
@@ -51,54 +58,6 @@ function readStoredCvForgeWorkspaceMode(): CvForgeWorkspaceMode {
     "preview"
     ? "preview"
     : "edit";
-}
-
-function getExportCloneNode(
-  root: HTMLElement,
-  selector: string,
-): HTMLElement | null {
-  if (root.matches(selector)) {
-    return root;
-  }
-
-  return root.querySelector<HTMLElement>(selector);
-}
-
-function normalizeResumeExportClone({
-  clonedNode,
-}: DocumentExportCloneContext): void {
-  const pageWidth = `${A4_PAGE_WIDTH_PX}px`;
-  const pageHeight = `${A4_PAGE_HEIGHT_PX}px`;
-  const nodes = [
-    clonedNode,
-    getExportCloneNode(clonedNode, ".resume-page-frame"),
-    getExportCloneNode(clonedNode, ".resume-page-stage"),
-  ].filter((node): node is HTMLElement => Boolean(node));
-
-  for (const node of nodes) {
-    node.style.setProperty("--preview-scale", "1");
-    node.style.setProperty("--preview-stage-width", pageWidth);
-    node.style.setProperty("--preview-stage-height", pageHeight);
-    node.style.width = pageWidth;
-    node.style.minWidth = pageWidth;
-    node.style.maxWidth = pageWidth;
-    node.style.height = pageHeight;
-    node.style.minHeight = pageHeight;
-    node.style.maxHeight = pageHeight;
-    node.style.overflow = "visible";
-  }
-
-  const page = getExportCloneNode(clonedNode, ".resume-page");
-  if (page) {
-    page.style.transform = "none";
-    page.style.transformOrigin = "top left";
-    page.style.width = pageWidth;
-    page.style.minWidth = pageWidth;
-    page.style.maxWidth = pageWidth;
-    page.style.height = pageHeight;
-    page.style.minHeight = pageHeight;
-    page.style.maxHeight = pageHeight;
-  }
 }
 
 function normalizePresetSlot(
@@ -168,7 +127,6 @@ export function CvForge(): JSX.Element {
   const { search } = useLocation();
   const { currentCv, importCv } = useCvLibrary();
   const presetMenuRef = React.useRef<HTMLDivElement | null>(null);
-  const cvPreviewExportRef = React.useRef<HTMLDivElement | null>(null);
   const [viewportWidth, setViewportWidth] = React.useState(() =>
     typeof window === "undefined" ? 1440 : window.innerWidth,
   );
@@ -186,6 +144,9 @@ export function CvForge(): JSX.Element {
   const [isStylePresetMenuOpen, setIsStylePresetMenuOpen] = React.useState(
     false,
   );
+  const [exportingFormat, setExportingFormat] =
+    React.useState<string | null>(null);
+  const { showToast } = useToast();
   const requestedCvId = React.useMemo(
     () => new URLSearchParams(search).get("id") || undefined,
     [search],
@@ -247,14 +208,87 @@ export function CvForge(): JSX.Element {
     };
   }, [isStylePresetMenuOpen]);
 
-  const exportCurrentCvAsPdf = React.useCallback(() => {
-    printFirstMatchingNodeAsPdf({
-      container: cvPreviewExportRef.current,
-      selectors: [".resume-page-stage", ".resume-page-frame"],
-      title: currentCv?.title || "Resume",
-      prepareClone: normalizeResumeExportClone,
-    });
-  }, [currentCv?.title]);
+  const authoritativeResume = React.useMemo(
+    () => readAuthoritativeResumeFromCv(currentCv),
+    [currentCv],
+  );
+  const authoritativeExportModel = React.useMemo(
+    () => buildAuthoritativeResumeExportModel(authoritativeResume),
+    [authoritativeResume],
+  );
+  const hasTrustedExport = authoritativeExportModel !== null;
+  const exportStatusLabel = hasTrustedExport ? "ATS Ready" : "Standard Export";
+  const exportStatusDescription = hasTrustedExport
+    ? "Trusted Mistral v3"
+    : "Not ATS-verified";
+
+  const handleResumeExport = React.useCallback(
+    async (request: ResumeExportRequest) => {
+      dbg(
+        "[CvForge] export authoritative snapshot",
+        buildAuthoritativeResumeDebugSnapshot({
+          authoritativeResume,
+          metadataAuthoritativeResumePresent: Boolean(
+            currentCv?.metadata?.authoritativeResume,
+          ),
+        }),
+      );
+
+      if (!currentCv) {
+        showToast("Open or create a CV before exporting", {
+          variant: "warning",
+        });
+        return;
+      }
+
+      const exportKey =
+        request.format === "pdf" ? `pdf:${request.mode}` : request.format;
+      setExportingFormat(exportKey);
+      try {
+        const exported =
+          request.format === "pdf"
+            ? await (async () => {
+                const source = buildResumeExportSource({
+                  currentCv,
+                  authoritativeResume,
+                });
+
+                if (!source) {
+                  throw new Error("Resume export source is unavailable.");
+                }
+
+                return exportDocumentFile({
+                  kind: "resume",
+                  format: "pdf",
+                  mode: request.mode,
+                  data: source,
+                  stylePreset:
+                    request.mode === "styled" ? stylePreset : undefined,
+                  fileNameBase:
+                    request.mode === "ats"
+                      ? "Resume - ATS"
+                      : "Resume - Styled",
+                });
+              })()
+            : hasTrustedExport && authoritativeResume
+              ? await downloadAuthoritativeResumeExport({
+                  authoritativeResume,
+                  format: request.format,
+                })
+              : await downloadStandardResumeExport({
+                  document: currentCv,
+                  format: request.format,
+                });
+        showToast(`Exported ${exported.filename}`, { variant: "success" });
+      } catch (error) {
+        console.error("[CvForge] export failed", error);
+        showToast("Resume export failed", { variant: "error" });
+      } finally {
+        setExportingFormat(null);
+      }
+    },
+    [authoritativeResume, currentCv, hasTrustedExport, showToast, stylePreset],
+  );
 
   const stylePresetSlots = React.useMemo(
     () =>
@@ -384,17 +418,15 @@ export function CvForge(): JSX.Element {
       <X size={15} strokeWidth={1.9} aria-hidden="true" />
     </button>
   );
-  const previewModePdfControl = (
-    <button
-      type="button"
-      className="dasti-icon-button"
-      aria-label="Export CV as PDF"
-      onClick={exportCurrentCvAsPdf}
-      data-toolbar-tooltip="Export PDF"
-      data-no-pan="true"
-    >
-      <FilePdf size={15} strokeWidth={1.7} aria-hidden="true" />
-    </button>
+  const resumeExportControl = (
+    <ResumeExportControl
+      exportingFormat={exportingFormat}
+      menuLabel="More export formats"
+      onExport={handleResumeExport}
+      statusDescription={exportStatusDescription}
+      statusLabel={exportStatusLabel}
+      statusTone={hasTrustedExport ? "trusted" : "standard"}
+    />
   );
   const cvWorkbenchShellStyle: React.CSSProperties = {
     width: "100%",
@@ -435,15 +467,12 @@ export function CvForge(): JSX.Element {
         {workspaceMode === "preview" ? (
           <>
             <div className="dasti-cv-preview-workbench">
-              <div
-                className="dasti-cv-preview-workbench__main"
-                ref={cvPreviewExportRef}
-              >
+              <div className="dasti-cv-preview-workbench__main">
                 <VerbatiCvPreviewPanel
                   layoutMode="stacked"
                   hostMode="workspace"
                   railLeadControl={previewModeLeadControl}
-                  railTrailingControl={previewModePdfControl}
+                  railTrailingControl={resumeExportControl}
                   stylePreset={stylePreset}
                   onStylePresetChange={setStylePreset}
                 />
@@ -470,9 +499,12 @@ export function CvForge(): JSX.Element {
               >
                 <ProfileReviewCard
                   cvId={requestedCvId}
+                  exportStatusDescription={exportStatusDescription}
+                  exportStatusLabel={exportStatusLabel}
+                  exportStatusTone={hasTrustedExport ? "trusted" : "standard"}
                   toolbarLeadControl={editModeToggle}
                   toolbarPrimaryControl={stylePresetToolbarControl}
-                  onRequestExport={exportCurrentCvAsPdf}
+                  onRequestExport={handleResumeExport}
                 />
                 <div
                   className={
@@ -480,7 +512,6 @@ export function CvForge(): JSX.Element {
                       ? "dasti-cv-preview-panel-slot dasti-cv-preview-panel-slot--sticky"
                       : "dasti-cv-preview-panel-slot"
                   }
-                  ref={cvPreviewExportRef}
                 >
                   <VerbatiCvPreviewPanel
                     layoutMode={isSplitCanvas ? "rail" : "stacked"}

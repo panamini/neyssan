@@ -5,13 +5,9 @@ import * as convexReact from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Button } from "./ui/button";
 import {
-  Upload,
   Loader2,
   ScanLine,
   Paperclip,
-  ChevronDown,
-  FilePdf,
-  FileImage,
 } from "@/lib/icons";
 import { useToast } from "./ui/toast";
 import type { CvSection } from "../types/cvDocument";
@@ -19,31 +15,27 @@ import {
   buildTypedSectionsFromNormalized,
   applyStrictContactToSections,
 } from "../utils/cv/mapping-utils";
-import type { ImportRecoveryPayload } from "../types/importRecovery";
+import {
+  coerceAuthoritativeResume,
+  hasTrustedAuthoritativeMistralImport,
+  type AuthoritativeResume,
+} from "../lib/authoritative-resume";
 
 export interface StructuredUploadButtonProps {
   sections?: CvSection[];
-  onApplyToSections?: (updated: CvSection[]) => void;
+  onApplyToSections?: (updated: CvSection[], payload?: StructuredPayload) => void;
   onResult?: (payload: unknown) => void;
-  onRecoveryRequired?: (payload: {
-    baseSections: CvSection[];
-    fullSections: CvSection[];
-    structured: StructuredPayload;
-  }) => void;
   className?: string;
   label?: string;
   ocrLabel?: string;
-  helperText?: string;
   ocrHelperText?: string;
-  size?: "sm" | "md" | "lg";
   disabled?: boolean;
   contextKey?: string;
-  /** Compact import trigger with explicit pipeline selection */
-  renderAs?: "buttons" | "dropdown";
 }
 
 type StructuredPayload = {
   normalized?: unknown;
+  authoritativeResume?: AuthoritativeResume | null;
   strict?: {
     name?: string | null;
     email?: string | null;
@@ -53,7 +45,6 @@ type StructuredPayload = {
   } | null;
   layout?: unknown;
   diagnostics?: unknown;
-  recovery?: ImportRecoveryPayload | null;
   debug?: {
     rawParser?: unknown;
   } | null;
@@ -61,17 +52,14 @@ type StructuredPayload = {
 
 export type { StructuredPayload };
 
-function buildSectionsFromPayload(
-  payload: StructuredPayload,
-  normalizedOverride?: unknown,
+function buildSectionsFromNormalized(
+  normalized: unknown,
+  strict?: StructuredPayload["strict"],
 ): CvSection[] {
-  const normalized =
-    (normalizedOverride ?? payload?.normalized) as unknown;
   if (!normalized || typeof normalized !== "object") {
     return [];
   }
   const typed = buildTypedSectionsFromNormalized(normalized as any);
-  const strict = payload?.strict;
   if (!strict || typed.length === 0) {
     return typed;
   }
@@ -82,6 +70,38 @@ function buildSectionsFromPayload(
     location: strict.location ?? null,
     desiredPosition: strict.desiredPosition ?? null,
   });
+}
+
+function readStructuredDiagnostics(
+  payload: StructuredPayload | null | undefined,
+): Record<string, unknown> | null {
+  return payload?.diagnostics && typeof payload.diagnostics === "object"
+    ? (payload.diagnostics as Record<string, unknown>)
+    : null;
+}
+
+function readStructuredAuthoritativeResume(
+  payload: StructuredPayload | null | undefined,
+): AuthoritativeResume | null {
+  return coerceAuthoritativeResume(payload?.authoritativeResume ?? null);
+}
+
+function buildRejectedOcrStatusMessage(
+  payload: StructuredPayload | null | undefined,
+): string {
+  const diagnostics = readStructuredDiagnostics(payload);
+  const mistralRuntime =
+    typeof diagnostics?.mistral_runtime === "string"
+      ? diagnostics.mistral_runtime
+      : null;
+  const mistralFallback = diagnostics?.mistral_fallback === true;
+  if (mistralRuntime === "local_fallback") {
+    return "OCR import rejected (fallback/untrusted). Local fallback output is debug-only.";
+  }
+  if (mistralFallback) {
+    return "OCR import rejected (fallback/untrusted). Fallback OCR output is debug-only.";
+  }
+  return "OCR import rejected (fallback/untrusted). Trusted authoritative Mistral result required.";
 }
 
 function readEmptyReasonFromDiagnostics(diagnostics: unknown): string | null {
@@ -104,61 +124,31 @@ function coerceCopyText(value: unknown): string | null {
 }
 
 const MAX_BYTES = 5 * 1024 * 1024;
-const DEFAULT_ACCEPT = ".pdf,.txt";
 const OCR_ACCEPT = ".pdf,.png,.jpg,.jpeg";
 const MISTRAL_PROBE_TTL_MS = 10_000;
-
-function isPdfUpload(file: File): boolean {
-  const ext = (file.name.split(".").pop() || "").toLowerCase();
-  return ext === "pdf" || file.type === "application/pdf";
-}
-
-function isImageUpload(file: File): boolean {
-  const ext = (file.name.split(".").pop() || "").toLowerCase();
-  return (
-    ext === "png" ||
-    ext === "jpg" ||
-    ext === "jpeg" ||
-    file.type === "image/png" ||
-    file.type === "image/jpeg"
-  );
-}
 
 export function StructuredUploadButton({
   sections: _sections,
   onApplyToSections,
   onResult,
-  onRecoveryRequired,
   className,
   label,
   ocrLabel,
-  helperText: _helperText,
   ocrHelperText,
-  size = "sm",
   disabled,
   contextKey,
-  renderAs = "buttons",
 }: StructuredUploadButtonProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [status, setStatus] = useState<"idle" | "reading" | "calling">("idle");
-  const [activeMode, setActiveMode] = useState<"default" | "mistral" | null>(
-    null,
-  );
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [emptyReason, setEmptyReason] = useState<string | null>(null);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [latestPayload, setLatestPayload] = useState<StructuredPayload | null>(null);
   const [copyFeedback, setCopyFeedback] = useState<null | "normalized" | "parser" | "rawText">(null);
   const { showToast } = useToast();
   const mountedRef = useRef(true);
   const requestIdRef = useRef(0);
   const scopeKeyRef = useRef<string>(contextKey ?? "");
-  const dropdownRef = useRef<HTMLDivElement | null>(null);
-  const droppedFileRef = useRef<File | null>(null);
-  const pickerRef = useRef<{
-    mode: "default" | "mistral";
-    scopeKey: string;
-  } | null>(null);
+  const pickerScopeKeyRef = useRef<string | null>(null);
 
   const structuredActionRef =
     (api as any).actions?.structuredUpload?.structuredUpload ??
@@ -202,9 +192,6 @@ export function StructuredUploadButton({
     if (legacy !== null) return legacy;
     return devDefault;
   })();
-  const [pendingMode, setPendingMode] = useState<"default" | "mistral">(
-    "default",
-  );
   const [mistralOk, setMistralOk] = useState<boolean | null>(null);
   const [isDropTargeted, setIsDropTargeted] = useState(false);
   const mistralProbePromiseRef = useRef<Promise<boolean> | null>(null);
@@ -279,8 +266,7 @@ export function StructuredUploadButton({
     return () => {
       mountedRef.current = false;
       requestIdRef.current += 1;
-      pickerRef.current = null;
-      droppedFileRef.current = null;
+      pickerScopeKeyRef.current = null;
     };
   }, []);
 
@@ -289,15 +275,12 @@ export function StructuredUploadButton({
     if (scopeKeyRef.current === nextScopeKey) return;
     scopeKeyRef.current = nextScopeKey;
     requestIdRef.current += 1;
-    pickerRef.current = null;
+    pickerScopeKeyRef.current = null;
     setStatus("idle");
-    setActiveMode(null);
     setErrorMsg(null);
     setEmptyReason(null);
-    setIsMenuOpen(false);
     setLatestPayload(null);
     setCopyFeedback(null);
-    droppedFileRef.current = null;
     if (inputRef.current) {
       inputRef.current.value = "";
     }
@@ -309,98 +292,56 @@ export function StructuredUploadButton({
     return () => window.clearTimeout(timeoutId);
   }, [copyFeedback]);
 
-  useEffect(() => {
-    if (!isMenuOpen) return undefined;
+  const trigger = useCallback(() => {
+    if (disabled || isBusy) return;
+    setErrorMsg(null);
+    setEmptyReason(null);
+    pickerScopeKeyRef.current = scopeKeyRef.current;
+    if (inputRef.current) {
+      inputRef.current.value = "";
+      inputRef.current.click();
+    }
+  }, [disabled, isBusy]);
 
-    const handleDocumentClick = (event: MouseEvent) => {
-      if (dropdownRef.current?.contains(event.target as Node)) return;
-      setIsMenuOpen(false);
-      droppedFileRef.current = null;
-    };
-
-    document.addEventListener("mousedown", handleDocumentClick);
-    return () => {
-      document.removeEventListener("mousedown", handleDocumentClick);
-    };
-  }, [isMenuOpen]);
-
-  const trigger = useCallback(
-    (mode: "default" | "mistral") => {
-      if (disabled || isBusy) return;
-      setErrorMsg(null);
-      setEmptyReason(null);
-      setPendingMode(mode);
-      setIsMenuOpen(false);
-      pickerRef.current = { mode, scopeKey: scopeKeyRef.current };
-      if (inputRef.current) {
-        inputRef.current.accept =
-          mode === "mistral" ? OCR_ACCEPT : DEFAULT_ACCEPT;
-        inputRef.current.value = "";
-        inputRef.current.click();
-      }
-    },
-    [disabled, isBusy],
-  );
-
-  async function buildSubmission(
-    file: File,
-  ): Promise<
-    | { kind: "text"; rawText: string }
-    | { kind: "file"; buffer: ArrayBuffer; fileName: string; mimeType: string }
-  > {
+  async function buildSubmission(file: File): Promise<{
+    buffer: ArrayBuffer;
+    fileName: string;
+    mimeType: string;
+  }> {
     if (file.size > MAX_BYTES) {
       throw new Error("File too large. Please upload a file under 5MB.");
     }
     const ext = (file.name.split(".").pop() || "").toLowerCase();
     if (ext === "pdf" || file.type === "application/pdf") {
-      const arrayBuffer = await file.arrayBuffer();
       return {
-        kind: "file",
-        buffer: arrayBuffer,
+        buffer: await file.arrayBuffer(),
         fileName: file.name,
         mimeType: file.type || "application/pdf",
       };
     }
     if (ext === "png" || file.type === "image/png") {
-      const arrayBuffer = await file.arrayBuffer();
       return {
-        kind: "file",
-        buffer: arrayBuffer,
+        buffer: await file.arrayBuffer(),
         fileName: file.name,
         mimeType: "image/png",
       };
     }
     if (ext === "jpg" || ext === "jpeg" || file.type === "image/jpeg") {
-      const arrayBuffer = await file.arrayBuffer();
       return {
-        kind: "file",
-        buffer: arrayBuffer,
+        buffer: await file.arrayBuffer(),
         fileName: file.name,
         mimeType: "image/jpeg",
       };
     }
-    if (ext === "txt" || file.type.startsWith("text/")) {
-      const text = await file.text();
-      const trimmed = text.trim();
-      if (!trimmed) {
-        throw new Error("Could not extract text from file.");
-      }
-      return { kind: "text", rawText: trimmed };
-    }
     throw new Error(
-      "Unsupported file type. Please upload a PDF, TXT, or image.",
+      "Unsupported file type. Please upload a scanned PDF or image.",
     );
   }
 
   const processFile = useCallback(
-    async (
-      file: File,
-      requestedMode: "default" | "mistral",
-      sourceScopeKey: string,
-    ) => {
+    async (file: File, sourceScopeKey: string) => {
       if (sourceScopeKey !== scopeKeyRef.current) {
         if (inputRef.current) inputRef.current.value = "";
-        setPendingMode("default");
         return;
       }
 
@@ -412,7 +353,6 @@ export function StructuredUploadButton({
         scopeKeyRef.current === startedScopeKey;
 
       setStatus("reading");
-      setActiveMode(requestedMode);
       setErrorMsg(null);
       setEmptyReason(null);
 
@@ -424,60 +364,28 @@ export function StructuredUploadButton({
         const submission = await buildSubmission(file);
         if (!isCurrentRequest()) return;
 
-        if (requestedMode === "mistral") {
-          const probeOk = await ensureMistralReady({ force: true });
-          if (!isCurrentRequest()) return;
-          if (!probeOk) {
-            console.warn(
-              "[StructuredUploadButton][mistral] live probe failed; continuing with upload and relying on server-side retries",
-            );
-          }
-        }
-
-        if (requestedMode === "default" && isImageUpload(file)) {
-          throw new Error(
-            "StructuredUpload is for selectable PDFs or TXT files. Use Mistral OCR for images and scanned PDFs.",
+        const probeOk = await ensureMistralReady({ force: true });
+        if (!isCurrentRequest()) return;
+        if (!probeOk) {
+          console.warn(
+            "[StructuredUploadButton][mistral] live probe failed; continuing with upload and relying on server-side retries",
           );
         }
 
-        if (requestedMode === "mistral" && submission.kind === "text") {
-          throw new Error(
-            "Mistral OCR is for scanned PDFs and images. Use StructuredUpload for text files.",
-          );
-        }
-
-        setActiveMode(requestedMode);
         setStatus("calling");
-        const useMistralFlow = requestedMode === "mistral";
-        if (submission.kind === "file") {
-          console.info(
-            "[StructuredUploadButton] invoking structured pipeline bytes=%d mistral=%s",
-            submission.buffer.byteLength,
-            useMistralFlow,
-          );
-        } else {
-          console.info(
-            "[StructuredUploadButton] invoking structured pipeline (mode=%s) rawLength=%d mistral=%s",
-            "text",
-            submission.rawText.length,
-            useMistralFlow,
-          );
-        }
+        console.info(
+          "[StructuredUploadButton] invoking structured pipeline bytes=%d mistral=%s",
+          submission.buffer.byteLength,
+          true,
+        );
 
-        const actionArgs =
-          submission.kind === "file"
-            ? {
-                file: submission.buffer,
-                fileName: submission.fileName,
-                mimeType: submission.mimeType,
-                mode: "auto" as const,
-                useMistral: useMistralFlow,
-              }
-            : {
-                rawText: submission.rawText,
-                mode: "text" as const,
-                useMistral: useMistralFlow,
-              };
+        const actionArgs = {
+          file: submission.buffer,
+          fileName: submission.fileName,
+          mimeType: submission.mimeType,
+          mode: "auto" as const,
+          useMistral: true,
+        };
 
         const invokeWithRetry = async (): Promise<StructuredPayload> => {
           if (typeof structuredAction !== "function") {
@@ -519,11 +427,12 @@ export function StructuredUploadButton({
         if (!isCurrentRequest()) return;
         setLatestPayload(payload);
         setCopyFeedback(null);
+        const diagnostics = readStructuredDiagnostics(payload);
+        const authoritativeResume = readStructuredAuthoritativeResume(payload);
         const diagnosticsEmptyReason = readEmptyReasonFromDiagnostics(
           payload?.diagnostics,
         );
-        if (requestedMode === "mistral" && payload?.diagnostics && typeof payload.diagnostics === "object") {
-          const diagnostics = payload.diagnostics as Record<string, unknown>;
+        if (diagnostics) {
           console.info("[StructuredUploadButton][mistral] evidence", {
             ocr_request_path:
               typeof diagnostics.ocr_request_path === "string" ? diagnostics.ocr_request_path : null,
@@ -545,37 +454,40 @@ export function StructuredUploadButton({
           }
         }
 
-        const recovery = payload?.recovery;
-        const fullSections = buildSectionsFromPayload(payload);
-        const baseSections =
-          recovery?.reviewNormalized && typeof recovery.reviewNormalized === "object"
-            ? buildSectionsFromPayload(payload, recovery.reviewNormalized)
-            : fullSections;
-        const requiresRecoveryReview = Boolean(
-          recovery?.reviewRequired && recovery.items.length > 0,
-        );
-        if (requiresRecoveryReview && typeof onRecoveryRequired === "function") {
+        const isTrustedOcrImport =
+          hasTrustedAuthoritativeMistralImport({
+            authoritativeResume,
+            mistralFallback: diagnostics?.mistral_fallback,
+            mistralRuntime: diagnostics?.mistral_runtime,
+          });
+        const fullSections = isTrustedOcrImport
+          ? buildSectionsFromNormalized(
+              authoritativeResume?.normalized ?? null,
+              payload?.strict,
+            )
+          : [];
+        if (!isTrustedOcrImport) {
+          const rejectionMessage = buildRejectedOcrStatusMessage(payload);
+          setEmptyReason(rejectionMessage);
           try {
-            onRecoveryRequired({
-              baseSections,
-              fullSections,
-              structured: payload,
-            });
+            showToast(rejectionMessage, { variant: "warning" });
           } catch {
             /* noop */
           }
-        } else {
-          if (typeof onApplyToSections === "function" && fullSections.length > 0) {
-            try {
-              onApplyToSections(fullSections);
-            } catch {
-              /* noop */
-            }
+          return;
+        }
+        if (typeof onApplyToSections === "function" && fullSections.length > 0) {
+          try {
+            onApplyToSections(fullSections, payload);
+          } catch {
+            /* noop */
           }
         }
         if (!isCurrentRequest()) return;
         if (diagnosticsEmptyReason) {
-          setEmptyReason(diagnosticsEmptyReason);
+          setEmptyReason(
+            `Parser returned empty result: ${diagnosticsEmptyReason}`,
+          );
           try {
             showToast(
               `Parser returned empty result: ${diagnosticsEmptyReason}`,
@@ -588,12 +500,8 @@ export function StructuredUploadButton({
           setEmptyReason(null);
           try {
             showToast(
-              requiresRecoveryReview
-                ? `Review ${recovery?.items.length ?? 0} uncertain sections before continuing`
-                : "Structured extraction completed",
-              {
-                variant: requiresRecoveryReview ? "neutral" : "success",
-              },
+              "Structured extraction completed",
+              { variant: "success" },
             );
           } catch {
             /* noop */
@@ -635,18 +543,14 @@ export function StructuredUploadButton({
         }
       } finally {
         if (inputRef.current) inputRef.current.value = "";
-        setPendingMode("default");
-        pickerRef.current = null;
-        droppedFileRef.current = null;
+        pickerScopeKeyRef.current = null;
         if (isCurrentRequest()) {
           setStatus("idle");
-          setActiveMode(null);
         }
       }
     },
     [
       onApplyToSections,
-      onRecoveryRequired,
       onResult,
       showToast,
       structuredAction,
@@ -658,19 +562,17 @@ export function StructuredUploadButton({
   const handleChange = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.currentTarget.files?.[0];
-      const pendingPicker = pickerRef.current;
-      pickerRef.current = null;
-      if (!file || !pendingPicker) {
+      const pendingScopeKey = pickerScopeKeyRef.current;
+      pickerScopeKeyRef.current = null;
+      if (!file || !pendingScopeKey) {
         if (inputRef.current) inputRef.current.value = "";
-        setPendingMode("default");
         return;
       }
-      if (pendingPicker.scopeKey !== scopeKeyRef.current) {
+      if (pendingScopeKey !== scopeKeyRef.current) {
         if (inputRef.current) inputRef.current.value = "";
-        setPendingMode("default");
         return;
       }
-      await processFile(file, pendingPicker.mode, pendingPicker.scopeKey);
+      await processFile(file, pendingScopeKey);
     },
     [processFile],
   );
@@ -679,34 +581,19 @@ export function StructuredUploadButton({
     (files: FileList | null) => {
       const file = files?.[0];
       if (!file || disabled || isBusy) return;
-      pickerRef.current = null;
+      pickerScopeKeyRef.current = null;
       setIsDropTargeted(false);
       setEmptyReason(null);
-      if (renderAs === "dropdown") {
-        droppedFileRef.current = file;
-        setErrorMsg(null);
-        setIsMenuOpen(true);
-        return;
-      }
-      void processFile(
-        file,
-        isImageUpload(file) ? "mistral" : "default",
-        scopeKeyRef.current,
-      );
+      setErrorMsg(null);
+      void processFile(file, scopeKeyRef.current);
     },
-    [disabled, isBusy, processFile, renderAs],
+    [disabled, isBusy, processFile],
   );
 
-  const primaryLabel = label ?? "Upload CV";
-  const compactImportLabel = label ?? "Import";
-  const secondaryLabel = ocrLabel ?? "Scanned PDF / Image";
-  const secondaryHelperText =
+  const importLabel = label ?? ocrLabel ?? "Scanned PDF / Image";
+  const importHelperText =
     ocrHelperText ??
     "Use for scanned PDFs, photos, or image files. OCR results may need review.";
-  const structuredHelperText =
-    "Use StructuredUpload for selectable/text PDFs and TXT exports.";
-  const dropdownHelperText =
-    "Choose the import route: text PDFs and TXT for structured parsing, scanned PDFs and images for OCR.";
   useEffect(() => {
     if (typeof window !== "undefined") {
       console.info("[UI_FLAG] mistral=", enableMistral);
@@ -717,23 +604,10 @@ export function StructuredUploadButton({
     <input
       ref={inputRef}
       type="file"
-      accept={pendingMode === "mistral" ? OCR_ACCEPT : DEFAULT_ACCEPT}
+      accept={OCR_ACCEPT}
       className="hidden"
       onChange={handleChange}
     />
-  );
-
-  const startMenuImport = useCallback(
-    (mode: "default" | "mistral") => {
-      const droppedFile = droppedFileRef.current;
-      if (droppedFile) {
-        setIsMenuOpen(false);
-        void processFile(droppedFile, mode, scopeKeyRef.current);
-        return;
-      }
-      trigger(mode);
-    },
-    [processFile, trigger],
   );
 
   const copyPayload = useCallback(
@@ -804,170 +678,57 @@ export function StructuredUploadButton({
       </div>
     ) : null;
 
-  if (renderAs === "dropdown") {
-    const hasActiveDropState = isDropTargeted && !disabled && !isBusy;
-    return (
-      <>
-        {fileInput}
-        <div className="flex flex-wrap items-center gap-2">
-          <div
-            ref={dropdownRef}
-            className="dasti-import-dropdown"
-            data-open={isMenuOpen ? "true" : "false"}
-          >
-            <button
-              type="button"
-              disabled={disabled || isBusy}
-              className={`dasti-button dasti-button--secondary dasti-button--sm dasti-import-button${
-                hasActiveDropState ? " dasti-import-button--drop" : ""
-              }`}
-              title={
-                hasActiveDropState
-                  ? "Drop a file here, then choose StructuredUpload or Mistral OCR."
-                  : dropdownHelperText
-              }
-              onClick={() =>
-                setIsMenuOpen((value) => {
-                  const nextValue = !value;
-                  if (!nextValue) {
-                    droppedFileRef.current = null;
-                  }
-                  return nextValue;
-                })
-              }
-              onDragEnter={(event) => {
-                event.preventDefault();
-                setIsDropTargeted(true);
-              }}
-              onDragOver={(event) => {
-                event.preventDefault();
-                event.dataTransfer.dropEffect = "copy";
-                setIsDropTargeted(true);
-              }}
-              onDragLeave={(event) => {
-                event.preventDefault();
-                if (!event.currentTarget.contains(event.relatedTarget as Node)) {
-                  setIsDropTargeted(false);
-                }
-              }}
-              onDrop={(event) => {
-                event.preventDefault();
-                handleDroppedFiles(event.dataTransfer.files);
-              }}
-            >
-              {isBusy ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : hasActiveDropState ? (
-                <Paperclip size={14} />
-              ) : (
-                <Upload size={14} />
-              )}
-              <span>
-                {hasActiveDropState ? "Choose import route" : compactImportLabel}
-              </span>
-              <ChevronDown size={14} aria-hidden />
-            </button>
-            {isMenuOpen ? (
-              <div className="dasti-import-dropdown__menu dasti-import-dropdown__menu--compact dasti-toolbar-drawer-surface">
-                <button
-                  type="button"
-                  className="dasti-menu-option dasti-menu-option--import-route"
-                  onClick={() => startMenuImport("default")}
-                >
-                  <div className="dasti-menu-option__row">
-                    <div className="dasti-menu-option__icons" aria-hidden>
-                      <span className="dasti-menu-option__icon">
-                        <FilePdf size={15} strokeWidth={1.6} />
-                      </span>
-                    </div>
-                    <div className="dasti-menu-option__copy">
-                      <div className="dasti-menu-option__title">
-                        Import text PDF or TXT
-                      </div>
-                    </div>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  className="dasti-menu-option dasti-menu-option--import-route"
-                  onClick={() => startMenuImport("mistral")}
-                  disabled={!enableMistral}
-                >
-                  <div className="dasti-menu-option__row">
-                    <div className="dasti-menu-option__icons" aria-hidden>
-                      <span className="dasti-menu-option__icon">
-                        <FileImage size={15} strokeWidth={1.6} />
-                      </span>
-                    </div>
-                    <div className="dasti-menu-option__copy">
-                      <div className="dasti-menu-option__title">
-                        Import scanned PDF or image
-                      </div>
-                    </div>
-                  </div>
-                </button>
-              </div>
-            ) : null}
-          </div>
-          {debugCopyControls}
-        </div>
-        {errorMsg && (
-          <span role="status" aria-live="polite" className="sr-only">
-            {errorMsg}
-          </span>
-        )}
-        {emptyReason ? (
-          <div className="dasti-import-empty-reason" role="status" aria-live="polite">
-            Empty reason: {emptyReason}
-          </div>
-        ) : null}
-      </>
-    );
-  }
+  const hasActiveDropState = isDropTargeted && !disabled && !isBusy;
 
   return (
     <>
       {fileInput}
       <div className={className ?? ""}>
         <div className="flex flex-wrap items-center gap-2">
-          <Button
+          <button
             type="button"
-            aria-label={primaryLabel}
-            title={structuredHelperText}
-            onClick={() => trigger("default")}
-            disabled={disabled || isBusy}
-            className="inline-flex items-center"
-            variant="secondary"
-            size={size}
-          >
-            {isBusy && activeMode === "default" ? (
-              <Loader2 className="animate-spin" size={16} />
-            ) : (
-              <Upload size={16} />
-            )}
-            <span className="ml-2 text-xs sm:text-sm">{primaryLabel}</span>
-          </Button>
-          <Button
-            type="button"
-            aria-label={secondaryLabel}
+            disabled={disabled || isBusy || !enableMistral}
+            className={`dasti-button dasti-button--secondary dasti-button--sm dasti-import-button${
+              hasActiveDropState ? " dasti-import-button--drop" : ""
+            }`}
             title={
               mistralAvailable
-                ? secondaryHelperText
+                ? hasActiveDropState
+                  ? "Drop a scanned PDF or image here to import with Mistral OCR."
+                  : importHelperText
                 : "Scanned/image OCR upload is unavailable in this environment."
             }
-            onClick={() => trigger("mistral")}
-            disabled={disabled || isBusy || !enableMistral}
-            className="inline-flex items-center"
-            variant="secondary"
-            size={size}
+            onClick={() => trigger()}
+            onDragEnter={(event) => {
+              event.preventDefault();
+              setIsDropTargeted(true);
+            }}
+            onDragOver={(event) => {
+              event.preventDefault();
+              event.dataTransfer.dropEffect = "copy";
+              setIsDropTargeted(true);
+            }}
+            onDragLeave={(event) => {
+              event.preventDefault();
+              if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+                setIsDropTargeted(false);
+              }
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              handleDroppedFiles(event.dataTransfer.files);
+            }}
           >
-            {isBusy && activeMode === "mistral" ? (
-              <Loader2 className="animate-spin" size={16} />
+            {isBusy ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : hasActiveDropState ? (
+              <Paperclip size={14} />
             ) : (
-              <ScanLine size={16} />
+              <ScanLine size={14} />
             )}
-            <span className="ml-2 text-xs sm:text-sm">{secondaryLabel}</span>
-          </Button>
+            <span>{importLabel}</span>
+          </button>
+          {debugCopyControls}
         </div>
         {errorMsg ? (
           <span role="status" aria-live="polite" className="sr-only">
@@ -976,10 +737,9 @@ export function StructuredUploadButton({
         ) : null}
         {emptyReason ? (
           <div className="dasti-import-empty-reason" role="status" aria-live="polite">
-            Empty reason: {emptyReason}
+            {emptyReason}
           </div>
         ) : null}
-        {debugCopyControls}
       </div>
     </>
   );

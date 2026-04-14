@@ -9,6 +9,8 @@
 !.dockerignore
 !requirements.txt
 !requirements.lock
+!package.json
+!package-lock.json
 
 # --------------------------------
 # cv_parser_service FastAPI app
@@ -26,6 +28,23 @@ cv_parser_service/Dockerfile_old.bk
 cv_parser_service/Dockerfile copy
 cv_parser_service/READMETOO.md
 cv_parser_service/README.md
+
+# --------------------------------
+# Export worker app (needed for direct-download PDF/DOCX rendering)
+# --------------------------------
+!my-app/
+!my-app/**
+my-app/node_modules/
+my-app/node_modules/**
+my-app/dist/
+my-app/dist/**
+my-app/.vite/
+my-app/.vite/**
+my-app/.convex/
+my-app/.convex/**
+my-app/coverage/
+my-app/coverage/**
+my-app/**/*.log
 
 # --------------------------------
 # Core cv_parser library (runtime dependencies)
