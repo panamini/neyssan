@@ -5,17 +5,20 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 
 import { CvForge } from "../CvForge";
+import type { ResumeExportRequest } from "../../components/ResumeExportControl";
 
 const {
   showToastMock,
   downloadAuthoritativeResumeExportMock,
   downloadStandardResumeExportMock,
+  exportDocumentFileMock,
   importCvMock,
   useCvLibraryMock,
 } = vi.hoisted(() => ({
   showToastMock: vi.fn(),
   downloadAuthoritativeResumeExportMock: vi.fn(),
   downloadStandardResumeExportMock: vi.fn(),
+  exportDocumentFileMock: vi.fn(),
   importCvMock: vi.fn(),
   useCvLibraryMock: vi.fn(),
 }));
@@ -34,18 +37,16 @@ vi.mock("../../components/ProfileReviewCard", () => ({
     cvId,
     exportStatusDescription,
     exportStatusLabel,
-    exportStatusTone,
-    onRequestExport,
     toolbarLeadControl,
     toolbarPrimaryControl,
+    onRequestExport,
   }: {
     cvId?: string;
     exportStatusDescription?: string;
     exportStatusLabel?: string;
-    exportStatusTone?: "standard" | "trusted";
-    onRequestExport?: (format: "pdf" | "docx" | "markdown" | "json") => void;
     toolbarLeadControl?: React.ReactNode;
     toolbarPrimaryControl?: React.ReactNode;
+    onRequestExport?: (request: ResumeExportRequest) => void;
   }) => {
     const [isMenuOpen, setIsMenuOpen] = React.useState(false);
 
@@ -58,8 +59,29 @@ vi.mock("../../components/ProfileReviewCard", () => ({
         {toolbarPrimaryControl}
         {onRequestExport ? (
           <div>
-            <button type="button" aria-label="Export PDF" onClick={() => onRequestExport("pdf")}>
-              Export PDF
+            <button
+              type="button"
+              aria-label="Export ATS PDF"
+              onClick={() =>
+                onRequestExport({
+                  format: "pdf",
+                  mode: "ats",
+                })
+              }
+            >
+              Export ATS PDF
+            </button>
+            <button
+              type="button"
+              aria-label="Export Styled PDF"
+              onClick={() =>
+                onRequestExport({
+                  format: "pdf",
+                  mode: "styled",
+                })
+              }
+            >
+              Export Styled PDF
             </button>
             <button
               type="button"
@@ -71,13 +93,25 @@ vi.mock("../../components/ProfileReviewCard", () => ({
             <span>{exportStatusLabel ?? "Standard Export"}</span>
             {isMenuOpen ? (
               <div role="menu" aria-label="Export resume formats">
-                <button type="button" role="menuitem" onClick={() => onRequestExport("docx")}>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => onRequestExport({ format: "docx" })}
+                >
                   Export DOCX
                 </button>
-                <button type="button" role="menuitem" onClick={() => onRequestExport("markdown")}>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => onRequestExport({ format: "markdown" })}
+                >
                   Export Markdown
                 </button>
-                <button type="button" role="menuitem" onClick={() => onRequestExport("json")}>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => onRequestExport({ format: "json" })}
+                >
                   Export JSON
                 </button>
                 <span>{exportStatusDescription ?? "Not ATS-verified"}</span>
@@ -132,11 +166,16 @@ vi.mock("../../lib/cv-export", () => ({
   downloadStandardResumeExport: downloadStandardResumeExportMock,
 }));
 
+vi.mock("../../lib/exportDocumentFile", () => ({
+  exportDocumentFile: exportDocumentFileMock,
+}));
+
 describe("CvForge export status", () => {
   beforeEach(() => {
     showToastMock.mockReset();
     downloadAuthoritativeResumeExportMock.mockReset();
     downloadStandardResumeExportMock.mockReset();
+    exportDocumentFileMock.mockReset();
     importCvMock.mockReset();
     useCvLibraryMock.mockReset();
     downloadAuthoritativeResumeExportMock.mockResolvedValue({
@@ -146,6 +185,9 @@ describe("CvForge export status", () => {
     downloadStandardResumeExportMock.mockResolvedValue({
       filename: "resume.pdf",
       data: {},
+    });
+    exportDocumentFileMock.mockResolvedValue({
+      filename: "Resume - ATS.pdf",
     });
   });
 
@@ -191,7 +233,12 @@ describe("CvForge export status", () => {
 
     expect(screen.getByText("ATS Ready")).toBeInTheDocument();
 
-    expect(screen.getByRole("button", { name: "Export PDF" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Export ATS PDF" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Export Styled PDF" }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "More export formats" }),
     ).toBeInTheDocument();
@@ -204,15 +251,21 @@ describe("CvForge export status", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: /Export JSON/i })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Export PDF" }));
+    await user.click(screen.getByRole("button", { name: "Export ATS PDF" }));
 
-    expect(downloadAuthoritativeResumeExportMock).toHaveBeenCalledWith({
-      authoritativeResume: expect.objectContaining({
-        source: "mistral_v3",
-        trusted: true,
+    expect(exportDocumentFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "resume",
+        format: "pdf",
+        mode: "ats",
+        fileNameBase: "Resume - ATS",
+        data: expect.objectContaining({
+          kind: "resume",
+          exportSource: "authoritative",
+        }),
       }),
-      format: "pdf",
-    });
+    );
+    expect(downloadAuthoritativeResumeExportMock).not.toHaveBeenCalled();
     expect(downloadStandardResumeExportMock).not.toHaveBeenCalled();
   });
 
@@ -244,7 +297,12 @@ describe("CvForge export status", () => {
     expect(screen.getByText("Standard Export")).toBeInTheDocument();
     expect(screen.queryByText("ATS Ready")).toBeNull();
 
-    expect(screen.getByRole("button", { name: "Export PDF" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Export ATS PDF" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Export Styled PDF" }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "More export formats" }),
     ).toBeInTheDocument();
@@ -257,15 +315,20 @@ describe("CvForge export status", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: /Export JSON/i })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Export PDF" }));
+    await user.click(screen.getByRole("button", { name: "Export Styled PDF" }));
 
-    expect(downloadStandardResumeExportMock).toHaveBeenCalledWith({
-      document: expect.objectContaining({
-        id: "cv-standard",
-        title: "Stale UI title",
+    expect(exportDocumentFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "resume",
+        format: "pdf",
+        mode: "styled",
+        fileNameBase: "Resume - Styled",
+        data: expect.objectContaining({
+          kind: "resume",
+          exportSource: "standard",
+        }),
       }),
-      format: "pdf",
-    });
+    );
     expect(downloadAuthoritativeResumeExportMock).not.toHaveBeenCalled();
     expect(showToastMock).not.toHaveBeenCalledWith(
       expect.stringContaining("Trusted Mistral v3 export is unavailable"),

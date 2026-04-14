@@ -256,14 +256,14 @@ const LOCAL_FONT_FACES: LocalFontFace[] = [
   },
 ];
 
-const LOCAL_FONT_FILES = import.meta.glob(
-  "../../assets/fonts/**/*.{woff,woff2,ttf,otf}",
-  {
-    eager: true,
-    import: "default",
-    query: "?url",
-  },
-) as FontAssetRecord;
+const LOCAL_FONT_FILES =
+  typeof import.meta.glob === "function"
+    ? (import.meta.glob("../../assets/fonts/**/*.{woff,woff2,ttf,otf}", {
+        eager: true,
+        import: "default",
+        query: "?url",
+      }) as FontAssetRecord)
+    : ({} as FontAssetRecord);
 
 const LEGACY_TO_FONT_PAIR_ID: Record<
   LegacyVerbatiTypographyPreset,

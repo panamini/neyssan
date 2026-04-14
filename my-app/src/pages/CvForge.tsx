@@ -5,6 +5,7 @@ import { Check, Eye, Palette, X } from "@/lib/icons";
 import { api } from "../../convex/_generated/api";
 import { ProfileReviewCard } from "../components/ProfileReviewCard";
 import ResumeExportControl from "../components/ResumeExportControl";
+import type { ResumeExportRequest } from "../components/ResumeExportControl";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import { VerbatiCvPreviewPanel } from "../features/verbati/VerbatiCvPreviewPanel";
 import { useBoundVerbatiCvStyle } from "../features/verbati/useBoundVerbatiCvStyle";
@@ -25,9 +26,10 @@ import {
 import {
   downloadAuthoritativeResumeExport,
   downloadStandardResumeExport,
-  type ResumeExportFormat,
 } from "../lib/cv-export";
 import dbg from "../lib/cv-debug";
+import { buildResumeExportSource } from "../lib/document-export-models";
+import { exportDocumentFile } from "../lib/exportDocumentFile";
 
 type CvForgeWorkspaceMode = "edit" | "preview";
 type PresetSlotIndex = 1 | 2 | 3;
@@ -143,7 +145,7 @@ export function CvForge(): JSX.Element {
     false,
   );
   const [exportingFormat, setExportingFormat] =
-    React.useState<ResumeExportFormat | null>(null);
+    React.useState<string | null>(null);
   const { showToast } = useToast();
   const requestedCvId = React.useMemo(
     () => new URLSearchParams(search).get("id") || undefined,
@@ -221,7 +223,7 @@ export function CvForge(): JSX.Element {
     : "Not ATS-verified";
 
   const handleResumeExport = React.useCallback(
-    async (format: ResumeExportFormat) => {
+    async (request: ResumeExportRequest) => {
       dbg(
         "[CvForge] export authoritative snapshot",
         buildAuthoritativeResumeDebugSnapshot({
@@ -239,17 +241,44 @@ export function CvForge(): JSX.Element {
         return;
       }
 
-      setExportingFormat(format);
+      const exportKey =
+        request.format === "pdf" ? `pdf:${request.mode}` : request.format;
+      setExportingFormat(exportKey);
       try {
-        const exported = hasTrustedExport && authoritativeResume
-          ? await downloadAuthoritativeResumeExport({
-              authoritativeResume,
-              format,
-            })
-          : await downloadStandardResumeExport({
-              document: currentCv,
-              format,
-            });
+        const exported =
+          request.format === "pdf"
+            ? await (async () => {
+                const source = buildResumeExportSource({
+                  currentCv,
+                  authoritativeResume,
+                });
+
+                if (!source) {
+                  throw new Error("Resume export source is unavailable.");
+                }
+
+                return exportDocumentFile({
+                  kind: "resume",
+                  format: "pdf",
+                  mode: request.mode,
+                  data: source,
+                  stylePreset:
+                    request.mode === "styled" ? stylePreset : undefined,
+                  fileNameBase:
+                    request.mode === "ats"
+                      ? "Resume - ATS"
+                      : "Resume - Styled",
+                });
+              })()
+            : hasTrustedExport && authoritativeResume
+              ? await downloadAuthoritativeResumeExport({
+                  authoritativeResume,
+                  format: request.format,
+                })
+              : await downloadStandardResumeExport({
+                  document: currentCv,
+                  format: request.format,
+                });
         showToast(`Exported ${exported.filename}`, { variant: "success" });
       } catch (error) {
         console.error("[CvForge] export failed", error);
@@ -258,7 +287,7 @@ export function CvForge(): JSX.Element {
         setExportingFormat(null);
       }
     },
-    [authoritativeResume, currentCv, hasTrustedExport, showToast],
+    [authoritativeResume, currentCv, hasTrustedExport, showToast, stylePreset],
   );
 
   const stylePresetSlots = React.useMemo(
