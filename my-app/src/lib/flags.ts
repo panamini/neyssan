@@ -47,3 +47,23 @@ export function isV1SectionsEnabled(): boolean {
   if (typeof raw === "undefined" || raw === null) return isDev || isTest;
   return toBool(raw, false);
 }
+
+/**
+ * Controls whether local CV editor debug entrypoints should be visible.
+ * - visible by default in development
+ * - hidden in production unless explicitly enabled
+ */
+export function isCvEditorDebugUiEnabled(): boolean {
+  const explicit = readEnv("VITE_ENABLE_CV_DEBUG_UI");
+  if (typeof explicit !== "undefined" && explicit !== null) {
+    return toBool(explicit, false);
+  }
+
+  const nodeEnv = readEnv("NODE_ENV");
+  if (nodeEnv === "production") {
+    return false;
+  }
+
+  const rawDev = readEnv("DEV");
+  return toBool(rawDev, false) || nodeEnv === "development";
+}

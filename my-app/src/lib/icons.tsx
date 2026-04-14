@@ -15,6 +15,7 @@ import {
   SealWarning as PhSealWarning,
   CornersIn as PhCornersIn,
   Copy as PhCopy,
+  DotsThree as PhDotsThree,
   DotsSixVertical as PhDotsSixVertical,
   Eye as PhEye,
   Eyedropper as PhEyedropper,
@@ -131,6 +132,7 @@ export const ChevronDown = withCompat(PhCaretDown);
 export const ChevronUp = withCompat(PhCaretUp);
 export const Copy = withCompat(PhCopy);
 export const CornersIn = withCompat(PhCornersIn);
+export const DotsThree = withCompat(PhDotsThree);
 export const Eye = withCompat(PhEye);
 export const EyeDropper = withCompat(PhEyedropper);
 export const Feather = withCompat(PhFeather);
