@@ -4,10 +4,19 @@ import { DotsThree, FilePdf } from "@/lib/icons";
 
 import type { ResumeExportFormat } from "../lib/cv-export";
 
+export type ResumeExportRequest =
+  | {
+      format: "pdf";
+      mode: "ats" | "styled";
+    }
+  | {
+      format: Exclude<ResumeExportFormat, "pdf">;
+    };
+
 type ResumeExportControlProps = {
-  exportingFormat: ResumeExportFormat | null;
+  exportingFormat: string | null;
   menuLabel?: string;
-  onExport: (format: ResumeExportFormat) => void;
+  onExport: (request: ResumeExportRequest) => void;
   statusDescription: string;
   statusLabel: string;
   statusTone?: "standard" | "trusted";
@@ -70,18 +79,40 @@ export function ResumeExportControl({
         <button
           type="button"
           className="dasti-button dasti-button--secondary dasti-button--pill dasti-button--sm dasti-resume-export-control__primary"
-          aria-label="Export PDF"
-          data-toolbar-tooltip="Export PDF"
+          aria-label="Export ATS PDF"
+          data-toolbar-tooltip="Export ATS PDF"
           onClick={() => {
             if (exportingFormat) {
               return;
             }
-            void onExport("pdf");
+            void onExport({
+              format: "pdf",
+              mode: "ats",
+            });
           }}
           disabled={exportingFormat !== null}
         >
           <FilePdf size={14} strokeWidth={1.6} aria-hidden="true" />
-          Export PDF
+          Export ATS PDF
+        </button>
+        <button
+          type="button"
+          className="dasti-button dasti-button--secondary dasti-button--pill dasti-button--sm dasti-resume-export-control__primary"
+          aria-label="Export Styled PDF"
+          data-toolbar-tooltip="Export Styled PDF"
+          onClick={() => {
+            if (exportingFormat) {
+              return;
+            }
+            void onExport({
+              format: "pdf",
+              mode: "styled",
+            });
+          }}
+          disabled={exportingFormat !== null}
+        >
+          <FilePdf size={14} strokeWidth={1.6} aria-hidden="true" />
+          Export Styled PDF
         </button>
         <button
           type="button"
@@ -125,7 +156,9 @@ export function ResumeExportControl({
               className="dasti-cv-style-presets__option"
               onClick={() => {
                 setIsMenuOpen(false);
-                void onExport(item.format);
+                void onExport({
+                  format: item.format,
+                });
               }}
               disabled={exportingFormat !== null}
             >
