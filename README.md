@@ -5,12 +5,29 @@ FastAPI service that parses CVs and returns a normalized JSON payload aligned wi
 ## Quick Start (local)
 
 ```bash
-./run.sh local               # local parser + Vite
-./run.sh local-convex        # local parser + local Convex + Vite
-./run.sh tunnel              # local parser + cloudflared + Vite via parser.dasti.ai
+./run.sh tunnel              # stable end-to-end validation via parser.dasti.ai
+./run.sh local-fast          # fast full-app parser development
+./run.sh parser-dev          # parser-only / advanced Python hacking
+./run.sh rebuild-docker      # explicit Docker/runtime rebuild + stable image validation
 ./run.sh down                # normal stop, keep images/caches/stateful installs
 ./run.sh reset               # stronger cleanup for stale local dev state
 ```
+
+`local-fast` is the daily parser-development mode:
+
+- parser runs from the workspace with autoreload
+- Vite points at the local parser
+- local Convex actions also resolve the local parser
+- export worker dependencies stay on the image-installed Linux runtime
+- normal Python parser edits do not require Docker rebuild
+
+Use `tunnel` when you want stable image-runtime validation against the edge path.
+
+Compatibility and advanced commands:
+
+- `./run.sh local` remains available for image-runtime local parser work
+- `./run.sh local-convex` remains as a legacy alias to `./run.sh local-fast`
+- `./run.sh rebuild-docker` is still required after Dockerfile or runtime dependency changes
 
 ## Endpoints
 
