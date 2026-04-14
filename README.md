@@ -5,10 +5,11 @@ FastAPI service that parses CVs and returns a normalized JSON payload aligned wi
 ## Quick Start (local)
 
 ```bash
-./run.sh up --doctr --tail   # build + start backend, tail logs
-./run.sh up --doctr          # build + start backend, detach
-./run.sh up --doctr --ui     # backend + Vite frontend
-./run.sh down                # stop dev containers
+./run.sh local               # local parser + Vite
+./run.sh local-convex        # local parser + local Convex + Vite
+./run.sh tunnel              # local parser + cloudflared + Vite via parser.dasti.ai
+./run.sh down                # normal stop, keep images/caches/stateful installs
+./run.sh reset               # stronger cleanup for stale local dev state
 ```
 
 ## Endpoints

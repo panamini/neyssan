@@ -248,7 +248,9 @@ describe("ProposalForge saved view", () => {
     expect(actionButtons).toEqual([
       "Back to draft",
       "Duplicate to draft",
-      "Export proposal as PDF",
+      "Export ATS PDF",
+      "Export Styled PDF",
+      "Export DOCX",
     ]);
   });
 
@@ -311,10 +313,10 @@ describe("ProposalForge saved view", () => {
     fireEvent.click(screen.getByRole("button", { name: "Back to draft" }));
 
     expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
-      "Live editable proposal|Live editable proposal body.|edit",
+      "Live editable proposal|Dear Hiring Manager, Live editable proposal body.|edit",
     );
     expect(readStoredProposalOutputDraft()?.proposalContent).toBe(
-      "Live editable proposal body.",
+      "Dear Hiring Manager,\n\nLive editable proposal body.",
     );
     expect(window.localStorage.getItem(PROPOSAL_ATTACHED_CV_STORAGE_KEY)).toBe(
       "cv_alpha",
@@ -480,7 +482,7 @@ describe("ProposalForge saved view", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Back to draft" }));
     expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
-      "Live editable proposal|Live editable proposal body.|edit",
+      "Live editable proposal|Dear Hiring Manager, Live editable proposal body.|edit",
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Open resume workspace" }));
@@ -493,7 +495,7 @@ describe("ProposalForge saved view", () => {
     );
 
     expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
-      "Live editable proposal|Live editable proposal body.|edit",
+      "Live editable proposal|Dear Hiring Manager, Live editable proposal body.|edit",
     );
   });
 });

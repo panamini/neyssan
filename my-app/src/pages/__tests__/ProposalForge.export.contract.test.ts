@@ -8,17 +8,20 @@ const proposalForgeSource = readFileSync(
 );
 
 describe("ProposalForge export contract", () => {
-  it("targets the mounted proposal document root for PDF export", () => {
-    expect(proposalForgeSource).toContain('".dasti-proposal-document"');
+  it("routes proposal exports through the unified direct-download API", () => {
+    expect(proposalForgeSource).toContain("exportDocumentFile");
   });
 
-  it("forces preview mode before exporting from compose or saved edit views", () => {
-    expect(proposalForgeSource).toContain('setProposalOutputMode("preview")');
-    expect(proposalForgeSource).toContain('setSavedProposalOutputMode("preview")');
+  it("does not retain mounted preview export selectors or preview-settle retries", () => {
+    expect(proposalForgeSource).not.toContain(
+      'from "../lib/document-export"',
+    );
+    expect(proposalForgeSource).not.toContain('".dasti-proposal-document"');
+    expect(proposalForgeSource).not.toContain("pendingExportTarget");
+    expect(proposalForgeSource).not.toContain("downloadProposalFromMountedPreview");
   });
 
-  it("does not retain legacy print-window export logic", () => {
-    expect(proposalForgeSource).not.toContain("preparePdfPrintWindow");
-    expect(proposalForgeSource).not.toContain("printFirstMatchingNodeAsPdf");
+  it("exposes ATS PDF, styled PDF, and DOCX proposal actions", () => {
+    expect(proposalForgeSource).toContain("ProposalExportActions");
   });
 });
