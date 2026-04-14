@@ -65,11 +65,27 @@ RUN --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
 
 COPY --from=deps /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 WORKDIR /app
 COPY . /app
 
 ENV CV_OCR_ENGINE=doctr
+
+RUN --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    set -eux; \
+    rm -f /var/lib/apt/lists/lock /var/cache/apt/archives/lock /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+      nodejs \
+      npm; \
+    rm -rf /var/lib/apt/lists/*
+
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci && \
+    npm ci --prefix /app/my-app && \
+    PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH}" npx playwright install --with-deps chromium
 
 EXPOSE 8000
 

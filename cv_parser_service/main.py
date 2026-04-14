@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import tempfile
 
 from fastapi import APIRouter, Body, FastAPI, File, Form, HTTPException, Query, Request, UploadFile, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
@@ -83,6 +84,7 @@ from .mistral_ocr import (
     run_mistral_ocr_from_url,
     should_use_ocr_raw_sections,
 )
+from .document_export import create_document_export_response
 
 
 def _load_canonicalize_module_via_path():
@@ -145,6 +147,25 @@ DO_PREWARM = _PREWARM_ENV in {"1", "true", "yes", "on"}
 OCR_ENGINE = _resolve_effective_ocr_engine()
 OCR_READY = False
 
+DEFAULT_LOCAL_CORS_ORIGINS = (
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+)
+DEFAULT_PRODUCTION_CORS_ORIGINS = (
+    "https://dasti.ai",
+    "https://www.dasti.ai",
+    "https://app.dasti.ai",
+)
+CORS_ALLOWED_METHODS = ("GET", "POST", "OPTIONS")
+CORS_ALLOWED_HEADERS = (
+    "Accept",
+    "Authorization",
+    "Content-Type",
+    "Origin",
+    "X-Requested-With",
+)
+CORS_EXPOSED_HEADERS = ("Content-Disposition",)
+
 # Track requested vs selected OCR engines with probe status
 OCR_STATE: Dict[str, Any] = {
     "requested": os.environ.get("CV_OCR_ENGINE", os.environ.get("OCR_ENGINE", "auto")).strip().lower() or "auto",
@@ -177,6 +198,41 @@ if os.getenv("VERBOSE_DOCTR_IMPORT", "0") == "1":
         print("DOCTR", getattr(doctr, "__version__", "unknown"))
     except Exception as exc:  # pragma: no cover
         print("DOCTR import failed (non-fatal)", exc)
+
+
+def _split_csv_env(value: Optional[str]) -> List[str]:
+    if not value:
+        return []
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _is_production_environment() -> bool:
+    raw = (
+        os.environ.get("CV_PARSER_ENV")
+        or os.environ.get("APP_ENV")
+        or os.environ.get("ENVIRONMENT")
+        or os.environ.get("FASTAPI_ENV")
+        or os.environ.get("ENV")
+        or ""
+    ).strip().lower()
+    return raw in {"prod", "production"}
+
+
+def _resolve_cors_allowed_origins() -> List[str]:
+    configured = (
+        _split_csv_env(os.environ.get("CV_PARSER_CORS_ALLOW_ORIGINS"))
+        or _split_csv_env(os.environ.get("CLIENT_ORIGIN_WHITELIST"))
+        or _split_csv_env(os.environ.get("CLIENT_ORIGIN"))
+    )
+    if configured:
+        return configured
+
+    if _is_production_environment():
+        return list(DEFAULT_PRODUCTION_CORS_ORIGINS)
+
+    combined = list(DEFAULT_PRODUCTION_CORS_ORIGINS)
+    combined.extend(DEFAULT_LOCAL_CORS_ORIGINS)
+    return combined
 
 
 def _run_subproc_probe(
@@ -543,6 +599,15 @@ app = FastAPI(
     title="CV Parser Service",
     description="Canonical CV parser with text and OCR flows.",
     version="0.2.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_resolve_cors_allowed_origins(),
+    allow_credentials=True,
+    allow_methods=list(CORS_ALLOWED_METHODS),
+    allow_headers=list(CORS_ALLOWED_HEADERS),
+    expose_headers=list(CORS_EXPOSED_HEADERS),
 )
 
 if make_asgi_app is not None:
@@ -1800,6 +1865,36 @@ async def parse_cv(
     })
     ROUTE_COUNTER.labels(route="invalid").inc()
     return _failure_response(diag_payload)
+
+
+@app.post("/api/v1/document-export/resume/pdf")
+async def export_resume_pdf(payload: Dict[str, Any] = Body(...)) -> Response:
+    return create_document_export_response(
+        payload,
+        expected_kind="resume",
+        expected_format="pdf",
+        fallback_filename_base="Resume - ATS",
+    )
+
+
+@app.post("/api/v1/document-export/proposal/pdf")
+async def export_proposal_pdf(payload: Dict[str, Any] = Body(...)) -> Response:
+    return create_document_export_response(
+        payload,
+        expected_kind="proposal",
+        expected_format="pdf",
+        fallback_filename_base="Proposal - Styled",
+    )
+
+
+@app.post("/api/v1/document-export/proposal/docx")
+async def export_proposal_docx(payload: Dict[str, Any] = Body(...)) -> Response:
+    return create_document_export_response(
+        payload,
+        expected_kind="proposal",
+        expected_format="docx",
+        fallback_filename_base="Proposal - Editable",
+    )
 
 
 @app.get("/healthz")

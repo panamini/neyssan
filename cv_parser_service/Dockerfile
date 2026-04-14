@@ -12,7 +12,8 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_RETRIES=5 \
     VIRTUAL_ENV=/opt/venv \
     PATH="/opt/venv/bin:${PATH}" \
-    PIP_EXTRA_INDEX_URL=https://download.pytorch.org/whl/cpu
+    PIP_EXTRA_INDEX_URL=https://download.pytorch.org/whl/cpu \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 # Faster Debian mirror + apt cache + retries
 RUN if [ -f /etc/apt/sources.list ]; then sed -i 's|http://deb.debian.org/debian|http://cdn-aws.deb.debian.org/debian|g' /etc/apt/sources.list; fi
@@ -29,7 +30,9 @@ RUN --mount=type=cache,target=/var/cache/apt \
       libopenblas0-serial \
       liblapack3 \
       python3-numpy \
-      curl && \
+      curl \
+      nodejs \
+      npm && \
     rm -rf /var/lib/apt/lists/*
 
 # Isolated virtualenv for main service (kept in base so deps stage can reuse)
@@ -108,6 +111,7 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app \
     VIRTUAL_ENV=/opt/venv \
     PATH="/opt/venv/bin:${PATH}" \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
     PADDLEOCR_HOME=/home/app/.paddlex \
     PADDLE_MODEL_PATH=/home/app/.paddlex \
     HF_HOME=/home/app/.cache/huggingface \
@@ -135,6 +139,7 @@ RUN if [ -f /etc/apt/sources.list ]; then sed -i 's|http://deb.debian.org/debian
       libglib2.0-0 libsm6 libxrender1 libxext6 libgl1 \
       libgomp1 libgfortran5 libopenblas0-serial liblapack3 \
       python3-numpy curl \
+      nodejs npm \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -147,6 +152,15 @@ COPY --from=deps /opt/doctr-venv /opt/doctr-venv
 COPY . /app
 # Ensure debug scripts are present explicitly as well
 COPY scripts /app/scripts
+
+RUN --mount=type=cache,target=/root/.npm \
+    if [ -f /app/package-lock.json ]; then npm ci; fi && \
+    npm ci --prefix /app/my-app && \
+    if [ -f /app/package-lock.json ]; then \
+      PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH}" npx playwright install --with-deps chromium; \
+    else \
+      PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH}" npx --prefix /app/my-app playwright install --with-deps chromium; \
+    fi
 
 # Dedicated Paddle venv (system BLAS serial build only)
 RUN PYTHON_FOR_PADDLE="$(command -v python3.11 || command -v python3)" && \
@@ -183,7 +197,7 @@ RUN PYTHON_FOR_PADDLE="$(command -v python3.11 || command -v python3)" && \
 
 # Non-root user & writable caches
 RUN useradd -m -u 10001 -s /usr/sbin/nologin app && \
-    chown -R app:app /app /opt/venv
+    chown -R app:app /app /opt/venv "${PLAYWRIGHT_BROWSERS_PATH}"
 USER app
 
 RUN mkdir -p "${PADDLEOCR_HOME}" "${HF_HOME}"
