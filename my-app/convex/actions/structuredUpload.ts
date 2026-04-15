@@ -196,8 +196,8 @@ type LocalParserProbeResult = {
 };
 
 const LOCAL_PARSER_ORIGINS = [
-  "http://127.0.0.1:8000",
-  "http://localhost:8000",
+  "http://127.0.0.1:8001",
+  "http://localhost:8001",
 ] as const;
 const LOCAL_PARSER_PROBE_TTL_MS = 5_000;
 let cachedLocalParserProbe: LocalParserProbeResult | null = null;
@@ -349,8 +349,8 @@ export function resolveParserEndpoints(
   );
 
   if (preferLoopback) {
-    pushCandidate(`http://127.0.0.1:8000${normalizedTarget}`, "prefer:loopback");
-    pushCandidate(`http://localhost:8000${normalizedTarget}`, "prefer:localhost");
+    pushCandidate(`http://127.0.0.1:8001${normalizedTarget}`, "prefer:loopback");
+    pushCandidate(`http://localhost:8001${normalizedTarget}`, "prefer:localhost");
   }
 
   if (envCandidates.length === 0 && !preferLoopback) {
@@ -371,19 +371,19 @@ export function resolveParserEndpoints(
       "[structuredUpload] CONVEX_PARSER_URL points to loopback (%s); local fallbacks will be used.",
       primaryOrigin,
     );
-    pushCandidate(`http://127.0.0.1:8000${normalizedTarget}`, "fallback:loopback");
-    pushCandidate(`http://localhost:8000${normalizedTarget}`, "fallback:localhost");
+    pushCandidate(`http://127.0.0.1:8001${normalizedTarget}`, "fallback:loopback");
+    pushCandidate(`http://localhost:8001${normalizedTarget}`, "fallback:localhost");
   } else if (allowLocalFallback) {
     console.info(
       "[structuredUpload] STRUCTURED_UPLOAD_ALLOW_LOOPBACK_FALLBACK enabled; adding local fallbacks as a last resort.",
     );
-    pushCandidate(`http://127.0.0.1:8000${normalizedTarget}`, "fallback:loopback");
-    pushCandidate(`http://localhost:8000${normalizedTarget}`, "fallback:localhost");
+    pushCandidate(`http://127.0.0.1:8001${normalizedTarget}`, "fallback:loopback");
+    pushCandidate(`http://localhost:8001${normalizedTarget}`, "fallback:localhost");
   }
 
   if (attempts.length === 0) {
     throw new Error(
-      "structuredUpload misconfigured: provide CONVEX_PARSER_URL or ensure local parser is running on http://127.0.0.1:8000",
+      "structuredUpload misconfigured: provide CONVEX_PARSER_URL or ensure local parser is running on http://127.0.0.1:8001",
     );
   }
 
@@ -625,7 +625,7 @@ export const structuredUpload = action({
     });
     const primaryUrl = (() => {
       try {
-        const origin = parserAttempts[0]?.endpoint?.origin || baseOrigin || "http://127.0.0.1:8000";
+        const origin = parserAttempts[0]?.endpoint?.origin || baseOrigin || "http://127.0.0.1:8001";
         return new URL(parserPath, origin).toString();
       } catch {
         return parserAttempts[0]?.endpoint?.toString?.() ?? "";
@@ -908,7 +908,7 @@ export const structuredUpload = action({
             try {
               return new URL(parserEndpoint.toString()).origin;
             } catch {
-              return parserEndpoint.origin || baseOrigin || "http://127.0.0.1:8000";
+              return parserEndpoint.origin || baseOrigin || "http://127.0.0.1:8001";
             }
           })();
           let endpointToCall: string;
