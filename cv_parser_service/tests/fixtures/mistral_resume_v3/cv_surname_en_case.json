@@ -1,0 +1,64 @@
+{
+  "pages": [
+    {
+      "index": 0,
+      "markdown": "Name Surname | Software Engineer\nCity - Country\nname.surname@example.com | +33 6 00 00 00 00\n\nLanguages\nEnglish: Good command\nPortuguese: Native speaker\n\nAreas of expertise\nBackend: Python, Node.js, REST APIs\nFrontend: React, TypeScript\nCloud: AWS, Docker\n\nExperience\nExample Systems | Software Engineer | 2021 - Present\n- Built backend APIs in Python and Node.js.\n- Collaborated with frontend teams on React-based dashboards.\n\nEducation\nExample University\nBSc in Computer Science\n2020\n"
+    }
+  ],
+  "annotation_raw": {
+    "identity": {
+      "name": "Name Surname",
+      "location": "City - Country",
+      "desiredPosition": "Software Engineer"
+    },
+    "summary": {
+      "text": null
+    },
+    "languages": [],
+    "skills": [],
+    "experience": [
+      {
+        "company": "Example Systems",
+        "position": "Software Engineer",
+        "startDate": "2021",
+        "endDate": "Present",
+        "isCurrent": true,
+        "responsibilityBullets": [
+          "Built backend APIs in Python and Node.js.",
+          "Collaborated with frontend teams on React-based dashboards."
+        ]
+      }
+    ],
+    "education": [
+      {
+        "institution": "Example University",
+        "degree": "BSc in Computer Science",
+        "endDate": "2020"
+      }
+    ],
+    "otherSections": [],
+    "sectionOrder": [
+      {
+        "family": "profile",
+        "ordinal": 0
+      },
+      {
+        "family": "experience",
+        "ordinal": 0,
+        "title": "Experience"
+      },
+      {
+        "family": "education",
+        "ordinal": 0,
+        "title": "Education"
+      }
+    ]
+  },
+  "diagnostics": {
+    "model": "mistral-ocr-latest",
+    "page_count": 1,
+    "pages": 1,
+    "ocr_chars": 516,
+    "document_name": "cv_surname-en.pdf"
+  }
+}

@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+from typing import Any
+
 import pytest
 
 from cv_parser.canonicalize import canonicalize_cv
@@ -8,8 +12,113 @@ from cv_parser_service.mistral_resume_v3.annotation_parser import parse_document
 from cv_parser_service.mistral_resume_v3.app_mapper import build_canonical_payload
 from cv_parser_service.mistral_resume_v3.extraction_schema import build_document_annotation_format
 from cv_parser_service.mistral_resume_v3.ocr_client import OCRAnnotationResult
-from cv_parser_service.mistral_resume_v3.pipeline import run_resume_pipeline_from_bytes
+from cv_parser_service.mistral_resume_v3.pipeline import (
+    _extract_explicit_sections_from_pages,
+    _run_resume_pipeline_from_ocr_result,
+    run_resume_pipeline_from_bytes,
+)
 from cv_parser_service.mistral_resume_v3.post_validation import normalize_extraction
+
+
+def _load_mistral_resume_v3_fixture(name: str) -> dict[str, Any]:
+    fixture_path = Path(__file__).parent / "fixtures" / "mistral_resume_v3" / name
+    return json.loads(fixture_path.read_text())
+
+
+def _build_fixture_ocr_result(name: str, *, annotation_raw: Any | None = None) -> OCRAnnotationResult:
+    fixture = _load_mistral_resume_v3_fixture(name)
+    payload = fixture["annotation_raw"] if annotation_raw is None else annotation_raw
+    return OCRAnnotationResult(
+        pages=fixture["pages"],
+        page_count=fixture["diagnostics"]["page_count"],
+        diagnostics=fixture["diagnostics"],
+        annotation_raw=payload,
+        response_payload={"document_annotation": payload},
+    )
+
+
+def _build_retry_contradiction_result() -> OCRAnnotationResult:
+    return OCRAnnotationResult(
+        pages=[
+            {
+                "index": 0,
+                "markdown": (
+                    "Retry Candidate | Software Engineer\n"
+                    "retry@example.com\n\n"
+                    "Languages\n\n"
+                    "Areas of expertise\n"
+                    "Backend: Python, Node.js\n\n"
+                    "Experience\n"
+                    "Example Systems | Software Engineer | 2021 - Present\n"
+                    "- Built backend APIs.\n"
+                ),
+            }
+        ],
+        page_count=1,
+        diagnostics={
+            "model": "mistral-ocr-latest",
+            "page_count": 1,
+            "pages": 1,
+            "ocr_chars": 188,
+            "document_name": "retry-contradiction.pdf",
+        },
+        annotation_raw={
+            "identity": {"name": "Retry Candidate", "desiredPosition": "Software Engineer"},
+            "contact": {"email": "retry@example.com"},
+            "languages": [],
+            "skills": [],
+            "experience": [
+                {
+                    "company": "Example Systems",
+                    "position": "Software Engineer",
+                    "startDate": "2021",
+                    "endDate": "Present",
+                    "isCurrent": True,
+                    "responsibilityBullets": ["Built backend APIs."],
+                }
+            ],
+            "sectionOrder": [
+                {"family": "languages", "ordinal": 0, "title": "Languages"},
+                {"family": "skills", "ordinal": 0, "title": "Areas of expertise"},
+                {"family": "experience", "ordinal": 0, "title": "Experience"},
+            ],
+        },
+        response_payload={},
+    )
+
+
+@pytest.mark.parametrize(
+    ("heading", "family"),
+    [
+        ("Tech stack", "skills"),
+        ("Technical stack", "skills"),
+        ("Technical background", "skills"),
+        ("Capabilities", "skills"),
+        ("Key capabilities", "skills"),
+        ("Core skills", "skills"),
+        ("Tools", "skills"),
+        ("Technologies", "skills"),
+        ("Language skills", "languages"),
+        ("Languages spoken", "languages"),
+        ("Linguistic skills", "languages"),
+        ("Skills", "skills"),
+        ("Areas of expertise", "skills"),
+        ("Languages", "languages"),
+    ],
+)
+def test_extract_explicit_sections_maps_heading_aliases_to_expected_family(heading: str, family: str) -> None:
+    sections = _extract_explicit_sections_from_pages(
+        [
+            {
+                "index": 0,
+                "markdown": f"## {heading}:\nPrimary item\n\nExperience\nExample Corp\n",
+            }
+        ]
+    )
+
+    assert family in sections
+    assert sections[family][0].heading == heading
+    assert sections[family][0].lines[0] == "Primary item"
 
 
 def test_parse_document_annotation_accepts_json_string() -> None:
@@ -41,7 +150,11 @@ def test_build_document_annotation_format_handles_numeric_schema_constraints() -
 
 
 def test_run_resume_pipeline_from_bytes_returns_authoritative_payload_when_annotation_is_valid(monkeypatch) -> None:
+    call_count = 0
+
     def fake_annotated_ocr_from_bytes(**_: object) -> OCRAnnotationResult:
+        nonlocal call_count
+        call_count += 1
         return OCRAnnotationResult(
             pages=[{"index": 0, "markdown": "# Summary\nTrusted Mistral OCR output"}],
             page_count=1,
@@ -81,9 +194,17 @@ def test_run_resume_pipeline_from_bytes_returns_authoritative_payload_when_annot
 
     assert result["fallback_to_legacy"] is False
     assert result["status"] == "success"
+    assert call_count == 1
     diagnostics = result["diagnostics"]
     assert diagnostics["mistral_parser_status"] == "success"
     assert diagnostics["model"] == "mistral-ocr-latest"
+    assert diagnostics["sectionRecovery"]["languages"]["applied"] is False
+    assert diagnostics["sectionRecovery"]["skills"]["applied"] is False
+    assert diagnostics["annotationRetry"]["attempted"] is False
+    assert diagnostics["annotationRetry"]["count"] == 0
+    assert diagnostics["annotationRetry"]["reason"] is None
+    assert result["canonical_payload"]["diagnostics"]["sectionRecovery"] == diagnostics["sectionRecovery"]
+    assert result["canonical_payload"]["diagnostics"]["annotationRetry"] == diagnostics["annotationRetry"]
     assert result["canonical_payload"]["normalized"]["name"] == "Robert Cooper"
 
 
@@ -120,6 +241,13 @@ def test_run_resume_pipeline_from_bytes_keeps_fallback_behavior_when_annotation_
     assert result["status"] == "failed"
     assert result["stage"] == "annotation_parse"
     assert result["errorType"] == "annotation_parse_failed"
+    diagnostics = result["diagnostics"]
+    assert "sectionRecovery" in diagnostics
+    assert diagnostics["sectionRecovery"]["languages"]["applied"] is False
+    assert diagnostics["sectionRecovery"]["skills"]["applied"] is False
+    assert diagnostics["annotationRetry"]["attempted"] is False
+    assert diagnostics["annotationRetry"]["count"] == 0
+    assert diagnostics["annotationRetry"]["reason"] is None
 
 
 def test_run_resume_pipeline_from_bytes_preserves_explicit_achievements_from_ocr_markdown_when_annotation_omits_field(
@@ -195,6 +323,514 @@ def test_run_resume_pipeline_from_bytes_preserves_explicit_achievements_from_ocr
         {"family": "experience", "ordinal": 0, "title": "EMPLOYMENT HISTORY"},
         {"family": "achievements", "ordinal": 0, "title": "ACHIEVEMENTS"},
     ]
+
+
+def test_run_resume_pipeline_from_bytes_recovers_explicit_languages_and_skills_without_retry(monkeypatch) -> None:
+    call_count = 0
+
+    def fake_annotated_ocr_from_bytes(**_: object) -> OCRAnnotationResult:
+        nonlocal call_count
+        call_count += 1
+        return _build_fixture_ocr_result("cv_surname_en_case.json")
+
+    monkeypatch.setattr(
+        "cv_parser_service.mistral_resume_v3.pipeline.run_annotated_ocr_from_bytes",
+        fake_annotated_ocr_from_bytes,
+    )
+
+    result = run_resume_pipeline_from_bytes(
+        file_name="cv_surname-en.pdf",
+        content_type="application/pdf",
+        data=b"fake-pdf",
+        api_key="test-key",
+        model_name="mistral-ocr-latest",
+    )
+
+    assert call_count == 1
+    assert result["fallback_to_legacy"] is False
+    assert result["status"] == "success"
+    normalized_payload = result["canonical_payload"]["normalized"]
+    assert normalized_payload["name"] == "Name Surname"
+    assert normalized_payload["summary"]["text"] == ""
+    assert [item["name"] for item in normalized_payload["languages"]] == ["English", "Portuguese"]
+    assert normalized_payload["languagesRaw"] == [
+        "English — Good command",
+        "Portuguese — Native speaker",
+    ]
+    assert [item["name"] for item in normalized_payload["skills"]] == [
+        "Python",
+        "Node.js",
+        "REST APIs",
+        "React",
+        "TypeScript",
+        "AWS",
+        "Docker",
+    ]
+
+    diagnostics = result["diagnostics"]
+    assert diagnostics["sectionRecovery"]["languages"]["applied"] is True
+    assert diagnostics["sectionRecovery"]["languages"]["heading"] == "Languages"
+    assert diagnostics["sectionRecovery"]["languages"]["source"] == "ocr_markdown"
+    assert diagnostics["sectionRecovery"]["languages"]["reason"] is not None
+    assert diagnostics["sectionRecovery"]["skills"]["applied"] is True
+    assert diagnostics["sectionRecovery"]["skills"]["heading"] == "Areas of expertise"
+    assert diagnostics["sectionRecovery"]["skills"]["source"] == "ocr_markdown"
+    assert diagnostics["sectionRecovery"]["skills"]["reason"] is not None
+    assert diagnostics["annotationRetry"]["attempted"] is False
+    assert diagnostics["annotationRetry"]["count"] == 0
+    assert diagnostics["annotationRetry"]["reason"] is None
+    assert result["canonical_payload"]["diagnostics"]["sectionRecovery"] == diagnostics["sectionRecovery"]
+    assert result["canonical_payload"]["diagnostics"]["annotationRetry"] == diagnostics["annotationRetry"]
+
+
+def test_run_resume_pipeline_from_ocr_result_recovers_polluted_languages_without_overwriting_sane_skills() -> None:
+    fixture = _load_mistral_resume_v3_fixture("cv_surname_en_case.json")
+    annotation_raw = json.loads(json.dumps(fixture["annotation_raw"]))
+    annotation_raw["languages"] = [
+        {
+            "name": (
+                "English: Good command Portuguese: Native speaker "
+                "Areas of expertise Programming Languages: C# Javascript Frameworks: .Net Process: Agile"
+            )
+        }
+    ]
+    annotation_raw["skills"] = [
+        {"name": "Python"},
+        {"name": "Node.js"},
+        {"name": "REST APIs"},
+        {"name": "React"},
+        {"name": "TypeScript"},
+        {"name": "AWS"},
+        {"name": "Docker"},
+    ]
+
+    result = _run_resume_pipeline_from_ocr_result(
+        _build_fixture_ocr_result("cv_surname_en_case.json", annotation_raw=annotation_raw)
+    )
+
+    assert result["fallback_to_legacy"] is False
+    assert result["status"] == "success"
+    normalized_payload = result["canonical_payload"]["normalized"]
+    assert normalized_payload["languagesRaw"] == [
+        "English — Good command",
+        "Portuguese — Native speaker",
+    ]
+    assert [item["name"] for item in normalized_payload["skills"]] == [
+        "Python",
+        "Node.js",
+        "REST APIs",
+        "React",
+        "TypeScript",
+        "AWS",
+        "Docker",
+    ]
+
+    diagnostics = result["diagnostics"]["sectionRecovery"]
+    assert diagnostics["languages"]["applied"] is True
+    assert diagnostics["languages"]["reason"] is not None
+    assert diagnostics["skills"]["applied"] is False
+    assert diagnostics["skills"]["reason"] is not None
+
+
+def test_run_resume_pipeline_from_ocr_result_recovers_46_atomic_skills_from_grouped_expertise_markdown() -> None:
+    expected_skills = [
+        "C#",
+        "Javascript",
+        "Typescript",
+        "C++",
+        "C",
+        "Java",
+        "Python",
+        "HTML",
+        "CSS",
+        ".Net",
+        "ASP.NET Core",
+        "Entity Framework",
+        "Node.js",
+        "React",
+        "Angular",
+        "Vue.js",
+        "Express",
+        "FastAPI",
+        "Django",
+        "AWS",
+        "Docker",
+        "Kubernetes",
+        "Terraform",
+        "Azure DevOps",
+        "GitHub Actions",
+        "Jenkins",
+        "Linux",
+        "Nginx",
+        "PostgreSQL",
+        "MySQL",
+        "SQL Server",
+        "MongoDB",
+        "Redis",
+        "xUnit",
+        "NUnit",
+        "Jest",
+        "Playwright",
+        "Cypress",
+        "Agile",
+        "Scrum",
+        "Kanban",
+        "TDD",
+        "CI/CD",
+        "Microservices",
+        "REST APIs",
+        "System Design",
+    ]
+    markdown = (
+        "Name Surname | Software Engineer\n"
+        "City - Country\n"
+        "name.surname@example.com\n\n"
+        "Languages\n"
+        "English: Good command\n"
+        "Portuguese: Native speaker\n\n"
+        "Areas of expertise\n"
+        "Programming Languages: C#, Javascript, Typescript, C++, C, Java, Python, HTML, CSS\n"
+        "Frameworks: .Net, ASP.NET Core, Entity Framework, Node.js, React, Angular, Vue.js, Express, FastAPI, Django\n"
+        "Cloud & DevOps: AWS, Docker, Kubernetes, Terraform, Azure DevOps, GitHub Actions, Jenkins, Linux, Nginx\n"
+        "Databases: PostgreSQL, MySQL, SQL Server, MongoDB, Redis\n"
+        "Testing: xUnit, NUnit, Jest, Playwright, Cypress\n"
+        "Process: Agile, Scrum, Kanban, TDD, CI/CD, Microservices, REST APIs, System Design\n\n"
+        "Experience\n"
+        "Example Systems | Software Engineer | 2021 - Present\n"
+        "- Built backend APIs.\n"
+    )
+    result = _run_resume_pipeline_from_ocr_result(
+        OCRAnnotationResult(
+            pages=[{"index": 0, "markdown": markdown}],
+            page_count=1,
+            diagnostics={
+                "model": "mistral-ocr-latest",
+                "page_count": 1,
+                "pages": 1,
+                "ocr_chars": len(markdown),
+                "document_name": "expertise-recovery.pdf",
+            },
+            annotation_raw={
+                "identity": {
+                    "name": "Name Surname",
+                    "location": "City - Country",
+                    "desiredPosition": "Software Engineer",
+                },
+                "contact": {"email": "name.surname@example.com"},
+                "summary": {"text": None},
+                "languages": [],
+                "skills": [],
+                "experience": [
+                    {
+                        "company": "Example Systems",
+                        "position": "Software Engineer",
+                        "startDate": "2021",
+                        "endDate": "Present",
+                        "isCurrent": True,
+                        "responsibilityBullets": ["Built backend APIs."],
+                    }
+                ],
+                "sectionOrder": [
+                    {"family": "languages", "ordinal": 0, "title": "Languages"},
+                    {"family": "skills", "ordinal": 0, "title": "Areas of expertise"},
+                    {"family": "experience", "ordinal": 0, "title": "Experience"},
+                ],
+            },
+            response_payload={},
+        )
+    )
+
+    assert result["fallback_to_legacy"] is False
+    assert result["status"] == "success"
+    normalized_payload = result["canonical_payload"]["normalized"]
+    assert [item["name"] for item in normalized_payload["skills"]] == expected_skills
+    assert len(normalized_payload["skills"]) == 46
+    assert [item["name"] for item in normalized_payload["languages"]] == ["English", "Portuguese"]
+    assert result["diagnostics"]["sectionRecovery"]["skills"]["applied"] is True
+    assert result["diagnostics"]["sectionRecovery"]["skills"]["heading"] == "Areas of expertise"
+
+
+def test_run_resume_pipeline_from_ocr_result_rejects_fused_recovered_languages_after_second_validation() -> None:
+    markdown = (
+        "Name Surname | Software Engineer\n"
+        "City - Country\n"
+        "name.surname@example.com\n\n"
+        "Languages\n"
+        "English: Good command Portuguese: Native speaker\n\n"
+        "Areas of expertise\n"
+        "Backend: Python, Node.js\n\n"
+        "Experience\n"
+        "Example Systems | Software Engineer | 2021 - Present\n"
+        "- Built backend APIs.\n"
+    )
+    result = _run_resume_pipeline_from_ocr_result(
+        OCRAnnotationResult(
+            pages=[{"index": 0, "markdown": markdown}],
+            page_count=1,
+            diagnostics={
+                "model": "mistral-ocr-latest",
+                "page_count": 1,
+                "pages": 1,
+                "ocr_chars": len(markdown),
+                "document_name": "fused-languages.pdf",
+            },
+            annotation_raw={
+                "identity": {
+                    "name": "Name Surname",
+                    "location": "City - Country",
+                    "desiredPosition": "Software Engineer",
+                },
+                "contact": {"email": "name.surname@example.com"},
+                "summary": {"text": None},
+                "languages": [],
+                "skills": [],
+                "experience": [
+                    {
+                        "company": "Example Systems",
+                        "position": "Software Engineer",
+                        "startDate": "2021",
+                        "endDate": "Present",
+                        "isCurrent": True,
+                        "responsibilityBullets": ["Built backend APIs."],
+                    }
+                ],
+                "sectionOrder": [
+                    {"family": "languages", "ordinal": 0, "title": "Languages"},
+                    {"family": "skills", "ordinal": 0, "title": "Areas of expertise"},
+                    {"family": "experience", "ordinal": 0, "title": "Experience"},
+                ],
+            },
+            response_payload={},
+        )
+    )
+
+    assert result["fallback_to_legacy"] is True
+    assert result["status"] == "failed"
+    assert result["stage"] == "section_recovery"
+    assert result["errorType"] == "section_evidence_contradiction"
+    diagnostics = result["diagnostics"]
+    assert diagnostics["sectionRecovery"]["languages"]["applied"] is True
+    assert diagnostics["sectionRecovery"]["languages"]["reason"] is not None
+    assert diagnostics["annotationRetry"]["eligible"] is True
+    assert diagnostics["annotationRetry"]["attempted"] is False
+
+
+def test_run_resume_pipeline_from_ocr_result_does_not_recover_skills_from_core_competencies_heading() -> None:
+    markdown = (
+        "Name Surname | Software Engineer\n"
+        "City - Country\n"
+        "name.surname@example.com\n\n"
+        "Core competencies\n"
+        "Backend: Python, Node.js\n"
+        "Frontend: React, TypeScript\n\n"
+        "Experience\n"
+        "Example Systems | Software Engineer | 2021 - Present\n"
+        "- Built backend APIs.\n"
+    )
+    result = _run_resume_pipeline_from_ocr_result(
+        OCRAnnotationResult(
+            pages=[{"index": 0, "markdown": markdown}],
+            page_count=1,
+            diagnostics={
+                "model": "mistral-ocr-latest",
+                "page_count": 1,
+                "pages": 1,
+                "ocr_chars": len(markdown),
+                "document_name": "core-competencies.pdf",
+            },
+            annotation_raw={
+                "identity": {
+                    "name": "Name Surname",
+                    "location": "City - Country",
+                    "desiredPosition": "Software Engineer",
+                },
+                "contact": {"email": "name.surname@example.com"},
+                "summary": {"text": None},
+                "skills": [],
+                "experience": [
+                    {
+                        "company": "Example Systems",
+                        "position": "Software Engineer",
+                        "startDate": "2021",
+                        "endDate": "Present",
+                        "isCurrent": True,
+                        "responsibilityBullets": ["Built backend APIs."],
+                    }
+                ],
+                "sectionOrder": [
+                    {"family": "skills", "ordinal": 0, "title": "Core competencies"},
+                    {"family": "experience", "ordinal": 0, "title": "Experience"},
+                ],
+            },
+            response_payload={},
+        )
+    )
+
+    assert result["fallback_to_legacy"] is True
+    assert result["status"] == "failed"
+    assert result["stage"] == "section_recovery"
+    assert result["errorType"] == "section_evidence_contradiction"
+    diagnostics = result["diagnostics"]
+    assert diagnostics["sectionRecovery"]["skills"]["applied"] is False
+    assert diagnostics["sectionRecovery"]["skills"]["heading"] == "Core competencies"
+    assert diagnostics["annotationRetry"]["eligible"] is True
+    assert diagnostics["annotationRetry"]["attempted"] is False
+
+
+def test_run_resume_pipeline_from_bytes_retries_once_after_section_recovery_contradiction(monkeypatch) -> None:
+    call_count = 0
+
+    def fake_annotated_ocr_from_bytes(**_: object) -> OCRAnnotationResult:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return _build_retry_contradiction_result()
+        return _build_fixture_ocr_result("cv_surname_en_case.json")
+
+    monkeypatch.setattr(
+        "cv_parser_service.mistral_resume_v3.pipeline.run_annotated_ocr_from_bytes",
+        fake_annotated_ocr_from_bytes,
+    )
+
+    result = run_resume_pipeline_from_bytes(
+        file_name="retry-contradiction.pdf",
+        content_type="application/pdf",
+        data=b"fake-pdf",
+        api_key="test-key",
+        model_name="mistral-ocr-latest",
+    )
+
+    assert call_count == 2
+    assert result["fallback_to_legacy"] is False
+    assert [item["name"] for item in result["canonical_payload"]["normalized"]["languages"]] == ["English", "Portuguese"]
+    retry_diagnostics = result["diagnostics"]["annotationRetry"]
+    assert retry_diagnostics["attempted"] is True
+    assert retry_diagnostics["count"] == 1
+    assert retry_diagnostics["reason"] == "section_evidence_contradiction"
+    assert result["canonical_payload"]["diagnostics"]["annotationRetry"] == retry_diagnostics
+
+
+def test_run_resume_pipeline_from_bytes_retries_once_after_second_validation_rejects_invalid_recovered_languages(
+    monkeypatch,
+) -> None:
+    call_count = 0
+    first_result = OCRAnnotationResult(
+        pages=[
+            {
+                "index": 0,
+                "markdown": (
+                    "Name Surname | Software Engineer\n"
+                    "City - Country\n"
+                    "name.surname@example.com\n\n"
+                    "Languages\n"
+                    "English: Good command Portuguese: Native speaker\n\n"
+                    "Areas of expertise\n"
+                    "Backend: Python, Node.js\n\n"
+                    "Experience\n"
+                    "Example Systems | Software Engineer | 2021 - Present\n"
+                    "- Built backend APIs.\n"
+                ),
+            }
+        ],
+        page_count=1,
+        diagnostics={
+            "model": "mistral-ocr-latest",
+            "page_count": 1,
+            "pages": 1,
+            "ocr_chars": 257,
+            "document_name": "invalid-recovered-languages.pdf",
+        },
+        annotation_raw={
+            "identity": {
+                "name": "Name Surname",
+                "location": "City - Country",
+                "desiredPosition": "Software Engineer",
+            },
+            "contact": {"email": "name.surname@example.com"},
+            "summary": {"text": None},
+            "languages": [],
+            "skills": [],
+            "experience": [
+                {
+                    "company": "Example Systems",
+                    "position": "Software Engineer",
+                    "startDate": "2021",
+                    "endDate": "Present",
+                    "isCurrent": True,
+                    "responsibilityBullets": ["Built backend APIs."],
+                }
+            ],
+            "sectionOrder": [
+                {"family": "languages", "ordinal": 0, "title": "Languages"},
+                {"family": "skills", "ordinal": 0, "title": "Areas of expertise"},
+                {"family": "experience", "ordinal": 0, "title": "Experience"},
+            ],
+        },
+        response_payload={},
+    )
+
+    def fake_annotated_ocr_from_bytes(**_: object) -> OCRAnnotationResult:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return first_result
+        return _build_fixture_ocr_result("cv_surname_en_case.json")
+
+    monkeypatch.setattr(
+        "cv_parser_service.mistral_resume_v3.pipeline.run_annotated_ocr_from_bytes",
+        fake_annotated_ocr_from_bytes,
+    )
+
+    result = run_resume_pipeline_from_bytes(
+        file_name="invalid-recovered-languages.pdf",
+        content_type="application/pdf",
+        data=b"fake-pdf",
+        api_key="test-key",
+        model_name="mistral-ocr-latest",
+    )
+
+    assert call_count == 2
+    assert result["fallback_to_legacy"] is False
+    assert [item["name"] for item in result["canonical_payload"]["normalized"]["languages"]] == ["English", "Portuguese"]
+    retry_diagnostics = result["diagnostics"]["annotationRetry"]
+    assert retry_diagnostics["attempted"] is True
+    assert retry_diagnostics["count"] == 1
+    assert retry_diagnostics["reason"] == "section_evidence_contradiction"
+
+
+def test_run_resume_pipeline_from_bytes_returns_fallback_after_retry_exhausts_section_contradiction(monkeypatch) -> None:
+    call_count = 0
+
+    def fake_annotated_ocr_from_bytes(**_: object) -> OCRAnnotationResult:
+        nonlocal call_count
+        call_count += 1
+        return _build_retry_contradiction_result()
+
+    monkeypatch.setattr(
+        "cv_parser_service.mistral_resume_v3.pipeline.run_annotated_ocr_from_bytes",
+        fake_annotated_ocr_from_bytes,
+    )
+
+    result = run_resume_pipeline_from_bytes(
+        file_name="retry-contradiction.pdf",
+        content_type="application/pdf",
+        data=b"fake-pdf",
+        api_key="test-key",
+        model_name="mistral-ocr-latest",
+    )
+
+    assert call_count == 2
+    assert result["fallback_to_legacy"] is True
+    assert result["status"] == "failed"
+    assert result["stage"] == "section_recovery"
+    assert result["errorType"] == "section_evidence_contradiction"
+    assert "canonical_payload" not in result
+    diagnostics = result["diagnostics"]
+    assert diagnostics["sectionRecovery"]["languages"]["heading"] == "Languages"
+    assert diagnostics["sectionRecovery"]["skills"]["heading"] == "Areas of expertise"
+    assert diagnostics["annotationRetry"]["attempted"] is True
+    assert diagnostics["annotationRetry"]["count"] == 1
+    assert diagnostics["annotationRetry"]["reason"] == "section_evidence_contradiction"
 
 
 def test_v3_payload_preserves_supported_and_generic_sections() -> None:
@@ -459,7 +1095,7 @@ def test_normalize_extraction_maps_helen_social_links_conservatively() -> None:
     assert normalized.contact.portfolio == "https://instagram.com/_hellenk_"
 
 
-def test_normalize_extraction_uses_short_explicit_headline_as_summary_fallback() -> None:
+def test_normalize_extraction_keeps_desired_position_without_backfilling_summary() -> None:
     extraction = parse_document_annotation(
         {
             "identity": {
@@ -476,7 +1112,7 @@ def test_normalize_extraction_uses_short_explicit_headline_as_summary_fallback()
     )
     payload = build_canonical_payload(normalized)
 
-    assert normalized.summary.text == "Fashion writer turned designer"
+    assert normalized.summary.text is None
     assert normalized.identity.desiredPosition == "Fashion writer turned designer"
     assert payload["normalized"]["identitySchema"]["desiredPosition"] == "Fashion writer turned designer"
     assert payload["normalized"]["profile"]["desiredPosition"] == "Fashion writer turned designer"
@@ -783,7 +1419,7 @@ def test_normalize_extraction_drops_template_branding_and_address_noise_for_robe
 
     assert normalized.contact.email is None
     assert normalized.contact.website is None
-    assert normalized.summary.text == "Lead Customer Advocate"
+    assert normalized.summary.text is None
     assert normalized.education == []
     assert normalized.textSections == []
     warning_codes = [warning.code for warning in normalized.warnings]
