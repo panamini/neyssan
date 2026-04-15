@@ -15,6 +15,9 @@ describe("exportDocumentFile", () => {
     createObjectUrlMock.mockClear();
     revokeObjectUrlMock.mockClear();
     clickMock.mockClear();
+    vi.stubEnv("VITE_PARSER_URL", "http://127.0.0.1:8001");
+    vi.stubEnv("VITE_CONVEX_PARSER_URL", "http://127.0.0.1:8001");
+    vi.stubEnv("VITE_PDF_INGEST_URL", "");
 
     vi.stubGlobal("fetch", fetchMock);
     vi.stubGlobal("URL", {
@@ -58,7 +61,7 @@ describe("exportDocumentFile", () => {
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "http://localhost:8000/api/v1/document-export/resume/pdf",
+      "http://127.0.0.1:8001/api/v1/document-export/resume/pdf",
       expect.objectContaining({
         method: "POST",
       }),
@@ -91,7 +94,7 @@ describe("exportDocumentFile", () => {
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "http://localhost:8000/api/v1/document-export/proposal/docx",
+      "http://127.0.0.1:8001/api/v1/document-export/proposal/docx",
       expect.objectContaining({
         method: "POST",
       }),
