@@ -287,6 +287,56 @@ def _pages_and_diagnostics_from_pipeline_result(result: Dict[str, Any]) -> Tuple
     return pages, diagnostics
 
 
+def _safe_log_url(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    try:
+        parsed = urlparse(value)
+    except Exception:
+        return None
+    if not parsed.scheme or not parsed.netloc:
+        return None
+    path = parsed.path or ""
+    return f"{parsed.scheme}://{parsed.netloc}{path}"
+
+
+def _log_pipeline_quality(
+    *,
+    result: Dict[str, Any],
+    source: str,
+    document_name: Optional[str] = None,
+    source_url: Optional[str] = None,
+) -> None:
+    diagnostics = result.get("diagnostics") or {}
+    if not isinstance(diagnostics, dict):
+        diagnostics = {}
+    quality = diagnostics.get("parsingQuality") or {}
+    if not isinstance(quality, dict):
+        quality = {}
+
+    LOGGER.info(
+        "[mistral-quality] %s",
+        {
+            "source": source,
+            "document_name": document_name,
+            "source_url": _safe_log_url(source_url),
+            "status": result.get("status"),
+            "page_count": diagnostics.get("page_count"),
+            "model": diagnostics.get("model"),
+            "has_languages_section": quality.get("has_languages_section"),
+            "languages_extracted": quality.get("languages_extracted"),
+            "languages_success": quality.get("languages_success"),
+            "has_skills_section": quality.get("has_skills_section"),
+            "skills_extracted": quality.get("skills_extracted"),
+            "skills_success": quality.get("skills_success"),
+            "recovery_used": quality.get("recovery_used"),
+            "retry_used": quality.get("retry_used"),
+            "error_type": quality.get("error_type"),
+            "hard_failure": quality.get("hard_failure"),
+        },
+    )
+
+
 def run_mistral_ocr_from_bytes(
     *,
     file_name: Optional[str],
@@ -307,6 +357,7 @@ def run_mistral_ocr_from_bytes(
             api_key=api_key,
             model_name=model_name,
         )
+        _log_pipeline_quality(result=result, source="file", document_name=normalized_name)
         pages, diagnostics = _pages_and_diagnostics_from_pipeline_result(result)
         if pages:
             return pages, diagnostics
@@ -329,6 +380,7 @@ def run_mistral_ocr_from_url(
             api_key=api_key,
             model_name=model_name,
         )
+        _log_pipeline_quality(result=result, source="url", document_name=document_name, source_url=url)
         pages, diagnostics = _pages_and_diagnostics_from_pipeline_result(result)
         if pages:
             return pages, diagnostics
