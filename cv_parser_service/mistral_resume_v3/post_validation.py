@@ -927,8 +927,6 @@ def normalize_extraction(
         raw_text=raw_text,
         contact_address=extraction.contact.address if extraction.contact else None,
     )
-    if not summary_text:
-        summary_text = desired_position
 
     identity_location = _validate_identity_location(
         extraction.identity.location if extraction.identity else None,
