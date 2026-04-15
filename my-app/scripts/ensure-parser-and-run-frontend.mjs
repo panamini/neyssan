@@ -17,8 +17,8 @@ const isProduction = process.env.NODE_ENV === "production";
 
 const CONTEXT = "[structuredUpload:dev]";
 const LOCAL_PARSER_CANDIDATES = [
-  "http://127.0.0.1:8000",
-  "http://localhost:8000",
+  "http://127.0.0.1:8001",
+  "http://localhost:8001",
 ];
 
 function isLoopbackHost(hostname) {
