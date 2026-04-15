@@ -670,6 +670,64 @@ def _build_pipeline_diagnostics(
     }
 
 
+def _collect_parsing_quality_metrics(result: Dict[str, Any]) -> Dict[str, Any]:
+    diagnostics = result.get("diagnostics") or {}
+    if not isinstance(diagnostics, dict):
+        diagnostics = {}
+
+    section_recovery = diagnostics.get("sectionRecovery") or {}
+    if not isinstance(section_recovery, dict):
+        section_recovery = {}
+
+    annotation_retry = diagnostics.get("annotationRetry") or {}
+    if not isinstance(annotation_retry, dict):
+        annotation_retry = {}
+
+    canonical_payload = result.get("canonical_payload") or {}
+    if not isinstance(canonical_payload, dict):
+        canonical_payload = {}
+    normalized = canonical_payload.get("normalized") or {}
+    if not isinstance(normalized, dict):
+        normalized = {}
+
+    has_languages_section = bool((section_recovery.get("languages") or {}).get("heading"))
+    has_skills_section = bool((section_recovery.get("skills") or {}).get("heading"))
+    languages_extracted = bool(normalized.get("languages")) if has_languages_section else False
+    skills_extracted = bool(normalized.get("skills")) if has_skills_section else False
+    error_type = result.get("errorType") or diagnostics.get("mistral_parser_error_type")
+
+    return {
+        "has_languages_section": has_languages_section,
+        "languages_extracted": languages_extracted,
+        "languages_success": has_languages_section and languages_extracted,
+        "has_skills_section": has_skills_section,
+        "skills_extracted": skills_extracted,
+        "skills_success": has_skills_section and skills_extracted,
+        "recovery_used": any(
+            isinstance(entry, dict) and bool(entry.get("applied"))
+            for entry in section_recovery.values()
+        ),
+        "retry_used": bool(annotation_retry.get("attempted")),
+        "error_type": error_type,
+        "hard_failure": error_type == RETRYABLE_SECTION_FAILURE,
+    }
+
+
+def _attach_parsing_quality_metrics(result: Dict[str, Any]) -> Dict[str, Any]:
+    metrics = _collect_parsing_quality_metrics(result)
+    diagnostics = dict(result.get("diagnostics") or {})
+    diagnostics["parsingQuality"] = metrics
+    result["diagnostics"] = diagnostics
+
+    canonical_payload = result.get("canonical_payload")
+    if isinstance(canonical_payload, dict):
+        canonical_diagnostics = dict(canonical_payload.get("diagnostics") or {})
+        canonical_diagnostics["parsingQuality"] = metrics
+        canonical_payload["diagnostics"] = canonical_diagnostics
+
+    return result
+
+
 def _build_failure_payload(
     *,
     status: str,
@@ -694,7 +752,7 @@ def _build_failure_payload(
         section_recovery=section_recovery,
         annotation_retry=annotation_retry,
     )
-    return {
+    return _attach_parsing_quality_metrics({
         "status": status,
         "fallback_to_legacy": True,
         "stage": stage,
@@ -704,7 +762,7 @@ def _build_failure_payload(
         "pages": ocr_result.pages,
         "rawText": _join_markdown_pages(ocr_result.pages),
         "diagnostics": diagnostics,
-    }
+    })
 
 
 def _build_success_payload(
@@ -731,14 +789,14 @@ def _build_success_payload(
     canonical_diagnostics = dict(canonical_payload.get("diagnostics") or {})
     canonical_diagnostics.update(diagnostics)
     canonical_payload["diagnostics"] = canonical_diagnostics
-    return {
+    return _attach_parsing_quality_metrics({
         "status": normalized.status,
         "fallback_to_legacy": False,
         "pages": ocr_result.pages,
         "canonical_payload": canonical_payload,
         "diagnostics": diagnostics,
         "rawText": raw_text,
-    }
+    })
 
 
 def _build_result_from_normalized(
@@ -835,7 +893,7 @@ def _apply_annotation_retry_metadata(
         canonical_diagnostics["annotationRetry"] = retry_metadata
         canonical_payload["diagnostics"] = canonical_diagnostics
 
-    return result
+    return _attach_parsing_quality_metrics(result)
 
 
 def _run_resume_pipeline_with_single_retry(fetch_ocr: Callable[[], OCRAnnotationResult]) -> Dict[str, Any]:
