@@ -203,8 +203,21 @@ def test_run_resume_pipeline_from_bytes_returns_authoritative_payload_when_annot
     assert diagnostics["annotationRetry"]["attempted"] is False
     assert diagnostics["annotationRetry"]["count"] == 0
     assert diagnostics["annotationRetry"]["reason"] is None
+    assert diagnostics["parsingQuality"] == {
+        "has_languages_section": False,
+        "languages_extracted": False,
+        "languages_success": False,
+        "has_skills_section": False,
+        "skills_extracted": False,
+        "skills_success": False,
+        "recovery_used": False,
+        "retry_used": False,
+        "error_type": None,
+        "hard_failure": False,
+    }
     assert result["canonical_payload"]["diagnostics"]["sectionRecovery"] == diagnostics["sectionRecovery"]
     assert result["canonical_payload"]["diagnostics"]["annotationRetry"] == diagnostics["annotationRetry"]
+    assert result["canonical_payload"]["diagnostics"]["parsingQuality"] == diagnostics["parsingQuality"]
     assert result["canonical_payload"]["normalized"]["name"] == "Robert Cooper"
 
 
@@ -379,8 +392,21 @@ def test_run_resume_pipeline_from_bytes_recovers_explicit_languages_and_skills_w
     assert diagnostics["annotationRetry"]["attempted"] is False
     assert diagnostics["annotationRetry"]["count"] == 0
     assert diagnostics["annotationRetry"]["reason"] is None
+    assert diagnostics["parsingQuality"] == {
+        "has_languages_section": True,
+        "languages_extracted": True,
+        "languages_success": True,
+        "has_skills_section": True,
+        "skills_extracted": True,
+        "skills_success": True,
+        "recovery_used": True,
+        "retry_used": False,
+        "error_type": None,
+        "hard_failure": False,
+    }
     assert result["canonical_payload"]["diagnostics"]["sectionRecovery"] == diagnostics["sectionRecovery"]
     assert result["canonical_payload"]["diagnostics"]["annotationRetry"] == diagnostics["annotationRetry"]
+    assert result["canonical_payload"]["diagnostics"]["parsingQuality"] == diagnostics["parsingQuality"]
 
 
 def test_run_resume_pipeline_from_ocr_result_recovers_polluted_languages_without_overwriting_sane_skills() -> None:
@@ -708,6 +734,19 @@ def test_run_resume_pipeline_from_bytes_retries_once_after_section_recovery_cont
     assert retry_diagnostics["count"] == 1
     assert retry_diagnostics["reason"] == "section_evidence_contradiction"
     assert result["canonical_payload"]["diagnostics"]["annotationRetry"] == retry_diagnostics
+    assert result["diagnostics"]["parsingQuality"] == {
+        "has_languages_section": True,
+        "languages_extracted": True,
+        "languages_success": True,
+        "has_skills_section": True,
+        "skills_extracted": True,
+        "skills_success": True,
+        "recovery_used": True,
+        "retry_used": True,
+        "error_type": None,
+        "hard_failure": False,
+    }
+    assert result["canonical_payload"]["diagnostics"]["parsingQuality"] == result["diagnostics"]["parsingQuality"]
 
 
 def test_run_resume_pipeline_from_bytes_retries_once_after_second_validation_rejects_invalid_recovered_languages(
@@ -831,6 +870,18 @@ def test_run_resume_pipeline_from_bytes_returns_fallback_after_retry_exhausts_se
     assert diagnostics["annotationRetry"]["attempted"] is True
     assert diagnostics["annotationRetry"]["count"] == 1
     assert diagnostics["annotationRetry"]["reason"] == "section_evidence_contradiction"
+    assert diagnostics["parsingQuality"] == {
+        "has_languages_section": True,
+        "languages_extracted": False,
+        "languages_success": False,
+        "has_skills_section": True,
+        "skills_extracted": False,
+        "skills_success": False,
+        "recovery_used": True,
+        "retry_used": True,
+        "error_type": "section_evidence_contradiction",
+        "hard_failure": True,
+    }
 
 
 def test_v3_payload_preserves_supported_and_generic_sections() -> None:
