@@ -22,7 +22,7 @@ describe("resolveParserEndpoints", () => {
 
     expect(attempts[0]?.label).toBe("prefer:loopback");
     expect(attempts[0]?.endpoint.toString()).toBe(
-      "http://127.0.0.1:8000/mistral-ocr/parse",
+      "http://127.0.0.1:8001/mistral-ocr/parse",
     );
     expect(attempts.map((attempt) => attempt.label)).toEqual([
       "prefer:loopback",
@@ -70,12 +70,12 @@ describe("resolveParserEndpoints", () => {
       .mockResolvedValueOnce({ ok: true } as Response);
 
     await expect(detectHealthyLocalParserOrigin()).resolves.toBe(
-      "http://127.0.0.1:8000",
+      "http://127.0.0.1:8001",
     );
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0]?.[0]).toBeInstanceOf(URL);
     expect((fetchMock.mock.calls[0]?.[0] as URL).toString()).toBe(
-      "http://127.0.0.1:8000/ready",
+      "http://127.0.0.1:8001/ready",
     );
   });
 
@@ -85,7 +85,7 @@ describe("resolveParserEndpoints", () => {
       .mockResolvedValueOnce({ ok: true } as Response);
 
     await expect(detectHealthyLocalParserOrigin()).resolves.toBe(
-      "http://localhost:8000",
+      "http://localhost:8001",
     );
   });
 

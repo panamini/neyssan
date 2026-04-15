@@ -18,10 +18,10 @@ export type ExportDocumentFileArgs = {
 
 function getParserBaseUrl(): string {
   return (
-    import.meta.env.VITE_PDF_INGEST_URL ||
     import.meta.env.VITE_PARSER_URL ||
     import.meta.env.VITE_CONVEX_PARSER_URL ||
-    "http://localhost:8000"
+    import.meta.env.VITE_PDF_INGEST_URL ||
+    "http://127.0.0.1:8001"
   ).replace(/\/+$/, "");
 }
 
