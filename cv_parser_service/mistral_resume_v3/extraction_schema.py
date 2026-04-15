@@ -64,13 +64,13 @@ class ExtractionSummary(ExtractionBaseModel):
 
 class ExtractionSkill(ExtractionBaseModel):
     name: str = Field(
-        description="Atomic skill/tool/technology/competency label only. Never include headings, decorative symbols, table syntax, prose fragments, or whole sentences. Preserve source order.",
+        description="Atomic skill/tool/technology/competency label only. Populate from explicit skills, expertise, areas of expertise, core competencies, or grouped expertise sections when present. Extract explicit skill labels from bullets, inline lists, and grouped expertise content, treating separators such as '/', ',', ';', '—', and parentheses as valid formatting when they clearly separate explicit labels. Flatten grouped expertise into atomic labels while preserving source order where possible. Never include headings, decorative symbols, table syntax, prose fragments, or whole sentences.",
     )
 
 
 class ExtractionLanguage(ExtractionBaseModel):
     name: str = Field(
-        description="Extract only explicitly stated spoken or human languages. Do not infer from nationality, location, education, employer, or name.",
+        description="Extract only explicitly stated spoken or human languages. Populate from explicit Languages or language proficiency sections and lines such as 'English: Good command', 'French - Intermediate', or 'Spanish (basic)'. Treat bullets, inline lists, and separators such as ':', '-', '/', ',', ';', '—', and parentheses as valid formatting when they clearly describe explicit languages or proficiency. Do not infer from nationality, location, education, employer, or name.",
     )
     levelRaw: Optional[str] = Field(
         default=None,
@@ -274,10 +274,10 @@ class ExtractionVolunteering(ExtractionBaseModel):
 
 class ExtractionOtherSection(ExtractionBaseModel):
     title: str = Field(
-        description="Use only for meaningful sections not covered by first-class schema families. Preserve the original section title faithfully.",
+        description="Use only for meaningful sections not covered by first-class schema families. Preserve the original section title faithfully. When a section clearly matches a first-class family, populate that first-class field instead. Do not use for explicit Languages, Skills, Expertise, Areas of Expertise, Core Competencies, or other headings that clearly fit a first-class family.",
     )
     content: str = Field(
-        description="Use only for meaningful sections not covered by first-class schema families. Preserve the original section content faithfully. Do not use as a dumping ground for fields that clearly belong elsewhere.",
+        description="Use only for meaningful sections not covered by first-class schema families. Preserve the original section content faithfully. Do not use as a dumping ground for fields that clearly belong elsewhere, especially explicit Languages or Skills/Expertise content that should populate first-class fields.",
     )
 
 
