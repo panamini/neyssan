@@ -274,6 +274,24 @@ const LEGACY_TO_FONT_PAIR_ID: Record<
   expert: "mono-signal",
 };
 
+export function sanitizePersistedVerbatiFontPairId(
+  value: unknown,
+): VerbatiFontPairId | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  if ((FONT_PAIR_IDS as readonly string[]).includes(value)) {
+    return value as VerbatiFontPairId;
+  }
+
+  if (value in LEGACY_TO_FONT_PAIR_ID) {
+    return LEGACY_TO_FONT_PAIR_ID[value as LegacyVerbatiTypographyPreset];
+  }
+
+  return null;
+}
+
 function normalizeToken(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
@@ -356,19 +374,10 @@ export function ensureLocalFontFacesLoaded(): void {
 export function resolveVerbatiFontPairId(
   value: unknown,
 ): VerbatiFontPairId {
-  if (typeof value !== "string") {
-    return LEGACY_TO_FONT_PAIR_ID.signature;
-  }
-
-  if ((FONT_PAIR_IDS as readonly string[]).includes(value)) {
-    return value as VerbatiFontPairId;
-  }
-
-  if (value in LEGACY_TO_FONT_PAIR_ID) {
-    return LEGACY_TO_FONT_PAIR_ID[value as LegacyVerbatiTypographyPreset];
-  }
-
-  return LEGACY_TO_FONT_PAIR_ID.signature;
+  return (
+    sanitizePersistedVerbatiFontPairId(value) ??
+    LEGACY_TO_FONT_PAIR_ID.signature
+  );
 }
 
 export const VERBATI_FONT_PAIR_OPTIONS: VerbatiFontPairOption[] = [

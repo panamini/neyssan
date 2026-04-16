@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ClipboardText,
   FloppyDisk,
+  RotateCcw,
   Trash,
   X,
 } from "@/lib/icons";
@@ -23,6 +24,10 @@ import ProposalDisplay, {
   getDisplayedProposalText,
 } from "../components/ProposalDisplay";
 import ProposalsList from "../components/ProposalsList";
+import {
+  SaveIndicator,
+  type SaveStatus,
+} from "../components/ui/SaveIndicator";
 import { useToast } from "../components/ui/toast";
 import type { FormValues } from "../components/ProposalInputForm.schemas";
 import { api } from "../../convex/_generated/api";
@@ -33,9 +38,11 @@ import {
   getProposalApplicantIdentity,
   getActiveLocalPersonalizationSource,
   getLocalActiveCvSnapshotById,
+  getLocalCvDocumentById,
   getProposalAttachedCvId,
   getProposalAttachedCvLocalDocument,
   PROPOSAL_ATTACHED_CV_UPDATED_EVENT,
+  setProposalAttachedCvId,
   type ProposalApplicantHeaderData,
 } from "../lib/proposal-personalization";
 import { type ProposalGenerationFallbackInfo } from "../lib/proposal-generation-ui";
@@ -87,6 +94,10 @@ import {
 import { getVoicePresetDisplayLabel } from "../lib/proposal-voice-label";
 import type { ProposalPaletteId } from "../lib/proposal-style-display";
 import {
+  resolveProposalStyle,
+  resolveProposalStyleStatus,
+} from "../features/verbati/styleState";
+import {
   findProposalTemplateBundleIdByStylePreset,
   getProposalTemplateBundleDefinition,
   type ProposalTemplateBundleId,
@@ -114,6 +125,16 @@ import {
   setStyledProposalExportContext,
 } from "../lib/document-export-debug";
 import { exportDocumentFile } from "../lib/exportDocumentFile";
+import {
+  logProposalStyleTrace,
+  readProposalStyleTraceStorageSnapshots,
+  resolveOutputDraftWinnerSource,
+  snapshotSavedProposalRecord,
+  snapshotStoredComposeDraft,
+  snapshotStoredOutputDraft,
+  type ProposalStyleTraceMetadataSnapshot,
+  type ProposalStyleTraceWinnerSource,
+} from "../lib/proposal-style-trace";
 
 type ProposalForgePrefill = {
   handoffId: string;
@@ -134,6 +155,14 @@ type ProposalImportedSourceState = {
   sourceUrl: string | null;
   platform: string | null;
 };
+
+const PROPOSAL_SAVE_DEBOUNCE_MS = Number(
+  (typeof globalThis !== "undefined" &&
+    (globalThis as any).process?.env?.TEST_DEBOUNCE_MS) ??
+    (typeof process !== "undefined"
+      ? (process as any).env?.TEST_DEBOUNCE_MS
+      : undefined),
+) || 1000;
 
 const COMPOSE_TOOLBAR_VISIBLE_VOICE_PRESETS = new Set<
   NonNullable<FormValues["voicePreset"]>
@@ -249,6 +278,7 @@ function resolveStoredComposeToolbarVoicePreset(args: {
 type ProposalDocumentMetadata = {
   sourceJobDescription?: string;
   sourceUrl?: string;
+  sourceCvId?: string;
   platform?: string;
   proposalType?: FormValues["proposalType"];
   voicePreset?: FormValues["voicePreset"];
@@ -334,6 +364,33 @@ function readAttachedCvSelection(): {
   };
 }
 
+function normalizeSourceCvId(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : null;
+}
+
+function resolveSourceCvTitle(sourceCvId: string | null | undefined): string | null {
+  const normalizedSourceCvId = normalizeSourceCvId(sourceCvId);
+  if (!normalizedSourceCvId) {
+    return null;
+  }
+
+  return getLocalActiveCvSnapshotById(normalizedSourceCvId)?.title ?? null;
+}
+
+function resolveSourceCvStylePreset(
+  sourceCvId: string | null | undefined,
+): ReturnType<typeof getVerbatiStyleFromCv> | null {
+  const normalizedSourceCvId = normalizeSourceCvId(sourceCvId);
+  if (!normalizedSourceCvId) {
+    return null;
+  }
+
+  const sourceCvDocument = getLocalCvDocumentById(normalizedSourceCvId);
+  return sourceCvDocument ? getVerbatiStyleFromCv(sourceCvDocument) : null;
+}
+
 function isProposalPaletteId(value: unknown): value is ProposalPaletteId {
   return (
     value === "sauge" ||
@@ -353,10 +410,6 @@ function normalizeProposalAccentHex(value: unknown): string | null {
 function normalizeProposalSettingsStyleChoice(
   value: unknown,
 ): ProposalStyleChoice {
-  if (value === "formal") {
-    return "balanced";
-  }
-
   return resolveProposalStyleChoice(value);
 }
 
@@ -412,6 +465,77 @@ function buildProposalSnippet(value: unknown): string {
   return paragraphs.slice(0, 2).join("\n");
 }
 
+function buildProposalStyleTraceRoute(location: {
+  pathname: string;
+  search: string;
+}): string {
+  return `${location.pathname}${location.search}`;
+}
+
+function buildProposalStyleTraceMetadataSnapshot(input: {
+  templateId?: unknown;
+  verbatiStyle?:
+    | ReturnType<typeof serializeVerbatiStyle>
+    | ReturnType<typeof resolveVerbatiStyle>
+    | null;
+  sourceCvId?: unknown;
+  styleLinkMode?: unknown;
+}): ProposalStyleTraceMetadataSnapshot {
+  const serializedStyle = input.verbatiStyle
+    ? serializeVerbatiStyle(input.verbatiStyle)
+    : null;
+
+  return {
+    templateId:
+      typeof input.templateId === "string" && input.templateId.trim().length > 0
+        ? input.templateId.trim()
+        : null,
+    verbatiStyle: serializedStyle
+      ? {
+          layout: serializedStyle.layout ?? null,
+          typography: serializedStyle.typography ?? null,
+          palette: serializedStyle.palette ?? null,
+          accentHex: serializedStyle.accentHex ?? null,
+        }
+      : null,
+    sourceCvId: normalizeSourceCvId(input.sourceCvId),
+    styleLinkMode:
+      typeof input.styleLinkMode === "string" && input.styleLinkMode.trim().length > 0
+        ? input.styleLinkMode.trim()
+        : null,
+  };
+}
+
+function buildResolvedRenderTraceSnapshot(args: {
+  proposalId?: unknown;
+  templateId?: unknown;
+  stylePreset?: ReturnType<typeof resolveVerbatiStyle> | null;
+  sourceCvId?: unknown;
+  styleLinkMode?: ProposalStyleLinkMode | null;
+  styleSource?: string | null;
+}): {
+  proposalId: string | null;
+  metadata: ProposalStyleTraceMetadataSnapshot;
+  styleSource: string | null;
+} {
+  return {
+    proposalId:
+      typeof args.proposalId === "string" && args.proposalId.trim().length > 0
+        ? args.proposalId.trim()
+        : null,
+    metadata: buildProposalStyleTraceMetadataSnapshot({
+      templateId: args.templateId,
+      verbatiStyle: args.stylePreset ?? null,
+      sourceCvId: args.sourceCvId,
+      styleLinkMode: args.styleLinkMode ?? null,
+    }),
+    styleSource:
+      typeof args.styleSource === "string" && args.styleSource.trim().length > 0
+        ? args.styleSource.trim()
+        : null,
+  };
+}
+
 /**
  * ProposalForge — page Write
  *
@@ -426,9 +550,105 @@ export function ProposalForge(): JSX.Element {
   const { search } = location;
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const storedOutputDraft = React.useMemo(
-    () => readStoredProposalOutputDraft(),
-    [],
+  const traceProposalStyle = React.useCallback(
+    (args: {
+      step: string;
+      proposalId?: string | null;
+      generatedProposalId?: string | null;
+      selectedProposalId?: string | null;
+      composeToken?: string | null;
+      persistedToken?: string | null;
+      winnerSource: ProposalStyleTraceWinnerSource;
+      winnerReason: string;
+      rawServerRow?: ReturnType<typeof snapshotSavedProposalRecord> | null;
+      rawQueryRow?: ReturnType<typeof snapshotSavedProposalRecord> | null;
+      rawLocalOutputDraft?: ReturnType<typeof snapshotStoredOutputDraft> | null;
+      rawSessionOutputDraft?: ReturnType<typeof snapshotStoredOutputDraft> | null;
+      rawComposeDraft?: ReturnType<typeof snapshotStoredComposeDraft> | null;
+      rawCvStyleSource?:
+        | {
+            cvId: string | null;
+            cvLabel: string | null;
+            metadata: ProposalStyleTraceMetadataSnapshot;
+          }
+        | null;
+      resolvedRenderState?: Record<string, unknown> | null;
+      traceData?: Record<string, unknown>;
+    }) => {
+      const storageSnapshots = readProposalStyleTraceStorageSnapshots();
+      logProposalStyleTrace({
+        route: buildProposalStyleTraceRoute(location),
+        step: args.step,
+        proposalId: args.proposalId ?? null,
+        generatedProposalId: args.generatedProposalId ?? null,
+        selectedProposalId: args.selectedProposalId ?? null,
+        composeToken: args.composeToken ?? null,
+        persistedToken: args.persistedToken ?? null,
+        winnerSource: args.winnerSource,
+        winnerReason: args.winnerReason,
+        rawServerRow: args.rawServerRow ?? null,
+        rawQueryRow: args.rawQueryRow ?? null,
+        rawLocalOutputDraft:
+          args.rawLocalOutputDraft === undefined
+            ? storageSnapshots.rawLocalOutputDraft
+            : args.rawLocalOutputDraft,
+        rawSessionOutputDraft:
+          args.rawSessionOutputDraft === undefined
+            ? storageSnapshots.rawSessionOutputDraft
+            : args.rawSessionOutputDraft,
+        rawComposeDraft:
+          args.rawComposeDraft === undefined
+            ? storageSnapshots.rawComposeDraft
+            : args.rawComposeDraft,
+        rawCvStyleSource: args.rawCvStyleSource ?? null,
+        resolvedRenderState: args.resolvedRenderState ?? null,
+        ...(args.traceData ?? {}),
+      });
+    },
+    [location],
+  );
+  const [storedOutputDraft, setStoredOutputDraft] =
+    React.useState<StoredProposalOutputDraft | null>(() =>
+      readStoredProposalOutputDraft(),
+    );
+  const writeStoredOutputDraft = React.useCallback(
+    (nextDraft: StoredProposalOutputDraft | null) => {
+      const storageSnapshots = readProposalStyleTraceStorageSnapshots();
+      const draftWinnerSource =
+        resolveOutputDraftWinnerSource({
+          localDraft: storageSnapshots.rawLocalOutputDraft,
+          sessionDraft: storageSnapshots.rawSessionOutputDraft,
+        }) ?? "default_fallback";
+      writeStoredProposalOutputDraft(nextDraft);
+      setStoredOutputDraft(nextDraft);
+      traceProposalStyle({
+        step: "write-stored-output-draft",
+        proposalId: nextDraft?.generatedProposalId ?? null,
+        generatedProposalId: nextDraft?.generatedProposalId ?? null,
+        selectedProposalId: null,
+        composeToken: null,
+        persistedToken: null,
+        winnerSource: nextDraft ? draftWinnerSource : "default_fallback",
+        winnerReason: nextDraft
+          ? draftWinnerSource === "session_output_draft"
+            ? "session output draft write requested from ProposalForge"
+            : "local output draft write requested from ProposalForge"
+          : "output draft cleared from ProposalForge",
+        rawLocalOutputDraft: storageSnapshots.rawLocalOutputDraft,
+        rawSessionOutputDraft: storageSnapshots.rawSessionOutputDraft,
+        resolvedRenderState: nextDraft
+          ? {
+              proposalId: String(nextDraft.generatedProposalId ?? ""),
+              metadata: snapshotStoredOutputDraft(nextDraft)?.metadata ?? null,
+              proposalOutputMode: nextDraft.proposalOutputMode,
+            }
+          : null,
+        traceData: {
+          nextDraft: snapshotStoredOutputDraft(nextDraft),
+        },
+      });
+    },
+    [traceProposalStyle],
   );
   const [attachedCvId, setAttachedCvId] = React.useState<string | null>(
     () => readAttachedCvSelection().id,
@@ -659,6 +879,19 @@ export function ProposalForge(): JSX.Element {
   const [proposalStylePreset, setProposalStylePreset] = React.useState(
     storedOutputStylePreset ?? activeCvProposalStylePreset,
   );
+  const shouldRestoreStoredCustomStyle = Boolean(
+    storedOutputDraft?.proposalStyleLinkMode === "proposal_local" &&
+      storedOutputStylePreset,
+  );
+  const [hasUserEditedStyle, setHasUserEditedStyle] = React.useState<boolean>(
+    () => shouldRestoreStoredCustomStyle,
+  );
+  const [proposalWorkspaceStyle, setProposalWorkspaceStyle] =
+    React.useState<ReturnType<typeof resolveVerbatiStyle> | null>(() =>
+      shouldRestoreStoredCustomStyle && storedOutputStylePreset
+        ? resolveVerbatiStyle(storedOutputStylePreset)
+        : null,
+    );
   const [proposalTemplateBundleId, setProposalTemplateBundleId] =
     React.useState<ProposalTemplateBundleId | null>(
       storedOutputDraft?.templateBundleId ?? null,
@@ -709,8 +942,8 @@ export function ProposalForge(): JSX.Element {
   const [proposalOutputMode, setProposalOutputMode] = React.useState<
     "preview" | "edit"
   >(storedOutputDraft?.proposalOutputMode ?? "preview");
-  const [isSavingGeneratedProposal, setIsSavingGeneratedProposal] =
-    React.useState(false);
+  const [composeSaveStatus, setComposeSaveStatus] =
+    React.useState<SaveStatus>("idle");
   const [isSavingOutputToLibrary, setIsSavingOutputToLibrary] =
     React.useState(false);
   const [proposalExportingFormat, setProposalExportingFormat] =
@@ -803,6 +1036,7 @@ export function ProposalForge(): JSX.Element {
   const briefSettleTimerRef = React.useRef<number | null>(null);
   const toolbarTransitionTimerRef = React.useRef<number | null>(null);
   const syncedStoredOutputSourceComposeRef = React.useRef(false);
+  const suppressStoredOutputDraftSyncRef = React.useRef(false);
   const lastAutoApplicantHeaderRef = React.useRef({
     name: defaultPreviewApplicantHeader.name ?? "",
     role: defaultPreviewApplicantHeader.role ?? "",
@@ -818,6 +1052,9 @@ export function ProposalForge(): JSX.Element {
   React.useEffect(() => {
     hasCompletedInitialRenderRef.current = true;
   }, []);
+  React.useEffect(() => {
+    generatedProposalIdRef.current = generatedProposalId;
+  }, [generatedProposalId]);
   React.useEffect(() => {
     const previousAuto = lastAutoApplicantHeaderRef.current;
     const nextAuto = {
@@ -892,7 +1129,38 @@ export function ProposalForge(): JSX.Element {
   const lastSavedProposalTitleRef = React.useRef<string>(
     storedOutputDraft?.proposalDocumentTitle ?? "",
   );
-  const lastStampedTemplateTokenRef = React.useRef<string | null>(null);
+  const generatedProposalIdRef = React.useRef<Id<"proposals"> | null>(
+    storedOutputDraft?.generatedProposalId ?? null,
+  );
+  const composeAutosaveTimeoutRef =
+    React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingComposeSavePromiseRef = React.useRef<Promise<Id<"proposals"> | null> | null>(
+    null,
+  );
+  const pendingQueuedComposeSnapshotRef = React.useRef<{
+    id: Id<"proposals"> | null;
+    title: string;
+    content: string;
+    metadata: ProposalDocumentMetadata | undefined;
+    status?: string;
+    token: string;
+  } | null>(null);
+  const isSavingComposeProposalRef = React.useRef(false);
+  const lastPersistedComposeTokenRef = React.useRef<string | null>(null);
+  const composeAutosavePrimedRef = React.useRef(false);
+  const previousComposeStyleTraceRef = React.useRef<{
+    proposalStyleLinkMode: ProposalStyleLinkMode;
+    proposalTemplateId: ProposalTemplateId | null;
+    proposalStylePreset: ReturnType<typeof resolveVerbatiStyle> | null;
+    hasUserEditedStyle: boolean;
+  } | null>(null);
+  const previousSavedStyleTraceRef = React.useRef<{
+    selectedProposalId: string | null;
+    savedProposalStyleLinkMode: ProposalStyleLinkMode;
+    savedProposalTemplateId: ProposalTemplateId | null;
+    savedProposalStylePreset: ReturnType<typeof resolveVerbatiStyle> | null;
+  } | null>(null);
+  const latestTraceSnapshotRef = React.useRef<Record<string, unknown> | null>(null);
   const appliedSettingsAppearanceDefaultsRef = React.useRef(false);
   const canPersistProposalState = isConvexAuthenticated && !isConvexAuthLoading;
   const settingsStyleChoice = React.useMemo(
@@ -1047,15 +1315,49 @@ export function ProposalForge(): JSX.Element {
       sourceUrl: prefill.sourceUrl ?? null,
       platform: prefill.platform ?? null,
     };
+    suppressStoredOutputDraftSyncRef.current = true;
+    syncedStoredOutputSourceComposeRef.current = true;
     pendingComposeDraftSyncRef.current = null;
     if (composeDraftSyncTimeoutRef.current !== null) {
       window.clearTimeout(composeDraftSyncTimeoutRef.current);
       composeDraftSyncTimeoutRef.current = null;
     }
+    setProposalContent(null);
+    setLoading(false);
+    setError(null);
+    setErrorDetail(null);
+    setStatusMessage(null);
+    setFallbackInfo(null);
+    setProposalType(null);
+    setProposalVoicePreset(null);
+    setProposalDocumentTitle("");
+    setProposalDocumentMeta("");
+    setGeneratedProposalId(null);
+    generatedProposalIdRef.current = null;
+    setProposalOutputMode("preview");
+    lastSavedProposalContentRef.current = null;
+    lastSavedProposalTitleRef.current = "";
+    lastPersistedComposeTokenRef.current = null;
+    composeAutosavePrimedRef.current = false;
+    pendingQueuedComposeSnapshotRef.current = null;
+    if (composeAutosaveTimeoutRef.current !== null) {
+      window.clearTimeout(composeAutosaveTimeoutRef.current);
+      composeAutosaveTimeoutRef.current = null;
+    }
+    setComposeSaveStatus("idle");
+    setLastProposalRequest(null);
+    setIsConfirmingGeneratedDelete(false);
+    setIsComposePanelVisible(true);
+    setIsBriefExpanded(true);
+    setCopyFeedback("idle");
+    writeStoredOutputDraft(null);
     writeStoredProposalComposeDraft(nextComposeDraft);
     setComposePreviewValues(nextComposeDraft);
     setOutputSourceComposeDraft(nextComposeDraft);
     setComposeDraftInitialSeed(nextComposeDraft);
+    setComposeToolbarVoicePreset(
+      normalizeComposeToolbarVoicePreset(nextComposeDraft.voicePreset ?? null),
+    );
   }, [
     prefill?.handoffId,
     prefill?.jobDescription,
@@ -1063,6 +1365,7 @@ export function ProposalForge(): JSX.Element {
     prefill?.sourceUrl,
     prefill?.platform,
     requestedView,
+    writeStoredOutputDraft,
   ]);
 
   React.useEffect(() => {
@@ -1298,6 +1601,10 @@ export function ProposalForge(): JSX.Element {
   );
 
   React.useEffect(() => {
+    if (hasUserEditedStyle) {
+      return;
+    }
+
     if (resolvedStyleLinkMode !== "proposal_local") {
       return;
     }
@@ -1327,24 +1634,20 @@ export function ProposalForge(): JSX.Element {
         : resolvedProposalLocalStyle.templateId,
     );
   }, [
+    hasUserEditedStyle,
     resolvedProposalLocalStyle.stylePreset,
     resolvedProposalLocalStyle.templateId,
     resolvedStyleLinkMode,
     selectedProposalBundleDefinition,
   ]);
 
-  const effectiveProposalStylePreset = React.useMemo(
-    () =>
-      resolvedStyleLinkMode === "inherit_cv" && activeCvProposalStylePreset
-        ? activeCvProposalStylePreset
-        : resolveVerbatiStyle(proposalStylePreset ?? undefined),
-    [activeCvProposalStylePreset, proposalStylePreset, resolvedStyleLinkMode],
-  );
-  const effectiveProposalStylePresetWithPalette = React.useMemo(
+  const proposalMetadataStyle = React.useMemo(
     () => {
+      const baseStyle = resolveVerbatiStyle(proposalStylePreset ?? undefined);
+
       if (proposalCustomAccentHex) {
         return resolveVerbatiStyle({
-          ...effectiveProposalStylePreset,
+          ...baseStyle,
           palette: "custom",
           accentHex: proposalCustomAccentHex,
         });
@@ -1352,32 +1655,163 @@ export function ProposalForge(): JSX.Element {
 
       if (proposalPaletteOverride) {
         return resolveVerbatiStyle({
-          ...effectiveProposalStylePreset,
+          ...baseStyle,
           palette: proposalPaletteOverride,
         });
       }
 
-      return effectiveProposalStylePreset;
+      return baseStyle;
     },
     [
-      effectiveProposalStylePreset,
+      proposalStylePreset,
       proposalCustomAccentHex,
       proposalPaletteOverride,
     ],
   );
-  const effectiveProposalTemplateId = React.useMemo(
+  const resolvedProposalRuntimeStyle = React.useMemo(
     () =>
-      resolvedStyleLinkMode === "inherit_cv" && activeCvProposalStylePreset
-        ? getProposalTwinTemplateId(activeCvProposalStylePreset)
-        : proposalTemplateId ??
-          getProposalTwinTemplateId(effectiveProposalStylePreset),
+      resolveProposalStyle({
+        workspaceStyle: proposalWorkspaceStyle,
+        metadataStyle: proposalMetadataStyle,
+        cvStyle: activeCvProposalStylePreset,
+        hasUserEditedStyle,
+        isCvAttached: Boolean(attachedCvId && activeCvProposalStylePreset),
+      }),
     [
       activeCvProposalStylePreset,
-      effectiveProposalStylePreset,
-      proposalTemplateId,
-      resolvedStyleLinkMode,
+      attachedCvId,
+      hasUserEditedStyle,
+      proposalMetadataStyle,
+      proposalWorkspaceStyle,
     ],
   );
+  const effectiveProposalStylePreset = resolvedProposalRuntimeStyle.style;
+  const effectiveProposalStylePresetWithPalette = effectiveProposalStylePreset;
+  const resolvedRuntimeStyleLinkMode =
+    resolvedProposalRuntimeStyle.source === "cv"
+      ? "inherit_cv"
+      : "proposal_local";
+  const proposalStyleStatus = React.useMemo(
+    () =>
+      resolveProposalStyleStatus({
+        sourceCvId: attachedCvId,
+        sourceCvLabel: attachedCvTitle,
+        styleSource: resolvedProposalRuntimeStyle.source,
+        hasSourceCvStyle: Boolean(activeCvProposalStylePreset),
+      }),
+    [
+      activeCvProposalStylePreset,
+      attachedCvId,
+      attachedCvTitle,
+      resolvedProposalRuntimeStyle.source,
+    ],
+  );
+  const effectiveProposalTemplateId = React.useMemo(
+    () => {
+      if (resolvedProposalRuntimeStyle.source === "cv") {
+        return getProposalTwinTemplateId(effectiveProposalStylePreset);
+      }
+
+      return (
+        proposalTemplateId ??
+        getProposalTwinTemplateId(effectiveProposalStylePreset)
+      );
+    },
+    [
+      effectiveProposalStylePreset,
+      proposalTemplateId,
+      resolvedProposalRuntimeStyle.source,
+    ],
+  );
+  const proposalStyleStatusLabel = React.useMemo(() => {
+    switch (proposalStyleStatus.styleSource) {
+      case "cv":
+        return "CV";
+      case "custom":
+        return "Custom";
+      case "default":
+      default:
+        return "Default";
+    }
+  }, [proposalStyleStatus.styleSource]);
+  const composeRawCvStyleSource = React.useMemo(
+    () =>
+      attachedCvId || activeCvProposalStylePreset
+        ? {
+            cvId: attachedCvId ?? null,
+            cvLabel: attachedCvTitle ?? null,
+            metadata: buildProposalStyleTraceMetadataSnapshot({
+              templateId: activeCvProposalStylePreset
+                ? getProposalTwinTemplateId(activeCvProposalStylePreset)
+                : null,
+              verbatiStyle: activeCvProposalStylePreset ?? null,
+              sourceCvId: attachedCvId,
+              styleLinkMode: "inherit_cv",
+            }),
+          }
+        : null,
+    [activeCvProposalStylePreset, attachedCvId, attachedCvTitle],
+  );
+  const composeTraceWinner = React.useMemo(() => {
+    const storageSnapshots = readProposalStyleTraceStorageSnapshots();
+    const draftWinnerSource = resolveOutputDraftWinnerSource({
+      localDraft: storageSnapshots.rawLocalOutputDraft,
+      sessionDraft: storageSnapshots.rawSessionOutputDraft,
+    });
+
+    if (
+      resolvedProposalRuntimeStyle.source === "cv" &&
+      attachedCvId &&
+      activeCvProposalStylePreset
+    ) {
+      return {
+        winnerSource: "cv_inherit_resolver" as const,
+        winnerReason: "styleLinkMode forced inherit_cv",
+      };
+    }
+
+    if (resolvedProposalRuntimeStyle.source === "custom") {
+      return {
+        winnerSource:
+          draftWinnerSource ??
+          ("local_output_draft" as ProposalStyleTraceWinnerSource),
+        winnerReason: draftWinnerSource === "session_output_draft"
+          ? "session output draft carried the detached proposal style"
+          : "proposal-local style resolved from the output draft path",
+      };
+    }
+
+    return {
+      winnerSource: "default_fallback" as const,
+      winnerReason: "no draft style fields present, fell back to default",
+    };
+  }, [
+    activeCvProposalStylePreset,
+    attachedCvId,
+    resolvedProposalRuntimeStyle.source,
+  ]);
+  const isCurrentComposeStyleSyncedToCv = React.useMemo(
+    () =>
+      Boolean(
+        activeCvProposalStylePreset &&
+          stylesEqual(effectiveProposalStylePreset, activeCvProposalStylePreset),
+      ),
+    [activeCvProposalStylePreset, effectiveProposalStylePreset],
+  );
+  const handleResetToCvStyle = React.useCallback(() => {
+    if (!activeCvProposalStylePreset) {
+      return;
+    }
+
+    setProposalStyleLinkMode("inherit_cv");
+    setProposalStylePreset(activeCvProposalStylePreset);
+    setProposalTemplateId(getProposalTwinTemplateId(activeCvProposalStylePreset));
+    setProposalTemplateBundleId(null);
+    setProposalPaletteOverride(null);
+    setProposalCustomAccentHex(null);
+    setHasUserEditedStyle(false);
+    setProposalWorkspaceStyle(null);
+  }, [activeCvProposalStylePreset]);
   const proposalRenderMetadata = React.useMemo<
     ProposalDocumentMetadata | undefined
   >(() => {
@@ -1394,7 +1828,10 @@ export function ProposalForge(): JSX.Element {
     nextMetadata.verbatiStyle = serializeVerbatiStyle(
       effectiveProposalStylePresetWithPalette,
     );
-    nextMetadata.styleLinkMode = resolvedStyleLinkMode;
+    nextMetadata.styleLinkMode = resolvedRuntimeStyleLinkMode;
+    if (attachedCvId) {
+      nextMetadata.sourceCvId = attachedCvId;
+    }
     nextMetadata.styleChoice = proposalStyleChoice;
     if (proposalTemplateBundleId) {
       nextMetadata.templateBundleId = proposalTemplateBundleId;
@@ -1406,6 +1843,7 @@ export function ProposalForge(): JSX.Element {
 
     return Object.keys(nextMetadata).length > 0 ? nextMetadata : undefined;
   }, [
+    attachedCvId,
     currentProposalSettings?.templateId,
     draftCharacterLimitMode,
     draftCharacterLimitValue,
@@ -1414,7 +1852,7 @@ export function ProposalForge(): JSX.Element {
     fallbackProposalTemplateId,
     proposalTemplateBundleId,
     proposalStyleChoice,
-    resolvedStyleLinkMode,
+    resolvedRuntimeStyleLinkMode,
   ]);
   const proposalPersistenceMetadata = React.useMemo<
     ProposalDocumentMetadata | undefined
@@ -1506,6 +1944,370 @@ export function ProposalForge(): JSX.Element {
     proposalType,
     proposalVoicePreset,
   ]);
+  const buildComposeSaveSnapshot = React.useCallback(
+    (requestedTitle?: string) => {
+      const trimmedContent = proposalContent?.trim() ?? "";
+      if (!trimmedContent) {
+        return null;
+      }
+
+      const normalizedTitle =
+        requestedTitle?.trim() ||
+        proposalDocumentTitle.trim() ||
+        (proposalType
+          ? proposalType === "cover_letter"
+            ? "Letter"
+            : proposalType === "application_message"
+              ? "Message"
+              : "Proposal"
+          : "Generated proposal");
+
+      const metadata = proposalPersistenceMetadata;
+      return {
+        id: generatedProposalId,
+        title: normalizedTitle,
+        content: trimmedContent,
+        metadata,
+        status: "saved",
+        token: JSON.stringify({
+          title: normalizedTitle,
+          content: trimmedContent,
+          metadata: metadata ?? null,
+        }),
+      };
+    },
+    [
+      generatedProposalId,
+      proposalContent,
+      proposalDocumentTitle,
+      proposalPersistenceMetadata,
+      proposalType,
+    ],
+  );
+  const composeAutosaveSnapshot = React.useMemo(
+    () => buildComposeSaveSnapshot(),
+    [buildComposeSaveSnapshot],
+  );
+  const performProposalSave = React.useCallback(
+    async (
+      initialSnapshot: NonNullable<typeof composeAutosaveSnapshot>,
+      options?: { silent?: boolean },
+    ) => {
+      if (!canPersistProposalState) {
+        if (!options?.silent) {
+          showConvexAuthRequiredToast("Save");
+        }
+        return null;
+      }
+
+      if (isSavingComposeProposalRef.current && pendingComposeSavePromiseRef.current) {
+        pendingQueuedComposeSnapshotRef.current = initialSnapshot;
+        return pendingComposeSavePromiseRef.current;
+      }
+
+      const saveLoop = async () => {
+        let nextSnapshot: typeof initialSnapshot | null = initialSnapshot;
+        let lastPersistedId: Id<"proposals"> | null = generatedProposalIdRef.current;
+
+        while (nextSnapshot) {
+          pendingQueuedComposeSnapshotRef.current = null;
+          isSavingComposeProposalRef.current = true;
+          setComposeSaveStatus("saving");
+
+          try {
+            traceProposalStyle({
+              step: "perform-proposal-save:before-write",
+              proposalId:
+                generatedProposalIdRef.current ?? nextSnapshot.id
+                  ? String(generatedProposalIdRef.current ?? nextSnapshot.id)
+                  : null,
+              generatedProposalId: generatedProposalIdRef.current
+                ? String(generatedProposalIdRef.current)
+                : null,
+              selectedProposalId,
+              composeToken: nextSnapshot.token,
+              persistedToken: lastPersistedComposeTokenRef.current,
+              winnerSource: composeTraceWinner.winnerSource,
+              winnerReason: composeTraceWinner.winnerReason,
+              rawServerRow: null,
+              rawQueryRow: null,
+              rawCvStyleSource: composeRawCvStyleSource,
+              resolvedRenderState: buildResolvedRenderTraceSnapshot({
+                proposalId: generatedProposalIdRef.current ?? nextSnapshot.id,
+                templateId: nextSnapshot.metadata?.templateId,
+                stylePreset: nextSnapshot.metadata?.verbatiStyle ?? null,
+                sourceCvId: nextSnapshot.metadata?.sourceCvId,
+                styleLinkMode: nextSnapshot.metadata?.styleLinkMode ?? null,
+                styleSource: composeTraceWinner.winnerSource,
+              }),
+              traceData: {
+                savePayload: {
+                  proposalId: nextSnapshot.id ? String(nextSnapshot.id) : null,
+                  title: nextSnapshot.title,
+                  status: nextSnapshot.status ?? "saved",
+                  metadata: buildProposalStyleTraceMetadataSnapshot({
+                    templateId: nextSnapshot.metadata?.templateId,
+                    verbatiStyle: nextSnapshot.metadata?.verbatiStyle,
+                    sourceCvId: nextSnapshot.metadata?.sourceCvId,
+                    styleLinkMode: nextSnapshot.metadata?.styleLinkMode,
+                  }),
+                },
+              },
+            });
+            if (generatedProposalIdRef.current) {
+              await updateProposal({
+                id: generatedProposalIdRef.current,
+                title: nextSnapshot.title,
+                content: nextSnapshot.content,
+                sections: [{ type: "text", content: nextSnapshot.content }],
+                status: nextSnapshot.status,
+                metadata: nextSnapshot.metadata,
+              });
+              lastPersistedId = generatedProposalIdRef.current;
+            } else {
+              const createdId = (await createProposal({
+                title: nextSnapshot.title,
+                content: nextSnapshot.content,
+                sections: [{ type: "text", content: nextSnapshot.content }],
+                status: nextSnapshot.status,
+                metadata: nextSnapshot.metadata,
+              })) as Id<"proposals">;
+              generatedProposalIdRef.current = createdId;
+              setGeneratedProposalId(createdId);
+              lastPersistedId = createdId;
+            }
+
+            traceProposalStyle({
+              step: "perform-proposal-save:after-write",
+              proposalId: lastPersistedId ? String(lastPersistedId) : null,
+              generatedProposalId: lastPersistedId ? String(lastPersistedId) : null,
+              selectedProposalId,
+              composeToken: nextSnapshot.token,
+              persistedToken: nextSnapshot.token,
+              winnerSource: composeTraceWinner.winnerSource,
+              winnerReason: composeTraceWinner.winnerReason,
+              rawServerRow: null,
+              rawQueryRow: null,
+              rawCvStyleSource: composeRawCvStyleSource,
+              resolvedRenderState: buildResolvedRenderTraceSnapshot({
+                proposalId: lastPersistedId,
+                templateId: nextSnapshot.metadata?.templateId,
+                stylePreset: nextSnapshot.metadata?.verbatiStyle ?? null,
+                sourceCvId: nextSnapshot.metadata?.sourceCvId,
+                styleLinkMode: nextSnapshot.metadata?.styleLinkMode ?? null,
+                styleSource: composeTraceWinner.winnerSource,
+              }),
+            });
+            lastSavedProposalContentRef.current = nextSnapshot.content;
+            lastSavedProposalTitleRef.current = nextSnapshot.title;
+            lastPersistedComposeTokenRef.current = nextSnapshot.token;
+            setComposeSaveStatus("saved");
+          } catch (saveError) {
+            traceProposalStyle({
+              step: "perform-proposal-save:error",
+              proposalId:
+                generatedProposalIdRef.current ?? nextSnapshot.id
+                  ? String(generatedProposalIdRef.current ?? nextSnapshot.id)
+                  : null,
+              generatedProposalId: generatedProposalIdRef.current
+                ? String(generatedProposalIdRef.current)
+                : null,
+              selectedProposalId,
+              composeToken: nextSnapshot.token,
+              persistedToken: lastPersistedComposeTokenRef.current,
+              winnerSource: composeTraceWinner.winnerSource,
+              winnerReason: composeTraceWinner.winnerReason,
+              rawServerRow: null,
+              rawQueryRow: null,
+              rawCvStyleSource: composeRawCvStyleSource,
+              resolvedRenderState: buildResolvedRenderTraceSnapshot({
+                proposalId: generatedProposalIdRef.current ?? nextSnapshot.id,
+                templateId: nextSnapshot.metadata?.templateId,
+                stylePreset: nextSnapshot.metadata?.verbatiStyle ?? null,
+                sourceCvId: nextSnapshot.metadata?.sourceCvId,
+                styleLinkMode: nextSnapshot.metadata?.styleLinkMode ?? null,
+                styleSource: composeTraceWinner.winnerSource,
+              }),
+              traceData: {
+                error:
+                  saveError instanceof Error ? saveError.message : String(saveError),
+              },
+            });
+            console.error("Failed to persist proposal draft:", saveError);
+            const errorMessage =
+              saveError instanceof Error ? saveError.message : String(saveError);
+            if (errorMessage.includes("Proposal not found")) {
+              generatedProposalIdRef.current = null;
+              setGeneratedProposalId(null);
+              lastPersistedComposeTokenRef.current = null;
+            }
+            setComposeSaveStatus("error");
+            throw saveError;
+          } finally {
+            isSavingComposeProposalRef.current = false;
+          }
+
+          const queuedSnapshot = pendingQueuedComposeSnapshotRef.current;
+          nextSnapshot =
+            queuedSnapshot &&
+            queuedSnapshot.token !== lastPersistedComposeTokenRef.current
+              ? queuedSnapshot
+              : null;
+        }
+
+        return lastPersistedId;
+      };
+
+      const pendingPromise = saveLoop();
+      pendingComposeSavePromiseRef.current = pendingPromise;
+
+      try {
+        return await pendingPromise;
+      } finally {
+        if (pendingComposeSavePromiseRef.current === pendingPromise) {
+          pendingComposeSavePromiseRef.current = null;
+        }
+      }
+    },
+    [
+      canPersistProposalState,
+      composeRawCvStyleSource,
+      composeTraceWinner.winnerReason,
+      composeTraceWinner.winnerSource,
+      createProposal,
+      selectedProposalId,
+      showConvexAuthRequiredToast,
+      traceProposalStyle,
+      updateProposal,
+    ],
+  );
+  const scheduleProposalSave = React.useCallback(
+    (snapshot: NonNullable<typeof composeAutosaveSnapshot>) => {
+      if (composeAutosaveTimeoutRef.current) {
+        window.clearTimeout(composeAutosaveTimeoutRef.current);
+      }
+
+      pendingQueuedComposeSnapshotRef.current = snapshot;
+      setComposeSaveStatus("saving");
+      composeAutosaveTimeoutRef.current = window.setTimeout(() => {
+        composeAutosaveTimeoutRef.current = null;
+        const nextSnapshot = pendingQueuedComposeSnapshotRef.current;
+        if (!nextSnapshot) {
+          return;
+        }
+        void performProposalSave(nextSnapshot, { silent: true }).catch(() => {});
+      }, PROPOSAL_SAVE_DEBOUNCE_MS);
+    },
+    [performProposalSave],
+  );
+  const flushScheduledProposalSave = React.useCallback(
+    async (requestedTitle?: string, options?: { force?: boolean }) => {
+      if (composeAutosaveTimeoutRef.current) {
+        window.clearTimeout(composeAutosaveTimeoutRef.current);
+        composeAutosaveTimeoutRef.current = null;
+      }
+
+      const snapshot =
+        buildComposeSaveSnapshot(requestedTitle) ??
+        pendingQueuedComposeSnapshotRef.current;
+      if (!snapshot) {
+        traceProposalStyle({
+          step: "flush-scheduled-proposal-save:no-snapshot",
+          proposalId: generatedProposalIdRef.current
+            ? String(generatedProposalIdRef.current)
+            : null,
+          generatedProposalId: generatedProposalIdRef.current
+            ? String(generatedProposalIdRef.current)
+            : null,
+          selectedProposalId,
+          composeToken: null,
+          persistedToken: lastPersistedComposeTokenRef.current,
+          winnerSource: composeTraceWinner.winnerSource,
+          winnerReason: "no save snapshot available to flush",
+          rawServerRow: null,
+          rawQueryRow: null,
+          rawCvStyleSource: composeRawCvStyleSource,
+          resolvedRenderState: null,
+        });
+        return generatedProposalIdRef.current;
+      }
+
+      traceProposalStyle({
+        step: "flush-scheduled-proposal-save",
+        proposalId:
+          generatedProposalIdRef.current ?? snapshot.id
+            ? String(generatedProposalIdRef.current ?? snapshot.id)
+            : null,
+        generatedProposalId: generatedProposalIdRef.current
+          ? String(generatedProposalIdRef.current)
+          : null,
+        selectedProposalId,
+        composeToken: snapshot.token,
+        persistedToken: lastPersistedComposeTokenRef.current,
+        winnerSource: composeTraceWinner.winnerSource,
+        winnerReason: composeTraceWinner.winnerReason,
+        rawServerRow: null,
+        rawQueryRow: null,
+        rawCvStyleSource: composeRawCvStyleSource,
+        resolvedRenderState: buildResolvedRenderTraceSnapshot({
+          proposalId: generatedProposalIdRef.current ?? snapshot.id,
+          templateId: snapshot.metadata?.templateId,
+          stylePreset: snapshot.metadata?.verbatiStyle ?? null,
+          sourceCvId: snapshot.metadata?.sourceCvId,
+          styleLinkMode: snapshot.metadata?.styleLinkMode ?? null,
+          styleSource: composeTraceWinner.winnerSource,
+        }),
+        traceData: {
+          force: options?.force === true,
+          requestedTitle: requestedTitle ?? null,
+        },
+      });
+
+      if (pendingComposeSavePromiseRef.current) {
+        await pendingComposeSavePromiseRef.current;
+      }
+
+      if (snapshot.token === lastPersistedComposeTokenRef.current) {
+        traceProposalStyle({
+          step: "flush-scheduled-proposal-save:skip-existing-token",
+          proposalId:
+            generatedProposalIdRef.current ?? snapshot.id
+              ? String(generatedProposalIdRef.current ?? snapshot.id)
+              : null,
+          generatedProposalId: generatedProposalIdRef.current
+            ? String(generatedProposalIdRef.current)
+            : null,
+          selectedProposalId,
+          composeToken: snapshot.token,
+          persistedToken: lastPersistedComposeTokenRef.current,
+          winnerSource: composeTraceWinner.winnerSource,
+          winnerReason: "compose token already persisted",
+          rawServerRow: null,
+          rawQueryRow: null,
+          rawCvStyleSource: composeRawCvStyleSource,
+          resolvedRenderState: null,
+          traceData: {
+            force: options?.force === true,
+          },
+        });
+        if (!options?.force || generatedProposalIdRef.current) {
+          return generatedProposalIdRef.current;
+        }
+      }
+
+      pendingQueuedComposeSnapshotRef.current = snapshot;
+      return performProposalSave(snapshot);
+    },
+    [
+      buildComposeSaveSnapshot,
+      composeRawCvStyleSource,
+      composeTraceWinner.winnerReason,
+      composeTraceWinner.winnerSource,
+      performProposalSave,
+      selectedProposalId,
+      traceProposalStyle,
+    ],
+  );
   const optimisticSavedDraftProposal = React.useMemo<SavedProposalRecord | null>(
     () => {
       if (
@@ -1550,10 +2352,10 @@ export function ProposalForge(): JSX.Element {
     }
 
     if (optimisticSavedDraftProposal) {
-      mergedProposals.set(
-        String(optimisticSavedDraftProposal._id),
-        optimisticSavedDraftProposal,
-      );
+      const optimisticId = String(optimisticSavedDraftProposal._id);
+      if (!mergedProposals.has(optimisticId)) {
+        mergedProposals.set(optimisticId, optimisticSavedDraftProposal);
+      }
     }
 
     return [...mergedProposals.values()]
@@ -1573,33 +2375,224 @@ export function ProposalForge(): JSX.Element {
         : null,
     [selectedProposalId, sortedSavedProposals],
   );
-  const resolvedSavedProposalStyleLinkMode =
-    savedProposalStyleLinkMode === "inherit_cv" && activeCvProposalStylePreset
-      ? "inherit_cv"
-      : "proposal_local";
-  const effectiveSavedProposalStylePreset = React.useMemo(
+  const querySelectedSavedProposal = React.useMemo(
     () =>
-      resolvedSavedProposalStyleLinkMode === "inherit_cv" &&
-      activeCvProposalStylePreset
-        ? activeCvProposalStylePreset
-        : resolveVerbatiStyle(savedProposalStylePreset ?? undefined),
+      selectedProposalId
+        ? (savedProposals ?? []).find(
+            (proposal) => String(proposal._id) === String(selectedProposalId),
+          ) ?? null
+        : null,
+    [savedProposals, selectedProposalId],
+  );
+  const fallbackSelectedSavedProposal = React.useMemo(
+    () =>
+      selectedProposalId
+        ? fallbackSavedProposals.find(
+            (proposal) => String(proposal._id) === String(selectedProposalId),
+          ) ?? null
+        : null,
+    [fallbackSavedProposals, selectedProposalId],
+  );
+  const savedSelectionTraceWinner = React.useMemo(() => {
+    const storageSnapshots = readProposalStyleTraceStorageSnapshots();
+    const draftWinnerSource = resolveOutputDraftWinnerSource({
+      localDraft: storageSnapshots.rawLocalOutputDraft,
+      sessionDraft: storageSnapshots.rawSessionOutputDraft,
+    });
+
+    if (querySelectedSavedProposal || fallbackSelectedSavedProposal) {
+      return {
+        winnerSource: "server_row" as const,
+        winnerReason: querySelectedSavedProposal
+          ? "selected proposal matched saved proposal query row"
+          : "selected proposal matched saved proposal fallback row",
+        rawServerRow: snapshotSavedProposalRecord(
+          querySelectedSavedProposal ?? fallbackSelectedSavedProposal,
+        ),
+        rawQueryRow: snapshotSavedProposalRecord(querySelectedSavedProposal),
+      };
+    }
+
+    if (
+      selectedProposalId &&
+      optimisticSavedDraftProposal &&
+      String(optimisticSavedDraftProposal._id) === String(selectedProposalId)
+    ) {
+      return {
+        winnerSource: (draftWinnerSource ?? "local_output_draft") as ProposalStyleTraceWinnerSource,
+        winnerReason: "same-id optimistic overlay matched selected proposal",
+        rawServerRow: null,
+        rawQueryRow: snapshotSavedProposalRecord(querySelectedSavedProposal),
+      };
+    }
+
+    return {
+      winnerSource: "default_fallback" as const,
+      winnerReason: "no server/query row available",
+      rawServerRow: snapshotSavedProposalRecord(
+        querySelectedSavedProposal ?? fallbackSelectedSavedProposal,
+      ),
+      rawQueryRow: snapshotSavedProposalRecord(querySelectedSavedProposal),
+    };
+  }, [
+    fallbackSelectedSavedProposal,
+    optimisticSavedDraftProposal,
+    querySelectedSavedProposal,
+    selectedProposalId,
+  ]);
+  const openedSavedProposalSourceCvId = React.useMemo(
+    () => normalizeSourceCvId(openedSavedProposal?.metadata?.sourceCvId),
+    [openedSavedProposal?.metadata?.sourceCvId],
+  );
+  const openedSavedProposalSourceCvLabel = React.useMemo(
+    () => resolveSourceCvTitle(openedSavedProposalSourceCvId),
+    [openedSavedProposalSourceCvId],
+  );
+  const openedSavedProposalSourceCvStylePreset = React.useMemo(
+    () => resolveSourceCvStylePreset(openedSavedProposalSourceCvId),
+    [openedSavedProposalSourceCvId],
+  );
+  const savedProposalHasPersistedStyleSnapshot = React.useMemo(
+    () =>
+      Boolean(
+        openedSavedProposal?.metadata?.verbatiStyle ||
+          openedSavedProposal?.metadata?.templateId,
+      ),
+    [openedSavedProposal?.metadata?.templateId, openedSavedProposal?.metadata?.verbatiStyle],
+  );
+  const resolvedSavedProposalRuntimeStyle = React.useMemo(
+    () => ({
+      style:
+        savedProposalStylePreset ??
+        resolveVerbatiStyle(
+          savedProposalHasPersistedStyleSnapshot
+            ? openedSavedProposal?.metadata?.verbatiStyle
+            : openedSavedProposalSourceCvStylePreset ?? undefined,
+        ),
+      source:
+        savedProposalStyleLinkMode === "proposal_local"
+          ? ("custom" as const)
+          : openedSavedProposalSourceCvId
+            ? ("cv" as const)
+            : ("default" as const),
+    }),
     [
-      activeCvProposalStylePreset,
-      resolvedSavedProposalStyleLinkMode,
+      openedSavedProposal?.metadata?.verbatiStyle,
+      openedSavedProposalSourceCvId,
+      openedSavedProposalSourceCvStylePreset,
+      savedProposalHasPersistedStyleSnapshot,
+      savedProposalStyleLinkMode,
       savedProposalStylePreset,
     ],
   );
+  const savedRawCvStyleSource = React.useMemo(
+    () =>
+      openedSavedProposalSourceCvId || openedSavedProposalSourceCvStylePreset
+        ? {
+            cvId: openedSavedProposalSourceCvId ?? null,
+            cvLabel: openedSavedProposalSourceCvLabel ?? null,
+            metadata: buildProposalStyleTraceMetadataSnapshot({
+              templateId: openedSavedProposalSourceCvStylePreset
+                ? getProposalTwinTemplateId(openedSavedProposalSourceCvStylePreset)
+                : null,
+              verbatiStyle: openedSavedProposalSourceCvStylePreset ?? null,
+              sourceCvId: openedSavedProposalSourceCvId,
+              styleLinkMode: "inherit_cv",
+            }),
+          }
+        : null,
+    [
+      openedSavedProposalSourceCvId,
+      openedSavedProposalSourceCvLabel,
+      openedSavedProposalSourceCvStylePreset,
+    ],
+  );
+  const savedRenderTraceWinner = React.useMemo(() => {
+    if (
+      savedSelectionTraceWinner.winnerSource === "local_output_draft" ||
+      savedSelectionTraceWinner.winnerSource === "session_output_draft"
+    ) {
+      return {
+        winnerSource: savedSelectionTraceWinner.winnerSource,
+        winnerReason: savedSelectionTraceWinner.winnerReason,
+      };
+    }
+
+    if (openedSavedProposal && savedProposalHasPersistedStyleSnapshot) {
+      return {
+        winnerSource: "server_row" as const,
+        winnerReason: "saved row carried persisted style snapshot",
+      };
+    }
+
+    if (openedSavedProposalSourceCvId && openedSavedProposalSourceCvStylePreset) {
+      return {
+        winnerSource: "cv_inherit_resolver" as const,
+        winnerReason: "saved row lacked persisted style snapshot",
+      };
+    }
+
+    return {
+      winnerSource: "default_fallback" as const,
+      winnerReason: openedSavedProposal
+        ? "no draft style fields present, fell back to default"
+        : savedSelectionTraceWinner.winnerReason,
+    };
+  }, [
+    openedSavedProposal,
+    openedSavedProposalSourceCvId,
+    openedSavedProposalSourceCvStylePreset,
+    savedProposalHasPersistedStyleSnapshot,
+    savedSelectionTraceWinner.winnerReason,
+    savedSelectionTraceWinner.winnerSource,
+  ]);
+  const savedProposalStyleStatus = React.useMemo(
+    () =>
+      resolveProposalStyleStatus({
+        sourceCvId: openedSavedProposalSourceCvId,
+        sourceCvLabel: openedSavedProposalSourceCvLabel,
+        styleSource: resolvedSavedProposalRuntimeStyle.source,
+        hasSourceCvStyle: Boolean(openedSavedProposalSourceCvStylePreset),
+      }),
+    [
+      openedSavedProposalSourceCvId,
+      openedSavedProposalSourceCvLabel,
+      openedSavedProposalSourceCvStylePreset,
+      resolvedSavedProposalRuntimeStyle.source,
+    ],
+  );
+  const savedProposalStyleStatusLabel = React.useMemo(() => {
+    switch (savedProposalStyleStatus.styleSource) {
+      case "cv":
+        return "CV";
+      case "custom":
+        return "Custom";
+      case "default":
+      default:
+        return "Default";
+    }
+  }, [savedProposalStyleStatus.styleSource]);
+  const effectiveSavedProposalStylePreset = React.useMemo(
+    () => resolvedSavedProposalRuntimeStyle.style,
+    [resolvedSavedProposalRuntimeStyle.style],
+  );
+  const isSavedProposalStyleSyncedToCv = React.useMemo(
+    () =>
+      Boolean(
+        openedSavedProposalSourceCvStylePreset &&
+          stylesEqual(
+            effectiveSavedProposalStylePreset,
+            openedSavedProposalSourceCvStylePreset,
+          ),
+      ),
+    [effectiveSavedProposalStylePreset, openedSavedProposalSourceCvStylePreset],
+  );
   const effectiveSavedProposalTemplateId = React.useMemo(
     () =>
-      resolvedSavedProposalStyleLinkMode === "inherit_cv" &&
-      activeCvProposalStylePreset
-        ? getProposalTwinTemplateId(activeCvProposalStylePreset)
-        : savedProposalTemplateId ??
-          getProposalTwinTemplateId(effectiveSavedProposalStylePreset),
+      savedProposalTemplateId ??
+      getProposalTwinTemplateId(effectiveSavedProposalStylePreset),
     [
-      activeCvProposalStylePreset,
       effectiveSavedProposalStylePreset,
-      resolvedSavedProposalStyleLinkMode,
       savedProposalTemplateId,
     ],
   );
@@ -1621,9 +2614,10 @@ export function ProposalForge(): JSX.Element {
         openedSavedProposal.metadata?.resolvedVoicePreset ??
         openedSavedProposal.metadata?.voicePreset ??
         undefined,
+      sourceCvId: openedSavedProposalSourceCvId ?? undefined,
       templateId: effectiveSavedProposalTemplateId,
       verbatiStyle: serializeVerbatiStyle(effectiveSavedProposalStylePreset),
-      styleLinkMode: resolvedSavedProposalStyleLinkMode,
+      styleLinkMode: savedProposalStyleLinkMode,
       styleChoice:
         openedSavedProposal.metadata?.styleChoice ??
         resolveProposalStyleChoiceFromRenderState({
@@ -1636,9 +2630,574 @@ export function ProposalForge(): JSX.Element {
     effectiveSavedProposalStylePreset,
     effectiveSavedProposalTemplateId,
     openedSavedProposal,
-    resolvedSavedProposalStyleLinkMode,
+    openedSavedProposalSourceCvId,
     savedProposalType,
+    savedProposalStyleLinkMode,
     savedProposalVoicePreset,
+  ]);
+
+  React.useEffect(() => {
+    if (!proposalContent?.trim()) {
+      return;
+    }
+
+    traceProposalStyle({
+      step: "compose-render-ready",
+      proposalId: generatedProposalId ? String(generatedProposalId) : null,
+      generatedProposalId: generatedProposalId ? String(generatedProposalId) : null,
+      selectedProposalId,
+      composeToken: composeAutosaveSnapshot?.token ?? null,
+      persistedToken: lastPersistedComposeTokenRef.current,
+      winnerSource: composeTraceWinner.winnerSource,
+      winnerReason: composeTraceWinner.winnerReason,
+      rawServerRow: null,
+      rawQueryRow: null,
+      rawCvStyleSource: composeRawCvStyleSource,
+      resolvedRenderState: buildResolvedRenderTraceSnapshot({
+        proposalId: generatedProposalId,
+        templateId: effectiveProposalTemplateId,
+        stylePreset: effectiveProposalStylePresetWithPalette,
+        sourceCvId: attachedCvId,
+        styleLinkMode: resolvedRuntimeStyleLinkMode,
+        styleSource: resolvedProposalRuntimeStyle.source,
+      }),
+      traceData: {
+        proposalPersistenceMetadata: buildProposalStyleTraceMetadataSnapshot({
+          templateId: proposalPersistenceMetadata?.templateId,
+          verbatiStyle: proposalPersistenceMetadata?.verbatiStyle,
+          sourceCvId: proposalPersistenceMetadata?.sourceCvId,
+          styleLinkMode: proposalPersistenceMetadata?.styleLinkMode,
+        }),
+        composeSaveStatus,
+      },
+    });
+  }, [
+    attachedCvId,
+    composeAutosaveSnapshot?.token,
+    composeRawCvStyleSource,
+    composeSaveStatus,
+    composeTraceWinner.winnerReason,
+    composeTraceWinner.winnerSource,
+    effectiveProposalStylePresetWithPalette,
+    effectiveProposalTemplateId,
+    generatedProposalId,
+    proposalContent,
+    proposalPersistenceMetadata?.sourceCvId,
+    proposalPersistenceMetadata?.styleLinkMode,
+    proposalPersistenceMetadata?.templateId,
+    proposalPersistenceMetadata?.verbatiStyle,
+    resolvedProposalRuntimeStyle.source,
+    resolvedRuntimeStyleLinkMode,
+    selectedProposalId,
+    traceProposalStyle,
+  ]);
+
+  React.useEffect(() => {
+    if (!optimisticSavedDraftProposal) {
+      return;
+    }
+
+    traceProposalStyle({
+      step: "saved-optimistic-overlay",
+      proposalId: String(optimisticSavedDraftProposal._id),
+      generatedProposalId: generatedProposalId ? String(generatedProposalId) : null,
+      selectedProposalId,
+      composeToken: composeAutosaveSnapshot?.token ?? null,
+      persistedToken: lastPersistedComposeTokenRef.current,
+      winnerSource:
+        (() => {
+          const storageSnapshots = readProposalStyleTraceStorageSnapshots();
+          return (
+            resolveOutputDraftWinnerSource({
+              localDraft: storageSnapshots.rawLocalOutputDraft,
+              sessionDraft: storageSnapshots.rawSessionOutputDraft,
+            }) ?? "local_output_draft"
+          );
+        })(),
+      winnerReason: "same-id optimistic overlay matched selected proposal",
+      rawServerRow: savedSelectionTraceWinner.rawServerRow,
+      rawQueryRow: savedSelectionTraceWinner.rawQueryRow,
+      rawCvStyleSource: composeRawCvStyleSource,
+      resolvedRenderState: snapshotSavedProposalRecord(optimisticSavedDraftProposal),
+    });
+  }, [
+    composeAutosaveSnapshot?.token,
+    composeRawCvStyleSource,
+    generatedProposalId,
+    optimisticSavedDraftProposal,
+    selectedProposalId,
+    savedSelectionTraceWinner.rawQueryRow,
+    savedSelectionTraceWinner.rawServerRow,
+    traceProposalStyle,
+  ]);
+
+  React.useEffect(() => {
+    if (!selectedProposalId) {
+      return;
+    }
+
+    traceProposalStyle({
+      step: "saved-merge",
+      proposalId: selectedProposalId,
+      generatedProposalId: generatedProposalId ? String(generatedProposalId) : null,
+      selectedProposalId,
+      composeToken: composeAutosaveSnapshot?.token ?? null,
+      persistedToken: lastPersistedComposeTokenRef.current,
+      winnerSource: savedSelectionTraceWinner.winnerSource,
+      winnerReason: savedSelectionTraceWinner.winnerReason,
+      rawServerRow: savedSelectionTraceWinner.rawServerRow,
+      rawQueryRow: savedSelectionTraceWinner.rawQueryRow,
+      rawCvStyleSource: savedRawCvStyleSource,
+      resolvedRenderState: snapshotSavedProposalRecord(openedSavedProposal),
+      traceData: {
+        mergedProposalIds: sortedSavedProposals.map((proposal) => String(proposal._id)),
+      },
+    });
+  }, [
+    composeAutosaveSnapshot?.token,
+    generatedProposalId,
+    openedSavedProposal,
+    savedRawCvStyleSource,
+    savedSelectionTraceWinner.rawQueryRow,
+    savedSelectionTraceWinner.rawServerRow,
+    savedSelectionTraceWinner.winnerReason,
+    savedSelectionTraceWinner.winnerSource,
+    selectedProposalId,
+    sortedSavedProposals,
+    traceProposalStyle,
+  ]);
+
+  React.useEffect(() => {
+    if (!selectedProposalId) {
+      return;
+    }
+
+    traceProposalStyle({
+      step: "saved-opened-proposal",
+      proposalId: openedSavedProposal ? String(openedSavedProposal._id) : selectedProposalId,
+      generatedProposalId: generatedProposalId ? String(generatedProposalId) : null,
+      selectedProposalId,
+      composeToken: composeAutosaveSnapshot?.token ?? null,
+      persistedToken: lastPersistedComposeTokenRef.current,
+      winnerSource: savedSelectionTraceWinner.winnerSource,
+      winnerReason: savedSelectionTraceWinner.winnerReason,
+      rawServerRow: savedSelectionTraceWinner.rawServerRow,
+      rawQueryRow: savedSelectionTraceWinner.rawQueryRow,
+      rawCvStyleSource: savedRawCvStyleSource,
+      resolvedRenderState: snapshotSavedProposalRecord(openedSavedProposal),
+    });
+  }, [
+    composeAutosaveSnapshot?.token,
+    generatedProposalId,
+    openedSavedProposal,
+    savedRawCvStyleSource,
+    savedSelectionTraceWinner.rawQueryRow,
+    savedSelectionTraceWinner.rawServerRow,
+    savedSelectionTraceWinner.winnerReason,
+    savedSelectionTraceWinner.winnerSource,
+    selectedProposalId,
+    traceProposalStyle,
+  ]);
+
+  React.useEffect(() => {
+    if (!openedSavedProposal) {
+      return;
+    }
+
+    traceProposalStyle({
+      step: "saved-runtime-style",
+      proposalId: String(openedSavedProposal._id),
+      generatedProposalId: generatedProposalId ? String(generatedProposalId) : null,
+      selectedProposalId,
+      composeToken: composeAutosaveSnapshot?.token ?? null,
+      persistedToken: lastPersistedComposeTokenRef.current,
+      winnerSource: savedRenderTraceWinner.winnerSource,
+      winnerReason: savedRenderTraceWinner.winnerReason,
+      rawServerRow: savedSelectionTraceWinner.rawServerRow,
+      rawQueryRow: savedSelectionTraceWinner.rawQueryRow,
+      rawCvStyleSource: savedRawCvStyleSource,
+      resolvedRenderState: buildResolvedRenderTraceSnapshot({
+        proposalId: openedSavedProposal._id,
+        templateId: effectiveSavedProposalTemplateId,
+        stylePreset: effectiveSavedProposalStylePreset,
+        sourceCvId: openedSavedProposalSourceCvId,
+        styleLinkMode: savedProposalStyleLinkMode,
+        styleSource: resolvedSavedProposalRuntimeStyle.source,
+      }),
+    });
+  }, [
+    composeAutosaveSnapshot?.token,
+    effectiveSavedProposalStylePreset,
+    effectiveSavedProposalTemplateId,
+    generatedProposalId,
+    openedSavedProposal,
+    openedSavedProposalSourceCvId,
+    resolvedSavedProposalRuntimeStyle.source,
+    savedProposalStyleLinkMode,
+    savedRawCvStyleSource,
+    savedRenderTraceWinner.winnerReason,
+    savedRenderTraceWinner.winnerSource,
+    savedSelectionTraceWinner.rawQueryRow,
+    savedSelectionTraceWinner.rawServerRow,
+    selectedProposalId,
+    traceProposalStyle,
+  ]);
+
+  React.useEffect(() => {
+    if (!openedSavedProposal || !savedProposalRenderMetadata) {
+      return;
+    }
+
+    traceProposalStyle({
+      step: "saved-render-metadata",
+      proposalId: String(openedSavedProposal._id),
+      generatedProposalId: generatedProposalId ? String(generatedProposalId) : null,
+      selectedProposalId,
+      composeToken: composeAutosaveSnapshot?.token ?? null,
+      persistedToken: lastPersistedComposeTokenRef.current,
+      winnerSource: savedRenderTraceWinner.winnerSource,
+      winnerReason: savedRenderTraceWinner.winnerReason,
+      rawServerRow: savedSelectionTraceWinner.rawServerRow,
+      rawQueryRow: savedSelectionTraceWinner.rawQueryRow,
+      rawCvStyleSource: savedRawCvStyleSource,
+      resolvedRenderState: {
+        proposalId: String(openedSavedProposal._id),
+        metadata: buildProposalStyleTraceMetadataSnapshot({
+          templateId: savedProposalRenderMetadata.templateId,
+          verbatiStyle: savedProposalRenderMetadata.verbatiStyle,
+          sourceCvId: savedProposalRenderMetadata.sourceCvId,
+          styleLinkMode: savedProposalRenderMetadata.styleLinkMode,
+        }),
+      },
+    });
+  }, [
+    composeAutosaveSnapshot?.token,
+    generatedProposalId,
+    openedSavedProposal,
+    savedProposalRenderMetadata,
+    savedRawCvStyleSource,
+    savedRenderTraceWinner.winnerReason,
+    savedRenderTraceWinner.winnerSource,
+    savedSelectionTraceWinner.rawQueryRow,
+    savedSelectionTraceWinner.rawServerRow,
+    selectedProposalId,
+    traceProposalStyle,
+  ]);
+
+  React.useEffect(() => {
+    latestTraceSnapshotRef.current =
+      requestedView === "saved"
+        ? {
+            step: "proposal-forge-unmount",
+            proposalId: openedSavedProposal ? String(openedSavedProposal._id) : selectedProposalId,
+            generatedProposalId: generatedProposalId ? String(generatedProposalId) : null,
+            selectedProposalId,
+            composeToken: composeAutosaveSnapshot?.token ?? null,
+            persistedToken: lastPersistedComposeTokenRef.current,
+            winnerSource: savedRenderTraceWinner.winnerSource,
+            winnerReason: savedRenderTraceWinner.winnerReason,
+            rawServerRow: savedSelectionTraceWinner.rawServerRow,
+            rawQueryRow: savedSelectionTraceWinner.rawQueryRow,
+            rawCvStyleSource: savedRawCvStyleSource,
+            resolvedRenderState: openedSavedProposal
+              ? buildResolvedRenderTraceSnapshot({
+                  proposalId: openedSavedProposal._id,
+                  templateId: effectiveSavedProposalTemplateId,
+                  stylePreset: effectiveSavedProposalStylePreset,
+                  sourceCvId: openedSavedProposalSourceCvId,
+                  styleLinkMode: savedProposalStyleLinkMode,
+                  styleSource: resolvedSavedProposalRuntimeStyle.source,
+                })
+              : null,
+            traceData: {
+              requestedView,
+              composeSaveStatus,
+            },
+          }
+        : {
+            step: "proposal-forge-unmount",
+            proposalId: generatedProposalId ? String(generatedProposalId) : null,
+            generatedProposalId: generatedProposalId ? String(generatedProposalId) : null,
+            selectedProposalId,
+            composeToken: composeAutosaveSnapshot?.token ?? null,
+            persistedToken: lastPersistedComposeTokenRef.current,
+            winnerSource: composeTraceWinner.winnerSource,
+            winnerReason: composeTraceWinner.winnerReason,
+            rawServerRow: null,
+            rawQueryRow: null,
+            rawCvStyleSource: composeRawCvStyleSource,
+            resolvedRenderState: buildResolvedRenderTraceSnapshot({
+              proposalId: generatedProposalId,
+              templateId: effectiveProposalTemplateId,
+              stylePreset: effectiveProposalStylePresetWithPalette,
+              sourceCvId: attachedCvId,
+              styleLinkMode: resolvedRuntimeStyleLinkMode,
+              styleSource: resolvedProposalRuntimeStyle.source,
+            }),
+            traceData: {
+              requestedView,
+              composeSaveStatus,
+              pendingQueuedComposeSnapshot: pendingQueuedComposeSnapshotRef.current
+                ? {
+                    proposalId: pendingQueuedComposeSnapshotRef.current.id
+                      ? String(pendingQueuedComposeSnapshotRef.current.id)
+                      : null,
+                    title: pendingQueuedComposeSnapshotRef.current.title,
+                    token: pendingQueuedComposeSnapshotRef.current.token,
+                    metadata: buildProposalStyleTraceMetadataSnapshot({
+                      templateId:
+                        pendingQueuedComposeSnapshotRef.current.metadata?.templateId,
+                      verbatiStyle:
+                        pendingQueuedComposeSnapshotRef.current.metadata?.verbatiStyle,
+                      sourceCvId:
+                        pendingQueuedComposeSnapshotRef.current.metadata?.sourceCvId,
+                      styleLinkMode:
+                        pendingQueuedComposeSnapshotRef.current.metadata?.styleLinkMode,
+                    }),
+                  }
+                : null,
+            },
+          };
+  }, [
+    attachedCvId,
+    composeAutosaveSnapshot?.token,
+    composeRawCvStyleSource,
+    composeSaveStatus,
+    composeTraceWinner.winnerReason,
+    composeTraceWinner.winnerSource,
+    effectiveProposalStylePresetWithPalette,
+    effectiveProposalTemplateId,
+    effectiveSavedProposalStylePreset,
+    effectiveSavedProposalTemplateId,
+    generatedProposalId,
+    openedSavedProposal,
+    openedSavedProposalSourceCvId,
+    pendingQueuedComposeSnapshotRef,
+    requestedView,
+    resolvedProposalRuntimeStyle.source,
+    resolvedRuntimeStyleLinkMode,
+    resolvedSavedProposalRuntimeStyle.source,
+    savedProposalStyleLinkMode,
+    savedRawCvStyleSource,
+    savedRenderTraceWinner.winnerReason,
+    savedRenderTraceWinner.winnerSource,
+    savedSelectionTraceWinner.rawQueryRow,
+    savedSelectionTraceWinner.rawServerRow,
+    selectedProposalId,
+  ]);
+
+  React.useEffect(() => {
+    return () => {
+      const latestSnapshot = latestTraceSnapshotRef.current;
+      if (!latestSnapshot) {
+        return;
+      }
+
+      traceProposalStyle({
+        step:
+          typeof latestSnapshot.step === "string"
+            ? latestSnapshot.step
+            : "proposal-forge-unmount",
+        proposalId:
+          typeof latestSnapshot.proposalId === "string"
+            ? latestSnapshot.proposalId
+            : null,
+        generatedProposalId:
+          typeof latestSnapshot.generatedProposalId === "string"
+            ? latestSnapshot.generatedProposalId
+            : null,
+        selectedProposalId:
+          typeof latestSnapshot.selectedProposalId === "string"
+            ? latestSnapshot.selectedProposalId
+            : null,
+        composeToken:
+          typeof latestSnapshot.composeToken === "string"
+            ? latestSnapshot.composeToken
+            : null,
+        persistedToken:
+          typeof latestSnapshot.persistedToken === "string"
+            ? latestSnapshot.persistedToken
+            : null,
+        winnerSource: latestSnapshot.winnerSource as ProposalStyleTraceWinnerSource,
+        winnerReason:
+          typeof latestSnapshot.winnerReason === "string"
+            ? latestSnapshot.winnerReason
+            : "proposal forge unmounted",
+        rawServerRow:
+          (latestSnapshot.rawServerRow as ReturnType<typeof snapshotSavedProposalRecord>) ??
+          null,
+        rawQueryRow:
+          (latestSnapshot.rawQueryRow as ReturnType<typeof snapshotSavedProposalRecord>) ??
+          null,
+        rawCvStyleSource:
+          (latestSnapshot.rawCvStyleSource as {
+            cvId: string | null;
+            cvLabel: string | null;
+            metadata: ProposalStyleTraceMetadataSnapshot;
+          }) ?? null,
+        resolvedRenderState:
+          (latestSnapshot.resolvedRenderState as Record<string, unknown>) ?? null,
+        traceData: (latestSnapshot.traceData as Record<string, unknown>) ?? undefined,
+      });
+    };
+  }, [traceProposalStyle]);
+
+  React.useEffect(() => {
+    const previousTrace = previousComposeStyleTraceRef.current;
+    const nextTrace = {
+      proposalStyleLinkMode,
+      proposalTemplateId,
+      proposalStylePreset,
+      hasUserEditedStyle,
+    };
+
+    if (
+      previousTrace &&
+      (previousTrace.proposalStyleLinkMode !== nextTrace.proposalStyleLinkMode ||
+        previousTrace.proposalTemplateId !== nextTrace.proposalTemplateId ||
+        previousTrace.hasUserEditedStyle !== nextTrace.hasUserEditedStyle ||
+        !stylesEqual(
+          previousTrace.proposalStylePreset ?? undefined,
+          nextTrace.proposalStylePreset ?? undefined,
+        ))
+    ) {
+      traceProposalStyle({
+        step: "compose-style-transition",
+        proposalId: generatedProposalId ? String(generatedProposalId) : null,
+        generatedProposalId: generatedProposalId ? String(generatedProposalId) : null,
+        selectedProposalId,
+        composeToken: composeAutosaveSnapshot?.token ?? null,
+        persistedToken: lastPersistedComposeTokenRef.current,
+        winnerSource: composeTraceWinner.winnerSource,
+        winnerReason: composeTraceWinner.winnerReason,
+        rawServerRow: null,
+        rawQueryRow: null,
+        rawCvStyleSource: composeRawCvStyleSource,
+        resolvedRenderState: buildResolvedRenderTraceSnapshot({
+          proposalId: generatedProposalId,
+          templateId: effectiveProposalTemplateId,
+          stylePreset: effectiveProposalStylePresetWithPalette,
+          sourceCvId: attachedCvId,
+          styleLinkMode: resolvedRuntimeStyleLinkMode,
+          styleSource: resolvedProposalRuntimeStyle.source,
+        }),
+        traceData: {
+          previous: {
+            proposalStyleLinkMode: previousTrace.proposalStyleLinkMode,
+            proposalTemplateId: previousTrace.proposalTemplateId,
+            proposalStylePreset: buildProposalStyleTraceMetadataSnapshot({
+              verbatiStyle: previousTrace.proposalStylePreset,
+            }).verbatiStyle,
+            hasUserEditedStyle: previousTrace.hasUserEditedStyle,
+          },
+          next: {
+            proposalStyleLinkMode,
+            proposalTemplateId,
+            proposalStylePreset: buildProposalStyleTraceMetadataSnapshot({
+              verbatiStyle: proposalStylePreset,
+            }).verbatiStyle,
+            hasUserEditedStyle,
+          },
+        },
+      });
+    }
+
+    previousComposeStyleTraceRef.current = nextTrace;
+  }, [
+    attachedCvId,
+    composeAutosaveSnapshot?.token,
+    composeRawCvStyleSource,
+    composeTraceWinner.winnerReason,
+    composeTraceWinner.winnerSource,
+    effectiveProposalStylePresetWithPalette,
+    effectiveProposalTemplateId,
+    generatedProposalId,
+    hasUserEditedStyle,
+    proposalStyleLinkMode,
+    proposalStylePreset,
+    proposalTemplateId,
+    resolvedProposalRuntimeStyle.source,
+    resolvedRuntimeStyleLinkMode,
+    selectedProposalId,
+    traceProposalStyle,
+  ]);
+
+  React.useEffect(() => {
+    const previousTrace = previousSavedStyleTraceRef.current;
+    const nextTrace = {
+      selectedProposalId,
+      savedProposalStyleLinkMode,
+      savedProposalTemplateId,
+      savedProposalStylePreset,
+    };
+
+    if (
+      previousTrace &&
+      previousTrace.selectedProposalId === nextTrace.selectedProposalId &&
+      (previousTrace.savedProposalStyleLinkMode !== nextTrace.savedProposalStyleLinkMode ||
+        previousTrace.savedProposalTemplateId !== nextTrace.savedProposalTemplateId ||
+        !stylesEqual(
+          previousTrace.savedProposalStylePreset ?? undefined,
+          nextTrace.savedProposalStylePreset ?? undefined,
+        ))
+    ) {
+      traceProposalStyle({
+        step: "saved-style-transition",
+        proposalId: selectedProposalId,
+        generatedProposalId: generatedProposalId ? String(generatedProposalId) : null,
+        selectedProposalId,
+        composeToken: composeAutosaveSnapshot?.token ?? null,
+        persistedToken: lastPersistedComposeTokenRef.current,
+        winnerSource: savedRenderTraceWinner.winnerSource,
+        winnerReason: savedRenderTraceWinner.winnerReason,
+        rawServerRow: savedSelectionTraceWinner.rawServerRow,
+        rawQueryRow: savedSelectionTraceWinner.rawQueryRow,
+        rawCvStyleSource: savedRawCvStyleSource,
+        resolvedRenderState: buildResolvedRenderTraceSnapshot({
+          proposalId: selectedProposalId,
+          templateId: effectiveSavedProposalTemplateId,
+          stylePreset: effectiveSavedProposalStylePreset,
+          sourceCvId: openedSavedProposalSourceCvId,
+          styleLinkMode: savedProposalStyleLinkMode,
+          styleSource: resolvedSavedProposalRuntimeStyle.source,
+        }),
+        traceData: {
+          previous: {
+            savedProposalStyleLinkMode: previousTrace.savedProposalStyleLinkMode,
+            savedProposalTemplateId: previousTrace.savedProposalTemplateId,
+            savedProposalStylePreset: buildProposalStyleTraceMetadataSnapshot({
+              verbatiStyle: previousTrace.savedProposalStylePreset,
+            }).verbatiStyle,
+          },
+          next: {
+            savedProposalStyleLinkMode,
+            savedProposalTemplateId,
+            savedProposalStylePreset: buildProposalStyleTraceMetadataSnapshot({
+              verbatiStyle: savedProposalStylePreset,
+            }).verbatiStyle,
+          },
+        },
+      });
+    }
+
+    previousSavedStyleTraceRef.current = nextTrace;
+  }, [
+    composeAutosaveSnapshot?.token,
+    effectiveSavedProposalStylePreset,
+    effectiveSavedProposalTemplateId,
+    generatedProposalId,
+    openedSavedProposalSourceCvId,
+    resolvedSavedProposalRuntimeStyle.source,
+    savedProposalStyleLinkMode,
+    savedProposalStylePreset,
+    savedProposalTemplateId,
+    savedRawCvStyleSource,
+    savedRenderTraceWinner.winnerReason,
+    savedRenderTraceWinner.winnerSource,
+    savedSelectionTraceWinner.rawQueryRow,
+    savedSelectionTraceWinner.rawServerRow,
+    selectedProposalId,
+    traceProposalStyle,
   ]);
 
   const persistOpenedSavedProposal = React.useCallback(
@@ -1710,6 +3269,8 @@ export function ProposalForge(): JSX.Element {
     setProposalStyleLinkMode(nextStyleLinkMode);
     setProposalStyleChoice(nextStyleChoice);
     setProposalStylePreset(nextStylePreset);
+    setHasUserEditedStyle(false);
+    setProposalWorkspaceStyle(null);
     setProposalPaletteOverride(activeCvProposalStylePreset ? null : settingsPaletteOverride);
     setProposalCustomAccentHex(activeCvProposalStylePreset ? null : settingsAccentHex);
     setProposalApplicantName(defaultPreviewApplicantHeader.name || "");
@@ -1724,12 +3285,13 @@ export function ProposalForge(): JSX.Element {
     setProposalDocumentMeta("");
     setFallbackInfo(null);
     setGeneratedProposalId(null);
+    generatedProposalIdRef.current = null;
     setProposalOutputMode("preview");
     setComposePreviewValues(null);
     setOutputSourceComposeDraft(null);
     setComposeDraftInitialSeed(null);
     setStickyImportedSource({ sourceUrl: null, platform: null });
-    setIsSavingGeneratedProposal(false);
+    setComposeSaveStatus("idle");
     setIsSavingOutputToLibrary(false);
     setLastProposalRequest(null);
     setIsConfirmingGeneratedDelete(false);
@@ -1739,7 +3301,13 @@ export function ProposalForge(): JSX.Element {
     setCopyFeedback("idle");
     lastSavedProposalContentRef.current = null;
     lastSavedProposalTitleRef.current = "";
-    lastStampedTemplateTokenRef.current = null;
+    lastPersistedComposeTokenRef.current = null;
+    composeAutosavePrimedRef.current = false;
+    pendingQueuedComposeSnapshotRef.current = null;
+    if (composeAutosaveTimeoutRef.current !== null) {
+      window.clearTimeout(composeAutosaveTimeoutRef.current);
+      composeAutosaveTimeoutRef.current = null;
+    }
   }, [
     activeCvProposalStylePreset,
     cancelPendingComposeDraftSync,
@@ -1923,7 +3491,7 @@ export function ProposalForge(): JSX.Element {
       setSavedProposalVoicePreset(null);
       setSavedProposalTemplateId(null);
       setSavedProposalStyleLinkMode("proposal_local");
-      setSavedProposalStylePreset(activeCvProposalStylePreset);
+      setSavedProposalStylePreset(null);
       setSavedProposalDocumentTitle("");
       setSavedProposalDocumentMeta("");
       setSavedProposalOutputMode("preview");
@@ -1933,13 +3501,51 @@ export function ProposalForge(): JSX.Element {
     const storedRenderState = resolveProposalRenderState({
       storedTemplateId: openedSavedProposal.metadata?.templateId,
       storedStylePreset: openedSavedProposal.metadata?.verbatiStyle,
-      activeCvStylePreset: activeCvProposalStylePreset,
+      activeCvStylePreset: savedProposalHasPersistedStyleSnapshot
+        ? undefined
+        : openedSavedProposalSourceCvStylePreset,
     });
     const nextVoicePreset =
       openedSavedProposal.metadata?.resolvedVoicePreset ??
       openedSavedProposal.metadata?.voicePreset ??
       DEFAULT_PROPOSAL_VOICE_PRESET;
     const nextProposalType = openedSavedProposal.metadata?.proposalType ?? null;
+
+    traceProposalStyle({
+      step: "saved-restore-effect",
+      proposalId: String(openedSavedProposal._id),
+      generatedProposalId: generatedProposalId ? String(generatedProposalId) : null,
+      selectedProposalId,
+      composeToken: composeAutosaveSnapshot?.token ?? null,
+      persistedToken: lastPersistedComposeTokenRef.current,
+      winnerSource: savedRenderTraceWinner.winnerSource,
+      winnerReason: savedRenderTraceWinner.winnerReason,
+      rawServerRow: savedSelectionTraceWinner.rawServerRow,
+      rawQueryRow: savedSelectionTraceWinner.rawQueryRow,
+      rawCvStyleSource: savedRawCvStyleSource,
+      resolvedRenderState: {
+        storedRenderState: buildResolvedRenderTraceSnapshot({
+          proposalId: openedSavedProposal._id,
+          templateId: storedRenderState.templateId,
+          stylePreset: storedRenderState.stylePreset,
+          sourceCvId: openedSavedProposalSourceCvId,
+          styleLinkMode: resolveProposalStyleLinkMode(
+            openedSavedProposal.metadata?.styleLinkMode,
+          ),
+          styleSource: savedRenderTraceWinner.winnerSource,
+        }),
+      },
+      traceData: {
+        savedProposalHasPersistedStyleSnapshot,
+        restoreInputs: {
+          storedTemplateId: openedSavedProposal.metadata?.templateId ?? null,
+          storedStylePreset: buildProposalStyleTraceMetadataSnapshot({
+            verbatiStyle: openedSavedProposal.metadata?.verbatiStyle,
+          }).verbatiStyle,
+          activeCvStylePreset: savedRawCvStyleSource?.metadata?.verbatiStyle ?? null,
+        },
+      },
+    });
 
     setSavedProposalContent(
       resolveProposalStoredText({
@@ -1970,11 +3576,22 @@ export function ProposalForge(): JSX.Element {
     );
     setSavedProposalOutputMode("preview");
   }, [
-    activeCvProposalStylePreset,
     buildProposalToneMetaLabel,
     formatProposalToneLabel,
     formatProposalTypeLabel,
     openedSavedProposal,
+    savedProposalHasPersistedStyleSnapshot,
+    openedSavedProposalSourceCvStylePreset,
+    openedSavedProposalSourceCvId,
+    composeAutosaveSnapshot?.token,
+    generatedProposalId,
+    savedRawCvStyleSource,
+    savedRenderTraceWinner.winnerReason,
+    savedRenderTraceWinner.winnerSource,
+    savedSelectionTraceWinner.rawQueryRow,
+    savedSelectionTraceWinner.rawServerRow,
+    selectedProposalId,
+    traceProposalStyle,
   ]);
 
   const handleToolbarCvPickerToggle = React.useCallback(() => {
@@ -2003,6 +3620,8 @@ export function ProposalForge(): JSX.Element {
       setProposalPaletteOverride(null);
       setProposalCustomAccentHex(null);
       setProposalStylePreset(resolvedStylePreset);
+      setHasUserEditedStyle(true);
+      setProposalWorkspaceStyle(resolvedStylePreset);
       setProposalTemplateId(nextTemplateId);
       setProposalStyleChoice(
         resolveProposalStyleChoiceFromRenderState({
@@ -2044,7 +3663,16 @@ export function ProposalForge(): JSX.Element {
       setProposalDocumentMeta(applicantHeader.email ?? "");
       setProposalContent(null);
       setGeneratedProposalId(null);
+      generatedProposalIdRef.current = null;
       setProposalOutputMode("preview");
+      pendingQueuedComposeSnapshotRef.current = null;
+      lastPersistedComposeTokenRef.current = null;
+      composeAutosavePrimedRef.current = false;
+      if (composeAutosaveTimeoutRef.current !== null) {
+        window.clearTimeout(composeAutosaveTimeoutRef.current);
+        composeAutosaveTimeoutRef.current = null;
+      }
+      setComposeSaveStatus("idle");
       setIsComposePanelVisible(true);
       setIsBriefExpanded(true);
       setStatusMessage(null);
@@ -2088,7 +3716,7 @@ export function ProposalForge(): JSX.Element {
       setComposePreviewValues(submittedComposeDraft);
       setOutputSourceComposeDraft(submittedComposeDraft);
       setComposeDraftInitialSeed(submittedComposeDraft);
-      writeStoredProposalOutputDraft({
+      writeStoredOutputDraft({
         proposalContent: proposal,
         proposalType: values.proposalType,
         proposalVoicePreset: resolvedVoicePreset,
@@ -2097,7 +3725,7 @@ export function ProposalForge(): JSX.Element {
         proposalVerbatiStyle: serializeVerbatiStyle(
           effectiveProposalStylePresetWithPalette,
         ),
-        proposalStyleLinkMode: resolvedStyleLinkMode,
+        proposalStyleLinkMode: resolvedRuntimeStyleLinkMode,
         proposalStyleChoice,
         proposalApplicantName: previewApplicantHeader.name ?? "",
         proposalApplicantRole: previewApplicantHeader.role ?? "",
@@ -2146,11 +3774,25 @@ export function ProposalForge(): JSX.Element {
       setProposalDocumentMeta(nextDocumentMeta);
       setProposalContent(proposal);
       setGeneratedProposalId(nextProposalId ?? null);
+      generatedProposalIdRef.current = nextProposalId ?? null;
       setProposalOutputMode("preview");
       setIsComposePanelVisible(true);
       setIsBriefExpanded(false);
       lastSavedProposalContentRef.current = proposal;
       lastSavedProposalTitleRef.current = nextDocumentTitle;
+      // Generation can return a persisted proposal id before the full compose
+      // artifact metadata has been patched onto that row. Leave the persisted
+      // token empty so autosave/save backfills the current style snapshot onto
+      // the generated server row.
+      lastPersistedComposeTokenRef.current = nextProposalId
+        ? null
+        : JSON.stringify({
+            title: nextDocumentTitle,
+            content: proposal.trim(),
+            metadata: proposalPersistenceMetadata ?? null,
+          });
+      composeAutosavePrimedRef.current = true;
+      setComposeSaveStatus("idle");
       setIsConfirmingGeneratedDelete(false);
       setStatusMessage(null);
       setError(null);
@@ -2171,8 +3813,9 @@ export function ProposalForge(): JSX.Element {
       proposalRecipientDetails,
       proposalTemplateBundleId,
       proposalStyleChoice,
-      resolvedStyleLinkMode,
+      resolvedRuntimeStyleLinkMode,
       resolveProposalVoicePreset,
+      writeStoredOutputDraft,
     ],
   );
 
@@ -2245,8 +3888,17 @@ export function ProposalForge(): JSX.Element {
     setLoading(false);
     setProposalContent(null);
     setGeneratedProposalId(null);
+    generatedProposalIdRef.current = null;
     setProposalOutputMode("preview");
     setOutputSourceComposeDraft(null);
+    pendingQueuedComposeSnapshotRef.current = null;
+    lastPersistedComposeTokenRef.current = null;
+    composeAutosavePrimedRef.current = false;
+    if (composeAutosaveTimeoutRef.current !== null) {
+      window.clearTimeout(composeAutosaveTimeoutRef.current);
+      composeAutosaveTimeoutRef.current = null;
+    }
+    setComposeSaveStatus("idle");
     setIsComposePanelVisible(true);
     setIsBriefExpanded(true);
     setError(null);
@@ -2257,46 +3909,15 @@ export function ProposalForge(): JSX.Element {
   }, []);
 
   const handleProposalDocumentCommit = React.useCallback(async () => {
-    if (
-      !generatedProposalId ||
-      isSavingGeneratedProposal ||
-      !canPersistProposalState
-    )
-      return;
-    const trimmed = proposalContent?.trim() ?? "";
-    const normalizedTitle =
-      proposalDocumentTitle.trim() ||
-      (proposalType
-        ? formatProposalTypeLabel(proposalType)
-        : "Generated proposal");
-    const lastSavedTrimmed = lastSavedProposalContentRef.current?.trim() ?? "";
-    const lastSavedTitle = lastSavedProposalTitleRef.current.trim();
-    const titleChanged = normalizedTitle !== lastSavedTitle;
-    const contentChanged = Boolean(trimmed) && trimmed !== lastSavedTrimmed;
-    if (!titleChanged && !contentChanged) return;
-    if (!trimmed && !titleChanged) return;
+    const snapshot = buildComposeSaveSnapshot();
+    if (!snapshot) return;
 
-    if (proposalDocumentTitle !== normalizedTitle) {
-      setProposalDocumentTitle(normalizedTitle);
+    if (proposalDocumentTitle !== snapshot.title) {
+      setProposalDocumentTitle(snapshot.title);
     }
 
-    setIsSavingGeneratedProposal(true);
     try {
-      await updateProposal({
-        id: generatedProposalId,
-        title: normalizedTitle,
-        metadata: proposalPersistenceMetadata,
-        ...(trimmed
-          ? {
-              content: trimmed,
-              sections: [{ type: "text", content: trimmed }],
-            }
-          : {}),
-      });
-      if (trimmed) {
-        lastSavedProposalContentRef.current = trimmed;
-      }
-      lastSavedProposalTitleRef.current = normalizedTitle;
+      await flushScheduledProposalSave(snapshot.title);
     } catch (saveError) {
       console.error("Failed to persist generated proposal edits:", saveError);
       const errorMessage =
@@ -2305,6 +3926,7 @@ export function ProposalForge(): JSX.Element {
         // The stored draft id is stale (deleted/expired). Keep local content
         // and stop retrying invalid mutations until a fresh generation happens.
         setGeneratedProposalId(null);
+        generatedProposalIdRef.current = null;
         showToast("Draft detached", {
           variant: "error",
           description:
@@ -2317,20 +3939,12 @@ export function ProposalForge(): JSX.Element {
         description:
           "The proposal text changed locally but could not be saved.",
       });
-    } finally {
-      setIsSavingGeneratedProposal(false);
     }
   }, [
-    generatedProposalId,
-    isSavingGeneratedProposal,
-    canPersistProposalState,
-    proposalContent,
+    buildComposeSaveSnapshot,
+    flushScheduledProposalSave,
     proposalDocumentTitle,
-    proposalPersistenceMetadata,
-    proposalType,
-    formatProposalTypeLabel,
     showToast,
-    updateProposal,
   ]);
   const handleSavedProposalContentChange = React.useCallback(
     (nextContent: string) => {
@@ -2387,6 +4001,9 @@ export function ProposalForge(): JSX.Element {
       if (savedCopyFeedbackTimeoutRef.current !== null) {
         window.clearTimeout(savedCopyFeedbackTimeoutRef.current);
       }
+      if (composeAutosaveTimeoutRef.current !== null) {
+        window.clearTimeout(composeAutosaveTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -2404,6 +4021,12 @@ export function ProposalForge(): JSX.Element {
   React.useEffect(() => {
     if (typeof window === "undefined") return;
 
+    if (suppressStoredOutputDraftSyncRef.current) {
+      suppressStoredOutputDraftSyncRef.current = false;
+      writeStoredOutputDraft(null);
+      return;
+    }
+
     const hasDraft =
       Boolean(proposalContent) ||
       Boolean(proposalDocumentTitle) ||
@@ -2416,7 +4039,7 @@ export function ProposalForge(): JSX.Element {
 
     if (!hasDraft) {
       if (hasCompletedInitialRenderRef.current) {
-        writeStoredProposalOutputDraft(null);
+        writeStoredOutputDraft(null);
       }
       return;
     }
@@ -2425,7 +4048,7 @@ export function ProposalForge(): JSX.Element {
       return;
     }
 
-    writeStoredProposalOutputDraft({
+    writeStoredOutputDraft({
       proposalContent,
       proposalType,
       proposalVoicePreset,
@@ -2433,7 +4056,7 @@ export function ProposalForge(): JSX.Element {
       proposalVerbatiStyle: effectiveProposalStylePresetWithPalette
         ? serializeVerbatiStyle(effectiveProposalStylePresetWithPalette)
         : null,
-      proposalStyleLinkMode: resolvedStyleLinkMode,
+      proposalStyleLinkMode: resolvedRuntimeStyleLinkMode,
       proposalStyleChoice,
       proposalApplicantName,
       proposalApplicantRole,
@@ -2483,12 +4106,13 @@ export function ProposalForge(): JSX.Element {
     proposalCustomAccentHex,
     proposalPaletteOverride,
     proposalTemplateBundleId,
-    resolvedStyleLinkMode,
+    resolvedRuntimeStyleLinkMode,
     draftCharacterLimitMode,
     draftCharacterLimitValue,
     effectiveProposalTemplateId,
     proposalType,
     proposalVoicePreset,
+    writeStoredOutputDraft,
   ]);
 
   React.useEffect(() => {
@@ -2532,35 +4156,40 @@ export function ProposalForge(): JSX.Element {
   ]);
 
   React.useEffect(() => {
-    if (
-      !generatedProposalId ||
-      !proposalPersistenceMetadata ||
-      !canPersistProposalState
-    ) {
+    if (!composeAutosaveSnapshot) {
+      pendingQueuedComposeSnapshotRef.current = null;
+      if (composeAutosaveTimeoutRef.current !== null) {
+        window.clearTimeout(composeAutosaveTimeoutRef.current);
+        composeAutosaveTimeoutRef.current = null;
+      }
+      if (composeSaveStatus !== "error") {
+        setComposeSaveStatus("idle");
+      }
       return;
     }
 
-    const nextToken = `${generatedProposalId}:${JSON.stringify(
-      proposalPersistenceMetadata,
-    )}`;
-    if (lastStampedTemplateTokenRef.current === nextToken) {
+    if (!canPersistProposalState) {
+      setComposeSaveStatus("idle");
       return;
     }
 
-    lastStampedTemplateTokenRef.current = nextToken;
+    if (!composeAutosavePrimedRef.current) {
+      composeAutosavePrimedRef.current = true;
+      lastPersistedComposeTokenRef.current = composeAutosaveSnapshot.token;
+      setComposeSaveStatus("idle");
+      return;
+    }
 
-    void updateProposal({
-      id: generatedProposalId,
-      metadata: proposalPersistenceMetadata,
-    }).catch((error) => {
-      console.warn("Failed to persist proposal template metadata:", error);
-      lastStampedTemplateTokenRef.current = null;
-    });
+    if (composeAutosaveSnapshot.token === lastPersistedComposeTokenRef.current) {
+      return;
+    }
+
+    scheduleProposalSave(composeAutosaveSnapshot);
   }, [
     canPersistProposalState,
-    generatedProposalId,
-    proposalPersistenceMetadata,
-    updateProposal,
+    composeAutosaveSnapshot,
+    composeSaveStatus,
+    scheduleProposalSave,
   ]);
 
   const updateProposalRoute = React.useCallback(
@@ -2674,6 +4303,8 @@ export function ProposalForge(): JSX.Element {
         : null;
     const restoredTemplateBundleId =
       findProposalTemplateBundleIdByStylePreset(effectiveSavedProposalStylePreset);
+    const shouldRestoreSavedDetachedStyle =
+      savedProposalStyleLinkMode === "proposal_local";
 
     if (typeof window !== "undefined") {
       try {
@@ -2708,6 +4339,9 @@ export function ProposalForge(): JSX.Element {
         setComposePreviewValues(composeDraft);
         setOutputSourceComposeDraft(composeDraft);
         setComposeDraftInitialSeed(composeDraft);
+        if (openedSavedProposalSourceCvId) {
+          setProposalAttachedCvId(openedSavedProposalSourceCvId);
+        }
       } catch {
         // Ignore storage failures and continue with the in-memory draft.
       }
@@ -2720,7 +4354,7 @@ export function ProposalForge(): JSX.Element {
       normalizeComposeToolbarVoicePreset(restoredRequestedVoicePreset),
     );
     setProposalTemplateId(effectiveSavedProposalTemplateId);
-    setProposalStyleLinkMode(resolvedSavedProposalStyleLinkMode);
+    setProposalStyleLinkMode(savedProposalStyleLinkMode);
     setProposalStyleChoice(
       resolveProposalStyleChoice(
         openedSavedProposal.metadata?.styleChoice ??
@@ -2732,13 +4366,28 @@ export function ProposalForge(): JSX.Element {
       ),
     );
     setProposalStylePreset(effectiveSavedProposalStylePreset);
+    setHasUserEditedStyle(shouldRestoreSavedDetachedStyle);
+    setProposalWorkspaceStyle(
+      shouldRestoreSavedDetachedStyle
+        ? effectiveSavedProposalStylePreset
+        : null,
+    );
     setProposalTemplateBundleId(restoredTemplateBundleId);
     setProposalPaletteOverride(restoredPaletteOverride);
     setProposalCustomAccentHex(restoredCustomAccentHex);
     setProposalDocumentTitle(savedProposalDocumentTitle);
     setProposalDocumentMeta(savedProposalDocumentMeta);
     setGeneratedProposalId(null);
+    generatedProposalIdRef.current = null;
     setProposalOutputMode(savedProposalOutputMode);
+    lastPersistedComposeTokenRef.current = null;
+    pendingQueuedComposeSnapshotRef.current = null;
+    composeAutosavePrimedRef.current = false;
+    if (composeAutosaveTimeoutRef.current !== null) {
+      window.clearTimeout(composeAutosaveTimeoutRef.current);
+      composeAutosaveTimeoutRef.current = null;
+    }
+    setComposeSaveStatus("idle");
     setLastProposalRequest(null);
     setComposeFormInstanceKey((currentKey) => currentKey + 1);
     setIsCvPickerOpen(false);
@@ -2760,15 +4409,59 @@ export function ProposalForge(): JSX.Element {
     effectiveSavedProposalStylePreset,
     effectiveSavedProposalTemplateId,
     openedSavedProposal,
-    resolvedSavedProposalStyleLinkMode,
+    openedSavedProposalSourceCvId,
     savedProposalContent,
     savedProposalDocumentMeta,
     savedProposalDocumentTitle,
     savedProposalOutputMode,
+    savedProposalStyleLinkMode,
     savedProposalType,
     savedProposalVoicePreset,
     showToast,
     updateProposalRoute,
+  ]);
+  const handleResetSavedProposalToCvStyle = React.useCallback(async () => {
+    if (
+      !openedSavedProposal ||
+      !openedSavedProposalSourceCvStylePreset ||
+      !openedSavedProposalSourceCvId
+    ) {
+      return;
+    }
+
+    try {
+      const nextMetadata: ProposalDocumentMetadata = {
+        ...(savedProposalRenderMetadata ?? openedSavedProposal.metadata ?? {}),
+        sourceCvId: openedSavedProposalSourceCvId,
+        templateId: getProposalTwinTemplateId(openedSavedProposalSourceCvStylePreset),
+        verbatiStyle: serializeVerbatiStyle(openedSavedProposalSourceCvStylePreset),
+        styleLinkMode: "inherit_cv",
+      };
+
+      setSavedProposalStyleLinkMode("inherit_cv");
+      setSavedProposalStylePreset(openedSavedProposalSourceCvStylePreset);
+      setSavedProposalTemplateId(nextMetadata.templateId ?? null);
+      await persistOpenedSavedProposal({
+        metadata: nextMetadata,
+      });
+      showToast("Reset to CV style", {
+        variant: "success",
+        description: "The saved proposal will follow its source CV style again.",
+      });
+    } catch (error) {
+      console.error("Failed to reset saved proposal style:", error);
+      showToast("Reset failed", {
+        variant: "error",
+        description: "The saved proposal could not be reset to its CV style.",
+      });
+    }
+  }, [
+    openedSavedProposal,
+    openedSavedProposalSourceCvId,
+    openedSavedProposalSourceCvStylePreset,
+    persistOpenedSavedProposal,
+    savedProposalRenderMetadata,
+    showToast,
   ]);
 
   const handleDeleteOutput = React.useCallback(async () => {
@@ -2791,6 +4484,8 @@ export function ProposalForge(): JSX.Element {
       setProposalStyleLinkMode(
         activeCvProposalStylePreset ? "inherit_cv" : "proposal_local",
       );
+      setHasUserEditedStyle(false);
+      setProposalWorkspaceStyle(null);
       setProposalApplicantName(defaultPreviewApplicantHeader.name || "");
       setProposalApplicantRole(defaultPreviewApplicantHeader.role || "");
       setProposalContactLine(defaultPreviewContactLine);
@@ -2812,7 +4507,15 @@ export function ProposalForge(): JSX.Element {
       setErrorDetail(null);
       setIsConfirmingGeneratedDelete(false);
       lastSavedProposalContentRef.current = null;
-      lastStampedTemplateTokenRef.current = null;
+      lastPersistedComposeTokenRef.current = null;
+      composeAutosavePrimedRef.current = false;
+      generatedProposalIdRef.current = null;
+      pendingQueuedComposeSnapshotRef.current = null;
+      if (composeAutosaveTimeoutRef.current !== null) {
+        window.clearTimeout(composeAutosaveTimeoutRef.current);
+        composeAutosaveTimeoutRef.current = null;
+      }
+      setComposeSaveStatus("idle");
       showToast("Proposal deleted", { variant: "success" });
     } catch (deleteError) {
       console.error("Failed to delete proposal draft:", deleteError);
@@ -2845,11 +4548,7 @@ export function ProposalForge(): JSX.Element {
   );
 
   const handleOpenSaveDialog = React.useCallback(() => {
-    if (
-      !proposalContent ||
-      isSavingOutputToLibrary ||
-      isSavingGeneratedProposal
-    ) {
+    if (!proposalContent || isSavingOutputToLibrary) {
       return;
     }
     if (!canPersistProposalState) {
@@ -2860,18 +4559,13 @@ export function ProposalForge(): JSX.Element {
     setIsSaveDialogOpen(true);
   }, [
     canPersistProposalState,
-    isSavingGeneratedProposal,
     isSavingOutputToLibrary,
     proposalContent,
     showConvexAuthRequiredToast,
   ]);
 
   const handleSaveOutputToLibrary = React.useCallback(async (requestedTitle: string) => {
-    if (
-      !proposalContent ||
-      isSavingOutputToLibrary ||
-      isSavingGeneratedProposal
-    ) {
+    if (!proposalContent || isSavingOutputToLibrary) {
       return;
     }
     if (!canPersistProposalState) {
@@ -2893,27 +4587,11 @@ export function ProposalForge(): JSX.Element {
 
     setIsSavingOutputToLibrary(true);
     try {
-      const persistedProposalId =
-        generatedProposalId ??
-        (await createProposal({
-          title: normalizedTitle,
-          content: trimmed,
-          sections: [{ type: "text", content: trimmed }],
-          status: "saved",
-          metadata: proposalPersistenceMetadata,
-        }));
-
-      if (generatedProposalId) {
-        await updateProposal({
-          id: generatedProposalId,
-          title: normalizedTitle,
-          content: trimmed,
-          sections: [{ type: "text", content: trimmed }],
-          status: "saved",
-          metadata: proposalPersistenceMetadata,
-        });
-      } else {
-        setGeneratedProposalId(persistedProposalId);
+      const persistedProposalId = await flushScheduledProposalSave(normalizedTitle, {
+        force: true,
+      });
+      if (!persistedProposalId) {
+        return;
       }
 
       setProposalDocumentTitle(normalizedTitle);
@@ -2942,18 +4620,14 @@ export function ProposalForge(): JSX.Element {
     }
   }, [
     canPersistProposalState,
-    createProposal,
-    isSavingGeneratedProposal,
+    flushScheduledProposalSave,
     isSavingOutputToLibrary,
     proposalContent,
     proposalDocumentTitle,
-    proposalPersistenceMetadata,
     proposalType,
     formatProposalTypeLabel,
-    generatedProposalId,
     showConvexAuthRequiredToast,
     showToast,
-    updateProposal,
     navigate,
     search,
   ]);
@@ -3747,6 +5421,11 @@ export function ProposalForge(): JSX.Element {
       generateLabel={composeGenerateControl.label}
       generateDisabled={composeGenerateControl.disabled}
       generateState={composeGenerateControl.state}
+      styleStatusLabel={proposalStyleStatusLabel}
+      saveStatus={composeSaveStatus}
+      canResetToCvStyle={proposalStyleStatus.canResetToCv}
+      resetToCvStyleDisabled={isCurrentComposeStyleSyncedToCv}
+      onResetToCvStyle={handleResetToCvStyle}
     />
   ) : showComposePanel ? (
     <ProposalComposeToolbar
@@ -3761,6 +5440,31 @@ export function ProposalForge(): JSX.Element {
       compact={isCompactComposeLayout}
       transitionState={toolbarTransitionState ?? undefined}
       onCollapseCompose={canCollapseComposePanel ? handleCollapseCompose : undefined}
+      styleStatusLabel={proposalStyleStatusLabel}
+      saveStatus={composeSaveStatus}
+      rightActions={
+        proposalContent && !loading && !error ? (
+          <ProposalExportActions
+            disabled={proposalExportingFormat !== null}
+            onExportPdf={(mode) => {
+              void handleExportProposalFile({
+                target: "compose",
+                format: "pdf",
+                mode,
+              });
+            }}
+            onExportDocx={() => {
+              void handleExportProposalFile({
+                target: "compose",
+                format: "docx",
+              });
+            }}
+          />
+        ) : null
+      }
+      canResetToCvStyle={proposalStyleStatus.canResetToCv}
+      resetToCvStyleDisabled={isCurrentComposeStyleSyncedToCv}
+      onResetToCvStyle={handleResetToCvStyle}
     />
   ) : null;
 
@@ -3804,6 +5508,16 @@ export function ProposalForge(): JSX.Element {
                   role="group"
                   aria-label="Saved proposal actions"
                 >
+                  <div
+                    className="dasti-proposal-saved-view-toolbar__status"
+                    role="group"
+                    aria-label="Saved proposal status"
+                  >
+                    <SaveIndicator
+                      label={savedProposalStyleStatusLabel}
+                      tone="neutral"
+                    />
+                  </div>
                   <button
                     type="button"
                     className="dasti-icon-button"
@@ -3820,14 +5534,32 @@ export function ProposalForge(): JSX.Element {
                     onClick={handleCopySavedProposalToDraft}
                     disabled={!openedSavedProposal || !savedProposalContent}
                     aria-label="Duplicate to draft"
-                  >
-                    <ClipboardText size={16} strokeWidth={1.6} />
-                  </button>
-                  <ProposalExportActions
-                    disabled={
-                      !openedSavedProposal ||
-                      !savedProposalContent ||
-                      proposalExportingFormat !== null
+                    >
+                      <ClipboardText size={16} strokeWidth={1.6} />
+                    </button>
+                  <span
+                    className="dasti-proposal-saved-view-toolbar__spacer"
+                    aria-hidden="true"
+                  />
+                  {savedProposalStyleStatus.canResetToCv ? (
+                    <button
+                      type="button"
+                      className="dasti-icon-button"
+                      data-toolbar-tooltip="Reset to CV style"
+                      onClick={() => {
+                        void handleResetSavedProposalToCvStyle();
+                      }}
+                      disabled={isSavedProposalStyleSyncedToCv}
+                      aria-label="Reset to CV style"
+                    >
+                      <RotateCcw size={16} strokeWidth={1.6} />
+                    </button>
+                  ) : null}
+                    <ProposalExportActions
+                      disabled={
+                        !openedSavedProposal ||
+                        !savedProposalContent ||
+                        proposalExportingFormat !== null
                     }
                     onExportPdf={(mode) => {
                       void handleExportProposalFile({
@@ -4131,22 +5863,6 @@ export function ProposalForge(): JSX.Element {
                     actions={
                       proposalContent && !loading && !error ? (
                         <span className="dasti-icon-cluster dasti-icon-cluster--tight">
-                          <ProposalExportActions
-                            disabled={proposalExportingFormat !== null}
-                            onExportPdf={(mode) => {
-                              void handleExportProposalFile({
-                                target: "compose",
-                                format: "pdf",
-                                mode,
-                              });
-                            }}
-                            onExportDocx={() => {
-                              void handleExportProposalFile({
-                                target: "compose",
-                                format: "docx",
-                              });
-                            }}
-                          />
                           <button
                             type="button"
                             className="dasti-icon-button"

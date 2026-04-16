@@ -4,6 +4,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { ProposalForge } from "../ProposalForge";
 import { readStoredProposalComposeDraft } from "../../lib/proposal-workspace-state";
+import {
+  readStoredProposalOutputDraft,
+  writeStoredProposalOutputDraft,
+} from "../../lib/proposal-output-draft";
 
 const mockProposalInputFormSpy = vi.fn();
 
@@ -59,7 +63,9 @@ vi.mock("../../components/ProposalInputForm", () => ({
 }));
 
 vi.mock("../../components/ProposalDisplay", () => ({
-  default: () => <div>Proposal output</div>,
+  default: ({ proposalContent }: { proposalContent?: string | null }) => (
+    <div data-testid="proposal-display-state">{proposalContent ?? "empty"}</div>
+  ),
   fallbackCopyText: () => "",
   getDisplayedProposalText: (value: string) => value,
 }));
@@ -134,5 +140,75 @@ describe("ProposalForge handoff continuity", () => {
       proposalType: "cover_letter",
       voicePreset: "expert",
     });
+  });
+
+  it("replaces stale generated output when a new handoff arrives", async () => {
+    mockProposalInputFormSpy.mockClear();
+    window.localStorage.setItem(
+      "dasti:proposal-compose-draft:v1",
+      JSON.stringify({
+        jobTitle: "Old role",
+        jobDescription: "Old brief",
+        proposalType: "cover_letter",
+        voicePreset: "expert",
+      }),
+    );
+    writeStoredProposalOutputDraft({
+      proposalContent: "Old generated proposal body.",
+      proposalType: "cover_letter",
+      proposalVoicePreset: "expert",
+      proposalTemplateId: null,
+      proposalVerbatiStyle: null,
+      proposalStyleLinkMode: "proposal_local",
+      proposalStyleChoice: "auto",
+      proposalApplicantName: "Alex Martin",
+      proposalApplicantRole: "Operations Associate",
+      proposalDocumentTitle: "Old generated proposal",
+      proposalDocumentMeta: "Compose output",
+      generatedProposalId: "proposal_old",
+      proposalOutputMode: "preview",
+      paletteOverride: null,
+      customAccentHex: null,
+      templateBundleId: null,
+      typographyOverride: null,
+      layoutOverride: null,
+      proposalDocumentTitleManual: false,
+      characterLimitMode: null,
+      characterLimitValue: null,
+      sourceComposeDraft: {
+        jobTitle: "Old role",
+        jobDescription: "Old brief",
+        proposalType: "cover_letter",
+        voicePreset: "expert",
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/proposal?handoffId=handoff_123"]}>
+        <Routes>
+          <Route
+            path="/proposal"
+            element={
+              <>
+                <ProposalForge />
+                <RouteProbe />
+              </>
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId("route-probe")).toHaveTextContent("/proposal"),
+    );
+
+    expect(screen.getByTestId("proposal-display-state")).toHaveTextContent("empty");
+    expect(readStoredProposalComposeDraft()).toMatchObject({
+      jobTitle: "Imported Product Ops Lead",
+      jobDescription:
+        "Own project coordination, keep handoffs clear, and maintain delivery momentum.",
+    });
+    expect(readStoredProposalOutputDraft()).toBeNull();
   });
 });

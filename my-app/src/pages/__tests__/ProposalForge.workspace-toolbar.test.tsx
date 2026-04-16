@@ -99,6 +99,9 @@ vi.mock("../../components/ProposalComposeToolbar", () => ({
         data-collapsed={props.collapsed ? "true" : "false"}
         data-transition-state={props.transitionState ?? "idle"}
       >
+        <div data-testid="proposal-toolbar-actions">
+          {props.rightActions as React.ReactNode}
+        </div>
         <button
           type="button"
           onClick={() => props.onChange?.("expert")}
@@ -650,6 +653,9 @@ describe("ProposalForge workbench layout", () => {
       proposalDisplaySpy.mock.calls[proposalDisplaySpy.mock.calls.length - 1]?.[0];
     const { container } = render(
       <div>
+        {proposalComposeToolbarSpy.mock.calls[
+          proposalComposeToolbarSpy.mock.calls.length - 1
+        ]?.[0]?.rightActions as React.ReactNode}
         {lastCall.actions as React.ReactNode}
         <button type="button" aria-label="Copy">
           Copy
@@ -663,9 +669,7 @@ describe("ProposalForge workbench layout", () => {
         button.getAttribute("data-toolbar-tooltip"),
     );
     expect(buttonLabels).toEqual([
-      "Export ATS PDF",
-      "Export Styled PDF",
-      "Export DOCX",
+      "Export proposal",
       "Save proposal to library",
       "Delete",
       "Copy",

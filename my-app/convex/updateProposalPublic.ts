@@ -78,6 +78,70 @@ const proposalVerbatiStyleChoice = v.object({
   accentHex: v.optional(v.string()),
 });
 
+const PROPOSAL_STYLE_TRACE_MARKER = "[proposal-style-trace]";
+
+function snapshotTraceMetadata(
+  metadata:
+    | {
+        templateId?: string;
+        verbatiStyle?: {
+          layout?: string;
+          typography?: string;
+          palette?: string;
+          accentHex?: string;
+        };
+        sourceCvId?: string;
+        styleLinkMode?: string;
+      }
+    | undefined,
+) {
+  return {
+    templateId: metadata?.templateId ?? null,
+    verbatiStyle: metadata?.verbatiStyle
+      ? {
+          layout: metadata.verbatiStyle.layout ?? null,
+          typography: metadata.verbatiStyle.typography ?? null,
+          palette: metadata.verbatiStyle.palette ?? null,
+          accentHex: metadata.verbatiStyle.accentHex ?? null,
+        }
+      : null,
+    sourceCvId: metadata?.sourceCvId ?? null,
+    styleLinkMode: metadata?.styleLinkMode ?? null,
+  };
+}
+
+function snapshotTraceRow(
+  proposal:
+    | {
+        _id: unknown;
+        title?: string;
+        status?: string;
+        metadata?: {
+          templateId?: string;
+          verbatiStyle?: {
+            layout?: string;
+            typography?: string;
+            palette?: string;
+            accentHex?: string;
+          };
+          sourceCvId?: string;
+          styleLinkMode?: string;
+        };
+      }
+    | null,
+) {
+  if (!proposal) {
+    return null;
+  }
+
+  return {
+    proposalId: String(proposal._id),
+    title: proposal.title ?? null,
+    status: proposal.status ?? null,
+    metadata: snapshotTraceMetadata(proposal.metadata),
+  };
+}
+
 /**
  * Public mutation to update a proposal owned by the authenticated user.
  * Args:
@@ -110,6 +174,12 @@ export default mutation({
         tags: v.optional(v.array(v.string())),
         sourceJobDescription: v.optional(v.string()),
         sourceUrl: v.optional(v.string()),
+        sourceCvId: v.optional(v.string()),
+        planned_path: v.optional(v.string()),
+        executed_path: v.optional(v.string()),
+        fallback_reason: v.optional(v.string()),
+        validator_outcome: v.optional(v.string()),
+        save_outcome: v.optional(v.string()),
         requestedModelType: v.optional(v.string()),
         actualModelType: v.optional(v.string()),
         fallbackTriggerCode: v.optional(v.string()),
@@ -220,6 +290,27 @@ export default mutation({
     }
 
     if (hasMetadataPatch) {
+      console.info(PROPOSAL_STYLE_TRACE_MARKER, {
+        route: "updateProposalPublic",
+        step: "update-proposal-public:before-patch",
+        proposalId: String(args.id),
+        generatedProposalId: String(args.id),
+        selectedProposalId: null,
+        composeToken: null,
+        persistedToken: null,
+        winnerSource: "server_row",
+        winnerReason: "public mutation received metadata patch",
+        rawServerRow: snapshotTraceRow(proposal),
+        rawQueryRow: null,
+        rawLocalOutputDraft: null,
+        rawSessionOutputDraft: null,
+        rawComposeDraft: null,
+        rawCvStyleSource: null,
+        resolvedRenderState: {
+          proposalId: String(args.id),
+          metadata: snapshotTraceMetadata(args.metadata),
+        },
+      });
       patch.metadata = {
         ...proposal.metadata,
         ...args.metadata,
@@ -227,6 +318,28 @@ export default mutation({
     }
 
     await ctx.db.patch(args.id, patch);
+
+    if (hasMetadataPatch) {
+      const updatedProposal = await ctx.db.get(args.id);
+      console.info(PROPOSAL_STYLE_TRACE_MARKER, {
+        route: "updateProposalPublic",
+        step: "update-proposal-public:after-patch",
+        proposalId: String(args.id),
+        generatedProposalId: String(args.id),
+        selectedProposalId: null,
+        composeToken: null,
+        persistedToken: null,
+        winnerSource: "server_row",
+        winnerReason: "server row after metadata patch",
+        rawServerRow: snapshotTraceRow(updatedProposal),
+        rawQueryRow: null,
+        rawLocalOutputDraft: null,
+        rawSessionOutputDraft: null,
+        rawComposeDraft: null,
+        rawCvStyleSource: null,
+        resolvedRenderState: snapshotTraceRow(updatedProposal),
+      });
+    }
 
     return { success: true };
   },
