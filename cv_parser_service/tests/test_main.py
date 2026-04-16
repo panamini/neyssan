@@ -4,6 +4,8 @@ import sys
 import types
 from io import BytesIO
 
+from fastapi.responses import Response
+from fastapi.testclient import TestClient
 from fastapi import UploadFile
 
 if "mistralai" not in sys.modules:
@@ -19,7 +21,7 @@ if "mistralai" not in sys.modules:
     sdk_module.Mistral = object
     sys.modules["mistralai.sdk"] = sdk_module
 
-from cv_parser_service.main import mistral_ocr_parse
+from cv_parser_service.main import app, mistral_ocr_parse
 from cv_parser_service.mistral_resume_v3 import INTERNAL_CANONICAL_PAYLOAD_DIAGNOSTIC_KEY
 
 
@@ -59,6 +61,74 @@ def test_mistral_ocr_parse_surfaces_runtime_evidence(monkeypatch):
     assert diagnostics["ocr_markdown_body_only"] is True
     assert diagnostics["ocr_markdown_use_raw_sections"] is False
     assert payload["sections"][0]["label"] == "SUMMARY"
+
+
+def test_resume_docx_export_route_uses_active_document_export_pipeline(monkeypatch):
+    captured = {}
+
+    def fake_create_document_export_response(
+        payload,
+        *,
+        expected_kind,
+        expected_format,
+        fallback_filename_base,
+    ):
+        captured["payload"] = payload
+        captured["expected_kind"] = expected_kind
+        captured["expected_format"] = expected_format
+        captured["fallback_filename_base"] = fallback_filename_base
+        return Response(
+            content=b"docx",
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+
+    monkeypatch.setattr(
+        "cv_parser_service.main.create_document_export_response",
+        fake_create_document_export_response,
+    )
+
+    client = TestClient(app)
+    response = client.post(
+        "/api/v1/document-export/resume/docx",
+        json={
+            "kind": "resume",
+            "format": "docx",
+            "fileNameBase": "Resume - Editable",
+            "stylePreset": {
+                "layout": "swiss",
+                "typography": "quiet-editorial",
+                "palette": "pierre",
+            },
+            "data": {
+                "schemaVersion": 1,
+                "kind": "resume",
+                "locale": "en",
+                "title": "Resume",
+                "exportSource": "standard",
+                "profile": {
+                    "name": "Jane Doe",
+                    "title": "Product Manager",
+                    "summary": "",
+                },
+                "contact": [],
+                "metadata": [],
+                "skills": [],
+                "languages": [],
+                "experience": [],
+                "projects": [],
+                "education": [],
+                "achievements": [],
+                "hobbies": [],
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.content == b"docx"
+    assert captured["expected_kind"] == "resume"
+    assert captured["expected_format"] == "docx"
+    assert captured["fallback_filename_base"] == "Resume - Editable"
+    assert captured["payload"]["stylePreset"]["typography"] == "quiet-editorial"
 
 
 def test_mistral_ocr_parse_preserves_precomputed_v3_payload(monkeypatch):

@@ -11,6 +11,10 @@ import {
   getPrimaryProfileForClerk,
   listProfilesForClerk,
 } from "./lib/userProfiles";
+import {
+  canonicalizeUserProfileMetadata,
+  userProfileMetadataValidator,
+} from "./lib/userProfileMetadata";
 
 export type UserProfile = {
   _id: Id<"userProfiles">;
@@ -172,11 +176,7 @@ export const updateUserProfile = internalMutation({
       linkedIn: v.optional(v.string()),
       raw_text: v.optional(v.string()),
       metadata: v.optional(
-        v.object({
-          source: v.optional(v.string()),
-          confidence: v.optional(v.number()),
-          importedAt: v.optional(v.number()),
-        }),
+        userProfileMetadataValidator,
       ),
     }),
   },
@@ -197,7 +197,8 @@ export const updateUserProfile = internalMutation({
     // Add provided fields to update data
     Object.entries(profileData).forEach(([key, value]) => {
       if (value !== undefined && value !== null) {
-        updateData[key] = value;
+        updateData[key] =
+          key === "metadata" ? canonicalizeUserProfileMetadata(value) : value;
       }
     });
 

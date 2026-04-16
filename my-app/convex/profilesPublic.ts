@@ -2,6 +2,10 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
+import {
+  canonicalizeUserProfileMetadata,
+  userProfileMetadataValidator,
+} from "./lib/userProfileMetadata";
 import { getPrimaryProfileForClerk } from "./lib/userProfiles";
 
 const publicUserProfileValidator = v.object({
@@ -47,12 +51,7 @@ const publicUserProfileValidator = v.object({
   linkedIn: v.optional(v.string()),
   raw_text: v.optional(v.string()),
   metadata: v.optional(
-    v.object({
-      source: v.optional(v.string()),
-      importedAt: v.optional(v.number()),
-      confidence: v.optional(v.number()),
-      filename: v.optional(v.string()),
-    }),
+    userProfileMetadataValidator,
   ),
   cvDocument: v.optional(v.any()),
 });
@@ -96,6 +95,43 @@ type UserProfile = {
     importedAt?: number;
     confidence?: number;
     filename?: string;
+    verbatiStyle?: {
+      layout:
+        | "swiss"
+        | "volk-register"
+        | "two-column"
+        | "editorial"
+        | "modernist"
+        | "quire"
+        | "playful-photo"
+        | "soft-ribbon"
+        | "slate-column";
+      typography:
+        | "quiet-editorial"
+        | "civic-correspondence"
+        | "ledger-sans"
+        | "mono-signal"
+        | "studio-grotesk"
+        | "soft-serif"
+        | "special-correspondence"
+        | "poster-accent"
+        | "high-contrast-editorial"
+        | "bricolage-hepta"
+        | "nunito-ortica"
+        | "nunito-code"
+        | "doto-code"
+        | "signature"
+        | "engaging"
+        | "expert";
+      palette:
+        | "sauge"
+        | "ocre"
+        | "pierre"
+        | "bordeaux"
+        | "encre"
+        | "custom";
+      accentHex?: string;
+    };
   };
   cvDocument?: unknown;
 } | null;
@@ -118,7 +154,10 @@ function projectProfileDoc(prof: any): Exclude<UserProfile, null> {
     education: prof.education ?? undefined,
     linkedIn: prof.linkedIn ?? undefined,
     raw_text: prof.raw_text ?? undefined,
-    metadata: prof.metadata ?? undefined,
+    metadata:
+      (canonicalizeUserProfileMetadata(prof.metadata) as
+        | Exclude<UserProfile, null>["metadata"]
+        | undefined) ?? undefined,
     cvDocument: prof.cvDocument ?? undefined,
   };
 }
@@ -229,10 +268,7 @@ export default mutation({
         )
       ),
       metadata: v.optional(
-        v.object({
-          source: v.optional(v.string()),
-          importedAt: v.optional(v.number()),
-        })
+        userProfileMetadataValidator,
       ),
     }),
   },
@@ -268,7 +304,9 @@ export default mutation({
     if (args.profile.skills !== undefined) updates.skills = args.profile.skills;
     if (args.profile.experience !== undefined) updates.experience = args.profile.experience;
     if (args.profile.education !== undefined) updates.education = args.profile.education;
-    if (args.profile.metadata !== undefined) updates.metadata = args.profile.metadata;
+    if (args.profile.metadata !== undefined) {
+      updates.metadata = canonicalizeUserProfileMetadata(args.profile.metadata);
+    }
 
     await ctx.db.patch(existing._id, updates);
     return null;
