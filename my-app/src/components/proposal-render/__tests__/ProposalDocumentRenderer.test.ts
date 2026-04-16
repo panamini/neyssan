@@ -23,6 +23,21 @@ describe("ProposalDocumentRenderer helpers", () => {
     ]);
   });
 
+  it("builds a closing block for deterministic French signoffs", () => {
+    const parsed = parseProposalDocumentContent(
+      "Madame, Monsieur,\n\nParagraphe.\n\nBien cordialement,\nAlex Martin",
+      "cover_letter",
+    );
+
+    const blocks = buildProposalDocumentBlocks(parsed);
+
+    expect(blocks.at(-1)).toMatchObject({
+      type: "closing",
+      signOff: "Bien cordialement,",
+      signatureName: "Alex Martin",
+    });
+  });
+
   it("paginates measured blocks into continuation pages when content exceeds one page", () => {
     const pages = paginateMeasuredProposalBlocks({
       capacity: 300,

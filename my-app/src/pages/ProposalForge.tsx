@@ -103,7 +103,16 @@ import {
   resolveProposalHeaderVisibility,
   type ProposalHeaderVisibility,
 } from "../lib/proposal-header";
-import { buildProposalExportSource } from "../lib/document-export-models";
+import {
+  buildProposalExportSource,
+  buildProposalPreviewPrintSource,
+  buildProposalPrintDebugSnapshot,
+} from "../lib/document-export-models";
+import {
+  buildProposalTypographyAuditMetadata,
+  readProposalPreviewDebugCapture,
+  setStyledProposalExportContext,
+} from "../lib/document-export-debug";
 import { exportDocumentFile } from "../lib/exportDocumentFile";
 
 type ProposalForgePrefill = {
@@ -704,6 +713,8 @@ export function ProposalForge(): JSX.Element {
     React.useState(false);
   const [isSavingOutputToLibrary, setIsSavingOutputToLibrary] =
     React.useState(false);
+  const [proposalExportingFormat, setProposalExportingFormat] =
+    React.useState<string | null>(null);
   const [isSaveDialogOpen, setIsSaveDialogOpen] = React.useState(false);
   const [lastProposalRequest, setLastProposalRequest] =
     React.useState<FormValues | null>(null);
@@ -3046,6 +3057,55 @@ export function ProposalForge(): JSX.Element {
       proposalContent,
     ],
   );
+  const exportComposeStyledProposalSource = React.useCallback(
+    () =>
+      buildProposalPreviewPrintSource({
+        content: proposalContent,
+        proposalType,
+        voicePreset: proposalVoicePreset,
+        railTitle: proposalApplicantName,
+        railMeta: proposalApplicantRole,
+        documentTitle:
+          proposalDocumentTitle ||
+          buildProfessionalApplicationSubject({
+            jobTitle: composePreviewValues?.jobTitle ?? "",
+            jobDescription: composePreviewValues?.jobDescription ?? "",
+            proposalType,
+          }),
+        documentMeta:
+          proposalDocumentMeta || proposalDisplayApplicantHeader.email || "",
+        contactLine: proposalContactLine,
+        letterDate: proposalLetterDate,
+        recipientDetails: proposalRecipientDetails,
+        applicantHeader: proposalDisplayApplicantHeader,
+        headerVisibility: proposalHeaderVisibility,
+        templateId:
+          proposalRenderMetadata?.templateId ??
+          effectiveProposalTemplateId ??
+          fallbackProposalTemplateId,
+        stylePreset: effectiveProposalStylePresetWithPalette,
+      }),
+    [
+      composePreviewValues?.jobDescription,
+      composePreviewValues?.jobTitle,
+      effectiveProposalStylePresetWithPalette,
+      effectiveProposalTemplateId,
+      fallbackProposalTemplateId,
+      proposalApplicantName,
+      proposalApplicantRole,
+      proposalContactLine,
+      proposalDisplayApplicantHeader,
+      proposalDocumentMeta,
+      proposalDocumentTitle,
+      proposalHeaderVisibility,
+      proposalLetterDate,
+      proposalRecipientDetails,
+      proposalRenderMetadata?.templateId,
+      proposalType,
+      proposalContent,
+      proposalVoicePreset,
+    ],
+  );
   const exportSavedProposalSource = React.useCallback(() => {
     if (!openedSavedProposal || !savedProposalContent) {
       return null;
@@ -3098,18 +3158,90 @@ export function ProposalForge(): JSX.Element {
     savedProposalTemplateId,
     savedProposalType,
   ]);
+  const exportSavedStyledProposalSource = React.useCallback(() => {
+    if (!openedSavedProposal || !savedProposalContent) {
+      return null;
+    }
+
+    const savedMetadata = openedSavedProposal.metadata;
+    const savedApplicantHeader = {
+      ...defaultPreviewApplicantHeader,
+      name:
+        savedMetadata?.applicantName?.trim() ||
+        defaultPreviewApplicantHeader.name ||
+        "",
+      role:
+        savedMetadata?.applicantRole?.trim() ||
+        defaultPreviewApplicantHeader.role ||
+        "",
+    };
+
+    return buildProposalPreviewPrintSource({
+      content: savedProposalContent,
+      proposalType: savedProposalType,
+      voicePreset: savedProposalVoicePreset,
+      railTitle: savedApplicantHeader.name,
+      railMeta: savedApplicantHeader.role,
+      documentTitle:
+        savedProposalDocumentTitle.trim() ||
+        openedSavedProposal.title ||
+        "Proposal",
+      documentMeta: savedProposalDocumentMeta,
+      contactLine:
+        savedMetadata?.contactLine ??
+        buildProposalApplicantContactLine(savedApplicantHeader),
+      letterDate:
+        savedMetadata?.letterDate ??
+        getDefaultProposalLetterDate(savedApplicantHeader.location),
+      recipientDetails: savedMetadata?.recipientDetails ?? "",
+      applicantHeader: savedApplicantHeader,
+      headerVisibility: resolveProposalHeaderVisibility({
+        showSender: savedMetadata?.headerShowSender,
+        showDate: savedMetadata?.headerShowDate,
+        showSubject: savedMetadata?.headerShowSubject,
+        showRecipient: savedMetadata?.headerShowRecipient,
+        showRecipientDetails: savedMetadata?.headerShowRecipientDetails,
+      }),
+      templateId: effectiveSavedProposalTemplateId,
+      stylePreset: effectiveSavedProposalStylePreset,
+    });
+  }, [
+    defaultPreviewApplicantHeader,
+    effectiveSavedProposalStylePreset,
+    effectiveSavedProposalTemplateId,
+    openedSavedProposal,
+    savedProposalContent,
+    savedProposalDocumentMeta,
+    savedProposalDocumentTitle,
+    savedProposalType,
+    savedProposalVoicePreset,
+  ]);
   const handleExportProposalFile = React.useCallback(
     async (args: {
       target: "compose" | "saved";
       format: "pdf" | "docx";
       mode?: "ats" | "styled";
     }) => {
-      const source =
-        args.target === "saved"
-          ? exportSavedProposalSource()
-          : exportComposeProposalSource();
+      if (proposalExportingFormat) {
+        return;
+      }
 
-      if (!source || source.body.length === 0) {
+      const source =
+        args.format === "pdf" && args.mode === "styled"
+          ? args.target === "saved"
+            ? exportSavedStyledProposalSource()
+            : exportComposeStyledProposalSource()
+          : args.target === "saved"
+            ? exportSavedProposalSource()
+            : exportComposeProposalSource();
+
+      const hasExportableContent =
+        source &&
+        ("body" in source
+          ? source.body.length > 0
+          : source.content.trim().length > 0);
+
+      if (!hasExportableContent) {
         showToast("Proposal export unavailable", {
           variant: "warning",
           description: "Generate or open a proposal before exporting.",
@@ -3117,37 +3249,116 @@ export function ProposalForge(): JSX.Element {
         return;
       }
 
+      const exportKey =
+        args.format === "pdf"
+          ? `${args.target}-${args.mode ?? "ats"}-pdf`
+          : `${args.target}-docx`;
+      const exportStylePreset =
+        args.target === "saved"
+          ? effectiveSavedProposalStylePreset
+          : effectiveProposalStylePresetWithPalette;
+
+      setProposalExportingFormat(exportKey);
+
       try {
+        if (args.format === "pdf" && args.mode === "styled") {
+          const resolvedTemplateId =
+            source.kind === "proposal" && "templateId" in source
+              ? source.templateId
+              : null;
+          const previewCapture = readProposalPreviewDebugCapture();
+          if (resolvedTemplateId) {
+            setStyledProposalExportContext({
+              proposalId:
+                args.target === "saved" && openedSavedProposal
+                  ? String(openedSavedProposal._id)
+                  : generatedProposalId
+                    ? String(generatedProposalId)
+                    : null,
+              proposalUrl:
+                typeof window !== "undefined" ? window.location.href : null,
+              templateId: resolvedTemplateId,
+              stylePreset: exportStylePreset,
+              previewCapture,
+              timestamp: Date.now(),
+            });
+
+            console.debug(
+              "[ProposalForge] styled proposal export snapshot",
+              buildProposalPrintDebugSnapshot({
+                stylePreset: exportStylePreset,
+                templateId: resolvedTemplateId,
+                voicePreset:
+                  source.kind === "proposal" && "voicePreset" in source
+                    ? source.voicePreset
+                    : null,
+              }),
+            );
+          }
+        }
+
         const exported = await exportDocumentFile({
           kind: "proposal",
           format: args.format,
           mode: args.format === "pdf" ? args.mode : undefined,
           data: source,
-          stylePreset:
-            args.format === "pdf" && args.mode === "styled"
-              ? args.target === "saved"
-                ? savedProposalStylePreset
-                : effectiveProposalStylePresetWithPalette
-              : undefined,
+          stylePreset: exportStylePreset,
           fileNameBase:
             args.format === "docx"
               ? "Proposal - Editable"
               : args.mode === "ats"
                 ? "Proposal - ATS"
                 : "Proposal - Styled",
+          metadata:
+            args.format === "pdf" && args.mode === "styled"
+              ? {
+                  proposalTypographyAudit: buildProposalTypographyAuditMetadata(
+                    {
+                      proposalId:
+                        args.target === "saved" && openedSavedProposal
+                          ? String(openedSavedProposal._id)
+                          : generatedProposalId
+                            ? String(generatedProposalId)
+                            : null,
+                      proposalUrl:
+                        typeof window !== "undefined"
+                          ? window.location.href
+                          : null,
+                      templateId:
+                        source.kind === "proposal" && "templateId" in source
+                          ? source.templateId
+                          : effectiveProposalTemplateId ??
+                            fallbackProposalTemplateId,
+                      stylePreset: exportStylePreset,
+                      previewCapture: readProposalPreviewDebugCapture(),
+                      timestamp: Date.now(),
+                    },
+                  ),
+                }
+              : undefined,
         });
 
         showToast(`Exported ${exported.filename}`, { variant: "success" });
       } catch (error) {
         console.error("[ProposalForge] export failed", error);
         showToast("Proposal export failed", { variant: "error" });
+      } finally {
+        setProposalExportingFormat(null);
       }
     },
     [
+      buildProposalTypographyAuditMetadata,
+      effectiveProposalTemplateId,
       effectiveProposalStylePresetWithPalette,
+      effectiveSavedProposalStylePreset,
+      exportComposeStyledProposalSource,
       exportComposeProposalSource,
+      exportSavedStyledProposalSource,
       exportSavedProposalSource,
-      savedProposalStylePreset,
+      fallbackProposalTemplateId,
+      generatedProposalId,
+      openedSavedProposal,
+      proposalExportingFormat,
       showToast,
     ],
   );
@@ -3613,7 +3824,11 @@ export function ProposalForge(): JSX.Element {
                     <ClipboardText size={16} strokeWidth={1.6} />
                   </button>
                   <ProposalExportActions
-                    disabled={!openedSavedProposal || !savedProposalContent}
+                    disabled={
+                      !openedSavedProposal ||
+                      !savedProposalContent ||
+                      proposalExportingFormat !== null
+                    }
                     onExportPdf={(mode) => {
                       void handleExportProposalFile({
                         target: "saved",
@@ -3917,6 +4132,7 @@ export function ProposalForge(): JSX.Element {
                       proposalContent && !loading && !error ? (
                         <span className="dasti-icon-cluster dasti-icon-cluster--tight">
                           <ProposalExportActions
+                            disabled={proposalExportingFormat !== null}
                             onExportPdf={(mode) => {
                               void handleExportProposalFile({
                                 target: "compose",

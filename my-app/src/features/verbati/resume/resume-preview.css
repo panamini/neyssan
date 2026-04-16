@@ -66,6 +66,34 @@
   padding: 0;
 }
 
+.dasti-resume-print-route {
+  min-height: 100vh;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  background: var(--color-canvas);
+}
+
+.dasti-resume-print-route .resume-page-frame {
+  width: auto;
+  min-width: 0;
+  gap: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.dasti-resume-print-route .resume-page-stage {
+  width: auto;
+  min-width: 0;
+  height: auto;
+  display: block;
+}
+
 .resume-preview-shell--comparison {
   width: min(100%, calc(var(--container) + 40mm));
   padding: clamp(6mm, 2vw, 10mm);
@@ -365,6 +393,7 @@
   width: var(--page-width);
   min-width: var(--page-width);
   height: var(--page-height);
+  font-family: var(--font-body-family);
   --fit-display-size-adjust: 0mm;
   --fit-title-size-adjust: 0mm;
   --fit-body-size-adjust: 0mm;
@@ -379,17 +408,6 @@
   --fit-margin-bottom-adjust: 0mm;
   --fit-margin-left-adjust: 0mm;
   --fit-content-scale: 1;
-  --fit-onecol-name-size-adjust: 0mm;
-  --fit-onecol-header-padding-adjust: 0mm;
-  --fit-onecol-meta-margin-adjust: 0mm;
-  --fit-onecol-main-margin-adjust: 0mm;
-  --fit-onecol-max-width-adjust: 0mm;
-  --fit-onecol-section-gap-adjust: 0mm;
-  --fit-onecol-section-rule-adjust: 0mm;
-  --fit-onecol-section-body-adjust: 0mm;
-  --fit-onecol-stack-gap-adjust: 0mm;
-  --fit-onecol-entry-padding-adjust: 0mm;
-  --fit-onecol-bottom-space-adjust: 0mm;
   --auto-display-size-adjust: calc(
     var(--display-size-adjust) + var(--fit-display-size-adjust)
   );
@@ -481,9 +499,7 @@
 .meta-item dt,
 .compact-list .label,
 .education-period,
-.experience-period,
-.onecol-section-title,
-.onecol-entry-eyebrow {
+.experience-period {
   font-family: var(--font-body-family);
   text-transform: uppercase;
   letter-spacing: 0.14em;
@@ -1075,472 +1091,25 @@
     display: block;
   }
 
+  .sidebar-section,
+  .main-section,
+  .experience-item,
+  .project-card,
+  .education-item {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .resume-page,
+  .resume-page-stage .resume-page {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
   .resume-page:last-child {
     break-after: auto;
     page-break-after: auto;
   }
-}
-
-.resume-page--onecol {
-  --onecol-grid-frame-width: 140mm;
-  --onecol-grid-column-width: calc(var(--onecol-grid-frame-width) - 18mm);
-  background: linear-gradient(
-    180deg,
-    var(--color-surface),
-    color-mix(in srgb, var(--color-surface) 92%, var(--color-surface-muted) 8%)
-  );
-}
-
-.resume-inner--onecol {
-  display: block;
-}
-
-.onecol-header {
-  text-align: center;
-  padding-bottom: calc(4.375mm + var(--fit-onecol-header-padding-adjust));
-  border-bottom: none;
-  width: 100%;
-  max-width: calc(
-    var(--onecol-grid-column-width) + var(--fit-onecol-max-width-adjust)
-  );
-  margin: 0 auto;
-}
-
-.header-copy--onecol {
-  display: grid;
-  gap: 0;
-  justify-items: center;
-}
-
-.name--onecol {
-  margin-top: 0;
-  font-size: calc(
-    var(--text-display-size) + 3mm + var(--fit-onecol-name-size-adjust)
-  );
-  line-height: 0.7;
-  letter-spacing: -0.04em;
-}
-
-.title--onecol {
-  margin-top: 2.2mm;
-  font-size: calc(
-    var(--text-title-size) + var(--auto-title-size-adjust) - 0.12mm
-  );
-  line-height: 1.18;
-}
-.summary--onecol {
-  max-width: 42ch;
-  margin: 3.4mm auto 0;
-  font-size: calc(
-    var(--text-body-size) + var(--auto-body-size-adjust) - 0.08mm
-  );
-  line-height: 1.44;
-  color: color-mix(in srgb, var(--color-text-muted) 66%, var(--color-text) 34%);
-  text-wrap: balance;
-}
-
-/* contact row: editorial inline strip */
-.onecol-meta {
-  margin: calc(8.6mm + var(--fit-onecol-meta-margin-adjust)) auto 0;
-  padding: 0;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  flex-wrap: wrap;
-  width: fit-content;
-  max-width: calc(
-    var(--onecol-grid-column-width) + var(--fit-onecol-max-width-adjust)
-  );
-  gap: 0;
-}
-
-.onecol-meta-item {
-  display: inline-flex;
-  align-items: center;
-  min-width: 0;
-}
-
-.onecol-meta-item dt {
-  display: none;
-}
-
-.onecol-meta-item dd {
-  margin: 0;
-  display: block;
-  font-family: var(--font-body-family);
-  font-size: calc(
-    var(--text-body-sm-size) + var(--auto-body-sm-size-adjust) - 0.08mm
-  );
-  line-height: var(--text-body-sm-line);
-  font-weight: 500;
-  white-space: nowrap;
-  color: color-mix(in srgb, var(--color-text) 90%, var(--color-accent) 10%);
-}
-
-.onecol-meta-item + .onecol-meta-item::before {
-  content: "·";
-  display: inline-block;
-  margin: 0 2.2mm;
-  line-height: 1;
-  color: color-mix(
-    in srgb,
-    var(--color-text-subtle) 78%,
-    var(--color-text) 22%
-  );
-  transform: translateY(-0.03em);
-}
-
-@media (max-width: 760px) {
-  .onecol-meta {
-    max-width: none;
-  }
-
-  .onecol-meta-item dd {
-    white-space: normal;
-    overflow-wrap: anywhere;
-  }
-
-  .onecol-meta-item:not(:last-child)::after {
-    margin: 0 1.8mm;
-  }
-}
-
-.onecol-main {
-  width: 100%;
-  max-width: calc(
-    var(--onecol-grid-column-width) + var(--fit-onecol-max-width-adjust)
-  );
-  margin: calc(6mm + var(--fit-onecol-main-margin-adjust)) auto 0;
-}
-
-.onecol-section {
-  margin-bottom: calc(4.375mm + var(--fit-onecol-section-gap-adjust));
-}
-
-.onecol-section:last-child {
-  margin-bottom: 0;
-}
-
-.onecol-section-rule {
-  height: 0.2mm;
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--color-border) 72%, transparent),
-    transparent 82%
-  );
-  margin-bottom: calc(2.2mm + var(--fit-onecol-section-rule-adjust));
-}
-
-.onecol-section-title {
-  margin: 0;
-  color: color-mix(in srgb, var(--color-accent) 88%, var(--color-text) 12%);
-  font-size: calc(var(--text-caption-size) - 0.01mm);
-  line-height: 1.14;
-  font-weight: 650;
-  text-transform: uppercase;
-  letter-spacing: 0.17em;
-}
-
-.onecol-section-body {
-  margin-top: calc(2.15mm + var(--fit-onecol-section-body-adjust));
-}
-
-.onecol-experience-stack {
-  display: grid;
-  gap: calc(3.8mm + var(--fit-onecol-stack-gap-adjust));
-}
-
-.onecol-entry + .onecol-entry {
-  padding-top: calc(3.8mm + var(--fit-onecol-entry-padding-adjust));
-  border-top: 0.3mm solid
-    color-mix(in srgb, var(--color-border) 82%, transparent);
-}
-
-.onecol-experience-stack .onecol-entry:nth-child(2) {
-  padding-top: 0;
-  border-top: 0;
-}
-
-.onecol-entry-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: calc(4.375mm + var(--fit-onecol-stack-gap-adjust));
-}
-
-.onecol-entry-eyebrow {
-  margin: 0 0 0.45mm;
-  font-size: calc(var(--text-caption-size) - 0.02mm);
-  line-height: 1.1;
-  font-weight: 600;
-  color: var(--color-accent);
-}
-
-.resume-page--onecol .entry-title {
-  font-size: calc(3.45mm + var(--auto-title-size-adjust) + 0.5mm);
-  line-height: 1.1;
-  letter-spacing: -0.02em;
-}
-
-.resume-page--onecol .experience-period,
-.resume-page--onecol .education-period {
-  padding-top: 0.2mm;
-  font-size: calc(var(--text-caption-size) - 0.02mm);
-  line-height: 1.25;
-  color: color-mix(
-    in srgb,
-    var(--color-text-subtle) 68%,
-    var(--color-text) 32%
-  );
-  letter-spacing: 0.16em;
-  white-space: nowrap;
-}
-
-.bullet-list--onecol {
-  margin-top: calc(1.8mm + var(--fit-onecol-section-body-adjust));
-}
-
-.bullet-list--onecol li {
-  font-size: calc(
-    var(--text-body-sm-size) + var(--auto-body-sm-size-adjust) - 0.02mm
-  );
-  line-height: 1.38;
-  max-width: 60ch;
-  color: color-mix(in srgb, var(--color-text) 96%, black 4%);
-}
-
-.resume-page--onecol .entry-subtitle {
-  margin-top: 0.7mm;
-  font-size: calc(
-    var(--text-body-sm-size) + var(--auto-body-sm-size-adjust) - 0.18mm
-  );
-  line-height: 1.27;
-  color: color-mix(in srgb, var(--color-text-muted) 74%, var(--color-text) 26%);
-  font-weight: 400;
-}
-.education-stack--onecol {
-  display: grid;
-  gap: 1.2mm;
-  padding-bottom: 0;
-}
-
-.skills-list--onecol {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0;
-  padding: 0;
-  margin: 0;
-  list-style: none;
-}
-
-.skills-list--onecol li {
-  padding: 0;
-  border: 0;
-  background: none;
-  border-radius: 0;
-  font-size: calc(
-    var(--text-body-sm-size) + var(--auto-body-sm-size-adjust) - 0.16mm
-  );
-  line-height: 1.22;
-  color: var(--color-text);
-  white-space: nowrap;
-}
-
-.skills-list--onecol li:not(:last-child)::after {
-  content: "·";
-  display: inline-block;
-  margin: 0 1.9mm;
-  color: var(--color-text-subtle);
-}
-.compact-list--onecol {
-  gap: calc(2mm + var(--fit-onecol-section-rule-adjust));
-}
-
-.compact-list--onecol li {
-  grid-template-columns: 1fr auto;
-  align-items: baseline;
-}
-
-.compact-list--onecol .label {
-  color: var(--color-text);
-}
-
-.compact-list--onecol .value {
-  color: color-mix(
-    in srgb,
-    var(--color-text-subtle) 68%,
-    var(--color-text) 32%
-  );
-  text-transform: uppercase;
-
-  letter-spacing: 0.08em;
-}
-
-.onecol-bottom-space {
-  min-height: calc(17.5mm + var(--fit-onecol-bottom-space-adjust));
-}
-
-@media (max-width: 760px) {
-  .onecol-header,
-  .onecol-main {
-    max-width: none;
-  }
-
-  .onecol-entry-head,
-  .education-item,
-  .compact-list--onecol li {
-    display: flex;
-    flex-direction: column;
-    gap: 2.2mm;
-  }
-  .resume-page--onecol .education-item .entry-subtitle {
-    font-size: calc(
-      var(--text-body-sm-size) + var(--auto-body-sm-size-adjust) - 0.18mm
-    );
-    line-height: 1.26;
-    font-weight: 500;
-  }
-  .resume-page--onecol .experience-period,
-  .resume-page--onecol .education-period {
-    white-space: normal;
-  }
-}
-
-/* auto-fit density fallback */
-.resume-page[data-fit="1"] {
-  --fit-display-size-adjust: -0.12mm;
-  --fit-title-size-adjust: -0.08mm;
-  --fit-body-size-adjust: -0.06mm;
-  --fit-body-sm-size-adjust: -0.06mm;
-  --fit-section-gap-adjust: -0.8mm;
-  --fit-heading-margin-adjust: -0.35mm;
-  --fit-bullet-gap-adjust: -0.2mm;
-  --fit-project-gap-adjust: -0.35mm;
-  --fit-project-padding-adjust: -0.3mm;
-  --fit-margin-top-adjust: -1mm;
-  --fit-margin-right-adjust: -0.8mm;
-  --fit-margin-bottom-adjust: -1.4mm;
-  --fit-margin-left-adjust: -0.8mm;
-}
-
-.resume-page[data-fit="2"] {
-  --fit-display-size-adjust: -0.24mm;
-  --fit-title-size-adjust: -0.14mm;
-  --fit-body-size-adjust: -0.12mm;
-  --fit-body-sm-size-adjust: -0.1mm;
-  --fit-section-gap-adjust: -1.5mm;
-  --fit-heading-margin-adjust: -0.65mm;
-  --fit-bullet-gap-adjust: -0.35mm;
-  --fit-project-gap-adjust: -0.65mm;
-  --fit-project-padding-adjust: -0.65mm;
-  --fit-margin-top-adjust: -2.2mm;
-  --fit-margin-right-adjust: -1.6mm;
-  --fit-margin-bottom-adjust: -3mm;
-  --fit-margin-left-adjust: -1.6mm;
-}
-
-.resume-page[data-fit="3"] {
-  --fit-display-size-adjust: -0.38mm;
-  --fit-title-size-adjust: -0.22mm;
-  --fit-body-size-adjust: -0.18mm;
-  --fit-body-sm-size-adjust: -0.16mm;
-  --fit-section-gap-adjust: -2.1mm;
-  --fit-heading-margin-adjust: -0.9mm;
-  --fit-bullet-gap-adjust: -0.5mm;
-  --fit-project-gap-adjust: -0.95mm;
-  --fit-project-padding-adjust: -0.95mm;
-  --fit-margin-top-adjust: -3.6mm;
-  --fit-margin-right-adjust: -2.4mm;
-  --fit-margin-bottom-adjust: -5.2mm;
-  --fit-margin-left-adjust: -2.4mm;
-}
-
-.resume-page[data-fit="4"] {
-  --fit-display-size-adjust: -0.5mm;
-  --fit-title-size-adjust: -0.3mm;
-  --fit-body-size-adjust: -0.22mm;
-  --fit-body-sm-size-adjust: -0.2mm;
-  --fit-section-gap-adjust: -2.7mm;
-  --fit-heading-margin-adjust: -1.1mm;
-  --fit-bullet-gap-adjust: -0.65mm;
-  --fit-project-gap-adjust: -1.15mm;
-  --fit-project-padding-adjust: -1.15mm;
-  --fit-margin-top-adjust: -4.5mm;
-  --fit-margin-right-adjust: -3.2mm;
-  --fit-margin-bottom-adjust: -6.8mm;
-  --fit-margin-left-adjust: -3.2mm;
-  --fit-content-scale: 0.875;
-}
-
-.resume-page--onecol[data-fit="1"] {
-  --fit-margin-right-adjust: -1.8mm;
-  --fit-margin-bottom-adjust: -2.2mm;
-  --fit-margin-left-adjust: -1.8mm;
-  --fit-onecol-name-size-adjust: -0.45mm;
-  --fit-onecol-header-padding-adjust: -1.2mm;
-  --fit-onecol-meta-margin-adjust: -1.5mm;
-  --fit-onecol-main-margin-adjust: -1mm;
-  --fit-onecol-max-width-adjust: 4mm;
-  --fit-onecol-section-gap-adjust: -0.8mm;
-  --fit-onecol-section-rule-adjust: -0.35mm;
-  --fit-onecol-section-body-adjust: -0.45mm;
-  --fit-onecol-stack-gap-adjust: -0.6mm;
-  --fit-onecol-entry-padding-adjust: -0.6mm;
-  --fit-onecol-bottom-space-adjust: -3mm;
-}
-
-.resume-page--onecol[data-fit="2"] {
-  --fit-margin-right-adjust: -3.2mm;
-  --fit-margin-bottom-adjust: -4.6mm;
-  --fit-margin-left-adjust: -3.2mm;
-  --fit-onecol-name-size-adjust: -0.9mm;
-  --fit-onecol-header-padding-adjust: -2.1mm;
-  --fit-onecol-meta-margin-adjust: -2.6mm;
-  --fit-onecol-main-margin-adjust: -1.8mm;
-  --fit-onecol-max-width-adjust: 8mm;
-  --fit-onecol-section-gap-adjust: -1.5mm;
-  --fit-onecol-section-rule-adjust: -0.7mm;
-  --fit-onecol-section-body-adjust: -0.8mm;
-  --fit-onecol-stack-gap-adjust: -1.1mm;
-  --fit-onecol-entry-padding-adjust: -1.1mm;
-  --fit-onecol-bottom-space-adjust: -5.5mm;
-}
-
-.resume-page--onecol[data-fit="3"] {
-  --fit-margin-top-adjust: -4.4mm;
-  --fit-margin-right-adjust: -5.4mm;
-  --fit-margin-bottom-adjust: -8.4mm;
-  --fit-margin-left-adjust: -5.4mm;
-  --fit-onecol-name-size-adjust: -1.45mm;
-  --fit-onecol-header-padding-adjust: -3.2mm;
-  --fit-onecol-meta-margin-adjust: -3.8mm;
-  --fit-onecol-main-margin-adjust: -2.8mm;
-  --fit-onecol-max-width-adjust: 12mm;
-  --fit-onecol-section-gap-adjust: -2.3mm;
-  --fit-onecol-section-rule-adjust: -1.05mm;
-  --fit-onecol-section-body-adjust: -1.15mm;
-  --fit-onecol-stack-gap-adjust: -1.65mm;
-  --fit-onecol-entry-padding-adjust: -1.65mm;
-  --fit-onecol-bottom-space-adjust: -9mm;
-}
-
-.resume-page--onecol[data-fit="4"] {
-  --fit-margin-top-adjust: -5.5mm;
-  --fit-margin-right-adjust: -7mm;
-  --fit-margin-bottom-adjust: -10mm;
-  --fit-margin-left-adjust: -7mm;
-  --fit-onecol-name-size-adjust: -1.9mm;
-  --fit-onecol-header-padding-adjust: -4.2mm;
-  --fit-onecol-meta-margin-adjust: -5mm;
-  --fit-onecol-main-margin-adjust: -3.6mm;
-  --fit-onecol-max-width-adjust: 15mm;
-  --fit-onecol-section-gap-adjust: -3mm;
-  --fit-onecol-section-rule-adjust: -1.4mm;
-  --fit-onecol-section-body-adjust: -1.5mm;
-  --fit-onecol-stack-gap-adjust: -2mm;
-  --fit-onecol-entry-padding-adjust: -2mm;
-  --fit-onecol-bottom-space-adjust: -12mm;
-  --fit-content-scale: 0.86;
 }
 
 /* ─── QUIRE ───────────────────────────────────────────────────────────────── */
