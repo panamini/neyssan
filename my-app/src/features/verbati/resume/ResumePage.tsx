@@ -9,6 +9,12 @@ import {
   A4_PAGE_HEIGHT_PX,
   A4_PAGE_WIDTH_PX,
 } from "../../../lib/document-stage";
+import { normalizeResumePreviewTokens } from "../../../lib/layout/documentTokenNormalizer";
+import {
+  serializeActiveResumePreviewDecorVars,
+  serializeResumePreviewVars,
+} from "../../../lib/layout/documentTokenSerializers";
+import type { VerbatiStylePreset } from "../types";
 
 type ResumePageMode = "comparison" | "comparisonAll" | ResumeLayoutVariantId;
 
@@ -16,6 +22,7 @@ type ResumePageProps = {
   data: ResumeData;
   mode?: ResumePageMode;
   comparisonVariantIds?: ResumeLayoutVariantId[];
+  stylePreset?: VerbatiStylePreset | null;
   fitToken?: string;
   onSelectVariantId?: ((variantId: ResumeLayoutVariantId) => void) | undefined;
   userZoom?: number;
@@ -24,11 +31,6 @@ type ResumePageProps = {
 
 type ResumeVariant =
   (typeof resumeLayoutSpec.variants)[keyof typeof resumeLayoutSpec.variants];
-
-type OnecolMetaItem = {
-  label: string;
-  value: string;
-};
 
 type ResumeLabeledValue = {
   label: string;
@@ -40,9 +42,13 @@ type ContactItemView = ResumeData["contact"][number] & {
 };
 
 const COMPACT_COMPARISON_BREAKPOINT = 1040;
+const PREVIEW_MONO_FAMILY =
+  '"SFMono-Regular", "IBM Plex Mono", Menlo, monospace';
 
 const ResumeUserZoomContext = React.createContext(1);
-const ResumeStageLayoutContext = React.createContext<DocumentStageLayout | null>(
+const ResumeStageLayoutContext =
+  React.createContext<DocumentStageLayout | null>(null);
+const ResumeStylePresetContext = React.createContext<VerbatiStylePreset | null>(
   null,
 );
 
@@ -120,10 +126,7 @@ function usePreviewScale() {
       // than the viewer shell, so including height in Math.min would always
       // pick the height constraint and leave the page narrower than the
       // viewport with large dark frames on both sides.
-      const fitScale = Math.min(
-        1,
-        availableWidth / A4_PAGE_WIDTH_PX,
-      );
+      const fitScale = Math.min(1, availableWidth / A4_PAGE_WIDTH_PX);
       const nextScale = fitScale * userZoom;
       setScale(nextScale > 0 ? nextScale : 1);
     };
@@ -161,6 +164,41 @@ function useAutoFitPage(fitToken?: string) {
   return { pageRef, innerRef };
 }
 
+/** Map a human-readable section title to a canonical section type for preview → editor linking. */
+function normalizeSectionTitleToType(title: string): string {
+  const lower = title.toLowerCase().trim();
+  if (lower.includes("experience") || lower.includes("expérience"))
+    return "experience";
+  if (
+    lower.includes("education") ||
+    lower.includes("éducation") ||
+    lower.includes("formation")
+  )
+    return "education";
+  if (lower.includes("skill") || lower.includes("compétence")) return "skills";
+  if (lower.includes("language") || lower.includes("langue"))
+    return "languages";
+  if (lower.includes("project") || lower.includes("projet")) return "projects";
+  if (
+    lower.includes("achievement") ||
+    lower.includes("réalisation") ||
+    lower.includes("award")
+  )
+    return "achievements";
+  if (lower.includes("certification") || lower.includes("certification"))
+    return "certifications";
+  if (lower.includes("affiliation") || lower.includes("association"))
+    return "affiliations";
+  if (
+    lower.includes("summary") ||
+    lower.includes("profil") ||
+    lower.includes("objective") ||
+    lower.includes("about")
+  )
+    return "summary";
+  return lower.replace(/\s+/g, "-");
+}
+
 function SidebarSection({
   title,
   children,
@@ -171,7 +209,10 @@ function SidebarSection({
   variant: ResumeVariant;
 }) {
   return (
-    <section className={`sidebar-section sidebar-section--${variant.id}`}>
+    <section
+      className={`sidebar-section sidebar-section--${variant.id}`}
+      data-preview-section={normalizeSectionTitleToType(title)}
+    >
       <h3 className={`sidebar-title sidebar-title--${variant.id}`}>{title}</h3>
       <div className={`sidebar-content sidebar-content--${variant.id}`}>
         {children}
@@ -190,7 +231,10 @@ function MainSection({
   variant: ResumeVariant;
 }) {
   return (
-    <section className={`main-section main-section--${variant.id}`}>
+    <section
+      className={`main-section main-section--${variant.id}`}
+      data-preview-section={normalizeSectionTitleToType(title)}
+    >
       <div className={`main-heading-row main-heading-row--${variant.id}`}>
         <h2 className={`main-heading main-heading--${variant.id}`}>{title}</h2>
         <div className={`main-heading-rule main-heading-rule--${variant.id}`} />
@@ -227,69 +271,15 @@ function HeaderMeta({
   );
 }
 
-function OneColumnSection({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="onecol-section">
-      <div className="onecol-section-rule" />
-      <h2 className="onecol-section-title">{title}</h2>
-      <div className="onecol-section-body">{children}</div>
-    </section>
-  );
-}
+function buildPageVars(
+  variant: ResumeVariant,
+  stylePreset?: VerbatiStylePreset | null,
+): React.CSSProperties {
+  const canonical = normalizeResumePreviewTokens(variant, stylePreset);
 
-function buildPageVars(variant: ResumeVariant): React.CSSProperties {
   return {
-    "--page-width": resumeLayoutSpec.page.width,
-    "--page-height": resumeLayoutSpec.page.height,
-    "--page-radius": resumeLayoutSpec.page.borderRadius,
-    "--margin-top": variant.margins.top,
-    "--margin-right": variant.margins.right,
-    "--margin-bottom": variant.margins.bottom,
-    "--margin-left": variant.margins.left,
-    "--sidebar-width": variant.columns.sidebar,
-    "--gutter-width": variant.columns.gutter,
-    "--main-width": variant.columns.main,
-    "--header-row-gap": variant.header.rowGap,
-    "--header-bottom-padding": variant.header.bottomPadding,
-    "--header-summary-width": variant.header.summaryMaxWidth,
-    "--header-title-margin-top": variant.header.titleMarginTop,
-    "--body-row-gap": variant.body.rowGap,
-    "--sidebar-right-padding": variant.body.sidebarRightPadding,
-    "--main-left-padding": variant.body.mainLeftPadding,
-    "--sidebar-section-gap": variant.sidebarSection.marginBottom,
-    "--sidebar-title-margin": variant.sidebarSection.titleMarginBottom,
-    "--sidebar-title-padding": variant.sidebarSection.titlePaddingBottom,
-    "--sidebar-content-gap": variant.sidebarSection.contentGap,
-    "--main-section-gap": variant.mainSection.marginBottom,
-    "--main-heading-gap": variant.mainSection.headingGap,
-    "--main-heading-margin": variant.mainSection.headingMarginBottom,
-    "--experience-date-column": variant.experience.dateColumn,
-    "--experience-column-gap": variant.experience.columnGap,
-    "--experience-item-gap": variant.experience.itemGap,
-    "--experience-org-margin": variant.experience.orgMarginBottom,
-    "--experience-bullets-padding": variant.experience.bulletsPaddingLeft,
-    "--experience-bullets-gap": variant.experience.bulletsGap,
-    "--project-gap": variant.projects.cardGap,
-    "--project-padding": variant.projects.cardPadding,
-    "--education-gap": variant.education.itemGap,
-    "--skill-gap": variant.skills.gap,
-    "--skill-padding-inline": variant.skills.paddingInline,
-    "--skill-padding-block": variant.skills.paddingBlock,
-    "--display-size-adjust": variant.density.displaySizeAdjust,
-    "--title-size-adjust": variant.density.titleSizeAdjust,
-    "--body-size-adjust": variant.density.bodySizeAdjust,
-    "--body-sm-size-adjust": variant.density.bodySmSizeAdjust,
-    "--section-gap-adjust": variant.density.sectionGapAdjust,
-    "--heading-margin-adjust": variant.density.headingMarginAdjust,
-    "--bullet-gap-adjust": variant.density.bulletGapAdjust,
-    "--project-gap-adjust": variant.density.projectGapAdjust,
-    "--project-padding-adjust": variant.density.projectPaddingAdjust,
+    ...serializeResumePreviewVars(canonical),
+    ...serializeActiveResumePreviewDecorVars(canonical, variant.id),
   } as React.CSSProperties;
 }
 
@@ -326,10 +316,7 @@ function uniqueRows(
 }
 
 function buildVolkRegisterMetaItems(data: ResumeData): ResumeLabeledValue[] {
-  return uniqueRows([
-    ...data.metadata,
-    ...data.contact,
-  ]).slice(0, 4);
+  return uniqueRows([...data.metadata, ...data.contact]).slice(0, 4);
 }
 
 function getInitials(name: string): string {
@@ -344,20 +331,6 @@ function getInitials(name: string): string {
   }
 
   return parts.map((part) => part.charAt(0).toUpperCase()).join("");
-}
-
-function getInterestItems(data: ResumeData, limit = 6): string[] {
-  const shortText = (value: string) =>
-    value.trim() && value.trim().length <= 36;
-  const fromProjects = data.projects
-    .map((project) => project.name)
-    .filter((value): value is string => Boolean(value && shortText(value)));
-  const fromSkills = data.skills.filter((value) => shortText(value));
-  const fromAchievements = (data.achievements ?? []).filter((value) =>
-    shortText(value),
-  );
-  const values = [...fromProjects, ...fromSkills, ...fromAchievements];
-  return Array.from(new Set(values)).slice(0, limit);
 }
 
 function PhotoOrInitials({
@@ -492,34 +465,6 @@ function getComparisonCardCopy(variant: ResumeVariant): ComparisonCardCopy {
           "Modernist uppercase masthead, narrower signal rail, and a more explicit information ladder.",
         color:
           "Whiter paper neutrals with accent-driven rules instead of broad tinted surfaces.",
-      };
-    case "studiopop":
-      return {
-        typography:
-          "Expressive serif hierarchy, portrait-led framing, and warmer creative section blocks.",
-        color:
-          "Playful paper tones with peach, blue-grey, and ochre accents around a soft photo stage.",
-      };
-    case "softribbon":
-      return {
-        typography:
-          "Rounded premium headings, portrait ribbon framing, and a softer project-manager voice.",
-        color:
-          "Blush neutrals, soft shadowed pills, and a calmer pastel support field.",
-      };
-    case "slateprofile":
-      return {
-        typography:
-          "Structured all-caps labelling, dark profile rail, and tighter corporate information hierarchy.",
-        color:
-          "Slate and pearl contrast with restrained blue-grey emphasis and stronger section zoning.",
-      };
-    case "onecol":
-      return {
-        typography:
-          "Single-column editorial rhythm with quieter contact and date captions.",
-        color:
-          "Soft paper field with calmer accent contrast for long-form reading.",
       };
     case "quire":
       return {
@@ -686,36 +631,56 @@ function PreviewFrame({
   );
 }
 
-const QUIRE_SIDEBAR_WIDTH = "57mm";
-const QUIRE_SIDEBAR_BG =
-  "color-mix(in srgb, var(--color-accent) 18%, #1a1a1a 82%)";
-const QUIRE_SIDEBAR_RULE = "rgba(255,255,255,0.18)";
-const QUIRE_SIDEBAR_LABEL_COLOR = "rgba(255,255,255,0.46)";
-const QUIRE_SIDEBAR_TEXT_PRIMARY = "#ffffff";
-const QUIRE_SIDEBAR_TEXT_SECONDARY = "rgba(255,255,255,0.62)";
-const QUIRE_SIDEBAR_ACCENT =
-  "color-mix(in srgb, var(--color-accent-soft) 80%, white 20%)";
+function ResumeFontDebugInheritProbe() {
+  return (
+    <span
+      aria-hidden="true"
+      data-font-probe="body-inherited"
+      style={{
+        position: "absolute",
+        inset: 0,
+        opacity: 0,
+        pointerEvents: "none",
+        userSelect: "none",
+        fontSize: "1px",
+        lineHeight: 1,
+        whiteSpace: "nowrap",
+      }}
+    >
+      Body font inheritance probe
+    </span>
+  );
+}
+
+const QUIRE_SIDEBAR_WIDTH = "var(--resume-preview-quire-sidebar-width)";
+const QUIRE_SIDEBAR_BG = "var(--resume-preview-quire-sidebar-background)";
+const QUIRE_SIDEBAR_LABEL_COLOR =
+  "var(--resume-preview-quire-sidebar-label-color)";
+const QUIRE_SIDEBAR_TEXT_PRIMARY =
+  "var(--resume-preview-quire-sidebar-text-primary)";
+const QUIRE_SIDEBAR_TEXT_SECONDARY =
+  "var(--resume-preview-quire-sidebar-text-secondary)";
+const QUIRE_SIDEBAR_ACCENT = "var(--resume-preview-quire-sidebar-accent)";
 const QUIRE_MAIN_SECTION_HEADING: React.CSSProperties = {
   margin: 0,
-  fontSize: "2.3mm",
+  fontSize: "calc(var(--text-caption-size) + 0.05mm)",
   fontWeight: 700,
   textTransform: "uppercase" as const,
   letterSpacing: "0.24em",
   color: "var(--color-accent)",
-  paddingBottom: "1.5mm",
-  borderBottom:
-    "0.26mm solid color-mix(in srgb, var(--color-border-strong) 58%, transparent)",
-  marginBottom: "2.8mm",
+  paddingBottom: "calc(var(--sidebar-title-padding) + 0.1mm)",
+  borderBottom: "var(--resume-preview-quire-main-rule)",
+  marginBottom: "calc(var(--sidebar-title-margin) + 0.8mm)",
 };
 const QUIRE_SIDEBAR_SECTION_HEADING: React.CSSProperties = {
-  margin: "0 0 1.6mm",
-  fontSize: "2mm",
+  margin: "0 0 var(--sidebar-title-margin)",
+  fontSize: "calc(var(--text-caption-size) - 0.25mm)",
   fontWeight: 700,
   textTransform: "uppercase" as const,
   letterSpacing: "0.28em",
   color: QUIRE_SIDEBAR_LABEL_COLOR,
-  paddingBottom: "1.3mm",
-  borderBottom: `0.2mm solid ${QUIRE_SIDEBAR_RULE}`,
+  paddingBottom: "calc(var(--sidebar-title-padding) + 0.1mm)",
+  borderBottom: "var(--resume-preview-quire-sidebar-rule)",
 };
 
 function QuirePage({
@@ -733,7 +698,10 @@ function QuirePage({
   onActivateComparison?: (() => void) | undefined;
   fitToken?: string;
 }) {
-  const pageVars = buildPageVars(variant);
+  const pageVars = buildPageVars(
+    variant,
+    React.useContext(ResumeStylePresetContext),
+  );
   const { pageRef, innerRef } = useAutoFitPage(fitToken);
 
   const email = findLabeledValue(data.contact, ["email"]);
@@ -742,14 +710,12 @@ function QuirePage({
     findLabeledValue(data.metadata, ["location", "city", "based"]) ??
     findLabeledValue(data.contact, ["location", "city"]);
   const web = findLabeledValue(data.contact, ["web", "portfolio", "site"]);
-  const headerContact = uniqueRows(
-    [
-      phone ? { label: "phone", value: phone } : null,
-      location ? { label: "location", value: location } : null,
-      email ? { label: "email", value: email } : null,
-      web ? { label: "web", value: web } : null,
-    ],
-  );
+  const headerContact = uniqueRows([
+    phone ? { label: "phone", value: phone } : null,
+    location ? { label: "location", value: location } : null,
+    email ? { label: "email", value: email } : null,
+    web ? { label: "web", value: web } : null,
+  ]);
 
   return (
     <PreviewFrame
@@ -763,14 +729,15 @@ function QuirePage({
         className={`resume-page resume-page--${variant.id}`}
         style={{
           ...pageVars,
-          background: "var(--paper)", /* --paper (#faf9f5) = warm document sheet */
-          border: "0.36mm solid rgba(0,0,0,0.15)",
+          background: "var(--resume-preview-page-background)",
+          border: "var(--resume-preview-page-border)",
           overflow: "hidden",
-          fontFamily: "var(--font-heading-family)",
+          fontFamily: "var(--font-body-family)",
           borderRadius: "var(--page-radius)",
         }}
         aria-label={variant.label}
       >
+        <ResumeFontDebugInheritProbe />
         {/* Full-height dark sidebar strip */}
         <div
           aria-hidden="true"
@@ -796,19 +763,26 @@ function QuirePage({
         >
           {/* ── HEADER ── */}
           <header
+            data-preview-section="profile"
             style={{
               display: "grid",
               gridTemplateColumns: `${QUIRE_SIDEBAR_WIDTH} 1fr`,
             }}
           >
             {/* Name + title on dark */}
-            <div style={{ padding: "13mm 8mm 8mm 12mm" }}>
+            <div
+              style={{
+                padding:
+                  "calc(var(--margin-top) - 9mm) calc(var(--margin-left) - 12mm) calc(var(--header-bottom-padding) + 2.5mm) calc(var(--margin-left) - 8mm)",
+              }}
+            >
               <h1
+                data-font-probe="heading"
                 style={{
                   margin: 0,
                   fontFamily: "var(--font-body-family)",
-                  fontSize: "11mm",
-                  lineHeight: 0.94,
+                  fontSize: "calc(var(--text-display-size) + 0.95mm)",
+                  lineHeight: "var(--text-display-line)",
                   fontWeight: 700,
                   textTransform: "uppercase",
                   letterSpacing: "0.07em",
@@ -819,9 +793,9 @@ function QuirePage({
               </h1>
               <p
                 style={{
-                  margin: "2.8mm 0 0",
-                  fontSize: "2.8mm",
-                  lineHeight: 1.15,
+                  margin: "calc(var(--header-title-margin-top) + 1.3mm) 0 0",
+                  fontSize: "calc(var(--text-body-size) - 0.55mm)",
+                  lineHeight: "calc(var(--text-body-line) - 0.35)",
                   fontWeight: 600,
                   textTransform: "uppercase",
                   letterSpacing: "0.2em",
@@ -835,9 +809,10 @@ function QuirePage({
             {/* Contact right-aligned on light */}
             <div
               style={{
-                padding: "13mm 13mm 8mm 10mm",
+                padding:
+                  "calc(var(--margin-top) - 9mm) calc(var(--margin-right) - 15mm) calc(var(--header-bottom-padding) + 2.5mm) calc(var(--margin-left) - 10mm)",
                 display: "grid",
-                gap: "1.4mm",
+                gap: "calc(var(--sidebar-content-gap) - 0.2mm)",
                 justifyItems: "end",
                 alignContent: "start",
                 borderBottom:
@@ -849,8 +824,8 @@ function QuirePage({
                   key={item.label}
                   style={{
                     margin: 0,
-                    fontSize: "2.62mm",
-                    lineHeight: 1.3,
+                    fontSize: "calc(var(--text-body-sm-size) - 0.33mm)",
+                    lineHeight: "calc(var(--text-body-sm-line) - 0.15)",
                     color: "var(--color-text-muted)",
                     textAlign: "right",
                     overflow: "hidden",
@@ -864,13 +839,14 @@ function QuirePage({
               ))}
               {data.summary && (
                 <p
+                  data-font-probe="body"
                   style={{
-                    margin: "1.8mm 0 0",
-                    fontSize: "2.52mm",
-                    lineHeight: 1.5,
+                    margin: "calc(var(--header-row-gap) - 1.7mm) 0 0",
+                    fontSize: "calc(var(--text-body-sm-size) - 0.43mm)",
+                    lineHeight: "var(--text-body-line)",
                     color: "var(--color-text-muted)",
                     textAlign: "right",
-                    maxWidth: "88mm",
+                    maxWidth: "var(--header-summary-width)",
                     textWrap: "pretty",
                   }}
                 >
@@ -892,9 +868,10 @@ function QuirePage({
             {/* LEFT SIDEBAR */}
             <aside
               style={{
-                padding: "6mm 8mm 13mm 12mm",
+                padding:
+                  "calc(var(--header-bottom-padding) + 0.5mm) calc(var(--margin-left) - 12mm) calc(var(--margin-bottom) - 25mm) calc(var(--margin-left) - 8mm)",
                 display: "grid",
-                gap: "5mm",
+                gap: "var(--sidebar-section-gap)",
                 alignContent: "start",
                 overflow: "hidden",
                 minWidth: 0,
@@ -903,21 +880,28 @@ function QuirePage({
               {/* Education */}
               <section>
                 <h2 style={QUIRE_SIDEBAR_SECTION_HEADING}>Education</h2>
-                <div style={{ display: "grid", gap: "3mm" }}>
+                <div
+                  style={{
+                    display: "grid",
+                    gap: "calc(var(--education-gap) - 1mm)",
+                  }}
+                >
                   {data.education.map((item) => (
                     <div
                       key={`${item.school}-${item.degree}`}
-                      style={{ display: "grid", gap: "0.4mm" }}
+                      style={{
+                        display: "grid",
+                        gap: "calc(var(--experience-bullets-gap) - 0.72mm)",
+                      }}
                     >
                       <p
                         style={{
                           margin: 0,
-                          fontSize: "2.1mm",
+                          fontSize: "calc(var(--text-caption-size) - 0.15mm)",
                           color: QUIRE_SIDEBAR_ACCENT,
                           fontWeight: 700,
                           letterSpacing: "0.08em",
-                          fontFamily:
-                            "SFMono-Regular, IBM Plex Mono, Menlo, monospace",
+                          fontFamily: PREVIEW_MONO_FAMILY,
                         }}
                       >
                         {item.period}
@@ -925,7 +909,7 @@ function QuirePage({
                       <p
                         style={{
                           margin: 0,
-                          fontSize: "2.65mm",
+                          fontSize: "calc(var(--text-body-sm-size) - 0.3mm)",
                           color: QUIRE_SIDEBAR_TEXT_PRIMARY,
                           fontWeight: 600,
                           lineHeight: 1.22,
@@ -936,7 +920,7 @@ function QuirePage({
                       <p
                         style={{
                           margin: 0,
-                          fontSize: "2.3mm",
+                          fontSize: "calc(var(--text-body-sm-size) - 0.65mm)",
                           color: QUIRE_SIDEBAR_TEXT_SECONDARY,
                           lineHeight: 1.3,
                         }}
@@ -957,7 +941,7 @@ function QuirePage({
                     padding: 0,
                     listStyle: "none",
                     display: "grid",
-                    gap: "0.82mm",
+                    gap: "calc(var(--skill-gap) - 0.98mm)",
                   }}
                 >
                   {data.skills.map((skill) => (
@@ -965,10 +949,10 @@ function QuirePage({
                       key={skill}
                       style={{
                         position: "relative",
-                        paddingLeft: "2.8mm",
-                        fontSize: "2.54mm",
-                        color: "rgba(255,255,255,0.76)",
-                        lineHeight: 1.3,
+                        paddingLeft: "calc(var(--experience-bullets-padding) - 0.8mm)",
+                        fontSize: "calc(var(--text-body-sm-size) - 0.41mm)",
+                        color: QUIRE_SIDEBAR_TEXT_SECONDARY,
+                        lineHeight: "calc(var(--text-body-sm-line) - 0.15)",
                       }}
                     >
                       <span
@@ -976,9 +960,9 @@ function QuirePage({
                         style={{
                           position: "absolute",
                           left: 0,
-                          top: "1.3mm",
-                          width: "0.9mm",
-                          height: "0.9mm",
+                          top: "calc(var(--text-caption-size) - 0.95mm)",
+                          width: "calc(var(--text-caption-size) - 1.1mm)",
+                          height: "calc(var(--text-caption-size) - 1.1mm)",
                           borderRadius: "50%",
                           background: QUIRE_SIDEBAR_ACCENT,
                         }}
@@ -993,25 +977,36 @@ function QuirePage({
               {data.languages.length > 0 && (
                 <section>
                   <h2 style={QUIRE_SIDEBAR_SECTION_HEADING}>Languages</h2>
-                  <div style={{ display: "grid", gap: "1.8mm" }}>
+                  <div
+                    style={{
+                      display: "grid",
+                      gap: "calc(var(--sidebar-content-gap) - 0.6mm)",
+                    }}
+                  >
                     {data.languages.map((lang) => (
-                      <div key={lang.name} style={{ display: "grid", gap: "0.22mm" }}>
+                      <div
+                        key={lang.name}
+                        style={{
+                          display: "grid",
+                          gap: "calc(var(--experience-bullets-gap) - 0.9mm)",
+                        }}
+                      >
                         <p
-                          style={{
-                            margin: 0,
-                            fontSize: "2.62mm",
-                            color: QUIRE_SIDEBAR_TEXT_PRIMARY,
-                            fontWeight: 600,
+                        style={{
+                          margin: 0,
+                          fontSize: "calc(var(--text-body-sm-size) - 0.33mm)",
+                          color: QUIRE_SIDEBAR_TEXT_PRIMARY,
+                          fontWeight: 600,
                           }}
                         >
                           {lang.name}
                         </p>
                         <p
-                          style={{
-                            margin: 0,
-                            fontSize: "2.22mm",
-                            color: QUIRE_SIDEBAR_TEXT_SECONDARY,
-                          }}
+                        style={{
+                          margin: 0,
+                          fontSize: "calc(var(--text-caption-size) - 0.03mm)",
+                          color: QUIRE_SIDEBAR_TEXT_SECONDARY,
+                        }}
                         >
                           {lang.level}
                         </p>
@@ -1025,9 +1020,10 @@ function QuirePage({
             {/* RIGHT MAIN */}
             <main
               style={{
-                padding: "6mm 13mm 13mm 10mm",
+                padding:
+                  "calc(var(--header-bottom-padding) + 0.5mm) calc(var(--margin-right) - 15mm) calc(var(--margin-bottom) - 25mm) calc(var(--margin-left) - 10mm)",
                 display: "grid",
-                gap: "4.6mm",
+                gap: "calc(var(--body-row-gap) - 2.4mm)",
                 alignContent: "start",
                 overflow: "hidden",
                 minWidth: 0,
@@ -1036,14 +1032,19 @@ function QuirePage({
               {/* Experience */}
               <section>
                 <h2 style={QUIRE_MAIN_SECTION_HEADING}>Experience</h2>
-                <div style={{ display: "grid", gap: "3.6mm" }}>
+                <div
+                  style={{
+                    display: "grid",
+                    gap: "calc(var(--main-section-gap) - 3mm)",
+                  }}
+                >
                   {data.experience.map((item) => (
                     <article
                       key={`${item.company}-${item.role}`}
                       style={{
                         display: "grid",
-                        gap: "0.5mm",
-                        paddingTop: "2.5mm",
+                        gap: "calc(var(--experience-bullets-gap) - 0.62mm)",
+                        paddingTop: "calc(var(--experience-item-gap) - 2.5mm)",
                         borderTop:
                           "0.2mm solid color-mix(in srgb, var(--color-border) 78%, transparent)",
                       }}
@@ -1053,32 +1054,31 @@ function QuirePage({
                           display: "flex",
                           justifyContent: "space-between",
                           alignItems: "baseline",
-                          gap: "4mm",
+                          gap: "var(--experience-column-gap)",
                         }}
                       >
                         <p
-                          style={{
-                            margin: 0,
-                            fontSize: "3.1mm",
-                            fontWeight: 700,
-                            color: "var(--color-text)",
-                            lineHeight: 1.1,
-                            textTransform: "uppercase",
-                            letterSpacing: "0.04em",
+                        style={{
+                          margin: 0,
+                          fontSize: "calc(var(--text-title-size) - 1.25mm)",
+                          fontWeight: 700,
+                          color: "var(--color-text)",
+                          lineHeight: "var(--text-title-line)",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.04em",
                           }}
                         >
                           {item.company}
                         </p>
                         <p
-                          style={{
-                            margin: 0,
-                            fontSize: "2.2mm",
-                            color: "var(--color-text-subtle)",
-                            lineHeight: 1.2,
-                            flexShrink: 0,
-                            fontFamily:
-                              "SFMono-Regular, IBM Plex Mono, Menlo, monospace",
-                            letterSpacing: "0.04em",
+                        style={{
+                          margin: 0,
+                          fontSize: "calc(var(--text-caption-size) - 0.05mm)",
+                          color: "var(--color-text-subtle)",
+                          lineHeight: "var(--text-caption-line)",
+                          flexShrink: 0,
+                          fontFamily: PREVIEW_MONO_FAMILY,
+                          letterSpacing: "0.04em",
                           }}
                         >
                           {item.period}
@@ -1087,11 +1087,11 @@ function QuirePage({
                       <p
                         style={{
                           margin: 0,
-                          fontSize: "2.82mm",
+                          fontSize: "calc(var(--text-body-size) - 0.53mm)",
                           fontStyle: "italic",
                           color:
                             "color-mix(in srgb, var(--color-accent) 72%, var(--color-text) 28%)",
-                          lineHeight: 1.24,
+                          lineHeight: "calc(var(--text-body-line) - 0.26)",
                           fontFamily: "var(--font-heading-family)",
                         }}
                       >
@@ -1101,7 +1101,7 @@ function QuirePage({
                             style={{
                               fontStyle: "normal",
                               color: "var(--color-text-muted)",
-                              fontSize: "2.54mm",
+                              fontSize: "calc(var(--text-body-sm-size) - 0.41mm)",
                             }}
                           >
                             {" · "}
@@ -1111,11 +1111,11 @@ function QuirePage({
                       </p>
                       <ul
                         style={{
-                          margin: "1.3mm 0 0",
+                          margin: "calc(var(--experience-bullets-gap) + 0.1mm) 0 0",
                           padding: 0,
-                          paddingLeft: "3.4mm",
+                          paddingLeft: "calc(var(--experience-bullets-padding) - 0.2mm)",
                           display: "grid",
-                          gap: "0.78mm",
+                          gap: "calc(var(--experience-bullets-gap) - 0.42mm)",
                           listStyle: "disc",
                         }}
                       >
@@ -1123,8 +1123,8 @@ function QuirePage({
                           <li
                             key={bullet}
                             style={{
-                              fontSize: "2.5mm",
-                              lineHeight: 1.46,
+                              fontSize: "calc(var(--text-body-sm-size) - 0.45mm)",
+                              lineHeight: "calc(var(--text-body-line) - 0.04)",
                               color: "var(--color-text-muted)",
                               letterSpacing: "-0.003em",
                             }}
@@ -1146,7 +1146,7 @@ function QuirePage({
                     style={{
                       display: "grid",
                       gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                      gap: "2.2mm",
+                      gap: "calc(var(--project-gap) - 0.4mm)",
                     }}
                   >
                     {data.projects.map((project) => (
@@ -1154,42 +1154,42 @@ function QuirePage({
                         key={project.name}
                         style={{
                           display: "grid",
-                          gap: "0.5mm",
-                          paddingTop: "2.2mm",
+                          gap: "calc(var(--experience-bullets-gap) - 0.62mm)",
+                          paddingTop: "calc(var(--project-gap) - 1mm)",
                           borderTop:
                             "0.24mm solid color-mix(in srgb, var(--color-border) 82%, transparent)",
                         }}
                       >
                         <p
-                          style={{
-                            margin: 0,
-                            fontSize: "2.75mm",
-                            fontWeight: 700,
-                            color: "var(--color-text)",
-                            lineHeight: 1.2,
-                            fontFamily: "var(--font-heading-family)",
-                            fontStyle: "italic",
+                        style={{
+                          margin: 0,
+                          fontSize: "calc(var(--text-body-size) - 0.6mm)",
+                          fontWeight: 700,
+                          color: "var(--color-text)",
+                          lineHeight: "var(--text-caption-line)",
+                          fontFamily: "var(--font-heading-family)",
+                          fontStyle: "italic",
                           }}
                         >
                           {project.name}
                         </p>
                         <p
-                          style={{
-                            margin: 0,
-                            fontSize: "2.3mm",
-                            color: "var(--color-accent)",
-                            lineHeight: 1.2,
-                          }}
+                        style={{
+                          margin: 0,
+                          fontSize: "calc(var(--text-body-sm-size) - 0.65mm)",
+                          color: "var(--color-accent)",
+                          lineHeight: "var(--text-caption-line)",
+                        }}
                         >
                           {project.meta}
                         </p>
                         <p
-                          style={{
-                            margin: 0,
-                            fontSize: "2.38mm",
-                            lineHeight: 1.44,
-                            color: "var(--color-text-muted)",
-                          }}
+                        style={{
+                          margin: 0,
+                          fontSize: "calc(var(--text-body-sm-size) - 0.57mm)",
+                          lineHeight: "calc(var(--text-body-line) - 0.06)",
+                          color: "var(--color-text-muted)",
+                        }}
                         >
                           {project.description}
                         </p>
@@ -1221,7 +1221,10 @@ function ClassicResumePage({
   onActivateComparison?: (() => void) | undefined;
   fitToken?: string;
 }) {
-  const pageVars = buildPageVars(variant);
+  const pageVars = buildPageVars(
+    variant,
+    React.useContext(ResumeStylePresetContext),
+  );
   const { pageRef, innerRef } = useAutoFitPage(fitToken);
   const contactItems: ContactItemView[] =
     variant.id === "robial"
@@ -1238,16 +1241,25 @@ function ClassicResumePage({
       <article
         ref={pageRef}
         className={`resume-page resume-page--${variant.id}`}
-        style={{ ...pageVars, background: "var(--paper)", fontFamily: "var(--font-body-family)" }}
+        style={{
+          ...pageVars,
+          background: "var(--paper)",
+          fontFamily: "var(--font-body-family)",
+        }}
         aria-label={variant.label}
       >
+        <ResumeFontDebugInheritProbe />
         <div ref={innerRef} className="resume-inner">
-          <header className="resume-header">
+          <header className="resume-header" data-preview-section="profile">
             <div className="header-copy">
               <p className="eyebrow">Résumé</p>
-              <h1 className="name">{data.name}</h1>
+              <h1 className="name" data-font-probe="heading">
+                {data.name}
+              </h1>
               <p className="title">{data.title}</p>
-              <p className="summary">{data.summary}</p>
+              <p className="summary" data-font-probe="body">
+                {data.summary}
+              </p>
             </div>
             <HeaderMeta items={data.metadata} variant={variant} />
           </header>
@@ -1378,166 +1390,6 @@ function ClassicResumePage({
   );
 }
 
-function OneColumnPage({
-  variant,
-  data,
-  comparisonLabel,
-  compactComparison,
-  onActivateComparison,
-  fitToken,
-}: {
-  variant: ResumeVariant;
-  data: ResumeData;
-  comparisonLabel?: string;
-  compactComparison?: boolean;
-  onActivateComparison?: (() => void) | undefined;
-  fitToken?: string;
-}) {
-  const pageVars = buildPageVars(variant);
-  const { pageRef, innerRef } = useAutoFitPage(fitToken);
-
-  const emailItem = data.contact.find(
-    (item) => item.label.toLowerCase() === "email",
-  );
-
-  const phoneItem = data.contact.find(
-    (item) => item.label.toLowerCase() === "phone",
-  );
-
-  const portfolioItem =
-    data.contact.find((item) => item.label.toLowerCase() === "web") ??
-    data.contact.find((item) => item.label.toLowerCase() === "portfolio") ??
-    data.metadata.find((item) => item.label.toLowerCase() === "portfolio");
-
-  const onecolMetaItems: OnecolMetaItem[] = [
-    phoneItem ? { label: "Phone", value: phoneItem.value } : null,
-    emailItem ? { label: "Email", value: emailItem.value } : null,
-    portfolioItem ? { label: "Portfolio", value: portfolioItem.value } : null,
-  ].filter((item): item is OnecolMetaItem => item !== null);
-
-  return (
-    <PreviewFrame
-      variant={variant}
-      comparisonLabel={comparisonLabel}
-      compactComparison={compactComparison}
-      onActivateComparison={onActivateComparison}
-    >
-      <article
-        ref={pageRef}
-        className={`resume-page resume-page--${variant.id}`}
-        style={{ ...pageVars, background: "var(--paper)", fontFamily: "var(--font-body-family)" }}
-        aria-label={variant.label}
-      >
-        <div ref={innerRef} className="resume-inner resume-inner--onecol">
-          <header className="onecol-header">
-            <div className="header-copy header-copy--onecol">
-              <h1 className="name name--onecol">{data.name}</h1>
-              <p className="title title--onecol">{data.title}</p>
-              <p className="summary summary--onecol">{data.summary}</p>
-            </div>
-
-            <dl
-              className="onecol-meta"
-              aria-label="Resume metadata"
-              style={{
-                gridTemplateColumns: `repeat(${Math.max(
-                  1,
-                  onecolMetaItems.length,
-                )}, minmax(0, 1fr))`,
-              }}
-            >
-              {onecolMetaItems.map((item) => (
-                <div key={item.label} className="onecol-meta-item">
-                  <dt>{item.label}</dt>
-                  <dd>{item.value}</dd>
-                </div>
-              ))}
-            </dl>
-          </header>
-
-          <main className="onecol-main">
-            <OneColumnSection title="Experience">
-              <div className="onecol-experience-stack">
-                {data.experience.map((item) => (
-                  <article
-                    key={`${item.company}-${item.role}`}
-                    className="onecol-entry"
-                  >
-                    <div className="onecol-entry-head">
-                      <div>
-                        <div className="onecol-entry-eyebrow">
-                          {item.company}
-                        </div>
-                        <h3 className="entry-title">{item.role}</h3>
-                        <p className="entry-subtitle">{item.location}</p>
-                      </div>
-                      <p className="experience-period">{item.period}</p>
-                    </div>
-
-                    <ul className="bullet-list bullet-list--onecol">
-                      {item.bullets.map((bullet) => (
-                        <li key={bullet}>{bullet}</li>
-                      ))}
-                    </ul>
-                  </article>
-                ))}
-              </div>
-            </OneColumnSection>
-
-            {!!data.achievements?.length && (
-              <OneColumnSection title="Achievements">
-                <ul className="bullet-list bullet-list--onecol bullet-list--achievements">
-                  {data.achievements.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </OneColumnSection>
-            )}
-
-            <OneColumnSection title="Education">
-              <div className="education-stack education-stack--onecol">
-                {data.education.map((item) => (
-                  <article
-                    key={`${item.school}-${item.degree}`}
-                    className="education-item"
-                  >
-                    <div>
-                      <h3 className="entry-title">{item.degree}</h3>
-                      <p className="entry-subtitle">{item.school}</p>
-                    </div>
-                    <p className="education-period">{item.period}</p>
-                  </article>
-                ))}
-              </div>
-            </OneColumnSection>
-
-            <OneColumnSection title="Skills">
-              <ul className="skills-list skills-list--onecol">
-                {data.skills.map((skill) => (
-                  <li key={skill}>{skill}</li>
-                ))}
-              </ul>
-            </OneColumnSection>
-
-            <OneColumnSection title="Languages">
-              <ul className="compact-list compact-list--languages compact-list--onecol">
-                {data.languages.map((language) => (
-                  <li key={language.name}>
-                    <span className="label">{language.name}</span>
-                    <span className="value">{language.level}</span>
-                  </li>
-                ))}
-              </ul>
-            </OneColumnSection>
-
-            <div className="onecol-bottom-space" />
-          </main>
-        </div>
-      </article>
-    </PreviewFrame>
-  );
-}
-
 function SwissMinimaPage({
   variant,
   data,
@@ -1553,7 +1405,10 @@ function SwissMinimaPage({
   onActivateComparison?: (() => void) | undefined;
   fitToken?: string;
 }) {
-  const pageVars = buildPageVars(variant);
+  const pageVars = buildPageVars(
+    variant,
+    React.useContext(ResumeStylePresetContext),
+  );
   const { pageRef, innerRef } = useAutoFitPage(fitToken);
   const mergedMeta = [...data.metadata, ...data.contact];
   const email =
@@ -1587,19 +1442,20 @@ function SwissMinimaPage({
         className={`resume-page resume-page--${variant.id}`}
         style={{
           ...pageVars,
-          background: "var(--paper)", /* --paper (#faf9f5) = warm document sheet */
-          borderColor: "rgba(17, 17, 17, 0.18)",
-          borderWidth: "0.6mm",
-          boxShadow: "0 5mm 14mm rgba(18, 12, 8, 0.08)",
-          fontFamily: "var(--font-heading-family)",
+          background: "var(--resume-preview-page-background)",
+          borderColor: "var(--resume-preview-page-border-color)",
+          borderWidth: "var(--resume-preview-page-border-width)",
+          boxShadow: "var(--resume-preview-page-shadow)",
+          fontFamily: "var(--font-body-family)",
         }}
         aria-label={variant.label}
       >
+        <ResumeFontDebugInheritProbe />
         <div
           style={{
             position: "absolute",
-            inset: "12mm",
-            border: "0.46mm solid rgba(17, 17, 17, 0.18)",
+            inset: "var(--resume-preview-frame-inset)",
+            border: "var(--resume-preview-frame-border)",
             pointerEvents: "none",
           }}
         />
@@ -1608,19 +1464,22 @@ function SwissMinimaPage({
           style={{
             position: "absolute",
             inset: 0,
-            padding: "18mm 16mm 18mm 18mm",
+            padding:
+              "var(--margin-top) calc(var(--margin-left) - 1mm) var(--margin-top) var(--margin-left)",
             display: "grid",
             gridTemplateRows: "auto auto minmax(0, 1fr) auto",
-            gap: "4.4mm",
+            gap: "calc(var(--body-row-gap) - 3.8mm)",
           }}
         >
           <header
+            data-preview-section="profile"
             style={{
               display: "grid",
-              gap: "3.2mm",
+              gap: "calc(var(--header-row-gap) - 0.8mm)",
               alignItems: "start",
-              paddingBottom: "4.2mm",
-              borderBottom: "0.34mm solid rgba(17, 17, 17, 0.28)",
+              paddingBottom: "var(--header-bottom-padding)",
+              borderBottom:
+                "0.34mm solid color-mix(in srgb, var(--color-text) 28%, transparent)",
             }}
           >
             <div style={{ minWidth: 0 }}>
@@ -1629,10 +1488,11 @@ function SwissMinimaPage({
                   style={{
                     display: "flex",
                     flexWrap: "wrap",
-                    gap: "1.6mm 4mm",
-                    marginBottom: "3.2mm",
-                    color: "rgba(17, 17, 17, 0.64)",
-                    fontSize: "2.7mm",
+                    gap:
+                      "calc(var(--experience-bullets-gap) + 0.4mm) var(--experience-column-gap)",
+                    marginBottom: "calc(var(--header-row-gap) - 0.8mm)",
+                    color: "color-mix(in srgb, var(--color-text) 64%, transparent)",
+                    fontSize: "var(--text-body-sm-size)",
                     lineHeight: 1.35,
                   }}
                 >
@@ -1642,27 +1502,28 @@ function SwissMinimaPage({
                 </div>
               ) : null}
               <h1
+                data-font-probe="heading"
                 style={{
                   margin: 0,
                   fontFamily: "var(--font-heading-family)",
-                  fontSize: "16.1mm",
-                  lineHeight: 0.86,
+                  fontSize: "var(--text-display-size)",
+                  lineHeight: "var(--text-display-line)",
                   letterSpacing: "0.11em",
                   fontWeight: 900,
                   textTransform: "uppercase",
-                  maxWidth: "130mm",
-                  color: "#111111",
+                  maxWidth: "calc(var(--main-width) + var(--sidebar-width) - 10mm)",
+                  color: "var(--color-text)",
                 }}
               >
                 {data.name}
               </h1>
               <p
                 style={{
-                  margin: "3.2mm 0 0",
-                  maxWidth: "112mm",
-                  fontSize: "3.55mm",
+                  margin: "calc(var(--header-row-gap) - 0.8mm) 0 0",
+                  maxWidth: "calc(var(--main-width) + 7mm)",
+                  fontSize: "calc(var(--text-title-size) - 0.8mm)",
                   lineHeight: 1.38,
-                  color: "rgba(17, 17, 17, 0.72)",
+                  color: "color-mix(in srgb, var(--color-text) 72%, transparent)",
                 }}
               >
                 {data.title}
@@ -1678,16 +1539,17 @@ function SwissMinimaPage({
           >
             <div>
               <p
+                data-font-probe="body"
                 style={{
                   margin: 0,
-                  maxWidth: "104mm",
-                  fontFamily: "var(--font-heading-family)",
-                  fontSize: "5.25mm",
+                  maxWidth: "var(--header-summary-width)",
+                  fontFamily: "var(--font-body-family)",
+                  fontSize: "calc(var(--text-title-size) + 0.9mm)",
                   lineHeight: 1.08,
                   letterSpacing: "0.03em",
                   fontWeight: 800,
                   textTransform: "uppercase",
-                  color: "#111111",
+                  color: "var(--color-text)",
                   display: "-webkit-box",
                   WebkitLineClamp: 5,
                   WebkitBoxOrient: "vertical",
@@ -1700,14 +1562,18 @@ function SwissMinimaPage({
           </section>
 
           <section
-            style={{ display: "grid", gap: "3.2mm", alignContent: "start" }}
+            style={{
+              display: "grid",
+              gap: "calc(var(--body-row-gap) - 4.8mm)",
+              alignContent: "start",
+            }}
           >
             <div>
               <p
                 style={{
                   margin: 0,
-                  fontSize: "2.2mm",
-                  lineHeight: 1.15,
+                  fontSize: "var(--text-caption-size)",
+                  lineHeight: "var(--text-caption-line)",
                   letterSpacing: "0.26em",
                   textTransform: "uppercase",
                   color: "var(--color-accent)",
@@ -1724,23 +1590,26 @@ function SwissMinimaPage({
                 key={`${item.company}-${item.role}-${item.period}-${index}`}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "minmax(0, 1fr) 39mm",
-                  gap: "5mm",
+                  gridTemplateColumns:
+                    "minmax(0, 1fr) calc(var(--experience-date-column) + 21mm)",
+                  gap: "calc(var(--experience-column-gap) + 1mm)",
                   alignItems: "start",
-                  paddingTop: "2.8mm",
-                  borderTop: "0.24mm solid rgba(17, 17, 17, 0.24)",
+                  paddingTop: "calc(var(--experience-item-gap) - 2.2mm)",
+                  borderTop:
+                    "0.24mm solid color-mix(in srgb, var(--color-text) 24%, transparent)",
                 }}
               >
                 <div style={{ minWidth: 0 }}>
                   <h2
                     style={{
-                      margin: "0 0 1.3mm",
-                      fontSize: "5.4mm",
+                      margin: "0 0 var(--experience-bullets-gap)",
+                      fontFamily: "var(--font-heading-family)",
+                      fontSize: "calc(var(--text-title-size) + 1.05mm)",
                       lineHeight: 1.02,
                       fontWeight: 800,
                       letterSpacing: "0.01em",
                       textTransform: "uppercase",
-                      color: "#111111",
+                      color: "var(--color-text)",
                     }}
                   >
                     {item.role}
@@ -1748,22 +1617,22 @@ function SwissMinimaPage({
                   <p
                     style={{
                       margin: 0,
-                      fontSize: "3mm",
+                      fontSize: "calc(var(--text-body-size) - 0.35mm)",
                       lineHeight: 1.28,
                       fontWeight: 700,
-                      color: "#111111",
+                      color: "var(--color-text)",
                     }}
                   >
                     {item.company}
                   </p>
                   <ul
                     style={{
-                      margin: "2.2mm 0 0",
-                      paddingLeft: "4mm",
+                      margin: "var(--experience-bullets-gap) 0 0",
+                      paddingLeft: "var(--experience-bullets-padding)",
                       display: "grid",
-                      gap: "1.2mm",
-                      color: "rgba(17, 17, 17, 0.72)",
-                      fontSize: "2.8mm",
+                      gap: "var(--experience-bullets-gap)",
+                      color: "color-mix(in srgb, var(--color-text) 72%, transparent)",
+                      fontSize: "calc(var(--text-body-sm-size) - 0.15mm)",
                       lineHeight: 1.44,
                     }}
                   >
@@ -1774,10 +1643,11 @@ function SwissMinimaPage({
                 </div>
                 <aside
                   style={{
-                    paddingLeft: "3mm",
-                    borderLeft: "0.32mm solid rgba(41, 34, 28, 0.16)",
+                    paddingLeft: "calc(var(--experience-column-gap) - 1mm)",
+                    borderLeft:
+                      "0.32mm solid color-mix(in srgb, var(--color-text) 16%, transparent)",
                     display: "grid",
-                    gap: "2.35mm",
+                    gap: "calc(var(--sidebar-content-gap) + 0.75mm)",
                   }}
                 >
                   {uniqueRows([
@@ -1787,13 +1657,16 @@ function SwissMinimaPage({
                   ]).map((row) => (
                     <div
                       key={row.label}
-                      style={{ display: "grid", gap: "0.7mm" }}
+                      style={{
+                        display: "grid",
+                        gap: "calc(var(--experience-bullets-gap) - 0.42mm)",
+                      }}
                     >
                       <span
                         style={{
-                          fontSize: "2.9mm",
+                          fontSize: "calc(var(--text-body-sm-size) + 0.25mm)",
                           lineHeight: 1.46,
-                          color: "rgba(17, 17, 17, 0.76)",
+                          color: "color-mix(in srgb, var(--color-text) 76%, transparent)",
                           textTransform:
                             row.label === "company" ? "none" : "uppercase",
                           letterSpacing:
@@ -1811,24 +1684,30 @@ function SwissMinimaPage({
 
           <section
             style={{
-              paddingTop: "2.8mm",
-              borderTop: "0.42mm solid rgba(17, 17, 17, 0.28)",
+              paddingTop: "calc(var(--main-section-gap) - 2.2mm)",
+              borderTop:
+                "0.42mm solid color-mix(in srgb, var(--color-text) 28%, transparent)",
               display: "grid",
               gridTemplateColumns:
                 "minmax(0, 1.25fr) minmax(0, 0.85fr) minmax(0, 0.9fr)",
-              gap: "3.2mm",
+              gap: "calc(var(--main-section-gap) - 4mm)",
               alignItems: "start",
             }}
           >
-            <div style={{ display: "grid", gap: "1.4mm" }}>
+            <div
+              style={{
+                display: "grid",
+                gap: "calc(var(--experience-bullets-gap) + 0.3mm)",
+              }}
+            >
               <h4
                 style={{
                   margin: 0,
-                  fontSize: "2.1mm",
-                  lineHeight: 1.2,
+                  fontSize: "calc(var(--text-caption-size) - 0.15mm)",
+                  lineHeight: "var(--text-caption-line)",
                   letterSpacing: "0.24em",
                   textTransform: "uppercase",
-                  color: "rgba(17, 17, 17, 0.52)",
+                  color: "color-mix(in srgb, var(--color-text) 52%, transparent)",
                   fontWeight: 700,
                   fontFamily: "var(--font-body-family)",
                 }}
@@ -1838,11 +1717,11 @@ function SwissMinimaPage({
               <ul
                 style={{
                   margin: 0,
-                  paddingLeft: "4mm",
+                  paddingLeft: "var(--experience-bullets-padding)",
                   display: "grid",
-                  gap: "0.8mm",
-                  color: "rgba(17, 17, 17, 0.72)",
-                  fontSize: "2.55mm",
+                  gap: "calc(var(--experience-bullets-gap) - 0.4mm)",
+                  color: "color-mix(in srgb, var(--color-text) 72%, transparent)",
+                  fontSize: "calc(var(--text-body-sm-size) - 0.4mm)",
                   lineHeight: 1.38,
                 }}
               >
@@ -1851,15 +1730,21 @@ function SwissMinimaPage({
                 ))}
               </ul>
             </div>
-            <div style={{ display: "grid", gap: "1.4mm", minWidth: 0 }}>
+            <div
+              style={{
+                display: "grid",
+                gap: "calc(var(--experience-bullets-gap) + 0.3mm)",
+                minWidth: 0,
+              }}
+            >
               <h4
                 style={{
                   margin: 0,
-                  fontSize: "2.1mm",
-                  lineHeight: 1.2,
+                  fontSize: "calc(var(--text-caption-size) - 0.15mm)",
+                  lineHeight: "var(--text-caption-line)",
                   letterSpacing: "0.24em",
                   textTransform: "uppercase",
-                  color: "rgba(17, 17, 17, 0.52)",
+                  color: "color-mix(in srgb, var(--color-text) 52%, transparent)",
                   fontWeight: 700,
                   fontFamily: "var(--font-body-family)",
                 }}
@@ -1869,9 +1754,9 @@ function SwissMinimaPage({
               <p
                 style={{
                   margin: 0,
-                  fontSize: "2.8mm",
+                  fontSize: "calc(var(--text-body-sm-size) + 0.15mm)",
                   lineHeight: 1.5,
-                  color: "rgba(17, 17, 17, 0.72)",
+                  color: "color-mix(in srgb, var(--color-text) 72%, transparent)",
                 }}
               >
                 {supportEducation ? (
@@ -1880,7 +1765,7 @@ function SwissMinimaPage({
                       style={{
                         display: "block",
                         fontWeight: 700,
-                        color: "#111111",
+                        color: "var(--color-text)",
                       }}
                     >
                       {supportEducation.degree}
@@ -1897,15 +1782,21 @@ function SwissMinimaPage({
                 )}
               </p>
             </div>
-            <div style={{ display: "grid", gap: "1.4mm", minWidth: 0 }}>
+            <div
+              style={{
+                display: "grid",
+                gap: "calc(var(--experience-bullets-gap) + 0.3mm)",
+                minWidth: 0,
+              }}
+            >
               <h4
                 style={{
                   margin: 0,
-                  fontSize: "2.1mm",
-                  lineHeight: 1.2,
+                  fontSize: "calc(var(--text-caption-size) - 0.15mm)",
+                  lineHeight: "var(--text-caption-line)",
                   letterSpacing: "0.24em",
                   textTransform: "uppercase",
-                  color: "rgba(17, 17, 17, 0.52)",
+                  color: "color-mix(in srgb, var(--color-text) 52%, transparent)",
                   fontWeight: 700,
                   fontFamily: "var(--font-body-family)",
                 }}
@@ -1915,9 +1806,9 @@ function SwissMinimaPage({
               <p
                 style={{
                   margin: 0,
-                  fontSize: "2.55mm",
+                  fontSize: "calc(var(--text-body-sm-size) - 0.4mm)",
                   lineHeight: 1.42,
-                  color: "rgba(17, 17, 17, 0.72)",
+                  color: "color-mix(in srgb, var(--color-text) 72%, transparent)",
                 }}
               >
                 {supportSkills || "Skills pending."}
@@ -1945,11 +1836,10 @@ function VolkRegisterPage({
   onActivateComparison?: (() => void) | undefined;
   fitToken?: string;
 }) {
-  const volkTitleLineHeight = "24pt";
-  const volkSubtitleGap = "4pt";
-  const volkSubtitleLineHeight = "18pt";
-  const volkBodyLeading = "18pt";
-  const pageVars = buildPageVars(variant);
+  const pageVars = buildPageVars(
+    variant,
+    React.useContext(ResumeStylePresetContext),
+  );
   const { pageRef, innerRef } = useAutoFitPage(fitToken);
   const mergedMeta = [...data.metadata, ...data.contact];
   const email =
@@ -1964,21 +1854,23 @@ function VolkRegisterPage({
   const website =
     findLabeledValue(data.contact, ["web", "portfolio", "site", "linkedin"]) ??
     findLabeledValue(mergedMeta, ["web", "portfolio", "site", "linkedin"]);
-  const senderLine = [location, email, phone, website].filter(Boolean).join(" · ");
+  const senderLine = [location, email, phone, website]
+    .filter(Boolean)
+    .join(" · ");
   const registerSkills = data.skills
     .map((skill) => skill.trim())
     .filter(Boolean)
     .slice(0, 3);
   const supportSkills = data.skills.slice(0, 10);
-  const sectionStackGap = "6mm";
-  const sectionHeadingGap = "1.7mm";
-  const bodyTextColor = "rgba(57, 48, 38, 0.9)";
+  const sectionStackGap = "calc(var(--body-row-gap) - 1.4mm)";
+  const sectionHeadingGap = "calc(var(--main-heading-gap) - 0.8mm)";
+  const bodyTextColor = "var(--resume-preview-volk-body-color)";
   const sectionHeadingStyle: React.CSSProperties = {
     margin: 0,
     color: "var(--color-accent)",
     fontFamily: "var(--font-heading-family)",
-    fontSize: "16pt",
-    lineHeight: "18pt",
+    fontSize: "var(--resume-preview-volk-section-heading-size)",
+    lineHeight: "var(--resume-preview-volk-section-heading-line)",
     fontWeight: 800,
     textTransform: "lowercase",
   };
@@ -1997,24 +1889,22 @@ function VolkRegisterPage({
           ...pageVars,
           position: "relative",
           overflow: "hidden",
-          background:
-            "linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0.04)), radial-gradient(circle at 18% 8%, rgba(255,255,255,0.22), transparent 26%), radial-gradient(circle at 92% 92%, rgba(120, 95, 52, 0.06), transparent 34%), var(--paper)",
-          borderColor: "rgba(130, 112, 82, 0.18)",
-          borderWidth: "0.42mm",
-          boxShadow:
-            "0 5mm 13mm rgba(28, 20, 14, 0.08), inset 0 0 0 0.18mm rgba(255,255,255,0.38), inset 0 0 10mm rgba(123,111,81,0.05)",
+          background: "var(--resume-preview-page-background)",
+          borderColor: "var(--resume-preview-page-border-color)",
+          borderWidth: "var(--resume-preview-page-border-width)",
+          boxShadow: "var(--resume-preview-page-shadow)",
           clipPath: "polygon(0 0, 100% 0, 100% 98.8%, 98.8% 100%, 0 100%)",
           fontFamily: "var(--font-heading-family)",
         }}
         aria-label={variant.label}
       >
+        <ResumeFontDebugInheritProbe />
         <div
           style={{
             position: "absolute",
             inset: 0,
             pointerEvents: "none",
-            background:
-              "linear-gradient(to right, transparent 0%, transparent 50.5%, rgba(120,108,77,0.055) 50.67%, transparent 50.84%, transparent 58.58%, rgba(120,108,77,0.028) 58.73%, transparent 58.88%, transparent 100%)",
+            background: "var(--resume-preview-volk-overlay-primary)",
             opacity: 0.95,
           }}
         />
@@ -2023,8 +1913,7 @@ function VolkRegisterPage({
             position: "absolute",
             inset: "0",
             pointerEvents: "none",
-            background:
-              "linear-gradient(to right, rgba(255,255,255,0.14), transparent 3%, transparent 97%, rgba(120,108,77,0.04)), linear-gradient(to bottom, rgba(255,255,255,0.08), transparent 5%, transparent 97%, rgba(120,108,77,0.04))",
+            background: "var(--resume-preview-volk-overlay-secondary)",
             mixBlendMode: "multiply",
           }}
         />
@@ -2037,9 +1926,9 @@ function VolkRegisterPage({
           <div
             style={{
               position: "absolute",
-              left: VOLK_REGISTER_GRID.left,
-              top: VOLK_REGISTER_GRID.titleTop,
-              width: VOLK_REGISTER_GRID.headerWidth,
+              left: "var(--volk-grid-left)",
+              top: "var(--volk-grid-title-top)",
+              width: "var(--volk-grid-header-width)",
               display: "grid",
               alignContent: "start",
               justifyItems: "start",
@@ -2050,8 +1939,8 @@ function VolkRegisterPage({
                 margin: 0,
                 color: "var(--color-accent)",
                 fontFamily: "var(--font-heading-family)",
-                fontSize: "32pt",
-                lineHeight: volkTitleLineHeight,
+                fontSize: "var(--resume-preview-volk-title-size)",
+                lineHeight: "var(--resume-preview-volk-section-heading-line)",
                 fontWeight: 800,
                 letterSpacing: "-0.045em",
                 whiteSpace: "nowrap",
@@ -2062,11 +1951,11 @@ function VolkRegisterPage({
             </h1>
             <p
               style={{
-                margin: `${volkSubtitleGap} 0 0`,
+                margin: "calc(var(--header-row-gap) - 0.8mm) 0 0",
                 color: "var(--color-accent)",
                 fontFamily: "var(--font-heading-family)",
-                fontSize: "20pt",
-                lineHeight: volkSubtitleLineHeight,
+                fontSize: "var(--resume-preview-volk-subtitle-size)",
+                lineHeight: "var(--text-title-line)",
                 fontWeight: 800,
                 letterSpacing: "-0.02em",
                 whiteSpace: "nowrap",
@@ -2077,11 +1966,11 @@ function VolkRegisterPage({
             </p>
             <p
               style={{
-                margin: "18pt 0 0",
+                margin: "calc(var(--header-row-gap) + 2.35mm) 0 0",
                 color: "var(--color-accent)",
                 fontFamily: "var(--font-heading-family)",
-                fontSize: "11pt",
-                lineHeight: volkBodyLeading,
+                fontSize: "var(--resume-preview-volk-meta-size)",
+                lineHeight: "var(--text-body-line)",
                 fontWeight: 800,
                 letterSpacing: "0.005em",
               }}
@@ -2095,8 +1984,8 @@ function VolkRegisterPage({
               key={`${skill}-${index}`}
               style={{
                 position: "absolute",
-                left: VOLK_REGISTER_GRID.metaLefts[index],
-                top: VOLK_REGISTER_GRID.metaTop,
+                left: `var(--volk-grid-meta-left-${index})`,
+                top: "var(--volk-grid-meta-top)",
                 display: "block",
                 color: "var(--color-accent)",
               }}
@@ -2105,8 +1994,8 @@ function VolkRegisterPage({
                 style={{
                   margin: 0,
                   fontFamily: "var(--font-heading-family)",
-                  fontSize: "11pt",
-                  lineHeight: volkBodyLeading,
+                  fontSize: "var(--resume-preview-volk-meta-size)",
+                  lineHeight: "var(--text-body-line)",
                   fontWeight: 800,
                   letterSpacing: "-0.01em",
                   whiteSpace: "nowrap",
@@ -2122,10 +2011,10 @@ function VolkRegisterPage({
             aria-hidden="true"
             style={{
               position: "absolute",
-              left: VOLK_REGISTER_GRID.dotLeft,
-              top: VOLK_REGISTER_GRID.dotTop,
-              width: "1.15mm",
-              height: "1.15mm",
+              left: "var(--volk-grid-dot-left)",
+              top: "var(--volk-grid-dot-top)",
+              width: "calc(var(--text-caption-size) - 1.1mm)",
+              height: "calc(var(--text-caption-size) - 1.1mm)",
               borderRadius: "50%",
               background: "var(--color-accent)",
             }}
@@ -2135,10 +2024,10 @@ function VolkRegisterPage({
             ref={innerRef}
             style={{
               position: "absolute",
-              left: VOLK_REGISTER_GRID.left,
-              top: VOLK_REGISTER_GRID.subjectTop,
-              width: `min(${VOLK_REGISTER_GRID.bodyWidth}, 60ch)`,
-              bottom: VOLK_REGISTER_GRID.bottomMargin,
+              left: "var(--volk-grid-left)",
+              top: "var(--volk-grid-subject-top)",
+              width: "min(var(--volk-grid-body-width), 60ch)",
+              bottom: "var(--volk-grid-bottom-margin)",
               overflow: "hidden",
             }}
           >
@@ -2159,12 +2048,13 @@ function VolkRegisterPage({
               >
                 <p style={sectionHeadingStyle}>summary</p>
                 <p
+                  data-font-probe="body"
                   style={{
                     margin: 0,
                     color: bodyTextColor,
                     fontFamily: "var(--font-heading-family)",
-                    fontSize: "11pt",
-                    lineHeight: 1.5,
+                    fontSize: "var(--resume-preview-volk-meta-size)",
+                    lineHeight: "var(--text-body-line)",
                     textAlign: "left",
                   }}
                 >
@@ -2174,13 +2064,13 @@ function VolkRegisterPage({
 
               <section style={{ display: "grid", gap: sectionHeadingGap }}>
                 <p style={sectionHeadingStyle}>experience</p>
-                <div style={{ display: "grid", gap: "3.5mm" }}>
+                <div style={{ display: "grid", gap: "var(--experience-item-gap)" }}>
                   {data.experience.slice(0, 2).map((item, index) => (
                     <article
                       key={`${item.company}-${item.role}-${item.period}-${index}`}
                       style={{
                         display: "grid",
-                        gap: "0.9mm",
+                        gap: "calc(var(--experience-bullets-gap) - 0.3mm)",
                         alignItems: "start",
                       }}
                     >
@@ -2189,8 +2079,8 @@ function VolkRegisterPage({
                           margin: 0,
                           color: bodyTextColor,
                           fontFamily: "var(--font-heading-family)",
-                          fontSize: "11pt",
-                          lineHeight: 1.5,
+                          fontSize: "var(--resume-preview-volk-meta-size)",
+                          lineHeight: "var(--text-body-line)",
                           fontWeight: 600,
                         }}
                       >
@@ -2201,8 +2091,8 @@ function VolkRegisterPage({
                           margin: 0,
                           color: bodyTextColor,
                           fontFamily: "var(--font-heading-family)",
-                          fontSize: "11pt",
-                          lineHeight: 1.5,
+                          fontSize: "var(--resume-preview-volk-meta-size)",
+                          lineHeight: "var(--text-body-line)",
                           fontWeight: 500,
                         }}
                       >
@@ -2217,8 +2107,8 @@ function VolkRegisterPage({
                             margin: 0,
                             color: bodyTextColor,
                             fontFamily: "var(--font-heading-family)",
-                            fontSize: "11pt",
-                            lineHeight: 1.5,
+                            fontSize: "var(--resume-preview-volk-meta-size)",
+                            lineHeight: "var(--text-body-line)",
                             fontWeight: 400,
                           }}
                         >
@@ -2233,45 +2123,46 @@ function VolkRegisterPage({
               {data.education.length > 0 ? (
                 <section style={{ display: "grid", gap: sectionHeadingGap }}>
                   <p style={sectionHeadingStyle}>education</p>
-                  <div style={{ display: "grid", gap: "3.2mm" }}>
+                  <div style={{ display: "grid", gap: "var(--education-gap)" }}>
                     {data.education.slice(0, 2).map((item) => (
                       <article
                         key={`${item.school}-${item.degree}`}
                         style={{
                           display: "grid",
-                          gap: "0.55mm",
+                          gap: "calc(var(--experience-bullets-gap) - 0.57mm)",
                         }}
                       >
                         <p
                           style={{
-                            margin: 0,
-                            color: bodyTextColor,
-                            fontFamily: "var(--font-heading-family)",
-                            fontSize: "11pt",
-                            lineHeight: 1.5,
-                            fontWeight: 600,
+                          margin: 0,
+                          color: bodyTextColor,
+                          fontFamily: "var(--font-heading-family)",
+                          fontSize: "var(--resume-preview-volk-meta-size)",
+                          lineHeight: "var(--text-body-line)",
+                          fontWeight: 600,
                           }}
                         >
                           {item.degree}
                         </p>
                         <p
                           style={{
-                            margin: 0,
-                            color: bodyTextColor,
-                            fontFamily: "var(--font-heading-family)",
-                            fontSize: "11pt",
-                            lineHeight: 1.5,
-                            fontWeight: 500,
+                          margin: 0,
+                          color: bodyTextColor,
+                          fontFamily: "var(--font-heading-family)",
+                          fontSize: "var(--resume-preview-volk-meta-size)",
+                          lineHeight: "var(--text-body-line)",
+                          fontWeight: 500,
                           }}
                         >
-                          {[item.school, item.period].filter(Boolean).join(" · ")}
+                          {[item.school, item.period]
+                            .filter(Boolean)
+                            .join(" · ")}
                         </p>
                       </article>
                     ))}
                   </div>
                 </section>
               ) : null}
-
             </main>
           </div>
         </div>
@@ -2295,10 +2186,28 @@ function EditorialMagazinePage({
   onActivateComparison?: (() => void) | undefined;
   fitToken?: string;
 }) {
-  const pageVars = buildPageVars(variant);
+  const pageVars = buildPageVars(
+    variant,
+    React.useContext(ResumeStylePresetContext),
+  );
   const { pageRef, innerRef } = useAutoFitPage(fitToken);
   const contactRows = data.contact.slice(0, 4);
   const metadataRows = data.metadata.slice(0, 3);
+  const editorialSectionLabelSize = "var(--text-caption-size)";
+  const editorialMetaLabelSize = "calc(var(--text-caption-size) - 0.15mm)";
+  const editorialMetaGap = "calc(var(--experience-bullets-gap) - 0.6mm)";
+  const editorialSectionGap = "calc(var(--main-section-gap) - 4.6mm)";
+  const editorialStackGap = "calc(var(--body-row-gap) - 2.2mm)";
+  const editorialEntryGap = "calc(var(--experience-item-gap) - 3.2mm)";
+  const editorialCardGap = "calc(var(--project-gap) + 0.2mm)";
+  const editorialMinorGap = "calc(var(--experience-bullets-gap) + 0.4mm)";
+  const editorialBodyColor = "var(--color-text-muted)";
+  const editorialSubtleColor = "var(--color-text-subtle)";
+  const editorialDisplaySize = "calc(var(--text-display-size) + 6.2mm)";
+  const editorialTitleSize = "calc(var(--text-title-size) - 0.35mm)";
+  const editorialSubtitleSize = "calc(var(--text-body-size) + 0.45mm)";
+  const editorialBodySize = "calc(var(--text-body-size) - 0.55mm)";
+  const editorialBodySmSize = "calc(var(--text-body-sm-size) - 0.25mm)";
 
   return (
     <PreviewFrame
@@ -2313,11 +2222,12 @@ function EditorialMagazinePage({
         style={{
           ...pageVars,
           background:
-            "linear-gradient(180deg, var(--paper), color-mix(in srgb, var(--paper) 94%, var(--sf1) 6%))", /* --paper base, faint sf1 tint toward foot */
+            "linear-gradient(180deg, var(--paper), color-mix(in srgb, var(--paper) 94%, var(--sf1) 6%))" /* --paper base, faint sf1 tint toward foot */,
           fontFamily: "var(--font-body-family)",
         }}
         aria-label={variant.label}
       >
+        <ResumeFontDebugInheritProbe />
         <div
           ref={innerRef}
           style={{
@@ -2329,15 +2239,17 @@ function EditorialMagazinePage({
             paddingLeft: "var(--auto-margin-left)",
             display: "grid",
             gridTemplateRows: "auto 1fr",
-            rowGap: "6.6mm",
+            rowGap: "calc(var(--body-row-gap) - 0.8mm)",
           }}
         >
           <header
+            data-preview-section="profile"
             style={{
               display: "grid",
-              gap: "4mm",
-              paddingBottom: "5mm",
-              borderBottom: "0.34mm solid rgba(32, 27, 22, 0.16)",
+              gap: "calc(var(--main-heading-gap) + 1.2mm)",
+              paddingBottom: "var(--header-bottom-padding)",
+              borderBottom:
+                "0.34mm solid var(--resume-preview-editorial-rule-color)",
             }}
           >
             <div
@@ -2345,13 +2257,13 @@ function EditorialMagazinePage({
                 display: "flex",
                 alignItems: "flex-end",
                 justifyContent: "space-between",
-                gap: "4mm",
+                gap: "var(--experience-column-gap)",
               }}
             >
               <p
                 style={{
                   margin: 0,
-                  fontSize: "2.2mm",
+                  fontSize: editorialSectionLabelSize,
                   lineHeight: 1.15,
                   letterSpacing: "0.18em",
                   textTransform: "uppercase",
@@ -2365,11 +2277,11 @@ function EditorialMagazinePage({
               <p
                 style={{
                   margin: 0,
-                  fontSize: "2.2mm",
+                  fontSize: editorialSectionLabelSize,
                   lineHeight: 1.15,
                   letterSpacing: "0.16em",
                   textTransform: "uppercase",
-                  color: "rgba(32, 27, 22, 0.5)",
+                  color: editorialSubtleColor,
                   fontFamily: "var(--font-body-family)",
                 }}
               >
@@ -2377,12 +2289,19 @@ function EditorialMagazinePage({
               </p>
             </div>
 
-            <div style={{ display: "grid", gap: "3.2mm", maxWidth: "124mm" }}>
+            <div
+              style={{
+                display: "grid",
+                gap: "calc(var(--experience-item-gap) - 1.6mm)",
+                maxWidth: "calc(var(--main-width) + var(--gutter-width) + 2.5mm)",
+              }}
+            >
               <h1
+                data-font-probe="heading"
                 style={{
                   margin: 0,
                   fontFamily: "var(--font-heading-family)",
-                  fontSize: "14.2mm",
+                  fontSize: editorialDisplaySize,
                   lineHeight: 0.92,
                   letterSpacing: "-0.055em",
                   fontWeight: 600,
@@ -2394,7 +2313,7 @@ function EditorialMagazinePage({
               <p
                 style={{
                   margin: 0,
-                  fontSize: "3.8mm",
+                  fontSize: editorialSubtitleSize,
                   lineHeight: 1.22,
                   letterSpacing: "0.03em",
                   textTransform: "uppercase",
@@ -2405,12 +2324,13 @@ function EditorialMagazinePage({
                 {data.title}
               </p>
               <p
+                data-font-probe="body"
                 style={{
                   margin: 0,
-                  maxWidth: "112mm",
-                  fontSize: "3.45mm",
+                  maxWidth: "calc(var(--main-width) + 8mm)",
+                  fontSize: "calc(var(--text-body-size) + 0.1mm)",
                   lineHeight: 1.55,
-                  color: "rgba(32, 27, 22, 0.76)",
+                  color: editorialBodyColor,
                 }}
               >
                 {data.summary}
@@ -2422,29 +2342,30 @@ function EditorialMagazinePage({
             style={{
               minHeight: 0,
               display: "grid",
-              gridTemplateColumns: "104mm 17.5mm 36mm",
+              gridTemplateColumns:
+                "var(--main-width) var(--gutter-width) var(--sidebar-width)",
             }}
           >
             <main
               style={{
                 minWidth: 0,
                 display: "grid",
-                gap: "5.2mm",
+                gap: editorialStackGap,
                 alignContent: "start",
               }}
             >
-              <section style={{ display: "grid", gap: "2.6mm" }}>
+              <section style={{ display: "grid", gap: editorialSectionGap }}>
                 <div
                   style={{
                     display: "flex",
                     alignItems: "center",
-                    gap: "3mm",
+                    gap: "calc(var(--experience-bullets-padding) - 1mm)",
                   }}
                 >
                   <p
                     style={{
                       margin: 0,
-                      fontSize: "2.2mm",
+                      fontSize: editorialSectionLabelSize,
                       lineHeight: 1.15,
                       letterSpacing: "0.18em",
                       textTransform: "uppercase",
@@ -2458,22 +2379,22 @@ function EditorialMagazinePage({
                   </p>
                   <div
                     style={{
-                      height: "0.28mm",
+                      height: "calc(var(--page-radius) - 1.12mm)",
                       flex: 1,
-                      background:
-                        "linear-gradient(90deg, rgba(32, 27, 22, 0.28), transparent 78%)",
+                      background: "var(--resume-preview-editorial-rule-fill)",
                     }}
                   />
                 </div>
-                <div style={{ display: "grid", gap: "4.2mm" }}>
+                <div style={{ display: "grid", gap: editorialCardGap }}>
                   {data.experience.slice(0, 3).map((item, index) => (
                     <article
                       key={`${item.company}-${item.role}-${item.period}-${index}`}
                       style={{
                         display: "grid",
-                        gap: "1.6mm",
-                        paddingTop: "3mm",
-                        borderTop: "0.24mm solid rgba(32, 27, 22, 0.12)",
+                        gap: editorialEntryGap,
+                        paddingTop: "calc(var(--experience-item-gap) - 1.8mm)",
+                        borderTop:
+                          "0.24mm solid var(--resume-preview-editorial-rule-color)",
                       }}
                     >
                       <div
@@ -2481,18 +2402,18 @@ function EditorialMagazinePage({
                           display: "flex",
                           alignItems: "baseline",
                           justifyContent: "space-between",
-                          gap: "4mm",
+                          gap: "var(--experience-column-gap)",
                         }}
                       >
                         <div style={{ minWidth: 0 }}>
                           <p
                             style={{
                               margin: 0,
-                              fontSize: "2.2mm",
+                              fontSize: editorialSectionLabelSize,
                               lineHeight: 1.15,
                               letterSpacing: "0.18em",
                               textTransform: "uppercase",
-                              color: "rgba(32, 27, 22, 0.48)",
+                              color: editorialSubtleColor,
                               fontFamily: "var(--font-body-family)",
                               fontWeight: 700,
                             }}
@@ -2501,9 +2422,10 @@ function EditorialMagazinePage({
                           </p>
                           <h3
                             style={{
-                              margin: "1mm 0 0",
+                              margin:
+                                "calc(var(--experience-bullets-gap) - 0.1mm) 0 0",
                               fontFamily: "var(--font-heading-family)",
-                              fontSize: "5mm",
+                              fontSize: "calc(var(--text-title-size) - 0.05mm)",
                               lineHeight: 1.02,
                               letterSpacing: "-0.04em",
                               fontWeight: 600,
@@ -2516,11 +2438,11 @@ function EditorialMagazinePage({
                         <p
                           style={{
                             margin: 0,
-                            fontSize: "2.2mm",
+                            fontSize: editorialSectionLabelSize,
                             lineHeight: 1.25,
                             letterSpacing: "0.14em",
                             textTransform: "uppercase",
-                            color: "rgba(32, 27, 22, 0.5)",
+                            color: editorialSubtleColor,
                             fontFamily: "var(--font-body-family)",
                             textAlign: "right",
                           }}
@@ -2532,7 +2454,7 @@ function EditorialMagazinePage({
                       <p
                         style={{
                           margin: 0,
-                          fontSize: "2.8mm",
+                          fontSize: editorialBodySize,
                           lineHeight: 1.4,
                           color: "var(--color-accent)",
                           fontWeight: 600,
@@ -2544,11 +2466,11 @@ function EditorialMagazinePage({
                       <ul
                         style={{
                           margin: 0,
-                          paddingLeft: "4mm",
+                          paddingLeft: "var(--experience-bullets-padding)",
                           display: "grid",
-                          gap: "1.1mm",
-                          color: "rgba(32, 27, 22, 0.76)",
-                          fontSize: "2.8mm",
+                          gap: "calc(var(--experience-bullets-gap) + 0.1mm)",
+                          color: editorialBodyColor,
+                          fontSize: editorialBodySize,
                           lineHeight: 1.48,
                         }}
                       >
@@ -2561,18 +2483,18 @@ function EditorialMagazinePage({
                 </div>
               </section>
 
-              <section style={{ display: "grid", gap: "2.6mm" }}>
+              <section style={{ display: "grid", gap: editorialSectionGap }}>
                 <div
                   style={{
                     display: "flex",
                     alignItems: "center",
-                    gap: "3mm",
+                    gap: "calc(var(--experience-bullets-padding) - 1mm)",
                   }}
                 >
                   <p
                     style={{
                       margin: 0,
-                      fontSize: "2.2mm",
+                      fontSize: editorialSectionLabelSize,
                       lineHeight: 1.15,
                       letterSpacing: "0.18em",
                       textTransform: "uppercase",
@@ -2586,29 +2508,29 @@ function EditorialMagazinePage({
                   </p>
                   <div
                     style={{
-                      height: "0.28mm",
+                      height: "calc(var(--page-radius) - 1.12mm)",
                       flex: 1,
-                      background:
-                        "linear-gradient(90deg, rgba(32, 27, 22, 0.28), transparent 78%)",
+                      background: "var(--resume-preview-editorial-rule-fill)",
                     }}
                   />
                 </div>
-                <div style={{ display: "grid", gap: "3.2mm" }}>
+                <div style={{ display: "grid", gap: "var(--project-gap)" }}>
                   {data.projects.slice(0, 2).map((project, index) => (
                     <article
                       key={`${project.name}-${project.meta}-${index}`}
                       style={{
-                        padding: "3mm 0 0",
-                        borderTop: "0.24mm solid rgba(32, 27, 22, 0.12)",
+                        padding: "calc(var(--project-padding) + 1mm) 0 0",
+                        borderTop:
+                          "0.24mm solid var(--resume-preview-editorial-rule-color)",
                         display: "grid",
-                        gap: "1.4mm",
+                        gap: editorialMinorGap,
                       }}
                     >
                       <h3
                         style={{
                           margin: 0,
                           fontFamily: "var(--font-heading-family)",
-                          fontSize: "4.7mm",
+                          fontSize: editorialTitleSize,
                           lineHeight: 1.04,
                           letterSpacing: "-0.03em",
                           fontWeight: 600,
@@ -2620,11 +2542,11 @@ function EditorialMagazinePage({
                       <p
                         style={{
                           margin: 0,
-                          fontSize: "2.2mm",
+                          fontSize: editorialSectionLabelSize,
                           lineHeight: 1.2,
                           letterSpacing: "0.16em",
                           textTransform: "uppercase",
-                          color: "rgba(32, 27, 22, 0.52)",
+                          color: editorialSubtleColor,
                           fontFamily: "var(--font-body-family)",
                         }}
                       >
@@ -2633,9 +2555,9 @@ function EditorialMagazinePage({
                       <p
                         style={{
                           margin: 0,
-                          fontSize: "2.8mm",
+                          fontSize: editorialBodySize,
                           lineHeight: 1.5,
-                          color: "rgba(32, 27, 22, 0.76)",
+                          color: editorialBodyColor,
                         }}
                       >
                         {project.description}
@@ -2647,23 +2569,31 @@ function EditorialMagazinePage({
             </main>
 
             <div
-              style={{ borderRight: "0.24mm solid rgba(32, 27, 22, 0.12)" }}
+              style={{
+                borderRight:
+                  "0.24mm solid var(--resume-preview-editorial-rule-color)",
+              }}
             />
 
             <aside
               style={{
                 minWidth: 0,
-                paddingLeft: "0mm",
+                paddingLeft: 0,
                 display: "grid",
-                gap: "4.6mm",
+                gap: "calc(var(--body-row-gap) - 2.8mm)",
                 alignContent: "start",
               }}
             >
-              <section style={{ display: "grid", gap: "2mm" }}>
+              <section
+                style={{
+                  display: "grid",
+                  gap: "calc(var(--sidebar-title-margin) + 0.7mm)",
+                }}
+              >
                 <p
                   style={{
                     margin: 0,
-                    fontSize: "2.2mm",
+                    fontSize: editorialSectionLabelSize,
                     lineHeight: 1.15,
                     letterSpacing: "0.18em",
                     textTransform: "uppercase",
@@ -2674,19 +2604,24 @@ function EditorialMagazinePage({
                 >
                   Contact
                 </p>
-                <div style={{ display: "grid", gap: "1.6mm" }}>
+                <div
+                  style={{
+                    display: "grid",
+                    gap: "calc(var(--sidebar-content-gap) - 0.8mm)",
+                  }}
+                >
                   {contactRows.map((item) => (
                     <div
                       key={item.label}
-                      style={{ display: "grid", gap: "0.5mm" }}
+                      style={{ display: "grid", gap: editorialMetaGap }}
                     >
                       <span
                         style={{
-                          fontSize: "2.05mm",
+                          fontSize: editorialMetaLabelSize,
                           lineHeight: 1.2,
                           letterSpacing: "0.16em",
                           textTransform: "uppercase",
-                          color: "rgba(32, 27, 22, 0.48)",
+                          color: editorialSubtleColor,
                           fontFamily: "var(--font-body-family)",
                         }}
                       >
@@ -2694,9 +2629,9 @@ function EditorialMagazinePage({
                       </span>
                       <span
                         style={{
-                          fontSize: "2.7mm",
+                          fontSize: editorialBodySmSize,
                           lineHeight: 1.42,
-                          color: "rgba(32, 27, 22, 0.76)",
+                          color: editorialBodyColor,
                         }}
                       >
                         {item.value}
@@ -2706,11 +2641,16 @@ function EditorialMagazinePage({
                 </div>
               </section>
 
-              <section style={{ display: "grid", gap: "2mm" }}>
+              <section
+                style={{
+                  display: "grid",
+                  gap: "calc(var(--sidebar-title-margin) + 0.7mm)",
+                }}
+              >
                 <p
                   style={{
                     margin: 0,
-                    fontSize: "2.2mm",
+                    fontSize: editorialSectionLabelSize,
                     lineHeight: 1.15,
                     letterSpacing: "0.18em",
                     textTransform: "uppercase",
@@ -2721,19 +2661,24 @@ function EditorialMagazinePage({
                 >
                   Notes
                 </p>
-                <div style={{ display: "grid", gap: "1.6mm" }}>
+                <div
+                  style={{
+                    display: "grid",
+                    gap: "calc(var(--sidebar-content-gap) - 0.8mm)",
+                  }}
+                >
                   {metadataRows.map((item) => (
                     <div
                       key={item.label}
-                      style={{ display: "grid", gap: "0.5mm" }}
+                      style={{ display: "grid", gap: editorialMetaGap }}
                     >
                       <span
                         style={{
-                          fontSize: "2.05mm",
+                          fontSize: editorialMetaLabelSize,
                           lineHeight: 1.2,
                           letterSpacing: "0.16em",
                           textTransform: "uppercase",
-                          color: "rgba(32, 27, 22, 0.48)",
+                          color: editorialSubtleColor,
                           fontFamily: "var(--font-body-family)",
                         }}
                       >
@@ -2741,9 +2686,9 @@ function EditorialMagazinePage({
                       </span>
                       <span
                         style={{
-                          fontSize: "2.7mm",
+                          fontSize: editorialBodySmSize,
                           lineHeight: 1.42,
-                          color: "rgba(32, 27, 22, 0.76)",
+                          color: editorialBodyColor,
                         }}
                       >
                         {item.value}
@@ -2753,11 +2698,16 @@ function EditorialMagazinePage({
                 </div>
               </section>
 
-              <section style={{ display: "grid", gap: "2mm" }}>
+              <section
+                style={{
+                  display: "grid",
+                  gap: "calc(var(--sidebar-title-margin) + 0.7mm)",
+                }}
+              >
                 <p
                   style={{
                     margin: 0,
-                    fontSize: "2.2mm",
+                    fontSize: editorialSectionLabelSize,
                     lineHeight: 1.15,
                     letterSpacing: "0.18em",
                     textTransform: "uppercase",
@@ -2771,20 +2721,25 @@ function EditorialMagazinePage({
                 <p
                   style={{
                     margin: 0,
-                    fontSize: "2.7mm",
+                    fontSize: editorialBodySmSize,
                     lineHeight: 1.5,
-                    color: "rgba(32, 27, 22, 0.76)",
+                    color: editorialBodyColor,
                   }}
                 >
                   {data.skills.slice(0, 8).join(", ")}
                 </p>
               </section>
 
-              <section style={{ display: "grid", gap: "2mm" }}>
+              <section
+                style={{
+                  display: "grid",
+                  gap: "calc(var(--sidebar-title-margin) + 0.7mm)",
+                }}
+              >
                 <p
                   style={{
                     margin: 0,
-                    fontSize: "2.2mm",
+                    fontSize: editorialSectionLabelSize,
                     lineHeight: 1.15,
                     letterSpacing: "0.18em",
                     textTransform: "uppercase",
@@ -2795,15 +2750,20 @@ function EditorialMagazinePage({
                 >
                   Education
                 </p>
-                <div style={{ display: "grid", gap: "1.6mm" }}>
+                <div
+                  style={{
+                    display: "grid",
+                    gap: "calc(var(--sidebar-content-gap) - 0.8mm)",
+                  }}
+                >
                   {data.education.slice(0, 2).map((item) => (
                     <div
                       key={`${item.school}-${item.degree}`}
-                      style={{ display: "grid", gap: "0.6mm" }}
+                      style={{ display: "grid", gap: editorialMetaGap }}
                     >
                       <span
                         style={{
-                          fontSize: "2.7mm",
+                          fontSize: editorialBodySmSize,
                           lineHeight: 1.34,
                           color: "var(--color-text)",
                           fontWeight: 600,
@@ -2813,20 +2773,20 @@ function EditorialMagazinePage({
                       </span>
                       <span
                         style={{
-                          fontSize: "2.5mm",
+                          fontSize: "calc(var(--text-body-sm-size) - 0.45mm)",
                           lineHeight: 1.4,
-                          color: "rgba(32, 27, 22, 0.68)",
+                          color: "var(--color-text-muted)",
                         }}
                       >
                         {item.school}
                       </span>
                       <span
                         style={{
-                          fontSize: "2.05mm",
+                          fontSize: editorialMetaLabelSize,
                           lineHeight: 1.2,
                           letterSpacing: "0.14em",
                           textTransform: "uppercase",
-                          color: "rgba(32, 27, 22, 0.48)",
+                          color: editorialSubtleColor,
                           fontFamily: "var(--font-body-family)",
                         }}
                       >
@@ -2838,412 +2798,6 @@ function EditorialMagazinePage({
               </section>
             </aside>
           </div>
-        </div>
-      </article>
-    </PreviewFrame>
-  );
-}
-
-function StudioPopPage({
-  variant,
-  data,
-  comparisonLabel,
-  compactComparison,
-  onActivateComparison,
-  fitToken,
-}: {
-  variant: ResumeVariant;
-  data: ResumeData;
-  comparisonLabel?: string;
-  compactComparison?: boolean;
-  onActivateComparison?: (() => void) | undefined;
-  fitToken?: string;
-}) {
-  const pageVars = buildPageVars(variant);
-  const { pageRef, innerRef } = useAutoFitPage(fitToken);
-  const interestItems = getInterestItems(data, 5);
-
-  return (
-    <PreviewFrame
-      variant={variant}
-      comparisonLabel={comparisonLabel}
-      compactComparison={compactComparison}
-      onActivateComparison={onActivateComparison}
-    >
-      <article
-        ref={pageRef}
-        className={`resume-page resume-page--${variant.id}`}
-        style={{
-          ...pageVars,
-          background: "linear-gradient(180deg, #fffaf2 0%, #fff7ef 100%)",
-          borderColor: "rgba(148, 112, 67, 0.14)",
-          overflow: "hidden",
-          fontFamily: "var(--font-body-family)",
-        }}
-        aria-label={variant.label}
-      >
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            background:
-              "radial-gradient(circle at 76% 12%, rgba(240, 198, 210, 0.9) 0, rgba(240, 198, 210, 0.9) 10.5%, transparent 10.7%), radial-gradient(circle at 88% 18%, rgba(189, 206, 214, 0.88) 0, rgba(189, 206, 214, 0.88) 13.8%, transparent 14%), linear-gradient(140deg, rgba(136, 153, 181, 0.34) 0, rgba(136, 153, 181, 0.34) 4.5%, transparent 4.7%)",
-            pointerEvents: "none",
-          }}
-        />
-        <div
-          ref={innerRef}
-          style={{
-            position: "absolute",
-            inset: 0,
-            padding: "18mm 18mm 18mm 18mm",
-            display: "grid",
-            gridTemplateColumns: "58mm minmax(0, 1fr)",
-            columnGap: "10mm",
-            minHeight: 0,
-          }}
-        >
-          <aside
-            style={{
-              display: "grid",
-              alignContent: "start",
-              gap: "4.2mm",
-              minWidth: 0,
-            }}
-          >
-            <div style={{ display: "grid", gap: "3.2mm" }}>
-              <h1
-                style={{
-                  margin: 0,
-                  fontFamily: "var(--font-heading-family)",
-                  fontSize: "10.5mm",
-                  lineHeight: 0.96,
-                  letterSpacing: "-0.05em",
-                  fontWeight: 500,
-                  color: "#39322b",
-                }}
-              >
-                {data.name}
-              </h1>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: "3.2mm",
-                  lineHeight: 1.35,
-                  color: "var(--color-accent)",
-                  fontWeight: 700,
-                }}
-              >
-                {data.title}
-              </p>
-            </div>
-
-            <section style={{ display: "grid", gap: "1.7mm" }}>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: "4.1mm",
-                  lineHeight: 1.08,
-                  color: "var(--color-accent)",
-                  fontWeight: 700,
-                }}
-              >
-                Profile
-              </p>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: "2.85mm",
-                  lineHeight: 1.55,
-                  color: "rgba(57, 50, 43, 0.82)",
-                }}
-              >
-                {data.summary}
-              </p>
-            </section>
-
-            <section style={{ display: "grid", gap: "1.6mm" }}>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: "4mm",
-                  lineHeight: 1.08,
-                  color: "var(--color-accent)",
-                  fontWeight: 700,
-                }}
-              >
-                Languages
-              </p>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: "2.8mm",
-                  lineHeight: 1.58,
-                  color: "rgba(57, 50, 43, 0.82)",
-                }}
-              >
-                {data.languages.length > 0
-                  ? data.languages
-                      .map(
-                        (item) =>
-                          `${item.name} ${item.level ? `| ${item.level}` : ""}`,
-                      )
-                      .join(" | ")
-                  : "Languages pending."}
-              </p>
-            </section>
-
-            <section style={{ display: "grid", gap: "1.6mm" }}>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: "4mm",
-                  lineHeight: 1.08,
-                  color: "var(--color-accent)",
-                  fontWeight: 700,
-                }}
-              >
-                Competences
-              </p>
-              <ul
-                style={{
-                  margin: 0,
-                  paddingLeft: "3.5mm",
-                  display: "grid",
-                  gap: "0.8mm",
-                  fontSize: "2.75mm",
-                  lineHeight: 1.5,
-                  color: "rgba(57, 50, 43, 0.82)",
-                }}
-              >
-                {data.skills.slice(0, 6).map((skill) => (
-                  <li key={skill}>{skill}</li>
-                ))}
-              </ul>
-            </section>
-
-            <section style={{ display: "grid", gap: "1.6mm" }}>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: "4mm",
-                  lineHeight: 1.08,
-                  color: "var(--color-accent)",
-                  fontWeight: 700,
-                }}
-              >
-                Coordonnees
-              </p>
-              <div style={{ display: "grid", gap: "1mm" }}>
-                {data.contact.slice(0, 4).map((item) => (
-                  <div
-                    key={item.label}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "3.2mm minmax(0, 1fr)",
-                      gap: "1.4mm",
-                      alignItems: "start",
-                      fontSize: "2.75mm",
-                      lineHeight: 1.48,
-                      color: "rgba(57, 50, 43, 0.82)",
-                    }}
-                  >
-                    <span
-                      style={{ color: "var(--color-accent)", fontWeight: 700 }}
-                    >
-                      ●
-                    </span>
-                    <span>{item.value}</span>
-                  </div>
-                ))}
-              </div>
-            </section>
-          </aside>
-
-          <main
-            style={{
-              display: "grid",
-              alignContent: "start",
-              gap: "4.6mm",
-              minWidth: 0,
-            }}
-          >
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "minmax(0, 1fr) 48mm",
-                gap: "6mm",
-                alignItems: "start",
-              }}
-            >
-              <div />
-              <div
-                style={{
-                  justifySelf: "end",
-                  width: "46mm",
-                  height: "41mm",
-                  overflow: "hidden",
-                  borderRadius: "14mm 0 14mm 14mm",
-                  boxShadow: "0 4mm 12mm rgba(89, 67, 40, 0.12)",
-                  background: "rgba(255,255,255,0.64)",
-                }}
-              >
-                <PhotoOrInitials name={data.name} src={data.photoUrl} />
-              </div>
-            </div>
-
-            <section style={{ display: "grid", gap: "2mm" }}>
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: "5mm",
-                  color: "var(--color-accent)",
-                  fontWeight: 700,
-                }}
-              >
-                Parcours Universitaire
-              </h2>
-              <div style={{ display: "grid", gap: "3.2mm" }}>
-                {data.education.slice(0, 2).map((item) => (
-                  <article
-                    key={`${item.school}-${item.degree}`}
-                    style={{ display: "grid", gap: "1mm" }}
-                  >
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: "3.2mm",
-                        lineHeight: 1.35,
-                        color: "#39322b",
-                        fontWeight: 700,
-                      }}
-                    >
-                      {item.school}
-                    </p>
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: "2.8mm",
-                        lineHeight: 1.48,
-                        color: "rgba(57, 50, 43, 0.82)",
-                      }}
-                    >
-                      {item.degree}
-                    </p>
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: "2.35mm",
-                        lineHeight: 1.35,
-                        color: "rgba(57, 50, 43, 0.6)",
-                      }}
-                    >
-                      {item.period}
-                    </p>
-                  </article>
-                ))}
-              </div>
-            </section>
-
-            <section style={{ display: "grid", gap: "2mm" }}>
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: "5mm",
-                  color: "var(--color-accent)",
-                  fontWeight: 700,
-                }}
-              >
-                Carriere Professionnelle
-              </h2>
-              <div style={{ display: "grid", gap: "3.3mm" }}>
-                {data.experience.slice(0, 3).map((item) => (
-                  <article
-                    key={`${item.company}-${item.role}`}
-                    style={{
-                      display: "grid",
-                      gap: "1.1mm",
-                      paddingTop: "2.8mm",
-                      borderTop:
-                        "0.24mm solid color-mix(in srgb, var(--color-accent) 22%, transparent)",
-                    }}
-                  >
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: "3.1mm",
-                        lineHeight: 1.32,
-                        color: "#39322b",
-                        fontWeight: 700,
-                      }}
-                    >
-                      {item.role}
-                    </p>
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: "2.8mm",
-                        lineHeight: 1.45,
-                        color: "rgba(57, 50, 43, 0.74)",
-                      }}
-                    >
-                      {item.company} / {item.location}
-                    </p>
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: "2.45mm",
-                        lineHeight: 1.34,
-                        color: "rgba(57, 50, 43, 0.56)",
-                      }}
-                    >
-                      {item.period}
-                    </p>
-                    <ul
-                      style={{
-                        margin: 0,
-                        paddingLeft: "3.8mm",
-                        display: "grid",
-                        gap: "0.8mm",
-                        fontSize: "2.7mm",
-                        lineHeight: 1.48,
-                        color: "rgba(57, 50, 43, 0.82)",
-                      }}
-                    >
-                      {item.bullets.slice(0, 3).map((bullet) => (
-                        <li key={bullet}>{bullet}</li>
-                      ))}
-                    </ul>
-                  </article>
-                ))}
-              </div>
-            </section>
-
-            {interestItems.length > 0 ? (
-              <section style={{ display: "grid", gap: "1.8mm" }}>
-                <h2
-                  style={{
-                    margin: 0,
-                    fontSize: "4.4mm",
-                    color: "var(--color-accent)",
-                    fontWeight: 700,
-                  }}
-                >
-                  Interests
-                </h2>
-                <p
-                  style={{
-                    margin: 0,
-                    fontSize: "2.7mm",
-                    lineHeight: 1.54,
-                    color: "rgba(57, 50, 43, 0.74)",
-                  }}
-                >
-                  {interestItems.join(" / ")}
-                </p>
-              </section>
-            ) : null}
-          </main>
         </div>
       </article>
     </PreviewFrame>
@@ -3265,11 +2819,24 @@ function SignalGridPage({
   onActivateComparison?: (() => void) | undefined;
   fitToken?: string;
 }) {
-  const pageVars = buildPageVars(variant);
+  const pageVars = buildPageVars(
+    variant,
+    React.useContext(ResumeStylePresetContext),
+  );
   const { pageRef, innerRef } = useAutoFitPage(fitToken);
   const sideMeta = uniqueRows(data.contact).slice(0, 3);
   const railSkills = data.skills.slice(0, 6);
   const projectCards = data.projects.slice(0, 2);
+  const signalRailWidth = "calc(var(--sidebar-width) + 5mm)";
+  const signalSectionLabelSize = "calc(var(--text-caption-size) - 0.05mm)";
+  const signalSidebarLabelSize = "calc(var(--text-caption-size) - 0.15mm)";
+  const signalSidebarTextSize = "calc(var(--text-body-sm-size) + 0.05mm)";
+  const signalSidebarSubtextSize = "calc(var(--text-body-sm-size) - 0.15mm)";
+  const signalNameSize = "calc(var(--text-display-size) + 7.8mm)";
+  const signalTitleSize = "calc(var(--text-body-size) + 0.1mm)";
+  const signalSummarySize = "calc(var(--text-body-size) + 0.05mm)";
+  const signalRoleSize = "calc(var(--text-title-size) - 1.35mm)";
+  const signalMetaSize = "calc(var(--text-body-sm-size) + 0.1mm)";
 
   return (
     <PreviewFrame
@@ -3284,67 +2851,87 @@ function SignalGridPage({
         style={{
           ...pageVars,
           background:
-            "linear-gradient(180deg, var(--paper), color-mix(in srgb, var(--paper) 96%, var(--sf1) 4%))", /* --paper base, barely-there sf1 tint */
+            "linear-gradient(180deg, var(--paper), color-mix(in srgb, var(--paper) 96%, var(--sf1) 4%))" /* --paper base, barely-there sf1 tint */,
           borderColor: "var(--color-border)",
           fontFamily: "var(--font-body-family)",
         }}
         aria-label={variant.label}
       >
+        <ResumeFontDebugInheritProbe />
         <div
           ref={innerRef}
           style={{
             position: "absolute",
             inset: 0,
             display: "grid",
-            gridTemplateColumns: "40mm minmax(0, 1fr)",
-            gap: "17mm",
+            gridTemplateColumns: `${signalRailWidth} minmax(0, 1fr)`,
+            gap: "var(--gutter-width)",
             alignItems: "stretch",
           }}
         >
           <aside
             style={{
               minHeight: "100%",
-              padding: "17mm 4mm 35mm",
+              padding:
+                "var(--margin-top) calc(var(--sidebar-content-gap) - 2.2mm) var(--margin-bottom)",
               display: "grid",
               alignContent: "start",
-              gap: "4.2mm",
+              gap: "calc(var(--sidebar-section-gap) - 0.4mm)",
               borderRadius: "8mm 0 18mm 0",
-              background:
-                "linear-gradient(180deg, color-mix(in srgb, var(--color-accent) 12%, var(--color-surface-muted) 88%), color-mix(in srgb, var(--color-accent) 18%, var(--color-surface-muted) 82%))",
-              borderRight:
-                "0.24mm solid color-mix(in srgb, var(--color-border) 70%, transparent)",
+              background: "var(--resume-preview-signal-rail-background)",
+              borderRight: "var(--resume-preview-signal-rail-border)",
             }}
           >
             <div
-              style={{ display: "grid", justifyItems: "center", gap: "2mm" }}
+              style={{
+                display: "grid",
+                justifyItems: "center",
+                gap: "calc(var(--experience-bullets-gap) + 1mm)",
+              }}
             >
               <div
                 style={{
-                  width: "22mm",
-                  height: "22mm",
+                  width: "calc(var(--sidebar-width) - 13mm)",
+                  height: "calc(var(--sidebar-width) - 13mm)",
                   borderRadius: "999px",
                   overflow: "hidden",
-                  border:
-                    "0.5mm solid color-mix(in srgb, var(--color-surface-raised) 86%, var(--color-accent) 14%)",
-                  boxShadow:
-                    "0 2mm 6mm color-mix(in srgb, var(--color-text) 6%, transparent)",
+                  border: "var(--resume-preview-signal-photo-border)",
+                  boxShadow: "var(--resume-preview-signal-photo-shadow)",
                 }}
               >
                 <PhotoOrInitials name={data.name} src={data.photoUrl} />
               </div>
             </div>
 
-            <div style={{ display: "grid", gap: "3.2mm" }}>
-              <section style={{ display: "grid", gap: "1.2mm" }}>
-                <div style={{ display: "grid", gap: "0.8mm" }}>
+            <div
+              style={{
+                display: "grid",
+                gap: "calc(var(--sidebar-section-gap) - 1.4mm)",
+              }}
+            >
+              <section
+                style={{
+                  display: "grid",
+                  gap: "calc(var(--sidebar-title-margin) - 0.1mm)",
+                }}
+              >
+                <div
+                  style={{
+                    display: "grid",
+                    gap: "calc(var(--sidebar-content-gap) - 1.6mm)",
+                  }}
+                >
                   {sideMeta.map((item) => (
                     <div
                       key={`${item.label}-${item.value}`}
-                      style={{ display: "grid", gap: "0.1mm" }}
+                      style={{
+                        display: "grid",
+                        gap: "calc(var(--experience-bullets-gap) - 1mm)",
+                      }}
                     >
                       <span
                         style={{
-                          fontSize: "2.35mm",
+                          fontSize: signalSidebarTextSize,
                           lineHeight: 1.34,
                           color: "var(--color-text)",
                           overflowWrap: "anywhere",
@@ -3357,11 +2944,16 @@ function SignalGridPage({
                 </div>
               </section>
 
-              <section style={{ display: "grid", gap: "1.2mm" }}>
+              <section
+                style={{
+                  display: "grid",
+                  gap: "calc(var(--sidebar-title-margin) - 0.1mm)",
+                }}
+              >
                 <p
                   style={{
                     margin: 0,
-                    fontSize: "2.05mm",
+                    fontSize: signalSidebarLabelSize,
                     lineHeight: 1.2,
                     letterSpacing: "0.22em",
                     textTransform: "uppercase",
@@ -3371,15 +2963,23 @@ function SignalGridPage({
                 >
                   Languages
                 </p>
-                <div style={{ display: "grid", gap: "0.75mm" }}>
+                <div
+                  style={{
+                    display: "grid",
+                    gap: "calc(var(--experience-bullets-gap) - 0.37mm)",
+                  }}
+                >
                   {data.languages.slice(0, 3).map((item) => (
                     <div
                       key={item.name}
-                      style={{ display: "grid", gap: "0.18mm" }}
+                      style={{
+                        display: "grid",
+                        gap: "calc(var(--experience-bullets-gap) - 0.94mm)",
+                      }}
                     >
                       <span
                         style={{
-                          fontSize: "2.35mm",
+                          fontSize: signalSidebarTextSize,
                           color: "var(--color-text)",
                           fontWeight: 700,
                         }}
@@ -3388,7 +2988,7 @@ function SignalGridPage({
                       </span>
                       <span
                         style={{
-                          fontSize: "2.15mm",
+                          fontSize: signalSidebarSubtextSize,
                           color: "var(--color-text-subtle)",
                         }}
                       >
@@ -3399,11 +2999,16 @@ function SignalGridPage({
                 </div>
               </section>
 
-              <section style={{ display: "grid", gap: "1.2mm" }}>
+              <section
+                style={{
+                  display: "grid",
+                  gap: "calc(var(--sidebar-title-margin) - 0.1mm)",
+                }}
+              >
                 <p
                   style={{
                     margin: 0,
-                    fontSize: "2.05mm",
+                    fontSize: signalSidebarLabelSize,
                     lineHeight: 1.2,
                     letterSpacing: "0.22em",
                     textTransform: "uppercase",
@@ -3413,12 +3018,17 @@ function SignalGridPage({
                 >
                   Skills
                 </p>
-                <div style={{ display: "grid", gap: "0.7mm" }}>
+                <div
+                  style={{
+                    display: "grid",
+                    gap: "calc(var(--experience-bullets-gap) - 0.42mm)",
+                  }}
+                >
                   {railSkills.map((item) => (
                     <span
                       key={item}
                       style={{
-                        fontSize: "2.25mm",
+                        fontSize: "calc(var(--text-body-sm-size) - 0.05mm)",
                         lineHeight: 1.34,
                         color: "var(--color-text-muted)",
                       }}
@@ -3434,35 +3044,41 @@ function SignalGridPage({
           <main
             style={{
               display: "grid",
-              gap: "5.4mm",
+              gap: "calc(var(--body-row-gap) - 2mm)",
               alignContent: "start",
               minWidth: 0,
-              paddingTop: "17mm",
-              paddingRight: "17mm",
-              paddingBottom: "35mm",
+              paddingTop: "var(--margin-top)",
+              paddingRight: "var(--margin-right)",
+              paddingBottom: "var(--margin-bottom)",
             }}
           >
             <header
+              data-preview-section="profile"
               style={{
                 display: "grid",
-                gap: "2.6mm",
-                paddingBottom: "4.4mm",
-                borderBottom:
-                  "0.34mm solid color-mix(in srgb, var(--color-accent) 16%, var(--color-border-strong) 84%)",
+                gap: "calc(var(--main-heading-gap) - 0.2mm)",
+                paddingBottom: "calc(var(--header-bottom-padding) - 0.6mm)",
+                borderBottom: "var(--resume-preview-signal-rule)",
               }}
             >
-              <div style={{ display: "grid", gap: "2mm" }}>
+              <div
+                style={{
+                  display: "grid",
+                  gap: "calc(var(--experience-bullets-gap) + 1mm)",
+                }}
+              >
                 <h1
+                  data-font-probe="heading"
                   style={{
                     margin: 0,
                     fontFamily: "var(--font-heading-family)",
-                    fontSize: "15.8mm",
+                    fontSize: signalNameSize,
                     lineHeight: 0.86,
                     letterSpacing: "0.05em",
                     fontWeight: 900,
                     textTransform: "uppercase",
                     color: "var(--color-text)",
-                    maxWidth: "104mm",
+                    maxWidth: "calc(var(--main-width) - 1mm)",
                   }}
                 >
                   {data.name}
@@ -3470,7 +3086,7 @@ function SignalGridPage({
                 <p
                   style={{
                     margin: 0,
-                    fontSize: "3.1mm",
+                    fontSize: signalTitleSize,
                     lineHeight: 1.3,
                     letterSpacing: "0.16em",
                     textTransform: "uppercase",
@@ -3483,13 +3099,13 @@ function SignalGridPage({
               </div>
 
               <p
+                data-font-probe="body"
                 style={{
                   margin: 0,
-                  maxWidth: "88mm",
-                  paddingTop: "2mm",
-                  borderTop:
-                    "0.6mm solid color-mix(in srgb, var(--color-accent) 62%, transparent)",
-                  fontSize: "3.05mm",
+                  maxWidth: "calc(var(--main-width) - 17mm)",
+                  paddingTop: "calc(var(--experience-bullets-gap) + 1mm)",
+                  borderTop: "var(--resume-preview-signal-summary-rule)",
+                  fontSize: signalSummarySize,
                   lineHeight: 1.56,
                   color: "var(--color-text)",
                 }}
@@ -3498,11 +3114,16 @@ function SignalGridPage({
               </p>
             </header>
 
-            <section style={{ display: "grid", gap: "2.4mm" }}>
+            <section
+              style={{
+                display: "grid",
+                gap: "calc(var(--main-heading-gap) - 0.4mm)",
+              }}
+            >
               <p
                 style={{
                   margin: 0,
-                  fontSize: "2.15mm",
+                  fontSize: signalSectionLabelSize,
                   lineHeight: 1.2,
                   letterSpacing: "0.24em",
                   textTransform: "uppercase",
@@ -3512,16 +3133,17 @@ function SignalGridPage({
               >
                 Experience
               </p>
-              <div style={{ display: "grid", gap: "3.6mm" }}>
+              <div style={{ display: "grid", gap: "var(--experience-item-gap)" }}>
                 {data.experience.slice(0, 3).map((item) => (
                   <article
                     key={`${item.company}-${item.role}`}
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "19mm minmax(0, 1fr)",
-                      gap: "4mm",
+                      gridTemplateColumns:
+                        "var(--experience-date-column) minmax(0, 1fr)",
+                      gap: "var(--experience-column-gap)",
                       alignItems: "start",
-                      paddingTop: "2.8mm",
+                      paddingTop: "calc(var(--experience-item-gap) - 1.8mm)",
                       borderTop:
                         "0.24mm solid color-mix(in srgb, var(--color-border-strong) 76%, transparent)",
                     }}
@@ -3529,7 +3151,7 @@ function SignalGridPage({
                     <p
                       style={{
                         margin: 0,
-                        fontSize: "2.25mm",
+                        fontSize: "calc(var(--text-caption-size) + 0.05mm)",
                         lineHeight: 1.35,
                         color: "var(--color-text-subtle)",
                         textTransform: "uppercase",
@@ -3538,12 +3160,17 @@ function SignalGridPage({
                     >
                       {item.period}
                     </p>
-                    <div style={{ display: "grid", gap: "0.9mm" }}>
+                    <div
+                      style={{
+                        display: "grid",
+                        gap: "calc(var(--experience-bullets-gap) + 0.1mm)",
+                      }}
+                    >
                       <h3
                         style={{
                           margin: 0,
                           fontFamily: "var(--font-heading-family)",
-                          fontSize: "3.7mm",
+                          fontSize: signalRoleSize,
                           lineHeight: 1.14,
                           color: "var(--color-text)",
                           fontWeight: 700,
@@ -3554,7 +3181,7 @@ function SignalGridPage({
                       <p
                         style={{
                           margin: 0,
-                          fontSize: "2.65mm",
+                          fontSize: "calc(var(--text-body-sm-size) + 0.35mm)",
                           lineHeight: 1.42,
                           color: "var(--color-text-muted)",
                         }}
@@ -3564,10 +3191,10 @@ function SignalGridPage({
                       <ul
                         style={{
                           margin: 0,
-                          paddingLeft: "3.8mm",
+                          paddingLeft: "var(--experience-bullets-padding)",
                           display: "grid",
-                          gap: "0.8mm",
-                          fontSize: "2.65mm",
+                          gap: "var(--experience-bullets-gap)",
+                          fontSize: "calc(var(--text-body-sm-size) + 0.35mm)",
                           lineHeight: 1.5,
                           color: "var(--color-text-muted)",
                         }}
@@ -3585,17 +3212,22 @@ function SignalGridPage({
             <section
               style={{
                 display: "grid",
-                gap: "4.2mm",
-                paddingTop: "2.8mm",
+                gap: "calc(var(--main-section-gap) - 3mm)",
+                paddingTop: "calc(var(--project-padding) + 0.8mm)",
                 borderTop:
                   "0.24mm solid color-mix(in srgb, var(--color-border-strong) 76%, transparent)",
               }}
             >
-              <div style={{ display: "grid", gap: "2.2mm" }}>
+              <div
+                style={{
+                  display: "grid",
+                  gap: "calc(var(--main-heading-gap) - 0.6mm)",
+                }}
+              >
                 <p
                   style={{
                     margin: 0,
-                    fontSize: "2.15mm",
+                    fontSize: signalSectionLabelSize,
                     lineHeight: 1.2,
                     letterSpacing: "0.24em",
                     textTransform: "uppercase",
@@ -3609,7 +3241,7 @@ function SignalGridPage({
                   style={{
                     display: "grid",
                     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                    gap: "2.2mm",
+                    gap: "calc(var(--project-gap) - 0.4mm)",
                   }}
                 >
                   {projectCards.map((item) => (
@@ -3617,20 +3249,19 @@ function SignalGridPage({
                       key={item.name}
                       style={{
                         display: "grid",
-                        gap: "0.8mm",
-                        padding: "2.4mm",
-                        borderRadius: "2.2mm",
-                        border:
-                          "0.22mm solid color-mix(in srgb, var(--color-border) 72%, transparent)",
-                        background:
-                          "color-mix(in srgb, var(--color-surface-muted) 52%, var(--color-surface-raised) 48%)",
+                        gap: "var(--experience-bullets-gap)",
+                        padding:
+                          "calc(var(--skill-padding-block) + 1.05mm) calc(var(--skill-padding-inline) + 0.9mm)",
+                        borderRadius: "calc(var(--skill-pad-inline) + 0.4mm)",
+                        border: "var(--resume-preview-signal-card-border)",
+                        background: "var(--resume-preview-signal-card-background)",
                       }}
                     >
                       <h3
                         style={{
                           margin: 0,
                           fontFamily: "var(--font-heading-family)",
-                          fontSize: "3.05mm",
+                          fontSize: signalMetaSize,
                           lineHeight: 1.2,
                           color: "var(--color-text)",
                           fontWeight: 700,
@@ -3641,7 +3272,7 @@ function SignalGridPage({
                       <p
                         style={{
                           margin: 0,
-                          fontSize: "2.4mm",
+                          fontSize: "calc(var(--text-body-sm-size) + 0.1mm)",
                           lineHeight: 1.46,
                           color: "var(--color-text-muted)",
                         }}
@@ -3653,11 +3284,16 @@ function SignalGridPage({
                 </div>
               </div>
 
-              <div style={{ display: "grid", gap: "2.1mm" }}>
+              <div
+                style={{
+                  display: "grid",
+                  gap: "calc(var(--main-heading-gap) - 0.7mm)",
+                }}
+              >
                 <p
                   style={{
                     margin: 0,
-                    fontSize: "2.15mm",
+                    fontSize: signalSectionLabelSize,
                     lineHeight: 1.2,
                     letterSpacing: "0.24em",
                     textTransform: "uppercase",
@@ -3671,18 +3307,21 @@ function SignalGridPage({
                   style={{
                     display: "grid",
                     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                    gap: "3.6mm 5mm",
+                    gap: "var(--education-gap) calc(var(--gutter-width) - 13mm)",
                   }}
                 >
                   {data.education.slice(0, 2).map((item) => (
                     <div
                       key={`${item.school}-${item.degree}`}
-                      style={{ display: "grid", gap: "0.35mm" }}
+                      style={{
+                        display: "grid",
+                        gap: "calc(var(--experience-bullets-gap) - 0.77mm)",
+                      }}
                     >
                       <span
                         style={{
                           fontFamily: "var(--font-heading-family)",
-                          fontSize: "2.8mm",
+                          fontSize: signalMetaSize,
                           lineHeight: 1.22,
                           color: "var(--color-text)",
                           fontWeight: 700,
@@ -3692,7 +3331,7 @@ function SignalGridPage({
                       </span>
                       <span
                         style={{
-                          fontSize: "2.35mm",
+                          fontSize: signalSidebarTextSize,
                           lineHeight: 1.4,
                           color: "var(--color-text-muted)",
                         }}
@@ -3701,7 +3340,7 @@ function SignalGridPage({
                       </span>
                       <span
                         style={{
-                          fontSize: "2.15mm",
+                          fontSize: signalSectionLabelSize,
                           lineHeight: 1.32,
                           color: "var(--color-text-subtle)",
                         }}
@@ -3711,782 +3350,6 @@ function SignalGridPage({
                     </div>
                   ))}
                 </div>
-              </div>
-            </section>
-          </main>
-        </div>
-      </article>
-    </PreviewFrame>
-  );
-}
-
-function SoftRibbonPage({
-  variant,
-  data,
-  comparisonLabel,
-  compactComparison,
-  onActivateComparison,
-  fitToken,
-}: {
-  variant: ResumeVariant;
-  data: ResumeData;
-  comparisonLabel?: string;
-  compactComparison?: boolean;
-  onActivateComparison?: (() => void) | undefined;
-  fitToken?: string;
-}) {
-  const pageVars = buildPageVars(variant);
-  const { pageRef, innerRef } = useAutoFitPage(fitToken);
-  const interestItems = getInterestItems(data, 6);
-
-  return (
-    <PreviewFrame
-      variant={variant}
-      comparisonLabel={comparisonLabel}
-      compactComparison={compactComparison}
-      onActivateComparison={onActivateComparison}
-    >
-      <article
-        ref={pageRef}
-        className={`resume-page resume-page--${variant.id}`}
-        style={{
-          ...pageVars,
-          background: "linear-gradient(180deg, #fcf7f6 0%, #fffaf9 100%)",
-          borderColor: "rgba(110, 95, 100, 0.12)",
-          overflow: "hidden",
-          fontFamily: "var(--font-body-family)",
-        }}
-        aria-label={variant.label}
-      >
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            background:
-              "radial-gradient(circle at 82% 8%, color-mix(in srgb, var(--color-accent-soft) 72%, white 28%) 0, color-mix(in srgb, var(--color-accent-soft) 72%, white 28%) 8%, transparent 8.2%)",
-            pointerEvents: "none",
-          }}
-        />
-        <div
-          ref={innerRef}
-          style={{
-            position: "absolute",
-            inset: 0,
-            padding: "18mm",
-            display: "grid",
-            gridTemplateColumns: "60mm minmax(0, 1fr)",
-            gap: "10mm",
-          }}
-        >
-          <aside
-            style={{
-              borderRadius: "0 0 0 0",
-              background:
-                "linear-gradient(180deg, rgba(247, 238, 239, 0.96), rgba(244, 235, 236, 0.96))",
-              padding: "10mm 7mm 8mm",
-              display: "grid",
-              gap: "3.6mm",
-              alignContent: "start",
-              minWidth: 0,
-            }}
-          >
-            <div style={{ display: "grid", gap: "1.6mm" }}>
-              <h1
-                style={{
-                  margin: 0,
-                  fontFamily: "var(--font-heading-family)",
-                  fontSize: "9.8mm",
-                  lineHeight: 0.94,
-                  color: "var(--color-text)",
-                  fontWeight: 600,
-                }}
-              >
-                {data.name}
-              </h1>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: "2.7mm",
-                  lineHeight: 1.25,
-                  letterSpacing: "0.24em",
-                  textTransform: "uppercase",
-                  color:
-                    "color-mix(in srgb, var(--color-accent) 72%, var(--color-text) 28%)",
-                  fontWeight: 700,
-                }}
-              >
-                {data.title}
-              </p>
-            </div>
-
-            <section style={{ display: "grid", gap: "1.3mm" }}>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: "3.2mm",
-                  lineHeight: 1.3,
-                  color: "var(--color-accent)",
-                }}
-              >
-                Contact
-              </p>
-              <div style={{ display: "grid", gap: "0.9mm" }}>
-                {data.contact.slice(0, 3).map((item) => (
-                  <p
-                    key={item.label}
-                    style={{
-                      margin: 0,
-                      fontSize: "2.7mm",
-                      lineHeight: 1.48,
-                      color: "rgba(79, 71, 71, 0.72)",
-                    }}
-                  >
-                    {item.value}
-                  </p>
-                ))}
-              </div>
-            </section>
-
-            <section style={{ display: "grid", gap: "1.3mm" }}>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: "3.2mm",
-                  lineHeight: 1.3,
-                  color: "var(--color-accent)",
-                }}
-              >
-                Languages
-              </p>
-              <div style={{ display: "grid", gap: "0.9mm" }}>
-                {data.languages.slice(0, 3).map((item) => (
-                  <div
-                    key={item.name}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "18mm minmax(0, 1fr)",
-                      gap: "1mm",
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: "2.65mm",
-                        color: "var(--color-accent)",
-                        fontWeight: 700,
-                      }}
-                    >
-                      {item.name}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: "2.55mm",
-                        color: "rgba(79, 71, 71, 0.58)",
-                      }}
-                    >
-                      {item.level}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section style={{ display: "grid", gap: "1.3mm" }}>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: "3.2mm",
-                  lineHeight: 1.3,
-                  color: "var(--color-accent)",
-                }}
-              >
-                Competences
-              </p>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: "2.65mm",
-                  lineHeight: 1.58,
-                  color: "rgba(79, 71, 71, 0.68)",
-                }}
-              >
-                {data.skills.slice(0, 8).join(" / ")}
-              </p>
-            </section>
-
-            {interestItems.length > 0 ? (
-              <section style={{ display: "grid", gap: "1.3mm" }}>
-                <p
-                  style={{
-                    margin: 0,
-                    fontSize: "3.2mm",
-                    lineHeight: 1.3,
-                    color: "var(--color-accent)",
-                  }}
-                >
-                  Centres d’interet
-                </p>
-                <p
-                  style={{
-                    margin: 0,
-                    fontSize: "2.65mm",
-                    lineHeight: 1.58,
-                    color: "rgba(79, 71, 71, 0.68)",
-                  }}
-                >
-                  {interestItems.join(" / ")}
-                </p>
-              </section>
-            ) : null}
-          </aside>
-
-          <main
-            style={{
-              display: "grid",
-              alignContent: "start",
-              gap: "4mm",
-              minWidth: 0,
-            }}
-          >
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "minmax(0, 1fr) 42mm",
-                gap: "6mm",
-                alignItems: "start",
-              }}
-            >
-              <div>
-                <p
-                  style={{
-                    margin: 0,
-                    fontSize: "2.7mm",
-                    lineHeight: 1.55,
-                    color: "rgba(79, 71, 71, 0.72)",
-                  }}
-                >
-                  {data.summary}
-                </p>
-              </div>
-              <div
-                style={{
-                  width: "38mm",
-                  height: "38mm",
-                  justifySelf: "end",
-                  borderRadius: "50% 50% 42% 42%",
-                  overflow: "hidden",
-                  boxShadow: "0 4mm 10mm rgba(114, 97, 101, 0.14)",
-                  border: "1.2mm solid rgba(255,255,255,0.88)",
-                  background: "rgba(255,255,255,0.86)",
-                }}
-              >
-                <PhotoOrInitials name={data.name} src={data.photoUrl} />
-              </div>
-            </div>
-
-            <section style={{ display: "grid", gap: "2.4mm" }}>
-              <div
-                style={{
-                  alignSelf: "start",
-                  width: "fit-content",
-                  padding: "2.1mm 8mm",
-                  borderRadius: "999px",
-                  background:
-                    "color-mix(in srgb, var(--color-accent-soft) 74%, white 26%)",
-                  color:
-                    "color-mix(in srgb, var(--color-accent) 68%, var(--color-text) 32%)",
-                  fontFamily: "var(--font-heading-family)",
-                  fontSize: "4mm",
-                }}
-              >
-                Formations
-              </div>
-              <div style={{ display: "grid", gap: "3mm" }}>
-                {data.education.slice(0, 3).map((item) => (
-                  <article
-                    key={`${item.school}-${item.degree}`}
-                    style={{ display: "grid", gap: "0.9mm" }}
-                  >
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: "2.55mm",
-                        color: "rgba(102, 93, 95, 0.62)",
-                      }}
-                    >
-                      {item.period}
-                    </p>
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: "2.9mm",
-                        color: "var(--color-accent)",
-                        fontWeight: 700,
-                      }}
-                    >
-                      {item.degree}
-                    </p>
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: "2.65mm",
-                        color: "rgba(79, 71, 71, 0.72)",
-                      }}
-                    >
-                      {item.school}
-                    </p>
-                  </article>
-                ))}
-              </div>
-            </section>
-
-            <section style={{ display: "grid", gap: "2.4mm" }}>
-              <div
-                style={{
-                  alignSelf: "start",
-                  width: "fit-content",
-                  padding: "2.1mm 8mm",
-                  borderRadius: "999px",
-                  background:
-                    "color-mix(in srgb, var(--color-accent-soft) 74%, white 26%)",
-                  color:
-                    "color-mix(in srgb, var(--color-accent) 68%, var(--color-text) 32%)",
-                  fontFamily: "var(--font-heading-family)",
-                  fontSize: "4mm",
-                }}
-              >
-                Experiences Professionnelles
-              </div>
-              <div style={{ display: "grid", gap: "3.2mm" }}>
-                {data.experience.slice(0, 3).map((item) => (
-                  <article
-                    key={`${item.company}-${item.role}`}
-                    style={{ display: "grid", gap: "0.9mm" }}
-                  >
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: "2.55mm",
-                        color: "rgba(102, 93, 95, 0.62)",
-                      }}
-                    >
-                      {item.period}
-                    </p>
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: "2.9mm",
-                        color: "var(--color-accent)",
-                        fontWeight: 700,
-                      }}
-                    >
-                      {item.role}
-                    </p>
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: "2.65mm",
-                        color: "rgba(79, 71, 71, 0.72)",
-                      }}
-                    >
-                      {item.company} / {item.location}
-                    </p>
-                    <ul
-                      style={{
-                        margin: 0,
-                        paddingLeft: "3.6mm",
-                        display: "grid",
-                        gap: "0.7mm",
-                        fontSize: "2.55mm",
-                        lineHeight: 1.48,
-                        color: "rgba(79, 71, 71, 0.72)",
-                      }}
-                    >
-                      {item.bullets.slice(0, 3).map((bullet) => (
-                        <li key={bullet}>{bullet}</li>
-                      ))}
-                    </ul>
-                  </article>
-                ))}
-              </div>
-            </section>
-          </main>
-        </div>
-      </article>
-    </PreviewFrame>
-  );
-}
-
-function SlateProfilePage({
-  variant,
-  data,
-  comparisonLabel,
-  compactComparison,
-  onActivateComparison,
-  fitToken,
-}: {
-  variant: ResumeVariant;
-  data: ResumeData;
-  comparisonLabel?: string;
-  compactComparison?: boolean;
-  onActivateComparison?: (() => void) | undefined;
-  fitToken?: string;
-}) {
-  const pageVars = buildPageVars(variant);
-  const { pageRef, innerRef } = useAutoFitPage(fitToken);
-  const interestItems = getInterestItems(data, 5);
-
-  return (
-    <PreviewFrame
-      variant={variant}
-      comparisonLabel={comparisonLabel}
-      compactComparison={compactComparison}
-      onActivateComparison={onActivateComparison}
-    >
-      <article
-        ref={pageRef}
-        className={`resume-page resume-page--${variant.id}`}
-        style={{
-          ...pageVars,
-          background: "linear-gradient(180deg, #fbfbfc 0%, #f2f2f4 100%)",
-          borderColor: "rgba(59, 67, 77, 0.18)",
-          overflow: "hidden",
-          fontFamily: "var(--font-body-family)",
-        }}
-        aria-label={variant.label}
-      >
-        <div
-          ref={innerRef}
-          style={{
-            position: "absolute",
-            inset: 0,
-            padding: "16mm",
-            display: "grid",
-            gridTemplateColumns: "52mm minmax(0, 1fr)",
-            gap: "10mm",
-          }}
-        >
-          <aside
-            style={{
-              background:
-                "linear-gradient(180deg, color-mix(in srgb, var(--color-accent) 68%, black 32%) 0%, color-mix(in srgb, var(--color-accent) 54%, black 46%) 100%)",
-              color: "rgba(255,255,255,0.92)",
-              borderRadius: "0 0 28mm 0",
-              padding: "8mm 6mm 8mm",
-              display: "grid",
-              gap: "4mm",
-              alignContent: "start",
-            }}
-          >
-            <div
-              style={{
-                width: "27mm",
-                height: "27mm",
-                borderRadius: "50%",
-                overflow: "hidden",
-                background: "rgba(255,255,255,0.18)",
-                border: "1mm solid rgba(255,255,255,0.18)",
-              }}
-            >
-              <PhotoOrInitials
-                name={data.name}
-                src={data.photoUrl}
-                style={{ color: "white", background: "rgba(255,255,255,0.16)" }}
-              />
-            </div>
-
-            <section style={{ display: "grid", gap: "1.6mm" }}>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: "2.5mm",
-                  letterSpacing: "0.2em",
-                  textTransform: "uppercase",
-                  fontWeight: 700,
-                }}
-              >
-                Coordonnees
-              </p>
-              <div style={{ display: "grid", gap: "1mm" }}>
-                {data.contact.slice(0, 3).map((item) => (
-                  <p
-                    key={item.label}
-                    style={{
-                      margin: 0,
-                      fontSize: "2.55mm",
-                      lineHeight: 1.48,
-                      color: "rgba(255,255,255,0.78)",
-                    }}
-                  >
-                    {item.value}
-                  </p>
-                ))}
-              </div>
-            </section>
-
-            <section style={{ display: "grid", gap: "1.6mm" }}>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: "2.5mm",
-                  letterSpacing: "0.2em",
-                  textTransform: "uppercase",
-                  fontWeight: 700,
-                }}
-              >
-                Langues
-              </p>
-              <div style={{ display: "grid", gap: "0.8mm" }}>
-                {data.languages.slice(0, 3).map((item) => (
-                  <div
-                    key={item.name}
-                    style={{ display: "grid", gap: "0.3mm" }}
-                  >
-                    <span style={{ fontSize: "2.5mm", fontWeight: 700 }}>
-                      {item.name}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: "2.35mm",
-                        color: "rgba(255,255,255,0.68)",
-                      }}
-                    >
-                      {item.level}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section style={{ display: "grid", gap: "1.6mm" }}>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: "2.5mm",
-                  letterSpacing: "0.2em",
-                  textTransform: "uppercase",
-                  fontWeight: 700,
-                }}
-              >
-                Competences
-              </p>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: "2.5mm",
-                  lineHeight: 1.55,
-                  color: "rgba(255,255,255,0.74)",
-                }}
-              >
-                {data.skills.slice(0, 7).join(" / ")}
-              </p>
-            </section>
-
-            {interestItems.length > 0 ? (
-              <section style={{ display: "grid", gap: "1.6mm" }}>
-                <p
-                  style={{
-                    margin: 0,
-                    fontSize: "2.5mm",
-                    letterSpacing: "0.2em",
-                    textTransform: "uppercase",
-                    fontWeight: 700,
-                  }}
-                >
-                  Centres d’interet
-                </p>
-                <p
-                  style={{
-                    margin: 0,
-                    fontSize: "2.5mm",
-                    lineHeight: 1.55,
-                    color: "rgba(255,255,255,0.74)",
-                  }}
-                >
-                  {interestItems.join(" / ")}
-                </p>
-              </section>
-            ) : null}
-          </aside>
-
-          <main
-            style={{
-              display: "grid",
-              alignContent: "start",
-              gap: "4mm",
-              minWidth: 0,
-            }}
-          >
-            <header style={{ display: "grid", gap: "1.2mm" }}>
-              <h1
-                style={{
-                  margin: 0,
-                  fontSize: "8.8mm",
-                  lineHeight: 0.96,
-                  fontWeight: 900,
-                  letterSpacing: "0.01em",
-                  textTransform: "uppercase",
-                  color: "var(--color-accent)",
-                }}
-              >
-                {data.name}
-              </h1>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: "3.4mm",
-                  lineHeight: 1.25,
-                  color:
-                    "color-mix(in srgb, var(--color-accent) 72%, white 28%)",
-                  fontWeight: 700,
-                  textTransform: "uppercase",
-                }}
-              >
-                {data.title}
-              </p>
-            </header>
-
-            <section style={{ display: "grid", gap: "1.9mm" }}>
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: "4.6mm",
-                  color: "var(--color-accent)",
-                  fontWeight: 800,
-                }}
-              >
-                Formation
-              </h2>
-              <div style={{ display: "grid", gap: "2.7mm" }}>
-                {data.education.slice(0, 2).map((item) => (
-                  <article
-                    key={`${item.school}-${item.degree}`}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "19mm minmax(0, 1fr)",
-                      gap: "3mm",
-                      alignItems: "start",
-                    }}
-                  >
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: "2.45mm",
-                        lineHeight: 1.38,
-                        color: "rgba(58, 64, 72, 0.58)",
-                        textAlign: "right",
-                      }}
-                    >
-                      {item.period}
-                    </p>
-                    <div style={{ display: "grid", gap: "0.8mm" }}>
-                      <p
-                        style={{
-                          margin: 0,
-                          fontSize: "2.8mm",
-                          lineHeight: 1.35,
-                          color: "var(--color-accent)",
-                          fontWeight: 700,
-                        }}
-                      >
-                        {item.degree}
-                      </p>
-                      <p
-                        style={{
-                          margin: 0,
-                          fontSize: "2.55mm",
-                          lineHeight: 1.48,
-                          color: "rgba(58, 64, 72, 0.7)",
-                        }}
-                      >
-                        {item.school}
-                      </p>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
-
-            <section style={{ display: "grid", gap: "2mm" }}>
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: "4.6mm",
-                  color: "var(--color-accent)",
-                  fontWeight: 800,
-                }}
-              >
-                Experience Professionnelle
-              </h2>
-              <div style={{ display: "grid", gap: "3mm" }}>
-                {data.experience.slice(0, 3).map((item) => (
-                  <article
-                    key={`${item.company}-${item.role}`}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "19mm minmax(0, 1fr)",
-                      gap: "3mm",
-                      alignItems: "start",
-                    }}
-                  >
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: "2.45mm",
-                        lineHeight: 1.38,
-                        color: "rgba(58, 64, 72, 0.58)",
-                        textAlign: "right",
-                      }}
-                    >
-                      {item.period}
-                    </p>
-                    <div
-                      style={{
-                        display: "grid",
-                        gap: "0.9mm",
-                        borderLeft:
-                          "0.4mm solid color-mix(in srgb, var(--color-accent) 42%, transparent)",
-                        paddingLeft: "3mm",
-                      }}
-                    >
-                      <p
-                        style={{
-                          margin: 0,
-                          fontSize: "2.9mm",
-                          lineHeight: 1.35,
-                          color: "var(--color-accent)",
-                          fontWeight: 700,
-                        }}
-                      >
-                        {item.role}
-                      </p>
-                      <p
-                        style={{
-                          margin: 0,
-                          fontSize: "2.55mm",
-                          lineHeight: 1.48,
-                          color: "rgba(58, 64, 72, 0.7)",
-                        }}
-                      >
-                        {item.company} / {item.location}
-                      </p>
-                      <ul
-                        style={{
-                          margin: 0,
-                          paddingLeft: "3.6mm",
-                          display: "grid",
-                          gap: "0.7mm",
-                          fontSize: "2.45mm",
-                          lineHeight: 1.48,
-                          color: "rgba(58, 64, 72, 0.74)",
-                        }}
-                      >
-                        {item.bullets.slice(0, 3).map((bullet) => (
-                          <li key={bullet}>{bullet}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  </article>
-                ))}
               </div>
             </section>
           </main>
@@ -4563,58 +3426,6 @@ function ResumeVariantPage({
     );
   }
 
-  if (variant.id === "studiopop") {
-    return (
-      <StudioPopPage
-        variant={variant}
-        data={data}
-        comparisonLabel={comparisonLabel}
-        compactComparison={compactComparison}
-        onActivateComparison={onActivateComparison}
-        fitToken={fitToken}
-      />
-    );
-  }
-
-  if (variant.id === "softribbon") {
-    return (
-      <SoftRibbonPage
-        variant={variant}
-        data={data}
-        comparisonLabel={comparisonLabel}
-        compactComparison={compactComparison}
-        onActivateComparison={onActivateComparison}
-        fitToken={fitToken}
-      />
-    );
-  }
-
-  if (variant.id === "slateprofile") {
-    return (
-      <SlateProfilePage
-        variant={variant}
-        data={data}
-        comparisonLabel={comparisonLabel}
-        compactComparison={compactComparison}
-        onActivateComparison={onActivateComparison}
-        fitToken={fitToken}
-      />
-    );
-  }
-
-  if (variant.id === "onecol") {
-    return (
-      <OneColumnPage
-        variant={variant}
-        data={data}
-        comparisonLabel={comparisonLabel}
-        compactComparison={compactComparison}
-        onActivateComparison={onActivateComparison}
-        fitToken={fitToken}
-      />
-    );
-  }
-
   if (variant.id === "quire") {
     return (
       <QuirePage
@@ -4644,6 +3455,7 @@ export default function ResumePage({
   data,
   mode = "comparison",
   comparisonVariantIds,
+  stylePreset = null,
   fitToken,
   onSelectVariantId,
   userZoom = 1,
@@ -4664,7 +3476,13 @@ export default function ResumePage({
     mode === "comparison"
       ? ["swissminima", "robial", "editorialmag", "signalgrid"]
       : mode === "comparisonAll"
-        ? ["swissminima", "volkregister", "robial", "editorialmag", "signalgrid"]
+        ? [
+            "swissminima",
+            "volkregister",
+            "robial",
+            "editorialmag",
+            "signalgrid",
+          ]
         : [mode];
 
   const resolvedVariantIds = isComparisonMode
@@ -4678,56 +3496,58 @@ export default function ResumePage({
   );
 
   return (
-    <ResumeStageLayoutContext.Provider value={stageLayout ?? null}>
-      <ResumeUserZoomContext.Provider value={userZoom}>
-        <div
-          className={`resume-preview-shell ${
-            isComparisonMode ? "resume-preview-shell--comparison" : ""
-          } ${!isComparisonMode ? "resume-preview-shell--single" : ""}`}
-        >
-          {expandedComparisonView ? (
-            <div className="resume-preview-bar">
-              <button
-                type="button"
-                className="resume-preview-back"
-                onClick={() => setExpandedComparison(false)}
-              >
-                Back to overview
-              </button>
-            </div>
-          ) : null}
-
+    <ResumeStylePresetContext.Provider value={stylePreset}>
+      <ResumeStageLayoutContext.Provider value={stageLayout ?? null}>
+        <ResumeUserZoomContext.Provider value={userZoom}>
           <div
-            className={`resume-preview-grid ${
-              isComparisonMode ? "resume-preview-grid--comparison" : ""
-            } ${compactComparison ? "resume-preview-grid--compact" : ""} ${
-              expandedComparisonView ? "resume-preview-grid--expanded" : ""
-            }`}
+            className={`resume-preview-shell ${
+              isComparisonMode ? "resume-preview-shell--comparison" : ""
+            } ${!isComparisonMode ? "resume-preview-shell--single" : ""}`}
           >
-            {variants.map((variant) => (
-              <ResumeVariantPage
-                key={variant.id}
-                variant={variant}
-                comparisonLabel={isComparisonMode ? variant.label : undefined}
-                compactComparison={compactComparison}
-                fitToken={`${fitToken ?? ""}:${variant.id}`}
-                onActivateComparison={
-                  isComparisonMode && !expandedComparisonView
-                    ? () => {
-                        if (onSelectVariantId) {
-                          onSelectVariantId(variant.id);
-                          return;
+            {expandedComparisonView ? (
+              <div className="resume-preview-bar">
+                <button
+                  type="button"
+                  className="resume-preview-back"
+                  onClick={() => setExpandedComparison(false)}
+                >
+                  Back to overview
+                </button>
+              </div>
+            ) : null}
+
+            <div
+              className={`resume-preview-grid ${
+                isComparisonMode ? "resume-preview-grid--comparison" : ""
+              } ${compactComparison ? "resume-preview-grid--compact" : ""} ${
+                expandedComparisonView ? "resume-preview-grid--expanded" : ""
+              }`}
+            >
+              {variants.map((variant) => (
+                <ResumeVariantPage
+                  key={variant.id}
+                  variant={variant}
+                  comparisonLabel={isComparisonMode ? variant.label : undefined}
+                  compactComparison={compactComparison}
+                  fitToken={`${fitToken ?? ""}:${variant.id}`}
+                  onActivateComparison={
+                    isComparisonMode && !expandedComparisonView
+                      ? () => {
+                          if (onSelectVariantId) {
+                            onSelectVariantId(variant.id);
+                            return;
+                          }
+                          setExpandedComparison(true);
                         }
-                        setExpandedComparison(true);
-                      }
-                    : undefined
-                }
-                data={data}
-              />
-            ))}
+                      : undefined
+                  }
+                  data={data}
+                />
+              ))}
+            </div>
           </div>
-        </div>
-      </ResumeUserZoomContext.Provider>
-    </ResumeStageLayoutContext.Provider>
+        </ResumeUserZoomContext.Provider>
+      </ResumeStageLayoutContext.Provider>
+    </ResumeStylePresetContext.Provider>
   );
 }

@@ -1,26 +1,68 @@
 import {
+  AlignmentType,
   Document,
+  HeadingLevel,
+  LineRuleType,
   Packer,
   Paragraph,
   TextRun,
-  AlignmentType,
-  HeadingLevel,
 } from "docx";
 
 import {
   DEFAULT_VERBATI_STYLE,
-  getVerbatiTypographyFamilies,
-  resolveVerbatiAccentHex,
   resolveVerbatiStyle,
 } from "../features/verbati/style";
 import type { VerbatiStylePreset } from "../features/verbati/types";
+import {
+  type ProposalTemplateId,
+} from "../../convex/lib/proposals/renderTemplates";
 import type {
   ProposalPrintBlock,
   ProposalPrintSource,
   ResumePrintItem,
   ResumePrintSource,
 } from "./document-export-models";
-import { ROBIAL_EXPORT_GRID } from "./layout/robialGrid";
+import {
+  getExportHtmlLang,
+  getLocalizedExportLabel,
+  localizeStructuredLabel,
+  normalizeLocaleTypography,
+} from "./export-locale";
+import {
+  resolveProposalExportProfile,
+  resolveResumeExportProfile,
+} from "./layout/exportProfiles";
+import {
+  resolveProposalDocxSurfaceTokens,
+  resolveResumeDocxSurfaceTokens,
+} from "./layout/documentTokenSerializers";
+import {
+  resolveDocxSafeColorHex,
+  resolvePrimaryFontFamily,
+} from "./layout/documentAppearance";
+
+type ExportMode = "ats" | "styled";
+
+type DocxParagraphOptions = {
+  alignment?: (typeof AlignmentType)[keyof typeof AlignmentType];
+  bold?: boolean;
+  color?: string;
+  font?: string;
+  heading?: (typeof HeadingLevel)[keyof typeof HeadingLevel];
+  keepLines?: boolean;
+  keepNext?: boolean;
+  line?: number;
+  spacingAfter?: number;
+  spacingBefore?: number;
+  size?: number;
+};
+
+type DocxParagraphDefaults = {
+  bodySizeHalfPt: number;
+  bodyLineTwip: number;
+  bodyGapTwip: number;
+  colorHex: string;
+};
 
 function escapeHtml(value: string): string {
   return value
@@ -31,7 +73,9 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#39;");
 }
 
-function joinClassNames(values: Array<string | false | null | undefined>): string {
+function joinClassNames(
+  values: Array<string | false | null | undefined>,
+): string {
   return values.filter(Boolean).join(" ");
 }
 
@@ -41,31 +85,708 @@ function normalizeStylePreset(
   return resolveVerbatiStyle(stylePreset ?? DEFAULT_VERBATI_STYLE);
 }
 
-function buildPageCss(stylePreset?: VerbatiStylePreset | null): string {
-  const resolvedStyle = normalizeStylePreset(stylePreset);
-  const accent = resolveVerbatiAccentHex(resolvedStyle);
-  const fonts = getVerbatiTypographyFamilies(resolvedStyle);
+function buildCssVarBlock(vars: Record<string, string>): string {
+  return Object.entries(vars)
+    .map(([name, value]) => `      ${name}: ${value};`)
+    .join("\n");
+}
+
+function buildStyledResumeAppearanceCss(): string {
+  return `
+    body.resume-export.resume--styled .export-page {
+      background: var(--decor-page-background, var(--paper));
+    }
+
+    body.resume-export.resume--styled .resume-styled-page {
+      display: grid;
+      gap: var(--flow-header-gap);
+      align-content: start;
+    }
+
+    body.resume-export.resume--styled .resume-styled-header,
+    body.resume-export.resume--styled .resume-styled-columns,
+    body.resume-export.resume--styled .resume-styled-main,
+    body.resume-export.resume--styled .resume-styled-support,
+    body.resume-export.resume--styled .resume-styled-header__identity,
+    body.resume-export.resume--styled .resume-styled-header__summary {
+      min-width: 0;
+    }
+
+    body.resume-export.resume--styled .resume-styled-columns {
+      align-items: start;
+    }
+
+    body.resume-export.resume--styled .resume-styled-contact-lines {
+      display: grid;
+      gap: calc(var(--flow-list-gap) + 0.25mm);
+      min-width: 0;
+    }
+
+    body.resume-export.resume--styled .resume-styled-contact-line {
+      margin: 0;
+      min-width: 0;
+      max-width: 100%;
+      font-size: calc(var(--flow-body-sm-size) - 0.35mm);
+      line-height: calc(var(--flow-body-sm-line) - 0.12);
+      overflow-wrap: anywhere;
+      white-space: pre-wrap;
+    }
+
+    body.resume-export.resume--styled .resume-styled-support__avatar {
+      display: grid;
+      justify-items: center;
+      padding-bottom: calc(var(--flow-stack-gap) + 0.6mm);
+    }
+
+    body.resume-export.resume--styled .resume-styled-support__avatar-badge {
+      width: calc(var(--page-sidebar) - 8mm);
+      height: calc(var(--page-sidebar) - 8mm);
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      border: var(--decor-tag-border-width) solid var(--decor-tag-border-color, var(--line));
+      background: color-mix(
+        in srgb,
+        var(--decor-tag-background, var(--tag-fill)) 78%,
+        var(--paper)
+      );
+      box-shadow: var(--decor-tag-shadow, none);
+      font-family: var(--heading-font);
+      font-size: calc(var(--flow-title-size) - 1.9mm);
+      line-height: 1;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      color: var(--ink);
+      text-transform: uppercase;
+    }
+
+    body.resume-export.resume--styled .robial-header__full {
+      background: var(--decor-header-background, transparent);
+      border-bottom-color: var(--decor-header-border-color, var(--header-rule));
+      box-shadow: var(--decor-header-shadow, none);
+    }
+
+    body.resume-export.resume--styled .robial-sidebar {
+      background: var(--decor-sidebar-background, var(--sidebar-fill));
+      box-shadow: var(--decor-sidebar-shadow, none);
+    }
+
+    body.resume-export.resume--styled .section--ruled {
+      border-top-color: var(--decor-section-rule-border-color, var(--line));
+      box-shadow: var(--decor-section-rule-shadow, none);
+    }
+
+    body.resume-export.resume--styled .section-title {
+      color: var(--decor-section-title-color, var(--accent));
+    }
+
+    body.resume-export.resume--styled .meta-label {
+      color: var(--decor-meta-label-color, var(--muted));
+    }
+
+    body.resume-export.resume--styled .tag {
+      border-color: var(--decor-tag-border-color, var(--line));
+      border-radius: var(--decor-tag-border-radius);
+      background: var(--decor-tag-background, var(--tag-fill));
+      box-shadow: var(--decor-tag-shadow, none);
+    }
+
+    body.resume-export.resume--styled .doc-name {
+      color: var(--decor-doc-name-color, var(--accent));
+    }
+
+    body.resume-export.resume--styled .doc-title {
+      color: var(--decor-doc-title-color, var(--muted));
+    }
+
+    body.resume-export.resume--styled .doc-summary {
+      color: var(--decor-doc-summary-color, var(--ink));
+    }
+
+    body.resume-export.resume--styled .entry-title {
+      color: var(--decor-entry-title-color, var(--ink));
+    }
+
+    body.resume-export.resume--styled .entry-meta {
+      color: var(--decor-entry-meta-color, var(--muted));
+    }
+
+    body.resume-export.resume-layout--editorial.resume--styled .resume-styled-page--editorial {
+      gap: calc(var(--flow-header-gap) + 0.8mm);
+      height: var(--page-height);
+    }
+
+    body.resume-export.resume-layout--editorial.resume--styled .resume-styled-header--editorial {
+      display: grid;
+      gap: calc(var(--flow-stack-gap) + 1.1mm);
+      border-bottom: var(--decor-header-border-width) solid var(--header-rule);
+      padding-bottom: calc(var(--flow-rule-pad-top) + 0.5mm);
+      box-shadow: var(--decor-header-aux-shadow, none);
+      min-width: 0;
+    }
+
+    body.resume-export.resume-layout--editorial.resume--styled .resume-styled-header__identity--editorial {
+      display: grid;
+      gap: calc(var(--flow-list-gap) + 0.35mm);
+      min-width: 0;
+    }
+
+    body.resume-export.resume-layout--editorial.resume--styled .resume-styled-page--editorial .doc-name {
+      max-width: none;
+      font-size: calc(var(--flow-display-size) + 6.5mm);
+      line-height: 0.92;
+      letter-spacing: -0.055em;
+      color: var(--ink);
+    }
+
+    body.resume-export.resume-layout--editorial.resume--styled .resume-styled-page--editorial .doc-title {
+      max-width: calc(var(--page-main) + var(--page-sidebar) + var(--page-gutter) - 4mm);
+      font-size: calc(var(--flow-body-size) + 0.45mm);
+      line-height: 1.22;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      font-style: normal;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    body.resume-export.resume-layout--editorial.resume--styled .resume-styled-page--editorial .doc-summary {
+      max-width: calc(var(--page-main) + 4mm);
+      font-size: calc(var(--flow-body-size) + 0.05mm);
+      line-height: 1.54;
+    }
+
+    body.resume-export.resume-layout--editorial.resume--styled .resume-styled-columns--editorial {
+      display: grid;
+      grid-template-columns:
+        minmax(0, var(--page-main))
+        minmax(0, var(--page-gutter))
+        minmax(0, var(--page-sidebar));
+      gap: 0;
+      align-items: start;
+    }
+
+    body.resume-export.resume-layout--editorial.resume--styled .resume-styled-main--editorial {
+      grid-column: 1;
+      display: grid;
+      gap: calc(var(--flow-section-gap) - 0.5mm);
+      min-width: 0;
+    }
+
+    body.resume-export.resume-layout--editorial.resume--styled .resume-styled-main--editorial .section,
+    body.resume-export.resume-layout--editorial.resume--styled .resume-styled-support--editorial .section {
+      margin-bottom: 0;
+    }
+
+    body.resume-export.resume-layout--editorial.resume--styled .resume-styled-support--editorial {
+      grid-column: 3;
+      display: grid;
+      gap: calc(var(--flow-stack-gap) + 0.45mm);
+      padding-left: calc(var(--page-gutter) - 4.5mm);
+      min-width: 0;
+      border-left: 0.24mm solid var(--decor-section-rule-border-color, var(--line));
+    }
+
+    body.resume-export.resume-layout--editorial.resume--styled .resume-styled-page--editorial .entry-head {
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--flow-entry-head-gap);
+    }
+
+    body.resume-export.resume-layout--editorial.resume--styled .resume-styled-page--editorial .entry-meta,
+    body.resume-export.resume-layout--editorial.resume--styled .resume-styled-page--editorial .section--education .entry-meta {
+      text-align: left;
+    }
+
+    body.resume-export.resume-layout--quire.resume--styled .resume-styled-page--quire {
+      gap: 0;
+      padding: 0;
+      min-height: var(--page-height);
+      height: var(--page-height);
+      overflow: hidden;
+      background: var(--paper);
+    }
+
+    body.resume-export.resume-layout--quire.resume--styled .resume-styled-columns--quire {
+      display: grid;
+      grid-template-columns: minmax(0, var(--page-sidebar)) minmax(0, 1fr);
+      gap: 0;
+      min-height: var(--page-height);
+    }
+
+    body.resume-export.resume-layout--quire.resume--styled .resume-styled-support--quire {
+      display: grid;
+      align-content: start;
+      gap: calc(var(--flow-section-gap) - 0.2mm);
+      min-height: var(--page-height);
+      padding:
+        calc(var(--page-margin-top) + 2mm)
+        calc(var(--page-margin-left) - 1.5mm)
+        calc(var(--page-margin-bottom) + 1mm)
+        var(--page-margin-left);
+      background: var(--decor-sidebar-background, var(--sidebar-fill));
+      box-shadow: var(--decor-sidebar-shadow, none);
+    }
+
+    body.resume-export.resume-layout--quire.resume--styled .resume-styled-header--quire {
+      display: grid;
+      gap: calc(var(--flow-stack-gap) + 0.55mm);
+      padding-bottom: calc(var(--flow-header-gap) + 0.25mm);
+      border-bottom: 0.28mm solid var(--decor-support-rule-color, transparent);
+      min-width: 0;
+    }
+
+    body.resume-export.resume-layout--quire.resume--styled .resume-styled-page--quire .resume-styled-support--quire .doc-name {
+      max-width: none;
+      font-family: var(--body-font);
+      font-size: calc(var(--flow-display-size) + 1.35mm);
+      line-height: 0.95;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--decor-support-text-primary, var(--paper));
+      overflow-wrap: normal;
+      word-break: normal;
+      hyphens: none;
+    }
+
+    body.resume-export.resume-layout--quire.resume--styled .resume-styled-page--quire .resume-styled-support--quire .doc-title {
+      font-family: var(--body-font);
+      font-size: calc(var(--flow-body-size) - 0.45mm);
+      line-height: calc(var(--flow-body-line) - 0.32);
+      font-style: normal;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      color: var(--decor-support-accent, var(--paper));
+      overflow-wrap: normal;
+      word-break: normal;
+      hyphens: none;
+    }
+
+    body.resume-export.resume-layout--quire.resume--styled .resume-styled-main--quire {
+      display: grid;
+      align-content: start;
+      gap: calc(var(--flow-section-gap) - 0.2mm);
+      min-width: 0;
+      padding:
+        var(--page-margin-top)
+        var(--page-margin-right)
+        calc(var(--page-margin-bottom) - 9mm)
+        calc(var(--page-gutter) + 6mm);
+    }
+
+    body.resume-export.resume-layout--quire.resume--styled .resume-styled-header__meta--quire {
+      display: grid;
+      gap: calc(var(--flow-stack-gap) + 0.1mm);
+      justify-items: end;
+      min-width: 0;
+      padding-bottom: calc(var(--flow-header-gap) - 0.3mm);
+      border-bottom: 0.28mm solid color-mix(in srgb, var(--ink) 18%, transparent);
+    }
+
+    body.resume-export.resume-layout--quire.resume--styled .resume-styled-header__meta--quire .resume-styled-contact-lines {
+      justify-items: end;
+      max-width: calc(var(--page-main) - 4mm);
+    }
+
+    body.resume-export.resume-layout--quire.resume--styled .resume-styled-header__meta--quire .section {
+      margin-bottom: 0;
+    }
+
+    body.resume-export.resume-layout--quire.resume--styled .resume-styled-header__meta--quire .section--ruled {
+      border-top: 0;
+      padding-top: 0;
+      box-shadow: none;
+    }
+
+    body.resume-export.resume-layout--quire.resume--styled .resume-styled-header__meta--quire .section-title {
+      display: none;
+    }
+
+    body.resume-export.resume-layout--quire.resume--styled .resume-styled-header__meta--quire .meta-list {
+      justify-items: end;
+      gap: calc(var(--flow-list-gap) + 0.2mm);
+    }
+
+    body.resume-export.resume-layout--quire.resume--styled .resume-styled-header__meta--quire .meta-value {
+      text-align: right;
+      color: var(--muted);
+    }
+
+    body.resume-export.resume-layout--quire.resume--styled .resume-styled-header__meta--quire .doc-summary {
+      max-width: calc(var(--page-main) - 6mm);
+      text-align: right;
+    }
+
+    body.resume-export.resume-layout--quire.resume--styled .resume-styled-main--quire .resume-main-stack {
+      gap: calc(var(--flow-section-gap) - 0.25mm);
+    }
+
+    body.resume-export.resume-layout--quire.resume--styled .resume-styled-main--quire .section,
+    body.resume-export.resume-layout--quire.resume--styled .resume-styled-support--quire .section {
+      margin-bottom: 0;
+    }
+
+    body.resume-export.resume-layout--quire.resume--styled .resume-styled-main--quire .section-title {
+      color: var(--accent);
+      padding-bottom: calc(var(--flow-list-gap) + 0.5mm);
+      border-bottom: 0.28mm solid color-mix(in srgb, var(--ink) 18%, transparent);
+    }
+
+    body.resume-export.resume-layout--quire.resume--styled .resume-styled-main--quire .entry-title {
+      font-family: var(--heading-font);
+      font-size: calc(var(--flow-title-size) - 0.55mm);
+      line-height: 0.98;
+      font-weight: 800;
+      letter-spacing: 0.01em;
+      text-transform: uppercase;
+    }
+
+    body.resume-export.resume-layout--quire.resume--styled .resume-styled-main--quire .entry-head {
+      grid-template-columns:
+        minmax(0, 1fr)
+        fit-content(calc(var(--flow-entry-meta-width) + 4mm));
+      gap: calc(var(--flow-entry-gap) - 0.1mm);
+      align-items: start;
+    }
+
+    body.resume-export.resume-layout--quire.resume--styled .resume-styled-main--quire .entry-meta {
+      padding-left: calc(var(--flow-entry-gap) - 0.8mm);
+      border-left: 0.24mm solid color-mix(in srgb, var(--ink) 16%, transparent);
+      text-align: right;
+      white-space: normal;
+      line-height: 1.46;
+      color: color-mix(in srgb, var(--ink) 76%, transparent);
+    }
+
+    body.resume-export.resume-layout--quire.resume--styled .resume-styled-main--quire .section--education .entry-head {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    body.resume-export.resume-layout--quire.resume--styled .resume-styled-main--quire .section--education .entry-meta {
+      padding-left: 0;
+      border-left: 0;
+      text-align: left;
+    }
+
+    body.resume-export.resume-layout--quire.resume--styled .resume-styled-support--quire .section--ruled,
+    body.resume-export.resume-layout--quire.resume--styled .resume-styled-support--quire .section--ruled .section-title {
+      box-shadow: none;
+    }
+
+    body.resume-export.resume-layout--quire.resume--styled .resume-styled-support--quire .section--ruled {
+      border-top: 0;
+      padding-top: 0;
+    }
+
+    body.resume-export.resume-layout--quire.resume--styled .resume-styled-support--quire .section-title {
+      margin: 0 0 var(--flow-stack-gap);
+      font-size: calc(var(--flow-label-size) - 0.15mm);
+      letter-spacing: 0.28em;
+      color: var(--decor-support-accent, var(--paper));
+      padding-bottom: calc(var(--flow-list-gap) + 0.45mm);
+      border-bottom: 0.24mm solid var(--decor-support-rule-color, transparent);
+    }
+
+    body.resume-export.resume-layout--quire.resume--styled .resume-styled-support--quire .meta-label {
+      display: none;
+    }
+
+    body.resume-export.resume-layout--quire.resume--styled .resume-styled-support--quire .meta-value,
+    body.resume-export.resume-layout--quire.resume--styled .resume-styled-support--quire .entry-summary,
+    body.resume-export.resume-layout--quire.resume--styled .resume-styled-support--quire .entry-meta {
+      font-size: calc(var(--flow-body-sm-size) - 0.4mm);
+      line-height: 1.4;
+      color: var(--decor-support-text-secondary, var(--paper));
+      text-align: left;
+    }
+
+    body.resume-export.resume-layout--quire.resume--styled .resume-styled-support--quire .entry-title,
+    body.resume-export.resume-layout--quire.resume--styled .resume-styled-support--quire .tag {
+      color: var(--decor-support-text-primary, var(--paper));
+    }
+
+    body.resume-export.resume-layout--modernist.resume--styled .resume-styled-page--modernist {
+      gap: 0;
+      padding: 0;
+      min-height: var(--page-height);
+    }
+
+    body.resume-export.resume-layout--modernist.resume--styled .resume-styled-columns--modernist {
+      display: grid;
+      grid-template-columns: minmax(0, calc(var(--page-sidebar) + 4mm)) minmax(0, 1fr);
+      gap: 0;
+      min-height: var(--page-height);
+      align-items: stretch;
+    }
+
+    body.resume-export.resume-layout--modernist.resume--styled .resume-styled-support--modernist {
+      display: grid;
+      align-content: start;
+      gap: calc(var(--flow-section-gap) - 0.25mm);
+      min-height: var(--page-height);
+      padding:
+        calc(var(--page-margin-top) + 2mm)
+        calc(var(--flow-stack-gap) + 0.9mm)
+        calc(var(--page-margin-bottom) + 1mm)
+        var(--page-margin-left);
+      background: var(--decor-sidebar-background, var(--sidebar-fill));
+      border-right: 0.28mm solid var(--decor-section-rule-border-color, var(--line));
+      border-radius: 0 9mm 18mm 0;
+      box-shadow: var(--decor-sidebar-shadow, none);
+    }
+
+    body.resume-export.resume-layout--modernist.resume--styled .resume-styled-support__lead--modernist {
+      padding-bottom: calc(var(--flow-stack-gap) + 0.4mm);
+      border-bottom: 0.24mm solid color-mix(
+        in srgb,
+        var(--decor-section-rule-border-color, var(--line)) 76%,
+        transparent
+      );
+    }
+
+    body.resume-export.resume-layout--modernist.resume--styled .resume-styled-support__lead--modernist .section {
+      margin-bottom: 0;
+    }
+
+    body.resume-export.resume-layout--modernist.resume--styled .resume-styled-support__lead--modernist .section--ruled {
+      border-top: 0;
+      padding-top: 0;
+      box-shadow: none;
+    }
+
+    body.resume-export.resume-layout--modernist.resume--styled .resume-styled-support__lead--modernist .section-title {
+      display: none;
+    }
+
+    body.resume-export.resume-layout--modernist.resume--styled .resume-styled-support__lead--modernist .meta-list {
+      gap: calc(var(--flow-list-gap) + 0.2mm);
+    }
+
+    body.resume-export.resume-layout--modernist.resume--styled .resume-styled-support__lead--modernist .meta-value {
+      color: color-mix(in srgb, var(--ink) 78%, white 22%);
+      font-size: calc(var(--flow-body-sm-size) - 0.1mm);
+      line-height: 1.36;
+    }
+
+    body.resume-export.resume-layout--modernist.resume--styled .resume-styled-support--modernist .section--ruled {
+      border-top: 0;
+      padding-top: 0;
+      box-shadow: none;
+    }
+
+    body.resume-export.resume-layout--modernist.resume--styled .resume-styled-support--modernist .section-title {
+      margin: 0 0 calc(var(--flow-stack-gap) - 0.4mm);
+      font-size: calc(var(--flow-label-size) - 0.15mm);
+      letter-spacing: 0.22em;
+      color: var(--muted);
+      border: 0;
+      padding-bottom: 0;
+    }
+
+    body.resume-export.resume-layout--modernist.resume--styled .resume-styled-support--modernist .meta-label {
+      display: none;
+    }
+
+    body.resume-export.resume-layout--modernist.resume--styled .resume-styled-support--modernist .meta-value,
+    body.resume-export.resume-layout--modernist.resume--styled .resume-styled-support--modernist .entry-summary {
+      color: var(--muted);
+      font-size: calc(var(--flow-body-sm-size) - 0.05mm);
+      line-height: 1.34;
+    }
+
+    body.resume-export.resume-layout--modernist.resume--styled .resume-styled-main--modernist {
+      display: grid;
+      align-content: start;
+      gap: calc(var(--flow-section-gap) - 0.25mm);
+      min-width: 0;
+      padding:
+        calc(var(--page-margin-top) + 2mm)
+        var(--page-margin-right)
+        calc(var(--page-margin-bottom) + 1mm)
+        calc(var(--page-gutter) + 4.5mm);
+    }
+
+    body.resume-export.resume-layout--modernist.resume--styled .resume-styled-main--modernist .section,
+    body.resume-export.resume-layout--modernist.resume--styled .resume-styled-support--modernist .section {
+      margin-bottom: 0;
+    }
+
+    body.resume-export.resume-layout--modernist.resume--styled .resume-styled-header--modernist {
+      display: grid;
+      gap: calc(var(--flow-stack-gap) + 0.7mm);
+      padding-bottom: calc(var(--flow-rule-pad-top) + 0.35mm);
+      border-bottom: 0.24mm solid color-mix(
+        in srgb,
+        var(--decor-section-rule-border-color, var(--line)) 76%,
+        transparent
+      );
+      min-width: 0;
+    }
+
+    body.resume-export.resume-layout--modernist.resume--styled .resume-styled-page--modernist .doc-name {
+      max-width: none;
+      font-size: calc(var(--flow-display-size) + 7mm);
+      line-height: 0.88;
+      letter-spacing: 0.05em;
+      font-weight: 900;
+      text-transform: uppercase;
+      color: var(--ink);
+    }
+
+    body.resume-export.resume-layout--modernist.resume--styled .resume-styled-page--modernist .doc-title {
+      font-size: calc(var(--flow-body-size) + 0.1mm);
+      line-height: 1.28;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      font-style: normal;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    body.resume-export.resume-layout--modernist.resume--styled .resume-styled-page--modernist .doc-summary {
+      max-width: calc(var(--page-main) - 10mm);
+      padding-top: calc(var(--flow-list-gap) + 1mm);
+      border-top: 0.24mm solid color-mix(in srgb, var(--line) 78%, transparent);
+      font-size: calc(var(--flow-body-size) + 0.05mm);
+      line-height: 1.56;
+    }
+
+    body.resume-export.resume-layout--modernist.resume--styled .resume-styled-main--modernist .section-title {
+      font-size: calc(var(--flow-label-size) - 0.05mm);
+      letter-spacing: 0.24em;
+      color: var(--accent);
+    }
+
+    body.resume-export.resume-layout--modernist.resume--styled .resume-styled-main--modernist .entry-head {
+      grid-template-columns: minmax(0, var(--flow-entry-meta-width)) minmax(0, 1fr);
+      gap: var(--flow-entry-gap);
+      align-items: start;
+    }
+
+    body.resume-export.resume-layout--modernist.resume--styled .resume-styled-main--modernist .entry-meta {
+      order: -1;
+      text-align: left;
+      white-space: normal;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      color: var(--muted);
+    }
+
+    body.resume-export.resume-layout--modernist.resume--styled .section--projects .entry--project {
+      padding: var(--flow-tag-pad-block) var(--flow-tag-pad-inline);
+      border: var(--decor-tag-border-width) solid var(--decor-tag-border-color, var(--line));
+      border-radius: var(--decor-tag-border-radius);
+      background: color-mix(
+        in srgb,
+        var(--decor-tag-background, var(--tag-fill)) 72%,
+        var(--paper)
+      );
+      box-shadow: var(--decor-tag-shadow, none);
+    }
+
+    body.resume-export.resume-layout--modernist.resume--styled .section--projects .entry--project .entry-head,
+    body.resume-export.resume-layout--modernist.resume--styled .section--education .entry--education .entry-head {
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--flow-entry-head-gap);
+    }
+
+    body.resume-export.resume-layout--modernist.resume--styled .section--projects .entry--project .entry-meta,
+    body.resume-export.resume-layout--modernist.resume--styled .section--education .entry--education .entry-meta {
+      text-align: left;
+    }
+  `;
+}
+
+function buildStyledProposalAppearanceCss(): string {
+  return `
+    body.proposal-export.proposal--styled .export-page {
+      background: var(--decor-page-background, var(--paper));
+    }
+
+    body.proposal-export.proposal--styled .robial-header__full {
+      background: var(--decor-header-background, transparent);
+      border-bottom-color: var(--decor-header-border-color, var(--header-rule));
+      box-shadow: var(--decor-header-shadow, none);
+    }
+
+    body.proposal-export.proposal--styled .robial-sidebar {
+      background: var(--decor-sidebar-background, var(--sidebar-fill));
+      box-shadow: var(--decor-sidebar-shadow, none);
+    }
+
+    body.proposal-export.proposal--styled .section--ruled {
+      border-top-color: var(--decor-section-rule-border-color, var(--line));
+      box-shadow: var(--decor-section-rule-shadow, none);
+    }
+
+    body.proposal-export.proposal--styled .proposal-title {
+      color: var(--decor-proposal-title-color, var(--accent));
+    }
+
+    body.proposal-export.proposal--styled .proposal-meta {
+      color: var(--decor-proposal-meta-color, var(--muted));
+    }
+
+    body.proposal-export.proposal--styled .meta-label {
+      color: var(--decor-meta-label-color, var(--muted));
+    }
+
+    body.proposal-export.proposal--styled .meta-value {
+      color: var(--decor-meta-value-color, var(--ink));
+    }
+
+    body.proposal-export.proposal--styled .proposal-block--subject {
+      background: var(--decor-subject-background, transparent);
+      box-shadow: var(--decor-subject-shadow, none);
+    }
+
+    body.proposal-export.proposal--styled .proposal-signoff {
+      color: var(--decor-signoff-color, var(--ink));
+    }
+
+    body.proposal-export.proposal--styled .proposal-signature {
+      color: var(--decor-signature-color, var(--ink));
+      text-transform: var(--decor-signature-text-transform, none);
+      font-variant-caps: var(--decor-signature-font-variant-caps, normal);
+      letter-spacing: var(--decor-signature-letter-spacing, normal);
+    }
+  `;
+}
+
+function buildPageCss(args: {
+  documentKind: "proposal" | "resume";
+  mode: ExportMode;
+  proposalTemplateId?: ProposalTemplateId | null;
+  stylePreset?: VerbatiStylePreset | null;
+}): string {
+  const resumeProfile =
+    args.documentKind === "resume"
+      ? resolveResumeExportProfile({
+          mode: args.mode,
+          layout: normalizeStylePreset(args.stylePreset).layout,
+          stylePreset: args.stylePreset,
+        })
+      : null;
+  const proposalProfile =
+    args.documentKind === "proposal"
+      ? resolveProposalExportProfile({
+          mode: args.mode,
+          proposalTemplateId: args.proposalTemplateId,
+          stylePreset: args.stylePreset,
+        })
+      : null;
+  const layoutProfileVars = resumeProfile?.vars ?? proposalProfile?.vars ?? {};
+  const appearanceOnlyCss =
+    args.mode !== "styled"
+      ? ""
+      : args.documentKind === "resume"
+        ? buildStyledResumeAppearanceCss()
+        : buildStyledProposalAppearanceCss();
 
   return `
     :root {
-      --page-width: ${ROBIAL_EXPORT_GRID.page.size.width};
-      --page-height: ${ROBIAL_EXPORT_GRID.page.size.height};
-      --page-margin-top: ${ROBIAL_EXPORT_GRID.page.margins.top};
-      --page-margin-right: ${ROBIAL_EXPORT_GRID.page.margins.right};
-      --page-margin-bottom: ${ROBIAL_EXPORT_GRID.page.margins.bottom};
-      --page-margin-left: ${ROBIAL_EXPORT_GRID.page.margins.left};
-      --page-sidebar: ${ROBIAL_EXPORT_GRID.page.columns.sidebar};
-      --page-gutter: ${ROBIAL_EXPORT_GRID.page.columns.gutter};
-      --page-main: ${ROBIAL_EXPORT_GRID.page.columns.main};
-      --accent: ${accent};
-      --ink: #1f1d1a;
-      --muted: #5f594f;
-      --line: rgba(31, 29, 26, 0.16);
-      --soft: rgba(31, 29, 26, 0.06);
-      --paper: #fffdfa;
-      --sidebar-soft: rgba(31, 29, 26, 0.03);
-      --heading-font: ${fonts.headingFamily}, "Times New Roman", Georgia, serif;
-      --body-font: ${fonts.bodyFamily}, "Helvetica Neue", Arial, sans-serif;
+${buildCssVarBlock(layoutProfileVars)}
     }
 
     @page {
@@ -81,16 +802,20 @@ function buildPageCss(stylePreset?: VerbatiStylePreset | null): string {
     body {
       margin: 0;
       padding: 0;
-      background: white;
+      background: var(--paper);
       color: var(--ink);
       font-family: var(--body-font);
+      font-size: var(--flow-body-size);
+      line-height: var(--flow-body-line);
+      font-kerning: normal;
+      font-variant-ligatures: common-ligatures;
+      text-rendering: optimizeLegibility;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
 
     body {
-      font-size: 10pt;
-      line-height: 1.45;
+      background: var(--paper);
     }
 
     .export-page {
@@ -113,15 +838,17 @@ function buildPageCss(stylePreset?: VerbatiStylePreset | null): string {
       display: grid;
       grid-template-columns: var(--page-sidebar) var(--page-gutter) var(--page-main);
       gap: 0;
-      margin-bottom: 17mm;
+      margin-bottom: var(--flow-header-gap);
       align-items: start;
     }
 
     .robial-header__full {
       grid-column: 1 / -1;
-      display: flex;
-      flex-direction: column;
-      gap: 3mm;
+      display: grid;
+      gap: var(--flow-stack-gap);
+      border-bottom: var(--decor-header-border-width) solid var(--header-rule);
+      padding-bottom: var(--flow-sidebar-pad-top);
+      min-width: 0;
     }
 
     .robial-body {
@@ -134,6 +861,9 @@ function buildPageCss(stylePreset?: VerbatiStylePreset | null): string {
     .robial-sidebar {
       grid-column: 1;
       min-width: 0;
+      padding-top: var(--flow-sidebar-pad-top);
+      border-top: var(--decor-sidebar-rule-width) solid var(--rule-strong);
+      background: var(--sidebar-fill);
     }
 
     .robial-main {
@@ -141,252 +871,409 @@ function buildPageCss(stylePreset?: VerbatiStylePreset | null): string {
       min-width: 0;
     }
 
-    .doc-name {
-      font-family: var(--heading-font);
-      font-size: 22pt;
-      line-height: 1.06;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      margin: 0;
+    .resume-main-stack,
+    .resume-sidebar-stack,
+    .proposal-support-stack {
+      display: grid;
+      gap: var(--flow-section-gap);
+      min-width: 0;
     }
 
-    .doc-title {
-      margin: 0;
-      font-size: 11pt;
-      line-height: 1.25;
-      color: var(--muted);
-    }
-
-    .doc-summary {
-      margin: 0;
-      max-width: 105mm;
-      font-size: 10pt;
-      line-height: 1.5;
-    }
-
-    .section {
-      margin-bottom: 8.5mm;
-    }
-
-    .section:last-child {
+    .resume-main-stack > :last-child,
+    .resume-sidebar-stack > :last-child,
+    .proposal-support-stack > :last-child {
       margin-bottom: 0;
     }
 
-    .section-title {
-      margin: 0 0 3mm;
-      font-family: var(--heading-font);
-      font-size: 8pt;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.16em;
-      color: var(--muted);
+    .resume-shell--onecol .resume-main-stack,
+    .proposal-shell--onecol .proposal-main-stack,
+    .proposal-shell--onecol .proposal-support-stack {
+      max-width: var(--flow-reading-measure);
     }
 
-    .rule {
-      border-top: 0.4mm solid var(--line);
-      padding-top: 2.4mm;
+    .resume-inline-meta {
+      display: grid;
+      gap: var(--flow-entry-head-gap);
+      max-width: var(--flow-reading-measure);
+      min-width: 0;
     }
 
-    .meta-list,
-    .tag-list {
-      display: flex;
-      flex-direction: column;
-      gap: 1.8mm;
+    .resume-inline-meta__line,
+    .proposal-inline-meta__line {
       margin: 0;
-      padding: 0;
-      list-style: none;
-    }
-
-    .meta-label {
-      display: block;
-      font-size: 7.5pt;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
+      min-width: 0;
+      max-width: 100%;
+      font-size: var(--flow-meta-size);
+      line-height: var(--flow-meta-line);
       color: var(--muted);
-      margin-bottom: 0.8mm;
-    }
-
-    .meta-value {
-      font-size: 9pt;
-      line-height: 1.35;
-    }
-
-    .tag {
-      display: inline-block;
-      padding: 1.1mm 1.8mm;
-      border: 0.3mm solid var(--line);
-      border-radius: 999px;
-      font-size: 8pt;
-      line-height: 1.2;
-      margin: 0 1.2mm 1.2mm 0;
-    }
-
-    .entry {
-      margin-bottom: 4.8mm;
-    }
-
-    .entry:last-child {
-      margin-bottom: 0;
-    }
-
-    .entry-head {
-      display: flex;
-      justify-content: space-between;
-      gap: 4mm;
-      align-items: baseline;
-      margin-bottom: 1.2mm;
-    }
-
-    .entry-title {
-      margin: 0;
-      font-size: 10.5pt;
-      line-height: 1.3;
-      font-weight: 700;
-    }
-
-    .entry-meta {
-      margin: 0;
-      font-size: 8.5pt;
-      line-height: 1.25;
-      color: var(--muted);
-      text-align: right;
+      overflow-wrap: anywhere;
       white-space: pre-wrap;
     }
 
-    .entry-summary {
-      margin: 0 0 1.4mm;
-      font-size: 9.3pt;
-      line-height: 1.45;
+    .proposal-inline-meta {
+      display: grid;
+      gap: var(--flow-stack-gap);
+      max-width: var(--flow-reading-measure);
+      min-width: 0;
     }
 
-    .bullet-list {
+    .doc-name {
       margin: 0;
-      padding-left: 4mm;
-    }
-
-    .bullet-list li {
-      margin: 0 0 1.1mm;
-    }
-
-    .bullet-list li:last-child {
-      margin-bottom: 0;
-    }
-
-    .proposal-topline {
-      display: flex;
-      justify-content: space-between;
-      gap: 8mm;
-      align-items: flex-start;
+      font-family: var(--heading-font);
+      font-size: var(--flow-title-size);
+      line-height: var(--flow-title-line);
+      font-weight: var(--decor-doc-name-font-weight, 700);
+      letter-spacing: var(--decor-doc-name-letter-spacing, -0.015em);
+      color: var(--accent);
+      overflow-wrap: anywhere;
     }
 
     .proposal-title {
       margin: 0;
       font-family: var(--heading-font);
-      font-size: 17pt;
-      line-height: 1.14;
-      font-weight: 700;
+      font-size: var(--proposal-title-size, var(--flow-title-size));
+      line-height: var(--proposal-title-line, var(--flow-title-line));
+      font-weight: var(--decor-proposal-title-font-weight, 700);
+      letter-spacing: var(--decor-proposal-title-letter-spacing, -0.015em);
+      font-style: var(--decor-proposal-title-font-style, normal);
+      color: var(--accent);
+      overflow-wrap: anywhere;
     }
 
-    .proposal-meta {
+    .doc-title {
       margin: 0;
-      font-size: 9pt;
+      font-size: var(--flow-subtitle-size);
+      line-height: var(--flow-subtitle-line);
+      font-style: var(--decor-doc-title-font-style, normal);
       color: var(--muted);
+      min-width: 0;
+      max-width: 100%;
+      overflow-wrap: anywhere;
     }
 
-    .proposal-block {
-      margin: 0 0 4.4mm;
-      font-size: 10pt;
-      line-height: 1.55;
-      white-space: pre-wrap;
+    .doc-summary {
+      margin: 0;
+      max-width: var(--flow-summary-measure);
+      min-width: 0;
+      font-size: var(--flow-summary-size);
+      line-height: var(--flow-summary-line);
+      overflow-wrap: anywhere;
     }
 
+    .section {
+      margin-bottom: var(--flow-section-gap);
+      break-inside: auto;
+      page-break-inside: auto;
+    }
+
+    .section:last-child,
+    .entry:last-child,
     .proposal-block:last-child {
       margin-bottom: 0;
     }
 
-    .proposal-closing {
-      margin-top: 7mm;
+    .section[data-keep="compact"],
+    .entry-lead,
+    .proposal-block--closing,
+    .proposal-block--salutation {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
+    .section-title {
+      margin: 0 0 var(--flow-stack-gap);
+      font-family: var(--decor-section-title-font-family, var(--heading-font));
+      font-size: var(--flow-label-size);
+      line-height: var(--flow-label-line);
+      font-weight: var(--decor-section-title-font-weight, 700);
+      text-transform: var(--decor-section-title-text-transform, uppercase);
+      letter-spacing: var(--decor-section-title-letter-spacing, 0.14em);
+      color: var(--accent);
+    }
+
+    .section--ruled {
+      border-top: var(--decor-section-rule-width) solid var(--line);
+      padding-top: var(--flow-rule-pad-top);
+    }
+
+    .meta-list {
+      display: grid;
+      gap: var(--flow-list-gap);
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      min-width: 0;
+      max-width: 100%;
+    }
+
+    .meta-item {
+      min-width: 0;
+    }
+
+    .meta-label {
+      display: block;
+      margin-bottom: var(--flow-list-gap);
+      font-family: var(--decor-meta-label-font-family, var(--heading-font));
+      font-size: var(--flow-label-size);
+      line-height: var(--flow-label-line);
+      text-transform: var(--decor-meta-label-text-transform, uppercase);
+      letter-spacing: var(--decor-meta-label-letter-spacing, 0.12em);
+      color: var(--muted);
+    }
+
+    .meta-value {
+      display: block;
+      min-width: 0;
+      max-width: 100%;
+      font-size: var(--flow-meta-size);
+      line-height: var(--flow-meta-line);
+      overflow-wrap: anywhere;
+      white-space: pre-line;
+    }
+
+    .tag-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--flow-tag-row-gap) var(--flow-tag-gap);
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      min-width: 0;
+      max-width: 100%;
+      align-content: flex-start;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-width: 0;
+      max-width: 100%;
+      border: var(--decor-tag-border-width) solid var(--line);
+      border-radius: var(--decor-tag-border-radius);
+      padding: var(--flow-tag-pad-block) var(--flow-tag-pad-inline);
+      font-size: var(--flow-label-size);
+      line-height: var(--flow-label-line);
+      background: var(--tag-fill);
+      overflow-wrap: anywhere;
+      text-align: left;
+    }
+
+    .entry {
+      margin-bottom: var(--flow-entry-gap);
+    }
+
+    .entry-lead {
+      display: grid;
+      gap: var(--flow-entry-head-gap);
+    }
+
+    .entry-head {
+      display: grid;
+      grid-template-columns:
+        minmax(0, 1fr)
+        fit-content(var(--flow-entry-meta-width));
+      gap: var(--flow-entry-gap);
+      align-items: start;
+    }
+
+    .entry-head > * {
+      min-width: 0;
+    }
+
+    .entry-title {
+      margin: 0;
+      min-width: 0;
+      max-width: 100%;
+      font-family: var(--decor-entry-title-font-family, var(--body-font));
+      font-size: var(--flow-body-size);
+      line-height: var(--flow-meta-line);
+      font-weight: var(--decor-entry-title-font-weight, 700);
+      overflow-wrap: anywhere;
+    }
+
+    .entry-meta {
+      margin: 0;
+      min-width: 0;
+      max-width: 100%;
+      font-size: var(--flow-meta-size);
+      line-height: var(--flow-meta-line);
+      font-style: var(--decor-entry-meta-font-style, normal);
+      color: var(--muted);
+      text-align: right;
+      white-space: pre-line;
+      overflow-wrap: anywhere;
+    }
+
+    .entry-summary,
+    .proposal-block {
+      margin: 0 0 var(--flow-entry-head-gap);
+      min-width: 0;
+      max-width: 100%;
+      font-size: var(--flow-body-size);
+      line-height: var(--flow-body-line);
+      overflow-wrap: anywhere;
+      white-space: pre-wrap;
+    }
+
+    .bullet-list {
+      display: grid;
+      gap: var(--flow-list-gap);
+      margin: 0;
+      padding: 0 0 0 var(--experience-bullets-padding);
+    }
+
+    .bullet-list li {
+      line-height: var(--flow-body-line);
+    }
+
+    .proposal-topline {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) fit-content(var(--flow-proposal-meta-width));
+      gap: var(--flow-header-gap);
+      align-items: start;
+    }
+
+    .proposal-topline > * {
+      min-width: 0;
+    }
+
+    .proposal-meta {
+      margin: 0;
+      min-width: 0;
+      max-width: 100%;
+      font-size: var(--flow-meta-size);
+      line-height: var(--flow-meta-line);
+      font-style: var(--decor-proposal-meta-font-style, normal);
+      color: var(--muted);
+      overflow-wrap: anywhere;
+      white-space: pre-line;
+    }
+
+    .proposal-main-stack {
+      display: grid;
+      gap: var(--flow-proposal-gap);
+      max-width: var(--flow-reading-measure);
+      min-width: 0;
+    }
+
+    .proposal-block--subject {
+      margin: 0;
+      min-width: 0;
+      max-width: 100%;
+      font-family: var(--heading-font);
+      font-size: var(--flow-subtitle-size);
+      line-height: var(--flow-meta-line);
+      font-weight: 700;
+      color: var(--ink);
+      overflow-wrap: anywhere;
+      white-space: pre-wrap;
+    }
+
+    .proposal-block--closing {
+      margin-top: var(--flow-closing-gap);
+      display: grid;
+      gap: 0;
+      min-width: 0;
     }
 
     .proposal-signoff,
     .proposal-signature {
       margin: 0;
+      min-width: 0;
+      max-width: 100%;
       white-space: pre-wrap;
+      overflow-wrap: anywhere;
     }
 
-    .resume--styled .robial-sidebar,
-    .proposal--styled .robial-sidebar {
-      padding: 4mm 3mm 4mm 0;
-      border-top: 0.7mm solid var(--accent);
+    .proposal-signoff {
+      break-after: avoid;
+      page-break-after: avoid;
+      font-style: var(--decor-signoff-font-style, normal);
     }
 
-    .resume--styled .section-title,
-    .proposal--styled .section-title {
-      color: var(--accent);
+    .proposal-signature {
+      margin-top: var(--flow-closing-name-gap);
+      font-weight: var(--decor-signature-font-weight, 700);
+      text-transform: var(--decor-signature-text-transform, none);
+      font-variant-caps: var(--decor-signature-font-variant-caps, normal);
+      letter-spacing: var(--decor-signature-letter-spacing, normal);
     }
 
-    .resume--styled .doc-name,
-    .proposal--styled .proposal-title {
-      color: var(--accent);
+    .resume-shell--onecol .export-page,
+    .proposal-shell--onecol .export-page {
+      display: grid;
+      gap: var(--flow-header-gap);
+      align-content: start;
     }
 
-    .resume--styled.layout-editorial .robial-main,
-    .proposal--styled.layout-editorial .robial-main {
-      border-left: 0.6mm solid var(--soft);
-      padding-left: 5mm;
+    .resume-shell--onecol .export-header,
+    .proposal-shell--onecol .export-header {
+      display: grid;
+      gap: var(--flow-stack-gap);
+      min-width: 0;
+      border-bottom: var(--decor-header-border-width) solid var(--header-rule);
+      padding-bottom: var(--flow-rule-pad-top);
     }
 
-    .resume--styled.layout-modernist .robial-sidebar,
-    .proposal--styled.layout-modernist .robial-sidebar {
-      background: linear-gradient(
-        180deg,
-        rgba(31, 29, 26, 0.05),
-        rgba(31, 29, 26, 0)
-      );
-      padding: 4mm 3mm 5mm 2.5mm;
+    .resume-shell--onecol .section--ruled,
+    .proposal-shell--onecol .section--ruled {
+      border-top-color: var(--line);
     }
 
-    .resume--styled.layout-volk-register .robial-header__full,
-    .proposal--styled.layout-volk-register .robial-header__full {
-      border-bottom: 0.35mm solid var(--line);
-      padding-bottom: 4mm;
+    .proposal-shell--onecol .proposal-main-stack {
+      gap: var(--flow-proposal-gap);
     }
 
-    .resume--styled.layout-two-column .tag,
-    .proposal--styled.layout-two-column .tag {
-      background: rgba(31, 29, 26, 0.03);
+    body.resume-export.resume-layout--editorial.resume--styled .export-header,
+    body.resume-export.resume-layout--quire.resume--styled .export-header,
+    body.proposal-export.proposal-template--editorial-wide.proposal--styled .export-header,
+    body.proposal-export.proposal-template--quire-margin.proposal--styled .export-header {
+      box-shadow: var(--decor-header-aux-shadow, none);
     }
+${appearanceOnlyCss}
   `;
 }
 
 function buildHtmlDocument(args: {
-  title: string;
   bodyClassName: string;
   bodyMarkup: string;
+  documentKind: "proposal" | "resume";
+  lang?: string | null;
+  mode: ExportMode;
+  proposalTemplateId?: ProposalTemplateId | null;
   stylePreset?: VerbatiStylePreset | null;
+  title: string;
 }): string {
   return `<!doctype html>
-<html lang="en">
+<html lang="${escapeHtml(getExportHtmlLang(args.lang))}">
   <head>
     <meta charset="utf-8" />
     <title>${escapeHtml(args.title)}</title>
-    <style>${buildPageCss(args.stylePreset)}</style>
+    <style>${buildPageCss({
+      documentKind: args.documentKind,
+      mode: args.mode,
+      proposalTemplateId: args.proposalTemplateId,
+      stylePreset: args.stylePreset,
+    })}</style>
   </head>
-  <body class="${escapeHtml(args.bodyClassName)}">
+  <body class="${escapeHtml(args.bodyClassName)}" data-export-mode="${escapeHtml(args.mode)}">
     ${args.bodyMarkup}
   </body>
 </html>`;
 }
 
-function renderResumeItems(items: ResumePrintItem[]): string {
-  if (items.length === 0) {
+function renderResumeItems(args: {
+  items: ResumePrintItem[];
+  locale?: string | null;
+}): string {
+  if (args.items.length === 0) {
     return "";
   }
 
-  return `<ul class="meta-list">${items
+  return `<ul class="meta-list">${args.items
     .map(
-      (item) => `<li>
-        <span class="meta-label">${escapeHtml(item.label)}</span>
+      (item) => `<li class="meta-item">
+        <span class="meta-label">${escapeHtml(localizeStructuredLabel(item.label, args.locale))}</span>
         <span class="meta-value">${escapeHtml(item.value)}</span>
       </li>`,
     )
@@ -398,167 +1285,268 @@ function renderResumeTagList(values: string[]): string {
     return "";
   }
 
-  return `<div class="tag-list">${values
-    .map((value) => `<span class="tag">${escapeHtml(value)}</span>`)
-    .join("")}</div>`;
+  return `<ul class="tag-list">${values
+    .map((value) => `<li class="tag">${escapeHtml(value)}</li>`)
+    .join("")}</ul>`;
+}
+
+function renderSection(args: {
+  block: string;
+  content: string;
+  locale?: string | null;
+  ruled?: boolean;
+  keep?: boolean;
+  titleKey: string;
+}) {
+  if (!args.content) {
+    return "";
+  }
+
+  return `<section class="${joinClassNames([
+    "section",
+    `section--${args.block}`,
+    args.ruled ? "section--ruled" : "",
+  ])}" data-block="${escapeHtml(args.block)}"${args.keep ? ' data-keep="compact"' : ""}>
+    <h2 class="section-title">${escapeHtml(getLocalizedExportLabel(args.titleKey, args.locale))}</h2>
+    ${args.content}
+  </section>`;
 }
 
 function renderResumeHtml(args: {
   data: ResumePrintSource;
-  mode: "ats" | "styled";
+  mode: ExportMode;
   stylePreset?: VerbatiStylePreset | null;
 }): string {
-  const stylePreset = normalizeStylePreset(args.stylePreset);
-  const sidebarSections = [
-    args.data.contact.length > 0
-      ? `<section class="section rule">
-          <h2 class="section-title">Contact</h2>
-          ${renderResumeItems(args.data.contact)}
-        </section>`
-      : "",
-    args.data.metadata.length > 0
-      ? `<section class="section rule">
-          <h2 class="section-title">Details</h2>
-          ${renderResumeItems(args.data.metadata)}
-        </section>`
-      : "",
-    args.data.skills.length > 0
-      ? `<section class="section rule">
-          <h2 class="section-title">Skills</h2>
-          ${renderResumeTagList(args.data.skills)}
-        </section>`
-      : "",
-    args.data.languages.length > 0
-      ? `<section class="section rule">
-          <h2 class="section-title">Languages</h2>
-          ${renderResumeItems(
-            args.data.languages.map((item) => ({
-              label: item.name,
-              value: item.level || "Working proficiency",
-            })),
-          )}
-        </section>`
-      : "",
-  ]
-    .filter(Boolean)
+  const locale = args.data.locale;
+  const profile = resolveResumeExportProfile({
+    mode: args.mode,
+    layout: normalizeStylePreset(args.stylePreset).layout,
+    stylePreset: args.stylePreset,
+  });
+  const contactSection = renderSection({
+    block: "contact",
+    content: renderResumeItems({ items: args.data.contact, locale }),
+    keep: true,
+    locale,
+    ruled: true,
+    titleKey: "contact",
+  });
+  const detailsSection = renderSection({
+    block: "details",
+    content: renderResumeItems({ items: args.data.metadata, locale }),
+    keep: true,
+    locale,
+    ruled: true,
+    titleKey: "details",
+  });
+  const skillsSection = renderSection({
+    block: "skills",
+    content: renderResumeTagList(args.data.skills),
+    keep: true,
+    locale,
+    ruled: true,
+    titleKey: "skills",
+  });
+  const languagesSection = renderSection({
+    block: "languages",
+    content: renderResumeItems({
+      items: args.data.languages.map((item) => ({
+        label: item.name,
+        value:
+          item.level || localizeStructuredLabel("Working proficiency", locale),
+      })),
+      locale,
+    }),
+    keep: true,
+    locale,
+    ruled: true,
+    titleKey: "languages",
+  });
+
+  const experienceContent = args.data.experience
+    .map(
+      (item) => `<article class="entry entry--experience">
+        <div class="entry-lead">
+          <div class="entry-head">
+            <h3 class="entry-title">${escapeHtml(
+              [item.role, item.company].filter(Boolean).join(" · "),
+            )}</h3>
+            <p class="entry-meta">${escapeHtml(
+              [item.period, item.location].filter(Boolean).join("\n"),
+            )}</p>
+          </div>
+          ${item.summary ? `<p class="entry-summary">${escapeHtml(item.summary)}</p>` : ""}
+        </div>
+        ${
+          item.bullets.length > 0
+            ? `<ul class="bullet-list">${item.bullets
+                .map((bullet) => `<li>${escapeHtml(bullet)}</li>`)
+                .join("")}</ul>`
+            : ""
+        }
+      </article>`,
+    )
     .join("");
 
-  const mainSections = [
-    args.data.experience.length > 0
-      ? `<section class="section">
-          <h2 class="section-title">Experience</h2>
-          ${args.data.experience
-            .map(
-              (item) => `<article class="entry">
-                <div class="entry-head">
-                  <h3 class="entry-title">${escapeHtml(
-                    [item.role, item.company].filter(Boolean).join(" · "),
-                  )}</h3>
-                  <p class="entry-meta">${escapeHtml(
-                    [item.period, item.location].filter(Boolean).join("\n"),
-                  )}</p>
-                </div>
-                ${item.summary ? `<p class="entry-summary">${escapeHtml(item.summary)}</p>` : ""}
-                ${
-                  item.bullets.length > 0
-                    ? `<ul class="bullet-list">${item.bullets
-                        .map((bullet) => `<li>${escapeHtml(bullet)}</li>`)
-                        .join("")}</ul>`
-                    : ""
-                }
-              </article>`,
-            )
-            .join("")}
-        </section>`
-      : "",
-    args.data.projects.length > 0
-      ? `<section class="section">
-          <h2 class="section-title">Projects</h2>
-          ${args.data.projects
-            .map(
-              (item) => `<article class="entry">
-                <div class="entry-head">
-                  <h3 class="entry-title">${escapeHtml(item.name)}</h3>
-                  <p class="entry-meta">${escapeHtml(item.meta)}</p>
-                </div>
-                <p class="entry-summary">${escapeHtml(item.description)}</p>
-              </article>`,
-            )
-            .join("")}
-        </section>`
-      : "",
-    args.data.education.length > 0
-      ? `<section class="section">
-          <h2 class="section-title">Education</h2>
-          ${args.data.education
-            .map(
-              (item) => `<article class="entry">
-                <div class="entry-head">
-                  <h3 class="entry-title">${escapeHtml(item.degree)}</h3>
-                  <p class="entry-meta">${escapeHtml(item.period)}</p>
-                </div>
-                <p class="entry-summary">${escapeHtml(item.school)}</p>
-              </article>`,
-            )
-            .join("")}
-        </section>`
-      : "",
-    args.data.achievements.length > 0
-      ? `<section class="section">
-          <h2 class="section-title">Achievements</h2>
-          <ul class="bullet-list">${args.data.achievements
+  const projectContent = args.data.projects
+    .map(
+      (item) => `<article class="entry entry--project">
+        <div class="entry-lead">
+          <div class="entry-head">
+            <h3 class="entry-title">${escapeHtml(item.name)}</h3>
+            <p class="entry-meta">${escapeHtml(item.meta)}</p>
+          </div>
+          <p class="entry-summary">${escapeHtml(item.description)}</p>
+        </div>
+      </article>`,
+    )
+    .join("");
+
+  const educationContent = args.data.education
+    .map(
+      (item) => `<article class="entry entry--education">
+        <div class="entry-lead">
+          <div class="entry-head">
+            <h3 class="entry-title">${escapeHtml(item.degree)}</h3>
+            <p class="entry-meta">${escapeHtml(item.period)}</p>
+          </div>
+          <p class="entry-summary">${escapeHtml(item.school)}</p>
+        </div>
+      </article>`,
+    )
+    .join("");
+
+  const experienceSection = renderSection({
+    block: "experience",
+    content: experienceContent,
+    locale,
+    titleKey: "experience",
+  });
+  const projectSection = renderSection({
+    block: "projects",
+    content: projectContent,
+    locale,
+    titleKey: "projects",
+  });
+  const educationSection = renderSection({
+    block: "education",
+    content: educationContent,
+    locale,
+    titleKey: "education",
+  });
+  const achievementsSection = renderSection({
+    block: "achievements",
+    content:
+      args.data.achievements.length > 0
+        ? `<ul class="bullet-list">${args.data.achievements
             .map((item) => `<li>${escapeHtml(item)}</li>`)
-            .join("")}</ul>
-        </section>`
-      : "",
-    args.data.hobbies.length > 0
-      ? `<section class="section">
-          <h2 class="section-title">Interests</h2>
-          <p class="entry-summary">${escapeHtml(args.data.hobbies.join(" · "))}</p>
-        </section>`
-      : "",
+            .join("")}</ul>`
+        : "",
+    locale,
+    titleKey: "achievements",
+  });
+  const interestsSection = renderSection({
+    block: "interests",
+    content:
+      args.data.hobbies.length > 0
+        ? `<p class="entry-summary">${escapeHtml(args.data.hobbies.join(" · "))}</p>`
+        : "",
+    locale,
+    titleKey: "interests",
+  });
+  const nameMarkup = `<h1 class="doc-name">${escapeHtml(args.data.profile.name)}</h1>`;
+  const titleMarkup = args.data.profile.title
+    ? `<p class="doc-title">${escapeHtml(args.data.profile.title)}</p>`
+    : "";
+  const summaryMarkup = args.data.profile.summary
+    ? `<p class="doc-summary" data-block="summary">${escapeHtml(args.data.profile.summary)}</p>`
+    : "";
+  const identityMarkup = [nameMarkup, titleMarkup].filter(Boolean).join("\n");
+  const headerMarkup = [identityMarkup, summaryMarkup].filter(Boolean).join("\n");
+  const splitSidebarSections = [
+    contactSection,
+    detailsSection,
+    skillsSection,
+    languagesSection,
   ]
     .filter(Boolean)
     .join("");
-
-  return buildHtmlDocument({
-    title: `${args.data.title} - ${args.mode === "ats" ? "ATS" : "Styled"}`,
-    bodyClassName: joinClassNames([
-      "resume-export",
-      `resume--${args.mode}`,
-      args.mode === "styled" ? `layout-${stylePreset.layout}` : "",
-    ]),
-    stylePreset: args.mode === "styled" ? stylePreset : undefined,
-    bodyMarkup: `<main class="export-page">
-      <header class="robial-header">
+  const splitMainSections = [
+    experienceSection,
+    projectSection,
+    educationSection,
+    achievementsSection,
+    interestsSection,
+  ]
+    .filter(Boolean)
+    .join("");
+  const oneColumnSections = [
+    contactSection,
+    detailsSection,
+    experienceSection,
+    projectSection,
+    educationSection,
+    skillsSection,
+    languagesSection,
+    achievementsSection,
+    interestsSection,
+  ]
+    .filter(Boolean)
+    .join("");
+  const baselineBodyMarkup =
+    profile.shell === "onecol"
+      ? `<main class="export-page" data-export-doc="resume">
+      <header class="export-header" data-block="header">
+        ${headerMarkup}
+      </header>
+      <section class="resume-main-stack">
+        ${oneColumnSections}
+      </section>
+    </main>`
+      : `<main class="export-page" data-export-doc="resume">
+      <header class="robial-header" data-block="header">
         <div class="robial-header__full">
-          <h1 class="doc-name">${escapeHtml(args.data.profile.name)}</h1>
-          ${
-            args.data.profile.title
-              ? `<p class="doc-title">${escapeHtml(args.data.profile.title)}</p>`
-              : ""
-          }
-          ${
-            args.data.profile.summary
-              ? `<p class="doc-summary">${escapeHtml(args.data.profile.summary)}</p>`
-              : ""
-          }
+          ${headerMarkup}
         </div>
       </header>
       <section class="robial-body">
-        <aside class="robial-sidebar">${sidebarSections}</aside>
-        <section class="robial-main">${mainSections}</section>
+        <aside class="robial-sidebar">
+          <div class="resume-sidebar-stack">${splitSidebarSections}</div>
+        </aside>
+        <section class="robial-main">
+          <div class="resume-main-stack">${splitMainSections}</div>
+        </section>
       </section>
-    </main>`,
+    </main>`;
+  return buildHtmlDocument({
+    bodyClassName: joinClassNames([
+      "resume-export",
+      `resume--${args.mode}`,
+      `resume-layout--${profile.id}`,
+      `resume-shell--${profile.shell}`,
+    ]),
+    bodyMarkup: baselineBodyMarkup,
+    documentKind: "resume",
+    lang: args.data.locale,
+    mode: args.mode,
+    stylePreset: args.stylePreset,
+    title: `${args.data.title} - ${args.mode === "ats" ? "ATS" : "Styled"}`,
   });
 }
 
-function renderProposalBlocks(blocks: ProposalPrintBlock[]): string {
+function renderProposalBlocks(
+  blocks: ProposalPrintBlock[],
+  locale?: string | null,
+): string {
   return blocks
     .map((block) => {
       if (block.type === "closing") {
-        return `<div class="proposal-block proposal-closing">
-          ${block.signOff ? `<p class="proposal-signoff">${escapeHtml(block.signOff)}</p>` : ""}
+        return `<div class="proposal-block proposal-block--closing" data-block="closing">
+          ${
+            block.signOff
+              ? `<p class="proposal-signoff">${escapeHtml(block.signOff)}</p>`
+              : ""
+          }
           ${
             block.signatureName
               ? `<p class="proposal-signature">${escapeHtml(block.signatureName)}</p>`
@@ -567,118 +1555,183 @@ function renderProposalBlocks(blocks: ProposalPrintBlock[]): string {
         </div>`;
       }
 
-      return `<p class="proposal-block">${escapeHtml(block.text)}</p>`;
+      return `<p class="${joinClassNames([
+        "proposal-block",
+        block.type === "salutation" ? "proposal-block--salutation" : "",
+      ])}">${escapeHtml(block.text)}</p>`;
     })
     .join("");
 }
 
-function renderProposalHeader(source: ProposalPrintSource): string {
-  const recipientLines = source.recipientDetails
-    ? source.recipientDetails
+function renderProposalHtml(args: {
+  data: ProposalPrintSource;
+  mode: ExportMode;
+  stylePreset?: VerbatiStylePreset | null;
+}): string {
+  const locale = args.data.locale;
+  const profile = resolveProposalExportProfile({
+    mode: args.mode,
+    proposalTemplateId: args.data.templateId,
+    stylePreset: args.stylePreset,
+  });
+  const recipientLines = args.data.recipientDetails
+    ? normalizeLocaleTypography(args.data.recipientDetails, locale)
         .split("\n")
         .map((line) => line.trim())
         .filter(Boolean)
     : [];
-
-  return `
-    <header class="robial-header">
-      <div class="robial-header__full">
-        <div class="proposal-topline">
-          <div>
-            <h1 class="proposal-title">${escapeHtml(source.documentTitle)}</h1>
-            ${
-              source.documentMeta
-                ? `<p class="proposal-meta">${escapeHtml(source.documentMeta)}</p>`
-                : ""
-            }
-          </div>
+  const senderLines = [
+    args.data.applicantHeader.name,
+    args.data.applicantHeader.role,
+    args.data.contactLine
+      ? normalizeLocaleTypography(args.data.contactLine, locale)
+      : "",
+  ].filter(Boolean);
+  const senderSection = renderSection({
+    block: "sender",
+    content:
+      senderLines.length > 0
+        ? `<ul class="meta-list">${senderLines
+            .map(
+              (line) =>
+                `<li class="meta-item"><span class="meta-value">${escapeHtml(line)}</span></li>`,
+            )
+            .join("")}</ul>`
+        : "",
+    keep: true,
+    locale,
+    ruled: true,
+    titleKey: "sender",
+  });
+  const recipientSection = renderSection({
+    block: "recipient",
+    content:
+      recipientLines.length > 0
+        ? `<ul class="meta-list">${recipientLines
+            .map(
+              (line) =>
+                `<li class="meta-item"><span class="meta-value">${escapeHtml(line)}</span></li>`,
+            )
+            .join("")}</ul>`
+        : "",
+    keep: true,
+    locale,
+    ruled: true,
+    titleKey: "recipient",
+  });
+  const subjectSection = args.data.headerVisibility.showSubject
+    ? renderSection({
+        block: "subject",
+        content: `<p class="proposal-block proposal-block--subject">${escapeHtml(
+          normalizeLocaleTypography(args.data.documentTitle, locale),
+        )}</p>`,
+        keep: true,
+        locale,
+        titleKey: "subject",
+      })
+    : "";
+  const headerMarkup =
+    profile.shell === "onecol"
+      ? `<h1 class="proposal-title">${escapeHtml(
+          normalizeLocaleTypography(args.data.documentTitle, locale),
+        )}</h1>
+      ${
+        args.data.documentMeta
+          ? `<p class="proposal-meta">${escapeHtml(
+              normalizeLocaleTypography(args.data.documentMeta, locale),
+            )}</p>`
+          : ""
+      }
+      ${
+        args.data.headerVisibility.showDate && args.data.letterDate
+          ? `<p class="proposal-meta">${escapeHtml(
+              normalizeLocaleTypography(args.data.letterDate, locale),
+            )}</p>`
+          : ""
+      }`
+      : `<div class="proposal-topline">
+        <div>
+          <h1 class="proposal-title">${escapeHtml(
+            normalizeLocaleTypography(args.data.documentTitle, locale),
+          )}</h1>
           ${
-            source.headerVisibility.showDate && source.letterDate
-              ? `<p class="proposal-meta">${escapeHtml(source.letterDate)}</p>`
+            args.data.documentMeta
+              ? `<p class="proposal-meta">${escapeHtml(
+                  normalizeLocaleTypography(args.data.documentMeta, locale),
+                )}</p>`
               : ""
           }
         </div>
-      </div>
-    </header>
-    <section class="robial-body">
-      <aside class="robial-sidebar">
         ${
-          source.headerVisibility.showSender
-            ? `<section class="section rule">
-                <h2 class="section-title">Sender</h2>
-                <ul class="meta-list">
-                  ${
-                    source.applicantHeader.name
-                      ? `<li><span class="meta-value">${escapeHtml(source.applicantHeader.name)}</span></li>`
-                      : ""
-                  }
-                  ${
-                    source.applicantHeader.role
-                      ? `<li><span class="meta-value">${escapeHtml(source.applicantHeader.role)}</span></li>`
-                      : ""
-                  }
-                  ${
-                    source.contactLine
-                      ? `<li><span class="meta-value">${escapeHtml(source.contactLine)}</span></li>`
-                      : ""
-                  }
-                </ul>
-              </section>`
+          args.data.headerVisibility.showDate && args.data.letterDate
+            ? `<p class="proposal-meta">${escapeHtml(
+                normalizeLocaleTypography(args.data.letterDate, locale),
+              )}</p>`
             : ""
         }
-        ${
-          source.headerVisibility.showRecipient && recipientLines.length > 0
-            ? `<section class="section rule">
-                <h2 class="section-title">Recipient</h2>
-                <ul class="meta-list">
-                  ${recipientLines
-                    .map((line) => `<li><span class="meta-value">${escapeHtml(line)}</span></li>`)
-                    .join("")}
-                </ul>
-              </section>`
-            : ""
-        }
-      </aside>
-      <section class="robial-main">
-        ${
-          source.headerVisibility.showSubject
-            ? `<section class="section">
-                <h2 class="section-title">Subject</h2>
-                <p class="proposal-block">${escapeHtml(source.documentTitle)}</p>
-              </section>`
-            : ""
-        }
-        <section class="section">
-          ${renderProposalBlocks(source.body)}
-        </section>
-      </section>
-    </section>
-  `;
-}
-
-function renderProposalHtml(args: {
-  data: ProposalPrintSource;
-  mode: "ats" | "styled";
-  stylePreset?: VerbatiStylePreset | null;
-}): string {
-  const stylePreset = normalizeStylePreset(args.stylePreset);
+      </div>`;
 
   return buildHtmlDocument({
-    title: `${args.data.title} - ${args.mode === "ats" ? "ATS" : "Styled"}`,
     bodyClassName: joinClassNames([
       "proposal-export",
       `proposal--${args.mode}`,
-      args.mode === "styled" ? `layout-${stylePreset.layout}` : "",
+      `proposal-template--${String(profile.id).replaceAll("_", "-")}`,
+      `proposal-shell--${profile.shell}`,
     ]),
-    stylePreset: args.mode === "styled" ? stylePreset : undefined,
-    bodyMarkup: `<main class="export-page">${renderProposalHeader(args.data)}</main>`,
+    bodyMarkup:
+      profile.shell === "onecol"
+        ? `<main class="export-page" data-export-doc="proposal">
+      <header class="export-header" data-block="header">
+        ${headerMarkup}
+      </header>
+      <section class="proposal-support-stack">
+        ${senderSection}
+        ${recipientSection}
+        ${subjectSection}
+      </section>
+      <section class="section" data-block="body">
+        <div class="proposal-main-stack">
+          ${renderProposalBlocks(args.data.body, locale)}
+        </div>
+      </section>
+    </main>`
+        : `<main class="export-page" data-export-doc="proposal">
+      <header class="robial-header" data-block="header">
+        <div class="robial-header__full">
+          ${headerMarkup}
+        </div>
+      </header>
+      <section class="robial-body">
+        <aside class="robial-sidebar">
+          <div class="proposal-support-stack">
+            ${senderSection}
+            ${recipientSection}
+          </div>
+        </aside>
+        <section class="robial-main">
+          ${subjectSection}
+          <section class="section" data-block="body">
+            <div class="proposal-main-stack">
+              ${renderProposalBlocks(args.data.body, locale)}
+            </div>
+          </section>
+        </section>
+      </section>
+    </main>`,
+    documentKind: "proposal",
+    lang: args.data.locale,
+    mode: args.mode,
+    proposalTemplateId: args.data.templateId,
+    stylePreset: args.stylePreset,
+    title: `${args.data.title} - ${args.mode === "ats" ? "ATS" : "Styled"}`,
   });
 }
 
 export function renderResumeAtsExportDocument(
   data: ResumePrintSource,
+  stylePreset?: VerbatiStylePreset | null,
 ): string {
-  return renderResumeHtml({ data, mode: "ats" });
+  return renderResumeHtml({ data, mode: "ats", stylePreset });
 }
 
 export function renderResumeStyledExportDocument(args: {
@@ -694,8 +1747,9 @@ export function renderResumeStyledExportDocument(args: {
 
 export function renderProposalAtsExportDocument(
   data: ProposalPrintSource,
+  stylePreset?: VerbatiStylePreset | null,
 ): string {
-  return renderProposalHtml({ data, mode: "ats" });
+  return renderProposalHtml({ data, mode: "ats", stylePreset });
 }
 
 export function renderProposalStyledExportDocument(args: {
@@ -711,113 +1765,347 @@ export function renderProposalStyledExportDocument(args: {
 
 function buildDocxParagraph(
   text: string,
-  options?: {
-    heading?: HeadingLevel;
-    spacingAfter?: number;
-    spacingBefore?: number;
-    bold?: boolean;
-    italics?: boolean;
-    alignment?: (typeof AlignmentType)[keyof typeof AlignmentType];
-  },
+  defaults: DocxParagraphDefaults,
+  options: DocxParagraphOptions = {},
 ): Paragraph {
   return new Paragraph({
-    heading: options?.heading,
-    alignment: options?.alignment,
+    alignment: options.alignment,
+    heading: options.heading,
+    keepLines: options.keepLines ?? true,
+    keepNext: options.keepNext ?? false,
     spacing: {
-      before: options?.spacingBefore ?? 0,
-      after: options?.spacingAfter ?? 160,
+      before: options.spacingBefore ?? 0,
+      after: options.spacingAfter ?? defaults.bodyGapTwip,
+      line: options.line ?? defaults.bodyLineTwip,
+      lineRule: LineRuleType.AUTO,
     },
     children: [
       new TextRun({
         text,
-        bold: options?.bold,
-        italics: options?.italics,
+        bold: options.bold,
+        color: options.color ?? defaults.colorHex,
+        font: options.font,
+        size: options.size ?? defaults.bodySizeHalfPt,
       }),
     ],
   });
 }
 
-export async function buildProposalDocxBuffer(args: {
-  data: ProposalPrintSource;
+export async function buildResumeDocxBuffer(args: {
+  data: ResumePrintSource;
   stylePreset?: VerbatiStylePreset | null;
 }): Promise<Buffer> {
   const resolvedStyle = normalizeStylePreset(args.stylePreset);
-  const fonts = getVerbatiTypographyFamilies(resolvedStyle);
-  const bodyParagraphs: Paragraph[] = [];
+  const locale = args.data.locale;
+  const profile = resolveResumeExportProfile({
+    mode: "styled",
+    layout: resolvedStyle.layout,
+    stylePreset: args.stylePreset,
+  });
+  const headingFont = resolvePrimaryFontFamily(
+    profile.canonical.appearance.font.heading.family,
+    "Times New Roman",
+  );
+  const bodyFont = resolvePrimaryFontFamily(
+    profile.canonical.appearance.font.body.family,
+    "Helvetica Neue",
+  );
+  const docxInk = resolveDocxSafeColorHex(
+    profile.canonical.appearance.theme.ink,
+  );
+  const docxTokens = resolveResumeDocxSurfaceTokens(profile.canonical);
+  const docxDefaults = {
+    bodySizeHalfPt: docxTokens.bodySizeHalfPt,
+    bodyLineTwip: docxTokens.bodyLineTwip,
+    bodyGapTwip: docxTokens.bodyGapTwip,
+    colorHex: docxInk,
+  };
+  const bodyParagraphs: Paragraph[] = [
+    buildDocxParagraph(args.data.profile.name, docxDefaults, {
+      bold: true,
+      font: headingFont,
+      keepNext: true,
+      line: docxTokens.compactLineTwip,
+      size: docxTokens.titleSizeHalfPt,
+      spacingAfter: docxTokens.compactGapTwip,
+    }),
+  ];
 
-  if (args.data.headerVisibility.showSender) {
-    [args.data.applicantHeader.name, args.data.applicantHeader.role, args.data.contactLine]
+  const pushSectionHeading = (key: string) => {
+    bodyParagraphs.push(
+      buildDocxParagraph(getLocalizedExportLabel(key, locale), docxDefaults, {
+        bold: true,
+        font: headingFont,
+        keepNext: true,
+        line: docxTokens.compactLineTwip,
+        size: docxTokens.labelSizeHalfPt,
+        spacingAfter: docxTokens.compactGapTwip,
+        spacingBefore: docxTokens.sectionGapTwip,
+      }),
+    );
+  };
+
+  const buildCompactLine = (items: ResumePrintItem[]) =>
+    items
+      .map((item) =>
+        [localizeStructuredLabel(item.label, locale), item.value]
+          .filter(Boolean)
+          .join(": "),
+      )
       .filter(Boolean)
-      .forEach((line, index) => {
+      .join(" · ");
+
+  if (args.data.profile.title) {
+    bodyParagraphs.push(
+      buildDocxParagraph(args.data.profile.title, docxDefaults, {
+        font: bodyFont,
+        line: docxTokens.compactLineTwip,
+        size: docxTokens.bodySizeHalfPt,
+        spacingAfter: docxTokens.compactGapTwip,
+      }),
+    );
+  }
+
+  const headerMetaLine = buildCompactLine([
+    ...args.data.contact,
+    ...args.data.metadata,
+  ]);
+  if (headerMetaLine) {
+    bodyParagraphs.push(
+      buildDocxParagraph(headerMetaLine, docxDefaults, {
+        font: bodyFont,
+        line: docxTokens.compactLineTwip,
+        size: docxTokens.metaSizeHalfPt,
+        spacingAfter: docxTokens.sectionGapTwip,
+      }),
+    );
+  }
+
+  if (args.data.profile.summary) {
+    pushSectionHeading("summary");
+    bodyParagraphs.push(
+      buildDocxParagraph(args.data.profile.summary, docxDefaults, {
+        font: bodyFont,
+        line: docxTokens.bodyLineTwip,
+        spacingAfter: docxTokens.bodyGapTwip,
+      }),
+    );
+  }
+
+  if (args.data.experience.length > 0) {
+    pushSectionHeading("experience");
+    args.data.experience.forEach((item) => {
+      bodyParagraphs.push(
+        buildDocxParagraph(
+          [item.role, item.company].filter(Boolean).join(" · ") || "Experience",
+          docxDefaults,
+          {
+            bold: true,
+            font: headingFont,
+            keepNext: true,
+            line: docxTokens.compactLineTwip,
+            size: docxTokens.bodySizeHalfPt,
+            spacingAfter: docxTokens.compactGapTwip,
+          },
+        ),
+      );
+
+      const meta = [item.period, item.location].filter(Boolean).join(" · ");
+      if (meta) {
         bodyParagraphs.push(
-          buildDocxParagraph(line, {
-            bold: index === 0,
-            spacingAfter: 70,
+          buildDocxParagraph(meta, docxDefaults, {
+            font: bodyFont,
+            line: docxTokens.compactLineTwip,
+            size: docxTokens.metaSizeHalfPt,
+            spacingAfter: docxTokens.compactGapTwip,
+          }),
+        );
+      }
+
+      if (item.summary) {
+        bodyParagraphs.push(
+          buildDocxParagraph(item.summary, docxDefaults, {
+            font: bodyFont,
+            line: docxTokens.bodyLineTwip,
+            spacingAfter:
+              item.bullets.length > 0
+                ? docxTokens.compactGapTwip
+                : docxTokens.bodyGapTwip,
+          }),
+        );
+      }
+
+      item.bullets.forEach((bullet, index) => {
+        bodyParagraphs.push(
+          new Paragraph({
+            keepLines: true,
+            spacing: {
+              after:
+                index === item.bullets.length - 1
+                  ? docxTokens.bodyGapTwip
+                  : docxTokens.bulletGapTwip,
+              line: docxTokens.bodyLineTwip,
+              lineRule: LineRuleType.AUTO,
+            },
+            bullet: { level: 0 },
+            children: [
+              new TextRun({
+                text: bullet,
+                font: bodyFont,
+                size: docxTokens.bodySizeHalfPt,
+                color: docxInk,
+              }),
+            ],
           }),
         );
       });
-    bodyParagraphs.push(buildDocxParagraph("", { spacingAfter: 80 }));
+    });
   }
 
-  if (args.data.headerVisibility.showDate && args.data.letterDate) {
-    bodyParagraphs.push(buildDocxParagraph(args.data.letterDate, { spacingAfter: 180 }));
+  if (args.data.projects.length > 0) {
+    pushSectionHeading("projects");
+    args.data.projects.forEach((item) => {
+      bodyParagraphs.push(
+        buildDocxParagraph(item.name || "Project", docxDefaults, {
+          bold: true,
+          font: headingFont,
+          keepNext: true,
+          line: docxTokens.compactLineTwip,
+          size: docxTokens.bodySizeHalfPt,
+          spacingAfter: docxTokens.compactGapTwip,
+        }),
+      );
+      if (item.meta) {
+        bodyParagraphs.push(
+          buildDocxParagraph(item.meta, docxDefaults, {
+            font: bodyFont,
+            line: docxTokens.compactLineTwip,
+            size: docxTokens.metaSizeHalfPt,
+            spacingAfter: docxTokens.compactGapTwip,
+          }),
+        );
+      }
+      bodyParagraphs.push(
+        buildDocxParagraph(item.description, docxDefaults, {
+          font: bodyFont,
+          line: docxTokens.bodyLineTwip,
+          spacingAfter: docxTokens.bodyGapTwip,
+        }),
+      );
+    });
   }
 
-  if (args.data.headerVisibility.showRecipient && args.data.recipientDetails) {
-    args.data.recipientDetails
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .forEach((line) => {
-        bodyParagraphs.push(buildDocxParagraph(line, { spacingAfter: 60 }));
-      });
-    bodyParagraphs.push(buildDocxParagraph("", { spacingAfter: 120 }));
+  if (args.data.education.length > 0) {
+    pushSectionHeading("education");
+    args.data.education.forEach((item) => {
+      bodyParagraphs.push(
+        buildDocxParagraph(item.degree || "Education", docxDefaults, {
+          bold: true,
+          font: headingFont,
+          keepNext: true,
+          line: docxTokens.compactLineTwip,
+          size: docxTokens.bodySizeHalfPt,
+          spacingAfter: docxTokens.compactGapTwip,
+        }),
+      );
+
+      const meta = [item.school, item.period].filter(Boolean).join(" · ");
+      if (meta) {
+        bodyParagraphs.push(
+          buildDocxParagraph(meta, docxDefaults, {
+            font: bodyFont,
+            line: docxTokens.compactLineTwip,
+            size: docxTokens.metaSizeHalfPt,
+            spacingAfter: docxTokens.bodyGapTwip,
+          }),
+        );
+      }
+    });
   }
 
-  if (args.data.headerVisibility.showSubject) {
+  if (args.data.skills.length > 0) {
+    pushSectionHeading("skills");
     bodyParagraphs.push(
-      buildDocxParagraph(args.data.documentTitle, {
-        heading: HeadingLevel.HEADING_2,
-        spacingAfter: 220,
+      buildDocxParagraph(args.data.skills.join(" · "), docxDefaults, {
+        font: bodyFont,
+        line: docxTokens.bodyLineTwip,
+        spacingAfter: docxTokens.bodyGapTwip,
       }),
     );
   }
 
-  args.data.body.forEach((block) => {
-    if (block.type === "closing") {
-      if (block.signOff) {
-        bodyParagraphs.push(
-          buildDocxParagraph(block.signOff, { spacingBefore: 200, spacingAfter: 80 }),
-        );
-      }
-      if (block.signatureName) {
-        bodyParagraphs.push(
-          buildDocxParagraph(block.signatureName, { bold: true, spacingAfter: 120 }),
-        );
-      }
-      return;
-    }
-
+  if (args.data.languages.length > 0) {
+    pushSectionHeading("languages");
     bodyParagraphs.push(
-      buildDocxParagraph(block.text, {
-        spacingAfter: block.type === "salutation" ? 180 : 190,
+      buildDocxParagraph(
+        args.data.languages
+          .map((item) =>
+            item.level ? `${item.name} (${item.level})` : item.name,
+          )
+          .join(" · "),
+        docxDefaults,
+        {
+          font: bodyFont,
+          line: docxTokens.bodyLineTwip,
+          spacingAfter: docxTokens.bodyGapTwip,
+        },
+      ),
+    );
+  }
+
+  if (args.data.achievements.length > 0) {
+    pushSectionHeading("achievements");
+    args.data.achievements.forEach((item, index) => {
+      bodyParagraphs.push(
+        new Paragraph({
+          keepLines: true,
+          spacing: {
+            after:
+              index === args.data.achievements.length - 1
+                ? docxTokens.bodyGapTwip
+                : docxTokens.bulletGapTwip,
+            line: docxTokens.bodyLineTwip,
+            lineRule: LineRuleType.AUTO,
+          },
+          bullet: { level: 0 },
+          children: [
+            new TextRun({
+              text: item,
+              font: bodyFont,
+              size: docxTokens.bodySizeHalfPt,
+              color: docxInk,
+            }),
+          ],
+        }),
+      );
+    });
+  }
+
+  if (args.data.hobbies.length > 0) {
+    pushSectionHeading("interests");
+    bodyParagraphs.push(
+      buildDocxParagraph(args.data.hobbies.join(" · "), docxDefaults, {
+        font: bodyFont,
+        line: docxTokens.bodyLineTwip,
+        spacingAfter: docxTokens.bodyGapTwip,
       }),
     );
-  });
+  }
 
   const document = new Document({
     styles: {
       default: {
         document: {
           run: {
-            font: fonts.bodyFamily,
-            size: 21,
-            color: "1F1D1A",
+            color: docxInk,
+            font: bodyFont,
+            size: docxTokens.bodySizeHalfPt,
           },
           paragraph: {
             spacing: {
-              after: 160,
-              line: 320,
+              after: docxTokens.bodyGapTwip,
+              line: docxTokens.bodyLineTwip,
+              lineRule: LineRuleType.AUTO,
             },
           },
         },
@@ -827,7 +2115,214 @@ export async function buildProposalDocxBuffer(args: {
       {
         properties: {
           page: {
-            margin: ROBIAL_EXPORT_GRID.docx.marginsTwip,
+            margin: docxTokens.pageMarginsTwip,
+          },
+        },
+        children: bodyParagraphs,
+      },
+    ],
+  });
+
+  return Buffer.from(await Packer.toBuffer(document));
+}
+
+export async function buildProposalDocxBuffer(args: {
+  data: ProposalPrintSource;
+  stylePreset?: VerbatiStylePreset | null;
+}): Promise<Buffer> {
+  const resolvedStyle = normalizeStylePreset(args.stylePreset);
+  const locale = args.data.locale;
+  const profile = resolveProposalExportProfile({
+    mode: "styled",
+    proposalTemplateId: args.data.templateId,
+    stylePreset: args.stylePreset,
+  });
+  const headingFont = resolvePrimaryFontFamily(
+    profile.canonical.appearance.font.heading.family,
+    "Times New Roman",
+  );
+  const bodyFont = resolvePrimaryFontFamily(
+    profile.canonical.appearance.font.body.family,
+    "Helvetica Neue",
+  );
+  const docxInk = resolveDocxSafeColorHex(
+    profile.canonical.appearance.theme.ink,
+  );
+  const docxTokens = resolveProposalDocxSurfaceTokens(profile.canonical);
+  const docxDefaults = {
+    bodySizeHalfPt: docxTokens.bodySizeHalfPt,
+    bodyLineTwip: docxTokens.bodyLineTwip,
+    bodyGapTwip: docxTokens.bodyGapTwip,
+    colorHex: docxInk,
+  };
+  const bodyParagraphs: Paragraph[] = [];
+
+  const pushSectionHeading = (key: string) => {
+    bodyParagraphs.push(
+      buildDocxParagraph(getLocalizedExportLabel(key, locale), docxDefaults, {
+        bold: true,
+        font: headingFont,
+        keepNext: true,
+        line: docxTokens.compactLineTwip,
+        size: docxTokens.labelSizeHalfPt,
+        spacingAfter: docxTokens.compactGapTwip,
+      }),
+    );
+  };
+
+  if (args.data.headerVisibility.showSender) {
+    const senderLines = [
+      args.data.applicantHeader.name,
+      args.data.applicantHeader.role,
+      args.data.contactLine
+        ? normalizeLocaleTypography(args.data.contactLine, locale)
+        : "",
+    ].filter(Boolean);
+
+    if (senderLines.length > 0) {
+      pushSectionHeading("sender");
+      senderLines.forEach((line, index) => {
+        bodyParagraphs.push(
+          buildDocxParagraph(line, docxDefaults, {
+            bold: index === 0,
+            font: bodyFont,
+            line: docxTokens.compactLineTwip,
+            size:
+              index === 0
+                ? docxTokens.bodySizeHalfPt
+                : docxTokens.metaSizeHalfPt,
+            spacingAfter:
+              index === senderLines.length - 1
+                ? docxTokens.sectionGapTwip
+                : docxTokens.compactGapTwip,
+          }),
+        );
+      });
+    }
+  }
+
+  if (args.data.headerVisibility.showDate && args.data.letterDate) {
+    bodyParagraphs.push(
+      buildDocxParagraph(
+        normalizeLocaleTypography(args.data.letterDate, locale),
+        docxDefaults,
+        {
+          alignment: AlignmentType.RIGHT,
+          font: bodyFont,
+          line: docxTokens.compactLineTwip,
+          size: docxTokens.metaSizeHalfPt,
+          spacingAfter: docxTokens.sectionGapTwip,
+        },
+      ),
+    );
+  }
+
+  if (args.data.headerVisibility.showRecipient && args.data.recipientDetails) {
+    const recipientLines = normalizeLocaleTypography(
+      args.data.recipientDetails,
+      locale,
+    )
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    if (recipientLines.length > 0) {
+      pushSectionHeading("recipient");
+      recipientLines.forEach((line, index) => {
+        bodyParagraphs.push(
+          buildDocxParagraph(line, docxDefaults, {
+            font: bodyFont,
+            line: docxTokens.compactLineTwip,
+            size: docxTokens.metaSizeHalfPt,
+            spacingAfter:
+              index === recipientLines.length - 1
+                ? docxTokens.sectionGapTwip
+                : docxTokens.compactGapTwip,
+          }),
+        );
+      });
+    }
+  }
+
+  if (args.data.headerVisibility.showSubject) {
+    pushSectionHeading("subject");
+    bodyParagraphs.push(
+      buildDocxParagraph(
+        normalizeLocaleTypography(args.data.documentTitle, locale),
+        docxDefaults,
+        {
+          bold: true,
+          font: headingFont,
+          line: docxTokens.compactLineTwip,
+          size: docxTokens.subjectSizeHalfPt,
+          spacingAfter: docxTokens.sectionGapTwip,
+        },
+      ),
+    );
+  }
+
+  args.data.body.forEach((block) => {
+    if (block.type === "closing") {
+      if (block.signOff) {
+        bodyParagraphs.push(
+          buildDocxParagraph(block.signOff, docxDefaults, {
+            font: bodyFont,
+            keepNext: true,
+            line: docxTokens.bodyLineTwip,
+            spacingAfter: docxTokens.closingLineGapTwip,
+            spacingBefore: docxTokens.closingBeforeTwip,
+          }),
+        );
+      }
+      if (block.signatureName) {
+        bodyParagraphs.push(
+          buildDocxParagraph(block.signatureName, docxDefaults, {
+            bold: true,
+            font: bodyFont,
+            line: docxTokens.compactLineTwip,
+            spacingAfter: docxTokens.sectionGapTwip,
+          }),
+        );
+      }
+      return;
+    }
+
+    bodyParagraphs.push(
+      buildDocxParagraph(block.text, docxDefaults, {
+        font: bodyFont,
+        line: docxTokens.bodyLineTwip,
+        spacingAfter:
+          block.type === "salutation"
+            ? docxTokens.salutationGapTwip
+            : docxTokens.bodyGapTwip,
+      }),
+    );
+  });
+
+  const document = new Document({
+    styles: {
+      default: {
+        document: {
+          run: {
+            color: docxInk,
+            font: bodyFont,
+            size: docxTokens.bodySizeHalfPt,
+          },
+          paragraph: {
+            spacing: {
+              after: docxTokens.bodyGapTwip,
+              line: docxTokens.bodyLineTwip,
+              lineRule: LineRuleType.AUTO,
+            },
+          },
+        },
+      },
+    },
+    sections: [
+      {
+        properties: {
+          page: {
+            margin: docxTokens.pageMarginsTwip,
           },
         },
         children: bodyParagraphs,

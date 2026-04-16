@@ -14,6 +14,17 @@ import {
   resolveProposalRecipientLines,
   type ProposalHeaderVisibility,
 } from "../../lib/proposal-header";
+import {
+  parseProposalClosingBlock,
+  stripInlineProposalMarkdown,
+} from "../../lib/proposal-closing";
+import { normalizeProposalPreviewTokens } from "../../lib/layout/documentTokenNormalizer";
+import {
+  serializeProposalPreviewVars,
+  serializeProposalMeasurementRuntimeVars,
+  serializeProposalRuntimeVars,
+} from "../../lib/layout/documentTokenSerializers";
+import type { VerbatiStylePreset } from "../../features/verbati/types";
 
 type ProposalDocumentRendererProps = {
   content: string;
@@ -33,6 +44,7 @@ type ProposalDocumentRendererProps = {
    *  without waiting for the ResizeObserver callback. */
   pageWidth?: number;
   pageGapPx?: number;
+  stylePreset?: VerbatiStylePreset | null;
   onPageCountChange?: (count: number) => void;
 };
 
@@ -116,21 +128,6 @@ function arePageGroupsEqual(a: number[][], b: number[][]) {
 
 const SALUTATION_PATTERN =
   /^(dear\b|hello\b|hi\b|greetings\b|madame\b|monsieur\b|madame,\s*monsieur\b|bonjour\b)/i;
-const SIGNOFF_PATTERN =
-  /^(sincerely|kind regards|best regards|warm regards|regards|cordialement|bien cordialement|avec mes salutations)[,!]?$/i;
-const SIGNATURE_NAME_PATTERN = /^[\p{L}][\p{L}\s.'’\-]{1,56}$/u;
-
-function stripInlineProposalMarkdown(value: string): string {
-  return value
-    .replace(/^\s{0,3}#{1,6}\s+/gm, "")
-    .replace(/\*\*(.*?)\*\*/g, "$1")
-    .replace(/__(.*?)__/g, "$1")
-    .replace(/\*(.*?)\*/g, "$1")
-    .replace(/_(.*?)_/g, "$1")
-    .replace(/`([^`]+)`/g, "$1")
-    .replace(/\[(.*?)\]\((.*?)\)/g, "$1")
-    .trim();
-}
 
 function compactProposalParagraph(value: string): string {
   return value
@@ -140,20 +137,6 @@ function compactProposalParagraph(value: string): string {
     .join(" ")
     .replace(/\s+/g, " ")
     .trim();
-}
-
-function isLikelySignatureName(value: string): boolean {
-  const normalized = stripInlineProposalMarkdown(value);
-  if (!normalized) {
-    return false;
-  }
-
-  const wordCount = normalized.split(/\s+/).filter(Boolean).length;
-  if (wordCount < 1 || wordCount > 5) {
-    return false;
-  }
-
-  return SIGNATURE_NAME_PATTERN.test(normalized);
 }
 
 function buildVolkRegisterMetaEntries(args: {
@@ -174,7 +157,7 @@ function buildVolkRegisterMetaEntries(args: {
       key: "date",
       value:
         visibility.showDate && args.letterDate?.trim()
-        ? `date: ${args.letterDate.trim()}`
+          ? `date: ${args.letterDate.trim()}`
           : "",
     },
     {
@@ -201,7 +184,9 @@ function buildVolkRegisterSenderLine(
     .join(" · ");
 }
 
-function normalizeDocumentContactLine(value: string | null | undefined): string {
+function normalizeDocumentContactLine(
+  value: string | null | undefined,
+): string {
   return String(value ?? "")
     .split(/\s*(?:,|·|•|\|)\s*/g)
     .map((part) => part.trim())
@@ -218,7 +203,9 @@ function buildStructuredHeaderValues(args: {
   const visibility = resolveProposalHeaderVisibility(args.headerVisibility);
   const recipientFields = parseProposalRecipientDetails(args.recipientDetails);
   const date = visibility.showDate ? args.letterDate?.trim() ?? "" : "";
-  const subject = visibility.showSubject ? args.documentTitle?.trim() ?? "" : "";
+  const subject = visibility.showSubject
+    ? args.documentTitle?.trim() ?? ""
+    : "";
   const toLines = visibility.showRecipient
     ? [
         recipientFields.name,
@@ -235,7 +222,12 @@ function buildStructuredHeaderValues(args: {
         ].filter(Boolean)
       : [];
 
-  if (!date && !subject && toLines.length === 0 && recipientDetailLines.length === 0) {
+  if (
+    !date &&
+    !subject &&
+    toLines.length === 0 &&
+    recipientDetailLines.length === 0
+  ) {
     return null;
   }
 
@@ -363,10 +355,10 @@ function parseProposalDocumentContent(
   }
 
   let salutation: string | null = null;
-  let signOff: string | null = null;
-  let signatureName: string | null = null;
 
-  const candidateSalutation = stripInlineProposalMarkdown(rawLines[start] ?? "");
+  const candidateSalutation = stripInlineProposalMarkdown(
+    rawLines[start] ?? "",
+  );
   if (candidateSalutation && SALUTATION_PATTERN.test(candidateSalutation)) {
     salutation = candidateSalutation;
     start += 1;
@@ -376,37 +368,25 @@ function parseProposalDocumentContent(
     start += 1;
   }
 
-  const trailingLine = stripInlineProposalMarkdown(rawLines[end] ?? "");
-  if (trailingLine && isLikelySignatureName(trailingLine)) {
-    signatureName = trailingLine;
-    end -= 1;
-  }
-
-  while (end >= start && !stripInlineProposalMarkdown(rawLines[end])) {
-    end -= 1;
-  }
-
-  const trailingSignOff = stripInlineProposalMarkdown(rawLines[end] ?? "");
-  if (trailingSignOff && SIGNOFF_PATTERN.test(trailingSignOff)) {
-    signOff = trailingSignOff;
-    end -= 1;
-  } else if (!signatureName && trailingSignOff && isLikelySignatureName(trailingSignOff)) {
-    signatureName = trailingSignOff;
-    end -= 1;
-  }
-
-  const body = rawLines.slice(start, end + 1).join("\n");
-  const paragraphs = body
+  const paragraphs = rawLines
+    .slice(start, end + 1)
+    .join("\n")
     .split(/\n\s*\n/)
-    .map(compactProposalParagraph)
     .filter(Boolean);
+  const closingBlock = parseProposalClosingBlock(paragraphs.at(-1) ?? null);
+
+  if (closingBlock) {
+    paragraphs.pop();
+  }
+
+  const body = paragraphs.join("\n\n");
 
   return {
     kind: inferredKind,
     salutation,
-    paragraphs,
-    signOff,
-    signatureName,
+    paragraphs: paragraphs.map(compactProposalParagraph).filter(Boolean),
+    signOff: closingBlock?.signOff ?? null,
+    signatureName: closingBlock?.signatureName ?? null,
     rawBody: body.trim(),
   };
 }
@@ -538,10 +518,21 @@ export function ProposalDocumentRenderer({
   documentTypography,
   pageWidth,
   pageGapPx = 0,
+  stylePreset = null,
   onPageCountChange,
 }: ProposalDocumentRendererProps): JSX.Element {
   const resolvedTemplateId = resolveProposalTemplateId(templateId);
   const templateDefinition = getProposalTemplateDefinition(resolvedTemplateId);
+  const canonicalPreviewTokens = React.useMemo(
+    () =>
+      normalizeProposalPreviewTokens({
+        templateId: resolvedTemplateId,
+        documentTypography,
+        stylePreset,
+        pageGapPx,
+      }),
+    [documentTypography, pageGapPx, resolvedTemplateId, stylePreset],
+  );
   const resolvedRailTitle =
     railTitle?.trim() || applicantHeader?.name || documentTitle || null;
   const resolvedRailMeta =
@@ -588,8 +579,10 @@ export function ProposalDocumentRenderer({
       const w = el.offsetWidth;
       if (w <= 0) return;
       const mmPx = w / 210;
-      el.style.setProperty("--proposal-inline-mm", `${mmPx}px`);
-      el.style.setProperty("--proposal-block-mm", `${mmPx}px`);
+      const runtimeVars = serializeProposalMeasurementRuntimeVars(mmPx);
+      Object.entries(runtimeVars).forEach(([name, value]) => {
+        el.style.setProperty(name, value);
+      });
     };
     sync();
     const ro = new ResizeObserver(sync);
@@ -604,8 +597,10 @@ export function ProposalDocumentRenderer({
     const el = rootRef.current;
     if (!el || !pageWidth || pageWidth <= 0) return;
     const mmPx = pageWidth / 210;
-    el.style.setProperty("--proposal-inline-mm", `${mmPx}px`);
-    el.style.setProperty("--proposal-block-mm", `${mmPx}px`);
+    const runtimeVars = serializeProposalMeasurementRuntimeVars(mmPx);
+    Object.entries(runtimeVars).forEach(([name, value]) => {
+      el.style.setProperty(name, value);
+    });
   }, [pageWidth]);
 
   React.useLayoutEffect(() => {
@@ -631,12 +626,12 @@ export function ProposalDocumentRenderer({
       const bodyRect = measurementBody.getBoundingClientRect();
       const measurementBodyStyles = window.getComputedStyle(measurementBody);
       const headerStackHeight =
-        measurementBody.querySelector<HTMLElement>(
-          ".dasti-proposal-document__header-stack",
-        )?.getBoundingClientRect().height ?? 0;
-      const firstPageLeadIn = Number.parseFloat(
-        measurementBodyStyles.paddingTop || "0",
-      ) + headerStackHeight;
+        measurementBody
+          .querySelector<HTMLElement>(".dasti-proposal-document__header-stack")
+          ?.getBoundingClientRect().height ?? 0;
+      const firstPageLeadIn =
+        Number.parseFloat(measurementBodyStyles.paddingTop || "0") +
+        headerStackHeight;
       const pageBreakSafetyReserve = Math.max(
         4,
         Math.round(resolveLineHeightPx(measurementBodyStyles) * 0.7),
@@ -831,11 +826,7 @@ export function ProposalDocumentRenderer({
         recipientDetails,
         headerVisibility: resolvedHeaderVisibility,
       }),
-    [
-      resolvedHeaderVisibility,
-      letterDate,
-      recipientDetails,
-    ],
+    [resolvedHeaderVisibility, letterDate, recipientDetails],
   );
   const volkMetaLefts = React.useMemo(() => VOLK_REGISTER_GRID.metaLefts, []);
   const structuredHeaderValues = React.useMemo(
@@ -936,7 +927,9 @@ export function ProposalDocumentRenderer({
           </p>
         ) : null}
         {resolvedRailMeta ? (
-          <p className="dasti-proposal-document__sender-role">{resolvedRailMeta}</p>
+          <p className="dasti-proposal-document__sender-role">
+            {resolvedRailMeta}
+          </p>
         ) : null}
         {resolvedSenderLine ? (
           <p className="dasti-proposal-document__sender-contact">
@@ -956,7 +949,9 @@ export function ProposalDocumentRenderer({
       <div className="dasti-proposal-document__structured-header">
         {structuredHeaderValues.date ? (
           <div className="dasti-proposal-document__structured-header-item">
-            <p className="dasti-proposal-document__structured-header-label">Date</p>
+            <p className="dasti-proposal-document__structured-header-label">
+              Date
+            </p>
             <p className="dasti-proposal-document__structured-header-value">
               {structuredHeaderValues.date}
             </p>
@@ -964,7 +959,9 @@ export function ProposalDocumentRenderer({
         ) : null}
         {structuredHeaderValues.toLines.length > 0 ? (
           <div className="dasti-proposal-document__structured-header-item">
-            <p className="dasti-proposal-document__structured-header-label">To</p>
+            <p className="dasti-proposal-document__structured-header-label">
+              To
+            </p>
             {structuredHeaderValues.toLines.map((line, index) => (
               <p
                 key={`recipient-line-${index}`}
@@ -1000,7 +997,11 @@ export function ProposalDocumentRenderer({
         {renderStructuredHeader()}
       </div>
     ),
-    [renderSenderHeader, renderStructuredHeader, resolvedHeaderVisibility.showSender],
+    [
+      renderSenderHeader,
+      renderStructuredHeader,
+      resolvedHeaderVisibility.showSender,
+    ],
   );
   const renderGenericDocumentShell = React.useCallback(
     (args: {
@@ -1017,9 +1018,11 @@ export function ProposalDocumentRenderer({
         >
           {!args.isContinuationPage ? renderClassicHeaderStack() : null}
           {args.pageBlocks.length > 0 ? (
-            args.measurement
-              ? args.pageBlocks.map((block) => renderDocumentBlock(block))
-              : renderVisibleDocumentBlocks(args.pageBlocks)
+            args.measurement ? (
+              args.pageBlocks.map((block) => renderDocumentBlock(block))
+            ) : (
+              renderVisibleDocumentBlocks(args.pageBlocks)
+            )
           ) : !args.isContinuationPage ? (
             <div
               className="dasti-proposal-document__raw-body"
@@ -1076,7 +1079,10 @@ export function ProposalDocumentRenderer({
                 </p>
               </div>
             ))}
-            <div className="dasti-proposal-document__volk-dot" aria-hidden="true" />
+            <div
+              className="dasti-proposal-document__volk-dot"
+              aria-hidden="true"
+            />
             <p
               className="dasti-proposal-document__volk-tier-marker dasti-proposal-document__volk-tier-marker--two"
               aria-hidden="true"
@@ -1140,47 +1146,8 @@ export function ProposalDocumentRenderer({
       data-proposal-template={resolvedTemplateId}
       style={
         {
-          "--proposal-template-left-zone-mm": String(
-            templateDefinition.leftZoneMm,
-          ),
-          "--proposal-template-top-offset-mm": String(
-            resolvedTemplateId === "volk_register"
-              ? templateDefinition.topOffsetMm
-              : 35,
-          ),
-          "--proposal-template-body-start-mm": String(
-            templateDefinition.bodyStartMm,
-          ),
-          "--proposal-template-bottom-margin-mm": String(
-            templateDefinition.bottomMarginMm,
-          ),
-          "--proposal-template-right-margin-mm": String(
-            templateDefinition.rightMarginMm,
-          ),
-          "--proposal-document-reading-measure-max": `${templateDefinition.readingMeasureCh}ch`,
-          "--proposal-document-title-scale": String(
-            templateDefinition.titleScaleMm,
-          ),
-          "--proposal-document-font-family": documentTypography.fontFamily,
-          "--proposal-document-font-size": documentTypography.fontSize,
-          "--proposal-document-font-weight": documentTypography.fontWeight,
-          "--proposal-document-letter-spacing":
-            documentTypography.letterSpacing ?? "0em",
-          "--proposal-document-line-height": String(documentTypography.lineHeight),
-          "--proposal-document-page-gap": `${pageGapPx}px`,
-          "--volk-grid-left": VOLK_REGISTER_GRID.left,
-          "--volk-grid-header-width": VOLK_REGISTER_GRID.headerWidth,
-          "--volk-grid-body-width": VOLK_REGISTER_GRID.bodyWidth,
-          "--volk-grid-title-top": VOLK_REGISTER_GRID.titleTop,
-          "--volk-grid-subtitle-top": VOLK_REGISTER_GRID.subtitleTop,
-          "--volk-grid-sender-top": VOLK_REGISTER_GRID.senderTop,
-          "--volk-grid-meta-top": VOLK_REGISTER_GRID.metaTop,
-          "--volk-grid-subject-top": VOLK_REGISTER_GRID.subjectTop,
-          "--volk-grid-subject-value-top": VOLK_REGISTER_GRID.subjectValueTop,
-          "--volk-grid-subject-value-left": VOLK_REGISTER_GRID.subjectValueLeft,
-          "--volk-grid-body-top": VOLK_REGISTER_GRID.bodyTop,
-          "--volk-grid-dot-left": VOLK_REGISTER_GRID.dotLeft,
-          "--volk-grid-dot-top": VOLK_REGISTER_GRID.dotTop,
+          ...serializeProposalPreviewVars(canonicalPreviewTokens),
+          ...serializeProposalRuntimeVars(canonicalPreviewTokens),
         } as React.CSSProperties
       }
     >
@@ -1190,61 +1157,69 @@ export function ProposalDocumentRenderer({
           className="dasti-proposal-document__page"
           data-fit="0"
         >
-          {resolvedTemplateId === "volk_register" ? (
-            renderVolkRegisterShell({
-              bodyRef: measurementBodyRef,
-              pageBlocks: documentBlocks,
-              isContinuationPage: false,
-              showFallback: true,
-              measurement: true,
-            })
-          ) : (
-            renderGenericDocumentShell({
-              bodyRef: measurementBodyRef,
-              pageBlocks: documentBlocks,
-              isContinuationPage: false,
-              measurement: true,
-            })
-          )}
+          {resolvedTemplateId === "volk_register"
+            ? renderVolkRegisterShell({
+                bodyRef: measurementBodyRef,
+                pageBlocks: documentBlocks,
+                isContinuationPage: false,
+                showFallback: true,
+                measurement: true,
+              })
+            : renderGenericDocumentShell({
+                bodyRef: measurementBodyRef,
+                pageBlocks: documentBlocks,
+                isContinuationPage: false,
+                measurement: true,
+              })}
         </div>
       </div>
       {resolvedPageGroups.map((pageGroup, pageIndex) => {
         const isContinuationPage = pageIndex > 0;
         const pageBlocks =
           pageGroup.length > 0
-            ? pageGroup.map((blockIndex) => documentBlocks[blockIndex]).filter(Boolean)
+            ? pageGroup
+                .map((blockIndex) => documentBlocks[blockIndex])
+                .filter(Boolean)
             : [];
 
         return (
           <div
             key={`proposal-page-${pageIndex}`}
-            ref={pageIndex === 0 && resolvedPageGroups.length === 1 ? pageRef : null}
+            ref={
+              pageIndex === 0 && resolvedPageGroups.length === 1
+                ? pageRef
+                : null
+            }
             className={[
               "dasti-proposal-document__page",
-              isContinuationPage ? "dasti-proposal-document__page--continuation" : "",
+              isContinuationPage
+                ? "dasti-proposal-document__page--continuation"
+                : "",
             ]
               .filter(Boolean)
               .join(" ")}
             data-fit="0"
           >
-            {resolvedTemplateId === "volk_register" ? (
-              renderVolkRegisterShell({
-                bodyRef:
-                  pageIndex === 0 && resolvedPageGroups.length === 1 ? bodyRef : null,
-                pageBlocks,
-                isContinuationPage,
-                showFallback: pageIndex === 0,
-                measurement: false,
-              })
-            ) : (
-              renderGenericDocumentShell({
-                bodyRef:
-                  pageIndex === 0 && resolvedPageGroups.length === 1 ? bodyRef : null,
-                pageBlocks,
-                isContinuationPage,
-                measurement: false,
-              })
-            )}
+            {resolvedTemplateId === "volk_register"
+              ? renderVolkRegisterShell({
+                  bodyRef:
+                    pageIndex === 0 && resolvedPageGroups.length === 1
+                      ? bodyRef
+                      : null,
+                  pageBlocks,
+                  isContinuationPage,
+                  showFallback: pageIndex === 0,
+                  measurement: false,
+                })
+              : renderGenericDocumentShell({
+                  bodyRef:
+                    pageIndex === 0 && resolvedPageGroups.length === 1
+                      ? bodyRef
+                      : null,
+                  pageBlocks,
+                  isContinuationPage,
+                  measurement: false,
+                })}
           </div>
         );
       })}

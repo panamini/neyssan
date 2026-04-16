@@ -1,18 +1,33 @@
 import type { ProposalTemplateId } from "../../convex/lib/proposals/renderTemplates";
+import { resolveProposalTemplateId } from "../../convex/lib/proposals/renderTemplates";
 import type { CvDocument } from "../types/cvDocument";
+import type { VerbatiStylePreset } from "../features/verbati/types";
 import {
   buildAuthoritativeResumeExportModel,
   type AuthoritativeResume,
   type AuthoritativeResumeExportModel,
 } from "./authoritative-resume";
 import { mapCvDocumentToResumeData } from "../features/verbati/cvDocumentToResumeData";
+import {
+  buildVerbatiThemeVars,
+  getVerbatiTypographyFamilies,
+  resolveVerbatiStyle,
+  VERBATI_LAYOUT_TO_RENDERER,
+} from "../features/verbati/style";
 import type { ProposalHeaderVisibility } from "./proposal-header";
 import {
   buildProposalSalutation,
   readProposalSalutation,
   resolveProposalHeaderVisibility,
 } from "./proposal-header";
-import type { ResumeData } from "../features/verbati/resume/resume.types";
+import type {
+  ResumeData,
+  ResumeLayoutVariantId,
+} from "../features/verbati/resume/resume.types";
+import { normalizeExportLocale } from "./export-locale";
+import { parseProposalClosingBlock } from "./proposal-closing";
+import { getProposalDocumentTypography } from "./proposal-document-typography";
+import { resolveProposalOutputLanguage } from "../../convex/lib/proposals/proposalOutput";
 
 export type ExportDocumentKind = "resume" | "proposal";
 export type ExportDocumentFormat = "pdf" | "docx";
@@ -47,6 +62,7 @@ export type ResumePrintProjectItem = {
 export type ResumePrintSource = {
   schemaVersion: 1;
   kind: "resume";
+  locale: string | null;
   title: string;
   exportSource: "authoritative" | "standard";
   profile: {
@@ -66,6 +82,51 @@ export type ResumePrintSource = {
   education: ResumePrintEducationItem[];
   achievements: string[];
   hobbies: string[];
+};
+
+export type ResumePreviewPrintSource = {
+  schemaVersion: 1;
+  kind: "resume";
+  renderSource: "preview";
+  locale: string | null;
+  resumeData: ResumeData;
+  stylePreset: VerbatiStylePreset;
+  rendererVariantId: ResumeLayoutVariantId;
+};
+
+export type ResumePrintRoutePayload = {
+  schemaVersion: 1;
+  kind: "resume_print_route";
+  locale: string | null;
+  resumeData: ResumeData;
+  stylePreset: VerbatiStylePreset;
+  rendererVariantId: ResumeLayoutVariantId;
+};
+
+export type ResumePrintDebugSnapshot = {
+  layout: VerbatiStylePreset["layout"];
+  typography: VerbatiStylePreset["typography"];
+  palette: VerbatiStylePreset["palette"];
+  accentHex?: string;
+  rendererVariantId: ResumeLayoutVariantId;
+  headingFontFamily: string;
+  bodyFontFamily: string;
+};
+
+export type ResumeTypographyAuditMetadata = {
+  kind: "resume_typography_audit";
+  artifactDirRelative: string | null;
+  capturePrePdfScreenshot: boolean;
+  cvId?: string | null;
+  cvUrl?: string | null;
+};
+
+export type ProposalTypographyAuditMetadata = {
+  kind: "proposal_typography_audit";
+  artifactDirRelative: string | null;
+  capturePrePdfScreenshot: boolean;
+  proposalId?: string | null;
+  proposalUrl?: string | null;
 };
 
 export type ProposalPrintBlock =
@@ -93,6 +154,7 @@ export type ProposalPrintApplicantHeader = {
 export type ProposalPrintSource = {
   schemaVersion: 1;
   kind: "proposal";
+  locale: string | null;
   title: string;
   proposalType: string | null;
   documentTitle: string;
@@ -106,7 +168,62 @@ export type ProposalPrintSource = {
   body: ProposalPrintBlock[];
 };
 
-export type ExportDocumentSource = ResumePrintSource | ProposalPrintSource;
+export type ProposalPreviewPrintSource = {
+  schemaVersion: 1;
+  kind: "proposal";
+  renderSource: "preview";
+  locale: string | null;
+  content: string;
+  proposalType: string | null;
+  voicePreset: string | null;
+  railTitle: string | null;
+  railMeta: string | null;
+  contactLine: string;
+  letterDate: string;
+  recipientDetails: string;
+  documentTitle: string;
+  documentMeta: string;
+  applicantHeader: ProposalPrintApplicantHeader;
+  headerVisibility: ProposalHeaderVisibility;
+  templateId: ProposalTemplateId;
+  stylePreset: VerbatiStylePreset;
+};
+
+export type ProposalPrintRoutePayload = {
+  schemaVersion: 1;
+  kind: "proposal_print_route";
+  locale: string | null;
+  content: string;
+  proposalType: string | null;
+  voicePreset: string | null;
+  railTitle: string | null;
+  railMeta: string | null;
+  contactLine: string;
+  letterDate: string;
+  recipientDetails: string;
+  documentTitle: string;
+  documentMeta: string;
+  applicantHeader: ProposalPrintApplicantHeader;
+  headerVisibility: ProposalHeaderVisibility;
+  templateId: ProposalTemplateId;
+  stylePreset: VerbatiStylePreset;
+};
+
+export type ProposalPrintDebugSnapshot = {
+  layout: VerbatiStylePreset["layout"];
+  typography: VerbatiStylePreset["typography"];
+  palette: VerbatiStylePreset["palette"];
+  accentHex?: string;
+  templateId: ProposalTemplateId;
+  voicePreset: string | null;
+  bodyFontFamily: string;
+};
+
+export type ExportDocumentSource =
+  | ResumePrintSource
+  | ResumePreviewPrintSource
+  | ProposalPrintSource
+  | ProposalPreviewPrintSource;
 
 function cleanString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -125,6 +242,7 @@ function normalizeResumeData(data: ResumeData): ResumePrintSource {
   return {
     schemaVersion: 1,
     kind: "resume",
+    locale: null,
     title: data.name || "Resume",
     exportSource: "standard",
     profile: {
@@ -182,6 +300,7 @@ function normalizeAuthoritativeResume(
   return {
     schemaVersion: 1,
     kind: "resume",
+    locale: null,
     title: cleanString(model.profile.name) || "Resume",
     exportSource: "authoritative",
     profile: {
@@ -243,10 +362,173 @@ export function buildResumeExportSource(args: {
     args.authoritativeResume,
   );
   if (authoritativeModel) {
-    return normalizeAuthoritativeResume(authoritativeModel);
+    return {
+      ...normalizeAuthoritativeResume(authoritativeModel),
+      locale: normalizeExportLocale(args.currentCv.metadata.locale),
+    };
   }
 
-  return normalizeResumeData(mapCvDocumentToResumeData(args.currentCv));
+  return {
+    ...normalizeResumeData(mapCvDocumentToResumeData(args.currentCv)),
+    locale: normalizeExportLocale(args.currentCv.metadata.locale),
+  };
+}
+
+export function buildStyledResumePrintSource(args: {
+  currentCv: CvDocument | null | undefined;
+  stylePreset?: VerbatiStylePreset | null;
+}): ResumePreviewPrintSource | null {
+  if (!args.currentCv) {
+    return null;
+  }
+
+  const stylePreset = resolveVerbatiStyle(args.stylePreset);
+
+  return {
+    schemaVersion: 1,
+    kind: "resume",
+    renderSource: "preview",
+    locale: normalizeExportLocale(args.currentCv.metadata.locale),
+    resumeData: mapCvDocumentToResumeData(args.currentCv),
+    stylePreset,
+    rendererVariantId: VERBATI_LAYOUT_TO_RENDERER[stylePreset.layout],
+  };
+}
+
+export function buildResumePrintRoutePayload(args: {
+  data: ResumePreviewPrintSource;
+}): ResumePrintRoutePayload {
+  return {
+    schemaVersion: 1,
+    kind: "resume_print_route",
+    locale: args.data.locale,
+    resumeData: args.data.resumeData,
+    stylePreset: args.data.stylePreset,
+    rendererVariantId: args.data.rendererVariantId,
+  };
+}
+
+export function buildResumePrintDebugSnapshot(args: {
+  stylePreset: VerbatiStylePreset;
+  rendererVariantId: ResumeLayoutVariantId;
+}): ResumePrintDebugSnapshot {
+  const stylePreset = resolveVerbatiStyle(args.stylePreset);
+  const themeVars = buildVerbatiThemeVars(stylePreset) as Record<
+    string,
+    string | undefined
+  >;
+
+  return {
+    layout: stylePreset.layout,
+    typography: stylePreset.typography,
+    palette: stylePreset.palette,
+    accentHex: stylePreset.accentHex,
+    rendererVariantId: args.rendererVariantId,
+    headingFontFamily: String(themeVars["--font-heading-family"] ?? "").trim(),
+    bodyFontFamily: String(themeVars["--font-body-family"] ?? "").trim(),
+  };
+}
+
+export function buildProposalPreviewPrintSource(args: {
+  content: string | null | undefined;
+  proposalType: string | null | undefined;
+  voicePreset: string | null | undefined;
+  railTitle: string | null | undefined;
+  railMeta: string | null | undefined;
+  contactLine: string | null | undefined;
+  letterDate: string | null | undefined;
+  recipientDetails: string | null | undefined;
+  documentTitle: string | null | undefined;
+  documentMeta: string | null | undefined;
+  applicantHeader: Partial<ProposalPrintApplicantHeader> | null | undefined;
+  headerVisibility?: Partial<ProposalHeaderVisibility> | null;
+  templateId?: ProposalTemplateId | null;
+  stylePreset?: VerbatiStylePreset | null;
+}): ProposalPreviewPrintSource {
+  const documentTitle = cleanString(args.documentTitle) || "Proposal";
+  const normalizedContent = cleanString(args.content);
+  const stylePreset = resolveVerbatiStyle(args.stylePreset);
+  const inferredLocale =
+    resolveProposalOutputLanguage(normalizedContent || documentTitle) === "French"
+      ? "fr"
+      : "en";
+
+  return {
+    schemaVersion: 1,
+    kind: "proposal",
+    renderSource: "preview",
+    locale: inferredLocale,
+    content: normalizedContent,
+    proposalType: cleanString(args.proposalType) || null,
+    voicePreset: cleanString(args.voicePreset) || null,
+    railTitle: cleanString(args.railTitle) || null,
+    railMeta: cleanString(args.railMeta) || null,
+    contactLine: cleanString(args.contactLine),
+    letterDate: cleanString(args.letterDate),
+    recipientDetails: cleanString(args.recipientDetails),
+    documentTitle,
+    documentMeta: cleanString(args.documentMeta),
+    applicantHeader: {
+      name: cleanString(args.applicantHeader?.name),
+      role: cleanString(args.applicantHeader?.role),
+      email: cleanString(args.applicantHeader?.email),
+      phone: cleanString(args.applicantHeader?.phone),
+      linkedin: cleanString(args.applicantHeader?.linkedin),
+      website: cleanString(args.applicantHeader?.website),
+      location: cleanString(args.applicantHeader?.location),
+      tag: cleanString(args.applicantHeader?.tag),
+    },
+    headerVisibility: resolveProposalHeaderVisibility(args.headerVisibility),
+    templateId: resolveProposalTemplateId(args.templateId),
+    stylePreset,
+  };
+}
+
+export function buildProposalPrintRoutePayload(args: {
+  data: ProposalPreviewPrintSource;
+}): ProposalPrintRoutePayload {
+  return {
+    schemaVersion: 1,
+    kind: "proposal_print_route",
+    locale: args.data.locale,
+    content: args.data.content,
+    proposalType: args.data.proposalType,
+    voicePreset: args.data.voicePreset,
+    railTitle: args.data.railTitle,
+    railMeta: args.data.railMeta,
+    contactLine: args.data.contactLine,
+    letterDate: args.data.letterDate,
+    recipientDetails: args.data.recipientDetails,
+    documentTitle: args.data.documentTitle,
+    documentMeta: args.data.documentMeta,
+    applicantHeader: args.data.applicantHeader,
+    headerVisibility: args.data.headerVisibility,
+    templateId: args.data.templateId,
+    stylePreset: args.data.stylePreset,
+  };
+}
+
+export function buildProposalPrintDebugSnapshot(args: {
+  stylePreset: VerbatiStylePreset;
+  templateId: ProposalTemplateId;
+  voicePreset: string | null | undefined;
+}): ProposalPrintDebugSnapshot {
+  const stylePreset = resolveVerbatiStyle(args.stylePreset);
+  const documentTypography = getProposalDocumentTypography(
+    args.voicePreset ?? null,
+    stylePreset,
+  );
+  const typographyFamilies = getVerbatiTypographyFamilies(stylePreset);
+
+  return {
+    layout: stylePreset.layout,
+    typography: stylePreset.typography,
+    palette: stylePreset.palette,
+    accentHex: stylePreset.accentHex,
+    templateId: resolveProposalTemplateId(args.templateId),
+    voicePreset: cleanString(args.voicePreset) || null,
+    bodyFontFamily: documentTypography.fontFamily || typographyFamilies.bodyFamily,
+  };
 }
 
 function splitProposalParagraphs(content: string): string[] {
@@ -257,29 +539,18 @@ function splitProposalParagraphs(content: string): string[] {
     .filter(Boolean);
 }
 
-function looksLikeClosingParagraph(paragraph: string): boolean {
-  const firstLine = paragraph.split("\n")[0]?.trim().toLowerCase() ?? "";
-  return /^(kind regards|best regards|regards|sincerely|thank you|many thanks|cordially)/i.test(
-    firstLine,
-  );
-}
-
 function extractClosingBlock(
   paragraph: string,
 ): ProposalPrintBlock | null {
-  const lines = paragraph
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  if (lines.length === 0 || !looksLikeClosingParagraph(paragraph)) {
+  const closingBlock = parseProposalClosingBlock(paragraph);
+  if (!closingBlock) {
     return null;
   }
 
   return {
     type: "closing",
-    signOff: lines[0] ?? "",
-    signatureName: lines.slice(1).join(" ") || "",
+    signOff: closingBlock.signOff ?? "",
+    signatureName: closingBlock.signatureName ?? "",
   };
 }
 
@@ -341,10 +612,17 @@ export function buildProposalExportSource(args: {
   templateId?: ProposalTemplateId | null;
 }): ProposalPrintSource {
   const documentTitle = cleanString(args.documentTitle) || "Proposal";
+  const inferredLocale =
+    resolveProposalOutputLanguage(
+      cleanString(args.content) || documentTitle,
+    ) === "French"
+      ? "fr"
+      : "en";
 
   return {
     schemaVersion: 1,
     kind: "proposal",
+    locale: inferredLocale,
     title: documentTitle,
     proposalType: cleanString(args.proposalType) || null,
     documentTitle,

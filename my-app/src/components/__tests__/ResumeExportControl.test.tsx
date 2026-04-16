@@ -61,4 +61,32 @@ describe("ResumeExportControl", () => {
       format: "json",
     });
   });
+
+  it("disables styled PDF when the active baseline layout is not available", () => {
+    const onExport = vi.fn();
+
+    render(
+      <ResumeExportControl
+        exportingFormat={null}
+        onExport={onExport}
+        statusDescription="Trusted Mistral v3"
+        statusLabel="ATS Ready"
+        styledPdfDisabled
+        styledPdfDisabledReason="Styled PDF is unavailable for the current resume layout."
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Export ATS PDF" }),
+    ).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: "Export Styled PDF" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Export Styled PDF" }),
+    ).toHaveAttribute(
+      "title",
+      "Styled PDF is unavailable for the current resume layout.",
+    );
+  });
 });

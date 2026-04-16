@@ -106,12 +106,15 @@ describe("ProposalDisplay stage behavior", () => {
     expect(
       container.querySelectorAll(".dasti-proposal-document__page"),
     ).toHaveLength(1);
+    expect(
+      container.querySelector(".dasti-proposal-sheet__preview-scale-shell"),
+    ).toBeTruthy();
     const lastCall =
       stageLayoutSpy.mock.calls[stageLayoutSpy.mock.calls.length - 1]?.[0];
     expect(lastCall).toMatchObject({ fitMode: "contain" });
   });
 
-  it("uses the same contain-fit stage sizing in edit mode for document proposals", () => {
+  it("uses fit-to-container stage sizing in edit mode for document proposals", () => {
     render(
       <ProposalDisplay
         proposalContent={"Dear team,\n\nSingle-page proposal.\n\nAlex"}
@@ -155,7 +158,7 @@ describe("ProposalDisplay stage behavior", () => {
     ).toHaveAttribute("data-stage-mode", "overflow");
   });
 
-  it("scales the volk register preview from a fixed A4 shell", () => {
+  it("uses the same fixed A4 stage policy for volk register previews", () => {
     const { container } = render(
       <ProposalDisplay
         proposalContent={"Dear team,\n\nSingle-page proposal.\n\nAlex"}
@@ -172,6 +175,6 @@ describe("ProposalDisplay stage behavior", () => {
     ).toBeTruthy();
     const lastCall =
       stageLayoutSpy.mock.calls[stageLayoutSpy.mock.calls.length - 1]?.[0];
-    expect(lastCall).toMatchObject({ fitMode: "width" });
+    expect(lastCall).toMatchObject({ fitMode: "contain" });
   });
 });

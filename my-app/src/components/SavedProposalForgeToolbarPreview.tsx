@@ -279,7 +279,7 @@ export function SavedProposalForgeToolbarPreview({
                 >
                   <button
                     type="button"
-                    className={mode === "edit" || zoomIndex === 1
+                    className={zoomIndex === 1
                       ? "dasti-doc-zoom-fit dasti-doc-zoom-fit--active"
                       : "dasti-doc-zoom-fit"}
                     onClick={() => {

@@ -138,7 +138,7 @@ describe("ProposalDisplay", () => {
     expect(frame).toBeTruthy();
     expect(
       (frame as HTMLElement).style.getPropertyValue("--font-heading-family"),
-    ).toContain("IBM Plex Mono");
+    ).toContain("Archivo");
     expect(
       (frame as HTMLElement).style.getPropertyValue("--proposal-document-paper"),
     ).not.toBe("");
@@ -168,7 +168,7 @@ describe("ProposalDisplay", () => {
     expect(sheet).toHaveAttribute("aria-busy", "true");
     expect(
       (frame as HTMLElement).style.getPropertyValue("--font-heading-family"),
-    ).toContain("IBM Plex Mono");
+    ).toContain("Archivo");
     expect(
       (frame as HTMLElement).style.getPropertyValue("--color-canvas"),
     ).toBe("");
@@ -232,8 +232,8 @@ describe("ProposalDisplay", () => {
       ),
     ).toBeTruthy();
     expect(
-      screen.queryByRole("button", { name: "100 percent zoom" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Fit page" }),
+    ).toHaveClass("dasti-doc-zoom-fit--active");
   });
 
   it("keeps the uncontrolled zoom state after zooming in", async () => {
