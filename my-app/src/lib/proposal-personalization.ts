@@ -735,12 +735,20 @@ export function getLocalActiveCvSnapshotById(
   const nextId = compactWhitespace(id);
   if (!nextId) return null;
 
-  const libraryDoc =
-    getLibraryDocuments().find((doc) => String(doc.id) === nextId) ?? null;
-  const doc = getStoredDocumentById(nextId) ?? libraryDoc;
+  const doc = getLocalCvDocumentById(nextId);
   if (!doc) return null;
 
   return buildActiveCvSnapshotFromCvDocument(doc);
+}
+
+export function getLocalCvDocumentById(id: string): CvDocument | null {
+  const nextId = compactWhitespace(id);
+  if (!nextId) return null;
+
+  const libraryDoc =
+    getLibraryDocuments().find((doc) => String(doc.id) === nextId) ?? null;
+
+  return getStoredDocumentById(nextId) ?? libraryDoc;
 }
 
 export function getActiveLocalPersonalizationSource(): {
@@ -924,10 +932,7 @@ export function getProposalAttachedCvLocalDocument(): CvDocument | null {
     return null;
   }
 
-  const libraryDoc =
-    getLibraryDocuments().find((doc) => String(doc.id) === attachedCvId) ?? null;
-
-  return getStoredDocumentById(attachedCvId) ?? libraryDoc;
+  return getLocalCvDocumentById(attachedCvId);
 }
 
 export function setProposalAttachedCvId(id: string): void {

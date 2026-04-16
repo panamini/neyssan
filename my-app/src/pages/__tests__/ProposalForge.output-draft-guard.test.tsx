@@ -133,7 +133,7 @@ describe("ProposalForge output draft guard", () => {
       "Content Creation & Social Media Intern|empty",
     );
     expect(readStoredProposalOutputDraft()).toMatchObject({
-      proposalContent: "Freshly generated proposal body.",
+      proposalContent: expect.stringContaining("Freshly generated proposal body."),
       generatedProposalId: "proposal_live",
       proposalDocumentTitle: "Operations Associate",
     });

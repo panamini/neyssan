@@ -3,7 +3,7 @@ import { getProposalTwinTemplateId } from "../../features/verbati/style";
 import { resolveProposalRenderState } from "../proposal-render-state";
 
 describe("resolveProposalRenderState", () => {
-  it("uses stored proposal style metadata ahead of the active cv fallback while normalizing removed resume layouts", () => {
+  it("uses stored proposal style metadata ahead of the active cv fallback without collapsing valid layout identity", () => {
     const result = resolveProposalRenderState({
       storedStylePreset: {
         layout: "modernist",
@@ -18,7 +18,7 @@ describe("resolveProposalRenderState", () => {
       },
     });
 
-    expect(result.stylePreset.layout).toBe("two-column");
+    expect(result.stylePreset.layout).toBe("modernist");
     expect(result.stylePreset.typography).toBe("mono-signal");
     expect(result.templateId).toBe("modernist_signal");
   });
@@ -36,7 +36,6 @@ describe("resolveProposalRenderState", () => {
 
     expect(result.stylePreset).toMatchObject({
       ...activeCvStylePreset,
-      layout: "two-column",
     });
     expect(result.templateId).toBe(
       getProposalTwinTemplateId(result.stylePreset),
@@ -64,7 +63,32 @@ describe("resolveProposalRenderState", () => {
     expect(result.templateId).toBe("editorial_wide");
   });
 
-  it("maps the Volk manual style family onto the surviving Swiss proposal twin", () => {
+  it("keeps stored template and stored style as independent artifact fields when both exist", () => {
+    const result = resolveProposalRenderState({
+      storedStylePreset: {
+        layout: "editorial",
+        typography: "civic-correspondence",
+        palette: "custom",
+        accentHex: "#AA7733",
+      },
+      storedTemplateId: "editorial_wide",
+      activeCvStylePreset: {
+        layout: "swiss",
+        typography: "quiet-editorial",
+        palette: "sauge",
+      },
+    });
+
+    expect(result.stylePreset).toEqual({
+      layout: "editorial",
+      typography: "civic-correspondence",
+      palette: "custom",
+      accentHex: "#aa7733",
+    });
+    expect(result.templateId).toBe("editorial_wide");
+  });
+
+  it("keeps Volk style identity while resolving its proposal twin independently", () => {
     const result = resolveProposalRenderState({
       activeCvStylePreset: {
         layout: "volk-register",
@@ -73,7 +97,7 @@ describe("resolveProposalRenderState", () => {
       },
     });
 
-    expect(result.stylePreset.layout).toBe("swiss");
+    expect(result.stylePreset.layout).toBe("volk-register");
     expect(result.stylePreset.typography).toBe("civic-correspondence");
     expect(result.templateId).toBe("swiss_margin");
   });

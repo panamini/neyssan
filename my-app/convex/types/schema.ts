@@ -28,6 +28,8 @@ export interface ProposalDoc extends Doc<"proposals"> {
     jobId?: string;
     tags?: string[];
     sourceJobDescription?: string;
+    sourceUrl?: string;
+    sourceCvId?: string;
     planned_path?: string;
     executed_path?: string;
     fallback_reason?: string;
@@ -63,6 +65,7 @@ export interface ProposalDoc extends Doc<"proposals"> {
       palette: string;
       accentHex?: string;
     };
+    styleLinkMode?: "inherit_cv" | "proposal_local";
     styleChoice?: "auto" | "formal" | "warm" | "technical" | "balanced";
     templateBundleId?:
       | "swiss_serif"

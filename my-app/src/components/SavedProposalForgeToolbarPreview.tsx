@@ -20,6 +20,10 @@ import {
 } from "@/lib/icons";
 import type { ProposalVoicePreset } from "../../convex/lib/proposals/voicePresets";
 import { ProposalColorPickerPopover } from "./ProposalColorPickerPopover";
+import {
+  SaveIndicator,
+  type SaveStatus,
+} from "./ui/SaveIndicator";
 import { getVoicePresetDisplayLabel } from "../lib/proposal-voice-label";
 import { DOCUMENT_ZOOM_STEPS } from "../lib/document-stage";
 import {
@@ -58,6 +62,7 @@ type SavedProposalForgeToolbarPreviewProps = {
   onLayoutChange: (
     value: Extract<VerbatiLayoutPreset, "swiss" | "editorial" | "modernist">,
   ) => void;
+  saveStatus?: SaveStatus;
 };
 
 type DrawerId = "zoom" | "layout" | "style" | "color" | "tone" | null;
@@ -134,6 +139,7 @@ export function SavedProposalForgeToolbarPreview({
   resolvedPaletteId,
   layoutValue,
   onLayoutChange,
+  saveStatus = "idle",
 }: SavedProposalForgeToolbarPreviewProps): JSX.Element {
   const rootRef = React.useRef<HTMLDivElement>(null);
   const colorButtonRef = React.useRef<HTMLButtonElement>(null);
@@ -585,6 +591,12 @@ export function SavedProposalForgeToolbarPreview({
       <div className="dasti-document-rail__section dasti-document-rail__section--center"></div>
 
       <div className="dasti-document-rail__section dasti-document-rail__section--end">
+        {saveStatus !== "idle" ? (
+          <>
+            <SaveIndicator status={saveStatus} />
+            <div className="dasti-icon-cluster__divider dasti-proposal-rail-cluster__divider" />
+          </>
+        ) : null}
         <span className="dasti-compose-toolbar__tone-anchor dasti-saved-proposal-forge-toolbar-preview__anchor dasti-saved-proposal-forge-toolbar-preview__anchor--tone">
           <button
             type="button"

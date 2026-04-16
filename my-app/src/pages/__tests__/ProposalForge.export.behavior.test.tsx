@@ -71,7 +71,11 @@ vi.mock("../../components/ProposalInputForm", () => ({
 }));
 
 vi.mock("../../components/ProposalComposeToolbar", () => ({
-  ProposalComposeToolbar: () => <div data-testid="proposal-compose-toolbar" />,
+  ProposalComposeToolbar: (props: Record<string, unknown>) => (
+    <div data-testid="proposal-compose-toolbar">
+      {props.rightActions as React.ReactNode}
+    </div>
+  ),
 }));
 
 vi.mock("../../components/ProposalArtifactInspector", () => ({
@@ -162,9 +166,8 @@ describe("ProposalForge export behavior", () => {
       </MemoryRouter>,
     );
 
-    await user.click(
-      screen.getByRole("button", { name: "Export ATS PDF" }),
-    );
+    await user.click(screen.getByRole("button", { name: "Export proposal" }));
+    await user.click(screen.getByRole("menuitem", { name: "Export ATS PDF" }));
 
     expect(exportDocumentFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -226,9 +229,8 @@ describe("ProposalForge export behavior", () => {
       </MemoryRouter>,
     );
 
-    await user.click(
-      screen.getByRole("button", { name: "Export Styled PDF" }),
-    );
+    await user.click(screen.getByRole("button", { name: "Export proposal" }));
+    await user.click(screen.getByRole("menuitem", { name: "Export Styled PDF" }));
 
     expect(exportDocumentFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -236,18 +238,18 @@ describe("ProposalForge export behavior", () => {
         format: "pdf",
         mode: "styled",
         stylePreset: expect.objectContaining({
-          layout: "swiss",
-          typography: "quiet-editorial",
-          palette: "pierre",
+          layout: "two-column",
+          typography: "mono-signal",
+          palette: "sauge",
         }),
         data: expect.objectContaining({
           kind: "proposal",
           renderSource: "preview",
-          templateId: "swiss_margin",
+          templateId: "two_column_rail",
           stylePreset: expect.objectContaining({
-            layout: "swiss",
-            typography: "quiet-editorial",
-            palette: "pierre",
+            layout: "two-column",
+            typography: "mono-signal",
+            palette: "sauge",
           }),
         }),
       }),
@@ -292,12 +294,11 @@ describe("ProposalForge export behavior", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Export Styled PDF" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Export proposal" })).toBeInTheDocument();
     });
 
-    await user.click(
-      screen.getByRole("button", { name: "Export Styled PDF" }),
-    );
+    await user.click(screen.getByRole("button", { name: "Export proposal" }));
+    await user.click(screen.getByRole("menuitem", { name: "Export Styled PDF" }));
 
     expect(exportDocumentFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -323,7 +324,8 @@ describe("ProposalForge export behavior", () => {
       filename: "Proposal - Editable.docx",
     });
 
-    await user.click(screen.getByRole("button", { name: "Export DOCX" }));
+    await user.click(screen.getByRole("button", { name: "Export proposal" }));
+    await user.click(screen.getByRole("menuitem", { name: /Export DOCX/i }));
 
     expect(exportDocumentFileMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -384,18 +386,15 @@ describe("ProposalForge export behavior", () => {
       </MemoryRouter>,
     );
 
-    const atsButton = screen.getByRole("button", { name: "Export ATS PDF" });
-    const styledButton = screen.getByRole("button", { name: "Export Styled PDF" });
-    const docxButton = screen.getByRole("button", { name: "Export DOCX" });
+    const exportButton = screen.getByRole("button", { name: "Export proposal" });
 
-    await user.click(atsButton);
+    await user.click(exportButton);
+    await user.click(screen.getByRole("menuitem", { name: "Export ATS PDF" }));
 
     expect(exportDocumentFileMock).toHaveBeenCalledTimes(1);
-    expect(atsButton).toBeDisabled();
-    expect(styledButton).toBeDisabled();
-    expect(docxButton).toBeDisabled();
+    expect(exportButton).toBeDisabled();
 
-    await user.click(styledButton);
+    await user.click(exportButton);
 
     expect(exportDocumentFileMock).toHaveBeenCalledTimes(1);
 
@@ -404,7 +403,7 @@ describe("ProposalForge export behavior", () => {
     });
 
     await waitFor(() => {
-      expect(atsButton).not.toBeDisabled();
+      expect(exportButton).not.toBeDisabled();
     });
 
     expect(showToastMock).toHaveBeenCalledWith("Exported Proposal - ATS.pdf", {
