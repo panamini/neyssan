@@ -5,8 +5,7 @@ import {
   type ProposalTemplateId,
 } from "../../convex/lib/proposals/renderTemplates";
 import {
-  resolveVerbatiStyle,
-  serializeVerbatiStyle,
+  sanitizePersistedVerbatiStyle,
 } from "../features/verbati/style";
 import { resolveVerbatiFontPairId } from "../features/verbati/fontCatalog";
 import type { VerbatiStylePreset } from "../features/verbati/types";
@@ -223,10 +222,8 @@ export function readStoredProposalOutputDraft(): StoredProposalOutputDraft | nul
       proposalVerbatiStyle:
         parsed.proposalVerbatiStyle &&
         typeof parsed.proposalVerbatiStyle === "object"
-          ? serializeVerbatiStyle(
-              resolveVerbatiStyle(
-                parsed.proposalVerbatiStyle as Partial<VerbatiStylePreset>,
-              ),
+          ? sanitizePersistedVerbatiStyle(
+              parsed.proposalVerbatiStyle as Partial<VerbatiStylePreset>,
             )
           : null,
       proposalStyleLinkMode:
@@ -359,10 +356,8 @@ function buildSanitizedStoredProposalOutputDraft(
     proposalVerbatiStyle:
       draft.proposalVerbatiStyle &&
       typeof draft.proposalVerbatiStyle === "object"
-        ? serializeVerbatiStyle(
-            resolveVerbatiStyle(
-              draft.proposalVerbatiStyle as Partial<VerbatiStylePreset>,
-            ),
+        ? sanitizePersistedVerbatiStyle(
+            draft.proposalVerbatiStyle as Partial<VerbatiStylePreset>,
           )
         : null,
     proposalStyleLinkMode:

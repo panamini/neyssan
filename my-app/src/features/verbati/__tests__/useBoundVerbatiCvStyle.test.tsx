@@ -9,7 +9,7 @@ describe("useBoundVerbatiCvStyle", () => {
     vi.useFakeTimers();
   });
 
-  it("persists canonicalized verbatiStyle metadata through importCv", async () => {
+  it("persists the exact valid style snapshot through importCv", async () => {
     const currentCv = generateCvTemplateV1("Verbati Hook CV");
     const importCv = vi.fn().mockResolvedValue(undefined);
 
@@ -23,9 +23,10 @@ describe("useBoundVerbatiCvStyle", () => {
 
     act(() => {
       result.current.setStylePreset({
-        layout: "swiss",
-        palette: "bordeaux",
-        typography: "engaging",
+        layout: "editorial",
+        palette: "custom",
+        accentHex: "#AA7733",
+        typography: "civic-correspondence",
       });
     });
 
@@ -40,10 +41,10 @@ describe("useBoundVerbatiCvStyle", () => {
         id: currentCv.id,
         metadata: expect.objectContaining({
           verbatiStyle: {
-            layout: "swiss",
-            palette: "bordeaux",
-            typography: "soft-serif",
-            accentHex: undefined,
+            layout: "editorial",
+            palette: "custom",
+            typography: "civic-correspondence",
+            accentHex: "#aa7733",
           },
         }),
       }),
