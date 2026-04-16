@@ -1,5 +1,6 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { userProfileMetadataValidator } from "./lib/userProfileMetadata";
 import { PROPOSAL_TEMPLATE_IDS } from "./lib/proposals/renderTemplates";
 
 const proposalVoicePresetChoice = v.union(
@@ -300,15 +301,7 @@ export default defineSchema({
         address: v.optional(v.string()),
       }),
     ),
-    metadata: v.optional(
-      v.object({
-        source: v.optional(v.string()),
-        importedAt: v.optional(v.number()),
-        // optional parsing metadata
-        confidence: v.optional(v.number()),
-        filename: v.optional(v.string()),
-      }),
-    ),
+    metadata: v.optional(userProfileMetadataValidator),
     cvDocument: v.optional(v.any()),
 
     // Fields used by upsert logic

@@ -199,7 +199,7 @@ describe("EmbeddedStyleInspector", () => {
     });
   });
 
-  it("offers the Volk layout and civic typography in the direct control drawers", async () => {
+  it("offers only the active resume layouts and keeps civic typography available", async () => {
     const user = userEvent.setup();
 
     renderInspector();
@@ -208,7 +208,11 @@ describe("EmbeddedStyleInspector", () => {
       screen.getByRole("button", { name: "Open layout controls" }),
     );
 
-    expect(screen.getByRole("button", { name: "Volk Register" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Swiss Minima" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Two Column" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Volk Register" }),
+    ).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Open text styles" }));
 
@@ -239,8 +243,8 @@ describe("EmbeddedStyleInspector", () => {
     await user.click(
       screen.getByRole("button", { name: "Open layout controls" }),
     );
-    await user.click(screen.getByRole("button", { name: "Volk Register" }));
+    await user.click(screen.getByRole("button", { name: "Two Column" }));
 
-    expect(onSelectLayout).toHaveBeenCalledWith("volk-register");
+    expect(onSelectLayout).toHaveBeenCalledWith("two-column");
   });
 });

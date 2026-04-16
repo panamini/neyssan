@@ -130,6 +130,49 @@ export interface UserProfileDoc extends Doc<"userProfiles"> {
   proposalAccentHex?: string | null;
   proposalFontPairId?: string | null;
   proposalSourceMode?: "inherit_cv" | "proposal_local";
+  metadata?: {
+    source?: string;
+    importedAt?: number;
+    confidence?: number;
+    filename?: string;
+    verbatiStyle?: {
+      layout:
+        | "swiss"
+        | "volk-register"
+        | "two-column"
+        | "editorial"
+        | "modernist"
+        | "quire"
+        | "playful-photo"
+        | "soft-ribbon"
+        | "slate-column";
+      typography:
+        | "quiet-editorial"
+        | "civic-correspondence"
+        | "ledger-sans"
+        | "mono-signal"
+        | "studio-grotesk"
+        | "soft-serif"
+        | "special-correspondence"
+        | "poster-accent"
+        | "high-contrast-editorial"
+        | "bricolage-hepta"
+        | "nunito-ortica"
+        | "nunito-code"
+        | "doto-code"
+        | "signature"
+        | "engaging"
+        | "expert";
+      palette:
+        | "sauge"
+        | "ocre"
+        | "pierre"
+        | "bordeaux"
+        | "encre"
+        | "custom";
+      accentHex?: string;
+    };
+  };
 }
 
 export interface RateLimitDoc extends Doc<"rateLimits"> {
