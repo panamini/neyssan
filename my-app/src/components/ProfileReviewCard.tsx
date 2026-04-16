@@ -34,8 +34,9 @@ import StructuredUploadButton, {
 import ImportWarningBanner from "./ImportWarningBanner";
 import CvRenameDialog from "./CvRenameDialog";
 import ImportRecoveryPanel from "./ImportRecoveryPanel";
-import ResumeExportControl from "./ResumeExportControl";
-import type { ResumeExportFormat } from "../lib/cv-export";
+import ResumeExportControl, {
+  type ResumeExportRequest,
+} from "./ResumeExportControl";
 import type {
   CvDocument,
   CvSection,
@@ -77,12 +78,15 @@ import { makeTextSection } from "../lib/cv-template";
 interface Props {
   cvId?: string;
   profile?: unknown;
-  onRequestExport?: (format: ResumeExportFormat) => void;
+  exportingFormat?: string | null;
+  onRequestExport?: (format: ResumeExportRequest) => void;
   exportStatusDescription?: string;
   exportStatusLabel?: string;
   exportStatusTone?: "standard" | "trusted";
   toolbarLeadControl?: React.ReactNode;
   toolbarPrimaryControl?: React.ReactNode;
+  /** When set, scrolls to and briefly highlights the first section matching this type (e.g. "experience", "skills"). */
+  highlightSectionType?: string | null;
 }
 
 type ManualSectionOption = {
@@ -108,7 +112,8 @@ type ImportRuntimeDebugSnapshot = {
 const IMPORT_WARNING_SESSION_KEY_PREFIX = "dasti:cv-import-warning-banner:";
 const IMPORT_REVIEW_SESSION_KEY_PREFIX = "dasti:cv-import-review:";
 const IMPORT_RENAME_PROMPT_SESSION_KEY_PREFIX = "dasti:cv-import-rename:";
-const IMPORT_RECOVERY_DRAFT_SESSION_KEY_PREFIX = "dasti:cv-import-recovery-draft:";
+const IMPORT_RECOVERY_DRAFT_SESSION_KEY_PREFIX =
+  "dasti:cv-import-recovery-draft:";
 const IMPORT_WARNING_AUTO_HIDE_DELAY_MS = 5000;
 const IMPORT_WARNING_EXIT_DURATION_MS = 180;
 const RECOVERY_RESUME_BANNER_AUTO_HIDE_DELAY_MS = 5000;
@@ -175,17 +180,22 @@ function getRecoveryDecisionStatus(
   targetSection: ImportRecoverySectionType,
   targetSectionTitle?: string | null,
 ): ImportRecoveryItem["reviewStatus"] {
-  const normalizedPredicted = normalizeRecoverySectionTarget(item.predictedSection);
+  const normalizedPredicted = normalizeRecoverySectionTarget(
+    item.predictedSection,
+  );
   const normalizedSelected = normalizeRecoverySectionTarget(targetSection);
   const normalizedTitle =
     normalizedSelected === "custom" ? targetSectionTitle?.trim() ?? "" : "";
 
-  return normalizedSelected === normalizedPredicted && normalizedTitle.length === 0
+  return normalizedSelected === normalizedPredicted &&
+    normalizedTitle.length === 0
     ? "accepted"
     : "reassigned";
 }
 
-function buildPendingRecoverySessionItem(item: ImportRecoveryItem): ImportRecoveryItem {
+function buildPendingRecoverySessionItem(
+  item: ImportRecoveryItem,
+): ImportRecoveryItem {
   const sessionText =
     item.displayTextSource === "raw" && item.rawText.trim()
       ? item.rawText
@@ -207,12 +217,17 @@ function buildPendingRecoverySessionItem(item: ImportRecoveryItem): ImportRecove
     ...(item.sourceFieldKey?.trim()
       ? { sourceFieldKey: item.sourceFieldKey.trim() }
       : {}),
-    ...(item.sourceLabel?.trim() ? { sourceLabel: item.sourceLabel.trim() } : {}),
+    ...(item.sourceLabel?.trim()
+      ? { sourceLabel: item.sourceLabel.trim() }
+      : {}),
     fragmentAssignments: [],
   };
 }
 
-function createImportRecoverySession(items: ImportRecoveryItem[], reviewLimit: number): ImportRecoverySession {
+function createImportRecoverySession(
+  items: ImportRecoveryItem[],
+  reviewLimit: number,
+): ImportRecoverySession {
   return {
     status: items.length > 0 ? "pending" : "completed",
     updatedAt: new Date().toISOString(),
@@ -233,13 +248,13 @@ function createCompletedImportRecoverySession(
     items: items.map((item) => normalizeRecoveryItemTargets(item)),
     overflowCount: Math.max(items.length - reviewLimit, 0),
     reviewLimit,
-    ...(Array.isArray(baseSectionsSnapshot)
-      ? { baseSectionsSnapshot }
-      : {}),
+    ...(Array.isArray(baseSectionsSnapshot) ? { baseSectionsSnapshot } : {}),
   };
 }
 
-function normalizeRecoveryItemTargets(item: ImportRecoveryItem): ImportRecoveryItem {
+function normalizeRecoveryItemTargets(
+  item: ImportRecoveryItem,
+): ImportRecoveryItem {
   return {
     ...item,
     predictedSection: normalizeRecoverySectionTarget(item.predictedSection),
@@ -253,7 +268,10 @@ function normalizeRecoveryItemTargets(item: ImportRecoveryItem): ImportRecoveryI
   };
 }
 
-function buildTouchedSectionRevealState(sections: CvSection[], touchedSectionIds: string[]) {
+function buildTouchedSectionRevealState(
+  sections: CvSection[],
+  touchedSectionIds: string[],
+) {
   const revealedIds = new Set(touchedSectionIds.map(String));
   return sections.map((section) =>
     revealedIds.has(String(section.id ?? ""))
@@ -286,7 +304,8 @@ function mergeImportedAuthoritativeResume(
   if (authoritativeResume) {
     nextMetadata.authoritativeResume = authoritativeResume;
   } else {
-    delete (nextMetadata as { authoritativeResume?: unknown }).authoritativeResume;
+    delete (nextMetadata as { authoritativeResume?: unknown })
+      .authoritativeResume;
   }
   return nextMetadata;
 }
@@ -302,7 +321,8 @@ function mergeExplicitAuthoritativeResume(
   if (authoritativeResume) {
     nextMetadata.authoritativeResume = authoritativeResume;
   } else {
-    delete (nextMetadata as { authoritativeResume?: unknown }).authoritativeResume;
+    delete (nextMetadata as { authoritativeResume?: unknown })
+      .authoritativeResume;
   }
   return nextMetadata;
 }
@@ -320,9 +340,7 @@ function buildImportRuntimeDebugSnapshot(
       : null;
   const authoritativeResume = readStructuredAuthoritativeResume(payload);
   const ocrEngine =
-    typeof diagnostics?.ocr_engine === "string"
-      ? diagnostics.ocr_engine
-      : null;
+    typeof diagnostics?.ocr_engine === "string" ? diagnostics.ocr_engine : null;
   const mistralRuntime =
     typeof diagnostics?.mistral_runtime === "string"
       ? diagnostics.mistral_runtime
@@ -378,13 +396,8 @@ function ImportRuntimeDebugControls(props: {
   rawTextForCopy: string | null;
   runtimeDebug: ImportRuntimeDebugSnapshot | null;
 }): JSX.Element {
-  const {
-    copyFeedback,
-    onCopyPayload,
-    payload,
-    rawTextForCopy,
-    runtimeDebug,
-  } = props;
+  const { copyFeedback, onCopyPayload, payload, rawTextForCopy, runtimeDebug } =
+    props;
 
   return (
     <>
@@ -519,12 +532,14 @@ function ImportRuntimeDebugControls(props: {
 export function ProfileReviewCard({
   cvId,
   profile,
+  exportingFormat = null,
   onRequestExport,
   exportStatusDescription = "Not ATS-verified",
   exportStatusLabel = "Standard Export",
   exportStatusTone = "standard",
   toolbarLeadControl,
   toolbarPrimaryControl,
+  highlightSectionType = null,
 }: Props) {
   const navigate = useNavigate();
   const {
@@ -551,6 +566,33 @@ export function ProfileReviewCard({
   const previousRecoveryOpenRef = useRef<boolean | null>(null);
   const previousCvIdRef = useRef<string | null>(null);
   const sectionRevealRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  // Respond to preview → editor section focus requests
+  useEffect(() => {
+    if (!highlightSectionType || !currentCv) return;
+
+    const sections = currentCv.sections ?? [];
+    const matchingSection = sections.find(
+      (s) =>
+        String(s.type ?? "").toLowerCase() ===
+        highlightSectionType.toLowerCase(),
+    );
+    if (!matchingSection) return;
+
+    const node = sectionRevealRefs.current[String(matchingSection.id ?? "")];
+    if (!node) return;
+
+    node.scrollIntoView({ behavior: "smooth", block: "center" });
+    // Brief highlight pulse via data attribute + CSS animation
+    node.setAttribute("data-preview-focus", "true");
+    const timeoutId = window.setTimeout(() => {
+      node.removeAttribute("data-preview-focus");
+    }, 1200);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [highlightSectionType, currentCv]);
 
   useEffect(() => {
     if (!cvId) {
@@ -621,20 +663,40 @@ export function ProfileReviewCard({
   const sectionCatalog = useMemo<ManualSectionOption[]>(() => {
     const typedOptions: ManualSectionOption[] = v1Enabled
       ? [
-          { value: "achievements", label: "Achievements", sectionType: "achievements" },
+          {
+            value: "achievements",
+            label: "Achievements",
+            sectionType: "achievements",
+          },
           { value: "languages", label: "Languages", sectionType: "languages" },
           { value: "projects", label: "Projects", sectionType: "projects" },
-          { value: "certifications", label: "Certifications", sectionType: "certifications" },
+          {
+            value: "certifications",
+            label: "Certifications",
+            sectionType: "certifications",
+          },
         ]
       : [
           { value: "summary", label: "Summary", sectionType: "summary" },
-          { value: "experience", label: "Experience", sectionType: "experience" },
-          { value: "achievements", label: "Achievements", sectionType: "achievements" },
+          {
+            value: "experience",
+            label: "Experience",
+            sectionType: "experience",
+          },
+          {
+            value: "achievements",
+            label: "Achievements",
+            sectionType: "achievements",
+          },
           { value: "education", label: "Education", sectionType: "education" },
           { value: "skills", label: "Skills", sectionType: "skills" },
           { value: "languages", label: "Languages", sectionType: "languages" },
           { value: "projects", label: "Projects", sectionType: "projects" },
-          { value: "certifications", label: "Certifications", sectionType: "certifications" },
+          {
+            value: "certifications",
+            label: "Certifications",
+            sectionType: "certifications",
+          },
         ];
 
     return [
@@ -670,11 +732,17 @@ export function ProfileReviewCard({
     ];
   }, [v1Enabled]);
   const addableSectionOptions = useMemo(() => {
-    const existingTypes = new Set(sections.map((section) => String(section.type ?? "")));
+    const existingTypes = new Set(
+      sections.map((section) => String(section.type ?? "")),
+    );
     const existingTextTitles = new Set(
       sections
         .filter((section) => String(section.type ?? "") === "text")
-        .map((section) => String(section.title ?? "").trim().toLowerCase()),
+        .map((section) =>
+          String(section.title ?? "")
+            .trim()
+            .toLowerCase(),
+        ),
     );
     return sectionCatalog.filter((option) => {
       if (option.value === "achievements") {
@@ -684,7 +752,11 @@ export function ProfileReviewCard({
         return true;
       }
       if (option.sectionType === "text") {
-        return !existingTextTitles.has(String(option.sectionTitle ?? "").trim().toLowerCase());
+        return !existingTextTitles.has(
+          String(option.sectionTitle ?? "")
+            .trim()
+            .toLowerCase(),
+        );
       }
       return !existingTypes.has(option.sectionType);
     });
@@ -695,10 +767,17 @@ export function ProfileReviewCard({
       if (sectionType === "text") {
         const title = String(section.title ?? "").trim();
         const matchingOption = sectionCatalog.find(
-          (option) => option.sectionType === "text" && option.sectionTitle === title,
+          (option) =>
+            option.sectionType === "text" && option.sectionTitle === title,
         );
         if (matchingOption) {
-          return [{ id: String(section.id), label: matchingOption.label, sectionId: String(section.id) }];
+          return [
+            {
+              id: String(section.id),
+              label: matchingOption.label,
+              sectionId: String(section.id),
+            },
+          ];
         }
         return [
           {
@@ -713,7 +792,13 @@ export function ProfileReviewCard({
         (option) => option.sectionType === sectionType,
       );
       if (!matchingOption) return [];
-      return [{ id: String(section.id), label: matchingOption.label, sectionId: String(section.id) }];
+      return [
+        {
+          id: String(section.id),
+          label: matchingOption.label,
+          sectionId: String(section.id),
+        },
+      ];
     });
   }, [sectionCatalog, sections]);
   React.useEffect(() => {
@@ -777,10 +862,13 @@ export function ProfileReviewCard({
     useState<PendingRecoveryImport | null>(null);
   const [savedRecoveryDraft, setSavedRecoveryDraft] =
     useState<PendingRecoveryImport | null>(null);
-  const [pendingTouchedRecoverySectionIds, setPendingTouchedRecoverySectionIds] =
-    useState<string[]>([]);
-  const [revealedRecoverySectionIds, setRevealedRecoverySectionIds] =
-    useState<string[]>([]);
+  const [
+    pendingTouchedRecoverySectionIds,
+    setPendingTouchedRecoverySectionIds,
+  ] = useState<string[]>([]);
+  const [revealedRecoverySectionIds, setRevealedRecoverySectionIds] = useState<
+    string[]
+  >([]);
   const recoveryItemsToReview = useMemo(
     () => pendingRecoveryImport?.items ?? [],
     [pendingRecoveryImport],
@@ -794,7 +882,11 @@ export function ProfileReviewCard({
     [currentCv],
   );
   const importSignalSignature = useMemo(
-    () => importSignals.map((signal) => signal.id).sort().join("|"),
+    () =>
+      importSignals
+        .map((signal) => signal.id)
+        .sort()
+        .join("|"),
     [importSignals],
   );
   const importWarningSessionKey = currentCv?.id
@@ -814,34 +906,39 @@ export function ProfileReviewCard({
     [importSignals],
   );
   const persistedMetadataRecoverySession = useMemo(() => {
-    const candidate = (currentCv?.metadata as { importRecoverySession?: unknown } | undefined)
-      ?.importRecoverySession;
+    const candidate = (
+      currentCv?.metadata as { importRecoverySession?: unknown } | undefined
+    )?.importRecoverySession;
     if (!candidate || typeof candidate !== "object") return null;
     const session = candidate as ImportRecoverySession;
-    if (!Array.isArray(session.items) || session.items.length === 0) return null;
+    if (!Array.isArray(session.items) || session.items.length === 0)
+      return null;
     return session;
   }, [currentCv]);
   const resumableRecoveryItemCount =
-    persistedMetadataRecoverySession?.items.length ?? savedRecoveryDraft?.items.length ?? 0;
-  const recoveryResumeBannerSignature = !pendingRecoveryImport && resumableRecoveryItemCount > 0
-    ? [
-        currentCv?.id ?? "fresh",
-        savedRecoveryDraft?.cycleId ?? "",
-        savedRecoveryDraft?.items.length ?? 0,
-        persistedMetadataRecoverySession?.updatedAt ?? "",
-        persistedMetadataRecoverySession?.status ?? "",
-        resumableRecoveryItemCount,
-      ].join("|")
-    : "";
+    persistedMetadataRecoverySession?.items.length ??
+    savedRecoveryDraft?.items.length ??
+    0;
+  const recoveryResumeBannerSignature =
+    !pendingRecoveryImport && resumableRecoveryItemCount > 0
+      ? [
+          currentCv?.id ?? "fresh",
+          savedRecoveryDraft?.cycleId ?? "",
+          savedRecoveryDraft?.items.length ?? 0,
+          persistedMetadataRecoverySession?.updatedAt ?? "",
+          persistedMetadataRecoverySession?.status ?? "",
+          resumableRecoveryItemCount,
+        ].join("|")
+      : "";
   const hasCompletedRecoverySession =
-    persistedMetadataRecoverySession?.status === "completed" && !pendingRecoveryImport;
+    persistedMetadataRecoverySession?.status === "completed" &&
+    !pendingRecoveryImport;
   const hasPendingRecoveryEntryPoint =
     Boolean(pendingRecoveryImport) ||
     Boolean(savedRecoveryDraft) ||
     Boolean(persistedMetadataRecoverySession);
   const hasImportReviewEntryPoint =
-    importSignals.length > 0 ||
-    hasPendingRecoveryEntryPoint;
+    importSignals.length > 0 || hasPendingRecoveryEntryPoint;
   const reviewChecksLabel = isImportReviewAcknowledged
     ? "Review flagged fields again"
     : "Review flagged fields";
@@ -855,9 +952,15 @@ export function ProfileReviewCard({
     : "Review import changes";
   const rawTextForCopy =
     coerceDebugPayloadText((latestStructuredPayload as any)?.rawText) ??
-    coerceDebugPayloadText((latestStructuredPayload?.normalized as any)?.rawText) ??
-    coerceDebugPayloadText((latestStructuredPayload?.debug as any)?.rawParser?.rawText) ??
-    coerceDebugPayloadText((latestStructuredPayload?.debug as any)?.rawParser?.normalized?.rawText);
+    coerceDebugPayloadText(
+      (latestStructuredPayload?.normalized as any)?.rawText,
+    ) ??
+    coerceDebugPayloadText(
+      (latestStructuredPayload?.debug as any)?.rawParser?.rawText,
+    ) ??
+    coerceDebugPayloadText(
+      (latestStructuredPayload?.debug as any)?.rawParser?.normalized?.rawText,
+    );
   const latestImportRuntimeDebug = useMemo(
     () => buildImportRuntimeDebugSnapshot(latestStructuredPayload),
     [latestStructuredPayload],
@@ -1074,7 +1177,9 @@ export function ProfileReviewCard({
     setSavedRecoveryDraft(null);
     setPendingTouchedRecoverySectionIds([]);
     previousRecoveryOpenRef.current = false;
-    clearRecoveryDraftStorage(options?.storageKey ?? importRecoveryDraftSessionKey);
+    clearRecoveryDraftStorage(
+      options?.storageKey ?? importRecoveryDraftSessionKey,
+    );
   }
 
   async function clearPersistedRecoverySession(options?: {
@@ -1089,8 +1194,11 @@ export function ProfileReviewCard({
       return true;
     }
 
-    const nextMetadata = { ...(currentCv.metadata ?? {}) } as CvDocument["metadata"];
-    delete (nextMetadata as { importRecoverySession?: unknown }).importRecoverySession;
+    const nextMetadata = {
+      ...(currentCv.metadata ?? {}),
+    } as CvDocument["metadata"];
+    delete (nextMetadata as { importRecoverySession?: unknown })
+      .importRecoverySession;
 
     try {
       await importCv({
@@ -1124,7 +1232,10 @@ export function ProfileReviewCard({
 
   function acknowledgeImportReview() {
     if (importReviewSessionKey && typeof window !== "undefined") {
-      window.sessionStorage.setItem(importReviewSessionKey, importSignalSignature);
+      window.sessionStorage.setItem(
+        importReviewSessionKey,
+        importSignalSignature,
+      );
     }
     setIsImportReviewAcknowledged(true);
   }
@@ -1167,7 +1278,8 @@ export function ProfileReviewCard({
       return;
     }
 
-    const usesAnimationFrame = typeof window.requestAnimationFrame === "function";
+    const usesAnimationFrame =
+      typeof window.requestAnimationFrame === "function";
     const frameId = usesAnimationFrame
       ? window.requestAnimationFrame(() => {
           scrollToRecoveryPanel();
@@ -1175,7 +1287,10 @@ export function ProfileReviewCard({
       : window.setTimeout(scrollToRecoveryPanel, 0);
 
     return () => {
-      if (usesAnimationFrame && typeof window.cancelAnimationFrame === "function") {
+      if (
+        usesAnimationFrame &&
+        typeof window.cancelAnimationFrame === "function"
+      ) {
         window.cancelAnimationFrame(frameId);
       } else {
         window.clearTimeout(frameId);
@@ -1205,7 +1320,9 @@ export function ProfileReviewCard({
     if (importSignals.length > 0) {
       if (isImportReviewCollapsed) {
         handleReviewFlaggedFields();
-      } else if (typeof inlineReviewRef.current?.scrollIntoView === "function") {
+      } else if (
+        typeof inlineReviewRef.current?.scrollIntoView === "function"
+      ) {
         inlineReviewRef.current.scrollIntoView({
           behavior: "smooth",
           block: "start",
@@ -1218,7 +1335,7 @@ export function ProfileReviewCard({
     setIsRenameDialogOpen(false);
   }
 
-  function handleExportClick(format: ResumeExportFormat) {
+  function handleExportClick(format: ResumeExportRequest) {
     if (importSignals.length > 0 && !isImportReviewAcknowledged) {
       handleImportReviewEntryPoint();
       pushToast("Review the flagged fields before exporting this CV.");
@@ -1301,14 +1418,19 @@ export function ProfileReviewCard({
     if (args.target === "fresh" || !currentCv) {
       return {
         id: uuidv4(),
-        title: deriveCvTitleFromSections(args.updatedSections as any, "Imported CV"),
+        title: deriveCvTitleFromSections(
+          args.updatedSections as any,
+          "Imported CV",
+        ),
         metadata: mergeExplicitAuthoritativeResume(
           mergeImportedAuthoritativeResume(
             {
               createdAt: now,
               updatedAt: now,
               version: 1,
-              ...(pendingSession ? { importRecoverySession: pendingSession } : {}),
+              ...(pendingSession
+                ? { importRecoverySession: pendingSession }
+                : {}),
             } as CvDocument["metadata"],
             args.structured,
           ),
@@ -1332,7 +1454,8 @@ export function ProfileReviewCard({
       args.authoritativeResume,
     );
     if (!pendingSession) {
-      delete (nextMetadata as { importRecoverySession?: unknown }).importRecoverySession;
+      delete (nextMetadata as { importRecoverySession?: unknown })
+        .importRecoverySession;
     }
 
     return {
@@ -1485,13 +1608,16 @@ export function ProfileReviewCard({
         items: current.items.map((item) => {
           if (item.blockId !== payload.blockId) return item;
 
-          const nextSection = normalizeRecoverySectionTarget(payload.targetSection);
+          const nextSection = normalizeRecoverySectionTarget(
+            payload.targetSection,
+          );
           const nextTitle =
             nextSection === "custom"
               ? payload.targetSectionTitle?.trim() ?? null
               : null;
           const nextStatus =
-            item.reviewStatus === "accepted" || item.reviewStatus === "reassigned"
+            item.reviewStatus === "accepted" ||
+            item.reviewStatus === "reassigned"
               ? getRecoveryDecisionStatus(item, nextSection, nextTitle)
               : item.reviewStatus;
 
@@ -1626,8 +1752,11 @@ export function ProfileReviewCard({
 
   async function applyReviewedRecoveryImport() {
     if (!pendingRecoveryImport) return;
-    const normalizedItems = pendingRecoveryImport.items.map(normalizeRecoveryItemTargets);
-    const { itemsToApply, pendingItems, summary } = buildRecoveryCommitState(normalizedItems);
+    const normalizedItems = pendingRecoveryImport.items.map(
+      normalizeRecoveryItemTargets,
+    );
+    const { itemsToApply, pendingItems, summary } =
+      buildRecoveryCommitState(normalizedItems);
     const reviewedSections = applyImportRecoveryItems(
       pendingRecoveryImport.baseSections,
       itemsToApply,
@@ -1641,7 +1770,10 @@ export function ProfileReviewCard({
       touchedSectionIds,
     );
     const persistedSession = pendingItems.length
-      ? createImportRecoverySession(pendingItems, pendingRecoveryImport.reviewLimit)
+      ? createImportRecoverySession(
+          pendingItems,
+          pendingRecoveryImport.reviewLimit,
+        )
       : createCompletedImportRecoverySession(
           normalizedItems,
           pendingRecoveryImport.reviewLimit,
@@ -1710,7 +1842,11 @@ export function ProfileReviewCard({
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [importRecoveryDraftSessionKey, pendingRecoveryImport, savedRecoveryDraft]);
+  }, [
+    importRecoveryDraftSessionKey,
+    pendingRecoveryImport,
+    savedRecoveryDraft,
+  ]);
 
   React.useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1721,7 +1857,11 @@ export function ProfileReviewCard({
         return;
       }
       const parsed = JSON.parse(raw) as PendingRecoveryImport;
-      if (!parsed || !Array.isArray(parsed.items) || parsed.items.length === 0) {
+      if (
+        !parsed ||
+        !Array.isArray(parsed.items) ||
+        parsed.items.length === 0
+      ) {
         setSavedRecoveryDraft(null);
         return;
       }
@@ -1935,7 +2075,9 @@ export function ProfileReviewCard({
       let newSection: CvSection;
       if (option.sectionType === "text") {
         const requestedTitle = option.isCustom
-          ? window.prompt("Name the new section", "Additional Information")?.trim() ?? ""
+          ? window
+              .prompt("Name the new section", "Additional Information")
+              ?.trim() ?? ""
           : String(option.sectionTitle ?? "").trim();
         if (!requestedTitle) {
           pushToast("Section name is required");
@@ -1944,7 +2086,11 @@ export function ProfileReviewCard({
         const existingTextTitles = new Set(
           (currentCv?.sections ?? sections)
             .filter((section) => String(section.type ?? "") === "text")
-            .map((section) => String(section.title ?? "").trim().toLowerCase()),
+            .map((section) =>
+              String(section.title ?? "")
+                .trim()
+                .toLowerCase(),
+            ),
         );
         if (existingTextTitles.has(requestedTitle.toLowerCase())) {
           pushToast(`Section "${requestedTitle}" already exists`);
@@ -1954,70 +2100,70 @@ export function ProfileReviewCard({
       } else {
         // Generate a full template and pick the matching section to ensure schema-compliance.
         try {
-        // If the user explicitly requested a typed v1 section, force the v1 template
-        // regardless of env flag. This ensures Add Section always creates a v1-shaped
-        // section when the user picks a v1 type from the UI.
-        const typedV1Set = new Set([
-          "profile",
-          "summary",
-          "experience",
-          "achievements",
-          "education",
-          "skills",
-          "languages",
-        ]);
-        const optionalV1SectionSet = new Set(["achievements", "languages"]);
-        const forceV1ForType = typedV1Set.has(String(type));
-        const tmpl = forceV1ForType
-          ? generateCvTemplateV1()
-          : v1Enabled
+          // If the user explicitly requested a typed v1 section, force the v1 template
+          // regardless of env flag. This ensures Add Section always creates a v1-shaped
+          // section when the user picks a v1 type from the UI.
+          const typedV1Set = new Set([
+            "profile",
+            "summary",
+            "experience",
+            "achievements",
+            "education",
+            "skills",
+            "languages",
+          ]);
+          const optionalV1SectionSet = new Set(["achievements", "languages"]);
+          const forceV1ForType = typedV1Set.has(String(type));
+          const tmpl = forceV1ForType
             ? generateCvTemplateV1()
-            : generateCvTemplate();
+            : v1Enabled
+              ? generateCvTemplateV1()
+              : generateCvTemplate();
 
-        // Dev log to aid QA: which template we picked and why
-        if (process.env.NODE_ENV !== "production") {
-          try {
-            // eslint-disable-next-line no-console
-            console.debug(
-              "[ProfileReviewCard] handleAddSection templateChoice",
-              {
-                requestedType: type,
-                forceV1ForType,
-                v1Enabled,
-                chosenTemplate: forceV1ForType
-                  ? "generateCvTemplateV1"
-                  : v1Enabled
+          // Dev log to aid QA: which template we picked and why
+          if (process.env.NODE_ENV !== "production") {
+            try {
+              // eslint-disable-next-line no-console
+              console.debug(
+                "[ProfileReviewCard] handleAddSection templateChoice",
+                {
+                  requestedType: type,
+                  forceV1ForType,
+                  v1Enabled,
+                  chosenTemplate: forceV1ForType
                     ? "generateCvTemplateV1"
-                    : "generateCvTemplate",
-              },
-            );
-          } catch {}
-        }
+                    : v1Enabled
+                      ? "generateCvTemplateV1"
+                      : "generateCvTemplate",
+                },
+              );
+            } catch {}
+          }
 
           let matched = tmpl.sections.find((s) => s.type === (type as any));
-        if (
-          !matched &&
-          forceV1ForType &&
-          optionalV1SectionSet.has(String(type))
-        ) {
-          const optionalTemplate = generateCvTemplate();
-          matched = optionalTemplate.sections.find(
-            (s) => s.type === (type as any),
-          );
-        }
-        if (!matched) {
-          pushToast(`Section type "${type}" is not available`);
-          return;
-        }
+          if (
+            !matched &&
+            forceV1ForType &&
+            optionalV1SectionSet.has(String(type))
+          ) {
+            const optionalTemplate = generateCvTemplate();
+            matched = optionalTemplate.sections.find(
+              (s) => s.type === (type as any),
+            );
+          }
+          if (!matched) {
+            pushToast(`Section type "${type}" is not available`);
+            return;
+          }
 
-        // Clone and give it a unique id for this document.
-        newSection = { ...matched, id: uuidv4() } as CvSection;
+          // Clone and give it a unique id for this document.
+          newSection = { ...matched, id: uuidv4() } as CvSection;
         } catch (err) {
-        // If template generation fails, fail safely instead of creating a legacy text section.
-        // eslint-disable-next-line no-console
-        console.error("[ProfileReviewCard] generateCvTemplate failed", err);
-        pushToast("Failed to create section");
-        return;
+          // If template generation fails, fail safely instead of creating a legacy text section.
+          // eslint-disable-next-line no-console
+          console.error("[ProfileReviewCard] generateCvTemplate failed", err);
+          pushToast("Failed to create section");
+          return;
         }
       }
 
@@ -2117,8 +2263,9 @@ export function ProfileReviewCard({
     reorderSections(nextSections as any);
     setIsManageSectionsMenuOpen(false);
     const removedLabel =
-      removableAddedSections.find((section) => section.sectionId === normalizedSectionId)
-        ?.label ?? "Section";
+      removableAddedSections.find(
+        (section) => section.sectionId === normalizedSectionId,
+      )?.label ?? "Section";
     pushToast(`${removedLabel} removed`);
   }
 
@@ -2184,7 +2331,9 @@ export function ProfileReviewCard({
           <div className="dasti-inline-review__panel">
             <div className="dasti-inline-review__header">
               <div className="dasti-inline-review__header-copy">
-                <div className="dasti-inline-review__eyebrow">Import review</div>
+                <div className="dasti-inline-review__eyebrow">
+                  Import review
+                </div>
                 <p className="dasti-inline-review__summary">
                   Clean flagged parser noise here before generating proposals.
                 </p>
@@ -2204,7 +2353,9 @@ export function ProfileReviewCard({
                   type="button"
                   className="dasti-inline-review__close"
                   aria-label={
-                    isImportReviewCollapsed ? "Open import review" : "Close import review"
+                    isImportReviewCollapsed
+                      ? "Open import review"
+                      : "Close import review"
                   }
                   onClick={toggleInlineImportReview}
                 >
@@ -2223,14 +2374,18 @@ export function ProfileReviewCard({
                   className="dasti-inline-review__item"
                   role="listitem"
                 >
-                  <div className="dasti-inline-review__title">{signal.title}</div>
+                  <div className="dasti-inline-review__title">
+                    {signal.title}
+                  </div>
                   <p className="dasti-inline-review__description">
                     {signal.description}
                   </p>
                 </div>
               ))}
             </div>
-            {pendingRecoveryImport || savedRecoveryDraft || persistedMetadataRecoverySession ? (
+            {pendingRecoveryImport ||
+            savedRecoveryDraft ||
+            persistedMetadataRecoverySession ? (
               <div className="dasti-inline-review__actions">
                 <button
                   type="button"
@@ -2284,7 +2439,10 @@ export function ProfileReviewCard({
       {!pendingRecoveryImport &&
       resumableRecoveryItemCount > 0 &&
       !isRecoveryResumeBannerHidden ? (
-        <section className="dasti-import-recovery__resume-banner" aria-label="Pending import recovery review">
+        <section
+          className="dasti-import-recovery__resume-banner"
+          aria-label="Pending import recovery review"
+        >
           <div>
             <div className="dasti-inline-review__eyebrow">Import recovery</div>
             <div className="dasti-import-recovery__resume-title">
@@ -2303,7 +2461,9 @@ export function ProfileReviewCard({
                   return;
                 }
                 if (persistedMetadataRecoverySession) {
-                  resumeRecoverySessionFromMetadata(persistedMetadataRecoverySession);
+                  resumeRecoverySessionFromMetadata(
+                    persistedMetadataRecoverySession,
+                  );
                 }
               }}
             >
@@ -2426,7 +2586,10 @@ export function ProfileReviewCard({
               contextKey="cvforge-empty-state"
               label="Import CV"
               onApplyToSections={(updated, structured) => {
-                void importSectionsIntoFreshCv(updated, structured as StructuredPayload | undefined);
+                void importSectionsIntoFreshCv(
+                  updated,
+                  structured as StructuredPayload | undefined,
+                );
               }}
               onResult={(payload) => {
                 setLatestStructuredPayload(payload as StructuredPayload);
@@ -2496,7 +2659,9 @@ export function ProfileReviewCard({
                     type="button"
                     aria-label="Manage sections"
                     className="dasti-select dasti-select--sm dasti-add-section-trigger"
-                    onClick={() => setIsAddSectionMenuOpen((current) => !current)}
+                    onClick={() =>
+                      setIsAddSectionMenuOpen((current) => !current)
+                    }
                   >
                     <span
                       className="dasti-add-section-trigger__spacer"
@@ -2535,17 +2700,17 @@ export function ProfileReviewCard({
                         >
                           <div className="dasti-menu-option__row">
                             <div className="dasti-menu-option__copy">
-                               <div className="dasti-menu-option__title">
-                                 {option.label}
-                               </div>
-                               {option.description ? (
-                                 <div className="dasti-menu-option__description">
-                                   {option.description}
-                                 </div>
-                               ) : null}
-                             </div>
-                           </div>
-                         </button>
+                              <div className="dasti-menu-option__title">
+                                {option.label}
+                              </div>
+                              {option.description ? (
+                                <div className="dasti-menu-option__description">
+                                  {option.description}
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
+                        </button>
                       ))}
                     </div>
                   ) : null}
@@ -2685,7 +2850,7 @@ export function ProfileReviewCard({
                 ) : null}
                 {onRequestExport ? (
                   <ResumeExportControl
-                    exportingFormat={null}
+                    exportingFormat={exportingFormat}
                     onExport={handleExportClick}
                     statusDescription={exportStatusDescription}
                     statusLabel={exportStatusLabel}
@@ -2698,17 +2863,29 @@ export function ProfileReviewCard({
                     onClick={handleImportReviewEntryPoint}
                     className="dasti-button dasti-button--secondary dasti-button--pill dasti-button--sm dasti-import-review-trigger"
                     aria-label={toolbarImportEntryLabel}
-                    aria-expanded={pendingRecoveryImport ? true : importSignals.length > 0 ? !isImportReviewCollapsed : false}
+                    aria-expanded={
+                      pendingRecoveryImport
+                        ? true
+                        : importSignals.length > 0
+                          ? !isImportReviewCollapsed
+                          : false
+                    }
                     data-toolbar-tooltip={toolbarImportEntryLabel}
                     data-review-state={
-                      pendingRecoveryImport || savedRecoveryDraft || persistedMetadataRecoverySession
+                      pendingRecoveryImport ||
+                      savedRecoveryDraft ||
+                      persistedMetadataRecoverySession
                         ? "required"
                         : isImportReviewAcknowledged
                           ? "acknowledged"
                           : "required"
                     }
                   >
-                    <SealWarning size={18} strokeWidth={1.7} aria-hidden="true" />
+                    <SealWarning
+                      size={18}
+                      strokeWidth={1.7}
+                      aria-hidden="true"
+                    />
                     {toolbarImportEntryLabel}
                   </button>
                 ) : null}
@@ -2762,12 +2939,15 @@ export function ProfileReviewCard({
                         : "false"
                     }
                     data-import-revealed={
-                      revealedRecoverySectionIds.includes(String(section.id ?? ""))
+                      revealedRecoverySectionIds.includes(
+                        String(section.id ?? ""),
+                      )
                         ? "true"
                         : "false"
                     }
                     ref={(node) => {
-                      sectionRevealRefs.current[String(section.id ?? "")] = node;
+                      sectionRevealRefs.current[String(section.id ?? "")] =
+                        node;
                     }}
                     tabIndex={-1}
                   >

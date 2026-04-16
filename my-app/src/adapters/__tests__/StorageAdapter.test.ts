@@ -156,4 +156,65 @@ describe("StorageAdapter persistence", () => {
       restored?.sections.some((section) => section.type === "summary"),
     ).toBe(true);
   });
+
+  it("sends metadata.verbatiStyle through patch metadata and keeps it in cvDocument", async () => {
+    const patchMutation = vi.fn().mockResolvedValue(undefined);
+    const adapter = new ConvexStorageAdapter(patchMutation);
+    const cv = generateCvTemplateV1("Styled Persistence CV");
+    cv.metadata.verbatiStyle = {
+      layout: "swiss",
+      palette: "bordeaux",
+      typography: "soft-serif",
+      accentHex: "#9a2d45",
+    };
+
+    await expect(adapter.save(cv)).resolves.toBeUndefined();
+
+    expect(patchMutation).toHaveBeenCalledTimes(1);
+    const payload = patchMutation.mock.calls[0][0].patch;
+    expect(payload.metadata.verbatiStyle).toEqual({
+      layout: "swiss",
+      palette: "bordeaux",
+      typography: "soft-serif",
+      accentHex: "#9a2d45",
+    });
+    expect(payload.cvDocument.metadata.verbatiStyle).toEqual({
+      layout: "swiss",
+      palette: "bordeaux",
+      typography: "soft-serif",
+      accentHex: "#9a2d45",
+    });
+  });
+
+  it("preserves and canonicalizes legacy verbatiStyle metadata on fallback restore", () => {
+    const restored = mapPersistedProfileToCvDocument(
+      {
+        profileId: "legacy-style-cv",
+        name: "Legacy Styled Candidate",
+        summary: "Summary",
+        metadata: {
+          source: "legacy-import",
+          importedAt: 123,
+          confidence: 0.82,
+          filename: "resume.pdf",
+          verbatiStyle: {
+            layout: "playful-photo",
+            palette: "bordeaux",
+            typography: "engaging",
+            accentHex: "#8f233b",
+          },
+        },
+      },
+      "legacy-style-cv",
+    );
+
+    expect(restored).not.toBeNull();
+    expect(restored?.metadata.source).toBe("legacy-import");
+    expect(restored?.metadata.verbatiStyle).toEqual({
+      layout: "two-column",
+      palette: "bordeaux",
+      typography: "soft-serif",
+      accentHex: undefined,
+    });
+  });
 });

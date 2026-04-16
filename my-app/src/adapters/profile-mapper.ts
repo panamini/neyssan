@@ -2,6 +2,10 @@
  
 import { parseCvDocumentStrict, CvDocumentSchema } from "../schemas/cvDocument.schema";
 import type { CvDocument, CvDocumentStrict } from "../schemas/cvDocument.schema";
+import {
+  resolveVerbatiStyle,
+  serializeVerbatiStyle,
+} from "../features/verbati/style";
 import type { INormalizedProfile } from "../types/profile";
  
 /**
@@ -50,6 +54,12 @@ export interface ConvexUserProfile {
     importedAt?: number;
     confidence?: number;
     filename?: string;
+    verbatiStyle?: {
+      layout?: string;
+      typography?: string;
+      palette?: string;
+      accentHex?: string;
+    };
   } | undefined;
   cvDocument?: unknown;
 }
@@ -120,6 +130,11 @@ export function mapProfileToCvDocument(profile: any, forcedId?: string): CvDocum
   const title = profile.name || profile.email || "Untitled CV";
 
   const nowIso = new Date().toISOString();
+  const persistedMetadata =
+    profile.metadata && typeof profile.metadata === "object"
+      ? (profile.metadata as Record<string, unknown>)
+      : null;
+
   const metadata = {
     createdAt: nowIso,
     updatedAt: nowIso,
@@ -127,6 +142,36 @@ export function mapProfileToCvDocument(profile: any, forcedId?: string): CvDocum
     locale: undefined,
     authorId: undefined,
     lastEditedBy: undefined,
+    source:
+      typeof persistedMetadata?.source === "string"
+        ? persistedMetadata.source
+        : undefined,
+    importedAt:
+      typeof persistedMetadata?.importedAt === "number"
+        ? persistedMetadata.importedAt
+        : undefined,
+    confidence:
+      typeof persistedMetadata?.confidence === "number"
+        ? persistedMetadata.confidence
+        : undefined,
+    filename:
+      typeof persistedMetadata?.filename === "string"
+        ? persistedMetadata.filename
+        : undefined,
+    verbatiStyle:
+      persistedMetadata?.verbatiStyle &&
+      typeof persistedMetadata.verbatiStyle === "object"
+        ? serializeVerbatiStyle(
+            resolveVerbatiStyle(
+              persistedMetadata.verbatiStyle as {
+                layout?: string;
+                typography?: string;
+                palette?: string;
+                accentHex?: string;
+              },
+            ),
+          )
+        : undefined,
   };
 
   const sections: CvDocument["sections"] = [];

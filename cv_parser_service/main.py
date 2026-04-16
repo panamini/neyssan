@@ -1877,6 +1877,16 @@ async def export_resume_pdf(payload: Dict[str, Any] = Body(...)) -> Response:
     )
 
 
+@app.post("/api/v1/document-export/resume/docx")
+async def export_resume_docx(payload: Dict[str, Any] = Body(...)) -> Response:
+    return create_document_export_response(
+        payload,
+        expected_kind="resume",
+        expected_format="docx",
+        fallback_filename_base="Resume - Editable",
+    )
+
+
 @app.post("/api/v1/document-export/proposal/pdf")
 async def export_proposal_pdf(payload: Dict[str, Any] = Body(...)) -> Response:
     return create_document_export_response(

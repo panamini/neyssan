@@ -324,6 +324,15 @@ const _CvMetadataBase = z.object({
     })
     .passthrough()
     .optional(),
+  verbatiStyle: z
+    .object({
+      layout: z.string().optional(),
+      typography: z.string().optional(),
+      palette: z.string().optional(),
+      accentHex: z.string().optional(),
+    })
+    .strict()
+    .optional(),
 });
 export const CvMetadataSchema = _CvMetadataBase.passthrough();
 export const CvMetadataSchemaStrict = _CvMetadataBase.strict();

@@ -1,5 +1,9 @@
 import { mutation, internalQuery, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
+import {
+  canonicalizeUserProfileMetadata,
+  userProfileMetadataValidator,
+} from "./lib/userProfileMetadata";
 import { getPrimaryProfileForClerk } from "./lib/userProfiles";
 
 export const get = internalQuery({
@@ -86,10 +90,7 @@ export const patch = mutation({
           )
         ),
         metadata: v.optional(
-          v.object({
-            source: v.optional(v.string()),
-            importedAt: v.optional(v.number()),
-          })
+          userProfileMetadataValidator,
         ),
       })
     ),
@@ -148,6 +149,13 @@ export const patch = mutation({
         version: args.version ?? 1,
       };
 
+      const initialMetadata = canonicalizeUserProfileMetadata(
+        args.patch?.metadata ?? incoming.metadata,
+      );
+      if (initialMetadata !== undefined) {
+        doc.metadata = initialMetadata;
+      }
+
       if (args.patch?.cvDocument !== undefined) {
         doc.cvDocument = args.patch.cvDocument;
       } else if (incoming.cvDocument !== undefined) {
@@ -189,15 +197,12 @@ export const patch = mutation({
       if (args.profile.raw_text !== undefined) updates.raw_text = args.profile.raw_text;
       if (args.profile.linkedIn !== undefined) updates.linkedIn = args.profile.linkedIn;
       if (args.profile.metadata !== undefined) {
-        interface Metadata {
-          source?: string;
-          importedAt?: number;
-          confidence?: number;
-          filename?: string;
-          updatedAt?: any;
-          version?: any;
-        }
-        const md = { ...args.profile.metadata } as Metadata;
+        const md = {
+          ...(canonicalizeUserProfileMetadata(args.profile.metadata) as Record<
+            string,
+            unknown
+          >),
+        };
         delete md.updatedAt;
         delete md.version;
         updates.metadata = md;
@@ -258,16 +263,12 @@ export const patch = mutation({
 
       // Defensive: remove updatedAt and version from metadata if present in patch
       if (updates.metadata) {
-        interface Metadata {
-          source?: string;
-          importedAt?: number;
-          confidence?: number;
-          filename?: string;
-          authoritativeResume?: unknown;
-          updatedAt?: any;
-          version?: any;
-        }
-        const md = { ...updates.metadata } as Metadata;
+        const md = {
+          ...(canonicalizeUserProfileMetadata(updates.metadata) as Record<
+            string,
+            unknown
+          >),
+        };
         delete md.updatedAt;
         delete md.version;
         delete md.authoritativeResume;

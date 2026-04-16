@@ -485,7 +485,7 @@ describe("ProfileReviewCard import", () => {
 
     render(<ProfileReviewCard onRequestExport={exportCvMock} />);
 
-    await user.click(screen.getByRole("button", { name: "Export PDF" }));
+    await user.click(screen.getByRole("button", { name: "Export ATS PDF" }));
 
     expect(exportCvMock).not.toHaveBeenCalled();
     expect(
@@ -1189,11 +1189,41 @@ describe("ProfileReviewCard import", () => {
 
     expect(actionGroup).not.toBeNull();
     expect(
-      actionGroup?.querySelector('[aria-label="Export PDF"]'),
+      actionGroup?.querySelector('[aria-label="Export ATS PDF"]'),
     ).not.toBeNull();
     expect(
       actionGroup?.querySelector('[aria-label="Review import changes"]'),
     ).not.toBeNull();
+  });
+
+  it("passes the in-flight export lock state to the inner toolbar export control", () => {
+    cvLibraryState.currentCv = {
+      id: "cv_imported",
+      title: "Imported CV",
+      metadata: {
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        version: 1,
+      },
+      sections: [],
+    };
+
+    render(
+      <ProfileReviewCard
+        exportingFormat="pdf:styled"
+        onRequestExport={exportCvMock}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Export ATS PDF" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Export Styled PDF" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "More export formats" }),
+    ).toBeDisabled();
   });
 
   it("renders the lead toolbar control inside the anchored CV action rail", () => {
