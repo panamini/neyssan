@@ -83,11 +83,27 @@ describe("resume preview workspace anchoring", () => {
     expect(workspaceFrameRule).toContain("max-width: 100%;");
     expect(workspaceFrameRule).toContain("height: auto;");
     expect(workspaceFrameRule).toContain("var(--cv-preview-toolbar-inset, 0px)");
-    expect(workspaceStagePaddingRule).toContain(
-      "padding: var(--space-3) var(--space-5) var(--space-5);",
-    );
+    expect(workspaceStagePaddingRule).toContain("padding: var(--space-5);");
     expect(productCss).toContain(
       ".dasti-doc-viewer-shell--resume-workspace .dasti-doc-viewport--resume {",
+    );
+  });
+
+  it("keeps Robial heading/body selectors tied to the shared font vars", () => {
+    expect(resumePreviewCss).toContain(
+      '.name {\n  margin: 0;\n  font-family: var(--font-editorial-family);',
+    );
+    expect(resumePreviewCss).toContain(
+      '.summary {\n  margin: 0;\n  max-width: var(--header-summary-width);\n  font-family: var(--font-body-family);',
+    );
+    expect(resumePreviewCss).toContain(
+      '.entry-title {\n  margin: 0;\n  font-family: var(--font-heading-family);',
+    );
+    expect(resumePreviewCss).toContain(
+      '.entry-subtitle {\n  margin: var(--experience-org-margin) 0 0;\n  font-family: var(--font-body-family);',
+    );
+    expect(resumePreviewCss).toContain(
+      '.bullet-list li,\n.project-copy {\n  font-family: var(--font-body-family);',
     );
   });
 });

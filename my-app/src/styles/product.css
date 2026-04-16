@@ -13434,3 +13434,30 @@ html:not(.dark) .dasti-proposal-submit {
 [title]:not(abbr):not([aria-describedby]) {
   /* Let browser still read for a11y, just suppress via JS approach in TSX */
 }
+
+/* ── Interactive preview → editor section linking ── */
+
+/* Cursor + hover highlight on clickable resume sections in the panel preview */
+.dasti-document-stage__canvas[data-interactive="true"] [data-preview-section] {
+  cursor: pointer;
+  position: relative;
+  transition: outline 0.1s ease;
+  border-radius: 1px;
+}
+
+.dasti-document-stage__canvas[data-interactive="true"] [data-preview-section]:hover {
+  outline: 1.5px solid color-mix(in srgb, var(--color-accent, currentColor) 55%, transparent 45%);
+  outline-offset: 2px;
+}
+
+/* Highlight pulse on editor section when preview click fires */
+@keyframes dasti-section-focus-pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent, var(--accent)) 40%, transparent 60%); }
+  50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--color-accent, var(--accent)) 12%, transparent 88%); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+[data-preview-focus="true"] {
+  animation: dasti-section-focus-pulse 0.9s ease forwards;
+  border-radius: var(--radius-card, 6px);
+}

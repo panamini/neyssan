@@ -12,11 +12,13 @@ export default defineConfig({
     host: "localhost",
     port: LOCAL_CLERK_SYNC_PORT,
     strictPort: true,
+    allowedHosts: ["host.docker.internal"],
   },
   preview: {
     host: "localhost",
     port: LOCAL_CLERK_SYNC_PORT,
     strictPort: true,
+    allowedHosts: ["host.docker.internal"],
   },
   resolve: {
     alias: {

@@ -30,6 +30,8 @@ type VerbatiCvPreviewPanelProps = {
   onStylePresetChange?: React.Dispatch<
     React.SetStateAction<ReturnType<typeof getVerbatiStyleFromCv>>
   >;
+  /** When provided, the preview panel becomes interactive: clicking a resume section fires this callback. */
+  onSectionClick?: (sectionType: string) => void;
 };
 
 export function VerbatiCvPreviewPanel({
@@ -39,6 +41,7 @@ export function VerbatiCvPreviewPanel({
   railTrailingControl = null,
   stylePreset: controlledStylePreset,
   onStylePresetChange,
+  onSectionClick,
 }: VerbatiCvPreviewPanelProps): JSX.Element {
   const { currentCv, importCv } = useCvLibrary();
   const persistedStylePreset = React.useMemo(
@@ -389,6 +392,7 @@ export function VerbatiCvPreviewPanel({
             data={previewData}
             stylePreset={stylePreset}
             hostMode="panel"
+            onSectionClick={onSectionClick}
           />
         </div>
       )}

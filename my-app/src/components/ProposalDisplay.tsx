@@ -31,6 +31,10 @@ import { buildVerbatiProposalDocumentVars } from "../features/verbati/style";
 import type { VerbatiStylePreset } from "../features/verbati/types";
 import { resolveProposalRenderState } from "../lib/proposal-render-state";
 import {
+  readDocumentExportDebugConfig,
+  setProposalPreviewDebugCapture,
+} from "../lib/document-export-debug";
+import {
   A4_PAGE_HEIGHT_PX,
   A4_PAGE_WIDTH_PX,
   DOCUMENT_ZOOM_STEPS,
@@ -48,6 +52,7 @@ import {
   resolveProposalHeaderVisibility,
   type ProposalHeaderVisibility,
 } from "../lib/proposal-header";
+import { collectProposalFontDebugSnapshot } from "../lib/proposal-font-debug";
 
 interface ProposalDisplayProps {
   proposalContent: string | null;
@@ -445,6 +450,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     () => buildVerbatiProposalDocumentVars(resolvedStylePreset),
     [resolvedStylePreset],
   );
+  const isEditable = mode === "edit" && Boolean(onContentChange);
 
   const [internalZoomIndex, setInternalZoomIndex] = React.useState(() =>
     readProposalZoomIndex(zoomStorageKey),
@@ -498,6 +504,74 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   const [isCharacterBadgeOverlappingPage, setIsCharacterBadgeOverlappingPage] =
     React.useState(false);
 
+  React.useEffect(() => {
+    if (
+      !proposalContent ||
+      loading ||
+      error ||
+      typeof window === "undefined" ||
+      !readDocumentExportDebugConfig()
+    ) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    const capturePreviewState = async () => {
+      try {
+        if (document.fonts?.ready) {
+          await document.fonts.ready;
+        }
+      } catch {
+        // Continue even if the browser cannot expose font readiness.
+      }
+
+      await new Promise<void>((resolve) => {
+        window.requestAnimationFrame(() => resolve());
+      });
+      await new Promise<void>((resolve) => {
+        window.requestAnimationFrame(() => resolve());
+      });
+
+      if (cancelled || !viewerSurfaceRef.current) {
+        return;
+      }
+
+      setProposalPreviewDebugCapture({
+        source: "live-preview",
+        templateId: resolvedTemplateId,
+        stylePreset: resolvedStylePreset,
+        serializedThemeVars: Object.fromEntries(
+          Object.entries(proposalDocumentThemeVars).map(([key, value]) => [
+            key,
+            String(value ?? ""),
+          ]),
+        ),
+        snapshot: collectProposalFontDebugSnapshot({
+          root: viewerSurfaceRef.current,
+          stylePreset: resolvedStylePreset,
+          templateId: resolvedTemplateId,
+          voicePreset: voicePreset ?? null,
+        }),
+        timestamp: Date.now(),
+      });
+    };
+
+    void capturePreviewState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    error,
+    loading,
+    proposalContent,
+    proposalDocumentThemeVars,
+    resolvedStylePreset,
+    resolvedTemplateId,
+    voicePreset,
+  ]);
+
   const {
     attach: attachEditableScrollEdges,
     showTop: showEditableScrollTop,
@@ -534,7 +608,6 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     proposalType === "cover_letter" ||
     proposalType === "application_message" ||
     proposalType === "freelance_proposal";
-  const isEditable = mode === "edit" && Boolean(onContentChange);
   const canEditApplicantHeader = Boolean(
     documentTitleEditable ||
       contactLineEditable ||
@@ -595,10 +668,6 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     [onRecipientDetailsChange, recipientFields],
   );
   const applicantDrawerId = React.useId();
-  const usesFixedA4ScalePreview =
-    usesDocumentRenderer &&
-    resolvedTemplateId === "volk_register" &&
-    !isEditable;
   const isLetterLike =
     proposalType === "cover_letter" || proposalType === "application_message";
   const isDocumentEditor = isEditable && usesDocumentRenderer;
@@ -626,21 +695,14 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     "--proposal-scroll-top-strength": activeScrollTopStrength.toFixed(3),
     "--proposal-scroll-bottom-strength": activeScrollBottomStrength.toFixed(3),
   } as React.CSSProperties;
-  const documentStageFitMode =
-    usesDocumentRenderer && usesFixedA4ScalePreview && !isEditable
-      ? "width"
-      : usesDocumentRenderer
-        ? "contain"
-        : "width";
   const stageLayout = useDocumentStageLayout({
     enabled: usesDocumentRenderer && Boolean(proposalContent),
     measurementRef: stageMeasureRef,
     zoomLevel: effectiveZoomLevel,
-    fitMode: documentStageFitMode,
+    fitMode: usesDocumentRenderer ? "contain" : "width",
     pageWidthPx: A4_PAGE_WIDTH_PX,
     pageHeightPx: A4_PAGE_HEIGHT_PX,
   });
-  const stageMode = stageLayout.isFit ? "fit" : "overflow";
   const stageLayoutVars =
     usesDocumentRenderer && proposalContent
       ? ({
@@ -663,11 +725,11 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         )
       : 0;
   const previewDocumentScale =
-    usesFixedA4ScalePreview && stageLayout.pageWidth > 0
+    usesDocumentRenderer && !isEditable && stageLayout.pageWidth > 0
       ? stageLayout.pageWidth / A4_PAGE_WIDTH_PX
       : 1;
   const unscaledDocumentPageGapPx =
-    usesFixedA4ScalePreview && previewDocumentScale > 0
+    usesDocumentRenderer && !isEditable && previewDocumentScale > 0
       ? documentPageGapPx / previewDocumentScale
       : documentPageGapPx;
   const renderedDocumentHeight =
@@ -676,7 +738,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         documentPageGapPx * Math.max(0, documentPageCount - 1)
       : stageLayout.pageHeight;
   const renderedUnscaledDocumentHeight =
-    usesFixedA4ScalePreview
+    usesDocumentRenderer && !isEditable
       ? A4_PAGE_HEIGHT_PX * Math.max(1, documentPageCount) +
         unscaledDocumentPageGapPx * Math.max(0, documentPageCount - 1)
       : renderedDocumentHeight;
@@ -685,9 +747,11 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   const previewStageMode =
     usesDocumentRenderer &&
     !isEditable &&
-    renderedDocumentHeight > stageLayout.stageHeight + 1
+    (renderedDocumentHeight > stageLayout.stageHeight + 1 ||
+      stageLayout.overflowX ||
+      stageLayout.overflowY)
       ? "overflow"
-      : stageMode;
+      : "fit";
   const resolveBodyClassName = React.useCallback(
     ({
       isReadonly = false,
@@ -1185,20 +1249,16 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           <button
             type="button"
             className={
-              isEditable || zoomIndex === 1
+              zoomIndex === 1
                 ? "dasti-doc-zoom-fit dasti-doc-zoom-fit--active"
                 : "dasti-doc-zoom-fit"
             }
             onClick={() => {
-              if (isEditable) {
-                return;
-              }
               setZoomIndex(1);
               setFitRequestCount((count) => count + 1);
             }}
             aria-label="Fit page"
             data-toolbar-tooltip="Fit page"
-            disabled={isEditable}
           >
             <CornersIn size={14} strokeWidth={1.8} aria-hidden="true" />
           </button>
@@ -1206,7 +1266,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
             type="button"
             className="dasti-icon-button"
             onClick={() => setZoomIndex((i) => Math.max(0, i - 1))}
-            disabled={isEditable || zoomIndex === 0}
+            disabled={zoomIndex === 0}
             aria-label="Zoom out"
             data-toolbar-tooltip="Zoom out"
           >
@@ -1220,9 +1280,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                 Math.min(DOCUMENT_ZOOM_STEPS.length - 1, i + 1),
               )
             }
-            disabled={
-              isEditable || zoomIndex === DOCUMENT_ZOOM_STEPS.length - 1
-            }
+            disabled={zoomIndex === DOCUMENT_ZOOM_STEPS.length - 1}
             aria-label="Zoom in"
             data-toolbar-tooltip="Zoom in"
           >
@@ -1402,84 +1460,16 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
             height: `${renderedDocumentHeight}px`,
           }}
         >
-          {usesFixedA4ScalePreview ? (
+          {isEditable ? (
             <div
-              className="dasti-proposal-sheet__preview-scale-shell"
-              style={{
-                width: `${A4_PAGE_WIDTH_PX}px`,
-                height: `${renderedUnscaledDocumentHeight}px`,
-                transform: `scale(${previewDocumentScale})`,
-              }}
-            >
-              <div
-                className={[
-                  "dasti-proposal-sheet__preview-page",
-                  isMultiPagePreview
-                    ? "dasti-proposal-sheet__preview-page--stacked"
-                    : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-                data-document-page="true"
-                style={{
-                  width: `${A4_PAGE_WIDTH_PX}px`,
-                  height: `${renderedUnscaledDocumentHeight}px`,
-                  aspectRatio: isMultiPagePreview ? "auto" : undefined,
-                }}
-                onClick={() => {
-                  if (mode === "preview") {
-                    onPreviewInteract?.();
-                  }
-                }}
-              >
-                <ProposalDocumentRenderer
-                  content={proposalContent ?? ""}
-                  proposalType={proposalType}
-                  templateId={resolvedTemplateId}
-                  railTitle={railTitle}
-                  railMeta={railMeta}
-                  contactLine={contactLine}
-                  letterDate={letterDate}
-                  recipientDetails={recipientDetails}
-                  documentTitle={documentTitle}
-                  documentMeta={documentMeta}
-                  applicantHeader={applicantHeader}
-                  headerVisibility={resolvedHeaderVisibility}
-                  documentTypography={documentTypography}
-                  pageWidth={A4_PAGE_WIDTH_PX}
-                  pageGapPx={unscaledDocumentPageGapPx}
-                  onPageCountChange={setDocumentPageCount}
-                />
-              </div>
-            </div>
-          ) : (
-            <div
-              className={
-                isEditable
-                  ? "dasti-proposal-sheet__preview-page dasti-proposal-sheet__preview-page--editable"
-                  : [
-                      "dasti-proposal-sheet__preview-page",
-                      isMultiPagePreview
-                        ? "dasti-proposal-sheet__preview-page--stacked"
-                        : "",
-                    ]
-                      .filter(Boolean)
-                      .join(" ")
-              }
+              className="dasti-proposal-sheet__preview-page dasti-proposal-sheet__preview-page--editable"
               data-document-page="true"
               style={{
                 width: `${stageLayout.pageWidth}px`,
-                height: `${isEditable ? stageLayout.pageHeight : renderedDocumentHeight}px`,
-                aspectRatio: isMultiPagePreview ? "auto" : undefined,
+                height: `${stageLayout.pageHeight}px`,
               }}
               ref={editablePageRef}
-              onClick={() => {
-                if (!isEditable && mode === "preview") {
-                  onPreviewInteract?.();
-                }
-              }}
             >
-              {isEditable ? (
                 <div
                   className="dasti-proposal-editor-page"
                   data-drawer-open={
@@ -1914,11 +1904,43 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                     />
                   </div>
                 </div>
-              ) : (
+            </div>
+          ) : (
+            <div
+              className="dasti-proposal-sheet__preview-scale-shell"
+              style={{
+                width: `${A4_PAGE_WIDTH_PX}px`,
+                height: `${renderedUnscaledDocumentHeight}px`,
+                transform: `scale(${previewDocumentScale})`,
+              }}
+            >
+              <div
+                className={[
+                  "dasti-proposal-sheet__preview-page",
+                  isMultiPagePreview
+                    ? "dasti-proposal-sheet__preview-page--stacked"
+                    : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                data-document-page="true"
+                style={{
+                  width: `${A4_PAGE_WIDTH_PX}px`,
+                  height: `${renderedUnscaledDocumentHeight}px`,
+                  aspectRatio: isMultiPagePreview ? "auto" : undefined,
+                }}
+                ref={editablePageRef}
+                onClick={() => {
+                  if (mode === "preview") {
+                    onPreviewInteract?.();
+                  }
+                }}
+              >
                 <ProposalDocumentRenderer
                   content={proposalContent ?? ""}
                   proposalType={proposalType}
                   templateId={resolvedTemplateId}
+                  stylePreset={resolvedStylePreset}
                   railTitle={railTitle}
                   railMeta={railMeta}
                   contactLine={contactLine}
@@ -1929,11 +1951,11 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                   applicantHeader={applicantHeader}
                   headerVisibility={resolvedHeaderVisibility}
                   documentTypography={documentTypography}
-                  pageWidth={stageLayout.pageWidth}
-                  pageGapPx={documentPageGapPx}
+                  pageWidth={A4_PAGE_WIDTH_PX}
+                  pageGapPx={unscaledDocumentPageGapPx}
                   onPageCountChange={setDocumentPageCount}
                 />
-              )}
+              </div>
             </div>
           )}
         </div>

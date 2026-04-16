@@ -17,6 +17,11 @@ export type RobialGridContract = {
       gutter: "18mm";
       main: "105mm";
     };
+    steps: {
+      stepA: "17mm";
+      stepB: "18mm";
+      halfStep: "8.5mm";
+    };
   };
   positions: {
     inline: readonly string[];
@@ -71,6 +76,23 @@ export function mmToTwip(value: number): number {
   return Math.round(value * MM_TO_TWIP);
 }
 
+export function buildRobialExportCssVarMap(): Record<string, string> {
+  return {
+    "--page-width": ROBIAL_EXPORT_GRID.page.size.width,
+    "--page-height": ROBIAL_EXPORT_GRID.page.size.height,
+    "--page-margin-top": ROBIAL_EXPORT_GRID.page.margins.top,
+    "--page-margin-right": ROBIAL_EXPORT_GRID.page.margins.right,
+    "--page-margin-bottom": ROBIAL_EXPORT_GRID.page.margins.bottom,
+    "--page-margin-left": ROBIAL_EXPORT_GRID.page.margins.left,
+    "--page-sidebar": ROBIAL_EXPORT_GRID.page.columns.sidebar,
+    "--page-gutter": ROBIAL_EXPORT_GRID.page.columns.gutter,
+    "--page-main": ROBIAL_EXPORT_GRID.page.columns.main,
+    "--robial-step-a": ROBIAL_EXPORT_GRID.page.steps.stepA,
+    "--robial-step-b": ROBIAL_EXPORT_GRID.page.steps.stepB,
+    "--robial-step-half": ROBIAL_EXPORT_GRID.page.steps.halfStep,
+  };
+}
+
 export const ROBIAL_EXPORT_GRID: RobialGridContract = {
   page: {
     size: {
@@ -87,6 +109,11 @@ export const ROBIAL_EXPORT_GRID: RobialGridContract = {
       sidebar: "35mm",
       gutter: "18mm",
       main: "105mm",
+    },
+    steps: {
+      stepA: "17mm",
+      stepB: "18mm",
+      halfStep: "8.5mm",
     },
   },
   positions: {

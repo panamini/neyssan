@@ -1,0 +1,748 @@
+import {
+  getProposalTemplateDefinition,
+  resolveProposalTemplateId,
+  type ProposalTemplateId,
+} from "../../../convex/lib/proposals/renderTemplates";
+import { VOLK_REGISTER_GRID } from "../../features/verbati/volkGrid";
+import type { ResumeVariantSpec } from "../../features/verbati/resume/resume-layout.spec";
+import type {
+  VerbatiLayoutPreset,
+  VerbatiStylePreset,
+} from "../../features/verbati/types";
+import {
+  DEFAULT_VERBATI_STYLE,
+  resolveVerbatiStyle,
+} from "../../features/verbati/style";
+import type { ProposalDocumentTypography } from "../proposal-document-typography";
+import {
+  resolvePreviewCanonicalAppearance,
+  resolveProposalExportCanonicalAppearance,
+  resolveResumeExportCanonicalAppearance,
+} from "./documentAppearance";
+import {
+  A4_PAGE_HEIGHT_MM,
+  A4_PAGE_WIDTH_MM,
+  BASE_PROPOSAL_TITLE_SCALE_MM,
+  createEmptyCanonicalTokens,
+  formatMm,
+  mmToPt,
+  parseEm,
+  parseMm,
+  parsePercent,
+  ptToMm,
+  type CanonicalDocumentTokens,
+} from "./documentTokens";
+
+export type ExportMode = "ats" | "styled";
+
+export type ResumeExportProfileDefinition = {
+  id: "ats" | VerbatiLayoutPreset;
+  shell: "onecol" | "split";
+  margins?: {
+    topMm?: number;
+    rightMm?: number;
+    bottomMm?: number;
+    leftMm?: number;
+  };
+  columns?: {
+    sidebarMm: number;
+    gutterMm: number;
+  };
+  flow: {
+    summaryWidthMm: number;
+    readingWidthMm: number;
+    entryMetaWidthMm?: number;
+    titleSizePt: number;
+    titleLineHeight: number;
+    headerGapMm: number;
+    sectionGapMm: number;
+    entryGapMm: number;
+  };
+};
+
+export type ProposalExportProfileDefinition = {
+  id: "ats" | ProposalTemplateId;
+  shell: "onecol" | "rail";
+  templateId: ProposalTemplateId | null;
+};
+
+type ProposalPreviewNormalizationArgs = {
+  templateId?: ProposalTemplateId | null;
+  documentTypography: ProposalDocumentTypography;
+  stylePreset?: VerbatiStylePreset | null;
+  pageGapPx?: number;
+};
+
+const EXPORT_BASE_FONT_TOKENS = {
+  displaySizePt: mmToPt(10.6),
+  displayLine: 0.96,
+  titleSizePt: 20.5,
+  titleLine: 1.12,
+  subtitleSizePt: 10.5,
+  subtitleLine: 1.28,
+  summarySizePt: 9.6,
+  summaryLine: 1.5,
+  bodySizePt: 10,
+  bodyLine: 1.46,
+  bodySmSizePt: mmToPt(2.95),
+  bodySmLine: 1.45,
+  labelSizePt: 7.5,
+  labelLine: 1.25,
+  metaSizePt: 8.6,
+  metaLine: 1.34,
+};
+
+const PREVIEW_RESUME_FONT_TOKENS = {
+  displaySizePt: mmToPt(10.6),
+  displayLine: 0.96,
+  titleSizePt: mmToPt(4.35),
+  titleLine: 1.1,
+  bodySizePt: mmToPt(3.35),
+  bodyLine: 1.5,
+  bodySmSizePt: mmToPt(2.95),
+  bodySmLine: 1.45,
+  labelSizePt: mmToPt(2.25),
+  labelLine: 1.3,
+  metaSizePt: mmToPt(2.25),
+  metaLine: 1.3,
+};
+
+const RESUME_EXPORT_PROFILE_DEFINITIONS: Record<
+  ResumeExportProfileDefinition["id"],
+  ResumeExportProfileDefinition
+> = {
+  ats: {
+    id: "ats",
+    shell: "onecol",
+    flow: {
+      summaryWidthMm: 112,
+      readingWidthMm: 112,
+      titleSizePt: 20,
+      titleLineHeight: 1.12,
+      headerGapMm: 10,
+      sectionGapMm: 6.8,
+      entryGapMm: 4.8,
+    },
+  },
+  "two-column": {
+    id: "two-column",
+    shell: "split",
+    columns: {
+      sidebarMm: 52,
+      gutterMm: 18,
+    },
+    flow: {
+      summaryWidthMm: 88,
+      readingWidthMm: 88,
+      entryMetaWidthMm: 28,
+      titleSizePt: 20.5,
+      titleLineHeight: 1.1,
+      headerGapMm: 16,
+      sectionGapMm: 8.2,
+      entryGapMm: 5,
+    },
+  },
+  swiss: {
+    id: "swiss",
+    shell: "split",
+    columns: {
+      sidebarMm: 35,
+      gutterMm: 18,
+    },
+    flow: {
+      summaryWidthMm: 105,
+      readingWidthMm: 105,
+      entryMetaWidthMm: 31,
+      titleSizePt: 20.5,
+      titleLineHeight: 1.12,
+      headerGapMm: 17,
+      sectionGapMm: 8.5,
+      entryGapMm: 5.1,
+    },
+  },
+};
+
+function normalizeStylePreset(
+  stylePreset?: VerbatiStylePreset | null,
+): VerbatiStylePreset {
+  return resolveVerbatiStyle(stylePreset ?? DEFAULT_VERBATI_STYLE);
+}
+
+function deriveLiveArea(args: {
+  topMm: number;
+  rightMm: number;
+  bottomMm: number;
+  leftMm: number;
+}) {
+  return {
+    widthMm: A4_PAGE_WIDTH_MM - args.leftMm - args.rightMm,
+    heightMm: A4_PAGE_HEIGHT_MM - args.topMm - args.bottomMm,
+  };
+}
+
+function resolvePercentMm(
+  totalMm: number,
+  percentValue: string | undefined,
+): number | undefined {
+  const parsedPercent = parsePercent(percentValue);
+  return parsedPercent === undefined ? undefined : totalMm * parsedPercent;
+}
+
+function proposalBodySizePtFromTypography(fontSize: string): number {
+  const millimeterExpressionMatch = fontSize.match(
+    /calc\(\s*var\(--proposal-inline-mm\)\s*\*\s*(-?\d+(?:\.\d+)?)\s*\)/,
+  );
+  if (millimeterExpressionMatch) {
+    return mmToPt(Number.parseFloat(millimeterExpressionMatch[1]));
+  }
+
+  const ptValue = fontSize.trim().match(/^(-?\d+(?:\.\d+)?)pt$/i);
+  if (ptValue) {
+    return Number.parseFloat(ptValue[1]);
+  }
+
+  const mmValue = fontSize.trim().match(/^(-?\d+(?:\.\d+)?)mm$/i);
+  if (mmValue) {
+    return mmToPt(Number.parseFloat(mmValue[1]));
+  }
+
+  return EXPORT_BASE_FONT_TOKENS.bodySizePt;
+}
+
+function proposalVolkGridTokens(): Record<string, number> {
+  const inlinePercentKeys = [
+    "left",
+    "headerWidth",
+    "bodyWidth",
+    "subjectValueLeft",
+    "dotLeft",
+  ] as const;
+  const blockPercentKeys = [
+    "titleTop",
+    "subtitleTop",
+    "senderTop",
+    "metaTop",
+    "subjectTop",
+    "subjectValueTop",
+    "bodyTop",
+    "dotTop",
+  ] as const;
+
+  const tokens: Record<string, number> = {};
+
+  inlinePercentKeys.forEach((key) => {
+    const percent = parsePercent(VOLK_REGISTER_GRID[key]);
+    if (percent !== undefined) {
+      tokens[key] = (percent / 100) * A4_PAGE_WIDTH_MM;
+    }
+  });
+
+  blockPercentKeys.forEach((key) => {
+    const percent = parsePercent(VOLK_REGISTER_GRID[key]);
+    if (percent !== undefined) {
+      tokens[key] = (percent / 100) * A4_PAGE_HEIGHT_MM;
+    }
+  });
+
+  const bottomMarginMm = parseMm(VOLK_REGISTER_GRID.bottomMargin);
+  if (bottomMarginMm !== undefined) {
+    tokens.bottomMargin = bottomMarginMm;
+  }
+
+  return tokens;
+}
+
+function baseExportFlowTokens(): CanonicalDocumentTokens["flow"] {
+  return {
+    type: {
+      display: {
+        sizePt: EXPORT_BASE_FONT_TOKENS.displaySizePt,
+        lineHeight: EXPORT_BASE_FONT_TOKENS.displayLine,
+      },
+      title: {
+        sizePt: EXPORT_BASE_FONT_TOKENS.titleSizePt,
+        lineHeight: EXPORT_BASE_FONT_TOKENS.titleLine,
+      },
+      subtitle: {
+        sizePt: EXPORT_BASE_FONT_TOKENS.subtitleSizePt,
+        lineHeight: EXPORT_BASE_FONT_TOKENS.subtitleLine,
+      },
+      summary: {
+        sizePt: EXPORT_BASE_FONT_TOKENS.summarySizePt,
+        lineHeight: EXPORT_BASE_FONT_TOKENS.summaryLine,
+      },
+      body: {
+        sizePt: EXPORT_BASE_FONT_TOKENS.bodySizePt,
+        lineHeight: EXPORT_BASE_FONT_TOKENS.bodyLine,
+      },
+      bodySm: {
+        sizePt: EXPORT_BASE_FONT_TOKENS.bodySmSizePt,
+        lineHeight: EXPORT_BASE_FONT_TOKENS.bodySmLine,
+      },
+      label: {
+        sizePt: EXPORT_BASE_FONT_TOKENS.labelSizePt,
+        lineHeight: EXPORT_BASE_FONT_TOKENS.labelLine,
+      },
+      meta: {
+        sizePt: EXPORT_BASE_FONT_TOKENS.metaSizePt,
+        lineHeight: EXPORT_BASE_FONT_TOKENS.metaLine,
+      },
+    },
+    measure: {
+      summaryWidthMm: 87,
+      resumeReadingWidthMm: 105,
+      resumeEntryMetaWidthMm: 31,
+      proposalMetaWidthMm: 34,
+    },
+    header: {},
+    template: {},
+    rhythm: {
+      headerGapMm: 17,
+      sectionGapMm: 8.5,
+      stackGapMm: 3,
+      entryGapMm: 5.1,
+      entryHeadGapMm: 1.3,
+      listGapMm: 1.3,
+      sidebarPadTopMm: 3,
+      rulePadTopMm: 2.4,
+      closingGapMm: 7,
+      closingNameGapMm: 5.2,
+    },
+    component: {
+      tag: {
+        gapMm: 1.6,
+        rowGapMm: 1.4,
+        padBlockMm: 1.1,
+        padInlineMm: 1.8,
+      },
+    },
+    pagination: {},
+    density: {},
+  };
+}
+
+export function normalizeResumePreviewTokens(
+  variant: ResumeVariantSpec,
+  stylePreset?: VerbatiStylePreset | null,
+): CanonicalDocumentTokens {
+  const tokens = createEmptyCanonicalTokens();
+  tokens.appearance = resolvePreviewCanonicalAppearance(
+    normalizeStylePreset(stylePreset),
+  );
+  const topMm = parseMm(variant.margins.top) ?? 0;
+  const rightMm = parseMm(variant.margins.right) ?? 0;
+  const bottomMm = parseMm(variant.margins.bottom) ?? 0;
+  const leftMm = parseMm(variant.margins.left) ?? 0;
+  const liveArea = deriveLiveArea({ topMm, rightMm, bottomMm, leftMm });
+
+  tokens.geometry.page = {
+    widthMm: parseMm("210mm") ?? A4_PAGE_WIDTH_MM,
+    heightMm: parseMm("297mm") ?? A4_PAGE_HEIGHT_MM,
+    radiusMm: parseMm("1mm") ?? 1,
+    margin: {
+      topMm,
+      rightMm,
+      bottomMm,
+      leftMm,
+    },
+    liveArea: {
+      widthMm: parseMm(variant.liveArea.width) ?? liveArea.widthMm,
+      heightMm: parseMm(variant.liveArea.height) ?? liveArea.heightMm,
+    },
+  };
+  tokens.geometry.columns = {
+    sidebarMm: parseMm(variant.columns.sidebar) ?? 0,
+    gutterMm: parseMm(variant.columns.gutter) ?? 0,
+    mainMm: parseMm(variant.columns.main) ?? 0,
+  };
+  if (variant.id === "volkregister") {
+    tokens.geometry.primitives = {
+      ...tokens.geometry.primitives,
+      volkGrid: {
+        left: resolvePercentMm(tokens.geometry.page.widthMm, VOLK_REGISTER_GRID.left),
+        headerWidth: resolvePercentMm(
+          tokens.geometry.page.widthMm,
+          VOLK_REGISTER_GRID.headerWidth,
+        ),
+        bodyWidth: resolvePercentMm(
+          tokens.geometry.page.widthMm,
+          VOLK_REGISTER_GRID.bodyWidth,
+        ),
+        titleTop: resolvePercentMm(tokens.geometry.page.heightMm, VOLK_REGISTER_GRID.titleTop),
+        subtitleTop: resolvePercentMm(
+          tokens.geometry.page.heightMm,
+          VOLK_REGISTER_GRID.subtitleTop,
+        ),
+        senderTop: resolvePercentMm(tokens.geometry.page.heightMm, VOLK_REGISTER_GRID.senderTop),
+        metaTop: resolvePercentMm(tokens.geometry.page.heightMm, VOLK_REGISTER_GRID.metaTop),
+        subjectTop: resolvePercentMm(tokens.geometry.page.heightMm, VOLK_REGISTER_GRID.subjectTop),
+        subjectValueTop: resolvePercentMm(
+          tokens.geometry.page.heightMm,
+          VOLK_REGISTER_GRID.subjectValueTop,
+        ),
+        subjectValueLeft: resolvePercentMm(
+          tokens.geometry.page.widthMm,
+          VOLK_REGISTER_GRID.subjectValueLeft,
+        ),
+        bodyTop: resolvePercentMm(tokens.geometry.page.heightMm, VOLK_REGISTER_GRID.bodyTop),
+        dotLeft: resolvePercentMm(tokens.geometry.page.widthMm, VOLK_REGISTER_GRID.dotLeft),
+        dotTop: resolvePercentMm(tokens.geometry.page.heightMm, VOLK_REGISTER_GRID.dotTop),
+        bottomMargin: parseMm(VOLK_REGISTER_GRID.bottomMargin),
+        metaLeft0: resolvePercentMm(tokens.geometry.page.widthMm, VOLK_REGISTER_GRID.metaLefts[0]),
+        metaLeft1: resolvePercentMm(tokens.geometry.page.widthMm, VOLK_REGISTER_GRID.metaLefts[1]),
+        metaLeft2: resolvePercentMm(tokens.geometry.page.widthMm, VOLK_REGISTER_GRID.metaLefts[2]),
+        metaLeft3: resolvePercentMm(tokens.geometry.page.widthMm, VOLK_REGISTER_GRID.metaLefts[3]),
+      },
+    };
+  }
+
+  tokens.flow.type.display = {
+    sizePt: PREVIEW_RESUME_FONT_TOKENS.displaySizePt,
+    lineHeight: PREVIEW_RESUME_FONT_TOKENS.displayLine,
+  };
+  tokens.flow.type.title = {
+    sizePt: PREVIEW_RESUME_FONT_TOKENS.titleSizePt,
+    lineHeight: PREVIEW_RESUME_FONT_TOKENS.titleLine,
+  };
+  tokens.flow.type.body = {
+    sizePt: PREVIEW_RESUME_FONT_TOKENS.bodySizePt,
+    lineHeight: PREVIEW_RESUME_FONT_TOKENS.bodyLine,
+  };
+  tokens.flow.type.bodySm = {
+    sizePt: PREVIEW_RESUME_FONT_TOKENS.bodySmSizePt,
+    lineHeight: PREVIEW_RESUME_FONT_TOKENS.bodySmLine,
+  };
+  tokens.flow.type.label = {
+    sizePt: PREVIEW_RESUME_FONT_TOKENS.labelSizePt,
+    lineHeight: PREVIEW_RESUME_FONT_TOKENS.labelLine,
+  };
+  tokens.flow.type.meta = {
+    sizePt: PREVIEW_RESUME_FONT_TOKENS.metaSizePt,
+    lineHeight: PREVIEW_RESUME_FONT_TOKENS.metaLine,
+  };
+  tokens.flow.measure.summaryWidthMm = parseMm(variant.header.summaryMaxWidth);
+  tokens.flow.measure.resumeReadingWidthMm = parseMm(variant.columns.main);
+  tokens.flow.header.titleMarginTopMm = parseMm(variant.header.titleMarginTop);
+  tokens.flow.header.bottomPaddingMm = parseMm(variant.header.bottomPadding);
+  tokens.flow.rhythm.headerGapMm = parseMm(variant.header.rowGap);
+  tokens.flow.rhythm.sectionGapMm = parseMm(variant.body.rowGap);
+  tokens.flow.component.sidebar = {
+    rightPaddingMm: parseMm(variant.body.sidebarRightPadding),
+    sectionGapMm: parseMm(variant.sidebarSection.marginBottom),
+    titleMarginBottomMm: parseMm(variant.sidebarSection.titleMarginBottom),
+    titlePaddingBottomMm: parseMm(variant.sidebarSection.titlePaddingBottom),
+    contentGapMm: parseMm(variant.sidebarSection.contentGap),
+  };
+  tokens.flow.component.main = {
+    leftPaddingMm: parseMm(variant.body.mainLeftPadding),
+    sectionGapMm: parseMm(variant.mainSection.marginBottom),
+    headingGapMm: parseMm(variant.mainSection.headingGap),
+    headingMarginBottomMm: parseMm(variant.mainSection.headingMarginBottom),
+  };
+  tokens.flow.component.experience = {
+    dateColumnWidthMm: parseMm(variant.experience.dateColumn),
+    columnGapMm: parseMm(variant.experience.columnGap),
+    itemGapMm: parseMm(variant.experience.itemGap),
+    orgMarginBottomMm: parseMm(variant.experience.orgMarginBottom),
+    bulletsPaddingLeftMm: parseMm(variant.experience.bulletsPaddingLeft),
+    bulletsGapMm: parseMm(variant.experience.bulletsGap),
+  };
+  tokens.flow.component.project = {
+    gapMm: parseMm(variant.projects.cardGap),
+    paddingMm: parseMm(variant.projects.cardPadding),
+  };
+  tokens.flow.component.education = {
+    itemGapMm: parseMm(variant.education.itemGap),
+  };
+  tokens.flow.component.skill = {
+    gapMm: parseMm(variant.skills.gap),
+    padInlineMm: parseMm(variant.skills.paddingInline),
+    padBlockMm: parseMm(variant.skills.paddingBlock),
+  };
+  tokens.flow.density = {
+    displayAdjustPt: mmToPt(parseMm(variant.density.displaySizeAdjust) ?? 0),
+    titleAdjustPt: mmToPt(parseMm(variant.density.titleSizeAdjust) ?? 0),
+    bodyAdjustPt: mmToPt(parseMm(variant.density.bodySizeAdjust) ?? 0),
+    bodySmAdjustPt: mmToPt(parseMm(variant.density.bodySmSizeAdjust) ?? 0),
+    sectionGapAdjustMm: parseMm(variant.density.sectionGapAdjust),
+    headingMarginAdjustMm: parseMm(variant.density.headingMarginAdjust),
+    bulletGapAdjustMm: parseMm(variant.density.bulletGapAdjust),
+    projectGapAdjustMm: parseMm(variant.density.projectGapAdjust),
+    projectPaddingAdjustMm: parseMm(variant.density.projectPaddingAdjust),
+  };
+  return tokens;
+}
+
+export function normalizeResumeExportTokens(args: {
+  mode: ExportMode;
+  layout?: VerbatiLayoutPreset | null;
+  stylePreset?: VerbatiStylePreset | null;
+}): {
+  id: ResumeExportProfileDefinition["id"];
+  shell: ResumeExportProfileDefinition["shell"];
+  canonical: CanonicalDocumentTokens;
+} {
+  const normalizedStylePreset = normalizeStylePreset(args.stylePreset);
+  const definition =
+    args.mode === "ats"
+      ? RESUME_EXPORT_PROFILE_DEFINITIONS.ats
+      : RESUME_EXPORT_PROFILE_DEFINITIONS["two-column"];
+  const tokens = createEmptyCanonicalTokens();
+  const topMm = definition.margins?.topMm ?? 17;
+  const rightMm = definition.margins?.rightMm ?? 35;
+  const bottomMm = definition.margins?.bottomMm ?? 35;
+  const leftMm = definition.margins?.leftMm ?? 17;
+  const liveArea = deriveLiveArea({ topMm, rightMm, bottomMm, leftMm });
+
+  tokens.geometry.page = {
+    widthMm: A4_PAGE_WIDTH_MM,
+    heightMm: A4_PAGE_HEIGHT_MM,
+    margin: {
+      topMm,
+      rightMm,
+      bottomMm,
+      leftMm,
+    },
+    liveArea,
+  };
+  tokens.geometry.columns = {
+    sidebarMm: definition.columns?.sidebarMm ?? 35,
+    gutterMm: definition.columns?.gutterMm ?? 18,
+    mainMm:
+      definition.columns !== undefined
+        ? liveArea.widthMm -
+          definition.columns.sidebarMm -
+          definition.columns.gutterMm
+        : 105,
+  };
+  tokens.geometry.primitives = {
+    robialStep: {
+      stepAMm: 17,
+      stepBMm: 18,
+      halfStepMm: 8.5,
+    },
+  };
+  tokens.flow = baseExportFlowTokens();
+  tokens.flow.measure.summaryWidthMm = definition.flow.summaryWidthMm;
+  tokens.flow.measure.resumeReadingWidthMm = definition.flow.readingWidthMm;
+  tokens.flow.measure.resumeEntryMetaWidthMm = definition.flow.entryMetaWidthMm;
+  tokens.flow.type.title = {
+    sizePt: definition.flow.titleSizePt,
+    lineHeight: definition.flow.titleLineHeight,
+  };
+  tokens.flow.rhythm.headerGapMm = definition.flow.headerGapMm;
+  tokens.flow.rhythm.sectionGapMm = definition.flow.sectionGapMm;
+  tokens.flow.rhythm.entryGapMm = definition.flow.entryGapMm;
+  tokens.appearance = resolveResumeExportCanonicalAppearance({
+    mode: args.mode,
+    stylePreset: normalizedStylePreset,
+    layout: definition.id === "ats" ? "swiss" : definition.id,
+  });
+
+  return {
+    id: definition.id,
+    shell: definition.shell,
+    canonical: tokens,
+  };
+}
+
+export function normalizeProposalExportTokens(args: {
+  mode: ExportMode;
+  proposalTemplateId?: ProposalTemplateId | null;
+  stylePreset?: VerbatiStylePreset | null;
+}): {
+  id: ProposalExportProfileDefinition["id"];
+  shell: ProposalExportProfileDefinition["shell"];
+  templateId: ProposalTemplateId | null;
+  canonical: CanonicalDocumentTokens;
+} {
+  const resolvedTemplateId =
+    args.mode === "ats"
+      ? null
+      : resolveProposalTemplateId(args.proposalTemplateId);
+  const definition = resolvedTemplateId
+    ? getProposalTemplateDefinition(resolvedTemplateId)
+    : null;
+  const leftMarginMm = 17;
+  const topMm = definition?.topOffsetMm ?? 17;
+  const rightMm = definition?.rightMarginMm ?? 35;
+  const bottomMm = definition?.bottomMarginMm ?? 35;
+  const leftZoneMm = definition?.leftZoneMm ?? 35;
+  const gutterMm = 18;
+  const liveArea = deriveLiveArea({
+    topMm,
+    rightMm,
+    bottomMm,
+    leftMm: leftMarginMm,
+  });
+  const mainMm =
+    A4_PAGE_WIDTH_MM - leftMarginMm - rightMm - leftZoneMm - gutterMm;
+  const tokens = createEmptyCanonicalTokens();
+
+  tokens.geometry.page = {
+    widthMm: A4_PAGE_WIDTH_MM,
+    heightMm: A4_PAGE_HEIGHT_MM,
+    margin: {
+      topMm,
+      rightMm,
+      bottomMm,
+      leftMm: leftMarginMm,
+    },
+    liveArea,
+  };
+  tokens.geometry.columns = {
+    sidebarMm: leftZoneMm,
+    gutterMm,
+    mainMm,
+  };
+  tokens.geometry.template = {
+    leftZoneMm,
+    topOffsetMm: topMm,
+    bodyStartMm: definition?.bodyStartMm ?? 94.5,
+    rightMarginMm: rightMm,
+    bottomMarginMm: bottomMm,
+  };
+  tokens.geometry.primitives = {
+    robialStep: {
+      stepAMm: 17,
+      stepBMm: 18,
+      halfStepMm: 8.5,
+    },
+    volkGrid: proposalVolkGridTokens(),
+  };
+  tokens.flow = baseExportFlowTokens();
+  tokens.flow.type.title = {
+    sizePt: mmToPt(BASE_PROPOSAL_TITLE_SCALE_MM),
+    lineHeight:
+      args.mode === "ats"
+        ? 1.08
+        : definition?.id === "editorial_wide"
+          ? 1.02
+          : 1.06,
+  };
+  tokens.flow.measure.proposalReadingWidthCh =
+    definition?.readingMeasureCh ?? undefined;
+  tokens.flow.measure.proposalMetaWidthMm =
+    definition?.leftZoneMm === 52 ? 42 : 34;
+  tokens.flow.template.titleScaleMultiplier = definition
+    ? definition.titleScaleMm / BASE_PROPOSAL_TITLE_SCALE_MM
+    : 1;
+  tokens.flow.rhythm.headerGapMm =
+    args.mode === "ats" ? 10 : definition?.leftZoneMm === 52 ? 13 : 11;
+  tokens.flow.rhythm.sectionGapMm =
+    args.mode === "ats" ? 6.8 : definition?.id === "volk_register" ? 7.4 : 7;
+  tokens.flow.rhythm.stackGapMm =
+    args.mode === "ats" ? 4.4 : definition?.id === "volk_register" ? 5.2 : 4.8;
+  tokens.appearance = resolveProposalExportCanonicalAppearance({
+    mode: args.mode,
+    stylePreset: normalizeStylePreset(args.stylePreset),
+    templateId: resolvedTemplateId,
+  });
+
+  return {
+    id: resolvedTemplateId ?? "ats",
+    shell:
+      args.mode === "ats" || definition?.id === "quire_margin"
+        ? "onecol"
+        : "rail",
+    templateId: resolvedTemplateId,
+    canonical: tokens,
+  };
+}
+
+export function normalizeProposalPreviewTokens(
+  args: ProposalPreviewNormalizationArgs,
+): CanonicalDocumentTokens {
+  const resolvedTemplateId = resolveProposalTemplateId(args.templateId);
+  const definition = getProposalTemplateDefinition(resolvedTemplateId);
+  const tokens = createEmptyCanonicalTokens();
+  const resolvedStyle = normalizeStylePreset(args.stylePreset);
+  tokens.appearance = resolvePreviewCanonicalAppearance(resolvedStyle);
+  const leftMarginMm = 17;
+  const rightMm = definition.rightMarginMm;
+  const topMm = definition.topOffsetMm;
+  const bottomMm = definition.bottomMarginMm;
+
+  tokens.geometry.page = {
+    widthMm: A4_PAGE_WIDTH_MM,
+    heightMm: A4_PAGE_HEIGHT_MM,
+    margin: {
+      topMm,
+      rightMm,
+      bottomMm,
+      leftMm: leftMarginMm,
+    },
+    liveArea: deriveLiveArea({
+      topMm,
+      rightMm,
+      bottomMm,
+      leftMm: leftMarginMm,
+    }),
+  };
+  tokens.geometry.template = {
+    leftZoneMm: definition.leftZoneMm,
+    topOffsetMm: definition.topOffsetMm,
+    bodyStartMm: definition.bodyStartMm,
+    rightMarginMm: definition.rightMarginMm,
+    bottomMarginMm: definition.bottomMarginMm,
+  };
+  tokens.geometry.columns = {
+    sidebarMm: definition.leftZoneMm,
+    gutterMm: 18,
+    mainMm:
+      A4_PAGE_WIDTH_MM -
+      leftMarginMm -
+      definition.rightMarginMm -
+      definition.leftZoneMm -
+      18,
+  };
+  tokens.geometry.primitives = {
+    volkGrid: proposalVolkGridTokens(),
+  };
+  tokens.flow.type.title = {
+    sizePt: mmToPt(BASE_PROPOSAL_TITLE_SCALE_MM),
+    lineHeight: resolvedTemplateId === "editorial_wide" ? 1.02 : 1.06,
+  };
+  tokens.flow.type.body = {
+    sizePt: proposalBodySizePtFromTypography(args.documentTypography.fontSize),
+    lineHeight: args.documentTypography.lineHeight,
+    resolvedTrackingEm: parseEm(args.documentTypography.letterSpacing),
+  };
+  tokens.flow.measure.proposalReadingWidthCh = definition.readingMeasureCh;
+  tokens.flow.template.titleScaleMultiplier =
+    definition.titleScaleMm / BASE_PROPOSAL_TITLE_SCALE_MM;
+  tokens.flow.rhythm.headerGapMm = definition.leftZoneMm === 52 ? 13 : 11;
+  tokens.flow.rhythm.sectionGapMm =
+    resolvedTemplateId === "volk_register" ? 7.4 : 7;
+  tokens.flow.rhythm.stackGapMm =
+    resolvedTemplateId === "volk_register" ? 5.2 : 4.8;
+  tokens.appearance.font.body = {
+    family: args.documentTypography.fontFamily,
+    weight: args.documentTypography.fontWeight,
+  };
+  tokens.runtime.rendererCompensation["proposalDocumentPageGapPx"] =
+    args.pageGapPx ?? 0;
+
+  return tokens;
+}
+
+export function canonicalSnapshot(tokens: CanonicalDocumentTokens) {
+  return JSON.parse(JSON.stringify(tokens)) as CanonicalDocumentTokens;
+}
+
+export function proposalTitleScaleMm(tokens: CanonicalDocumentTokens): number {
+  return (
+    (tokens.flow.template.titleScaleMultiplier ?? 1) *
+    BASE_PROPOSAL_TITLE_SCALE_MM
+  );
+}
+
+export function densityPtToPreviewMm(
+  valuePt: number | undefined,
+): string | undefined {
+  if (valuePt === undefined) {
+    return undefined;
+  }
+
+  return formatMm(ptToMm(valuePt));
+}

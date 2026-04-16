@@ -8,6 +8,16 @@ import { ProposalForge } from "../ProposalForge";
 import { writeStoredProposalOutputDraft } from "../../lib/proposal-output-draft";
 import { LOCAL_SAVED_PROPOSALS_FIXTURE_KEY } from "../../lib/proposal-saved-fixtures";
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((nextResolve, nextReject) => {
+    resolve = nextResolve;
+    void nextReject;
+  });
+
+  return { promise, resolve };
+}
+
 const {
   exportDocumentFileMock,
   useQueryMock,
@@ -162,10 +172,83 @@ describe("ProposalForge export behavior", () => {
         format: "pdf",
         mode: "ats",
         fileNameBase: "Proposal - ATS",
+        stylePreset: expect.objectContaining({
+          layout: "swiss",
+          typography: "quiet-editorial",
+          palette: "pierre",
+        }),
         data: expect.objectContaining({
           kind: "proposal",
           documentTitle: "Generated proposal",
           body: expect.any(Array),
+        }),
+      }),
+    );
+  });
+
+  it("exports compose styled PDFs from the live preview render state", async () => {
+    const user = userEvent.setup();
+
+    writeStoredProposalOutputDraft({
+      proposalContent:
+        "Dear Hiring Manager,\n\nGenerated proposal body.\n\nKind regards,\nAlex Martin",
+      proposalType: "cover_letter",
+      proposalVoicePreset: "signature",
+      proposalTemplateId: "two_column_rail",
+      proposalVerbatiStyle: {
+        layout: "two-column",
+        typography: "mono-signal",
+        palette: "graphite",
+      },
+      proposalStyleLinkMode: "proposal_local",
+      proposalStyleChoice: "balanced",
+      proposalApplicantName: "Alex Martin",
+      proposalApplicantRole: "Operations Lead",
+      proposalContactLine: "alex@example.com · +33 6 00 00 00 00",
+      proposalLetterDate: "Paris, April 14, 2026",
+      proposalRecipientDetails: "Hiring Manager\nStudio North",
+      proposalDocumentTitle: "Generated proposal",
+      proposalDocumentMeta: "Compose output",
+      generatedProposalId: "proposal_live",
+      proposalOutputMode: "edit",
+      paletteOverride: null,
+      customAccentHex: null,
+      templateBundleId: null,
+      typographyOverride: null,
+      layoutOverride: null,
+      characterLimitMode: "none",
+      characterLimitValue: null,
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Export Styled PDF" }),
+    );
+
+    expect(exportDocumentFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "proposal",
+        format: "pdf",
+        mode: "styled",
+        stylePreset: expect.objectContaining({
+          layout: "swiss",
+          typography: "quiet-editorial",
+          palette: "pierre",
+        }),
+        data: expect.objectContaining({
+          kind: "proposal",
+          renderSource: "preview",
+          templateId: "swiss_margin",
+          stylePreset: expect.objectContaining({
+            layout: "swiss",
+            typography: "quiet-editorial",
+            palette: "pierre",
+          }),
         }),
       }),
     );
@@ -222,9 +305,16 @@ describe("ProposalForge export behavior", () => {
         format: "pdf",
         mode: "styled",
         fileNameBase: "Proposal - Styled",
+        stylePreset: expect.objectContaining({
+          layout: "swiss",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }),
         data: expect.objectContaining({
           kind: "proposal",
+          renderSource: "preview",
           documentTitle: "Saved proposal",
+          templateId: "swiss_margin",
         }),
       }),
     );
@@ -240,11 +330,85 @@ describe("ProposalForge export behavior", () => {
         kind: "proposal",
         format: "docx",
         fileNameBase: "Proposal - Editable",
+        stylePreset: expect.objectContaining({
+          layout: "swiss",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }),
         data: expect.objectContaining({
           kind: "proposal",
           documentTitle: "Saved proposal",
         }),
       }),
     );
+  });
+
+  it("disables proposal export actions while an export is already in flight", async () => {
+    const user = userEvent.setup();
+    const pendingExport = createDeferred<{ filename: string }>();
+    exportDocumentFileMock.mockReturnValueOnce(pendingExport.promise);
+
+    writeStoredProposalOutputDraft({
+      proposalContent: "Dear Hiring Manager,\n\nGenerated proposal body.\n\nKind regards,\nAlex Martin",
+      proposalType: "cover_letter",
+      proposalVoicePreset: "signature",
+      proposalTemplateId: "swiss_margin",
+      proposalVerbatiStyle: {
+        layout: "swiss",
+        typography: "quiet-editorial",
+        palette: "sauge",
+      },
+      proposalStyleLinkMode: "inherit_cv",
+      proposalStyleChoice: "auto",
+      proposalApplicantName: "Alex Martin",
+      proposalApplicantRole: "Operations Lead",
+      proposalContactLine: "alex@example.com · +33 6 00 00 00 00",
+      proposalLetterDate: "Paris, April 14, 2026",
+      proposalRecipientDetails: "Hiring Manager\nStudio North",
+      proposalDocumentTitle: "Generated proposal",
+      proposalDocumentMeta: "Compose output",
+      generatedProposalId: "proposal_live",
+      proposalOutputMode: "edit",
+      paletteOverride: null,
+      customAccentHex: null,
+      templateBundleId: null,
+      typographyOverride: null,
+      layoutOverride: null,
+      characterLimitMode: "none",
+      characterLimitValue: null,
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    const atsButton = screen.getByRole("button", { name: "Export ATS PDF" });
+    const styledButton = screen.getByRole("button", { name: "Export Styled PDF" });
+    const docxButton = screen.getByRole("button", { name: "Export DOCX" });
+
+    await user.click(atsButton);
+
+    expect(exportDocumentFileMock).toHaveBeenCalledTimes(1);
+    expect(atsButton).toBeDisabled();
+    expect(styledButton).toBeDisabled();
+    expect(docxButton).toBeDisabled();
+
+    await user.click(styledButton);
+
+    expect(exportDocumentFileMock).toHaveBeenCalledTimes(1);
+
+    pendingExport.resolve({
+      filename: "Proposal - ATS.pdf",
+    });
+
+    await waitFor(() => {
+      expect(atsButton).not.toBeDisabled();
+    });
+
+    expect(showToastMock).toHaveBeenCalledWith("Exported Proposal - ATS.pdf", {
+      variant: "success",
+    });
   });
 });

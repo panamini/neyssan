@@ -5,6 +5,12 @@ import type {
   ExportDocumentPdfMode,
   ExportDocumentSource,
 } from "./document-export-models";
+import {
+  encodeArrayBufferToBase64,
+  readStyledProposalExportContext,
+  readStyledResumeExportContext,
+  setLastCapturedDocumentExport,
+} from "./document-export-debug";
 
 export type ExportDocumentFileArgs = {
   kind: ExportDocumentKind;
@@ -15,6 +21,8 @@ export type ExportDocumentFileArgs = {
   fileNameBase: string;
   metadata?: Record<string, unknown>;
 };
+
+const DOWNLOAD_OBJECT_URL_REVOKE_DELAY_MS = 1_500;
 
 function getParserBaseUrl(): string {
   return (
@@ -31,6 +39,10 @@ function resolveEndpoint(args: {
 }): string {
   if (args.kind === "resume" && args.format === "pdf") {
     return "/api/v1/document-export/resume/pdf";
+  }
+
+  if (args.kind === "resume" && args.format === "docx") {
+    return "/api/v1/document-export/resume/docx";
   }
 
   if (args.kind === "proposal" && args.format === "pdf") {
@@ -63,18 +75,44 @@ function parseContentDispositionFilename(header: string | null): string | null {
   return plainMatch?.[1]?.trim() || null;
 }
 
-function triggerDownload(blob: Blob, filename: string): void {
+function scheduleObjectUrlCleanup(url: string): void {
+  globalThis.setTimeout(() => {
+    URL.revokeObjectURL(url);
+  }, DOWNLOAD_OBJECT_URL_REVOKE_DELAY_MS);
+}
+
+async function triggerDownload(blob: Blob, filename: string): Promise<void> {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
   link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
+  link.rel = "noopener";
+  link.style.display = "none";
+  document.body.appendChild(link);
+
+  try {
+    link.click();
+    await Promise.resolve();
+  } finally {
+    if (link.parentNode) {
+      link.parentNode.removeChild(link);
+    }
+    scheduleObjectUrlCleanup(url);
+  }
 }
 
 export async function exportDocumentFile(
   args: ExportDocumentFileArgs,
 ): Promise<{ filename: string }> {
+  const requestBody = {
+    kind: args.kind,
+    format: args.format,
+    mode: args.mode,
+    data: args.data,
+    stylePreset: args.stylePreset ?? null,
+    fileNameBase: args.fileNameBase,
+    metadata: args.metadata ?? null,
+  };
   const response = await fetch(
     `${getParserBaseUrl()}${resolveEndpoint(args)}`,
     {
@@ -82,15 +120,7 @@ export async function exportDocumentFile(
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        kind: args.kind,
-        format: args.format,
-        mode: args.mode,
-        data: args.data,
-        stylePreset: args.stylePreset ?? null,
-        fileNameBase: args.fileNameBase,
-        metadata: args.metadata ?? null,
-      }),
+      body: JSON.stringify(requestBody),
     },
   );
 
@@ -101,11 +131,34 @@ export async function exportDocumentFile(
   }
 
   const blob = await response.blob();
+  const buffer = await blob.arrayBuffer();
   const filename =
     parseContentDispositionFilename(response.headers.get("Content-Disposition")) ||
     resolveFallbackFilename(args);
 
-  triggerDownload(blob, filename);
+  await triggerDownload(new Blob([buffer], { type: blob.type }), filename);
+
+  setLastCapturedDocumentExport({
+    requestBody,
+    response: {
+      responseStatus: response.status,
+      responseOk: response.ok,
+      contentType: response.headers.get("Content-Type"),
+      contentDisposition: response.headers.get("Content-Disposition"),
+      filename,
+      byteLength: buffer.byteLength,
+      bytesBase64: args.format === "pdf" ? encodeArrayBufferToBase64(buffer) : null,
+    },
+    clickContext:
+      args.kind === "resume" && args.format === "pdf" && args.mode === "styled"
+        ? readStyledResumeExportContext()
+        : args.kind === "proposal" &&
+            args.format === "pdf" &&
+            args.mode === "styled"
+          ? readStyledProposalExportContext()
+        : null,
+    timestamp: Date.now(),
+  });
   return { filename };
 }
 

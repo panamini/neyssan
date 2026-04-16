@@ -10,9 +10,6 @@ export type VerbatiLayoutPreset =
   | "two-column"
   | "editorial"
   | "modernist"
-  | "playful-photo"
-  | "soft-ribbon"
-  | "slate-column"
   | "quire";
 export type VerbatiPalettePreset =
   | "sauge"

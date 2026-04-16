@@ -20,6 +20,11 @@ import {
   A4_PAGE_WIDTH_PX,
   DOCUMENT_ZOOM_STEPS,
 } from "../../lib/document-stage";
+import {
+  readDocumentExportDebugConfig,
+  setResumePreviewDebugCapture,
+} from "../../lib/document-export-debug";
+import { collectResumeFontDebugSnapshot } from "../../lib/resume-font-debug";
 import type { VerbatiLayoutPreset, VerbatiStylePreset } from "./types";
 
 type VerbatiResumePreviewProps = {
@@ -29,7 +34,11 @@ type VerbatiResumePreviewProps = {
   hostMode?: "panel" | "workspace";
   railLeadControl?: React.ReactNode;
   railStartAddon?: React.ReactNode;
-  onSelectComparisonLayout?: ((layout: VerbatiLayoutPreset) => void) | undefined;
+  onSelectComparisonLayout?:
+    | ((layout: VerbatiLayoutPreset) => void)
+    | undefined;
+  /** When provided, the preview becomes interactive: clicking a section fires this callback with its type (e.g. "experience", "profile"). */
+  onSectionClick?: (sectionType: string) => void;
 };
 
 const comparisonLayouts: VerbatiLayoutPreset[] = VERBATI_LAYOUT_OPTIONS.map(
@@ -54,7 +63,9 @@ export function VerbatiResumePreview({
   railLeadControl = null,
   railStartAddon = null,
   onSelectComparisonLayout,
+  onSectionClick,
 }: VerbatiResumePreviewProps): JSX.Element {
+  const previewRootRef = React.useRef<HTMLDivElement | null>(null);
   const themeVars = React.useMemo(
     () => buildVerbatiThemeVars(stylePreset),
     [stylePreset],
@@ -104,13 +115,15 @@ export function VerbatiResumePreview({
   const { attachViewport, viewportPanProps } = useDocumentPan({
     enabled: !compareLayouts && isWorkspaceMode && userZoom > 1,
   });
-  const { attachViewport: attachCenterViewport } = useDocumentViewportCentering({
-    enabled: !compareLayouts,
-    layoutKey: `${userZoom}:${stageLayout.stageWidth}:${stageLayout.stageHeight}:${stylePreset.layout}:${data.name}:${data.title}`,
-    recenterKey: fitRequestCount,
-    defaultCenterX: isWorkspaceMode ? 0.5 : 0.5,
-    defaultCenterY: isWorkspaceMode ? 0.5 : 0.5,
-  });
+  const { attachViewport: attachCenterViewport } = useDocumentViewportCentering(
+    {
+      enabled: !compareLayouts,
+      layoutKey: `${userZoom}:${stageLayout.stageWidth}:${stageLayout.stageHeight}:${stylePreset.layout}:${data.name}:${data.title}`,
+      recenterKey: fitRequestCount,
+      defaultCenterX: isWorkspaceMode ? 0.5 : 0.5,
+      defaultCenterY: isWorkspaceMode ? 0.5 : 0.5,
+    },
+  );
   const attachResumeViewport = React.useCallback(
     (node: HTMLDivElement | null) => {
       attachViewport(node);
@@ -118,6 +131,66 @@ export function VerbatiResumePreview({
     },
     [attachCenterViewport, attachViewport],
   );
+
+  React.useEffect(() => {
+    if (compareLayouts || typeof window === "undefined") {
+      return undefined;
+    }
+
+    if (!readDocumentExportDebugConfig()) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    const rendererVariantId = VERBATI_LAYOUT_TO_RENDERER[stylePreset.layout];
+
+    const capturePreviewState = async () => {
+      try {
+        if (document.fonts?.ready) {
+          await document.fonts.ready;
+        }
+      } catch {
+        // Continue even if the browser does not expose font readiness.
+      }
+
+      await new Promise<void>((resolve) => {
+        window.requestAnimationFrame(() => resolve());
+      });
+      await new Promise<void>((resolve) => {
+        window.requestAnimationFrame(() => resolve());
+      });
+
+      if (cancelled || !previewRootRef.current) {
+        return;
+      }
+
+      const snapshot = collectResumeFontDebugSnapshot({
+        root: previewRootRef.current,
+        stylePreset,
+        rendererVariantId,
+      });
+
+      setResumePreviewDebugCapture({
+        source: "live-preview",
+        rendererVariantId,
+        stylePreset,
+        serializedThemeVars: Object.fromEntries(
+          Object.entries(themeVars).map(([key, value]) => [
+            key,
+            String(value ?? ""),
+          ]),
+        ),
+        snapshot,
+        timestamp: Date.now(),
+      });
+    };
+
+    void capturePreviewState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [compareLayouts, stylePreset, themeVars]);
 
   if (compareLayouts) {
     const comparisonVariantIds = comparisonLayouts.map(
@@ -128,13 +201,19 @@ export function VerbatiResumePreview({
     return (
       <div
         key={fitToken}
+        ref={previewRootRef}
         className="theme-resume-calm theme-resume-calm--comparison"
+        data-live-resume-preview="true"
+        data-style-layout={stylePreset.layout}
+        data-style-typography={stylePreset.typography}
+        data-renderer-variant={VERBATI_LAYOUT_TO_RENDERER[stylePreset.layout]}
         style={themeVars}
       >
         <ResumePage
           data={data}
           mode="comparisonAll"
           comparisonVariantIds={comparisonVariantIds}
+          stylePreset={stylePreset}
           fitToken={fitToken}
           onSelectVariantId={
             onSelectComparisonLayout
@@ -153,7 +232,10 @@ export function VerbatiResumePreview({
   const fitToken = `${stylePreset.layout}:${stylePreset.typography}:${accentToken}:single:${data.name}:${data.title}:${data.summary.length}:${data.experience.length}:${data.education.length}:${data.skills.length}:${data.languages.length}:${data.projects.length}:${data.achievements?.length ?? 0}`;
 
   const workspaceZoomControls = isWorkspaceMode ? (
-    <div className="dasti-doc-zoom-bar dasti-doc-zoom-bar--rail" data-no-pan="true">
+    <div
+      className="dasti-doc-zoom-bar dasti-doc-zoom-bar--rail"
+      data-no-pan="true"
+    >
       <button
         type="button"
         className={
@@ -232,6 +314,28 @@ export function VerbatiResumePreview({
       </div>
     ) : null;
 
+  const handlePreviewCanvasClick = React.useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (!onSectionClick) return;
+      const target = e.target as HTMLElement;
+      // Walk up from click target to find the nearest [data-preview-section] attribute
+      const sectionEl = target.closest(
+        "[data-preview-section]",
+      ) as HTMLElement | null;
+      // Fallback: any <header> inside the resume page = profile area
+      const headerEl = !sectionEl
+        ? (target.closest("header") as HTMLElement | null)
+        : null;
+      const sectionType =
+        sectionEl?.dataset.previewSection ?? (headerEl ? "profile" : null);
+      if (sectionType) {
+        e.stopPropagation();
+        onSectionClick(sectionType);
+      }
+    },
+    [onSectionClick],
+  );
+
   const documentStage = (
     <div className="dasti-document-stage-chassis" ref={stageMeasureRef}>
       <div
@@ -255,14 +359,17 @@ export function VerbatiResumePreview({
         <div
           className="dasti-document-stage__canvas"
           data-document-page="true"
+          data-interactive={onSectionClick ? "true" : undefined}
           style={{
             width: `${stageLayout.pageWidth}px`,
             height: `${stageLayout.pageHeight}px`,
           }}
+          onClick={onSectionClick ? handlePreviewCanvasClick : undefined}
         >
           <ResumePage
             data={data}
             mode={VERBATI_LAYOUT_TO_RENDERER[stylePreset.layout]}
+            stylePreset={stylePreset}
             fitToken={fitToken}
             userZoom={userZoom}
             stageLayout={stageLayout}
@@ -277,10 +384,18 @@ export function VerbatiResumePreview({
       <div className="dasti-doc-viewer-shell dasti-doc-viewer-shell--resume-panel">
         <div
           className="dasti-resume-mini-preview theme-resume-calm theme-resume-calm--single"
+          ref={previewRootRef}
+          data-live-resume-preview="true"
+          data-style-layout={stylePreset.layout}
+          data-style-typography={stylePreset.typography}
+          data-renderer-variant={VERBATI_LAYOUT_TO_RENDERER[stylePreset.layout]}
           style={themeVars}
         >
           {railStartControls ? (
-            <div className="dasti-resume-mini-preview__toolbar" data-no-pan="true">
+            <div
+              className="dasti-resume-mini-preview__toolbar"
+              data-no-pan="true"
+            >
               {railStartControls}
             </div>
           ) : null}
@@ -321,6 +436,11 @@ export function VerbatiResumePreview({
       >
         <div
           className="dasti-proposal-sheet dasti-document-shell theme-resume-calm theme-resume-calm--single"
+          ref={previewRootRef}
+          data-live-resume-preview="true"
+          data-style-layout={stylePreset.layout}
+          data-style-typography={stylePreset.typography}
+          data-renderer-variant={VERBATI_LAYOUT_TO_RENDERER[stylePreset.layout]}
           style={themeVars}
         >
           <div className="dasti-proposal-sheet__body dasti-proposal-sheet__body--document-viewer">

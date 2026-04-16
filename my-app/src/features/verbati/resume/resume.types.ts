@@ -49,12 +49,8 @@ export type ResumeLayoutVariantId =
   | "tschichold"
   | "golden"
   | "robial"
-  | "onecol"
   | "swissminima"
   | "volkregister"
   | "editorialmag"
   | "signalgrid"
-  | "studiopop"
-  | "softribbon"
-  | "slateprofile"
   | "quire";
