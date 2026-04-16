@@ -79,6 +79,70 @@ const proposalVerbatiStyleChoice = v.object({
   accentHex: v.optional(v.string()),
 });
 
+const PROPOSAL_STYLE_TRACE_MARKER = "[proposal-style-trace]";
+
+function snapshotTraceMetadata(
+  metadata:
+    | {
+        templateId?: string;
+        verbatiStyle?: {
+          layout?: string;
+          typography?: string;
+          palette?: string;
+          accentHex?: string;
+        };
+        sourceCvId?: string;
+        styleLinkMode?: string;
+      }
+    | undefined,
+) {
+  return {
+    templateId: metadata?.templateId ?? null,
+    verbatiStyle: metadata?.verbatiStyle
+      ? {
+          layout: metadata.verbatiStyle.layout ?? null,
+          typography: metadata.verbatiStyle.typography ?? null,
+          palette: metadata.verbatiStyle.palette ?? null,
+          accentHex: metadata.verbatiStyle.accentHex ?? null,
+        }
+      : null,
+    sourceCvId: metadata?.sourceCvId ?? null,
+    styleLinkMode: metadata?.styleLinkMode ?? null,
+  };
+}
+
+function snapshotTraceRow(
+  proposal:
+    | {
+        _id: unknown;
+        title?: string;
+        status?: string;
+        metadata?: {
+          templateId?: string;
+          verbatiStyle?: {
+            layout?: string;
+            typography?: string;
+            palette?: string;
+            accentHex?: string;
+          };
+          sourceCvId?: string;
+          styleLinkMode?: string;
+        };
+      }
+    | null,
+) {
+  if (!proposal) {
+    return null;
+  }
+
+  return {
+    proposalId: String(proposal._id),
+    title: proposal.title ?? null,
+    status: proposal.status ?? null,
+    metadata: snapshotTraceMetadata(proposal.metadata),
+  };
+}
+
 export default mutation({
   args: {
     title: v.string(),
@@ -104,6 +168,12 @@ export default mutation({
         tags: v.optional(v.array(v.string())),
         sourceJobDescription: v.optional(v.string()),
         sourceUrl: v.optional(v.string()),
+        sourceCvId: v.optional(v.string()),
+        planned_path: v.optional(v.string()),
+        executed_path: v.optional(v.string()),
+        fallback_reason: v.optional(v.string()),
+        validator_outcome: v.optional(v.string()),
+        save_outcome: v.optional(v.string()),
         requestedModelType: v.optional(v.string()),
         actualModelType: v.optional(v.string()),
         fallbackTriggerCode: v.optional(v.string()),
@@ -182,7 +252,29 @@ export default mutation({
     const trimmedTitle = args.title.trim() || "Generated proposal";
     const now = Date.now();
 
-    return ctx.db.insert("proposals", {
+    console.info(PROPOSAL_STYLE_TRACE_MARKER, {
+      route: "createProposalPublic",
+      step: "create-proposal-public:before-insert",
+      proposalId: null,
+      generatedProposalId: null,
+      selectedProposalId: null,
+      composeToken: null,
+      persistedToken: null,
+      winnerSource: "server_row",
+      winnerReason: "public mutation received create payload",
+      rawServerRow: null,
+      rawQueryRow: null,
+      rawLocalOutputDraft: null,
+      rawSessionOutputDraft: null,
+      rawComposeDraft: null,
+      rawCvStyleSource: null,
+      resolvedRenderState: {
+        proposalId: null,
+        metadata: snapshotTraceMetadata(args.metadata),
+      },
+    });
+
+    const proposalId = await ctx.db.insert("proposals", {
       userId: user._id,
       title: trimmedTitle,
       content: trimmedContent,
@@ -200,5 +292,27 @@ export default mutation({
       },
       metadata: args.metadata ?? {},
     });
+
+    const insertedProposal = await ctx.db.get(proposalId);
+    console.info(PROPOSAL_STYLE_TRACE_MARKER, {
+      route: "createProposalPublic",
+      step: "create-proposal-public:after-insert",
+      proposalId: String(proposalId),
+      generatedProposalId: String(proposalId),
+      selectedProposalId: null,
+      composeToken: null,
+      persistedToken: null,
+      winnerSource: "server_row",
+      winnerReason: "server row after insert",
+      rawServerRow: snapshotTraceRow(insertedProposal),
+      rawQueryRow: null,
+      rawLocalOutputDraft: null,
+      rawSessionOutputDraft: null,
+      rawComposeDraft: null,
+      rawCvStyleSource: null,
+      resolvedRenderState: snapshotTraceRow(insertedProposal),
+    });
+
+    return proposalId;
   },
 });

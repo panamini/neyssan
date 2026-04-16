@@ -5,10 +5,13 @@ import { api } from "../../convex/_generated/api";
 import { useToast } from "./ui/toast";
 import ProposalDisplay from "./ProposalDisplay";
 import { SavedProposalForgeToolbarPreview } from "./SavedProposalForgeToolbarPreview";
+import type { SaveStatus } from "./ui/SaveIndicator";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import {
   buildAppProposalPersonalizationPayload,
   getActiveLocalPersonalizationSource,
+  getLocalCvDocumentById,
+  getProposalAttachedCvId,
   getProposalApplicantHeaderData,
   type ProposalApplicantHeaderData,
   type ProposalGenerationPersonalizationPayload,
@@ -82,6 +85,8 @@ type SavedProposalRecord = {
     creativity?: ProposalCreativityLevel;
     templateId?: ProposalTemplateId;
     verbatiStyle?: Partial<VerbatiStylePreset>;
+    styleLinkMode?: "inherit_cv" | "proposal_local";
+    sourceCvId?: string;
     templateBundleId?: ProposalTemplateBundleId;
     layoutOverride?: SavedProposalLayoutId | null;
     characterLimitMode?: ProposalCharacterLimitMode;
@@ -98,6 +103,14 @@ type SavedProposalRecord = {
     headerShowRecipientDetails?: boolean;
   };
 };
+
+const PROPOSAL_SAVE_DEBOUNCE_MS = Number(
+  (typeof globalThis !== "undefined" &&
+    (globalThis as any).process?.env?.TEST_DEBOUNCE_MS) ??
+    (typeof process !== "undefined"
+      ? (process as any).env?.TEST_DEBOUNCE_MS
+      : undefined),
+) || 1000;
 
 type SavedProposalViewMode = "focused" | "stack" | "library";
 
@@ -187,13 +200,9 @@ function resolveSavedAppearanceState(proposal: SavedProposalRecord | null): {
   }
 
   const storedStyle = proposal.metadata?.verbatiStyle ?? null;
-  const derivedBundleId =
-    normalizeSavedBundleId(proposal.metadata?.templateBundleId) ??
-    (storedStyle?.layout === "editorial"
-      ? "magazine_editorial"
-      : storedStyle?.layout === "modernist"
-        ? "grid_mono"
-        : "swiss_serif");
+  const explicitBundleId = normalizeSavedBundleId(
+    proposal.metadata?.templateBundleId,
+  );
   const customAccentHex =
     storedStyle?.palette === "custom"
       ? normalizeAccentHex(storedStyle.accentHex)
@@ -201,12 +210,12 @@ function resolveSavedAppearanceState(proposal: SavedProposalRecord | null): {
   const storedPalette = isProposalPaletteId(storedStyle?.palette)
     ? storedStyle.palette
     : null;
-  const bundleDefaultPalette = derivedBundleId
-    ? getProposalTemplateBundleDefinition(derivedBundleId).stylePreset.palette
+  const bundleDefaultPalette = explicitBundleId
+    ? getProposalTemplateBundleDefinition(explicitBundleId).stylePreset.palette
     : null;
 
   return {
-    bundleId: derivedBundleId,
+    bundleId: explicitBundleId,
     paletteOverride:
       customAccentHex || !storedPalette || storedPalette === bundleDefaultPalette
         ? null
@@ -214,6 +223,25 @@ function resolveSavedAppearanceState(proposal: SavedProposalRecord | null): {
     customAccentHex,
     layoutOverride: normalizeSavedLayoutOverride(proposal.metadata?.layoutOverride),
   };
+}
+
+function resolveSavedSourceCvId(
+  proposal: SavedProposalRecord | null,
+): string | null {
+  return normalizeSavedTextValue(proposal?.metadata?.sourceCvId) ?? null;
+}
+
+function resolveSavedSourceCvStylePreset(
+  proposal: SavedProposalRecord | null,
+  fallbackCvStylePreset: Partial<VerbatiStylePreset> | null,
+): Partial<VerbatiStylePreset> | null {
+  const sourceCvId = resolveSavedSourceCvId(proposal);
+  if (sourceCvId) {
+    const sourceCvDocument = getLocalCvDocumentById(sourceCvId);
+    return sourceCvDocument ? getVerbatiStyleFromCv(sourceCvDocument) : null;
+  }
+
+  return fallbackCvStylePreset;
 }
 
 function buildSavedApplicantHeader(
@@ -368,6 +396,12 @@ function getStoredProposalRenderInput(proposal: SavedProposalRecord): {
   };
 }
 
+function hasSavedProposalArtifactSnapshot(
+  proposal: SavedProposalRecord | null,
+): boolean {
+  return Boolean(proposal?.metadata?.verbatiStyle || proposal?.metadata?.templateId);
+}
+
 function getProposalDisplayText(proposal: SavedProposalRecord | null): string {
   if (!proposal) return "";
 
@@ -512,8 +546,11 @@ export default function ProposalsList({
       metadata: {
         sourceJobDescription:
           composeDraft?.jobDescription?.trim() || undefined,
+        sourceCvId: getProposalAttachedCvId() ?? undefined,
         proposalType: outputDraft.proposalType ?? undefined,
         voicePreset: outputDraft.proposalVoicePreset ?? undefined,
+        styleLinkMode: outputDraft.proposalStyleLinkMode ?? undefined,
+        verbatiStyle: outputDraft.proposalVerbatiStyle ?? undefined,
         applicantName: normalizeSavedTextValue(outputDraft.proposalApplicantName) ?? undefined,
         applicantRole: normalizeSavedTextValue(outputDraft.proposalApplicantRole) ?? undefined,
         contactLine: normalizeSavedTextValue(outputDraft.proposalContactLine) ?? undefined,
@@ -570,6 +607,8 @@ export default function ProposalsList({
     null,
   );
   const [isUpdating, setIsUpdating] = React.useState<string | null>(null);
+  const [selectedSaveStatus, setSelectedSaveStatus] =
+    React.useState<SaveStatus>("idle");
   const [selectedOutputMode, setSelectedOutputMode] = React.useState<
     "preview" | "edit"
   >("preview");
@@ -600,6 +639,11 @@ export default function ProposalsList({
     () => (currentCv ? getVerbatiStyleFromCv(currentCv) : null),
     [currentCv],
   );
+  const resolveSourceCvStyleForProposal = React.useCallback(
+    (proposal: SavedProposalRecord | null) =>
+      resolveSavedSourceCvStylePreset(proposal, activeCvStylePreset),
+    [activeCvStylePreset],
+  );
   const showConvexAuthRequiredToast = React.useCallback(
     (actionLabel: string) => {
       showToast("Sign in required", {
@@ -613,6 +657,19 @@ export default function ProposalsList({
   const gestureSurfaceRef = React.useRef<HTMLDivElement | null>(null);
   const selectedCardRef = React.useRef<HTMLDivElement | null>(null);
   const shouldRevealSelectedCardRef = React.useRef(false);
+  const selectedSaveTimeoutRef =
+    React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingSelectedSavePromiseRef = React.useRef<Promise<void> | null>(null);
+  const pendingSelectedSaveSnapshotRef = React.useRef<{
+    id: string;
+    title: string;
+    content: string;
+    metadata: NonNullable<SavedProposalRecord["metadata"]>;
+    token: string;
+  } | null>(null);
+  const lastPersistedSelectedTokenRef = React.useRef<string | null>(null);
+  const selectedAutosavePrimedIdRef = React.useRef<string | null>(null);
+  const isSavingSelectedProposalRef = React.useRef(false);
 
   const selectProposal = React.useCallback(
     (proposal: SavedProposalRecord | null, syncSelection: boolean) => {
@@ -701,7 +758,9 @@ export default function ProposalsList({
       );
       if (requested) {
         if (requested._id !== selectedId) {
-          handleSelectProposal(requested, false);
+          // Route-driven hydration already has the target saved row; avoid
+          // entering the switching skeleton state on reopen.
+          selectProposal(requested, false);
         }
         return;
       }
@@ -735,22 +794,60 @@ export default function ProposalsList({
 
       return resolveProposalRenderState({
         ...getStoredProposalRenderInput(proposal),
-        activeCvStylePreset,
+        activeCvStylePreset: hasSavedProposalArtifactSnapshot(proposal)
+          ? undefined
+          : resolveSourceCvStyleForProposal(proposal),
       });
     },
-    [activeCvStylePreset],
+    [resolveSourceCvStyleForProposal],
+  );
+  const selectedSourceCvId = React.useMemo(
+    () => resolveSavedSourceCvId(selected),
+    [selected],
+  );
+  const selectedSourceCvTitle = React.useMemo(() => {
+    if (!selectedSourceCvId) {
+      return null;
+    }
+
+    return getLocalCvDocumentById(selectedSourceCvId)?.title ?? null;
+  }, [selectedSourceCvId]);
+  const selectedSourceCvStylePreset = React.useMemo(
+    () => resolveSourceCvStyleForProposal(selected),
+    [resolveSourceCvStyleForProposal, selected],
   );
   const selectedStoredAppearance = React.useMemo(
     () => resolveSavedAppearanceState(selected),
     [selected],
   );
+  const selectedStoredRenderState = React.useMemo(() => {
+    if (!selected) {
+      return null;
+    }
+
+    return resolveProposalRenderState({
+      ...getStoredProposalRenderInput(selected),
+      activeCvStylePreset: hasSavedProposalArtifactSnapshot(selected)
+        ? undefined
+        : selectedSourceCvStylePreset,
+    });
+  }, [selected, selectedSourceCvStylePreset]);
   const selectedBaseStylePreset = React.useMemo(() => {
     if (!selected) return null;
-    if (selectedStyleBundleId) {
+    const hasPendingBundleOverride =
+      selectedStyleBundleId !== null &&
+      selectedStyleBundleId !== selectedStoredAppearance.bundleId;
+
+    if (hasPendingBundleOverride) {
       return getProposalTemplateBundleDefinition(selectedStyleBundleId).stylePreset;
     }
-    return selected.metadata?.verbatiStyle ?? activeCvStylePreset ?? null;
-  }, [activeCvStylePreset, selected, selectedStyleBundleId]);
+    return selectedStoredRenderState?.stylePreset ?? null;
+  }, [
+    selected,
+    selectedStoredAppearance.bundleId,
+    selectedStoredRenderState,
+    selectedStyleBundleId,
+  ]);
   const selectedEffectiveStylePreset = React.useMemo(() => {
     if (!selectedBaseStylePreset) return null;
     const nextStylePreset = selectedLayoutOverride
@@ -783,15 +880,114 @@ export default function ProposalsList({
   const selectedRenderState = React.useMemo(() => {
     if (!selected) return null;
     return resolveProposalRenderState({
-      preferredStylePreset:
-        selectedEffectiveStylePreset ??
-        selected.metadata?.verbatiStyle ??
-        undefined,
-      storedStylePreset: selected.metadata?.verbatiStyle,
-      storedTemplateId: selected.metadata?.templateId,
-      activeCvStylePreset,
+      preferredStylePreset: selectedEffectiveStylePreset ?? undefined,
+      storedStylePreset: selectedStoredRenderState?.stylePreset,
+      storedTemplateId: selectedStoredRenderState?.templateId,
     });
-  }, [activeCvStylePreset, selected, selectedEffectiveStylePreset]);
+  }, [selected, selectedEffectiveStylePreset, selectedStoredRenderState]);
+  const selectedHasExplicitStyleEdit = React.useMemo(
+    () =>
+      selectedStyleBundleId !== selectedStoredAppearance.bundleId ||
+      selectedPaletteOverride !== selectedStoredAppearance.paletteOverride ||
+      selectedCustomAccentHex !== selectedStoredAppearance.customAccentHex ||
+      selectedLayoutOverride !== selectedStoredAppearance.layoutOverride,
+    [
+      selectedCustomAccentHex,
+      selectedLayoutOverride,
+      selectedPaletteOverride,
+      selectedStoredAppearance.bundleId,
+      selectedStoredAppearance.customAccentHex,
+      selectedStoredAppearance.layoutOverride,
+      selectedStoredAppearance.paletteOverride,
+      selectedStyleBundleId,
+    ],
+  );
+  const selectedPersistMetadata = React.useMemo<
+    NonNullable<SavedProposalRecord["metadata"]> | null
+  >(() => {
+    if (!selected || !selectedRenderState) {
+      return null;
+    }
+
+    const nextMetadata: NonNullable<SavedProposalRecord["metadata"]> = {
+      ...(selected.metadata ?? {}),
+      sourceCvId: selectedSourceCvId ?? undefined,
+    };
+
+    if (selectedHasExplicitStyleEdit) {
+      nextMetadata.templateId = selectedRenderState.templateId;
+      nextMetadata.verbatiStyle = selectedRenderState.stylePreset;
+      nextMetadata.styleLinkMode = "proposal_local";
+
+      if (selectedStyleBundleId) {
+        nextMetadata.templateBundleId = selectedStyleBundleId;
+      } else {
+        delete nextMetadata.templateBundleId;
+      }
+      if (selectedLayoutOverride) {
+        nextMetadata.layoutOverride = selectedLayoutOverride;
+      } else {
+        delete nextMetadata.layoutOverride;
+      }
+    } else {
+      nextMetadata.templateId =
+        selected.metadata?.templateId ?? selectedRenderState.templateId;
+      nextMetadata.verbatiStyle =
+        selected.metadata?.verbatiStyle ?? selectedRenderState.stylePreset;
+      nextMetadata.styleLinkMode =
+        selected.metadata?.styleLinkMode ??
+        (selectedSourceCvId ? "inherit_cv" : "proposal_local");
+
+      if (selected.metadata?.templateBundleId) {
+        nextMetadata.templateBundleId = selected.metadata.templateBundleId;
+      } else {
+        delete nextMetadata.templateBundleId;
+      }
+      if (selected.metadata?.layoutOverride) {
+        nextMetadata.layoutOverride = selected.metadata.layoutOverride;
+      } else {
+        delete nextMetadata.layoutOverride;
+      }
+    }
+
+    return nextMetadata;
+  }, [
+    selected,
+    selectedHasExplicitStyleEdit,
+    selectedLayoutOverride,
+    selectedRenderState,
+    selectedSourceCvId,
+    selectedStyleBundleId,
+  ]);
+  const buildSelectedProposalSaveSnapshot = React.useCallback(() => {
+    if (!selected || !selectedPersistMetadata) {
+      return null;
+    }
+
+    const trimmedContent = editContent.trim();
+    if (!trimmedContent) {
+      return null;
+    }
+
+    const normalizedTitle =
+      editTitle.trim() || selected.title || "Saved proposal";
+    return {
+      id: selected._id,
+      title: normalizedTitle,
+      content: trimmedContent,
+      metadata: selectedPersistMetadata,
+      token: JSON.stringify({
+        id: selected._id,
+        title: normalizedTitle,
+        content: trimmedContent,
+        metadata: selectedPersistMetadata,
+      }),
+    };
+  }, [editContent, editTitle, selected, selectedPersistMetadata]);
+  const selectedSaveSnapshot = React.useMemo(
+    () => buildSelectedProposalSaveSnapshot(),
+    [buildSelectedProposalSaveSnapshot],
+  );
   const proposalStack = React.useMemo(() => {
     if (!selected) return displayList;
     return [
@@ -829,75 +1025,165 @@ export default function ProposalsList({
     setSelectedZoomIndex(1);
   }, [selected?._id]);
 
-  React.useEffect(() => {
-    if (
-      !selected ||
-      !selectedRenderState ||
-      !isConvexAuthenticated ||
-      isUpdating !== null
-    ) {
-      return undefined;
-    }
-
-    const appearanceChanged =
-      selectedStyleBundleId !== selectedStoredAppearance.bundleId ||
-      selectedPaletteOverride !== selectedStoredAppearance.paletteOverride ||
-      selectedCustomAccentHex !== selectedStoredAppearance.customAccentHex ||
-      selectedLayoutOverride !== selectedStoredAppearance.layoutOverride;
-
-    if (!appearanceChanged) {
-      return undefined;
-    }
-
-    const timeoutId = window.setTimeout(async () => {
-      setIsUpdating(selected._id);
-      try {
-        const nextMetadata: NonNullable<SavedProposalRecord["metadata"]> = {
-          ...(selected.metadata ?? {}),
-          templateId: selectedRenderState.templateId,
-          verbatiStyle: selectedRenderState.stylePreset,
-        };
-        if (selectedStyleBundleId) {
-          nextMetadata.templateBundleId = selectedStyleBundleId;
-        } else {
-          delete nextMetadata.templateBundleId;
+  const performSelectedProposalSave = React.useCallback(
+    async (
+      initialSnapshot: NonNullable<typeof selectedSaveSnapshot>,
+      options?: { silent?: boolean },
+    ) => {
+      if (!isConvexAuthenticated) {
+        if (!options?.silent) {
+          showConvexAuthRequiredToast("Save");
         }
-        if (selectedLayoutOverride) {
-          nextMetadata.layoutOverride = selectedLayoutOverride;
-        } else {
-          delete nextMetadata.layoutOverride;
-        }
-
-        await updateProposal({
-          id: selected._id,
-          metadata: nextMetadata,
-        });
-
-        applyLocalUpdate(selected._id, {
-          metadata: nextMetadata,
-        });
-      } catch (error) {
-        console.error("Saved proposal appearance update failed:", error);
-      } finally {
-        setIsUpdating(null);
+        return;
       }
-    }, 240);
 
-    return () => window.clearTimeout(timeoutId);
+      if (isSavingSelectedProposalRef.current && pendingSelectedSavePromiseRef.current) {
+        pendingSelectedSaveSnapshotRef.current = initialSnapshot;
+        return pendingSelectedSavePromiseRef.current;
+      }
+
+      const saveLoop = async () => {
+        let nextSnapshot: typeof initialSnapshot | null = initialSnapshot;
+
+        while (nextSnapshot) {
+          pendingSelectedSaveSnapshotRef.current = null;
+          isSavingSelectedProposalRef.current = true;
+          setSelectedSaveStatus("saving");
+          setIsUpdating(nextSnapshot.id);
+
+          try {
+            await updateProposal({
+              id: nextSnapshot.id,
+              title: nextSnapshot.title,
+              content: nextSnapshot.content,
+              sections: [{ type: "text", content: nextSnapshot.content }],
+              metadata: nextSnapshot.metadata,
+            });
+
+            applyLocalUpdate(nextSnapshot.id, {
+              title: nextSnapshot.title,
+              content: nextSnapshot.content,
+              metadata: nextSnapshot.metadata,
+            });
+            lastPersistedSelectedTokenRef.current = nextSnapshot.token;
+            setSelectedSaveStatus("saved");
+          } catch (error) {
+            console.error("Saved proposal update failed:", error);
+            setSelectedSaveStatus("error");
+            throw error;
+          } finally {
+            isSavingSelectedProposalRef.current = false;
+            setIsUpdating(null);
+          }
+
+          const queuedSnapshot = pendingSelectedSaveSnapshotRef.current;
+          nextSnapshot =
+            queuedSnapshot &&
+            queuedSnapshot.token !== lastPersistedSelectedTokenRef.current
+              ? queuedSnapshot
+              : null;
+        }
+      };
+
+      const pendingPromise = saveLoop();
+      pendingSelectedSavePromiseRef.current = pendingPromise;
+
+      try {
+        await pendingPromise;
+      } finally {
+        if (pendingSelectedSavePromiseRef.current === pendingPromise) {
+          pendingSelectedSavePromiseRef.current = null;
+        }
+      }
+    },
+    [
+      applyLocalUpdate,
+      isConvexAuthenticated,
+      showConvexAuthRequiredToast,
+      updateProposal,
+    ],
+  );
+  const scheduleSelectedProposalSave = React.useCallback(
+    (snapshot: NonNullable<typeof selectedSaveSnapshot>) => {
+      if (selectedSaveTimeoutRef.current) {
+        window.clearTimeout(selectedSaveTimeoutRef.current);
+      }
+
+      pendingSelectedSaveSnapshotRef.current = snapshot;
+      setSelectedSaveStatus("saving");
+      selectedSaveTimeoutRef.current = window.setTimeout(() => {
+        selectedSaveTimeoutRef.current = null;
+        const nextSnapshot = pendingSelectedSaveSnapshotRef.current;
+        if (!nextSnapshot) {
+          return;
+        }
+        void performSelectedProposalSave(nextSnapshot, { silent: true }).catch(() => {});
+      }, PROPOSAL_SAVE_DEBOUNCE_MS);
+    },
+    [performSelectedProposalSave],
+  );
+  const flushSelectedProposalSave = React.useCallback(async () => {
+    if (selectedSaveTimeoutRef.current) {
+      window.clearTimeout(selectedSaveTimeoutRef.current);
+      selectedSaveTimeoutRef.current = null;
+    }
+
+    const snapshot =
+      buildSelectedProposalSaveSnapshot() ?? pendingSelectedSaveSnapshotRef.current;
+    if (!snapshot) {
+      return;
+    }
+    if (snapshot.token === lastPersistedSelectedTokenRef.current) {
+      if (pendingSelectedSavePromiseRef.current) {
+        await pendingSelectedSavePromiseRef.current;
+      }
+      return;
+    }
+
+    pendingSelectedSaveSnapshotRef.current = snapshot;
+    await performSelectedProposalSave(snapshot);
+  }, [buildSelectedProposalSaveSnapshot, performSelectedProposalSave]);
+
+  React.useEffect(() => {
+    return () => {
+      if (selectedSaveTimeoutRef.current !== null) {
+        window.clearTimeout(selectedSaveTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  React.useEffect(() => {
+    const nextSelectedId = selected?._id ?? null;
+    if (selectedAutosavePrimedIdRef.current !== nextSelectedId) {
+      selectedAutosavePrimedIdRef.current = nextSelectedId;
+      lastPersistedSelectedTokenRef.current = selectedSaveSnapshot?.token ?? null;
+      setSelectedSaveStatus("idle");
+      return;
+    }
+
+    if (!isConvexAuthenticated) {
+      setSelectedSaveStatus("idle");
+      return;
+    }
+
+    if (!selectedSaveSnapshot) {
+      if (selectedSaveStatus !== "error") {
+        setSelectedSaveStatus("idle");
+      }
+      return;
+    }
+
+    if (selectedSaveSnapshot.token === lastPersistedSelectedTokenRef.current) {
+      return;
+    }
+
+    scheduleSelectedProposalSave(selectedSaveSnapshot);
   }, [
     isConvexAuthenticated,
-    isUpdating,
-    selected,
-    selectedCustomAccentHex,
-    selectedLayoutOverride,
-    selectedPaletteOverride,
-    selectedRenderState,
-    selectedStoredAppearance.bundleId,
-    selectedStoredAppearance.customAccentHex,
-    selectedStoredAppearance.layoutOverride,
-    selectedStoredAppearance.paletteOverride,
-    selectedStyleBundleId,
-    updateProposal,
+    scheduleSelectedProposalSave,
+    selected?._id,
+    selectedSaveSnapshot,
+    selectedSaveStatus,
   ]);
 
   React.useEffect(() => {
@@ -1040,110 +1326,14 @@ export default function ProposalsList({
     };
   }, [isMobileSavedViewport]);
 
-  if (!isLoaded || isConvexAuthLoading) {
-    return (
-      <div
-        style={{
-          padding: "var(--s5)",
-          color: "var(--tg2)",
-          fontSize: "var(--ts)",
-        }}
-      >
-        Loading…
-      </div>
-    );
-  }
-  if (!isSignedIn || !isConvexAuthenticated) {
-    return (
-      <div
-        style={{
-          padding: "var(--s5)",
-          color: "var(--tg2)",
-          fontSize: "var(--ts)",
-        }}
-      >
-        Sign in to view saved proposals.
-      </div>
-    );
-  }
-  if (!proposals) {
-    return (
-      <div
-        style={{
-          padding: "var(--s5)",
-          color: "var(--tg2)",
-          fontSize: "var(--ts)",
-        }}
-      >
-        Loading proposals…
-      </div>
-    );
-  }
-  if (displayList.length === 0) {
-    return (
-      <div
-        style={{
-          padding: "var(--s5)",
-          color: "var(--tg2)",
-          fontSize: "var(--ts)",
-        }}
-      >
-        No proposals yet.
-      </div>
-    );
-  }
-
   async function handleSaveDocument() {
-    if (!selected || !selectedRenderState || isUpdating) return;
-    if (!isConvexAuthenticated) {
-      showConvexAuthRequiredToast("Save");
-      return;
-    }
-    const trimmed = editContent.trim();
-    const normalizedTitle =
-      editTitle.trim() || selected.title || "Saved proposal";
-    const titleChanged = normalizedTitle !== (selected.title ?? "");
-    const contentChanged = trimmed !== (selected.content ?? "").trim();
-    if (!titleChanged && !contentChanged) return;
-    setIsUpdating(selected._id);
+    if (!selected) return;
+
     try {
-      const nextMetadata: NonNullable<SavedProposalRecord["metadata"]> = {
-        ...(selected.metadata ?? {}),
-        templateId: selectedRenderState.templateId,
-        verbatiStyle: selectedRenderState.stylePreset,
-      };
-      if (selectedStyleBundleId) {
-        nextMetadata.templateBundleId = selectedStyleBundleId;
-      } else {
-        delete nextMetadata.templateBundleId;
-      }
-      if (selectedLayoutOverride) {
-        nextMetadata.layoutOverride = selectedLayoutOverride;
-      } else {
-        delete nextMetadata.layoutOverride;
-      }
-      await updateProposal({
-        id: selected._id,
-        title: normalizedTitle,
-        ...(contentChanged
-          ? {
-              content: trimmed,
-              sections: [{ type: "text", content: trimmed }],
-            }
-          : {}),
-        metadata: nextMetadata,
-      });
-      setEditTitle(normalizedTitle);
-      applyLocalUpdate(selected._id, {
-        title: normalizedTitle,
-        ...(contentChanged ? { content: trimmed } : {}),
-        metadata: nextMetadata,
-      });
+      await flushSelectedProposalSave();
+      setEditTitle((current) => current.trim() || selected.title || "Saved proposal");
     } catch (err) {
-      console.error("Update failed:", err);
-      showToast("Update failed", { variant: "error" });
-    } finally {
-      setIsUpdating(null);
+      console.error("Saved proposal save failed:", err);
     }
   }
 
@@ -1264,9 +1454,19 @@ export default function ProposalsList({
 
   const selectedHeaderTitle =
     editTitle.trim() || (selected?.title || "").trim();
-  const selectedHeaderMeta = selected
-    ? buildProposalMeta(selected, { includeTone: false }) || "Saved proposal"
-    : "";
+  const selectedHeaderMeta = React.useMemo(() => {
+    if (!selected) {
+      return "";
+    }
+
+    const metadataLine =
+      buildProposalMeta(selected, { includeTone: false }) || "Saved proposal";
+    const sourceLine = selectedSourceCvTitle
+      ? `Based on CV: ${selectedSourceCvTitle}`
+      : null;
+
+    return [metadataLine, sourceLine].filter(Boolean).join("\n");
+  }, [selected, selectedSourceCvTitle]);
   const selectedTonePendingRefresh = selected
     ? selectedRefineVoicePreset !== getStoredRequestedVoicePreset(selected)
     : false;
@@ -1390,8 +1590,62 @@ export default function ProposalsList({
           value === selectedBaseStylePreset?.layout ? null : value,
         );
       }}
+      saveStatus={selectedSaveStatus}
     />
   ) : null;
+
+  if (!isLoaded || isConvexAuthLoading) {
+    return (
+      <div
+        style={{
+          padding: "var(--s5)",
+          color: "var(--tg2)",
+          fontSize: "var(--ts)",
+        }}
+      >
+        Loading…
+      </div>
+    );
+  }
+  if (!isSignedIn || !isConvexAuthenticated) {
+    return (
+      <div
+        style={{
+          padding: "var(--s5)",
+          color: "var(--tg2)",
+          fontSize: "var(--ts)",
+        }}
+      >
+        Sign in to view saved proposals.
+      </div>
+    );
+  }
+  if (!proposals) {
+    return (
+      <div
+        style={{
+          padding: "var(--s5)",
+          color: "var(--tg2)",
+          fontSize: "var(--ts)",
+        }}
+      >
+        Loading proposals…
+      </div>
+    );
+  }
+  if (displayList.length === 0) {
+    return (
+      <div
+        style={{
+          padding: "var(--s5)",
+          color: "var(--tg2)",
+          fontSize: "var(--ts)",
+        }}
+      >
+        No proposals yet.
+      </div>
+    );
+  }
 
   return (
     <div
