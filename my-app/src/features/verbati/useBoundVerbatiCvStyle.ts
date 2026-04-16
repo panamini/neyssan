@@ -6,6 +6,7 @@ import {
   serializeVerbatiStyle,
   stylesEqual,
 } from "./style";
+import { canonicalizeVisualStyle } from "./styleState";
 
 type UseBoundVerbatiCvStyleArgs = {
   currentCv: CvDocument | null | undefined;
@@ -26,7 +27,7 @@ export function useBoundVerbatiCvStyle({
   logPrefix = "[useBoundVerbatiCvStyle]",
 }: UseBoundVerbatiCvStyleArgs): UseBoundVerbatiCvStyleResult {
   const persistedStylePreset = React.useMemo(
-    () => getVerbatiStyleFromCv(currentCv),
+    () => canonicalizeVisualStyle(getVerbatiStyleFromCv(currentCv)),
     [currentCv],
   );
   const [stylePreset, setStylePreset] = React.useState(persistedStylePreset);
@@ -42,11 +43,13 @@ export function useBoundVerbatiCvStyle({
   ]);
 
   React.useEffect(() => {
+    const canonicalStylePreset = canonicalizeVisualStyle(stylePreset);
+
     if (typeof window === "undefined") {
       return;
     }
 
-    if (!currentCv || stylesEqual(stylePreset, persistedStylePreset)) {
+    if (!currentCv || stylesEqual(canonicalStylePreset, persistedStylePreset)) {
       return;
     }
 
@@ -56,7 +59,7 @@ export function useBoundVerbatiCvStyle({
         metadata: {
           ...currentCv.metadata,
           updatedAt: new Date().toISOString(),
-          verbatiStyle: serializeVerbatiStyle(stylePreset),
+          verbatiStyle: serializeVerbatiStyle(canonicalStylePreset),
         },
       };
 
