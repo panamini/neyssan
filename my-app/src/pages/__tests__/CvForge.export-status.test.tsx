@@ -35,6 +35,7 @@ vi.mock("convex/react", () => ({
 vi.mock("../../components/ProfileReviewCard", () => ({
   ProfileReviewCard: ({
     cvId,
+    exportingFormat,
     exportStatusDescription,
     exportStatusLabel,
     toolbarLeadControl,
@@ -42,6 +43,7 @@ vi.mock("../../components/ProfileReviewCard", () => ({
     onRequestExport,
   }: {
     cvId?: string;
+    exportingFormat?: string | null;
     exportStatusDescription?: string;
     exportStatusLabel?: string;
     toolbarLeadControl?: React.ReactNode;
@@ -62,6 +64,7 @@ vi.mock("../../components/ProfileReviewCard", () => ({
             <button
               type="button"
               aria-label="Export ATS PDF"
+              disabled={exportingFormat !== null}
               onClick={() =>
                 onRequestExport({
                   format: "pdf",
@@ -74,6 +77,7 @@ vi.mock("../../components/ProfileReviewCard", () => ({
             <button
               type="button"
               aria-label="Export Styled PDF"
+              disabled={exportingFormat !== null}
               onClick={() =>
                 onRequestExport({
                   format: "pdf",
@@ -86,6 +90,7 @@ vi.mock("../../components/ProfileReviewCard", () => ({
             <button
               type="button"
               aria-label="More export formats"
+              disabled={exportingFormat !== null}
               onClick={() => setIsMenuOpen((current) => !current)}
             >
               More export formats
@@ -142,7 +147,7 @@ vi.mock("../../features/verbati/VerbatiCvPreviewPanel", () => ({
 vi.mock("../../features/verbati/useBoundVerbatiCvStyle", () => ({
   useBoundVerbatiCvStyle: () => ({
     stylePreset: {
-      layout: "stacked",
+      layout: "swiss",
       typography: "quiet-editorial",
       palette: "pierre",
       accentHex: null,
@@ -259,6 +264,11 @@ describe("CvForge export status", () => {
         format: "pdf",
         mode: "ats",
         fileNameBase: "Resume - ATS",
+        stylePreset: expect.objectContaining({
+          layout: "swiss",
+          typography: "quiet-editorial",
+          palette: "pierre",
+        }),
         data: expect.objectContaining({
           kind: "resume",
           exportSource: "authoritative",
@@ -323,9 +333,20 @@ describe("CvForge export status", () => {
         format: "pdf",
         mode: "styled",
         fileNameBase: "Resume - Styled",
+        stylePreset: expect.objectContaining({
+          layout: "swiss",
+          typography: "quiet-editorial",
+          palette: "pierre",
+        }),
         data: expect.objectContaining({
           kind: "resume",
-          exportSource: "standard",
+          renderSource: "preview",
+          stylePreset: expect.objectContaining({
+            layout: "swiss",
+            typography: "quiet-editorial",
+            palette: "pierre",
+          }),
+          rendererVariantId: "swissminima",
         }),
       }),
     );
@@ -334,5 +355,243 @@ describe("CvForge export status", () => {
       expect.stringContaining("Trusted Mistral v3 export is unavailable"),
       expect.anything(),
     );
+  });
+
+  it("allows repeated resume PDF exports in one session without changing pages", async () => {
+    const user = userEvent.setup();
+    useCvLibraryMock.mockReturnValue({
+      currentCv: {
+        id: "cv-repeat",
+        title: "Repeat export CV",
+        metadata: {
+          authoritativeResume: {
+            source: "mistral_v3",
+            trusted: true,
+            fallbackToLegacy: false,
+            normalized: {
+              profile: {
+                name: "Jane Doe",
+                desiredPosition: "Product Manager",
+              },
+              summary: {
+                text: "Summary text",
+              },
+              experience: [],
+              education: [],
+              skills: [],
+              languages: [],
+              projects: [],
+              certifications: [],
+              achievements: [],
+            },
+          },
+        },
+        sections: [],
+      },
+      importCv: importCvMock,
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv-repeat"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Export ATS PDF" }));
+    await user.click(screen.getByRole("button", { name: "Export Styled PDF" }));
+
+    expect(exportDocumentFileMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        kind: "resume",
+        format: "pdf",
+        mode: "ats",
+        stylePreset: expect.objectContaining({
+          layout: "swiss",
+        }),
+      }),
+    );
+    expect(exportDocumentFileMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        kind: "resume",
+        format: "pdf",
+        mode: "styled",
+        stylePreset: expect.objectContaining({
+          layout: "swiss",
+        }),
+        data: expect.objectContaining({
+          renderSource: "preview",
+          rendererVariantId: "swissminima",
+        }),
+      }),
+    );
+  });
+
+  it("routes resume DOCX through the active export pipeline with the selected style preset", async () => {
+    const user = userEvent.setup();
+    exportDocumentFileMock.mockResolvedValueOnce({
+      filename: "Resume - Editable.docx",
+    });
+    useCvLibraryMock.mockReturnValue({
+      currentCv: {
+        id: "cv-docx",
+        title: "Docx export CV",
+        metadata: {
+          authoritativeResume: {
+            source: "mistral_v3",
+            trusted: true,
+            fallbackToLegacy: false,
+            normalized: {
+              profile: {
+                name: "Jane Doe",
+                desiredPosition: "Product Manager",
+              },
+              summary: {
+                text: "Summary text",
+              },
+              experience: [],
+              education: [],
+              skills: [],
+              languages: [],
+              projects: [],
+              certifications: [],
+              achievements: [],
+            },
+          },
+        },
+        sections: [],
+      },
+      importCv: importCvMock,
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv-docx"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "More export formats" }));
+    await user.click(screen.getByRole("menuitem", { name: /Export DOCX/i }));
+
+    expect(exportDocumentFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "resume",
+        format: "docx",
+        fileNameBase: "Resume - Editable",
+        stylePreset: expect.objectContaining({
+          layout: "swiss",
+          typography: "quiet-editorial",
+          palette: "pierre",
+        }),
+        data: expect.objectContaining({
+          kind: "resume",
+          exportSource: "authoritative",
+        }),
+      }),
+    );
+    expect(downloadAuthoritativeResumeExportMock).not.toHaveBeenCalled();
+    expect(downloadStandardResumeExportMock).not.toHaveBeenCalled();
+  });
+
+  it("disables the editor export surface while a resume export is in flight and does the same in preview mode", async () => {
+    const user = userEvent.setup();
+    let resolveExport: ((value: { filename: string }) => void) | null = null;
+
+    exportDocumentFileMock.mockImplementation(
+      () =>
+        new Promise<{ filename: string }>((resolve) => {
+          resolveExport = resolve;
+        }),
+    );
+
+    useCvLibraryMock.mockReturnValue({
+      currentCv: {
+        id: "cv-pending",
+        title: "Pending export CV",
+        metadata: {
+          authoritativeResume: {
+            source: "mistral_v3",
+            trusted: false,
+            fallbackToLegacy: true,
+            normalized: null,
+          },
+        },
+        sections: [],
+      },
+      importCv: importCvMock,
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv-pending"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Export ATS PDF" }));
+
+    expect(
+      screen.getByRole("button", { name: "Export ATS PDF" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Export Styled PDF" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "More export formats" }),
+    ).toBeDisabled();
+
+    expect(exportDocumentFileMock).toHaveBeenCalledTimes(1);
+
+    resolveExport?.({ filename: "Resume - ATS.pdf" });
+
+    expect(
+      await screen.findByRole("button", { name: "Export ATS PDF" }),
+    ).not.toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Export Styled PDF" }),
+    ).not.toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "More export formats" }),
+    ).not.toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "Open resume preview" }));
+
+    expect(
+      screen.getByText("Preview host: workspace"),
+    ).toBeInTheDocument();
+
+    resolveExport = null;
+    exportDocumentFileMock.mockImplementation(
+      () =>
+        new Promise<{ filename: string }>((resolve) => {
+          resolveExport = resolve;
+        }),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Export Styled PDF" }));
+
+    expect(
+      screen.getByRole("button", { name: "Export ATS PDF" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Export Styled PDF" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "More export formats" }),
+    ).toBeDisabled();
+
+    expect(exportDocumentFileMock).toHaveBeenCalledTimes(2);
+
+    resolveExport?.({ filename: "Resume - Styled.pdf" });
+
+    expect(
+      await screen.findByRole("button", { name: "Export ATS PDF" }),
+    ).not.toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Export Styled PDF" }),
+    ).not.toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "More export formats" }),
+    ).not.toBeDisabled();
   });
 });

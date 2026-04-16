@@ -187,7 +187,7 @@ describe("ProposalsList toolbar grouping", () => {
     await waitFor(() => {
       expect(getMainProposalDisplayCall()?.stylePreset).toEqual(
         expect.objectContaining({
-          layout: "editorial",
+          layout: "two-column",
         }),
       );
     });

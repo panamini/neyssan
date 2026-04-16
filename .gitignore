@@ -89,6 +89,12 @@ pdf-ingest/.env.alembic
 
 # --- Docs / notes internes (pas du code) -------------------------
 /docs/
+!/docs/
+/docs/*
+!/docs/plans/
+/docs/plans/*
+!/docs/plans/export-layout-fidelity-brief.md
+!/docs/plans/export-layout-fidelity-audit.md
 roocode_doc/
 alembic_backups/
 pdf-ingest.disabled/

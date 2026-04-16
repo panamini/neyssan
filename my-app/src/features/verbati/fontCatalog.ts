@@ -257,7 +257,7 @@ const LOCAL_FONT_FACES: LocalFontFace[] = [
 ];
 
 const LOCAL_FONT_FILES =
-  typeof import.meta.glob === "function"
+  typeof window !== "undefined"
     ? (import.meta.glob("../../assets/fonts/**/*.{woff,woff2,ttf,otf}", {
         eager: true,
         import: "default",
@@ -327,17 +327,20 @@ const FONT_FACE_STYLE_ID = "dasti-local-font-faces";
 let fontFacesInjected = false;
 
 export function ensureLocalFontFacesLoaded(): void {
-  if (fontFacesInjected || typeof document === "undefined") {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  const existingTag = document.getElementById(FONT_FACE_STYLE_ID);
+  if (fontFacesInjected && existingTag) {
     return;
   }
 
   const css = buildFontFaceCss();
   if (!css) {
-    fontFacesInjected = true;
     return;
   }
 
-  const existingTag = document.getElementById(FONT_FACE_STYLE_ID);
   if (existingTag) {
     fontFacesInjected = true;
     return;

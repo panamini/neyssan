@@ -71,7 +71,7 @@ describe("VerbatiCvPreviewPanel workspace style cycle", () => {
       }),
     );
 
-    expect(screen.getByText("Preview layout: modernist")).toBeInTheDocument();
+    expect(screen.getByText("Preview layout: two-column")).toBeInTheDocument();
 
     fireEvent.click(
       screen.getByRole("button", {
@@ -91,7 +91,7 @@ describe("VerbatiCvPreviewPanel workspace style cycle", () => {
 
     nextStyleButton.focus();
     fireEvent.keyDown(nextStyleButton, { key: "ArrowRight" });
-    expect(screen.getByText("Preview layout: modernist")).toBeInTheDocument();
+    expect(screen.getByText("Preview layout: two-column")).toBeInTheDocument();
 
     fireEvent.keyDown(nextStyleButton, { key: "ArrowLeft" });
     expect(screen.getByText("Preview layout: swiss")).toBeInTheDocument();

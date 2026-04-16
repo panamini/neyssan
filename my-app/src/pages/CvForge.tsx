@@ -28,7 +28,16 @@ import {
   downloadStandardResumeExport,
 } from "../lib/cv-export";
 import dbg from "../lib/cv-debug";
-import { buildResumeExportSource } from "../lib/document-export-models";
+import {
+  buildResumePrintDebugSnapshot,
+  buildResumeExportSource,
+  buildStyledResumePrintSource,
+} from "../lib/document-export-models";
+import {
+  buildResumeTypographyAuditMetadata,
+  readResumePreviewDebugCapture,
+  setStyledResumeExportContext,
+} from "../lib/document-export-debug";
 import { exportDocumentFile } from "../lib/exportDocumentFile";
 
 type CvForgeWorkspaceMode = "edit" | "preview";
@@ -60,9 +69,7 @@ function readStoredCvForgeWorkspaceMode(): CvForgeWorkspaceMode {
     : "edit";
 }
 
-function normalizePresetSlot(
-  value: unknown,
-): SavedStylePresetSlot | null {
+function normalizePresetSlot(value: unknown): SavedStylePresetSlot | null {
   if (!value || typeof value !== "object") {
     return null;
   }
@@ -85,8 +92,7 @@ function normalizePresetSlot(
       record.paletteOverride === "encre"
         ? (record.paletteOverride as ProposalPaletteId)
         : null,
-    accentHex:
-      typeof record.accentHex === "string" ? record.accentHex : null,
+    accentHex: typeof record.accentHex === "string" ? record.accentHex : null,
     voicePreset:
       record.voicePreset === "signature" ||
       record.voicePreset === "expert" ||
@@ -134,6 +140,27 @@ export function CvForge(): JSX.Element {
     React.useState<CvForgeWorkspaceMode>(() =>
       readStoredCvForgeWorkspaceMode(),
     );
+  // Preview → editor section linking: stores the section type most recently clicked in the preview
+  const [highlightSectionType, setHighlightSectionType] = React.useState<
+    string | null
+  >(null);
+  const highlightResetTimerRef = React.useRef<number | null>(null);
+
+  const handlePreviewSectionClick = React.useCallback((sectionType: string) => {
+    // Clear any pending reset so rapid clicks don't cancel each other
+    if (highlightResetTimerRef.current !== null) {
+      window.clearTimeout(highlightResetTimerRef.current);
+    }
+    // Set to null first so the effect re-fires even when clicking the same section twice
+    setHighlightSectionType(null);
+    window.requestAnimationFrame(() => {
+      setHighlightSectionType(sectionType);
+      highlightResetTimerRef.current = window.setTimeout(() => {
+        setHighlightSectionType(null);
+        highlightResetTimerRef.current = null;
+      }, 1500);
+    });
+  }, []);
   const { stylePreset, setStylePreset } = useBoundVerbatiCvStyle({
     currentCv,
     importCv,
@@ -141,11 +168,11 @@ export function CvForge(): JSX.Element {
     logPrefix: "[CvForge]",
   });
   const savedStylePresets = useQuery(api.proposalSettings.getPresets);
-  const [isStylePresetMenuOpen, setIsStylePresetMenuOpen] = React.useState(
-    false,
+  const [isStylePresetMenuOpen, setIsStylePresetMenuOpen] =
+    React.useState(false);
+  const [exportingFormat, setExportingFormat] = React.useState<string | null>(
+    null,
   );
-  const [exportingFormat, setExportingFormat] =
-    React.useState<string | null>(null);
   const { showToast } = useToast();
   const requestedCvId = React.useMemo(
     () => new URLSearchParams(search).get("id") || undefined,
@@ -246,28 +273,82 @@ export function CvForge(): JSX.Element {
       setExportingFormat(exportKey);
       try {
         const exported =
-          request.format === "pdf"
+          request.format === "pdf" || request.format === "docx"
             ? await (async () => {
-                const source = buildResumeExportSource({
-                  currentCv,
-                  authoritativeResume,
-                });
+                const source =
+                  request.format === "pdf" && request.mode === "styled"
+                    ? buildStyledResumePrintSource({
+                        currentCv,
+                        stylePreset,
+                      })
+                    : buildResumeExportSource({
+                        currentCv,
+                        authoritativeResume,
+                      });
 
                 if (!source) {
                   throw new Error("Resume export source is unavailable.");
                 }
 
+                if (
+                  request.format === "pdf" &&
+                  request.mode === "styled" &&
+                  "renderSource" in source
+                ) {
+                  const previewCapture = readResumePreviewDebugCapture();
+                  const exportContext = {
+                    cvId: currentCv?.id ? String(currentCv.id) : null,
+                    cvUrl:
+                      typeof window !== "undefined" ? window.location.href : null,
+                    rendererVariantId: source.rendererVariantId,
+                    stylePreset: source.stylePreset,
+                    previewCapture,
+                    timestamp: Date.now(),
+                  } as const;
+                  setStyledResumeExportContext(exportContext);
+
+                  dbg(
+                    "[CvForge] styled resume export snapshot",
+                    buildResumePrintDebugSnapshot({
+                      stylePreset: source.stylePreset,
+                      rendererVariantId: source.rendererVariantId,
+                    }),
+                  );
+                }
+
                 return exportDocumentFile({
                   kind: "resume",
-                  format: "pdf",
-                  mode: request.mode,
+                  format: request.format,
+                  mode: request.format === "pdf" ? request.mode : undefined,
                   data: source,
-                  stylePreset:
-                    request.mode === "styled" ? stylePreset : undefined,
+                  stylePreset: stylePreset,
                   fileNameBase:
-                    request.mode === "ats"
-                      ? "Resume - ATS"
-                      : "Resume - Styled",
+                    request.format === "docx"
+                      ? "Resume - Editable"
+                      : request.mode === "ats"
+                        ? "Resume - ATS"
+                        : "Resume - Styled",
+                  metadata:
+                    request.format === "pdf" && request.mode === "styled"
+                      ? {
+                          resumeTypographyAudit:
+                            buildResumeTypographyAuditMetadata(
+                              currentCv
+                                ? {
+                                    cvId: String(currentCv.id),
+                                    cvUrl:
+                                      typeof window !== "undefined"
+                                        ? window.location.href
+                                        : null,
+                                    rendererVariantId: source.rendererVariantId,
+                                    stylePreset: source.stylePreset,
+                                    previewCapture: readResumePreviewDebugCapture(),
+                                    timestamp: Date.now(),
+                                  }
+                                : null,
+                            ),
+                        }
+                      : undefined,
                 });
               })()
             : hasTrustedExport && authoritativeResume
@@ -305,8 +386,7 @@ export function CvForge(): JSX.Element {
           : null;
         return {
           slot,
-          label:
-            preset?.name?.trim() || DEFAULT_PRESET_SLOT_NAMES[slot],
+          label: preset?.name?.trim() || DEFAULT_PRESET_SLOT_NAMES[slot],
           preset,
           stylePreset: nextStylePreset,
           isActive:
@@ -320,7 +400,9 @@ export function CvForge(): JSX.Element {
       }),
     [savedStylePresets, stylePreset],
   );
-  const hasAnySavedStylePreset = stylePresetSlots.some(({ preset }) => Boolean(preset));
+  const hasAnySavedStylePreset = stylePresetSlots.some(({ preset }) =>
+    Boolean(preset),
+  );
   const stylePresetToolbarLabel = hasAnySavedStylePreset
     ? "Open saved resume styles"
     : "Open resume style controls";
@@ -338,7 +420,9 @@ export function CvForge(): JSX.Element {
         type="button"
         className="dasti-icon-button"
         aria-label={stylePresetToolbarLabel}
-        aria-expanded={hasAnySavedStylePreset ? isStylePresetMenuOpen : undefined}
+        aria-expanded={
+          hasAnySavedStylePreset ? isStylePresetMenuOpen : undefined
+        }
         aria-haspopup={hasAnySavedStylePreset ? "menu" : undefined}
         data-toolbar-tooltip={stylePresetToolbarTooltip}
         onClick={() => {
@@ -357,37 +441,39 @@ export function CvForge(): JSX.Element {
           role="menu"
           aria-label="Saved resume styles"
         >
-          {stylePresetSlots.map(({ slot, label, preset, stylePreset: nextStyle, isActive }) => (
-            <button
-              key={slot}
-              type="button"
-              role="menuitemradio"
-              className="dasti-cv-style-presets__option"
-              disabled={!preset || !nextStyle}
-              aria-checked={isActive}
-              onClick={() => {
-                if (!nextStyle) {
-                  return;
-                }
-                setStylePreset(nextStyle);
-                setIsStylePresetMenuOpen(false);
-              }}
-            >
-              <span className="dasti-cv-style-presets__option-copy">
-                <span className="dasti-cv-style-presets__option-title">
-                  {label}
+          {stylePresetSlots.map(
+            ({ slot, label, preset, stylePreset: nextStyle, isActive }) => (
+              <button
+                key={slot}
+                type="button"
+                role="menuitemradio"
+                className="dasti-cv-style-presets__option"
+                disabled={!preset || !nextStyle}
+                aria-checked={isActive}
+                onClick={() => {
+                  if (!nextStyle) {
+                    return;
+                  }
+                  setStylePreset(nextStyle);
+                  setIsStylePresetMenuOpen(false);
+                }}
+              >
+                <span className="dasti-cv-style-presets__option-copy">
+                  <span className="dasti-cv-style-presets__option-title">
+                    {label}
+                  </span>
+                  <span className="dasti-cv-style-presets__option-description">
+                    {preset
+                      ? `${nextStyle ? nextStyle.layout : "swiss"} / ${preset.fontPairId ?? "default"}`
+                      : "No saved style"}
+                  </span>
                 </span>
-                <span className="dasti-cv-style-presets__option-description">
-                  {preset
-                    ? `${nextStyle ? nextStyle.layout : "swiss"} / ${preset.fontPairId ?? "default"}`
-                    : "No saved style"}
-                </span>
-              </span>
-              {isActive ? (
-                <Check size={14} strokeWidth={1.8} aria-hidden="true" />
-              ) : null}
-            </button>
-          ))}
+                {isActive ? (
+                  <Check size={14} strokeWidth={1.8} aria-hidden="true" />
+                ) : null}
+              </button>
+            ),
+          )}
         </div>
       ) : null}
     </div>
@@ -455,9 +541,7 @@ export function CvForge(): JSX.Element {
             "--cv-preview-toolbar-inset":
               workspaceMode === "preview" ? "var(--space-2)" : undefined,
             "--page-shell-pad-top-mobile":
-              workspaceMode === "preview"
-                ? "0px"
-                : "var(--space-2)",
+              workspaceMode === "preview" ? "0px" : "var(--space-2)",
             "--page-shell-pad-inline-mobile":
               workspaceMode === "preview" ? "0px" : "var(--space-4)",
             "--page-shell-pad-bottom-mobile": "var(--space-1)",
@@ -499,12 +583,14 @@ export function CvForge(): JSX.Element {
               >
                 <ProfileReviewCard
                   cvId={requestedCvId}
+                  exportingFormat={exportingFormat}
                   exportStatusDescription={exportStatusDescription}
                   exportStatusLabel={exportStatusLabel}
                   exportStatusTone={hasTrustedExport ? "trusted" : "standard"}
                   toolbarLeadControl={editModeToggle}
                   toolbarPrimaryControl={stylePresetToolbarControl}
                   onRequestExport={handleResumeExport}
+                  highlightSectionType={highlightSectionType}
                 />
                 <div
                   className={
@@ -518,6 +604,7 @@ export function CvForge(): JSX.Element {
                     hostMode="panel"
                     stylePreset={stylePreset}
                     onStylePresetChange={setStylePreset}
+                    onSectionClick={handlePreviewSectionClick}
                   />
                 </div>
               </div>

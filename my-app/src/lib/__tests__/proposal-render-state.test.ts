@@ -3,7 +3,7 @@ import { getProposalTwinTemplateId } from "../../features/verbati/style";
 import { resolveProposalRenderState } from "../proposal-render-state";
 
 describe("resolveProposalRenderState", () => {
-  it("uses stored proposal style metadata ahead of the active cv fallback", () => {
+  it("uses stored proposal style metadata ahead of the active cv fallback while normalizing removed resume layouts", () => {
     const result = resolveProposalRenderState({
       storedStylePreset: {
         layout: "modernist",
@@ -18,7 +18,7 @@ describe("resolveProposalRenderState", () => {
       },
     });
 
-    expect(result.stylePreset.layout).toBe("modernist");
+    expect(result.stylePreset.layout).toBe("two-column");
     expect(result.stylePreset.typography).toBe("mono-signal");
     expect(result.templateId).toBe("modernist_signal");
   });
@@ -34,7 +34,10 @@ describe("resolveProposalRenderState", () => {
       activeCvStylePreset,
     });
 
-    expect(result.stylePreset).toMatchObject(activeCvStylePreset);
+    expect(result.stylePreset).toMatchObject({
+      ...activeCvStylePreset,
+      layout: "two-column",
+    });
     expect(result.templateId).toBe(
       getProposalTwinTemplateId(result.stylePreset),
     );
@@ -61,7 +64,7 @@ describe("resolveProposalRenderState", () => {
     expect(result.templateId).toBe("editorial_wide");
   });
 
-  it("maps the Volk manual style family to the Volk proposal twin", () => {
+  it("maps the Volk manual style family onto the surviving Swiss proposal twin", () => {
     const result = resolveProposalRenderState({
       activeCvStylePreset: {
         layout: "volk-register",
@@ -70,8 +73,8 @@ describe("resolveProposalRenderState", () => {
       },
     });
 
-    expect(result.stylePreset.layout).toBe("volk-register");
+    expect(result.stylePreset.layout).toBe("swiss");
     expect(result.stylePreset.typography).toBe("civic-correspondence");
-    expect(result.templateId).toBe("volk_register");
+    expect(result.templateId).toBe("swiss_margin");
   });
 });

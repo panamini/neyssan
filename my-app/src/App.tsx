@@ -11,6 +11,10 @@ import { ProposalForge } from "./pages/ProposalForge";
 import { ProposalsLibrary } from "./pages/ProposalsLibrary";
 import { StyleForge } from "./pages/StyleForge";
 import { SettingsPage } from "./pages/SettingsPage";
+import { ResumePrintPage } from "./pages/ResumePrintPage";
+import { ProposalPrintPage } from "./pages/ProposalPrintPage";
+import { ResumeFontParityHarnessPage } from "./pages/ResumeFontParityHarnessPage";
+import { PdfRasterHarnessPage } from "./pages/PdfRasterHarnessPage";
 import { Sidebar } from "./components/Sidebar";
 import { CvLibraryProvider } from "./contexts/CvLibraryContext";
 import { installStorageDiagnostics } from "./lib/storage-diagnostics";
@@ -317,7 +321,29 @@ function AppShell(): JSX.Element {
 export default function App(): JSX.Element {
   return (
     <BrowserRouter>
-      <AppShell />
+      <AppRouter />
     </BrowserRouter>
   );
+}
+
+function AppRouter(): JSX.Element {
+  const location = useLocation();
+
+  if (location.pathname === "/print/resume") {
+    return <ResumePrintPage />;
+  }
+
+  if (location.pathname === "/print/proposal") {
+    return <ProposalPrintPage />;
+  }
+
+   if (location.pathname === "/debug/resume-font-parity") {
+    return <ResumeFontParityHarnessPage />;
+  }
+
+  if (location.pathname === "/debug/pdf-raster") {
+    return <PdfRasterHarnessPage />;
+  }
+
+  return <AppShell />;
 }

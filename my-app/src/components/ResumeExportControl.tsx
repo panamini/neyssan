@@ -20,6 +20,8 @@ type ResumeExportControlProps = {
   statusDescription: string;
   statusLabel: string;
   statusTone?: "standard" | "trusted";
+  styledPdfDisabled?: boolean;
+  styledPdfDisabledReason?: string;
 };
 
 const SECONDARY_EXPORT_MENU_ITEMS: ReadonlyArray<{
@@ -38,6 +40,8 @@ export function ResumeExportControl({
   statusDescription,
   statusLabel,
   statusTone = "standard",
+  styledPdfDisabled = false,
+  styledPdfDisabledReason = "Styled PDF is unavailable for the current resume layout.",
 }: ResumeExportControlProps): JSX.Element {
   const menuRef = React.useRef<HTMLDivElement | null>(null);
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
@@ -99,9 +103,12 @@ export function ResumeExportControl({
           type="button"
           className="dasti-button dasti-button--secondary dasti-button--pill dasti-button--sm dasti-resume-export-control__primary"
           aria-label="Export Styled PDF"
-          data-toolbar-tooltip="Export Styled PDF"
+          data-toolbar-tooltip={
+            styledPdfDisabled ? styledPdfDisabledReason : "Export Styled PDF"
+          }
+          title={styledPdfDisabled ? styledPdfDisabledReason : undefined}
           onClick={() => {
-            if (exportingFormat) {
+            if (exportingFormat || styledPdfDisabled) {
               return;
             }
             void onExport({
@@ -109,7 +116,7 @@ export function ResumeExportControl({
               mode: "styled",
             });
           }}
-          disabled={exportingFormat !== null}
+          disabled={exportingFormat !== null || styledPdfDisabled}
         >
           <FilePdf size={14} strokeWidth={1.6} aria-hidden="true" />
           Export Styled PDF
