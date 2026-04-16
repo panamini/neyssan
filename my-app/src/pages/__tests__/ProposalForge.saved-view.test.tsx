@@ -8,7 +8,21 @@ import {
   writeStoredProposalOutputDraft,
 } from "../../lib/proposal-output-draft";
 import { PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY } from "../../lib/proposal-workspace-state";
-import { PROPOSAL_ATTACHED_CV_STORAGE_KEY } from "../../lib/proposal-personalization";
+
+const ATTACHED_CV_STORAGE_KEY = "dasti:proposal-attached-cv-id:v1";
+
+let mockAttachedCvId: string | null = null;
+const mockSourceCv = {
+  id: "cv_alpha",
+  title: "Alex Martin Resume",
+  metadata: {
+    verbatiStyle: {
+      layout: "editorial",
+      typography: "engaging",
+      palette: "encre",
+    },
+  },
+} as any;
 
 const SAVED_PROPOSALS = [
   {
@@ -24,10 +38,45 @@ const SAVED_PROPOSALS = [
       proposalType: "cover_letter",
       voicePreset: "signature",
       requestedVoicePreset: "signature",
+      sourceCvId: "cv_alpha",
+      styleLinkMode: "inherit_cv",
+      templateId: "swiss_margin",
+      verbatiStyle: {
+        layout: "swiss",
+        typography: "signature",
+        palette: "bordeaux",
+      },
       sourceUrl: "https://www.linkedin.com/jobs/view/123456",
       platform: "linkedin",
       sourceJobDescription:
         "Lead recurring operations and keep cross-team communication on track.",
+    },
+  },
+  {
+    _id: "proposal_local_saved",
+    _creationTime: 1710000000500,
+    title: "Saved proposal local",
+    content: "Dear client,\n\nDetached saved proposal content.\n\nBest,",
+    status: "saved",
+    updatedAt: 1710000000500,
+    createdAt: 1710000000500,
+    sections: [{ type: "text", content: "Detached saved proposal content." }],
+    metadata: {
+      proposalType: "cover_letter",
+      voicePreset: "signature",
+      requestedVoicePreset: "signature",
+      sourceCvId: "cv_alpha",
+      styleLinkMode: "proposal_local",
+      templateId: "swiss_margin",
+      verbatiStyle: {
+        layout: "swiss",
+        typography: "signature",
+        palette: "bordeaux",
+      },
+      sourceUrl: "https://example.com/jobs/local-123",
+      platform: "company_website",
+      sourceJobDescription:
+        "Build polished client proposals with stable saved styling.",
     },
   },
   {
@@ -110,6 +159,49 @@ vi.mock("../../components/ui/toast", () => ({
   }),
 }));
 
+vi.mock("../../lib/proposal-personalization", () => ({
+  buildAppProposalPersonalizationPayload: () => ({}),
+  clearActiveLocalCvId: () => {
+    mockAttachedCvId = null;
+    window.localStorage.removeItem("dasti:proposal-attached-cv-id:v1");
+  },
+  getActiveLocalPersonalizationSource: () => ({
+    title: mockAttachedCvId === "cv_alpha" ? "Alex Martin Resume" : null,
+    personalizationContext: null,
+  }),
+  getLocalActiveCvSnapshotById: (id: string) =>
+    id === "cv_alpha" ? { title: "Alex Martin Resume" } : null,
+  getLocalCvDocumentById: (id: string) => (id === "cv_alpha" ? mockSourceCv : null),
+  getProposalApplicantHeaderData: () => ({
+    name: "Alex Martin",
+    role: "Operations Associate",
+    email: "alex@example.com",
+    phone: null,
+    linkedin: null,
+    website: null,
+    location: null,
+    tag: null,
+  }),
+  getProposalApplicantIdentity: () => ({
+    name: "Alex Martin",
+    role: "Operations Associate",
+  }),
+  getProposalAttachedCvId: () =>
+    mockAttachedCvId ??
+    window.localStorage.getItem("dasti:proposal-attached-cv-id:v1"),
+  getProposalAttachedCvLocalDocument: () =>
+    (mockAttachedCvId ??
+      window.localStorage.getItem("dasti:proposal-attached-cv-id:v1")) === "cv_alpha"
+      ? mockSourceCv
+      : null,
+  PROPOSAL_ATTACHED_CV_STORAGE_KEY: "dasti:proposal-attached-cv-id:v1",
+  PROPOSAL_ATTACHED_CV_UPDATED_EVENT: "dasti:proposal-attached-cv-updated",
+  setProposalAttachedCvId: (id: string) => {
+    mockAttachedCvId = id;
+    window.localStorage.setItem("dasti:proposal-attached-cv-id:v1", id);
+  },
+}));
+
 vi.mock("../../components/ProposalInputForm", () => ({
   default: (props: { onValuesChange?: (values: any) => void }) => {
     const storedDraft = JSON.parse(
@@ -164,13 +256,19 @@ vi.mock("../../components/ProposalDisplay", () => ({
     proposalContent,
     documentTitle,
     mode,
+    stylePreset,
   }: {
     proposalContent: string | null;
     documentTitle?: string | null;
     mode?: "preview" | "edit";
+    stylePreset?: {
+      layout?: string | null;
+      palette?: string | null;
+    } | null;
   }) => (
     <div data-testid="proposal-display-state">
-      {documentTitle ?? "untitled"}|{proposalContent ?? "empty"}|{mode ?? "preview"}
+      {documentTitle ?? "untitled"}|{proposalContent ?? "empty"}|{mode ?? "preview"}|
+      {stylePreset?.layout ?? "none"}|{stylePreset?.palette ?? "none"}
     </div>
   ),
   fallbackCopyText: () => "",
@@ -215,6 +313,7 @@ function ResumeRoundTripControls(): JSX.Element {
 describe("ProposalForge saved view", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    mockAttachedCvId = null;
   });
 
   it("renders explicit saved proposal actions beside the saved stack", () => {
@@ -248,10 +347,15 @@ describe("ProposalForge saved view", () => {
     expect(actionButtons).toEqual([
       "Back to draft",
       "Duplicate to draft",
-      "Export ATS PDF",
-      "Export Styled PDF",
-      "Export DOCX",
+      "Reset to CV style",
+      "Export proposal",
     ]);
+    expect(toolbar).not.toHaveTextContent("Based on CV: Alex Martin Resume");
+    expect(
+      within(toolbar as HTMLElement).getByRole("group", {
+        name: "Saved proposal status",
+      }),
+    ).toHaveTextContent("CV");
   });
 
   it("treats bare proposal id links as saved view for backward compatibility", () => {
@@ -269,7 +373,7 @@ describe("ProposalForge saved view", () => {
   });
 
   it("returns to the live editable draft without clearing it", () => {
-    window.localStorage.setItem(PROPOSAL_ATTACHED_CV_STORAGE_KEY, "cv_alpha");
+    window.localStorage.setItem(ATTACHED_CV_STORAGE_KEY, "cv_alpha");
     window.localStorage.setItem(
       PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
       JSON.stringify({
@@ -318,7 +422,7 @@ describe("ProposalForge saved view", () => {
     expect(readStoredProposalOutputDraft()?.proposalContent).toBe(
       "Dear Hiring Manager,\n\nLive editable proposal body.",
     );
-    expect(window.localStorage.getItem(PROPOSAL_ATTACHED_CV_STORAGE_KEY)).toBe(
+    expect(window.localStorage.getItem(ATTACHED_CV_STORAGE_KEY)).toBe(
       "cv_alpha",
     );
   });
@@ -354,6 +458,121 @@ describe("ProposalForge saved view", () => {
     ).toMatchObject({
       sourceUrl: "https://www.linkedin.com/jobs/view/123456",
       platform: "linkedin",
+    });
+    expect(window.localStorage.getItem(ATTACHED_CV_STORAGE_KEY)).toBe(
+      "cv_alpha",
+    );
+  });
+
+  it("keeps saved proposal cv provenance visible on reopen even when the saved artifact is stable", () => {
+    render(
+      <MemoryRouter initialEntries={["/proposal?view=saved&id=proposal_beta"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    const toolbar = screen.getByRole("group", { name: "Saved proposal actions" });
+    expect(toolbar).not.toHaveTextContent("Based on CV: Alex Martin Resume");
+    expect(
+      within(toolbar as HTMLElement).getByRole("group", {
+        name: "Saved proposal status",
+      }),
+    ).toHaveTextContent("CV");
+  });
+
+  it("duplicates the persisted inherited-style row instead of a stale local draft when reopening the same proposal id", async () => {
+    window.localStorage.setItem(ATTACHED_CV_STORAGE_KEY, "cv_alpha");
+    mockAttachedCvId = "cv_alpha";
+    writeStoredProposalOutputDraft({
+      proposalContent: "Stale inherited draft body.",
+      proposalType: "cover_letter",
+      proposalVoicePreset: "signature",
+      proposalTemplateId: "two_column_rail",
+      proposalVerbatiStyle: {
+        layout: "editorial",
+        typography: "engaging",
+        palette: "encre",
+      },
+      proposalStyleLinkMode: "inherit_cv",
+      proposalStyleChoice: "auto",
+      proposalApplicantName: "Alex Martin",
+      proposalApplicantRole: "Operations Associate",
+      proposalDocumentTitle: "Stale inherited draft",
+      proposalDocumentMeta: "Stale compose output",
+      generatedProposalId: "proposal_beta",
+      proposalOutputMode: "preview",
+      paletteOverride: null,
+      customAccentHex: null,
+      templateBundleId: null,
+      typographyOverride: null,
+      layoutOverride: null,
+      proposalDocumentTitleManual: false,
+      characterLimitMode: null,
+      characterLimitValue: null,
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/proposal?view=saved&id=proposal_beta"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Duplicate to draft" }));
+
+    await waitFor(() => {
+      const state = screen.getByTestId("proposal-display-state");
+      expect(state).toHaveTextContent("Saved proposal beta");
+      expect(state).toHaveTextContent("Saved proposal content.");
+      expect(state).toHaveTextContent("|preview|editorial|encre");
+    });
+  });
+
+  it("duplicates the persisted local-style row instead of a stale inherited draft when reopening the same proposal id", async () => {
+    window.localStorage.setItem(ATTACHED_CV_STORAGE_KEY, "cv_alpha");
+    mockAttachedCvId = "cv_alpha";
+    writeStoredProposalOutputDraft({
+      proposalContent: "Stale detached draft body.",
+      proposalType: "cover_letter",
+      proposalVoicePreset: "signature",
+      proposalTemplateId: "two_column_rail",
+      proposalVerbatiStyle: {
+        layout: "editorial",
+        typography: "engaging",
+        palette: "encre",
+      },
+      proposalStyleLinkMode: "inherit_cv",
+      proposalStyleChoice: "auto",
+      proposalApplicantName: "Alex Martin",
+      proposalApplicantRole: "Operations Associate",
+      proposalDocumentTitle: "Stale detached draft",
+      proposalDocumentMeta: "Stale compose output",
+      generatedProposalId: "proposal_local_saved",
+      proposalOutputMode: "preview",
+      paletteOverride: null,
+      customAccentHex: null,
+      templateBundleId: null,
+      typographyOverride: null,
+      layoutOverride: null,
+      proposalDocumentTitleManual: false,
+      characterLimitMode: null,
+      characterLimitValue: null,
+    });
+
+    render(
+      <MemoryRouter
+        initialEntries={["/proposal?view=saved&id=proposal_local_saved"]}
+      >
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Duplicate to draft" }));
+
+    await waitFor(() => {
+      const state = screen.getByTestId("proposal-display-state");
+      expect(state).toHaveTextContent("Saved proposal local");
+      expect(state).toHaveTextContent("Detached saved proposal content.");
+      expect(state).toHaveTextContent("|preview|swiss|bordeaux");
     });
   });
 

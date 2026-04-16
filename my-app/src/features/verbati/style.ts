@@ -4,7 +4,7 @@ import type { ProposalTemplateId } from "../../../convex/lib/proposals/renderTem
 import type { ResumeLayoutVariantId } from "./resume/resume.types";
 import {
   getVerbatiFontPairLabel,
-  resolveVerbatiFontPairId,
+  sanitizePersistedVerbatiFontPairId,
   VERBATI_FONT_PAIR_OPTIONS,
   type VerbatiFontPairOption,
 } from "./fontCatalog";
@@ -46,9 +46,29 @@ export const VERBATI_LAYOUT_OPTIONS: LayoutOption[] = [
       "Swiss register typography built on a Robial 17/18 modular field.",
   },
   {
+    id: "volk-register",
+    name: "Volk Register",
+    description: "Archival civic register with a quieter, slower field.",
+  },
+  {
     id: "two-column",
     name: "Two Column",
     description: "Robial split layout with the accent rail sidebar.",
+  },
+  {
+    id: "editorial",
+    name: "Editorial",
+    description: "Editorial split layout with a broader, calmer rhythm.",
+  },
+  {
+    id: "modernist",
+    name: "Modernist",
+    description: "Sharper split layout with a stricter signal-heavy cadence.",
+  },
+  {
+    id: "quire",
+    name: "Quire",
+    description: "Bookish split layout with quieter literary spacing.",
   },
 ];
 
@@ -89,14 +109,31 @@ const LEGACY_LAYOUT_ALIASES: Record<string, VerbatiLayoutPreset> = {
   "slate-column": "two-column",
 };
 
-const DEFERRED_LAYOUT_REMAPPINGS: Record<VerbatiLayoutPreset, VerbatiLayoutPreset> = {
-  swiss: "swiss",
-  "volk-register": "swiss",
-  "two-column": "two-column",
-  editorial: "two-column",
-  modernist: "two-column",
-  quire: "two-column",
-};
+function sanitizePersistedVerbatiLayout(
+  value: unknown,
+): VerbatiLayoutPreset | null {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    return null;
+  }
+
+  const normalizedValue = LEGACY_LAYOUT_ALIASES[value] ?? value;
+  return VERBATI_LAYOUT_OPTIONS.some((option) => option.id === normalizedValue)
+    ? (normalizedValue as VerbatiLayoutPreset)
+    : null;
+}
+
+function sanitizePersistedVerbatiPalette(
+  value: unknown,
+): VerbatiStylePreset["palette"] | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  return value === "custom" ||
+    VERBATI_PALETTE_OPTIONS.some((option) => option.id === value)
+    ? (value as VerbatiStylePreset["palette"])
+    : null;
+}
 
 export function getLayoutLabel(preset: VerbatiLayoutPreset): string {
   return (
@@ -111,42 +148,45 @@ export function getVerbatiStyleFromCv(
   const candidate = (doc?.metadata as Record<string, unknown> | undefined)
     ?.verbatiStyle as Partial<VerbatiStylePreset> | undefined;
 
-  return resolveVerbatiStyle(candidate);
+  return sanitizePersistedVerbatiStyle(candidate) ?? resolveVerbatiStyle(candidate);
+}
+
+export function sanitizePersistedVerbatiStyle(
+  candidate: Partial<VerbatiStylePreset> | null | undefined,
+): VerbatiStylePreset | null {
+  const safeCandidate = candidate ?? {};
+  const layout = sanitizePersistedVerbatiLayout(safeCandidate.layout);
+  const typography = sanitizePersistedVerbatiFontPairId(safeCandidate.typography);
+  const palette = sanitizePersistedVerbatiPalette(safeCandidate.palette);
+
+  if (!layout || !typography || !palette) {
+    return null;
+  }
+
+  return {
+    layout,
+    typography,
+    palette,
+    accentHex:
+      palette === "custom"
+        ? normalizeVerbatiAccentHex(safeCandidate.accentHex)
+        : undefined,
+  };
 }
 
 export function resolveVerbatiStyle(
   candidate: Partial<VerbatiStylePreset> | null | undefined,
 ): VerbatiStylePreset {
   const safeCandidate = candidate ?? {};
-
-  const paletteOption =
-    safeCandidate.palette &&
-    (safeCandidate.palette === "custom" ||
-      VERBATI_PALETTE_OPTIONS.some(
-        (option) => option.id === safeCandidate.palette,
-      ))
-      ? safeCandidate.palette
-      : DEFAULT_VERBATI_STYLE.palette;
-
-  const requestedLayout =
-    typeof safeCandidate.layout === "string"
-      ? LEGACY_LAYOUT_ALIASES[safeCandidate.layout] ?? safeCandidate.layout
-      : null;
-  const normalizedRequestedLayout =
-    requestedLayout &&
-    requestedLayout in DEFERRED_LAYOUT_REMAPPINGS
-      ? DEFERRED_LAYOUT_REMAPPINGS[requestedLayout as VerbatiLayoutPreset]
-      : null;
-
   const layout =
-    normalizedRequestedLayout &&
-    VERBATI_LAYOUT_OPTIONS.some(
-      (option) => option.id === normalizedRequestedLayout,
-    )
-      ? normalizedRequestedLayout
-      : DEFAULT_VERBATI_STYLE.layout;
-
-  const typography = resolveVerbatiFontPairId(safeCandidate.typography);
+    sanitizePersistedVerbatiLayout(safeCandidate.layout) ??
+    DEFAULT_VERBATI_STYLE.layout;
+  const typography =
+    sanitizePersistedVerbatiFontPairId(safeCandidate.typography) ??
+    DEFAULT_VERBATI_STYLE.typography;
+  const paletteOption =
+    sanitizePersistedVerbatiPalette(safeCandidate.palette) ??
+    DEFAULT_VERBATI_STYLE.palette;
 
   return {
     layout,
@@ -189,15 +229,14 @@ export function buildVerbatiThemeVars(
 export function serializeVerbatiStyle(
   style: VerbatiStylePreset,
 ): VerbatiStylePreset {
-  return {
-    layout: style.layout,
-    typography: resolveVerbatiFontPairId(style.typography),
-    palette: style.palette,
-    accentHex:
-      style.palette === "custom"
-        ? normalizeVerbatiAccentHex(style.accentHex)
-        : undefined,
-  };
+  return (
+    sanitizePersistedVerbatiStyle(style) ?? {
+      layout: DEFAULT_VERBATI_STYLE.layout,
+      typography: DEFAULT_VERBATI_STYLE.typography,
+      palette: DEFAULT_VERBATI_STYLE.palette,
+      accentHex: undefined,
+    }
+  );
 }
 
 export function buildVerbatiProposalDocumentVars(

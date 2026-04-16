@@ -5,6 +5,7 @@ import {
   Paperclip,
   PanelLeftDashed,
   PenNib,
+  RotateCcw,
   Sunglasses,
   Wand2,
   X,
@@ -14,6 +15,10 @@ import {
   ProposalGenerateButtonGlyph,
   type ProposalGenerateButtonVisualState,
 } from "./ProposalGenerateGlyph";
+import {
+  SaveIndicator,
+  type SaveStatus,
+} from "./ui/SaveIndicator";
 import type { ProposalVoicePreset } from "../../convex/lib/proposals/voicePresets";
 import type { FormValues } from "./ProposalInputForm.schemas";
 import { getVoicePresetDisplayLabel } from "../lib/proposal-voice-label";
@@ -38,6 +43,12 @@ type ProposalComposeToolbarProps = {
   generateLabel?: string;
   generateDisabled?: boolean;
   generateState?: ProposalGenerateButtonVisualState;
+  styleStatusLabel?: string | null;
+  saveStatus?: SaveStatus;
+  rightActions?: React.ReactNode;
+  canResetToCvStyle?: boolean;
+  resetToCvStyleDisabled?: boolean;
+  onResetToCvStyle?: () => void;
 };
 
 type ToneOption = {
@@ -121,6 +132,12 @@ export function ProposalComposeToolbar({
   generateLabel = "Generate",
   generateDisabled = true,
   generateState = "idle",
+  styleStatusLabel = null,
+  saveStatus = "idle",
+  rightActions = null,
+  canResetToCvStyle = false,
+  resetToCvStyleDisabled = false,
+  onResetToCvStyle,
 }: ProposalComposeToolbarProps): JSX.Element {
   const rootRef = React.useRef<HTMLDivElement>(null);
   const [isToneMenuOpen, setIsToneMenuOpen] = React.useState(false);
@@ -405,10 +422,43 @@ export function ProposalComposeToolbar({
             </div>
           </div>
 
-          <span
-            className="dasti-compose-toolbar__group-divider dasti-compose-toolbar__group-divider--trailing"
-            aria-hidden="true"
-          />
+          {styleStatusLabel || saveStatus !== "idle" || canResetToCvStyle ? (
+            <>
+              <span
+                className="dasti-compose-toolbar__group-divider"
+                aria-hidden="true"
+              />
+              <div
+                className="dasti-compose-toolbar__group dasti-compose-toolbar__group--context"
+                role="group"
+                aria-label="Proposal context"
+              >
+                <div className="dasti-compose-toolbar__context-slot">
+                  <SaveIndicator
+                    status={saveStatus}
+                    label={styleStatusLabel}
+                    tone="neutral"
+                  />
+                  {canResetToCvStyle ? (
+                    <button
+                      type="button"
+                      className="dasti-compose-toolbar__icon-button"
+                      aria-label="Reset to CV style"
+                      data-toolbar-tooltip="Reset to CV style"
+                      onClick={onResetToCvStyle}
+                      disabled={
+                        disabled ||
+                        resetToCvStyleDisabled ||
+                        !onResetToCvStyle
+                      }
+                    >
+                      <RotateCcw size={13} strokeWidth={1.7} aria-hidden="true" />
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </>
+          ) : null}
 
           <div
             className="dasti-compose-toolbar__group dasti-compose-toolbar__group--tone"
@@ -451,6 +501,22 @@ export function ProposalComposeToolbar({
               </div>
             </div>
           </div>
+
+          {rightActions ? (
+            <>
+              <span
+                className="dasti-compose-toolbar__group-divider dasti-compose-toolbar__group-divider--trailing"
+                aria-hidden="true"
+              />
+              <div
+                className="dasti-compose-toolbar__group dasti-compose-toolbar__group--actions"
+                role="group"
+                aria-label="Proposal actions"
+              >
+                {rightActions}
+              </div>
+            </>
+          ) : null}
         </div>
       )}
     </section>

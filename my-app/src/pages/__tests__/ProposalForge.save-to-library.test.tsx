@@ -15,6 +15,18 @@ import {
 const mockUpdateProposal = vi.fn().mockResolvedValue(undefined);
 const mockCreateProposal = vi.fn().mockResolvedValue("proposal_saved_new");
 const mockShowToast = vi.fn();
+let mockAttachedCvId: string | null = null;
+const mockSourceCv = {
+  id: "cv_alpha",
+  title: "Alex Martin Resume",
+  metadata: {
+    verbatiStyle: {
+      layout: "editorial",
+      typography: "engaging",
+      palette: "encre",
+    },
+  },
+} as any;
 
 vi.mock("convex/react", () => ({
   useConvexAuth: () => ({
@@ -61,6 +73,41 @@ vi.mock("../../components/ui/toast", () => ({
   useToast: () => ({
     showToast: mockShowToast,
   }),
+}));
+
+vi.mock("../../lib/proposal-personalization", () => ({
+  buildAppProposalPersonalizationPayload: () => ({}),
+  clearActiveLocalCvId: () => {
+    mockAttachedCvId = null;
+  },
+  getActiveLocalPersonalizationSource: () => ({
+    title: mockAttachedCvId === "cv_alpha" ? "Alex Martin Resume" : null,
+    personalizationContext: null,
+  }),
+  getLocalActiveCvSnapshotById: (id: string) =>
+    id === "cv_alpha" ? { title: "Alex Martin Resume" } : null,
+  getLocalCvDocumentById: (id: string) => (id === "cv_alpha" ? mockSourceCv : null),
+  getProposalApplicantHeaderData: () => ({
+    name: "Alex Martin",
+    role: "Operations Associate",
+    email: "alex@example.com",
+    phone: null,
+    linkedin: null,
+    website: null,
+    location: null,
+    tag: null,
+  }),
+  getProposalApplicantIdentity: () => ({
+    name: "Alex Martin",
+    role: "Operations Associate",
+  }),
+  getProposalAttachedCvId: () => mockAttachedCvId,
+  getProposalAttachedCvLocalDocument: () =>
+    mockAttachedCvId === "cv_alpha" ? mockSourceCv : null,
+  PROPOSAL_ATTACHED_CV_UPDATED_EVENT: "dasti:proposal-attached-cv-updated",
+  setProposalAttachedCvId: (id: string) => {
+    mockAttachedCvId = id;
+  },
 }));
 
 vi.mock("../../components/ProposalInputForm", () => ({
@@ -125,9 +172,12 @@ describe("ProposalForge save to library", () => {
     mockCreateProposal.mockClear();
     mockUpdateProposal.mockClear();
     mockShowToast.mockClear();
+    mockAttachedCvId = null;
   });
 
   it("confirms the title, saves the generated proposal to the library, and opens the saved route", async () => {
+    mockAttachedCvId = "cv_alpha";
+
     render(
       <MemoryRouter initialEntries={["/proposal"]}>
         <ProposalForge />
@@ -155,11 +205,21 @@ describe("ProposalForge save to library", () => {
           title: "Operations Associate saved",
           content: "Freshly generated proposal body.",
           status: "saved",
+          metadata: expect.objectContaining({
+            sourceCvId: "cv_alpha",
+            templateId: expect.any(String),
+            styleLinkMode: "inherit_cv",
+            verbatiStyle: expect.objectContaining({
+              palette: "encre",
+            }),
+          }),
         }),
       );
     });
 
-    expect(screen.getByText("Saved proposals")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("Saved proposals")).toBeInTheDocument();
+    });
 
     expect(readStoredProposalComposeDraft()).toMatchObject({
       jobTitle: "Operations Associate",
@@ -176,6 +236,68 @@ describe("ProposalForge save to library", () => {
         variant: "success",
       }),
     );
+  });
+
+  it("persists a custom detached style while keeping the saved proposal source cv association", async () => {
+    mockAttachedCvId = "cv_alpha";
+    window.localStorage.setItem(
+      PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,
+      JSON.stringify({
+        proposalContent: "Detached styled proposal.",
+        proposalType: "cover_letter",
+        proposalVoicePreset: "signature",
+        proposalTemplateId: null,
+        proposalVerbatiStyle: {
+          layout: "swiss",
+          typography: "signature",
+          palette: "bordeaux",
+        },
+        proposalStyleLinkMode: "proposal_local",
+        proposalStyleChoice: "balanced",
+        proposalApplicantName: "Alex Martin",
+        proposalApplicantRole: "Operations Associate",
+        proposalDocumentTitle: "Detached proposal",
+        proposalDocumentMeta: "Compose output",
+        generatedProposalId: null,
+        proposalOutputMode: "preview",
+        paletteOverride: null,
+        customAccentHex: null,
+        templateBundleId: null,
+        typographyOverride: null,
+        layoutOverride: null,
+        proposalDocumentTitleManual: false,
+        characterLimitMode: null,
+        characterLimitValue: null,
+      }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save proposal to library" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save to Library" }));
+
+    await waitFor(() => {
+      expect(mockCreateProposal).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Detached proposal",
+          content: expect.stringContaining("Detached styled proposal."),
+          metadata: expect.objectContaining({
+            sourceCvId: "cv_alpha",
+            templateId: expect.any(String),
+            styleLinkMode: "proposal_local",
+            verbatiStyle: expect.objectContaining({
+              palette: "bordeaux",
+            }),
+          }),
+        }),
+      );
+    });
   });
 
   it("creates a new saved proposal when the live draft has no server id", async () => {
@@ -233,7 +355,7 @@ describe("ProposalForge save to library", () => {
       expect(mockCreateProposal).toHaveBeenCalledWith(
         expect.objectContaining({
           title: "Detached proposal",
-          content: "Edited detached draft.",
+          content: expect.stringContaining("Edited detached draft."),
           status: "saved",
           metadata: expect.objectContaining({
             sourceJobDescription:
@@ -245,9 +367,11 @@ describe("ProposalForge save to library", () => {
       );
     });
 
-    expect(screen.getByText("Saved proposals")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("Saved proposals")).toBeInTheDocument();
+    });
     expect(readStoredProposalOutputDraft()).toMatchObject({
-      proposalContent: "Edited detached draft.",
+      proposalContent: expect.stringContaining("Edited detached draft."),
       proposalDocumentTitle: "Detached proposal",
     });
   });
