@@ -57,6 +57,100 @@ describe("readStoredProposalOutputDraft", () => {
     );
   });
 
+  it("round-trips a persisted style snapshot without collapsing valid semantic ids", () => {
+    writeStoredProposalOutputDraft({
+      proposalContent: "Generated proposal body.",
+      proposalType: "cover_letter",
+      proposalVoicePreset: "signature",
+      proposalTemplateId: "editorial_wide",
+      proposalVerbatiStyle: {
+        layout: "editorial",
+        typography: "civic-correspondence",
+        palette: "custom",
+        accentHex: "#AA7733",
+      },
+      proposalStyleLinkMode: "proposal_local",
+      proposalStyleChoice: "formal",
+      proposalApplicantName: "Alex Martin",
+      proposalApplicantRole: "Operations Associate",
+      proposalDocumentTitle: "Operations Associate Proposal",
+      proposalDocumentMeta: "Cover letter · Signature",
+      generatedProposalId: "proposal_live",
+      proposalOutputMode: "preview",
+      paletteOverride: null,
+      customAccentHex: null,
+      templateBundleId: null,
+      typographyOverride: null,
+      layoutOverride: null,
+      proposalDocumentTitleManual: false,
+      characterLimitMode: null,
+      characterLimitValue: null,
+    });
+
+    expect(readStoredProposalOutputDraft()).toEqual(
+      expect.objectContaining({
+        proposalTemplateId: "editorial_wide",
+        proposalStyleChoice: "formal",
+        proposalVerbatiStyle: {
+          layout: "editorial",
+          typography: "civic-correspondence",
+          palette: "custom",
+          accentHex: "#aa7733",
+        },
+      }),
+    );
+  });
+
+  it("does not drift after repeated output-draft read and write cycles", () => {
+    const initialDraft = {
+      proposalContent: "Generated proposal body.",
+      proposalType: "cover_letter" as const,
+      proposalVoicePreset: "signature" as const,
+      proposalTemplateId: "editorial_wide" as const,
+      proposalVerbatiStyle: {
+        layout: "editorial" as const,
+        typography: "civic-correspondence" as const,
+        palette: "custom" as const,
+        accentHex: "#AA7733",
+      },
+      proposalStyleLinkMode: "proposal_local" as const,
+      proposalStyleChoice: "formal" as const,
+      proposalApplicantName: "Alex Martin",
+      proposalApplicantRole: "Operations Associate",
+      proposalDocumentTitle: "Operations Associate Proposal",
+      proposalDocumentMeta: "Cover letter · Signature",
+      generatedProposalId: "proposal_live" as const,
+      proposalOutputMode: "preview" as const,
+      paletteOverride: null,
+      customAccentHex: null,
+      templateBundleId: null,
+      typographyOverride: null,
+      layoutOverride: null,
+      proposalDocumentTitleManual: false,
+      characterLimitMode: null,
+      characterLimitValue: null,
+    };
+
+    writeStoredProposalOutputDraft(initialDraft);
+    const firstRead = readStoredProposalOutputDraft();
+    expect(firstRead).toBeTruthy();
+
+    writeStoredProposalOutputDraft(firstRead);
+    const secondRead = readStoredProposalOutputDraft();
+
+    expect(secondRead).toEqual(firstRead);
+    expect(secondRead).toEqual(
+      expect.objectContaining({
+        proposalTemplateId: "editorial_wide",
+        proposalVerbatiStyle: expect.objectContaining({
+          layout: "editorial",
+          typography: "civic-correspondence",
+          palette: "custom",
+        }),
+      }),
+    );
+  });
+
   it("drops invalid custom accent values safely", () => {
     window.localStorage.setItem(
       PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,
