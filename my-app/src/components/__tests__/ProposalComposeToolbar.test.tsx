@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ProposalComposeToolbar } from "../ProposalComposeToolbar";
@@ -41,7 +41,7 @@ describe("ProposalComposeToolbar", () => {
     ).toContain("Formal");
     expect(
       container.querySelectorAll(".dasti-compose-toolbar__group-divider"),
-    ).toHaveLength(2);
+    ).toHaveLength(1);
   });
 
   it("opens the collapsed tone popover and closes it on escape", async () => {
@@ -220,5 +220,99 @@ describe("ProposalComposeToolbar", () => {
     expect(
       container.querySelector(".dasti-compose-toolbar__group--collapse"),
     ).toBeNull();
+  });
+
+  it("renders the compact contextual style capsule when the workspace exposes one", () => {
+    const { container } = render(
+      <ProposalComposeToolbar
+        value="signature"
+        onChange={vi.fn()}
+        onToggleCvPicker={vi.fn()}
+        cvTitle="Mohamed Ismail J."
+        isCvPickerOpen={false}
+        onCollapseCompose={vi.fn()}
+        styleStatusLabel="CV"
+      />,
+    );
+
+    expect(screen.getByRole("status")).toHaveTextContent("CV");
+    expect(
+      container.querySelector(".dasti-compose-toolbar__group--context"),
+    ).toBeTruthy();
+  });
+
+  it("renders a reset action when a source cv exists and delegates the click", async () => {
+    const user = userEvent.setup();
+    const handleReset = vi.fn();
+
+    render(
+      <ProposalComposeToolbar
+        value="signature"
+        onChange={vi.fn()}
+        onToggleCvPicker={vi.fn()}
+        cvTitle="Mohamed Ismail J."
+        isCvPickerOpen={false}
+        onCollapseCompose={vi.fn()}
+        styleStatusLabel="Custom"
+        canResetToCvStyle
+        onResetToCvStyle={handleReset}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Reset to CV style" }));
+    expect(handleReset).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByRole("button", { name: "Attached CV Mohamed Ismail J." }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps the source cv button visible while saving owns the contextual slot", () => {
+    render(
+      <ProposalComposeToolbar
+        value="signature"
+        onChange={vi.fn()}
+        onToggleCvPicker={vi.fn()}
+        cvTitle="Mohamed Ismail J."
+        isCvPickerOpen={false}
+        onCollapseCompose={vi.fn()}
+        styleStatusLabel="CV"
+        saveStatus="saving"
+        canResetToCvStyle
+        onResetToCvStyle={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Attached CV Mohamed Ismail J." }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Saving…");
+    expect(screen.queryByText("CV")).toBeNull();
+  });
+
+  it("prioritizes transient save status before returning to the resting contextual capsule", () => {
+    vi.useFakeTimers();
+
+    render(
+      <ProposalComposeToolbar
+        value="signature"
+        onChange={vi.fn()}
+        onToggleCvPicker={vi.fn()}
+        cvTitle="Mohamed Ismail J."
+        isCvPickerOpen={false}
+        onCollapseCompose={vi.fn()}
+        styleStatusLabel="CV"
+        saveStatus="saved"
+      />,
+    );
+
+    expect(screen.getByRole("status")).toHaveTextContent("Saved");
+    expect(screen.queryByText("CV")).toBeNull();
+
+    act(() => {
+      vi.advanceTimersByTime(1500);
+    });
+
+    expect(screen.getByRole("status")).toHaveTextContent("CV");
+    vi.useRealTimers();
   });
 });

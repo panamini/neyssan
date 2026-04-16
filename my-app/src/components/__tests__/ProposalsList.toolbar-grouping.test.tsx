@@ -210,4 +210,5 @@ describe("ProposalsList toolbar grouping", () => {
       screen.queryByRole("button", { name: /open proposal library overview/i }),
     ).not.toBeInTheDocument();
   });
+
 });

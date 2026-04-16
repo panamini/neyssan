@@ -3,6 +3,7 @@ import {
   DEFAULT_VERBATI_STYLE,
   getProposalTwinTemplateId,
   resolveVerbatiStyle,
+  sanitizePersistedVerbatiStyle,
 } from "../features/verbati/style";
 import type { VerbatiStylePreset } from "../features/verbati/types";
 import { resolveProposalTemplateId } from "../../convex/lib/proposals/renderTemplates";
@@ -29,12 +30,19 @@ export type ResolvedProposalRenderState = {
 export function resolveProposalRenderState(
   input: ProposalRenderStateInput,
 ): ResolvedProposalRenderState {
-  const stylePreset = resolveVerbatiStyle(
-    input.preferredStylePreset ??
-      input.storedStylePreset ??
-      input.activeCvStylePreset ??
-      DEFAULT_VERBATI_STYLE,
-  );
+  const stylePreset =
+    (input.preferredStylePreset
+      ? sanitizePersistedVerbatiStyle(input.preferredStylePreset) ??
+        resolveVerbatiStyle(input.preferredStylePreset)
+      : null) ??
+    (input.storedStylePreset
+      ? sanitizePersistedVerbatiStyle(input.storedStylePreset) ??
+        resolveVerbatiStyle(input.storedStylePreset)
+      : null) ??
+    (input.activeCvStylePreset
+      ? resolveVerbatiStyle(input.activeCvStylePreset)
+      : null) ??
+    DEFAULT_VERBATI_STYLE;
 
   const templateId = input.preferredTemplateId
     ? resolveProposalTemplateId(input.preferredTemplateId)
