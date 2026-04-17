@@ -301,13 +301,14 @@ describe("QuickStartFlow", () => {
 
     fireEvent.change(fileInput, { target: { files: [file] } });
 
-    expect(
-      await screen.findByTestId("quick-start-import-status"),
-    ).toHaveTextContent(/Importing resume/i);
+    const loadingCard = await screen.findByTestId("quick-start-import-status");
+    expect(loadingCard.tagName).toBe("BUTTON");
+    expect(loadingCard).toHaveTextContent(/Importing resume/i);
     expect(screen.getByText("slow-import.pdf")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /^Reading your file\b/i }),
-    ).toBeDisabled();
+      screen.queryByRole("button", { name: /^Upload PDF or image\b/i }),
+    ).not.toBeInTheDocument();
+    expect(loadingCard).toBeDisabled();
     expect(screen.getByRole("button", { name: /^Start fresh\b/i })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Not now" })).toBeDisabled();
 
@@ -330,7 +331,9 @@ describe("QuickStartFlow", () => {
     expect(
       await screen.findByTestId("quick-start-import-status"),
     ).toHaveTextContent(/Opening resume/i);
-    expect(screen.getByText(/Loading the imported resume into the editor/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Loading the imported resume into the editor/i),
+    ).toBeInTheDocument();
   });
 
   it("keeps Quick Start on the resume step when trusted import rejects", async () => {

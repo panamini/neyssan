@@ -566,6 +566,18 @@ function StepTwo({
                 ? "Creating a blank resume and opening the editor."
                 : "Running the trusted Mistral import. This can take a few seconds.",
             };
+  const uploadCardTitle = parsing
+    ? importStatusCopy.title
+    : "Upload PDF or image";
+  const uploadCardHint = parsing
+    ? importStatusCopy.detail
+    : "Quick Start only accepts trusted parser-supported files.";
+  const freshCardTitle = creatingFresh
+    ? importStatusCopy.title
+    : "Start fresh";
+  const freshCardHint = creatingFresh
+    ? importStatusCopy.detail
+    : "Open a blank resume immediately.";
 
   return (
     <section
@@ -607,77 +619,24 @@ function StepTwo({
 
       <div style={{ display: "grid", gap: "var(--space-3)" }}>
         <ChoiceCard
-          label={parsing ? "Reading your file…" : "Upload PDF or image"}
-          hint="Quick Start only accepts trusted parser-supported files."
+          label={uploadCardTitle}
+          hint={uploadCardHint}
           onClick={onPickFile}
           disabled={isBusy}
+          loading={parsing}
+          meta={parsing ? importFileName : null}
+          testId={parsing ? "quick-start-import-status" : undefined}
         />
         {resumeMode !== "upload-only" ? (
           <ChoiceCard
-            label={creatingFresh ? "Opening blank resume…" : "Start fresh"}
-            hint="Open a blank resume immediately."
+            label={freshCardTitle}
+            hint={freshCardHint}
             onClick={onStartFresh}
             disabled={isBusy}
+            loading={creatingFresh}
           />
         ) : null}
       </div>
-
-      {isBusy ? (
-        <div
-          role="status"
-          aria-live="polite"
-          data-testid="quick-start-import-status"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "auto 1fr",
-            gap: "var(--space-3)",
-            alignItems: "start",
-            padding: "var(--space-3)",
-            borderRadius: "var(--radius-surface, 12px)",
-            border: "1px solid var(--color-border)",
-            background:
-              "color-mix(in srgb, var(--color-canvas) 95%, white 5%)",
-          }}
-        >
-          <Loader2
-            size={16}
-            className="animate-spin"
-            aria-hidden="true"
-            style={{ marginTop: 2, color: "var(--color-accent, var(--ti))" }}
-          />
-          <div style={{ display: "grid", gap: 4 }}>
-            <div
-              style={{
-                fontSize: "var(--tm)",
-                fontWeight: 600,
-                color: "var(--color-text)",
-              }}
-            >
-              {importStatusCopy.title}
-            </div>
-            <div
-              style={{
-                fontSize: "var(--ts)",
-                color: "var(--color-text-muted)",
-                lineHeight: 1.45,
-              }}
-            >
-              {importStatusCopy.detail}
-            </div>
-            {importFileName ? (
-              <div
-                style={{
-                  fontSize: "var(--txs, 11px)",
-                  color: "var(--color-text-subtle)",
-                  wordBreak: "break-word",
-                }}
-              >
-                {importFileName}
-              </div>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
 
       {parseError ? (
         <p
@@ -706,37 +665,85 @@ function ChoiceCard({
   hint,
   onClick,
   disabled,
+  loading,
+  meta,
+  testId,
 }: {
   label: string;
   hint: string;
   onClick: () => void;
   disabled?: boolean;
+  loading?: boolean;
+  meta?: string | null;
+  testId?: string;
 }): JSX.Element {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
+      data-testid={testId}
       style={{
         textAlign: "left",
         padding: "var(--space-3) var(--space-4)",
         borderRadius: "var(--radius-surface, 12px)",
-        border: "1px solid var(--color-border)",
-        background: "var(--sfr, #fff)",
-        cursor: disabled ? "not-allowed" : "pointer",
-        opacity: disabled ? 0.55 : 1,
+        border: loading
+          ? "1px solid color-mix(in srgb, var(--color-accent, var(--ti)) 38%, var(--color-border))"
+          : "1px solid var(--color-border)",
+        background: loading
+          ? "linear-gradient(135deg, color-mix(in srgb, var(--color-canvas) 92%, white 8%) 0%, color-mix(in srgb, var(--color-canvas) 98%, var(--color-accent, var(--ti)) 2%) 100%)"
+          : "var(--sfr, #fff)",
+        cursor: loading ? "progress" : disabled ? "not-allowed" : "pointer",
+        opacity: disabled && !loading ? 0.55 : 1,
         transition:
           "transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease",
+        boxShadow: loading
+          ? "0 0 0 1px color-mix(in srgb, var(--color-accent, var(--ti)) 12%, transparent)"
+          : "none",
       }}
     >
       <div
         style={{
-          fontFamily: "var(--font-heading-family)",
-          fontSize: "var(--tm)",
-          fontWeight: 600,
+          display: "grid",
+          gap: "var(--space-2)",
         }}
       >
-        {label}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "var(--space-2)",
+          }}
+        >
+          {loading ? (
+            <Loader2
+              size={15}
+              className="animate-spin"
+              aria-hidden="true"
+              style={{ color: "var(--color-accent, var(--ti))", flex: "0 0 auto" }}
+            />
+          ) : null}
+          <div
+            style={{
+              fontFamily: "var(--font-heading-family)",
+              fontSize: "var(--tm)",
+              fontWeight: 600,
+            }}
+          >
+            {label}
+          </div>
+        </div>
+        {loading ? (
+          <div
+            aria-hidden="true"
+            style={{
+              height: 2,
+              borderRadius: 999,
+              background:
+                "linear-gradient(90deg, color-mix(in srgb, var(--color-accent, var(--ti)) 28%, transparent) 0%, color-mix(in srgb, var(--color-accent, var(--ti)) 72%, white 28%) 52%, color-mix(in srgb, var(--color-accent, var(--ti)) 28%, transparent) 100%)",
+            }}
+          />
+        ) : null}
       </div>
       <div
         style={{
@@ -748,6 +755,18 @@ function ChoiceCard({
       >
         {hint}
       </div>
+      {meta ? (
+        <div
+          style={{
+            marginTop: "var(--space-2)",
+            color: "var(--color-text-subtle)",
+            fontSize: "var(--txs, 11px)",
+            wordBreak: "break-word",
+          }}
+        >
+          {meta}
+        </div>
+      ) : null}
     </button>
   );
 }
