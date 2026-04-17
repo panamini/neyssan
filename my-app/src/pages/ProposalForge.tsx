@@ -18,6 +18,7 @@ import ProposalInputForm, {
 import EmbeddedStyleInspector from "../components/EmbeddedStyleInspector";
 import { ProposalComposeToolbar } from "../components/ProposalComposeToolbar";
 import { ProposalBriefCard } from "../components/ProposalBriefCard";
+import { CoverLetterStartSurface } from "../components/CoverLetterStartSurface";
 import ProposalSaveDialog from "../components/ProposalSaveDialog";
 import ProposalDisplay, {
   fallbackCopyText,
@@ -41,6 +42,7 @@ import {
   getLocalCvDocumentById,
   getProposalAttachedCvId,
   getProposalAttachedCvLocalDocument,
+  listLocalCvPickerOptions,
   PROPOSAL_ATTACHED_CV_UPDATED_EVENT,
   setProposalAttachedCvId,
   type ProposalApplicantHeaderData,
@@ -85,6 +87,7 @@ import {
 import { resolveProposalRenderState } from "../lib/proposal-render-state";
 import { buildProposalSourceSummary } from "../lib/proposal-source-summary";
 import { formatUiDate } from "../lib/ui-date";
+import { buildQuickStartHref } from "../lib/quick-start-routing";
 import {
   resolveProposalStyleChoice,
   resolveProposalStyleChoiceFromRenderState,
@@ -780,6 +783,9 @@ export function ProposalForge(): JSX.Element {
     (nextId: string | null) => {
       if (nextId === null) {
         clearActiveLocalCvId();
+      } else {
+        setHasDismissedCoverLetterStart(true);
+        setShowExtensionHelper(false);
       }
       refreshAttachedCvSelection();
     },
@@ -805,6 +811,16 @@ export function ProposalForge(): JSX.Element {
     () => readProposalWorkspaceResetToken(location.state as unknown),
     [location.state],
   );
+  React.useEffect(() => {
+    if (requestedView === "saved" || handoffId) {
+      setHasDismissedCoverLetterStart(false);
+      setShowExtensionHelper(false);
+      return;
+    }
+
+    setHasDismissedCoverLetterStart(false);
+    setShowExtensionHelper(false);
+  }, [handoffId, proposalWorkspaceResetToken, requestedView]);
   const {
     isLoading: isConvexAuthLoading,
     isAuthenticated: isConvexAuthenticated,
@@ -993,6 +1009,9 @@ export function ProposalForge(): JSX.Element {
   );
   const [composeFormInstanceKey, setComposeFormInstanceKey] = React.useState(0);
   const [isCvPickerOpen, setIsCvPickerOpen] = React.useState(false);
+  const [hasDismissedCoverLetterStart, setHasDismissedCoverLetterStart] =
+    React.useState(false);
+  const [showExtensionHelper, setShowExtensionHelper] = React.useState(false);
   const [isComposePanelVisible, setIsComposePanelVisible] = React.useState(true);
   const [isBriefExpanded, setIsBriefExpanded] = React.useState(true);
   const [briefAnimationPhase, setBriefAnimationPhase] =
@@ -3599,6 +3618,42 @@ export function ProposalForge(): JSX.Element {
     setCvPickerRequestKey((currentKey) => currentKey + 1);
   }, []);
 
+  const handleOpenCoverLetterEditor = React.useCallback(() => {
+    setShowExtensionHelper(false);
+    setHasDismissedCoverLetterStart(true);
+    setIsComposePanelVisible(true);
+    window.setTimeout(() => {
+      const field = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+        'input[name="jobTitle"], textarea[name="jobDescription"], textarea',
+      );
+      field?.focus();
+    }, 0);
+  }, []);
+
+  const handleOpenStartSurfaceCvPicker = React.useCallback(() => {
+    setShowExtensionHelper(false);
+    setHasDismissedCoverLetterStart(true);
+    setIsComposePanelVisible(true);
+    setIsCvPickerOpen(true);
+    setCvPickerRequestKey((currentKey) => currentKey + 1);
+  }, []);
+
+  const handleImportResumeIntoCoverLetter = React.useCallback(() => {
+    setShowExtensionHelper(false);
+    void navigate(
+      buildQuickStartHref(location.pathname, location.search, {
+        createType: "resume",
+        resumeMode: "upload-only",
+        returnTarget: "proposal",
+      }),
+      { replace: true },
+    );
+  }, [location.pathname, location.search, navigate]);
+
+  const handleRevealExtensionHelper = React.useCallback(() => {
+    setShowExtensionHelper((current) => !current);
+  }, []);
+
   const handleToolbarVoicePresetChange = React.useCallback(
     (preset: FormValues["voicePreset"] | null) => {
       setComposeToolbarVoicePreset(preset);
@@ -4633,6 +4688,10 @@ export function ProposalForge(): JSX.Element {
   ]);
 
   const isSavedView = requestedView === "saved";
+  const hasLocalResumes = React.useMemo(
+    () => listLocalCvPickerOptions().length > 0,
+    [attachedCvId, attachedCvTitle],
+  );
   const proposalTwoPaneMinViewportWidth = 1440;
   const proposalWorkspaceOutputShellInlineSize =
     "calc(var(--document-sheet-inline-size) - (var(--s4) * 2))";
@@ -4670,6 +4729,23 @@ export function ProposalForge(): JSX.Element {
     stickyImportedSource.platform ??
     prefill?.platform ??
     null;
+  const hasMeaningfulComposeDraft = Boolean(
+    composePreviewValues?.jobTitle?.trim() ||
+      composePreviewValues?.jobDescription?.trim() ||
+      composeDraftInitialSeed?.jobTitle?.trim() ||
+      composeDraftInitialSeed?.jobDescription?.trim() ||
+      prefill?.jobTitle?.trim() ||
+      prefill?.jobDescription?.trim() ||
+      briefSourceUrl?.trim() ||
+      briefSourcePlatform?.trim(),
+  );
+  const hasMeaningfulOutputDraft = Boolean(
+    proposalContent?.trim() ||
+      proposalDocumentTitle?.trim() ||
+      storedOutputDraft?.proposalContent?.trim() ||
+      storedOutputDraft?.proposalDocumentTitle?.trim() ||
+      generatedProposalId,
+  );
   const proposalDisplayApplicantHeader = React.useMemo(
     () => ({
       ...defaultPreviewApplicantHeader,
@@ -5058,6 +5134,14 @@ export function ProposalForge(): JSX.Element {
     Boolean(handoffId) &&
     (isConvexAuthLoading ||
       (isConvexAuthenticated && handoffRecord === undefined));
+  const shouldShowCoverLetterStartSurface =
+    !isSavedView &&
+    !handoffId &&
+    !isLoadingHandoff &&
+    !attachedCvId &&
+    !hasMeaningfulComposeDraft &&
+    !hasMeaningfulOutputDraft &&
+    !hasDismissedCoverLetterStart;
   const shouldShowCollapsedComposeToolbar =
     !isComposePanelVisible && !isSavedView && canCollapseComposePanel;
   const liveWorkbenchMaxWidth = isCompactComposeLayout
@@ -5672,6 +5756,15 @@ export function ProposalForge(): JSX.Element {
                       <div style={{ paddingTop: "var(--s2)" }}>
                         <p className="dasti-hint">Loading imported job offer…</p>
                       </div>
+                    ) : shouldShowCoverLetterStartSurface ? (
+                      <CoverLetterStartSurface
+                        hasResumes={hasLocalResumes}
+                        showExtensionHelper={showExtensionHelper}
+                        onUseResume={handleOpenStartSurfaceCvPicker}
+                        onImportResume={handleImportResumeIntoCoverLetter}
+                        onOpenEditor={handleOpenCoverLetterEditor}
+                        onUseChromeExtension={handleRevealExtensionHelper}
+                      />
                     ) : (
                       <ProposalInputForm
                         key={composeFormInstanceKey}
