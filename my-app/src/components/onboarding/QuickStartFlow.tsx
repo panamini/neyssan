@@ -1,10 +1,11 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
+import { useAction, useAuth } from "convex/react";
 import { Button } from "../ui/button";
 import { useCvLibrary } from "../../contexts/CvLibraryContext";
-import { parsePdfArrayBuffer } from "../../services/pdf/browser-cv-parser";
 import { mapProfileToCvDocument } from "../../adapters/profile-mapper";
 import { clientFormatCompleteCV } from "../../utils/simpleClientParse";
+import { api } from "../../../convex/_generated/api";
 import {
   TONE_OPTIONS,
   markQuickStartCompleted,
@@ -29,7 +30,21 @@ interface Props {
 export function QuickStartFlow({ onExit }: Props): JSX.Element {
   const navigate = useNavigate();
   const { importCv, createNewCv } = useCvLibrary();
+  const { getToken } = useAuth();
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  // Use the same OCR extraction actions as StrictUploadButton
+  const withSpansRef =
+    (api as any).actions?.extractProfileStrictWithSpans ??
+    (api as any)["actions/extractProfileStrictWithSpans"]
+      ?.extractProfileStrictWithSpans ??
+    null;
+  const strictOnlyRef =
+    (api as any).actions?.extractProfileStrict ??
+    (api as any)["actions/extractProfileStrict"]?.extractProfileStrict ??
+    null;
+  const extractWithSpans = useAction(withSpansRef || (() => Promise.reject("No action")));
+  const extractStrictOnly = useAction(strictOnlyRef || (() => Promise.reject("No action")));
 
   const [step, setStep] = React.useState<Step>(1);
   const [createType, setCreateType] = React.useState<CreateType>("resume");
@@ -55,11 +70,39 @@ export function QuickStartFlow({ onExit }: Props): JSX.Element {
       setParseError(null);
       setParsing(true);
       try {
-        const buffer = await file.arrayBuffer();
-        const profile = await parsePdfArrayBuffer(buffer);
+        // Extract raw text from file
+        let rawText: string;
+        const ext = (file.name.split(".").pop() || "").toLowerCase();
+        if (ext === "pdf") {
+          // PDF text extraction would need a library; for now fallback to error
+          throw new Error("PDF upload requires server processing. Please use text paste or start fresh.");
+        } else if (ext === "txt") {
+          rawText = await file.text();
+        } else {
+          throw new Error("Unsupported file type. Please upload a TXT or paste text.");
+        }
+
+        // Call the OCR extraction action (prefer with-spans)
+        let profile: unknown = null;
+        if (typeof extractWithSpans === "function") {
+          try {
+            profile = await extractWithSpans({ rawText });
+          } catch (e) {
+            if (typeof extractStrictOnly === "function") {
+              profile = await extractStrictOnly({ rawText });
+            } else {
+              throw e;
+            }
+          }
+        } else if (typeof extractStrictOnly === "function") {
+          profile = await extractStrictOnly({ rawText });
+        } else {
+          throw new Error("OCR service unavailable. Please try again or paste text manually.");
+        }
+
         const doc = mapProfileToCvDocument(profile);
         if (!doc) {
-          throw new Error("We couldn't read that file. Try another PDF.");
+          throw new Error("We couldn't structure that file. Try pasting text instead.");
         }
         await importCv(doc);
         setImportChoice("pdf");
@@ -73,7 +116,7 @@ export function QuickStartFlow({ onExit }: Props): JSX.Element {
         setParsing(false);
       }
     },
-    [importCv],
+    [importCv, extractWithSpans, extractStrictOnly],
   );
 
   const handleStartFresh = React.useCallback(() => {
@@ -91,9 +134,28 @@ export function QuickStartFlow({ onExit }: Props): JSX.Element {
     setParseError(null);
     setParsing(true);
     try {
-      const parsed = clientFormatCompleteCV(raw);
-      const result =
-        (parsed as { result?: Record<string, unknown> })?.result ?? {};
+      // Try OCR extraction first (with-spans preferred)
+      let profile: unknown = null;
+      if (typeof extractWithSpans === "function") {
+        try {
+          profile = await extractWithSpans({ rawText: raw });
+        } catch (e) {
+          if (typeof extractStrictOnly === "function") {
+            profile = await extractStrictOnly({ rawText: raw });
+          }
+        }
+      } else if (typeof extractStrictOnly === "function") {
+        profile = await extractStrictOnly({ rawText: raw });
+      }
+
+      // Fallback to client-side parsing if server extraction fails
+      if (!profile) {
+        const parsed = clientFormatCompleteCV(raw);
+        profile =
+          (parsed as { result?: Record<string, unknown> })?.result ?? {};
+      }
+
+      const result = (profile as Record<string, unknown>) ?? {};
       const identity =
         (result.identity as Record<string, unknown> | undefined) ?? {};
       const flatProfile = {
@@ -107,7 +169,7 @@ export function QuickStartFlow({ onExit }: Props): JSX.Element {
       };
       const doc = mapProfileToCvDocument(flatProfile);
       if (!doc) {
-        throw new Error("We couldn't structure that text. Try a PDF instead.");
+        throw new Error("We couldn't structure that text. Try again or start fresh.");
       }
       await importCv(doc);
       setImportChoice("text");
@@ -119,7 +181,7 @@ export function QuickStartFlow({ onExit }: Props): JSX.Element {
     } finally {
       setParsing(false);
     }
-  }, [importCv, pastedText]);
+  }, [importCv, pastedText, extractWithSpans, extractStrictOnly]);
 
   const handleFinish = React.useCallback(async () => {
     setFinishing(true);
