@@ -8,6 +8,10 @@ import ResumeExportControl from "../components/ResumeExportControl";
 import type { ResumeExportRequest } from "../components/ResumeExportControl";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import { VerbatiCvPreviewPanel } from "../features/verbati/VerbatiCvPreviewPanel";
+import type {
+  ResumeActiveTarget,
+  ResumeLinkIntent,
+} from "../features/verbati/resumeLinking";
 import { useBoundVerbatiCvStyle } from "../features/verbati/useBoundVerbatiCvStyle";
 import { resolveVerbatiStyle } from "../features/verbati/style";
 import {
@@ -140,26 +144,32 @@ export function CvForge(): JSX.Element {
     React.useState<CvForgeWorkspaceMode>(() =>
       readStoredCvForgeWorkspaceMode(),
     );
-  // Preview → editor section linking: stores the section type most recently clicked in the preview
-  const [highlightSectionType, setHighlightSectionType] = React.useState<
-    string | null
-  >(null);
-  const highlightResetTimerRef = React.useRef<number | null>(null);
+  const [resumeLinkIntent, setResumeLinkIntent] =
+    React.useState<ResumeLinkIntent | null>(null);
+  const [resumeActiveTarget, setResumeActiveTarget] =
+    React.useState<ResumeActiveTarget | null>(null);
 
-  const handlePreviewSectionClick = React.useCallback((sectionType: string) => {
-    // Clear any pending reset so rapid clicks don't cancel each other
-    if (highlightResetTimerRef.current !== null) {
-      window.clearTimeout(highlightResetTimerRef.current);
-    }
-    // Set to null first so the effect re-fires even when clicking the same section twice
-    setHighlightSectionType(null);
-    window.requestAnimationFrame(() => {
-      setHighlightSectionType(sectionType);
-      highlightResetTimerRef.current = window.setTimeout(() => {
-        setHighlightSectionType(null);
-        highlightResetTimerRef.current = null;
-      }, 1500);
-    });
+  const handleResumeLinkIntent = React.useCallback(
+    (intent: ResumeLinkIntent) => {
+      setResumeLinkIntent(intent);
+      setResumeActiveTarget({
+        sectionType: intent.sectionType,
+        previewSectionType: intent.previewSectionType,
+        itemId: intent.itemId,
+        sectionId: intent.sectionId,
+        source: intent.source,
+      });
+      if (workspaceMode === "preview" && !intent.shouldOpenModal) {
+        setWorkspaceMode("edit");
+      }
+    },
+    [workspaceMode],
+  );
+
+  const handleResumeLinkIntentHandled = React.useCallback((requestId: string) => {
+    setResumeLinkIntent((currentIntent) =>
+      currentIntent?.requestId === requestId ? null : currentIntent,
+    );
   }, []);
   const { stylePreset, setStylePreset } = useBoundVerbatiCvStyle({
     currentCv,
@@ -550,6 +560,24 @@ export function CvForge(): JSX.Element {
       >
         {workspaceMode === "preview" ? (
           <>
+            {currentCv ? (
+              <div style={{ display: "none" }} aria-hidden="true">
+                <ProfileReviewCard
+                  cvId={requestedCvId}
+                  exportingFormat={exportingFormat}
+                  exportStatusDescription={exportStatusDescription}
+                  exportStatusLabel={exportStatusLabel}
+                  exportStatusTone={hasTrustedExport ? "trusted" : "standard"}
+                  onRequestExport={handleResumeExport}
+                  resumeLinkIntent={
+                    resumeLinkIntent?.shouldOpenModal ? resumeLinkIntent : null
+                  }
+                  onResumeLinkIntentHandled={handleResumeLinkIntentHandled}
+                  activeTarget={resumeActiveTarget}
+                  onActiveTargetChange={setResumeActiveTarget}
+                />
+              </div>
+            ) : null}
             <div className="dasti-cv-preview-workbench">
               <div className="dasti-cv-preview-workbench__main">
                 <VerbatiCvPreviewPanel
@@ -559,6 +587,8 @@ export function CvForge(): JSX.Element {
                   railTrailingControl={resumeExportControl}
                   stylePreset={stylePreset}
                   onStylePresetChange={setStylePreset}
+                  onLinkIntent={handleResumeLinkIntent}
+                  activeTarget={resumeActiveTarget}
                 />
               </div>
             </div>
@@ -590,7 +620,10 @@ export function CvForge(): JSX.Element {
                   toolbarLeadControl={editModeToggle}
                   toolbarPrimaryControl={stylePresetToolbarControl}
                   onRequestExport={handleResumeExport}
-                  highlightSectionType={highlightSectionType}
+                  resumeLinkIntent={resumeLinkIntent}
+                  onResumeLinkIntentHandled={handleResumeLinkIntentHandled}
+                  activeTarget={resumeActiveTarget}
+                  onActiveTargetChange={setResumeActiveTarget}
                 />
                 <div
                   className={
@@ -604,7 +637,8 @@ export function CvForge(): JSX.Element {
                     hostMode="panel"
                     stylePreset={stylePreset}
                     onStylePresetChange={setStylePreset}
-                    onSectionClick={handlePreviewSectionClick}
+                    onLinkIntent={handleResumeLinkIntent}
+                    activeTarget={resumeActiveTarget}
                   />
                 </div>
               </div>

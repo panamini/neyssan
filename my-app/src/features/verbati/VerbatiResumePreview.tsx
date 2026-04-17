@@ -16,6 +16,16 @@ import {
 } from "./style";
 import type { ResumeData, ResumeLayoutVariantId } from "./resume/resume.types";
 import {
+  buildResumeLinkRequestId,
+  isModalCanonicalSectionType,
+  resolvePreviewSectionType,
+  resolvePreviewSurfaceType,
+  type ResumeActiveTarget,
+  type ResumeCanonicalSectionType,
+  type ResumeLinkIntent,
+  type ResumePreviewSectionType,
+} from "./resumeLinking";
+import {
   A4_PAGE_HEIGHT_PX,
   A4_PAGE_WIDTH_PX,
   DOCUMENT_ZOOM_STEPS,
@@ -37,8 +47,16 @@ type VerbatiResumePreviewProps = {
   onSelectComparisonLayout?:
     | ((layout: VerbatiLayoutPreset) => void)
     | undefined;
-  /** When provided, the preview becomes interactive: clicking a section fires this callback with its type (e.g. "experience", "profile"). */
-  onSectionClick?: (sectionType: string) => void;
+  activeTarget?: ResumeActiveTarget | null;
+  onLinkIntent?: (intent: ResumeLinkIntent) => void;
+  onRemoveSection?:
+    | ((section: {
+        sectionId: string;
+        sectionType: ResumeCanonicalSectionType;
+        sectionTitle?: string;
+        previewSectionType?: ResumePreviewSectionType;
+      }) => void)
+    | undefined;
 };
 
 const comparisonLayouts: VerbatiLayoutPreset[] = VERBATI_LAYOUT_OPTIONS.map(
@@ -63,9 +81,12 @@ export function VerbatiResumePreview({
   railLeadControl = null,
   railStartAddon = null,
   onSelectComparisonLayout,
-  onSectionClick,
+  activeTarget = null,
+  onLinkIntent,
+  onRemoveSection,
 }: VerbatiResumePreviewProps): JSX.Element {
   const previewRootRef = React.useRef<HTMLDivElement | null>(null);
+  const resumeViewportRef = React.useRef<HTMLDivElement | null>(null);
   const themeVars = React.useMemo(
     () => buildVerbatiThemeVars(stylePreset),
     [stylePreset],
@@ -126,6 +147,7 @@ export function VerbatiResumePreview({
   );
   const attachResumeViewport = React.useCallback(
     (node: HTMLDivElement | null) => {
+      resumeViewportRef.current = node;
       attachViewport(node);
       attachCenterViewport(node);
     },
@@ -215,6 +237,8 @@ export function VerbatiResumePreview({
           comparisonVariantIds={comparisonVariantIds}
           stylePreset={stylePreset}
           fitToken={fitToken}
+          activeTarget={activeTarget}
+          onRemoveSection={onRemoveSection}
           onSelectVariantId={
             onSelectComparisonLayout
               ? (variantId) => {
@@ -316,24 +340,139 @@ export function VerbatiResumePreview({
 
   const handlePreviewCanvasClick = React.useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
-      if (!onSectionClick) return;
+      if (!onLinkIntent) return;
       const target = e.target as HTMLElement;
-      // Walk up from click target to find the nearest [data-preview-section] attribute
       const sectionEl = target.closest(
         "[data-preview-section]",
       ) as HTMLElement | null;
-      // Fallback: any <header> inside the resume page = profile area
       const headerEl = !sectionEl
         ? (target.closest("header") as HTMLElement | null)
         : null;
-      const sectionType =
+      const rawSectionType =
         sectionEl?.dataset.previewSection ?? (headerEl ? "profile" : null);
-      if (sectionType) {
-        e.stopPropagation();
-        onSectionClick(sectionType);
+      const sectionType = resolvePreviewSectionType(rawSectionType);
+      if (!sectionType) {
+        return;
+      }
+      const itemEl = target.closest(
+        "[data-preview-item-id]",
+      ) as HTMLElement | null;
+      const rowEl = !itemEl
+        ? (target.closest("[data-preview-row-id]") as HTMLElement | null)
+        : null;
+      const source =
+        hostMode === "workspace" ? "preview-workspace" : "preview-panel";
+
+      e.stopPropagation();
+      onLinkIntent({
+        requestId: buildResumeLinkRequestId(),
+        sectionType,
+        previewSectionType:
+          resolvePreviewSurfaceType(rawSectionType) ?? undefined,
+        itemId: (() => {
+          const previewItemId = itemEl?.dataset.previewItemId;
+          if (previewItemId && previewItemId.trim().length > 0) {
+            return previewItemId;
+          }
+          const previewRowId = rowEl?.dataset.previewRowId;
+          return previewRowId && previewRowId.trim().length > 0
+            ? previewRowId
+            : undefined;
+        })(),
+        source,
+        shouldOpenModal: isModalCanonicalSectionType(sectionType),
+        sectionId:
+          sectionEl?.dataset.previewSectionId &&
+          sectionEl.dataset.previewSectionId.trim().length > 0
+            ? sectionEl.dataset.previewSectionId
+            : undefined,
+        sectionTitle:
+          sectionEl?.dataset.previewSectionTitle &&
+          sectionEl.dataset.previewSectionTitle.trim().length > 0
+            ? sectionEl.dataset.previewSectionTitle
+            : undefined,
+      });
+    },
+    [hostMode, onLinkIntent],
+  );
+
+  const handlePreviewWheel = React.useCallback(
+    (event: React.WheelEvent<HTMLDivElement>) => {
+      if (compareLayouts || event.ctrlKey) {
+        return;
+      }
+
+      const viewport = resumeViewportRef.current;
+      if (!viewport) {
+        return;
+      }
+
+      const applyScrollDelta = (node: HTMLElement | null) => {
+        if (!node) {
+          return false;
+        }
+
+        const previousTop = node.scrollTop;
+        const previousLeft = node.scrollLeft;
+
+        if (Math.abs(event.deltaY) > 0.01) {
+          node.scrollTop += event.deltaY;
+        }
+
+        if (Math.abs(event.deltaX) > 0.01) {
+          node.scrollLeft += event.deltaX;
+        }
+
+        return previousTop !== node.scrollTop || previousLeft !== node.scrollLeft;
+      };
+
+      const viewportCanScroll =
+        viewport.scrollHeight > viewport.clientHeight + 1 ||
+        viewport.scrollWidth > viewport.clientWidth + 1;
+
+      const shouldDeferToNativeViewportScroll =
+        isWorkspaceMode &&
+        workspaceViewMode === "manual" &&
+        viewportCanScroll;
+
+      if (shouldDeferToNativeViewportScroll) {
+        return;
+      }
+
+      if (viewportCanScroll && applyScrollDelta(viewport)) {
+        event.preventDefault();
+        return;
+      }
+
+      let ancestor = viewport.parentElement;
+      while (ancestor) {
+        const style = window.getComputedStyle(ancestor);
+        const canScrollY =
+          /(auto|scroll|overlay)/.test(style.overflowY) &&
+          ancestor.scrollHeight > ancestor.clientHeight + 1;
+        const canScrollX =
+          /(auto|scroll|overlay)/.test(style.overflowX) &&
+          ancestor.scrollWidth > ancestor.clientWidth + 1;
+
+        if (canScrollY || canScrollX) {
+          if (applyScrollDelta(ancestor)) {
+            event.preventDefault();
+          }
+          return;
+        }
+
+        ancestor = ancestor.parentElement;
+      }
+
+      const scrollingElement =
+        document.scrollingElement instanceof HTMLElement
+          ? document.scrollingElement
+          : null;
+      if (applyScrollDelta(scrollingElement)) {
+        event.preventDefault();
       }
     },
-    [onSectionClick],
+    [compareLayouts, isWorkspaceMode, workspaceViewMode],
   );
 
   const documentStage = (
@@ -359,12 +498,13 @@ export function VerbatiResumePreview({
         <div
           className="dasti-document-stage__canvas"
           data-document-page="true"
-          data-interactive={onSectionClick ? "true" : undefined}
+          data-interactive={onLinkIntent ? "true" : undefined}
           style={{
             width: `${stageLayout.pageWidth}px`,
             height: `${stageLayout.pageHeight}px`,
           }}
-          onClick={onSectionClick ? handlePreviewCanvasClick : undefined}
+          onClick={onLinkIntent ? handlePreviewCanvasClick : undefined}
+          onWheelCapture={handlePreviewWheel}
         >
           <ResumePage
             data={data}
@@ -373,6 +513,8 @@ export function VerbatiResumePreview({
             fitToken={fitToken}
             userZoom={userZoom}
             stageLayout={stageLayout}
+            activeTarget={activeTarget}
+            onRemoveSection={onRemoveSection}
           />
         </div>
       </div>
