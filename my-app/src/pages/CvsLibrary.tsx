@@ -411,16 +411,34 @@ export function CvsLibrary(): JSX.Element {
             <p className="dasti-empty-state__subtitle">
               Create or import a resume to start editing and personalizing it.
             </p>
-            <button
-              onClick={() => {
-                createNewCv();
-                void navigate("/cv");
+            <div
+              style={{
+                display: "flex",
+                gap: "var(--space-2)",
+                flexWrap: "wrap",
+                justifyContent: "center",
               }}
-              className="dasti-button dasti-button--primary dasti-button--pill"
             >
-              <Plus size={14} />
-              Create your first resume
-            </button>
+              <button
+                onClick={() => {
+                  createNewCv();
+                  void navigate("/cv");
+                }}
+                className="dasti-button dasti-button--primary dasti-button--pill"
+              >
+                <Plus size={14} />
+                Create your first resume
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void navigate("/cv?start=quick");
+                }}
+                className="dasti-button dasti-button--secondary dasti-button--pill"
+              >
+                Quick Start
+              </button>
+            </div>
           </div>
         )}
       </div>

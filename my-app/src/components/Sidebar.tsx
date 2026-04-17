@@ -19,7 +19,10 @@ import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useAuth, useUser, UserButton } from "@clerk/clerk-react";
 import { api } from "../../convex/_generated/api";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
-import { formatCvDisplayTitle } from "../lib/proposal-personalization";
+import {
+  clearActiveLocalCvId,
+  formatCvDisplayTitle,
+} from "../lib/proposal-personalization";
 import {
   PROPOSAL_OUTPUT_DRAFT_UPDATED_EVENT,
   readStoredProposalOutputDraft,
@@ -31,6 +34,7 @@ import {
   readStoredProposalComposeDraft,
   startFreshProposalWorkspace,
 } from "../lib/proposal-workspace-state";
+import { buildQuickStartHref } from "../lib/quick-start-routing";
 
 const MAX_RECENT_ITEMS = 3;
 
@@ -587,6 +591,7 @@ export const Sidebar: React.FC = () => {
   const isProposalLibraryRoute = matchesRoute("/proposals");
 
   const handleCreateProposal = React.useCallback(() => {
+    clearActiveLocalCvId();
     startFreshProposalWorkspace();
     void navigate("/proposal", {
       state: createProposalWorkspaceResetState(),
@@ -907,14 +912,14 @@ export const Sidebar: React.FC = () => {
     () =>
       resolveDocumentTitles(
         proposalDocsForTitles,
-        "Proposal",
+        "Cover Letter",
         isGenericProposalTitle,
       ),
     [proposalDocsForTitles],
   );
 
   const activeProposalTitle = activeProposalKey
-    ? proposalTitles.get(activeProposalKey) ?? "Untitled Proposal"
+    ? proposalTitles.get(activeProposalKey) ?? "Untitled Cover Letter"
     : null;
 
   const recentProposalItems = React.useMemo(
@@ -923,7 +928,7 @@ export const Sidebar: React.FC = () => {
         .slice(0, MAX_RECENT_ITEMS)
         .map((doc) => ({
           key: doc.key,
-          title: proposalTitles.get(doc.key) ?? "Untitled Proposal",
+          title: proposalTitles.get(doc.key) ?? "Untitled Cover Letter",
           href:
             doc.key === "__draft__" ? "/proposal" : buildSavedProposalHref(doc.key),
           onFollow:
@@ -972,6 +977,10 @@ export const Sidebar: React.FC = () => {
   const hasResumeDocuments = resumeDocs.length > 0;
   const hasProposalDocuments =
     proposalTotalCount > 0 || Boolean(activeProposalKey);
+  const quickStartHref = React.useMemo(
+    () => buildQuickStartHref(location.pathname, location.search),
+    [location.pathname, location.search],
+  );
 
   if (hideSidebar) {
     return null;
@@ -1006,6 +1015,12 @@ export const Sidebar: React.FC = () => {
 
       {sidebarCollapsed ? (
         <nav className="sb__nav sb__nav--rail" aria-label="Primary sidebar">
+          <SidebarRailLink
+            label="Quick Start"
+            icon={<Check size={16} strokeWidth={1.5} aria-hidden="true" />}
+            active={false}
+            href={quickStartHref}
+          />
           {hasResumeDocuments ? (
             <SidebarRailLink
               label="Resumes"
@@ -1032,7 +1047,7 @@ export const Sidebar: React.FC = () => {
           )}
           {hasProposalDocuments ? (
             <SidebarRailLink
-              label="Proposals"
+              label="Cover letters"
               icon={
                 <FileText size={16} strokeWidth={1.5} aria-hidden="true" />
               }
@@ -1041,7 +1056,7 @@ export const Sidebar: React.FC = () => {
             />
           ) : (
             <SidebarRailButton
-              label="Proposals"
+              label="Cover letters"
               icon={
                 <FileText size={16} strokeWidth={1.5} aria-hidden="true" />
               }
@@ -1052,12 +1067,20 @@ export const Sidebar: React.FC = () => {
         </nav>
       ) : (
         <nav className="sb__nav sb__nav--stack" aria-label="Primary sidebar">
+          <div
+            className="sb-section"
+            aria-label="Quick Start"
+            style={{ paddingBottom: "var(--space-2)" }}
+          >
+            <Link to={quickStartHref} className="sb-section__action">
+              Quick Start
+            </Link>
+          </div>
+
           <SidebarDocumentSection
             sectionLabel="Resumes"
             hasDocuments={hasResumeDocuments}
             createLabel="New Resume"
-            secondaryActionLabel="Quick Start"
-            secondaryActionHref="/cv?start=quick"
             allLabel="Resumes"
             allCount={resumeDocs.length}
             items={recentResumeItems}
@@ -1066,10 +1089,10 @@ export const Sidebar: React.FC = () => {
           />
 
           <SidebarDocumentSection
-            sectionLabel="Proposals"
+            sectionLabel="Cover letters"
             hasDocuments={hasProposalDocuments}
-            createLabel="New Proposal"
-            allLabel="Proposals"
+            createLabel="New Cover Letter"
+            allLabel="Cover letters"
             allCount={proposalTotalCount}
             items={recentProposalItems}
             onCreate={handleCreateProposal}

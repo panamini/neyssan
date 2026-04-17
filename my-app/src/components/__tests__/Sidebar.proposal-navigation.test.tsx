@@ -189,7 +189,7 @@ describe("Sidebar proposal navigation", () => {
 
     writeProposalDraftToStorage();
 
-    fireEvent.click(screen.getByRole("link", { name: "Proposals" }));
+    fireEvent.click(screen.getByRole("link", { name: "Cover letters" }));
 
     expect(screen.getByTestId("proposal-compose-title")).toHaveTextContent(
       "Operations Associate",
@@ -267,7 +267,7 @@ describe("Sidebar proposal navigation", () => {
     });
   });
 
-  it("keeps Quick Start available as an explicit sidebar resume action", () => {
+  it("opens Quick Start as a shell-level action from the current workspace", () => {
     render(
       <MemoryRouter initialEntries={["/proposal"]}>
         <Sidebar />
@@ -283,7 +283,7 @@ describe("Sidebar proposal navigation", () => {
 
     expect(mockCvLibraryState.createNewCv).not.toHaveBeenCalled();
     expect(screen.getByTestId("sidebar-location")).toHaveTextContent(
-      "/cv?start=quick",
+      "/proposal?start=quick",
     );
   });
 
@@ -388,7 +388,7 @@ describe("Sidebar proposal navigation", () => {
     );
 
     expect(screen.queryByText("Current")).not.toBeInTheDocument();
-    expect(screen.getByText("Proposals")).toBeInTheDocument();
+    expect(screen.getByText("Cover letters")).toBeInTheDocument();
     expect(screen.getByText("Resumes")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Operations Associate Proposal" }),
