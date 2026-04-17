@@ -155,6 +155,154 @@ describe("ProfileReviewCard import", () => {
     );
   });
 
+  it("consumes the same resume link intent request only once", async () => {
+    const onResumeLinkIntentHandled = vi.fn();
+    cvLibraryState.currentCv = {
+      id: "cv-linking",
+      title: "Linking CV",
+      metadata: {
+        createdAt: "2026-04-17T09:00:00.000Z",
+        updatedAt: "2026-04-17T09:00:00.000Z",
+        version: 1,
+      },
+      sections: [
+        {
+          id: "profile-section-1",
+          title: "Profile",
+          type: "profile",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "profile-item-1",
+              name: "Jane Doe",
+            },
+          ],
+        },
+      ],
+    };
+
+    const intent = {
+      requestId: "resume-link-1",
+      sectionType: "profile" as const,
+      source: "preview-panel" as const,
+      shouldOpenModal: true,
+      sectionId: "profile-section-1",
+      sectionTitle: "Profile",
+    };
+
+    const view = render(
+      <ProfileReviewCard
+        resumeLinkIntent={intent}
+        onResumeLinkIntentHandled={onResumeLinkIntentHandled}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(onResumeLinkIntentHandled).toHaveBeenCalledTimes(1),
+    );
+
+    view.rerender(
+      <ProfileReviewCard
+        resumeLinkIntent={{ ...intent }}
+        onResumeLinkIntentHandled={onResumeLinkIntentHandled}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(onResumeLinkIntentHandled).toHaveBeenCalledTimes(1),
+    );
+  });
+
+  it("shows add and remove optional section actions in the same manage-sections menu", async () => {
+    const user = userEvent.setup();
+
+    cvLibraryState.currentCv = {
+      id: "cv-manage-sections",
+      title: "Manage Sections CV",
+      metadata: {
+        createdAt: "2026-04-17T09:00:00.000Z",
+        updatedAt: "2026-04-17T09:00:00.000Z",
+        version: 1,
+      },
+      sections: [
+        {
+          id: "profile-section-1",
+          title: "Profile",
+          type: "profile",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "profile-item-1",
+              name: "Jane Doe",
+            },
+          ],
+        },
+        {
+          id: "achievements-section-1",
+          title: "Achievements",
+          type: "achievements",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "achievement-1",
+              text: "Launched a reporting refresh.",
+            },
+          ],
+        },
+      ],
+    };
+
+    render(<ProfileReviewCard />);
+
+    await user.click(screen.getByRole("button", { name: "Manage sections" }));
+
+    expect(screen.getByText("Add sections")).toBeInTheDocument();
+    expect(screen.getByText("Remove optional sections")).toBeInTheDocument();
+    expect(screen.getByText("Languages")).toBeInTheDocument();
+    expect(screen.getByText("Remove Achievements")).toBeInTheDocument();
+  });
+
+  it("can add the projects optional section back from manage sections", async () => {
+    const user = userEvent.setup();
+
+    cvLibraryState.currentCv = {
+      id: "cv-add-projects",
+      title: "Add Projects CV",
+      metadata: {
+        createdAt: "2026-04-17T09:00:00.000Z",
+        updatedAt: "2026-04-17T09:00:00.000Z",
+        version: 1,
+      },
+      sections: [
+        {
+          id: "profile-section-1",
+          title: "Profile",
+          type: "profile",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "profile-item-1",
+              name: "Jane Doe",
+            },
+          ],
+        },
+      ],
+    };
+
+    render(<ProfileReviewCard />);
+
+    await user.click(screen.getByRole("button", { name: "Manage sections" }));
+    await user.click(screen.getByRole("button", { name: "Projects" }));
+
+    await waitFor(() =>
+      expect(reorderSectionsMock).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ type: "projects", title: "Projects" }),
+        ]),
+      ),
+    );
+  });
+
   it("shows trusted Mistral runtime status in local debug mode and keeps it visible after import", async () => {
     const user = userEvent.setup();
     (window as Window & { __CV_EDITOR_DEBUG__?: boolean }).__CV_EDITOR_DEBUG__ =
