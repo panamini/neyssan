@@ -51,6 +51,8 @@ const makeDefaultCvLibCtx = () => {
     currentCv: null,
     currentCvId: null,
     isLoading: false,
+    isLibraryHydrated: true,
+    lastLibraryFetchFailed: false,
     isDirty: false,
     loadCv: () => false,
     saveCurrentCv: asyncNoop,

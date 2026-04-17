@@ -1,14 +1,14 @@
 import React from "react";
 import { useQuery } from "convex/react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
+import { isQuickStartCompleted } from "../lib/onboarding-state";
+import { buildQuickStartHref } from "../lib/quick-start-routing";
 import { Check, Eye, Palette, X } from "@/lib/icons";
 import { api } from "../../convex/_generated/api";
 import { ProfileReviewCard } from "../components/ProfileReviewCard";
 import ResumeExportControl from "../components/ResumeExportControl";
 import type { ResumeExportRequest } from "../components/ResumeExportControl";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
-import { QuickStartFlow } from "../components/onboarding/QuickStartFlow";
-import { isQuickStartCompleted } from "../lib/onboarding-state";
 import { VerbatiCvPreviewPanel } from "../features/verbati/VerbatiCvPreviewPanel";
 import type {
   ResumeActiveTarget,
@@ -137,11 +137,31 @@ function buildStylePresetFromSettingsSlot(
  */
 export function CvForge(): JSX.Element {
   const { search } = useLocation();
-  const { currentCv, importCv, hasMeaningfulContent } = useCvLibrary();
-  const [quickStartDismissed, setQuickStartDismissed] = React.useState(() =>
+  const navigate = useNavigate();
+  const { currentCv, importCv, cvs, isLibraryHydrated, lastLibraryFetchFailed } =
+    useCvLibrary();
+  const [quickStartCompleted] = React.useState(() =>
     isQuickStartCompleted(),
   );
-  const shouldShowQuickStart = !quickStartDismissed && !hasMeaningfulContent;
+  const [hasHandledQuickStartSession, setHasHandledQuickStartSession] =
+    React.useState(false);
+  const quickStartSearchParam = React.useMemo(
+    () => new URLSearchParams(search).get("start") === "quick",
+    [search],
+  );
+  // Auto-launch gate:
+  // - authoritative source must be settled (isLibraryHydrated)
+  // - the authoritative fetch must NOT have failed (transient error must not be
+  //   treated as "new user empty library")
+  // - user must genuinely have no CVs and no active CV
+  // - user must not have explicitly skipped before
+  // The completed flag is an input alongside data/hydration, not the authority.
+  const shouldAutoLaunchQuickStart =
+    isLibraryHydrated &&
+    !lastLibraryFetchFailed &&
+    cvs.length === 0 &&
+    !currentCv &&
+    !quickStartCompleted;
   const presetMenuRef = React.useRef<HTMLDivElement | null>(null);
   const [viewportWidth, setViewportWidth] = React.useState(() =>
     typeof window === "undefined" ? 1440 : window.innerWidth,
@@ -150,6 +170,31 @@ export function CvForge(): JSX.Element {
     React.useState<CvForgeWorkspaceMode>(() =>
       readStoredCvForgeWorkspaceMode(),
     );
+  React.useEffect(() => {
+    if (!quickStartSearchParam || hasHandledQuickStartSession) {
+      return;
+    }
+    setHasHandledQuickStartSession(true);
+  }, [hasHandledQuickStartSession, quickStartSearchParam]);
+
+  React.useEffect(() => {
+    if (
+      !shouldAutoLaunchQuickStart ||
+      quickStartSearchParam ||
+      hasHandledQuickStartSession
+    ) {
+      return;
+    }
+
+    setHasHandledQuickStartSession(true);
+    void navigate(buildQuickStartHref("/cv", search), { replace: true });
+  }, [
+    hasHandledQuickStartSession,
+    navigate,
+    quickStartSearchParam,
+    search,
+    shouldAutoLaunchQuickStart,
+  ]);
   const [resumeLinkIntent, setResumeLinkIntent] =
     React.useState<ResumeLinkIntent | null>(null);
   const [resumeActiveTarget, setResumeActiveTarget] =
@@ -541,17 +586,6 @@ export function CvForge(): JSX.Element {
     maxWidth: editorGridMaxWidth,
     marginInline: "auto",
   };
-
-  if (shouldShowQuickStart) {
-    return (
-      <div
-        className="dasti-page-scroll"
-        style={{ minWidth: 0, height: "100%" }}
-      >
-        <QuickStartFlow onExit={() => setQuickStartDismissed(true)} />
-      </div>
-    );
-  }
 
   return (
     <div
