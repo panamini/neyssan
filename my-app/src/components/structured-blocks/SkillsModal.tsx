@@ -8,6 +8,7 @@ import { CvModalShell } from "./CvModalShell";
 interface SkillsModalProps {
   open: boolean;
   items: ISkillItem[];
+  initialItemId?: string;
   recoveryNotes?: string[];
   onDismissRecoveryNotes?: () => void;
   suggestedItems?: string[];
@@ -32,6 +33,7 @@ function newSkill(): ISkillItem {
 export function SkillsModal({
   open,
   items,
+  initialItemId,
   recoveryNotes = [],
   onDismissRecoveryNotes,
   suggestedItems = [],
@@ -48,6 +50,7 @@ export function SkillsModal({
 }: SkillsModalProps) {
   const [rows, setRows] = useState<ISkillItem[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const inputRefs = React.useRef<Record<string, HTMLInputElement | null>>({});
 
   // Seed rows only when the modal opens or when the real items content changes.
   // Prevents resetting the input on each parent render (which caused single-character typing).
@@ -64,6 +67,14 @@ export function SkillsModal({
       setRows(JSON.parse(JSON.stringify(items ?? [])) as ISkillItem[]);
     }
   }, [open, items]);
+
+  useEffect(() => {
+    if (!open || !initialItemId) return;
+
+    window.setTimeout(() => {
+      inputRefs.current[initialItemId]?.focus();
+    }, 40);
+  }, [initialItemId, open, rows]);
 
   const canSave = useMemo(() => {
     return rows.every(
@@ -298,6 +309,9 @@ export function SkillsModal({
                   </label>
                   <input
                     id={`skill-name-${idx}`}
+                    ref={(node) => {
+                      inputRefs.current[String(row.id ?? `row-${idx}`)] = node;
+                    }}
                     className="flex-1 min-w-0 px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
                     placeholder="Skill name"
                     value={row.name ?? ""}

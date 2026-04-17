@@ -7,6 +7,7 @@ import {
   makeCertificationItem,
   makeEducationItem,
   makeExperienceItem,
+  makeHobbyItem,
   makeLanguageItem,
   makeProfileItem,
   makeSkillItem,
@@ -21,6 +22,7 @@ import type {
   ICertificationItem,
   IEducationItem,
   IExperienceItem,
+  IHobbyItem,
   ILanguageItem,
   IProfileItem,
   ISkillItem,
@@ -1053,7 +1055,7 @@ function applyToHobbies(
   metadata?: ImportRecoveryBlockMetadata,
 ) {
   const structured = Array.isArray(section.structuredContent)
-    ? ([...section.structuredContent] as ISkillItem[])
+    ? ([...section.structuredContent] as IHobbyItem[])
     : [];
   const existing = new Set(
     structured.map((entry) => String(entry.name ?? "").trim().toLowerCase()),
@@ -1063,7 +1065,7 @@ function applyToHobbies(
     const key = value.toLowerCase();
     if (!value || existing.has(key)) return;
     existing.add(key);
-    const hobbyItem = makeSkillItem();
+    const hobbyItem = makeHobbyItem();
     hobbyItem.name = value;
     structured.push(hobbyItem);
   });

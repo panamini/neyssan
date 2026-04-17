@@ -1,9 +1,13 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { CvSection } from "../../schemas/cvDocument.schema";
 import AchievementsDisplay from "../cv-display/AchievementsDisplay";
 import AchievementsModal from "./AchievementsModal";
 import { ChevronDown, ChevronUp, Pencil, X } from "@/lib/icons";
 import { docToPlainText } from "../remirror-editor/utils/text";
+import type {
+  ResumeActiveTarget,
+  SectionOpenRequest,
+} from "../../features/verbati/resumeLinking";
 
 /**
  * AchievementsBlock
@@ -23,12 +27,18 @@ interface AchievementsBlockProps {
   onChange: (updatedSection: CvSection) => void;
   onContentChange?: (sectionId: string, json: unknown) => void;
   onDeleteSection?: () => void;
+  openRequest?: SectionOpenRequest | null;
+  activeTarget?: ResumeActiveTarget | null;
+  onActiveTargetChange?: (target: ResumeActiveTarget | null) => void;
 }
 
 export function AchievementsBlock({
   section,
   onChange,
   onDeleteSection,
+  openRequest = null,
+  activeTarget = null,
+  onActiveTargetChange,
 }: AchievementsBlockProps) {
   const items = useMemo(() => {
     const normalizedItems: Array<{ id: string; text: string }> = [];
@@ -114,12 +124,57 @@ export function AchievementsBlock({
 
   const [isExpanded, setIsExpanded] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [initialItemId, setInitialItemId] = useState<string | undefined>();
   // When true and list is empty, seed the modal with a blank row and focus it.
   const [seedOnOpen, setSeedOnOpen] = useState(false);
+  const lastHandledRequestIdRef = useRef<string | null>(null);
   const contentId = useMemo(
     () => `ach-content-${String(section.id)}`,
     [section.id],
   );
+
+  function publishActiveTarget(
+    source: ResumeActiveTarget["source"],
+    itemId?: string,
+  ) {
+    onActiveTargetChange?.({
+      sectionType: "achievements",
+      sectionId: String(section.id ?? ""),
+      itemId,
+      source,
+    });
+  }
+
+  function clearActiveTarget() {
+    onActiveTargetChange?.(null);
+  }
+
+  function clearHoverTarget(itemId?: string) {
+    if (
+      activeTarget?.source === "editor-hover" &&
+      activeTarget.sectionType === "achievements" &&
+      (itemId ? activeTarget.itemId === itemId : true)
+    ) {
+      onActiveTargetChange?.(null);
+    }
+  }
+
+  useEffect(() => {
+    if (
+      !openRequest ||
+      openRequest.sectionType !== "achievements" ||
+      openRequest.sectionId !== String(section.id ?? "") ||
+      lastHandledRequestIdRef.current === openRequest.requestId
+    ) {
+      return;
+    }
+
+    lastHandledRequestIdRef.current = openRequest.requestId;
+    setSeedOnOpen(false);
+    setInitialItemId(openRequest.itemId);
+    setIsModalOpen(true);
+    publishActiveTarget("modal", openRequest.itemId);
+  }, [openRequest, publishActiveTarget, section.id]);
 
   function handleSave(next: Array<{ id?: string; text: string }>) {
     try {
@@ -169,6 +224,8 @@ export function AchievementsBlock({
             onClick={(e) => {
               e.stopPropagation();
               setSeedOnOpen(false);
+              setInitialItemId(undefined);
+              publishActiveTarget("modal");
               setIsModalOpen(true);
             }}
             className="dasti-icon-button cv-section-edit-trigger"
@@ -198,13 +255,19 @@ export function AchievementsBlock({
             onClick={() => {
               if (items.length === 0) return;
               setSeedOnOpen(false);
+              setInitialItemId(undefined);
+              publishActiveTarget("modal");
               setIsModalOpen(true);
             }}
+            onPointerEnter={() => publishActiveTarget("editor-hover")}
+            onPointerLeave={() => clearHoverTarget()}
             onKeyDown={(e) => {
               if (items.length === 0) return;
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
                 setSeedOnOpen(false);
+                setInitialItemId(undefined);
+                publishActiveTarget("modal");
                 setIsModalOpen(true);
               }
             }}
@@ -220,6 +283,8 @@ export function AchievementsBlock({
               tabIndex={0}
               onClick={() => {
                 setSeedOnOpen(true);
+                setInitialItemId(undefined);
+                publishActiveTarget("modal");
                 setIsModalOpen(true);
                 setTimeout(() => {
                   try {
@@ -236,6 +301,8 @@ export function AchievementsBlock({
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
                   setSeedOnOpen(true);
+                  setInitialItemId(undefined);
+                  publishActiveTarget("modal");
                   setIsModalOpen(true);
                   setTimeout(() => {
                     try {
@@ -296,10 +363,13 @@ export function AchievementsBlock({
       <AchievementsModal
         open={isModalOpen}
         items={items}
+        initialItemId={initialItemId}
         appendBlankOnOpen={seedOnOpen}
         onClose={() => {
           setIsModalOpen(false);
+          setInitialItemId(undefined);
           setSeedOnOpen(false);
+          clearActiveTarget();
         }}
         onSave={handleSave}
       />

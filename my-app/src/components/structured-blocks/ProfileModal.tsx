@@ -9,6 +9,7 @@ interface ProfileModalProps {
   open: boolean;
   sectionId: string;
   item: IProfileItem | null;
+  initialItemId?: string;
   recoveryNotes?: string[];
   onDismissRecoveryNotes?: () => void;
   onClose: () => void;
@@ -47,6 +48,7 @@ export function ProfileModal({
   open,
   sectionId,
   item,
+  initialItemId,
   recoveryNotes = [],
   onDismissRecoveryNotes,
   onClose,
@@ -57,12 +59,55 @@ export function ProfileModal({
   const [form, setForm] = useState<FormState>(() => buildInitialForm(item));
   const [isSaving, setIsSaving] = useState(false);
   const [isClearConfirming, setIsClearConfirming] = useState(false);
+  const normalizedTarget = String(initialItemId ?? "")
+    .trim()
+    .toLowerCase();
+  const targetInputId =
+    normalizedTarget === "email"
+      ? "profile-email"
+      : normalizedTarget === "phone"
+        ? "profile-phone"
+        : normalizedTarget === "linkedin"
+          ? "profile-linkedin"
+          : normalizedTarget === "website" ||
+              normalizedTarget === "web" ||
+              normalizedTarget === "portfolio" ||
+              normalizedTarget === "site"
+            ? "profile-website"
+            : normalizedTarget === "location" ||
+                normalizedTarget === "address" ||
+                normalizedTarget === "city"
+              ? "profile-location"
+              : normalizedTarget === "desiredposition" ||
+                  normalizedTarget === "desired_position" ||
+                  normalizedTarget === "title"
+                ? "profile-desired-position"
+                : normalizedTarget === "name"
+                  ? "profile-name"
+                  : "";
 
   useEffect(() => {
     if (!open) return;
     setForm(buildInitialForm(item));
     setIsClearConfirming(false);
   }, [open, item]);
+
+  useEffect(() => {
+    if (!open || !targetInputId) {
+      return;
+    }
+
+    const focusTimer = window.setTimeout(() => {
+      const node = document.getElementById(targetInputId);
+      if (node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement) {
+        node.focus({ preventScroll: true });
+      }
+    }, 40);
+
+    return () => {
+      window.clearTimeout(focusTimer);
+    };
+  }, [open, targetInputId]);
 
   const itemId = String(item?.id ?? "");
 
@@ -300,7 +345,7 @@ export function ProfileModal({
                   className="dasti-field"
                   value={form.name}
                   onChange={(e) => handleChange("name", e.target.value)}
-                  autoFocus
+                  autoFocus={!targetInputId || targetInputId === "profile-name"}
                 />
               </label>
 
@@ -314,6 +359,7 @@ export function ProfileModal({
                     handleChange("desiredPosition", e.target.value)
                   }
                   placeholder="e.g. Senior Designer"
+                  autoFocus={targetInputId === "profile-desired-position"}
                 />
               </label>
             </div>
@@ -333,6 +379,7 @@ export function ProfileModal({
                   value={form.email}
                   onChange={(e) => handleChange("email", e.target.value)}
                   type="email"
+                  autoFocus={targetInputId === "profile-email"}
                 />
               </label>
 
@@ -343,6 +390,7 @@ export function ProfileModal({
                   className="dasti-field"
                   value={form.phone}
                   onChange={(e) => handleChange("phone", e.target.value)}
+                  autoFocus={targetInputId === "profile-phone"}
                 />
               </label>
 
@@ -354,6 +402,7 @@ export function ProfileModal({
                   value={form.linkedin}
                   onChange={(e) => handleChange("linkedin", e.target.value)}
                   placeholder="linkedin.com/in/..."
+                  autoFocus={targetInputId === "profile-linkedin"}
                 />
               </label>
 
@@ -365,6 +414,7 @@ export function ProfileModal({
                   value={form.website}
                   onChange={(e) => handleChange("website", e.target.value)}
                   placeholder="https://..."
+                  autoFocus={targetInputId === "profile-website"}
                 />
               </label>
             </div>
@@ -376,6 +426,7 @@ export function ProfileModal({
                 className="dasti-field"
                 value={form.location}
                 onChange={(e) => handleChange("location", e.target.value)}
+                autoFocus={targetInputId === "profile-location"}
               />
             </label>
           </section>
