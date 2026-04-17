@@ -13,6 +13,7 @@ vi.mock("convex/react", () => ({
     preset3: null,
     activeSlot: null,
   })),
+  useAction: vi.fn(() => undefined),
 }));
 
 vi.mock("../../components/ProfileReviewCard", () => ({

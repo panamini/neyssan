@@ -40,6 +40,7 @@ vi.mock("convex/react", () => ({
     preset3: null,
     activeSlot: 1,
   })),
+  useAction: vi.fn(() => undefined),
 }));
 
 vi.mock("../../features/verbati/VerbatiCvPreviewPanel", () => ({
@@ -62,6 +63,7 @@ vi.mock("../../features/verbati/VerbatiCvPreviewPanel", () => ({
 describe("CvForge workspace mode", () => {
   beforeEach(() => {
     window.localStorage.removeItem("dasti:cv-forge-workspace-mode:v1");
+    window.localStorage.setItem("twoweeks:quick-start-completed", "1");
   });
 
   it("switches between edit and preview workbench modes and persists the choice", async () => {
