@@ -1,14 +1,16 @@
 import React from "react";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { ProposalForge } from "../ProposalForge";
 import { writeStoredProposalOutputDraft } from "../../lib/proposal-output-draft";
+import { PROPOSAL_EXTENSION_INSTALL_LINK } from "../../lib/proposal-source-platforms";
 
 const mockLoadCv = vi.fn();
 const mockUpdateProposal = vi.fn().mockResolvedValue(undefined);
 
 let mockActiveCvId: string | null = null;
+let mockHasLocalResumes = true;
 const mockAttachedCv = {
   id: "cv_alpha",
   title: "Alex Martin Resume",
@@ -102,7 +104,7 @@ vi.mock("../../lib/proposal-personalization", () => ({
     linkedIn: null,
   }),
   listLocalCvPickerOptions: () =>
-    mockActiveCvId === "cv_alpha"
+    mockHasLocalResumes || mockActiveCvId === "cv_alpha"
       ? [
           {
             id: "cv_alpha",
@@ -124,10 +126,13 @@ vi.mock("../../contexts/CvLibraryContext", () => ({
 vi.mock("../../components/ProposalInputForm", () => ({
   default: ({
     onActiveCvChange,
+    cvPickerOpen,
   }: {
     onActiveCvChange?: (cvId: string | null) => void;
+    cvPickerOpen?: boolean;
   }) => (
     <div>
+      <div>{cvPickerOpen ? "CV picker open" : "CV picker closed"}</div>
       <button
         type="button"
         onClick={() => {
@@ -217,9 +222,15 @@ vi.mock("../../components/ProposalsList", () => ({
   default: () => <div>Saved proposals</div>,
 }));
 
+function LocationProbe(): JSX.Element {
+  const location = useLocation();
+  return <div data-testid="location">{`${location.pathname}${location.search}`}</div>;
+}
+
 describe("ProposalForge attached CV sync", () => {
   beforeEach(() => {
     mockActiveCvId = null;
+    mockHasLocalResumes = true;
     mockLoadCv.mockReset();
     mockUpdateProposal.mockClear();
     window.localStorage.clear();
@@ -227,6 +238,139 @@ describe("ProposalForge attached CV sync", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it("shows the cover-letter start surface on a blank compose entry", () => {
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId("cover-letter-start-surface")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Use a resume\b/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Import a resume\b/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Use Chrome extension\b/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Open editor\b/i })).toBeInTheDocument();
+  });
+
+  it("hides the resume-picker shortcut when no resumes exist yet", () => {
+    mockHasLocalResumes = false;
+
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId("cover-letter-start-surface")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Use a resume\b/i })).not.toBeInTheDocument();
+  });
+
+  it("opens the existing CV picker when the start surface uses a resume", async () => {
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /^Use a resume\b/i }));
+    });
+
+    expect(screen.queryByTestId("cover-letter-start-surface")).not.toBeInTheDocument();
+    expect(screen.getByText("CV picker open")).toBeInTheDocument();
+  });
+
+  it("opens shared Quick Start in upload-only resume mode from the start surface", async () => {
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+        <LocationProbe />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^Import a resume\b/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("location")).toHaveTextContent(
+        "/proposal?start=quick&quickStartResumeMode=upload-only&quickStartReturnTo=proposal",
+      );
+    });
+  });
+
+  it("reveals actionable extension links from the verified supported list", async () => {
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^Use Chrome extension\b/i }));
+
+    expect(
+      screen.getByRole("link", { name: /LinkedIn/i }),
+    ).toHaveAttribute("href", "https://www.linkedin.com/jobs/");
+    expect(screen.getByRole("link", { name: /Indeed/i })).toHaveAttribute(
+      "href",
+      "https://www.indeed.com/jobs",
+    );
+    expect(screen.getByRole("link", { name: /Upwork/i })).toHaveAttribute(
+      "href",
+      "https://www.upwork.com/nx/jobs/search/",
+    );
+    expect(screen.queryByRole("link", { name: /Fiverr/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("More supported sites"));
+
+    expect(screen.getByRole("link", { name: /ZipRecruiter/i })).toHaveAttribute(
+      "href",
+      "https://www.ziprecruiter.com",
+    );
+    expect(screen.getByRole("link", { name: /HelloWork/i })).toHaveAttribute(
+      "href",
+      "https://www.hellowork.com/fr-fr/",
+    );
+    expect(
+      screen.getByRole("link", { name: /Install Chrome extension/i }),
+    ).toHaveAttribute("href", PROPOSAL_EXTENSION_INSTALL_LINK.href);
+  });
+
+  it("toggles the extension helper closed when the action is clicked again", async () => {
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    const toggle = screen.getByRole("button", {
+      name: /^Use Chrome extension\b/i,
+    });
+
+    fireEvent.click(toggle);
+    expect(
+      screen.getByRole("link", { name: /Install Chrome extension/i }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(toggle);
+    expect(
+      screen.queryByRole("link", { name: /Install Chrome extension/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("reveals the editor when the start surface is dismissed", async () => {
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^Open editor\b/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("cover-letter-start-surface")).not.toBeInTheDocument();
+    });
+    expect(screen.getByText("CV picker closed")).toBeInTheDocument();
   });
 
   it("keeps the proposal-level CV source control in sync with attach and remove actions", async () => {
@@ -241,6 +385,7 @@ describe("ProposalForge attached CV sync", () => {
       "Default",
     );
 
+    fireEvent.click(screen.getByRole("button", { name: /^Open editor\b/i }));
     fireEvent.click(screen.getByRole("button", { name: "Attach CV from form" }));
 
     expect(
@@ -270,6 +415,7 @@ describe("ProposalForge attached CV sync", () => {
       </MemoryRouter>,
     );
 
+    fireEvent.click(screen.getByRole("button", { name: /^Open editor\b/i }));
     fireEvent.click(screen.getByRole("button", { name: "Attach CV from form" }));
 
     expect(screen.getByText("Operations Associate — Alex Martin")).toBeInTheDocument();
