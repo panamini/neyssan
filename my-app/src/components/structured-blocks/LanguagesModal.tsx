@@ -7,6 +7,7 @@ import { CvModalShell } from "./CvModalShell";
 interface LanguagesModalProps {
   open: boolean;
   items: ILanguageItem[];
+  initialItemId?: string;
   onClose: () => void;
   onSave: (next: ILanguageItem[]) => void;
 }
@@ -27,11 +28,13 @@ function newLanguage(): ILanguageItem {
 export function LanguagesModal({
   open,
   items,
+  initialItemId,
   onClose,
   onSave,
 }: LanguagesModalProps) {
   const [rows, setRows] = useState<ILanguageItem[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   // Seed rows only when the modal opens or when the real items content changes.
   // Prevents resetting the input on each parent render (which caused single-character typing).
@@ -48,6 +51,14 @@ export function LanguagesModal({
       setRows(JSON.parse(JSON.stringify(items ?? [])) as ILanguageItem[]);
     }
   }, [open, items]);
+
+  useEffect(() => {
+    if (!open || !initialItemId) return;
+
+    window.setTimeout(() => {
+      inputRefs.current[initialItemId]?.focus();
+    }, 40);
+  }, [initialItemId, open, rows]);
 
   const canSave = useMemo(() => {
     return rows.every(
@@ -199,6 +210,9 @@ export function LanguagesModal({
                   </label>
                   <input
                     id={`language-name-${idx}`}
+                    ref={(node) => {
+                      inputRefs.current[String(row.id ?? `row-${idx}`)] = node;
+                    }}
                     className="flex-1 min-w-0 px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
                     placeholder="Language name"
                     value={row.name ?? ""}

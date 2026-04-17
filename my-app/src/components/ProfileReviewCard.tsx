@@ -65,12 +65,19 @@ import {
   type AuthoritativeResume,
 } from "../lib/authoritative-resume";
 import dbg from "../lib/cv-debug";
+import { shouldUseV1TemplateForAddSection } from "./profileReviewCardAddSection";
 import type {
   ImportRecoveryItem,
   ImportRecoverySession,
   ImportRecoverySectionType,
 } from "../types/importRecovery";
 import { makeTextSection } from "../lib/cv-template";
+import {
+  getCanonicalSectionType,
+  type ResumeActiveTarget,
+  type ResumeLinkIntent,
+  type SectionOpenRequest,
+} from "../features/verbati/resumeLinking";
 
 /**
  * Props for ProfileReviewCard
@@ -85,8 +92,10 @@ interface Props {
   exportStatusTone?: "standard" | "trusted";
   toolbarLeadControl?: React.ReactNode;
   toolbarPrimaryControl?: React.ReactNode;
-  /** When set, scrolls to and briefly highlights the first section matching this type (e.g. "experience", "skills"). */
-  highlightSectionType?: string | null;
+  resumeLinkIntent?: ResumeLinkIntent | null;
+  onResumeLinkIntentHandled?: (requestId: string) => void;
+  activeTarget?: ResumeActiveTarget | null;
+  onActiveTargetChange?: (target: ResumeActiveTarget | null) => void;
 }
 
 type ManualSectionOption = {
@@ -96,6 +105,7 @@ type ManualSectionOption = {
   sectionType: string;
   sectionTitle?: string;
   isCustom?: boolean;
+  removable?: boolean;
 };
 
 type ImportRuntimeDebugSnapshot = {
@@ -117,6 +127,67 @@ const IMPORT_RECOVERY_DRAFT_SESSION_KEY_PREFIX =
 const IMPORT_WARNING_AUTO_HIDE_DELAY_MS = 5000;
 const IMPORT_WARNING_EXIT_DURATION_MS = 180;
 const RECOVERY_RESUME_BANNER_AUTO_HIDE_DELAY_MS = 5000;
+
+function normalizeSectionTitleKey(value: string | undefined | null): string {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+function resolveSectionForResumeLinkIntent(
+  sections: CvSection[],
+  intent: ResumeLinkIntent,
+): CvSection | null {
+  const exactSection = intent.sectionId
+    ? sections.find((section) => String(section.id ?? "") === intent.sectionId)
+    : null;
+  if (exactSection) {
+    return exactSection;
+  }
+
+  const normalizedIntentTitle = normalizeSectionTitleKey(intent.sectionTitle);
+  const requiresTitleMatch =
+    intent.sectionType === "custom" ||
+    intent.sectionType === "additional_information" ||
+    intent.sectionType === "affiliations" ||
+    intent.sectionType === "hobbies";
+
+  return (
+    sections.find((section) => {
+      const sectionType = getCanonicalSectionType(section);
+      if (sectionType !== intent.sectionType) {
+        return false;
+      }
+
+      if (requiresTitleMatch) {
+        return normalizedIntentTitle.length > 0
+          ? normalizeSectionTitleKey(section.title) === normalizedIntentTitle
+          : true;
+      }
+
+      return true;
+    }) ?? null
+  );
+}
+
+function hasExistingSectionForOption(
+  sections: CvSection[],
+  option: ManualSectionOption,
+): boolean {
+  if (option.sectionType === "text") {
+    const expectedTitle = normalizeSectionTitleKey(option.sectionTitle);
+    return sections.some(
+      (section) =>
+        String(section.type ?? "") === "text" &&
+        normalizeSectionTitleKey(section.title) === expectedTitle,
+    );
+  }
+
+  return sections.some(
+    (section) => String(section.type ?? "") === option.sectionType,
+  );
+}
 
 function shouldPromptForImportedTitleRename(
   cv: CvDocument | null | undefined,
@@ -539,7 +610,10 @@ export function ProfileReviewCard({
   exportStatusTone = "standard",
   toolbarLeadControl,
   toolbarPrimaryControl,
-  highlightSectionType = null,
+  resumeLinkIntent = null,
+  onResumeLinkIntentHandled,
+  activeTarget = null,
+  onActiveTargetChange,
 }: Props) {
   const navigate = useNavigate();
   const {
@@ -559,31 +633,64 @@ export function ProfileReviewCard({
   // Use document-driven runtime detector primarily; fall back to env flag
   const v1Enabled = isV1Active || isV1SectionsEnabled();
   const requestedCvIdRef = useRef<string | null>(null);
-  const addSectionMenuRef = useRef<HTMLDivElement | null>(null);
   const manageSectionsMenuRef = useRef<HTMLDivElement | null>(null);
   const inlineReviewRef = useRef<HTMLElement | null>(null);
   const recoveryPanelRef = useRef<HTMLDivElement | null>(null);
   const previousRecoveryOpenRef = useRef<boolean | null>(null);
   const previousCvIdRef = useRef<string | null>(null);
   const sectionRevealRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const lastHandledResumeLinkRequestIdRef = useRef<string | null>(null);
+  const [sectionOpenRequest, setSectionOpenRequest] =
+    useState<SectionOpenRequest | null>(null);
 
-  // Respond to preview → editor section focus requests
   useEffect(() => {
-    if (!highlightSectionType || !currentCv) return;
+    if (!resumeLinkIntent || !currentCv) {
+      return;
+    }
 
-    const sections = currentCv.sections ?? [];
-    const matchingSection = sections.find(
-      (s) =>
-        String(s.type ?? "").toLowerCase() ===
-        highlightSectionType.toLowerCase(),
+    if (
+      lastHandledResumeLinkRequestIdRef.current === resumeLinkIntent.requestId
+    ) {
+      return;
+    }
+
+    const matchingSection = resolveSectionForResumeLinkIntent(
+      currentCv.sections ?? [],
+      resumeLinkIntent,
     );
-    if (!matchingSection) return;
+    if (!matchingSection) {
+      return;
+    }
+
+    const nextOpenRequest: SectionOpenRequest = {
+      requestId: resumeLinkIntent.requestId,
+      shouldOpenModal: resumeLinkIntent.shouldOpenModal,
+      itemId: resumeLinkIntent.itemId,
+      sectionType: resumeLinkIntent.sectionType,
+      previewSectionType: resumeLinkIntent.previewSectionType,
+      sectionId: String(matchingSection.id ?? ""),
+      sectionTitle: matchingSection.title,
+    };
+
+    lastHandledResumeLinkRequestIdRef.current = resumeLinkIntent.requestId;
+    setSectionOpenRequest(nextOpenRequest);
+    onActiveTargetChange?.({
+      sectionType: resumeLinkIntent.sectionType,
+      previewSectionType: resumeLinkIntent.previewSectionType,
+      itemId: resumeLinkIntent.itemId,
+      sectionId: String(matchingSection.id ?? ""),
+      source: resumeLinkIntent.source,
+    });
+    onResumeLinkIntentHandled?.(resumeLinkIntent.requestId);
 
     const node = sectionRevealRefs.current[String(matchingSection.id ?? "")];
-    if (!node) return;
+    if (!node) {
+      return;
+    }
 
-    node.scrollIntoView({ behavior: "smooth", block: "center" });
-    // Brief highlight pulse via data attribute + CSS animation
+    if (typeof node.scrollIntoView === "function") {
+      node.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
     node.setAttribute("data-preview-focus", "true");
     const timeoutId = window.setTimeout(() => {
       node.removeAttribute("data-preview-focus");
@@ -592,7 +699,12 @@ export function ProfileReviewCard({
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [highlightSectionType, currentCv]);
+  }, [
+    currentCv,
+    onActiveTargetChange,
+    onResumeLinkIntentHandled,
+    resumeLinkIntent,
+  ]);
 
   useEffect(() => {
     if (!cvId) {
@@ -621,45 +733,6 @@ export function ProfileReviewCard({
   }, [currentCvId, cvId, loadCv]);
 
   const sections: CvSection[] = (currentCv?.sections ?? []) as CvSection[];
-  const hasMeaningfulAchievementsSection = useMemo(() => {
-    function extractLooseText(value: unknown): string {
-      const parts: string[] = [];
-      const seen = new Set<unknown>();
-      function walk(node: unknown) {
-        if (node == null || seen.has(node)) return;
-        if (typeof node === "object") seen.add(node);
-        if (typeof node === "string") {
-          const trimmed = node.trim();
-          if (trimmed) parts.push(trimmed);
-          return;
-        }
-        if (Array.isArray(node)) {
-          node.forEach(walk);
-          return;
-        }
-        if (typeof node === "object") {
-          const record = node as Record<string, unknown>;
-          if (typeof record.text === "string") walk(record.text);
-          if (typeof record.achievement === "string") walk(record.achievement);
-          if (typeof record.plainText === "string") walk(record.plainText);
-          if ("content" in record) walk(record.content);
-          if ("items" in record) walk(record.items);
-        }
-      }
-      walk(value);
-      return parts.join(" ").trim();
-    }
-
-    return sections.some((section) => {
-      if (String(section.type ?? "") !== "achievements") return false;
-      const structuredText = extractLooseText(
-        (section as any).structuredContent,
-      );
-      if (structuredText) return true;
-      const blockText = extractLooseText((section as any).blocks);
-      return Boolean(blockText);
-    });
-  }, [sections]);
   const sectionCatalog = useMemo<ManualSectionOption[]>(() => {
     const typedOptions: ManualSectionOption[] = v1Enabled
       ? [
@@ -667,35 +740,75 @@ export function ProfileReviewCard({
             value: "achievements",
             label: "Achievements",
             sectionType: "achievements",
+            removable: true,
           },
-          { value: "languages", label: "Languages", sectionType: "languages" },
-          { value: "projects", label: "Projects", sectionType: "projects" },
+          {
+            value: "languages",
+            label: "Languages",
+            sectionType: "languages",
+            removable: true,
+          },
+          {
+            value: "projects",
+            label: "Projects",
+            sectionType: "projects",
+            removable: true,
+          },
           {
             value: "certifications",
             label: "Certifications",
             sectionType: "certifications",
+            removable: true,
           },
         ]
       : [
-          { value: "summary", label: "Summary", sectionType: "summary" },
+          {
+            value: "summary",
+            label: "Summary",
+            sectionType: "summary",
+            removable: false,
+          },
           {
             value: "experience",
             label: "Experience",
             sectionType: "experience",
+            removable: false,
           },
           {
             value: "achievements",
             label: "Achievements",
             sectionType: "achievements",
+            removable: true,
           },
-          { value: "education", label: "Education", sectionType: "education" },
-          { value: "skills", label: "Skills", sectionType: "skills" },
-          { value: "languages", label: "Languages", sectionType: "languages" },
-          { value: "projects", label: "Projects", sectionType: "projects" },
+          {
+            value: "education",
+            label: "Education",
+            sectionType: "education",
+            removable: false,
+          },
+          {
+            value: "skills",
+            label: "Skills",
+            sectionType: "skills",
+            removable: false,
+          },
+          {
+            value: "languages",
+            label: "Languages",
+            sectionType: "languages",
+            removable: true,
+          },
+          {
+            value: "projects",
+            label: "Projects",
+            sectionType: "projects",
+            removable: true,
+          },
           {
             value: "certifications",
             label: "Certifications",
             sectionType: "certifications",
+            removable: true,
           },
         ];
 
@@ -707,6 +820,7 @@ export function ProfileReviewCard({
         description: "Extra details and references",
         sectionType: "text",
         sectionTitle: "Additional Information",
+        removable: true,
       },
       {
         value: "affiliations",
@@ -714,6 +828,7 @@ export function ProfileReviewCard({
         description: "Memberships and associations",
         sectionType: "text",
         sectionTitle: "Affiliations",
+        removable: true,
       },
       {
         value: "hobbies",
@@ -721,6 +836,7 @@ export function ProfileReviewCard({
         description: "Interests and personal activities",
         sectionType: "text",
         sectionTitle: "Hobbies",
+        removable: true,
       },
       {
         value: "custom",
@@ -728,6 +844,7 @@ export function ProfileReviewCard({
         description: "Create a custom titled section",
         sectionType: "text",
         isCustom: true,
+        removable: true,
       },
     ];
   }, [v1Enabled]);
@@ -743,14 +860,18 @@ export function ProfileReviewCard({
             .trim()
             .toLowerCase(),
         ),
-    );
+      );
     return sectionCatalog.filter((option) => {
-      if (option.value === "achievements") {
-        return !hasMeaningfulAchievementsSection;
-      }
       if (option.isCustom) {
         return true;
       }
+
+      const alreadyExists = hasExistingSectionForOption(sections, option);
+
+      if (option.value === "achievements") {
+        return !alreadyExists;
+      }
+
       if (option.sectionType === "text") {
         return !existingTextTitles.has(
           String(option.sectionTitle ?? "")
@@ -758,7 +879,8 @@ export function ProfileReviewCard({
             .toLowerCase(),
         );
       }
-      return !existingTypes.has(option.sectionType);
+
+      return !existingTypes.has(option.sectionType) && !alreadyExists;
     });
   }, [sectionCatalog, sections]);
   const removableAddedSections = useMemo(() => {
@@ -791,7 +913,7 @@ export function ProfileReviewCard({
       const matchingOption = sectionCatalog.find(
         (option) => option.sectionType === sectionType,
       );
-      if (!matchingOption) return [];
+      if (!matchingOption || matchingOption.removable === false) return [];
       return [
         {
           id: String(section.id),
@@ -833,8 +955,6 @@ export function ProfileReviewCard({
 
   const [recentlyAddedSectionType, setRecentlyAddedSectionType] =
     useState<string>("");
-  const [isAddSectionMenuOpen, setIsAddSectionMenuOpen] =
-    useState<boolean>(false);
   const [isManageSectionsMenuOpen, setIsManageSectionsMenuOpen] =
     useState<boolean>(false);
   const [isImportWarningDismissed, setIsImportWarningDismissed] =
@@ -1916,12 +2036,10 @@ export function ProfileReviewCard({
   }, [pendingTouchedRecoverySectionIds, sections]);
 
   React.useEffect(() => {
-    if (!isAddSectionMenuOpen && !isManageSectionsMenuOpen) return undefined;
+    if (!isManageSectionsMenuOpen) return undefined;
 
     const handleDocumentClick = (event: MouseEvent) => {
-      if (addSectionMenuRef.current?.contains(event.target as Node)) return;
       if (manageSectionsMenuRef.current?.contains(event.target as Node)) return;
-      setIsAddSectionMenuOpen(false);
       setIsManageSectionsMenuOpen(false);
     };
 
@@ -1929,7 +2047,7 @@ export function ProfileReviewCard({
     return () => {
       document.removeEventListener("mousedown", handleDocumentClick);
     };
-  }, [isAddSectionMenuOpen, isManageSectionsMenuOpen]);
+  }, [isManageSectionsMenuOpen]);
 
   /**
    * Replace an updated section into the current document via context.
@@ -2004,6 +2122,14 @@ export function ProfileReviewCard({
         <SectionComponent
           section={section}
           index={index}
+          activeTarget={activeTarget}
+          openRequest={
+            sectionOpenRequest?.sectionId === String(section.id ?? "")
+              ? sectionOpenRequest
+              : null
+          }
+          onOpenRequestHandled={handleSectionOpenRequestHandled}
+          onActiveTargetChange={onActiveTargetChange}
           onChange={(_i, updated) => {
             try {
               updateSectionInDoc(updated as any);
@@ -2041,6 +2167,15 @@ export function ProfileReviewCard({
     return makeTextSection(title, { includeSeedBlock: true });
   }
 
+  const handleSectionOpenRequestHandled = React.useCallback(
+    (requestId: string) => {
+      setSectionOpenRequest((current) =>
+        current?.requestId === requestId ? null : current,
+      );
+    },
+    [],
+  );
+
   function handleAddSection(optionValue?: string) {
     try {
       const option = sectionCatalog.find(
@@ -2076,7 +2211,7 @@ export function ProfileReviewCard({
       if (option.sectionType === "text") {
         const requestedTitle = option.isCustom
           ? window
-              .prompt("Name the new section", "Additional Information")
+              .prompt("Name the new section", "Custom section")
               ?.trim() ?? ""
           : String(option.sectionTitle ?? "").trim();
         if (!requestedTitle) {
@@ -2100,25 +2235,13 @@ export function ProfileReviewCard({
       } else {
         // Generate a full template and pick the matching section to ensure schema-compliance.
         try {
-          // If the user explicitly requested a typed v1 section, force the v1 template
-          // regardless of env flag. This ensures Add Section always creates a v1-shaped
-          // section when the user picks a v1 type from the UI.
-          const typedV1Set = new Set([
-            "profile",
-            "summary",
-            "experience",
-            "achievements",
-            "education",
-            "skills",
-            "languages",
-          ]);
-          const optionalV1SectionSet = new Set(["achievements", "languages"]);
-          const forceV1ForType = typedV1Set.has(String(type));
-          const tmpl = forceV1ForType
+          const useV1Template = shouldUseV1TemplateForAddSection(
+            type,
+            v1Enabled,
+          );
+          const tmpl = useV1Template
             ? generateCvTemplateV1()
-            : v1Enabled
-              ? generateCvTemplateV1()
-              : generateCvTemplate();
+            : generateCvTemplate();
 
           // Dev log to aid QA: which template we picked and why
           if (process.env.NODE_ENV !== "production") {
@@ -2128,29 +2251,16 @@ export function ProfileReviewCard({
                 "[ProfileReviewCard] handleAddSection templateChoice",
                 {
                   requestedType: type,
-                  forceV1ForType,
                   v1Enabled,
-                  chosenTemplate: forceV1ForType
+                  chosenTemplate: useV1Template
                     ? "generateCvTemplateV1"
-                    : v1Enabled
-                      ? "generateCvTemplateV1"
-                      : "generateCvTemplate",
+                    : "generateCvTemplate",
                 },
               );
             } catch {}
           }
 
           let matched = tmpl.sections.find((s) => s.type === (type as any));
-          if (
-            !matched &&
-            forceV1ForType &&
-            optionalV1SectionSet.has(String(type))
-          ) {
-            const optionalTemplate = generateCvTemplate();
-            matched = optionalTemplate.sections.find(
-              (s) => s.type === (type as any),
-            );
-          }
           if (!matched) {
             pushToast(`Section type "${type}" is not available`);
             return;
@@ -2209,6 +2319,7 @@ export function ProfileReviewCard({
       }
       pushToast(`${newSection.title || option.label} added`);
       setRecentlyAddedSectionType(option.value);
+      setIsManageSectionsMenuOpen(false);
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error("[ProfileReviewCard] addSection failed", err);
@@ -2241,6 +2352,7 @@ export function ProfileReviewCard({
 
     reorderSections(nextSections as any);
     setIsManageSectionsMenuOpen(false);
+    setRecentlyAddedSectionType("");
     pushToast("Added sections removed");
   }
 
@@ -2262,6 +2374,7 @@ export function ProfileReviewCard({
 
     reorderSections(nextSections as any);
     setIsManageSectionsMenuOpen(false);
+    setRecentlyAddedSectionType("");
     const removedLabel =
       removableAddedSections.find(
         (section) => section.sectionId === normalizedSectionId,
@@ -2648,74 +2761,8 @@ export function ProfileReviewCard({
             ) : null}
             <div className="dasti-cv-edit-toolbar__group dasti-cv-edit-toolbar__group--primary">
               {toolbarPrimaryControl}
-              {addableSectionOptions.length > 0 ? (
-                <div
-                  ref={addSectionMenuRef}
-                  className="dasti-import-dropdown"
-                  data-open={isAddSectionMenuOpen ? "true" : "false"}
-                  style={{ flex: "0 0 auto" }}
-                >
-                  <button
-                    type="button"
-                    aria-label="Manage sections"
-                    className="dasti-select dasti-select--sm dasti-add-section-trigger"
-                    onClick={() =>
-                      setIsAddSectionMenuOpen((current) => !current)
-                    }
-                  >
-                    <span
-                      className="dasti-add-section-trigger__spacer"
-                      aria-hidden
-                    />
-                    <span className="dasti-add-section-trigger__label">
-                      Manage sections
-                    </span>
-                    <span className="dasti-add-section-trigger__icon">
-                      {isAddSectionMenuOpen ? (
-                        <X className="h-4 w-4 [color:var(--ti)]" aria-hidden />
-                      ) : recentlyAddedSectionType ? (
-                        <Check
-                          className="h-4 w-4 [color:var(--color-accent)]"
-                          aria-hidden
-                        />
-                      ) : (
-                        <ChevronDown
-                          className="h-4 w-4 [color:var(--tg2)]"
-                          aria-hidden
-                        />
-                      )}
-                    </span>
-                  </button>
-                  {isAddSectionMenuOpen ? (
-                    <div className="dasti-import-dropdown__menu dasti-add-section-menu dasti-toolbar-drawer-surface">
-                      {addableSectionOptions.map((option) => (
-                        <button
-                          key={option.value}
-                          type="button"
-                          className="dasti-menu-option dasti-menu-option--section"
-                          onClick={() => {
-                            handleAddSection(option.value);
-                            setIsAddSectionMenuOpen(false);
-                          }}
-                        >
-                          <div className="dasti-menu-option__row">
-                            <div className="dasti-menu-option__copy">
-                              <div className="dasti-menu-option__title">
-                                {option.label}
-                              </div>
-                              {option.description ? (
-                                <div className="dasti-menu-option__description">
-                                  {option.description}
-                                </div>
-                              ) : null}
-                            </div>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              ) : removableAddedSections.length > 0 ? (
+              {addableSectionOptions.length > 0 ||
+              removableAddedSections.length > 0 ? (
                 <div
                   ref={manageSectionsMenuRef}
                   className="dasti-import-dropdown"
@@ -2750,41 +2797,91 @@ export function ProfileReviewCard({
                   </button>
                   {isManageSectionsMenuOpen ? (
                     <div className="dasti-import-dropdown__menu dasti-add-section-menu dasti-add-section-menu--manage dasti-toolbar-drawer-surface">
-                      {removableAddedSections.map((section) => {
-                        const sectionLabel = section.label;
-                        return (
-                          <button
-                            key={section.sectionId}
-                            type="button"
-                            className="dasti-menu-option dasti-menu-option--section"
-                            onClick={() => {
-                              handleRemoveAddedSection(section.sectionId);
-                            }}
-                          >
-                            <div className="dasti-menu-option__row">
-                              <div className="dasti-menu-option__copy">
-                                <div className="dasti-menu-option__title">
-                                  Remove {sectionLabel}
+                      {addableSectionOptions.length > 0 ? (
+                        <>
+                          <div className="dasti-add-section-menu__heading">
+                            Add sections
+                          </div>
+                          {addableSectionOptions.map((option) => (
+                            <button
+                              key={option.value}
+                              type="button"
+                              className="dasti-menu-option dasti-menu-option--section"
+                              onClick={() => {
+                                handleAddSection(option.value);
+                              }}
+                            >
+                              <div className="dasti-menu-option__row">
+                                <div className="dasti-menu-option__copy">
+                                  <div className="dasti-menu-option__title">
+                                    {option.label}
+                                  </div>
+                                  {option.description ? (
+                                    <div className="dasti-menu-option__description">
+                                      {option.description}
+                                    </div>
+                                  ) : null}
                                 </div>
                               </div>
-                            </div>
-                          </button>
-                        );
-                      })}
-                      {removableAddedSections.length > 1 ? (
-                        <button
-                          type="button"
-                          className="dasti-menu-option dasti-menu-option--section"
-                          onClick={handleClearAddedSections}
-                        >
-                          <div className="dasti-menu-option__row">
-                            <div className="dasti-menu-option__copy">
-                              <div className="dasti-menu-option__title">
-                                Remove all optional sections
-                              </div>
-                            </div>
+                            </button>
+                          ))}
+                        </>
+                      ) : null}
+                      {addableSectionOptions.length > 0 &&
+                      removableAddedSections.length > 0 ? (
+                        <div
+                          className="dasti-add-section-menu__divider"
+                          aria-hidden="true"
+                        />
+                      ) : null}
+                      {removableAddedSections.length > 0 ? (
+                        <>
+                          <div className="dasti-add-section-menu__heading">
+                            Remove optional sections
                           </div>
-                        </button>
+                          {removableAddedSections.map((section) => {
+                            const sectionLabel = section.label;
+                            return (
+                              <button
+                                key={section.sectionId}
+                                type="button"
+                                className="dasti-menu-option dasti-menu-option--section"
+                                onClick={() => {
+                                  handleRemoveAddedSection(section.sectionId);
+                                }}
+                              >
+                                <div className="dasti-menu-option__row">
+                                  <div className="dasti-menu-option__copy">
+                                    <div className="dasti-menu-option__title">
+                                      Remove {sectionLabel}
+                                    </div>
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })}
+                          {removableAddedSections.length > 1 ? (
+                            <button
+                              type="button"
+                              className="dasti-menu-option dasti-menu-option--section"
+                              onClick={handleClearAddedSections}
+                            >
+                              <div className="dasti-menu-option__row">
+                                <div className="dasti-menu-option__copy">
+                                  <div className="dasti-menu-option__title">
+                                    Remove all optional sections
+                                  </div>
+                                </div>
+                              </div>
+                            </button>
+                          ) : null}
+                        </>
+                      ) : null}
+                      {addableSectionOptions.length === 0 &&
+                      removableAddedSections.length === 0 ? (
+                        <div className="dasti-add-section-menu__empty">
+                          All optional sections are already configured.
+                        </div>
                       ) : null}
                     </div>
                   ) : null}
@@ -2954,6 +3051,14 @@ export function ProfileReviewCard({
                     <SectionComponent
                       section={section}
                       index={idx}
+                      activeTarget={activeTarget}
+                      openRequest={
+                        sectionOpenRequest?.sectionId === String(section.id ?? "")
+                          ? sectionOpenRequest
+                          : null
+                      }
+                      onOpenRequestHandled={handleSectionOpenRequestHandled}
+                      onActiveTargetChange={onActiveTargetChange}
                       onChange={(_i, updated) => {
                         try {
                           updateSectionInDoc(updated as any);

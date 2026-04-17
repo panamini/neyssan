@@ -135,6 +135,11 @@ export interface ISkillItem {
   bucket?: SkillBucket;
 }
 
+export interface IHobbyItem {
+  id?: string;
+  name: string;
+}
+
 export interface ICertificationItem {
   id?: string;
   certificationName: string;
@@ -185,6 +190,7 @@ export type SectionContent =
   | IExperienceItem[]
   | IEducationItem[]
   | ISkillItem[]
+  | IHobbyItem[]
   | ICertificationItem[]
   | IAffiliationItem[]
   | IProjectItem[]
@@ -214,6 +220,7 @@ export interface CvSection {
     | IExperienceItem[]
     | IEducationItem[]
     | ISkillItem[]
+    | IHobbyItem[]
     | ICertificationItem[]
     | IAffiliationItem[]
     | IProjectItem[]

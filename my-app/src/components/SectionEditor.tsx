@@ -35,8 +35,11 @@ import { SummaryBlock } from "./structured-blocks/SummaryBlock";
 import { SkillsBlock } from "./structured-blocks/SkillsBlock";
 import { ProfileModal } from "./structured-blocks/ProfileModal";
 import { SummaryModal } from "./structured-blocks/SummaryModal";
+import { HobbiesModal } from "./structured-blocks/HobbiesModal";
 import { SkillsModal } from "./structured-blocks/SkillsModal";
+import { LanguagesModal } from "./structured-blocks/LanguagesModal";
 import { SkillsDrawer } from "./structured-blocks/SkillsDrawer";
+import { TextSectionModal } from "./structured-blocks/TextSectionModal";
 import BlockRenderer from "./cv-editor/BlockRenderer";
 import AchievementsBlock from "./structured-blocks/AchievementsBlock";
 import { useSectionFlushSubscription } from "../hooks/use-flush-subscription";
@@ -80,6 +83,12 @@ import {
   isPrimaryPointerPressed,
 } from "../lib/editor-ai-selection";
 import { useToast } from "./ui/toast";
+import {
+  getCanonicalSectionType,
+  type ResumeActiveTarget,
+  type ResumeCanonicalSectionType,
+  type SectionOpenRequest,
+} from "../features/verbati/resumeLinking";
 
 /**
  * Simple uid helper used for generating new block/entry ids locally.
@@ -93,6 +102,7 @@ import type {
   ICertificationItem,
   IExperienceItem,
   IEducationItem,
+  IHobbyItem,
   IProjectItem,
   IProfileItem,
   ISummaryItem,
@@ -123,6 +133,7 @@ type InlineEditorSelectionState = {
 type SectionAiMenuState =
   | { type: "summary" }
   | { type: "skills" }
+  | { type: "hobbies" }
   | { type: "languages" }
   | { type: "experience"; itemId: string }
   | null;
@@ -287,6 +298,21 @@ function stripRecoveryNoteBlocks(
     ...section,
     blocks: nextBlocks as any,
   };
+}
+
+function isRemovableOptionalSectionType(
+  sectionType: ResumeCanonicalSectionType | null,
+): boolean {
+  return (
+    sectionType === "languages" ||
+    sectionType === "achievements" ||
+    sectionType === "projects" ||
+    sectionType === "certifications" ||
+    sectionType === "affiliations" ||
+    sectionType === "hobbies" ||
+    sectionType === "additional_information" ||
+    sectionType === "custom"
+  );
 }
 
 function RecoveryNotes({
@@ -830,6 +856,10 @@ interface SectionEditorProps {
   // Controlled collapse support (optional)
   collapsed?: boolean;
   onCollapseChange?: () => void;
+  openRequest?: SectionOpenRequest | null;
+  onOpenRequestHandled?: (requestId: string) => void;
+  activeTarget?: ResumeActiveTarget | null;
+  onActiveTargetChange?: (target: ResumeActiveTarget | null) => void;
   // When true, this SectionEditor is used as an embedded/inline editor (e.g., inside BlockRenderer).
   // In this mode, legacy migration side-effects must be disabled to avoid infinite remount loops.
   embedded?: boolean;
@@ -972,6 +1002,10 @@ export default function SectionEditor({
   onContentChange,
   collapsed = false,
   onCollapseChange,
+  openRequest = null,
+  onOpenRequestHandled,
+  activeTarget = null,
+  onActiveTargetChange,
   embedded = false,
 }: SectionEditorProps) {
   const { showToast } = useToast();
@@ -1029,6 +1063,52 @@ export default function SectionEditor({
     [section.id],
   );
   const titleInputRef = useRef<HTMLInputElement | null>(null);
+  const sectionContainerRef = useRef<HTMLDivElement | null>(null);
+  const lastOpenRequestIdRef = useRef<string | null>(null);
+  const [modalInitialItemIds, setModalInitialItemIds] = useState<
+    Record<string, string | undefined>
+  >({});
+  const setModalInitialItemId = useCallback(
+    (sectionType: ResumeCanonicalSectionType, itemId?: string) => {
+      setModalInitialItemIds((currentIds) => ({
+        ...currentIds,
+        [sectionType]: itemId,
+      }));
+    },
+    [],
+  );
+  const publishActiveTarget = useCallback(
+    (
+      sectionType: ResumeCanonicalSectionType,
+      source: ResumeActiveTarget["source"],
+      itemId?: string,
+      previewSectionType?: ResumeActiveTarget["previewSectionType"],
+    ) => {
+      onActiveTargetChange?.({
+        sectionType,
+        previewSectionType,
+        itemId,
+        sectionId: String(section.id ?? ""),
+        source,
+      });
+    },
+    [onActiveTargetChange, section.id],
+  );
+  const clearActiveTarget = useCallback(() => {
+    onActiveTargetChange?.(null);
+  }, [onActiveTargetChange]);
+  const clearHoverTarget = useCallback(
+    (sectionType: ResumeCanonicalSectionType, itemId?: string) => {
+      if (
+        activeTarget?.source === "editor-hover" &&
+        activeTarget.sectionType === sectionType &&
+        (itemId ? activeTarget.itemId === itemId : true)
+      ) {
+        onActiveTargetChange?.(null);
+      }
+    },
+    [activeTarget, onActiveTargetChange],
+  );
   const showCvAiActionError = useCallback(
     (actionLabel: string, error: unknown) => {
       console.error(`[SectionEditor] ${actionLabel} failed`, error);
@@ -1288,11 +1368,14 @@ export default function SectionEditor({
   useEffect(() => {
     const viewDom = (manager as any)?.view?.dom as HTMLElement | undefined;
     if (!viewDom) return;
+    const focusedSectionType = getCanonicalSectionType(section) ?? "custom";
     const handleFocusIn = () => {
       onFocus?.(String(section.id));
+      publishActiveTarget(focusedSectionType, "editor-focus");
     };
     const handleFocusOut = () => {
       onBlur?.(String(section.id));
+      clearActiveTarget();
     };
     viewDom.addEventListener("focusin", handleFocusIn);
     viewDom.addEventListener("focusout", handleFocusOut);
@@ -1304,7 +1387,15 @@ export default function SectionEditor({
         /* ignore */
       }
     };
-  }, [manager, section.id, onFocus, onBlur]);
+  }, [
+    clearActiveTarget,
+    manager,
+    onBlur,
+    onFocus,
+    publishActiveTarget,
+    section.id,
+    section,
+  ]);
 
   // Keep editor content in sync when parent updates section.content,
   // but avoid overwriting local edits while the editor has focus.
@@ -1365,6 +1456,45 @@ export default function SectionEditor({
   } catch {
     /* noop */
   }
+  const canonicalSectionType = getCanonicalSectionType(section);
+  const isOptionalSection = isRemovableOptionalSectionType(
+    canonicalSectionType,
+  );
+  const optionalSectionLabel =
+    String(section.title ?? "section").trim() || "section";
+  const effectiveStructured = useMemo(() => {
+    if (sectionType !== "projects") {
+      return structured;
+    }
+
+    if (Array.isArray(structured)) {
+      return structured;
+    }
+
+    const blocks = Array.isArray(section.blocks) ? section.blocks : [];
+    const derivedProjects = blocks
+      .map((block, index) => {
+        const title = String(block.title ?? "").trim();
+        const description = plainTextFromBlockValue(block);
+        if (!title && !description) {
+          return null;
+        }
+
+        const linkedStructuredId = getBlockLinkedStructuredId(block);
+        const fallbackId =
+          linkedStructuredId || String(block.id ?? `project-${section.id}-${index}`);
+
+        return {
+          id: fallbackId,
+          title: title || `Project ${index + 1}`,
+          meta: "",
+          description: description || "",
+        } satisfies IProjectItem;
+      })
+      .filter((item): item is IProjectItem => item !== null);
+
+    return derivedProjects;
+  }, [section.blocks, section.id, sectionType, structured]);
 
   // Determine whether v1 rendering should be active for this document.
   // Use the canonical runtime detector from CvLibraryContext.
@@ -1705,6 +1835,31 @@ export default function SectionEditor({
     reorderSections(nextSections as CvSection[]);
   }, [closeInspector, currentCv, reorderSections, section.id]);
 
+  const renderOptionalSectionDismissButton = useCallback(() => {
+    if (!isOptionalSection) {
+      return null;
+    }
+
+    return (
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          handleRemoveSection();
+        }}
+        className="dasti-section-dismiss-pill"
+        aria-label={`Delete ${optionalSectionLabel}`}
+        title={`Delete ${optionalSectionLabel}`}
+      >
+        <X size={13} strokeWidth={2.1} aria-hidden />
+      </button>
+    );
+  }, [
+    handleRemoveSection,
+    isOptionalSection,
+    optionalSectionLabel,
+  ]);
+
   const renderAiMenuTrigger = useCallback(
     (args: {
       menu: Exclude<SectionAiMenuState, null>;
@@ -1792,9 +1947,15 @@ export default function SectionEditor({
   const [isProfileModalOpen, setProfileModalOpen] = useState<boolean>(false);
   // Summary modal editor (Remirror)
   const [isSummaryModalOpen, setSummaryModalOpen] = useState<boolean>(false);
+  const [isAdditionalInformationModalOpen, setAdditionalInformationModalOpen] =
+    useState<boolean>(false);
+  const [isCustomTextModalOpen, setCustomTextModalOpen] =
+    useState<boolean>(false);
   // Skills modal editor
   const [isSkillsModalOpen, setSkillsModalOpen] = useState<boolean>(false);
   const [isHobbiesModalOpen, setHobbiesModalOpen] = useState<boolean>(false);
+  const [isLanguagesModalOpen, setLanguagesModalOpen] =
+    useState<boolean>(false);
   const [isCertificationModalOpen, setCertificationModalOpen] =
     useState<boolean>(false);
   const [isAffiliationModalOpen, setAffiliationModalOpen] =
@@ -1817,6 +1978,110 @@ export default function SectionEditor({
   const [isProfilePhotoDragActive, setIsProfilePhotoDragActive] =
     useState<boolean>(false);
   const profilePhotoInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!openRequest) {
+      return;
+    }
+
+    if (
+      openRequest.sectionId !== String(section.id ?? "") ||
+      lastOpenRequestIdRef.current === openRequest.requestId
+    ) {
+      return;
+    }
+
+    lastOpenRequestIdRef.current = openRequest.requestId;
+    setModalInitialItemId(openRequest.sectionType, openRequest.itemId);
+    publishActiveTarget(
+      openRequest.sectionType,
+      openRequest.shouldOpenModal ? "modal" : "editor-focus",
+      openRequest.itemId,
+      openRequest.previewSectionType,
+    );
+    onOpenRequestHandled?.(openRequest.requestId);
+
+    if (!openRequest.shouldOpenModal) {
+      sectionContainerRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+      if (titleInputRef.current) {
+        titleInputRef.current.focus({ preventScroll: true });
+      } else {
+        focusEditorAtEnd();
+      }
+      return;
+    }
+
+    if (openRequest.sectionType === "profile") {
+      setProfileModalOpen(true);
+      return;
+    }
+    if (openRequest.sectionType === "summary") {
+      setSummaryModalOpen(true);
+      return;
+    }
+    if (openRequest.sectionType === "additional_information") {
+      setAdditionalInformationModalOpen(true);
+      return;
+    }
+    if (openRequest.sectionType === "custom") {
+      setCustomTextModalOpen(true);
+      return;
+    }
+    if (openRequest.sectionType === "skills") {
+      setSkillsModalOpen(true);
+      return;
+    }
+    if (openRequest.sectionType === "hobbies") {
+      setHobbiesModalOpen(true);
+      return;
+    }
+    if (openRequest.sectionType === "languages") {
+      setLanguagesModalOpen(true);
+      return;
+    }
+    if (openRequest.sectionType === "certifications") {
+      setCertificationModalOpen(true);
+      return;
+    }
+    if (openRequest.sectionType === "affiliations") {
+      setAffiliationModalOpen(true);
+      return;
+    }
+    if (openRequest.sectionType === "experience") {
+      setExperienceModalOpen(true);
+      return;
+    }
+    if (openRequest.sectionType === "education") {
+      setEducationModalOpen(true);
+      return;
+    }
+    if (openRequest.sectionType === "projects") {
+      setProjectsModalOpen(true);
+      return;
+    }
+    if (openRequest.sectionType === "achievements") {
+      return;
+    }
+    sectionContainerRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    });
+    if (titleInputRef.current) {
+      titleInputRef.current.focus({ preventScroll: true });
+    } else {
+      focusEditorAtEnd();
+    }
+  }, [
+    focusEditorAtEnd,
+    openRequest,
+    onOpenRequestHandled,
+    publishActiveTarget,
+    section.id,
+    setModalInitialItemId,
+  ]);
 
   // (moved) The flush-related hooks and refs were moved higher up in the component
   // to resolve TypeScript declaration errors and to support the stable-ref pattern for registration.
@@ -2009,6 +2274,11 @@ export default function SectionEditor({
       }
     }
 
+    function openSummaryModal() {
+      publishActiveTarget("summary", "modal");
+      setSummaryModalOpen(true);
+    }
+
     return (
       <div className="mb-4 border [border-color:var(--color-border)] [border-radius:var(--radius-card)] section-container">
         <div className="section-container-header flex items-center justify-between">
@@ -2036,7 +2306,7 @@ export default function SectionEditor({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                setSummaryModalOpen(true);
+                openSummaryModal();
               }}
               className="dasti-icon-button cv-section-edit-trigger"
               aria-label="Edit summary"
@@ -2103,13 +2373,13 @@ export default function SectionEditor({
               } catch {
                 /* noop */
               }
-              setSummaryModalOpen(true);
+              openSummaryModal();
             }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
                 e.stopPropagation();
-                setSummaryModalOpen(true);
+                openSummaryModal();
               }
             }}
           >
@@ -2145,7 +2415,7 @@ export default function SectionEditor({
                 handleSummaryPersist(updatedSection as any);
               }}
               onContentChange={onContentChange}
-              onOpenEditor={() => setSummaryModalOpen(true)}
+              onOpenEditor={openSummaryModal}
             />
             <RecoveryNotes
               notes={recoveredSummaryNotes}
@@ -2170,25 +2440,351 @@ export default function SectionEditor({
               linkedStructuredId: String(summaryItem?.id ?? ""),
             }) as any);
           }}
-          onClose={() => setSummaryModalOpen(false)}
+          onClose={() => {
+            setSummaryModalOpen(false);
+            clearActiveTarget();
+          }}
         />
       </div>
     );
   }
 
-  // Structured "skills" and titled "hobbies" sections: chip/list editing with shared modal UX
-  if (sectionType === "skills" || sectionType === "hobbies") {
-    const isHobbiesSection = sectionType === "hobbies";
-    const itemLabel = isHobbiesSection ? "hobby" : "skill";
-    const emptyInlineLabel = isHobbiesSection
-      ? "Click + to add your first hobby"
-      : "Click + to add your first skill";
-    const emptyPreviewLabel = isHobbiesSection
-      ? "Add your first hobby"
-      : "Add your first skill";
-    const suggestionHeading = isHobbiesSection
-      ? "Suggested interests"
-      : "Suggested from experience and education";
+  if (sectionType === "hobbies") {
+    const items: IHobbyItem[] = useMemo(() => {
+      const structuredItems = Array.isArray(section.structuredContent)
+        ? (section.structuredContent as any[])
+        : [];
+      if (structuredItems.length > 0) {
+        return structuredItems.map((item, index) => ({
+          id: String((item as any)?.id ?? `hobby-${index}-${String(section.id)}`),
+          name: String((item as any)?.name ?? (item as any)?.text ?? "").trim(),
+        }));
+      }
+
+      return (Array.isArray(section.blocks) ? section.blocks : [])
+        .flatMap((block, blockIndex) =>
+          plainTextFromBlockValue(block)
+            .split(/[\n,]/)
+            .map((value) => value.replace(/^[-•*+]\s*/, "").trim())
+            .filter(Boolean)
+            .map((name, index) => ({
+              id: `hobby-${String(section.id)}-${blockIndex}-${index}`,
+              name,
+            })),
+        )
+        .filter(
+          (item, index, allItems) =>
+            allItems.findIndex(
+              (candidate) =>
+                normalizeSkillName(candidate.name) ===
+                normalizeSkillName(item.name),
+            ) === index,
+        );
+    }, [section.blocks, section.id, section.structuredContent]);
+
+    const visibleItems = items.filter(
+      (item) => String(item.name ?? "").trim().length > 0,
+    );
+    const recoveredHobbyNotes = extractCompactRecoveryFallbackNotes({
+      blocks: Array.isArray(section.blocks) ? section.blocks : [],
+      hiddenValues: visibleItems.map((item) => String(item.name ?? "")),
+    });
+
+    function persistHobbyItems(next: IHobbyItem[]) {
+      try {
+        onChange(index, {
+          ...section,
+          structuredContent: next
+            .map((item) => ({
+              id: String(item.id ?? `hobby-${uuidv4()}`),
+              name: String(item.name ?? "").trim(),
+            }))
+            .filter((item) => item.name.length > 0) as any,
+        } as CvSection);
+      } catch {
+        /* noop */
+      }
+    }
+
+    function openHobbiesModal(targetItemId?: string) {
+      setModalInitialItemId("hobbies", targetItemId);
+      publishActiveTarget("hobbies", "modal", targetItemId);
+      setHobbiesModalOpen(true);
+    }
+
+    function requestHobbySuggestions(excludeItems: string[] = []) {
+      setSectionAiMenu(null);
+      setSkillsAiRequested(true);
+      const existingNames = new Set(
+        visibleItems
+          .map((item) => normalizeSkillName(String(item.name ?? "")))
+          .filter(Boolean),
+      );
+      const nextSuggestions = HOBBY_SUGGESTION_LIBRARY.filter(
+        (candidate) =>
+          !existingNames.has(normalizeSkillName(candidate)) &&
+          !excludeItems.some(
+            (excluded) =>
+              normalizeSkillName(excluded) === normalizeSkillName(candidate),
+          ),
+      ).slice(0, 6);
+      setSkillsAiSuggestions(nextSuggestions);
+    }
+
+    function appendSuggestedHobby(name: string) {
+      const cleanName = String(name ?? "").trim();
+      if (!cleanName) return;
+      const exists = visibleItems.some(
+        (item) =>
+          normalizeSkillName(String(item.name ?? "")) ===
+          normalizeSkillName(cleanName),
+      );
+      if (exists) return;
+
+      const next = [
+        ...visibleItems,
+        {
+          id: `hobby-${uuidv4()}`,
+          name: cleanName,
+        },
+      ];
+      persistHobbyItems(next);
+    }
+
+    function handleAcceptHobbySuggestion(name: string) {
+      const nextExcluded = dedupeStringList([...skillsAiExcluded, name]);
+      setSkillsAiExcluded(nextExcluded);
+      setSkillsAiSuggestions((current) =>
+        current.filter(
+          (candidate) =>
+            normalizeSkillName(candidate) !== normalizeSkillName(name),
+        ),
+      );
+      appendSuggestedHobby(name);
+    }
+
+    function handleDismissHobbySuggestion(name: string) {
+      const remaining = skillsAiSuggestions.filter(
+        (candidate) => normalizeSkillName(candidate) !== normalizeSkillName(name),
+      );
+      const nextExcluded = dedupeStringList([...skillsAiExcluded, name]);
+      setSkillsAiExcluded(nextExcluded);
+      setSkillsAiSuggestions(remaining);
+
+      if (remaining.length === 0 && skillsAiRefillCount < 1) {
+        setSkillsAiRefillCount(1);
+        requestHobbySuggestions(nextExcluded);
+      }
+    }
+
+    return (
+      <div className="mb-4 section-container section-container--dismissable">
+        {renderOptionalSectionDismissButton()}
+        <div className="section-container-header flex items-center justify-between">
+          <h3
+            className="cv-section-heading cursor-pointer"
+            onClick={() => openHobbiesModal()}
+          >
+            {section.title}
+          </h3>
+          <div className="flex items-center gap-1">
+            {renderAiMenuTrigger({
+              menu: { type: "hobbies" },
+              isLoading: false,
+              title: "Hobby suggestions",
+              items: [
+                {
+                  label: "Suggest hobbies",
+                  onClick: () => {
+                    setSkillsAiExcluded([]);
+                    setSkillsAiRefillCount(0);
+                    requestHobbySuggestions([]);
+                  },
+                },
+              ],
+            })}
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                openHobbiesModal();
+              }}
+              className="dasti-icon-button cv-section-edit-trigger"
+              aria-label="Edit hobbies"
+              title="Edit hobbies"
+            >
+              <Pencil className="w-4 h-4" strokeWidth={1.5} aria-hidden />
+            </button>
+            {typeof onCollapseChange === "function" ? (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onCollapseChange();
+                }}
+                aria-label={collapsed ? "Expand section" : "Collapse section"}
+                className="p-1 rounded focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
+              >
+                <span className="[color:var(--tg2)]" aria-hidden>
+                  {collapsed ? "▶" : "▼"}
+                </span>
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        <CvSuggestionRow
+          label="Suggested interests"
+          items={skillsAiSuggestions}
+          isLoading={false}
+          hasRequested={skillsAiRequested}
+          emptyLabel="No hobby suggestions yet."
+          onAccept={handleAcceptHobbySuggestion}
+          onDismiss={handleDismissHobbySuggestion}
+        />
+
+        {collapsed ? (
+          <div className="cv-section-preview">
+            {visibleItems.length === 0 ? (
+              <button
+                type="button"
+                className="cv-preview-empty cv-preview-text cv-preview-text--muted text-left appearance-none bg-transparent border-0 p-0"
+                onClick={() => openHobbiesModal()}
+              >
+                Add your first hobby
+              </button>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {visibleItems.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className="card-group inline-flex items-center gap-2 px-2.5 py-1 text-xs rounded-full [background:var(--sf2)] [color:var(--tm2)]"
+                    aria-label={`Edit hobby ${item.name}`}
+                    title={`Edit ${item.name}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openHobbiesModal(String(item.id));
+                    }}
+                    onPointerEnter={() =>
+                      publishActiveTarget("hobbies", "editor-hover", String(item.id))
+                    }
+                    onPointerLeave={() =>
+                      clearHoverTarget("hobbies", String(item.id))
+                    }
+                  >
+                    <span className="font-medium [color:var(--ti)]">
+                      {item.name}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <RecoveryNotes
+              notes={recoveredHobbyNotes}
+              variant="compact"
+              onDismiss={() => {
+                onChange(index, stripRecoveryNoteBlocks(section) as any);
+              }}
+            />
+          </div>
+        ) : (
+          <div
+            className="cv-section-body cv-section-body--stack"
+            onClick={(event) => {
+              if (event.target === event.currentTarget) {
+                openHobbiesModal();
+              }
+            }}
+          >
+            {visibleItems.length === 0 ? (
+              <div
+                className="cv-section-preview cursor-pointer"
+                role="button"
+                tabIndex={0}
+                aria-label="Edit hobbies"
+                onClick={() => openHobbiesModal()}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    openHobbiesModal();
+                  }
+                }}
+              >
+                <p className="cv-preview-empty cv-preview-text cv-preview-text--muted">
+                  Add hobbies as simple tags without proficiency or scoring.
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {visibleItems.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className="card-group inline-flex items-center gap-2 px-2.5 py-1 text-xs rounded-full [background:var(--sf2)] [color:var(--tm2)]"
+                    aria-label={`Edit hobby ${item.name}`}
+                    title={`Edit ${item.name}`}
+                    onClick={() => openHobbiesModal(String(item.id))}
+                    onPointerEnter={() =>
+                      publishActiveTarget("hobbies", "editor-hover", String(item.id))
+                    }
+                    onPointerLeave={() =>
+                      clearHoverTarget("hobbies", String(item.id))
+                    }
+                  >
+                    <span className="font-medium [color:var(--ti)]">
+                      {item.name}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <RecoveryNotes
+              notes={recoveredHobbyNotes}
+              variant="compact"
+              onDismiss={() => {
+                onChange(index, stripRecoveryNoteBlocks(section) as any);
+              }}
+            />
+          </div>
+        )}
+
+        <HobbiesModal
+          open={isHobbiesModalOpen}
+          items={items}
+          initialItemId={modalInitialItemIds.hobbies}
+          suggestedItems={skillsAiSuggestions}
+          recoveryNotes={recoveredHobbyNotes}
+          onDismissRecoveryNotes={() => {
+            onChange(index, stripRecoveryNoteBlocks(section) as any);
+          }}
+          onAcceptSuggestion={(name) => {
+            setSkillsAiSuggestions((current) =>
+              current.filter(
+                (candidate) =>
+                  normalizeSkillName(candidate) !== normalizeSkillName(name),
+              ),
+            );
+          }}
+          onDismissSuggestion={(name) => {
+            handleDismissHobbySuggestion(name);
+          }}
+          onClose={() => {
+            setHobbiesModalOpen(false);
+            clearActiveTarget();
+          }}
+          onSave={persistHobbyItems}
+        />
+      </div>
+    );
+  }
+
+  // Structured skills section: chip/list editing with modal support
+  if (sectionType === "skills") {
+    const itemLabel = "skill";
+    const emptyInlineLabel = "Click + to add your first skill";
+    const emptyPreviewLabel = "Add your first skill";
+    const suggestionHeading = "Suggested from experience and education";
     // Memoize to avoid new array identity on each parent render (prevents modal typing resets)
     const items: ISkillItem[] = useMemo(() => {
       if (!Array.isArray(section.structuredContent)) return [];
@@ -2416,25 +3012,6 @@ export default function SectionEditor({
     }
 
     async function requestSkillsSuggestions(excludeItems: string[] = []) {
-      if (isHobbiesSection) {
-        const existingNames = new Set(
-          skillRows
-            .map((item) => normalizeSkillName(String(item.name ?? "")))
-            .filter(Boolean),
-        );
-        const nextSuggestions = HOBBY_SUGGESTION_LIBRARY.filter(
-          (candidate) =>
-            !existingNames.has(normalizeSkillName(candidate)) &&
-            !excludeItems.some(
-              (excluded) =>
-                normalizeSkillName(excluded) === normalizeSkillName(candidate),
-            ),
-        ).slice(0, 6);
-        setSkillsAiRequested(true);
-        setSkillsAiSuggestions(nextSuggestions);
-        return;
-      }
-
       if (!cvAiCapabilities.isSupported("generate_skills_suggestions")) {
         setSkillsAiSuggestions([]);
         showCvAiRefreshToast();
@@ -2534,9 +3111,9 @@ export default function SectionEditor({
       }
     }
 
-    const canSuggestSkills = isHobbiesSection
-      ? true
-      : cvAiCapabilities.isSupported("generate_skills_suggestions");
+    const canSuggestSkills = cvAiCapabilities.isSupported(
+      "generate_skills_suggestions",
+    );
 
     return (
         <div className="mb-4 section-container">
@@ -2546,10 +3123,10 @@ export default function SectionEditor({
               {renderAiMenuTrigger({
                 menu: { type: "skills" },
                 isLoading: sectionAiLoadingKey === "skills:generate",
-                title: isHobbiesSection ? "Hobbies suggestions" : "Skills AI actions",
+                title: "Skills AI actions",
                 items: [
                   {
-                    label: isHobbiesSection ? "Suggest hobbies" : "Suggest skills",
+                    label: "Suggest skills",
                     onClick: () => {
                       setSkillsAiExcluded([]);
                       setSkillsAiRefillCount(0);
@@ -2557,26 +3134,11 @@ export default function SectionEditor({
                     },
                     disabled:
                       !canSuggestSkills ||
-                      (!isHobbiesSection &&
-                        currentCvExperiences.length === 0 &&
+                      (currentCvExperiences.length === 0 &&
                         currentCvEducations.length === 0),
                   },
                 ],
               })}
-              {isHobbiesSection ? (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setHobbiesModalOpen(true);
-                  }}
-                  className="dasti-icon-button cv-section-edit-trigger"
-                  aria-label="Edit hobbies"
-                  title="Edit hobbies"
-                >
-                  <Pencil className="w-4 h-4" strokeWidth={1.5} aria-hidden />
-                </button>
-              ) : null}
               <button
                 type="button"
                 onClick={(e) => {
@@ -2622,7 +3184,7 @@ export default function SectionEditor({
           items={skillsAiSuggestions}
           isLoading={sectionAiLoadingKey === "skills:generate"}
           hasRequested={skillsAiRequested}
-          emptyLabel={isHobbiesSection ? "No hobby suggestions yet." : "No new skill suggestions yet."}
+          emptyLabel="No new skill suggestions yet."
           onAccept={handleAcceptSkillSuggestion}
           onDismiss={handleDismissSkillSuggestion}
         />
@@ -2731,7 +3293,7 @@ export default function SectionEditor({
                           color: "var(--ti)",
                           lineHeight: "var(--ls)",
                         }}
-                        placeholder={isHobbiesSection ? "Hobby name" : "Skill name"}
+                        placeholder="Skill name"
                         value={row.name ?? ""}
                         onChange={(e) =>
                           handleNameChangeInline(idx, e.target.value)
@@ -2813,27 +3375,20 @@ export default function SectionEditor({
         )}
 
         <SkillsModal
-          open={isHobbiesSection ? isHobbiesModalOpen : isSkillsModalOpen}
+          open={isSkillsModalOpen}
           items={items}
+          initialItemId={modalInitialItemIds.skills}
           suggestedItems={skillsAiSuggestions}
-          title={isHobbiesSection ? "Edit hobbies" : "Edit skills"}
-          description={
-            isHobbiesSection
-              ? "Add, remove, or edit your hobbies and interests as lightweight tags"
-              : "Add, remove, or edit your skills and levels"
-          }
-          emptyLabel={
-            isHobbiesSection
-              ? "No hobbies yet. Add your first hobby."
-              : "No skills yet. Add your first skill."
-          }
+          title="Edit skills"
+          description="Add, remove, or edit your skills and levels"
+          emptyLabel="No skills yet. Add your first skill."
           recoveryNotes={recoveredSkillNotes}
           onDismissRecoveryNotes={() => {
             onChange(index, stripRecoveryNoteBlocks(section) as any);
           }}
           itemLabel={itemLabel}
           suggestionLabel={suggestionHeading}
-          saveLabel={isHobbiesSection ? "Save hobbies" : "Save skills"}
+          saveLabel="Save skills"
           onAcceptSuggestion={(name) => {
             setSkillsAiSuggestions((current) =>
               current.filter(
@@ -2851,11 +3406,8 @@ export default function SectionEditor({
             );
           }}
           onClose={() => {
-            if (isHobbiesSection) {
-              setHobbiesModalOpen(false);
-              return;
-            }
             setSkillsModalOpen(false);
+            clearActiveTarget();
           }}
           onSave={(next) => {
             try {
@@ -2889,9 +3441,8 @@ export default function SectionEditor({
     );
   }
 
-  // Structured "languages" section: collapsed chips + LanguagesModal (no Remirror block)
+  // Structured "languages" section: canonicalized to a modal-owned surface.
   if (sectionType === "languages") {
-    // Memoize to avoid new array identity on each parent render (prevents modal typing resets)
     const items: ILanguageItem[] = useMemo(() => {
       if (!Array.isArray(section.structuredContent)) return [];
       return (section.structuredContent as any[]).map((it, idx) => {
@@ -2902,19 +3453,14 @@ export default function SectionEditor({
             level: "Intermediate",
           };
         }
-        const o = it as Partial<ILanguageItem>;
-        const name = typeof o.name === "string" ? o.name : "";
-        const level = (o.level as ILanguageItem["level"]) ?? "Intermediate";
+        const row = it as Partial<ILanguageItem>;
         return {
-          id: String(o.id ?? `lang-${idx}-${String(section.id)}`),
-          name,
-          level,
+          id: String(row.id ?? `lang-${idx}-${String(section.id)}`),
+          name: typeof row.name === "string" ? row.name : "",
+          level: (row.level as ILanguageItem["level"]) ?? "Intermediate",
         };
       });
-    }, [section.structuredContent, section.id]);
-
-    // Inline-first editing for Languages (parity with Skills but without buckets/pinning/sort)
-    const [languageRows, setLanguageRows] = useState<ILanguageItem[]>([]);
+    }, [section.id, section.structuredContent]);
     const visibleLanguageItems = items.filter(
       (item) => String(item.name ?? "").trim().length > 0,
     );
@@ -2922,193 +3468,19 @@ export default function SectionEditor({
       blocks: Array.isArray(section.blocks) ? section.blocks : [],
       hiddenValues: visibleLanguageItems.map((item) => String(item.name ?? "")),
     });
-    const lastLanguagesSeedRef = useRef<string | null>(null);
-    // Keep a ref to the latest local rows so the seeding effect can merge drafts safely.
-    const languageRowsRef = useRef<ILanguageItem[]>([]);
-    useEffect(() => {
-      languageRowsRef.current = languageRows;
-    }, [languageRows]);
 
-    useEffect(() => {
-      try {
-        const nextStr = JSON.stringify(items ?? []);
-        // If the seed hasn't changed, no-op.
-        if (lastLanguagesSeedRef.current === nextStr) return;
-        // If user is currently focused inside a language input, skip reseeding to avoid stomping edits.
-        try {
-          const active =
-            typeof document !== "undefined"
-              ? (document.activeElement as HTMLElement | null)
-              : null;
-          if (
-            active &&
-            active.id &&
-            active.id.startsWith("language-name-inline-")
-          ) {
-            return;
-          }
-        } catch {
-          // ignore focus detection errors
-        }
-        lastLanguagesSeedRef.current = nextStr;
-
-        // Parse server items and merge any local draft rows that contain non-empty names
-        const parsed = JSON.parse(nextStr) as ILanguageItem[];
-        const localDrafts = (languageRowsRef.current ?? []).filter(
-          (r) => String(r.name ?? "").trim().length > 0,
-        );
-
-        const merged: ILanguageItem[] = [...parsed];
-        for (const d of localDrafts) {
-          const exists = merged.some(
-            (p) =>
-              String(p.id ?? "") === String(d.id ?? "") ||
-              String(p.name ?? "")
-                .trim()
-                .toLowerCase() ===
-                String(d.name ?? "")
-                  .trim()
-                  .toLowerCase(),
-          );
-          if (!exists) merged.push(d);
-        }
-
-        setLanguageRows(merged);
-      } catch {
-        setLanguageRows(items);
-      }
-    }, [items]);
-
-    function newLanguageRow(): ILanguageItem {
-      const id = `lang-${uuidv4()}`;
-      return { id, name: "", level: "Intermediate" };
-    }
-
-    const [savedTick, setSavedTick] = useState<string | null>(null);
-    function persistLanguageRows(next: ILanguageItem[], tickId?: string) {
+    function persistLanguageItems(next: ILanguageItem[]) {
       try {
         const sanitized = next
-          .map((r) => ({ ...r, name: String(r.name ?? "").trim() }))
-          .filter((r) => r.name.length > 0);
-        const updatedSection = {
+          .map((item) => ({
+            ...item,
+            name: String(item.name ?? "").trim(),
+          }))
+          .filter((item) => item.name.length > 0);
+        onChange(index, {
           ...section,
           structuredContent: sanitized as any,
-        };
-        onChange(index, updatedSection as any);
-        if (tickId) {
-          setSavedTick(tickId);
-          window.setTimeout(() => setSavedTick(null), 1200);
-        }
-      } catch {
-        /* noop */
-      }
-    }
-
-    function handleAddLanguageInline() {
-      setLanguageRows((prev) => [...prev, newLanguageRow()]);
-    }
-
-    function handleRemoveLanguageInline(langId: string) {
-      try {
-        const next = languageRows.filter(
-          (r) => String(r.id) !== String(langId),
-        );
-        setLanguageRows(next);
-        persistLanguageRows(next, langId);
-      } catch {
-        /* noop */
-      }
-    }
-
-    function handleNameChangeLanguage(idx: number, name: string) {
-      setLanguageRows((prev) =>
-        prev.map((r, i) => (i === idx ? { ...r, name } : r)),
-      );
-    }
-
-    function handleNameBlurLanguage(idx: number) {
-      const row = languageRows[idx];
-      if (!row) return;
-      const name = String(row.name ?? "").trim();
-      // Do not persist/clear an empty draft row on accidental blur — keep it editable.
-      if (name.length === 0) return;
-      persistLanguageRows(languageRows, String(row.id ?? idx));
-    }
-
-    function handleNameKeyDownLanguage(
-      e: React.KeyboardEvent<HTMLInputElement>,
-      idx: number,
-    ) {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        const row = languageRows[idx];
-        persistLanguageRows(languageRows, String(row?.id ?? idx));
-        (e.target as HTMLInputElement).blur();
-      }
-      if (e.key === "Escape") {
-        e.preventDefault();
-        (e.target as HTMLInputElement).blur();
-      }
-    }
-
-    function handleLevelChangeLanguage(idx: number, lvl: Level) {
-      const next = languageRows.map((r, i) =>
-        i === idx ? { ...r, level: lvl } : r,
-      );
-      const row = next[idx];
-      setLanguageRows(next);
-
-      // If the row has a non-empty name we can persist; otherwise try to read the latest
-      // value from the DOM input to avoid losing a freshly-typed name when user clicks level.
-      const currentName = String(row?.name ?? "").trim();
-      if (currentName.length === 0) {
-        try {
-          const input =
-            typeof document !== "undefined"
-              ? (document.getElementById(
-                  `language-name-inline-${idx}`,
-                ) as HTMLInputElement | null)
-              : null;
-          const domVal = input?.value ?? "";
-          if (domVal.trim().length > 0) {
-            next[idx] = { ...next[idx], name: domVal.trim() };
-            window.setTimeout(() => {
-              persistLanguageRows(next, String(next[idx].id ?? idx));
-            }, 30);
-          }
-        } catch {
-          /* noop */
-        }
-        return;
-      }
-
-      // Row already has a name; persist after a short delay to allow any pending input handlers to finish.
-      window.setTimeout(() => {
-        persistLanguageRows(next, String(row?.id ?? idx));
-      }, 30);
-    }
-
-    // Collapsed view remove handler (chip remove)
-    function handleRemoveLanguage(langId: string): void {
-      try {
-        const sc = Array.isArray(section.structuredContent)
-          ? section.structuredContent
-          : [];
-        if (sc.length === 0) return;
-        let nextStructured: any[];
-        if (typeof sc[0] === "string") {
-          const idx = items.findIndex((it) => String(it.id) === String(langId));
-          nextStructured = (sc as any[]).filter((_, i) => i !== idx);
-        } else {
-          nextStructured = (sc as any[]).filter(
-            (it) => String((it as any).id ?? "") !== String(langId),
-          );
-        }
-        const updatedSection = {
-          ...section,
-          structuredContent: nextStructured as any,
-        };
-        onChange(index, updatedSection as any);
+        } as CvSection);
       } catch {
         /* noop */
       }
@@ -3131,7 +3503,7 @@ export default function SectionEditor({
           experiences: currentCvExperiences,
           educations: currentCvEducations,
           existingItems: dedupeStringList(
-            languageRows.map((item) => String(item.name ?? "").trim()),
+            visibleLanguageItems.map((item) => String(item.name ?? "").trim()),
           ),
           excludeItems,
           maxItems: 5,
@@ -3146,19 +3518,20 @@ export default function SectionEditor({
           result.items.map((item: unknown) => String(item ?? "").trim()),
         );
         const existingNames = new Set(
-          languageRows
+          visibleLanguageItems
             .map((item) => normalizeSkillName(String(item.name ?? "")))
             .filter(Boolean),
         );
-        const nextSuggestions = nextItems.filter(
-          (item) =>
-            !existingNames.has(normalizeSkillName(item)) &&
-            !excludeItems.some(
-              (candidate) =>
-                normalizeSkillName(candidate) === normalizeSkillName(item),
-            ),
+        setLanguagesAiSuggestions(
+          nextItems.filter(
+            (item) =>
+              !existingNames.has(normalizeSkillName(item)) &&
+              !excludeItems.some(
+                (candidate) =>
+                  normalizeSkillName(candidate) === normalizeSkillName(item),
+              ),
+          ),
         );
-        setLanguagesAiSuggestions(nextSuggestions);
       } catch (error) {
         setLanguagesAiSuggestions([]);
         showCvAiActionError("language suggestion", error);
@@ -3169,24 +3542,28 @@ export default function SectionEditor({
 
     function appendSuggestedLanguage(name: string) {
       const cleanName = String(name ?? "").trim();
-      if (!cleanName) return;
-      const exists = languageRows.some(
-        (row) =>
-          normalizeSkillName(String(row.name ?? "")) ===
+      if (!cleanName) {
+        return;
+      }
+
+      const exists = visibleLanguageItems.some(
+        (item) =>
+          normalizeSkillName(String(item.name ?? "")) ===
           normalizeSkillName(cleanName),
       );
-      if (exists) return;
+      if (exists) {
+        return;
+      }
 
-      const next = [
-        ...languageRows,
+      persistLanguageItems([
+        ...items,
         {
           id: `lang-${uuidv4()}`,
           name: cleanName,
-          level: "Intermediate" as Level,
+          level: "Intermediate",
         },
-      ];
-      setLanguageRows(next);
-      persistLanguageRows(next, cleanName);
+      ]);
+      publishActiveTarget("languages", "modal");
     }
 
     function handleAcceptLanguageSuggestion(name: string) {
@@ -3220,7 +3597,10 @@ export default function SectionEditor({
     );
 
     return (
-      <div className="mb-4 section-container section-container--dismissable">
+      <div
+        ref={sectionContainerRef}
+        className="mb-4 section-container section-container--dismissable"
+      >
         <button
           type="button"
           onClick={(e) => {
@@ -3250,9 +3630,9 @@ export default function SectionEditor({
                   },
                   disabled:
                     !canSuggestLanguages ||
-                    currentCvExperiences.length === 0 &&
-                    currentCvEducations.length === 0 &&
-                    currentCvSummaryText.length === 0,
+                    (currentCvExperiences.length === 0 &&
+                      currentCvEducations.length === 0 &&
+                      currentCvSummaryText.length === 0),
                 },
               ],
             })}
@@ -3260,15 +3640,16 @@ export default function SectionEditor({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                handleAddLanguageInline();
+                publishActiveTarget("languages", "modal");
+                setLanguagesModalOpen(true);
               }}
               className="dasti-icon-button cv-section-edit-trigger"
-              aria-label="Add language"
-              title="Add language"
+              aria-label="Edit languages"
+              title="Edit languages"
             >
-              <Plus size={16} strokeWidth={1.7} aria-hidden />
+              <Pencil className="w-4 h-4" strokeWidth={1.5} aria-hidden />
             </button>
-            {typeof onCollapseChange === "function" && (
+            {typeof onCollapseChange === "function" ? (
               <button
                 type="button"
                 onClick={(e) => {
@@ -3282,7 +3663,7 @@ export default function SectionEditor({
                   {collapsed ? "▶" : "▼"}
                 </span>
               </button>
-            )}
+            ) : null}
           </div>
         </div>
 
@@ -3306,136 +3687,90 @@ export default function SectionEditor({
           onDismiss={handleDismissLanguageSuggestion}
         />
 
-        {collapsed && (
-          <div className="cv-section-preview">
+        <div className={collapsed ? "cv-section-preview" : "cv-section-body cv-section-body--stack"}>
+          {visibleLanguageItems.length === 0 ? (
+            <span className="cv-preview-empty cv-preview-text cv-preview-text--muted">
+              Add your first language
+            </span>
+          ) : collapsed ? (
             <div className="flex flex-wrap gap-2">
-              {visibleLanguageItems.length === 0 ? (
-                <span className="cv-preview-empty cv-preview-text cv-preview-text--muted">
-                  Add your first language
-                </span>
-              ) : (
-                visibleLanguageItems.map((lng) => (
-                  <span
-                    key={lng.id}
-                    className="card-group inline-flex items-center gap-2 px-2.5 py-1 text-xs rounded-full [background:var(--sf2)] [color:var(--tm2)]"
-                    aria-label={`${lng.name} ${lng.level}`}
-                  >
-                    <span className="font-medium [color:var(--ti)]">
-                      {lng.name}
-                    </span>
-                    <LevelDots
-                      value={lng.level}
-                      levels={LANGUAGE_DOT_LEVELS}
-                      kind="language"
-                      readOnly={true}
-                      ariaLabel={`${lng.name} level`}
-                    />
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        try {
-                          handleRemoveLanguage(String(lng.id));
-                        } catch {
-                          /* noop */
-                        }
-                      }}
-                      className="card-delete-btn dasti-icon-button dasti-icon-button--compact ml-1"
-                      aria-label={`Remove ${lng.name || "language"}`}
-                      title="Remove language"
-                    >
-                      <X className="w-3 h-3" aria-hidden />
-                      <span className="sr-only">Remove</span>
-                    </button>
+              {visibleLanguageItems.map((language) => (
+                <span
+                  key={language.id}
+                  className="card-group inline-flex items-center gap-2 px-2.5 py-1 text-xs rounded-full [background:var(--sf2)] [color:var(--tm2)]"
+                  aria-label={`${language.name} ${language.level}`}
+                  onPointerEnter={() =>
+                    publishActiveTarget("languages", "editor-hover", String(language.id))
+                  }
+                  onPointerLeave={() =>
+                    clearHoverTarget("languages", String(language.id))
+                  }
+                >
+                  <span className="font-medium [color:var(--ti)]">
+                    {language.name}
                   </span>
-                ))
-              )}
+                  <LevelDots
+                    value={language.level}
+                    levels={LANGUAGE_DOT_LEVELS}
+                    kind="language"
+                    readOnly={true}
+                    ariaLabel={`${language.name} level`}
+                  />
+                </span>
+              ))}
             </div>
-            <RecoveryNotes
-              notes={recoveredLanguageNotes}
-              variant="compact"
-              onDismiss={() => {
-                onChange(index, stripRecoveryNoteBlocks(section) as any);
-              }}
-            />
-          </div>
-        )}
-
-        {!collapsed && (
-          <div className="px-3 pb-2">
-            {languageRows.length === 0 ? (
-              <div className="py-2 text-xs" style={{ color: "var(--tg2)" }}>
-                Click + to add your first language
-              </div>
-            ) : (
-              <div className="divide-y divide-[color:var(--color-border)]">
-                {languageRows.map((row, idx) => (
-                  <div
-                    key={row.id ?? `row-${idx}`}
-                    className="group grid items-center gap-3 py-2 min-w-0"
-                    style={{
-                      gridTemplateColumns:
-                        "minmax(0, 1fr) calc(var(--s8) + var(--s8) + var(--s2)) calc(var(--s4) + var(--s4))",
-                    }}
-                  >
-                    <div className="min-w-0">
-                      <label
-                        className="sr-only"
-                        htmlFor={`language-name-inline-${idx}`}
-                      >
-                        Language name
-                      </label>
-                      <input
-                        id={`language-name-inline-${idx}`}
-                        className="w-full min-w-0 bg-transparent border-0 text-sm font-medium focus:outline-none"
-                        style={{
-                          color: "var(--ti)",
-                          lineHeight: "var(--ls)",
-                        }}
-                        placeholder="Language name"
-                        value={row.name ?? ""}
-                        onChange={(e) =>
-                          handleNameChangeLanguage(idx, e.target.value)
-                        }
-                        onBlur={() => handleNameBlurLanguage(idx)}
-                        onKeyDown={(e) => handleNameKeyDownLanguage(e, idx)}
-                      />
+          ) : (
+            <div className="cv-entry-stack">
+              {visibleLanguageItems.map((language) => (
+                <button
+                  key={language.id}
+                  type="button"
+                  className="w-full py-3 text-left"
+                  onClick={() => {
+                    setModalInitialItemId("languages", String(language.id));
+                    publishActiveTarget("languages", "modal", String(language.id));
+                    setLanguagesModalOpen(true);
+                  }}
+                  onPointerEnter={() =>
+                    publishActiveTarget("languages", "editor-hover", String(language.id))
+                  }
+                  onPointerLeave={() =>
+                    clearHoverTarget("languages", String(language.id))
+                  }
+                >
+                  <div className="cv-entry-summary">
+                    <div className="cv-entry-summary__main">
+                      <p className="cv-entry-title cv-entry-title--truncate">
+                        {language.name}
+                      </p>
                     </div>
-                    <div className="min-w-0">
-                      <LevelDots
-                        value={row.level}
-                        levels={LANGUAGE_DOT_LEVELS}
-                        kind="language"
-                        onChange={(lvl) => handleLevelChangeLanguage(idx, lvl)}
-                        ariaLabel={`Language level for ${row.name || `row ${idx + 1}`}`}
-                      />
-                    </div>
-                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleRemoveLanguageInline(String(row.id ?? idx))
-                        }
-                        className="dasti-icon-button dasti-icon-button--compact"
-                        aria-label={`Remove ${row.name || "language"}`}
-                        title="Remove language"
-                      >
-                        <X className="w-3 h-3" aria-hidden />
-                      </button>
-                    </div>
+                    <p className="cv-entry-date">{language.level}</p>
                   </div>
-                ))}
-              </div>
-            )}
-            <RecoveryNotes
-              notes={recoveredLanguageNotes}
-              variant="compact"
-              onDismiss={() => {
-                onChange(index, stripRecoveryNoteBlocks(section) as any);
-              }}
-            />
-          </div>
-        )}
+                </button>
+              ))}
+            </div>
+          )}
+          <RecoveryNotes
+            notes={recoveredLanguageNotes}
+            variant="compact"
+            onDismiss={() => {
+              onChange(index, stripRecoveryNoteBlocks(section) as any);
+            }}
+          />
+        </div>
+
+        <LanguagesModal
+          open={isLanguagesModalOpen}
+          items={items}
+          initialItemId={modalInitialItemIds.languages}
+          onClose={() => {
+            setLanguagesModalOpen(false);
+            clearActiveTarget();
+          }}
+          onSave={(next) => {
+            persistLanguageItems(next);
+          }}
+        />
       </div>
     );
   }
@@ -3487,16 +3822,28 @@ export default function SectionEditor({
       }
     }
 
+    function openCertificationModal(targetItemId?: string) {
+      setModalInitialItemId("certifications", targetItemId);
+      publishActiveTarget("certifications", "modal", targetItemId);
+      setCertificationModalOpen(true);
+    }
+
     return (
-      <div className="mb-4 border [border-color:var(--color-border)] [border-radius:var(--radius-card)] section-container">
+      <div className="mb-4 border [border-color:var(--color-border)] [border-radius:var(--radius-card)] section-container section-container--dismissable">
+        {renderOptionalSectionDismissButton()}
         <div className="section-container-header flex items-center justify-between">
-          <h3 className="cv-section-heading">{section.title}</h3>
+          <h3
+            className="cv-section-heading cursor-pointer"
+            onClick={() => openCertificationModal()}
+          >
+            {section.title}
+          </h3>
           <div className="flex items-center gap-1">
             <button
               type="button"
               onClick={(event) => {
                 event.stopPropagation();
-                setCertificationModalOpen(true);
+                openCertificationModal();
               }}
               className="dasti-icon-button cv-section-edit-trigger"
               aria-label="Edit certifications"
@@ -3523,15 +3870,52 @@ export default function SectionEditor({
         </div>
 
         {!collapsed ? (
-          <div className="cv-section-body cv-section-body--stack">
+          <div
+            className="cv-section-body cv-section-body--stack"
+            onClick={(event) => {
+              if (event.target === event.currentTarget) {
+                openCertificationModal();
+              }
+            }}
+          >
             {visibleItems.length === 0 ? (
-              <p className="cv-preview-empty cv-preview-text cv-preview-text--muted">
-                Add certification name, issuer, dates, and credential details.
-              </p>
+              <div
+                className="cv-section-preview cursor-pointer"
+                role="button"
+                tabIndex={0}
+                aria-label="Edit certifications"
+                onClick={() => openCertificationModal()}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    openCertificationModal();
+                  }
+                }}
+              >
+                <p className="cv-preview-empty cv-preview-text cv-preview-text--muted">
+                  Add certification name, issuer, dates, and credential details.
+                </p>
+              </div>
             ) : (
               <div className="cv-entry-stack">
                 {visibleItems.map((item) => (
-                  <div key={item.id} className="py-3">
+                  <div
+                    key={item.id}
+                    className="py-3"
+                    onPointerEnter={() =>
+                      publishActiveTarget(
+                        "certifications",
+                        "editor-hover",
+                        String(item.id),
+                      )
+                    }
+                    onPointerLeave={() =>
+                      clearHoverTarget("certifications", String(item.id))
+                    }
+                    onClick={() => {
+                      openCertificationModal(String(item.id));
+                    }}
+                  >
                     <div className="cv-entry-summary">
                       <div className="cv-entry-summary__main">
                         <p className="cv-entry-title cv-entry-title--truncate">
@@ -3568,7 +3952,19 @@ export default function SectionEditor({
             )}
           </div>
         ) : (
-          <div className="cv-section-preview">
+          <div
+            className="cv-section-preview cursor-pointer"
+            role="button"
+            tabIndex={0}
+            aria-label="Edit certifications"
+            onClick={() => openCertificationModal()}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                openCertificationModal();
+              }
+            }}
+          >
             {visibleItems.length === 0 ? (
               <span className="cv-preview-empty cv-preview-text cv-preview-text--muted">
                 Add your first certification
@@ -3579,6 +3975,16 @@ export default function SectionEditor({
                   <span
                     key={item.id}
                     className="card-group inline-flex items-center gap-2 px-2.5 py-1 text-xs rounded-full [background:var(--sf2)] [color:var(--tm2)]"
+                    onPointerEnter={() =>
+                      publishActiveTarget(
+                        "certifications",
+                        "editor-hover",
+                        String(item.id),
+                      )
+                    }
+                    onPointerLeave={() =>
+                      clearHoverTarget("certifications", String(item.id))
+                    }
                   >
                     <span className="font-medium [color:var(--ti)]">
                       {item.certificationName || "Certification"}
@@ -3596,7 +4002,11 @@ export default function SectionEditor({
         <CertificationModal
           open={isCertificationModalOpen}
           items={items}
-          onClose={() => setCertificationModalOpen(false)}
+          initialItemId={modalInitialItemIds.certifications}
+          onClose={() => {
+            setCertificationModalOpen(false);
+            clearActiveTarget();
+          }}
           onSave={persistCertificationItems}
         />
       </div>
@@ -3637,16 +4047,28 @@ export default function SectionEditor({
       }
     }
 
+    function openAffiliationModal(targetItemId?: string) {
+      setModalInitialItemId("affiliations", targetItemId);
+      publishActiveTarget("affiliations", "modal", targetItemId);
+      setAffiliationModalOpen(true);
+    }
+
     return (
-      <div className="mb-4 border [border-color:var(--color-border)] [border-radius:var(--radius-card)] section-container">
+      <div className="mb-4 border [border-color:var(--color-border)] [border-radius:var(--radius-card)] section-container section-container--dismissable">
+        {renderOptionalSectionDismissButton()}
         <div className="section-container-header flex items-center justify-between">
-          <h3 className="cv-section-heading">{section.title}</h3>
+          <h3
+            className="cv-section-heading cursor-pointer"
+            onClick={() => openAffiliationModal()}
+          >
+            {section.title}
+          </h3>
           <div className="flex items-center gap-1">
             <button
               type="button"
               onClick={(event) => {
                 event.stopPropagation();
-                setAffiliationModalOpen(true);
+                openAffiliationModal();
               }}
               className="dasti-icon-button cv-section-edit-trigger"
               aria-label="Edit affiliations"
@@ -3673,15 +4095,52 @@ export default function SectionEditor({
         </div>
 
         {!collapsed ? (
-          <div className="cv-section-body cv-section-body--stack">
+          <div
+            className="cv-section-body cv-section-body--stack"
+            onClick={(event) => {
+              if (event.target === event.currentTarget) {
+                openAffiliationModal();
+              }
+            }}
+          >
             {visibleItems.length === 0 ? (
-              <p className="cv-preview-empty cv-preview-text cv-preview-text--muted">
-                Add organization, membership details, dates, and notes.
-              </p>
+              <div
+                className="cv-section-preview cursor-pointer"
+                role="button"
+                tabIndex={0}
+                aria-label="Edit affiliations"
+                onClick={() => openAffiliationModal()}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    openAffiliationModal();
+                  }
+                }}
+              >
+                <p className="cv-preview-empty cv-preview-text cv-preview-text--muted">
+                  Add organization, membership details, dates, and notes.
+                </p>
+              </div>
             ) : (
               <div className="cv-entry-stack">
                 {visibleItems.map((item) => (
-                  <div key={item.id} className="py-3">
+                  <div
+                    key={item.id}
+                    className="py-3"
+                    onPointerEnter={() =>
+                      publishActiveTarget(
+                        "affiliations",
+                        "editor-hover",
+                        String(item.id),
+                      )
+                    }
+                    onPointerLeave={() =>
+                      clearHoverTarget("affiliations", String(item.id))
+                    }
+                    onClick={() => {
+                      openAffiliationModal(String(item.id));
+                    }}
+                  >
                     <div className="cv-entry-summary">
                       <div className="cv-entry-summary__main">
                         <p className="cv-entry-title cv-entry-title--truncate">
@@ -3717,7 +4176,19 @@ export default function SectionEditor({
             )}
           </div>
         ) : (
-          <div className="cv-section-preview">
+          <div
+            className="cv-section-preview cursor-pointer"
+            role="button"
+            tabIndex={0}
+            aria-label="Edit affiliations"
+            onClick={() => openAffiliationModal()}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                openAffiliationModal();
+              }
+            }}
+          >
             {visibleItems.length === 0 ? (
               <span className="cv-preview-empty cv-preview-text cv-preview-text--muted">
                 Add your first affiliation
@@ -3728,6 +4199,16 @@ export default function SectionEditor({
                   <span
                     key={item.id}
                     className="card-group inline-flex items-center gap-2 px-2.5 py-1 text-xs rounded-full [background:var(--sf2)] [color:var(--tm2)]"
+                    onPointerEnter={() =>
+                      publishActiveTarget(
+                        "affiliations",
+                        "editor-hover",
+                        String(item.id),
+                      )
+                    }
+                    onPointerLeave={() =>
+                      clearHoverTarget("affiliations", String(item.id))
+                    }
                   >
                     <span className="font-medium [color:var(--ti)]">
                       {item.organizationName || "Affiliation"}
@@ -3745,7 +4226,11 @@ export default function SectionEditor({
         <AffiliationModal
           open={isAffiliationModalOpen}
           items={items}
-          onClose={() => setAffiliationModalOpen(false)}
+          initialItemId={modalInitialItemIds.affiliations}
+          onClose={() => {
+            setAffiliationModalOpen(false);
+            clearActiveTarget();
+          }}
           onSave={persistAffiliationItems}
         />
       </div>
@@ -3753,32 +4238,116 @@ export default function SectionEditor({
   }
 
   if (
-    sectionType === "text" ||
-    (sectionType === "projects" && !Array.isArray(structured))
+    sectionType === "text"
   ) {
+    const canonicalTextSectionType = getCanonicalSectionType(section) ?? "custom";
     const blocks = Array.isArray(section.blocks) ? section.blocks : [];
+    const isCustomTextSection = canonicalTextSectionType === "custom";
     const previewText = blocks
       .map((block) => plainTextFromBlockValue(block))
       .filter(Boolean)
-      .join(" • ")
+      .join("\n\n")
       .trim();
+    const modalInitialDoc =
+      blocks.length === 1
+        ? ensureRemirrorDoc((blocks[0] as any)?.content as any)
+        : ensureRemirrorDoc(previewText);
+    const isModalOpen = isCustomTextSection
+      ? isCustomTextModalOpen
+      : isAdditionalInformationModalOpen;
+
+    function openTextSectionModal() {
+      publishActiveTarget(canonicalTextSectionType, "modal");
+      if (isCustomTextSection) {
+        setCustomTextModalOpen(true);
+        return;
+      }
+      setAdditionalInformationModalOpen(true);
+    }
+
+    function closeTextSectionModal() {
+      if (isCustomTextSection) {
+        setCustomTextModalOpen(false);
+      } else {
+        setAdditionalInformationModalOpen(false);
+      }
+      clearActiveTarget();
+    }
+
+    function persistTextSectionDoc(nextDoc: RemirrorJSON) {
+      try {
+        const nextSection = remirrorDocToSection(
+          ensureRemirrorDoc(nextDoc as any),
+          String(section.id),
+          section.title,
+        );
+        const existingPrimaryBlock = blocks[0] as
+          | Record<string, unknown>
+          | undefined;
+        const nextPrimaryBlock = {
+          ...(nextSection.blocks?.[0] ?? {}),
+          id:
+            typeof existingPrimaryBlock?.id === "string" &&
+            existingPrimaryBlock.id.trim().length > 0
+              ? existingPrimaryBlock.id
+              : String((nextSection.blocks?.[0] as any)?.id ?? uuidv4()),
+          title: section.title,
+          type: "text" as const,
+          attributes: {},
+        };
+
+        onChange(index, {
+          ...section,
+          ...nextSection,
+          id: section.id,
+          title: section.title,
+          type: "text",
+          structuredContent: null,
+          blocks: [nextPrimaryBlock] as any,
+        } as CvSection);
+      } catch {
+        /* noop */
+      }
+    }
 
     return (
-      <div className="mb-4 border [border-color:var(--color-border)] [border-radius:var(--radius-card)] section-container">
+      <div
+        ref={sectionContainerRef}
+        className={[
+          "mb-4",
+          "border",
+          "[border-color:var(--color-border)]",
+          "[border-radius:var(--radius-card)]",
+          "section-container",
+          "section-container--dismissable",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        onPointerEnter={() =>
+          publishActiveTarget(canonicalTextSectionType, "editor-hover")
+        }
+        onPointerLeave={() => clearHoverTarget(canonicalTextSectionType)}
+      >
+        {renderOptionalSectionDismissButton()}
         <div className="section-container-header flex items-center justify-between">
-          <h3 className="cv-section-heading">{section.title}</h3>
+          <h3
+            className="cv-section-heading cursor-pointer"
+            onClick={() => openTextSectionModal()}
+          >
+            {section.title}
+          </h3>
           <div className="flex items-center gap-1">
             <button
               type="button"
               onClick={(event) => {
                 event.stopPropagation();
-                void addBlock();
+                openTextSectionModal();
               }}
               className="dasti-icon-button cv-section-edit-trigger"
-              aria-label={`Add block to ${section.title}`}
-              title={`Add block to ${section.title}`}
+              aria-label={`Edit ${section.title}`}
+              title={`Edit ${section.title}`}
             >
-              <Plus size={16} strokeWidth={1.7} aria-hidden />
+              <Pencil className="w-4 h-4" strokeWidth={1.5} aria-hidden />
             </button>
             {typeof onCollapseChange === "function" ? (
               <button
@@ -3798,31 +4367,57 @@ export default function SectionEditor({
           </div>
         </div>
 
-        {collapsed ? (
-          <div className="cv-section-preview">
-            <p className="cv-entry-body cv-entry-body--muted">
-              {previewText || "Add details to this section"}
-            </p>
-          </div>
-        ) : (
-          <div className="cv-section-body cv-section-body--stack">
-            {blocks.length === 0 ? (
-              <p className="cv-preview-empty cv-preview-text cv-preview-text--muted">
-                Add details to this section
-              </p>
-            ) : (
-              blocks.map((block) => (
-                <div key={String(block.id)} className="p-0">
-                  <BlockRenderer
-                    sectionId={String(section.id)}
-                    block={block as any}
-                    onDelete={() => handleDeleteBlock(String(block.id))}
-                  />
-                </div>
-              ))
-            )}
-          </div>
-        )}
+        <div
+          className={
+            collapsed ? "cv-section-preview" : "cv-section-body cv-section-body--stack"
+          }
+          role={isCustomTextSection ? "button" : undefined}
+          tabIndex={isCustomTextSection ? 0 : undefined}
+          aria-label={isCustomTextSection ? `Edit ${section.title}` : undefined}
+          onClick={() => openTextSectionModal()}
+          onKeyDown={(event) => {
+            if (!isCustomTextSection) {
+              return;
+            }
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              openTextSectionModal();
+            }
+          }}
+        >
+          <p
+            className={
+              previewText
+                ? "cv-entry-body"
+                : "cv-preview-empty cv-preview-text cv-preview-text--muted"
+            }
+            style={previewText ? { whiteSpace: "pre-wrap" } : undefined}
+          >
+            {previewText ||
+              (isCustomTextSection
+                ? "Add details to this custom section."
+                : "Add supporting details, references, or availability notes.")}
+          </p>
+        </div>
+
+        <TextSectionModal
+          open={isModalOpen}
+          title={section.title}
+          description={
+            isCustomTextSection
+              ? "Capture this custom section in one rich text block."
+              : "Capture extra details, references, and supporting information in one section."
+          }
+          placeholder={
+            isCustomTextSection
+              ? "Add details for this custom section."
+              : "Add supporting details, references, or availability notes."
+          }
+          initialContent={modalInitialDoc}
+          saveLabel={isCustomTextSection ? "Save" : "Save additional information"}
+          onClose={closeTextSectionModal}
+          onSave={persistTextSectionDoc}
+        />
       </div>
     );
   }
@@ -3833,6 +4428,9 @@ export default function SectionEditor({
       <div className="mb-4">
         <AchievementsBlock
           section={section as any}
+          openRequest={openRequest}
+          activeTarget={activeTarget}
+          onActiveTargetChange={onActiveTargetChange}
           onChange={(updatedSection) => {
             try {
               onChange(index, updatedSection as any);
@@ -3878,6 +4476,7 @@ export default function SectionEditor({
     }
 
     function openProfileModal() {
+      publishActiveTarget("profile", "modal");
       setProfileModalOpen(true);
     }
 
@@ -4172,18 +4771,22 @@ export default function SectionEditor({
           open={isProfileModalOpen}
           sectionId={String(section.id)}
           item={item}
+          initialItemId={modalInitialItemIds.profile}
           recoveryNotes={recoveredProfileNotes}
           onDismissRecoveryNotes={() => {
             onChange(index, stripRecoveryNoteBlocks(section) as any);
           }}
-          onClose={() => setProfileModalOpen(false)}
+          onClose={() => {
+            setProfileModalOpen(false);
+            clearActiveTarget();
+          }}
         />
       </div>
     );
   }
 
   if (
-    Array.isArray(structured) &&
+    Array.isArray(effectiveStructured) &&
     (sectionType === "experience" ||
       sectionType === "education" ||
       sectionType === "projects")
@@ -4319,7 +4922,7 @@ export default function SectionEditor({
 
     const structuredList = Array.isArray(structuredSection.structuredContent)
       ? (structuredSection.structuredContent as any[])
-      : [];
+      : (effectiveStructured as any[]);
     const guard =
       sectionType === "experience"
         ? isExperienceRenderable
@@ -4397,11 +5000,21 @@ export default function SectionEditor({
       return nextBlocks;
     }
 
-    function openStructuredModal() {
+    function openStructuredModal(itemId?: string) {
       try {
-        if (sectionType === "experience") setExperienceModalOpen(true);
-        else if (sectionType === "education") setEducationModalOpen(true);
-        else if (sectionType === "projects") setProjectsModalOpen(true);
+        if (sectionType === "experience") {
+          setModalInitialItemId("experience", itemId);
+          publishActiveTarget("experience", "modal", itemId);
+          setExperienceModalOpen(true);
+        } else if (sectionType === "education") {
+          setModalInitialItemId("education", itemId);
+          publishActiveTarget("education", "modal", itemId);
+          setEducationModalOpen(true);
+        } else if (sectionType === "projects") {
+          setModalInitialItemId("projects", itemId);
+          publishActiveTarget("projects", "modal", itemId);
+          setProjectsModalOpen(true);
+        }
       } catch {
         /* noop */
       }
@@ -4557,7 +5170,17 @@ export default function SectionEditor({
           variant === "compact" && bulletSource.length > 3;
 
         return (
-          <div key={structuredId} className="py-3">
+          <div
+            key={structuredId}
+            className="py-3"
+            onPointerEnter={() =>
+              publishActiveTarget("experience", "editor-hover", structuredId)
+            }
+            onPointerLeave={() =>
+              clearHoverTarget("experience", structuredId)
+            }
+            onClick={() => openStructuredModal(structuredId)}
+          >
             <div className="cv-entry-summary">
               <div className="cv-entry-summary__main">
                 <p className="cv-entry-title cv-entry-title--truncate">
@@ -4660,7 +5283,15 @@ export default function SectionEditor({
           variant === "compact" && description.length > 220;
 
         return (
-          <div key={structuredId} className="py-3">
+          <div
+            key={structuredId}
+            className="py-3"
+            onPointerEnter={() =>
+              publishActiveTarget("projects", "editor-hover", structuredId)
+            }
+            onPointerLeave={() => clearHoverTarget("projects", structuredId)}
+            onClick={() => openStructuredModal(structuredId)}
+          >
             <div className="cv-entry-summary">
               <div className="cv-entry-summary__main">
                 <p className="cv-entry-title cv-entry-title--truncate">{title}</p>
@@ -4732,7 +5363,15 @@ export default function SectionEditor({
         variant === "compact" && description.length > 160;
 
       return (
-        <div key={structuredId} className="py-3">
+        <div
+          key={structuredId}
+          className="py-3"
+          onPointerEnter={() =>
+            publishActiveTarget("education", "editor-hover", structuredId)
+          }
+          onPointerLeave={() => clearHoverTarget("education", structuredId)}
+          onClick={() => openStructuredModal(structuredId)}
+        >
           <div className="cv-entry-summary">
             <div className="cv-entry-summary__main">
               <p className="cv-entry-title cv-entry-title--truncate">{title}</p>
@@ -4789,7 +5428,19 @@ export default function SectionEditor({
     };
 
     return (
-      <div className="mb-4 border [border-color:var(--color-border)] [border-radius:var(--radius-card)] section-container">
+      <div
+        className={[
+          "mb-4",
+          "border",
+          "[border-color:var(--color-border)]",
+          "[border-radius:var(--radius-card)]",
+          "section-container",
+          sectionType === "projects" ? "section-container--dismissable" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      >
+        {sectionType === "projects" ? renderOptionalSectionDismissButton() : null}
         <div className="section-container-header flex items-center justify-between">
           <h3 className="cv-section-heading">{section.title}</h3>
           <div className="dasti-icon-cluster dasti-icon-cluster--tight">
@@ -5033,11 +5684,13 @@ export default function SectionEditor({
         {sectionType === "experience" ? (
           <ExperienceModal
             open={isExperienceModalOpen}
-            onClose={() => setExperienceModalOpen(false)}
+            initialItemId={modalInitialItemIds.experience}
+            onClose={() => {
+              setExperienceModalOpen(false);
+              clearActiveTarget();
+            }}
             items={
-              (Array.isArray(structuredSection.structuredContent)
-                ? (structuredSection.structuredContent as any)
-                : []) as IExperienceItem[]
+              structuredList as IExperienceItem[]
             }
             recoveryNotesByItemId={Object.fromEntries(recoveryNotesByStructuredId)}
             onDismissRecoveryNotesByItemId={(itemId) => {
@@ -5077,6 +5730,7 @@ export default function SectionEditor({
                 setStructuredPreviewOverride(updatedSection);
                 commitStructuredSection(updatedSection);
                 setExperienceModalOpen(false);
+                clearActiveTarget();
               } catch {
                 /* noop */
               }
@@ -5086,11 +5740,13 @@ export default function SectionEditor({
         {sectionType === "education" ? (
           <EducationModal
             open={isEducationModalOpen}
-            onClose={() => setEducationModalOpen(false)}
+            initialItemId={modalInitialItemIds.education}
+            onClose={() => {
+              setEducationModalOpen(false);
+              clearActiveTarget();
+            }}
             items={
-              (Array.isArray(structuredSection.structuredContent)
-                ? (structuredSection.structuredContent as any)
-                : []) as IEducationItem[]
+              structuredList as IEducationItem[]
             }
             recoveryNotesByItemId={Object.fromEntries(recoveryNotesByStructuredId)}
             onDismissRecoveryNotesByItemId={(itemId) => {
@@ -5130,6 +5786,7 @@ export default function SectionEditor({
                 setStructuredPreviewOverride(updatedSection);
                 commitStructuredSection(updatedSection);
                 setEducationModalOpen(false);
+                clearActiveTarget();
               } catch {
                 /* noop */
               }
@@ -5139,11 +5796,13 @@ export default function SectionEditor({
         {sectionType === "projects" ? (
           <ProjectsModal
             open={isProjectsModalOpen}
-            onClose={() => setProjectsModalOpen(false)}
+            initialItemId={modalInitialItemIds.projects}
+            onClose={() => {
+              setProjectsModalOpen(false);
+              clearActiveTarget();
+            }}
             items={
-              (Array.isArray(structuredSection.structuredContent)
-                ? (structuredSection.structuredContent as any)
-                : []) as IProjectItem[]
+              structuredList as IProjectItem[]
             }
             onSave={(next) => {
               try {
@@ -5178,6 +5837,7 @@ export default function SectionEditor({
                 setStructuredPreviewOverride(updatedSection);
                 commitStructuredSection(updatedSection);
                 setProjectsModalOpen(false);
+                clearActiveTarget();
               } catch {
                 /* noop */
               }
