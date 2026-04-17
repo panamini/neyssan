@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const structuredActionMock = vi.fn();
 const probeMistralMock = vi.fn();
+const convexClientActionMock = vi.fn();
 
 vi.mock("../../../convex/_generated/api", () => ({
   api: {
@@ -30,14 +31,84 @@ vi.mock("convex/react", () => ({
   },
 }));
 
+vi.mock("../../lib/convex-client", () => ({
+  convexClient: {
+    action: (ref: unknown, args: unknown) => convexClientActionMock(ref, args),
+  },
+}));
+
 describe("useStructuredMistralImport", () => {
   beforeEach(() => {
     structuredActionMock.mockReset();
     probeMistralMock.mockReset();
+    convexClientActionMock.mockReset();
     probeMistralMock.mockResolvedValue({
       ready: { status: 200 },
       parse: { status: 200 },
     });
+  });
+
+  it("keeps the direct client import path on structuredUpload without an extra probe round-trip", async () => {
+    convexClientActionMock.mockImplementation(async (ref) => {
+      if (ref === "structuredUpload") {
+        return {
+          normalized: {
+            summary: "Scanned import",
+          },
+          strict: null,
+          diagnostics: {
+            ocr_request_path: "/mistral-ocr/parse",
+            ocr_engine: "mistral",
+            mistral_model: "mistral-ocr-latest",
+            mistral_fallback: false,
+            mistral_runtime: "mistral",
+          },
+          authoritativeResume: {
+            source: "mistral_v3",
+            trusted: true,
+            fallbackToLegacy: false,
+            normalized: {
+              profile: {
+                name: "Shared Candidate",
+              },
+              summary: {
+                text: "Scanned import",
+              },
+            },
+          },
+        };
+      }
+      if (ref === "probeMistral") {
+        throw new Error("direct import path should not probe first");
+      }
+      throw new Error(`Unexpected action ref: ${String(ref)}`);
+    });
+
+    const { importStructuredMistralFileViaClient } = await import(
+      "../useStructuredMistralImport"
+    );
+
+    const file = new File(["scan"], "scan.pdf", {
+      type: "application/pdf",
+    });
+    Object.defineProperty(file, "arrayBuffer", {
+      configurable: true,
+      value: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
+    });
+
+    const outcome = await importStructuredMistralFileViaClient(file);
+
+    expect(outcome).toMatchObject({
+      status: "success",
+      sections: expect.arrayContaining([
+        expect.objectContaining({ type: "profile" }),
+      ]),
+    });
+    expect(convexClientActionMock).toHaveBeenCalledTimes(1);
+    expect(convexClientActionMock).toHaveBeenCalledWith(
+      "structuredUpload",
+      expect.any(Object),
+    );
   });
 
   it("re-probes and retries transient network failures before returning trusted sections", async () => {

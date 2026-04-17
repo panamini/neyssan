@@ -62,7 +62,9 @@ export function StructuredUploadButton({
   const requestIdRef = useRef(0);
   const scopeKeyRef = useRef<string>(contextKey ?? "");
   const pickerScopeKeyRef = useRef<string | null>(null);
-  const { enableMistral, importFile } = useStructuredMistralImport();
+  const { enableMistral, importFile } = useStructuredMistralImport({
+    probeOnMount: false,
+  });
   const [isDropTargeted, setIsDropTargeted] = useState(false);
 
   const mistralAvailable = enableMistral;
