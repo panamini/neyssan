@@ -162,6 +162,18 @@ function buildPreviewAppearanceTheme(
   const accentPressed = mixHex(accent, "#0f0f0f", 0.22);
   const accentSoft = mixHex(PREVIEW_NEUTRAL_THEME.surfaceMuted, accent, 0.06);
   const accentMuted = mixHex(PREVIEW_NEUTRAL_THEME.surface, accent, 0.18);
+  const interactionRing = withAlpha(
+    mixHex(PREVIEW_NEUTRAL_THEME.text, accent, 0.3),
+    0.28,
+  );
+  const interactionFill = withAlpha(
+    mixHex(PREVIEW_NEUTRAL_THEME.surface, accent, 0.08),
+    0.88,
+  );
+  const interactionShadow = `inset 0 0 0 0.18mm ${withAlpha(
+    mixHex(PREVIEW_NEUTRAL_THEME.text, accent, 0.22),
+    0.08,
+  )}, 0 1.8mm 4.8mm ${withAlpha(mixHex(accent, "#0f0f0f", 0.34), 0.08)}`;
   const canvas = mixHex(PREVIEW_NEUTRAL_THEME.canvas, accent, 0.012);
   const surfaceMuted = mixHex(
     PREVIEW_NEUTRAL_THEME.surfaceMuted,
@@ -232,6 +244,9 @@ function buildPreviewAppearanceTheme(
         accentPressed,
         accentSoft,
         accentMuted,
+        interactionRing,
+        interactionFill,
+        interactionShadow,
       },
       export: {},
     },
@@ -547,6 +562,12 @@ export function serializeVerbatiThemeVars(
     "--color-accent-hover": appearance.decor.preview?.accentHover,
     "--color-accent-pressed": appearance.decor.preview?.accentPressed,
     "--color-accent-soft": appearance.decor.preview?.accentSoft,
+    "--resume-preview-interaction-ring":
+      appearance.decor.preview?.interactionRing,
+    "--resume-preview-interaction-fill":
+      appearance.decor.preview?.interactionFill,
+    "--resume-preview-interaction-shadow":
+      appearance.decor.preview?.interactionShadow,
     "--paper": appearance.theme.paper,
     "--proposal-document-paper": appearance.theme.paper,
     "--proposal-document-ink": appearance.theme.proposalDocumentInk,

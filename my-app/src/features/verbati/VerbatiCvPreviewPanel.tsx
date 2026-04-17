@@ -19,6 +19,10 @@ import {
   hasRenderableResumeData,
   mapCvDocumentToResumeData,
 } from "./cvDocumentToResumeData";
+import type {
+  ResumeActiveTarget,
+  ResumeLinkIntent,
+} from "./resumeLinking";
 import type { VerbatiPreviewSource } from "./types";
 
 type VerbatiCvPreviewPanelProps = {
@@ -30,8 +34,8 @@ type VerbatiCvPreviewPanelProps = {
   onStylePresetChange?: React.Dispatch<
     React.SetStateAction<ReturnType<typeof getVerbatiStyleFromCv>>
   >;
-  /** When provided, the preview panel becomes interactive: clicking a resume section fires this callback. */
-  onSectionClick?: (sectionType: string) => void;
+  onLinkIntent?: (intent: ResumeLinkIntent) => void;
+  activeTarget?: ResumeActiveTarget | null;
 };
 
 export function VerbatiCvPreviewPanel({
@@ -41,7 +45,8 @@ export function VerbatiCvPreviewPanel({
   railTrailingControl = null,
   stylePreset: controlledStylePreset,
   onStylePresetChange,
-  onSectionClick,
+  onLinkIntent,
+  activeTarget = null,
 }: VerbatiCvPreviewPanelProps): JSX.Element {
   const { currentCv, importCv } = useCvLibrary();
   const persistedStylePreset = React.useMemo(
@@ -52,10 +57,11 @@ export function VerbatiCvPreviewPanel({
     () => (currentCv ? mapCvDocumentToResumeData(currentCv) : null),
     [currentCv],
   );
+  const hasCurrentCv = Boolean(currentCv);
   const hasActiveResume = hasRenderableResumeData(activeData);
   const [previewSource, setPreviewSource] =
     React.useState<VerbatiPreviewSource>(() =>
-      hasActiveResume ? "active" : "sample",
+      hasCurrentCv ? "active" : "sample",
     );
   const [uncontrolledStylePreset, setUncontrolledStylePreset] =
     React.useState(persistedStylePreset);
@@ -65,10 +71,55 @@ export function VerbatiCvPreviewPanel({
     currentCv?.id ? String(currentCv.id) : null,
   );
   const previewData =
-    previewSource === "active" && hasActiveResume && activeData
+    previewSource === "active" && hasCurrentCv && activeData
       ? activeData
       : resumeMock;
-  const isActivePreview = previewSource === "active" && hasActiveResume;
+  const isActivePreview =
+    previewSource === "active" && hasCurrentCv && Boolean(activeData);
+  const interactiveLinkHandler = isActivePreview ? onLinkIntent : undefined;
+  const interactiveActiveTarget = isActivePreview ? activeTarget : null;
+  const handleRemoveSection = React.useCallback(
+    (section: {
+      sectionId: string;
+      sectionType: string;
+      sectionTitle?: string;
+      previewSectionType?: string;
+    }) => {
+      const normalizedSectionId = String(section.sectionId ?? "").trim();
+      if (!currentCv || !normalizedSectionId) {
+        return;
+      }
+
+      const currentSections = Array.isArray(currentCv.sections)
+        ? currentCv.sections
+        : [];
+      const nextSections = currentSections.filter(
+        (candidate) => String(candidate.id ?? "") !== normalizedSectionId,
+      );
+
+      if (
+        nextSections.length === currentSections.length ||
+        nextSections.length === 0
+      ) {
+        return;
+      }
+
+      void importCv({
+        ...currentCv,
+        metadata: {
+          ...(currentCv.metadata ?? {}),
+          updatedAt: new Date().toISOString(),
+        },
+        sections: nextSections,
+      }).catch((error) => {
+        console.error(
+          "[VerbatiCvPreviewPanel] Failed to remove preview-linked section",
+          error,
+        );
+      });
+    },
+    [currentCv, importCv],
+  );
   const activeBundleId = React.useMemo(() => {
     const exactBundleId = resolveVerbatiStyleBundleId({
       stylePreset,
@@ -117,14 +168,14 @@ export function VerbatiCvPreviewPanel({
 
     if (lastResolvedCvIdRef.current !== nextCvId) {
       lastResolvedCvIdRef.current = nextCvId;
-      setPreviewSource(hasActiveResume ? "active" : "sample");
+      setPreviewSource(hasCurrentCv ? "active" : "sample");
       return;
     }
 
-    if (!hasActiveResume && previewSource === "active") {
+    if (!hasCurrentCv && previewSource === "active") {
       setPreviewSource("sample");
     }
-  }, [currentCv?.id, hasActiveResume, previewSource]);
+  }, [currentCv?.id, hasCurrentCv, previewSource]);
 
   React.useEffect(() => {
     if (!currentCv || stylesEqual(stylePreset, persistedStylePreset)) {
@@ -251,18 +302,18 @@ export function VerbatiCvPreviewPanel({
           aria-label={
             isActivePreview
               ? "Switch to sample preview"
-              : hasActiveResume
+              : hasCurrentCv
                 ? "Switch to active CV preview"
                 : "Active CV preview unavailable"
           }
           title={
             isActivePreview
               ? "Preview the sample CV"
-              : hasActiveResume
+              : hasCurrentCv
                 ? "Preview the active CV"
                 : "Active CV preview unavailable"
           }
-          disabled={!isActivePreview && !hasActiveResume}
+          disabled={!isActivePreview && !hasCurrentCv}
         >
           <span
             className="styleforge-active-cv-control__icon styleforge-active-cv-control__icon--base"
@@ -282,7 +333,7 @@ export function VerbatiCvPreviewPanel({
           aria-label={
             isActivePreview
               ? "Previewing active CV"
-              : hasActiveResume
+              : hasCurrentCv
                 ? "Previewing sample CV"
                 : "Previewing sample CV because the active CV is unavailable"
           }
@@ -327,6 +378,9 @@ export function VerbatiCvPreviewPanel({
             stylePreset={stylePreset}
             hostMode="workspace"
             railLeadControl={railLeadControl}
+            activeTarget={interactiveActiveTarget}
+            onLinkIntent={interactiveLinkHandler}
+            onRemoveSection={isActivePreview ? handleRemoveSection : undefined}
             railStartAddon={
               <>
                 {workspacePreviewSourceControl}
@@ -392,7 +446,9 @@ export function VerbatiCvPreviewPanel({
             data={previewData}
             stylePreset={stylePreset}
             hostMode="panel"
-            onSectionClick={onSectionClick}
+            activeTarget={interactiveActiveTarget}
+            onLinkIntent={interactiveLinkHandler}
+            onRemoveSection={isActivePreview ? handleRemoveSection : undefined}
           />
         </div>
       )}

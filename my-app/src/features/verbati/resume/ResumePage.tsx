@@ -1,8 +1,17 @@
 import React from "react";
+import { X } from "@/lib/icons";
 import "./resume-preview.css";
 
 import { resumeLayoutSpec } from "./resume-layout.spec";
 import type { ResumeData, ResumeLayoutVariantId } from "./resume.types";
+import {
+  matchesResumeActiveTarget,
+  resolvePreviewSectionType,
+  resolvePreviewSurfaceType,
+  type ResumeActiveTarget,
+  type ResumeCanonicalSectionType,
+  type ResumePreviewSectionType,
+} from "../resumeLinking";
 import { VOLK_REGISTER_GRID } from "../volkGrid";
 import type { DocumentStageLayout } from "../../../hooks/use-document-stage-layout";
 import {
@@ -25,8 +34,17 @@ type ResumePageProps = {
   stylePreset?: VerbatiStylePreset | null;
   fitToken?: string;
   onSelectVariantId?: ((variantId: ResumeLayoutVariantId) => void) | undefined;
+  activeTarget?: ResumeActiveTarget | null;
   userZoom?: number;
   stageLayout?: DocumentStageLayout;
+  onRemoveSection?:
+    | ((section: {
+        sectionId: string;
+        sectionType: ResumeCanonicalSectionType;
+        sectionTitle?: string;
+        previewSectionType?: ResumePreviewSectionType;
+      }) => void)
+    | undefined;
 };
 
 type ResumeVariant =
@@ -35,6 +53,7 @@ type ResumeVariant =
 type ResumeLabeledValue = {
   label: string;
   value: string;
+  itemId?: string;
 };
 
 type ContactItemView = ResumeData["contact"][number] & {
@@ -51,6 +70,30 @@ const ResumeStageLayoutContext =
 const ResumeStylePresetContext = React.createContext<VerbatiStylePreset | null>(
   null,
 );
+const ResumeRemoveSectionContext = React.createContext<
+  | ((
+      section: {
+        sectionId: string;
+        sectionType: ResumeCanonicalSectionType;
+        sectionTitle?: string;
+        previewSectionType?: ResumePreviewSectionType;
+      },
+    ) => void)
+  | null
+>(null);
+
+const REMOVABLE_PREVIEW_SECTION_TYPES = new Set<ResumeCanonicalSectionType>([
+  "achievements",
+  "languages",
+  "projects",
+  "certifications",
+  "affiliations",
+  "hobbies",
+  "additional_information",
+  "custom",
+]);
+
+type ProjectPreviewField = "name" | "meta" | "description";
 
 type ComparisonCardCopy = {
   typography: string;
@@ -199,25 +242,281 @@ function normalizeSectionTitleToType(title: string): string {
   return lower.replace(/\s+/g, "-");
 }
 
+function getPrimarySectionId(
+  data: ResumeData,
+  sectionType: ResumeCanonicalSectionType,
+): string | undefined {
+  if (sectionType === "profile") return data.profileSectionId;
+  if (sectionType === "summary") return data.summarySectionId;
+  return data.sectionIdsByType?.[sectionType]?.[0];
+}
+
+function getSectionOrder(value: { sectionOrder?: number } | undefined): number {
+  return typeof value?.sectionOrder === "number"
+    ? value.sectionOrder
+    : Number.MAX_SAFE_INTEGER;
+}
+
+function normalizeIdentityLine(value: string | undefined | null): string {
+  return String(value ?? "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+}
+
+function getRenderableIdentitySubtitle(
+  name: string | undefined | null,
+  title: string | undefined | null,
+): string | null {
+  const trimmedTitle = String(title ?? "").trim();
+  if (!trimmedTitle) {
+    return null;
+  }
+
+  return normalizeIdentityLine(name) === normalizeIdentityLine(trimmedTitle)
+    ? null
+    : trimmedTitle;
+}
+
+type PreviewRegionProps = React.HTMLAttributes<HTMLElement> & {
+  as?: keyof JSX.IntrinsicElements;
+  sectionType: ResumePreviewSectionType;
+  sectionId?: string;
+  sectionTitle?: string;
+  itemId?: string;
+  activeTarget?: ResumeActiveTarget | null;
+  surface: "section" | "item";
+};
+
+function buildPreviewRegionAttrs(args: {
+  sectionType: ResumePreviewSectionType;
+  sectionId?: string;
+  sectionTitle?: string;
+  itemId?: string;
+  activeTarget?: ResumeActiveTarget | null;
+  surface: "section" | "item";
+}) {
+  const canonicalSectionType = resolvePreviewSectionType(args.sectionType);
+  const previewSectionType = resolvePreviewSurfaceType(args.sectionType);
+  const isActive = canonicalSectionType
+    ? matchesResumeActiveTarget({
+        target: args.activeTarget,
+        sectionType: canonicalSectionType,
+        previewSectionType,
+        sectionId: args.sectionId,
+        itemId: args.itemId,
+      })
+    : false;
+
+  return {
+    "data-no-pan": "true",
+    "data-preview-section": args.sectionType,
+    "data-preview-section-id": args.sectionId,
+    "data-preview-section-title": args.sectionTitle,
+    "data-preview-item-id": args.itemId,
+    "data-preview-surface": args.surface,
+    "data-preview-active": isActive ? "true" : undefined,
+  };
+}
+
+function PreviewSectionRegion({
+  as = "section",
+  sectionType,
+  sectionId,
+  sectionTitle,
+  activeTarget,
+  surface,
+  ...props
+}: PreviewRegionProps) {
+  const Component = as as keyof JSX.IntrinsicElements;
+
+  return (
+    <Component
+      {...props}
+      {...buildPreviewRegionAttrs({
+        sectionType,
+        sectionId,
+        sectionTitle,
+        activeTarget,
+        surface,
+      })}
+    />
+  );
+}
+
+function PreviewItemRegion({
+  as = "div",
+  sectionType,
+  sectionId,
+  sectionTitle,
+  itemId,
+  activeTarget,
+  surface,
+  ...props
+}: PreviewRegionProps) {
+  const Component = as as keyof JSX.IntrinsicElements;
+
+  return (
+    <Component
+      {...props}
+      {...buildPreviewRegionAttrs({
+        sectionType,
+        sectionId,
+        sectionTitle,
+        itemId,
+        activeTarget,
+        surface,
+      })}
+    />
+  );
+}
+
+function buildProjectPreviewFieldId(
+  itemId: string,
+  field: ProjectPreviewField,
+): string {
+  return `${itemId}:${field}`;
+}
+
+function resolvePreviewSectionRemoval(section: {
+  sectionType?: ResumePreviewSectionType;
+  sectionId?: string;
+  sectionTitle?: string;
+}): {
+  sectionId: string;
+  sectionType: ResumeCanonicalSectionType;
+  sectionTitle?: string;
+  previewSectionType?: ResumePreviewSectionType;
+} | null {
+  const sectionId = String(section.sectionId ?? "").trim();
+  const previewSectionType = section.sectionType;
+  const canonicalSectionType = resolvePreviewSectionType(previewSectionType);
+
+  if (
+    !sectionId ||
+    !canonicalSectionType ||
+    !REMOVABLE_PREVIEW_SECTION_TYPES.has(canonicalSectionType)
+  ) {
+    return null;
+  }
+
+  return {
+    sectionId,
+    sectionType: canonicalSectionType,
+    sectionTitle: section.sectionTitle,
+    previewSectionType,
+  };
+}
+
+function PreviewSectionDeleteButton({
+  sectionType,
+  sectionId,
+  sectionTitle,
+}: {
+  sectionType?: ResumePreviewSectionType;
+  sectionId?: string;
+  sectionTitle?: string;
+}) {
+  const onRemoveSection = React.useContext(ResumeRemoveSectionContext);
+  const removalTarget = React.useMemo(
+    () =>
+      resolvePreviewSectionRemoval({
+        sectionType,
+        sectionId,
+        sectionTitle,
+      }),
+    [sectionId, sectionTitle, sectionType],
+  );
+
+  if (!onRemoveSection || !removalTarget) {
+    return null;
+  }
+
+  return (
+    <button
+      type="button"
+      aria-label={`Delete ${sectionTitle ?? "section"}`}
+      title={`Delete ${sectionTitle ?? "section"}`}
+      data-no-pan="true"
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onRemoveSection(removalTarget);
+      }}
+      onPointerDown={(event) => {
+        event.stopPropagation();
+      }}
+      style={{
+        marginInlineStart: "auto",
+        inlineSize: "4.2mm",
+        blockSize: "4.2mm",
+        minInlineSize: "4.2mm",
+        minBlockSize: "4.2mm",
+        padding: 0,
+        borderRadius: "999px",
+        border:
+          "0.2mm solid color-mix(in srgb, var(--color-text) 18%, transparent)",
+        background:
+          "color-mix(in srgb, var(--resume-preview-page-background, var(--paper)) 86%, transparent)",
+        color: "color-mix(in srgb, var(--color-text) 64%, transparent)",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        cursor: "pointer",
+        flex: "0 0 auto",
+      }}
+    >
+      <X size={10} strokeWidth={2.1} aria-hidden="true" />
+    </button>
+  );
+}
+
 function SidebarSection({
   title,
   children,
   variant,
+  sectionType,
+  sectionId,
+  activeTarget,
 }: {
   title: string;
   children: React.ReactNode;
   variant: ResumeVariant;
+  sectionType?: ResumePreviewSectionType;
+  sectionId?: string;
+  activeTarget?: ResumeActiveTarget | null;
 }) {
   return (
-    <section
+    <PreviewSectionRegion
+      as="section"
       className={`sidebar-section sidebar-section--${variant.id}`}
-      data-preview-section={normalizeSectionTitleToType(title)}
+      sectionType={sectionType ?? (normalizeSectionTitleToType(title) as ResumePreviewSectionType)}
+      sectionId={sectionId}
+      sectionTitle={title}
+      activeTarget={activeTarget}
+      surface="section"
     >
-      <h3 className={`sidebar-title sidebar-title--${variant.id}`}>{title}</h3>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "1.6mm",
+        }}
+      >
+        <h3 className={`sidebar-title sidebar-title--${variant.id}`}>{title}</h3>
+        <PreviewSectionDeleteButton
+          sectionType={
+            sectionType ??
+            (normalizeSectionTitleToType(title) as ResumePreviewSectionType)
+          }
+          sectionId={sectionId}
+          sectionTitle={title}
+        />
+      </div>
       <div className={`sidebar-content sidebar-content--${variant.id}`}>
         {children}
       </div>
-    </section>
+    </PreviewSectionRegion>
   );
 }
 
@@ -225,31 +524,56 @@ function MainSection({
   title,
   children,
   variant,
+  sectionType,
+  sectionId,
+  activeTarget,
 }: {
   title: string;
   children: React.ReactNode;
   variant: ResumeVariant;
+  sectionType?: ResumePreviewSectionType;
+  sectionId?: string;
+  activeTarget?: ResumeActiveTarget | null;
 }) {
   return (
-    <section
+    <PreviewSectionRegion
+      as="section"
       className={`main-section main-section--${variant.id}`}
-      data-preview-section={normalizeSectionTitleToType(title)}
+      sectionType={sectionType ?? (normalizeSectionTitleToType(title) as ResumePreviewSectionType)}
+      sectionId={sectionId}
+      sectionTitle={title}
+      activeTarget={activeTarget}
+      surface="section"
     >
       <div className={`main-heading-row main-heading-row--${variant.id}`}>
         <h2 className={`main-heading main-heading--${variant.id}`}>{title}</h2>
         <div className={`main-heading-rule main-heading-rule--${variant.id}`} />
+        <PreviewSectionDeleteButton
+          sectionType={
+            sectionType ??
+            (normalizeSectionTitleToType(title) as ResumePreviewSectionType)
+          }
+          sectionId={sectionId}
+          sectionTitle={title}
+        />
       </div>
       {children}
-    </section>
+    </PreviewSectionRegion>
   );
 }
 
 function HeaderMeta({
   items,
   variant,
+  sectionType = "notes",
+  sectionId,
+  activeTarget,
 }: {
   items: ResumeData["metadata"];
   variant: ResumeVariant;
+  sectionType?: ResumePreviewSectionType;
+  sectionId?: string;
+  activeTarget?: ResumeActiveTarget | null;
 }) {
   const visibleItems =
     variant.id === "robial"
@@ -257,17 +581,33 @@ function HeaderMeta({
       : items;
 
   return (
-    <dl
+    <PreviewSectionRegion
+      as="dl"
       className={`meta-grid meta-grid--${variant.id}`}
       aria-label="Resume metadata"
+      sectionType={sectionType}
+      sectionId={sectionId ?? visibleItems[0]?.sectionId}
+      sectionTitle="Metadata"
+      activeTarget={activeTarget}
+      surface="section"
     >
       {visibleItems.map((item) => (
-        <div key={item.label} className="meta-item">
+        <PreviewItemRegion
+          as="div"
+          key={`${item.label}-${item.value}`}
+          className="meta-item"
+          sectionType={sectionType}
+          sectionId={item.sectionId ?? sectionId ?? visibleItems[0]?.sectionId}
+          sectionTitle="Metadata"
+          itemId={item.itemId}
+          activeTarget={activeTarget}
+          surface="item"
+        >
           <dt>{item.label}</dt>
           <dd>{item.value}</dd>
-        </div>
+        </PreviewItemRegion>
       ))}
-    </dl>
+    </PreviewSectionRegion>
   );
 }
 
@@ -295,6 +635,16 @@ function findLabeledValue(
   return value || undefined;
 }
 
+function findLabeledItem<T extends ResumeLabeledValue>(
+  items: T[],
+  labels: string[],
+): T | undefined {
+  const normalizedLabels = labels.map((label) => label.toLowerCase());
+  return items.find((item) =>
+    normalizedLabels.includes(item.label.toLowerCase()),
+  );
+}
+
 function uniqueRows(
   rows: Array<ResumeLabeledValue | null>,
 ): ResumeLabeledValue[] {
@@ -309,10 +659,62 @@ function uniqueRows(
     const key = `${label.toLowerCase()}::${value.toLowerCase()}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    result.push({ label, value });
+    result.push({ ...row, label, value });
   }
 
   return result;
+}
+
+function normalizePreviewComparableValue(value: string): string {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function buildSwissHeaderContact(data: ResumeData): ResumeLabeledValue[] {
+  const mergedMeta = [...data.metadata, ...data.contact];
+  const email =
+    findLabeledItem(data.contact, ["email"]) ??
+    findLabeledItem(mergedMeta, ["email"]);
+  const phone =
+    findLabeledItem(data.contact, ["phone"]) ??
+    findLabeledItem(mergedMeta, ["phone"]);
+  const linkedin =
+    findLabeledItem(data.contact, ["linkedin"]) ??
+    findLabeledItem(mergedMeta, ["linkedin"]);
+  const site =
+    findLabeledItem(data.contact, ["web", "portfolio", "site"]) ??
+    findLabeledItem(mergedMeta, ["web", "portfolio", "site"]);
+
+  return uniqueRows([email, phone, linkedin, site]);
+}
+
+function buildSwissHeaderNotes(
+  data: ResumeData,
+  topContact: ResumeLabeledValue[],
+): ResumeLabeledValue[] {
+  const topContactItemIds = new Set(
+    topContact
+      .map((item) => normalizePreviewComparableValue(item.itemId ?? ""))
+      .filter(Boolean),
+  );
+  const topContactValues = new Set(
+    topContact
+      .map((item) => normalizePreviewComparableValue(item.value))
+      .filter(Boolean),
+  );
+
+  return uniqueRows(
+    data.metadata.filter((item) => {
+      const itemId = normalizePreviewComparableValue(item.itemId ?? "");
+      const value = normalizePreviewComparableValue(item.value);
+      if (itemId && topContactItemIds.has(itemId)) {
+        return false;
+      }
+      if (value && topContactValues.has(value)) {
+        return false;
+      }
+      return true;
+    }),
+  ).slice(0, 3);
 }
 
 function buildVolkRegisterMetaItems(data: ResumeData): ResumeLabeledValue[] {
@@ -716,6 +1118,7 @@ function QuirePage({
     email ? { label: "email", value: email } : null,
     web ? { label: "web", value: web } : null,
   ]);
+  const renderableTitle = getRenderableIdentitySubtitle(data.name, data.title);
 
   return (
     <PreviewFrame
@@ -791,19 +1194,21 @@ function QuirePage({
               >
                 {data.name}
               </h1>
-              <p
-                style={{
-                  margin: "calc(var(--header-title-margin-top) + 1.3mm) 0 0",
-                  fontSize: "calc(var(--text-body-size) - 0.55mm)",
-                  lineHeight: "calc(var(--text-body-line) - 0.35)",
-                  fontWeight: 600,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.2em",
-                  color: QUIRE_SIDEBAR_ACCENT,
-                }}
-              >
-                {data.title}
-              </p>
+              {renderableTitle ? (
+                <p
+                  style={{
+                    margin: "calc(var(--header-title-margin-top) + 1.3mm) 0 0",
+                    fontSize: "calc(var(--text-body-size) - 0.55mm)",
+                    lineHeight: "calc(var(--text-body-line) - 0.35)",
+                    fontWeight: 600,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.2em",
+                    color: QUIRE_SIDEBAR_ACCENT,
+                  }}
+                >
+                  {renderableTitle}
+                </p>
+              ) : null}
             </div>
 
             {/* Contact right-aligned on light */}
@@ -820,8 +1225,9 @@ function QuirePage({
               }}
             >
               {headerContact.map((item) => (
-                <p
-                  key={item.label}
+                <PreviewItemRegion
+                  as="p"
+                  key={`${item.label}-${item.value}`}
                   style={{
                     margin: 0,
                     fontSize: "calc(var(--text-body-sm-size) - 0.33mm)",
@@ -833,9 +1239,15 @@ function QuirePage({
                     whiteSpace: "nowrap",
                     maxWidth: "100%",
                   }}
+                  sectionType="contact"
+                  sectionId={data.profileSectionId}
+                  sectionTitle="Contact"
+                  itemId={item.itemId}
+                  activeTarget={activeTarget}
+                  surface="item"
                 >
                   {item.value}
-                </p>
+                </PreviewItemRegion>
               ))}
               {data.summary && (
                 <p
@@ -1213,6 +1625,7 @@ function ClassicResumePage({
   compactComparison,
   onActivateComparison,
   fitToken,
+  activeTarget,
 }: {
   variant: ResumeVariant;
   data: ResumeData;
@@ -1220,6 +1633,7 @@ function ClassicResumePage({
   compactComparison?: boolean;
   onActivateComparison?: (() => void) | undefined;
   fitToken?: string;
+  activeTarget?: ResumeActiveTarget | null;
 }) {
   const pageVars = buildPageVars(
     variant,
@@ -1230,6 +1644,39 @@ function ClassicResumePage({
     variant.id === "robial"
       ? getRobialContactItems(data.contact)
       : data.contact.map((item) => ({ ...item }));
+  const sidebarExtras = [
+    data.hobbyItems.length > 0
+      ? {
+          key: "hobbies",
+          order: getSectionOrder(data.hobbyItems[0]),
+        }
+      : null,
+    data.certifications.length > 0
+      ? {
+          key: "certifications",
+          order: getSectionOrder(data.certifications[0]),
+        }
+      : null,
+    data.affiliations.length > 0
+      ? {
+          key: "affiliations",
+          order: getSectionOrder(data.affiliations[0]),
+        }
+      : null,
+  ]
+    .filter(
+      (
+        value,
+      ): value is {
+        key: "hobbies" | "certifications" | "affiliations";
+        order: number;
+      } => Boolean(value),
+    )
+    .sort((left, right) => left.order - right.order);
+  const orderedTextSections = [...data.textSections].sort(
+    (left, right) => left.sectionOrder - right.sectionOrder,
+  );
+  const renderableTitle = getRenderableIdentitySubtitle(data.name, data.title);
 
   return (
     <PreviewFrame
@@ -1250,23 +1697,52 @@ function ClassicResumePage({
       >
         <ResumeFontDebugInheritProbe />
         <div ref={innerRef} className="resume-inner">
-          <header className="resume-header" data-preview-section="profile">
+          <PreviewSectionRegion
+            as="header"
+            className="resume-header"
+            sectionType="profile"
+            sectionId={data.profileSectionId}
+            sectionTitle="Profile"
+            activeTarget={activeTarget}
+            surface="section"
+          >
             <div className="header-copy">
               <p className="eyebrow">Résumé</p>
               <h1 className="name" data-font-probe="heading">
                 {data.name}
               </h1>
-              <p className="title">{data.title}</p>
-              <p className="summary" data-font-probe="body">
+              {renderableTitle ? <p className="title">{renderableTitle}</p> : null}
+              <PreviewSectionRegion
+                as="p"
+                className="summary"
+                data-font-probe="body"
+                sectionType="summary"
+                sectionId={data.summarySectionId}
+                sectionTitle="Summary"
+                activeTarget={activeTarget}
+                surface="section"
+              >
                 {data.summary}
-              </p>
+              </PreviewSectionRegion>
             </div>
-            <HeaderMeta items={data.metadata} variant={variant} />
-          </header>
+            <HeaderMeta
+              items={data.metadata}
+              variant={variant}
+              sectionType="notes"
+              sectionId={data.profileSectionId}
+              activeTarget={activeTarget}
+            />
+          </PreviewSectionRegion>
 
           <div className="resume-grid">
             <aside className="resume-sidebar">
-              <SidebarSection title="Contact" variant={variant}>
+              <SidebarSection
+                title="Contact"
+                variant={variant}
+                sectionType="contact"
+                sectionId={data.profileSectionId}
+                activeTarget={activeTarget}
+              >
                 <ul
                   className={`compact-list ${
                     variant.id === "robial"
@@ -1275,50 +1751,209 @@ function ClassicResumePage({
                   }`}
                 >
                   {contactItems.map((item) => (
-                    <li
-                      key={item.label}
+                    <PreviewItemRegion
+                      as="li"
+                      key={`${item.label}-${item.value}`}
                       className={
                         item.compact ? "compact-list-item--compact" : ""
                       }
+                      sectionType="contact"
+                      sectionId={item.sectionId}
+                      sectionTitle="Contact"
+                      itemId={item.itemId}
+                      activeTarget={activeTarget}
+                      surface="item"
                     >
                       {variant.id === "robial" ? null : (
                         <span className="label">{item.label}</span>
                       )}
                       <span className="value">{item.value}</span>
-                    </li>
+                    </PreviewItemRegion>
                   ))}
                 </ul>
               </SidebarSection>
 
-              <SidebarSection title="Skills" variant={variant}>
+              <SidebarSection
+                title="Skills"
+                variant={variant}
+                sectionType="skills"
+                sectionId={getPrimarySectionId(data, "skills")}
+                activeTarget={activeTarget}
+              >
                 <ul className="skills-list">
-                  {data.skills.map((skill) => (
-                    <li key={skill}>{skill}</li>
+                  {(data.skillItems.length > 0
+                    ? data.skillItems
+                    : data.skills.map((skill, index) => ({
+                        id: `skills-fallback-${index}`,
+                        name: skill,
+                        sectionId: getPrimarySectionId(data, "skills") ?? "",
+                        sectionType: "skills" as const,
+                      }))
+                  ).map((skill) => (
+                    <PreviewItemRegion
+                      as="li"
+                      key={skill.id}
+                      sectionType="skills"
+                      sectionId={skill.sectionId}
+                      sectionTitle="Skills"
+                      itemId={skill.id}
+                      activeTarget={activeTarget}
+                      surface="item"
+                    >
+                      {skill.name}
+                    </PreviewItemRegion>
                   ))}
                 </ul>
               </SidebarSection>
 
-              <SidebarSection title="Languages" variant={variant}>
+              <SidebarSection
+                title="Languages"
+                variant={variant}
+                sectionType="languages"
+                sectionId={getPrimarySectionId(data, "languages")}
+                activeTarget={activeTarget}
+              >
                 <ul className="compact-list compact-list--languages">
                   {data.languages.map((language) => (
-                    <li key={language.name}>
+                    <PreviewItemRegion
+                      as="li"
+                      key={language.id}
+                      sectionType="languages"
+                      sectionId={language.sectionId}
+                      sectionTitle="Languages"
+                      itemId={language.id}
+                      activeTarget={activeTarget}
+                      surface="item"
+                    >
                       <span className="label">{language.name}</span>
                       <span className="value">{language.level}</span>
-                    </li>
+                    </PreviewItemRegion>
                   ))}
                 </ul>
               </SidebarSection>
+
+              {sidebarExtras.map((section) => {
+                if (section.key === "hobbies") {
+                  return (
+                    <SidebarSection
+                      key={section.key}
+                      title="Hobbies"
+                      variant={variant}
+                      sectionType="hobbies"
+                      sectionId={getPrimarySectionId(data, "hobbies")}
+                      activeTarget={activeTarget}
+                    >
+                      <div className="hobby-tag-list">
+                        {data.hobbyItems.map((item) => (
+                          <PreviewItemRegion
+                            as="span"
+                            key={item.id}
+                            className="hobby-tag"
+                            sectionType="hobbies"
+                            sectionId={item.sectionId}
+                            sectionTitle="Hobbies"
+                            itemId={item.id}
+                            activeTarget={activeTarget}
+                            surface="item"
+                          >
+                            {item.name}
+                          </PreviewItemRegion>
+                        ))}
+                      </div>
+                    </SidebarSection>
+                  );
+                }
+
+                if (section.key === "certifications") {
+                  return (
+                    <SidebarSection
+                      key={section.key}
+                      title="Certifications"
+                      variant={variant}
+                      sectionType="certifications"
+                      sectionId={getPrimarySectionId(data, "certifications")}
+                      activeTarget={activeTarget}
+                    >
+                      <ul className="compact-list">
+                        {data.certifications.map((item) => (
+                          <PreviewItemRegion
+                            as="li"
+                            key={item.id}
+                            sectionType="certifications"
+                            sectionId={item.sectionId}
+                            sectionTitle="Certifications"
+                            itemId={item.id}
+                            activeTarget={activeTarget}
+                            surface="item"
+                          >
+                            <span className="label">{item.name}</span>
+                            <span className="value">
+                              {[item.issuer, item.meta].filter(Boolean).join(" · ")}
+                            </span>
+                          </PreviewItemRegion>
+                        ))}
+                      </ul>
+                    </SidebarSection>
+                  );
+                }
+
+                return (
+                  <SidebarSection
+                    key={section.key}
+                    title="Affiliations"
+                    variant={variant}
+                    sectionType="affiliations"
+                    sectionId={getPrimarySectionId(data, "affiliations")}
+                    activeTarget={activeTarget}
+                  >
+                    <ul className="compact-list">
+                      {data.affiliations.map((item) => (
+                        <PreviewItemRegion
+                          as="li"
+                          key={item.id}
+                          sectionType="affiliations"
+                          sectionId={item.sectionId}
+                          sectionTitle="Affiliations"
+                          itemId={item.id}
+                          activeTarget={activeTarget}
+                          surface="item"
+                        >
+                          <span className="label">{item.organizationName}</span>
+                          <span className="value">
+                            {[item.roleOrMembershipType, item.dateRange]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </span>
+                        </PreviewItemRegion>
+                      ))}
+                    </ul>
+                  </SidebarSection>
+                );
+              })}
             </aside>
 
             <div className="resume-divider" aria-hidden="true" />
 
             <main className="resume-main">
-              <MainSection title="Experience" variant={variant}>
+              <MainSection
+                title="Experience"
+                variant={variant}
+                sectionType="experience"
+                sectionId={getPrimarySectionId(data, "experience")}
+                activeTarget={activeTarget}
+              >
                 <div className="experience-stack">
                   {data.experience.map((item) => (
-                    <article
-                      key={`${item.company}-${item.role}`}
+                    <PreviewItemRegion
+                      as="article"
+                      key={item.id}
                       className="experience-item"
+                      sectionType="experience"
+                      sectionId={item.sectionId}
+                      sectionTitle="Experience"
+                      itemId={item.id}
+                      activeTarget={activeTarget}
+                      surface="item"
                     >
                       <div
                         className={`experience-period ${
@@ -1344,44 +1979,141 @@ function ClassicResumePage({
                           ))}
                         </ul>
                       </div>
-                    </article>
+                    </PreviewItemRegion>
                   ))}
                 </div>
               </MainSection>
 
-              <MainSection title="Selected projects" variant={variant}>
-                <div className="projects-grid">
-                  {data.projects.map((project) => (
-                    <article
-                      className={`project-card project-card--${variant.id}`}
-                      key={project.name}
-                    >
-                      <h3 className="entry-title">{project.name}</h3>
-                      <p className="entry-subtitle entry-subtitle--project">
-                        {project.meta}
-                      </p>
-                      <p className="project-copy">{project.description}</p>
-                    </article>
-                  ))}
-                </div>
-              </MainSection>
+              {data.projects.length > 0 ? (
+                <MainSection
+                  title="Selected projects"
+                  variant={variant}
+                  sectionType="selected_projects"
+                  sectionId={getPrimarySectionId(data, "projects")}
+                  activeTarget={activeTarget}
+                >
+                  <div className="projects-grid">
+                    {data.projects.map((project) => (
+                      <article
+                        className={`project-card project-card--${variant.id}`}
+                        key={project.id}
+                        data-preview-row-id={project.id}
+                        data-no-pan="true"
+                      >
+                        <PreviewItemRegion
+                          as="h3"
+                          className="entry-title"
+                          sectionType="selected_projects"
+                          sectionId={project.sectionId}
+                          sectionTitle="Selected projects"
+                          itemId={buildProjectPreviewFieldId(project.id, "name")}
+                          activeTarget={activeTarget}
+                          surface="item"
+                        >
+                          {project.name}
+                        </PreviewItemRegion>
+                        <PreviewItemRegion
+                          as="p"
+                          className="entry-subtitle entry-subtitle--project"
+                          sectionType="selected_projects"
+                          sectionId={project.sectionId}
+                          sectionTitle="Selected projects"
+                          itemId={buildProjectPreviewFieldId(project.id, "meta")}
+                          activeTarget={activeTarget}
+                          surface="item"
+                        >
+                          {project.meta}
+                        </PreviewItemRegion>
+                        <PreviewItemRegion
+                          as="p"
+                          className="project-copy"
+                          sectionType="selected_projects"
+                          sectionId={project.sectionId}
+                          sectionTitle="Selected projects"
+                          itemId={buildProjectPreviewFieldId(
+                            project.id,
+                            "description",
+                          )}
+                          activeTarget={activeTarget}
+                          surface="item"
+                        >
+                          {project.description}
+                        </PreviewItemRegion>
+                      </article>
+                    ))}
+                  </div>
+                </MainSection>
+              ) : null}
 
-              <MainSection title="Education" variant={variant}>
+              <MainSection
+                title="Education"
+                variant={variant}
+                sectionType="education"
+                sectionId={getPrimarySectionId(data, "education")}
+                activeTarget={activeTarget}
+              >
                 <div className="education-stack">
                   {data.education.map((item) => (
-                    <article
-                      key={`${item.school}-${item.degree}`}
+                    <PreviewItemRegion
+                      as="article"
+                      key={item.id}
                       className="education-item"
+                      sectionType="education"
+                      sectionId={item.sectionId}
+                      sectionTitle="Education"
+                      itemId={item.id}
+                      activeTarget={activeTarget}
+                      surface="item"
                     >
                       <div>
                         <h3 className="entry-title">{item.degree}</h3>
                         <p className="entry-subtitle">{item.school}</p>
                       </div>
                       <p className="education-period">{item.period}</p>
-                    </article>
+                    </PreviewItemRegion>
                   ))}
                 </div>
               </MainSection>
+
+              {data.achievementItems.length > 0 ? (
+                <MainSection
+                  title="Achievements"
+                  variant={variant}
+                  sectionType="achievements"
+                  sectionId={getPrimarySectionId(data, "achievements")}
+                  activeTarget={activeTarget}
+                >
+                  <ul className="bullet-list">
+                    {data.achievementItems.map((item) => (
+                      <PreviewItemRegion
+                        as="li"
+                        key={item.id}
+                        sectionType="achievements"
+                        sectionId={item.sectionId}
+                        sectionTitle="Achievements"
+                        itemId={item.id}
+                        activeTarget={activeTarget}
+                        surface="item"
+                      >
+                        {item.text}
+                      </PreviewItemRegion>
+                    ))}
+                  </ul>
+                </MainSection>
+              ) : null}
+
+              {orderedTextSections.map((section) => (
+                <MainSection
+                  key={section.id}
+                  title={section.sectionTitle}
+                  variant={variant}
+                  sectionType={section.sectionType}
+                  sectionId={section.sectionId}
+                  activeTarget={activeTarget}
+                >
+                  <p className="project-copy">{section.text}</p>
+                </MainSection>
+              ))}
             </main>
           </div>
         </div>
@@ -1397,6 +2129,7 @@ function SwissMinimaPage({
   compactComparison,
   onActivateComparison,
   fitToken,
+  activeTarget,
 }: {
   variant: ResumeVariant;
   data: ResumeData;
@@ -1404,31 +2137,424 @@ function SwissMinimaPage({
   compactComparison?: boolean;
   onActivateComparison?: (() => void) | undefined;
   fitToken?: string;
+  activeTarget?: ResumeActiveTarget | null;
 }) {
   const pageVars = buildPageVars(
     variant,
     React.useContext(ResumeStylePresetContext),
   );
+  const onRemoveSection = React.useContext(ResumeRemoveSectionContext);
   const { pageRef, innerRef } = useAutoFitPage(fitToken);
-  const mergedMeta = [...data.metadata, ...data.contact];
-  const email =
-    findLabeledValue(data.contact, ["email"]) ??
-    findLabeledValue(mergedMeta, ["email"]);
-  const site =
-    findLabeledValue(data.contact, ["web", "portfolio", "site"]) ??
-    findLabeledValue(mergedMeta, ["web", "portfolio", "site"]);
-  const phone =
-    findLabeledValue(data.contact, ["phone"]) ??
-    findLabeledValue(mergedMeta, ["phone"]);
-  const topContact = [email, phone, site].filter((value): value is string =>
-    Boolean(String(value ?? "").trim()),
-  );
-  const supportAchievements =
-    data.achievements?.length && data.achievements.length > 0
-      ? data.achievements.slice(0, 2)
-      : data.projects.slice(0, 2).map((project) => project.description);
-  const supportEducation = data.education[0];
-  const supportSkills = data.skills.slice(0, 5).join(", ");
+  const topContact = buildSwissHeaderContact(data);
+  const topNotes = buildSwissHeaderNotes(data, topContact);
+  const renderableTitle = getRenderableIdentitySubtitle(data.name, data.title);
+  const supportSections = [
+    data.projects.length > 0
+      ? {
+          key: "projects",
+          title: "Selected Projects",
+          sectionType: "selected_projects" as const,
+          sectionId: getPrimarySectionId(data, "projects"),
+          sectionOrder: getSectionOrder(data.projects[0]),
+          content: (
+            <div
+              style={{
+                display: "grid",
+                gap: "calc(var(--experience-bullets-gap) + 0.3mm)",
+              }}
+            >
+              {data.projects.map((item) => (
+                <div
+                  key={item.id}
+                  data-preview-row-id={item.id}
+                  data-no-pan="true"
+                  style={{ display: "grid", gap: "var(--experience-bullets-gap)" }}
+                >
+                  <PreviewItemRegion
+                    as="span"
+                    sectionType="selected_projects"
+                    sectionId={item.sectionId}
+                    sectionTitle="Selected Projects"
+                    itemId={buildProjectPreviewFieldId(item.id, "name")}
+                    activeTarget={activeTarget}
+                    surface="item"
+                    style={{
+                      fontWeight: 700,
+                      color: "var(--color-text)",
+                      fontSize: "calc(var(--text-body-sm-size) + 0.05mm)",
+                    }}
+                  >
+                    {item.name}
+                  </PreviewItemRegion>
+                  {item.meta ? (
+                    <PreviewItemRegion
+                      as="span"
+                      sectionType="selected_projects"
+                      sectionId={item.sectionId}
+                      sectionTitle="Selected Projects"
+                      itemId={buildProjectPreviewFieldId(item.id, "meta")}
+                      activeTarget={activeTarget}
+                      surface="item"
+                      style={{
+                        color: "color-mix(in srgb, var(--color-text) 56%, transparent)",
+                        fontSize: "calc(var(--text-body-sm-size) - 0.3mm)",
+                      }}
+                    >
+                      {item.meta}
+                    </PreviewItemRegion>
+                  ) : null}
+                  <PreviewItemRegion
+                    as="span"
+                    sectionType="selected_projects"
+                    sectionId={item.sectionId}
+                    sectionTitle="Selected Projects"
+                    itemId={buildProjectPreviewFieldId(item.id, "description")}
+                    activeTarget={activeTarget}
+                    surface="item"
+                    style={{
+                      color: "color-mix(in srgb, var(--color-text) 72%, transparent)",
+                      fontSize: "calc(var(--text-body-sm-size) - 0.35mm)",
+                      lineHeight: 1.38,
+                    }}
+                  >
+                    {item.description}
+                  </PreviewItemRegion>
+                </div>
+              ))}
+            </div>
+          ),
+        }
+      : null,
+    data.education.length > 0
+      ? {
+          key: "education",
+          title: "Education",
+          sectionType: "education" as const,
+          sectionId: getPrimarySectionId(data, "education"),
+          sectionOrder: getSectionOrder(data.education[0]),
+          content: (
+            <div
+              style={{
+                display: "grid",
+                gap: "calc(var(--experience-bullets-gap) + 0.3mm)",
+              }}
+            >
+              {data.education.map((item) => (
+                <PreviewItemRegion
+                  as="div"
+                  key={item.id}
+                  sectionType="education"
+                  sectionId={item.sectionId}
+                  sectionTitle="Education"
+                  itemId={item.id}
+                  activeTarget={activeTarget}
+                  surface="item"
+                  style={{ display: "grid", gap: "calc(var(--experience-bullets-gap) - 0.3mm)" }}
+                >
+                  <span style={{ fontWeight: 700, color: "var(--color-text)" }}>
+                    {item.degree}
+                  </span>
+                  <span
+                    style={{
+                      color: "color-mix(in srgb, var(--color-text) 72%, transparent)",
+                    }}
+                  >
+                    {item.school}
+                  </span>
+                  <span
+                    style={{
+                      color: "color-mix(in srgb, var(--color-text) 56%, transparent)",
+                      fontSize: "calc(var(--text-body-sm-size) - 0.35mm)",
+                    }}
+                  >
+                    {item.period}
+                  </span>
+                </PreviewItemRegion>
+              ))}
+            </div>
+          ),
+        }
+      : null,
+    (data.skillItems.length > 0 || data.skills.length > 0)
+      ? {
+          key: "skills",
+          title: "Skills",
+          sectionType: "skills" as const,
+          sectionId: getPrimarySectionId(data, "skills"),
+          sectionOrder: getSectionOrder(data.skillItems[0]),
+          content: (
+            <div
+              style={{
+                display: "grid",
+                gap: "calc(var(--experience-bullets-gap) - 0.1mm)",
+              }}
+            >
+              {(data.skillItems.length > 0
+                ? data.skillItems
+                : data.skills.map((skill, index) => ({
+                    id: `skills-fallback-${index}`,
+                    name: skill,
+                    sectionId: getPrimarySectionId(data, "skills") ?? "",
+                  }))
+              ).map((item) => (
+                <PreviewItemRegion
+                  as="span"
+                  key={item.id}
+                  sectionType="skills"
+                  sectionId={item.sectionId}
+                  sectionTitle="Skills"
+                  itemId={item.id}
+                  activeTarget={activeTarget}
+                  surface="item"
+                  style={{
+                    color: "color-mix(in srgb, var(--color-text) 72%, transparent)",
+                    fontSize: "calc(var(--text-body-sm-size) - 0.35mm)",
+                    lineHeight: 1.38,
+                  }}
+                >
+                  {item.name}
+                </PreviewItemRegion>
+              ))}
+            </div>
+          ),
+        }
+      : null,
+    data.languages.length > 0
+      ? {
+          key: "languages",
+          title: "Languages",
+          sectionType: "languages" as const,
+          sectionId: getPrimarySectionId(data, "languages"),
+          sectionOrder: getSectionOrder(data.languages[0]),
+          content: (
+            <div
+              style={{
+                display: "grid",
+                gap: "calc(var(--experience-bullets-gap) + 0.2mm)",
+              }}
+            >
+              {data.languages.map((item) => (
+                <PreviewItemRegion
+                  as="div"
+                  key={item.id}
+                  sectionType="languages"
+                  sectionId={item.sectionId}
+                  sectionTitle="Languages"
+                  itemId={item.id}
+                  activeTarget={activeTarget}
+                  surface="item"
+                  style={{ display: "grid", gap: "calc(var(--experience-bullets-gap) - 0.5mm)" }}
+                >
+                  <span style={{ fontWeight: 700, color: "var(--color-text)" }}>
+                    {item.name}
+                  </span>
+                  <span
+                    style={{
+                      color: "color-mix(in srgb, var(--color-text) 56%, transparent)",
+                      fontSize: "calc(var(--text-body-sm-size) - 0.35mm)",
+                    }}
+                  >
+                    {item.level}
+                  </span>
+                </PreviewItemRegion>
+              ))}
+            </div>
+          ),
+        }
+      : null,
+    data.achievementItems.length > 0
+      ? {
+          key: "achievements",
+          title: "Achievements",
+          sectionType: "achievements" as const,
+          sectionId: getPrimarySectionId(data, "achievements"),
+          sectionOrder: getSectionOrder(data.achievementItems[0]),
+          content: (
+            <ul
+              style={{
+                margin: 0,
+                paddingLeft: "var(--experience-bullets-padding)",
+                display: "grid",
+                gap: "calc(var(--experience-bullets-gap) - 0.4mm)",
+                color: "color-mix(in srgb, var(--color-text) 72%, transparent)",
+                fontSize: "calc(var(--text-body-sm-size) - 0.4mm)",
+                lineHeight: 1.38,
+              }}
+            >
+              {data.achievementItems.map((item) => (
+                <PreviewItemRegion
+                  as="li"
+                  key={item.id}
+                  sectionType="achievements"
+                  sectionId={item.sectionId}
+                  sectionTitle="Achievements"
+                  itemId={item.id}
+                  activeTarget={activeTarget}
+                  surface="item"
+                >
+                  {item.text}
+                </PreviewItemRegion>
+              ))}
+            </ul>
+          ),
+        }
+      : null,
+    data.hobbyItems.length > 0
+      ? {
+          key: "hobbies",
+          title: "Hobbies",
+          sectionType: "hobbies" as const,
+          sectionId: getPrimarySectionId(data, "hobbies"),
+          sectionOrder: getSectionOrder(data.hobbyItems[0]),
+          content: (
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "1.6mm",
+              }}
+            >
+              {data.hobbyItems.map((item) => (
+                <PreviewItemRegion
+                  as="span"
+                  key={item.id}
+                  className="hobby-tag hobby-tag--editorial"
+                  sectionType="hobbies"
+                  sectionId={item.sectionId}
+                  sectionTitle="Hobbies"
+                  itemId={item.id}
+                  activeTarget={activeTarget}
+                  surface="item"
+                >
+                  {item.name}
+                </PreviewItemRegion>
+              ))}
+            </div>
+          ),
+        }
+      : null,
+    data.certifications.length > 0
+      ? {
+          key: "certifications",
+          title: "Certifications",
+          sectionType: "certifications" as const,
+          sectionId: getPrimarySectionId(data, "certifications"),
+          sectionOrder: getSectionOrder(data.certifications[0]),
+          content: (
+            <div
+              style={{
+                display: "grid",
+                gap: "calc(var(--experience-bullets-gap) + 0.2mm)",
+              }}
+            >
+              {data.certifications.map((item) => (
+                <PreviewItemRegion
+                  as="div"
+                  key={item.id}
+                  sectionType="certifications"
+                  sectionId={item.sectionId}
+                  sectionTitle="Certifications"
+                  itemId={item.id}
+                  activeTarget={activeTarget}
+                  surface="item"
+                  style={{ display: "grid", gap: "calc(var(--experience-bullets-gap) - 0.5mm)" }}
+                >
+                  <span style={{ fontWeight: 700, color: "var(--color-text)" }}>
+                    {item.name}
+                  </span>
+                  <span
+                    style={{
+                      color: "color-mix(in srgb, var(--color-text) 56%, transparent)",
+                      fontSize: "calc(var(--text-body-sm-size) - 0.35mm)",
+                    }}
+                  >
+                    {[item.issuer, item.meta].filter(Boolean).join(" · ")}
+                  </span>
+                </PreviewItemRegion>
+              ))}
+            </div>
+          ),
+        }
+      : null,
+    data.affiliations.length > 0
+      ? {
+          key: "affiliations",
+          title: "Affiliations",
+          sectionType: "affiliations" as const,
+          sectionId: getPrimarySectionId(data, "affiliations"),
+          sectionOrder: getSectionOrder(data.affiliations[0]),
+          content: (
+            <div
+              style={{
+                display: "grid",
+                gap: "calc(var(--experience-bullets-gap) + 0.2mm)",
+              }}
+            >
+              {data.affiliations.map((item) => (
+                <PreviewItemRegion
+                  as="div"
+                  key={item.id}
+                  sectionType="affiliations"
+                  sectionId={item.sectionId}
+                  sectionTitle="Affiliations"
+                  itemId={item.id}
+                  activeTarget={activeTarget}
+                  surface="item"
+                  style={{ display: "grid", gap: "calc(var(--experience-bullets-gap) - 0.5mm)" }}
+                >
+                  <span style={{ fontWeight: 700, color: "var(--color-text)" }}>
+                    {item.organizationName}
+                  </span>
+                  <span
+                    style={{
+                      color: "color-mix(in srgb, var(--color-text) 56%, transparent)",
+                      fontSize: "calc(var(--text-body-sm-size) - 0.35mm)",
+                    }}
+                  >
+                    {[item.roleOrMembershipType, item.dateRange]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </span>
+                </PreviewItemRegion>
+              ))}
+            </div>
+          ),
+        }
+      : null,
+    ...data.textSections.map((section) => ({
+      key: section.id,
+      title: section.sectionTitle,
+      sectionType: section.sectionType,
+      sectionId: section.sectionId,
+      sectionOrder: section.sectionOrder,
+      content: (
+        <p
+          style={{
+            margin: 0,
+            color: "color-mix(in srgb, var(--color-text) 72%, transparent)",
+            fontSize: "calc(var(--text-body-sm-size) - 0.3mm)",
+            lineHeight: 1.45,
+            whiteSpace: "pre-wrap" as const,
+          }}
+        >
+          {section.text}
+        </p>
+      ),
+    })),
+  ]
+    .filter(
+      (
+        value,
+      ): value is {
+        key: string;
+        title: string;
+        sectionType: ResumePreviewSectionType;
+        sectionId?: string;
+        sectionOrder: number;
+        content: React.ReactNode;
+      } => Boolean(value),
+    )
+    .sort((left, right) => left.sectionOrder - right.sectionOrder);
 
   return (
     <PreviewFrame
@@ -1471,8 +2597,8 @@ function SwissMinimaPage({
             gap: "calc(var(--body-row-gap) - 3.8mm)",
           }}
         >
-          <header
-            data-preview-section="profile"
+          <PreviewSectionRegion
+            as="header"
             style={{
               display: "grid",
               gap: "calc(var(--header-row-gap) - 0.8mm)",
@@ -1481,10 +2607,16 @@ function SwissMinimaPage({
               borderBottom:
                 "0.34mm solid color-mix(in srgb, var(--color-text) 28%, transparent)",
             }}
+            sectionType="profile"
+            sectionId={data.profileSectionId}
+            sectionTitle="Profile"
+            activeTarget={activeTarget}
+            surface="section"
           >
             <div style={{ minWidth: 0 }}>
               {topContact.length > 0 ? (
-                <div
+                <PreviewSectionRegion
+                  as="div"
                   style={{
                     display: "flex",
                     flexWrap: "wrap",
@@ -1495,11 +2627,62 @@ function SwissMinimaPage({
                     fontSize: "var(--text-body-sm-size)",
                     lineHeight: 1.35,
                   }}
+                  sectionType="contact"
+                  sectionId={data.profileSectionId}
+                  sectionTitle="Contact"
+                  activeTarget={activeTarget}
+                  surface="section"
                 >
-                  {topContact.map((item, index) => (
-                    <span key={`${item}-${index}`}>{item}</span>
+                  {topContact.map((item) => (
+                    <PreviewItemRegion
+                      as="span"
+                      key={`${item.label}-${item.value}`}
+                      sectionType="contact"
+                      sectionId={data.profileSectionId}
+                      sectionTitle="Contact"
+                      itemId={item.itemId}
+                      activeTarget={activeTarget}
+                      surface="item"
+                    >
+                      {item.value}
+                    </PreviewItemRegion>
                   ))}
-                </div>
+                </PreviewSectionRegion>
+              ) : null}
+              {topNotes.length > 0 ? (
+                <PreviewSectionRegion
+                  as="div"
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap:
+                      "calc(var(--experience-bullets-gap) + 0.25mm) var(--experience-column-gap)",
+                    marginBottom: "calc(var(--header-row-gap) - 0.3mm)",
+                    color: "color-mix(in srgb, var(--color-text) 58%, transparent)",
+                    fontSize: "calc(var(--text-body-sm-size) - 0.1mm)",
+                    lineHeight: 1.35,
+                  }}
+                  sectionType="notes"
+                  sectionId={data.profileSectionId}
+                  sectionTitle="Metadata"
+                  activeTarget={activeTarget}
+                  surface="section"
+                >
+                  {topNotes.map((item) => (
+                    <PreviewItemRegion
+                      as="span"
+                      key={`${item.label}-${item.value}`}
+                      sectionType="notes"
+                      sectionId={data.profileSectionId}
+                      sectionTitle="Metadata"
+                      itemId={item.itemId}
+                      activeTarget={activeTarget}
+                      surface="item"
+                    >
+                      {item.label}: {item.value}
+                    </PreviewItemRegion>
+                  ))}
+                </PreviewSectionRegion>
               ) : null}
               <h1
                 data-font-probe="heading"
@@ -1517,25 +2700,33 @@ function SwissMinimaPage({
               >
                 {data.name}
               </h1>
-              <p
-                style={{
-                  margin: "calc(var(--header-row-gap) - 0.8mm) 0 0",
-                  maxWidth: "calc(var(--main-width) + 7mm)",
-                  fontSize: "calc(var(--text-title-size) - 0.8mm)",
-                  lineHeight: 1.38,
-                  color: "color-mix(in srgb, var(--color-text) 72%, transparent)",
-                }}
-              >
-                {data.title}
-              </p>
+              {renderableTitle ? (
+                <p
+                  style={{
+                    margin: "calc(var(--header-row-gap) - 0.8mm) 0 0",
+                    maxWidth: "calc(var(--main-width) + 7mm)",
+                    fontSize: "calc(var(--text-title-size) - 0.8mm)",
+                    lineHeight: 1.38,
+                    color: "color-mix(in srgb, var(--color-text) 72%, transparent)",
+                  }}
+                >
+                  {renderableTitle}
+                </p>
+              ) : null}
             </div>
-          </header>
+          </PreviewSectionRegion>
 
-          <section
+          <PreviewSectionRegion
+            as="section"
             style={{
               display: "grid",
               alignItems: "start",
             }}
+            sectionType="summary"
+            sectionId={data.summarySectionId}
+            sectionTitle="Summary"
+            activeTarget={activeTarget}
+            surface="section"
           >
             <div>
               <p
@@ -1559,14 +2750,20 @@ function SwissMinimaPage({
                 {data.summary}
               </p>
             </div>
-          </section>
+          </PreviewSectionRegion>
 
-          <section
+          <PreviewSectionRegion
+            as="section"
             style={{
               display: "grid",
               gap: "calc(var(--body-row-gap) - 4.8mm)",
               alignContent: "start",
             }}
+            sectionType="experience"
+            sectionId={getPrimarySectionId(data, "experience")}
+            sectionTitle="Experience"
+            activeTarget={activeTarget}
+            surface="section"
           >
             <div>
               <p
@@ -1586,8 +2783,9 @@ function SwissMinimaPage({
             </div>
 
             {data.experience.slice(0, 3).map((item, index) => (
-              <article
-                key={`${item.company}-${item.role}-${item.period}-${index}`}
+              <PreviewItemRegion
+                as="article"
+                key={item.id || `${item.company}-${item.role}-${item.period}-${index}`}
                 style={{
                   display: "grid",
                   gridTemplateColumns:
@@ -1598,6 +2796,12 @@ function SwissMinimaPage({
                   borderTop:
                     "0.24mm solid color-mix(in srgb, var(--color-text) 24%, transparent)",
                 }}
+                sectionType="experience"
+                sectionId={item.sectionId}
+                sectionTitle="Experience"
+                itemId={item.id}
+                activeTarget={activeTarget}
+                surface="item"
               >
                 <div style={{ minWidth: 0 }}>
                   <h2
@@ -1678,143 +2882,72 @@ function SwissMinimaPage({
                     </div>
                   ))}
                 </aside>
-              </article>
+              </PreviewItemRegion>
             ))}
-          </section>
+          </PreviewSectionRegion>
 
-          <section
-            style={{
-              paddingTop: "calc(var(--main-section-gap) - 2.2mm)",
-              borderTop:
-                "0.42mm solid color-mix(in srgb, var(--color-text) 28%, transparent)",
-              display: "grid",
-              gridTemplateColumns:
-                "minmax(0, 1.25fr) minmax(0, 0.85fr) minmax(0, 0.9fr)",
-              gap: "calc(var(--main-section-gap) - 4mm)",
-              alignItems: "start",
-            }}
-          >
-            <div
+          {supportSections.length > 0 ? (
+            <section
               style={{
+                paddingTop: "calc(var(--main-section-gap) - 2.2mm)",
+                borderTop:
+                  "0.42mm solid color-mix(in srgb, var(--color-text) 28%, transparent)",
                 display: "grid",
-                gap: "calc(var(--experience-bullets-gap) + 0.3mm)",
+                gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                gap: "calc(var(--main-section-gap) - 4mm)",
+                alignItems: "start",
               }}
             >
-              <h4
-                style={{
-                  margin: 0,
-                  fontSize: "calc(var(--text-caption-size) - 0.15mm)",
-                  lineHeight: "var(--text-caption-line)",
-                  letterSpacing: "0.24em",
-                  textTransform: "uppercase",
-                  color: "color-mix(in srgb, var(--color-text) 52%, transparent)",
-                  fontWeight: 700,
-                  fontFamily: "var(--font-body-family)",
-                }}
-              >
-                Achievements
-              </h4>
-              <ul
-                style={{
-                  margin: 0,
-                  paddingLeft: "var(--experience-bullets-padding)",
-                  display: "grid",
-                  gap: "calc(var(--experience-bullets-gap) - 0.4mm)",
-                  color: "color-mix(in srgb, var(--color-text) 72%, transparent)",
-                  fontSize: "calc(var(--text-body-sm-size) - 0.4mm)",
-                  lineHeight: 1.38,
-                }}
-              >
-                {supportAchievements.map((item, index) => (
-                  <li key={`${item}-${index}`}>{item}</li>
-                ))}
-              </ul>
-            </div>
-            <div
-              style={{
-                display: "grid",
-                gap: "calc(var(--experience-bullets-gap) + 0.3mm)",
-                minWidth: 0,
-              }}
-            >
-              <h4
-                style={{
-                  margin: 0,
-                  fontSize: "calc(var(--text-caption-size) - 0.15mm)",
-                  lineHeight: "var(--text-caption-line)",
-                  letterSpacing: "0.24em",
-                  textTransform: "uppercase",
-                  color: "color-mix(in srgb, var(--color-text) 52%, transparent)",
-                  fontWeight: 700,
-                  fontFamily: "var(--font-body-family)",
-                }}
-              >
-                Education
-              </h4>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: "calc(var(--text-body-sm-size) + 0.15mm)",
-                  lineHeight: 1.5,
-                  color: "color-mix(in srgb, var(--color-text) 72%, transparent)",
-                }}
-              >
-                {supportEducation ? (
-                  <>
-                    <span
+              {supportSections.map((section) => (
+                <PreviewSectionRegion
+                  as="div"
+                  key={section.key}
+                  sectionType={section.sectionType}
+                  sectionId={section.sectionId}
+                  sectionTitle={section.title}
+                  activeTarget={activeTarget}
+                  surface="section"
+                  style={{
+                    display: "grid",
+                    gap: "calc(var(--experience-bullets-gap) + 0.3mm)",
+                    minWidth: 0,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "1.5mm",
+                    }}
+                  >
+                    <h4
                       style={{
-                        display: "block",
+                        margin: 0,
+                        fontSize: "calc(var(--text-caption-size) - 0.15mm)",
+                        lineHeight: "var(--text-caption-line)",
+                        letterSpacing: "0.24em",
+                        textTransform: "uppercase",
+                        color:
+                          "color-mix(in srgb, var(--color-text) 52%, transparent)",
                         fontWeight: 700,
-                        color: "var(--color-text)",
+                        fontFamily: "var(--font-body-family)",
                       }}
                     >
-                      {supportEducation.degree}
-                    </span>
-                    <span style={{ display: "block" }}>
-                      {supportEducation.school}
-                    </span>
-                    <span style={{ display: "block" }}>
-                      {supportEducation.period}
-                    </span>
-                  </>
-                ) : (
-                  "Education details pending."
-                )}
-              </p>
-            </div>
-            <div
-              style={{
-                display: "grid",
-                gap: "calc(var(--experience-bullets-gap) + 0.3mm)",
-                minWidth: 0,
-              }}
-            >
-              <h4
-                style={{
-                  margin: 0,
-                  fontSize: "calc(var(--text-caption-size) - 0.15mm)",
-                  lineHeight: "var(--text-caption-line)",
-                  letterSpacing: "0.24em",
-                  textTransform: "uppercase",
-                  color: "color-mix(in srgb, var(--color-text) 52%, transparent)",
-                  fontWeight: 700,
-                  fontFamily: "var(--font-body-family)",
-                }}
-              >
-                Skills
-              </h4>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: "calc(var(--text-body-sm-size) - 0.4mm)",
-                  lineHeight: 1.42,
-                  color: "color-mix(in srgb, var(--color-text) 72%, transparent)",
-                }}
-              >
-                {supportSkills || "Skills pending."}
-              </p>
-            </div>
-          </section>
+                      {section.title}
+                    </h4>
+                    {onRemoveSection ? (
+                      <PreviewSectionDeleteButton
+                        sectionType={section.sectionType}
+                        sectionId={section.sectionId}
+                        sectionTitle={section.title}
+                      />
+                    ) : null}
+                  </div>
+                  {section.content}
+                </PreviewSectionRegion>
+              ))}
+            </section>
+          ) : null}
         </div>
       </article>
     </PreviewFrame>
@@ -2208,6 +3341,7 @@ function EditorialMagazinePage({
   const editorialSubtitleSize = "calc(var(--text-body-size) + 0.45mm)";
   const editorialBodySize = "calc(var(--text-body-size) - 0.55mm)";
   const editorialBodySmSize = "calc(var(--text-body-sm-size) - 0.25mm)";
+  const renderableTitle = getRenderableIdentitySubtitle(data.name, data.title);
 
   return (
     <PreviewFrame
@@ -2310,19 +3444,21 @@ function EditorialMagazinePage({
               >
                 {data.name}
               </h1>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: editorialSubtitleSize,
-                  lineHeight: 1.22,
-                  letterSpacing: "0.03em",
-                  textTransform: "uppercase",
-                  color: "var(--color-accent)",
-                  fontWeight: 700,
-                }}
-              >
-                {data.title}
-              </p>
+              {renderableTitle ? (
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: editorialSubtitleSize,
+                    lineHeight: 1.22,
+                    letterSpacing: "0.03em",
+                    textTransform: "uppercase",
+                    color: "var(--color-accent)",
+                    fontWeight: 700,
+                  }}
+                >
+                  {renderableTitle}
+                </p>
+              ) : null}
               <p
                 data-font-probe="body"
                 style={{
@@ -2483,89 +3619,91 @@ function EditorialMagazinePage({
                 </div>
               </section>
 
-              <section style={{ display: "grid", gap: editorialSectionGap }}>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "calc(var(--experience-bullets-padding) - 1mm)",
-                  }}
-                >
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: editorialSectionLabelSize,
-                      lineHeight: 1.15,
-                      letterSpacing: "0.18em",
-                      textTransform: "uppercase",
-                      color: "var(--color-accent)",
-                      fontFamily: "var(--font-body-family)",
-                      fontWeight: 700,
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    Selected projects
-                  </p>
+              {data.projects.length > 0 ? (
+                <section style={{ display: "grid", gap: editorialSectionGap }}>
                   <div
                     style={{
-                      height: "calc(var(--page-radius) - 1.12mm)",
-                      flex: 1,
-                      background: "var(--resume-preview-editorial-rule-fill)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "calc(var(--experience-bullets-padding) - 1mm)",
                     }}
-                  />
-                </div>
-                <div style={{ display: "grid", gap: "var(--project-gap)" }}>
-                  {data.projects.slice(0, 2).map((project, index) => (
-                    <article
-                      key={`${project.name}-${project.meta}-${index}`}
+                  >
+                    <p
                       style={{
-                        padding: "calc(var(--project-padding) + 1mm) 0 0",
-                        borderTop:
-                          "0.24mm solid var(--resume-preview-editorial-rule-color)",
-                        display: "grid",
-                        gap: editorialMinorGap,
+                        margin: 0,
+                        fontSize: editorialSectionLabelSize,
+                        lineHeight: 1.15,
+                        letterSpacing: "0.18em",
+                        textTransform: "uppercase",
+                        color: "var(--color-accent)",
+                        fontFamily: "var(--font-body-family)",
+                        fontWeight: 700,
+                        whiteSpace: "nowrap",
                       }}
                     >
-                      <h3
+                      Selected projects
+                    </p>
+                    <div
+                      style={{
+                        height: "calc(var(--page-radius) - 1.12mm)",
+                        flex: 1,
+                        background: "var(--resume-preview-editorial-rule-fill)",
+                      }}
+                    />
+                  </div>
+                  <div style={{ display: "grid", gap: "var(--project-gap)" }}>
+                    {data.projects.slice(0, 2).map((project, index) => (
+                      <article
+                        key={`${project.name}-${project.meta}-${index}`}
                         style={{
-                          margin: 0,
-                          fontFamily: "var(--font-heading-family)",
-                          fontSize: editorialTitleSize,
-                          lineHeight: 1.04,
-                          letterSpacing: "-0.03em",
-                          fontWeight: 600,
-                          color: "var(--color-text)",
+                          padding: "calc(var(--project-padding) + 1mm) 0 0",
+                          borderTop:
+                            "0.24mm solid var(--resume-preview-editorial-rule-color)",
+                          display: "grid",
+                          gap: editorialMinorGap,
                         }}
                       >
-                        {project.name}
-                      </h3>
-                      <p
-                        style={{
-                          margin: 0,
-                          fontSize: editorialSectionLabelSize,
-                          lineHeight: 1.2,
-                          letterSpacing: "0.16em",
-                          textTransform: "uppercase",
-                          color: editorialSubtleColor,
-                          fontFamily: "var(--font-body-family)",
-                        }}
-                      >
-                        {project.meta}
-                      </p>
-                      <p
-                        style={{
-                          margin: 0,
-                          fontSize: editorialBodySize,
-                          lineHeight: 1.5,
-                          color: editorialBodyColor,
-                        }}
-                      >
-                        {project.description}
-                      </p>
-                    </article>
-                  ))}
-                </div>
-              </section>
+                        <h3
+                          style={{
+                            margin: 0,
+                            fontFamily: "var(--font-heading-family)",
+                            fontSize: editorialTitleSize,
+                            lineHeight: 1.04,
+                            letterSpacing: "-0.03em",
+                            fontWeight: 600,
+                            color: "var(--color-text)",
+                          }}
+                        >
+                          {project.name}
+                        </h3>
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: editorialSectionLabelSize,
+                            lineHeight: 1.2,
+                            letterSpacing: "0.16em",
+                            textTransform: "uppercase",
+                            color: editorialSubtleColor,
+                            fontFamily: "var(--font-body-family)",
+                          }}
+                        >
+                          {project.meta}
+                        </p>
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: editorialBodySize,
+                            lineHeight: 1.5,
+                            color: editorialBodyColor,
+                          }}
+                        >
+                          {project.description}
+                        </p>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
             </main>
 
             <div
@@ -2837,6 +3975,7 @@ function SignalGridPage({
   const signalSummarySize = "calc(var(--text-body-size) + 0.05mm)";
   const signalRoleSize = "calc(var(--text-title-size) - 1.35mm)";
   const signalMetaSize = "calc(var(--text-body-sm-size) + 0.1mm)";
+  const renderableTitle = getRenderableIdentitySubtitle(data.name, data.title);
 
   return (
     <PreviewFrame
@@ -3083,19 +4222,21 @@ function SignalGridPage({
                 >
                   {data.name}
                 </h1>
-                <p
-                  style={{
-                    margin: 0,
-                    fontSize: signalTitleSize,
-                    lineHeight: 1.3,
-                    letterSpacing: "0.16em",
-                    textTransform: "uppercase",
-                    color: "var(--color-accent)",
-                    fontWeight: 700,
-                  }}
-                >
-                  {data.title}
-                </p>
+                {renderableTitle ? (
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: signalTitleSize,
+                      lineHeight: 1.3,
+                      letterSpacing: "0.16em",
+                      textTransform: "uppercase",
+                      color: "var(--color-accent)",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {renderableTitle}
+                  </p>
+                ) : null}
               </div>
 
               <p
@@ -3218,91 +4359,93 @@ function SignalGridPage({
                   "0.24mm solid color-mix(in srgb, var(--color-border-strong) 76%, transparent)",
               }}
             >
-              <div
-                style={{
-                  display: "grid",
-                  gap: "calc(var(--main-heading-gap) - 0.6mm)",
-                }}
-              >
-                <p
-                  style={{
-                    margin: 0,
-                    fontSize: signalSectionLabelSize,
-                    lineHeight: 1.2,
-                    letterSpacing: "0.24em",
-                    textTransform: "uppercase",
-                    color: "var(--color-accent)",
-                    fontWeight: 700,
-                  }}
-                >
-                  Selected Projects
-                </p>
+              {projectCards.length > 0 ? (
                 <div
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                    gap: "calc(var(--project-gap) - 0.4mm)",
+                    gap: "calc(var(--main-heading-gap) - 0.6mm)",
                   }}
                 >
-                  {projectCards.map((item) => (
-                    <article
-                      key={item.name}
-                      style={{
-                        display: "grid",
-                        gap: "var(--experience-bullets-gap)",
-                        padding:
-                          "calc(var(--skill-padding-block) + 1.05mm) calc(var(--skill-padding-inline) + 0.9mm)",
-                        borderRadius: "calc(var(--skill-pad-inline) + 0.4mm)",
-                        border: "var(--resume-preview-signal-card-border)",
-                        background: "var(--resume-preview-signal-card-background)",
-                      }}
-                    >
-                      <h3
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: signalSectionLabelSize,
+                      lineHeight: 1.2,
+                      letterSpacing: "0.24em",
+                      textTransform: "uppercase",
+                      color: "var(--color-accent)",
+                      fontWeight: 700,
+                    }}
+                  >
+                    Selected Projects
+                  </p>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                      gap: "calc(var(--project-gap) - 0.4mm)",
+                    }}
+                  >
+                    {projectCards.map((item) => (
+                      <article
+                        key={item.name}
                         style={{
-                          margin: 0,
-                          fontFamily: "var(--font-heading-family)",
-                          fontSize: signalMetaSize,
-                          lineHeight: 1.2,
-                          color: "var(--color-text)",
-                          fontWeight: 700,
+                          display: "grid",
+                          gap: "var(--experience-bullets-gap)",
+                          padding:
+                            "calc(var(--skill-padding-block) + 1.05mm) calc(var(--skill-padding-inline) + 0.9mm)",
+                          borderRadius: "calc(var(--skill-pad-inline) + 0.4mm)",
+                          border: "var(--resume-preview-signal-card-border)",
+                          background: "var(--resume-preview-signal-card-background)",
                         }}
                       >
-                        {item.name}
-                      </h3>
-                      <p
-                        style={{
-                          margin: 0,
-                          fontSize: "calc(var(--text-body-sm-size) + 0.1mm)",
-                          lineHeight: 1.46,
-                          color: "var(--color-text-muted)",
-                        }}
-                      >
-                        {item.description}
-                      </p>
-                    </article>
-                  ))}
+                        <h3
+                          style={{
+                            margin: 0,
+                            fontFamily: "var(--font-heading-family)",
+                            fontSize: signalMetaSize,
+                            lineHeight: 1.2,
+                            color: "var(--color-text)",
+                            fontWeight: 700,
+                          }}
+                        >
+                          {item.name}
+                        </h3>
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: "calc(var(--text-body-sm-size) + 0.1mm)",
+                            lineHeight: 1.46,
+                            color: "var(--color-text-muted)",
+                          }}
+                        >
+                          {item.description}
+                        </p>
+                      </article>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              ) : null}
 
-              <div
-                style={{
-                  display: "grid",
-                  gap: "calc(var(--main-heading-gap) - 0.7mm)",
-                }}
-              >
-                <p
+                <div
                   style={{
-                    margin: 0,
-                    fontSize: signalSectionLabelSize,
-                    lineHeight: 1.2,
-                    letterSpacing: "0.24em",
-                    textTransform: "uppercase",
-                    color: "var(--color-accent)",
-                    fontWeight: 700,
+                    display: "grid",
+                    gap: "calc(var(--main-heading-gap) - 0.7mm)",
                   }}
                 >
-                  Education
-                </p>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: signalSectionLabelSize,
+                      lineHeight: 1.2,
+                      letterSpacing: "0.24em",
+                      textTransform: "uppercase",
+                      color: "var(--color-accent)",
+                      fontWeight: 700,
+                    }}
+                  >
+                    Education
+                  </p>
                 <div
                   style={{
                     display: "grid",
@@ -3350,8 +4493,8 @@ function SignalGridPage({
                     </div>
                   ))}
                 </div>
-              </div>
-            </section>
+                </div>
+              </section>
           </main>
         </div>
       </article>
@@ -3366,6 +4509,7 @@ function ResumeVariantPage({
   compactComparison,
   onActivateComparison,
   fitToken,
+  activeTarget,
 }: {
   variant: ResumeVariant;
   data: ResumeData;
@@ -3373,12 +4517,14 @@ function ResumeVariantPage({
   compactComparison?: boolean;
   onActivateComparison?: (() => void) | undefined;
   fitToken?: string;
+  activeTarget?: ResumeActiveTarget | null;
 }) {
   if (variant.id === "swissminima") {
     return (
       <SwissMinimaPage
         variant={variant}
         data={data}
+        activeTarget={activeTarget}
         comparisonLabel={comparisonLabel}
         compactComparison={compactComparison}
         onActivateComparison={onActivateComparison}
@@ -3443,6 +4589,7 @@ function ResumeVariantPage({
     <ClassicResumePage
       variant={variant}
       data={data}
+      activeTarget={activeTarget}
       comparisonLabel={comparisonLabel}
       compactComparison={compactComparison}
       onActivateComparison={onActivateComparison}
@@ -3458,8 +4605,10 @@ export default function ResumePage({
   stylePreset = null,
   fitToken,
   onSelectVariantId,
+  activeTarget = null,
   userZoom = 1,
   stageLayout,
+  onRemoveSection,
 }: ResumePageProps) {
   const isComparisonMode = mode === "comparison" || mode === "comparisonAll";
   const [expandedComparison, setExpandedComparison] = React.useState(false);
@@ -3499,53 +4648,56 @@ export default function ResumePage({
     <ResumeStylePresetContext.Provider value={stylePreset}>
       <ResumeStageLayoutContext.Provider value={stageLayout ?? null}>
         <ResumeUserZoomContext.Provider value={userZoom}>
-          <div
-            className={`resume-preview-shell ${
-              isComparisonMode ? "resume-preview-shell--comparison" : ""
-            } ${!isComparisonMode ? "resume-preview-shell--single" : ""}`}
-          >
-            {expandedComparisonView ? (
-              <div className="resume-preview-bar">
-                <button
-                  type="button"
-                  className="resume-preview-back"
-                  onClick={() => setExpandedComparison(false)}
-                >
-                  Back to overview
-                </button>
-              </div>
-            ) : null}
-
+          <ResumeRemoveSectionContext.Provider value={onRemoveSection ?? null}>
             <div
-              className={`resume-preview-grid ${
-                isComparisonMode ? "resume-preview-grid--comparison" : ""
-              } ${compactComparison ? "resume-preview-grid--compact" : ""} ${
-                expandedComparisonView ? "resume-preview-grid--expanded" : ""
-              }`}
+              className={`resume-preview-shell ${
+                isComparisonMode ? "resume-preview-shell--comparison" : ""
+              } ${!isComparisonMode ? "resume-preview-shell--single" : ""}`}
             >
-              {variants.map((variant) => (
-                <ResumeVariantPage
-                  key={variant.id}
-                  variant={variant}
-                  comparisonLabel={isComparisonMode ? variant.label : undefined}
-                  compactComparison={compactComparison}
-                  fitToken={`${fitToken ?? ""}:${variant.id}`}
-                  onActivateComparison={
-                    isComparisonMode && !expandedComparisonView
-                      ? () => {
-                          if (onSelectVariantId) {
-                            onSelectVariantId(variant.id);
-                            return;
+              {expandedComparisonView ? (
+                <div className="resume-preview-bar">
+                  <button
+                    type="button"
+                    className="resume-preview-back"
+                    onClick={() => setExpandedComparison(false)}
+                  >
+                    Back to overview
+                  </button>
+                </div>
+              ) : null}
+
+              <div
+                className={`resume-preview-grid ${
+                  isComparisonMode ? "resume-preview-grid--comparison" : ""
+                } ${compactComparison ? "resume-preview-grid--compact" : ""} ${
+                  expandedComparisonView ? "resume-preview-grid--expanded" : ""
+                }`}
+              >
+                {variants.map((variant) => (
+                  <ResumeVariantPage
+                    key={variant.id}
+                    variant={variant}
+                    activeTarget={activeTarget}
+                    comparisonLabel={isComparisonMode ? variant.label : undefined}
+                    compactComparison={compactComparison}
+                    fitToken={`${fitToken ?? ""}:${variant.id}`}
+                    onActivateComparison={
+                      isComparisonMode && !expandedComparisonView
+                        ? () => {
+                            if (onSelectVariantId) {
+                              onSelectVariantId(variant.id);
+                              return;
+                            }
+                            setExpandedComparison(true);
                           }
-                          setExpandedComparison(true);
-                        }
-                      : undefined
-                  }
-                  data={data}
-                />
-              ))}
+                        : undefined
+                    }
+                    data={data}
+                  />
+                ))}
+              </div>
             </div>
-          </div>
+          </ResumeRemoveSectionContext.Provider>
         </ResumeUserZoomContext.Provider>
       </ResumeStageLayoutContext.Provider>
     </ResumeStylePresetContext.Provider>
