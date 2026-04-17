@@ -34,7 +34,7 @@ vi.mock("../../contexts/CvLibraryContext", () => ({
   }),
 }));
 
-describe("CvsLibrary empty search results", () => {
+describe("CvsLibrary", () => {
   beforeEach(() => {
     navigateMock.mockReset();
     createNewCvMock.mockReset();
@@ -56,5 +56,14 @@ describe("CvsLibrary empty search results", () => {
     ).toHaveValue("zzz");
     expect(screen.getByRole("combobox", { name: "Sort all resumes" })).toBeInTheDocument();
     expect(screen.getByText("No resumes match this search")).toBeInTheDocument();
+  });
+
+  it("creates a normal new CV from the main create action", () => {
+    render(<CvsLibrary />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Create new resume" }));
+
+    expect(createNewCvMock).toHaveBeenCalledTimes(1);
+    expect(navigateMock).toHaveBeenCalledWith("/cv");
   });
 });
