@@ -2,6 +2,10 @@
 import { action } from "../_generated/server";
 import { v } from "convex/values";
 
+function nowMs(): number {
+  return Date.now();
+}
+
 function normalizeOrigin(value?: string): string {
   if (!value) return "";
   try {
@@ -41,6 +45,7 @@ export const probe = action({
   args: {},
   returns: v.any(),
   handler: async (ctx) => {
+    const traceId = `probe:${nowMs()}`;
     const envGet = (ctx as any)?.env?.get?.bind((ctx as any).env);
     const raw = envGet ? envGet("CONVEX_PARSER_URL") : (process.env.CONVEX_PARSER_URL as string | undefined);
     const cfAccessClientId = envGet
@@ -72,6 +77,11 @@ export const probe = action({
     let readyStatus = 0;
     let readyJson: any = null;
     let readyBody = "";
+    const readyStartedAt = nowMs();
+    console.info("[resume-import-timing][probe] ready.start", {
+      traceId,
+      readyUrl,
+    });
     try {
       const headers: Record<string, string> = { Accept: "application/json" };
       if (accessHeaders) Object.assign(headers, accessHeaders);
@@ -90,7 +100,20 @@ export const probe = action({
           readyJson = null;
         }
       }
+      console.info("[resume-import-timing][probe] ready.finish", {
+        traceId,
+        readyUrl,
+        readyStatus,
+        elapsedMs: nowMs() - readyStartedAt,
+      });
     } catch (err: any) {
+      console.info("[resume-import-timing][probe] ready.finish", {
+        traceId,
+        readyUrl,
+        readyStatus: 0,
+        elapsedMs: nowMs() - readyStartedAt,
+        error: err?.message ?? String(err),
+      });
       return {
         route: { origin, readyUrl, parseUrl },
         ready: { status: 0, error: err?.message ?? String(err) },
@@ -105,6 +128,11 @@ export const probe = action({
     let diag: any = null;
     let bodySample = "";
     let cfRay: string | null = null;
+    const parseStartedAt = nowMs();
+    console.info("[resume-import-timing][probe] parse.start", {
+      traceId,
+      parseUrl,
+    });
     try {
       const headers: Record<string, string> = { Accept: "application/json" };
       if (accessHeaders) Object.assign(headers, accessHeaders);
@@ -126,7 +154,21 @@ export const probe = action({
           diag = null;
         }
       }
+      console.info("[resume-import-timing][probe] parse.finish", {
+        traceId,
+        parseUrl,
+        status,
+        elapsedMs: nowMs() - parseStartedAt,
+        cfRay,
+      });
     } catch (err: any) {
+      console.info("[resume-import-timing][probe] parse.finish", {
+        traceId,
+        parseUrl,
+        status: 0,
+        elapsedMs: nowMs() - parseStartedAt,
+        error: err?.message ?? String(err),
+      });
       return {
         route: { origin, readyUrl, parseUrl },
         ready: { status: readyStatus, json: readyJson ?? null, bodySample: (readyBody ?? "").slice(0, 200) },

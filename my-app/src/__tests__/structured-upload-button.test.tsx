@@ -123,6 +123,14 @@ describe("StructuredUploadButton", () => {
     );
   });
 
+  it("does not probe Mistral on mount before the user selects a file", async () => {
+    render(<StructuredUploadButton />);
+
+    await Promise.resolve();
+
+    expect(probeMistralMock).not.toHaveBeenCalled();
+  });
+
   it("surfaces top-level Mistral diagnostics to onResult", async () => {
     const onResult = vi.fn();
     structuredActionMock.mockResolvedValue({
@@ -342,13 +350,12 @@ describe("StructuredUploadButton", () => {
     render(<StructuredUploadButton />);
     const file = new File(["scan"], "scan.png", { type: "image/png" });
 
-    await waitFor(() => expect(probeMistralMock).toHaveBeenCalledTimes(1));
     fireEvent.drop(screen.getByRole("button", { name: "Scanned PDF / Image" }), {
       dataTransfer: { files: [file] },
     });
 
     await waitFor(() => expect(structuredActionMock).toHaveBeenCalledTimes(1));
-    expect(probeMistralMock).toHaveBeenCalledTimes(2);
+    expect(probeMistralMock).toHaveBeenCalledTimes(1);
   });
 
   it("continues scanned upload when the click-time probe fails transiently", async () => {
@@ -383,10 +390,6 @@ describe("StructuredUploadButton", () => {
     probeMistralMock
       .mockResolvedValueOnce({
         ready: { status: 200 },
-        parse: { status: 200 },
-      })
-      .mockResolvedValueOnce({
-        ready: { status: 200 },
         parse: { status: 0 },
       });
 
@@ -401,6 +404,6 @@ describe("StructuredUploadButton", () => {
     });
 
     await waitFor(() => expect(structuredActionMock).toHaveBeenCalledTimes(1));
-    expect(probeMistralMock).toHaveBeenCalledTimes(2);
+    expect(probeMistralMock).toHaveBeenCalledTimes(1);
   });
 });

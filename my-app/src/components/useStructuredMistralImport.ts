@@ -16,6 +16,13 @@ import {
   buildTypedSectionsFromNormalized,
 } from "../utils/cv/mapping-utils";
 
+export type StructuredImportTimingTrace = {
+  id: string;
+  source: string;
+  fileName: string | null;
+  startedAt: number;
+};
+
 export type StructuredPayload = {
   normalized?: unknown;
   authoritativeResume?: AuthoritativeResume | null;
@@ -36,6 +43,7 @@ export type StructuredPayload = {
 type StructuredImportCallbacks = {
   onRetrying?: () => void | Promise<void>;
   onRetrySucceeded?: () => void | Promise<void>;
+  trace?: StructuredImportTimingTrace | null;
 };
 
 type StructuredImportRunnerArgs = {
@@ -70,6 +78,67 @@ export type StructuredImportOutcome =
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const MISTRAL_PROBE_TTL_MS = 10_000;
+export const TRUSTED_MISTRAL_FILE_INPUT_ACCEPT =
+  ".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg";
+
+function nowMs(): number {
+  if (
+    typeof globalThis !== "undefined" &&
+    globalThis.performance &&
+    typeof globalThis.performance.now === "function"
+  ) {
+    return globalThis.performance.now();
+  }
+  return Date.now();
+}
+
+function shouldLogStructuredImportTiming(): boolean {
+  if (
+    typeof import.meta !== "undefined" &&
+    typeof import.meta.env !== "undefined" &&
+    Boolean(import.meta.env.DEV)
+  ) {
+    return true;
+  }
+
+  if (typeof window !== "undefined") {
+    return (window as any).__QUICK_START_IMPORT_DEBUG__ === true;
+  }
+
+  return process.env.NODE_ENV !== "production";
+}
+
+export function beginStructuredImportTimingTrace(
+  source: string,
+  fileName?: string | null,
+): StructuredImportTimingTrace {
+  return {
+    id: `${source}:${Math.round(nowMs())}`,
+    source,
+    fileName: fileName ?? null,
+    startedAt: nowMs(),
+  };
+}
+
+export function logStructuredImportTiming(
+  trace: StructuredImportTimingTrace | null | undefined,
+  stage: string,
+  details?: Record<string, unknown>,
+): void {
+  if (!trace || !shouldLogStructuredImportTiming()) {
+    return;
+  }
+
+  const elapsedMs = Math.round((nowMs() - trace.startedAt) * 10) / 10;
+  console.info("[resume-import-timing]", {
+    traceId: trace.id,
+    source: trace.source,
+    fileName: trace.fileName,
+    stage,
+    elapsedMs,
+    ...(details ?? {}),
+  });
+}
 
 function buildSectionsFromNormalized(
   normalized: unknown,
@@ -178,22 +247,47 @@ async function runStructuredMistralImport(
   file: File,
   { invokeStructuredAction, invokeProbeMistral, callbacks }: StructuredImportRunnerArgs,
 ): Promise<StructuredImportOutcome> {
+  const trace =
+    callbacks?.trace ??
+    beginStructuredImportTimingTrace("structured_import", file.name);
+
+  logStructuredImportTiming(trace, "run.entered", {
+    fileSizeBytes: file.size,
+    fileType: file.type || null,
+  });
+  logStructuredImportTiming(trace, "submission.build.start");
   const submission = await buildSubmission(file);
+  logStructuredImportTiming(trace, "submission.build.finish", {
+    mimeType: submission.mimeType,
+    byteLength: submission.buffer.byteLength,
+  });
   if (typeof invokeProbeMistral === "function") {
+    logStructuredImportTiming(trace, "readiness_probe.start");
     try {
       const result = await invokeProbeMistral();
       const readyStatus = result?.ready?.status;
       const parseStatus = result?.parse?.status;
+      logStructuredImportTiming(trace, "readiness_probe.finish", {
+        readyStatus: readyStatus ?? null,
+        parseStatus: parseStatus ?? null,
+      });
       if (!(readyStatus === 200 && parseStatus === 200)) {
         console.warn(
           "[StructuredUploadButton][mistral] live probe failed; continuing with upload and relying on server-side retries",
         );
       }
     } catch {
+      logStructuredImportTiming(trace, "readiness_probe.finish", {
+        readyStatus: null,
+        parseStatus: null,
+        outcome: "error",
+      });
       console.warn(
         "[StructuredUploadButton][mistral] live probe failed; continuing with upload and relying on server-side retries",
       );
     }
+  } else {
+    logStructuredImportTiming(trace, "readiness_probe.skipped");
   }
 
   console.info(
@@ -212,7 +306,9 @@ async function runStructuredMistralImport(
 
   let payload: StructuredPayload;
   try {
+    logStructuredImportTiming(trace, "structured_upload.start");
     payload = await invokeStructuredAction(actionArgs);
+    logStructuredImportTiming(trace, "structured_upload.finish");
   } catch (err: any) {
     const message = String(err?.message ?? err ?? "");
     const code = String((err as any)?.code ?? "");
@@ -223,19 +319,38 @@ async function runStructuredMistralImport(
     if (!shouldRetry) {
       throw err;
     }
+    logStructuredImportTiming(trace, "retry.start", {
+      reason: code || message || "unknown",
+    });
     await callbacks?.onRetrying?.();
     await sleep(500);
+    logStructuredImportTiming(trace, "structured_upload.start", {
+      attempt: "retry",
+    });
     payload = await invokeStructuredAction(actionArgs);
     console.info("[StructuredUploadButton] retry succeeded");
     await callbacks?.onRetrySucceeded?.();
+    logStructuredImportTiming(trace, "retry.finish");
+    logStructuredImportTiming(trace, "structured_upload.finish", {
+      attempt: "retry",
+    });
   }
 
+  logStructuredImportTiming(trace, "trusted_validation.start");
   const authoritativeResume = readStructuredAuthoritativeResume(payload);
   const diagnostics = readStructuredDiagnostics(payload);
   const trustedImport = hasTrustedAuthoritativeMistralImport({
     authoritativeResume,
     mistralFallback: diagnostics?.mistral_fallback,
     mistralRuntime: diagnostics?.mistral_runtime,
+  });
+  logStructuredImportTiming(trace, "trusted_validation.finish", {
+    trustedImport,
+    mistralRuntime:
+      typeof diagnostics?.mistral_runtime === "string"
+        ? diagnostics.mistral_runtime
+        : null,
+    mistralFallback: diagnostics?.mistral_fallback === true,
   });
 
   if (!trustedImport) {
@@ -269,17 +384,13 @@ export async function importStructuredMistralFileViaClient(
   if (!structuredActionRef) {
     throw new Error("Structured pipeline action unavailable.");
   }
-  const probeMistralRef =
-    (api as any).actions?._probeMistral?.probe ??
-    (api as any)["actions/_probeMistral"]?.probe ??
-    null;
 
+  // Quick Start relies on the canonical structuredUpload action only.
+  // The action already performs route selection, health checks, retries,
+  // and trusted-result gating, so an extra direct probe just adds latency.
   return await runStructuredMistralImport(file, {
     invokeStructuredAction: async (args) =>
       (await convexClient.action(structuredActionRef, args)) as StructuredPayload,
-    invokeProbeMistral: probeMistralRef
-      ? async () => await convexClient.action(probeMistralRef, {})
-      : undefined,
     callbacks,
   });
 }
