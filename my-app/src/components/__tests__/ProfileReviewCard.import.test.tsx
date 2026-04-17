@@ -597,12 +597,26 @@ describe("ProfileReviewCard import", () => {
         updatedAt: new Date().toISOString(),
         version: 1,
       },
-      sections: [],
+      sections: [
+        {
+          id: "profile-1",
+          type: "profile",
+          title: "Profile",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "profile-item-1",
+              name: "Jane Doe",
+              desiredPosition: "Operations Associate",
+            },
+          ],
+        },
+      ],
     };
 
     render(<ProfileReviewCard />);
 
-    expect(screen.getByText("Name this imported CV")).toBeInTheDocument();
+    expect(screen.getByText("Rename CV")).toBeInTheDocument();
 
     await user.clear(screen.getByPlaceholderText("e.g. Jane Doe — Product Manager"));
     await user.type(
