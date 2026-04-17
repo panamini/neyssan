@@ -11,6 +11,7 @@ import {
   Moon,
   Sun,
   Trash,
+  User,
   X,
 } from "@/lib/icons";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -180,6 +181,8 @@ function SidebarDocumentSection({
   sectionLabel,
   hasDocuments,
   createLabel,
+  secondaryActionLabel,
+  secondaryActionHref,
   allLabel,
   allCount,
   items,
@@ -189,6 +192,8 @@ function SidebarDocumentSection({
   sectionLabel: string;
   hasDocuments: boolean;
   createLabel: string;
+  secondaryActionLabel?: string;
+  secondaryActionHref?: string;
   allLabel: string;
   allCount: number;
   items: SidebarListItem[];
@@ -212,6 +217,11 @@ function SidebarDocumentSection({
           >
             {`+ ${createLabel}`}
           </button>
+          {secondaryActionLabel && secondaryActionHref ? (
+            <Link to={secondaryActionHref} className="sb-section__all-link">
+              {secondaryActionLabel}
+            </Link>
+          ) : null}
 
           {items.length > 0 ? (
             <ul className="sb-section__list" role="list">
@@ -300,13 +310,20 @@ function SidebarDocumentSection({
           </Link>
         </>
       ) : (
-        <button
-          type="button"
-          className="sb-section__action"
-          onClick={onCreate}
-        >
-          {`+ ${createLabel}`}
-        </button>
+        <>
+          <button
+            type="button"
+            className="sb-section__action"
+            onClick={onCreate}
+          >
+            {`+ ${createLabel}`}
+          </button>
+          {secondaryActionLabel && secondaryActionHref ? (
+            <Link to={secondaryActionHref} className="sb-section__all-link">
+              {secondaryActionLabel}
+            </Link>
+          ) : null}
+        </>
       )}
     </section>
   );
@@ -432,6 +449,7 @@ export const Sidebar: React.FC = () => {
   } = useConvexAuth();
   const { cvs, currentCv, currentCvId, loadCv, createNewCv, deleteCv } =
     useCvLibrary();
+  const clerkUserButtonRef = React.useRef<HTMLDivElement | null>(null);
   const [collapsed, setCollapsed] = React.useState(false);
   const [viewportWidth, setViewportWidth] = React.useState(() =>
     typeof window === "undefined" ? 1440 : window.innerWidth,
@@ -546,6 +564,19 @@ export const Sidebar: React.FC = () => {
     (base: string) => pathname === base || pathname.startsWith(`${base}/`),
     [pathname],
   );
+  const handleAccountClick = React.useCallback(() => {
+    const clerkTrigger =
+      clerkUserButtonRef.current?.querySelector<HTMLButtonElement>("button");
+
+    if (clerkTrigger) {
+      clerkTrigger.click();
+      return;
+    }
+
+    if (!isSignedIn) {
+      void navigate("/sign-in");
+    }
+  }, [isSignedIn, navigate]);
 
   const forcedCollapsed = viewportWidth < 768;
   const hideSidebar = viewportWidth < 480;
@@ -1025,6 +1056,8 @@ export const Sidebar: React.FC = () => {
             sectionLabel="Resumes"
             hasDocuments={hasResumeDocuments}
             createLabel="New Resume"
+            secondaryActionLabel="Quick Start"
+            secondaryActionHref="/cv?start=quick"
             allLabel="Resumes"
             allCount={resumeDocs.length}
             items={recentResumeItems}
@@ -1052,7 +1085,24 @@ export const Sidebar: React.FC = () => {
         )}
       >
         <div className="sb-footer__avatar">
-          <UserButton afterSignOutUrl="/" appearance={clerkAppearance} />
+          <button
+            type="button"
+            className="sb-footer__account-button"
+            onClick={handleAccountClick}
+            aria-label={isSignedIn ? "Open account menu" : "Sign in"}
+            title={isSignedIn ? "Account" : "Sign in"}
+          >
+            <User size={18} strokeWidth={1.8} aria-hidden="true" />
+          </button>
+          {isSignedIn ? (
+            <div
+              ref={clerkUserButtonRef}
+              className="sb-footer__clerk-user-button"
+              aria-hidden="true"
+            >
+              <UserButton afterSignOutUrl="/" appearance={clerkAppearance} />
+            </div>
+          ) : null}
         </div>
         {!sidebarCollapsed ? (
           <div className="sb-footer__account">
