@@ -11,10 +11,17 @@ type UseDocumentPanResult = {
 };
 
 function isInteractivePanTarget(target: EventTarget | null): boolean {
+  const element =
+    target instanceof Element
+      ? target
+      : target instanceof Node
+        ? target.parentElement
+        : null;
+
   return (
-    target instanceof Element &&
+    element instanceof Element &&
     Boolean(
-      target.closest(
+      element.closest(
         [
           "button",
           "input",

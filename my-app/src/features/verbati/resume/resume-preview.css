@@ -851,7 +851,8 @@
 
 .compact-list,
 .bullet-list,
-.skills-list {
+.skills-list,
+.hobby-tag-list {
   margin: 0;
   padding: 0;
   list-style: none;
@@ -896,6 +897,34 @@
   line-height: 1;
   color: var(--color-text);
   white-space: nowrap;
+}
+
+.hobby-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--skill-gap);
+}
+
+.hobby-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: calc(var(--skill-padding-block) - 0.1mm)
+    calc(var(--skill-padding-inline) - 0.15mm);
+  border-radius: var(--radius-pill);
+  border: 0.3mm solid color-mix(in srgb, var(--color-border) 92%, transparent);
+  background: color-mix(in srgb, var(--color-surface-muted) 72%, white 28%);
+  font-size: var(--text-caption-size);
+  line-height: 1;
+  color: var(--color-text);
+  white-space: nowrap;
+}
+
+.resume-page--robial .hobby-tag {
+  font-size: calc(var(--text-caption-size) + 0.08mm);
+}
+
+.hobby-tag--editorial {
+  background: color-mix(in srgb, var(--color-surface) 82%, transparent);
 }
 
 .experience-stack {

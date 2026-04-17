@@ -188,6 +188,9 @@ export type CanonicalDocumentTokens = {
         accentPressed?: string;
         accentSoft?: string;
         accentMuted?: string;
+        interactionRing?: string;
+        interactionFill?: string;
+        interactionShadow?: string;
       };
       export?: {
         pageBackground?: string;

@@ -8486,6 +8486,27 @@ html:not(.dark) .dasti-proposal-submit {
   padding: var(--space-1);
 }
 
+.dasti-add-section-menu__heading {
+  padding: var(--space-2) var(--space-2) var(--space-1);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tg2);
+}
+
+.dasti-add-section-menu__divider {
+  height: 1px;
+  margin: var(--space-1) var(--space-2);
+  background: color-mix(in srgb, var(--color-border) 82%, transparent);
+}
+
+.dasti-add-section-menu__empty {
+  padding: var(--space-3);
+  font-size: var(--tx);
+  color: var(--tg2);
+}
+
 .cv-photo-upload-trigger {
   background: color-mix(in srgb, var(--color-surface-muted) 88%, white 12%);
   border-color: var(--color-border);
@@ -13497,13 +13518,34 @@ html:not(.dark) .dasti-proposal-submit {
 .dasti-document-stage__canvas[data-interactive="true"] [data-preview-section] {
   cursor: pointer;
   position: relative;
-  transition: outline 0.1s ease;
-  border-radius: 1px;
+  transition:
+    background-color 0.12s ease,
+    box-shadow 0.12s ease;
+  background: transparent;
 }
 
 .dasti-document-stage__canvas[data-interactive="true"] [data-preview-section]:hover {
-  outline: 1.5px solid color-mix(in srgb, var(--color-accent, currentColor) 55%, transparent 45%);
-  outline-offset: 2px;
+  background:
+    color-mix(
+      in srgb,
+      var(--resume-preview-interaction-fill) 72%,
+      transparent
+    );
+  box-shadow:
+    inset 0 0 0 1px
+      color-mix(
+        in srgb,
+        var(--resume-preview-interaction-ring) 74%,
+        transparent
+      ),
+    var(--resume-preview-interaction-shadow);
+}
+
+.dasti-document-stage__canvas[data-interactive="true"] [data-preview-active="true"] {
+  background: var(--resume-preview-interaction-fill);
+  box-shadow:
+    inset 0 0 0 1px var(--resume-preview-interaction-ring),
+    var(--resume-preview-interaction-shadow);
 }
 
 /* Highlight pulse on editor section when preview click fires */
