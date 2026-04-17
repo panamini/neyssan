@@ -7,6 +7,8 @@ import { ProfileReviewCard } from "../components/ProfileReviewCard";
 import ResumeExportControl from "../components/ResumeExportControl";
 import type { ResumeExportRequest } from "../components/ResumeExportControl";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
+import { QuickStartFlow } from "../components/onboarding/QuickStartFlow";
+import { isQuickStartCompleted } from "../lib/onboarding-state";
 import { VerbatiCvPreviewPanel } from "../features/verbati/VerbatiCvPreviewPanel";
 import type {
   ResumeActiveTarget,
@@ -135,7 +137,11 @@ function buildStylePresetFromSettingsSlot(
  */
 export function CvForge(): JSX.Element {
   const { search } = useLocation();
-  const { currentCv, importCv } = useCvLibrary();
+  const { currentCv, importCv, hasMeaningfulContent } = useCvLibrary();
+  const [quickStartDismissed, setQuickStartDismissed] = React.useState(() =>
+    isQuickStartCompleted(),
+  );
+  const shouldShowQuickStart = !quickStartDismissed && !hasMeaningfulContent;
   const presetMenuRef = React.useRef<HTMLDivElement | null>(null);
   const [viewportWidth, setViewportWidth] = React.useState(() =>
     typeof window === "undefined" ? 1440 : window.innerWidth,
@@ -166,11 +172,14 @@ export function CvForge(): JSX.Element {
     [workspaceMode],
   );
 
-  const handleResumeLinkIntentHandled = React.useCallback((requestId: string) => {
-    setResumeLinkIntent((currentIntent) =>
-      currentIntent?.requestId === requestId ? null : currentIntent,
-    );
-  }, []);
+  const handleResumeLinkIntentHandled = React.useCallback(
+    (requestId: string) => {
+      setResumeLinkIntent((currentIntent) =>
+        currentIntent?.requestId === requestId ? null : currentIntent,
+      );
+    },
+    [],
+  );
   const { stylePreset, setStylePreset } = useBoundVerbatiCvStyle({
     currentCv,
     importCv,
@@ -309,7 +318,9 @@ export function CvForge(): JSX.Element {
                   const exportContext = {
                     cvId: currentCv?.id ? String(currentCv.id) : null,
                     cvUrl:
-                      typeof window !== "undefined" ? window.location.href : null,
+                      typeof window !== "undefined"
+                        ? window.location.href
+                        : null,
                     rendererVariantId: source.rendererVariantId,
                     stylePreset: source.stylePreset,
                     previewCapture,
@@ -352,7 +363,8 @@ export function CvForge(): JSX.Element {
                                         : null,
                                     rendererVariantId: source.rendererVariantId,
                                     stylePreset: source.stylePreset,
-                                    previewCapture: readResumePreviewDebugCapture(),
+                                    previewCapture:
+                                      readResumePreviewDebugCapture(),
                                     timestamp: Date.now(),
                                   }
                                 : null,
@@ -529,6 +541,17 @@ export function CvForge(): JSX.Element {
     maxWidth: editorGridMaxWidth,
     marginInline: "auto",
   };
+
+  if (shouldShowQuickStart) {
+    return (
+      <div
+        className="dasti-page-scroll"
+        style={{ minWidth: 0, height: "100%" }}
+      >
+        <QuickStartFlow onExit={() => setQuickStartDismissed(true)} />
+      </div>
+    );
+  }
 
   return (
     <div
