@@ -336,7 +336,7 @@ describe("ProposalForge attached CV sync", () => {
     ).toHaveAttribute("href", PROPOSAL_EXTENSION_INSTALL_LINK.href);
   });
 
-  it("toggles the extension helper closed when the action is clicked again", async () => {
+  it("toggles the extension helper open and closed on repeated clicks", async () => {
     render(
       <MemoryRouter initialEntries={["/proposal"]}>
         <ProposalForge />
@@ -346,13 +346,16 @@ describe("ProposalForge attached CV sync", () => {
     const toggle = screen.getByRole("button", {
       name: /^Use Chrome extension\b/i,
     });
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
 
     fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
     expect(
       screen.getByRole("link", { name: /Install Chrome extension/i }),
     ).toBeInTheDocument();
 
     fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
     expect(
       screen.queryByRole("link", { name: /Install Chrome extension/i }),
     ).not.toBeInTheDocument();
