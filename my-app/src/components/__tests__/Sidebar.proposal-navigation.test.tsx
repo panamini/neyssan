@@ -1,7 +1,7 @@
 import React from "react";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { Sidebar } from "../Sidebar";
 import {
   PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,
@@ -103,6 +103,15 @@ function ProposalRouteProbe(): JSX.Element {
   );
 }
 
+function LocationProbe(): JSX.Element {
+  const location = useLocation();
+  return (
+    <div data-testid="sidebar-location">
+      {`${location.pathname}${location.search}`}
+    </div>
+  );
+}
+
 function setViewportWidth(width: number): void {
   Object.defineProperty(window, "innerWidth", {
     configurable: true,
@@ -199,6 +208,22 @@ describe("Sidebar proposal navigation", () => {
     expect(window.localStorage.getItem("cvActiveId")).toBe("cv_beta");
   });
 
+  it("renders an explicit account trigger in the sidebar footer", () => {
+    render(
+      <MemoryRouter initialEntries={["/cv"]}>
+        <Sidebar />
+        <Routes>
+          <Route path="/cv" element={<CvRoute />} />
+          <Route path="/proposal" element={<ProposalRouteProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Open account menu" }),
+    ).toBeInTheDocument();
+  });
+
   it("fully removes the sidebar from layout on very narrow mobile widths", () => {
     setViewportWidth(440);
 
@@ -240,6 +265,26 @@ describe("Sidebar proposal navigation", () => {
         screen.getByText("Operations Associate Proposal"),
       ).toBeInTheDocument();
     });
+  });
+
+  it("keeps Quick Start available as an explicit sidebar resume action", () => {
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <Sidebar />
+        <Routes>
+          <Route path="/cv" element={<CvRoute />} />
+          <Route path="/proposal" element={<ProposalRouteProbe />} />
+        </Routes>
+        <LocationProbe />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("link", { name: "Quick Start" }));
+
+    expect(mockCvLibraryState.createNewCv).not.toHaveBeenCalled();
+    expect(screen.getByTestId("sidebar-location")).toHaveTextContent(
+      "/cv?start=quick",
+    );
   });
 
   it("keeps the resume workspace item visible from currentCvId while proposal stays active", () => {

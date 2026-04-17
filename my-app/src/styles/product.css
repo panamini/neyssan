@@ -7146,9 +7146,44 @@ html:not(.dark) .dasti-proposal-submit {
 }
 
 .sb-footer__avatar {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+.sb-footer__account-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-control);
+  color: var(--ti);
+  background: color-mix(in srgb, var(--sfr) 58%, transparent);
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
+}
+
+.sb-footer__account-button:hover,
+.sb-footer__account-button:focus-visible {
+  background: color-mix(in srgb, var(--sfr) 82%, transparent);
+  color: var(--ti);
+  outline: none;
+}
+
+.sb-footer__account-button:active {
+  transform: translateY(1px);
+}
+
+.sb-footer__clerk-user-button {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .sb--forced-collapsed .sb-footer {
