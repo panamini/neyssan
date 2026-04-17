@@ -176,6 +176,10 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function nowMs(): number {
+  return Date.now();
+}
+
 function isTransientParserStatus(status: number): boolean {
   return status >= 500 && status < 600;
 }
@@ -241,16 +245,23 @@ function isLoopbackUrl(value: string | undefined | null): boolean {
 export async function detectHealthyLocalParserOrigin(
   accessHeaders?: Record<string, string> | null,
 ): Promise<string | null> {
+  const detectionStartedAt = nowMs();
   const now = Date.now();
   if (
     cachedLocalParserProbe &&
     now - cachedLocalParserProbe.checkedAt < LOCAL_PARSER_PROBE_TTL_MS
   ) {
+    console.info("[resume-import-timing][structuredUpload] local_parser_probe.cache_hit", {
+      origin: cachedLocalParserProbe.origin,
+      ageMs: now - cachedLocalParserProbe.checkedAt,
+      elapsedMs: nowMs() - detectionStartedAt,
+    });
     return cachedLocalParserProbe.origin;
   }
 
   for (const origin of LOCAL_PARSER_ORIGINS) {
     const readyUrl = new URL("/ready", origin);
+    const probeStartedAt = nowMs();
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 400);
     try {
@@ -265,9 +276,27 @@ export async function detectHealthyLocalParserOrigin(
       });
       if (res.ok) {
         cachedLocalParserProbe = { checkedAt: now, origin };
+        console.info("[resume-import-timing][structuredUpload] local_parser_probe.finish", {
+          origin,
+          readyUrl: readyUrl.toString(),
+          status: res.status,
+          elapsedMs: nowMs() - probeStartedAt,
+        });
         return origin;
       }
+      console.info("[resume-import-timing][structuredUpload] local_parser_probe.finish", {
+        origin,
+        readyUrl: readyUrl.toString(),
+        status: res.status,
+        elapsedMs: nowMs() - probeStartedAt,
+      });
     } catch {
+      console.info("[resume-import-timing][structuredUpload] local_parser_probe.finish", {
+        origin,
+        readyUrl: readyUrl.toString(),
+        status: 0,
+        elapsedMs: nowMs() - probeStartedAt,
+      });
       // Ignore; this probe only decides whether loopback should win locally.
     } finally {
       clearTimeout(timeout);
@@ -397,6 +426,10 @@ async function ensureParserReachable(
   const healthUrl = new URL(endpoint.toString());
   healthUrl.pathname = "/ready";
   healthUrl.search = "";
+  const healthStartedAt = nowMs();
+  console.info("[resume-import-timing][structuredUpload] parser_ready.start", {
+    healthUrl: healthUrl.toString(),
+  });
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 3_000);
@@ -413,7 +446,18 @@ async function ensureParserReachable(
     if (!res.ok) {
       throw new Error(`health check returned ${res.status}`);
     }
+    console.info("[resume-import-timing][structuredUpload] parser_ready.finish", {
+      healthUrl: healthUrl.toString(),
+      status: res.status,
+      elapsedMs: nowMs() - healthStartedAt,
+    });
   } catch (err: any) {
+    console.info("[resume-import-timing][structuredUpload] parser_ready.finish", {
+      healthUrl: healthUrl.toString(),
+      status: 0,
+      elapsedMs: nowMs() - healthStartedAt,
+      error: err?.message ?? String(err),
+    });
     console.error(
       "[structuredUpload] health check failed url=%s error=%s",
       healthUrl.toString(),
@@ -476,6 +520,8 @@ export const structuredUpload = action({
   },
   returns: v.any(),
   handler: async (ctx, { rawText, file, fileName, mimeType, mode, storageId, fileUrl, useMistral }) => {
+    const traceId = `structuredUpload:${nowMs()}`;
+    const handlerStartedAt = nowMs();
     const STRICT_EMPTY_CHECK = process.env.STRUCTURED_UPLOAD_STRICT_EMPTY_CHECK === "1";
     const hasRawText = typeof rawText === "string" && rawText.trim().length > 0;
     const hasDirectFile = file instanceof ArrayBuffer && file.byteLength > 0;
@@ -900,6 +946,7 @@ export const structuredUpload = action({
       };
 
       const performFetch = async (formData: FormData, retryIndex: number, modeUsed: ParserMode) => {
+        const fetchStartedAt = nowMs();
         const controller = new AbortController();
         const parserFetchTimeoutMs = activeUseMistral ? 240_000 : 90_000;
         const timer = setTimeout(() => controller.abort(), parserFetchTimeoutMs);
@@ -925,16 +972,45 @@ export const structuredUpload = action({
             retryIndex + 1,
             endpointToCall,
           );
+          console.info("[resume-import-timing][structuredUpload] parser_request.start", {
+            traceId,
+            label: attempt.label,
+            mode: modeUsed,
+            retry: retryIndex + 1,
+            endpointToCall,
+          });
           const headers: Record<string, string> = { Accept: "application/json" };
           if (parserAccessHeaders) {
             Object.assign(headers, parserAccessHeaders);
           }
-          return await fetch(endpointToCall, {
+          const response = await fetch(endpointToCall, {
             method: "POST",
             headers,
             body: formData,
             signal: controller.signal,
           });
+          console.info("[resume-import-timing][structuredUpload] parser_request.finish", {
+            traceId,
+            label: attempt.label,
+            mode: modeUsed,
+            retry: retryIndex + 1,
+            endpointToCall,
+            status: response.status,
+            elapsedMs: nowMs() - fetchStartedAt,
+          });
+          return response;
+        } catch (error: any) {
+          console.info("[resume-import-timing][structuredUpload] parser_request.finish", {
+            traceId,
+            label: attempt.label,
+            mode: modeUsed,
+            retry: retryIndex + 1,
+            endpointToCall,
+            status: 0,
+            elapsedMs: nowMs() - fetchStartedAt,
+            error: error?.message ?? String(error),
+          });
+          throw error;
         } finally {
           clearTimeout(timer);
         }
@@ -1665,6 +1741,13 @@ export const structuredUpload = action({
       });
     }
     const authoritativeResume = buildAuthoritativeResumeEnvelope(lastPayload);
+    console.info("[resume-import-timing][structuredUpload] handler.finish", {
+      traceId,
+      elapsedMs: nowMs() - handlerStartedAt,
+      parserUrl,
+      parserLabel: selectedEndpoint.label,
+      activeUseMistral,
+    });
     if (process.env.NODE_ENV !== "production") {
       console.info(
         "[structuredUpload][trusted-export] authoritativeResume=%j",
