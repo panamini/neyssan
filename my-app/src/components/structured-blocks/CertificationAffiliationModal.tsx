@@ -47,6 +47,7 @@ function newAffiliationItem(): IAffiliationItem {
 interface CertificationModalProps {
   open: boolean;
   items: ICertificationItem[];
+  initialItemId?: string;
   onClose: () => void;
   onSave: (next: ICertificationItem[]) => void;
 }
@@ -54,6 +55,7 @@ interface CertificationModalProps {
 interface AffiliationModalProps {
   open: boolean;
   items: IAffiliationItem[];
+  initialItemId?: string;
   onClose: () => void;
   onSave: (next: IAffiliationItem[]) => void;
 }
@@ -61,12 +63,15 @@ interface AffiliationModalProps {
 export function CertificationModal({
   open,
   items,
+  initialItemId,
   onClose,
   onSave,
 }: CertificationModalProps) {
   const [rows, setRows] = useState<ICertificationItem[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const lastSeedRef = useRef<string | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const handledInitialFocusRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -84,6 +89,39 @@ export function CertificationModal({
       setRows(items.length > 0 ? [...items] : [newCertificationItem()]);
     }
   }, [items, open]);
+
+  useEffect(() => {
+    if (!open) {
+      handledInitialFocusRef.current = null;
+      return;
+    }
+
+    if (!initialItemId) return;
+
+    const focusRequestKey = String(initialItemId);
+    if (handledInitialFocusRef.current === focusRequestKey) {
+      return;
+    }
+
+    const escapedId =
+      typeof CSS !== "undefined" && typeof CSS.escape === "function"
+        ? CSS.escape(initialItemId)
+        : initialItemId;
+
+    const timeoutId = window.setTimeout(() => {
+      const node = dialogRef.current?.querySelector<HTMLElement>(
+        `[data-entry-id="${escapedId}"] input, [data-entry-id="${escapedId}"] textarea, [data-entry-id="${escapedId}"] select`,
+      );
+      if (node) {
+        handledInitialFocusRef.current = focusRequestKey;
+        node.focus();
+      }
+    }, 40);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [initialItemId, open, rows]);
 
   const canSave = useMemo(
     () => rows.every((row) => String(row.certificationName ?? "").trim().length > 0),
@@ -115,7 +153,7 @@ export function CertificationModal({
 
   return (
     <CvModalShell open={open} onClose={onClose} onBackdropClick={() => (isSaving ? undefined : onClose())}>
-      <div role="dialog" aria-modal="true" aria-label="Edit certifications" className="dasti-modal" onClick={(event) => event.stopPropagation()}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Edit certifications" className="dasti-modal" onClick={(event) => event.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3 border-b [border-color:var(--color-border)]">
           <div>
             <h2 className="text-lg font-semibold">Edit certifications</h2>
@@ -143,7 +181,7 @@ export function CertificationModal({
 
           <div className="space-y-3">
             {rows.map((row, idx) => (
-              <div key={row.id ?? `cert-${idx}`} className="rounded-[var(--radius-card)] border [border-color:var(--color-border)] [background:var(--sf1)] p-3 space-y-3">
+              <div key={row.id ?? `cert-${idx}`} data-entry-id={String(row.id ?? `cert-${idx}`)} className="rounded-[var(--radius-card)] border [border-color:var(--color-border)] [background:var(--sf1)] p-3 space-y-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-sm font-medium [color:var(--ti)]">Certification {idx + 1}</div>
                   <button type="button" onClick={() => setRows((current) => (current.length > 1 ? current.filter((_, rowIdx) => rowIdx !== idx) : [newCertificationItem()]))} className="dasti-modal-close" aria-label={`Remove certification ${idx + 1}`}>
@@ -190,12 +228,15 @@ export function CertificationModal({
 export function AffiliationModal({
   open,
   items,
+  initialItemId,
   onClose,
   onSave,
 }: AffiliationModalProps) {
   const [rows, setRows] = useState<IAffiliationItem[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const lastSeedRef = useRef<string | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const handledInitialFocusRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -213,6 +254,39 @@ export function AffiliationModal({
       setRows(items.length > 0 ? [...items] : [newAffiliationItem()]);
     }
   }, [items, open]);
+
+  useEffect(() => {
+    if (!open) {
+      handledInitialFocusRef.current = null;
+      return;
+    }
+
+    if (!initialItemId) return;
+
+    const focusRequestKey = String(initialItemId);
+    if (handledInitialFocusRef.current === focusRequestKey) {
+      return;
+    }
+
+    const escapedId =
+      typeof CSS !== "undefined" && typeof CSS.escape === "function"
+        ? CSS.escape(initialItemId)
+        : initialItemId;
+
+    const timeoutId = window.setTimeout(() => {
+      const node = dialogRef.current?.querySelector<HTMLElement>(
+        `[data-entry-id="${escapedId}"] input, [data-entry-id="${escapedId}"] textarea, [data-entry-id="${escapedId}"] select`,
+      );
+      if (node) {
+        handledInitialFocusRef.current = focusRequestKey;
+        node.focus();
+      }
+    }, 40);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [initialItemId, open, rows]);
 
   const canSave = useMemo(
     () => rows.every((row) => String(row.organizationName ?? "").trim().length > 0),
@@ -245,7 +319,7 @@ export function AffiliationModal({
 
   return (
     <CvModalShell open={open} onClose={onClose} onBackdropClick={() => (isSaving ? undefined : onClose())}>
-      <div role="dialog" aria-modal="true" aria-label="Edit affiliations" className="dasti-modal" onClick={(event) => event.stopPropagation()}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Edit affiliations" className="dasti-modal" onClick={(event) => event.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3 border-b [border-color:var(--color-border)]">
           <div>
             <h2 className="text-lg font-semibold">Edit affiliations</h2>
@@ -273,7 +347,7 @@ export function AffiliationModal({
 
           <div className="space-y-3">
             {rows.map((row, idx) => (
-              <div key={row.id ?? `aff-${idx}`} className="rounded-[var(--radius-card)] border [border-color:var(--color-border)] [background:var(--sf1)] p-3 space-y-3">
+              <div key={row.id ?? `aff-${idx}`} data-entry-id={String(row.id ?? `aff-${idx}`)} className="rounded-[var(--radius-card)] border [border-color:var(--color-border)] [background:var(--sf1)] p-3 space-y-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-sm font-medium [color:var(--ti)]">Affiliation {idx + 1}</div>
                   <button type="button" onClick={() => setRows((current) => (current.length > 1 ? current.filter((_, rowIdx) => rowIdx !== idx) : [newAffiliationItem()]))} className="dasti-modal-close" aria-label={`Remove affiliation ${idx + 1}`}>

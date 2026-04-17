@@ -71,6 +71,7 @@ interface BaseModalProps {
 
 interface ExperienceModalProps extends BaseModalProps {
   items: IExperienceItem[];
+  initialItemId?: string;
   recoveryNotesByItemId?: Record<string, string[]>;
   onDismissRecoveryNotesByItemId?: (itemId: string) => void;
   onSave: (next: IExperienceItem[]) => void;
@@ -78,6 +79,7 @@ interface ExperienceModalProps extends BaseModalProps {
 
 interface EducationModalProps extends BaseModalProps {
   items: IEducationItem[];
+  initialItemId?: string;
   recoveryNotesByItemId?: Record<string, string[]>;
   onDismissRecoveryNotesByItemId?: (itemId: string) => void;
   onSave: (next: IEducationItem[]) => void;
@@ -611,6 +613,7 @@ export function ExperienceModal({
   open,
   onClose,
   items,
+  initialItemId,
   recoveryNotesByItemId = {},
   onDismissRecoveryNotesByItemId,
   onSave,
@@ -658,6 +661,9 @@ export function ExperienceModal({
   const [editorRevisionMap, setEditorRevisionMap] = useState<
     Record<string, number>
   >({});
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const handledInitialFocusRef = useRef<string | null>(null);
+  const [activeEntryId, setActiveEntryId] = useState<string | null>(null);
   const canImproveResponsibilities = cvAiCapabilities.isSupported(
     "improve_experience_responsibilities",
   );
@@ -689,6 +695,54 @@ export function ExperienceModal({
       );
     }
   }, [open, items, deriveUi]);
+
+  useEffect(() => {
+    if (!open) {
+      handledInitialFocusRef.current = null;
+      return;
+    }
+
+    if (!initialItemId) return;
+
+    const focusRequestKey = String(initialItemId);
+    if (handledInitialFocusRef.current === focusRequestKey) {
+      return;
+    }
+
+    const escapedId =
+      typeof CSS !== "undefined" && typeof CSS.escape === "function"
+        ? CSS.escape(initialItemId)
+        : initialItemId;
+
+    const timeoutId = window.setTimeout(() => {
+      const entryNode = dialogRef.current?.querySelector<HTMLElement>(
+        `[data-entry-id="${escapedId}"]`,
+      );
+      entryNode?.scrollIntoView?.({
+        block: "nearest",
+        inline: "nearest",
+      });
+      setActiveEntryId(initialItemId);
+      const node = dialogRef.current?.querySelector<HTMLElement>(
+        `[data-entry-id="${escapedId}"] input, [data-entry-id="${escapedId}"] textarea, [data-entry-id="${escapedId}"] select, [data-entry-id="${escapedId}"] [contenteditable="true"]`,
+      );
+      if (node) {
+        handledInitialFocusRef.current = focusRequestKey;
+        node.focus();
+      }
+    }, 40);
+
+    const clearHighlightId = window.setTimeout(() => {
+      setActiveEntryId((current) =>
+        current === initialItemId ? null : current,
+      );
+    }, 1400);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      window.clearTimeout(clearHighlightId);
+    };
+  }, [initialItemId, local, open]);
 
   const setField = useCallback(
     (idx: number, key: keyof IExperienceItem, value: unknown) => {
@@ -1045,7 +1099,7 @@ export function ExperienceModal({
       }}
       footerNote="Order follows your resume."
     >
-      <div className="space-y-5">
+      <div ref={dialogRef} className="space-y-5">
         {local.length === 0 && (
           <div className="dasti-hint">
             No experience yet. Use “Add entry” to create one.
@@ -1065,7 +1119,22 @@ export function ExperienceModal({
             isCurrent: false,
           };
           return (
-            <section key={String(row.id ?? idx)} className="dasti-zone">
+            <section
+              key={String(row.id ?? idx)}
+              data-entry-id={String(row.id ?? idx)}
+              className="dasti-zone"
+              data-targeted={
+                activeEntryId === String(row.id ?? idx) ? "true" : undefined
+              }
+              style={
+                activeEntryId === String(row.id ?? idx)
+                  ? {
+                      borderColor: "var(--primary)",
+                      boxShadow: "0 0 0 1px var(--primary)",
+                    }
+                  : undefined
+              }
+            >
               <div className="dasti-zone-header">
                 <h3 className="dasti-zone-title">Entry {idx + 1}</h3>
                 <button
@@ -1359,6 +1428,7 @@ export function EducationModal({
   open,
   onClose,
   items,
+  initialItemId,
   recoveryNotesByItemId = {},
   onDismissRecoveryNotesByItemId,
   onSave,
@@ -1389,6 +1459,9 @@ export function EducationModal({
     return [];
   });
   const localRef = React.useRef<IEducationItem[]>([]);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const handledInitialFocusRef = useRef<string | null>(null);
+  const [activeEntryId, setActiveEntryId] = useState<string | null>(null);
 
   // Sync local + UI state for Education on open/items change
   useEffect(() => {
@@ -1401,6 +1474,54 @@ export function EducationModal({
       setUiState(copied.map((it) => deriveUiEdu(it)));
     }
   }, [open, items, deriveUiEdu]);
+
+  useEffect(() => {
+    if (!open) {
+      handledInitialFocusRef.current = null;
+      return;
+    }
+
+    if (!initialItemId) return;
+
+    const focusRequestKey = String(initialItemId);
+    if (handledInitialFocusRef.current === focusRequestKey) {
+      return;
+    }
+
+    const escapedId =
+      typeof CSS !== "undefined" && typeof CSS.escape === "function"
+        ? CSS.escape(initialItemId)
+        : initialItemId;
+
+    const timeoutId = window.setTimeout(() => {
+      const entryNode = dialogRef.current?.querySelector<HTMLElement>(
+        `[data-entry-id="${escapedId}"]`,
+      );
+      entryNode?.scrollIntoView?.({
+        block: "nearest",
+        inline: "nearest",
+      });
+      setActiveEntryId(initialItemId);
+      const node = dialogRef.current?.querySelector<HTMLElement>(
+        `[data-entry-id="${escapedId}"] input, [data-entry-id="${escapedId}"] textarea, [data-entry-id="${escapedId}"] select, [data-entry-id="${escapedId}"] [contenteditable="true"]`,
+      );
+      if (node) {
+        handledInitialFocusRef.current = focusRequestKey;
+        node.focus();
+      }
+    }, 40);
+
+    const clearHighlightId = window.setTimeout(() => {
+      setActiveEntryId((current) =>
+        current === initialItemId ? null : current,
+      );
+    }, 1400);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      window.clearTimeout(clearHighlightId);
+    };
+  }, [initialItemId, local, open]);
 
   const setField = useCallback(
     (idx: number, key: keyof IEducationItem, value: unknown) => {
@@ -1572,7 +1693,7 @@ export function EducationModal({
       }}
       footerNote="Order follows your resume."
     >
-      <div className="space-y-5">
+      <div ref={dialogRef} className="space-y-5">
         {local.length === 0 && (
           <div className="dasti-hint">
             No education yet. Use “Add entry” to create one.
@@ -1592,7 +1713,22 @@ export function EducationModal({
             isCurrent: false,
           };
           return (
-            <section key={String(row.id ?? idx)} className="dasti-zone">
+            <section
+              key={String(row.id ?? idx)}
+              data-entry-id={String(row.id ?? idx)}
+              className="dasti-zone"
+              data-targeted={
+                activeEntryId === String(row.id ?? idx) ? "true" : undefined
+              }
+              style={
+                activeEntryId === String(row.id ?? idx)
+                  ? {
+                      borderColor: "var(--primary)",
+                      boxShadow: "0 0 0 1px var(--primary)",
+                    }
+                  : undefined
+              }
+            >
               <div className="dasti-zone-header">
                 <h3 className="dasti-zone-title">Entry {idx + 1}</h3>
                 <button

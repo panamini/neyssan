@@ -6,6 +6,7 @@ import type {
   IEducationItem,
   IProfileItem,
   ISummaryItem,
+  IHobbyItem,
   ISkillItem,
   ICertificationItem,
   IAffiliationItem,
@@ -90,6 +91,13 @@ export function makeSkillItem(): ISkillItem {
   };
 }
 
+export function makeHobbyItem(): IHobbyItem {
+  return {
+    id: uuidv4(),
+    name: "",
+  };
+}
+
 export function makeLanguageItem(): ILanguageItem {
   return {
     id: uuidv4(),
@@ -149,7 +157,7 @@ export function makeTextSection(
     return {
       ...baseSection,
       blocks: [],
-      structuredContent: [] as ISkillItem[],
+      structuredContent: [] as IHobbyItem[],
     };
   }
 

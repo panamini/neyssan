@@ -11,6 +11,7 @@ import { useCvAiCapabilities } from "../../hooks/use-cv-ai-capabilities";
 interface AchievementsModalProps {
   open: boolean;
   items: IAchievementItem[];
+  initialItemId?: string;
   appendBlankOnOpen?: boolean;
   onClose: () => void;
   onSave: (next: IAchievementItem[]) => void;
@@ -66,6 +67,7 @@ function AchievementAiDiffCard({
 export function AchievementsModal({
   open,
   items,
+  initialItemId,
   appendBlankOnOpen = false,
   onClose,
   onSave,
@@ -151,6 +153,14 @@ export function AchievementsModal({
       setRows(fallbackRows);
     }
   }, [open, items, appendBlankOnOpen]);
+
+  useEffect(() => {
+    if (!open || !initialItemId) return;
+
+    window.setTimeout(() => {
+      textareaRefs.current[initialItemId]?.focus();
+    }, 40);
+  }, [initialItemId, open, rows]);
 
   const syncTextareaHeight = React.useCallback((rowId: string) => {
     const node = textareaRefs.current[rowId];
