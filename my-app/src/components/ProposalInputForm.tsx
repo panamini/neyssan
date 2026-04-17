@@ -47,6 +47,7 @@ import { getProposalDocumentTypography } from "../lib/proposal-document-typograp
 import { formatUiDate } from "../lib/ui-date";
 import { useScrollEdgeFades } from "../hooks/use-scroll-edge-fades";
 import { getVoicePresetDisplayLabel } from "../lib/proposal-voice-label";
+import { getProposalSourceLabel } from "../lib/proposal-source-platforms";
 import {
   ArrowSquareOut,
   Check,
@@ -251,40 +252,7 @@ function formatImportedSourceLabel(
   platform: string | null | undefined,
   sourceUrl: string | null | undefined,
 ): string | null {
-  const normalizedPlatform = String(platform ?? "").trim();
-  if (normalizedPlatform) {
-    if (/linkedin/i.test(normalizedPlatform)) {
-      return "LinkedIn";
-    }
-    if (/indeed/i.test(normalizedPlatform)) {
-      return "Indeed";
-    }
-    if (
-      !/^web$/i.test(normalizedPlatform) &&
-      !/^site$/i.test(normalizedPlatform) &&
-      !/^website$/i.test(normalizedPlatform)
-    ) {
-      return capitalizeLabel(normalizedPlatform);
-    }
-  }
-
-  if (!sourceUrl) {
-    return null;
-  }
-
-  try {
-    const url = new URL(sourceUrl);
-    const hostname = url.hostname.replace(/^www\./i, "");
-    if (/linkedin/i.test(hostname)) {
-      return "LinkedIn";
-    }
-    if (/indeed/i.test(hostname)) {
-      return "Indeed";
-    }
-    return hostname;
-  } catch {
-    return "External source";
-  }
+  return getProposalSourceLabel(platform, sourceUrl);
 }
 
 function formatImportedSourceHost(
@@ -2021,8 +1989,3 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
 };
 
 export default ProposalInputForm;
-
-function capitalizeLabel(value: string): string {
-  if (!value) return value;
-  return value.charAt(0).toUpperCase() + value.slice(1);
-}
