@@ -35,6 +35,8 @@ export function CvModalShell({
   );
   const exitTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const enterFrameRef = React.useRef<number | null>(null);
+  const previousBodyOverflowRef = React.useRef<string | null>(null);
+  const previousDocumentOverflowRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
     if (open) {
@@ -58,6 +60,31 @@ export function CvModalShell({
     };
   }, [open]);
 
+  React.useEffect(() => {
+    if (!open || typeof document === "undefined") {
+      return undefined;
+    }
+
+    if (previousBodyOverflowRef.current === null) {
+      previousBodyOverflowRef.current = document.body.style.overflow;
+    }
+    if (previousDocumentOverflowRef.current === null) {
+      previousDocumentOverflowRef.current =
+        document.documentElement.style.overflow;
+    }
+
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflowRef.current ?? "";
+      document.documentElement.style.overflow =
+        previousDocumentOverflowRef.current ?? "";
+      previousBodyOverflowRef.current = null;
+      previousDocumentOverflowRef.current = null;
+    };
+  }, [open]);
+
   useCloseOnEscape({ open, onClose });
 
   if (!isVisible) return null;
@@ -70,6 +97,7 @@ export function CvModalShell({
         className={clsx(
           "dasti-dialog-root fixed inset-0 z-[10000] flex items-center justify-center p-4",
         )}
+        data-no-pan="true"
         data-state={surfaceState}
         onMouseDownCapture={
           stopPropagation ? (e) => e.stopPropagation() : undefined
@@ -77,9 +105,11 @@ export function CvModalShell({
         onPointerDownCapture={
           stopPropagation ? (e) => e.stopPropagation() : undefined
         }
+        onWheelCapture={stopPropagation ? (e) => e.stopPropagation() : undefined}
       >
         <div
           className="dasti-dialog-overlay absolute inset-0"
+          data-no-pan="true"
           onClick={backdropHandler}
           aria-hidden
           style={{
@@ -88,7 +118,9 @@ export function CvModalShell({
             WebkitBackdropFilter: "blur(6px) saturate(1.2)",
           }}
         />
-        <div className="dasti-dialog-panel-shell">{children}</div>
+        <div className="dasti-dialog-panel-shell" data-no-pan="true">
+          {children}
+        </div>
       </div>
     </BodyPortal>
   );

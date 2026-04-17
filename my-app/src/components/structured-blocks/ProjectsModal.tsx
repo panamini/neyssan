@@ -18,19 +18,53 @@ function newProjectItem(): IProjectItem {
 interface ProjectsModalProps {
   open: boolean;
   items: IProjectItem[];
+  initialItemId?: string;
   onClose: () => void;
   onSave: (next: IProjectItem[]) => void;
+}
+
+type ProjectFocusField = "title" | "meta" | "description";
+
+function parseProjectFocusTarget(
+  initialItemId: string | undefined,
+): { entryId: string; field: ProjectFocusField | null } | null {
+  const rawTarget = String(initialItemId ?? "").trim();
+  if (!rawTarget) {
+    return null;
+  }
+
+  const [entryId, fieldToken] = rawTarget.split(":", 2);
+  const normalizedField = String(fieldToken ?? "")
+    .trim()
+    .toLowerCase();
+  const field =
+    normalizedField === "description"
+      ? "description"
+      : normalizedField === "meta"
+        ? "meta"
+        : normalizedField === "name" || normalizedField === "title"
+          ? "title"
+          : null;
+
+  return entryId ? { entryId, field } : null;
 }
 
 export function ProjectsModal({
   open,
   items,
+  initialItemId,
   onClose,
   onSave,
 }: ProjectsModalProps) {
   const [rows, setRows] = useState<IProjectItem[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const lastSeedRef = useRef<string | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const handledInitialFocusRef = useRef<string | null>(null);
+  const focusTarget = useMemo(
+    () => parseProjectFocusTarget(initialItemId),
+    [initialItemId],
+  );
 
   useEffect(() => {
     if (!open) {
@@ -47,6 +81,42 @@ export function ProjectsModal({
       setRows(items.length > 0 ? [...items] : [newProjectItem()]);
     }
   }, [items, open]);
+
+  useEffect(() => {
+    if (!open) {
+      handledInitialFocusRef.current = null;
+      return;
+    }
+
+    if (!focusTarget) return;
+
+    const focusRequestKey = String(initialItemId);
+    if (handledInitialFocusRef.current === focusRequestKey) {
+      return;
+    }
+
+    const escapedId =
+      typeof CSS !== "undefined" && typeof CSS.escape === "function"
+        ? CSS.escape(focusTarget.entryId)
+        : focusTarget.entryId;
+
+    const timeoutId = window.setTimeout(() => {
+      const fieldSelector = focusTarget.field
+        ? `[data-project-field="${focusTarget.field}"]`
+        : "input, textarea, select";
+      const node = dialogRef.current?.querySelector<HTMLElement>(
+        `[data-entry-id="${escapedId}"] ${fieldSelector}`,
+      );
+      if (node) {
+        handledInitialFocusRef.current = focusRequestKey;
+        node.focus();
+      }
+    }, 40);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [focusTarget, initialItemId, open, rows]);
 
   const canSave = useMemo(
     () =>
@@ -99,6 +169,7 @@ export function ProjectsModal({
       onBackdropClick={() => (isSaving ? undefined : onClose())}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Edit projects"
@@ -145,6 +216,7 @@ export function ProjectsModal({
             {rows.map((row, idx) => (
               <div
                 key={row.id ?? `project-${idx}`}
+                data-entry-id={String(row.id ?? `project-${idx}`)}
                 className="rounded-[var(--radius-card)] border [border-color:var(--color-border)] [background:var(--sf1)] p-3 space-y-3"
               >
                 <div className="flex items-center justify-between gap-3">
@@ -170,6 +242,7 @@ export function ProjectsModal({
                   <label className="grid gap-1 text-sm [color:var(--tm2)]">
                     <span>Project Title</span>
                     <input
+                      data-project-field="title"
                       className="dasti-select dasti-select--sm"
                       value={String(row.title ?? row.name ?? "")}
                       onChange={(event) =>
@@ -181,6 +254,7 @@ export function ProjectsModal({
                   <label className="grid gap-1 text-sm [color:var(--tm2)]">
                     <span>Meta</span>
                     <input
+                      data-project-field="meta"
                       className="dasti-select dasti-select--sm"
                       value={String(row.meta ?? row.subtitle ?? "")}
                       onChange={(event) =>
@@ -193,6 +267,7 @@ export function ProjectsModal({
                 <label className="grid gap-1 text-sm [color:var(--tm2)]">
                   <span>Description</span>
                   <textarea
+                    data-project-field="description"
                     className="min-h-[104px] dasti-select dasti-select--sm"
                     value={String(row.description ?? row.summary ?? "")}
                     onChange={(event) =>

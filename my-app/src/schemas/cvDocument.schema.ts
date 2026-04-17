@@ -186,6 +186,14 @@ export const SkillItemSchema = z
   .passthrough();
 export const SkillItemSchemaStrict = SkillItemSchema.strict();
 
+export const HobbyItemSchema = z
+  .object({
+    id: z.string().optional(),
+    name: z.string(),
+  })
+  .passthrough();
+export const HobbyItemSchemaStrict = HobbyItemSchema.strict();
+
 export const LanguageItemSchema = z
   .object({
     id: z.string().optional(),
@@ -247,6 +255,7 @@ export const StructuredContentSchema = z.union([
   z.array(IExperienceItemSchema),
   z.array(IEducationItemSchema),
   z.array(SkillItemSchema),
+  z.array(HobbyItemSchema),
   z.array(CertificationItemSchema),
   z.array(AffiliationItemSchema),
   z.array(ProjectItemSchema),
@@ -260,6 +269,7 @@ export const StructuredContentSchemaStrict = z.union([
   z.array(IExperienceItemSchemaStrict),
   z.array(IEducationItemSchemaStrict),
   z.array(SkillItemSchemaStrict),
+  z.array(HobbyItemSchemaStrict),
   z.array(CertificationItemSchemaStrict),
   z.array(AffiliationItemSchemaStrict),
   z.array(ProjectItemSchemaStrict),
