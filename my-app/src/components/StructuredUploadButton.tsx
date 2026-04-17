@@ -1,8 +1,6 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import * as convexReact from "convex/react";
-import { api } from "../../convex/_generated/api";
 import { Button } from "./ui/button";
 import {
   Loader2,
@@ -10,16 +8,14 @@ import {
   Paperclip,
 } from "@/lib/icons";
 import { useToast } from "./ui/toast";
+import {
+  readEmptyReasonFromDiagnostics,
+  readStructuredAuthoritativeResume,
+  readStructuredDiagnostics,
+  type StructuredPayload,
+  useStructuredMistralImport,
+} from "./useStructuredMistralImport";
 import type { CvSection } from "../types/cvDocument";
-import {
-  buildTypedSectionsFromNormalized,
-  applyStrictContactToSections,
-} from "../utils/cv/mapping-utils";
-import {
-  coerceAuthoritativeResume,
-  hasTrustedAuthoritativeMistralImport,
-  type AuthoritativeResume,
-} from "../lib/authoritative-resume";
 
 export interface StructuredUploadButtonProps {
   sections?: CvSection[];
@@ -33,89 +29,7 @@ export interface StructuredUploadButtonProps {
   contextKey?: string;
 }
 
-type StructuredPayload = {
-  normalized?: unknown;
-  authoritativeResume?: AuthoritativeResume | null;
-  strict?: {
-    name?: string | null;
-    email?: string | null;
-    phone?: string | null;
-    location?: string | null;
-    desiredPosition?: string | null | undefined;
-  } | null;
-  layout?: unknown;
-  diagnostics?: unknown;
-  debug?: {
-    rawParser?: unknown;
-  } | null;
-};
-
 export type { StructuredPayload };
-
-function buildSectionsFromNormalized(
-  normalized: unknown,
-  strict?: StructuredPayload["strict"],
-): CvSection[] {
-  if (!normalized || typeof normalized !== "object") {
-    return [];
-  }
-  const typed = buildTypedSectionsFromNormalized(normalized as any);
-  if (!strict || typed.length === 0) {
-    return typed;
-  }
-  return applyStrictContactToSections(typed, {
-    name: strict.name ?? null,
-    email: strict.email ?? null,
-    phone: strict.phone ?? null,
-    location: strict.location ?? null,
-    desiredPosition: strict.desiredPosition ?? null,
-  });
-}
-
-function readStructuredDiagnostics(
-  payload: StructuredPayload | null | undefined,
-): Record<string, unknown> | null {
-  return payload?.diagnostics && typeof payload.diagnostics === "object"
-    ? (payload.diagnostics as Record<string, unknown>)
-    : null;
-}
-
-function readStructuredAuthoritativeResume(
-  payload: StructuredPayload | null | undefined,
-): AuthoritativeResume | null {
-  return coerceAuthoritativeResume(payload?.authoritativeResume ?? null);
-}
-
-function buildRejectedOcrStatusMessage(
-  payload: StructuredPayload | null | undefined,
-): string {
-  const diagnostics = readStructuredDiagnostics(payload);
-  const mistralRuntime =
-    typeof diagnostics?.mistral_runtime === "string"
-      ? diagnostics.mistral_runtime
-      : null;
-  const mistralFallback = diagnostics?.mistral_fallback === true;
-  if (mistralRuntime === "local_fallback") {
-    return "OCR import rejected (fallback/untrusted). Local fallback output is debug-only.";
-  }
-  if (mistralFallback) {
-    return "OCR import rejected (fallback/untrusted). Fallback OCR output is debug-only.";
-  }
-  return "OCR import rejected (fallback/untrusted). Trusted authoritative Mistral result required.";
-}
-
-function readEmptyReasonFromDiagnostics(diagnostics: unknown): string | null {
-  if (!diagnostics || typeof diagnostics !== "object") return null;
-  const record = diagnostics as Record<string, unknown>;
-  const candidate =
-    typeof record.empty_reason === "string"
-      ? record.empty_reason
-      : typeof record.error === "string"
-        ? record.error
-        : null;
-  const trimmed = candidate?.trim();
-  return trimmed ? trimmed : null;
-}
 
 function coerceCopyText(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -125,7 +39,6 @@ function coerceCopyText(value: unknown): string | null {
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const OCR_ACCEPT = ".pdf,.png,.jpg,.jpeg";
-const MISTRAL_PROBE_TTL_MS = 10_000;
 
 export function StructuredUploadButton({
   sections: _sections,
@@ -149,103 +62,8 @@ export function StructuredUploadButton({
   const requestIdRef = useRef(0);
   const scopeKeyRef = useRef<string>(contextKey ?? "");
   const pickerScopeKeyRef = useRef<string | null>(null);
-
-  const structuredActionRef =
-    (api as any).actions?.structuredUpload?.structuredUpload ??
-    (api as any)["actions/structuredUpload"]?.structuredUpload ??
-    null;
-  const structuredAction =
-    (convexReact as any).useAction && structuredActionRef
-      ? (convexReact as any).useAction(structuredActionRef)
-      : undefined;
-
-  const probeMistralRef =
-    (api as any).actions?._probeMistral?.probe ??
-    (api as any)["actions/_probeMistral"]?.probe ??
-    null;
-  const probeMistral =
-    (convexReact as any).useAction && probeMistralRef
-      ? (convexReact as any).useAction(probeMistralRef)
-      : undefined;
-
-  const enableMistral = (() => {
-    if (
-      typeof import.meta === "undefined" ||
-      typeof import.meta.env === "undefined"
-    ) {
-      return false;
-    }
-    const env = import.meta.env;
-    const devDefault = Boolean(env.DEV);
-    const parseFlag = (value: unknown): boolean | null => {
-      if (typeof value !== "string") return null;
-      const normalized = value.trim().toLowerCase();
-      if (normalized === "1" || normalized === "true" || normalized === "on")
-        return true;
-      if (normalized === "0" || normalized === "false" || normalized === "off")
-        return false;
-      return null;
-    };
-    const primary = parseFlag((env as any).VITE_ENABLE_MISTRAL);
-    if (primary !== null) return primary;
-    const legacy = parseFlag((env as any).VITE_UI_ENABLE_MISTRAL_OCR);
-    if (legacy !== null) return legacy;
-    return devDefault;
-  })();
-  const [mistralOk, setMistralOk] = useState<boolean | null>(null);
+  const { enableMistral, importFile } = useStructuredMistralImport();
   const [isDropTargeted, setIsDropTargeted] = useState(false);
-  const mistralProbePromiseRef = useRef<Promise<boolean> | null>(null);
-  const mistralProbeCheckedAtRef = useRef(0);
-
-  const resolveMistralProbeOk = useCallback((result: any): boolean => {
-    const readyStatus = result?.ready?.status;
-    const parseStatus = result?.parse?.status;
-    return readyStatus === 200 && parseStatus === 200;
-  }, []);
-
-  const ensureMistralReady = useCallback(async (options?: { force?: boolean }): Promise<boolean> => {
-    const force = options?.force === true;
-    if (typeof probeMistral !== "function") {
-      setMistralOk(true);
-      return true;
-    }
-    const probeAgeMs = Date.now() - mistralProbeCheckedAtRef.current;
-    if (!force && mistralOk === true && probeAgeMs < MISTRAL_PROBE_TTL_MS) {
-      return true;
-    }
-    if (!force && mistralOk === false) {
-      return false;
-    }
-    if (!mistralProbePromiseRef.current) {
-      mistralProbePromiseRef.current = probeMistral({})
-        .then((result: any) => {
-          const ok = resolveMistralProbeOk(result);
-          mistralProbeCheckedAtRef.current = Date.now();
-          if (mountedRef.current) {
-            setMistralOk(ok);
-          }
-          return ok;
-        })
-        .catch(() => {
-          mistralProbeCheckedAtRef.current = Date.now();
-          if (mountedRef.current) {
-            setMistralOk(false);
-          }
-          return false;
-        })
-        .finally(() => {
-          mistralProbePromiseRef.current = null;
-        });
-    }
-    return await mistralProbePromiseRef.current;
-  }, [mistralOk, probeMistral, resolveMistralProbeOk]);
-
-  useEffect(() => {
-    void ensureMistralReady();
-    return () => {
-      mistralProbePromiseRef.current = null;
-    };
-  }, [ensureMistralReady]);
 
   const mistralAvailable = enableMistral;
   const isBusy = status === "reading" || status === "calling";
@@ -303,41 +121,6 @@ export function StructuredUploadButton({
     }
   }, [disabled, isBusy]);
 
-  async function buildSubmission(file: File): Promise<{
-    buffer: ArrayBuffer;
-    fileName: string;
-    mimeType: string;
-  }> {
-    if (file.size > MAX_BYTES) {
-      throw new Error("File too large. Please upload a file under 5MB.");
-    }
-    const ext = (file.name.split(".").pop() || "").toLowerCase();
-    if (ext === "pdf" || file.type === "application/pdf") {
-      return {
-        buffer: await file.arrayBuffer(),
-        fileName: file.name,
-        mimeType: file.type || "application/pdf",
-      };
-    }
-    if (ext === "png" || file.type === "image/png") {
-      return {
-        buffer: await file.arrayBuffer(),
-        fileName: file.name,
-        mimeType: "image/png",
-      };
-    }
-    if (ext === "jpg" || ext === "jpeg" || file.type === "image/jpeg") {
-      return {
-        buffer: await file.arrayBuffer(),
-        fileName: file.name,
-        mimeType: "image/jpeg",
-      };
-    }
-    throw new Error(
-      "Unsupported file type. Please upload a scanned PDF or image.",
-    );
-  }
-
   const processFile = useCallback(
     async (file: File, sourceScopeKey: string) => {
       if (sourceScopeKey !== scopeKeyRef.current) {
@@ -357,52 +140,14 @@ export function StructuredUploadButton({
       setEmptyReason(null);
 
       try {
-        if (typeof structuredAction !== "function") {
-          throw new Error("Structured pipeline action unavailable.");
+        if (file.size > MAX_BYTES) {
+          throw new Error("File too large. Please upload a file under 5MB.");
         }
-
-        const submission = await buildSubmission(file);
         if (!isCurrentRequest()) return;
-
-        const probeOk = await ensureMistralReady({ force: true });
-        if (!isCurrentRequest()) return;
-        if (!probeOk) {
-          console.warn(
-            "[StructuredUploadButton][mistral] live probe failed; continuing with upload and relying on server-side retries",
-          );
-        }
 
         setStatus("calling");
-        console.info(
-          "[StructuredUploadButton] invoking structured pipeline bytes=%d mistral=%s",
-          submission.buffer.byteLength,
-          true,
-        );
-
-        const actionArgs = {
-          file: submission.buffer,
-          fileName: submission.fileName,
-          mimeType: submission.mimeType,
-          mode: "auto" as const,
-          useMistral: true,
-        };
-
-        const invokeWithRetry = async (): Promise<StructuredPayload> => {
-          if (typeof structuredAction !== "function") {
-            throw new Error("Structured pipeline action unavailable.");
-          }
-          try {
-            return await structuredAction(actionArgs);
-          } catch (err: any) {
-            const message = String(err?.message ?? err ?? "");
-            const code = String((err as any)?.code ?? "");
-            const shouldRetry =
-              message.includes("Connection lost while action was in flight") ||
-              code === "NetworkingError" ||
-              code === "ClientDisconnected";
-            if (!shouldRetry) {
-              throw err;
-            }
+        const outcome = await importFile(file, {
+          onRetrying: () => {
             console.info("Connection lost, retrying upload…");
             try {
               showToast("Connection lost, retrying upload…", {
@@ -411,20 +156,17 @@ export function StructuredUploadButton({
             } catch {
               /* noop */
             }
-            await new Promise((resolve) => setTimeout(resolve, 500));
-            const result = await structuredAction(actionArgs);
-            console.info("[StructuredUploadButton] retry succeeded");
+          },
+          onRetrySucceeded: () => {
             try {
               showToast("Upload retry succeeded", { variant: "success" });
             } catch {
               /* noop */
             }
-            return result;
-          }
-        };
-
-        const payload: StructuredPayload = await invokeWithRetry();
+          },
+        });
         if (!isCurrentRequest()) return;
+        const payload = outcome.payload;
         setLatestPayload(payload);
         setCopyFeedback(null);
         const diagnostics = readStructuredDiagnostics(payload);
@@ -454,28 +196,16 @@ export function StructuredUploadButton({
           }
         }
 
-        const isTrustedOcrImport =
-          hasTrustedAuthoritativeMistralImport({
-            authoritativeResume,
-            mistralFallback: diagnostics?.mistral_fallback,
-            mistralRuntime: diagnostics?.mistral_runtime,
-          });
-        const fullSections = isTrustedOcrImport
-          ? buildSectionsFromNormalized(
-              authoritativeResume?.normalized ?? null,
-              payload?.strict,
-            )
-          : [];
-        if (!isTrustedOcrImport) {
-          const rejectionMessage = buildRejectedOcrStatusMessage(payload);
-          setEmptyReason(rejectionMessage);
+        if (outcome.status === "rejected") {
+          setEmptyReason(outcome.message);
           try {
-            showToast(rejectionMessage, { variant: "warning" });
+            showToast(outcome.message, { variant: "warning" });
           } catch {
             /* noop */
           }
           return;
         }
+        const fullSections = outcome.sections;
         if (typeof onApplyToSections === "function" && fullSections.length > 0) {
           try {
             onApplyToSections(fullSections, payload);
@@ -484,13 +214,14 @@ export function StructuredUploadButton({
           }
         }
         if (!isCurrentRequest()) return;
-        if (diagnosticsEmptyReason) {
+        if (outcome.emptyReason ?? diagnosticsEmptyReason) {
+          const emptyReason = outcome.emptyReason ?? diagnosticsEmptyReason;
           setEmptyReason(
-            `Parser returned empty result: ${diagnosticsEmptyReason}`,
+            `Parser returned empty result: ${emptyReason}`,
           );
           try {
             showToast(
-              `Parser returned empty result: ${diagnosticsEmptyReason}`,
+              `Parser returned empty result: ${emptyReason}`,
               { variant: "warning" },
             );
           } catch {
@@ -553,9 +284,7 @@ export function StructuredUploadButton({
       onApplyToSections,
       onResult,
       showToast,
-      structuredAction,
-      mistralAvailable,
-      ensureMistralReady,
+      importFile,
     ],
   );
 

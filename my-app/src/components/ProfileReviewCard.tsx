@@ -197,7 +197,14 @@ function shouldPromptForImportedTitleRename(
     return false;
   }
 
-  return signals.some((signal) => signal.id === "document-title-generic");
+  const hasGenericTitleSignal = signals.some(
+    (signal) => signal.id === "document-title-generic",
+  );
+  const hasTemplateSkeletonSignal = signals.some(
+    (signal) => signal.id === "document-template-skeleton",
+  );
+
+  return hasGenericTitleSignal && !hasTemplateSkeletonSignal;
 }
 
 function getFlaggedSectionTypes(signals: CvImportSignal[]): Set<string> {
@@ -2389,7 +2396,7 @@ export function ProfileReviewCard({
         currentTitle={renameDraftTitle}
         onClose={closeRenameDialog}
         onSave={handleRenameSave}
-        title="Name this imported CV"
+        title="Rename CV"
         placeholder="e.g. Jane Doe — Product Manager"
         saveLabel="Save title"
       />
