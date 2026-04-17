@@ -442,6 +442,16 @@ export interface ICvLibraryContext {
   /** Back-compat id exposure for older tests */
   currentCvId: string | null;
   isLoading: boolean;
+  // True once the library has fully resolved its authoritative source:
+  // - signed-out users: immediately after auth resolves
+  // - signed-in users: after the remote profile list query completes
+  //   (regardless of outcome — success or error)
+  // Use this to avoid first-render flash on onboarding/empty-state gates.
+  isLibraryHydrated: boolean;
+  // True when the last remote authoritative fetch errored. A transient fetch
+  // failure must NOT be treated as "new user / empty library" by consumers
+  // making onboarding or empty-state decisions.
+  lastLibraryFetchFailed: boolean;
   isDirty: boolean;
   // New: runtime detector for v1-shaped documents
   isV1Active: boolean;
@@ -722,6 +732,11 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
   );
   const hasHydratedActiveCvRef = useRef(false);
   const hasHydratedRemoteLibraryRef = useRef(false);
+  const [isLibraryHydrated, setIsLibraryHydrated] = useState(false);
+  // Distinct from isLibraryHydrated: tracks whether the remote authoritative
+  // fetch errored on its last attempt. A transient failure must NOT be treated
+  // as "new user empty library" by consumers making onboarding decisions.
+  const [lastLibraryFetchFailed, setLastLibraryFetchFailed] = useState(false);
   const pendingActiveRestoreIdRef = useRef<string | null>(null);
   const cvsRef = useRef<CvDocument[]>(cvs);
   const currentCvRef = useRef<CvDocument | null>(null);
@@ -791,8 +806,21 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
   useEffect(() => {
     if (!isSignedIn) {
       hasHydratedRemoteLibraryRef.current = false;
+      setIsLibraryHydrated(false);
+      setLastLibraryFetchFailed(false);
     }
   }, [isSignedIn]);
+
+  // Mark library hydrated once auth is resolved; for signed-out users this is
+  // immediate (no remote fetch), for signed-in users this flips after the
+  // remote list resolves in the effect below.
+  useEffect(() => {
+    if (!isAuthLoaded) return;
+    if (!isSignedIn) {
+      setIsLibraryHydrated(true);
+      setLastLibraryFetchFailed(false);
+    }
+  }, [isAuthLoaded, isSignedIn]);
 
   useEffect(() => {
     if (!isAuthLoaded || !isSignedIn || hasHydratedRemoteLibraryRef.current) {
@@ -800,6 +828,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
     }
 
     let cancelled = false;
+    let fetchFailed = false;
 
     void (async () => {
       try {
@@ -845,10 +874,13 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
           return changed ? Array.from(byId.values()) : prev;
         });
       } catch (error) {
+        fetchFailed = true;
         dbg("[CvLibraryContext] remote library hydration failed", error);
       } finally {
         if (!cancelled) {
           hasHydratedRemoteLibraryRef.current = true;
+          setLastLibraryFetchFailed(fetchFailed);
+          setIsLibraryHydrated(true);
         }
       }
     })();
@@ -3649,6 +3681,8 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       currentCv,
       currentCvId,
       isLoading,
+      isLibraryHydrated,
+      lastLibraryFetchFailed,
       isDirty,
       // runtime v1 detector exposed to consumers
       isV1Active,
@@ -3702,6 +3736,8 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       currentCv,
       currentCvId,
       isLoading,
+      isLibraryHydrated,
+      lastLibraryFetchFailed,
       isDirty,
       loadCv,
       saveCurrentCv,

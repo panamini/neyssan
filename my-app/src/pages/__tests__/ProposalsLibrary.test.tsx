@@ -55,24 +55,24 @@ describe("ProposalsLibrary empty search results", () => {
     deleteProposalMock.mockClear();
   });
 
-  it("keeps the search controls anchored when a search returns no proposals", () => {
+  it("keeps the search controls anchored when a search returns no cover letters", () => {
     render(<ProposalsLibrary />);
 
     const searchInput = screen.getByRole("searchbox", {
-      name: "Search all proposals",
+      name: "Search all cover letters",
     });
 
     fireEvent.change(searchInput, { target: { value: "zzz" } });
 
     expect(
-      screen.getByRole("searchbox", { name: "Search all proposals" }),
+      screen.getByRole("searchbox", { name: "Search all cover letters" }),
     ).toHaveValue("zzz");
     expect(
-      screen.getByRole("combobox", { name: "Filter all proposals by tone" }),
+      screen.getByRole("combobox", { name: "Filter all cover letters by tone" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("combobox", { name: "Sort all proposals" }),
+      screen.getByRole("combobox", { name: "Sort all cover letters" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("No proposals match this search")).toBeInTheDocument();
+    expect(screen.getByText("No cover letters match this search")).toBeInTheDocument();
   });
 });

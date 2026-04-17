@@ -4,10 +4,17 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { CvLibraryProvider, useCvLibrary } from '../CvLibraryContext';
 import { convexClient } from '../../lib/convex-client';
 
-vi.mock('@clerk/clerk-react', () => ({
-  useAuth: () => ({
+const { authState } = vi.hoisted(() => ({
+  authState: {
     isLoaded: false,
     isSignedIn: false,
+  },
+}));
+
+vi.mock('@clerk/clerk-react', () => ({
+  useAuth: () => ({
+    isLoaded: authState.isLoaded,
+    isSignedIn: authState.isSignedIn,
   }),
 }));
 
@@ -66,6 +73,8 @@ describe('CvLibraryContext', () => {
   beforeEach(() => {
     // Reset in-memory storage and install mock
     storage = {};
+    authState.isLoaded = false;
+    authState.isSignedIn = false;
     Object.defineProperty(window, 'localStorage', {
       value: mockLocalStorage,
       configurable: true,
@@ -102,6 +111,131 @@ describe('CvLibraryContext', () => {
     expect(ctx.cvs.length).toBe(0);
     expect(ctx.currentCvId).toBeNull();
     expect(ctx.currentCv).toBeNull();
+  });
+
+  it('marks the library hydrated for signed-out users once auth resolves', async () => {
+    authState.isLoaded = true;
+    authState.isSignedIn = false;
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(ctx).toBeDefined());
+    await waitFor(() => expect(ctx.isLibraryHydrated).toBe(true));
+    expect(ctx.lastLibraryFetchFailed).toBe(false);
+  });
+
+  it('keeps the library unhydrated until signed-in remote reconciliation resolves and merges', async () => {
+    authState.isLoaded = true;
+    authState.isSignedIn = true;
+
+    let resolveRemoteProfiles: ((value: unknown[]) => void) | null = null;
+    vi.mocked(convexClient.query).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRemoteProfiles = resolve as (value: unknown[]) => void;
+        }) as Promise<any>,
+    );
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(ctx).toBeDefined());
+    expect(ctx.isLibraryHydrated).toBe(false);
+    expect(ctx.cvs).toHaveLength(0);
+
+    act(() => {
+      resolveRemoteProfiles?.([
+        {
+          _id: 'cv_remote_only',
+          profileId: 'cv_remote_only',
+          cvDocument: {
+            id: 'cv_remote_only',
+            title: 'Remote CV',
+            metadata: {
+              createdAt: '2026-04-17T09:00:00.000Z',
+              updatedAt: '2026-04-17T09:00:00.000Z',
+              version: 1,
+            },
+            sections: [
+              {
+                id: 'sec-profile-1',
+                title: 'Profile',
+                type: 'profile',
+                blocks: [],
+                structuredContent: [
+                  {
+                    id: 'profile-1',
+                    name: 'Remote User',
+                    desiredPosition: 'Designer',
+                  },
+                ],
+                collapsed: false,
+              },
+            ],
+          },
+        },
+      ]);
+    });
+
+    await waitFor(() => expect(ctx.isLibraryHydrated).toBe(true));
+    expect(ctx.lastLibraryFetchFailed).toBe(false);
+    expect(ctx.cvs).toHaveLength(1);
+    expect(ctx.cvs[0].id).toBe('cv_remote_only');
+  });
+
+  it('treats signed-in remote fetch failures as hydrated but failed reconciliation', async () => {
+    authState.isLoaded = true;
+    authState.isSignedIn = true;
+    vi.mocked(convexClient.query).mockRejectedValueOnce(new Error('network down'));
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(ctx).toBeDefined());
+    await waitFor(() => expect(ctx.isLibraryHydrated).toBe(true));
+    expect(ctx.lastLibraryFetchFailed).toBe(true);
+    expect(ctx.cvs).toHaveLength(0);
+  });
+
+  it('resets hydration failure state on sign-out for the next auth cycle', async () => {
+    authState.isLoaded = true;
+    authState.isSignedIn = true;
+    vi.mocked(convexClient.query).mockRejectedValueOnce(new Error('network down'));
+
+    let ctx: any;
+    const { rerender } = render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(ctx).toBeDefined());
+    await waitFor(() => expect(ctx.isLibraryHydrated).toBe(true));
+    expect(ctx.lastLibraryFetchFailed).toBe(true);
+
+    authState.isSignedIn = false;
+
+    rerender(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(ctx.isLibraryHydrated).toBe(true));
+    expect(ctx.lastLibraryFetchFailed).toBe(false);
   });
 
   it('initializes from localStorage when data exists', async () => {

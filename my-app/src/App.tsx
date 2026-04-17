@@ -1,7 +1,14 @@
 import "./styles/globals.css";
 
 import React from "react";
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 import { Unauthenticated, useConvexAuth, useQuery } from "convex/react";
 import { SignInButton } from "@clerk/clerk-react";
 import { ConvexStatusBanner } from "./components/ConvexStatusBanner";
@@ -16,6 +23,7 @@ import { ProposalPrintPage } from "./pages/ProposalPrintPage";
 import { ResumeFontParityHarnessPage } from "./pages/ResumeFontParityHarnessPage";
 import { PdfRasterHarnessPage } from "./pages/PdfRasterHarnessPage";
 import { Sidebar } from "./components/Sidebar";
+import { QuickStartFlow } from "./components/onboarding/QuickStartFlow";
 import { CvLibraryProvider } from "./contexts/CvLibraryContext";
 import { installStorageDiagnostics } from "./lib/storage-diagnostics";
 import { useCvLibrary } from "./contexts/CvLibraryContext";
@@ -29,6 +37,10 @@ import {
   readStoredProposalOutputDraft,
 } from "./lib/proposal-output-draft";
 import { readStoredSavedProposalFixtures } from "./lib/proposal-saved-fixtures";
+import {
+  clearQuickStartSearch,
+  readQuickStartRouteState,
+} from "./lib/quick-start-routing";
 
 function normalizeTitle(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -106,8 +118,8 @@ function useTopbarDocumentTitle(): string | null {
 
     if (pathname === "/proposals") {
       return savedProposalCount > 0
-        ? `All proposals (${savedProposalCount})`
-        : "All proposals";
+        ? `All cover letters (${savedProposalCount})`
+        : "All cover letters";
     }
 
     if (pathname === "/settings") {
@@ -142,11 +154,13 @@ function useBrowserTitle(topbarDocumentTitle: string | null): void {
         ? `${topbarDocumentTitle} · dasti`
         : "All resumes · dasti";
     } else if (pathname === "/proposal") {
-      pageTitle = topbarDocumentTitle ? `${topbarDocumentTitle} · Proposal · dasti` : "Proposal · dasti";
+      pageTitle = topbarDocumentTitle
+        ? `${topbarDocumentTitle} · Cover letter · dasti`
+        : "Cover letter · dasti";
     } else if (pathname === "/proposals") {
       pageTitle = topbarDocumentTitle
         ? `${topbarDocumentTitle} · dasti`
-        : "All proposals · dasti";
+        : "All cover letters · dasti";
     } else if (pathname === "/settings") {
       pageTitle = topbarDocumentTitle
         ? `${topbarDocumentTitle} · dasti`
@@ -259,6 +273,9 @@ function Topbar() {
  * depuis n'importe quelle route.
  */
 function AppShell(): JSX.Element {
+  const location = useLocation();
+  const navigate = useNavigate();
+
   React.useEffect(() => {
     if (!import.meta.env.DEV) {
       return;
@@ -266,6 +283,22 @@ function AppShell(): JSX.Element {
 
     installStorageDiagnostics();
   }, []);
+
+  const quickStartRouteState = React.useMemo(
+    () => readQuickStartRouteState(location.search),
+    [location.search],
+  );
+
+  const closeQuickStart = React.useCallback(() => {
+    const nextSearch = clearQuickStartSearch(location.search);
+    void navigate(
+      {
+        pathname: location.pathname,
+        search: nextSearch ? `?${nextSearch}` : "",
+      },
+      { replace: true },
+    );
+  }, [location.pathname, location.search, navigate]);
 
   return (
     <CvLibraryProvider>
@@ -293,13 +326,14 @@ function AppShell(): JSX.Element {
             flexDirection: "column",
             overflow: "hidden",
             minWidth: 0,
+            position: "relative",
           }}
         >
           <ConvexStatusBanner />
           <Topbar />
 
           {/* .pscroll — flex:1 overflow:hidden, chaque page gère son propre scroll */}
-          <div style={{ flex: 1, overflow: "hidden" }}>
+          <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
             <Routes>
               <Route path="/cv" element={<CvForge />} />
               <Route path="/cvs" element={<CvsLibrary />} />
@@ -311,6 +345,36 @@ function AppShell(): JSX.Element {
               <Route path="/" element={<Navigate to="/cv" replace />} />
               <Route path="*" element={<Navigate to="/cv" replace />} />
             </Routes>
+            {quickStartRouteState.isOpen ? (
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  zIndex: 4,
+                  padding: "var(--space-3)",
+                  background:
+                    "linear-gradient(180deg, color-mix(in srgb, var(--color-canvas) 76%, transparent) 0%, color-mix(in srgb, var(--color-canvas) 92%, transparent) 100%)",
+                  backdropFilter: "blur(10px)",
+                }}
+              >
+                <div
+                  style={{
+                    height: "100%",
+                    border: "1px solid var(--color-border)",
+                    borderRadius: "calc(var(--radius-surface, 12px) + 6px)",
+                    background: "color-mix(in srgb, var(--color-canvas) 94%, white 6%)",
+                    boxShadow: "var(--shadow-lg)",
+                  }}
+                >
+                  <QuickStartFlow
+                    onExit={closeQuickStart}
+                    initialCreateType={quickStartRouteState.createType}
+                    resumeMode={quickStartRouteState.resumeMode}
+                    returnTarget={quickStartRouteState.returnTarget}
+                  />
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
       </div>

@@ -9,17 +9,27 @@ const createNewCvMock = vi.fn();
 const deleteCvMock = vi.fn();
 const loadCvMock = vi.fn();
 
-const CVS = [
-  {
-    id: "cv_1",
-    title: "Alpha Resume",
-    sections: [],
-    metadata: {
-      updatedAt: "2026-04-06T08:00:00.000Z",
-      createdAt: "2026-04-05T08:00:00.000Z",
+const mockCvLibraryState = {
+  cvs: [
+    {
+      id: "cv_1",
+      title: "Alpha Resume",
+      sections: [],
+      metadata: {
+        updatedAt: "2026-04-06T08:00:00.000Z",
+        createdAt: "2026-04-05T08:00:00.000Z",
+      },
     },
-  },
-] as const;
+  ] as Array<{
+    id: string;
+    title: string;
+    sections: unknown[];
+    metadata: {
+      updatedAt: string;
+      createdAt: string;
+    };
+  }>,
+};
 
 vi.mock("react-router-dom", () => ({
   useNavigate: () => navigateMock,
@@ -27,7 +37,7 @@ vi.mock("react-router-dom", () => ({
 
 vi.mock("../../contexts/CvLibraryContext", () => ({
   useCvLibrary: () => ({
-    cvs: CVS,
+    cvs: mockCvLibraryState.cvs,
     loadCv: loadCvMock,
     createNewCv: createNewCvMock,
     deleteCv: deleteCvMock,
@@ -40,6 +50,17 @@ describe("CvsLibrary", () => {
     createNewCvMock.mockReset();
     deleteCvMock.mockReset();
     loadCvMock.mockReset();
+    mockCvLibraryState.cvs = [
+      {
+        id: "cv_1",
+        title: "Alpha Resume",
+        sections: [],
+        metadata: {
+          updatedAt: "2026-04-06T08:00:00.000Z",
+          createdAt: "2026-04-05T08:00:00.000Z",
+        },
+      },
+    ];
   });
 
   it("keeps the search controls visible when a search returns no resumes", () => {
@@ -65,5 +86,16 @@ describe("CvsLibrary", () => {
 
     expect(createNewCvMock).toHaveBeenCalledTimes(1);
     expect(navigateMock).toHaveBeenCalledWith("/cv");
+  });
+
+  it("keeps Quick Start discoverable from the empty library state", () => {
+    mockCvLibraryState.cvs = [];
+
+    render(<CvsLibrary />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Quick Start" }));
+
+    expect(createNewCvMock).not.toHaveBeenCalled();
+    expect(navigateMock).toHaveBeenCalledWith("/cv?start=quick");
   });
 });
