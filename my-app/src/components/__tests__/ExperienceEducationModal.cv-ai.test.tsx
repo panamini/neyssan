@@ -1,7 +1,17 @@
 import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { ExperienceModal } from "../structured-blocks/ExperienceEducationModal";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import {
+  EducationModal,
+  ExperienceModal,
+} from "../structured-blocks/ExperienceEducationModal";
 import { ensureRemirrorDoc } from "../remirror-editor/utils/conversion";
 import type { RemirrorJSON } from "remirror";
 
@@ -206,5 +216,108 @@ describe("ExperienceModal CV AI", () => {
     expect(JSON.stringify(onSave.mock.calls[0]?.[0][0]?.responsibilities)).toContain(
       "Reduced incident response times.",
     );
+  });
+
+  it("keeps the targeted experience field focused while typing after preview open", async () => {
+    vi.useFakeTimers();
+
+    render(
+      <ExperienceModal
+        open
+        initialItemId="exp-2"
+        onClose={vi.fn()}
+        onSave={vi.fn()}
+        items={[
+          {
+            id: "exp-1",
+            company: "Acme",
+            position: "Security Officer",
+            startDate: "2023-01-01",
+            endDate: null,
+            location: "Paris",
+            responsibilities: ensureRemirrorDoc("Old responsibility"),
+            responsibilityBullets: ["Old responsibility"],
+            achievements: [],
+          },
+          {
+            id: "exp-2",
+            company: "Northline",
+            position: "Lead",
+            startDate: "2024-01-01",
+            endDate: null,
+            location: "Lille",
+            responsibilities: ensureRemirrorDoc("Led operations"),
+            responsibilityBullets: ["Led operations"],
+            achievements: [],
+          },
+        ]}
+      />,
+    );
+
+    await act(async () => {
+      vi.advanceTimersByTime(60);
+    });
+
+    const row = document.querySelector('[data-entry-id="exp-2"]') as HTMLElement;
+    const locationInput = within(row).getByLabelText("Location");
+
+    locationInput.focus();
+    expect(locationInput).toHaveFocus();
+    fireEvent.change(locationInput, { target: { value: "Lyon" } });
+
+    await act(async () => {
+      vi.advanceTimersByTime(60);
+    });
+
+    expect(locationInput).toHaveFocus();
+    vi.useRealTimers();
+  });
+
+  it("keeps the targeted education field focused while typing after preview open", async () => {
+    vi.useFakeTimers();
+
+    render(
+      <EducationModal
+        open
+        initialItemId="edu-2"
+        onClose={vi.fn()}
+        onSave={vi.fn()}
+        items={[
+          {
+            id: "edu-1",
+            institution: "Sorbonne",
+            degree: "BA",
+            startDate: "2019-01-01",
+            endDate: "2022-01-01",
+          },
+          {
+            id: "edu-2",
+            institution: "Sciences Po",
+            degree: "MA",
+            startDate: "2022-01-01",
+            endDate: null,
+            fieldOfStudy: "Policy",
+          },
+        ]}
+      />,
+    );
+
+    await act(async () => {
+      vi.advanceTimersByTime(60);
+    });
+
+    const row = document.querySelector('[data-entry-id="edu-2"]') as HTMLElement;
+    const degreeInput = within(row).getByLabelText("Degree");
+
+    degreeInput.focus();
+    expect(degreeInput).toHaveFocus();
+    fireEvent.change(degreeInput, { target: { value: "MBA" } });
+
+    await act(async () => {
+      vi.advanceTimersByTime(60);
+    });
+
+    expect(degreeInput).toHaveFocus();
+    vi.useRealTimers();
   });
 });

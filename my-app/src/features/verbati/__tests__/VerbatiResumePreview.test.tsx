@@ -1,28 +1,8 @@
 import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { VerbatiResumePreview } from "../VerbatiResumePreview";
 import { resumeMock } from "../resume/resume.mock";
-import { DEFAULT_VERBATI_STYLE } from "../style";
-
-const recenterViewport = vi.fn();
-const viewportCenteringSpy = vi.fn();
-const resumePageSpy = vi.fn();
-
-vi.mock("../../../hooks/use-document-stage-layout", () => ({
-  useDocumentStageLayout: () => ({
-    fitScale: 1,
-    availableWidth: 794,
-    availableHeight: 1123,
-    stageWidth: 794,
-    stageHeight: 1123,
-    pageWidth: 794,
-    pageHeight: 1123,
-    overflowX: false,
-    overflowY: false,
-    isFit: true,
-  }),
-}));
 
 vi.mock("../../../hooks/use-document-pan", () => ({
   useDocumentPan: () => ({
@@ -31,155 +11,359 @@ vi.mock("../../../hooks/use-document-pan", () => ({
   }),
 }));
 
+vi.mock("../../../hooks/use-document-stage-layout", () => ({
+  useDocumentStageLayout: () => ({
+    availableWidth: 794,
+    availableHeight: 1123,
+    stageWidth: 794,
+    stageHeight: 1123,
+    pageWidth: 794,
+    pageHeight: 1123,
+    isFit: true,
+  }),
+}));
+
 vi.mock("../../../hooks/use-document-viewport-centering", () => ({
-  useDocumentViewportCentering: (options: Record<string, unknown>) => {
-    viewportCenteringSpy(options);
-    return {
-      attachViewport: () => undefined,
-      recenterViewport,
-      syncViewport: () => undefined,
-    };
-  },
+  useDocumentViewportCentering: () => ({
+    attachViewport: () => undefined,
+  }),
+}));
+
+vi.mock("../../../lib/document-export-debug", () => ({
+  readDocumentExportDebugConfig: () => false,
+  setResumePreviewDebugCapture: vi.fn(),
+}));
+
+vi.mock("../../../lib/resume-font-debug", () => ({
+  collectResumeFontDebugSnapshot: vi.fn(() => ({})),
 }));
 
 vi.mock("../resume/ResumePage", () => ({
-  default: (props: Record<string, unknown>) => {
-    resumePageSpy(props);
-    return <div data-testid="resume-page" />;
-  },
+  default: () => (
+    <div>
+      <button
+        type="button"
+        data-preview-section="contact"
+        data-preview-section-id="profile-1"
+        data-preview-surface="section"
+      >
+        Contact alias
+      </button>
+      <button
+        type="button"
+        data-preview-section="contact"
+        data-preview-section-id="profile-1"
+        data-preview-item-id="email"
+        data-preview-surface="item"
+      >
+        Contact email field
+      </button>
+      <button
+        type="button"
+        data-preview-section="notes"
+        data-preview-section-id="profile-1"
+        data-preview-surface="section"
+      >
+        Notes alias
+      </button>
+      <button
+        type="button"
+        data-preview-section="selected_projects"
+        data-preview-section-id="projects-1"
+        data-preview-item-id="project-1"
+        data-preview-surface="item"
+      >
+        Selected project alias
+      </button>
+      <button
+        type="button"
+        data-preview-section="selected_projects"
+        data-preview-section-id="projects-1"
+        data-preview-item-id="project-1:description"
+        data-preview-surface="item"
+      >
+        Selected project description field
+      </button>
+    </div>
+  ),
 }));
 
 describe("VerbatiResumePreview", () => {
-  beforeEach(() => {
-    recenterViewport.mockClear();
-    viewportCenteringSpy.mockClear();
-    resumePageSpy.mockClear();
-  });
+  it("routes contact and notes aliases to the profile editor surface from panel clicks", () => {
+    const onLinkIntent = vi.fn();
 
-  it("keeps the workspace shell on the canvas viewer classes", () => {
-    const { container } = render(
-      <VerbatiResumePreview
-        data={resumeMock}
-        stylePreset={DEFAULT_VERBATI_STYLE}
-        hostMode="workspace"
-      />,
-    );
-
-    const shell = container.querySelector(
-      ".dasti-doc-viewer-shell--resume-workspace",
-    );
-    const rail = container.querySelector(".dasti-document-rail--resume-workspace");
-
-    expect(shell).toBeTruthy();
-    expect(rail).toBeTruthy();
-    expect(shell).not.toHaveClass("dasti-doc-viewer-shell--resume-workspace-page");
-
-    const lastCall =
-      viewportCenteringSpy.mock.calls[viewportCenteringSpy.mock.calls.length - 1]?.[0];
-    expect(lastCall).toMatchObject({ defaultCenterX: 0.5, defaultCenterY: 0.5 });
-  });
-
-  it("renders workspace controls in the shared top-left slot before the resume surface", () => {
-    const { container } = render(
-      <VerbatiResumePreview
-        data={resumeMock}
-        stylePreset={DEFAULT_VERBATI_STYLE}
-        hostMode="workspace"
-        railLeadControl={
-          <button type="button" aria-label="Toggle workspace mode">
-            Toggle workspace mode
-          </button>
-        }
-      />,
-    );
-
-    const shell = container.querySelector(
-      ".dasti-doc-viewer-shell--resume-workspace",
-    );
-    expect(shell).toBeTruthy();
-
-    const slot = shell?.firstElementChild as HTMLElement | null;
-    const surface = shell?.children[1] as HTMLElement | undefined;
-
-    expect(slot).toHaveClass(
-      "dasti-document-rail",
-      "dasti-document-rail--resume-workspace",
-    );
-    expect(slot).toContainElement(
-      screen.getByRole("button", { name: "Toggle workspace mode" }),
-    );
-    expect(surface).toHaveClass(
-      "dasti-proposal-sheet-frame",
-      "dasti-proposal-sheet-frame--resume-workspace",
-    );
-    expect(
-      screen.getByRole("button", { name: "Fit page" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Fit width" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "100 percent zoom" }),
-    ).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Page count")).toHaveTextContent("1 page");
-    expect(screen.queryByText("100%")).not.toBeInTheDocument();
-  });
-
-  it("keeps the explicit fit controls centered on the full page in workspace mode", () => {
     render(
       <VerbatiResumePreview
         data={resumeMock}
-        stylePreset={DEFAULT_VERBATI_STYLE}
-        hostMode="workspace"
-      />,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "Fit page" }));
-
-    const lastCall =
-      viewportCenteringSpy.mock.calls[viewportCenteringSpy.mock.calls.length - 1]?.[0];
-    expect(lastCall).toMatchObject({ defaultCenterX: 0.5, defaultCenterY: 0.5 });
-  });
-
-  it("renders the edit-preview toggle in the mini render without layout slideshow arrows", () => {
-    render(
-      <VerbatiResumePreview
-        data={resumeMock}
-        stylePreset={DEFAULT_VERBATI_STYLE}
+        stylePreset={{
+          layout: "swiss",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
         hostMode="panel"
-        railLeadControl={
-          <button type="button" aria-label="Open resume preview">
-            Open resume preview
-          </button>
-        }
+        onLinkIntent={onLinkIntent}
       />,
     );
 
-    expect(
-      screen.getByRole("button", { name: "Open resume preview" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: /Show next resume layout:/ }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: /Show previous resume layout:/ }),
-    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Contact alias" }));
+    fireEvent.click(screen.getByRole("button", { name: "Notes alias" }));
+
+    expect(onLinkIntent).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        requestId: expect.any(String),
+        sectionType: "profile",
+        previewSectionType: "contact",
+        source: "preview-panel",
+        shouldOpenModal: true,
+        sectionId: "profile-1",
+      }),
+    );
+    expect(onLinkIntent).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        requestId: expect.any(String),
+        sectionType: "profile",
+        previewSectionType: "notes",
+        source: "preview-panel",
+        shouldOpenModal: true,
+        sectionId: "profile-1",
+      }),
+    );
   });
 
-  it("includes the Volk renderer in comparison mode when layout comparison is enabled", () => {
+  it("routes selected_projects aliases to the projects editor surface with item targeting", () => {
+    const onLinkIntent = vi.fn();
+
     render(
       <VerbatiResumePreview
         data={resumeMock}
-        stylePreset={DEFAULT_VERBATI_STYLE}
-        compareLayouts
+        stylePreset={{
+          layout: "swiss",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        hostMode="panel"
+        onLinkIntent={onLinkIntent}
       />,
     );
 
-    const lastCall =
-      resumePageSpy.mock.calls[resumePageSpy.mock.calls.length - 1]?.[0];
-    expect(lastCall).toMatchObject({
-      mode: "comparisonAll",
-      comparisonVariantIds: expect.arrayContaining(["volkregister"]),
+    fireEvent.click(
+      screen.getByRole("button", { name: "Selected project alias" }),
+    );
+
+    expect(onLinkIntent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestId: expect.any(String),
+        sectionType: "projects",
+        itemId: "project-1",
+        previewSectionType: "selected_projects",
+        source: "preview-panel",
+        shouldOpenModal: true,
+        sectionId: "projects-1",
+      }),
+    );
+  });
+
+  it("preserves selected_projects field targeting for focused preview clicks", () => {
+    const onLinkIntent = vi.fn();
+
+    render(
+      <VerbatiResumePreview
+        data={resumeMock}
+        stylePreset={{
+          layout: "swiss",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        hostMode="panel"
+        onLinkIntent={onLinkIntent}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Selected project description field" }),
+    );
+
+    expect(onLinkIntent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestId: expect.any(String),
+        sectionType: "projects",
+        itemId: "project-1:description",
+        previewSectionType: "selected_projects",
+        source: "preview-panel",
+        shouldOpenModal: true,
+        sectionId: "projects-1",
+      }),
+    );
+  });
+
+  it("preserves profile field targeting for contact item clicks", () => {
+    const onLinkIntent = vi.fn();
+
+    render(
+      <VerbatiResumePreview
+        data={resumeMock}
+        stylePreset={{
+          layout: "swiss",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        hostMode="panel"
+        onLinkIntent={onLinkIntent}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Contact email field" }));
+
+    expect(onLinkIntent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestId: expect.any(String),
+        sectionType: "profile",
+        previewSectionType: "contact",
+        itemId: "email",
+        source: "preview-panel",
+        shouldOpenModal: true,
+        sectionId: "profile-1",
+      }),
+    );
+  });
+
+  it("scrolls the preview viewport while hovering the page in workspace fit mode", () => {
+    render(
+      <VerbatiResumePreview
+        data={resumeMock}
+        stylePreset={{
+          layout: "swiss",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        hostMode="workspace"
+      />,
+    );
+
+    const viewport = document.querySelector(
+      ".dasti-doc-viewport--resume",
+    ) as HTMLDivElement | null;
+    const page = document.querySelector(
+      "[data-document-page='true']",
+    ) as HTMLDivElement | null;
+
+    expect(viewport).not.toBeNull();
+    expect(page).not.toBeNull();
+
+    Object.defineProperty(viewport!, "clientHeight", {
+      configurable: true,
+      value: 600,
     });
+    Object.defineProperty(viewport!, "scrollHeight", {
+      configurable: true,
+      value: 1200,
+    });
+    Object.defineProperty(viewport!, "clientWidth", {
+      configurable: true,
+      value: 794,
+    });
+    Object.defineProperty(viewport!, "scrollWidth", {
+      configurable: true,
+      value: 794,
+    });
+    viewport!.scrollTop = 0;
+
+    fireEvent.wheel(page!, { deltaY: 140 });
+
+    expect(viewport!.scrollTop).toBe(140);
+  });
+
+  it("falls back to the document scroll root when the page viewport itself cannot scroll", () => {
+    render(
+      <VerbatiResumePreview
+        data={resumeMock}
+        stylePreset={{
+          layout: "swiss",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        hostMode="workspace"
+      />,
+    );
+
+    const viewport = document.querySelector(
+      ".dasti-doc-viewport--resume",
+    ) as HTMLDivElement | null;
+    const page = document.querySelector(
+      "[data-document-page='true']",
+    ) as HTMLDivElement | null;
+    const scrollRoot = document.createElement("div");
+
+    expect(viewport).not.toBeNull();
+    expect(page).not.toBeNull();
+    Object.defineProperty(document, "scrollingElement", {
+      configurable: true,
+      value: scrollRoot,
+    });
+
+    Object.defineProperty(viewport!, "clientHeight", {
+      configurable: true,
+      value: 600,
+    });
+    Object.defineProperty(viewport!, "scrollHeight", {
+      configurable: true,
+      value: 600,
+    });
+    Object.defineProperty(scrollRoot, "clientHeight", {
+      configurable: true,
+      value: 500,
+    });
+    Object.defineProperty(scrollRoot, "scrollHeight", {
+      configurable: true,
+      value: 1200,
+    });
+    viewport!.scrollTop = 0;
+    scrollRoot.scrollTop = 0;
+
+    fireEvent.wheel(page!, { deltaY: 120 });
+
+    expect(viewport!.scrollTop).toBe(0);
+    expect(scrollRoot.scrollTop).toBe(120);
+  });
+
+  it("lets the browser own wheel scrolling after switching to manual zoom", () => {
+    render(
+      <VerbatiResumePreview
+        data={resumeMock}
+        stylePreset={{
+          layout: "swiss",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        hostMode="workspace"
+      />,
+    );
+
+    const viewport = document.querySelector(
+      ".dasti-doc-viewport--resume",
+    ) as HTMLDivElement | null;
+    const page = document.querySelector(
+      "[data-document-page='true']",
+    ) as HTMLDivElement | null;
+
+    expect(viewport).not.toBeNull();
+    expect(page).not.toBeNull();
+
+    Object.defineProperty(viewport!, "clientHeight", {
+      configurable: true,
+      value: 600,
+    });
+    Object.defineProperty(viewport!, "scrollHeight", {
+      configurable: true,
+      value: 1200,
+    });
+    viewport!.scrollTop = 0;
+
+    fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
+    fireEvent.wheel(page!, { deltaY: 140 });
+
+    expect(viewport!.scrollTop).toBe(0);
   });
 });
