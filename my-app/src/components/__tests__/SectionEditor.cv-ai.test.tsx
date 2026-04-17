@@ -6,6 +6,10 @@ import { ensureRemirrorDoc } from "../remirror-editor/utils/conversion";
 import type { RemirrorJSON } from "remirror";
 import type { CvDocument, CvSection } from "../../types/cvDocument";
 import { applyImportRecoveryItems } from "../../lib/import-recovery";
+import type {
+  ResumeActiveTarget,
+  SectionOpenRequest,
+} from "../../features/verbati/resumeLinking";
 
 const {
   mockRunCvSectionAiAction,
@@ -239,6 +243,10 @@ function renderSectionEditor(
     onChange?: ReturnType<typeof vi.fn>;
     onContentChange?: ReturnType<typeof vi.fn>;
     collapsed?: boolean;
+    openRequest?: SectionOpenRequest | null;
+    onOpenRequestHandled?: ReturnType<typeof vi.fn>;
+    activeTarget?: ResumeActiveTarget | null;
+    onActiveTargetChange?: ReturnType<typeof vi.fn>;
   },
 ) {
   mockCvLibraryValue.currentCv =
@@ -246,6 +254,8 @@ function renderSectionEditor(
 
   const onChange = options?.onChange ?? vi.fn();
   const onContentChange = options?.onContentChange ?? vi.fn();
+  const onOpenRequestHandled = options?.onOpenRequestHandled ?? vi.fn();
+  const onActiveTargetChange = options?.onActiveTargetChange ?? vi.fn();
 
   render(
     <SectionEditor
@@ -254,10 +264,19 @@ function renderSectionEditor(
       onChange={onChange}
       onContentChange={onContentChange}
       collapsed={options?.collapsed}
+      openRequest={options?.openRequest}
+      onOpenRequestHandled={onOpenRequestHandled}
+      activeTarget={options?.activeTarget}
+      onActiveTargetChange={onActiveTargetChange}
     />,
   );
 
-  return { onChange, onContentChange };
+  return {
+    onChange,
+    onContentChange,
+    onOpenRequestHandled,
+    onActiveTargetChange,
+  };
 }
 
 function buildRecoverySection(
@@ -744,7 +763,7 @@ describe("SectionEditor CV AI flows", () => {
         title: "Hobbies",
         type: "text",
         blocks: [],
-        structuredContent: [{ id: "hob-1", name: "Chess", level: "Intermediate" }],
+        structuredContent: [{ id: "hob-1", name: "Chess" }],
       } as any,
     ]);
 
@@ -793,7 +812,7 @@ describe("SectionEditor CV AI flows", () => {
     expect(screen.getByRole("dialog", { name: "Edit education" })).toBeInTheDocument();
   });
 
-  it("renders hobbies with skills-style behavior and opens the hobbies modal", () => {
+  it("renders hobbies as name-only tags and opens the hobbies modal", () => {
     const hobbiesSection: CvSection = {
       id: "hobbies-sec",
       title: "Hobbies",
@@ -803,17 +822,18 @@ describe("SectionEditor CV AI flows", () => {
         {
           id: "hob-1",
           name: "Chess",
-          level: "Intermediate",
         },
       ],
     } as any;
 
     renderSectionEditor(hobbiesSection);
 
-    expect(screen.getByDisplayValue("Chess")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit hobby Chess" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Edit hobbies" }));
     expect(screen.getByRole("dialog", { name: "Edit hobbies" })).toBeInTheDocument();
-    expect(screen.queryByText("No hobbies yet. Add your first hobby.")).toBeNull();
+    expect(screen.getByDisplayValue("Chess")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Skill level")).toBeNull();
+    expect(screen.queryByText("Mid")).toBeNull();
   });
 
   it("routes recovery-created hobbies through the hobbies modal", () => {
@@ -896,7 +916,7 @@ describe("SectionEditor CV AI flows", () => {
     expect(screen.queryByText(",")).toBeNull();
   });
 
-  it("renders recovery-created additional information through the plain text block branch", () => {
+  it("routes recovery-created additional information through the section modal surface", () => {
     const additionalInformationSection = buildRecoverySection(
       "additional_information",
     );
@@ -904,10 +924,24 @@ describe("SectionEditor CV AI flows", () => {
     renderSectionEditor(additionalInformationSection);
 
     expect(screen.getByText("Additional Information")).toBeInTheDocument();
-    expect(screen.getByTestId("block-renderer")).toBeInTheDocument();
+    expect(
+      screen.getByText("Available for travel and relocation"),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("block-renderer")).toBeNull();
+    expect(
+      screen.getAllByRole("button", { name: "Edit Additional Information" }),
+    ).toHaveLength(1);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Edit Additional Information" }),
+    );
+
+    expect(
+      screen.getByRole("dialog", { name: "Edit Additional Information" }),
+    ).toBeInTheDocument();
   });
 
-  it("renders recovery-created projects through the visible block-backed branch", () => {
+  it("canonicalizes block-backed projects onto the projects modal surface", () => {
     const projectsSection = applyImportRecoveryItems([], [
       {
         blockId: "recovery-project-1",
@@ -928,8 +962,17 @@ describe("SectionEditor CV AI flows", () => {
 
     renderSectionEditor(projectsSection);
 
-    expect(screen.getByText("Projects")).toBeInTheDocument();
-    expect(screen.getByTestId("block-renderer")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Projects" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Cv Forge redesign shipped for internal beta"),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("block-renderer")).toBeNull();
+    fireEvent.click(screen.getAllByRole("button", { name: "Edit projects" })[0]!);
+    expect(
+      screen.getByRole("dialog", { name: "Edit projects" }),
+    ).toBeInTheDocument();
   });
 
   it("renders structured projects through the section-level editor path", () => {
@@ -974,7 +1017,7 @@ describe("SectionEditor CV AI flows", () => {
     ).toBeGreaterThan(0);
   });
 
-  it("renders recovery-created custom sections through the text block branch", () => {
+  it("routes recovery-created custom sections through the modern section modal surface", async () => {
     const customSection = applyImportRecoveryItems([], [
       {
         blockId: "recovery-custom-1",
@@ -994,10 +1037,35 @@ describe("SectionEditor CV AI flows", () => {
       },
     ]).find((entry) => String(entry.title) === "My own") as CvSection;
 
-    renderSectionEditor(customSection);
+    const { onChange } = renderSectionEditor(customSection);
 
     expect(screen.getByText("My own")).toBeInTheDocument();
-    expect(screen.getByTestId("block-renderer")).toBeInTheDocument();
+    expect(screen.queryByTestId("block-renderer")).toBeNull();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Edit My own" })[0]!);
+
+    expect(
+      screen.getByRole("dialog", { name: "Edit My own" }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(onChange).toHaveBeenCalledWith(
+        0,
+        expect.objectContaining({
+          id: String(customSection.id),
+          title: "My own",
+          type: "text",
+          blocks: expect.arrayContaining([
+            expect.objectContaining({
+              title: "My own",
+              type: "text",
+            }),
+          ]),
+        }),
+      ),
+    );
   });
 
   it("surfaces recovery fallback notes in summary and its modal", () => {
@@ -1105,19 +1173,20 @@ describe("SectionEditor CV AI flows", () => {
             },
           },
         },
-      ],
+          ],
       structuredContent: [
         {
           id: "hob-1",
           name: "Chess",
-          level: "Intermediate",
         },
       ],
     } as any;
 
     renderSectionEditor(hobbiesSection);
 
-    expect(screen.getByDisplayValue("Chess")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Edit hobby Chess" }),
+    ).toBeInTheDocument();
     expect(screen.queryByText("Recovered hobby block")).toBeNull();
   });
 
@@ -1369,6 +1438,48 @@ describe("SectionEditor CV AI flows", () => {
     expect(screen.getByDisplayValue("Amazon Web Services")).toBeInTheDocument();
   });
 
+  it("opens the certification modal from an openRequest and focuses the targeted item", async () => {
+    const certificationSection: CvSection = {
+      id: "cert-open-request",
+      title: "Certifications",
+      type: "certifications",
+      blocks: [],
+      structuredContent: [
+        {
+          id: "cert-1",
+          certificationName: "AWS Certified Developer",
+          issuingOrganization: "Amazon Web Services",
+          credentialId: "AWS-123",
+        },
+        {
+          id: "cert-2",
+          certificationName: "CKA",
+          issuingOrganization: "CNCF",
+          credentialId: "CKA-456",
+        },
+      ],
+    } as any;
+
+    renderSectionEditor(certificationSection, {
+      openRequest: {
+        requestId: "resume-link-cert-2",
+        shouldOpenModal: true,
+        itemId: "cert-2",
+        sectionType: "certifications",
+        sectionId: "cert-open-request",
+      },
+    });
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("dialog", { name: "Edit certifications" }),
+      ).toBeInTheDocument(),
+    );
+    await waitFor(() =>
+      expect(screen.getByDisplayValue("CKA")).toHaveFocus(),
+    );
+  });
+
   it("surfaces recovery fallback notes in certifications", () => {
     const certificationSection: CvSection = {
       id: "cert-sec-notes",
@@ -1448,5 +1559,213 @@ describe("SectionEditor CV AI flows", () => {
     expect(screen.getByRole("dialog", { name: "Edit affiliations" })).toBeInTheDocument();
     expect(screen.getByDisplayValue("IEEE")).toBeInTheDocument();
     expect(screen.getByDisplayValue("Member")).toBeInTheDocument();
+  });
+
+  it("opens the affiliation modal when the section heading is clicked", () => {
+    const affiliationSection: CvSection = {
+      id: "aff-sec-click",
+      title: "Affiliations",
+      type: "text",
+      blocks: [],
+      structuredContent: [
+        {
+          id: "aff-1",
+          organizationName: "IEEE",
+          roleOrMembershipType: "Member",
+        },
+      ],
+    } as any;
+
+    renderSectionEditor(affiliationSection);
+
+    fireEvent.click(screen.getByText("Affiliations"));
+
+    expect(
+      screen.getByRole("dialog", { name: "Edit affiliations" }),
+    ).toBeInTheDocument();
+  });
+
+  it("opens the additional information modal from the section surface and saves back to a canonical text block", async () => {
+    const additionalInformationSection: CvSection = {
+      id: "additional-info-sec",
+      title: "Additional Information",
+      type: "text",
+      blocks: [],
+      structuredContent: null,
+    } as any;
+
+    const { onChange } = renderSectionEditor(additionalInformationSection);
+
+    fireEvent.click(screen.getByText("Add supporting details, references, or availability notes."));
+
+    expect(
+      screen.getByRole("dialog", { name: "Edit Additional Information" }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Save additional information",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(onChange).toHaveBeenCalledWith(
+        0,
+        expect.objectContaining({
+          id: "additional-info-sec",
+          type: "text",
+          blocks: expect.arrayContaining([
+            expect.objectContaining({
+              title: "Additional Information",
+              type: "text",
+            }),
+          ]),
+        }),
+      ),
+    );
+  });
+
+  it("opens the additional information modal from an openRequest", async () => {
+    const additionalInformationSection: CvSection = {
+      id: "additional-info-open-request",
+      title: "Additional Information",
+      type: "text",
+      blocks: [
+        {
+          id: "additional-info-block-1",
+          title: "Additional Information",
+          type: "text",
+          content: ensureRemirrorDoc("Available for relocation."),
+        },
+      ],
+      structuredContent: null,
+    } as any;
+
+    renderSectionEditor(additionalInformationSection, {
+      openRequest: {
+        requestId: "resume-link-additional-info",
+        shouldOpenModal: true,
+        sectionType: "additional_information",
+        sectionId: "additional-info-open-request",
+      },
+    });
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("dialog", { name: "Edit Additional Information" }),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  it("notifies the parent when an additional information openRequest is consumed", async () => {
+    const additionalInformationSection: CvSection = {
+      id: "additional-info-handled",
+      title: "Additional Information",
+      type: "text",
+      blocks: [
+        {
+          id: "additional-info-handled-block-1",
+          title: "Additional Information",
+          type: "text",
+          content: ensureRemirrorDoc("Available for relocation."),
+        },
+      ],
+      structuredContent: null,
+    } as any;
+
+    const { onOpenRequestHandled } = renderSectionEditor(
+      additionalInformationSection,
+      {
+        onOpenRequestHandled: vi.fn(),
+        openRequest: {
+          requestId: "resume-link-additional-info-handled",
+          shouldOpenModal: true,
+          sectionType: "additional_information",
+          sectionId: "additional-info-handled",
+        },
+      },
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("dialog", { name: "Edit Additional Information" }),
+      ).toBeInTheDocument(),
+    );
+
+    expect(onOpenRequestHandled).toHaveBeenCalledWith(
+      "resume-link-additional-info-handled",
+    );
+    expect(onOpenRequestHandled).toHaveBeenCalledTimes(1);
+  });
+
+  it("focuses the targeted profile field when a preview-linked profile modal opens", async () => {
+    const profileSection: CvSection = {
+      id: "profile-focus-sec",
+      title: "Profile",
+      type: "profile",
+      blocks: [],
+      structuredContent: [
+        {
+          id: "profile-item-1",
+          name: "Jane Doe",
+          desiredPosition: "Security Officer",
+          email: "jane@example.com",
+          phone: "+33 6 12 34 56 78",
+          linkedin: "linkedin.com/in/janedoe",
+          website: "https://janedoe.dev",
+          location: "Paris",
+        },
+      ],
+    } as any;
+
+    renderSectionEditor(profileSection, {
+      openRequest: {
+        requestId: "resume-link-profile-email",
+        shouldOpenModal: true,
+        sectionType: "profile",
+        itemId: "email",
+        sectionId: "profile-focus-sec",
+        sectionTitle: "Profile",
+      },
+    });
+
+    const emailInput = await screen.findByLabelText("Email", {
+      selector: "input",
+    });
+    expect(screen.getByRole("dialog", { name: "Edit profile" })).toBeInTheDocument();
+    expect(emailInput).toHaveFocus();
+  });
+
+  it("opens a custom text section modal from an openRequest", async () => {
+    const customSection: CvSection = {
+      id: "custom-open-request",
+      title: "Community",
+      type: "text",
+      blocks: [
+        {
+          id: "custom-open-request-block",
+          title: "Community",
+          type: "text",
+          content: ensureRemirrorDoc("Volunteer organizer"),
+        },
+      ],
+      structuredContent: null,
+    } as any;
+
+    renderSectionEditor(customSection, {
+      openRequest: {
+        requestId: "resume-link-custom",
+        shouldOpenModal: true,
+        sectionType: "custom",
+        sectionId: "custom-open-request",
+        sectionTitle: "Community",
+      },
+    });
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("dialog", { name: "Edit Community" }),
+      ).toBeInTheDocument(),
+    );
   });
 });
