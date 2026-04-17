@@ -1,5 +1,6 @@
 import React from "react";
 import { ArrowSquareOut, ChevronDown } from "@/lib/icons";
+import { getProposalSourceLabel } from "../lib/proposal-source-platforms";
 
 type ProposalBriefCardProps = {
   documentTitle: string;
@@ -9,27 +10,6 @@ type ProposalBriefCardProps = {
   sourceUrl?: string | null;
   sourcePlatform?: string | null;
 };
-
-function formatBriefSourceLabel(platform: string | null | undefined, sourceUrl: string | null | undefined): string | null {
-  const p = String(platform ?? "").trim();
-  if (p) {
-    if (/linkedin/i.test(p)) return "LinkedIn";
-    if (/indeed/i.test(p)) return "Indeed";
-    if (!/^web$/i.test(p) && !/^site$/i.test(p) && !/^website$/i.test(p)) {
-      const capitalized = p.charAt(0).toUpperCase() + p.slice(1).toLowerCase();
-      return capitalized;
-    }
-  }
-  if (!sourceUrl) return null;
-  try {
-    const hostname = new URL(sourceUrl).hostname.replace(/^www\./i, "");
-    if (/linkedin/i.test(hostname)) return "LinkedIn";
-    if (/indeed/i.test(hostname)) return "Indeed";
-    return hostname;
-  } catch {
-    return "External source";
-  }
-}
 
 export function ProposalBriefCard({
   documentTitle,
@@ -41,7 +21,7 @@ export function ProposalBriefCard({
 }: ProposalBriefCardProps): JSX.Element {
   const hasSummary = Boolean(jobDescription);
   const isCompact = variant === "compact";
-  const sourceLabel = formatBriefSourceLabel(sourcePlatform, sourceUrl);
+  const sourceLabel = getProposalSourceLabel(sourcePlatform, sourceUrl);
 
   return (
     <div
