@@ -111,6 +111,7 @@ export function CoverLetterStartSurface({
           label="Use Chrome extension"
           hint="Open supported job-source pages and capture the offer there."
           onClick={onUseChromeExtension}
+          selected={showExtensionHelper}
         />
         <ChoiceCard
           label="Open editor"
@@ -223,22 +224,32 @@ function ChoiceCard({
   label,
   hint,
   onClick,
+  selected,
 }: {
   label: string;
   hint: string;
   onClick: () => void;
+  selected?: boolean;
 }): JSX.Element {
   return (
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={selected}
       style={{
         textAlign: "left",
         padding: "var(--space-3) var(--space-4)",
         borderRadius: "var(--radius-surface, 12px)",
-        border: "1px solid var(--color-border)",
-        background: "var(--sfr, #fff)",
+        border: selected
+          ? "1px solid color-mix(in srgb, var(--color-accent, var(--ti)) 40%, var(--color-border))"
+          : "1px solid var(--color-border)",
+        background: selected
+          ? "linear-gradient(180deg, color-mix(in srgb, var(--color-canvas) 94%, white 6%) 0%, color-mix(in srgb, var(--color-canvas) 98%, var(--color-accent, var(--ti)) 2%) 100%)"
+          : "var(--sfr, #fff)",
         cursor: "pointer",
+        boxShadow: selected
+          ? "0 0 0 1px color-mix(in srgb, var(--color-accent, var(--ti)) 12%, transparent)"
+          : "none",
       }}
     >
       <div
