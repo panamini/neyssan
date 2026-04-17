@@ -1,11 +1,13 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { useAction, useAuth } from "convex/react";
+import { useAction } from "convex/react";
+import { v4 as uuidv4 } from "uuid";
 import { Button } from "../ui/button";
 import { useCvLibrary } from "../../contexts/CvLibraryContext";
 import { mapProfileToCvDocument } from "../../adapters/profile-mapper";
 import { clientFormatCompleteCV } from "../../utils/simpleClientParse";
 import { api } from "../../../convex/_generated/api";
+import { deriveCvTitleFromSections } from "../../lib/normalize-cv";
 import {
   TONE_OPTIONS,
   markQuickStartCompleted,
@@ -30,7 +32,6 @@ interface Props {
 export function QuickStartFlow({ onExit }: Props): JSX.Element {
   const navigate = useNavigate();
   const { importCv, createNewCv } = useCvLibrary();
-  const { getToken } = useAuth();
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   // Use the same OCR extraction actions as StrictUploadButton
@@ -70,16 +71,50 @@ export function QuickStartFlow({ onExit }: Props): JSX.Element {
       setParseError(null);
       setParsing(true);
       try {
-        // Extract raw text from file
-        let rawText: string;
         const ext = (file.name.split(".").pop() || "").toLowerCase();
         if (ext === "pdf") {
-          // PDF text extraction would need a library; for now fallback to error
-          throw new Error("PDF upload requires server processing. Please use text paste or start fresh.");
-        } else if (ext === "txt") {
+          const { importStructuredMistralFileViaClient } = await import(
+            "../useStructuredMistralImport"
+          );
+          const outcome = await importStructuredMistralFileViaClient(file);
+          if (outcome.status === "rejected") {
+            setParseError(outcome.message);
+            return;
+          }
+          if (!Array.isArray(outcome.sections) || outcome.sections.length === 0) {
+            setParseError(
+              outcome.emptyReason
+                ? `Parser returned empty result: ${outcome.emptyReason}`
+                : "No importable sections were found.",
+            );
+            return;
+          }
+
+          const now = new Date().toISOString();
+          await importCv({
+            id: uuidv4(),
+            title: deriveCvTitleFromSections(outcome.sections as any, "Imported CV"),
+            metadata: {
+              createdAt: now,
+              updatedAt: now,
+              version: 1,
+              ...(outcome.authoritativeResume
+                ? { authoritativeResume: outcome.authoritativeResume }
+                : {}),
+            },
+            sections: outcome.sections as any,
+          });
+          setImportChoice("pdf");
+          setStep(3);
+          return;
+        }
+
+        // Extract raw text from file
+        let rawText: string;
+        if (ext === "txt") {
           rawText = await file.text();
         } else {
-          throw new Error("Unsupported file type. Please upload a TXT or paste text.");
+          throw new Error("Unsupported file type. Please upload a PDF or paste text.");
         }
 
         // Call the OCR extraction action (prefer with-spans)
