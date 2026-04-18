@@ -3,7 +3,7 @@ import { useQuery } from "convex/react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { isQuickStartCompleted } from "../lib/onboarding-state";
 import { buildQuickStartHref } from "../lib/quick-start-routing";
-import { Check, Eye, Palette, X } from "@/lib/icons";
+import { Check, Eye, EyeClosed, Palette } from "@/lib/icons";
 import { api } from "../../convex/_generated/api";
 import { ProfileReviewCard } from "../components/ProfileReviewCard";
 import ResumeExportControl from "../components/ResumeExportControl";
@@ -568,7 +568,7 @@ export function CvForge(): JSX.Element {
       data-toolbar-tooltip="Back to edit"
       data-no-pan="true"
     >
-      <X size={15} strokeWidth={1.9} aria-hidden="true" />
+      <EyeClosed size={15} strokeWidth={1.9} aria-hidden="true" />
     </button>
   );
   const resumeExportControl = (
