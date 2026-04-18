@@ -625,6 +625,88 @@ def test_run_resume_pipeline_from_ocr_result_recovers_explicit_french_experience
     assert result["diagnostics"]["annotationRetry"]["attempted"] is False
 
 
+def test_run_resume_pipeline_from_ocr_result_recovers_explicit_summary_section_without_retry() -> None:
+    result = _run_resume_pipeline_from_ocr_result(
+        OCRAnnotationResult(
+            pages=[
+                {
+                    "index": 0,
+                    "markdown": (
+                        "# ROBERT SMITH\n\n"
+                        "## Lead Customer Advocate\n\n"
+                        "Phone: (0123)-456-789 | Email: info@qwikresume.com | Website: Qwikresume.com\n\n"
+                        "## SUMMARY\n\n"
+                        "Cash handling accuracy Excellent multi-tasker Organized Friendly Dependable "
+                        "Reliable Strong communication skills Punctual Flexible schedule Knowledge of MS office and POS.\n\n"
+                        "## CORE COMPETENCIES\n\n"
+                        "Accounting, Data Entry, WindowsXP-8, Technology Management.\n\n"
+                        "## PROFESSIONAL EXPERIENCE\n\n"
+                        "### Lead Customer Advocate\n\n"
+                        "CitySquare - 2015 – Present\n\n"
+                        "#### Key Deliverables:\n\n"
+                        "- Worked with men, women and children who were attempting to leave a violent relationship.\n"
+                    ),
+                }
+            ],
+            page_count=1,
+            diagnostics={
+                "model": "mistral-ocr-latest",
+                "page_count": 1,
+                "pages": 1,
+                "ocr_chars": 760,
+                "document_name": "robertsmith.jpg",
+            },
+            annotation_raw={
+                "identity": {
+                    "name": "ROBERT SMITH",
+                    "desiredPosition": "Lead Customer Advocate",
+                },
+                "contact": {
+                    "email": "info@qwikresume.com",
+                    "website": "Qwikresume.com",
+                    "phone": "(0123)-456-789",
+                },
+                "summary": {"text": None},
+                "skills": [
+                    {"name": "Accounting"},
+                    {"name": "Data Entry"},
+                    {"name": "WindowsXP-8"},
+                    {"name": "Technology Management"},
+                ],
+                "experience": [
+                    {
+                        "company": "CitySquare",
+                        "position": "Lead Customer Advocate",
+                        "startDate": "2015",
+                        "endDate": "Present",
+                        "isCurrent": True,
+                        "responsibilityBullets": [
+                            "Worked with men, women and children who were attempting to leave a violent relationship."
+                        ],
+                    }
+                ],
+                "sectionOrder": [
+                    {"family": "summary", "ordinal": 0, "title": "SUMMARY"},
+                    {"family": "skills", "ordinal": 0, "title": "CORE COMPETENCIES"},
+                    {"family": "experience", "ordinal": 0, "title": "PROFESSIONAL EXPERIENCE"},
+                ],
+            },
+            response_payload={},
+        )
+    )
+
+    assert result["fallback_to_legacy"] is False
+    assert result["status"] == "partial"
+    normalized_payload = result["canonical_payload"]["normalized"]
+    assert normalized_payload["summary"]["text"] == (
+        "Cash handling accuracy Excellent multi-tasker Organized Friendly Dependable "
+        "Reliable Strong communication skills Punctual Flexible schedule Knowledge of MS office and POS."
+    )
+    assert result["diagnostics"]["sectionRecovery"]["summary"]["applied"] is True
+    assert result["diagnostics"]["sectionRecovery"]["summary"]["heading"] == "SUMMARY"
+    assert result["diagnostics"]["annotationRetry"]["attempted"] is False
+
+
 def test_run_resume_pipeline_from_bytes_recovers_explicit_languages_and_skills_without_retry(monkeypatch) -> None:
     call_count = 0
 
@@ -1766,6 +1848,50 @@ def test_normalize_extraction_drops_template_branding_and_address_noise_for_robe
     assert "summary_dropped" in warning_codes
     assert "education_dropped" in warning_codes
     assert "text_section_dropped" in warning_codes
+
+
+def test_normalize_extraction_keeps_explicit_summary_heading_content_for_robertsmith() -> None:
+    extraction = parse_document_annotation(
+        {
+            "identity": {
+                "name": "ROBERT SMITH",
+                "desiredPosition": "Lead Customer Advocate",
+            },
+            "contact": {
+                "email": "info@qwikresume.com",
+                "website": "Qwikresume.com",
+                "phone": "(0123)-456-789",
+            },
+            "summary": {
+                "text": (
+                    "Cash handling accuracy Excellent multi-tasker Organized Friendly Dependable "
+                    "Reliable Strong communication skills Punctual Flexible schedule Knowledge of MS office and POS."
+                )
+            },
+        }
+    )
+
+    normalized = normalize_extraction(
+        extraction,
+        raw_text=(
+            "# ROBERT SMITH\n\n"
+            "## Lead Customer Advocate\n\n"
+            "Phone: (0123)-456-789 | Email: info@qwikresume.com | Website: Qwikresume.com\n\n"
+            "## SUMMARY\n\n"
+            "Cash handling accuracy Excellent multi-tasker Organized Friendly Dependable "
+            "Reliable Strong communication skills Punctual Flexible schedule Knowledge of MS office and POS.\n\n"
+            "© This Free Resume Template is the copyright of Qwikresume.com. Usage Guidelines\n"
+        ),
+        page_count=1,
+        document_name="robertsmith.jpg",
+    )
+
+    assert normalized.summary.text == (
+        "Cash handling accuracy Excellent multi-tasker Organized Friendly Dependable "
+        "Reliable Strong communication skills Punctual Flexible schedule Knowledge of MS office and POS."
+    )
+    warning_codes = [warning.code for warning in normalized.warnings]
+    assert "summary_dropped" not in warning_codes
 
 
 def test_normalize_extraction_keeps_explicit_anne_professional_links() -> None:

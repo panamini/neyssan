@@ -76,6 +76,12 @@ SKILL_RECOVERY_HEADING_ALIASES = {
     _normalize_lookup("skills"),
     _normalize_lookup("areas of expertise"),
 }
+SUMMARY_RECOVERY_HEADING_ALIASES = {
+    _normalize_lookup("summary"),
+    _normalize_lookup("professional summary"),
+    _normalize_lookup("professional profile"),
+    _normalize_lookup("about"),
+}
 SKILLISH_LANGUAGE_MARKERS = (
     "areas of expertise",
     "core competencies",
@@ -98,7 +104,7 @@ SKILLISH_LANGUAGE_MARKERS = (
     "agile",
     "scrum",
 )
-RECOVERY_FIELD_FAMILIES = ("languages", "skills", "achievements", "experience")
+RECOVERY_FIELD_FAMILIES = ("languages", "skills", "achievements", "experience", "summary")
 
 
 @dataclass
@@ -422,6 +428,10 @@ def _skill_sections_eligible_for_recovery(sections: list[OCRMarkdownSection]) ->
     return [section for section in sections if _normalize_heading_text(section.heading) in SKILL_RECOVERY_HEADING_ALIASES]
 
 
+def _summary_sections_eligible_for_recovery(sections: list[OCRMarkdownSection]) -> list[OCRMarkdownSection]:
+    return [section for section in sections if _normalize_heading_text(section.heading) in SUMMARY_RECOVERY_HEADING_ALIASES]
+
+
 def _extract_explicit_achievements_from_sections(sections: list[OCRMarkdownSection]) -> list[str]:
     items: list[str] = []
     current_item: Optional[str] = None
@@ -618,6 +628,39 @@ def _extract_explicit_experience_from_sections(sections: list[OCRMarkdownSection
     return recovered
 
 
+def _extract_explicit_summary_from_sections(sections: list[OCRMarkdownSection]) -> Optional[str]:
+    fragments: list[str] = []
+    for section in sections:
+        section_fragments: list[str] = []
+        for raw_line in section.lines:
+            stripped = raw_line.strip()
+            if not stripped or TABLE_DIVIDER_RE.match(stripped):
+                continue
+            if _is_heading_value(stripped):
+                continue
+            cleaned = _clean_inline_text(_strip_list_prefix(stripped).strip("|"))
+            if not cleaned:
+                continue
+            if re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", cleaned):
+                continue
+            if re.search(r"(https?://|www\.)", cleaned, re.IGNORECASE):
+                continue
+            if re.search(r"\b(?:phone|email|website|linkedin|github|portfolio)\b\s*:", cleaned, re.IGNORECASE):
+                continue
+            if re.search(r"(?:\+?\d[\d\s().-]{6,}\d)", cleaned):
+                continue
+            section_fragments.append(cleaned)
+        if section_fragments:
+            fragments.append(" ".join(section_fragments))
+
+    summary = _clean_inline_text(" ".join(fragments))
+    if not summary:
+        return None
+    if len(re.findall(r"[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'/-]*", summary)) < 5:
+        return None
+    return summary
+
+
 def _is_heading_value(value: Optional[str]) -> bool:
     cleaned = _clean_inline_text(value)
     if not cleaned:
@@ -700,6 +743,11 @@ def _collect_section_gate_issues(normalized: Any, explicit_sections: dict[str, l
         experience = list(getattr(normalized, "experience", []) or [])
         if not experience:
             issues["experience"] = "empty_explicit_section_values"
+
+    if _summary_sections_eligible_for_recovery(explicit_sections.get("summary", [])):
+        summary = _clean_inline_text(getattr(getattr(normalized, "summary", None), "text", None))
+        if not summary:
+            issues["summary"] = "empty_explicit_section_values"
 
     return issues
 
@@ -812,9 +860,11 @@ def _collect_post_recovery_issues(
     recovered_languages: Optional[list[dict[str, Any]]],
     recovered_skills: Optional[list[str]],
     recovered_experience: Optional[list[dict[str, Any]]],
+    recovered_summary: Optional[str],
     repaired_normalized: Any,
     skills_section_exists: bool,
     experience_section_exists: bool,
+    summary_section_exists: bool,
 ) -> dict[str, str]:
     issues: dict[str, str] = {}
     if recovered_languages is not None:
@@ -837,6 +887,10 @@ def _collect_post_recovery_issues(
         )
         if experience_issue:
             issues["experience"] = experience_issue
+    if recovered_summary is not None:
+        summary_text = _clean_inline_text(getattr(getattr(repaired_normalized, "summary", None), "text", None))
+        if summary_section_exists and not summary_text:
+            issues["summary"] = "empty_explicit_section_values"
     return issues
 
 
@@ -847,6 +901,7 @@ def _collect_second_validation_issues_after_recovery(
     recovered_languages: Optional[list[dict[str, Any]]],
     recovered_skills: Optional[list[str]],
     recovered_experience: Optional[list[dict[str, Any]]],
+    recovered_summary: Optional[str],
 ) -> dict[str, str]:
     issues = _collect_section_gate_issues(repaired_normalized, explicit_sections)
     issues.update(
@@ -854,9 +909,11 @@ def _collect_second_validation_issues_after_recovery(
             recovered_languages=recovered_languages,
             recovered_skills=recovered_skills,
             recovered_experience=recovered_experience,
+            recovered_summary=recovered_summary,
             repaired_normalized=repaired_normalized,
             skills_section_exists=bool(explicit_sections.get("skills")),
             experience_section_exists=bool(explicit_sections.get("experience")),
+            summary_section_exists=bool(_summary_sections_eligible_for_recovery(explicit_sections.get("summary", []))),
         )
     )
     return issues
@@ -1144,6 +1201,7 @@ def _run_resume_pipeline_from_ocr_result(ocr_result: OCRAnnotationResult) -> Dic
     raw_text = _join_markdown_pages(ocr_result.pages)
     explicit_sections = _extract_explicit_sections_from_pages(ocr_result.pages)
     skills_recovery_sections = _skill_sections_eligible_for_recovery(explicit_sections.get("skills", []))
+    summary_recovery_sections = _summary_sections_eligible_for_recovery(explicit_sections.get("summary", []))
     section_recovery = _default_section_recovery_metadata(explicit_sections)
     try:
         extraction = parse_document_annotation(ocr_result.annotation_raw)
@@ -1184,8 +1242,17 @@ def _run_resume_pipeline_from_ocr_result(ocr_result: OCRAnnotationResult) -> Dic
         section_recovery["experience"]["reason"] = (
             "empty_explicit_section_values" if experience_recovery_needed else "accepted_annotation_values"
         )
+    summary_recovery_needed = bool(summary_recovery_sections) and not _clean_inline_text(
+        getattr(getattr(normalized, "summary", None), "text", None)
+    )
+    if explicit_sections.get("summary"):
+        section_recovery["summary"]["reason"] = (
+            "empty_explicit_section_values"
+            if summary_recovery_needed
+            else ("explicit_section_not_recovery_eligible" if not summary_recovery_sections else "accepted_annotation_values")
+        )
 
-    if not section_gate_issues and not achievements_recovery_needed and not experience_recovery_needed:
+    if not section_gate_issues and not achievements_recovery_needed and not experience_recovery_needed and not summary_recovery_needed:
         return _build_result_from_normalized(
             normalized=normalized,
             raw_text=raw_text,
@@ -1199,6 +1266,7 @@ def _run_resume_pipeline_from_ocr_result(ocr_result: OCRAnnotationResult) -> Dic
     recovered_languages: Optional[list[dict[str, Any]]] = None
     recovered_skills: Optional[list[str]] = None
     recovered_experience: Optional[list[dict[str, Any]]] = None
+    recovered_summary: Optional[str] = None
 
     if achievements_recovery_needed:
         achievements = _extract_explicit_achievements_from_sections(explicit_sections.get("achievements", []))
@@ -1213,6 +1281,14 @@ def _run_resume_pipeline_from_ocr_result(ocr_result: OCRAnnotationResult) -> Dic
             repaired_payload["experience"] = experience
             recovered_experience = experience
             section_recovery["experience"]["applied"] = True
+            repair_applied = True
+
+    if summary_recovery_needed:
+        summary = _extract_explicit_summary_from_sections(summary_recovery_sections)
+        if summary:
+            repaired_payload["summary"] = {"text": summary}
+            recovered_summary = summary
+            section_recovery["summary"]["applied"] = True
             repair_applied = True
 
     if "languages" in section_gate_issues:
@@ -1281,8 +1357,9 @@ def _run_resume_pipeline_from_ocr_result(ocr_result: OCRAnnotationResult) -> Dic
         recovered_languages=recovered_languages,
         recovered_skills=recovered_skills,
         recovered_experience=recovered_experience,
+        recovered_summary=recovered_summary,
     )
-    for family in ("languages", "skills", "experience"):
+    for family in ("languages", "skills", "experience", "summary"):
         if explicit_sections.get(family):
             if repaired_issues.get(family):
                 section_recovery[family]["reason"] = repaired_issues[family]
