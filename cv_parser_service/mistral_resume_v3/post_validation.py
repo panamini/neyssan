@@ -40,6 +40,7 @@ EMAIL_FRAGMENT_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"
 DOMAINISH_RE = re.compile(r"^[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?:/[\w./#?=&%-]+)?$")
 HANDLE_RE = re.compile(r"^@?[A-Za-z0-9._/-]{2,100}$")
 BULLETISH_RE = re.compile(r"^\s*(?:[-*•·●▪◦]|(?:\d+[.)]))\s+")
+MARKDOWN_HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s+(.+?)\s*$")
 TEMPLATE_BRANDING_RE = re.compile(
     r"\b(enhancv(?:\.com)?|qwikresume(?:\.com)?|free resume template|usage guidelines|resume templates?|build this template|copyright)\b",
     re.IGNORECASE,
@@ -97,6 +98,12 @@ SOCIAL_PORTFOLIO_DOMAINS = (
     "youtube.com",
     "facebook.com",
 )
+SAFE_EXPLICIT_SUMMARY_HEADING_ALIASES = {
+    "summary",
+    "professional summary",
+    "professional profile",
+    "about",
+}
 
 
 def _normalize_lookup(value: str) -> str:
@@ -505,10 +512,42 @@ def _looks_like_address_education_noise(
     return False
 
 
+def _extract_explicit_summary_section_text(raw_text: str) -> Optional[str]:
+    if not raw_text:
+        return None
+    capturing = False
+    fragments: list[str] = []
+    for raw_line in str(raw_text).replace("\r", "").split("\n"):
+        heading_match = MARKDOWN_HEADING_RE.match(raw_line)
+        if heading_match:
+            normalized_heading = _normalize_lookup(
+                re.sub(r"^[#\s]+|[:\-\u2013\u2014\s]+$", "", heading_match.group(1) or "")
+            )
+            if capturing:
+                break
+            if normalized_heading in SAFE_EXPLICIT_SUMMARY_HEADING_ALIASES:
+                capturing = True
+            continue
+        if not capturing:
+            continue
+        cleaned = _clean_inline_text(raw_line.strip())
+        if cleaned:
+            fragments.append(cleaned)
+    return _clean_inline_text(" ".join(fragments))
+
+
 def _looks_like_template_skill_blob_summary(value: str, raw_text: str) -> bool:
     cleaned = _clean_inline_text(value)
     if not cleaned or not TEMPLATE_BRANDING_RE.search(raw_text or ""):
         return False
+    explicit_summary_text = _extract_explicit_summary_section_text(raw_text)
+    if explicit_summary_text:
+        normalized_summary = _normalize_lookup(cleaned)
+        normalized_explicit = _normalize_lookup(explicit_summary_text)
+        if normalized_summary and normalized_explicit and (
+            normalized_summary in normalized_explicit or normalized_explicit in normalized_summary
+        ):
+            return False
     normalized = _normalize_lookup(cleaned)
     if SUMMARY_VERBISH_RE.search(normalized):
         return False
