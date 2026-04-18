@@ -104,6 +104,44 @@ def _build_retry_contradiction_result() -> OCRAnnotationResult:
         ("Skills", "skills"),
         ("Areas of expertise", "skills"),
         ("Languages", "languages"),
+        ("Work Experience", "experience"),
+        ("Professional Experience", "experience"),
+        ("Employment History", "experience"),
+        ("Work History", "experience"),
+        ("Career History", "experience"),
+        ("Professional Background", "experience"),
+        ("Relevant Experience", "experience"),
+        ("Career Experience", "experience"),
+        ("Industry Experience", "experience"),
+        ("Experiencia", "experience"),
+        ("Experiencia Laboral", "experience"),
+        ("Experiencia Profesional", "experience"),
+        ("Experiencia Profesional Relevante", "experience"),
+        ("Historial Laboral", "experience"),
+        ("Historial Profesional", "experience"),
+        ("Trayectoria Profesional", "experience"),
+        ("Experiência", "experience"),
+        ("Experiência Profissional", "experience"),
+        ("Histórico Profissional", "experience"),
+        ("Histórico de Trabalho", "experience"),
+        ("Trajetória Profissional", "experience"),
+        ("Expérience", "experience"),
+        ("Expérience Professionnelle", "experience"),
+        ("Expérience de Travail", "experience"),
+        ("Parcours Professionnel", "experience"),
+        ("Historique Professionnel", "experience"),
+        ("Berufserfahrung", "experience"),
+        ("Berufliche Erfahrung", "experience"),
+        ("Beruflicher Werdegang", "experience"),
+        ("Arbeitserfahrung", "experience"),
+        ("Werdegang", "experience"),
+        ("Esperienza", "experience"),
+        ("Esperienza Professionale", "experience"),
+        ("Esperienza Lavorativa", "experience"),
+        ("Percorso Professionale", "experience"),
+        ("Experience / Work History", "experience"),
+        ("Experiência / Histórico Profissional", "experience"),
+        ("Expérience / Expérience Professionnelle", "experience"),
     ],
 )
 def test_extract_explicit_sections_maps_heading_aliases_to_expected_family(heading: str, family: str) -> None:
@@ -119,6 +157,34 @@ def test_extract_explicit_sections_maps_heading_aliases_to_expected_family(headi
     assert family in sections
     assert sections[family][0].heading == heading
     assert sections[family][0].lines[0] == "Primary item"
+
+
+def test_extract_explicit_sections_keeps_nested_markdown_headings_inside_experience_section() -> None:
+    sections = _extract_explicit_sections_from_pages(
+        [
+            {
+                "index": 0,
+                "markdown": (
+                    "# WORK HISTORY\n\n"
+                    "## Spring Education Group - Middle School Language Arts Teacher\n\n"
+                    "Issaquah, WA • 08/2010 - Current\n"
+                    "- Taught all levels of English language arts.\n\n"
+                    "# EDUCATION\n"
+                    "Example University\n"
+                ),
+            }
+        ]
+    )
+
+    assert "experience" in sections
+    assert sections["experience"][0].heading == "WORK HISTORY"
+    assert sections["experience"][0].lines == [
+        "## Spring Education Group - Middle School Language Arts Teacher",
+        "",
+        "Issaquah, WA • 08/2010 - Current",
+        "- Taught all levels of English language arts.",
+        "",
+    ]
 
 
 def test_parse_document_annotation_accepts_json_string() -> None:
@@ -336,6 +402,227 @@ def test_run_resume_pipeline_from_bytes_preserves_explicit_achievements_from_ocr
         {"family": "experience", "ordinal": 0, "title": "EMPLOYMENT HISTORY"},
         {"family": "achievements", "ordinal": 0, "title": "ACHIEVEMENTS"},
     ]
+
+
+def test_run_resume_pipeline_from_ocr_result_recovers_explicit_work_history_entries_without_retry() -> None:
+    markdown = (
+        "JESSICA CLAIRE\n"
+        "resumeexample@example.com(555) 432-1000\n"
+        "Location: Montgomery Street, San Francisco, CA 94105\n\n"
+        "# WORK HISTORY\n\n"
+        "## Spring Education Group - Middle School Language Arts Teacher\n\n"
+        "Issaquah, WA • 08/2010 - Current\n\n"
+        "- Taught all levels of English language arts including intensive, regular, and advanced students\n"
+        "- Taught seventh and eight grade students\n\n"
+        "## Falcon School District 49 - Elementary School Teacher\n\n"
+        "Peyton, CO • 08/2008 - 06/2010\n\n"
+        "- Gained experience teaching in a Title I school with a diverse student population\n"
+        "- Taught three subject areas\n\n"
+        "# EDUCATION\n"
+        "Cedarville University\n"
+    )
+    result = _run_resume_pipeline_from_ocr_result(
+        OCRAnnotationResult(
+            pages=[{"index": 0, "markdown": markdown}],
+            page_count=1,
+            diagnostics={
+                "model": "mistral-ocr-latest",
+                "page_count": 1,
+                "pages": 1,
+                "ocr_chars": len(markdown),
+                "document_name": "jessica-claire.pdf",
+            },
+            annotation_raw={
+                "identity": {
+                    "name": "Jessica Claire",
+                    "location": "Montgomery Street, San Francisco, CA 94105",
+                },
+                "contact": {"email": "resumeexample@example.com", "phone": "(555) 432-1000"},
+                "experience": [],
+                "education": [{"institution": "Cedarville University"}],
+                "sectionOrder": [
+                    {"family": "experience", "ordinal": 0, "title": "WORK HISTORY"},
+                    {"family": "education", "ordinal": 0, "title": "EDUCATION"},
+                ],
+            },
+            response_payload={},
+        )
+    )
+
+    assert result["fallback_to_legacy"] is False
+    normalized_payload = result["canonical_payload"]["normalized"]
+    assert len(normalized_payload["experience"]) == 2
+    first_experience = normalized_payload["experience"][0]
+    second_experience = normalized_payload["experience"][1]
+    assert first_experience["company"] == "Spring Education Group"
+    assert first_experience["position"] == "Middle School Language Arts Teacher"
+    assert first_experience["location"] == "Issaquah, WA"
+    assert first_experience["startDate"] == "08/2010"
+    assert first_experience["endDate"] is None
+    assert first_experience["isCurrent"] is True
+    assert first_experience["responsibilityBullets"] == [
+        "Taught all levels of English language arts including intensive, regular, and advanced students",
+        "Taught seventh and eight grade students",
+    ]
+    assert second_experience["company"] == "Falcon School District 49"
+    assert second_experience["position"] == "Elementary School Teacher"
+    assert second_experience["location"] == "Peyton, CO"
+    assert second_experience["startDate"] == "08/2008"
+    assert second_experience["endDate"] == "06/2010"
+    assert result["diagnostics"]["sectionRecovery"]["experience"]["applied"] is True
+    assert result["diagnostics"]["sectionRecovery"]["experience"]["heading"] == "WORK HISTORY"
+    assert result["diagnostics"]["annotationRetry"]["attempted"] is False
+
+
+def test_run_resume_pipeline_from_ocr_result_recovers_explicit_relevant_experience_entries_without_retry() -> None:
+    markdown = (
+        "JESSICA CLAIRE\n"
+        "resumeexample@example.com(555) 432-1000\n\n"
+        "# RELEVANT EXPERIENCE\n\n"
+        "## Spring Education Group - Middle School Language Arts Teacher\n\n"
+        "Issaquah, WA • 08/2010 - Current\n\n"
+        "- Taught all levels of English language arts including intensive, regular, and advanced students\n"
+        "- Taught seventh and eight grade students\n\n"
+        "# EDUCATION\n"
+        "Cedarville University\n"
+    )
+    result = _run_resume_pipeline_from_ocr_result(
+        OCRAnnotationResult(
+            pages=[{"index": 0, "markdown": markdown}],
+            page_count=1,
+            diagnostics={
+                "model": "mistral-ocr-latest",
+                "page_count": 1,
+                "pages": 1,
+                "ocr_chars": len(markdown),
+                "document_name": "jessica-claire-relevant-experience.pdf",
+            },
+            annotation_raw={
+                "identity": {
+                    "name": "Jessica Claire",
+                },
+                "contact": {"email": "resumeexample@example.com", "phone": "(555) 432-1000"},
+                "experience": [],
+                "education": [{"institution": "Cedarville University"}],
+                "sectionOrder": [
+                    {"family": "experience", "ordinal": 0, "title": "RELEVANT EXPERIENCE"},
+                    {"family": "education", "ordinal": 0, "title": "EDUCATION"},
+                ],
+            },
+            response_payload={},
+        )
+    )
+
+    assert result["fallback_to_legacy"] is False
+    normalized_payload = result["canonical_payload"]["normalized"]
+    assert len(normalized_payload["experience"]) == 1
+    assert normalized_payload["experience"][0]["company"] == "Spring Education Group"
+    assert normalized_payload["experience"][0]["position"] == "Middle School Language Arts Teacher"
+    assert result["diagnostics"]["sectionRecovery"]["experience"]["applied"] is True
+    assert result["diagnostics"]["sectionRecovery"]["experience"]["heading"] == "RELEVANT EXPERIENCE"
+    assert result["diagnostics"]["annotationRetry"]["attempted"] is False
+
+
+def test_run_resume_pipeline_from_ocr_result_recovers_explicit_portuguese_experience_heading_without_retry() -> None:
+    markdown = (
+        "JESSICA CLAIRE\n"
+        "resumeexample@example.com(555) 432-1000\n\n"
+        "# EXPERIÊNCIA PROFISSIONAL\n\n"
+        "## Spring Education Group - Middle School Language Arts Teacher\n\n"
+        "Issaquah, WA • 08/2010 - 06/2014\n\n"
+        "- Taught all levels of English language arts including intensive, regular, and advanced students\n"
+        "- Taught seventh and eight grade students\n\n"
+        "# EDUCATION\n"
+        "Cedarville University\n"
+    )
+    result = _run_resume_pipeline_from_ocr_result(
+        OCRAnnotationResult(
+            pages=[{"index": 0, "markdown": markdown}],
+            page_count=1,
+            diagnostics={
+                "model": "mistral-ocr-latest",
+                "page_count": 1,
+                "pages": 1,
+                "ocr_chars": len(markdown),
+                "document_name": "jessica-claire-experiencia-profissional.pdf",
+            },
+            annotation_raw={
+                "identity": {
+                    "name": "Jessica Claire",
+                },
+                "contact": {"email": "resumeexample@example.com", "phone": "(555) 432-1000"},
+                "experience": [],
+                "education": [{"institution": "Cedarville University"}],
+                "sectionOrder": [
+                    {"family": "experience", "ordinal": 0, "title": "EXPERIÊNCIA PROFISSIONAL"},
+                    {"family": "education", "ordinal": 0, "title": "EDUCATION"},
+                ],
+            },
+            response_payload={},
+        )
+    )
+
+    assert result["fallback_to_legacy"] is False
+    normalized_payload = result["canonical_payload"]["normalized"]
+    assert len(normalized_payload["experience"]) == 1
+    assert normalized_payload["experience"][0]["company"] == "Spring Education Group"
+    assert normalized_payload["experience"][0]["position"] == "Middle School Language Arts Teacher"
+    assert normalized_payload["experience"][0]["startDate"] == "08/2010"
+    assert normalized_payload["experience"][0]["endDate"] == "06/2014"
+    assert result["diagnostics"]["sectionRecovery"]["experience"]["applied"] is True
+    assert result["diagnostics"]["sectionRecovery"]["experience"]["heading"] == "EXPERIÊNCIA PROFISSIONAL"
+    assert result["diagnostics"]["annotationRetry"]["attempted"] is False
+
+
+def test_run_resume_pipeline_from_ocr_result_recovers_explicit_french_experience_heading_without_retry() -> None:
+    markdown = (
+        "JESSICA CLAIRE\n"
+        "resumeexample@example.com(555) 432-1000\n\n"
+        "# EXPÉRIENCE PROFESSIONNELLE\n\n"
+        "## Spring Education Group - Middle School Language Arts Teacher\n\n"
+        "Issaquah, WA • 08/2010 - 06/2014\n\n"
+        "- Taught all levels of English language arts including intensive, regular, and advanced students\n"
+        "- Taught seventh and eight grade students\n\n"
+        "# EDUCATION\n"
+        "Cedarville University\n"
+    )
+    result = _run_resume_pipeline_from_ocr_result(
+        OCRAnnotationResult(
+            pages=[{"index": 0, "markdown": markdown}],
+            page_count=1,
+            diagnostics={
+                "model": "mistral-ocr-latest",
+                "page_count": 1,
+                "pages": 1,
+                "ocr_chars": len(markdown),
+                "document_name": "jessica-claire-experience-professionnelle.pdf",
+            },
+            annotation_raw={
+                "identity": {
+                    "name": "Jessica Claire",
+                },
+                "contact": {"email": "resumeexample@example.com", "phone": "(555) 432-1000"},
+                "experience": [],
+                "education": [{"institution": "Cedarville University"}],
+                "sectionOrder": [
+                    {"family": "experience", "ordinal": 0, "title": "EXPÉRIENCE PROFESSIONNELLE"},
+                    {"family": "education", "ordinal": 0, "title": "EDUCATION"},
+                ],
+            },
+            response_payload={},
+        )
+    )
+
+    assert result["fallback_to_legacy"] is False
+    normalized_payload = result["canonical_payload"]["normalized"]
+    assert len(normalized_payload["experience"]) == 1
+    assert normalized_payload["experience"][0]["company"] == "Spring Education Group"
+    assert normalized_payload["experience"][0]["position"] == "Middle School Language Arts Teacher"
+    assert normalized_payload["experience"][0]["startDate"] == "08/2010"
+    assert normalized_payload["experience"][0]["endDate"] == "06/2014"
+    assert result["diagnostics"]["sectionRecovery"]["experience"]["applied"] is True
+    assert result["diagnostics"]["sectionRecovery"]["experience"]["heading"] == "EXPÉRIENCE PROFESSIONNELLE"
+    assert result["diagnostics"]["annotationRetry"]["attempted"] is False
 
 
 def test_run_resume_pipeline_from_bytes_recovers_explicit_languages_and_skills_without_retry(monkeypatch) -> None:

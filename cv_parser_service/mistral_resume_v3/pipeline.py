@@ -19,6 +19,7 @@ from .ocr_client import (
     serialize_for_json,
 )
 from .post_validation import LANGUAGE_ALIASES, normalize_extraction
+from .section_headings import RAW_SECTION_HEADING_ALIASES
 
 
 INTERNAL_CANONICAL_PAYLOAD_DIAGNOSTIC_KEY = "_mistral_resume_v3_canonical_payload"
@@ -26,7 +27,13 @@ MARKDOWN_HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s+(.+?)\s*$")
 LIST_PREFIX_RE = re.compile(r"^\s*(?:[-*•·●▪◦]+|\d+[.)])\s*")
 TABLE_DIVIDER_RE = re.compile(r"^\s*\|?(?:\s*:?-{2,}:?\s*\|)+\s*$")
 MULTI_SPACE_RE = re.compile(r"\s+")
+HEADING_SEGMENT_SPLIT_RE = re.compile(r"\s*(?:[&/|,]| y | et | und | e )\s*", re.IGNORECASE)
 RETRYABLE_SECTION_FAILURE = "section_evidence_contradiction"
+EXPERIENCE_DATE_FRAGMENT_RE = re.compile(
+    r"\b(?:\d{1,2}/\d{4}|\d{4}|\w{3,9}\s+\d{4}|present|current|now)\b",
+    re.IGNORECASE,
+)
+EXPERIENCE_DATE_RANGE_SEPARATOR_RE = re.compile(r"\s+(?:to|[-–—])\s+", re.IGNORECASE)
 
 
 def _normalize_lookup(value: str) -> str:
@@ -38,47 +45,6 @@ def _normalize_lookup(value: str) -> str:
     return MULTI_SPACE_RE.sub(" ", ascii_text).strip().lower()
 
 
-RAW_SECTION_HEADING_ALIASES: dict[str, set[str]] = {
-    "languages": {
-        "language",
-        "languages",
-        "language skills",
-        "languages spoken",
-        "linguistic skills",
-    },
-    "skills": {
-        "skills",
-        "skill",
-        "expertise",
-        "areas of expertise",
-        "area of expertise",
-        "core competencies",
-        "core competency",
-        "technical skills",
-        "key skills",
-        "tech stack",
-        "technical stack",
-        "technical background",
-        "capabilities",
-        "key capabilities",
-        "core skills",
-        "tools",
-        "technologies",
-    },
-    "achievements": {"achievements", "achievement", "accomplishments", "key achievements"},
-    "experience": {"experience", "work experience", "professional experience", "employment history", "work history"},
-    "education": {"education", "academic background", "academic qualifications"},
-    "summary": {"summary", "profile", "professional summary", "professional profile", "about"},
-    "projects": {"projects", "project experience"},
-    "certifications": {"certifications", "certification", "licenses", "licenses & certifications"},
-    "awards": {"awards", "honors", "honours"},
-    "publications": {"publications", "publication"},
-    "volunteering": {"volunteering", "volunteer experience", "community involvement"},
-    "hobbies": {"hobbies", "interests"},
-    "affiliations": {"affiliations", "memberships"},
-    "additionalInformation": {"additional information", "additional details"},
-    "contact": {"contact", "contact information"},
-}
 SECTION_HEADING_ALIASES: dict[str, set[str]] = {
     family: {_normalize_lookup(alias) for alias in aliases}
     for family, aliases in RAW_SECTION_HEADING_ALIASES.items()
@@ -132,7 +98,7 @@ SKILLISH_LANGUAGE_MARKERS = (
     "agile",
     "scrum",
 )
-RECOVERY_FIELD_FAMILIES = ("languages", "skills", "achievements")
+RECOVERY_FIELD_FAMILIES = ("languages", "skills", "achievements", "experience")
 
 
 @dataclass
@@ -179,11 +145,33 @@ def _normalize_heading_text(value: str) -> str:
     return _normalize_lookup(re.sub(r"^[#\s]+|[:\-\u2013\u2014\s]+$", "", value or ""))
 
 
-def _classify_heading(value: str) -> Optional[str]:
+def _classify_heading_exact(value: str) -> Optional[str]:
     normalized = _normalize_heading_text(value)
     for family, aliases in SECTION_HEADING_ALIASES.items():
         if normalized in aliases:
             return family
+    return None
+
+
+def _classify_heading(value: str) -> Optional[str]:
+    direct_match = _classify_heading_exact(value)
+    if direct_match:
+        return direct_match
+
+    segments = [segment for segment in HEADING_SEGMENT_SPLIT_RE.split(value or "") if _clean_inline_text(segment)]
+    if len(segments) < 2:
+        return None
+
+    matched_families = [family for family in (_classify_heading_exact(segment) for segment in segments) if family]
+    if len(matched_families) < 2:
+        return None
+
+    unique_families = []
+    for family in matched_families:
+        if family not in unique_families:
+            unique_families.append(family)
+    if len(unique_families) == 1:
+        return unique_families[0]
     return None
 
 
@@ -202,11 +190,13 @@ def _extract_explicit_sections_from_pages(pages: list[dict[str, Any]]) -> dict[s
         for raw_line in markdown.replace("\r", "").split("\n"):
             heading_match = MARKDOWN_HEADING_RE.match(raw_line)
             if heading_match:
-                flush_current()
                 heading_text = heading_match.group(1).strip()
                 family = _classify_heading(heading_text)
                 if family:
+                    flush_current()
                     current = OCRMarkdownSection(family=family, heading=heading_text.rstrip(":").strip(), lines=[])
+                elif current is not None and raw_line.strip():
+                    current.lines.append(raw_line.strip())
                 continue
 
             stripped = raw_line.strip()
@@ -219,6 +209,8 @@ def _extract_explicit_sections_from_pages(pages: list[dict[str, Any]]) -> dict[s
                 continue
 
             if current is not None:
+                if not current.lines and not stripped:
+                    continue
                 current.lines.append(raw_line)
 
     flush_current()
@@ -464,6 +456,168 @@ def _extract_explicit_achievements_from_sections(sections: list[OCRMarkdownSecti
     return items
 
 
+def _looks_like_experience_date_range(value: Optional[str]) -> bool:
+    cleaned = _clean_inline_text(value)
+    if not cleaned:
+        return False
+    return bool(
+        EXPERIENCE_DATE_FRAGMENT_RE.search(cleaned)
+        and EXPERIENCE_DATE_RANGE_SEPARATOR_RE.search(cleaned)
+    )
+
+
+def _parse_experience_date_range(value: Optional[str]) -> dict[str, Any]:
+    cleaned = _clean_inline_text(value)
+    if not _looks_like_experience_date_range(cleaned):
+        return {}
+    parts = EXPERIENCE_DATE_RANGE_SEPARATOR_RE.split(cleaned, maxsplit=1)
+    if len(parts) != 2:
+        return {}
+    start_date = _clean_inline_text(parts[0])
+    end_date = _clean_inline_text(parts[1])
+    if not start_date or not end_date:
+        return {}
+    is_current = _normalize_lookup(end_date) in {"present", "current", "now"}
+    return {
+        "startDate": start_date,
+        "endDate": end_date,
+        "isCurrent": is_current or None,
+    }
+
+
+def _parse_experience_date_line(value: Optional[str]) -> dict[str, Any]:
+    cleaned = _clean_inline_text(value)
+    if not cleaned:
+        return {}
+    if " • " in cleaned:
+        location_part, date_part = cleaned.split(" • ", 1)
+        date_fields = _parse_experience_date_range(date_part)
+        if date_fields:
+            location = _clean_inline_text(location_part)
+            return {
+                **({"location": location} if location else {}),
+                **date_fields,
+            }
+    if " | " in cleaned:
+        location_part, date_part = cleaned.split(" | ", 1)
+        date_fields = _parse_experience_date_range(date_part)
+        if date_fields:
+            location = _clean_inline_text(location_part)
+            return {
+                **({"location": location} if location else {}),
+                **date_fields,
+            }
+    return _parse_experience_date_range(cleaned)
+
+
+def _parse_experience_header_line(value: Optional[str]) -> Optional[dict[str, Any]]:
+    cleaned = _clean_inline_text(value)
+    if not cleaned:
+        return None
+    heading_match = MARKDOWN_HEADING_RE.match(cleaned)
+    if heading_match:
+        cleaned = _clean_inline_text(heading_match.group(1))
+    if not cleaned or _is_heading_value(cleaned):
+        return None
+    if _parse_experience_date_line(cleaned):
+        return None
+
+    at_match = re.match(r"^(?P<position>.+?)\s+at\s+(?P<company>.+)$", cleaned, flags=re.IGNORECASE)
+    if at_match:
+        position = _clean_inline_text(at_match.group("position"))
+        company = _clean_inline_text(at_match.group("company"))
+        if position and company:
+            return {"company": company, "position": position}
+
+    if " | " in cleaned:
+        parts = [_clean_inline_text(part) for part in cleaned.split("|")]
+        parts = [part for part in parts if part]
+        if len(parts) >= 2 and not _looks_like_experience_date_range(parts[0]) and not _looks_like_experience_date_range(parts[1]):
+            parsed = {"company": parts[0], "position": parts[1]}
+            if len(parts) >= 3:
+                parsed.update(_parse_experience_date_line(" | ".join(parts[2:])))
+            return parsed
+
+    for separator in (" - ", " – ", " — "):
+        if separator not in cleaned:
+            continue
+        left, right = cleaned.split(separator, 1)
+        company = _clean_inline_text(left)
+        position = _clean_inline_text(right)
+        if not company or not position:
+            continue
+        if _looks_like_experience_date_range(company) or _looks_like_experience_date_range(position):
+            continue
+        return {"company": company, "position": position}
+    return None
+
+
+def _experience_entry_has_content(entry: Any) -> bool:
+    company = _clean_inline_text(getattr(entry, "company", None) if not isinstance(entry, dict) else entry.get("company"))
+    position = _clean_inline_text(getattr(entry, "position", None) if not isinstance(entry, dict) else entry.get("position"))
+    description = _clean_inline_text(
+        getattr(entry, "description", None) if not isinstance(entry, dict) else entry.get("description")
+    )
+    bullets_raw = getattr(entry, "responsibilityBullets", None) if not isinstance(entry, dict) else entry.get("responsibilityBullets")
+    bullets = [_clean_inline_text(item) for item in list(bullets_raw or [])]
+    return bool(company or position or description or any(bullets))
+
+
+def _extract_explicit_experience_from_sections(sections: list[OCRMarkdownSection]) -> list[dict[str, Any]]:
+    recovered: list[dict[str, Any]] = []
+    current: Optional[dict[str, Any]] = None
+
+    def flush_current() -> None:
+        nonlocal current
+        if current and _experience_entry_has_content(current):
+            recovered.append(current)
+        current = None
+
+    for section in sections:
+        for raw_line in [*section.lines, ""]:
+            stripped = raw_line.strip()
+            if not stripped or TABLE_DIVIDER_RE.match(stripped):
+                continue
+
+            parsed_header = _parse_experience_header_line(raw_line)
+            if parsed_header:
+                flush_current()
+                current = {
+                    **parsed_header,
+                    "responsibilityBullets": [],
+                    "achievements": [],
+                }
+                continue
+
+            if current is None:
+                continue
+
+            date_fields = _parse_experience_date_line(raw_line)
+            if date_fields:
+                for field, value in date_fields.items():
+                    if value is not None and not current.get(field):
+                        current[field] = value
+                continue
+
+            if stripped[:1] in {"-", "*", "•"} or LIST_PREFIX_RE.match(stripped):
+                bullet = _clean_inline_text(_strip_list_prefix(stripped).strip("|"))
+                if bullet and not _is_heading_value(bullet):
+                    current["responsibilityBullets"].append(bullet)
+                continue
+
+            content = _clean_inline_text(stripped.strip("|"))
+            if not content or _is_heading_value(content):
+                continue
+            if current.get("description"):
+                current["description"] = f"{current['description']} {content}"
+            else:
+                current["description"] = content
+
+        flush_current()
+
+    return recovered
+
+
 def _is_heading_value(value: Optional[str]) -> bool:
     cleaned = _clean_inline_text(value)
     if not cleaned:
@@ -542,6 +696,11 @@ def _collect_section_gate_issues(normalized: Any, explicit_sections: dict[str, l
         elif any(_skill_entry_is_polluted(value) for value in skills):
             issues["skills"] = "polluted_explicit_section_values"
 
+    if explicit_sections.get("experience"):
+        experience = list(getattr(normalized, "experience", []) or [])
+        if not experience:
+            issues["experience"] = "empty_explicit_section_values"
+
     return issues
 
 
@@ -593,12 +752,69 @@ def _validated_recovered_skills(
     return None
 
 
+def _experience_entry_identity(entry: Any) -> Optional[tuple[str, str, str, str]]:
+    company = _clean_inline_text(getattr(entry, "company", None) if not isinstance(entry, dict) else entry.get("company")) or ""
+    position = _clean_inline_text(getattr(entry, "position", None) if not isinstance(entry, dict) else entry.get("position")) or ""
+    start_date = _clean_inline_text(getattr(entry, "startDate", None) if not isinstance(entry, dict) else entry.get("startDate")) or ""
+    end_date = _clean_inline_text(getattr(entry, "endDate", None) if not isinstance(entry, dict) else entry.get("endDate")) or ""
+    if not any((company, position, start_date, end_date)):
+        return None
+    return (
+        _normalize_lookup(company),
+        _normalize_lookup(position),
+        _normalize_lookup(start_date),
+        _normalize_lookup(end_date),
+    )
+
+
+def _validated_recovered_experience(
+    recovered_experience: list[dict[str, Any]],
+    repaired_normalized: Any,
+    *,
+    explicit_section_exists: bool,
+) -> Optional[str]:
+    if not explicit_section_exists:
+        return None
+    if not recovered_experience:
+        return "empty_explicit_section_values"
+
+    normalized_entries = list(getattr(repaired_normalized, "experience", []) or [])
+    if not normalized_entries:
+        return "empty_explicit_section_values"
+
+    normalized_identities = {
+        identity
+        for identity in (_experience_entry_identity(entry) for entry in normalized_entries)
+        if identity is not None
+    }
+    normalized_fallback_identities = {
+        identity[:2]
+        for identity in normalized_identities
+        if identity is not None
+    }
+
+    for entry in recovered_experience:
+        if not _experience_entry_has_content(entry):
+            return "invalid_recovered_values"
+        identity = _experience_entry_identity(entry)
+        if identity is None:
+            return "invalid_recovered_values"
+        if identity in normalized_identities:
+            continue
+        if identity[:2] and identity[:2] in normalized_fallback_identities:
+            continue
+        return "invalid_recovered_values"
+    return None
+
+
 def _collect_post_recovery_issues(
     *,
     recovered_languages: Optional[list[dict[str, Any]]],
     recovered_skills: Optional[list[str]],
+    recovered_experience: Optional[list[dict[str, Any]]],
     repaired_normalized: Any,
     skills_section_exists: bool,
+    experience_section_exists: bool,
 ) -> dict[str, str]:
     issues: dict[str, str] = {}
     if recovered_languages is not None:
@@ -613,6 +829,14 @@ def _collect_post_recovery_issues(
         )
         if skills_issue:
             issues["skills"] = skills_issue
+    if recovered_experience is not None:
+        experience_issue = _validated_recovered_experience(
+            recovered_experience,
+            repaired_normalized,
+            explicit_section_exists=experience_section_exists,
+        )
+        if experience_issue:
+            issues["experience"] = experience_issue
     return issues
 
 
@@ -622,14 +846,17 @@ def _collect_second_validation_issues_after_recovery(
     explicit_sections: dict[str, list[OCRMarkdownSection]],
     recovered_languages: Optional[list[dict[str, Any]]],
     recovered_skills: Optional[list[str]],
+    recovered_experience: Optional[list[dict[str, Any]]],
 ) -> dict[str, str]:
     issues = _collect_section_gate_issues(repaired_normalized, explicit_sections)
     issues.update(
         _collect_post_recovery_issues(
             recovered_languages=recovered_languages,
             recovered_skills=recovered_skills,
+            recovered_experience=recovered_experience,
             repaired_normalized=repaired_normalized,
             skills_section_exists=bool(explicit_sections.get("skills")),
+            experience_section_exists=bool(explicit_sections.get("experience")),
         )
     )
     return issues
@@ -952,8 +1179,13 @@ def _run_resume_pipeline_from_ocr_result(ocr_result: OCRAnnotationResult) -> Dic
         section_recovery["achievements"]["reason"] = (
             "empty_explicit_section_values" if achievements_recovery_needed else "accepted_annotation_values"
         )
+    experience_recovery_needed = bool(explicit_sections.get("experience")) and not getattr(normalized, "experience", [])
+    if explicit_sections.get("experience"):
+        section_recovery["experience"]["reason"] = (
+            "empty_explicit_section_values" if experience_recovery_needed else "accepted_annotation_values"
+        )
 
-    if not section_gate_issues and not achievements_recovery_needed:
+    if not section_gate_issues and not achievements_recovery_needed and not experience_recovery_needed:
         return _build_result_from_normalized(
             normalized=normalized,
             raw_text=raw_text,
@@ -966,12 +1198,21 @@ def _run_resume_pipeline_from_ocr_result(ocr_result: OCRAnnotationResult) -> Dic
     repair_applied = False
     recovered_languages: Optional[list[dict[str, Any]]] = None
     recovered_skills: Optional[list[str]] = None
+    recovered_experience: Optional[list[dict[str, Any]]] = None
 
     if achievements_recovery_needed:
         achievements = _extract_explicit_achievements_from_sections(explicit_sections.get("achievements", []))
         if achievements:
             repaired_payload["achievements"] = achievements
             section_recovery["achievements"]["applied"] = True
+            repair_applied = True
+
+    if experience_recovery_needed:
+        experience = _extract_explicit_experience_from_sections(explicit_sections.get("experience", []))
+        if experience:
+            repaired_payload["experience"] = experience
+            recovered_experience = experience
+            section_recovery["experience"]["applied"] = True
             repair_applied = True
 
     if "languages" in section_gate_issues:
@@ -1039,8 +1280,9 @@ def _run_resume_pipeline_from_ocr_result(ocr_result: OCRAnnotationResult) -> Dic
         explicit_sections=explicit_sections,
         recovered_languages=recovered_languages,
         recovered_skills=recovered_skills,
+        recovered_experience=recovered_experience,
     )
-    for family in ("languages", "skills"):
+    for family in ("languages", "skills", "experience"):
         if explicit_sections.get(family):
             if repaired_issues.get(family):
                 section_recovery[family]["reason"] = repaired_issues[family]
