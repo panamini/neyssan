@@ -70,8 +70,8 @@ vi.mock("../../lib/proposal-personalization", () => ({
 
 vi.mock("../../lib/proposal-workspace-state", () => ({
   startFreshProposalWorkspace: () => startFreshProposalWorkspaceMock(),
-  createProposalWorkspaceResetState: () =>
-    createProposalWorkspaceResetStateMock(),
+  createProposalWorkspaceResetState: (options?: { entryIntent?: string }) =>
+    createProposalWorkspaceResetStateMock(options),
 }));
 
 describe("QuickStartFlow", () => {
@@ -90,7 +90,66 @@ describe("QuickStartFlow", () => {
     setProposalAttachedCvIdMock.mockReset();
     clearActiveLocalCvIdMock.mockReset();
     startFreshProposalWorkspaceMock.mockReset();
-    createProposalWorkspaceResetStateMock.mockClear();
+    createProposalWorkspaceResetStateMock.mockReset();
+    createProposalWorkspaceResetStateMock.mockImplementation(
+      (options?: { entryIntent?: string }) => ({
+        reset: true,
+        ...(options?.entryIntent
+          ? { proposalEntryIntent: options.entryIntent }
+          : {}),
+      }),
+    );
+  });
+
+  it("renders as a content-pane sheet and only shows Back when a previous step exists", async () => {
+    const { rerender } = render(<QuickStartFlow onExit={vi.fn()} />);
+
+    expect(screen.getByTestId("quick-start-pane")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Close")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "What are you starting?" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Pick one path and keep moving."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("quick-start-header-back-slot"),
+    ).toHaveAttribute("data-has-action", "false");
+    expect(
+      screen.queryByRole("button", { name: "Back" }),
+    ).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /^Resume\b/i }));
+
+    expect(
+      screen.getByRole("heading", { name: "Bring in your resume." }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Upload a PDF or image. Or start blank.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Back" })).toBeInTheDocument();
+    expect(
+      screen.getByTestId("quick-start-header-back-slot"),
+    ).toHaveAttribute("data-has-action", "true");
+
+    rerender(
+      <QuickStartFlow
+        onExit={vi.fn()}
+        initialCreateType="resume"
+        resumeMode="upload-only"
+      />,
+    );
+
+    expect(screen.getByLabelText("Close")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("quick-start-header-back-slot"),
+    ).toHaveAttribute("data-has-action", "false");
+    expect(
+      screen.queryByRole("button", { name: "Back" }),
+    ).not.toBeInTheDocument();
   });
 
   it("imports trusted files through the shared Mistral hook routine", async () => {
@@ -310,7 +369,8 @@ describe("QuickStartFlow", () => {
     ).not.toBeInTheDocument();
     expect(loadingCard).toBeDisabled();
     expect(screen.getByRole("button", { name: /^Start fresh\b/i })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Not now" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Back" })).toBeDisabled();
+    expect(screen.getByLabelText("Close")).toBeDisabled();
 
     resolveImport?.({
       status: "success",
@@ -429,7 +489,10 @@ describe("QuickStartFlow", () => {
     expect(markQuickStartCompletedMock).toHaveBeenCalledTimes(1);
     expect(navigateMock).toHaveBeenCalledWith("/proposal", {
       replace: true,
-      state: { reset: true },
+      state: {
+        reset: true,
+        proposalEntryIntent: "cover-letter-start",
+      },
     });
   });
 

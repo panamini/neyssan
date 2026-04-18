@@ -1,27 +1,45 @@
 import React from "react";
-import { ArrowSquareOut } from "@/lib/icons";
+import { ArrowSquareOut, Plug, Rewind, Stop } from "@/lib/icons";
 import {
   getProposalExtensionSourceLinks,
   PROPOSAL_EXTENSION_INSTALL_LINK,
 } from "../lib/proposal-source-platforms";
+import { QuickStartChoiceCard } from "./onboarding/QuickStartChoiceCard";
+
+export type CoverLetterStartSurfaceImportState = {
+  isBusy: boolean;
+  label: string;
+  hint: string;
+  fileName: string | null;
+  error: string | null;
+};
+
+type CoverLetterStartRoute = "root" | "job" | "resume";
 
 type Props = {
   hasResumes: boolean;
   showExtensionHelper: boolean;
+  importResumeState: CoverLetterStartSurfaceImportState;
+  onBackToQuickStart?: (() => void) | null;
+  onClose: () => void;
   onUseResume: () => void;
   onImportResume: () => void;
-  onOpenEditor: () => void;
+  onPasteJobOffer: () => void;
   onUseChromeExtension: () => void;
 };
 
 export function CoverLetterStartSurface({
   hasResumes,
   showExtensionHelper,
+  importResumeState,
+  onBackToQuickStart = null,
+  onClose,
   onUseResume,
   onImportResume,
-  onOpenEditor,
+  onPasteJobOffer,
   onUseChromeExtension,
 }: Props): JSX.Element {
+  const [route, setRoute] = React.useState<CoverLetterStartRoute>("root");
   const extensionSourceLinks = React.useMemo(
     () => getProposalExtensionSourceLinks(),
     [],
@@ -31,247 +49,248 @@ export function CoverLetterStartSurface({
     [extensionSourceLinks],
   );
   const secondarySources = React.useMemo(
-    () =>
-      extensionSourceLinks.filter((source) => source.tier === "secondary"),
+    () => extensionSourceLinks.filter((source) => source.tier === "secondary"),
     [extensionSourceLinks],
   );
+  const hasPreviousStep = route !== "root";
+  const canRewind = hasPreviousStep || Boolean(onBackToQuickStart);
 
   return (
-    <section
+    <div
       aria-label="Cover letter start"
-      className="dasti-proposal-sheet"
+      className="dasti-quick-start-pane dasti-cover-letter-start-pane"
       data-testid="cover-letter-start-surface"
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: "var(--space-4)",
-        padding: "clamp(var(--space-4), 3vw, var(--space-5))",
-        borderRadius: "calc(var(--radius-surface, 12px) + 4px)",
-        border: "1px solid var(--color-border)",
-        background:
-          "linear-gradient(180deg, color-mix(in srgb, var(--color-canvas) 92%, white 8%) 0%, var(--color-canvas) 100%)",
-        boxShadow: "var(--shadow-sm)",
-      }}
     >
-      <header style={{ display: "grid", gap: "var(--space-2)" }}>
-        <div
-          style={{
-            fontSize: "var(--txs, 11px)",
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-            color: "var(--color-text-subtle)",
-            fontWeight: 700,
-          }}
-        >
-          Cover letter
-        </div>
-        <h1
-          style={{
-            margin: 0,
-            fontFamily: "var(--font-heading-family)",
-            fontSize: "clamp(1.6rem, 2vw, 2rem)",
-            lineHeight: 1.05,
-          }}
-        >
-          Take the clean route.
-        </h1>
-        <p
-          style={{
-            margin: 0,
-            color: "var(--color-text-muted)",
-            fontSize: "var(--tm)",
-            maxWidth: 560,
-          }}
-        >
-          Use a resume, import one, open the editor, or pull the job in through
-          the extension.
-        </p>
-      </header>
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-          gap: "var(--space-3)",
-        }}
+      <section
+        aria-labelledby="cover-letter-start-heading"
+        aria-describedby="cover-letter-start-description"
+        className="dasti-quick-start-pane__frame"
       >
-        {hasResumes ? (
-          <ChoiceCard
-            label="Use a resume"
-            hint="Pick from your existing resume library."
-            onClick={onUseResume}
-          />
-        ) : null}
-        <ChoiceCard
-          label="Import a resume"
-          hint="Upload a PDF or image and attach it here."
-          onClick={onImportResume}
-        />
-        <ChoiceCard
-          label="Use Chrome extension"
-          hint="Open supported job-source pages and capture the offer there."
-          onClick={onUseChromeExtension}
-          selected={showExtensionHelper}
-        />
-        <ChoiceCard
-          label="Open editor"
-          hint="Skip the helper and write directly."
-          onClick={onOpenEditor}
-        />
-      </div>
-
-      {showExtensionHelper ? (
-        <div
-          style={{
-            display: "grid",
-            gap: "var(--space-3)",
-            padding: "var(--space-3)",
-            borderRadius: "var(--radius-surface, 12px)",
-            border: "1px solid var(--color-border)",
-            background: "color-mix(in srgb, var(--color-canvas) 96%, white 4%)",
-          }}
-        >
-          <div style={{ display: "grid", gap: 6 }}>
-            <div
-              style={{
-                fontWeight: 600,
-                fontSize: "var(--tm)",
-              }}
-            >
-              Use the extension where it already works.
-            </div>
-            <p
-              style={{
-                margin: 0,
-                color: "var(--color-text-muted)",
-                fontSize: "var(--ts)",
-              }}
-            >
-              Open a supported source. Install the extension first if you need
-              it.
-            </p>
-          </div>
-
-          <div>
-            <a
-              href={PROPOSAL_EXTENSION_INSTALL_LINK.href}
-              target="_blank"
-              rel="noreferrer"
-              className="dasti-button dasti-button--secondary"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "var(--space-2)",
-              }}
-            >
-              <span>{PROPOSAL_EXTENSION_INSTALL_LINK.label}</span>
-              <ArrowSquareOut size={12} strokeWidth={1.7} aria-hidden="true" />
-            </a>
-          </div>
-
+        <header className="dasti-quick-start-pane__controls">
           <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-              gap: "var(--space-2)",
-            }}
+            className="dasti-quick-start-pane__control-slot"
+            data-testid="cover-letter-start-header-back-slot"
+            data-has-action={canRewind ? "true" : "false"}
           >
-            {primarySources.map((source) => (
-              <SourceLinkCard
-                key={source.key}
-                href={source.href}
-                label={source.label}
-              />
-            ))}
+            {canRewind ? (
+              <button
+                type="button"
+                aria-label="Back"
+                className="dasti-modal-close"
+                onClick={() => {
+                  if (hasPreviousStep) {
+                    setRoute("root");
+                    return;
+                  }
+                  onBackToQuickStart?.();
+                }}
+              >
+                <Rewind className="w-5 h-5" aria-hidden="true" />
+              </button>
+            ) : (
+              <div aria-hidden="true" style={{ width: "100%", height: "var(--hs)" }} />
+            )}
           </div>
 
-          {secondarySources.length > 0 ? (
-            <details>
-              <summary
+          <div className="dasti-quick-start-pane__progress">
+            <CoverLetterStartIndicator currentStep={hasPreviousStep ? 2 : 1} />
+          </div>
+
+          <div className="dasti-quick-start-pane__control-slot dasti-quick-start-pane__control-slot--end">
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="dasti-modal-close"
+            >
+              <Stop className="w-5 h-5" aria-hidden="true" />
+            </button>
+          </div>
+        </header>
+
+        <div className="dasti-quick-start-sheet">
+          <section className="dasti-quick-start-sheet__section">
+            <header className="dasti-quick-start-sheet__header">
+              <h1
+                id="cover-letter-start-heading"
+                className="dasti-quick-start-sheet__title"
+              >
+                {route === "root"
+                  ? "Start your cover letter."
+                  : route === "job"
+                    ? "Bring in the job."
+                    : "Bring in your resume."}
+              </h1>
+              <p
+                id="cover-letter-start-description"
+                className="dasti-quick-start-sheet__subtitle"
+              >
+                {route === "root"
+                  ? "Pick one path and keep moving."
+                  : route === "job"
+                    ? "Choose one way to capture the role."
+                    : "Attach it before you write."}
+              </p>
+            </header>
+
+            {route === "root" ? (
+              <div className="dasti-quick-start-sheet__choice-grid">
+                <QuickStartChoiceCard
+                  label="Bring in the job"
+                  hint="Use the extension or paste the job offer."
+                  onClick={() => setRoute("job")}
+                  className="dasti-quick-start-sheet__choice-card"
+                  primaryAction
+                />
+                <QuickStartChoiceCard
+                  label="Bring in your resume"
+                  hint="Use an existing resume or import a new one."
+                  onClick={() => setRoute("resume")}
+                  className="dasti-quick-start-sheet__choice-card"
+                />
+              </div>
+            ) : null}
+
+            {route === "job" ? (
+              <div className="dasti-quick-start-sheet__choice-grid">
+                <QuickStartChoiceCard
+                  label="Capture the role"
+                  hint={
+                    showExtensionHelper
+                      ? "Use the TwoWeeks extension on a supported site."
+                      : "Pull it in from a supported site."
+                  }
+                  onClick={onUseChromeExtension}
+                  selected={showExtensionHelper}
+                  expandedContent={
+                    <div className="dasti-cover-letter-start__extension-helper">
+                      <div className="dasti-cover-letter-start__extension-actions">
+                        <a
+                          href={PROPOSAL_EXTENSION_INSTALL_LINK.href}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="dasti-button dasti-button--accent dasti-button--md dasti-cover-letter-start__install-row"
+                        >
+                          <Plug
+                            size={12}
+                            strokeWidth={1.7}
+                            aria-hidden="true"
+                          />
+                          <span className="dasti-text-label">
+                            {PROPOSAL_EXTENSION_INSTALL_LINK.label}
+                          </span>
+                        </a>
+                      </div>
+                      <div className="dasti-cover-letter-start__source-grid">
+                        {primarySources.map((source) => (
+                          <SourceLinkCard
+                            key={source.key}
+                            href={source.href}
+                            label={source.label}
+                          />
+                        ))}
+                      </div>
+                      {secondarySources.length > 0 ? (
+                        <details>
+                          <summary className="dasti-cover-letter-start__summary">
+                            More supported sites
+                          </summary>
+                          <div className="dasti-cover-letter-start__source-grid">
+                            {secondarySources.map((source) => (
+                              <SourceLinkCard
+                                key={source.key}
+                                href={source.href}
+                                label={source.label}
+                              />
+                            ))}
+                          </div>
+                        </details>
+                      ) : null}
+                    </div>
+                  }
+                  className="dasti-quick-start-sheet__choice-card"
+                  primaryAction
+                />
+                <QuickStartChoiceCard
+                  label="Paste job offer"
+                  hint="Open the editor and focus the brief."
+                  onClick={onPasteJobOffer}
+                  className="dasti-quick-start-sheet__choice-card"
+                />
+              </div>
+            ) : null}
+
+            {route === "resume" ? (
+              <div className="dasti-quick-start-sheet__choice-grid">
+                {hasResumes ? (
+                  <QuickStartChoiceCard
+                    label="Use a resume"
+                    hint="Pick from your existing resume library."
+                    onClick={onUseResume}
+                    className="dasti-quick-start-sheet__choice-card"
+                    primaryAction
+                  />
+                ) : null}
+                <QuickStartChoiceCard
+                  label={importResumeState.label}
+                  hint={importResumeState.hint}
+                  onClick={onImportResume}
+                  loading={importResumeState.isBusy}
+                  meta={importResumeState.fileName}
+                  className="dasti-quick-start-sheet__choice-card"
+                  primaryAction={!hasResumes}
+                />
+              </div>
+            ) : null}
+
+            {importResumeState.error ? (
+              <p
+                role="alert"
                 style={{
-                  cursor: "pointer",
-                  color: "var(--color-text-muted)",
+                  margin: 0,
+                  color: "var(--color-danger, #b42318)",
                   fontSize: "var(--ts)",
                 }}
               >
-                More supported sites
-              </summary>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-                  gap: "var(--space-2)",
-                  marginTop: "var(--space-2)",
-                }}
-              >
-                {secondarySources.map((source) => (
-                  <SourceLinkCard
-                    key={source.key}
-                    href={source.href}
-                    label={source.label}
-                  />
-                ))}
-              </div>
-            </details>
-          ) : null}
+                {importResumeState.error}
+              </p>
+            ) : null}
+          </section>
         </div>
-      ) : null}
-    </section>
+      </section>
+    </div>
   );
 }
 
-function ChoiceCard({
-  label,
-  hint,
-  onClick,
-  selected,
+function CoverLetterStartIndicator({
+  currentStep,
 }: {
-  label: string;
-  hint: string;
-  onClick: () => void;
-  selected?: boolean;
+  currentStep: 1 | 2;
 }): JSX.Element {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={selected}
+    <div
+      aria-label={`Step ${currentStep} of 2`}
       style={{
-        textAlign: "left",
-        padding: "var(--space-3) var(--space-4)",
-        borderRadius: "var(--radius-surface, 12px)",
-        border: selected
-          ? "1px solid color-mix(in srgb, var(--color-accent, var(--ti)) 40%, var(--color-border))"
-          : "1px solid var(--color-border)",
-        background: selected
-          ? "linear-gradient(180deg, color-mix(in srgb, var(--color-canvas) 94%, white 6%) 0%, color-mix(in srgb, var(--color-canvas) 98%, var(--color-accent, var(--ti)) 2%) 100%)"
-          : "var(--sfr, #fff)",
-        cursor: "pointer",
-        boxShadow: selected
-          ? "0 0 0 1px color-mix(in srgb, var(--color-accent, var(--ti)) 12%, transparent)"
-          : "none",
+        display: "flex",
+        gap: "var(--space-2)",
+        justifyContent: "center",
       }}
     >
-      <div
-        style={{
-          fontFamily: "var(--font-heading-family)",
-          fontSize: "var(--tm)",
-          fontWeight: 600,
-        }}
-      >
-        {label}
-      </div>
-      <div
-        style={{
-          marginTop: 4,
-          color: "var(--color-text-muted)",
-          fontSize: "var(--ts)",
-          lineHeight: 1.4,
-        }}
-      >
-        {hint}
-      </div>
-    </button>
+      {[1, 2].map((step) => (
+        <span
+          key={step}
+          style={{
+            height: 4,
+            width: 32,
+            borderRadius: 2,
+            background:
+              step <= currentStep
+                ? "var(--color-accent, var(--ti))"
+                : "var(--color-border)",
+          }}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -287,7 +306,7 @@ function SourceLinkCard({
       href={href}
       target="_blank"
       rel="noreferrer"
-      className="dasti-button dasti-button--secondary"
+      className="dasti-button dasti-button--secondary dasti-button--pill dasti-button--md dasti-cover-letter-start__site-button"
       style={{
         display: "inline-flex",
         justifyContent: "space-between",
@@ -296,7 +315,7 @@ function SourceLinkCard({
         width: "100%",
       }}
     >
-      <span>{label}</span>
+      <span className="dasti-text-label">{label}</span>
       <ArrowSquareOut size={12} strokeWidth={1.7} aria-hidden="true" />
     </a>
   );
