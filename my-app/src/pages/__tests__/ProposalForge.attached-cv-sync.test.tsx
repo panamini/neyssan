@@ -1,5 +1,12 @@
 import React from "react";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { ProposalForge } from "../ProposalForge";
@@ -7,10 +14,16 @@ import { writeStoredProposalOutputDraft } from "../../lib/proposal-output-draft"
 import { PROPOSAL_EXTENSION_INSTALL_LINK } from "../../lib/proposal-source-platforms";
 
 const mockLoadCv = vi.fn();
+const mockImportCv = vi.fn();
+const mockImportFile = vi.fn();
 const mockUpdateProposal = vi.fn().mockResolvedValue(undefined);
 
 let mockActiveCvId: string | null = null;
+let mockCurrentCvId: string | null = null;
 let mockHasLocalResumes = true;
+const mockCvSnapshots: Record<string, string> = {
+  cv_alpha: "Operations Associate — Alex Martin",
+};
 const mockAttachedCv = {
   id: "cv_alpha",
   title: "Alex Martin Resume",
@@ -79,9 +92,7 @@ vi.mock("../../lib/proposal-personalization", () => ({
   }),
   getProposalAttachedCvId: () => mockActiveCvId,
   getLocalActiveCvSnapshotById: (id: string) =>
-    id === "cv_alpha"
-      ? { title: "Operations Associate — Alex Martin" }
-      : null,
+    mockCvSnapshots[id] ? { title: mockCvSnapshots[id] } : null,
   getProposalAttachedCvLocalDocument: () =>
     mockActiveCvId === "cv_alpha" ? mockAttachedCv : null,
   getActiveLocalPersonalizationSource: () => ({
@@ -114,13 +125,37 @@ vi.mock("../../lib/proposal-personalization", () => ({
         ]
       : [],
   PROPOSAL_ATTACHED_CV_UPDATED_EVENT: "dasti:proposal-attached-cv-updated",
+  setProposalAttachedCvId: (id: string | null) => {
+    mockActiveCvId = id;
+    if (id && !mockCvSnapshots[id]) {
+      mockCvSnapshots[id] = "Imported CV";
+    }
+  },
 }));
 
 vi.mock("../../contexts/CvLibraryContext", () => ({
   useCvLibrary: () => ({
     currentCv: null,
+    currentCvId: mockCurrentCvId,
     loadCv: mockLoadCv,
+    importCv: mockImportCv,
   }),
+}));
+
+vi.mock("../../components/useStructuredMistralImport", () => ({
+  useStructuredMistralImport: () => ({
+    enableMistral: true,
+    importFile: mockImportFile,
+  }),
+  beginStructuredImportTimingTrace: (_source: string, fileName?: string | null) => ({
+    id: "trace-1",
+    source: "proposal_inline",
+    fileName: fileName ?? null,
+    startedAt: 0,
+  }),
+  logStructuredImportTiming: vi.fn(),
+  TRUSTED_MISTRAL_FILE_INPUT_ACCEPT:
+    ".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg",
 }));
 
 vi.mock("../../components/ProposalInputForm", () => ({
@@ -133,6 +168,12 @@ vi.mock("../../components/ProposalInputForm", () => ({
   }) => (
     <div>
       <div>{cvPickerOpen ? "CV picker open" : "CV picker closed"}</div>
+      <input id="jobTitle" name="jobTitle" defaultValue="Operations Associate" />
+      <textarea
+        id="jobDescription"
+        name="jobDescription"
+        defaultValue="Support recurring processes and coordinate communication."
+      />
       <button
         type="button"
         onClick={() => {
@@ -227,13 +268,31 @@ function LocationProbe(): JSX.Element {
   return <div data-testid="location">{`${location.pathname}${location.search}`}</div>;
 }
 
+function buildCoverLetterStartEntry() {
+  return {
+    pathname: "/proposal",
+    state: {
+      proposalEntryIntent: "cover-letter-start",
+    },
+  };
+}
+
 describe("ProposalForge attached CV sync", () => {
   beforeEach(() => {
     mockActiveCvId = null;
+    mockCurrentCvId = null;
     mockHasLocalResumes = true;
     mockLoadCv.mockReset();
+    mockImportCv.mockReset();
+    mockImportFile.mockReset();
     mockUpdateProposal.mockClear();
     window.localStorage.clear();
+    Object.keys(mockCvSnapshots).forEach((key) => {
+      if (key !== "cv_alpha") {
+        delete mockCvSnapshots[key];
+      }
+    });
+    mockCvSnapshots.cv_alpha = "Operations Associate — Alex Martin";
   });
 
   afterEach(() => {
@@ -241,26 +300,105 @@ describe("ProposalForge attached CV sync", () => {
   });
 
   it("shows the cover-letter start surface on a blank compose entry", () => {
-    render(
-      <MemoryRouter initialEntries={["/proposal"]}>
+    const { container } = render(
+      <MemoryRouter initialEntries={[buildCoverLetterStartEntry()]}>
         <ProposalForge />
       </MemoryRouter>,
     );
 
     expect(screen.getByTestId("cover-letter-start-surface")).toBeInTheDocument();
+    expect(screen.getByTestId("cover-letter-start-surface")).toHaveClass(
+      "dasti-quick-start-pane",
+    );
+    expect(
+      screen.getByRole("heading", { name: "Start your cover letter." }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Close")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /^Bring in the job\b/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /^Bring in your resume\b/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /^Capture the role\b/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /^Paste job offer\b/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /^Use a resume\b/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /^Import a resume\b/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Proposal output")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Pick CV" })).not.toBeInTheDocument();
+    expect(container.querySelector(".dasti-proposal-output-shell")).toBeNull();
+    expect(container.querySelector(".dasti-workbench-top-left-slot--proposal")).toBeNull();
+    expect(container.querySelector(".dasti-grid-split")).toBeNull();
+  });
+
+  it("shows one decision level at a time and navigates between parent and child states", () => {
+    render(
+      <MemoryRouter initialEntries={[buildCoverLetterStartEntry()]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    const backSlot = screen.getByTestId("cover-letter-start-header-back-slot");
+
+    expect(backSlot).toHaveAttribute("data-has-action", "true");
+    expect(screen.getByLabelText("Back")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Bring in the job\b/i }));
+
+    expect(screen.getByRole("heading", { name: "Bring in the job." })).toBeInTheDocument();
+    expect(backSlot).toHaveAttribute("data-has-action", "true");
+    expect(screen.getByLabelText("Back")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Capture the role\b/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Paste job offer\b/i })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /^Use a resume\b/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /^Import a resume\b/i }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText("Back"));
+
+    expect(screen.getByRole("heading", { name: "Start your cover letter." })).toBeInTheDocument();
+    expect(backSlot).toHaveAttribute("data-has-action", "true");
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Bring in your resume\b/i }),
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Bring in your resume." }),
+    ).toBeInTheDocument();
+    expect(backSlot).toHaveAttribute("data-has-action", "true");
     expect(screen.getByRole("button", { name: /^Use a resume\b/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^Import a resume\b/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^Use Chrome extension\b/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^Open editor\b/i })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /^Capture the role\b/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /^Paste job offer\b/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("hides the resume-picker shortcut when no resumes exist yet", () => {
     mockHasLocalResumes = false;
 
     render(
-      <MemoryRouter initialEntries={["/proposal"]}>
+      <MemoryRouter initialEntries={[buildCoverLetterStartEntry()]}>
         <ProposalForge />
       </MemoryRouter>,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Bring in your resume\b/i }),
     );
 
     expect(screen.getByTestId("cover-letter-start-surface")).toBeInTheDocument();
@@ -269,9 +407,13 @@ describe("ProposalForge attached CV sync", () => {
 
   it("opens the existing CV picker when the start surface uses a resume", async () => {
     render(
-      <MemoryRouter initialEntries={["/proposal"]}>
+      <MemoryRouter initialEntries={[buildCoverLetterStartEntry()]}>
         <ProposalForge />
       </MemoryRouter>,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Bring in your resume\b/i }),
     );
 
     await act(async () => {
@@ -282,31 +424,36 @@ describe("ProposalForge attached CV sync", () => {
     expect(screen.getByText("CV picker open")).toBeInTheDocument();
   });
 
-  it("opens shared Quick Start in upload-only resume mode from the start surface", async () => {
+  it("opens the inline file picker directly from the start surface without navigating to Quick Start", async () => {
+    const fileInputClickSpy = vi.spyOn(HTMLInputElement.prototype, "click");
+
     render(
-      <MemoryRouter initialEntries={["/proposal"]}>
+      <MemoryRouter initialEntries={[buildCoverLetterStartEntry()]}>
         <ProposalForge />
         <LocationProbe />
       </MemoryRouter>,
     );
 
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Bring in your resume\b/i }),
+    );
     fireEvent.click(screen.getByRole("button", { name: /^Import a resume\b/i }));
 
-    await waitFor(() => {
-      expect(screen.getByTestId("location")).toHaveTextContent(
-        "/proposal?start=quick&quickStartResumeMode=upload-only&quickStartReturnTo=proposal",
-      );
-    });
+    expect(fileInputClickSpy).toHaveBeenCalled();
+    expect(screen.getByTestId("location")).toHaveTextContent("/proposal");
+
+    fileInputClickSpy.mockRestore();
   });
 
   it("reveals actionable extension links from the verified supported list", async () => {
     render(
-      <MemoryRouter initialEntries={["/proposal"]}>
+      <MemoryRouter initialEntries={[buildCoverLetterStartEntry()]}>
         <ProposalForge />
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /^Use Chrome extension\b/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Bring in the job\b/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Capture the role\b/i }));
 
     expect(
       screen.getByRole("link", { name: /LinkedIn/i }),
@@ -332,48 +479,168 @@ describe("ProposalForge attached CV sync", () => {
       "https://www.hellowork.com/fr-fr/",
     );
     expect(
-      screen.getByRole("link", { name: /Install Chrome extension/i }),
+      screen.getByRole("link", { name: /Install TwoWeeks extension/i }),
     ).toHaveAttribute("href", PROPOSAL_EXTENSION_INSTALL_LINK.href);
   });
 
   it("toggles the extension helper open and closed on repeated clicks", async () => {
     render(
-      <MemoryRouter initialEntries={["/proposal"]}>
+      <MemoryRouter initialEntries={[buildCoverLetterStartEntry()]}>
         <ProposalForge />
       </MemoryRouter>,
     );
 
+    fireEvent.click(screen.getByRole("button", { name: /^Bring in the job\b/i }));
     const toggle = screen.getByRole("button", {
-      name: /^Use Chrome extension\b/i,
+      name: /^Capture the role\b/i,
     });
     expect(toggle).toHaveAttribute("aria-pressed", "false");
 
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute("aria-pressed", "true");
     expect(
-      screen.getByRole("link", { name: /Install Chrome extension/i }),
+      screen.getByRole("link", { name: /Install TwoWeeks extension/i }),
     ).toBeInTheDocument();
+    expect(
+      toggle.closest(".dasti-quick-start-choice"),
+    ).toContainElement(
+      screen.getByRole("link", { name: /Install TwoWeeks extension/i }),
+    );
 
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute("aria-pressed", "false");
     expect(
-      screen.queryByRole("link", { name: /Install Chrome extension/i }),
+      screen.queryByRole("link", { name: /Install TwoWeeks extension/i }),
     ).not.toBeInTheDocument();
   });
 
-  it("reveals the editor when the start surface is dismissed", async () => {
-    render(
-      <MemoryRouter initialEntries={["/proposal"]}>
+  it("closes the start sheet back to the normal proposal workspace", async () => {
+    const { container } = render(
+      <MemoryRouter initialEntries={[buildCoverLetterStartEntry()]}>
         <ProposalForge />
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /^Open editor\b/i }));
+    fireEvent.click(screen.getByLabelText("Close"));
 
     await waitFor(() => {
       expect(screen.queryByTestId("cover-letter-start-surface")).not.toBeInTheDocument();
     });
     expect(screen.getByText("CV picker closed")).toBeInTheDocument();
+    expect(screen.getByText("Proposal output")).toBeInTheDocument();
+    expect(container.querySelector(".dasti-proposal-output-shell")).not.toBeNull();
+  });
+
+  it("opens the editor and focuses the job-description field when pasting a job offer", async () => {
+    render(
+      <MemoryRouter initialEntries={[buildCoverLetterStartEntry()]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^Bring in the job\b/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Paste job offer\b/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("cover-letter-start-surface")).not.toBeInTheDocument();
+      expect(document.getElementById("jobDescription")).toHaveFocus();
+    });
+  });
+
+  it("imports a resume inline, attaches it to the proposal, and keeps the compose editor visible", async () => {
+    mockImportFile.mockResolvedValue({
+      status: "success",
+      authoritativeResume: null,
+      sections: [
+        {
+          id: "profile-1",
+          type: "profile",
+          title: "Profile",
+          blocks: [],
+          structuredContent: [{ id: "profile-item-1", name: "Taylor Case" }],
+        },
+      ],
+      emptyReason: null,
+    });
+    mockImportCv.mockImplementation(async (nextCv: { id: string; title: string }) => {
+      mockCvSnapshots[nextCv.id] = nextCv.title;
+    });
+
+    const view = render(
+      <MemoryRouter initialEntries={[buildCoverLetterStartEntry()]}>
+        <ProposalForge />
+        <LocationProbe />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Bring in your resume\b/i }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^Import a resume\b/i }));
+
+    const fileInput = document.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
+    const file = new File(["pdf"], "inline-import.pdf", {
+      type: "application/pdf",
+    });
+
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    await waitFor(() => expect(mockImportCv).toHaveBeenCalledTimes(1));
+
+    mockCurrentCvId = mockImportCv.mock.calls[0][0].id;
+    view.rerender(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+        <LocationProbe />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("cover-letter-start-surface")).not.toBeInTheDocument();
+      expect(document.getElementById("jobDescription")).toHaveFocus();
+    });
+    expect(mockActiveCvId).toBe(mockImportCv.mock.calls[0][0].id);
+    expect(screen.getByTestId("location")).toHaveTextContent("/proposal");
+  });
+
+  it("keeps the cold-start surface visible and shows inline status when the inline import is rejected", async () => {
+    mockImportFile.mockResolvedValue({
+      status: "rejected",
+      message:
+        "OCR import rejected (fallback/untrusted). Local fallback output is debug-only.",
+    });
+
+    render(
+      <MemoryRouter initialEntries={[buildCoverLetterStartEntry()]}>
+        <ProposalForge />
+        <LocationProbe />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Bring in your resume\b/i }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^Import a resume\b/i }));
+
+    const fileInput = document.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
+    const file = new File(["scan"], "inline-import.png", {
+      type: "image/png",
+    });
+
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/OCR import rejected \(fallback\/untrusted\)/i),
+      ).toBeInTheDocument();
+    });
+    expect(screen.getByTestId("cover-letter-start-surface")).toBeInTheDocument();
+    expect(mockImportCv).not.toHaveBeenCalled();
+    expect(screen.getByTestId("location")).toHaveTextContent("/proposal");
   });
 
   it("keeps the proposal-level CV source control in sync with attach and remove actions", async () => {
@@ -388,7 +655,6 @@ describe("ProposalForge attached CV sync", () => {
       "Default",
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /^Open editor\b/i }));
     fireEvent.click(screen.getByRole("button", { name: "Attach CV from form" }));
 
     expect(
@@ -417,8 +683,6 @@ describe("ProposalForge attached CV sync", () => {
         <ProposalForge />
       </MemoryRouter>,
     );
-
-    fireEvent.click(screen.getByRole("button", { name: /^Open editor\b/i }));
     fireEvent.click(screen.getByRole("button", { name: "Attach CV from form" }));
 
     expect(screen.getByText("Operations Associate — Alex Martin")).toBeInTheDocument();

@@ -1,11 +1,12 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Plus, X, Check } from "@/lib/icons";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import {
   buildActiveCvSnapshotFromCvDocument,
   formatCvDisplaySubtitle,
 } from "../lib/proposal-personalization";
+import { createQuickStartLocationState } from "../lib/quick-start-routing";
 import { formatUiDate } from "../lib/ui-date";
 import type {
   CvDocument,
@@ -65,6 +66,7 @@ function readProfileContact(cv: CvDocument): {
 }
 
 export function CvsLibrary(): JSX.Element {
+  const location = useLocation();
   const navigate = useNavigate();
   const { cvs, loadCv, createNewCv, deleteCv } = useCvLibrary();
   const [confirmingId, setConfirmingId] = React.useState<string | null>(null);
@@ -432,7 +434,15 @@ export function CvsLibrary(): JSX.Element {
               <button
                 type="button"
                 onClick={() => {
-                  void navigate("/cv?start=quick");
+                  void navigate(
+                    {
+                      pathname: location.pathname,
+                      search: location.search,
+                    },
+                    {
+                      state: createQuickStartLocationState(location.state),
+                    },
+                  );
                 }}
                 className="dasti-button dasti-button--secondary dasti-button--pill"
               >

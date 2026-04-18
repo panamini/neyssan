@@ -15,64 +15,70 @@ type QuickStartRouteOptions = {
   returnTarget?: QuickStartReturnTarget;
 };
 
-const QUICK_START_QUERY_KEYS = {
-  trigger: "start",
-  createType: "quickStartType",
-  resumeMode: "quickStartResumeMode",
-  returnTarget: "quickStartReturnTo",
-} as const;
+const QUICK_START_LOCATION_STATE_KEY = "quickStart";
 
-export function readQuickStartRouteState(search: string): QuickStartRouteState {
-  const params = new URLSearchParams(search);
-  const isOpen = params.get(QUICK_START_QUERY_KEYS.trigger) === "quick";
-  const createTypeParam = params.get(QUICK_START_QUERY_KEYS.createType);
-  const resumeModeParam = params.get(QUICK_START_QUERY_KEYS.resumeMode);
-  const returnTargetParam = params.get(QUICK_START_QUERY_KEYS.returnTarget);
+function asStateRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
 
-  const createType: QuickStartCreateType =
-    createTypeParam === "cover-letter" ? "cover-letter" : "resume";
-  const resumeMode: QuickStartResumeMode =
-    resumeModeParam === "upload-only" ? "upload-only" : "choice";
-  const returnTarget: QuickStartReturnTarget =
-    returnTargetParam === "proposal" ? "proposal" : null;
+  return value as Record<string, unknown>;
+}
+
+export function readQuickStartRouteState(value: unknown): QuickStartRouteState {
+  const record = asStateRecord(value);
+  const quickStartRecord = asStateRecord(
+    record?.[QUICK_START_LOCATION_STATE_KEY],
+  );
+
+  if (!quickStartRecord) {
+    return {
+      isOpen: false,
+      createType: "resume",
+      resumeMode: "choice",
+      returnTarget: null,
+    };
+  }
 
   return {
-    isOpen,
-    createType,
-    resumeMode,
-    returnTarget,
+    isOpen: true,
+    createType:
+      quickStartRecord.createType === "cover-letter"
+        ? "cover-letter"
+        : "resume",
+    resumeMode:
+      quickStartRecord.resumeMode === "upload-only"
+        ? "upload-only"
+        : "choice",
+    returnTarget:
+      quickStartRecord.returnTarget === "proposal" ? "proposal" : null,
   };
 }
 
-export function clearQuickStartSearch(search: string): string {
-  const params = new URLSearchParams(search);
-  params.delete(QUICK_START_QUERY_KEYS.trigger);
-  params.delete(QUICK_START_QUERY_KEYS.createType);
-  params.delete(QUICK_START_QUERY_KEYS.resumeMode);
-  params.delete(QUICK_START_QUERY_KEYS.returnTarget);
-  return params.toString();
+export function createQuickStartLocationState(
+  currentState: unknown,
+  options: QuickStartRouteOptions = {},
+): Record<string, unknown> {
+  const baseState = asStateRecord(currentState) ?? {};
+
+  return {
+    ...baseState,
+    [QUICK_START_LOCATION_STATE_KEY]: {
+      createType: options.createType ?? "resume",
+      resumeMode: options.resumeMode ?? "choice",
+      returnTarget: options.returnTarget ?? null,
+    },
+  };
 }
 
-export function buildQuickStartHref(
-  pathname: string,
-  search: string,
-  options: QuickStartRouteOptions = {},
-): string {
-  const params = new URLSearchParams(clearQuickStartSearch(search));
-  params.set(QUICK_START_QUERY_KEYS.trigger, "quick");
-
-  if (options.createType && options.createType !== "resume") {
-    params.set(QUICK_START_QUERY_KEYS.createType, options.createType);
+export function clearQuickStartLocationState(
+  currentState: unknown,
+): Record<string, unknown> | null {
+  const baseState = asStateRecord(currentState);
+  if (!baseState) {
+    return null;
   }
 
-  if (options.resumeMode && options.resumeMode !== "choice") {
-    params.set(QUICK_START_QUERY_KEYS.resumeMode, options.resumeMode);
-  }
-
-  if (options.returnTarget) {
-    params.set(QUICK_START_QUERY_KEYS.returnTarget, options.returnTarget);
-  }
-
-  const nextSearch = params.toString();
-  return nextSearch ? `${pathname}?${nextSearch}` : pathname;
+  const { [QUICK_START_LOCATION_STATE_KEY]: _ignored, ...nextState } = baseState;
+  return Object.keys(nextState).length > 0 ? nextState : null;
 }

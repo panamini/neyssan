@@ -42,16 +42,20 @@ import {
   PenNib as PhPenNib,
   PencilSimple as PhPencilSimple,
   PencilSimpleLine as PhPencilSimpleLine,
+  Plug as PhPlug,
   Minus as PhMinus,
   Plus as PhPlus,
+  PuzzlePiece as PhPuzzlePiece,
   PushPin as PhPushPin,
   PushPinSlash as PhPushPinSlash,
   Question as PhQuestion,
+  Rewind as PhRewind,
   Rows as PhRows,
   Scan as PhScan,
   Scroll as PhScroll,
   SidebarSimple as PhSidebarSimple,
   SpinnerGap as PhSpinnerGap,
+  Stop as PhStop,
   ImagesSquare as PhImagesSquare,
   SquaresFour as PhSquaresFour,
   Square as PhSquare,
@@ -168,7 +172,10 @@ export const Pencil = withCompat(PhPencilSimple);
 export const Pin = withCompat(PhPushPin);
 export const PinOff = withCompat(PhPushPinSlash);
 export const Plus = withCompat(PhPlus);
+export const Plug = withCompat(PhPlug);
+export const PuzzlePiece = withCompat(PhPuzzlePiece);
 export const Question = withCompat(PhQuestion);
+export const Rewind = withCompat(PhRewind);
 export const RotateCcw = withCompat(PhArrowsClockwise);
 export const ScanLine = withCompat(PhScan);
 export const ScrollText = withCompat(PhScroll);
@@ -178,6 +185,7 @@ export const Square = withCompat(PhSquare);
 export const ImagesSquare = withCompat(PhImagesSquare);
 export const SquaresFour = withCompat(PhSquaresFour);
 export const Star = withCompat(PhStar);
+export const Stop = withCompat(PhStop);
 export const Sun = withCompat(PhSun);
 export const SunMedium = withCompat(PhSun);
 export const Sunglasses = withCompat(PhSunglasses);

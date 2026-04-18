@@ -2,7 +2,7 @@ import React from "react";
 import { useQuery } from "convex/react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { isQuickStartCompleted } from "../lib/onboarding-state";
-import { buildQuickStartHref } from "../lib/quick-start-routing";
+import { createQuickStartLocationState } from "../lib/quick-start-routing";
 import { Check, Eye, EyeClosed, Palette } from "@/lib/icons";
 import { api } from "../../convex/_generated/api";
 import { ProfileReviewCard } from "../components/ProfileReviewCard";
@@ -136,7 +136,8 @@ function buildStylePresetFromSettingsSlot(
  * Intro panel .ip : eyebrow + h2 Fraunces + description (§13 dasti-spec-v1).
  */
 export function CvForge(): JSX.Element {
-  const { search } = useLocation();
+  const location = useLocation();
+  const { search } = location;
   const navigate = useNavigate();
   const { currentCv, importCv, cvs, isLibraryHydrated, lastLibraryFetchFailed } =
     useCvLibrary();
@@ -145,10 +146,6 @@ export function CvForge(): JSX.Element {
   );
   const [hasHandledQuickStartSession, setHasHandledQuickStartSession] =
     React.useState(false);
-  const quickStartSearchParam = React.useMemo(
-    () => new URLSearchParams(search).get("start") === "quick",
-    [search],
-  );
   // Auto-launch gate:
   // - authoritative source must be settled (isLibraryHydrated)
   // - the authoritative fetch must NOT have failed (transient error must not be
@@ -171,28 +168,27 @@ export function CvForge(): JSX.Element {
       readStoredCvForgeWorkspaceMode(),
     );
   React.useEffect(() => {
-    if (!quickStartSearchParam || hasHandledQuickStartSession) {
-      return;
-    }
-    setHasHandledQuickStartSession(true);
-  }, [hasHandledQuickStartSession, quickStartSearchParam]);
-
-  React.useEffect(() => {
-    if (
-      !shouldAutoLaunchQuickStart ||
-      quickStartSearchParam ||
-      hasHandledQuickStartSession
-    ) {
+    if (!shouldAutoLaunchQuickStart || hasHandledQuickStartSession) {
       return;
     }
 
     setHasHandledQuickStartSession(true);
-    void navigate(buildQuickStartHref("/cv", search), { replace: true });
+    void navigate(
+      {
+        pathname: location.pathname,
+        search: location.search,
+      },
+      {
+        replace: true,
+        state: createQuickStartLocationState(location.state),
+      },
+    );
   }, [
     hasHandledQuickStartSession,
+    location.pathname,
+    location.search,
+    location.state,
     navigate,
-    quickStartSearchParam,
-    search,
     shouldAutoLaunchQuickStart,
   ]);
   const [resumeLinkIntent, setResumeLinkIntent] =
