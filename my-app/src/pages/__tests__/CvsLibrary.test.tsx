@@ -3,11 +3,17 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CvsLibrary } from "../CvsLibrary";
+import { createQuickStartLocationState } from "../../lib/quick-start-routing";
 
 const navigateMock = vi.fn();
 const createNewCvMock = vi.fn();
 const deleteCvMock = vi.fn();
 const loadCvMock = vi.fn();
+const locationState = {
+  pathname: "/cvs",
+  search: "",
+  state: null as unknown,
+};
 
 const mockCvLibraryState = {
   cvs: [
@@ -33,6 +39,7 @@ const mockCvLibraryState = {
 
 vi.mock("react-router-dom", () => ({
   useNavigate: () => navigateMock,
+  useLocation: () => locationState,
 }));
 
 vi.mock("../../contexts/CvLibraryContext", () => ({
@@ -50,6 +57,9 @@ describe("CvsLibrary", () => {
     createNewCvMock.mockReset();
     deleteCvMock.mockReset();
     loadCvMock.mockReset();
+    locationState.pathname = "/cvs";
+    locationState.search = "";
+    locationState.state = null;
     mockCvLibraryState.cvs = [
       {
         id: "cv_1",
@@ -96,6 +106,14 @@ describe("CvsLibrary", () => {
     fireEvent.click(screen.getByRole("button", { name: "Quick Start" }));
 
     expect(createNewCvMock).not.toHaveBeenCalled();
-    expect(navigateMock).toHaveBeenCalledWith("/cv?start=quick");
+    expect(navigateMock).toHaveBeenCalledWith(
+      {
+        pathname: "/cvs",
+        search: "",
+      },
+      {
+        state: createQuickStartLocationState(null),
+      },
+    );
   });
 });

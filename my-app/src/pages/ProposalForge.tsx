@@ -1,6 +1,7 @@
 import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
+import { v4 as uuidv4 } from "uuid";
 import {
   ArrowLeft,
   Check,
@@ -18,7 +19,10 @@ import ProposalInputForm, {
 import EmbeddedStyleInspector from "../components/EmbeddedStyleInspector";
 import { ProposalComposeToolbar } from "../components/ProposalComposeToolbar";
 import { ProposalBriefCard } from "../components/ProposalBriefCard";
-import { CoverLetterStartSurface } from "../components/CoverLetterStartSurface";
+import {
+  CoverLetterStartSurface,
+  type CoverLetterStartSurfaceImportState,
+} from "../components/CoverLetterStartSurface";
 import ProposalSaveDialog from "../components/ProposalSaveDialog";
 import ProposalDisplay, {
   fallbackCopyText,
@@ -31,6 +35,14 @@ import {
 } from "../components/ui/SaveIndicator";
 import { useToast } from "../components/ui/toast";
 import type { FormValues } from "../components/ProposalInputForm.schemas";
+import {
+  beginStructuredImportTimingTrace,
+  logStructuredImportTiming,
+  TRUSTED_MISTRAL_FILE_INPUT_ACCEPT,
+  type StructuredImportTimingTrace,
+  useStructuredMistralImport,
+} from "../components/useStructuredMistralImport";
+import { useCvLibrary } from "../contexts/CvLibraryContext";
 import { api } from "../../convex/_generated/api";
 import {
   buildAppProposalPersonalizationPayload,
@@ -55,11 +67,13 @@ import {
   writeStoredProposalOutputDraft,
 } from "../lib/proposal-output-draft";
 import {
+  readProposalEntryIntent,
   readProposalWorkspaceResetToken,
   readStoredProposalComposeDraft,
   writeStoredProposalComposeDraft,
   type StoredProposalComposeDraft,
 } from "../lib/proposal-workspace-state";
+import { createQuickStartLocationState } from "../lib/quick-start-routing";
 import { readStoredSavedProposalFixtures } from "../lib/proposal-saved-fixtures";
 import type { ProposalTemplateId } from "../../convex/lib/proposals/renderTemplates";
 import {
@@ -87,7 +101,6 @@ import {
 import { resolveProposalRenderState } from "../lib/proposal-render-state";
 import { buildProposalSourceSummary } from "../lib/proposal-source-summary";
 import { formatUiDate } from "../lib/ui-date";
-import { buildQuickStartHref } from "../lib/quick-start-routing";
 import {
   resolveProposalStyleChoice,
   resolveProposalStyleChoiceFromRenderState,
@@ -106,6 +119,7 @@ import {
   type ProposalTemplateBundleId,
 } from "../lib/proposal-template-bundles";
 import { readCssDurationMs } from "../lib/readCssDuration";
+import { deriveCvTitleFromSections } from "../lib/normalize-cv";
 import {
   buildProposalHeaderVisibilityFromContent,
   buildProposalLetterDateLine,
@@ -158,6 +172,12 @@ type ProposalImportedSourceState = {
   sourceUrl: string | null;
   platform: string | null;
 };
+type ProposalInlineImportPhase =
+  | "idle"
+  | "preparing"
+  | "importing"
+  | "retrying"
+  | "finalizing";
 
 const PROPOSAL_SAVE_DEBOUNCE_MS = Number(
   (typeof globalThis !== "undefined" &&
@@ -552,6 +572,7 @@ export function ProposalForge(): JSX.Element {
   const location = useLocation();
   const { search } = location;
   const navigate = useNavigate();
+  const { currentCvId, importCv } = useCvLibrary();
   const { showToast } = useToast();
   const traceProposalStyle = React.useCallback(
     (args: {
@@ -784,7 +805,7 @@ export function ProposalForge(): JSX.Element {
       if (nextId === null) {
         clearActiveLocalCvId();
       } else {
-        setHasDismissedCoverLetterStart(true);
+        setIsCoverLetterStartSessionActive(false);
         setShowExtensionHelper(false);
       }
       refreshAttachedCvSelection();
@@ -811,16 +832,27 @@ export function ProposalForge(): JSX.Element {
     () => readProposalWorkspaceResetToken(location.state as unknown),
     [location.state],
   );
+  const proposalEntryIntent = React.useMemo(
+    () => readProposalEntryIntent(location.state as unknown),
+    [location.state],
+  );
+  const shouldInitializeCoverLetterStartSession =
+    requestedView === "compose" &&
+    proposalEntryIntent === "cover-letter-start" &&
+    !handoffId;
   React.useEffect(() => {
-    if (requestedView === "saved" || handoffId) {
-      setHasDismissedCoverLetterStart(false);
+    if (
+      requestedView === "compose" &&
+      proposalEntryIntent === "cover-letter-start" &&
+      !handoffId
+    ) {
+      setIsCoverLetterStartSessionActive(true);
       setShowExtensionHelper(false);
       return;
     }
 
-    setHasDismissedCoverLetterStart(false);
     setShowExtensionHelper(false);
-  }, [handoffId, proposalWorkspaceResetToken, requestedView]);
+  }, [handoffId, proposalEntryIntent, proposalWorkspaceResetToken, requestedView]);
   const {
     isLoading: isConvexAuthLoading,
     isAuthenticated: isConvexAuthenticated,
@@ -1009,9 +1041,17 @@ export function ProposalForge(): JSX.Element {
   );
   const [composeFormInstanceKey, setComposeFormInstanceKey] = React.useState(0);
   const [isCvPickerOpen, setIsCvPickerOpen] = React.useState(false);
-  const [hasDismissedCoverLetterStart, setHasDismissedCoverLetterStart] =
-    React.useState(false);
+  const [isCoverLetterStartSessionActive, setIsCoverLetterStartSessionActive] =
+    React.useState(() => shouldInitializeCoverLetterStartSession);
   const [showExtensionHelper, setShowExtensionHelper] = React.useState(false);
+  const [coverLetterInlineImportPhase, setCoverLetterInlineImportPhase] =
+    React.useState<ProposalInlineImportPhase>("idle");
+  const [coverLetterInlineImportFileName, setCoverLetterInlineImportFileName] =
+    React.useState<string | null>(null);
+  const [coverLetterInlineImportError, setCoverLetterInlineImportError] =
+    React.useState<string | null>(null);
+  const [pendingInlineImportedCvId, setPendingInlineImportedCvId] =
+    React.useState<string | null>(null);
   const [isComposePanelVisible, setIsComposePanelVisible] = React.useState(true);
   const [isBriefExpanded, setIsBriefExpanded] = React.useState(true);
   const [briefAnimationPhase, setBriefAnimationPhase] =
@@ -1029,7 +1069,19 @@ export function ProposalForge(): JSX.Element {
       });
     });
   const [cvPickerRequestKey, setCvPickerRequestKey] = React.useState(0);
+  const coverLetterInlineFileInputRef = React.useRef<HTMLInputElement | null>(
+    null,
+  );
+  const mountedRef = React.useRef(true);
+  const inlineImportRequestIdRef = React.useRef(0);
+  const pendingInlineImportedCvIdRef = React.useRef<string | null>(null);
+  const pendingInlineImportRequestIdRef = React.useRef<number | null>(null);
+  const pendingInlineImportTraceRef =
+    React.useRef<StructuredImportTimingTrace | null>(null);
   const composeGenerateTriggerRef = React.useRef<(() => void) | null>(null);
+  const { importFile: importStructuredResumeFile } = useStructuredMistralImport({
+    probeOnMount: false,
+  });
   const [composeGenerateControl, setComposeGenerateControl] = React.useState<
     Omit<ProposalGenerateControl, "trigger">
   >({
@@ -3347,8 +3399,19 @@ export function ProposalForge(): JSX.Element {
 
     setComposeFormInstanceKey((currentKey) => currentKey + 1);
     resetProposalWorkspace();
-    void navigate("/proposal", { replace: true });
-  }, [navigate, proposalWorkspaceResetToken, resetProposalWorkspace]);
+    void navigate("/proposal", {
+      replace: true,
+      state:
+        proposalEntryIntent === "cover-letter-start"
+          ? { proposalEntryIntent }
+          : null,
+    });
+  }, [
+    navigate,
+    proposalEntryIntent,
+    proposalWorkspaceResetToken,
+    resetProposalWorkspace,
+  ]);
 
   /* ── Handlers (logique métier intacte) ────────────────────── */
 
@@ -3618,41 +3681,309 @@ export function ProposalForge(): JSX.Element {
     setCvPickerRequestKey((currentKey) => currentKey + 1);
   }, []);
 
-  const handleOpenCoverLetterEditor = React.useCallback(() => {
-    setShowExtensionHelper(false);
-    setHasDismissedCoverLetterStart(true);
-    setIsComposePanelVisible(true);
+  const scheduleJobDescriptionFocus = React.useCallback(() => {
     window.setTimeout(() => {
-      const field = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
-        'input[name="jobTitle"], textarea[name="jobDescription"], textarea',
-      );
-      field?.focus();
+      const jobDescriptionField =
+        document.getElementById("jobDescription") as HTMLTextAreaElement | null;
+      if (jobDescriptionField) {
+        try {
+          jobDescriptionField.focus({ preventScroll: true });
+        } catch {
+          jobDescriptionField.focus();
+        }
+        return;
+      }
+
+      const fallbackField = document.querySelector<
+        HTMLInputElement | HTMLTextAreaElement
+      >('input[name="jobTitle"], textarea[name="jobDescription"], textarea');
+      fallbackField?.focus();
     }, 0);
   }, []);
 
+  const openCoverLetterComposeSurface = React.useCallback(
+    ({
+      focusJobDescription = false,
+      openCvPicker = false,
+    }: {
+      focusJobDescription?: boolean;
+      openCvPicker?: boolean;
+    } = {}) => {
+      setShowExtensionHelper(false);
+      setIsCoverLetterStartSessionActive(false);
+      setIsComposePanelVisible(true);
+      setIsCvPickerOpen(openCvPicker);
+      if (openCvPicker) {
+        setCvPickerRequestKey((currentKey) => currentKey + 1);
+      }
+      if (focusJobDescription) {
+        scheduleJobDescriptionFocus();
+      }
+    },
+    [scheduleJobDescriptionFocus],
+  );
+
+  const handlePasteJobOffer = React.useCallback(() => {
+    openCoverLetterComposeSurface({ focusJobDescription: true });
+  }, [openCoverLetterComposeSurface]);
+
+  const handleDismissCoverLetterStart = React.useCallback(() => {
+    openCoverLetterComposeSurface();
+  }, [openCoverLetterComposeSurface]);
+
+  const handleReturnToQuickStart = React.useCallback(() => {
+    void navigate(
+      {
+        pathname: location.pathname,
+        search: location.search,
+      },
+      {
+        replace: true,
+        state: createQuickStartLocationState(location.state, {
+          createType: "resume",
+          resumeMode: "choice",
+          returnTarget: null,
+        }),
+      },
+    );
+  }, [location.pathname, location.search, location.state, navigate]);
+
   const handleOpenStartSurfaceCvPicker = React.useCallback(() => {
-    setShowExtensionHelper(false);
-    setHasDismissedCoverLetterStart(true);
-    setIsComposePanelVisible(true);
-    setIsCvPickerOpen(true);
-    setCvPickerRequestKey((currentKey) => currentKey + 1);
-  }, []);
+    openCoverLetterComposeSurface({ openCvPicker: true });
+  }, [openCoverLetterComposeSurface]);
 
   const handleImportResumeIntoCoverLetter = React.useCallback(() => {
     setShowExtensionHelper(false);
-    void navigate(
-      buildQuickStartHref(location.pathname, location.search, {
-        createType: "resume",
-        resumeMode: "upload-only",
-        returnTarget: "proposal",
-      }),
-      { replace: true },
-    );
-  }, [location.pathname, location.search, navigate]);
+    setCoverLetterInlineImportError(null);
+    if (coverLetterInlineImportPhase !== "idle") {
+      return;
+    }
+
+    if (coverLetterInlineFileInputRef.current) {
+      coverLetterInlineFileInputRef.current.value = "";
+      coverLetterInlineFileInputRef.current.click();
+    }
+  }, [coverLetterInlineImportPhase]);
 
   const handleRevealExtensionHelper = React.useCallback(() => {
     setShowExtensionHelper((current) => !current);
   }, []);
+
+  const resetCoverLetterInlineImportUi = React.useCallback(() => {
+    setCoverLetterInlineImportPhase("idle");
+    setCoverLetterInlineImportFileName(null);
+  }, []);
+
+  const clearPendingInlineImportRefs = React.useCallback(() => {
+    pendingInlineImportedCvIdRef.current = null;
+    pendingInlineImportRequestIdRef.current = null;
+    pendingInlineImportTraceRef.current = null;
+  }, []);
+
+  const clearPendingInlineImport = React.useCallback(() => {
+    clearPendingInlineImportRefs();
+    setPendingInlineImportedCvId(null);
+  }, [clearPendingInlineImportRefs]);
+
+  React.useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      inlineImportRequestIdRef.current += 1;
+      clearPendingInlineImportRefs();
+    };
+  }, [clearPendingInlineImportRefs]);
+
+  const finalizeInlineImportedCv = React.useCallback(
+    (nextCvId: string, trace?: StructuredImportTimingTrace | null) => {
+      logStructuredImportTiming(trace, "proposal_inline.finalize.start", {
+        cvId: nextCvId,
+      });
+      setProposalAttachedCvId(nextCvId);
+      setShowExtensionHelper(false);
+      setIsCoverLetterStartSessionActive(false);
+      setIsComposePanelVisible(true);
+      refreshAttachedCvSelection();
+      resetCoverLetterInlineImportUi();
+      setCoverLetterInlineImportError(null);
+      scheduleJobDescriptionFocus();
+      logStructuredImportTiming(trace, "proposal_inline.finalize.finish", {
+        cvId: nextCvId,
+      });
+    },
+    [
+      refreshAttachedCvSelection,
+      resetCoverLetterInlineImportUi,
+      scheduleJobDescriptionFocus,
+    ],
+  );
+
+  React.useEffect(() => {
+    if (!pendingInlineImportedCvId) {
+      return;
+    }
+    if (!mountedRef.current) {
+      return;
+    }
+    if (currentCvId !== pendingInlineImportedCvId) {
+      return;
+    }
+    if (pendingInlineImportRequestIdRef.current === null) {
+      return;
+    }
+    if (inlineImportRequestIdRef.current !== pendingInlineImportRequestIdRef.current) {
+      return;
+    }
+
+    const importedCvId = pendingInlineImportedCvId;
+    const trace = pendingInlineImportTraceRef.current;
+    clearPendingInlineImport();
+    finalizeInlineImportedCv(importedCvId, trace);
+  }, [
+    clearPendingInlineImport,
+    currentCvId,
+    finalizeInlineImportedCv,
+    pendingInlineImportedCvId,
+  ]);
+
+  const handleCoverLetterInlineImportChange = React.useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      const isInlineImportBusy = coverLetterInlineImportPhase !== "idle";
+      if (!file || isInlineImportBusy) {
+        return;
+      }
+
+      const trace = beginStructuredImportTimingTrace("proposal_inline", file.name);
+      const requestId = ++inlineImportRequestIdRef.current;
+      let awaitingLiveCvHandoff = false;
+      const isCurrentRequest = () =>
+        mountedRef.current && inlineImportRequestIdRef.current === requestId;
+
+      logStructuredImportTiming(trace, "file.selected", {
+        fileSizeBytes: file.size,
+        fileType: file.type || null,
+      });
+      logStructuredImportTiming(trace, "proposal_inline.handler.entered");
+      setShowExtensionHelper(false);
+      setCoverLetterInlineImportError(null);
+      setCoverLetterInlineImportFileName(file.name);
+      setCoverLetterInlineImportPhase("preparing");
+
+      try {
+        if (!isCurrentRequest()) {
+          return;
+        }
+
+        setCoverLetterInlineImportPhase("importing");
+        const outcome = await importStructuredResumeFile(file, {
+          trace,
+          onRetrying: () => {
+            if (isCurrentRequest()) {
+              setCoverLetterInlineImportPhase("retrying");
+            }
+          },
+          onRetrySucceeded: () => {
+            if (isCurrentRequest()) {
+              setCoverLetterInlineImportPhase("importing");
+            }
+          },
+        });
+        if (!isCurrentRequest()) {
+          return;
+        }
+
+        if (outcome.status === "rejected") {
+          setCoverLetterInlineImportError(outcome.message);
+          return;
+        }
+        if (!Array.isArray(outcome.sections) || outcome.sections.length === 0) {
+          setCoverLetterInlineImportError(
+            outcome.emptyReason
+              ? `Parser returned empty result: ${outcome.emptyReason}`
+              : "No importable sections were found.",
+          );
+          return;
+        }
+
+        const nextCvId = uuidv4();
+        const now = new Date().toISOString();
+        setCoverLetterInlineImportPhase("finalizing");
+        logStructuredImportTiming(trace, "importCv.start", {
+          nextCvId,
+        });
+        pendingInlineImportedCvIdRef.current = nextCvId;
+        pendingInlineImportRequestIdRef.current = requestId;
+        pendingInlineImportTraceRef.current = trace;
+        setPendingInlineImportedCvId(nextCvId);
+        awaitingLiveCvHandoff = true;
+
+        void importCv({
+          id: nextCvId,
+          title: deriveCvTitleFromSections(
+            outcome.sections as any,
+            "Imported CV",
+          ),
+          metadata: {
+            createdAt: now,
+            updatedAt: now,
+            version: 1,
+            ...(outcome.authoritativeResume
+              ? { authoritativeResume: outcome.authoritativeResume }
+              : {}),
+          },
+          sections: outcome.sections as any,
+        })
+          .then(() => {
+            logStructuredImportTiming(trace, "importCv.finish", {
+              nextCvId,
+            });
+          })
+          .catch((error) => {
+            const message =
+              error instanceof Error ? error.message : "Couldn't read that file.";
+            logStructuredImportTiming(trace, "importCv.error", {
+              nextCvId,
+              message,
+            });
+            if (!isCurrentRequest()) {
+              return;
+            }
+            if (pendingInlineImportedCvIdRef.current !== nextCvId) {
+              return;
+            }
+            clearPendingInlineImport();
+            setCoverLetterInlineImportError(message);
+            resetCoverLetterInlineImportUi();
+          });
+        return;
+      } catch (error) {
+        if (isCurrentRequest()) {
+          logStructuredImportTiming(trace, "proposal_inline.error", {
+            message:
+              error instanceof Error ? error.message : "Couldn't read that file.",
+          });
+          setCoverLetterInlineImportError(
+            error instanceof Error ? error.message : "Couldn't read that file.",
+          );
+        }
+      } finally {
+        if (coverLetterInlineFileInputRef.current) {
+          coverLetterInlineFileInputRef.current.value = "";
+        }
+        if (isCurrentRequest() && !awaitingLiveCvHandoff) {
+          resetCoverLetterInlineImportUi();
+        }
+      }
+    },
+    [
+      clearPendingInlineImport,
+      coverLetterInlineImportPhase,
+      importCv,
+      importStructuredResumeFile,
+      resetCoverLetterInlineImportUi,
+    ],
+  );
 
   const handleToolbarVoicePresetChange = React.useCallback(
     (preset: FormValues["voicePreset"] | null) => {
@@ -5136,16 +5467,23 @@ export function ProposalForge(): JSX.Element {
       (isConvexAuthenticated && handoffRecord === undefined));
   const shouldShowCoverLetterStartSurface =
     !isSavedView &&
+    proposalEntryIntent === "cover-letter-start" &&
+    isCoverLetterStartSessionActive &&
     !handoffId &&
     !isLoadingHandoff &&
     !attachedCvId &&
     !hasMeaningfulComposeDraft &&
-    !hasMeaningfulOutputDraft &&
-    !hasDismissedCoverLetterStart;
+    !hasMeaningfulOutputDraft;
+  const shouldRenderColdStartInlineOnly = shouldShowCoverLetterStartSurface;
   const shouldShowCollapsedComposeToolbar =
-    !isComposePanelVisible && !isSavedView && canCollapseComposePanel;
+    !shouldRenderColdStartInlineOnly &&
+    !isComposePanelVisible &&
+    !isSavedView &&
+    canCollapseComposePanel;
   const liveWorkbenchMaxWidth = isCompactComposeLayout
     ? "560px"
+    : shouldRenderColdStartInlineOnly
+      ? proposalDesktopComposeWidth
     : shouldCenterOutputStage
       ? "860px"
       : `calc(${proposalDesktopComposeWidth} + var(--proposal-workspace-output-shell-inline-size) + var(--layout-card-grid))`;
@@ -5169,7 +5507,10 @@ export function ProposalForge(): JSX.Element {
     width: "100%",
     maxWidth: liveWorkbenchMaxWidth,
     marginInline:
-      shouldLeftAnchorStackedWorkbench || shouldShowDesktopBriefCapsule
+      shouldRenderColdStartInlineOnly
+        ? "auto"
+        : shouldLeftAnchorStackedWorkbench ||
+            shouldShowDesktopBriefCapsule
         ? 0
         : "auto",
     minWidth: 0,
@@ -5215,6 +5556,57 @@ export function ProposalForge(): JSX.Element {
         : "";
   const shouldHideComposeShell =
     !showComposePanel || showBriefCard;
+  const coverLetterInlineImportState =
+    React.useMemo<CoverLetterStartSurfaceImportState>(() => {
+      const isBusy = coverLetterInlineImportPhase !== "idle";
+      if (coverLetterInlineImportPhase === "preparing") {
+        return {
+          isBusy,
+          label: "Preparing resume import...",
+          hint: "Checking the file before upload.",
+          fileName: coverLetterInlineImportFileName,
+          error: coverLetterInlineImportError,
+        };
+      }
+      if (coverLetterInlineImportPhase === "retrying") {
+        return {
+          isBusy,
+          label: "Retrying resume import...",
+          hint: "The connection dropped. The same import is retrying now.",
+          fileName: coverLetterInlineImportFileName,
+          error: coverLetterInlineImportError,
+        };
+      }
+      if (coverLetterInlineImportPhase === "finalizing") {
+        return {
+          isBusy,
+          label: "Opening imported resume...",
+          hint: "Attaching the imported resume to this cover letter.",
+          fileName: coverLetterInlineImportFileName,
+          error: coverLetterInlineImportError,
+        };
+      }
+      if (coverLetterInlineImportPhase === "importing") {
+        return {
+          isBusy,
+          label: "Importing resume...",
+          hint: "Running the trusted Mistral import. This can take a few seconds.",
+          fileName: coverLetterInlineImportFileName,
+          error: coverLetterInlineImportError,
+        };
+      }
+      return {
+        isBusy,
+        label: "Import a resume",
+        hint: "Upload a trusted PDF or image and attach it here.",
+        fileName: coverLetterInlineImportFileName,
+        error: coverLetterInlineImportError,
+      };
+    }, [
+      coverLetterInlineImportError,
+      coverLetterInlineImportFileName,
+      coverLetterInlineImportPhase,
+    ]);
 
   const clearBriefAnimationTimers = React.useCallback(() => {
     if (briefSwapTimerRef.current !== null) {
@@ -5488,7 +5880,7 @@ export function ProposalForge(): JSX.Element {
     showBriefCard,
   ]);
 
-  const proposalWorkbenchToolbar = shouldShowCollapsedComposeToolbar ? (
+  const proposalWorkbenchToolbar = shouldRenderColdStartInlineOnly ? null : shouldShowCollapsedComposeToolbar ? (
     <ProposalComposeToolbar
       value={composeToolbarVoicePreset}
       resolvedValue={proposalVoicePreset ?? null}
@@ -5688,336 +6080,369 @@ export function ProposalForge(): JSX.Element {
             ) : null}
             <div className="dasti-flow" style={proposalWorkbenchFrameStyle}>
             <section aria-hidden={false}>
-              <div
-                className="dasti-grid-split"
-                style={
-                  {
-                    "--grid-columns": isCompactComposeLayout
-                      ? "minmax(0, 1fr)"
-                      : showComposeGridColumn
-                        ? `${proposalDesktopComposeWidth} minmax(0, var(--proposal-workspace-output-shell-inline-size))`
-                        : "minmax(0, 0px) minmax(0, 1fr)",
-                    "--grid-gap": showComposeGridColumn
-                      ? "var(--layout-card-grid)"
-                      : "0px",
-                    "--grid-align": "start",
-                    "--grid-justify": shouldCenterOutputStage ? "center" : "start",
-                  } as React.CSSProperties
-                }
-              >
-              <div
-                className={[
-                  "dasti-flow",
-                  "dasti-forge-left-col",
-                  !showComposeGridColumn && !isCompactComposeLayout
-                    ? "dasti-forge-left-col--hidden"
-                    : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-              >
+              {shouldRenderColdStartInlineOnly ? (
+                <>
+                  <CoverLetterStartSurface
+                    hasResumes={hasLocalResumes}
+                    showExtensionHelper={showExtensionHelper}
+                    importResumeState={coverLetterInlineImportState}
+                    onBackToQuickStart={
+                      proposalEntryIntent === "cover-letter-start"
+                        ? handleReturnToQuickStart
+                        : null
+                    }
+                    onClose={handleDismissCoverLetterStart}
+                    onUseResume={handleOpenStartSurfaceCvPicker}
+                    onImportResume={handleImportResumeIntoCoverLetter}
+                    onPasteJobOffer={handlePasteJobOffer}
+                    onUseChromeExtension={handleRevealExtensionHelper}
+                  />
+                  <input
+                    ref={coverLetterInlineFileInputRef}
+                    type="file"
+                    accept={TRUSTED_MISTRAL_FILE_INPUT_ACCEPT}
+                    onChange={handleCoverLetterInlineImportChange}
+                    style={{ display: "none" }}
+                    aria-hidden="true"
+                  />
+                </>
+              ) : (
                 <div
-                  style={composeColumnShellWidthStyle}
-                  className="dasti-proposal-compose-column dasti-proposal-compose-column--workspace"
+                  className="dasti-grid-split"
+                  style={
+                    {
+                      "--grid-columns": isCompactComposeLayout
+                        ? "minmax(0, 1fr)"
+                        : showComposeGridColumn
+                          ? `${proposalDesktopComposeWidth} minmax(0, var(--proposal-workspace-output-shell-inline-size))`
+                          : "minmax(0, 0px) minmax(0, 1fr)",
+                      "--grid-gap": showComposeGridColumn
+                        ? "var(--layout-card-grid)"
+                        : "0px",
+                      "--grid-align": "start",
+                      "--grid-justify": shouldCenterOutputStage ? "center" : "start",
+                    } as React.CSSProperties
+                  }
                 >
-                  {shouldRenderBriefCard ? (
-                    <div
-                      className={[
-                        "dasti-proposal-brief-stage",
-                        briefCardMotionClass,
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
-                    >
-                      <ProposalBriefCard
-                        documentTitle={
-                          proposalDocumentTitle ||
-                          briefJobTitle ||
-                          "Generated proposal"
-                        }
-                        jobDescription={briefJobDescription}
-                        onToggleBrief={handleOpenComposeBrief}
-                        variant={shouldShowDesktopBriefCapsule ? "compact" : "card"}
-                        sourceUrl={briefSourceUrl}
-                        sourcePlatform={briefSourcePlatform}
-                      />
-                    </div>
-                  ) : null}
                   <div
                     className={[
-                      "dasti-proposal-compose-panel-stage",
-                      composeShellMotionClass,
+                      "dasti-flow",
+                      "dasti-forge-left-col",
+                      !showComposeGridColumn && !isCompactComposeLayout
+                        ? "dasti-forge-left-col--hidden"
+                        : "",
                     ]
                       .filter(Boolean)
                       .join(" ")}
-                    style={shouldHideComposeShell ? { display: "none" } : undefined}
                   >
-                    {isLoadingHandoff ? (
-                      <div style={{ paddingTop: "var(--s2)" }}>
-                        <p className="dasti-hint">Loading imported job offer…</p>
+                    <div
+                      style={composeColumnShellWidthStyle}
+                      className="dasti-proposal-compose-column dasti-proposal-compose-column--workspace"
+                    >
+                      {shouldRenderBriefCard ? (
+                        <div
+                          className={[
+                            "dasti-proposal-brief-stage",
+                            briefCardMotionClass,
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
+                        >
+                          <ProposalBriefCard
+                            documentTitle={
+                              proposalDocumentTitle ||
+                              briefJobTitle ||
+                              "Generated proposal"
+                            }
+                            jobDescription={briefJobDescription}
+                            onToggleBrief={handleOpenComposeBrief}
+                            variant={shouldShowDesktopBriefCapsule ? "compact" : "card"}
+                            sourceUrl={briefSourceUrl}
+                            sourcePlatform={briefSourcePlatform}
+                          />
+                        </div>
+                      ) : null}
+                      <div
+                        className={[
+                          "dasti-proposal-compose-panel-stage",
+                          composeShellMotionClass,
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                        style={shouldHideComposeShell ? { display: "none" } : undefined}
+                      >
+                        {isLoadingHandoff ? (
+                          <div style={{ paddingTop: "var(--s2)" }}>
+                            <p className="dasti-hint">Loading imported job offer…</p>
+                          </div>
+                        ) : (
+                          <ProposalInputForm
+                            key={composeFormInstanceKey}
+                            onStart={handleProposalStart}
+                            onStop={handleProposalStop}
+                            onSubmit={handleProposalSubmit}
+                            onError={handleProposalError}
+                            onValuesChange={handleProposalFormValuesChange}
+                            onActiveCvChange={handleAttachedCvChange}
+                            prefill={prefill}
+                            cvPickerOpen={isCvPickerOpen}
+                            onCvPickerOpenChange={setIsCvPickerOpen}
+                            cvPickerRequestKey={cvPickerRequestKey}
+                            suppressToneControls
+                            suppressCvPicker
+                            externalVoicePreset={composeToolbarVoicePreset}
+                            headerLabel={null}
+                            initialComposeDraft={composeDraftInitialSeed}
+                            sourceUrl={briefSourceUrl}
+                            sourcePlatform={briefSourcePlatform}
+                            onGenerateControlChange={handleComposeGenerateControlChange}
+                            headerAction={
+                              hasBriefContent ? (
+                                <button
+                                  type="button"
+                                  className="dasti-proposal-compose-shell__toggle"
+                                  onClick={handleToggleComposeBrief}
+                                  aria-label={
+                                    isBriefExpanded ? "Collapse" : "Expand"
+                                  }
+                                >
+                                  {isBriefExpanded ? (
+                                    <X size={14} strokeWidth={1.9} aria-hidden="true" />
+                                  ) : (
+                                    <ChevronDown
+                                      size={14}
+                                      strokeWidth={1.7}
+                                      aria-hidden="true"
+                                    />
+                                  )}
+                                </button>
+                              ) : null
+                            }
+                          />
+                        )}
+                        <input
+                          ref={coverLetterInlineFileInputRef}
+                          type="file"
+                          accept={TRUSTED_MISTRAL_FILE_INPUT_ACCEPT}
+                          onChange={handleCoverLetterInlineImportChange}
+                          style={{ display: "none" }}
+                          aria-hidden="true"
+                        />
                       </div>
-                    ) : shouldShowCoverLetterStartSurface ? (
-                      <CoverLetterStartSurface
-                        hasResumes={hasLocalResumes}
-                        showExtensionHelper={showExtensionHelper}
-                        onUseResume={handleOpenStartSurfaceCvPicker}
-                        onImportResume={handleImportResumeIntoCoverLetter}
-                        onOpenEditor={handleOpenCoverLetterEditor}
-                        onUseChromeExtension={handleRevealExtensionHelper}
-                      />
-                    ) : (
-                      <ProposalInputForm
-                        key={composeFormInstanceKey}
-                        onStart={handleProposalStart}
-                        onStop={handleProposalStop}
-                        onSubmit={handleProposalSubmit}
-                        onError={handleProposalError}
-                        onValuesChange={handleProposalFormValuesChange}
-                        onActiveCvChange={handleAttachedCvChange}
-                        prefill={prefill}
-                        cvPickerOpen={isCvPickerOpen}
-                        onCvPickerOpenChange={setIsCvPickerOpen}
-                        cvPickerRequestKey={cvPickerRequestKey}
-                        suppressToneControls
-                        suppressCvPicker
-                        externalVoicePreset={composeToolbarVoicePreset}
-                        headerLabel={null}
-                        initialComposeDraft={composeDraftInitialSeed}
-                        sourceUrl={briefSourceUrl}
-                        sourcePlatform={briefSourcePlatform}
-                        onGenerateControlChange={handleComposeGenerateControlChange}
-                        headerAction={
-                          hasBriefContent ? (
+                    </div>
+                  </div>
+
+                  <div className="dasti-flow">
+                    <div
+                      style={
+                        {
+                          ...stackedCardWidthStyle,
+                          "--document-viewer-shell-inline-size":
+                            "var(--proposal-workspace-output-shell-inline-size)",
+                        } as React.CSSProperties
+                      }
+                      className="dasti-proposal-output-shell dasti-proposal-output-shell--workspace"
+                    >
+                      <ProposalDisplay
+                        proposalContent={proposalContent}
+                        loading={loading}
+                        error={error}
+                        statusMessage={statusMessage}
+                      errorDetail={errorDetail}
+                      proposalType={proposalType}
+                      voicePreset={proposalVoicePreset}
+                      templateId={
+                        proposalRenderMetadata?.templateId ??
+                        effectiveProposalTemplateId ??
+                        fallbackProposalTemplateId
+                      }
+                      stylePreset={effectiveProposalStylePresetWithPalette}
+                      railTitle={proposalApplicantName || null}
+                      railMeta={proposalApplicantRole || null}
+                      contactLine={proposalContactLine || null}
+                      letterDate={proposalLetterDate || null}
+                      recipientDetails={proposalRecipientDetails || null}
+                      salutationValue={proposalSalutationValue || null}
+                      applicantHeader={proposalDisplayApplicantHeader}
+                      headerVisibility={proposalHeaderVisibility}
+                      fallbackInfo={fallbackInfo}
+                      documentTitle={
+                        proposalDocumentTitle ||
+                        buildProfessionalApplicationSubject({
+                          jobTitle: composePreviewValues?.jobTitle ?? "",
+                          jobDescription:
+                            composePreviewValues?.jobDescription ?? "",
+                          proposalType,
+                        })
+                      }
+                      documentMeta={
+                        proposalDocumentMeta ||
+                        proposalDisplayApplicantHeader.email ||
+                        null
+                      }
+                      mode={proposalOutputMode}
+                      onModeChange={setProposalOutputMode}
+                      showDocumentCaption={false}
+                      documentTitleEditable={proposalOutputMode === "edit"}
+                      onDocumentTitleChange={setProposalDocumentTitle}
+                      onDocumentTitleCommit={() => {
+                        void handleProposalDocumentCommit();
+                      }}
+                      documentTitlePlaceholder={buildProfessionalApplicationSubject(
+                        {
+                          jobTitle: composePreviewValues?.jobTitle ?? "",
+                          jobDescription:
+                            composePreviewValues?.jobDescription ?? "",
+                          proposalType,
+                        },
+                      )}
+                      onRailTitleChange={setProposalApplicantName}
+                      onRailMetaChange={setProposalApplicantRole}
+                      contactLineEditable={proposalOutputMode === "edit"}
+                      onContactLineChange={handleProposalContactLineChange}
+                      onContactLineCommit={handleProposalContactLineCommit}
+                      letterDateEditable={proposalOutputMode === "edit"}
+                      onLetterDateChange={setProposalLetterDate}
+                      recipientDetailsEditable={proposalOutputMode === "edit"}
+                      onRecipientDetailsChange={setProposalRecipientDetails}
+                      salutationEditable={proposalOutputMode === "edit"}
+                      salutationPlaceholder={proposalSalutationPlaceholder}
+                      onSalutationChange={handleProposalSalutationChange}
+                      onHeaderVisibilityChange={(value) => {
+                        setProposalHeaderVisibility((current) => ({
+                          ...current,
+                          ...(typeof value === "function"
+                            ? value(current)
+                            : value),
+                        }));
+                      }}
+                      characterLimit={activeCharacterLimitSelection.value}
+                      characterLimitAdvisory={
+                        activeCharacterLimitSelection.advisory
+                      }
+                      showModeToggle
+                      showZoomControls
+                      zoomStorageKey={null}
+                      previewAnchor="top"
+                      size="default"
+                      documentHeaderMode="actions-only"
+                      railStartAddon={
+                        proposalContent && proposalOutputMode === "preview" ? (
+                          <EmbeddedStyleInspector
+                            stylePreset={effectiveProposalStylePresetWithPalette}
+                            templateId={
+                              proposalRenderMetadata?.templateId ??
+                              effectiveProposalTemplateId ??
+                              fallbackProposalTemplateId
+                            }
+                            copyMode="title-only"
+                            controlMode="direct"
+                            showCustomizeControl={false}
+                            showPromptControl={false}
+                            onSelectBundle={() => {}}
+                            onSelectLayout={(layout) =>
+                              applyProposalDirectStyle({
+                                ...effectiveProposalStylePresetWithPalette,
+                                layout,
+                              })
+                            }
+                            onSelectTypography={(typography) =>
+                              applyProposalDirectStyle({
+                                ...effectiveProposalStylePresetWithPalette,
+                                typography,
+                              })
+                            }
+                            onSelectPalette={(palette) =>
+                              applyProposalDirectStyle({
+                                ...effectiveProposalStylePresetWithPalette,
+                                palette,
+                                accentHex: undefined,
+                              })
+                            }
+                            onSelectCustomAccent={(accentHex) =>
+                              applyProposalDirectStyle({
+                                ...effectiveProposalStylePresetWithPalette,
+                                palette: "custom",
+                                accentHex,
+                              })
+                            }
+                          />
+                        ) : null
+                      }
+                      onCopy={() => {
+                        void handleCopyOutput();
+                      }}
+                      copyFeedback={copyFeedback}
+                      onContentChange={handleProposalContentChange}
+                      onContentCommit={() => {
+                        void handleProposalDocumentCommit();
+                      }}
+                      actions={
+                        proposalContent && !loading && !error ? (
+                          <span className="dasti-icon-cluster dasti-icon-cluster--tight">
                             <button
                               type="button"
-                              className="dasti-proposal-compose-shell__toggle"
-                              onClick={handleToggleComposeBrief}
-                              aria-label={
-                                isBriefExpanded ? "Collapse" : "Expand"
+                              className="dasti-icon-button"
+                              aria-label="Save proposal to library"
+                              data-toolbar-tooltip={
+                                isSavingOutputToLibrary ? "Saving" : "Save"
                               }
+                              onClick={() => {
+                                handleOpenSaveDialog();
+                              }}
+                              disabled={isSavingOutputToLibrary}
+                              style={{
+                                opacity: isSavingOutputToLibrary ? 0.55 : 1,
+                              }}
                             >
-                              {isBriefExpanded ? (
-                                <X size={14} strokeWidth={1.9} aria-hidden="true" />
-                              ) : (
-                                <ChevronDown
-                                  size={14}
-                                  strokeWidth={1.7}
-                                  aria-hidden="true"
-                                />
-                              )}
+                              <FloppyDisk size={16} strokeWidth={1.7} />
                             </button>
-                          ) : null
-                        }
-                      />
-                    )}
+                            <div className="dasti-icon-cluster__divider" />
+                            {isConfirmingGeneratedDelete ? (
+                              <button
+                                type="button"
+                                className="dasti-icon-button dasti-icon-button--confirm"
+                                data-toolbar-tooltip="Confirm delete"
+                                onClick={() => {
+                                  void handleDeleteOutput();
+                                }}
+                              >
+                                <Check size={14} strokeWidth={2.5} />
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                className="dasti-icon-button"
+                                data-toolbar-tooltip="Delete"
+                                onClick={() =>
+                                  setIsConfirmingGeneratedDelete(true)
+                                }
+                              >
+                                <Trash size={16} strokeWidth={1.5} />
+                              </button>
+                            )}
+                            {isConfirmingGeneratedDelete ? (
+                              <button
+                                type="button"
+                                className="dasti-icon-button"
+                                data-toolbar-tooltip="Cancel"
+                                onClick={() =>
+                                  setIsConfirmingGeneratedDelete(false)
+                                }
+                              >
+                                <X size={16} strokeWidth={1.8} />
+                              </button>
+                            ) : null}
+                          </span>
+                        ) : undefined
+                      }
+                    />
                   </div>
                 </div>
               </div>
-
-              <div className="dasti-flow">
-                <div
-                  style={
-                    {
-                      ...stackedCardWidthStyle,
-                      "--document-viewer-shell-inline-size":
-                        "var(--proposal-workspace-output-shell-inline-size)",
-                    } as React.CSSProperties
-                  }
-                  className="dasti-proposal-output-shell dasti-proposal-output-shell--workspace"
-                >
-                  <ProposalDisplay
-                    proposalContent={proposalContent}
-                    loading={loading}
-                    error={error}
-                    statusMessage={statusMessage}
-                    errorDetail={errorDetail}
-                    proposalType={proposalType}
-                    voicePreset={proposalVoicePreset}
-                    templateId={
-                      proposalRenderMetadata?.templateId ??
-                      effectiveProposalTemplateId ??
-                      fallbackProposalTemplateId
-                    }
-                    stylePreset={effectiveProposalStylePresetWithPalette}
-                    railTitle={proposalApplicantName || null}
-                    railMeta={proposalApplicantRole || null}
-                    contactLine={proposalContactLine || null}
-                    letterDate={proposalLetterDate || null}
-                    recipientDetails={proposalRecipientDetails || null}
-                    salutationValue={proposalSalutationValue || null}
-                    applicantHeader={proposalDisplayApplicantHeader}
-                    headerVisibility={proposalHeaderVisibility}
-                    fallbackInfo={fallbackInfo}
-                    documentTitle={
-                      proposalDocumentTitle ||
-                      buildProfessionalApplicationSubject({
-                        jobTitle: composePreviewValues?.jobTitle ?? "",
-                        jobDescription: composePreviewValues?.jobDescription ?? "",
-                        proposalType,
-                      })
-                    }
-                    documentMeta={
-                      proposalDocumentMeta ||
-                      proposalDisplayApplicantHeader.email ||
-                      null
-                    }
-                    mode={proposalOutputMode}
-                    onModeChange={setProposalOutputMode}
-                    showDocumentCaption={false}
-                    documentTitleEditable={proposalOutputMode === "edit"}
-                    onDocumentTitleChange={setProposalDocumentTitle}
-                    onDocumentTitleCommit={() => {
-                      void handleProposalDocumentCommit();
-                    }}
-                    documentTitlePlaceholder={buildProfessionalApplicationSubject({
-                      jobTitle: composePreviewValues?.jobTitle ?? "",
-                      jobDescription: composePreviewValues?.jobDescription ?? "",
-                      proposalType,
-                    })}
-                    onRailTitleChange={setProposalApplicantName}
-                    onRailMetaChange={setProposalApplicantRole}
-                    contactLineEditable={proposalOutputMode === "edit"}
-                    onContactLineChange={handleProposalContactLineChange}
-                    onContactLineCommit={handleProposalContactLineCommit}
-                    letterDateEditable={proposalOutputMode === "edit"}
-                    onLetterDateChange={setProposalLetterDate}
-                    recipientDetailsEditable={proposalOutputMode === "edit"}
-                    onRecipientDetailsChange={setProposalRecipientDetails}
-                    salutationEditable={proposalOutputMode === "edit"}
-                    salutationPlaceholder={proposalSalutationPlaceholder}
-                    onSalutationChange={handleProposalSalutationChange}
-                    onHeaderVisibilityChange={(value) => {
-                      setProposalHeaderVisibility((current) => ({
-                        ...current,
-                        ...(typeof value === "function" ? value(current) : value),
-                      }));
-                    }}
-                    characterLimit={activeCharacterLimitSelection.value}
-                    characterLimitAdvisory={
-                      activeCharacterLimitSelection.advisory
-                    }
-                    showModeToggle
-                    showZoomControls
-                    zoomStorageKey={null}
-                    previewAnchor="top"
-                    size="default"
-                    documentHeaderMode="actions-only"
-                    railStartAddon={
-                      proposalContent && proposalOutputMode === "preview" ? (
-                        <EmbeddedStyleInspector
-                          stylePreset={effectiveProposalStylePresetWithPalette}
-                          templateId={
-                            proposalRenderMetadata?.templateId ??
-                            effectiveProposalTemplateId ??
-                            fallbackProposalTemplateId
-                          }
-                          copyMode="title-only"
-                          controlMode="direct"
-                          showCustomizeControl={false}
-                          showPromptControl={false}
-                          onSelectBundle={() => {}}
-                          onSelectLayout={(layout) =>
-                            applyProposalDirectStyle({
-                              ...effectiveProposalStylePresetWithPalette,
-                              layout,
-                            })
-                          }
-                          onSelectTypography={(typography) =>
-                            applyProposalDirectStyle({
-                              ...effectiveProposalStylePresetWithPalette,
-                              typography,
-                            })
-                          }
-                          onSelectPalette={(palette) =>
-                            applyProposalDirectStyle({
-                              ...effectiveProposalStylePresetWithPalette,
-                              palette,
-                              accentHex: undefined,
-                            })
-                          }
-                          onSelectCustomAccent={(accentHex) =>
-                            applyProposalDirectStyle({
-                              ...effectiveProposalStylePresetWithPalette,
-                              palette: "custom",
-                              accentHex,
-                            })
-                          }
-                        />
-                      ) : null
-                    }
-                    onCopy={() => {
-                      void handleCopyOutput();
-                    }}
-                    copyFeedback={copyFeedback}
-                    onContentChange={handleProposalContentChange}
-                    onContentCommit={() => {
-                      void handleProposalDocumentCommit();
-                    }}
-                    actions={
-                      proposalContent && !loading && !error ? (
-                        <span className="dasti-icon-cluster dasti-icon-cluster--tight">
-                          <button
-                            type="button"
-                            className="dasti-icon-button"
-                            aria-label="Save proposal to library"
-                            data-toolbar-tooltip={
-                              isSavingOutputToLibrary ? "Saving" : "Save"
-                            }
-                            onClick={() => {
-                              handleOpenSaveDialog();
-                            }}
-                            disabled={isSavingOutputToLibrary}
-                            style={{
-                              opacity: isSavingOutputToLibrary ? 0.55 : 1,
-                            }}
-                          >
-                            <FloppyDisk size={16} strokeWidth={1.7} />
-                          </button>
-                          <div className="dasti-icon-cluster__divider" />
-                          {isConfirmingGeneratedDelete ? (
-                            <button
-                              type="button"
-                              className="dasti-icon-button dasti-icon-button--confirm"
-                              data-toolbar-tooltip="Confirm delete"
-                              onClick={() => {
-                                void handleDeleteOutput();
-                              }}
-                            >
-                              <Check size={14} strokeWidth={2.5} />
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              className="dasti-icon-button"
-                              data-toolbar-tooltip="Delete"
-                              onClick={() =>
-                                setIsConfirmingGeneratedDelete(true)
-                              }
-                            >
-                              <Trash size={16} strokeWidth={1.5} />
-                            </button>
-                          )}
-                          {isConfirmingGeneratedDelete ? (
-                            <button
-                              type="button"
-                              className="dasti-icon-button"
-                              data-toolbar-tooltip="Cancel"
-                              onClick={() =>
-                                setIsConfirmingGeneratedDelete(false)
-                              }
-                            >
-                              <X size={16} strokeWidth={1.8} />
-                            </button>
-                          ) : null}
-                        </span>
-                      ) : undefined
-                    }
-                  />
-                </div>
-              </div>
-              </div>
+              )}
             </section>
-            </div>
+          </div>
           </>
         )}
       </div>

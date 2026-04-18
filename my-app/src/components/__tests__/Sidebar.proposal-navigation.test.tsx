@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { Sidebar } from "../Sidebar";
+import { createQuickStartLocationState } from "../../lib/quick-start-routing";
 import {
   PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,
   readStoredProposalOutputDraft,
@@ -107,7 +108,7 @@ function LocationProbe(): JSX.Element {
   const location = useLocation();
   return (
     <div data-testid="sidebar-location">
-      {`${location.pathname}${location.search}`}
+      {`${location.pathname}${location.search}::${JSON.stringify(location.state ?? null)}`}
     </div>
   );
 }
@@ -279,11 +280,11 @@ describe("Sidebar proposal navigation", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("link", { name: "Quick Start" }));
+    fireEvent.click(screen.getByRole("button", { name: "Quick Start" }));
 
     expect(mockCvLibraryState.createNewCv).not.toHaveBeenCalled();
     expect(screen.getByTestId("sidebar-location")).toHaveTextContent(
-      "/proposal?start=quick",
+      `/proposal::${JSON.stringify(createQuickStartLocationState(null))}`,
     );
   });
 

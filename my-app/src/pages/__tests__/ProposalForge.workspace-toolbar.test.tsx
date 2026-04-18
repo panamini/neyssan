@@ -155,6 +155,14 @@ describe("ProposalForge workbench layout", () => {
     useQueryMock.mockReset();
     useQueryMock.mockReturnValue(null);
     window.localStorage.clear();
+    window.localStorage.setItem(
+      "dasti:proposal-compose-draft:v1",
+      JSON.stringify({
+        jobTitle: "Game UI Artist",
+        jobDescription:
+          "Detailed role description for the proposal brief capsule tests.",
+      }),
+    );
     Object.defineProperty(window, "innerWidth", {
       configurable: true,
       value: 1440,

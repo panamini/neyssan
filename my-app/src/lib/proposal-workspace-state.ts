@@ -11,6 +11,9 @@ export const PROPOSAL_COMPOSE_DRAFT_UPDATED_EVENT =
   "dasti:proposal-compose-draft-updated";
 export const PROPOSAL_WORKSPACE_RESET_STATE_KEY =
   "proposalWorkspaceResetToken";
+export const PROPOSAL_ENTRY_INTENT_STATE_KEY = "proposalEntryIntent";
+
+export type ProposalEntryIntent = "cover-letter-start";
 
 export type StoredProposalComposeDraft = {
   jobTitle?: string;
@@ -107,10 +110,18 @@ export function startFreshProposalWorkspace(): void {
   dispatchBrowserEvent(PROPOSAL_OUTPUT_DRAFT_UPDATED_EVENT);
 }
 
-export function createProposalWorkspaceResetState(): Record<string, string> {
-  return {
+export function createProposalWorkspaceResetState(options?: {
+  entryIntent?: ProposalEntryIntent | null;
+}): Record<string, string> {
+  const nextState: Record<string, string> = {
     [PROPOSAL_WORKSPACE_RESET_STATE_KEY]: `${Date.now()}`,
   };
+
+  if (options?.entryIntent === "cover-letter-start") {
+    nextState[PROPOSAL_ENTRY_INTENT_STATE_KEY] = options.entryIntent;
+  }
+
+  return nextState;
 }
 
 export function readProposalWorkspaceResetToken(
@@ -130,4 +141,13 @@ export function readProposalWorkspaceResetToken(
   }
 
   return null;
+}
+
+export function readProposalEntryIntent(
+  value: unknown,
+): ProposalEntryIntent | null {
+  if (!value || typeof value !== "object") return null;
+  const intent = (value as Record<string, unknown>)[PROPOSAL_ENTRY_INTENT_STATE_KEY];
+
+  return intent === "cover-letter-start" ? intent : null;
 }

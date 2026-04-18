@@ -5,6 +5,7 @@ import { MemoryRouter, useLocation } from "react-router-dom";
 
 import { CvForge } from "../CvForge";
 import { DEFAULT_VERBATI_STYLE } from "../../features/verbati/style";
+import { createQuickStartLocationState } from "../../lib/quick-start-routing";
 
 const { useCvLibraryMock } = vi.hoisted(() => ({
   useCvLibraryMock: vi.fn(),
@@ -75,7 +76,7 @@ function LocationProbe(): JSX.Element {
   const location = useLocation();
   return (
     <div data-testid="location">
-      {`${location.pathname}${location.search}`}
+      {`${location.pathname}${location.search}::${JSON.stringify(location.state ?? null)}`}
     </div>
   );
 }
@@ -86,7 +87,7 @@ describe("CvForge Quick Start gating", () => {
     useCvLibraryMock.mockReset();
   });
 
-  it("pushes empty first-session users into the shell-level quick-start route", async () => {
+  it("pushes empty first-session users into the shell-level quick-start state", async () => {
     useCvLibraryMock.mockReturnValue(buildCvLibraryState());
 
     render(
@@ -97,7 +98,10 @@ describe("CvForge Quick Start gating", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByTestId("location")).toHaveTextContent("/cv?start=quick");
+      expect(screen.getByTestId("location")).toHaveTextContent("/cv::");
+      expect(screen.getByTestId("location")).toHaveTextContent(
+        JSON.stringify(createQuickStartLocationState(null)),
+      );
     });
   });
 
@@ -171,7 +175,7 @@ describe("CvForge Quick Start gating", () => {
     expect(screen.getByTestId("location")).toHaveTextContent("/cv");
   });
 
-  it("leaves the manual query-param trigger in place for the shell to resolve", () => {
+  it("does not auto-launch again when quick start state is already present", () => {
     const blankCv = buildBlankCv();
     window.localStorage.setItem("twoweeks:quick-start-completed", "1");
     useCvLibraryMock.mockReturnValue(
@@ -184,13 +188,22 @@ describe("CvForge Quick Start gating", () => {
     );
 
     render(
-      <MemoryRouter initialEntries={["/cv?start=quick"]}>
+      <MemoryRouter
+        initialEntries={[
+          {
+            pathname: "/cv",
+            state: createQuickStartLocationState(null),
+          },
+        ]}
+      >
         <CvForge />
         <LocationProbe />
       </MemoryRouter>,
     );
 
     expect(screen.getByText("Mock profile editor none")).toBeInTheDocument();
-    expect(screen.getByTestId("location")).toHaveTextContent("/cv?start=quick");
+    expect(screen.getByTestId("location")).toHaveTextContent(
+      JSON.stringify(createQuickStartLocationState(null)),
+    );
   });
 });
