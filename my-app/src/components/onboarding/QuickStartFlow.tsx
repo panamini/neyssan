@@ -1,8 +1,7 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { v4 as uuidv4 } from "uuid";
-import { Loader2 } from "@/lib/icons";
-import { Button } from "../ui/button";
+import { Rewind, Stop } from "@/lib/icons";
 import { useCvLibrary } from "../../contexts/CvLibraryContext";
 import { deriveCvTitleFromSections } from "../../lib/normalize-cv";
 import { markQuickStartCompleted } from "../../lib/onboarding-state";
@@ -26,6 +25,7 @@ import {
   type StructuredImportTimingTrace,
   useStructuredMistralImport,
 } from "../useStructuredMistralImport";
+import { QuickStartChoiceCard } from "./QuickStartChoiceCard";
 
 type Step = 1 | 2;
 type ImportPhase =
@@ -63,8 +63,6 @@ export function QuickStartFlow({
   const [step, setStep] = React.useState<Step>(() =>
     initialCreateType === "resume" && resumeMode === "upload-only" ? 2 : 1,
   );
-  const [createType, setCreateType] =
-    React.useState<QuickStartCreateType>(initialCreateType);
   const [parsing, setParsing] = React.useState(false);
   const [parseError, setParseError] = React.useState<string | null>(null);
   const [creatingFresh, setCreatingFresh] = React.useState(false);
@@ -76,6 +74,7 @@ export function QuickStartFlow({
     string | null
   >(null);
   const isBusy = parsing || creatingFresh;
+  const hasPreviousStep = step === 2 && resumeMode !== "upload-only";
 
   const clearPendingImportedHandoffRefs = React.useCallback(() => {
     pendingImportedCvIdRef.current = null;
@@ -183,7 +182,9 @@ export function QuickStartFlow({
     markQuickStartCompleted();
     void navigate("/proposal", {
       replace: true,
-      state: createProposalWorkspaceResetState(),
+      state: createProposalWorkspaceResetState({
+        entryIntent: "cover-letter-start",
+      }),
     });
   }, [invalidateActiveQuickStartSession, navigate]);
 
@@ -351,87 +352,93 @@ export function QuickStartFlow({
 
   return (
     <div
-      role="dialog"
-      aria-modal="false"
-      aria-labelledby="quick-start-heading"
-      style={{
-        height: "100%",
-        overflowY: "auto",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "clamp(var(--space-4), 4vw, var(--space-7))",
-      }}
+      data-testid="quick-start-pane"
+      className="dasti-quick-start-pane"
     >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: 560,
-          display: "flex",
-          flexDirection: "column",
-          gap: "var(--space-5)",
-        }}
+      <section
+        aria-labelledby="quick-start-heading"
+        aria-describedby="quick-start-description"
+        className="dasti-quick-start-pane__frame"
       >
-        <StepIndicator current={step} />
-
-        {step === 1 ? (
-          <StepOne
-            onResume={() => {
-              setCreateType("resume");
-              setStep(2);
-            }}
-            onCoverLetter={handleStartCoverLetter}
-          />
-        ) : null}
-
-        {step === 2 ? (
-          <StepTwo
-            parsing={parsing}
-            parseError={parseError}
-            createType={createType}
-            resumeMode={resumeMode}
-            creatingFresh={creatingFresh}
-            importPhase={importPhase}
-            importFileName={importFileName}
-            onPickFile={() => {
-              if (!isBusy) {
-                fileInputRef.current?.click();
-              }
-            }}
-            onStartFresh={handleStartFresh}
-            onBack={() => {
-              invalidateActiveQuickStartSession();
-              setParseError(null);
-              if (resumeMode === "upload-only") {
-                closeQuickStart();
-                return;
-              }
-              setStep(1);
-            }}
-          />
-        ) : null}
-
-        <div style={{ display: "flex", justifyContent: "center" }}>
-          <button
-            type="button"
-            onClick={closeQuickStart}
-            className="dasti-button dasti-button--ghost dasti-button--sm"
-            style={{ color: "var(--color-text-muted)" }}
-            disabled={isBusy}
+        <header className="dasti-quick-start-pane__controls">
+          <div
+            data-testid="quick-start-header-back-slot"
+            data-has-action={hasPreviousStep ? "true" : "false"}
+            className="dasti-quick-start-pane__control-slot"
           >
-            Not now
-          </button>
-        </div>
+            {hasPreviousStep ? (
+              <button
+                type="button"
+                aria-label="Back"
+                className="dasti-modal-close"
+                onClick={() => {
+                  invalidateActiveQuickStartSession();
+                  setParseError(null);
+                  setStep(1);
+                }}
+                disabled={isBusy}
+              >
+                <Rewind className="w-5 h-5" aria-hidden="true" />
+              </button>
+            ) : (
+              <div aria-hidden="true" style={{ width: "100%", height: "var(--hs)" }} />
+            )}
+          </div>
 
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept={TRUSTED_MISTRAL_FILE_INPUT_ACCEPT}
-          onChange={handleFileChange}
-          style={{ display: "none" }}
-          aria-hidden="true"
-        />
-      </div>
+          <div className="dasti-quick-start-pane__progress">
+            <StepIndicator current={step} />
+          </div>
+
+          <div className="dasti-quick-start-pane__control-slot dasti-quick-start-pane__control-slot--end">
+            <button
+              type="button"
+              onClick={closeQuickStart}
+              aria-label="Close"
+              className="dasti-modal-close"
+              disabled={isBusy}
+            >
+              <Stop className="w-5 h-5" aria-hidden="true" />
+            </button>
+          </div>
+        </header>
+
+        <div className="dasti-quick-start-sheet">
+          {step === 1 ? (
+            <StepOne
+              onResume={() => {
+                setStep(2);
+              }}
+              onCoverLetter={handleStartCoverLetter}
+            />
+          ) : null}
+
+          {step === 2 ? (
+            <StepTwo
+              parsing={parsing}
+              parseError={parseError}
+              resumeMode={resumeMode}
+              creatingFresh={creatingFresh}
+              importPhase={importPhase}
+              importFileName={importFileName}
+              onPickFile={() => {
+                if (!isBusy) {
+                  fileInputRef.current?.click();
+                }
+              }}
+              onStartFresh={handleStartFresh}
+            />
+          ) : null}
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={TRUSTED_MISTRAL_FILE_INPUT_ACCEPT}
+            onChange={handleFileChange}
+            style={{ display: "none" }}
+            aria-hidden="true"
+          />
+        </div>
+      </section>
     </div>
   );
 }
@@ -451,8 +458,8 @@ function StepIndicator({ current }: { current: Step }): JSX.Element {
           key={n}
           style={{
             height: 4,
-            width: 40,
-            borderRadius: 999,
+            width: 32,
+            borderRadius: 2,
             background:
               n <= current
                 ? "var(--color-accent, var(--ti))"
@@ -472,46 +479,31 @@ function StepOne({
   onCoverLetter: () => void;
 }): JSX.Element {
   return (
-    <section
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: "var(--space-4)",
-      }}
-    >
-      <header>
-        <h1
-          id="quick-start-heading"
-          style={{
-            fontFamily: "var(--font-heading-family)",
-            fontSize: "var(--tl)",
-            margin: 0,
-            lineHeight: 1.15,
-          }}
-        >
+    <section className="dasti-quick-start-sheet__section">
+      <header className="dasti-quick-start-sheet__header">
+        <h1 id="quick-start-heading" className="dasti-quick-start-sheet__title">
           What are you starting?
         </h1>
         <p
-          style={{
-            marginTop: "var(--space-2)",
-            color: "var(--color-text-muted)",
-            fontSize: "var(--tm)",
-          }}
+          id="quick-start-description"
+          className="dasti-quick-start-sheet__subtitle"
         >
           Pick one path and keep moving.
         </p>
       </header>
-
-      <div style={{ display: "grid", gap: "var(--space-3)" }}>
-        <ChoiceCard
+      <div className="dasti-quick-start-sheet__choice-grid">
+        <QuickStartChoiceCard
           label="Resume"
-          hint="Upload a PDF or image, or begin from a blank resume."
+          hint="A sharp, printable CV."
           onClick={onResume}
+          primaryAction
+          className="dasti-quick-start-sheet__choice-card"
         />
-        <ChoiceCard
+        <QuickStartChoiceCard
           label="Cover letter"
-          hint="Open the cover letter workspace with a lightweight start surface."
+          hint="Targeted to one role."
           onClick={onCoverLetter}
+          className="dasti-quick-start-sheet__choice-card"
         />
       </div>
     </section>
@@ -521,47 +513,43 @@ function StepOne({
 function StepTwo({
   parsing,
   parseError,
-  createType,
   resumeMode,
   creatingFresh,
   importPhase,
   importFileName,
   onPickFile,
   onStartFresh,
-  onBack,
 }: {
   parsing: boolean;
   parseError: string | null;
-  createType: QuickStartCreateType;
   resumeMode: QuickStartResumeMode;
   creatingFresh: boolean;
   importPhase: ImportPhase;
   importFileName: string | null;
   onPickFile: () => void;
   onStartFresh: () => void;
-  onBack: () => void;
 }): JSX.Element {
   const isBusy = parsing || creatingFresh;
   const importStatusCopy =
     importPhase === "preparing"
       ? {
-          title: "Preparing file…",
+          title: "Preparing file...",
           detail: "Checking the file before upload.",
         }
       : importPhase === "retrying"
         ? {
-            title: "Retrying import…",
+            title: "Retrying import...",
             detail: "The connection dropped. The same import is retrying now.",
           }
         : importPhase === "finalizing"
         ? {
-            title: "Opening resume…",
+            title: "Opening resume...",
             detail: "Loading the imported resume into the editor.",
           }
           : {
               title: creatingFresh
-                ? "Opening blank resume…"
-                : "Importing resume…",
+                ? "Opening blank resume..."
+                : "Importing resume...",
               detail: creatingFresh
                 ? "Creating a blank resume and opening the editor."
                 : "Running the trusted Mistral import. This can take a few seconds.",
@@ -571,54 +559,35 @@ function StepTwo({
     : "Upload PDF or image";
   const uploadCardHint = parsing
     ? importStatusCopy.detail
-    : "Quick Start only accepts trusted parser-supported files.";
+    : "We’ll fill the editor for you.";
   const freshCardTitle = creatingFresh
     ? importStatusCopy.title
     : "Start fresh";
   const freshCardHint = creatingFresh
     ? importStatusCopy.detail
-    : "Open a blank resume immediately.";
+    : "A clean template, nothing to unlearn.";
 
   return (
     <section
       aria-busy={isBusy || undefined}
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: "var(--space-4)",
-      }}
+      className="dasti-quick-start-sheet__section"
     >
-      <header>
-        <h1
-          id="quick-start-heading"
-          style={{
-            fontFamily: "var(--font-heading-family)",
-            fontSize: "var(--tl)",
-            margin: 0,
-            lineHeight: 1.15,
-          }}
-        >
-          {createType === "cover-letter"
-            ? "Open the workspace."
-            : resumeMode === "upload-only"
-              ? "Import a resume."
-              : "Bring in your resume."}
+      <header className="dasti-quick-start-sheet__header">
+        <h1 id="quick-start-heading" className="dasti-quick-start-sheet__title">
+          Bring in your resume.
         </h1>
         <p
-          style={{
-            marginTop: "var(--space-2)",
-            color: "var(--color-text-muted)",
-            fontSize: "var(--tm)",
-          }}
+          id="quick-start-description"
+          className="dasti-quick-start-sheet__subtitle"
         >
           {resumeMode === "upload-only"
             ? "Upload a trusted PDF or image to use it in the cover letter flow."
-            : "Use a trusted PDF or image, or start from a blank resume."}
+            : "Upload a PDF or image. Or start blank."}
         </p>
       </header>
 
-      <div style={{ display: "grid", gap: "var(--space-3)" }}>
-        <ChoiceCard
+      <div className="dasti-quick-start-sheet__choice-grid">
+        <QuickStartChoiceCard
           label={uploadCardTitle}
           hint={uploadCardHint}
           onClick={onPickFile}
@@ -626,14 +595,17 @@ function StepTwo({
           loading={parsing}
           meta={parsing ? importFileName : null}
           testId={parsing ? "quick-start-import-status" : undefined}
+          primaryAction
+          className="dasti-quick-start-sheet__choice-card"
         />
         {resumeMode !== "upload-only" ? (
-          <ChoiceCard
+          <QuickStartChoiceCard
             label={freshCardTitle}
             hint={freshCardHint}
             onClick={onStartFresh}
             disabled={isBusy}
             loading={creatingFresh}
+            className="dasti-quick-start-sheet__choice-card"
           />
         ) : null}
       </div>
@@ -650,123 +622,6 @@ function StepTwo({
           {parseError}
         </p>
       ) : null}
-
-      <div style={{ display: "flex", justifyContent: "space-between" }}>
-        <Button variant="ghost" onClick={onBack} disabled={isBusy}>
-          {resumeMode === "upload-only" ? "Close" : "Back"}
-        </Button>
-      </div>
     </section>
-  );
-}
-
-function ChoiceCard({
-  label,
-  hint,
-  onClick,
-  disabled,
-  loading,
-  meta,
-  testId,
-}: {
-  label: string;
-  hint: string;
-  onClick: () => void;
-  disabled?: boolean;
-  loading?: boolean;
-  meta?: string | null;
-  testId?: string;
-}): JSX.Element {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      data-testid={testId}
-      style={{
-        textAlign: "left",
-        padding: "var(--space-3) var(--space-4)",
-        borderRadius: "var(--radius-surface, 12px)",
-        border: loading
-          ? "1px solid color-mix(in srgb, var(--color-accent, var(--ti)) 38%, var(--color-border))"
-          : "1px solid var(--color-border)",
-        background: loading
-          ? "linear-gradient(135deg, color-mix(in srgb, var(--color-canvas) 92%, white 8%) 0%, color-mix(in srgb, var(--color-canvas) 98%, var(--color-accent, var(--ti)) 2%) 100%)"
-          : "var(--sfr, #fff)",
-        cursor: loading ? "progress" : disabled ? "not-allowed" : "pointer",
-        opacity: disabled && !loading ? 0.55 : 1,
-        transition:
-          "transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease",
-        boxShadow: loading
-          ? "0 0 0 1px color-mix(in srgb, var(--color-accent, var(--ti)) 12%, transparent)"
-          : "none",
-      }}
-    >
-      <div
-        style={{
-          display: "grid",
-          gap: "var(--space-2)",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "var(--space-2)",
-          }}
-        >
-          {loading ? (
-            <Loader2
-              size={15}
-              className="animate-spin"
-              aria-hidden="true"
-              style={{ color: "var(--color-accent, var(--ti))", flex: "0 0 auto" }}
-            />
-          ) : null}
-          <div
-            style={{
-              fontFamily: "var(--font-heading-family)",
-              fontSize: "var(--tm)",
-              fontWeight: 600,
-            }}
-          >
-            {label}
-          </div>
-        </div>
-        {loading ? (
-          <div
-            aria-hidden="true"
-            style={{
-              height: 2,
-              borderRadius: 999,
-              background:
-                "linear-gradient(90deg, color-mix(in srgb, var(--color-accent, var(--ti)) 28%, transparent) 0%, color-mix(in srgb, var(--color-accent, var(--ti)) 72%, white 28%) 52%, color-mix(in srgb, var(--color-accent, var(--ti)) 28%, transparent) 100%)",
-            }}
-          />
-        ) : null}
-      </div>
-      <div
-        style={{
-          marginTop: 4,
-          color: "var(--color-text-muted)",
-          fontSize: "var(--ts)",
-          lineHeight: 1.4,
-        }}
-      >
-        {hint}
-      </div>
-      {meta ? (
-        <div
-          style={{
-            marginTop: "var(--space-2)",
-            color: "var(--color-text-subtle)",
-            fontSize: "var(--txs, 11px)",
-            wordBreak: "break-word",
-          }}
-        >
-          {meta}
-        </div>
-      ) : null}
-    </button>
   );
 }

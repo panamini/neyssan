@@ -38,7 +38,7 @@ import {
 } from "./lib/proposal-output-draft";
 import { readStoredSavedProposalFixtures } from "./lib/proposal-saved-fixtures";
 import {
-  clearQuickStartSearch,
+  clearQuickStartLocationState,
   readQuickStartRouteState,
 } from "./lib/quick-start-routing";
 
@@ -285,20 +285,22 @@ function AppShell(): JSX.Element {
   }, []);
 
   const quickStartRouteState = React.useMemo(
-    () => readQuickStartRouteState(location.search),
-    [location.search],
+    () => readQuickStartRouteState(location.state),
+    [location.state],
   );
 
   const closeQuickStart = React.useCallback(() => {
-    const nextSearch = clearQuickStartSearch(location.search);
     void navigate(
       {
         pathname: location.pathname,
-        search: nextSearch ? `?${nextSearch}` : "",
+        search: location.search,
       },
-      { replace: true },
+      {
+        replace: true,
+        state: clearQuickStartLocationState(location.state),
+      },
     );
-  }, [location.pathname, location.search, navigate]);
+  }, [location.pathname, location.search, location.state, navigate]);
 
   return (
     <CvLibraryProvider>
@@ -334,47 +336,26 @@ function AppShell(): JSX.Element {
 
           {/* .pscroll — flex:1 overflow:hidden, chaque page gère son propre scroll */}
           <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
-            <Routes>
-              <Route path="/cv" element={<CvForge />} />
-              <Route path="/cvs" element={<CvsLibrary />} />
-              <Route path="/proposal" element={<ProposalForge />} />
-              <Route path="/proposal-next" element={<Navigate to="/proposal" replace />} />
-              <Route path="/proposals" element={<ProposalsLibrary />} />
-              <Route path="/style" element={<StyleForge />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="/" element={<Navigate to="/cv" replace />} />
-              <Route path="*" element={<Navigate to="/cv" replace />} />
-            </Routes>
             {quickStartRouteState.isOpen ? (
-              <div
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  zIndex: 4,
-                  padding: "var(--space-3)",
-                  background:
-                    "linear-gradient(180deg, color-mix(in srgb, var(--color-canvas) 76%, transparent) 0%, color-mix(in srgb, var(--color-canvas) 92%, transparent) 100%)",
-                  backdropFilter: "blur(10px)",
-                }}
-              >
-                <div
-                  style={{
-                    height: "100%",
-                    border: "1px solid var(--color-border)",
-                    borderRadius: "calc(var(--radius-surface, 12px) + 6px)",
-                    background: "color-mix(in srgb, var(--color-canvas) 94%, white 6%)",
-                    boxShadow: "var(--shadow-lg)",
-                  }}
-                >
-                  <QuickStartFlow
-                    onExit={closeQuickStart}
-                    initialCreateType={quickStartRouteState.createType}
-                    resumeMode={quickStartRouteState.resumeMode}
-                    returnTarget={quickStartRouteState.returnTarget}
-                  />
-                </div>
-              </div>
-            ) : null}
+              <QuickStartFlow
+                onExit={closeQuickStart}
+                initialCreateType={quickStartRouteState.createType}
+                resumeMode={quickStartRouteState.resumeMode}
+                returnTarget={quickStartRouteState.returnTarget}
+              />
+            ) : (
+              <Routes>
+                <Route path="/cv" element={<CvForge />} />
+                <Route path="/cvs" element={<CvsLibrary />} />
+                <Route path="/proposal" element={<ProposalForge />} />
+                <Route path="/proposal-next" element={<Navigate to="/proposal" replace />} />
+                <Route path="/proposals" element={<ProposalsLibrary />} />
+                <Route path="/style" element={<StyleForge />} />
+                <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/" element={<Navigate to="/cv" replace />} />
+                <Route path="*" element={<Navigate to="/cv" replace />} />
+              </Routes>
+            )}
           </div>
         </div>
       </div>

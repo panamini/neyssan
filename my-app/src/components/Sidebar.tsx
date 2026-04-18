@@ -34,7 +34,7 @@ import {
   readStoredProposalComposeDraft,
   startFreshProposalWorkspace,
 } from "../lib/proposal-workspace-state";
-import { buildQuickStartHref } from "../lib/quick-start-routing";
+import { createQuickStartLocationState } from "../lib/quick-start-routing";
 
 const MAX_RECENT_ITEMS = 3;
 
@@ -977,10 +977,17 @@ export const Sidebar: React.FC = () => {
   const hasResumeDocuments = resumeDocs.length > 0;
   const hasProposalDocuments =
     proposalTotalCount > 0 || Boolean(activeProposalKey);
-  const quickStartHref = React.useMemo(
-    () => buildQuickStartHref(location.pathname, location.search),
-    [location.pathname, location.search],
-  );
+  const handleOpenQuickStart = React.useCallback(() => {
+    void navigate(
+      {
+        pathname: location.pathname,
+        search: location.search,
+      },
+      {
+        state: createQuickStartLocationState(location.state),
+      },
+    );
+  }, [location.pathname, location.search, location.state, navigate]);
 
   if (hideSidebar) {
     return null;
@@ -1015,11 +1022,11 @@ export const Sidebar: React.FC = () => {
 
       {sidebarCollapsed ? (
         <nav className="sb__nav sb__nav--rail" aria-label="Primary sidebar">
-          <SidebarRailLink
+          <SidebarRailButton
             label="Quick Start"
             icon={<Check size={16} strokeWidth={1.5} aria-hidden="true" />}
             active={false}
-            href={quickStartHref}
+            onClick={handleOpenQuickStart}
           />
           {hasResumeDocuments ? (
             <SidebarRailLink
@@ -1072,9 +1079,20 @@ export const Sidebar: React.FC = () => {
             aria-label="Quick Start"
             style={{ paddingBottom: "var(--space-2)" }}
           >
-            <Link to={quickStartHref} className="sb-section__action">
+            <button
+              type="button"
+              onClick={handleOpenQuickStart}
+              className="sb-section__action"
+              style={{
+                width: "100%",
+                border: "none",
+                background: "none",
+                cursor: "pointer",
+                textAlign: "left",
+              }}
+            >
               Quick Start
-            </Link>
+            </button>
           </div>
 
           <SidebarDocumentSection

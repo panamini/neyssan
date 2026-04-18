@@ -1,6 +1,6 @@
 import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { ProposalForge } from "../ProposalForge";
 
@@ -19,6 +19,7 @@ vi.mock("../../../convex/_generated/api", () => ({
     functions: { generateProposal: "functions.generateProposal" },
     proposalHandoffs: { get: "proposalHandoffs.get" },
     proposalSettings: { getCurrent: "proposalSettings.getCurrent" },
+    proposalsPublic: { default: "proposalsPublic.default" },
     updateProposalPublic: { default: "updateProposalPublic.default" },
     deleteProposalPublic: { default: "deleteProposalPublic.default" },
   },
@@ -111,6 +112,18 @@ vi.mock("../../components/ProposalsList", () => ({
 }));
 
 describe("ProposalForge controlled failure integration", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    window.localStorage.setItem(
+      "dasti:proposal-compose-draft:v1",
+      JSON.stringify({
+        jobTitle: "Operations Associate",
+        jobDescription:
+          "Support recurring processes, update internal records, and coordinate communication across teams.",
+      }),
+    );
+  });
+
   it("shows a visible provider-busy failure state in the result panel and clears stale proposal content", () => {
     render(
       <MemoryRouter>
@@ -125,9 +138,12 @@ describe("ProposalForge controlled failure integration", () => {
     fireEvent.click(screen.getByRole("button", { name: "Trigger success" }));
 
     expect(
-      screen.getByText("I am writing with interest in the Operations Associate role."),
-    ).toBeInTheDocument();
+      screen.getAllByText(
+        "I am writing with interest in the Operations Associate role.",
+      ).length,
+    ).toBeGreaterThan(0);
 
+    fireEvent.click(screen.getByRole("button", { name: "Expand" }));
     fireEvent.click(
       screen.getByRole("button", { name: "Trigger provider busy" }),
     );
@@ -187,10 +203,10 @@ describe("ProposalForge controlled failure integration", () => {
       ),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(
+      screen.getAllByText(
         "I am writing with interest in the Operations Associate role.",
-      ),
-    ).toBeInTheDocument();
+      ).length,
+    ).toBeGreaterThan(0);
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });
