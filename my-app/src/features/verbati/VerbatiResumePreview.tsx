@@ -8,10 +8,16 @@ import { useDocumentPan } from "../../hooks/use-document-pan";
 import { useDocumentStageLayout } from "../../hooks/use-document-stage-layout";
 import { useDocumentViewportCentering } from "../../hooks/use-document-viewport-centering";
 import ResumePage from "./resume/ResumePage";
+import ResumeTemplateRenderer, {
+  WORKSHOP_TEMPLATE_RENDERER_ID,
+  getResumeTemplateCanvasHeight,
+} from "./resume/ResumeTemplateRenderer";
 import {
   buildVerbatiThemeVars,
+  getResumeTemplateId,
   resolveLegacyResumeRendererVariantId,
   resolveVerbatiAccentHex,
+  VERBATI_LAYOUT_TO_RENDERER,
   VERBATI_LAYOUT_OPTIONS,
 } from "./style";
 import type { ResumeData, ResumeLayoutVariantId } from "./resume/resume.types";
@@ -36,6 +42,7 @@ import {
 } from "../../lib/document-export-debug";
 import { collectResumeFontDebugSnapshot } from "../../lib/resume-font-debug";
 import type { VerbatiLayoutPreset, VerbatiStylePreset } from "./types";
+import { getResumeTemplateDefinition } from "../../lib/layout/resumeTemplates";
 
 type VerbatiResumePreviewProps = {
   data: ResumeData;
@@ -87,9 +94,18 @@ export function VerbatiResumePreview({
 }: VerbatiResumePreviewProps): JSX.Element {
   const previewRootRef = React.useRef<HTMLDivElement | null>(null);
   const resumeViewportRef = React.useRef<HTMLDivElement | null>(null);
+  const [stableWorkshopPageCount, setStableWorkshopPageCount] = React.useState(1);
   const themeVars = React.useMemo(
     () => buildVerbatiThemeVars(stylePreset),
     [stylePreset],
+  );
+  const resolvedResumeTemplateId = React.useMemo(
+    () => getResumeTemplateId(stylePreset),
+    [stylePreset],
+  );
+  const resolvedTemplateDefinition = React.useMemo(
+    () => getResumeTemplateDefinition(resolvedResumeTemplateId),
+    [resolvedResumeTemplateId],
   );
   const rendererVariantId = React.useMemo(
     () => resolveLegacyResumeRendererVariantId(stylePreset) ?? "swissminima",
@@ -137,6 +153,19 @@ export function VerbatiResumePreview({
     return 1;
   }, [fitPageScale, isWorkspaceMode, workspaceViewMode, zoomIndex]);
   const stageMode = stageLayout.isFit ? "fit" : "overflow";
+  const usesWorkshopTemplateRenderer =
+    !compareLayouts &&
+    resolvedResumeTemplateId === WORKSHOP_TEMPLATE_RENDERER_ID &&
+    resolvedTemplateDefinition.supportsPlanner;
+  const visiblePageCount = usesWorkshopTemplateRenderer
+    ? stableWorkshopPageCount
+    : 1;
+  const canvasHeightPx = usesWorkshopTemplateRenderer
+    ? getResumeTemplateCanvasHeight({
+        pageCount: visiblePageCount,
+        pageHeightPx: stageLayout.pageHeight,
+      })
+    : stageLayout.pageHeight;
   const { attachViewport, viewportPanProps } = useDocumentPan({
     enabled: !compareLayouts && isWorkspaceMode && userZoom > 1,
   });
@@ -157,6 +186,12 @@ export function VerbatiResumePreview({
     },
     [attachCenterViewport, attachViewport],
   );
+
+  React.useEffect(() => {
+    if (!usesWorkshopTemplateRenderer) {
+      setStableWorkshopPageCount(1);
+    }
+  }, [usesWorkshopTemplateRenderer]);
 
   React.useEffect(() => {
     if (compareLayouts || typeof window === "undefined") {
@@ -310,7 +345,7 @@ export function VerbatiResumePreview({
         <MagnifyingGlassPlus size={14} strokeWidth={1.7} aria-hidden="true" />
       </button>
       <span className="dasti-doc-page-count" aria-label="Page count">
-        1 page
+        {visiblePageCount} {visiblePageCount === 1 ? "page" : "pages"}
       </span>
     </div>
   ) : null;
@@ -503,21 +538,32 @@ export function VerbatiResumePreview({
           data-interactive={onLinkIntent ? "true" : undefined}
           style={{
             width: `${stageLayout.pageWidth}px`,
-            height: `${stageLayout.pageHeight}px`,
+            height: `${canvasHeightPx}px`,
           }}
           onClick={onLinkIntent ? handlePreviewCanvasClick : undefined}
           onWheelCapture={handlePreviewWheel}
         >
-          <ResumePage
-            data={data}
-            mode={rendererVariantId}
-            stylePreset={stylePreset}
-            fitToken={fitToken}
-            userZoom={userZoom}
-            stageLayout={stageLayout}
-            activeTarget={activeTarget}
-            onRemoveSection={onRemoveSection}
-          />
+          {usesWorkshopTemplateRenderer ? (
+            <ResumeTemplateRenderer
+              data={data}
+              stylePreset={stylePreset}
+              resumeTemplateId={resolvedResumeTemplateId}
+              stageLayout={stageLayout}
+              activeTarget={activeTarget}
+              onStablePageCountChange={setStableWorkshopPageCount}
+            />
+          ) : (
+            <ResumePage
+              data={data}
+              mode={rendererVariantId}
+              stylePreset={stylePreset}
+              fitToken={fitToken}
+              userZoom={userZoom}
+              stageLayout={stageLayout}
+              activeTarget={activeTarget}
+              onRemoveSection={onRemoveSection}
+            />
+          )}
         </div>
       </div>
     </div>
