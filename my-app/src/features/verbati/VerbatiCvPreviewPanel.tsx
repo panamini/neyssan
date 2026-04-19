@@ -17,8 +17,8 @@ import {
 import { VerbatiResumePreview } from "./VerbatiResumePreview";
 import {
   hasRenderableResumeData,
-  mapCvDocumentToResumeData,
 } from "./cvDocumentToResumeData";
+import { buildCanonicalResumeRenderModelFromCv } from "../../lib/buildCanonicalResumeRenderModel";
 import type {
   ResumeActiveTarget,
   ResumeLinkIntent,
@@ -54,7 +54,7 @@ export function VerbatiCvPreviewPanel({
     [currentCv],
   );
   const activeData = React.useMemo(
-    () => (currentCv ? mapCvDocumentToResumeData(currentCv) : null),
+    () => (currentCv ? buildCanonicalResumeRenderModelFromCv(currentCv) : null),
     [currentCv],
   );
   const hasCurrentCv = Boolean(currentCv);

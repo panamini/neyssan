@@ -70,7 +70,10 @@ import FloatingAiToolbar, {
 } from "./FloatingAiToolbar";
 
 import { formatRangeFromItem } from "../lib/date-utils";
-import { splitResponsibilitiesIntoBullets } from "../utils/cv/mapping-utils";
+import {
+  deriveResponsibilityBullets,
+  responsibilityValueToPlainText,
+} from "../lib/resumeResponsibilityAuthority";
 import {
   isExperienceRenderable,
   isEducationRenderable,
@@ -404,27 +407,16 @@ function buildBulletListDoc(items: string[]): RemirrorJSON {
 }
 
 function getExperienceBulletLines(item: any): string[] {
-  const responsibilitiesText = plainTextFromStructuredValue(
-    item?.responsibilities,
-  );
-  const responsibilityBullets = Array.isArray(item?.responsibilityBullets)
-    ? (item.responsibilityBullets as unknown[])
-        .map((value) => (typeof value === "string" ? value.trim() : ""))
-        .filter(Boolean)
-    : splitResponsibilitiesIntoBullets(responsibilitiesText);
-  const achievements = Array.isArray(item?.achievements)
-    ? (item.achievements as unknown[])
-        .map((value) =>
-          typeof value === "string"
-            ? value.trim()
-            : typeof (value as any)?.text === "string"
-              ? (value as any).text.trim()
-              : "",
-        )
-        .filter(Boolean)
-    : [];
-
-  return responsibilityBullets.length > 0 ? responsibilityBullets : achievements;
+  return deriveResponsibilityBullets({
+    responsibilities: item?.responsibilities,
+    hasResponsibilitiesField: Object.prototype.hasOwnProperty.call(
+      item ?? {},
+      "responsibilities",
+    ),
+    responsibilityBullets: item?.responsibilityBullets,
+    achievements: item?.achievements,
+    fallbackToAchievements: true,
+  });
 }
 
 function buildExperienceAiSourceText(item: any): string {
@@ -441,8 +433,8 @@ function buildExperienceAiSourceText(item: any): string {
     typeof item?.description === "string" && item.description.trim()
       ? `Description: ${item.description.trim()}`
       : null,
-    plainTextFromStructuredValue(item?.responsibilities)
-      ? `Responsibilities: ${plainTextFromStructuredValue(item?.responsibilities)}`
+    responsibilityValueToPlainText(item?.responsibilities)
+      ? `Responsibilities: ${responsibilityValueToPlainText(item?.responsibilities)}`
       : null,
   ].filter(Boolean);
   const bullets = getExperienceBulletLines(item);

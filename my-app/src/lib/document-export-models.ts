@@ -5,9 +5,7 @@ import type { VerbatiStylePreset } from "../features/verbati/types";
 import {
   buildAuthoritativeResumeExportModel,
   type AuthoritativeResume,
-  type AuthoritativeResumeExportModel,
 } from "./authoritative-resume";
-import { mapCvDocumentToResumeData } from "../features/verbati/cvDocumentToResumeData";
 import {
   buildVerbatiThemeVars,
   getVerbatiTypographyFamilies,
@@ -28,6 +26,10 @@ import { normalizeExportLocale } from "./export-locale";
 import { parseProposalClosingBlock } from "./proposal-closing";
 import { getProposalDocumentTypography } from "./proposal-document-typography";
 import { resolveProposalOutputLanguage } from "../../convex/lib/proposals/proposalOutput";
+import {
+  buildCanonicalResumeRenderModelFromAuthoritative,
+  buildCanonicalResumeRenderModelFromCv,
+} from "./buildCanonicalResumeRenderModel";
 
 export type ExportDocumentKind = "resume" | "proposal";
 export type ExportDocumentFormat = "pdf" | "docx";
@@ -238,13 +240,16 @@ function normalizeResumeItems(items: ResumeData["metadata"]): ResumePrintItem[] 
     .filter((item) => item.label && item.value);
 }
 
-function normalizeResumeData(data: ResumeData): ResumePrintSource {
+function normalizeResumeData(
+  data: ResumeData,
+  exportSource: ResumePrintSource["exportSource"] = "standard",
+): ResumePrintSource {
   return {
     schemaVersion: 1,
     kind: "resume",
     locale: null,
     title: data.name || "Resume",
-    exportSource: "standard",
+    exportSource,
     profile: {
       name: cleanString(data.name) || "Candidate",
       title: cleanString(data.title),
@@ -282,74 +287,6 @@ function normalizeResumeData(data: ResumeData): ResumePrintSource {
   };
 }
 
-function buildAuthoritativeContact(model: AuthoritativeResumeExportModel): ResumePrintItem[] {
-  return [
-    { label: "Email", value: cleanString(model.profile.email) },
-    { label: "Phone", value: cleanString(model.profile.phone) },
-    { label: "Location", value: cleanString(model.profile.location) },
-    { label: "LinkedIn", value: cleanString(model.profile.linkedin) },
-    { label: "Website", value: cleanString(model.profile.website) },
-    { label: "GitHub", value: cleanString(model.profile.github) },
-    { label: "Portfolio", value: cleanString(model.profile.portfolio) },
-  ].filter((item) => item.value);
-}
-
-function normalizeAuthoritativeResume(
-  model: AuthoritativeResumeExportModel,
-): ResumePrintSource {
-  return {
-    schemaVersion: 1,
-    kind: "resume",
-    locale: null,
-    title: cleanString(model.profile.name) || "Resume",
-    exportSource: "authoritative",
-    profile: {
-      name: cleanString(model.profile.name) || "Candidate",
-      title: cleanString(model.profile.desiredPosition),
-      summary: cleanString(model.summary),
-    },
-    contact: buildAuthoritativeContact(model),
-    metadata: [],
-    skills: model.skills.map((item) => cleanString(item.name)).filter(Boolean),
-    languages: model.languages
-      .map((item) => ({
-        name: cleanString(item.name),
-        level: cleanString(item.level),
-      }))
-      .filter((item) => item.name),
-    experience: model.experience.map((item) => ({
-      role: cleanString(item.position) || "Experience",
-      company: cleanString(item.company),
-      period: [cleanString(item.startDate), item.isCurrent ? "Present" : cleanString(item.endDate)]
-        .filter(Boolean)
-        .join(" - "),
-      location: cleanString(item.location),
-      summary: cleanString(item.description),
-      bullets: [
-        ...item.responsibilityBullets.map((bullet) => cleanString(bullet)),
-        ...item.achievements.map((bullet) => cleanString(bullet)),
-      ].filter(Boolean),
-    })),
-    projects: model.projects.map((item) => ({
-      name: cleanString(item.title) || "Project",
-      meta: cleanString(item.meta),
-      description: cleanString(item.summary),
-    })),
-    education: model.education.map((item) => ({
-      degree:
-        cleanString(item.degree) ||
-        cleanString(item.fieldOfStudy) ||
-        "Education",
-      school: cleanString(item.institution),
-      period: [cleanString(item.startDate), item.isCurrent ? "Present" : cleanString(item.endDate)]
-        .filter(Boolean)
-        .join(" - "),
-    })),
-    achievements: model.achievements.map((item) => cleanString(item)).filter(Boolean),
-    hobbies: model.hobbies.map((item) => cleanString(item)).filter(Boolean),
-  };
-}
-
 export function buildResumeExportSource(args: {
   currentCv: CvDocument | null | undefined;
   authoritativeResume?: AuthoritativeResume | unknown;
@@ -363,13 +300,16 @@ export function buildResumeExportSource(args: {
   );
   if (authoritativeModel) {
     return {
-      ...normalizeAuthoritativeResume(authoritativeModel),
+      ...normalizeResumeData(
+        buildCanonicalResumeRenderModelFromAuthoritative(authoritativeModel),
+        "authoritative",
+      ),
       locale: normalizeExportLocale(args.currentCv.metadata.locale),
     };
   }
 
   return {
-    ...normalizeResumeData(mapCvDocumentToResumeData(args.currentCv)),
+    ...normalizeResumeData(buildCanonicalResumeRenderModelFromCv(args.currentCv)),
     locale: normalizeExportLocale(args.currentCv.metadata.locale),
   };
 }
@@ -389,7 +329,7 @@ export function buildStyledResumePrintSource(args: {
     kind: "resume",
     renderSource: "preview",
     locale: normalizeExportLocale(args.currentCv.metadata.locale),
-    resumeData: mapCvDocumentToResumeData(args.currentCv),
+    resumeData: buildCanonicalResumeRenderModelFromCv(args.currentCv),
     stylePreset,
     rendererVariantId: VERBATI_LAYOUT_TO_RENDERER[stylePreset.layout],
   };
