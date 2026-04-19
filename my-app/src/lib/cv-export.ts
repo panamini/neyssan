@@ -20,7 +20,7 @@ import type {
 import { buildAuthoritativeResumeExportModel } from "./authoritative-resume";
 import type { CvDocument } from "../types/cvDocument";
 import type { ResumeData } from "../features/verbati/resume/resume.types";
-import { mapCvDocumentToResumeData } from "../features/verbati/cvDocumentToResumeData";
+import { buildCanonicalResumeRenderModelFromCv } from "./buildCanonicalResumeRenderModel";
 
 export type ResumeExportFormat = "pdf" | "docx" | "markdown" | "json";
 
@@ -1231,7 +1231,7 @@ export async function downloadStandardResumeExport(args: {
   document: CvDocument;
   format: ResumeExportFormat;
 }): Promise<{ filename: string; data: ResumeData }> {
-  const data = mapCvDocumentToResumeData(args.document);
+  const data = buildCanonicalResumeRenderModelFromCv(args.document);
   const filename = buildStandardResumeFilename(args.format);
 
   if (args.format === "json") {

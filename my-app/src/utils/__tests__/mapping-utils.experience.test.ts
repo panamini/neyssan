@@ -27,6 +27,25 @@ describe("buildTypedSectionsFromNormalized experience", () => {
     expect(String(structured.responsibilities)).toContain("Built internal tooling");
   });
 
+  it("does not resurrect cached bullets when responsibilities are explicitly empty", () => {
+    const sections = buildTypedSectionsFromNormalized({
+      experience: [
+        {
+          id: "exp-3",
+          company: "Example",
+          position: "Lead",
+          responsibilities: "",
+          responsibilityBullets: ["Stale cached bullet"],
+        },
+      ],
+    } as any);
+
+    const experienceSection = sections.find((section) => section.type === "experience");
+    const structured = (experienceSection?.structuredContent ?? [])[0] as any;
+    expect(structured.responsibilities).toBeNull();
+    expect(structured.responsibilityBullets).toBeUndefined();
+  });
+
   it("derives responsibilityBullets from newline and bullet-delimited text", () => {
     const sections = buildTypedSectionsFromNormalized({
       experience: [

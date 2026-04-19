@@ -157,6 +157,46 @@ describe("ExperienceModal CV AI", () => {
     vi.clearAllMocks();
   });
 
+  it("does not save stale cached bullets when responsibilities are empty", async () => {
+    const onSave = vi.fn();
+
+    render(
+      <ExperienceModal
+        open
+        onClose={vi.fn()}
+        onSave={onSave}
+        items={[
+          {
+            id: "exp-stale",
+            company: "Acme",
+            position: "Security Officer",
+            startDate: "2023-01-01",
+            endDate: null,
+            responsibilities: ensureRemirrorDoc(undefined),
+            responsibilityBullets: ["Stale cached bullet"],
+            achievements: [],
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledTimes(1);
+    });
+
+    expect(onSave.mock.calls[0]?.[0]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "exp-stale",
+          responsibilities: undefined,
+          responsibilityBullets: undefined,
+        }),
+      ]),
+    );
+  });
+
   it("applies an accepted AI responsibilities diff before save", async () => {
     mockRunCvSectionAiAction.mockResolvedValue({
       kind: "list",
@@ -202,8 +242,8 @@ describe("ExperienceModal CV AI", () => {
         expect.objectContaining({
           id: "exp-1",
           responsibilityBullets: [
-            "Reduced incident response times.",
-            "Standardized patrol logs.",
+            "Reduced incident response times",
+            "Standardized patrol logs",
           ],
           achievements: [],
           responsibilities: expect.objectContaining({

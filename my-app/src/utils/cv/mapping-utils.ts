@@ -14,6 +14,7 @@
 import { v4 as uuidv4 } from "uuid";
 import type { CvSection } from "../../types/cvDocument";
 import { ensureRemirrorDoc } from "../../components/remirror-editor/utils/conversion";
+import { splitResponsibilitiesIntoBullets } from "../../lib/resumeResponsibilityAuthority";
 import { CvSectionSchema, CvSectionSchemaStrict } from "../../schemas/cvDocument.schema";
 import languageNames from "../../../../shared/language_names.json";
 import { resolveCanonicalHeadingFamily } from "../../../convex/lib/parsing/headingResolver";
@@ -417,46 +418,6 @@ function extractSummaryString(input: unknown): string {
     if (typeof candidate === "string") return candidate;
   }
   return "";
-}
-
-export function splitResponsibilitiesIntoBullets(input: string | null | undefined): string[] {
-  const raw = String(input ?? "");
-  if (!raw.trim()) return [];
-  const normalized = raw
-    .replace(/\r/g, "\n")
-    .replace(/[•·●◦◆]+/g, "\n")
-    .trim();
-  const lines = normalized
-    .split(/\n+/)
-    .map((line) => sanitizeToken(line))
-    .filter(Boolean);
-
-  const bullets: string[] = [];
-  for (const line of lines) {
-    if (!line) continue;
-    if (/[.?!]\s+[A-Z]/.test(line) && line.length > 140) {
-      const sentences = line
-        .split(/(?<=[.!?])\s+(?=[A-Z])/)
-        .map((sentence) => sanitizeToken(sentence))
-        .filter((sentence) => sentence.length > 3);
-      if (sentences.length) {
-        bullets.push(...sentences);
-        continue;
-      }
-    }
-    bullets.push(line);
-  }
-
-  if (!bullets.length && lines.length === 1) {
-    const lone = lines[0];
-    const sentences = lone
-      .split(/(?<=[.!?])\s+(?=[A-Z])/)
-      .map((sentence) => sanitizeToken(sentence))
-      .filter((sentence) => sentence.length > 3);
-    bullets.push(...sentences);
-  }
-
-  return dedupeCaseInsensitive(bullets.map((b) => b.replace(/\s*[.]+$/, "").trim()).filter(Boolean));
 }
 
 function isLikelyDateish(s: string): boolean {
@@ -1408,6 +1369,10 @@ function consolidateExperience(expArr: any[]): { items: any[]; diag: Consolidate
           : typeof entry?.description === "string"
             ? entry.description
             : "";
+    const hasExplicitResponsibilities = Object.prototype.hasOwnProperty.call(
+      entry ?? {},
+      "responsibilities",
+    );
     const initialResponsibilities = sanitizeToken(rawResponsibilities);
     const explicitBullets = Array.isArray(entry?.responsibilityBullets)
       ? dedupeCaseInsensitive(
@@ -1441,6 +1406,7 @@ function consolidateExperience(expArr: any[]): { items: any[]; diag: Consolidate
         location: entry?.location ?? "",
         responsibilities: initialResponsibilities || null,
         responsibilityBullets: [...seededBullets],
+        __hasExplicitResponsibilities: hasExplicitResponsibilities,
       };
       items.push(currentJob);
       diag.jobs++;
@@ -1519,13 +1485,16 @@ function consolidateExperience(expArr: any[]): { items: any[]; diag: Consolidate
       job.responsibilityBullets = dedupeCaseInsensitive(job.responsibilityBullets.map((b) => sanitizeToken(String(b))).filter(Boolean));
       if (job.responsibilityBullets.length === 0) {
         delete job.responsibilityBullets;
-      } else if (!job.responsibilities) {
+      } else if (!job.responsibilities && job.__hasExplicitResponsibilities !== true) {
         job.responsibilities = job.responsibilityBullets.join("\n");
+      } else if (!job.responsibilities && job.__hasExplicitResponsibilities === true) {
+        delete job.responsibilityBullets;
       }
     }
     if (Array.isArray(job.achievements)) {
       job.achievements = dedupeCaseInsensitive(job.achievements.map((a) => sanitizeToken(String(a))).filter(Boolean));
     }
+    delete job.__hasExplicitResponsibilities;
   });
 
   return { items, diag };
