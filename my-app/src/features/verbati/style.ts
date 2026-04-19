@@ -20,6 +20,8 @@ import {
 } from "../../lib/layout/documentAppearance";
 import { isWorkshopFamilyEnabled } from "../../lib/flags";
 import {
+  getStyleFamilyProposalTemplateId,
+  getStyleFamilyResumeTemplateId,
   getStyleFamilyDefinition,
   resolveStyleFamilyFromStyle,
   resolveStyleFamilyId,
@@ -87,22 +89,6 @@ export const VERBATI_LAYOUT_TO_RENDERER: Record<
   "playful-photo": "robial",
   "soft-ribbon": "robial",
   "slate-column": "robial",
-};
-
-export const VERBATI_LAYOUT_TO_PROPOSAL_TEMPLATE: Record<
-  VerbatiLayoutPreset,
-  ProposalTemplateId
-> = {
-  swiss: "swiss_margin",
-  "volk-register": "volk_register",
-  "two-column": "two_column_rail",
-  editorial: "editorial_wide",
-  modernist: "modernist_signal",
-  quire: "quire_margin",
-  workshop: "workshop_proposal_margin",
-  "playful-photo": "two_column_rail",
-  "soft-ribbon": "two_column_rail",
-  "slate-column": "two_column_rail",
 };
 
 const LEGACY_LAYOUT_ALIASES: Record<
@@ -232,17 +218,21 @@ export function getVerbatiTypographyFamilies(style: VerbatiStylePreset): {
 export function getProposalTwinTemplateId(
   style: VerbatiStylePreset | null | undefined,
 ): ProposalTemplateId {
-  return resolveStyleFamilyFromStyle(
-    style ? resolveVerbatiStyle(style) : DEFAULT_VERBATI_STYLE,
-  ).proposalTemplateId;
+  return getStyleFamilyProposalTemplateId(
+    resolveStyleFamilyFromStyle(
+      style ? resolveVerbatiStyle(style) : DEFAULT_VERBATI_STYLE,
+    ).id,
+  );
 }
 
 export function getResumeTemplateId(
   style: VerbatiStylePreset | null | undefined,
 ): ResumeTemplateId {
-  return resolveStyleFamilyFromStyle(
-    style ? resolveVerbatiStyle(style) : DEFAULT_VERBATI_STYLE,
-  ).resumeTemplateId;
+  return getStyleFamilyResumeTemplateId(
+    resolveStyleFamilyFromStyle(
+      style ? resolveVerbatiStyle(style) : DEFAULT_VERBATI_STYLE,
+    ).id,
+  );
 }
 
 export function getStyleFamilyId(

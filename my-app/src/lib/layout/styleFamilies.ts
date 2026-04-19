@@ -108,3 +108,15 @@ export function resolveStyleFamilyFromStyle(
     resolveStyleFamilyId(style?.familyId) ?? resolveStyleFamilyId(style?.layout),
   );
 }
+
+export function getStyleFamilyProposalTemplateId(
+  familyId: StyleFamilyId | null | undefined,
+): ProposalTemplateId {
+  return getStyleFamilyDefinition(familyId).proposalTemplateId;
+}
+
+export function getStyleFamilyResumeTemplateId(
+  familyId: StyleFamilyId | null | undefined,
+): ResumeTemplateId {
+  return getStyleFamilyDefinition(familyId).resumeTemplateId;
+}

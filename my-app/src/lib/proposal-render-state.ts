@@ -6,7 +6,10 @@ import {
   sanitizePersistedVerbatiStyle,
 } from "../features/verbati/style";
 import type { VerbatiStylePreset } from "../features/verbati/types";
-import { resolveProposalTemplateId } from "../../convex/lib/proposals/renderTemplates";
+import {
+  isProposalTemplateId,
+  resolveProposalTemplateId,
+} from "../../convex/lib/proposals/renderTemplates";
 
 type VerbatiStyleCandidate =
   | Partial<VerbatiStylePreset>
@@ -27,6 +30,18 @@ export type ResolvedProposalRenderState = {
   templateId: ProposalTemplateId;
 };
 
+function resolveExplicitProposalTemplateId(
+  ...candidates: ReadonlyArray<ProposalTemplateId | null | undefined>
+): ProposalTemplateId | null {
+  for (const candidate of candidates) {
+    if (isProposalTemplateId(candidate)) {
+      return resolveProposalTemplateId(candidate);
+    }
+  }
+
+  return null;
+}
+
 export function resolveProposalRenderState(
   input: ProposalRenderStateInput,
 ): ResolvedProposalRenderState {
@@ -44,11 +59,11 @@ export function resolveProposalRenderState(
       : null) ??
     DEFAULT_VERBATI_STYLE;
 
-  const templateId = input.preferredTemplateId
-    ? resolveProposalTemplateId(input.preferredTemplateId)
-    : input.storedTemplateId
-      ? resolveProposalTemplateId(input.storedTemplateId)
-      : getProposalTwinTemplateId(stylePreset);
+  const templateId =
+    resolveExplicitProposalTemplateId(
+      input.preferredTemplateId,
+      input.storedTemplateId,
+    ) ?? getProposalTwinTemplateId(stylePreset);
 
   return {
     stylePreset,
