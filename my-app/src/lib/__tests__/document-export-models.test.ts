@@ -111,7 +111,7 @@ describe("document-export-models", () => {
         renderSource: "preview",
         templateId: "two_column_rail",
         stylePreset: expect.objectContaining({
-          layout: "two-column",
+          layout: "swiss",
           typography: "mono-signal",
         }),
       }),
@@ -180,7 +180,7 @@ describe("document-export-models", () => {
 
     expect(snapshot).toEqual(
       expect.objectContaining({
-        layout: "two-column",
+        layout: "swiss",
         typography: "mono-signal",
         templateId: "two_column_rail",
         bodyFontFamily: expect.stringContaining("Archivo"),
