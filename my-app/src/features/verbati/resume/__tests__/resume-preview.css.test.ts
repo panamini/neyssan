@@ -51,10 +51,11 @@ describe("resume preview workspace anchoring", () => {
       /\.dasti-document-rail--resume-workspace\s*\{[^}]*\}/,
     )?.[0];
 
+    expect(workspaceRailRule).toContain("position: relative;");
+    expect(workspaceRailRule).toContain("width: 100%;");
     expect(workspaceRailRule).toContain(
-      "inset-block-start: var(--cv-preview-toolbar-inset, 0px);",
+      "margin-block-end: var(--resume-preview-toolbar-gap, var(--space-1));",
     );
-    expect(workspaceRailRule).toContain("inset-inline-start: 0;");
   });
 
   it("clamps embedded resume frames to the viewport width outside workspace mode", () => {
@@ -94,10 +95,12 @@ describe("resume preview workspace anchoring", () => {
     );
     expect(workspaceShellRule).toContain("--resume-preview-toolbar-gap: 0px;");
     expect(workspaceShellRule).toContain("--resume-preview-shell-padding: 0px;");
-    expect(workspaceShellRule).toContain("grid-template-rows: minmax(0, 1fr);");
     expect(workspaceShellRule).toContain(
-      "width: min(100%, var(--document-viewer-shell-inline-size));",
+      "grid-template-rows: auto minmax(0, 1fr);",
     );
+    expect(workspaceShellRule).toContain("width: 100%;");
+    expect(workspaceShellRule).toContain("max-width: none;");
+    expect(workspaceShellRule).toContain("margin-inline: 0;");
     expect(workspaceShellRule).toContain(
       "height: var(--cv-preview-shell-block-size);",
     );
@@ -107,16 +110,16 @@ describe("resume preview workspace anchoring", () => {
     expect(workspaceSurfaceRule).toContain(
       "block-size: var(--cv-preview-shell-block-size);",
     );
-    expect(workspaceSurfaceRule).toContain("justify-content: center;");
+    expect(workspaceSurfaceRule).toContain("justify-content: flex-start;");
     expect(productCss).toContain(
       ".dasti-resume-workspace-stage .dasti-document-stage__canvas,\n.dasti-resume-workspace-stage .resume-preview-shell--single,\n.dasti-resume-workspace-stage .resume-preview-grid {\n  justify-items: start;",
     );
-    expect(workspaceFrameRule).toContain(
-      "width: min(100%, var(--document-viewer-shell-inline-size));",
-    );
+    expect(workspaceFrameRule).toContain("width: 100%;");
+    expect(workspaceFrameRule).toContain("max-width: none;");
+    expect(workspaceFrameRule).toContain("margin-inline: 0;");
     expect(workspaceFrameRule).toContain("height: auto;");
     expect(workspaceFrameRule).toContain("display: flex;");
-    expect(workspaceFrameRule).toContain("var(--document-viewer-toolbar-block-size)");
+    expect(workspaceFrameRule).toContain("padding-block-start: 0;");
     expect(workspaceFrameRule).not.toContain(
       "var(--cv-preview-toolbar-inset, 0px)",
     );

@@ -292,6 +292,17 @@ describe("VerbatiCvPreviewPanel", () => {
     expect(screen.getByText("Preview projects: 2")).toBeInTheDocument();
   });
 
+  it("does not flash the sparse render warning before an active CV is loaded", () => {
+    mockCurrentCv = null as never;
+    mockHasRenderableResumeData.mockReturnValue(false);
+
+    render(<VerbatiCvPreviewPanel hostMode="workspace" />);
+
+    expect(
+      screen.queryByText(/too sparse for a faithful render/i),
+    ).not.toBeInTheDocument();
+  });
+
   it("disables preview linking when the panel is showing the sample resume", () => {
     resumePreviewPropsSpy.mockClear();
     const onLinkIntent = vi.fn();
