@@ -29,4 +29,27 @@ describe("ResumeTemplateRenderer", () => {
       expect(onStablePageCountChange).toHaveBeenCalledWith(expect.any(Number));
     });
   });
+
+  it("stays inert for non-workshop template ids", async () => {
+    const onStablePageCountChange = vi.fn();
+
+    const { container } = render(
+      <ResumeTemplateRenderer
+        data={resumeMock}
+        stylePreset={{
+          familyId: "swiss",
+          layout: "swiss",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        resumeTemplateId="swiss_resume_legacy"
+        onStablePageCountChange={onStablePageCountChange}
+      />,
+    );
+
+    expect(container).toBeEmptyDOMElement();
+
+    await new Promise((resolve) => window.setTimeout(resolve, 70));
+    expect(onStablePageCountChange).not.toHaveBeenCalled();
+  });
 });

@@ -227,6 +227,24 @@ describe("VerbatiResumePreview", () => {
     });
   });
 
+  it("keeps non-workshop families entirely on the legacy ResumePage path", () => {
+    render(
+      <VerbatiResumePreview
+        data={resumeMock}
+        stylePreset={{
+          familyId: "swiss",
+          layout: "swiss",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        hostMode="workspace"
+      />,
+    );
+
+    expect(screen.getByTestId("resume-page")).toBeInTheDocument();
+    expect(screen.queryByTestId("resume-template-renderer")).not.toBeInTheDocument();
+  });
+
   it("keeps workshop compare-layout mode on the legacy comparison path without mixed rendering", () => {
     render(
       <VerbatiResumePreview
@@ -284,6 +302,46 @@ describe("VerbatiResumePreview", () => {
         itemId: "project-1:description",
         previewSectionType: "selected_projects",
         source: "preview-panel",
+      }),
+    );
+  });
+
+  it("preserves workshop workspace preview link intents through the template renderer path", () => {
+    const onLinkIntent = vi.fn();
+
+    render(
+      <VerbatiResumePreview
+        data={resumeMock}
+        stylePreset={{
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        hostMode="workspace"
+        activeTarget={{
+          sectionType: "projects",
+          sectionId: "projects-1",
+          itemId: "project-1:description",
+          previewSectionType: "selected_projects",
+          source: "preview-workspace",
+        }}
+        onLinkIntent={onLinkIntent}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Workshop project description field" }),
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Workshop project description field" }),
+    ).toHaveAttribute("data-preview-active", "true");
+    expect(onLinkIntent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        itemId: "project-1:description",
+        previewSectionType: "selected_projects",
+        source: "preview-workspace",
       }),
     );
   });
