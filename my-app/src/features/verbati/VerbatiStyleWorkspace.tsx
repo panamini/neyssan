@@ -30,8 +30,8 @@ import type { VerbatiPreviewSource, VerbatiStylePreset } from "./types";
 import { VerbatiResumePreview } from "./VerbatiResumePreview";
 import {
   hasRenderableResumeData,
-  mapCvDocumentToResumeData,
 } from "./cvDocumentToResumeData";
+import { buildCanonicalResumeRenderModelFromCv } from "../../lib/buildCanonicalResumeRenderModel";
 import { formatUiDate } from "../../lib/ui-date";
 import { VerbatiProposalWorkspace } from "./VerbatiProposalWorkspace";
 
@@ -153,7 +153,7 @@ export function VerbatiStyleWorkspace(): JSX.Element {
     useCvLibrary();
 
   const activeResumeData = React.useMemo(
-    () => (currentCv ? mapCvDocumentToResumeData(currentCv) : null),
+    () => (currentCv ? buildCanonicalResumeRenderModelFromCv(currentCv) : null),
     [currentCv],
   );
   const hasActiveResume = hasRenderableResumeData(activeResumeData);
