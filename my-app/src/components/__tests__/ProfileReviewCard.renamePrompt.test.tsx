@@ -86,7 +86,7 @@ describe("ProfileReviewCard rename prompt", () => {
       .__CV_EDITOR_DEBUG__;
   });
 
-  it("shows the renamed dialog copy for a meaningful imported CV with a generic title", () => {
+  it("does not auto-open the rename dialog when reopening a generic imported CV", () => {
     cvLibraryState.currentCv = {
       id: "cv_imported",
       title: "Imported CV",
@@ -114,13 +114,10 @@ describe("ProfileReviewCard rename prompt", () => {
 
     render(<ProfileReviewCard />);
 
-    expect(screen.getByText("Rename CV")).toBeInTheDocument();
+    expect(screen.queryByText("Rename CV")).not.toBeInTheDocument();
     expect(
-      screen.queryByText("Name this imported CV"),
+      screen.queryByPlaceholderText("e.g. Jane Doe — Product Manager"),
     ).not.toBeInTheDocument();
-    expect(
-      screen.getByPlaceholderText("e.g. Jane Doe — Product Manager"),
-    ).toBeInTheDocument();
   });
 
   it("does not auto-open the rename dialog for a blank imported skeleton CV", () => {

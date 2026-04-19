@@ -86,6 +86,8 @@ export function AchievementsModal({
     Record<string, { before: string; after: string }>
   >({});
   const textareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
+  const handledInitialFocusRef = useRef<string | null>(null);
+  const activeRowIdRef = useRef<string | null>(null);
 
   const openerRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
@@ -103,6 +105,7 @@ export function AchievementsModal({
   useEffect(() => {
     if (!open) {
       lastSeedRef.current = null;
+      handledInitialFocusRef.current = null;
       setIsClearConfirming(false);
       setAiLoadingId(null);
       setAiDiffs({});
@@ -154,14 +157,6 @@ export function AchievementsModal({
     }
   }, [open, items, appendBlankOnOpen]);
 
-  useEffect(() => {
-    if (!open || !initialItemId) return;
-
-    window.setTimeout(() => {
-      textareaRefs.current[initialItemId]?.focus();
-    }, 40);
-  }, [initialItemId, open, rows]);
-
   const syncTextareaHeight = React.useCallback((rowId: string) => {
     const node = textareaRefs.current[rowId];
     if (!node) return;
@@ -181,6 +176,24 @@ export function AchievementsModal({
       syncTextareaHeight(String(row.id ?? idx));
     });
   }, [open, rows, syncTextareaHeight]);
+
+  React.useLayoutEffect(() => {
+    if (!open) return;
+
+    const activeRowId = activeRowIdRef.current;
+    if (!activeRowId) return;
+
+    const target = textareaRefs.current[activeRowId];
+    if (!target || document.activeElement === target) {
+      return;
+    }
+
+    try {
+      target.focus({ preventScroll: true });
+    } catch {
+      target.focus();
+    }
+  }, [open, rows]);
 
   function updateRow(
     idx: number,
@@ -416,13 +429,35 @@ export function AchievementsModal({
                     <textarea
                       ref={(node) => {
                         textareaRefs.current[rowId] = node;
+                        if (
+                          !node ||
+                          !open ||
+                          !initialItemId ||
+                          rowId !== String(initialItemId) ||
+                          handledInitialFocusRef.current === rowId
+                        ) {
+                          return;
+                        }
+
+                        window.setTimeout(() => {
+                          if (handledInitialFocusRef.current === rowId) {
+                            return;
+                          }
+
+                          handledInitialFocusRef.current = rowId;
+                          node.focus();
+                        }, 0);
                       }}
                       id={`achievement-text-${idx}`}
                       className="dasti-field dasti-achievements-modal__textarea"
                       placeholder="Reduced stock loss by 15% through tighter floor controls."
                       value={rowText}
                       rows={1}
+                      onFocus={() => {
+                        activeRowIdRef.current = rowId;
+                      }}
                       onChange={(e) => {
+                        activeRowIdRef.current = rowId;
                         updateRow(idx, { text: e.target.value });
                         window.requestAnimationFrame(() => {
                           syncTextareaHeight(rowId);

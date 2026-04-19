@@ -15,7 +15,7 @@ describe("resume preview workspace anchoring", () => {
     expect(resumePreviewCss).toMatch(
       /\.dasti-doc-viewer-shell--resume-workspace\s+\.dasti-doc-viewport--resume\s+\.resume-page-stage(?:,|\s)/,
     );
-    expect(resumePreviewCss).toMatch(/place-items:\s*start;/);
+    expect(resumePreviewCss).toMatch(/place-items:\s*start start;/);
     expect(productCss).not.toContain("dasti-doc-viewer-shell--resume-workspace-page");
     expect(productCss).not.toContain(
       "dasti-resume-preview-panel__surface--workspace-page",
@@ -24,10 +24,28 @@ describe("resume preview workspace anchoring", () => {
       /\.dasti-doc-viewer-shell--resume-workspace\s+\.dasti-doc-viewport--resume\[data-document-stage="true"\]\[data-stage-mode="fit"\],\s*\.dasti-doc-viewer-shell--resume-workspace\s+\.dasti-doc-viewport--resume\[data-document-stage="true"\]\[data-stage-mode="overflow"\]\s*\{[^}]*\}/,
     )?.[0];
 
-    expect(workspaceStageOverride).toContain(
-      "scrollbar-gutter: stable both-edges;",
-    );
+    expect(workspaceStageOverride).toContain("scrollbar-gutter: auto;");
     expect(workspaceStageOverride).not.toContain("overflow: visible;");
+    expect(productCss).toContain(
+      '.dasti-doc-viewport[data-document-stage="true"][data-overflow-x="false"] {',
+    );
+    expect(productCss).toContain("overflow-x: hidden;");
+    expect(productCss).toContain(
+      '.dasti-doc-viewer-shell--resume-workspace\n  .dasti-doc-viewport--resume[data-document-stage="true"][data-overflow-x="true"] {',
+    );
+    expect(productCss).toContain("scrollbar-gutter: auto;");
+    expect(resumePreviewCss).toContain(
+      "min-height: var(--preview-page-height, auto);",
+    );
+    expect(resumePreviewCss).toContain(
+      "height: var(--preview-stack-height, var(--preview-page-height, auto));",
+    );
+    expect(resumePreviewCss).toContain(".resume-page-stack__page-shell {");
+    expect(resumePreviewCss).toContain("justify-items: start;");
+    expect(resumePreviewCss).toContain("transform-origin: top left;");
+    expect(resumePreviewCss).not.toContain(
+      '.resume-page-stage--stacked .resume-page-stack {\n  transform: scale(var(--preview-scale, 1));',
+    );
 
     const workspaceRailRule = productCss.match(
       /\.dasti-document-rail--resume-workspace\s*\{[^}]*\}/,
@@ -36,6 +54,7 @@ describe("resume preview workspace anchoring", () => {
     expect(workspaceRailRule).toContain(
       "inset-block-start: var(--cv-preview-toolbar-inset, 0px);",
     );
+    expect(workspaceRailRule).toContain("inset-inline-start: 0;");
   });
 
   it("clamps embedded resume frames to the viewport width outside workspace mode", () => {
@@ -68,22 +87,45 @@ describe("resume preview workspace anchoring", () => {
     )?.[0];
 
     expect(workspaceShellRule).toContain(
-      "--document-viewer-bleed-inline: var(--space-1);",
+      "--document-viewer-bleed-inline: 0px;",
     );
     expect(workspaceShellRule).toContain(
-      "--document-viewer-bleed-block: var(--space-1);",
+      "--document-viewer-bleed-block: 0px;",
     );
+    expect(workspaceShellRule).toContain("--resume-preview-toolbar-gap: 0px;");
+    expect(workspaceShellRule).toContain("--resume-preview-shell-padding: 0px;");
     expect(workspaceShellRule).toContain("grid-template-rows: minmax(0, 1fr);");
+    expect(workspaceShellRule).toContain(
+      "width: min(100%, var(--document-viewer-shell-inline-size));",
+    );
+    expect(workspaceShellRule).toContain(
+      "height: var(--cv-preview-shell-block-size);",
+    );
     expect(workspacePanelRule).toContain("padding: 0;");
     expect(workspacePanelRule).toContain("gap: 0;");
     expect(workspacePanelRule).toContain("border: none;");
-    expect(workspaceSurfaceRule).toContain("min-block-size: 0;");
-    expect(workspaceSurfaceRule).toContain("block-size: auto;");
-    expect(workspaceSurfaceRule).not.toContain("100dvh");
-    expect(workspaceFrameRule).toContain("max-width: 100%;");
+    expect(workspaceSurfaceRule).toContain(
+      "block-size: var(--cv-preview-shell-block-size);",
+    );
+    expect(workspaceSurfaceRule).toContain("justify-content: center;");
+    expect(productCss).toContain(
+      ".dasti-resume-workspace-stage .dasti-document-stage__canvas,\n.dasti-resume-workspace-stage .resume-preview-shell--single,\n.dasti-resume-workspace-stage .resume-preview-grid {\n  justify-items: start;",
+    );
+    expect(workspaceFrameRule).toContain(
+      "width: min(100%, var(--document-viewer-shell-inline-size));",
+    );
     expect(workspaceFrameRule).toContain("height: auto;");
-    expect(workspaceFrameRule).toContain("var(--cv-preview-toolbar-inset, 0px)");
-    expect(workspaceStagePaddingRule).toContain("padding: var(--space-5);");
+    expect(workspaceFrameRule).toContain("display: flex;");
+    expect(workspaceFrameRule).toContain("var(--document-viewer-toolbar-block-size)");
+    expect(workspaceFrameRule).not.toContain(
+      "var(--cv-preview-toolbar-inset, 0px)",
+    );
+    expect(workspaceStagePaddingRule).toContain(
+      "padding: var(--resume-preview-shell-padding, var(--space-1));",
+    );
+    expect(productCss).toContain(
+      ".dasti-resume-workspace-stage\n  .dasti-document-stage__canvas[data-document-page=\"true\"] {\n  overflow: hidden;",
+    );
     expect(productCss).toContain(
       ".dasti-doc-viewer-shell--resume-workspace .dasti-doc-viewport--resume {",
     );

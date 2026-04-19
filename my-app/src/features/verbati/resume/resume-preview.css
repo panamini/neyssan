@@ -177,9 +177,22 @@
   position: relative;
   width: max(100%, var(--preview-stage-width, 100%));
   min-width: 100%;
-  height: var(--preview-stage-height);
+  min-height: var(--preview-page-height, auto);
+  height: var(--preview-page-height, auto);
   display: grid;
-  place-items: center;
+  align-content: start;
+  justify-items: start;
+  place-items: start start;
+}
+
+.resume-page-stage--stacked {
+  min-height: var(
+    --preview-stack-height,
+    var(--preview-page-height, auto)
+  );
+  height: var(--preview-stack-height, var(--preview-page-height, auto));
+  justify-items: start;
+  place-items: start start;
 }
 
 .resume-page-stage .resume-page {
@@ -189,18 +202,68 @@
   transform-origin: top left;
 }
 
+.resume-page-stack {
+  position: relative;
+  display: grid;
+  width: var(--preview-stage-width, auto);
+  min-width: var(--preview-stage-width, auto);
+  gap: var(--preview-page-gap, 0px);
+  justify-items: start;
+  align-content: start;
+}
+
+.resume-page-stack__page-shell {
+  width: var(--preview-stage-width, auto);
+  min-width: var(--preview-stage-width, auto);
+  min-height: var(--preview-page-height, auto);
+  height: var(--preview-page-height, auto);
+  display: grid;
+  justify-items: start;
+  place-items: start start;
+  align-content: start;
+  overflow: hidden;
+}
+
+.resume-page-stage--stacked .resume-page {
+  transform: scale(var(--preview-scale, 1));
+  transform-origin: top left;
+}
+
+.dasti-document-stage__canvas[data-document-page-stack="true"] {
+  justify-items: start;
+  place-items: start start;
+}
+
+.dasti-document-stage__canvas[data-document-page-stack="true"][data-document-page="true"] {
+  aspect-ratio: auto;
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.resume-page-measure-shell {
+  position: absolute;
+  left: -200vw;
+  top: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .dasti-doc-viewer-shell--resume-workspace
   .dasti-doc-viewport--resume
   .resume-page-stage,
 .dasti-doc-viewer-shell--resume-workspace
   .dasti-doc-viewport--resume
   .resume-page-stage--embedded {
-  place-items: start;
+  justify-items: start;
+  place-items: start start;
 }
 
 .resume-page-frame {
   width: max(100%, var(--preview-stage-width, 100%));
   min-width: 100%;
+  min-height: var(--preview-page-height, auto);
   display: grid;
   gap: 3.6mm;
   justify-items: center;
@@ -454,6 +517,13 @@
   box-shadow: 0 5mm 14mm color-mix(in srgb, var(--color-text) 8%, transparent);
   overflow: hidden;
   flex: 0 0 auto;
+}
+
+.resume-page--measure {
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+  box-shadow: none;
 }
 
 .resume-page::before {

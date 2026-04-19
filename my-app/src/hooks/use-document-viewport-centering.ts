@@ -64,6 +64,13 @@ export function useDocumentViewportCentering({
       ? Math.max(0, previous.scrollHeight - previous.clientHeight)
       : 0;
 
+    if (!enabled) {
+      recenterRequestedRef.current = false;
+      snapshotRef.current = next;
+      onSync?.();
+      return;
+    }
+
     // Keep Fit as the only deliberate recenter. When the previous layout was
     // already fully fitted, treat the next zoom step as originating from the
     // centered view instead of anchoring to the top-left corner.
@@ -91,12 +98,20 @@ export function useDocumentViewportCentering({
             );
 
     node.scrollLeft =
-      enabled && maxLeft > 0
-        ? clamp(centerX * next.scrollWidth - next.clientWidth * defaultCenterX, 0, maxLeft)
+      maxLeft > 0
+        ? clamp(
+            centerX * next.scrollWidth - next.clientWidth * defaultCenterX,
+            0,
+            maxLeft,
+          )
         : 0;
     node.scrollTop =
-      enabled && maxTop > 0
-        ? clamp(centerY * next.scrollHeight - next.clientHeight * defaultCenterY, 0, maxTop)
+      maxTop > 0
+        ? clamp(
+            centerY * next.scrollHeight - next.clientHeight * defaultCenterY,
+            0,
+            maxTop,
+          )
         : 0;
 
     recenterRequestedRef.current = false;
