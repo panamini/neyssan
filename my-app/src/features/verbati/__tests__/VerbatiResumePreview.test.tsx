@@ -1,8 +1,42 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ResumePreviewMetrics } from "../resume/ResumePage";
 import { VerbatiResumePreview } from "../VerbatiResumePreview";
 import { resumeMock } from "../resume/resume.mock";
+import { A4_PAGE_WIDTH_PX } from "../../../lib/document-stage";
+
+const useDocumentStageLayoutMock = vi.fn(
+  ({
+    pageHeightPx = 1123,
+  }: {
+    pageHeightPx?: number;
+  }) => ({
+    availableWidth: 794,
+    availableHeight: 1123,
+    stageWidth: 794,
+    stageHeight: Math.min(1123, pageHeightPx),
+    pageWidth: 794,
+    pageHeight: pageHeightPx,
+    overflowX: false,
+    overflowY: pageHeightPx > 1123,
+    isFit: true,
+  }),
+);
+const useDocumentViewportCenteringMock = vi.fn(() => ({
+  attachViewport: () => undefined,
+}));
+const resumePreviewMetricsRef: {
+  current:
+    | {
+        pageCount: number;
+        pageGapPx: number;
+        stackHeightPx: number;
+      }
+    | null;
+} = {
+  current: null,
+};
 
 vi.mock("../../../hooks/use-document-pan", () => ({
   useDocumentPan: () => ({
@@ -12,21 +46,13 @@ vi.mock("../../../hooks/use-document-pan", () => ({
 }));
 
 vi.mock("../../../hooks/use-document-stage-layout", () => ({
-  useDocumentStageLayout: () => ({
-    availableWidth: 794,
-    availableHeight: 1123,
-    stageWidth: 794,
-    stageHeight: 1123,
-    pageWidth: 794,
-    pageHeight: 1123,
-    isFit: true,
-  }),
+  useDocumentStageLayout: (args: { pageHeightPx?: number }) =>
+    useDocumentStageLayoutMock(args),
 }));
 
 vi.mock("../../../hooks/use-document-viewport-centering", () => ({
-  useDocumentViewportCentering: () => ({
-    attachViewport: () => undefined,
-  }),
+  useDocumentViewportCentering: (args: unknown) =>
+    useDocumentViewportCenteringMock(args),
 }));
 
 vi.mock("../../../lib/document-export-debug", () => ({
@@ -45,6 +71,7 @@ vi.mock("../resume/ResumePage", () => ({
   default: ({
     mode,
     activeTarget,
+    onPreviewMetricsChange,
   }: {
     mode: string;
     activeTarget?: {
@@ -52,8 +79,14 @@ vi.mock("../resume/ResumePage", () => ({
       itemId?: string;
       source?: string;
     } | null;
+    onPreviewMetricsChange?: (metrics: ResumePreviewMetrics) => void;
   }) => {
     resumePagePropsSpy({ mode, activeTarget });
+    React.useEffect(() => {
+      if (resumePreviewMetricsRef.current) {
+        onPreviewMetricsChange?.(resumePreviewMetricsRef.current);
+      }
+    }, [onPreviewMetricsChange]);
 
     return (
       <div data-testid="resume-page" data-mode={mode}>
@@ -161,6 +194,12 @@ vi.mock("../resume/ResumeTemplateRenderer", () => ({
 }));
 
 describe("VerbatiResumePreview", () => {
+  afterEach(() => {
+    resumePreviewMetricsRef.current = null;
+    useDocumentStageLayoutMock.mockClear();
+    useDocumentViewportCenteringMock.mockClear();
+  });
+
   it("keeps workshop panel preview link intents and active highlighting intact on the template renderer path", () => {
     const onLinkIntent = vi.fn();
 
@@ -242,7 +281,9 @@ describe("VerbatiResumePreview", () => {
     );
 
     expect(screen.getByTestId("resume-page")).toBeInTheDocument();
-    expect(screen.queryByTestId("resume-template-renderer")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("resume-template-renderer"),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps workshop compare-layout mode on the legacy comparison path without mixed rendering", () => {
@@ -263,7 +304,9 @@ describe("VerbatiResumePreview", () => {
       "data-mode",
       "comparisonAll",
     );
-    expect(screen.queryByTestId("resume-template-renderer")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("resume-template-renderer"),
+    ).not.toBeInTheDocument();
   });
 
   it("preserves workshop panel preview link intents through the template renderer path", () => {
@@ -532,7 +575,7 @@ describe("VerbatiResumePreview", () => {
     expect(viewport!.scrollTop).toBe(140);
   });
 
-  it("falls back to the document scroll root when the page viewport itself cannot scroll", () => {
+  it("keeps workspace wheel scrolling contained to the preview viewport even at the bottom edge", () => {
     render(
       <VerbatiResumePreview
         data={resumeMock}
@@ -566,7 +609,7 @@ describe("VerbatiResumePreview", () => {
     });
     Object.defineProperty(viewport!, "scrollHeight", {
       configurable: true,
-      value: 600,
+      value: 1200,
     });
     Object.defineProperty(scrollRoot, "clientHeight", {
       configurable: true,
@@ -576,13 +619,13 @@ describe("VerbatiResumePreview", () => {
       configurable: true,
       value: 1200,
     });
-    viewport!.scrollTop = 0;
+    viewport!.scrollTop = 600;
     scrollRoot.scrollTop = 0;
 
     fireEvent.wheel(page!, { deltaY: 120 });
 
-    expect(viewport!.scrollTop).toBe(0);
-    expect(scrollRoot.scrollTop).toBe(120);
+    expect(viewport!.scrollTop).toBe(600);
+    expect(scrollRoot.scrollTop).toBe(0);
   });
 
   it("lets the browser own wheel scrolling after switching to manual zoom", () => {
@@ -622,5 +665,106 @@ describe("VerbatiResumePreview", () => {
     fireEvent.wheel(page!, { deltaY: 140 });
 
     expect(viewport!.scrollTop).toBe(0);
+    expect(useDocumentViewportCenteringMock.mock.lastCall?.[0]).toEqual(
+      expect.objectContaining({
+        enabled: false,
+      }),
+    );
+  });
+
+  it("keeps workspace fit geometry single-page while exposing stacked scroll height", async () => {
+    resumePreviewMetricsRef.current = {
+      pageCount: 3,
+      pageGapPx: 16,
+      stackHeightPx: 3400,
+    };
+
+    render(
+      <VerbatiResumePreview
+        data={resumeMock}
+        stylePreset={{
+          layout: "swiss",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        hostMode="workspace"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Page count")).toHaveTextContent("3 pages");
+    });
+
+    const canvas = document.querySelector(
+      "[data-document-page='true']",
+    ) as HTMLDivElement | null;
+    const viewport = document.querySelector(
+      ".dasti-doc-viewport--resume",
+    ) as HTMLDivElement | null;
+    const expectedCanvasHeight = 3400 * (794 / A4_PAGE_WIDTH_PX);
+
+    expect(canvas?.dataset.documentPageCount).toBe("3");
+    expect(canvas?.dataset.documentPageStack).toBe("true");
+    expect(Number.parseFloat(canvas?.style.height ?? "0")).toBeCloseTo(
+      expectedCanvasHeight,
+      2,
+    );
+    expect(viewport?.style.height).toBe("1123px");
+    expect(viewport?.dataset.stageMode).toBe("overflow");
+    expect(viewport?.dataset.overflowX).toBe("false");
+    expect(viewport?.dataset.overflowY).toBe("true");
+    expect(useDocumentStageLayoutMock.mock.lastCall?.[0]).not.toHaveProperty(
+      "pageHeightPx",
+    );
+    expect(useDocumentViewportCenteringMock.mock.lastCall?.[0]).toEqual(
+      expect.objectContaining({
+        enabled: true,
+        defaultCenterY: 0,
+      }),
+    );
+  });
+
+  it("keeps the panel viewport fixed and scrolls the stacked resume inside it", async () => {
+    resumePreviewMetricsRef.current = {
+      pageCount: 2,
+      pageGapPx: 13.6,
+      stackHeightPx: 2260,
+    };
+
+    render(
+      <VerbatiResumePreview
+        data={resumeMock}
+        stylePreset={{
+          layout: "swiss",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        hostMode="panel"
+      />,
+    );
+
+    await waitFor(() => {
+      const canvas = document.querySelector(
+        "[data-document-page='true']",
+      ) as HTMLDivElement | null;
+      const expectedCanvasHeight = 2260 * (794 / A4_PAGE_WIDTH_PX);
+
+      expect(Number.parseFloat(canvas?.style.height ?? "0")).toBeCloseTo(
+        expectedCanvasHeight,
+        2,
+      );
+    });
+
+    const viewport = document.querySelector(
+      ".dasti-doc-viewport--resume",
+    ) as HTMLDivElement | null;
+
+    expect(viewport?.style.height).toBe("1123px");
+    expect(viewport?.dataset.stageMode).toBe("overflow");
+    expect(viewport?.dataset.overflowX).toBe("false");
+    expect(viewport?.dataset.overflowY).toBe("true");
+    expect(useDocumentStageLayoutMock.mock.lastCall?.[0]).not.toHaveProperty(
+      "pageHeightPx",
+    );
   });
 });

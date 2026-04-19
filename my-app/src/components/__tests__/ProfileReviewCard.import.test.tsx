@@ -586,9 +586,7 @@ describe("ProfileReviewCard import", () => {
     }
   });
 
-  it("prompts for a real title when an imported CV keeps a generic name", async () => {
-    const user = userEvent.setup();
-
+  it("does not auto-open the rename prompt when reopening an imported CV", async () => {
     cvLibraryState.currentCv = {
       id: "cv_imported",
       title: "Imported CV",
@@ -616,19 +614,69 @@ describe("ProfileReviewCard import", () => {
 
     render(<ProfileReviewCard />);
 
-    expect(screen.getByText("Rename CV")).toBeInTheDocument();
+    expect(screen.queryByText("Rename CV")).not.toBeInTheDocument();
+    expect(renameCvMock).not.toHaveBeenCalled();
+  });
 
-    await user.clear(screen.getByPlaceholderText("e.g. Jane Doe — Product Manager"));
-    await user.type(
-      screen.getByPlaceholderText("e.g. Jane Doe — Product Manager"),
-      "Jane Doe — Operations Associate",
-    );
-    await user.click(screen.getByRole("button", { name: "Save title" }));
+  it("keeps the rename prompt closed after later edits change the warning signature", async () => {
+    cvLibraryState.currentCv = {
+      id: "cv_imported",
+      title: "Imported CV",
+      metadata: {
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        version: 1,
+      },
+      sections: [
+        {
+          id: "profile-1",
+          type: "profile",
+          title: "Profile",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "profile-item-1",
+              name: "Jane Doe",
+              desiredPosition: "Operations Associate",
+            },
+          ],
+        },
+      ],
+    };
 
-    expect(renameCvMock).toHaveBeenCalledWith(
-      "cv_imported",
-      "Jane Doe — Operations Associate",
-    );
+    const view = render(<ProfileReviewCard />);
+
+    expect(screen.queryByText("Rename CV")).not.toBeInTheDocument();
+
+    cvLibraryState.currentCv = {
+      ...cvLibraryState.currentCv,
+      sections: [
+        ...(cvLibraryState.currentCv?.sections ?? []),
+        {
+          id: "experience-1",
+          type: "experience",
+          title: "Experience",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "experience-item-1",
+              company: "Jane Doe",
+              position: "Operations Associate",
+              startDate: "2022-01-01",
+              endDate: null,
+              isCurrent: true,
+              achievements: [],
+            },
+          ],
+        },
+      ],
+    };
+
+    view.rerender(<ProfileReviewCard />);
+
+    await waitFor(() => {
+      expect(screen.queryByText("Rename CV")).not.toBeInTheDocument();
+    });
   });
 
   it("blocks CV export until flagged import issues are reviewed", async () => {

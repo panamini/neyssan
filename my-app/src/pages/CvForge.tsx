@@ -3,7 +3,7 @@ import { useQuery } from "convex/react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { isQuickStartCompleted } from "../lib/onboarding-state";
 import { createQuickStartLocationState } from "../lib/quick-start-routing";
-import { Check, Eye, EyeClosed, Palette } from "@/lib/icons";
+import { Check, Eye, Palette, PenLine } from "@/lib/icons";
 import { api } from "../../convex/_generated/api";
 import { ProfileReviewCard } from "../components/ProfileReviewCard";
 import ResumeExportControl from "../components/ResumeExportControl";
@@ -248,6 +248,8 @@ export function CvForge(): JSX.Element {
       : isSplitCanvas
         ? "1240px"
         : "var(--cv-editor-shell-max-width)";
+  const cvPreviewShellBlockSize =
+    "min(var(--document-viewer-shell-max-block), calc(100dvh - var(--header-height) - (var(--space-2) * 2) - (var(--document-viewer-toolbar-block-size) + var(--space-1))))";
 
   React.useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -578,7 +580,7 @@ export function CvForge(): JSX.Element {
       data-toolbar-tooltip="Back to edit"
       data-no-pan="true"
     >
-      <EyeClosed size={15} strokeWidth={1.9} aria-hidden="true" />
+      <PenLine size={15} strokeWidth={1.9} aria-hidden="true" />
     </button>
   );
   const resumeExportControl = (
@@ -596,6 +598,15 @@ export function CvForge(): JSX.Element {
     maxWidth: editorGridMaxWidth,
     marginInline: "auto",
   };
+  const cvPreviewWorkbenchStyle: React.CSSProperties = {
+    width: "100%",
+    maxWidth: editorGridMaxWidth,
+    marginInline: "auto",
+    minWidth: 0,
+    "--cv-preview-shell-block-size": cvPreviewShellBlockSize,
+    "--document-viewer-shell-inline-size":
+      "min(100%, calc(var(--document-sheet-inline-size) + (var(--space-1) * 2) + 2px))",
+  } as React.CSSProperties;
 
   return (
     <div
@@ -616,7 +627,7 @@ export function CvForge(): JSX.Element {
               workspaceMode === "preview" ? "0px" : "var(--space-4)",
             "--page-shell-pad-bottom": "var(--space-1)",
             "--cv-preview-toolbar-inset":
-              workspaceMode === "preview" ? "var(--space-2)" : undefined,
+              workspaceMode === "preview" ? "0px" : undefined,
             "--page-shell-pad-top-mobile":
               workspaceMode === "preview" ? "0px" : "var(--space-2)",
             "--page-shell-pad-inline-mobile":
@@ -645,7 +656,10 @@ export function CvForge(): JSX.Element {
                 />
               </div>
             ) : null}
-            <div className="dasti-cv-preview-workbench">
+            <div
+              className="dasti-cv-preview-workbench"
+              style={cvPreviewWorkbenchStyle}
+            >
               <div className="dasti-cv-preview-workbench__main">
                 <VerbatiCvPreviewPanel
                   layoutMode="stacked"
