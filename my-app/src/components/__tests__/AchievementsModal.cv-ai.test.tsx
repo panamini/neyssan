@@ -1,6 +1,6 @@
 import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import AchievementsModal from "../structured-blocks/AchievementsModal";
 
 const {
@@ -129,5 +129,45 @@ describe("AchievementsModal CV AI", () => {
     expect(
       screen.getByRole("button", { name: "Add achievement" }),
     ).toBeInTheDocument();
+  });
+
+  it("keeps the user on the field they switched to after targeted preview focus", async () => {
+    vi.useFakeTimers();
+
+    await act(async () => {
+      render(
+        <AchievementsModal
+          open
+          initialItemId="ach-1"
+          items={[
+            { id: "ach-1", text: "Reduced theft by 28%." },
+            { id: "ach-2", text: "Improved onboarding" },
+          ]}
+          onClose={vi.fn()}
+          onSave={vi.fn()}
+        />,
+      );
+      await vi.advanceTimersByTimeAsync(60);
+    });
+
+    const secondField = document.getElementById(
+      "achievement-text-1",
+    ) as HTMLTextAreaElement | null;
+    const firstField = document.getElementById(
+      "achievement-text-0",
+    ) as HTMLTextAreaElement | null;
+
+    expect(secondField).not.toBeNull();
+    fireEvent.focus(secondField!);
+    await act(async () => {
+      fireEvent.change(secondField!, {
+        target: { value: "Improved onboarding across 3 product lines" },
+      });
+      await vi.advanceTimersByTimeAsync(60);
+    });
+
+    expect(secondField).toHaveValue("Improved onboarding across 3 product lines");
+    expect(firstField).toHaveValue("Reduced theft by 28%.");
+    vi.useRealTimers();
   });
 });

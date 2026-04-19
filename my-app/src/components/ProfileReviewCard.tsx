@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import {
   Check,
@@ -1025,9 +1025,6 @@ export function ProfileReviewCard({
   const importReviewSessionKey = currentCv?.id
     ? `${IMPORT_REVIEW_SESSION_KEY_PREFIX}${currentCv.id}`
     : null;
-  const importRenamePromptSessionKey = currentCv?.id
-    ? `${IMPORT_RENAME_PROMPT_SESSION_KEY_PREFIX}${currentCv.id}`
-    : null;
   const flaggedSectionTypes = useMemo(
     () => getFlaggedSectionTypes(importSignals),
     [importSignals],
@@ -1250,36 +1247,26 @@ export function ProfileReviewCard({
     setIsImportReviewCollapsed(true);
   }, [currentCv?.id, importSignalSignature]);
 
-  useEffect(() => {
-    if (
-      !currentCv ||
-      !importRenamePromptSessionKey ||
-      typeof window === "undefined" ||
-      !shouldPromptForImportedTitleRename(currentCv, importSignals)
-    ) {
-      return;
-    }
+  const openImportedTitleRenameDialog = useCallback(
+    (cv: Pick<CvDocument, "id" | "title">) => {
+      const nextCvId = String(cv.id ?? "").trim();
+      if (!nextCvId) {
+        return;
+      }
 
-    const storedPromptSignature = window.sessionStorage.getItem(
-      importRenamePromptSessionKey,
-    );
-    if (storedPromptSignature === importSignalSignature) {
-      return;
-    }
+      setRenameDraftTitle(cv.title ?? "");
+      setRenameTargetCvId(nextCvId);
+      setIsRenameDialogOpen(true);
 
-    setRenameDraftTitle(currentCv.title ?? "");
-    setRenameTargetCvId(String(currentCv.id));
-    setIsRenameDialogOpen(true);
-    window.sessionStorage.setItem(
-      importRenamePromptSessionKey,
-      importSignalSignature,
-    );
-  }, [
-    currentCv,
-    importRenamePromptSessionKey,
-    importSignalSignature,
-    importSignals,
-  ]);
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem(
+          `${IMPORT_RENAME_PROMPT_SESSION_KEY_PREFIX}${nextCvId}`,
+          "shown",
+        );
+      }
+    },
+    [],
+  );
 
   // Simple in-component toast notifications for debugging (no external deps)
   const [toasts, setToasts] = useState<{ id: string; message: string }[]>([]);
@@ -1521,9 +1508,7 @@ export function ProfileReviewCard({
       await importCv(importedDoc);
       const importedSignals = inspectCvImportSignals(importedDoc);
       if (shouldPromptForImportedTitleRename(importedDoc, importedSignals)) {
-        setRenameDraftTitle(importedDoc.title);
-        setRenameTargetCvId(importedDoc.id);
-        setIsRenameDialogOpen(true);
+        openImportedTitleRenameDialog(importedDoc);
       }
     } catch {
       pushToast("Failed to import CV");
@@ -1625,9 +1610,7 @@ export function ProfileReviewCard({
       if (target === "fresh") {
         const importedSignals = inspectCvImportSignals(nextDoc);
         if (shouldPromptForImportedTitleRename(nextDoc, importedSignals)) {
-          setRenameDraftTitle(nextDoc.title);
-          setRenameTargetCvId(nextDoc.id);
-          setIsRenameDialogOpen(true);
+          openImportedTitleRenameDialog(nextDoc);
         }
       }
       return true;

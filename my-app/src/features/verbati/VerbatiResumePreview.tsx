@@ -43,6 +43,7 @@ import {
 import { collectResumeFontDebugSnapshot } from "../../lib/resume-font-debug";
 import type { VerbatiLayoutPreset, VerbatiStylePreset } from "./types";
 import { getResumeTemplateDefinition } from "../../lib/layout/resumeTemplates";
+import type { ResumePreviewMetrics } from "./resume/ResumePage";
 
 type VerbatiResumePreviewProps = {
   data: ResumeData;
@@ -69,6 +70,16 @@ type VerbatiResumePreviewProps = {
 const comparisonLayouts: VerbatiLayoutPreset[] = VERBATI_LAYOUT_OPTIONS.map(
   (option) => option.id,
 ).filter((layout) => layout !== "workshop");
+
+const DEFAULT_RESUME_PREVIEW_METRICS: ResumePreviewMetrics = {
+  pageCount: 1,
+  pageGapPx: 0,
+  stackHeightPx: A4_PAGE_HEIGHT_PX,
+};
+
+function roundPx(value: number) {
+  return Math.round(value * 100) / 100;
+}
 
 function getLayoutPresetForRenderer(
   variantId: ResumeLayoutVariantId,
@@ -120,8 +131,22 @@ export function VerbatiResumePreview({
   const [workspaceViewMode, setWorkspaceViewMode] = React.useState<
     "fit-page" | "manual"
   >("fit-page");
+  const [resumePreviewMetrics, setResumePreviewMetrics] =
+    React.useState<ResumePreviewMetrics>(DEFAULT_RESUME_PREVIEW_METRICS);
   const stageMeasureRef = React.useRef<HTMLDivElement | null>(null);
   const isWorkspaceMode = hostMode === "workspace";
+  const handlePreviewMetricsChange = React.useCallback(
+    (nextMetrics: ResumePreviewMetrics) => {
+      setResumePreviewMetrics((current) =>
+        current.pageCount === nextMetrics.pageCount &&
+        current.pageGapPx === nextMetrics.pageGapPx &&
+        current.stackHeightPx === nextMetrics.stackHeightPx
+          ? current
+          : nextMetrics,
+      );
+    },
+    [],
+  );
   const stageLayout = useDocumentStageLayout({
     enabled: !compareLayouts,
     measurementRef: stageMeasureRef,
@@ -134,6 +159,18 @@ export function VerbatiResumePreview({
     fitMode: isWorkspaceMode ? "contain" : "width",
     fillAvailableOnZoom: isWorkspaceMode,
   });
+  const previewScale = React.useMemo(
+    () => stageLayout.pageWidth / A4_PAGE_WIDTH_PX,
+    [stageLayout.pageWidth],
+  );
+  const stackedCanvasHeight = React.useMemo(
+    () =>
+      Math.max(
+        stageLayout.pageHeight,
+        roundPx(resumePreviewMetrics.stackHeightPx * previewScale),
+      ),
+    [previewScale, resumePreviewMetrics.stackHeightPx, stageLayout.pageHeight],
+  );
   const fitPageScale = React.useMemo(
     () =>
       Math.min(
@@ -152,7 +189,6 @@ export function VerbatiResumePreview({
     }
     return 1;
   }, [fitPageScale, isWorkspaceMode, workspaceViewMode, zoomIndex]);
-  const stageMode = stageLayout.isFit ? "fit" : "overflow";
   const usesWorkshopTemplateRenderer =
     !compareLayouts &&
     resolvedResumeTemplateId === WORKSHOP_TEMPLATE_RENDERER_ID &&
@@ -165,17 +201,29 @@ export function VerbatiResumePreview({
         pageCount: visiblePageCount,
         pageHeightPx: stageLayout.pageHeight,
       })
-    : stageLayout.pageHeight;
+    : stackedCanvasHeight;
+  const effectivePageCount = usesWorkshopTemplateRenderer
+    ? visiblePageCount
+    : resumePreviewMetrics.pageCount;
+  const stageMode =
+    stageLayout.overflowX ||
+    stageLayout.overflowY ||
+    canvasHeightPx > stageLayout.stageHeight + 1
+      ? "overflow"
+      : "fit";
   const { attachViewport, viewportPanProps } = useDocumentPan({
     enabled: !compareLayouts && isWorkspaceMode && userZoom > 1,
   });
+  const shouldCenterViewport =
+    !compareLayouts && (!isWorkspaceMode || workspaceViewMode === "fit-page");
   const { attachViewport: attachCenterViewport } = useDocumentViewportCentering(
     {
-      enabled: !compareLayouts,
-      layoutKey: `${userZoom}:${stageLayout.stageWidth}:${stageLayout.stageHeight}:${stylePreset.layout}:${rendererVariantId}:${data.name}:${data.title}`,
+      enabled: shouldCenterViewport,
+      layoutKey: `${userZoom}:${stageLayout.stageWidth}:${stageLayout.stageHeight}:${stageLayout.pageWidth}:${canvasHeightPx}:${effectivePageCount}:${stylePreset.layout}:${rendererVariantId}:${data.name}:${data.title}`,
       recenterKey: fitRequestCount,
       defaultCenterX: isWorkspaceMode ? 0.5 : 0.5,
-      defaultCenterY: isWorkspaceMode ? 0.5 : 0.5,
+      defaultCenterY:
+        isWorkspaceMode || effectivePageCount > 1 ? 0 : 0.5,
     },
   );
   const attachResumeViewport = React.useCallback(
@@ -345,7 +393,7 @@ export function VerbatiResumePreview({
         <MagnifyingGlassPlus size={14} strokeWidth={1.7} aria-hidden="true" />
       </button>
       <span className="dasti-doc-page-count" aria-label="Page count">
-        {visiblePageCount} {visiblePageCount === 1 ? "page" : "pages"}
+        {effectivePageCount} {effectivePageCount === 1 ? "page" : "pages"}
       </span>
     </div>
   ) : null;
@@ -451,13 +499,21 @@ export function VerbatiResumePreview({
 
         const previousTop = node.scrollTop;
         const previousLeft = node.scrollLeft;
+        const maxTop = Math.max(0, node.scrollHeight - node.clientHeight);
+        const maxLeft = Math.max(0, node.scrollWidth - node.clientWidth);
 
         if (Math.abs(event.deltaY) > 0.01) {
-          node.scrollTop += event.deltaY;
+          node.scrollTop = Math.min(
+            maxTop,
+            Math.max(0, node.scrollTop + event.deltaY),
+          );
         }
 
         if (Math.abs(event.deltaX) > 0.01) {
-          node.scrollLeft += event.deltaX;
+          node.scrollLeft = Math.min(
+            maxLeft,
+            Math.max(0, node.scrollLeft + event.deltaX),
+          );
         }
 
         return previousTop !== node.scrollTop || previousLeft !== node.scrollLeft;
@@ -476,36 +532,8 @@ export function VerbatiResumePreview({
         return;
       }
 
-      if (viewportCanScroll && applyScrollDelta(viewport)) {
-        event.preventDefault();
-        return;
-      }
-
-      let ancestor = viewport.parentElement;
-      while (ancestor) {
-        const style = window.getComputedStyle(ancestor);
-        const canScrollY =
-          /(auto|scroll|overlay)/.test(style.overflowY) &&
-          ancestor.scrollHeight > ancestor.clientHeight + 1;
-        const canScrollX =
-          /(auto|scroll|overlay)/.test(style.overflowX) &&
-          ancestor.scrollWidth > ancestor.clientWidth + 1;
-
-        if (canScrollY || canScrollX) {
-          if (applyScrollDelta(ancestor)) {
-            event.preventDefault();
-          }
-          return;
-        }
-
-        ancestor = ancestor.parentElement;
-      }
-
-      const scrollingElement =
-        document.scrollingElement instanceof HTMLElement
-          ? document.scrollingElement
-          : null;
-      if (applyScrollDelta(scrollingElement)) {
+      if (viewportCanScroll) {
+        applyScrollDelta(viewport);
         event.preventDefault();
       }
     },
@@ -525,6 +553,12 @@ export function VerbatiResumePreview({
           .filter(Boolean)
           .join(" ")}
         data-stage-mode={stageMode}
+        data-overflow-x={stageLayout.overflowX ? "true" : "false"}
+        data-overflow-y={
+          stageLayout.overflowY || canvasHeightPx > stageLayout.stageHeight + 1
+            ? "true"
+            : "false"
+        }
         data-document-stage="true"
         style={{
           width: `${stageLayout.stageWidth}px`,
@@ -535,6 +569,8 @@ export function VerbatiResumePreview({
         <div
           className="dasti-document-stage__canvas"
           data-document-page="true"
+          data-document-page-count={effectivePageCount}
+          data-document-page-stack={effectivePageCount > 1 ? "true" : undefined}
           data-interactive={onLinkIntent ? "true" : undefined}
           style={{
             width: `${stageLayout.pageWidth}px`,
@@ -562,6 +598,7 @@ export function VerbatiResumePreview({
               stageLayout={stageLayout}
               activeTarget={activeTarget}
               onRemoveSection={onRemoveSection}
+              onPreviewMetricsChange={handlePreviewMetricsChange}
             />
           )}
         </div>

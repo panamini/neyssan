@@ -130,8 +130,19 @@ describe("CvForge workspace mode", () => {
       "0px",
     );
     expect(pageShell?.style.getPropertyValue("--cv-preview-toolbar-inset")).toBe(
-      "var(--space-2)",
+      "0px",
     );
+    const previewWorkbench = container.querySelector(
+      ".dasti-cv-preview-workbench",
+    ) as HTMLElement | null;
+    expect(
+      previewWorkbench?.style.getPropertyValue("--cv-preview-shell-block-size"),
+    ).toContain("100dvh");
+    expect(
+      previewWorkbench?.style.getPropertyValue(
+        "--document-viewer-shell-inline-size",
+      ),
+    ).toContain("var(--document-sheet-inline-size)");
     expect(
       window.localStorage.getItem("dasti:cv-forge-workspace-mode:v1"),
     ).toBe("preview");
