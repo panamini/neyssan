@@ -294,9 +294,7 @@ describe("VerbatiResumePreview", () => {
       pageGapPx: 24,
       stackHeightPx: 4200,
     };
-    const defaultStageLayoutImplementation =
-      useDocumentStageLayoutMock.getMockImplementation();
-    useDocumentStageLayoutMock.mockImplementation(() => ({
+    useDocumentStageLayoutMock.mockImplementationOnce(() => ({
       availableWidth: 794,
       availableHeight: 1123,
       stageWidth: 794,
@@ -333,20 +331,6 @@ describe("VerbatiResumePreview", () => {
     expect(Number.parseFloat(canvas?.style.height ?? "0")).toBeCloseTo(
       expectedCanvasHeight,
       2,
-    );
-
-    useDocumentStageLayoutMock.mockImplementation(
-      defaultStageLayoutImplementation ?? (({ pageHeightPx = 1123 }) => ({
-        availableWidth: 794,
-        availableHeight: 1123,
-        stageWidth: 794,
-        stageHeight: Math.min(1123, pageHeightPx),
-        pageWidth: 794,
-        pageHeight: pageHeightPx,
-        overflowX: false,
-        overflowY: pageHeightPx > 1123,
-        isFit: true,
-      })),
     );
   });
 
