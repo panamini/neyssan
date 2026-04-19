@@ -67,3 +67,12 @@ export function isCvEditorDebugUiEnabled(): boolean {
   const rawDev = readEnv("DEV");
   return toBool(rawDev, false) || nodeEnv === "development";
 }
+
+/**
+ * Controls whether the workshop family is visible in user-facing selectors.
+ * Persisted workshop styles must still render through the legacy-safe path even
+ * when this flag is disabled.
+ */
+export function isWorkshopFamilyEnabled(): boolean {
+  return toBool(readEnv("VITE_ENABLE_WORKSHOP_FAMILY"), false);
+}
