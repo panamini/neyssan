@@ -4,13 +4,19 @@ import type {
 } from "./fontCatalog";
 import type { CvDocument } from "../../types/cvDocument";
 
-export type VerbatiLayoutPreset =
+export type StyleFamilyId =
   | "swiss"
   | "volk-register"
   | "two-column"
   | "editorial"
   | "modernist"
-  | "quire";
+  | "quire"
+  | "workshop";
+export type LegacyVerbatiLayoutAlias =
+  | "playful-photo"
+  | "soft-ribbon"
+  | "slate-column";
+export type VerbatiLayoutPreset = StyleFamilyId | LegacyVerbatiLayoutAlias;
 export type VerbatiPalettePreset =
   | "sauge"
   | "ocre"
@@ -22,6 +28,7 @@ export type VerbatiPreviewSource = "active" | "sample";
 
 export interface VerbatiStylePreset {
   layout: VerbatiLayoutPreset;
+  familyId?: StyleFamilyId;
   typography: VerbatiTypographyPreset;
   palette: VerbatiPalettePreset;
   accentHex?: string;

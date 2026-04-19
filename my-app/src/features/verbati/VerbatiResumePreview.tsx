@@ -10,9 +10,9 @@ import { useDocumentViewportCentering } from "../../hooks/use-document-viewport-
 import ResumePage from "./resume/ResumePage";
 import {
   buildVerbatiThemeVars,
+  resolveLegacyResumeRendererVariantId,
   resolveVerbatiAccentHex,
   VERBATI_LAYOUT_OPTIONS,
-  VERBATI_LAYOUT_TO_RENDERER,
 } from "./style";
 import type { ResumeData, ResumeLayoutVariantId } from "./resume/resume.types";
 import {
@@ -61,7 +61,7 @@ type VerbatiResumePreviewProps = {
 
 const comparisonLayouts: VerbatiLayoutPreset[] = VERBATI_LAYOUT_OPTIONS.map(
   (option) => option.id,
-);
+).filter((layout) => layout !== "workshop");
 
 function getLayoutPresetForRenderer(
   variantId: ResumeLayoutVariantId,
@@ -89,6 +89,10 @@ export function VerbatiResumePreview({
   const resumeViewportRef = React.useRef<HTMLDivElement | null>(null);
   const themeVars = React.useMemo(
     () => buildVerbatiThemeVars(stylePreset),
+    [stylePreset],
+  );
+  const rendererVariantId = React.useMemo(
+    () => resolveLegacyResumeRendererVariantId(stylePreset) ?? "swissminima",
     [stylePreset],
   );
   const accentToken = React.useMemo(
@@ -139,7 +143,7 @@ export function VerbatiResumePreview({
   const { attachViewport: attachCenterViewport } = useDocumentViewportCentering(
     {
       enabled: !compareLayouts,
-      layoutKey: `${userZoom}:${stageLayout.stageWidth}:${stageLayout.stageHeight}:${stylePreset.layout}:${data.name}:${data.title}`,
+      layoutKey: `${userZoom}:${stageLayout.stageWidth}:${stageLayout.stageHeight}:${stylePreset.layout}:${rendererVariantId}:${data.name}:${data.title}`,
       recenterKey: fitRequestCount,
       defaultCenterX: isWorkspaceMode ? 0.5 : 0.5,
       defaultCenterY: isWorkspaceMode ? 0.5 : 0.5,
@@ -164,8 +168,6 @@ export function VerbatiResumePreview({
     }
 
     let cancelled = false;
-    const rendererVariantId = VERBATI_LAYOUT_TO_RENDERER[stylePreset.layout];
-
     const capturePreviewState = async () => {
       try {
         if (document.fonts?.ready) {
@@ -212,11 +214,11 @@ export function VerbatiResumePreview({
     return () => {
       cancelled = true;
     };
-  }, [compareLayouts, stylePreset, themeVars]);
+  }, [compareLayouts, rendererVariantId, stylePreset, themeVars]);
 
   if (compareLayouts) {
     const comparisonVariantIds = comparisonLayouts.map(
-      (layout) => VERBATI_LAYOUT_TO_RENDERER[layout],
+      (layout) => resolveLegacyResumeRendererVariantId(layout) ?? "swissminima",
     );
     const fitToken = `${stylePreset.layout}:${stylePreset.typography}:${accentToken}:compare:${data.name}:${data.title}:${data.summary.length}:${data.experience.length}:${data.education.length}:${data.skills.length}:${data.languages.length}:${data.projects.length}:${data.achievements?.length ?? 0}`;
 
@@ -228,7 +230,7 @@ export function VerbatiResumePreview({
         data-live-resume-preview="true"
         data-style-layout={stylePreset.layout}
         data-style-typography={stylePreset.typography}
-        data-renderer-variant={VERBATI_LAYOUT_TO_RENDERER[stylePreset.layout]}
+        data-renderer-variant={rendererVariantId}
         style={themeVars}
       >
         <ResumePage
@@ -508,7 +510,7 @@ export function VerbatiResumePreview({
         >
           <ResumePage
             data={data}
-            mode={VERBATI_LAYOUT_TO_RENDERER[stylePreset.layout]}
+            mode={rendererVariantId}
             stylePreset={stylePreset}
             fitToken={fitToken}
             userZoom={userZoom}
@@ -530,7 +532,7 @@ export function VerbatiResumePreview({
           data-live-resume-preview="true"
           data-style-layout={stylePreset.layout}
           data-style-typography={stylePreset.typography}
-          data-renderer-variant={VERBATI_LAYOUT_TO_RENDERER[stylePreset.layout]}
+          data-renderer-variant={rendererVariantId}
           style={themeVars}
         >
           {railStartControls ? (
@@ -582,7 +584,7 @@ export function VerbatiResumePreview({
           data-live-resume-preview="true"
           data-style-layout={stylePreset.layout}
           data-style-typography={stylePreset.typography}
-          data-renderer-variant={VERBATI_LAYOUT_TO_RENDERER[stylePreset.layout]}
+          data-renderer-variant={rendererVariantId}
           style={themeVars}
         >
           <div className="dasti-proposal-sheet__body dasti-proposal-sheet__body--document-viewer">
