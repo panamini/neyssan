@@ -89,7 +89,6 @@ vi.mock("../../lib/proposal-personalization", () => ({
   }),
   getProposalAttachedCvId: () => null,
   getProposalAttachedCvLocalDocument: () => null,
-  listLocalCvPickerOptions: () => [],
   PROPOSAL_ATTACHED_CV_UPDATED_EVENT: "dasti:proposal-attached-cv-updated",
 }));
 

@@ -3,7 +3,6 @@ import type {
   StyleFamilyId,
   VerbatiStylePreset,
 } from "../../features/verbati/types";
-import { isWorkshopFamilyEnabled } from "../flags";
 import type { ResumeTemplateId } from "./resumeTemplates";
 
 export type StyleFamilyDefinition = {
@@ -99,23 +98,6 @@ export function getStyleFamilyDefinition(
   return (
     STYLE_FAMILY_DEFINITIONS.find((family) => family.id === familyId) ??
     STYLE_FAMILY_DEFINITIONS[0]
-  );
-}
-
-export function getStyleFamilyDisplayMetadata(
-  familyId: StyleFamilyId | null | undefined,
-): Pick<StyleFamilyDefinition, "id" | "label" | "description"> {
-  const definition = getStyleFamilyDefinition(familyId);
-  return {
-    id: definition.id,
-    label: definition.label,
-    description: definition.description,
-  };
-}
-
-export function listSelectableStyleFamilies(): readonly StyleFamilyDefinition[] {
-  return STYLE_FAMILY_DEFINITIONS.filter(
-    (family) => family.id !== "workshop" || isWorkshopFamilyEnabled(),
   );
 }
 
