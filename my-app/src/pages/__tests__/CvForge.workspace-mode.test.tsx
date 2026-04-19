@@ -125,9 +125,11 @@ describe("CvForge workspace mode", () => {
     const pageShell = container.querySelector(
       ".dasti-page-shell--cv-forge",
     ) as HTMLElement | null;
-    expect(pageShell?.style.getPropertyValue("--page-shell-pad-top")).toBe("0px");
+    expect(pageShell?.style.getPropertyValue("--page-shell-pad-top")).toBe(
+      "var(--space-2)",
+    );
     expect(pageShell?.style.getPropertyValue("--page-shell-pad-top-mobile")).toBe(
-      "0px",
+      "var(--space-2)",
     );
     expect(pageShell?.style.getPropertyValue("--cv-preview-toolbar-inset")).toBe(
       "0px",
