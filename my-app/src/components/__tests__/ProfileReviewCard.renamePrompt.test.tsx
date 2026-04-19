@@ -10,6 +10,7 @@ const reorderSectionsMock = vi.fn();
 const renameCvMock = vi.fn();
 const cvLibraryState = {
   currentCv: null as Record<string, unknown> | null,
+  isLibraryHydrated: true,
 };
 
 vi.mock("../../../convex/_generated/api", () => ({
@@ -50,6 +51,7 @@ vi.mock("../../contexts/CvLibraryContext", () => ({
     currentCvId: null,
     loadCv: vi.fn(),
     isLoading: false,
+    isLibraryHydrated: cvLibraryState.isLibraryHydrated,
     isDirty: false,
     reorderSections: reorderSectionsMock,
     addSection: vi.fn(),
@@ -73,6 +75,7 @@ describe("ProfileReviewCard rename prompt", () => {
     reorderSectionsMock.mockReset();
     renameCvMock.mockReset();
     cvLibraryState.currentCv = null;
+    cvLibraryState.isLibraryHydrated = true;
     window.sessionStorage.clear();
     Object.defineProperty(window, "__CV_EDITOR_DEBUG__", {
       configurable: true,
