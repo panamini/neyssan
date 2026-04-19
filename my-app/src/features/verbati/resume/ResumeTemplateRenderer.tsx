@@ -88,8 +88,12 @@ export function ResumeTemplateRenderer({
         : null,
     [isWorkshopTemplateRenderer, resumeTemplateId, stylePreset],
   );
-  const pageWidthPx = stageLayout?.pageWidth ?? A4_PAGE_WIDTH_PX;
-  const pageHeightPx = stageLayout?.pageHeight ?? A4_PAGE_HEIGHT_PX;
+  const previewScale =
+    stageLayout && stageLayout.pageWidth > 0
+      ? stageLayout.pageWidth / A4_PAGE_WIDTH_PX
+      : 1;
+  const shellPageWidthPx = stageLayout?.pageWidth ?? A4_PAGE_WIDTH_PX;
+  const shellPageHeightPx = stageLayout?.pageHeight ?? A4_PAGE_HEIGHT_PX;
   const lastCommittedPageCountRef = React.useRef<number | null>(null);
 
   React.useEffect(() => {
@@ -120,10 +124,10 @@ export function ResumeTemplateRenderer({
       data-testid="resume-template-renderer"
       style={{
         ...previewVars,
-        width: `${pageWidthPx}px`,
+        width: `${shellPageWidthPx}px`,
         minHeight: `${getResumeTemplateCanvasHeight({
           pageCount: plan.pageCount,
-          pageHeightPx,
+          pageHeightPx: shellPageHeightPx,
         })}px`,
         display: "grid",
         gap: `${RESUME_TEMPLATE_PAGE_GAP_PX}px`,
@@ -134,20 +138,34 @@ export function ResumeTemplateRenderer({
         <div
           key={`workshop-page-${page.index + 1}`}
           style={{
-            width: `${pageWidthPx}px`,
-            minHeight: `${pageHeightPx}px`,
+            width: `${shellPageWidthPx}px`,
+            minHeight: `${shellPageHeightPx}px`,
             boxSizing: "border-box",
-            background: "var(--paper)",
-            boxShadow:
-              "0 1px 2px rgba(20, 20, 20, 0.06), 0 18px 36px rgba(20, 20, 20, 0.08)",
+            overflow: "hidden",
+            display: "grid",
+            alignContent: "start",
+            justifyItems: "start",
           }}
         >
-          <ResumeOneColAtsPage
-            data={data}
-            page={page}
-            template={templateDefinition}
-            activeTarget={activeTarget}
-          />
+          <div
+            style={{
+              width: `${A4_PAGE_WIDTH_PX}px`,
+              minHeight: `${A4_PAGE_HEIGHT_PX}px`,
+              boxSizing: "border-box",
+              background: "var(--paper)",
+              boxShadow:
+                "0 1px 2px rgba(20, 20, 20, 0.06), 0 18px 36px rgba(20, 20, 20, 0.08)",
+              transform: `scale(${previewScale})`,
+              transformOrigin: "top left",
+            }}
+          >
+            <ResumeOneColAtsPage
+              data={data}
+              page={page}
+              template={templateDefinition}
+              activeTarget={activeTarget}
+            />
+          </div>
         </div>
       ))}
     </div>
