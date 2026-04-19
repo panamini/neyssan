@@ -3,7 +3,10 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { resumeMock } from "../../features/verbati/resume/resume.mock";
-import { DEFAULT_VERBATI_STYLE } from "../../features/verbati/style";
+import {
+  DEFAULT_VERBATI_STYLE,
+  getResumeTemplateId,
+} from "../../features/verbati/style";
 import type { ResumePrintRoutePayload } from "../../lib/document-export-models";
 import { ResumePrintPage } from "../ResumePrintPage";
 
@@ -15,8 +18,14 @@ function buildPayload(): ResumePrintRoutePayload {
     resumeData: resumeMock,
     stylePreset: {
       ...DEFAULT_VERBATI_STYLE,
+      familyId: "two-column",
       layout: "two-column",
     },
+    resumeTemplateId: getResumeTemplateId({
+      ...DEFAULT_VERBATI_STYLE,
+      familyId: "two-column",
+      layout: "two-column",
+    }),
     rendererVariantId: "robial",
   };
 }
