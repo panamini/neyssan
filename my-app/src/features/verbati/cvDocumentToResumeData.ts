@@ -1,4 +1,5 @@
 import { formatByPrecision, formatRangeFromItem } from "../../lib/date-utils";
+import { deriveResponsibilityBullets } from "../../lib/resumeResponsibilityAuthority";
 import { remirrorJsonToString } from "../../lib/utils";
 import type { RemirrorJSON } from "remirror";
 import type {
@@ -272,11 +273,14 @@ function mapExperience(
 
   const structuredExperience = readStructured<IExperienceItem>(experienceContext.section)
     .map((item, index) => {
-      const bullets = Array.isArray(item.responsibilityBullets)
-        ? item.responsibilityBullets
-            .map((value) => String(value ?? "").trim())
-            .filter(Boolean)
-        : [];
+      const bullets = deriveResponsibilityBullets({
+        responsibilities: item.responsibilities,
+        hasResponsibilitiesField: Object.prototype.hasOwnProperty.call(
+          item,
+          "responsibilities",
+        ),
+        responsibilityBullets: item.responsibilityBullets,
+      });
       const description = toPlainText(item.description);
       const role = String(item.position ?? "").trim();
       const company = String(item.company ?? "").trim();
