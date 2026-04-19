@@ -123,6 +123,46 @@ describe("useDocumentStageLayout", () => {
     expect(result.current.overflowY).toBe(true);
   });
 
+  it("keeps the workspace viewport fixed in fit mode while scaling the page inside it", async () => {
+    const measurementRef = {
+      current: createMeasurementNode({ width: 600, height: 800 }),
+    } as React.RefObject<HTMLDivElement>;
+
+    const { result } = renderHook(() =>
+      useDocumentStageLayout({
+        measurementRef,
+        zoomLevel: 1,
+        fitMode: "contain",
+        fillAvailableOnZoom: true,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.stageWidth).toBe(600);
+      expect(result.current.stageHeight).toBe(800);
+    });
+
+    const expectedFitScale = Math.min(
+      600 / A4_PAGE_WIDTH_PX,
+      800 / A4_PAGE_HEIGHT_PX,
+    );
+
+    expect(result.current.pageWidth).toBeCloseTo(
+      A4_PAGE_WIDTH_PX * expectedFitScale,
+      2,
+    );
+    expect(result.current.pageHeight).toBeCloseTo(
+      A4_PAGE_HEIGHT_PX * expectedFitScale,
+      2,
+    );
+    expect(result.current.pageWidth).toBeLessThan(result.current.stageWidth);
+    expect(result.current.pageHeight).toBeLessThanOrEqual(
+      result.current.stageHeight,
+    );
+    expect(result.current.overflowX).toBe(false);
+    expect(result.current.overflowY).toBe(false);
+  });
+
   it("falls back to the parent viewport size when the stage node collapses", async () => {
     const collapsedNode = createMeasurementNode({ width: 28, height: 120 });
     const parent = attachMeasurementParent(collapsedNode, {

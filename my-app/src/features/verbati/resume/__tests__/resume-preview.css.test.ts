@@ -93,7 +93,9 @@ describe("resume preview workspace anchoring", () => {
     expect(workspaceShellRule).toContain(
       "--document-viewer-bleed-block: 0px;",
     );
-    expect(workspaceShellRule).toContain("--resume-preview-toolbar-gap: 0px;");
+    expect(workspaceShellRule).toContain(
+      "--resume-preview-toolbar-gap: var(--document-rail-gap);",
+    );
     expect(workspaceShellRule).toContain("--resume-preview-shell-padding: 0px;");
     expect(workspaceShellRule).toContain(
       "grid-template-rows: auto minmax(0, 1fr);",
