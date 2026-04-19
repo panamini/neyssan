@@ -51,26 +51,32 @@ describe("SettingsPage preview controls", () => {
     presetsQueryMock.mockReturnValue({
       activeSlot: 1,
       preset1: {
-        fontPairId: "quiet-editorial",
-        styleChoice: "balanced",
-        paletteOverride: null,
-        accentHex: null,
+        verbatiStyle: {
+          familyId: "swiss",
+          layout: "swiss",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        },
         voicePreset: null,
         name: "Style 1",
       },
       preset2: {
-        fontPairId: "quiet-editorial",
-        styleChoice: "balanced",
-        paletteOverride: null,
-        accentHex: null,
+        verbatiStyle: {
+          familyId: "swiss",
+          layout: "swiss",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        },
         voicePreset: null,
         name: "Style 2",
       },
       preset3: {
-        fontPairId: "quiet-editorial",
-        styleChoice: "warm",
-        paletteOverride: null,
-        accentHex: null,
+        verbatiStyle: {
+          familyId: "editorial",
+          layout: "editorial",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        },
         voicePreset: null,
         name: "Style 3",
       },
@@ -107,7 +113,11 @@ describe("SettingsPage preview controls", () => {
     expect(lastCall).toMatchObject({
       slot: 1,
       preset: expect.objectContaining({
-        fontPairId: "civic-correspondence",
+        verbatiStyle: expect.objectContaining({
+          familyId: "swiss",
+          layout: "swiss",
+          typography: "civic-correspondence",
+        }),
       }),
     });
     expect(
@@ -138,7 +148,7 @@ describe("SettingsPage preview controls", () => {
         element.className.includes("dasti-settings-style-card"),
       );
 
-    expect(previewBadge()).toHaveTextContent("Swiss");
+    expect(previewBadge()).toHaveTextContent("Swiss Minima");
     expect(editorialStyleButton).toBeTruthy();
 
     await user.click(editorialStyleButton!);
@@ -151,7 +161,10 @@ describe("SettingsPage preview controls", () => {
     expect(lastCall).toMatchObject({
       slot: 1,
       preset: expect.objectContaining({
-        styleChoice: "warm",
+        verbatiStyle: expect.objectContaining({
+          familyId: "editorial",
+          layout: "editorial",
+        }),
       }),
     });
     expect(previewBadge()).toHaveTextContent("Editorial");
