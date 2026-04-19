@@ -81,27 +81,95 @@ function roundPx(value: number) {
   return Math.round(value * 100) / 100;
 }
 
+function normalizeSignatureValue(value: string | undefined | null) {
+  return String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function joinSignatureParts(parts: ReadonlyArray<string>) {
+  return parts.map((part) => normalizeSignatureValue(part)).join("|");
+}
+
 function buildResumeDataSignature(data: ResumeData) {
   return [
-    data.name,
-    data.title,
-    data.summary,
-    data.metadata.length,
-    data.contact.length,
-    data.skills.length,
-    data.skillItems.length,
-    data.languages.length,
-    data.experience.length,
-    data.projects.length,
-    data.education.length,
-    data.achievements?.length ?? 0,
-    data.achievementItems.length,
-    data.hobbies.length,
-    data.hobbyItems.length,
-    data.certifications.length,
-    data.affiliations.length,
-    data.textSections.length,
-  ].join(":");
+    joinSignatureParts([data.name, data.title, data.summary]),
+    data.metadata
+      .map((item) => joinSignatureParts([item.label, item.value, item.itemId]))
+      .join("||"),
+    data.contact
+      .map((item) => joinSignatureParts([item.label, item.value, item.itemId]))
+      .join("||"),
+    data.skills.map((skill) => normalizeSignatureValue(skill)).join("||"),
+    data.skillItems
+      .map((item) => joinSignatureParts([item.id, item.name, item.level]))
+      .join("||"),
+    data.languages
+      .map((item) => joinSignatureParts([item.id, item.name, item.level]))
+      .join("||"),
+    data.experience
+      .map((item) =>
+        joinSignatureParts([
+          item.id,
+          item.role,
+          item.company,
+          item.period,
+          item.location,
+          item.description,
+          ...item.bullets,
+        ]),
+      )
+      .join("||"),
+    data.projects
+      .map((item) =>
+        joinSignatureParts([
+          item.id,
+          item.name,
+          item.meta,
+          item.description,
+        ]),
+      )
+      .join("||"),
+    data.education
+      .map((item) =>
+        joinSignatureParts([item.id, item.degree, item.school, item.period])
+      )
+      .join("||"),
+    (data.achievements ?? []).map((item) => normalizeSignatureValue(item)).join(
+      "||",
+    ),
+    data.achievementItems
+      .map((item) => joinSignatureParts([item.id, item.text]))
+      .join("||"),
+    data.hobbies.map((item) => normalizeSignatureValue(item)).join("||"),
+    data.hobbyItems
+      .map((item) => joinSignatureParts([item.id, item.name]))
+      .join("||"),
+    data.certifications
+      .map((item) => joinSignatureParts([item.id, item.name, item.issuer, item.meta]))
+      .join("||"),
+    data.affiliations
+      .map((item) =>
+        joinSignatureParts([
+          item.id,
+          item.organizationName,
+          item.roleOrMembershipType,
+          item.dateRange,
+          item.notes,
+        ])
+      )
+      .join("||"),
+    data.textSections
+      .map((item) =>
+        joinSignatureParts([
+          item.id,
+          item.sectionId,
+          item.sectionTitle,
+          item.text,
+        ])
+      )
+      .join("||"),
+  ].join("::");
 }
 
 function getLayoutPresetForRenderer(
@@ -289,6 +357,7 @@ export function VerbatiResumePreview({
     };
   }, [
     compareLayouts,
+    dataSignature,
     resumePreviewMetrics.pageCount,
     resumePreviewMetrics.stackHeightPx,
     stageLayout.pageHeight,
