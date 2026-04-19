@@ -1315,6 +1315,255 @@ function renderSection(args: {
   </section>`;
 }
 
+function getCommittedWorkshopPagesOrThrow(
+  data: ResumePrintSource,
+): NonNullable<ResumePrintSource["committedPages"]> {
+  if (data.resumeTemplateId !== "workshop_resume_onecol_ats") {
+    return [];
+  }
+
+  if (!data.committedPages || data.committedPages.length === 0) {
+    throw new Error(
+      "Committed workshop export pages are required for workshop export rendering.",
+    );
+  }
+
+  return data.committedPages;
+}
+
+function renderWorkshopProfileFragment(args: {
+  fragment: Extract<
+    NonNullable<ResumePrintSource["committedPages"]>[number]["fragments"][number],
+    { kind: "profile" }
+  >;
+  locale?: string | null;
+}): string {
+  const contactMarkup = renderResumeItems({
+    items: args.fragment.contact,
+    locale: args.locale,
+  });
+  const metadataMarkup = renderResumeItems({
+    items: args.fragment.metadata,
+    locale: args.locale,
+  });
+
+  return `<header class="export-header workshop-export-header" data-block="header" data-export-fragment-id="${escapeHtml(args.fragment.fragmentId)}">
+    <div class="workshop-export-header__identity">
+      <h1 class="doc-name">${escapeHtml(args.fragment.profile.name)}</h1>
+      ${
+        args.fragment.profile.title
+          ? `<p class="doc-title">${escapeHtml(args.fragment.profile.title)}</p>`
+          : ""
+      }
+    </div>
+    ${
+      contactMarkup
+        ? `<div class="workshop-export-header__contact">${contactMarkup}</div>`
+        : ""
+    }
+    ${
+      metadataMarkup
+        ? `<div class="workshop-export-header__metadata">${metadataMarkup}</div>`
+        : ""
+    }
+  </header>`;
+}
+
+function renderWorkshopFragment(args: {
+  fragment: NonNullable<ResumePrintSource["committedPages"]>[number]["fragments"][number];
+  locale?: string | null;
+}): string {
+  const { fragment, locale } = args;
+
+  switch (fragment.kind) {
+    case "profile":
+      return renderWorkshopProfileFragment({ fragment, locale });
+    case "summary":
+      return renderSection({
+        block: "summary",
+        content: `<p class="entry-summary">${escapeHtml(fragment.text)}</p>`,
+        locale,
+        titleKey: "summary",
+      });
+    case "experience":
+      return renderSection({
+        block: "experience",
+        content: fragment.items
+          .map(
+            (item) => `<article class="entry entry--experience" data-export-item-id="${escapeHtml(item.id)}">
+              <div class="entry-lead">
+                <div class="entry-head">
+                  <h3 class="entry-title">${escapeHtml(
+                    [item.role, item.company].filter(Boolean).join(" · "),
+                  )}</h3>
+                  <p class="entry-meta">${escapeHtml(
+                    [item.period, item.location].filter(Boolean).join("\n"),
+                  )}</p>
+                </div>
+                ${item.summary ? `<p class="entry-summary">${escapeHtml(item.summary)}</p>` : ""}
+              </div>
+              ${
+                item.bullets.length > 0
+                  ? `<ul class="bullet-list">${item.bullets
+                      .map((bullet) => `<li>${escapeHtml(bullet)}</li>`)
+                      .join("")}</ul>`
+                  : ""
+              }
+            </article>`,
+          )
+          .join(""),
+        locale,
+        titleKey: "experience",
+      });
+    case "education":
+      return renderSection({
+        block: "education",
+        content: fragment.items
+          .map(
+            (item) => `<article class="entry entry--education" data-export-item-id="${escapeHtml(item.id)}">
+              <div class="entry-lead">
+                <div class="entry-head">
+                  <h3 class="entry-title">${escapeHtml(item.degree)}</h3>
+                  <p class="entry-meta">${escapeHtml(item.period)}</p>
+                </div>
+                <p class="entry-summary">${escapeHtml(item.school)}</p>
+              </div>
+            </article>`,
+          )
+          .join(""),
+        locale,
+        titleKey: "education",
+      });
+    case "skills":
+      return renderSection({
+        block: "skills",
+        content: renderResumeTagList(
+          fragment.items.map((item) =>
+            item.level ? `${item.name} (${item.level})` : item.name,
+          ),
+        ),
+        keep: true,
+        locale,
+        ruled: true,
+        titleKey: "skills",
+      });
+    case "selected_projects":
+      return renderSection({
+        block: "projects",
+        content: fragment.items
+          .map(
+            (item) => `<article class="entry entry--project" data-export-item-id="${escapeHtml(item.id)}">
+              <div class="entry-lead">
+                <div class="entry-head">
+                  <h3 class="entry-title">${escapeHtml(item.name)}</h3>
+                  <p class="entry-meta">${escapeHtml(item.meta)}</p>
+                </div>
+                <p class="entry-summary">${escapeHtml(item.description)}</p>
+              </div>
+            </article>`,
+          )
+          .join(""),
+        locale,
+        titleKey: "projects",
+      });
+    case "languages":
+      return renderSection({
+        block: "languages",
+        content: renderResumeItems({
+          items: fragment.items.map((item) => ({
+            label: item.name,
+            value:
+              item.level || localizeStructuredLabel("Working proficiency", locale),
+          })),
+          locale,
+        }),
+        keep: true,
+        locale,
+        ruled: true,
+        titleKey: "languages",
+      });
+    case "certifications":
+      return renderSection({
+        block: "certifications",
+        content: fragment.items
+          .map(
+            (item) => `<article class="entry entry--certification" data-export-item-id="${escapeHtml(item.id)}">
+              <div class="entry-lead">
+                <div class="entry-head">
+                  <h3 class="entry-title">${escapeHtml(item.name)}</h3>
+                  <p class="entry-meta">${escapeHtml(
+                    [item.issuer, item.meta].filter(Boolean).join(" · "),
+                  )}</p>
+                </div>
+              </div>
+            </article>`,
+          )
+          .join(""),
+        locale,
+        titleKey: "certifications",
+      });
+    case "achievements":
+      return renderSection({
+        block: "achievements",
+        content: `<ul class="bullet-list">${fragment.items
+          .map((item) => `<li data-export-item-id="${escapeHtml(item.id)}">${escapeHtml(item.text)}</li>`)
+          .join("")}</ul>`,
+        locale,
+        titleKey: "achievements",
+      });
+    case "affiliations":
+      return renderSection({
+        block: "affiliations",
+        content: fragment.items
+          .map(
+            (item) => `<article class="entry entry--affiliation" data-export-item-id="${escapeHtml(item.id)}">
+              <div class="entry-lead">
+                <div class="entry-head">
+                  <h3 class="entry-title">${escapeHtml(item.organizationName)}</h3>
+                  <p class="entry-meta">${escapeHtml(
+                    [item.roleOrMembershipType, item.dateRange].filter(Boolean).join(" · "),
+                  )}</p>
+                </div>
+                ${item.notes ? `<p class="entry-summary">${escapeHtml(item.notes)}</p>` : ""}
+              </div>
+            </article>`,
+          )
+          .join(""),
+        locale,
+        titleKey: "affiliations",
+      });
+    case "hobbies":
+      return renderSection({
+        block: "interests",
+        content: `<p class="entry-summary">${escapeHtml(
+          fragment.items.map((item) => item.name).join(" · "),
+        )}</p>`,
+        locale,
+        titleKey: "interests",
+      });
+    case "additional_information":
+      return renderSection({
+        block: "additional_information",
+        content: fragment.items
+          .map(
+            (item) => `<article class="entry entry--text-section" data-export-item-id="${escapeHtml(item.id)}">
+              <div class="entry-lead">
+                ${
+                  item.sectionTitle
+                    ? `<div class="entry-head"><h3 class="entry-title">${escapeHtml(item.sectionTitle)}</h3></div>`
+                    : ""
+                }
+                <p class="entry-summary">${escapeHtml(item.text)}</p>
+              </div>
+            </article>`,
+          )
+          .join(""),
+        locale,
+        titleKey: fragment.title || "additional_information",
+      });
+  }
+}
+
 function renderResumeHtml(args: {
   data: ResumePrintSource;
   mode: ExportMode;
@@ -1326,6 +1575,41 @@ function renderResumeHtml(args: {
     resumeTemplateId: args.data.resumeTemplateId,
     stylePreset: args.stylePreset,
   });
+  if (args.data.resumeTemplateId === "workshop_resume_onecol_ats") {
+    const committedPages = getCommittedWorkshopPagesOrThrow(args.data);
+    const workshopBodyMarkup = committedPages
+      .map(
+        (page) => `<main class="export-page" data-export-doc="resume" data-export-page-index="${page.index + 1}" data-resume-template="workshop_resume_onecol_ats">
+          <article class="resume-styled-page resume-styled-page--workshop" data-export-page-id="${escapeHtml(page.pageId)}">
+            ${page.fragments
+              .map((fragment) =>
+                renderWorkshopFragment({
+                  fragment,
+                  locale,
+                }),
+              )
+              .join("")}
+          </article>
+        </main>`,
+      )
+      .join("");
+
+    return buildHtmlDocument({
+      bodyClassName: joinClassNames([
+        "resume-export",
+        `resume--${args.mode}`,
+        `resume-layout--${normalizeStylePreset(args.stylePreset).layout}`,
+        `resume-shell--${profile.shell}`,
+      ]),
+      bodyMarkup: workshopBodyMarkup,
+      documentKind: "resume",
+      lang: args.data.locale,
+      mode: args.mode,
+      resumeTemplateId: args.data.resumeTemplateId,
+      stylePreset: args.stylePreset,
+      title: `${args.data.title} - ${args.mode === "ats" ? "ATS" : "Styled"}`,
+    });
+  }
   const contactSection = renderSection({
     block: "contact",
     content: renderResumeItems({ items: args.data.contact, locale }),
