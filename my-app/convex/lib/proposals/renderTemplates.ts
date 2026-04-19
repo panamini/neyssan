@@ -5,6 +5,7 @@ export const PROPOSAL_ACTIVE_TEMPLATE_IDS = [
   "editorial_wide",
   "modernist_signal",
   "quire_margin",
+  "workshop_proposal_margin",
 ] as const;
 
 export const PROPOSAL_LEGACY_TEMPLATE_IDS = [
@@ -134,6 +135,21 @@ export const PROPOSAL_TEMPLATE_DEFINITIONS: readonly ProposalTemplateDefinition[
       leftZoneMm: 35,
       topOffsetMm: 52,
       bodyStartMm: 98.5,
+      bottomMarginMm: 18,
+      rightMarginMm: 18,
+      readingMeasureCh: 58,
+      titleScaleMm: 7,
+    },
+    {
+      id: "workshop_proposal_margin",
+      name: "Workshop Margin",
+      shortLabel: "35 mm workshop",
+      description:
+        "A workshop twin with a clean ATS-adjacent margin field and a steady, content-first body cadence.",
+      twinLabel: "Workshop ATS",
+      leftZoneMm: 35,
+      topOffsetMm: 35,
+      bodyStartMm: 96,
       bottomMarginMm: 18,
       rightMarginMm: 18,
       readingMeasureCh: 58,
