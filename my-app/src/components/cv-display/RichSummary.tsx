@@ -36,7 +36,7 @@ export function RichSummary({
     const range = formatRangeFromItem(exp);
     return (
       <div className="cv-entry-summary">
-        <div className="cv-entry-summary__main">
+        <div className="cv-entry-summary__main cv-reading-measure">
           <p className="cv-entry-title cv-entry-title--truncate">
             {exp.position}
           </p>
@@ -59,7 +59,7 @@ export function RichSummary({
     const range = formatRangeFromItem(edu);
     return (
       <div className="cv-entry-summary">
-        <div className="cv-entry-summary__main">
+        <div className="cv-entry-summary__main cv-reading-measure">
           <p className="cv-entry-title cv-entry-title--truncate">
             {edu.degree || edu.institution}
           </p>

@@ -507,7 +507,7 @@ const RichEditor = forwardRef<
   );
 
   return (
-    <div className="dasti-rich">
+    <div className="dasti-rich dasti-rich--cv-reading-measure">
       {inlineSelectionState ? (
         <FloatingAiToolbar
           open

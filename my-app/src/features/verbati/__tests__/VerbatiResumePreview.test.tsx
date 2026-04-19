@@ -86,7 +86,12 @@ vi.mock("../resume/ResumePage", () => ({
       if (resumePreviewMetricsRef.current) {
         onPreviewMetricsChange?.(resumePreviewMetricsRef.current);
       }
-    }, [onPreviewMetricsChange]);
+    }, [
+      onPreviewMetricsChange,
+      resumePreviewMetricsRef.current?.pageCount,
+      resumePreviewMetricsRef.current?.pageGapPx,
+      resumePreviewMetricsRef.current?.stackHeightPx,
+    ]);
 
     return (
       <div data-testid="resume-page" data-mode={mode}>
@@ -766,5 +771,133 @@ describe("VerbatiResumePreview", () => {
     expect(useDocumentStageLayoutMock.mock.lastCall?.[0]).not.toHaveProperty(
       "pageHeightPx",
     );
+  });
+
+  it("clamps the panel viewport back to the last page when stacked content shrinks", async () => {
+    resumePreviewMetricsRef.current = {
+      pageCount: 3,
+      pageGapPx: 16,
+      stackHeightPx: 3400,
+    };
+
+    const { rerender } = render(
+      <VerbatiResumePreview
+        data={resumeMock}
+        stylePreset={{
+          layout: "swiss",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        hostMode="panel"
+      />,
+    );
+
+    const viewport = document.querySelector(
+      ".dasti-doc-viewport--resume",
+    ) as HTMLDivElement | null;
+
+    expect(viewport).not.toBeNull();
+
+    let viewportScrollHeight = 1800;
+
+    Object.defineProperty(viewport!, "clientHeight", {
+      configurable: true,
+      value: 600,
+    });
+    Object.defineProperty(viewport!, "scrollHeight", {
+      configurable: true,
+      get: () => viewportScrollHeight,
+    });
+    Object.defineProperty(viewport!, "clientWidth", {
+      configurable: true,
+      value: 794,
+    });
+    Object.defineProperty(viewport!, "scrollWidth", {
+      configurable: true,
+      value: 794,
+    });
+
+    viewport!.scrollTop = 900;
+
+    viewportScrollHeight = 940;
+    resumePreviewMetricsRef.current = {
+      pageCount: 2,
+      pageGapPx: 16,
+      stackHeightPx: 1700,
+    };
+
+    rerender(
+      <VerbatiResumePreview
+        data={resumeMock}
+        stylePreset={{
+          layout: "swiss",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        hostMode="panel"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(viewport!.scrollTop).toBe(340);
+    });
+  });
+
+  it("keeps panel wheel scrolling owned by the preview viewport even over blank viewport space", () => {
+    render(
+      <VerbatiResumePreview
+        data={resumeMock}
+        stylePreset={{
+          layout: "swiss",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        hostMode="panel"
+      />,
+    );
+
+    const viewport = document.querySelector(
+      ".dasti-doc-viewport--resume",
+    ) as HTMLDivElement | null;
+    const scrollRoot = document.createElement("div");
+
+    expect(viewport).not.toBeNull();
+    Object.defineProperty(document, "scrollingElement", {
+      configurable: true,
+      value: scrollRoot,
+    });
+
+    Object.defineProperty(viewport!, "clientHeight", {
+      configurable: true,
+      value: 600,
+    });
+    Object.defineProperty(viewport!, "scrollHeight", {
+      configurable: true,
+      value: 1200,
+    });
+    Object.defineProperty(viewport!, "clientWidth", {
+      configurable: true,
+      value: 794,
+    });
+    Object.defineProperty(viewport!, "scrollWidth", {
+      configurable: true,
+      value: 794,
+    });
+    Object.defineProperty(scrollRoot, "clientHeight", {
+      configurable: true,
+      value: 500,
+    });
+    Object.defineProperty(scrollRoot, "scrollHeight", {
+      configurable: true,
+      value: 1200,
+    });
+
+    viewport!.scrollTop = 600;
+    scrollRoot.scrollTop = 0;
+
+    fireEvent.wheel(viewport!, { deltaY: 120 });
+
+    expect(viewport!.scrollTop).toBe(600);
+    expect(scrollRoot.scrollTop).toBe(0);
   });
 });

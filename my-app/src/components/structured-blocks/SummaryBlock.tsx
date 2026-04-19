@@ -267,7 +267,7 @@ export function SummaryBlock({ section, onOpenEditor }: SummaryBlockProps) {
       }
     >
       <div
-        className="text-sm [color:var(--ti)]"
+        className="text-sm [color:var(--ti)] cv-reading-measure"
         role="region"
         aria-expanded={isExpanded}
         aria-labelledby={tooLong ? `${regionId}-toggle` : undefined}
