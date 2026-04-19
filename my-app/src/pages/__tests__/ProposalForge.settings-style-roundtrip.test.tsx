@@ -13,6 +13,12 @@ const mockCurrentProposalSettings = {
   paletteOverride: null,
   accentHex: null,
   fontPairId: null,
+  verbatiStyle: {
+    familyId: "editorial",
+    layout: "editorial",
+    typography: "quiet-editorial",
+    palette: "sauge",
+  },
   sourceMode: "proposal_local",
 } as const;
 
@@ -138,7 +144,7 @@ describe("ProposalForge settings style round-trip", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("proposal-settings-style")).toHaveTextContent(
-        "quire|mono-signal|pierre|two_column_rail",
+        "editorial|quiet-editorial|sauge|editorial_wide",
       );
     });
 
@@ -152,7 +158,7 @@ describe("ProposalForge settings style round-trip", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("proposal-settings-style")).toHaveTextContent(
-        "quire|mono-signal|pierre|two_column_rail",
+        "editorial|quiet-editorial|sauge|editorial_wide",
       );
     });
   });
