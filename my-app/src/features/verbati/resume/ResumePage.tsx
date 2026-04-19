@@ -2284,6 +2284,7 @@ function SwissMinimaPage({
   onPreviewMetricsChange?: ((metrics: ResumePreviewMetrics) => void) | undefined;
 }) {
   const stylePreset = React.useContext(ResumeStylePresetContext);
+  const sharedStageLayout = React.useContext(ResumeStageLayoutContext);
   const pageVars = buildPageVars(variant, stylePreset);
   const onRemoveSection = React.useContext(ResumeRemoveSectionContext);
   const { pageRef } = useAutoFitPage(fitToken);
@@ -2302,6 +2303,7 @@ function SwissMinimaPage({
   const [measuredBlocks, setMeasuredBlocks] = React.useState<
     ResumePaginationMeasuredBlock[]
   >([]);
+  const stackRef = React.useRef<HTMLDivElement | null>(null);
 
   const supportSections = React.useMemo(
     () =>
@@ -3342,15 +3344,68 @@ function SwissMinimaPage({
     });
   }, [blockDefinitions, measuredBlocks, pageContentHeightPx]);
 
-  React.useEffect(() => {
-    onPreviewMetricsChange?.({
-      pageCount: Math.max(1, plannedPages.length),
-      pageGapPx: SWISS_MINIMA_PAGE_GAP_PX,
-      stackHeightPx:
-        A4_PAGE_HEIGHT_PX * Math.max(1, plannedPages.length) +
-        SWISS_MINIMA_PAGE_GAP_PX * Math.max(0, plannedPages.length - 1),
+  const previewScale =
+    sharedStageLayout && sharedStageLayout.pageWidth > 0
+      ? sharedStageLayout.pageWidth / A4_PAGE_WIDTH_PX
+      : 1;
+  const fallbackStackHeightPx = React.useMemo(
+    () =>
+      A4_PAGE_HEIGHT_PX * Math.max(1, plannedPages.length) +
+      SWISS_MINIMA_PAGE_GAP_PX * Math.max(0, plannedPages.length - 1),
+    [plannedPages.length],
+  );
+
+  React.useLayoutEffect(() => {
+    if (!onPreviewMetricsChange) {
+      return undefined;
+    }
+
+    const publishMetrics = () => {
+      const measuredHeight = stackRef.current?.getBoundingClientRect().height;
+      const stackHeightPx =
+        measuredHeight && previewScale > 0
+          ? measuredHeight / previewScale
+          : fallbackStackHeightPx;
+
+      onPreviewMetricsChange({
+        pageCount: Math.max(1, plannedPages.length),
+        pageGapPx: SWISS_MINIMA_PAGE_GAP_PX,
+        stackHeightPx,
+      });
+    };
+
+    publishMetrics();
+
+    let frameId: number | null = window.requestAnimationFrame(() => {
+      frameId = null;
+      publishMetrics();
     });
-  }, [onPreviewMetricsChange, plannedPages.length]);
+
+    if (!stackRef.current || typeof ResizeObserver === "undefined") {
+      return () => {
+        if (frameId !== null) {
+          window.cancelAnimationFrame(frameId);
+        }
+      };
+    }
+
+    const resizeObserver = new ResizeObserver(() => {
+      publishMetrics();
+    });
+    resizeObserver.observe(stackRef.current);
+
+    return () => {
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
+      resizeObserver.disconnect();
+    };
+  }, [
+    fallbackStackHeightPx,
+    onPreviewMetricsChange,
+    plannedPages.length,
+    previewScale,
+  ]);
 
   const renderPageBlock = React.useCallback(
     (placement: ResumePaginationPlacement, pageIndex: number, blockIndex: number) => {
@@ -3384,7 +3439,11 @@ function SwissMinimaPage({
       pageCount={plannedPages.length}
       pageGapPx={SWISS_MINIMA_PAGE_GAP_PX}
     >
-      <div className="resume-page-stack" data-resume-page-stack="swissminima">
+      <div
+        ref={stackRef}
+        className="resume-page-stack"
+        data-resume-page-stack="swissminima"
+      >
         {plannedPages.map((page, pageIndex) => (
           <div
             key={`swissminima-page-shell-${pageIndex}`}
