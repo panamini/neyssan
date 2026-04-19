@@ -142,7 +142,14 @@ describe("CvForge workspace mode", () => {
       previewWorkbench?.style.getPropertyValue(
         "--document-viewer-shell-inline-size",
       ),
-    ).toContain("var(--document-sheet-inline-size)");
+    ).toBe("100%");
+    expect(previewWorkbench?.style.marginInline).toBe("0");
+    expect(pageShell?.style.getPropertyValue("--page-shell-pad-inline")).toBe(
+      "var(--space-4)",
+    );
+    expect(
+      pageShell?.style.getPropertyValue("--page-shell-pad-inline-mobile"),
+    ).toBe("var(--space-4)");
     expect(
       window.localStorage.getItem("dasti:cv-forge-workspace-mode:v1"),
     ).toBe("preview");

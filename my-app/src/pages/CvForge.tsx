@@ -249,7 +249,7 @@ export function CvForge(): JSX.Element {
         ? "1240px"
         : "var(--cv-editor-shell-max-width)";
   const cvPreviewShellBlockSize =
-    "min(var(--document-viewer-shell-max-block), calc(100dvh - var(--header-height) - (var(--space-2) * 2) - (var(--document-viewer-toolbar-block-size) + var(--space-1))))";
+    "min(var(--document-viewer-shell-max-block), calc(100dvh - var(--header-height) - (var(--space-2) * 2)))";
 
   React.useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -600,12 +600,11 @@ export function CvForge(): JSX.Element {
   };
   const cvPreviewWorkbenchStyle: React.CSSProperties = {
     width: "100%",
-    maxWidth: editorGridMaxWidth,
-    marginInline: "auto",
+    maxWidth: "100%",
+    marginInline: 0,
     minWidth: 0,
     "--cv-preview-shell-block-size": cvPreviewShellBlockSize,
-    "--document-viewer-shell-inline-size":
-      "min(100%, calc(var(--document-sheet-inline-size) + (var(--space-1) * 2) + 2px))",
+    "--document-viewer-shell-inline-size": "100%",
   } as React.CSSProperties;
 
   return (
@@ -624,14 +623,14 @@ export function CvForge(): JSX.Element {
             "--page-shell-pad-top":
               workspaceMode === "preview" ? "0px" : "var(--space-2)",
             "--page-shell-pad-inline":
-              workspaceMode === "preview" ? "0px" : "var(--space-4)",
+              "var(--space-4)",
             "--page-shell-pad-bottom": "var(--space-1)",
             "--cv-preview-toolbar-inset":
               workspaceMode === "preview" ? "0px" : undefined,
             "--page-shell-pad-top-mobile":
               workspaceMode === "preview" ? "0px" : "var(--space-2)",
             "--page-shell-pad-inline-mobile":
-              workspaceMode === "preview" ? "0px" : "var(--space-4)",
+              "var(--space-4)",
             "--page-shell-pad-bottom-mobile": "var(--space-1)",
           } as React.CSSProperties
         }
