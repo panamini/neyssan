@@ -32,7 +32,14 @@ import {
   buildCanonicalResumeRenderModelFromAuthoritative,
   buildCanonicalResumeRenderModelFromCv,
 } from "./buildCanonicalResumeRenderModel";
-import type { ResumeTemplateId } from "./layout/resumeTemplates";
+import {
+  getResumeTemplateDefinition,
+  type ResumeTemplateId,
+} from "./layout/resumeTemplates";
+import {
+  planWorkshopResumePages,
+  type WorkshopResumeCommittedPage,
+} from "./resume/resumePagination";
 
 export type ExportDocumentKind = "resume" | "proposal";
 export type ExportDocumentFormat = "pdf" | "docx";
@@ -88,6 +95,7 @@ export type ResumePrintSource = {
   achievements: string[];
   hobbies: string[];
   resumeTemplateId: ResumeTemplateId;
+  committedPages?: WorkshopResumeCommittedPage[];
 };
 
 export type ResumePreviewPrintSource = {
@@ -99,6 +107,7 @@ export type ResumePreviewPrintSource = {
   stylePreset: VerbatiStylePreset;
   resumeTemplateId: ResumeTemplateId;
   rendererVariantId: ResumeLayoutVariantId;
+  committedPages?: WorkshopResumeCommittedPage[];
 };
 
 export type ResumePrintRoutePayload = {
@@ -109,6 +118,7 @@ export type ResumePrintRoutePayload = {
   stylePreset: VerbatiStylePreset;
   resumeTemplateId: ResumeTemplateId;
   rendererVariantId: ResumeLayoutVariantId;
+  committedPages?: WorkshopResumeCommittedPage[];
 };
 
 export type ResumePrintDebugSnapshot = {
@@ -250,6 +260,7 @@ function normalizeResumeData(
   data: ResumeData,
   resumeTemplateId: ResumeTemplateId,
   exportSource: ResumePrintSource["exportSource"] = "standard",
+  committedPages?: WorkshopResumeCommittedPage[],
 ): ResumePrintSource {
   return {
     schemaVersion: 1,
@@ -292,37 +303,67 @@ function normalizeResumeData(
     achievements: (data.achievements ?? []).map((item) => cleanString(item)).filter(Boolean),
     hobbies: data.hobbies.map((item) => cleanString(item)).filter(Boolean),
     resumeTemplateId,
+    committedPages,
   };
+}
+
+function buildCommittedWorkshopPages(args: {
+  data: ResumeData;
+  resumeTemplateId: ResumeTemplateId;
+}): WorkshopResumeCommittedPage[] | undefined {
+  if (args.resumeTemplateId !== "workshop_resume_onecol_ats") {
+    return undefined;
+  }
+
+  return planWorkshopResumePages({
+    data: args.data,
+    template: getResumeTemplateDefinition(args.resumeTemplateId),
+  }).committedPages;
 }
 
 export function buildResumeExportSource(args: {
   currentCv: CvDocument | null | undefined;
   authoritativeResume?: AuthoritativeResume | unknown;
+  stylePreset?: VerbatiStylePreset | null;
 }): ResumePrintSource | null {
   if (!args.currentCv) {
     return null;
   }
 
+  const stylePreset = resolveVerbatiStyle(
+    args.stylePreset ?? getVerbatiStyleFromCv(args.currentCv),
+  );
+  const resumeTemplateId = getResumeTemplateId(stylePreset);
   const authoritativeModel = buildAuthoritativeResumeExportModel(
     args.authoritativeResume,
   );
   if (authoritativeModel) {
-    const stylePreset = getVerbatiStyleFromCv(args.currentCv);
+    const canonicalData =
+      buildCanonicalResumeRenderModelFromAuthoritative(authoritativeModel);
     return {
       ...normalizeResumeData(
-        buildCanonicalResumeRenderModelFromAuthoritative(authoritativeModel),
-        getResumeTemplateId(stylePreset),
+        canonicalData,
+        resumeTemplateId,
         "authoritative",
+        buildCommittedWorkshopPages({
+          data: canonicalData,
+          resumeTemplateId,
+        }),
       ),
       locale: normalizeExportLocale(args.currentCv.metadata.locale),
     };
   }
 
-  const stylePreset = getVerbatiStyleFromCv(args.currentCv);
+  const canonicalData = buildCanonicalResumeRenderModelFromCv(args.currentCv);
   return {
     ...normalizeResumeData(
-      buildCanonicalResumeRenderModelFromCv(args.currentCv),
-      getResumeTemplateId(stylePreset),
+      canonicalData,
+      resumeTemplateId,
+      "standard",
+      buildCommittedWorkshopPages({
+        data: canonicalData,
+        resumeTemplateId,
+      }),
     ),
     locale: normalizeExportLocale(args.currentCv.metadata.locale),
   };
@@ -361,6 +402,7 @@ export function buildResumePrintRoutePayload(args: {
     stylePreset: args.data.stylePreset,
     resumeTemplateId: args.data.resumeTemplateId,
     rendererVariantId: args.data.rendererVariantId,
+    committedPages: args.data.committedPages,
   };
 }
 
