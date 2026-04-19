@@ -15,7 +15,10 @@ import type {
   ResumeLinkIntent,
 } from "../features/verbati/resumeLinking";
 import { useBoundVerbatiCvStyle } from "../features/verbati/useBoundVerbatiCvStyle";
-import { resolveVerbatiStyle } from "../features/verbati/style";
+import {
+  getResumeTemplateId,
+  resolveVerbatiStyle,
+} from "../features/verbati/style";
 import {
   getProposalStyleDefinition,
   type ProposalStyleChoice,
@@ -332,11 +335,21 @@ export function CvForge(): JSX.Element {
         request.format === "pdf" ? `pdf:${request.mode}` : request.format;
       setExportingFormat(exportKey);
       try {
+        const isWorkshopStyledPdfExport =
+          request.format === "pdf" &&
+          request.mode === "styled" &&
+          getResumeTemplateId(stylePreset) === "workshop_resume_onecol_ats";
         const exported =
           request.format === "pdf" || request.format === "docx"
             ? await (async () => {
                 const source =
-                  request.format === "pdf" && request.mode === "styled"
+                  isWorkshopStyledPdfExport
+                    ? buildResumeExportSource({
+                        currentCv,
+                        authoritativeResume,
+                        stylePreset,
+                      })
+                    : request.format === "pdf" && request.mode === "styled"
                     ? buildStyledResumePrintSource({
                         currentCv,
                         stylePreset,
@@ -344,6 +357,7 @@ export function CvForge(): JSX.Element {
                     : buildResumeExportSource({
                         currentCv,
                         authoritativeResume,
+                        stylePreset,
                       });
 
                 if (!source) {

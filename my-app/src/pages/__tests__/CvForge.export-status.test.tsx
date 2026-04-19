@@ -13,6 +13,7 @@ const {
   downloadStandardResumeExportMock,
   exportDocumentFileMock,
   importCvMock,
+  useBoundVerbatiCvStyleMock,
   useCvLibraryMock,
 } = vi.hoisted(() => ({
   showToastMock: vi.fn(),
@@ -20,6 +21,7 @@ const {
   downloadStandardResumeExportMock: vi.fn(),
   exportDocumentFileMock: vi.fn(),
   importCvMock: vi.fn(),
+  useBoundVerbatiCvStyleMock: vi.fn(),
   useCvLibraryMock: vi.fn(),
 }));
 
@@ -146,15 +148,7 @@ vi.mock("../../features/verbati/VerbatiCvPreviewPanel", () => ({
 }));
 
 vi.mock("../../features/verbati/useBoundVerbatiCvStyle", () => ({
-  useBoundVerbatiCvStyle: () => ({
-    stylePreset: {
-      layout: "swiss",
-      typography: "quiet-editorial",
-      palette: "pierre",
-      accentHex: null,
-    },
-    setStylePreset: vi.fn(),
-  }),
+  useBoundVerbatiCvStyle: () => useBoundVerbatiCvStyleMock(),
 }));
 
 vi.mock("../../components/ui/toast", () => ({
@@ -183,6 +177,7 @@ describe("CvForge export status", () => {
     downloadStandardResumeExportMock.mockReset();
     exportDocumentFileMock.mockReset();
     importCvMock.mockReset();
+    useBoundVerbatiCvStyleMock.mockReset();
     useCvLibraryMock.mockReset();
     downloadAuthoritativeResumeExportMock.mockResolvedValue({
       filename: "jane-doe.pdf",
@@ -194,6 +189,15 @@ describe("CvForge export status", () => {
     });
     exportDocumentFileMock.mockResolvedValue({
       filename: "Resume - ATS.pdf",
+    });
+    useBoundVerbatiCvStyleMock.mockReturnValue({
+      stylePreset: {
+        layout: "swiss",
+        typography: "quiet-editorial",
+        palette: "pierre",
+        accentHex: null,
+      },
+      setStylePreset: vi.fn(),
     });
   });
 
@@ -594,5 +598,63 @@ describe("CvForge export status", () => {
     expect(
       screen.getByRole("button", { name: "More export formats" }),
     ).not.toBeDisabled();
+  });
+
+  it("routes workshop styled PDF export through the committed export-source path", async () => {
+    const user = userEvent.setup();
+    useBoundVerbatiCvStyleMock.mockReturnValue({
+      stylePreset: {
+        familyId: "workshop",
+        layout: "workshop",
+        typography: "quiet-editorial",
+        palette: "sauge",
+        accentHex: null,
+      },
+      setStylePreset: vi.fn(),
+    });
+    useCvLibraryMock.mockReturnValue({
+      currentCv: {
+        id: "cv-workshop-export",
+        title: "Workshop export CV",
+        metadata: {
+          authoritativeResume: null,
+          verbatiStyle: {
+            familyId: "workshop",
+            layout: "workshop",
+            typography: "quiet-editorial",
+            palette: "sauge",
+          },
+        },
+        sections: [],
+      },
+      importCv: importCvMock,
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv-workshop-export"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Export Styled PDF" }));
+
+    expect(exportDocumentFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "resume",
+        format: "pdf",
+        mode: "styled",
+        data: expect.objectContaining({
+          kind: "resume",
+          exportSource: "standard",
+          resumeTemplateId: "workshop_resume_onecol_ats",
+          committedPages: expect.any(Array),
+        }),
+      }),
+    );
+    expect(exportDocumentFileMock.mock.calls.at(-1)?.[0]?.data).not.toEqual(
+      expect.objectContaining({
+        renderSource: "preview",
+      }),
+    );
   });
 });
