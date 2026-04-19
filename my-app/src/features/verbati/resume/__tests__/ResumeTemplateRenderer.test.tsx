@@ -86,6 +86,8 @@ describe("ResumeTemplateRenderer", () => {
 
     expect(scaledPageShell?.getAttribute("style")).toContain("width: 396.85px;");
     expect(scaledPageShell?.getAttribute("style")).toContain("min-height: 561.25px;");
+    expect(scaledPageShell?.getAttribute("style")).toContain("height: 561.25px;");
+    expect(scaledPageShell?.getAttribute("style")).toContain("position: relative;");
     expect(scaledPageInner?.getAttribute("style")).toContain("width: 793.700");
     expect(scaledPageInner?.getAttribute("style")).toContain(
       "min-height: 1122.519",
@@ -94,5 +96,8 @@ describe("ResumeTemplateRenderer", () => {
     expect(scaledPageInner?.getAttribute("style")).toContain(
       "transform-origin: top left;",
     );
+    expect(scaledPageInner?.getAttribute("style")).toContain("position: absolute;");
+    expect(scaledPageInner?.getAttribute("style")).toContain("top: 0px;");
+    expect(scaledPageInner?.getAttribute("style")).toContain("left: 0px;");
   });
 });

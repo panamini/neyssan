@@ -140,23 +140,26 @@ export function ResumeTemplateRenderer({
           style={{
             width: `${shellPageWidthPx}px`,
             minHeight: `${shellPageHeightPx}px`,
+            height: `${shellPageHeightPx}px`,
             boxSizing: "border-box",
             overflow: "hidden",
-            display: "grid",
-            alignContent: "start",
-            justifyItems: "start",
+            position: "relative",
           }}
         >
           <div
             style={{
               width: `${A4_PAGE_WIDTH_PX}px`,
               minHeight: `${A4_PAGE_HEIGHT_PX}px`,
+              height: `${A4_PAGE_HEIGHT_PX}px`,
               boxSizing: "border-box",
               background: "var(--paper)",
               boxShadow:
                 "0 1px 2px rgba(20, 20, 20, 0.06), 0 18px 36px rgba(20, 20, 20, 0.08)",
               transform: `scale(${previewScale})`,
               transformOrigin: "top left",
+              position: "absolute",
+              top: 0,
+              left: 0,
             }}
           >
             <ResumeOneColAtsPage
