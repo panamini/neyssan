@@ -1,6 +1,7 @@
 import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import AchievementsModal from "../structured-blocks/AchievementsModal";
 
 const {
@@ -169,5 +170,92 @@ describe("AchievementsModal CV AI", () => {
     expect(secondField).toHaveValue("Improved onboarding across 3 product lines");
     expect(firstField).toHaveValue("Reduced theft by 28%.");
     vi.useRealTimers();
+  });
+
+  it("retargets focus when preview selects another achievement while the modal stays open", async () => {
+    vi.useFakeTimers();
+
+    const view = render(
+      <AchievementsModal
+        open
+        initialItemId="ach-1"
+        items={[
+          { id: "ach-1", text: "Reduced theft by 28%." },
+          { id: "ach-2", text: "Improved onboarding" },
+        ]}
+        onClose={vi.fn()}
+        onSave={vi.fn()}
+      />,
+    );
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10);
+    });
+
+    const firstField = document.getElementById(
+      "achievement-text-0",
+    ) as HTMLTextAreaElement | null;
+    const secondField = document.getElementById(
+      "achievement-text-1",
+    ) as HTMLTextAreaElement | null;
+
+    expect(document.activeElement).toBe(firstField);
+
+    view.rerender(
+      <AchievementsModal
+        open
+        initialItemId="ach-2"
+        items={[
+          { id: "ach-1", text: "Reduced theft by 28%." },
+          { id: "ach-2", text: "Improved onboarding" },
+        ]}
+        onClose={vi.fn()}
+        onSave={vi.fn()}
+      />,
+    );
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10);
+    });
+
+    expect(document.activeElement).toBe(secondField);
+
+    fireEvent.change(secondField!, {
+      target: { value: "Improved onboarding across 3 product lines" },
+    });
+    expect(secondField).toHaveValue("Improved onboarding across 3 product lines");
+    vi.useRealTimers();
+  });
+
+  it("lets the user click into a different row after typing in the current one", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <AchievementsModal
+        open
+        items={[
+          { id: "ach-1", text: "Reduced theft by 28%." },
+          { id: "ach-2", text: "Improved onboarding" },
+        ]}
+        onClose={vi.fn()}
+        onSave={vi.fn()}
+      />,
+    );
+
+    const firstField = document.getElementById(
+      "achievement-text-0",
+    ) as HTMLTextAreaElement | null;
+    const secondField = document.getElementById(
+      "achievement-text-1",
+    ) as HTMLTextAreaElement | null;
+
+    expect(firstField).not.toBeNull();
+    expect(secondField).not.toBeNull();
+
+    await user.click(firstField!);
+    await user.type(firstField!, "x");
+    await user.click(secondField!);
+
+    expect(document.activeElement).toBe(secondField);
   });
 });
