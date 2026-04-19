@@ -65,4 +65,44 @@ describe("ResumeOneColAtsPage", () => {
       container.querySelector('[data-preview-section="experience"][data-no-pan="true"]'),
     ).toBeTruthy();
   });
+
+  it("uses shared preview spacing tokens for the workshop page shell and header rhythm", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const plan = planWorkshopResumePages({
+      data: {
+        ...resumeMock,
+        metadata: resumeMock.metadata.slice(0, 1),
+        contact: resumeMock.contact.slice(0, 2),
+        experience: resumeMock.experience.slice(0, 1),
+        projects: [],
+        education: [],
+        certifications: [],
+        affiliations: [],
+        hobbyItems: [],
+        hobbies: [],
+        textSections: [],
+      },
+      template,
+    });
+
+    const { container } = render(
+      <ResumeOneColAtsPage
+        data={resumeMock}
+        page={plan.pages[0]!}
+        template={template}
+      />,
+    );
+
+    const pageShell = container.querySelector('[data-testid="resume-template-page"]');
+    const profileHeader = container.querySelector('[data-preview-section="profile"]');
+
+    expect(pageShell?.getAttribute("style")).toContain(
+      "padding: var(--margin-top) var(--margin-right) var(--margin-bottom) var(--margin-left);",
+    );
+    expect(pageShell?.getAttribute("style")).toContain("gap: var(--body-row-gap);");
+    expect(profileHeader?.getAttribute("style")).toContain("gap: var(--header-row-gap);");
+    expect(profileHeader?.getAttribute("style")).toContain(
+      "padding-bottom: var(--header-bottom-padding);",
+    );
+  });
 });
