@@ -92,6 +92,7 @@ describe("readStoredProposalOutputDraft", () => {
         proposalTemplateId: "editorial_wide",
         proposalStyleChoice: "formal",
         proposalVerbatiStyle: {
+          familyId: "editorial",
           layout: "editorial",
           typography: "civic-correspondence",
           palette: "custom",
