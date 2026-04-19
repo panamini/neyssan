@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ProjectsModal } from "../structured-blocks/ProjectsModal";
+import { SkillsModal } from "../structured-blocks/SkillsModal";
 import {
   AffiliationModal,
   CertificationModal,
@@ -107,6 +108,49 @@ describe("Structured modal targeted focus", () => {
     });
 
     expect(credentialIdInput).toHaveFocus();
+    vi.useRealTimers();
+  });
+
+  it("keeps the targeted skill field focused while typing after preview targeting", async () => {
+    vi.useFakeTimers();
+
+    render(
+      <SkillsModal
+        open
+        initialItemId="skill-2"
+        onClose={vi.fn()}
+        onSave={vi.fn()}
+        items={[
+          {
+            id: "skill-1",
+            name: "React",
+            level: "Advanced",
+          },
+          {
+            id: "skill-2",
+            name: "TypeScript",
+            level: "Advanced",
+          },
+        ]}
+      />,
+    );
+
+    await act(async () => {
+      vi.advanceTimersByTime(60);
+    });
+
+    const targetedInput = screen.getByDisplayValue("TypeScript");
+
+    expect(targetedInput).toHaveFocus();
+    fireEvent.change(targetedInput, {
+      target: { value: "TypeScript systems" },
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(60);
+    });
+
+    expect(targetedInput).toHaveFocus();
     vi.useRealTimers();
   });
 
