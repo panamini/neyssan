@@ -538,6 +538,8 @@ export function ResumeOneColAtsPage({
         color: "var(--color-text)",
         display: "grid",
         gap: "var(--body-row-gap)",
+        alignContent: "start",
+        alignItems: "start",
       }}
     >
       {page.sections.map((section) => (
