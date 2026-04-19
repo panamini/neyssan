@@ -45,11 +45,210 @@ const proposalPaletteOverrideValidator = v.union(
 );
 const proposalAccentHexValidator = v.union(v.string(), v.null());
 const proposalFontPairIdValidator = v.union(v.string(), v.null());
+const proposalVerbatiStyleValidator = v.object({
+  familyId: v.optional(v.string()),
+  layout: v.string(),
+  typography: v.string(),
+  palette: v.string(),
+  accentHex: v.optional(v.string()),
+});
 
 const proposalSourceModeValidator = v.union(
   v.literal("inherit_cv"),
   v.literal("proposal_local"),
 );
+
+const STYLE_FAMILY_IDS = [
+  "swiss",
+  "volk-register",
+  "two-column",
+  "editorial",
+  "modernist",
+  "quire",
+  "workshop",
+] as const;
+
+type StyleFamilyId = (typeof STYLE_FAMILY_IDS)[number];
+
+type CanonicalVerbatiStyle = {
+  familyId: StyleFamilyId;
+  layout: StyleFamilyId;
+  typography: string;
+  palette: string;
+  accentHex?: string;
+};
+
+const LEGACY_PROPOSAL_STYLE_DEFAULTS: Record<
+  "auto" | "formal" | "warm" | "technical" | "balanced",
+  CanonicalVerbatiStyle
+> = {
+  auto: {
+    familyId: "swiss",
+    layout: "swiss",
+    typography: "signature",
+    palette: "pierre",
+  },
+  balanced: {
+    familyId: "swiss",
+    layout: "swiss",
+    typography: "signature",
+    palette: "pierre",
+  },
+  formal: {
+    familyId: "quire",
+    layout: "quire",
+    typography: "expert",
+    palette: "pierre",
+  },
+  warm: {
+    familyId: "editorial",
+    layout: "editorial",
+    typography: "engaging",
+    palette: "bordeaux",
+  },
+  technical: {
+    familyId: "modernist",
+    layout: "modernist",
+    typography: "expert",
+    palette: "encre",
+  },
+};
+
+const STYLE_FAMILY_PROPOSAL_TEMPLATES: Record<StyleFamilyId, typeof PROPOSAL_TEMPLATE_IDS[number]> = {
+  swiss: "swiss_margin",
+  "volk-register": "volk_register",
+  "two-column": "two_column_rail",
+  editorial: "editorial_wide",
+  modernist: "modernist_signal",
+  quire: "quire_margin",
+  workshop: "workshop_proposal_margin",
+};
+
+function resolveStyleFamilyId(value: unknown): StyleFamilyId | null {
+  return typeof value === "string" && STYLE_FAMILY_IDS.includes(value as StyleFamilyId)
+    ? (value as StyleFamilyId)
+    : null;
+}
+
+function normalizeProposalPaletteOverride(
+  value: unknown,
+): "sauge" | "ocre" | "pierre" | "bordeaux" | "encre" | null {
+  return value === "sauge" ||
+    value === "ocre" ||
+    value === "pierre" ||
+    value === "bordeaux" ||
+    value === "encre"
+    ? value
+    : null;
+}
+
+function normalizeProposalAccentHex(value: unknown): string | null {
+  return typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value)
+    ? value.toUpperCase()
+    : null;
+}
+
+function normalizeVerbatiTypography(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : null;
+}
+
+function resolveProposalStyleChoiceValue(
+  value: unknown,
+): "auto" | "formal" | "warm" | "technical" | "balanced" {
+  return value === "formal" ||
+    value === "warm" ||
+    value === "technical" ||
+    value === "balanced"
+    ? value
+    : "auto";
+}
+
+export function buildCanonicalProposalVerbatiStyle(input: {
+  verbatiStyle?: {
+    familyId?: unknown;
+    layout?: unknown;
+    typography?: unknown;
+    palette?: unknown;
+    accentHex?: unknown;
+  } | null;
+  styleChoice?: unknown;
+  fontPairId?: unknown;
+  paletteOverride?: unknown;
+  accentHex?: unknown;
+}): CanonicalVerbatiStyle {
+  const storedFamilyId =
+    resolveStyleFamilyId(input.verbatiStyle?.familyId) ??
+    resolveStyleFamilyId(input.verbatiStyle?.layout);
+
+  const baseStyle = storedFamilyId
+    ? {
+        familyId: storedFamilyId,
+        layout: storedFamilyId,
+        typography:
+          normalizeVerbatiTypography(input.verbatiStyle?.typography) ??
+          LEGACY_PROPOSAL_STYLE_DEFAULTS.auto.typography,
+        palette:
+          normalizeProposalPaletteOverride(input.verbatiStyle?.palette) ??
+          (typeof input.verbatiStyle?.palette === "string" &&
+          input.verbatiStyle.palette.trim().length > 0
+            ? input.verbatiStyle.palette.trim()
+            : LEGACY_PROPOSAL_STYLE_DEFAULTS.auto.palette),
+      }
+    : { ...LEGACY_PROPOSAL_STYLE_DEFAULTS[resolveProposalStyleChoiceValue(input.styleChoice)] };
+
+  const typography =
+    normalizeVerbatiTypography(input.fontPairId) ??
+    normalizeVerbatiTypography(input.verbatiStyle?.typography) ??
+    baseStyle.typography;
+  const accentHex =
+    normalizeProposalAccentHex(input.accentHex) ??
+    normalizeProposalAccentHex(input.verbatiStyle?.accentHex);
+  const paletteOverride = accentHex
+    ? null
+    : normalizeProposalPaletteOverride(input.paletteOverride) ??
+      normalizeProposalPaletteOverride(input.verbatiStyle?.palette);
+
+  return {
+    familyId: baseStyle.familyId,
+    layout: baseStyle.familyId,
+    typography,
+    palette: accentHex ? "custom" : paletteOverride ?? baseStyle.palette,
+    ...(accentHex ? { accentHex } : {}),
+  };
+}
+
+export function inferLegacyProposalStyleChoice(
+  style: CanonicalVerbatiStyle,
+): "auto" | "formal" | "warm" | "technical" | "balanced" {
+  switch (style.familyId) {
+    case "editorial":
+      return "warm";
+    case "modernist":
+      return "technical";
+    case "quire":
+      return "formal";
+    default:
+      return "balanced";
+  }
+}
+
+function buildCompatibilityStyleFields(style: CanonicalVerbatiStyle) {
+  const accentHex = normalizeProposalAccentHex(style.accentHex);
+  const paletteOverride = accentHex
+    ? null
+    : normalizeProposalPaletteOverride(style.palette);
+
+  return {
+    proposalVerbatiStyle: style,
+    proposalStyleChoice: inferLegacyProposalStyleChoice(style),
+    proposalPaletteOverride: paletteOverride,
+    proposalAccentHex: accentHex,
+    proposalFontPairId: style.typography,
+    proposalTemplateId: STYLE_FAMILY_PROPOSAL_TEMPLATES[style.familyId],
+  };
+}
 
 export const getCurrent = query({
   args: {},
@@ -57,6 +256,7 @@ export const getCurrent = query({
     voicePreset: proposalVoicePresetChoice,
     savedVoicePreset: v.union(proposalVoicePresetChoice, v.null()),
     templateId: proposalTemplateChoice,
+    verbatiStyle: v.optional(proposalVerbatiStyleValidator),
     styleChoice: v.optional(proposalStyleChoiceValidator),
     paletteOverride: v.optional(proposalPaletteOverrideValidator),
     accentHex: v.optional(proposalAccentHexValidator),
@@ -82,6 +282,16 @@ export const getCurrent = query({
       templateId:
         resolveProposalTemplateId(user?.proposalTemplateId) ??
         DEFAULT_PROPOSAL_TEMPLATE_ID,
+      verbatiStyle: buildCanonicalProposalVerbatiStyle({
+        verbatiStyle:
+          user?.proposalVerbatiStyle && typeof user.proposalVerbatiStyle === "object"
+            ? user.proposalVerbatiStyle
+            : null,
+        styleChoice: user?.proposalStyleChoice,
+        fontPairId: user?.proposalFontPairId,
+        paletteOverride: user?.proposalPaletteOverride,
+        accentHex: user?.proposalAccentHex,
+      }),
       styleChoice: user?.proposalStyleChoice,
       paletteOverride: user?.proposalPaletteOverride,
       accentHex: user?.proposalAccentHex,
@@ -94,19 +304,21 @@ export const getCurrent = query({
 // ─── Preset slot shape ────────────────────────────────────────────────────────
 
 const presetSlotValidator = v.object({
-  fontPairId: v.union(v.string(), v.null()),
-  styleChoice: proposalStyleChoiceValidator,
-  paletteOverride: proposalPaletteOverrideValidator,
-  accentHex: proposalAccentHexValidator,
+  verbatiStyle: v.optional(proposalVerbatiStyleValidator),
+  fontPairId: v.optional(v.union(v.string(), v.null())),
+  styleChoice: v.optional(proposalStyleChoiceValidator),
+  paletteOverride: v.optional(proposalPaletteOverrideValidator),
+  accentHex: v.optional(proposalAccentHexValidator),
   voicePreset: v.union(proposalVoicePresetChoice, v.null()),
   name: v.optional(v.string()),
 });
 
 type PresetSlotData = {
-  fontPairId: string | null;
-  styleChoice: "auto" | "formal" | "warm" | "technical" | "balanced";
-  paletteOverride: "sauge" | "ocre" | "pierre" | "bordeaux" | "encre" | null;
-  accentHex: string | null;
+  verbatiStyle?: CanonicalVerbatiStyle;
+  fontPairId?: string | null;
+  styleChoice?: "auto" | "formal" | "warm" | "technical" | "balanced";
+  paletteOverride?: "sauge" | "ocre" | "pierre" | "bordeaux" | "encre" | null;
+  accentHex?: string | null;
   voicePreset: "signature" | "expert" | "direct" | "engaging" | "storyteller" | null;
   name?: string;
 };
@@ -159,12 +371,23 @@ export const savePreset = mutation({
     if (!user) throw new Error("User profile not found");
 
     const fieldKey = `proposalPreset${args.slot}` as "proposalPreset1" | "proposalPreset2" | "proposalPreset3";
-    const nextAccentHex =
-      typeof args.preset.accentHex === "string" &&
-      /^#[0-9a-fA-F]{6}$/.test(args.preset.accentHex)
-        ? args.preset.accentHex.toUpperCase()
-        : null;
-    const cleanPreset: PresetSlotData = { ...args.preset, accentHex: nextAccentHex };
+    const canonicalStyle = buildCanonicalProposalVerbatiStyle({
+      verbatiStyle: args.preset.verbatiStyle ?? null,
+      styleChoice: args.preset.styleChoice,
+      fontPairId: args.preset.fontPairId,
+      paletteOverride: args.preset.paletteOverride,
+      accentHex: args.preset.accentHex,
+    });
+    const compatibilityFields = buildCompatibilityStyleFields(canonicalStyle);
+    const cleanPreset: PresetSlotData = {
+      verbatiStyle: canonicalStyle,
+      fontPairId: compatibilityFields.proposalFontPairId,
+      styleChoice: compatibilityFields.proposalStyleChoice,
+      paletteOverride: compatibilityFields.proposalPaletteOverride,
+      accentHex: compatibilityFields.proposalAccentHex,
+      voicePreset: args.preset.voicePreset,
+      ...(args.preset.name ? { name: args.preset.name } : {}),
+    };
 
     await Promise.all(
       profiles.map((profile) => {
@@ -219,23 +442,25 @@ export const setActivePreset = mutation({
 
         // Mirror active preset into legacy single-default fields so ProposalForge continues to work
         if (preset) {
+          const canonicalStyle = buildCanonicalProposalVerbatiStyle({
+            verbatiStyle: preset.verbatiStyle ?? null,
+            styleChoice: preset.styleChoice,
+            fontPairId: preset.fontPairId,
+            paletteOverride: preset.paletteOverride,
+            accentHex: preset.accentHex,
+          });
+          const compatibilityFields = buildCompatibilityStyleFields(canonicalStyle);
           if (preset.voicePreset) {
             nextReplacement.proposalVoicePreset = preset.voicePreset;
           } else {
             delete nextReplacement.proposalVoicePreset;
           }
-          if (preset.styleChoice && preset.styleChoice !== "auto") {
-            nextReplacement.proposalStyleChoice = preset.styleChoice;
-          } else {
-            delete nextReplacement.proposalStyleChoice;
-          }
-          nextReplacement.proposalPaletteOverride = preset.paletteOverride;
-          const nextAccentHex =
-            typeof preset.accentHex === "string" && /^#[0-9a-fA-F]{6}$/.test(preset.accentHex)
-              ? preset.accentHex.toUpperCase()
-              : null;
-          nextReplacement.proposalAccentHex = nextAccentHex;
-          nextReplacement.proposalFontPairId = preset.fontPairId;
+          nextReplacement.proposalVerbatiStyle = compatibilityFields.proposalVerbatiStyle;
+          nextReplacement.proposalStyleChoice = compatibilityFields.proposalStyleChoice;
+          nextReplacement.proposalPaletteOverride = compatibilityFields.proposalPaletteOverride;
+          nextReplacement.proposalAccentHex = compatibilityFields.proposalAccentHex;
+          nextReplacement.proposalFontPairId = compatibilityFields.proposalFontPairId;
+          nextReplacement.proposalTemplateId = compatibilityFields.proposalTemplateId;
         }
 
         return ctx.db.replace(_id, nextReplacement);
@@ -249,6 +474,7 @@ export const setCurrent = mutation({
   args: {
     voicePreset: v.optional(v.union(proposalVoicePresetChoice, v.null())),
     templateId: v.optional(proposalTemplateChoice),
+    verbatiStyle: v.optional(v.union(proposalVerbatiStyleValidator, v.null())),
     styleChoice: v.optional(proposalStyleChoiceValidator),
     paletteOverride: v.optional(proposalPaletteOverrideValidator),
     accentHex: v.optional(proposalAccentHexValidator),
@@ -259,6 +485,7 @@ export const setCurrent = mutation({
     voicePreset: proposalVoicePresetChoice,
     savedVoicePreset: v.union(proposalVoicePresetChoice, v.null()),
     templateId: proposalTemplateChoice,
+    verbatiStyle: v.optional(proposalVerbatiStyleValidator),
     styleChoice: v.optional(proposalStyleChoiceValidator),
     paletteOverride: v.optional(proposalPaletteOverrideValidator),
     accentHex: v.optional(proposalAccentHexValidator),
@@ -278,6 +505,10 @@ export const setCurrent = mutation({
     const hasTemplatePatch = Object.prototype.hasOwnProperty.call(
       args,
       "templateId",
+    );
+    const hasVerbatiStylePatch = Object.prototype.hasOwnProperty.call(
+      args,
+      "verbatiStyle",
     );
     const hasStyleChoicePatch = Object.prototype.hasOwnProperty.call(
       args,
@@ -303,6 +534,7 @@ export const setCurrent = mutation({
     if (
       !hasVoicePresetPatch &&
       !hasTemplatePatch &&
+      !hasVerbatiStylePatch &&
       !hasStyleChoicePatch &&
       !hasPalettePatch &&
       !hasAccentHexPatch &&
@@ -337,15 +569,39 @@ export const setCurrent = mutation({
       : currentSavedVoicePreset;
     const nextVoicePreset =
       nextSavedVoicePreset ?? DEFAULT_PROPOSAL_VOICE_PRESET;
-    const nextTemplateId =
-      args.templateId ??
-      resolveProposalTemplateId(user.proposalTemplateId) ??
-      DEFAULT_PROPOSAL_TEMPLATE_ID;
+    const nextVerbatiStyle = hasVerbatiStylePatch
+      ? args.verbatiStyle
+        ? buildCanonicalProposalVerbatiStyle({
+            verbatiStyle: args.verbatiStyle,
+          })
+        : null
+      : buildCanonicalProposalVerbatiStyle({
+          verbatiStyle:
+            user.proposalVerbatiStyle && typeof user.proposalVerbatiStyle === "object"
+              ? user.proposalVerbatiStyle
+              : null,
+          styleChoice: user.proposalStyleChoice,
+          fontPairId: user.proposalFontPairId,
+          paletteOverride: user.proposalPaletteOverride,
+          accentHex: user.proposalAccentHex,
+        });
+    const nextVerbatiCompatibility = nextVerbatiStyle
+      ? buildCompatibilityStyleFields(nextVerbatiStyle)
+      : null;
+    const nextTemplateId = hasTemplatePatch
+      ? args.templateId ?? DEFAULT_PROPOSAL_TEMPLATE_ID
+      : nextVerbatiCompatibility?.proposalTemplateId ??
+        resolveProposalTemplateId(user.proposalTemplateId) ??
+        DEFAULT_PROPOSAL_TEMPLATE_ID;
     const nextStyleChoice = hasStyleChoicePatch
       ? (args.styleChoice ?? undefined)
+      : nextVerbatiCompatibility?.proposalStyleChoice
+        ? nextVerbatiCompatibility.proposalStyleChoice
       : user.proposalStyleChoice;
     const nextPaletteOverride = hasPalettePatch
       ? args.paletteOverride
+      : nextVerbatiCompatibility
+        ? nextVerbatiCompatibility.proposalPaletteOverride
       : user.proposalPaletteOverride;
     const nextAccentHex =
       hasAccentHexPatch && typeof args.accentHex === "string"
@@ -354,11 +610,15 @@ export const setCurrent = mutation({
           : user.proposalAccentHex
         : hasAccentHexPatch
           ? null
+          : nextVerbatiCompatibility
+            ? nextVerbatiCompatibility.proposalAccentHex
           : user.proposalAccentHex;
     const nextFontPairId = hasFontPairPatch
       ? typeof args.fontPairId === "string" && args.fontPairId.trim()
         ? args.fontPairId.trim()
         : null
+      : nextVerbatiCompatibility
+        ? nextVerbatiCompatibility.proposalFontPairId
       : user.proposalFontPairId;
     const nextSourceMode = hasSourceModePatch
       ? (args.sourceMode ?? undefined)
@@ -367,6 +627,8 @@ export const setCurrent = mutation({
     const needsWrite =
       currentSavedVoicePreset !== nextSavedVoicePreset ||
       user.proposalTemplateId !== nextTemplateId ||
+      JSON.stringify(user.proposalVerbatiStyle ?? null) !==
+        JSON.stringify(nextVerbatiStyle ?? null) ||
       user.proposalStyleChoice !== nextStyleChoice ||
       user.proposalPaletteOverride !== nextPaletteOverride ||
       user.proposalAccentHex !== nextAccentHex ||
@@ -382,6 +644,11 @@ export const setCurrent = mutation({
           updatedAt: Date.now(),
           version: (profile.version ?? 1) + 1,
         };
+        if (nextVerbatiStyle) {
+          nextReplacement.proposalVerbatiStyle = nextVerbatiStyle;
+        } else {
+          delete nextReplacement.proposalVerbatiStyle;
+        }
 
         if (nextSavedVoicePreset) {
           nextReplacement.proposalVoicePreset = nextSavedVoicePreset;
@@ -433,6 +700,7 @@ export const setCurrent = mutation({
       voicePreset: nextVoicePreset,
       savedVoicePreset: nextSavedVoicePreset,
       templateId: nextTemplateId,
+      verbatiStyle: nextVerbatiStyle ?? undefined,
       styleChoice: nextStyleChoice,
       paletteOverride: nextPaletteOverride,
       accentHex: nextAccentHex,

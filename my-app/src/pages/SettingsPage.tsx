@@ -9,32 +9,53 @@ import {
   Sun,
   Wand2,
 } from "@/lib/icons";
-import type { ProposalStyleChoice } from "../lib/proposal-style-choice";
 import {
   PROPOSAL_PALETTE_OPTIONS,
   PROPOSAL_STYLE_PREVIEW_DEFINITIONS,
-  PROPOSAL_AUTO_STYLE_PREVIEW,
   type ProposalPaletteId,
 } from "../lib/proposal-style-display";
+import { buildVerbatiStyleFromProposalSettings } from "../lib/proposal-style-choice";
 import { getVoicePresetDisplayLabel } from "../lib/proposal-voice-label";
 import { ProposalColorPickerPopover } from "../components/ProposalColorPickerPopover";
 import {
   VERBATI_FONT_PAIR_OPTIONS,
   type VerbatiFontPairId,
 } from "../features/verbati/fontCatalog";
+import {
+  DEFAULT_VERBATI_STYLE,
+  getStyleFamilyId,
+  resolveVerbatiStyle,
+  serializeVerbatiStyle,
+} from "../features/verbati/style";
+import type {
+  StyleFamilyId,
+  VerbatiStylePreset,
+} from "../features/verbati/types";
+import {
+  getStyleFamilyDisplayMetadata,
+  listSelectableStyleFamilies,
+  type StyleFamilyDefinition,
+} from "../lib/layout/styleFamilies";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type SlotIndex = 1 | 2 | 3;
 
 type PresetSlot = {
-  fontPairId: VerbatiFontPairId | null;
-  styleChoice: ProposalStyleChoice;
-  paletteOverride: ProposalPaletteId | null;
-  accentHex: string | null;
+  verbatiStyle: VerbatiStylePreset;
   voicePreset: "signature" | "expert" | "engaging" | null;
   name?: string;
 };
+
+type RawPresetSlot = {
+  verbatiStyle?: Partial<VerbatiStylePreset> | null;
+  fontPairId?: VerbatiFontPairId | null;
+  styleChoice?: unknown;
+  paletteOverride?: ProposalPaletteId | null;
+  accentHex?: string | null;
+  voicePreset?: "signature" | "expert" | "engaging" | null;
+  name?: string;
+} | null | undefined;
 
 const DEFAULT_SLOT_NAMES: Record<SlotIndex, string> = {
   1: "Style 1",
@@ -43,10 +64,7 @@ const DEFAULT_SLOT_NAMES: Record<SlotIndex, string> = {
 };
 
 const EMPTY_PRESET: PresetSlot = {
-  fontPairId: VERBATI_FONT_PAIR_OPTIONS[0]?.id ?? null,
-  styleChoice: "auto",
-  paletteOverride: null,
-  accentHex: null,
+  verbatiStyle: DEFAULT_VERBATI_STYLE,
   voicePreset: null,
 };
 
@@ -60,39 +78,47 @@ const TONE_OPTIONS: { id: ToneId; label: string; description: string; Icon: type
   { id: "engaging", label: getVoicePresetDisplayLabel("engaging"), description: "Lively and interpersonal.", Icon: Sun },
 ];
 
-// ─── Style options ─────────────────────────────────────────────────────────────
+function getSettingsPreviewVariant(
+  style: VerbatiStylePreset,
+): keyof typeof PROPOSAL_STYLE_PREVIEW_DEFINITIONS {
+  switch (getStyleFamilyId(style)) {
+    case "editorial":
+      return "warm";
+    case "modernist":
+      return "technical";
+    case "quire":
+      return "formal";
+    default:
+      return "balanced";
+  }
+}
 
-type StyleOption = {
-  id: ProposalStyleChoice;
-  label: string;
-  description: string;
-  isAuto?: boolean;
-};
+function normalizePresetSlot(raw: RawPresetSlot): PresetSlot {
+  const verbatiStyle = buildVerbatiStyleFromProposalSettings({
+    verbatiStyle: raw?.verbatiStyle ?? null,
+    styleChoice: raw?.styleChoice,
+    fontPairId: raw?.fontPairId,
+    paletteOverride: raw?.paletteOverride ?? null,
+    accentHex: raw?.accentHex ?? null,
+  });
 
-const STYLE_OPTIONS: StyleOption[] = [
-  { id: "auto",     label: "Auto",      description: "Matches the look to the role.",                   isAuto: true },
-  { id: "balanced", label: "Swiss",     description: "Quiet Swiss grid with a calmer serif-led rhythm." },
-  { id: "warm",     label: "Editorial", description: "Editorial pacing with a richer reading voice."    },
-  { id: "technical",label: "Mono",      description: "Tighter grid with a more technical contrast."     },
-];
+  return {
+    verbatiStyle,
+    voicePreset: raw?.voicePreset ?? null,
+    name: raw?.name,
+  };
+}
 
-// ─── Tilt hook ────────────────────────────────────────────────────────────────
-
-// ─── Mini style preview helper ────────────────────────────────────────────────
-
-function StyleMiniPreview({ styleId }: { styleId: ProposalStyleChoice }) {
-  return (
-    <div
-      className={`dasti-settings-style-card__mini dasti-settings-style-card__mini--${styleId}`}
-      aria-hidden="true"
-    >
-      <span className="dasti-settings-style-card__mini-header" />
-      <span className="dasti-settings-style-card__mini-title" />
-      <span className="dasti-settings-style-card__mini-body dasti-settings-style-card__mini-body--primary" />
-      <span className="dasti-settings-style-card__mini-body" />
-      <span className="dasti-settings-style-card__mini-body" />
-    </div>
-  );
+function serializePresetSlot(preset: PresetSlot): {
+  verbatiStyle: VerbatiStylePreset;
+  voicePreset: "signature" | "expert" | "engaging" | null;
+  name?: string;
+} {
+  return {
+    verbatiStyle: serializeVerbatiStyle(preset.verbatiStyle),
+    voicePreset: preset.voicePreset ?? null,
+    ...(preset.name ? { name: preset.name } : {}),
+  };
 }
 
 // ─── Layout style card — Pure CSS 5×5 hotspot tilt ────────────────────────────
@@ -104,7 +130,7 @@ function StyleTiltCard({
   active,
   onSelect,
 }: {
-  option: StyleOption;
+  option: Pick<StyleFamilyDefinition, "id" | "label" | "description">;
   active: boolean;
   onSelect: () => void;
 }) {
@@ -154,22 +180,23 @@ function StyleTiltCard({
 
 // ─── Hero preview ──────────────────────────────────────────────────────────────
 
-function HeroPreview({ preset, slotName }: { preset: PresetSlot; slotName: string }) {
-  const fontPair = VERBATI_FONT_PAIR_OPTIONS.find((f) => f.id === preset.fontPairId)
-    ?? VERBATI_FONT_PAIR_OPTIONS[0];
-  const styleOption = STYLE_OPTIONS.find((s) => s.id === preset.styleChoice) ?? STYLE_OPTIONS[0];
-  const paletteOption = PROPOSAL_PALETTE_OPTIONS.find((p) => p.id === preset.paletteOverride);
+function HeroPreview({ preset }: { preset: PresetSlot }) {
+  const resolvedStyle = resolveVerbatiStyle(preset.verbatiStyle);
+  const fontPair =
+    VERBATI_FONT_PAIR_OPTIONS.find((f) => f.id === resolvedStyle.typography) ??
+    VERBATI_FONT_PAIR_OPTIONS[0];
+  const familyDisplay = getStyleFamilyDisplayMetadata(resolvedStyle.familyId);
+  const paletteOption = PROPOSAL_PALETTE_OPTIONS.find(
+    (p) => p.id === resolvedStyle.palette,
+  );
 
   const accentColor =
-    preset.accentHex ??
+    resolvedStyle.accentHex ??
     paletteOption?.color ??
     "color-mix(in srgb, var(--color-accent) 80%, white 20%)";
 
-  const previewDef =
-    preset.styleChoice === "auto"
-      ? PROPOSAL_AUTO_STYLE_PREVIEW
-      : PROPOSAL_STYLE_PREVIEW_DEFINITIONS[preset.styleChoice as keyof typeof PROPOSAL_STYLE_PREVIEW_DEFINITIONS]
-          ?? PROPOSAL_STYLE_PREVIEW_DEFINITIONS.balanced;
+  const previewVariant = getSettingsPreviewVariant(resolvedStyle);
+  const previewDef = PROPOSAL_STYLE_PREVIEW_DEFINITIONS[previewVariant];
 
   const cardRef = useRef<HTMLElement>(null);
   const rafRef = useRef(0);
@@ -217,7 +244,7 @@ function HeroPreview({ preset, slotName }: { preset: PresetSlot; slotName: strin
   return (
     <article
       ref={cardRef}
-      className={`dasti-settings-hero-preview dasti-settings-hero-preview--${preset.styleChoice}`}
+      className={`dasti-settings-hero-preview dasti-settings-hero-preview--${previewVariant}`}
       style={{ "--hero-accent": accentColor } as React.CSSProperties}
     >
       <div className="dasti-settings-hero-preview__inner">
@@ -258,7 +285,7 @@ function HeroPreview({ preset, slotName }: { preset: PresetSlot; slotName: strin
             {fontPair?.headingLabel} / {fontPair?.bodyLabel}
           </span>
           <span className="dasti-settings-hero-preview__style-badge">
-            {styleOption.label}
+            {familyDisplay.label}
           </span>
         </div>
       </div>
@@ -283,13 +310,11 @@ function SlotCard({
   onSelect: () => void;
   onSetActive: (e: React.MouseEvent) => void;
 }) {
-  const fontPair = VERBATI_FONT_PAIR_OPTIONS.find((f) => f.id === preset.fontPairId)
-    ?? VERBATI_FONT_PAIR_OPTIONS[0];
-  const paletteOption = PROPOSAL_PALETTE_OPTIONS.find((p) => p.id === preset.paletteOverride);
-  const accentColor =
-    preset.accentHex ??
-    paletteOption?.color ??
-    "color-mix(in srgb, var(--color-accent) 80%, white 20%)";
+  const resolvedStyle = resolveVerbatiStyle(preset.verbatiStyle);
+  const fontPair =
+    VERBATI_FONT_PAIR_OPTIONS.find((f) => f.id === resolvedStyle.typography) ??
+    VERBATI_FONT_PAIR_OPTIONS[0];
+  const familyDisplay = getStyleFamilyDisplayMetadata(resolvedStyle.familyId);
   const slotName = preset.name || DEFAULT_SLOT_NAMES[slotIndex];
 
   return (
@@ -326,6 +351,10 @@ function SlotCard({
       </div>
 
       <div className="dasti-settings-slot-card__meta">
+        <span className="dasti-settings-slot-card__font-label">
+          {familyDisplay.label}
+        </span>
+        <span className="dasti-settings-slot-card__font-sep" aria-hidden="true">/</span>
         <span
           className="dasti-settings-slot-card__font-label"
           style={{ fontFamily: fontPair?.headingFamily, fontWeight: 700 }}
@@ -398,13 +427,22 @@ export function SettingsPage(): JSX.Element {
   const presetsQuery = useQuery(api.proposalSettings.getPresets);
   const savePreset = useMutation(api.proposalSettings.savePreset);
   const setActivePreset = useMutation(api.proposalSettings.setActivePreset);
+  const familyOptions = React.useMemo(() => listSelectableStyleFamilies(), []);
 
   // Local state
   const [editingSlot, setEditingSlot] = React.useState<SlotIndex>(1);
   const [localPresets, setLocalPresets] = React.useState<Record<SlotIndex, PresetSlot>>({
     1: { ...EMPTY_PRESET },
-    2: { ...EMPTY_PRESET, styleChoice: "balanced" },
-    3: { ...EMPTY_PRESET, styleChoice: "warm" },
+    2: { ...EMPTY_PRESET },
+    3: {
+      ...EMPTY_PRESET,
+      verbatiStyle: resolveVerbatiStyle({
+        familyId: "editorial",
+        layout: "editorial",
+        typography: "quiet-editorial",
+        palette: "sauge",
+      }),
+    },
   });
   const [activeSlot, setActiveSlot] = React.useState<SlotIndex>(1);
   const [savedTick, setSavedTick] = React.useState(false);
@@ -419,19 +457,10 @@ export function SettingsPage(): JSX.Element {
     if (!presetsQuery || hydrated.current) return;
     hydrated.current = true;
 
-    const serverPreset = (raw: typeof presetsQuery.preset1): PresetSlot => ({
-      fontPairId: (raw?.fontPairId as VerbatiFontPairId | null) ?? VERBATI_FONT_PAIR_OPTIONS[0]?.id ?? null,
-      styleChoice: (raw?.styleChoice as ProposalStyleChoice) ?? "auto",
-      paletteOverride: (raw?.paletteOverride as ProposalPaletteId | null) ?? null,
-      accentHex: raw?.accentHex ?? null,
-      voicePreset: (raw?.voicePreset as ToneId) ?? null,
-      name: raw?.name,
-    });
-
     setLocalPresets({
-      1: serverPreset(presetsQuery.preset1),
-      2: serverPreset(presetsQuery.preset2),
-      3: serverPreset(presetsQuery.preset3),
+      1: normalizePresetSlot(presetsQuery.preset1),
+      2: normalizePresetSlot(presetsQuery.preset2),
+      3: normalizePresetSlot(presetsQuery.preset3),
     });
     setActiveSlot((presetsQuery.activeSlot as SlotIndex | null) ?? 1);
   }, [presetsQuery]);
@@ -457,19 +486,11 @@ export function SettingsPage(): JSX.Element {
     (patch: Partial<PresetSlot>) => {
       setLocalPresets((prev) => {
         const next = { ...prev, [editingSlot]: { ...prev[editingSlot], ...patch } };
-        // debounce save
         if (saveDebounceRef.current !== null) clearTimeout(saveDebounceRef.current);
         saveDebounceRef.current = setTimeout(() => {
           void savePreset({
             slot: editingSlot,
-            preset: {
-              ...next[editingSlot],
-              voicePreset: next[editingSlot].voicePreset ?? null,
-              styleChoice: next[editingSlot].styleChoice,
-              paletteOverride: next[editingSlot].paletteOverride ?? null,
-              accentHex: next[editingSlot].accentHex ?? null,
-              fontPairId: next[editingSlot].fontPairId ?? null,
-            },
+            preset: serializePresetSlot(next[editingSlot]),
           }).then(() => flashSaved());
           saveDebounceRef.current = null;
         }, 400);
@@ -477,6 +498,18 @@ export function SettingsPage(): JSX.Element {
       });
     },
     [editingSlot, flashSaved, savePreset],
+  );
+
+  const updateVerbatiStyle = React.useCallback(
+    (patch: Partial<VerbatiStylePreset>) => {
+      updatePreset({
+        verbatiStyle: resolveVerbatiStyle({
+          ...localPresets[editingSlot].verbatiStyle,
+          ...patch,
+        }),
+      });
+    },
+    [editingSlot, localPresets, updatePreset],
   );
 
   const handleSetActive = React.useCallback(
@@ -489,10 +522,8 @@ export function SettingsPage(): JSX.Element {
   );
 
   const currentPreset = localPresets[editingSlot];
-
-  const selectedPaletteOption = currentPreset.paletteOverride
-    ? PROPOSAL_PALETTE_OPTIONS.find((p) => p.id === currentPreset.paletteOverride) ?? null
-    : null;
+  const currentStyle = resolveVerbatiStyle(currentPreset.verbatiStyle);
+  const currentFamilyDisplay = getStyleFamilyDisplayMetadata(currentStyle.familyId);
 
   return (
     <div className="dasti-page-scroll" style={{ minWidth: 0 }}>
@@ -554,27 +585,37 @@ export function SettingsPage(): JSX.Element {
               <div className="dasti-settings-appearance-group">
                 <div className="dasti-settings-appearance-label">Typography</div>
                 <FontPairGrid
-                  selectedId={currentPreset.fontPairId as VerbatiFontPairId | null}
-                  onChange={(id) => updatePreset({ fontPairId: id })}
+                  selectedId={currentStyle.typography as VerbatiFontPairId | null}
+                  onChange={(id) => updateVerbatiStyle({ typography: id })}
                 />
               </div>
 
               {/* Layout */}
               <div className="dasti-settings-appearance-group">
-                <div className="dasti-settings-appearance-label">Layout</div>
+                <div className="dasti-settings-appearance-label">
+                  Family
+                </div>
                 <div
                   className="dasti-settings-style-grid"
                   role="group"
-                  aria-label="Layout"
+                  aria-label="Style family"
                 >
-                  {STYLE_OPTIONS.map((option) => (
+                  {familyOptions.map((option) => (
                     <StyleTiltCard
                       key={option.id}
                       option={option}
-                      active={currentPreset.styleChoice === option.id}
-                      onSelect={() => updatePreset({ styleChoice: option.id })}
+                      active={currentStyle.familyId === option.id}
+                      onSelect={() =>
+                        updateVerbatiStyle({
+                          familyId: option.id,
+                          layout: option.id,
+                        })
+                      }
                     />
                   ))}
+                </div>
+                <div className="dasti-settings-style-card__description">
+                  Current family: {currentFamilyDisplay.label}
                 </div>
               </div>
 
@@ -590,12 +631,14 @@ export function SettingsPage(): JSX.Element {
                     type="button"
                     className={[
                       "dasti-settings-swatch dasti-settings-swatch--auto",
-                      !currentPreset.paletteOverride && !currentPreset.accentHex
+                      currentStyle.palette === "sauge" && !currentStyle.accentHex
                         ? "dasti-settings-swatch--active"
                         : "",
                     ].filter(Boolean).join(" ")}
-                    aria-pressed={!currentPreset.paletteOverride && !currentPreset.accentHex}
-                    onClick={() => updatePreset({ paletteOverride: null, accentHex: null })}
+                    aria-pressed={currentStyle.palette === "sauge" && !currentStyle.accentHex}
+                    onClick={() =>
+                      updateVerbatiStyle({ palette: DEFAULT_VERBATI_STYLE.palette, accentHex: undefined })
+                    }
                     title="Automatic — follows the selected style"
                     aria-label="Automatic palette"
                   >
@@ -603,7 +646,7 @@ export function SettingsPage(): JSX.Element {
                   </button>
 
                   {PROPOSAL_PALETTE_OPTIONS.map((pal) => {
-                    const active = currentPreset.paletteOverride === pal.id;
+                    const active = currentStyle.palette === pal.id && !currentStyle.accentHex;
                     return (
                       <button
                         key={pal.id}
@@ -613,7 +656,7 @@ export function SettingsPage(): JSX.Element {
                           active ? "dasti-settings-swatch--active" : "",
                         ].filter(Boolean).join(" ")}
                         aria-pressed={active}
-                        onClick={() => updatePreset({ paletteOverride: pal.id as ProposalPaletteId, accentHex: null })}
+                        onClick={() => updateVerbatiStyle({ palette: pal.id as ProposalPaletteId, accentHex: undefined })}
                         title={pal.label}
                         aria-label={pal.label}
                         style={{ "--swatch-color": pal.color } as React.CSSProperties}
@@ -627,20 +670,20 @@ export function SettingsPage(): JSX.Element {
                     className={[
                       "dasti-settings-swatch",
                       "dasti-settings-swatch--custom",
-                      currentPreset.accentHex ? "" : "dasti-settings-swatch--icon",
-                      currentPreset.accentHex ? "dasti-settings-swatch--active" : "",
+                      currentStyle.accentHex ? "" : "dasti-settings-swatch--icon",
+                      currentStyle.accentHex ? "dasti-settings-swatch--active" : "",
                     ].filter(Boolean).join(" ")}
-                    aria-pressed={currentPreset.accentHex !== null}
+                    aria-pressed={Boolean(currentStyle.accentHex)}
                     onClick={() => setIsColorPickerOpen(true)}
-                    title={currentPreset.accentHex ?? "Custom color"}
+                    title={currentStyle.accentHex ?? "Custom color"}
                     aria-label="Custom accent color"
                     style={
-                      currentPreset.accentHex
-                        ? ({ "--swatch-color": currentPreset.accentHex } as React.CSSProperties)
+                      currentStyle.accentHex
+                        ? ({ "--swatch-color": currentStyle.accentHex } as React.CSSProperties)
                         : undefined
                     }
                   >
-                    {!currentPreset.accentHex ? (
+                    {!currentStyle.accentHex ? (
                       <ColorWheel size={16} className="dasti-settings-swatch__wheel" aria-hidden="true" />
                     ) : null}
                   </button>
@@ -701,7 +744,6 @@ export function SettingsPage(): JSX.Element {
             <HeroPreview
               key={editingSlot}
               preset={currentPreset}
-              slotName={currentPreset.name || DEFAULT_SLOT_NAMES[editingSlot]}
             />
             {activeSlot !== editingSlot && (
               <button
@@ -718,16 +760,23 @@ export function SettingsPage(): JSX.Element {
       </div>
 
       <ProposalColorPickerPopover
-        currentHex={currentPreset.accentHex}
+        currentHex={currentStyle.accentHex ?? null}
         onHexChange={(hex) => {
-          updatePreset({ accentHex: hex, paletteOverride: hex ? null : currentPreset.paletteOverride });
+          updateVerbatiStyle({
+            palette: hex ? "custom" : DEFAULT_VERBATI_STYLE.palette,
+            accentHex: hex ?? undefined,
+          });
         }}
         anchorRef={colorPickerAnchorRef}
         isOpen={isColorPickerOpen}
         onClose={() => setIsColorPickerOpen(false)}
         onClear={
-          currentPreset.accentHex !== null
-            ? () => updatePreset({ accentHex: null })
+          currentStyle.accentHex !== undefined
+            ? () =>
+                updateVerbatiStyle({
+                  palette: DEFAULT_VERBATI_STYLE.palette,
+                  accentHex: undefined,
+                })
             : undefined
         }
       />
