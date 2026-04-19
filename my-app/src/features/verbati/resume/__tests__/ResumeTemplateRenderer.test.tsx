@@ -52,4 +52,47 @@ describe("ResumeTemplateRenderer", () => {
     await new Promise((resolve) => window.setTimeout(resolve, 70));
     expect(onStablePageCountChange).not.toHaveBeenCalled();
   });
+
+  it("scales workshop pages inside the preview shell instead of resizing the underlying A4 page box", () => {
+    const { container } = render(
+      <ResumeTemplateRenderer
+        data={resumeMock}
+        stylePreset={{
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        resumeTemplateId="workshop_resume_onecol_ats"
+        stageLayout={{
+          fitScale: 0.5,
+          availableWidth: 400,
+          availableHeight: 600,
+          stageWidth: 400,
+          stageHeight: 600,
+          pageWidth: 396.85,
+          pageHeight: 561.25,
+          overflowX: false,
+          overflowY: false,
+          isFit: true,
+        }}
+      />,
+    );
+
+    const scaledPageShell = container.querySelector(
+      '[data-testid="resume-template-renderer"] > div',
+    );
+    const scaledPageInner = scaledPageShell?.firstElementChild as HTMLElement | null;
+
+    expect(scaledPageShell?.getAttribute("style")).toContain("width: 396.85px;");
+    expect(scaledPageShell?.getAttribute("style")).toContain("min-height: 561.25px;");
+    expect(scaledPageInner?.getAttribute("style")).toContain("width: 793.700");
+    expect(scaledPageInner?.getAttribute("style")).toContain(
+      "min-height: 1122.519",
+    );
+    expect(scaledPageInner?.getAttribute("style")).toContain("transform: scale(0.499");
+    expect(scaledPageInner?.getAttribute("style")).toContain(
+      "transform-origin: top left;",
+    );
+  });
 });
