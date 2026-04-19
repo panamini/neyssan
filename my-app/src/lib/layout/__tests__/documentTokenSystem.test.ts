@@ -3,14 +3,15 @@ import { describe, expect, it } from "vitest";
 import {
   buildVerbatiProposalDocumentVars,
   buildVerbatiThemeVars,
+  getResumeTemplateId,
 } from "../../../features/verbati/style";
-import { resumeLayoutSpec } from "../../../features/verbati/resume/resume-layout.spec";
 import { resolveVerbatiStyle } from "../../../features/verbati/style";
 import { getProposalDocumentTypography } from "../../proposal-document-typography";
 import { resolvePreviewCanonicalAppearance } from "../documentAppearance";
 import {
   normalizeProposalExportTokens,
   normalizeProposalPreviewTokens,
+  normalizeResumeExportTokens,
   normalizeResumePreviewTokens,
 } from "../documentTokenNormalizer";
 import {
@@ -172,9 +173,9 @@ describe("document token system", () => {
   });
 
   it("serializes resume preview vars from one canonical object", () => {
-    const tokens = normalizeResumePreviewTokens(
-      resumeLayoutSpec.variants.robial,
-    );
+    const tokens = normalizeResumePreviewTokens({
+      resumeTemplateId: "two_column_resume_legacy",
+    });
     const previewVars = serializeResumePreviewVars(tokens);
 
     expect(tokens.geometry.page.liveArea).toEqual({
@@ -190,9 +191,16 @@ describe("document token system", () => {
   });
 
   it("serializes canonical volk grid primitives for the active volk preview", () => {
-    const tokens = normalizeResumePreviewTokens(
-      resumeLayoutSpec.variants.volkregister,
-    );
+    const stylePreset = resolveVerbatiStyle({
+      familyId: "volk-register",
+      layout: "volk-register",
+      typography: "quiet-editorial",
+      palette: "sauge",
+    });
+    const tokens = normalizeResumePreviewTokens({
+      resumeTemplateId: getResumeTemplateId(stylePreset),
+      stylePreset,
+    });
     const previewVars = serializeResumePreviewVars(tokens);
 
     expect(previewVars["--volk-grid-left"]).toBeDefined();
@@ -241,8 +249,10 @@ describe("document token system", () => {
     const themeVars = buildVerbatiThemeVars(stylePreset);
     const proposalVars = buildVerbatiProposalDocumentVars(stylePreset);
     const resumePreviewTokens = normalizeResumePreviewTokens(
-      resumeLayoutSpec.variants.robial,
-      stylePreset,
+      {
+        resumeTemplateId: "two_column_resume_legacy",
+        stylePreset,
+      },
     );
     const proposalPreviewTokens = normalizeProposalPreviewTokens({
       templateId: "swiss_margin",
@@ -356,3 +366,33 @@ describe("document token system", () => {
     );
   });
 });
+  it("resolves workshop preview and export resume tokens from the exact template id", () => {
+    const stylePreset = resolveVerbatiStyle({
+      familyId: "workshop",
+      layout: "workshop",
+      typography: "quiet-editorial",
+      palette: "sauge",
+    });
+    const resumeTemplateId = getResumeTemplateId(stylePreset);
+    const previewTokens = normalizeResumePreviewTokens({
+      resumeTemplateId,
+      stylePreset,
+    });
+    const previewVars = serializeResumePreviewVars(previewTokens);
+    const exportTokens = normalizeResumeExportTokens({
+      mode: "styled",
+      resumeTemplateId,
+      stylePreset,
+    });
+
+    expect(resumeTemplateId).toBe("workshop_resume_onecol_ats");
+    expect(previewTokens.geometry.columns.sidebarMm).toBe(0);
+    expect(previewTokens.flow.measure.summaryWidthMm).toBe(120);
+    expect(previewVars["--sidebar-width"]).toBe("0mm");
+    expect(previewVars["--margin-left"]).toBe("18mm");
+    expect(previewVars["--header-summary-width"]).toBe("120mm");
+    expect(exportTokens.id).toBe("workshop_resume_onecol_ats");
+    expect(exportTokens.shell).toBe("onecol");
+    expect(exportTokens.canonical.geometry.columns.sidebarMm).toBe(0);
+    expect(exportTokens.canonical.flow.measure.resumeReadingWidthMm).toBe(120);
+  });
