@@ -359,6 +359,7 @@
   --card-rail-md: 608px;
   --card-rail-lg: 672px;
   --cv-editor-shell-max-width: 736px;
+  --cv-editor-reading-measure-max: 70ch;
   --app-sidebar-header-height: var(--header-height);
   --app-sidebar-inline-pad: var(--space-2);
   --app-sidebar-item-height: 36px;

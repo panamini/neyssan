@@ -6069,7 +6069,7 @@ export default function SectionEditor({
                 />
               }
             >
-              <div className="rich-content">
+              <div className="rich-content rich-content--cv-reading-measure">
                 <EditorComponent />
               </div>
             </ErrorBoundary>
