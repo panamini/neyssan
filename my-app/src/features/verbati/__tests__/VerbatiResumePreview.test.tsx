@@ -39,6 +39,7 @@ vi.mock("../../../lib/resume-font-debug", () => ({
 }));
 
 const resumePagePropsSpy = vi.fn();
+const resumeTemplateRendererPropsSpy = vi.fn();
 
 vi.mock("../resume/ResumePage", () => ({
   default: ({
@@ -112,6 +113,44 @@ vi.mock("../resume/ResumePage", () => ({
   },
 }));
 
+vi.mock("../resume/ResumeTemplateRenderer", () => ({
+  default: ({
+    activeTarget,
+    onStablePageCountChange,
+  }: {
+    activeTarget?: {
+      sectionType?: string;
+      itemId?: string;
+      source?: string;
+    } | null;
+    onStablePageCountChange?: (pageCount: number) => void;
+  }) => {
+    resumeTemplateRendererPropsSpy({ activeTarget });
+    React.useEffect(() => {
+      onStablePageCountChange?.(3);
+    }, [onStablePageCountChange]);
+
+    return (
+      <div data-testid="resume-template-renderer">
+        <button
+          type="button"
+          data-preview-section="selected_projects"
+          data-preview-section-id="projects-1"
+          data-preview-item-id="project-1:description"
+          data-preview-surface="item"
+          data-preview-active={
+            activeTarget?.itemId === "project-1:description"
+              ? "true"
+              : undefined
+          }
+        >
+          Workshop project description field
+        </button>
+      </div>
+    );
+  },
+}));
+
 describe("VerbatiResumePreview", () => {
   it("keeps workshop on the legacy panel preview path with link intents and active highlighting intact", () => {
     const onLinkIntent = vi.fn();
@@ -150,6 +189,88 @@ describe("VerbatiResumePreview", () => {
     ).toBeTruthy();
     expect(
       screen.getByRole("button", { name: "Selected project description field" }),
+    ).toHaveAttribute("data-preview-active", "true");
+    expect(onLinkIntent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        itemId: "project-1:description",
+        previewSectionType: "selected_projects",
+        source: "preview-panel",
+      }),
+    );
+  });
+
+  it("uses ResumeTemplateRenderer only for the workshop template path and reports stable page counts in workspace mode", async () => {
+    render(
+      <VerbatiResumePreview
+        data={resumeMock}
+        stylePreset={{
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        hostMode="workspace"
+      />,
+    );
+
+    expect(screen.getByTestId("resume-template-renderer")).toBeInTheDocument();
+    expect(screen.queryByTestId("resume-page")).not.toBeInTheDocument();
+    expect(await screen.findByLabelText("Page count")).toHaveTextContent(
+      "3 pages",
+    );
+  });
+
+  it("keeps workshop compare-layout mode on the legacy comparison path without mixed rendering", () => {
+    render(
+      <VerbatiResumePreview
+        data={resumeMock}
+        stylePreset={{
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        compareLayouts
+      />,
+    );
+
+    expect(screen.getByTestId("resume-page")).toHaveAttribute(
+      "data-mode",
+      "comparisonAll",
+    );
+    expect(screen.queryByTestId("resume-template-renderer")).not.toBeInTheDocument();
+  });
+
+  it("preserves workshop panel preview link intents through the template renderer path", () => {
+    const onLinkIntent = vi.fn();
+
+    render(
+      <VerbatiResumePreview
+        data={resumeMock}
+        stylePreset={{
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        hostMode="panel"
+        activeTarget={{
+          sectionType: "projects",
+          sectionId: "projects-1",
+          itemId: "project-1:description",
+          previewSectionType: "selected_projects",
+          source: "preview-panel",
+        }}
+        onLinkIntent={onLinkIntent}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Workshop project description field" }),
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Workshop project description field" }),
     ).toHaveAttribute("data-preview-active", "true");
     expect(onLinkIntent).toHaveBeenCalledWith(
       expect.objectContaining({
