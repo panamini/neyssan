@@ -34,6 +34,7 @@ import { useToast } from "../ui/toast";
 import { CvModalShell } from "./CvModalShell";
 import { useCvAiCapabilities } from "../../hooks/use-cv-ai-capabilities";
 import FloatingAiToolbar, { type InlineAiActionId } from "../FloatingAiToolbar";
+import { deriveResponsibilityBullets } from "../../lib/resumeResponsibilityAuthority";
 import {
   getDomSelectionState,
   isInlineAiToolbarActiveElement,
@@ -875,26 +876,15 @@ export function ExperienceModal({
     item: IExperienceItem,
     doc: RemirrorJSON | undefined,
   ): string[] {
-    const explicitBullets = Array.isArray(item.responsibilityBullets)
-      ? item.responsibilityBullets
-          .map((line) => String(line ?? "").trim())
-          .filter(Boolean)
-      : [];
-
-    if (explicitBullets.length > 0) {
-      return explicitBullets;
-    }
-
-    const docText = plainTextFromValue(doc ?? item.responsibilities);
-    if (docText) {
-      return splitPlainTextIntoLines(docText);
-    }
-
-    return Array.isArray(item.achievements)
-      ? item.achievements
-          .map((line) => String(line ?? "").trim())
-          .filter(Boolean)
-      : [];
+    return deriveResponsibilityBullets({
+      responsibilities: doc ?? item.responsibilities,
+      hasResponsibilitiesField:
+        doc !== undefined ||
+        Object.prototype.hasOwnProperty.call(item, "responsibilities"),
+      responsibilityBullets: item.responsibilityBullets,
+      achievements: item.achievements,
+      fallbackToAchievements: true,
+    });
   }
 
   function buildExperienceAiSource(
@@ -1085,11 +1075,20 @@ export function ExperienceModal({
               return {
                 ...item,
                 responsibilities: undefined,
+                responsibilityBullets: undefined,
               } as IExperienceItem;
             }
+            const responsibilityBullets = deriveResponsibilityBullets({
+              responsibilities: normalizedDoc,
+              hasResponsibilitiesField: true,
+            });
             return {
               ...item,
               responsibilities: normalizedDoc,
+              responsibilityBullets:
+                responsibilityBullets.length > 0
+                  ? responsibilityBullets
+                  : undefined,
               achievements: [],
             } as IExperienceItem;
           });
