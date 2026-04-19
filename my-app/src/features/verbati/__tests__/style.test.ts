@@ -2,8 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import { resolveProposalTemplateId } from "../../../../convex/lib/proposals/renderTemplates";
 import {
+  getProposalTwinTemplateId,
+  getResumeTemplateId,
+  getStyleFamilyId,
   resolveVerbatiStyle,
   sanitizePersistedVerbatiStyle,
+  serializeVerbatiStyle,
+  VERBATI_LAYOUT_OPTIONS,
 } from "../style";
 
 describe("verbati style normalization", () => {
@@ -93,5 +98,77 @@ describe("verbati style normalization", () => {
       "editorial_wide",
     );
     expect(resolveProposalTemplateId("quiet_margin")).toBe("quire_margin");
+  });
+
+  it("canonicalizes family identity while mirroring layout for persistence", () => {
+    expect(
+      resolveVerbatiStyle({
+        familyId: "workshop",
+        layout: "swiss",
+        typography: "quiet-editorial",
+        palette: "sauge",
+      }),
+    ).toMatchObject({
+      familyId: "workshop",
+      layout: "workshop",
+      typography: "quiet-editorial",
+      palette: "sauge",
+    });
+
+    expect(
+      serializeVerbatiStyle({
+        familyId: "workshop",
+        layout: "workshop",
+        typography: "quiet-editorial",
+        palette: "sauge",
+      }),
+    ).toMatchObject({
+      familyId: "workshop",
+      layout: "workshop",
+    });
+  });
+
+  it("resolves legacy aliases and canonical family ids to the same paired templates", () => {
+    const legacyResolved = resolveVerbatiStyle({
+      layout: "soft-ribbon" as never,
+      typography: "quiet-editorial",
+      palette: "sauge",
+    });
+    const familyResolved = resolveVerbatiStyle({
+      familyId: "two-column",
+      typography: "quiet-editorial",
+      palette: "sauge",
+    });
+
+    expect(getStyleFamilyId(legacyResolved)).toBe("two-column");
+    expect(getStyleFamilyId(familyResolved)).toBe("two-column");
+    expect(getResumeTemplateId(legacyResolved)).toBe(
+      getResumeTemplateId(familyResolved),
+    );
+    expect(getProposalTwinTemplateId(legacyResolved)).toBe(
+      getProposalTwinTemplateId(familyResolved),
+    );
+  });
+
+  it("resolves workshop family identity to the scaffolded paired templates", () => {
+    const workshopStyle = resolveVerbatiStyle({
+      familyId: "workshop",
+      typography: "quiet-editorial",
+      palette: "sauge",
+    });
+
+    expect(getStyleFamilyId(workshopStyle)).toBe("workshop");
+    expect(getResumeTemplateId(workshopStyle)).toBe(
+      "workshop_resume_onecol_ats",
+    );
+    expect(getProposalTwinTemplateId(workshopStyle)).toBe(
+      "workshop_proposal_margin",
+    );
+  });
+
+  it("keeps workshop hidden from layout options while the feature flag is off", () => {
+    expect(
+      VERBATI_LAYOUT_OPTIONS.some((option) => option.id === "workshop"),
+    ).toBe(false);
   });
 });
