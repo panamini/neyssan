@@ -38,57 +38,128 @@ vi.mock("../../../lib/resume-font-debug", () => ({
   collectResumeFontDebugSnapshot: vi.fn(() => ({})),
 }));
 
+const resumePagePropsSpy = vi.fn();
+
 vi.mock("../resume/ResumePage", () => ({
-  default: () => (
-    <div>
-      <button
-        type="button"
-        data-preview-section="contact"
-        data-preview-section-id="profile-1"
-        data-preview-surface="section"
-      >
-        Contact alias
-      </button>
-      <button
-        type="button"
-        data-preview-section="contact"
-        data-preview-section-id="profile-1"
-        data-preview-item-id="email"
-        data-preview-surface="item"
-      >
-        Contact email field
-      </button>
-      <button
-        type="button"
-        data-preview-section="notes"
-        data-preview-section-id="profile-1"
-        data-preview-surface="section"
-      >
-        Notes alias
-      </button>
-      <button
-        type="button"
-        data-preview-section="selected_projects"
-        data-preview-section-id="projects-1"
-        data-preview-item-id="project-1"
-        data-preview-surface="item"
-      >
-        Selected project alias
-      </button>
-      <button
-        type="button"
-        data-preview-section="selected_projects"
-        data-preview-section-id="projects-1"
-        data-preview-item-id="project-1:description"
-        data-preview-surface="item"
-      >
-        Selected project description field
-      </button>
-    </div>
-  ),
+  default: ({
+    mode,
+    activeTarget,
+  }: {
+    mode: string;
+    activeTarget?: {
+      sectionType?: string;
+      itemId?: string;
+      source?: string;
+    } | null;
+  }) => {
+    resumePagePropsSpy({ mode, activeTarget });
+
+    return (
+      <div data-testid="resume-page" data-mode={mode}>
+        <button
+          type="button"
+          data-preview-section="contact"
+          data-preview-section-id="profile-1"
+          data-preview-surface="section"
+        >
+          Contact alias
+        </button>
+        <button
+          type="button"
+          data-preview-section="contact"
+          data-preview-section-id="profile-1"
+          data-preview-item-id="email"
+          data-preview-surface="item"
+        >
+          Contact email field
+        </button>
+        <button
+          type="button"
+          data-preview-section="notes"
+          data-preview-section-id="profile-1"
+          data-preview-surface="section"
+        >
+          Notes alias
+        </button>
+        <button
+          type="button"
+          data-preview-section="selected_projects"
+          data-preview-section-id="projects-1"
+          data-preview-item-id="project-1"
+          data-preview-surface="item"
+          data-preview-active={
+            activeTarget?.itemId === "project-1" ? "true" : undefined
+          }
+        >
+          Selected project alias
+        </button>
+        <button
+          type="button"
+          data-preview-section="selected_projects"
+          data-preview-section-id="projects-1"
+          data-preview-item-id="project-1:description"
+          data-preview-surface="item"
+          data-preview-active={
+            activeTarget?.itemId === "project-1:description"
+              ? "true"
+              : undefined
+          }
+        >
+          Selected project description field
+        </button>
+      </div>
+    );
+  },
 }));
 
 describe("VerbatiResumePreview", () => {
+  it("keeps workshop on the legacy panel preview path with link intents and active highlighting intact", () => {
+    const onLinkIntent = vi.fn();
+
+    render(
+      <VerbatiResumePreview
+        data={resumeMock}
+        stylePreset={{
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        hostMode="panel"
+        activeTarget={{
+          sectionType: "projects",
+          sectionId: "projects-1",
+          itemId: "project-1:description",
+          previewSectionType: "selected_projects",
+          source: "preview-panel",
+        }}
+        onLinkIntent={onLinkIntent}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Selected project description field" }),
+    );
+
+    expect(screen.getByTestId("resume-page")).toHaveAttribute(
+      "data-mode",
+      "swissminima",
+    );
+    expect(
+      document.querySelector(".dasti-doc-viewer-shell--resume-panel"),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Selected project description field" }),
+    ).toHaveAttribute("data-preview-active", "true");
+    expect(onLinkIntent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        itemId: "project-1:description",
+        previewSectionType: "selected_projects",
+        source: "preview-panel",
+      }),
+    );
+  });
+
   it("routes contact and notes aliases to the profile editor surface from panel clicks", () => {
     const onLinkIntent = vi.fn();
 
