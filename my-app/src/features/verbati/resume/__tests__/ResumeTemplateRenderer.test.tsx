@@ -95,4 +95,38 @@ describe("ResumeTemplateRenderer", () => {
       "transform-origin: top left;",
     );
   });
+
+  it("scales the page gutter with the preview scale instead of keeping a fixed raw pixel gap", () => {
+    const { container } = render(
+      <ResumeTemplateRenderer
+        data={resumeMock}
+        stylePreset={{
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        resumeTemplateId="workshop_resume_onecol_ats"
+        stageLayout={{
+          fitScale: 0.5,
+          availableWidth: 400,
+          availableHeight: 600,
+          stageWidth: 400,
+          stageHeight: 600,
+          pageWidth: 396.85,
+          pageHeight: 561.25,
+          overflowX: false,
+          overflowY: false,
+          isFit: true,
+        }}
+      />,
+    );
+
+    const rendererRoot = container.querySelector(
+      '[data-testid="resume-template-renderer"]',
+    ) as HTMLElement | null;
+
+    expect(rendererRoot).not.toBeNull();
+    expect(Number.parseFloat(rendererRoot!.style.gap)).toBeCloseTo(12, 2);
+  });
 });
