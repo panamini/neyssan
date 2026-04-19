@@ -27,7 +27,7 @@ function renderSectionHeading(title: string, continued: boolean) {
         display: "flex",
         alignItems: "baseline",
         gap: "1.4mm",
-        marginBottom: "3mm",
+        marginBottom: "var(--main-heading-margin)",
       }}
     >
       <h2
@@ -82,8 +82,8 @@ function renderEntry(args: {
           data-preview-section="profile"
           style={{
             display: "grid",
-            gap: "4mm",
-            paddingBottom: "5mm",
+            gap: "var(--header-row-gap)",
+            paddingBottom: "var(--header-bottom-padding)",
             borderBottom:
               "0.3mm solid color-mix(in srgb, var(--color-border-strong) 58%, transparent)",
           }}
@@ -532,11 +532,12 @@ export function ResumeOneColAtsPage({
         boxSizing: "border-box",
         width: "100%",
         minHeight: "100%",
-        padding: "17mm 18mm 18mm",
+        padding:
+          "var(--margin-top) var(--margin-right) var(--margin-bottom) var(--margin-left)",
         background: "var(--paper)",
         color: "var(--color-text)",
         display: "grid",
-        gap: "5mm",
+        gap: "var(--body-row-gap)",
       }}
     >
       {page.sections.map((section) => (
