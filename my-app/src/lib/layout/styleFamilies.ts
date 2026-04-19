@@ -32,7 +32,7 @@ export const STYLE_FAMILY_DEFINITIONS: readonly StyleFamilyDefinition[] = [
     description: "Archival civic register with a quieter, slower field.",
     defaultTypography: "quiet-editorial",
     defaultPalette: "sauge",
-    resumeTemplateId: "swiss_resume_legacy",
+    resumeTemplateId: "volk_register_resume_legacy",
     proposalTemplateId: "volk_register",
   },
   {
@@ -50,7 +50,7 @@ export const STYLE_FAMILY_DEFINITIONS: readonly StyleFamilyDefinition[] = [
     description: "Editorial split layout with a broader, calmer rhythm.",
     defaultTypography: "quiet-editorial",
     defaultPalette: "sauge",
-    resumeTemplateId: "two_column_resume_legacy",
+    resumeTemplateId: "editorial_resume_legacy",
     proposalTemplateId: "editorial_wide",
   },
   {
@@ -59,7 +59,7 @@ export const STYLE_FAMILY_DEFINITIONS: readonly StyleFamilyDefinition[] = [
     description: "Sharper split layout with a stricter signal-heavy cadence.",
     defaultTypography: "quiet-editorial",
     defaultPalette: "sauge",
-    resumeTemplateId: "two_column_resume_legacy",
+    resumeTemplateId: "modernist_resume_legacy",
     proposalTemplateId: "modernist_signal",
   },
   {
@@ -68,7 +68,7 @@ export const STYLE_FAMILY_DEFINITIONS: readonly StyleFamilyDefinition[] = [
     description: "Bookish split layout with quieter literary spacing.",
     defaultTypography: "quiet-editorial",
     defaultPalette: "sauge",
-    resumeTemplateId: "two_column_resume_legacy",
+    resumeTemplateId: "quire_resume_legacy",
     proposalTemplateId: "quire_margin",
   },
   {
