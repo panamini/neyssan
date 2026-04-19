@@ -12,6 +12,9 @@ import type {
   ResumeTextSection,
 } from "../../features/verbati/resume/resume.types";
 import type { ResumePreviewSectionType } from "../../features/verbati/resumeLinking";
+import type { VerbatiStylePreset } from "../../features/verbati/types";
+import { normalizeResumePreviewTokens } from "../layout/documentTokenNormalizer";
+import { ptToMm } from "../layout/documentTokens";
 import type { ResumeTemplateDefinition } from "../layout/resumeTemplates";
 
 type WorkshopEntryKind =
@@ -335,6 +338,30 @@ type PlannerSectionDefinition = {
 
 const BASE_SECTION_HEADER_HEIGHT = 8.5;
 
+type WorkshopPlannerMetrics = {
+  pageHeightBudgetMm: number;
+  summaryCharsPerLine: number;
+  readingCharsPerLine: number;
+  compactCharsPerLine: number;
+  bodyLineHeightMm: number;
+  bodySmLineHeightMm: number;
+  labelLineHeightMm: number;
+  displayLineHeightMm: number;
+  titleLineHeightMm: number;
+  headerGapMm: number;
+  headerBottomPaddingMm: number;
+  sectionGapMm: number;
+  mainHeadingMarginMm: number;
+  experienceItemGapMm: number;
+  experienceOrgMarginMm: number;
+  experienceBulletGapMm: number;
+  projectGapMm: number;
+  projectPaddingMm: number;
+  educationGapMm: number;
+  skillGapMm: number;
+  skillPadBlockMm: number;
+};
+
 function estimateTextHeight(text: string, lineLength: number, lineHeight: number) {
   const normalized = text.trim();
   if (!normalized) {
@@ -344,53 +371,212 @@ function estimateTextHeight(text: string, lineLength: number, lineHeight: number
   return Math.ceil(normalized.length / lineLength) * lineHeight;
 }
 
-function estimateExperienceHeight(item: ResumeExperienceItem): number {
+function resolveTextLineHeightMm(
+  sizePt: number | undefined,
+  lineHeight: number | undefined,
+  adjustPt = 0,
+) {
+  if (sizePt === undefined) {
+    return 0;
+  }
+
+  return ptToMm(sizePt + adjustPt) * (lineHeight ?? 1.2);
+}
+
+function resolveCharsPerLine(widthMm: number | undefined, lineHeightMm: number) {
+  if (widthMm === undefined || widthMm <= 0) {
+    return 60;
+  }
+
+  return Math.max(18, Math.floor(widthMm / Math.max(1.65, lineHeightMm * 0.36)));
+}
+
+function buildPlannerMetrics(args: {
+  template: ResumeTemplateDefinition;
+  stylePreset?: VerbatiStylePreset | null;
+}): WorkshopPlannerMetrics {
+  const tokens = normalizeResumePreviewTokens({
+    resumeTemplateId: args.template.id,
+    stylePreset: args.stylePreset,
+  });
+  const bodyLineHeightMm = resolveTextLineHeightMm(
+    tokens.flow.type.body.sizePt,
+    tokens.flow.type.body.lineHeight,
+    tokens.flow.density.bodyAdjustPt,
+  );
+  const bodySmLineHeightMm = resolveTextLineHeightMm(
+    tokens.flow.type.bodySm.sizePt,
+    tokens.flow.type.bodySm.lineHeight,
+    tokens.flow.density.bodySmAdjustPt,
+  );
+  const labelLineHeightMm = resolveTextLineHeightMm(
+    tokens.flow.type.label.sizePt,
+    tokens.flow.type.label.lineHeight,
+  );
+  const displayLineHeightMm = resolveTextLineHeightMm(
+    tokens.flow.type.display.sizePt,
+    tokens.flow.type.display.lineHeight,
+    tokens.flow.density.displayAdjustPt,
+  );
+  const titleLineHeightMm = resolveTextLineHeightMm(
+    tokens.flow.type.title.sizePt,
+    tokens.flow.type.title.lineHeight,
+    tokens.flow.density.titleAdjustPt,
+  );
+  const liveHeightMm =
+    tokens.geometry.page.liveArea?.heightMm ?? args.template.preview.liveHeightMm;
+
+  return {
+    pageHeightBudgetMm: Math.max(liveHeightMm - 4, 120),
+    summaryCharsPerLine: resolveCharsPerLine(
+      tokens.flow.measure.summaryWidthMm,
+      bodyLineHeightMm,
+    ),
+    readingCharsPerLine: resolveCharsPerLine(
+      tokens.flow.measure.resumeReadingWidthMm,
+      bodyLineHeightMm,
+    ),
+    compactCharsPerLine: resolveCharsPerLine(
+      tokens.flow.measure.resumeReadingWidthMm,
+      bodySmLineHeightMm,
+    ),
+    bodyLineHeightMm,
+    bodySmLineHeightMm,
+    labelLineHeightMm,
+    displayLineHeightMm,
+    titleLineHeightMm,
+    headerGapMm: tokens.flow.rhythm.headerGapMm ?? args.template.preview.headerGapMm,
+    headerBottomPaddingMm:
+      tokens.flow.header.bottomPaddingMm ?? args.template.preview.headerBottomPaddingMm,
+    sectionGapMm:
+      tokens.flow.rhythm.sectionGapMm ?? args.template.preview.bodySectionGapMm,
+    mainHeadingMarginMm:
+      tokens.flow.component.main?.headingMarginBottomMm ??
+      args.template.preview.mainHeadingMarginBottomMm,
+    experienceItemGapMm:
+      tokens.flow.component.experience?.itemGapMm ??
+      args.template.preview.experienceItemGapMm,
+    experienceOrgMarginMm:
+      tokens.flow.component.experience?.orgMarginBottomMm ??
+      args.template.preview.experienceOrgMarginBottomMm,
+    experienceBulletGapMm:
+      tokens.flow.component.experience?.bulletsGapMm ??
+      args.template.preview.experienceBulletsGapMm,
+    projectGapMm:
+      tokens.flow.component.project?.gapMm ?? args.template.preview.projectGapMm,
+    projectPaddingMm:
+      tokens.flow.component.project?.paddingMm ??
+      args.template.preview.projectPaddingMm,
+    educationGapMm:
+      tokens.flow.component.education?.itemGapMm ??
+      args.template.preview.educationItemGapMm,
+    skillGapMm:
+      tokens.flow.component.skill?.gapMm ?? args.template.preview.skillGapMm,
+    skillPadBlockMm:
+      tokens.flow.component.skill?.padBlockMm ??
+      args.template.preview.skillPaddingBlockMm,
+  };
+}
+
+function estimateExperienceHeight(
+  item: ResumeExperienceItem,
+  metrics: WorkshopPlannerMetrics,
+) {
   return (
-    12 +
-    estimateTextHeight(`${item.role} ${item.company} ${item.location}`, 42, 2.1) +
-    (item.description ? estimateTextHeight(item.description, 80, 2.6) : 0) +
+    metrics.experienceItemGapMm +
+    estimateTextHeight(
+      `${item.role} ${item.company} ${item.location}`,
+      metrics.compactCharsPerLine,
+      metrics.bodySmLineHeightMm,
+    ) +
+    metrics.experienceOrgMarginMm +
+    (item.description
+      ? estimateTextHeight(
+          item.description,
+          metrics.readingCharsPerLine,
+          metrics.bodyLineHeightMm,
+        )
+      : 0) +
     item.bullets.reduce(
-      (sum, bullet) => sum + 3.2 + estimateTextHeight(bullet, 92, 1.8),
+      (sum, bullet) =>
+        sum +
+        metrics.experienceBulletGapMm +
+        estimateTextHeight(
+          bullet,
+          Math.max(18, metrics.readingCharsPerLine - 4),
+          metrics.bodyLineHeightMm,
+        ),
       0,
     )
   );
 }
 
-function estimateProjectHeight(item: ResumeProjectItem): number {
+function estimateProjectHeight(
+  item: ResumeProjectItem,
+  metrics: WorkshopPlannerMetrics,
+) {
   return (
-    10 +
-    estimateTextHeight(`${item.name} ${item.meta}`, 54, 2.2) +
-    estimateTextHeight(item.description, 96, 2.2)
+    metrics.projectPaddingMm * 2 +
+    estimateTextHeight(
+      `${item.name} ${item.meta}`,
+      metrics.compactCharsPerLine,
+      metrics.bodySmLineHeightMm,
+    ) +
+    metrics.projectGapMm +
+    estimateTextHeight(
+      item.description,
+      metrics.readingCharsPerLine,
+      metrics.bodyLineHeightMm,
+    )
   );
 }
 
-function estimateEducationHeight(item: ResumeEducationItem): number {
-  return 7 + estimateTextHeight(`${item.degree} ${item.school} ${item.period}`, 56, 2);
+function estimateEducationHeight(
+  item: ResumeEducationItem,
+  metrics: WorkshopPlannerMetrics,
+) {
+  return (
+    metrics.educationGapMm +
+    estimateTextHeight(
+      `${item.degree} ${item.school} ${item.period}`,
+      metrics.compactCharsPerLine,
+      metrics.bodySmLineHeightMm,
+    )
+  );
 }
 
-function estimateCertificationHeight(item: ResumeCertificationItem): number {
+function estimateCertificationHeight(
+  item: ResumeCertificationItem,
+  metrics: WorkshopPlannerMetrics,
+) {
   return (
-    5.4 +
+    metrics.educationGapMm +
     estimateTextHeight(
       `${item.name} ${item.issuer ?? ""} ${item.meta ?? ""}`,
-      64,
-      1.8,
+      metrics.compactCharsPerLine,
+      metrics.bodySmLineHeightMm,
     )
   );
 }
 
-function estimateAffiliationHeight(item: ResumeAffiliationItem): number {
+function estimateAffiliationHeight(
+  item: ResumeAffiliationItem,
+  metrics: WorkshopPlannerMetrics,
+) {
   return (
-    5.6 +
+    metrics.educationGapMm +
     estimateTextHeight(
       `${item.organizationName} ${item.roleOrMembershipType ?? ""} ${item.dateRange ?? ""} ${item.notes ?? ""}`,
-      68,
-      1.9,
+      metrics.compactCharsPerLine,
+      metrics.bodySmLineHeightMm,
     )
   );
 }
 
-function buildPlannerSections(data: ResumeData): PlannerSectionDefinition[] {
+function buildPlannerSections(
+  data: ResumeData,
+  metrics: WorkshopPlannerMetrics,
+): PlannerSectionDefinition[] {
   const sections: PlannerSectionDefinition[] = [];
 
   sections.push({
@@ -405,10 +591,13 @@ function buildPlannerSections(data: ResumeData): PlannerSectionDefinition[] {
         id: "profile",
         kind: "profile",
         estimatedHeight:
-          26 +
-          data.contact.length * 3.2 +
-          data.metadata.length * 2.8 +
-          (data.title.trim() ? 4 : 0),
+          metrics.displayLineHeightMm +
+          (data.title.trim() ? metrics.titleLineHeightMm : 0) +
+          metrics.headerGapMm +
+          data.contact.length * metrics.bodySmLineHeightMm +
+          data.metadata.length *
+            (metrics.labelLineHeightMm + metrics.bodySmLineHeightMm) +
+          metrics.headerBottomPaddingMm,
       },
     ],
   });
@@ -421,12 +610,18 @@ function buildPlannerSections(data: ResumeData): PlannerSectionDefinition[] {
       sectionId: data.summarySectionId,
       title: "Summary",
       order: -10,
-      headerHeight: 6,
+      headerHeight: Math.max(6, metrics.mainHeadingMarginMm + metrics.labelLineHeightMm),
       entries: [
         {
           id: "summary",
           kind: "summary",
-          estimatedHeight: 8 + estimateTextHeight(data.summary, 118, 2.6),
+          estimatedHeight:
+            metrics.sectionGapMm +
+            estimateTextHeight(
+              data.summary,
+              metrics.summaryCharsPerLine,
+              metrics.bodyLineHeightMm,
+            ),
           text: data.summary,
         },
       ],
@@ -445,7 +640,7 @@ function buildPlannerSections(data: ResumeData): PlannerSectionDefinition[] {
       entries: data.experience.map((item) => ({
         id: item.id,
         kind: "experience",
-        estimatedHeight: estimateExperienceHeight(item),
+        estimatedHeight: estimateExperienceHeight(item, metrics),
         item,
       })),
     },
@@ -460,7 +655,7 @@ function buildPlannerSections(data: ResumeData): PlannerSectionDefinition[] {
       entries: data.education.map((item) => ({
         id: item.id,
         kind: "education",
-        estimatedHeight: estimateEducationHeight(item),
+        estimatedHeight: estimateEducationHeight(item, metrics),
         item,
       })),
     },
@@ -475,7 +670,13 @@ function buildPlannerSections(data: ResumeData): PlannerSectionDefinition[] {
       entries: data.skillItems.map((item) => ({
         id: item.id,
         kind: "skills",
-        estimatedHeight: 4.1 + estimateTextHeight(item.name, 28, 1.2),
+        estimatedHeight:
+          metrics.skillPadBlockMm * 2 +
+          estimateTextHeight(
+            item.name,
+            Math.max(14, Math.floor(metrics.compactCharsPerLine / 2)),
+            metrics.bodySmLineHeightMm,
+          ),
         item,
       })),
     },
@@ -490,7 +691,7 @@ function buildPlannerSections(data: ResumeData): PlannerSectionDefinition[] {
       entries: data.projects.map((item) => ({
         id: item.id,
         kind: "selected_projects",
-        estimatedHeight: estimateProjectHeight(item),
+        estimatedHeight: estimateProjectHeight(item, metrics),
         item,
       })),
     },
@@ -505,7 +706,13 @@ function buildPlannerSections(data: ResumeData): PlannerSectionDefinition[] {
       entries: data.languages.map((item) => ({
         id: item.id,
         kind: "languages",
-        estimatedHeight: 4.2 + estimateTextHeight(`${item.name} ${item.level}`, 28, 1.4),
+        estimatedHeight:
+          metrics.educationGapMm +
+          estimateTextHeight(
+            `${item.name} ${item.level}`,
+            metrics.compactCharsPerLine,
+            metrics.bodySmLineHeightMm,
+          ),
         item,
       })),
     },
@@ -521,7 +728,7 @@ function buildPlannerSections(data: ResumeData): PlannerSectionDefinition[] {
       entries: data.certifications.map((item) => ({
         id: item.id,
         kind: "certifications",
-        estimatedHeight: estimateCertificationHeight(item),
+        estimatedHeight: estimateCertificationHeight(item, metrics),
         item,
       })),
     },
@@ -537,7 +744,13 @@ function buildPlannerSections(data: ResumeData): PlannerSectionDefinition[] {
       entries: data.achievementItems.map((item) => ({
         id: item.id,
         kind: "achievements",
-        estimatedHeight: 4.6 + estimateTextHeight(item.text, 96, 1.5),
+        estimatedHeight:
+          metrics.educationGapMm +
+          estimateTextHeight(
+            item.text,
+            metrics.readingCharsPerLine,
+            metrics.bodyLineHeightMm,
+          ),
         item,
       })),
     },
@@ -553,7 +766,7 @@ function buildPlannerSections(data: ResumeData): PlannerSectionDefinition[] {
       entries: data.affiliations.map((item) => ({
         id: item.id,
         kind: "affiliations",
-        estimatedHeight: estimateAffiliationHeight(item),
+        estimatedHeight: estimateAffiliationHeight(item, metrics),
         item,
       })),
     },
@@ -568,7 +781,13 @@ function buildPlannerSections(data: ResumeData): PlannerSectionDefinition[] {
       entries: data.hobbyItems.map((item) => ({
         id: item.id,
         kind: "hobbies",
-        estimatedHeight: 4 + estimateTextHeight(item.name, 28, 1.2),
+        estimatedHeight:
+          metrics.educationGapMm +
+          estimateTextHeight(
+            item.name,
+            metrics.compactCharsPerLine,
+            metrics.bodySmLineHeightMm,
+          ),
         item,
       })),
     },
@@ -584,7 +803,13 @@ function buildPlannerSections(data: ResumeData): PlannerSectionDefinition[] {
         id: item.id,
         kind:
           item.sectionType === "custom" ? "additional_information" : "additional_information",
-        estimatedHeight: 8 + estimateTextHeight(item.text, 104, 2.2),
+        estimatedHeight:
+          metrics.sectionGapMm +
+          estimateTextHeight(
+            item.text,
+            metrics.readingCharsPerLine,
+            metrics.bodyLineHeightMm,
+          ),
         item,
       })),
     },
@@ -792,10 +1017,15 @@ function buildCommittedFragment(args: {
 export function planWorkshopResumePages(args: {
   data: ResumeData;
   template: ResumeTemplateDefinition;
+  stylePreset?: VerbatiStylePreset | null;
 }): WorkshopResumePlan {
-  const pageHeightBudget = Math.max(args.template.preview.liveHeightMm - 8, 120);
+  const metrics = buildPlannerMetrics({
+    template: args.template,
+    stylePreset: args.stylePreset,
+  });
+  const pageHeightBudget = metrics.pageHeightBudgetMm;
   const pages: WorkshopResumePagePlan[] = [];
-  const sections = buildPlannerSections(args.data);
+  const sections = buildPlannerSections(args.data, metrics);
 
   let currentPage: WorkshopResumePagePlan = {
     index: 0,

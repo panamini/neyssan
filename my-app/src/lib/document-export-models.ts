@@ -310,6 +310,7 @@ function normalizeResumeData(
 function buildCommittedWorkshopPages(args: {
   data: ResumeData;
   resumeTemplateId: ResumeTemplateId;
+  stylePreset?: VerbatiStylePreset | null;
 }): WorkshopResumeCommittedPage[] | undefined {
   if (args.resumeTemplateId !== "workshop_resume_onecol_ats") {
     return undefined;
@@ -318,6 +319,7 @@ function buildCommittedWorkshopPages(args: {
   return planWorkshopResumePages({
     data: args.data,
     template: getResumeTemplateDefinition(args.resumeTemplateId),
+    stylePreset: args.stylePreset,
   }).committedPages;
 }
 
@@ -348,6 +350,7 @@ export function buildResumeExportSource(args: {
         buildCommittedWorkshopPages({
           data: canonicalData,
           resumeTemplateId,
+          stylePreset,
         }),
       ),
       locale: normalizeExportLocale(args.currentCv.metadata.locale),
@@ -363,6 +366,7 @@ export function buildResumeExportSource(args: {
       buildCommittedWorkshopPages({
         data: canonicalData,
         resumeTemplateId,
+        stylePreset,
       }),
     ),
     locale: normalizeExportLocale(args.currentCv.metadata.locale),

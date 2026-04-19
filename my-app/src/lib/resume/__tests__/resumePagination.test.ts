@@ -64,6 +64,44 @@ describe("resumePagination", () => {
     );
   });
 
+  it("moves an oversized experience block onto the next page instead of stretching the first workshop page", () => {
+    const result = planWorkshopResumePages({
+      data: {
+        ...resumeMock,
+        metadata: resumeMock.metadata.slice(0, 1),
+        contact: resumeMock.contact.slice(0, 2),
+        skillItems: [],
+        languages: [],
+        education: [],
+        achievements: [],
+        achievementItems: [],
+        certifications: [],
+        affiliations: [],
+        hobbyItems: [],
+        hobbies: [],
+        projects: [],
+        textSections: [],
+        experience: [
+          {
+            ...resumeMock.experience[0]!,
+            id: "exp-oversized",
+            bullets: Array.from({ length: 16 }, (_, bulletIndex) =>
+              `Oversized experience bullet ${bulletIndex + 1} with enough copy to consume the real one-column preview line budget and force the planner to start experience on a fresh page.`,
+            ),
+          },
+        ],
+      },
+      template: workshopTemplate,
+    });
+
+    expect(result.pages.length).toBeGreaterThan(1);
+    expect(result.pages[0]?.sections.map((section) => section.key)).toEqual([
+      "profile",
+      "summary",
+    ]);
+    expect(result.pages[1]?.sections[0]?.key).toBe("experience");
+  });
+
   it("emits serializable committed pages and fragments for workshop export parity", () => {
     const result = planWorkshopResumePages({
       data: {
