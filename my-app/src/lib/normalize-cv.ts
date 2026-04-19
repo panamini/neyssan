@@ -268,15 +268,19 @@ function normalizeExperienceItem(entry: any, idx: number): IExperienceItem {
     ? undefined
     : providedEndPrecision ?? (endIsEmptyString ? startDatePrecision : endParsed.precision);
 
+  const hasExplicitResponsibilities = Object.prototype.hasOwnProperty.call(
+    entry ?? {},
+    "responsibilities",
+  );
   const responsibilities = normalizeRichField(entry?.responsibilities);
-  const responsibilityBullets = Array.isArray(entry?.responsibilityBullets)
-    ? entry.responsibilityBullets
-        .map((value: unknown) => (typeof value === "string" ? normalizeWhitespace(value) : ""))
-        .filter((value: string) => value.length > 0)
-    : Array.isArray(entry?.responsibilities)
+  const responsibilityBullets = Array.isArray(entry?.responsibilities)
       ? entry.responsibilities
           .map((value: unknown) => (typeof value === "string" ? normalizeWhitespace(value) : ""))
           .filter((value: string) => value.length > 0)
+      : !hasExplicitResponsibilities && Array.isArray(entry?.responsibilityBullets)
+        ? entry.responsibilityBullets
+            .map((value: unknown) => (typeof value === "string" ? normalizeWhitespace(value) : ""))
+            .filter((value: string) => value.length > 0)
       : undefined;
 
   const base = {
