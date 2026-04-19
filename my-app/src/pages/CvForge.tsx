@@ -17,15 +17,17 @@ import type {
 import { useBoundVerbatiCvStyle } from "../features/verbati/useBoundVerbatiCvStyle";
 import {
   getResumeTemplateId,
+  getVerbatiTypographyLabel,
   resolveVerbatiStyle,
 } from "../features/verbati/style";
 import {
-  getProposalStyleDefinition,
+  buildVerbatiStyleFromProposalSettings,
   type ProposalStyleChoice,
 } from "../lib/proposal-style-choice";
 import type { ProposalPaletteId } from "../lib/proposal-style-display";
 import type { VerbatiFontPairId } from "../features/verbati/fontCatalog";
 import type { VerbatiStylePreset } from "../features/verbati/types";
+import { getStyleFamilyDisplayMetadata } from "../lib/layout/styleFamilies";
 import { useToast } from "../components/ui/toast";
 import {
   buildAuthoritativeResumeDebugSnapshot,
@@ -52,10 +54,11 @@ import { exportDocumentFile } from "../lib/exportDocumentFile";
 type CvForgeWorkspaceMode = "edit" | "preview";
 type PresetSlotIndex = 1 | 2 | 3;
 type SavedStylePresetSlot = {
-  fontPairId: VerbatiFontPairId | null;
-  styleChoice: ProposalStyleChoice;
-  paletteOverride: ProposalPaletteId | null;
-  accentHex: string | null;
+  verbatiStyle?: Partial<VerbatiStylePreset> | null;
+  fontPairId?: VerbatiFontPairId | null;
+  styleChoice?: ProposalStyleChoice;
+  paletteOverride?: ProposalPaletteId | null;
+  accentHex?: string | null;
   voicePreset: "signature" | "expert" | "engaging" | null;
   name?: string;
 };
@@ -85,6 +88,10 @@ function normalizePresetSlot(value: unknown): SavedStylePresetSlot | null {
 
   const record = value as Record<string, unknown>;
   return {
+    verbatiStyle:
+      record.verbatiStyle && typeof record.verbatiStyle === "object"
+        ? (record.verbatiStyle as Partial<VerbatiStylePreset>)
+        : null,
     fontPairId:
       typeof record.fontPairId === "string"
         ? (record.fontPairId as VerbatiFontPairId)
@@ -115,19 +122,12 @@ function normalizePresetSlot(value: unknown): SavedStylePresetSlot | null {
 function buildStylePresetFromSettingsSlot(
   preset: SavedStylePresetSlot,
 ): VerbatiStylePreset {
-  const baseStyle = getProposalStyleDefinition(preset.styleChoice).stylePreset;
-
-  return resolveVerbatiStyle({
-    ...baseStyle,
-    typography: preset.fontPairId ?? baseStyle.typography,
-    ...(preset.accentHex
-      ? {
-          palette: "custom" as const,
-          accentHex: preset.accentHex,
-        }
-      : preset.paletteOverride
-        ? { palette: preset.paletteOverride }
-        : null),
+  return buildVerbatiStyleFromProposalSettings({
+    verbatiStyle: preset.verbatiStyle ?? null,
+    styleChoice: preset.styleChoice,
+    fontPairId: preset.fontPairId,
+    paletteOverride: preset.paletteOverride ?? null,
+    accentHex: preset.accentHex ?? null,
   });
 }
 
@@ -541,7 +541,7 @@ export function CvForge(): JSX.Element {
                   </span>
                   <span className="dasti-cv-style-presets__option-description">
                     {preset
-                      ? `${nextStyle ? nextStyle.layout : "swiss"} / ${preset.fontPairId ?? "default"}`
+                      ? `${getStyleFamilyDisplayMetadata(nextStyle?.familyId).label} / ${getVerbatiTypographyLabel(nextStyle?.typography ?? "quiet-editorial")}`
                       : "No saved style"}
                   </span>
                 </span>
@@ -613,14 +613,14 @@ export function CvForge(): JSX.Element {
             "--page-shell-pad-top":
               workspaceMode === "preview" ? "0px" : "var(--space-2)",
             "--page-shell-pad-inline":
-              workspaceMode === "preview" ? "0px" : "var(--space-4)",
+              workspaceMode === "preview" ? "var(--space-1)" : "var(--space-4)",
             "--page-shell-pad-bottom": "var(--space-1)",
             "--cv-preview-toolbar-inset":
               workspaceMode === "preview" ? "var(--space-2)" : undefined,
             "--page-shell-pad-top-mobile":
               workspaceMode === "preview" ? "0px" : "var(--space-2)",
             "--page-shell-pad-inline-mobile":
-              workspaceMode === "preview" ? "0px" : "var(--space-4)",
+              workspaceMode === "preview" ? "var(--space-1)" : "var(--space-4)",
             "--page-shell-pad-bottom-mobile": "var(--space-1)",
           } as React.CSSProperties
         }

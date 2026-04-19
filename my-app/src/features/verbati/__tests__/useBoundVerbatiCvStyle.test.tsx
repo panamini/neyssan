@@ -41,6 +41,7 @@ describe("useBoundVerbatiCvStyle", () => {
         id: currentCv.id,
         metadata: expect.objectContaining({
           verbatiStyle: {
+            familyId: "editorial",
             layout: "editorial",
             palette: "custom",
             typography: "civic-correspondence",

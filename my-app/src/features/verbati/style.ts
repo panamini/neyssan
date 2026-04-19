@@ -18,14 +18,14 @@ import {
   serializeVerbatiThemeVars,
   type VerbatiPaletteOption,
 } from "../../lib/layout/documentAppearance";
-import { isWorkshopFamilyEnabled } from "../../lib/flags";
 import {
   getStyleFamilyProposalTemplateId,
   getStyleFamilyResumeTemplateId,
   getStyleFamilyDefinition,
+  getStyleFamilyDisplayMetadata,
+  listSelectableStyleFamilies,
   resolveStyleFamilyFromStyle,
   resolveStyleFamilyId,
-  STYLE_FAMILY_DEFINITIONS,
 } from "../../lib/layout/styleFamilies";
 import type {
   LegacyVerbatiLayoutAlias,
@@ -51,13 +51,13 @@ export const DEFAULT_VERBATI_STYLE: VerbatiStylePreset = {
   palette: "sauge",
 };
 
-export const VERBATI_LAYOUT_OPTIONS: LayoutOption[] = STYLE_FAMILY_DEFINITIONS.map(
+export const VERBATI_LAYOUT_OPTIONS: LayoutOption[] = listSelectableStyleFamilies().map(
   (family) => ({
     id: family.id,
     name: family.label,
     description: family.description,
   }),
-).filter((option) => option.id !== "workshop" || isWorkshopFamilyEnabled());
+);
 
 export const VERBATI_TYPOGRAPHY_OPTIONS: TypographyOption[] = [
   ...VERBATI_FONT_PAIR_OPTIONS,
@@ -135,7 +135,7 @@ function sanitizePersistedVerbatiPalette(
 }
 
 export function getLayoutLabel(preset: VerbatiLayoutPreset): string {
-  return getStyleFamilyDefinition(sanitizePersistedVerbatiFamilyId(preset)).label;
+  return getStyleFamilyDisplayMetadata(sanitizePersistedVerbatiFamilyId(preset)).label;
 }
 
 export function getVerbatiStyleFromCv(
