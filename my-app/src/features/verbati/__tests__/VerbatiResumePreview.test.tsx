@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { VerbatiResumePreview } from "../VerbatiResumePreview";
 import { resumeMock } from "../resume/resume.mock";
@@ -39,6 +39,7 @@ vi.mock("../../../lib/resume-font-debug", () => ({
 }));
 
 const resumePagePropsSpy = vi.fn();
+const resumeTemplateRendererPropsSpy = vi.fn();
 
 vi.mock("../resume/ResumePage", () => ({
   default: ({
@@ -112,8 +113,55 @@ vi.mock("../resume/ResumePage", () => ({
   },
 }));
 
+vi.mock("../resume/ResumeTemplateRenderer", () => ({
+  WORKSHOP_TEMPLATE_RENDERER_ID: "workshop_resume_onecol_ats",
+  getResumeTemplateCanvasHeight: ({
+    pageCount,
+    pageHeightPx,
+  }: {
+    pageCount: number;
+    pageHeightPx: number;
+  }) => pageCount * pageHeightPx,
+  RESUME_TEMPLATE_PAGE_GAP_PX: 24,
+  default: ({
+    activeTarget,
+    onStablePageCountChange,
+  }: {
+    activeTarget?: {
+      sectionType?: string;
+      itemId?: string;
+      source?: string;
+    } | null;
+    onStablePageCountChange?: (pageCount: number) => void;
+  }) => {
+    resumeTemplateRendererPropsSpy({ activeTarget });
+    React.useEffect(() => {
+      onStablePageCountChange?.(3);
+    }, [onStablePageCountChange]);
+
+    return (
+      <div data-testid="resume-template-renderer">
+        <button
+          type="button"
+          data-preview-section="selected_projects"
+          data-preview-section-id="projects-1"
+          data-preview-item-id="project-1:description"
+          data-preview-surface="item"
+          data-preview-active={
+            activeTarget?.itemId === "project-1:description"
+              ? "true"
+              : undefined
+          }
+        >
+          Workshop project description field
+        </button>
+      </div>
+    );
+  },
+}));
+
 describe("VerbatiResumePreview", () => {
-  it("keeps workshop on the legacy panel preview path with link intents and active highlighting intact", () => {
+  it("keeps workshop panel preview link intents and active highlighting intact on the template renderer path", () => {
     const onLinkIntent = vi.fn();
 
     render(
@@ -138,24 +186,162 @@ describe("VerbatiResumePreview", () => {
     );
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Selected project description field" }),
+      screen.getByRole("button", { name: "Workshop project description field" }),
     );
 
-    expect(screen.getByTestId("resume-page")).toHaveAttribute(
-      "data-mode",
-      "swissminima",
-    );
+    expect(screen.getByTestId("resume-template-renderer")).toBeInTheDocument();
+    expect(screen.queryByTestId("resume-page")).not.toBeInTheDocument();
     expect(
       document.querySelector(".dasti-doc-viewer-shell--resume-panel"),
     ).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: "Selected project description field" }),
+      screen.getByRole("button", { name: "Workshop project description field" }),
     ).toHaveAttribute("data-preview-active", "true");
     expect(onLinkIntent).toHaveBeenCalledWith(
       expect.objectContaining({
         itemId: "project-1:description",
         previewSectionType: "selected_projects",
         source: "preview-panel",
+      }),
+    );
+  });
+
+  it("uses ResumeTemplateRenderer only for the workshop template path and reports stable page counts in workspace mode", async () => {
+    render(
+      <VerbatiResumePreview
+        data={resumeMock}
+        stylePreset={{
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        hostMode="workspace"
+      />,
+    );
+
+    expect(screen.getByTestId("resume-template-renderer")).toBeInTheDocument();
+    expect(screen.queryByTestId("resume-page")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByLabelText("Page count")).toHaveTextContent("3 pages");
+    });
+  });
+
+  it("keeps non-workshop families entirely on the legacy ResumePage path", () => {
+    render(
+      <VerbatiResumePreview
+        data={resumeMock}
+        stylePreset={{
+          familyId: "swiss",
+          layout: "swiss",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        hostMode="workspace"
+      />,
+    );
+
+    expect(screen.getByTestId("resume-page")).toBeInTheDocument();
+    expect(screen.queryByTestId("resume-template-renderer")).not.toBeInTheDocument();
+  });
+
+  it("keeps workshop compare-layout mode on the legacy comparison path without mixed rendering", () => {
+    render(
+      <VerbatiResumePreview
+        data={resumeMock}
+        stylePreset={{
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        compareLayouts
+      />,
+    );
+
+    expect(screen.getByTestId("resume-page")).toHaveAttribute(
+      "data-mode",
+      "comparisonAll",
+    );
+    expect(screen.queryByTestId("resume-template-renderer")).not.toBeInTheDocument();
+  });
+
+  it("preserves workshop panel preview link intents through the template renderer path", () => {
+    const onLinkIntent = vi.fn();
+
+    render(
+      <VerbatiResumePreview
+        data={resumeMock}
+        stylePreset={{
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        hostMode="panel"
+        activeTarget={{
+          sectionType: "projects",
+          sectionId: "projects-1",
+          itemId: "project-1:description",
+          previewSectionType: "selected_projects",
+          source: "preview-panel",
+        }}
+        onLinkIntent={onLinkIntent}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Workshop project description field" }),
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Workshop project description field" }),
+    ).toHaveAttribute("data-preview-active", "true");
+    expect(onLinkIntent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        itemId: "project-1:description",
+        previewSectionType: "selected_projects",
+        source: "preview-panel",
+      }),
+    );
+  });
+
+  it("preserves workshop workspace preview link intents through the template renderer path", () => {
+    const onLinkIntent = vi.fn();
+
+    render(
+      <VerbatiResumePreview
+        data={resumeMock}
+        stylePreset={{
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        hostMode="workspace"
+        activeTarget={{
+          sectionType: "projects",
+          sectionId: "projects-1",
+          itemId: "project-1:description",
+          previewSectionType: "selected_projects",
+          source: "preview-workspace",
+        }}
+        onLinkIntent={onLinkIntent}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Workshop project description field" }),
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Workshop project description field" }),
+    ).toHaveAttribute("data-preview-active", "true");
+    expect(onLinkIntent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        itemId: "project-1:description",
+        previewSectionType: "selected_projects",
+        source: "preview-workspace",
       }),
     );
   });
