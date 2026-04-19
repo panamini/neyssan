@@ -1,9 +1,12 @@
 import React from "react";
-import { act, fireEvent, render, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ProjectsModal } from "../structured-blocks/ProjectsModal";
-import { CertificationModal } from "../structured-blocks/CertificationAffiliationModal";
+import {
+  AffiliationModal,
+  CertificationModal,
+} from "../structured-blocks/CertificationAffiliationModal";
 
 describe("Structured modal targeted focus", () => {
   it("keeps the targeted projects field focused while typing after preview targeting", async () => {
@@ -105,5 +108,55 @@ describe("Structured modal targeted focus", () => {
 
     expect(credentialIdInput).toHaveFocus();
     vi.useRealTimers();
+  });
+
+  it("uses the standard modal field size for projects and affiliations", () => {
+    const { rerender } = render(
+      <ProjectsModal
+        open
+        onClose={vi.fn()}
+        onSave={vi.fn()}
+        items={[
+          {
+            id: "project-1",
+            title: "Atlas",
+            meta: "2023",
+            description: "System work",
+          },
+        ]}
+      />,
+    );
+
+    const projectTitleInput = screen.getByLabelText("Project Title");
+    const projectDescriptionInput = screen.getByLabelText("Description");
+
+    expect(projectTitleInput).toHaveClass("dasti-select");
+    expect(projectTitleInput).not.toHaveClass("dasti-select--sm");
+    expect(projectDescriptionInput).toHaveClass("dasti-select");
+    expect(projectDescriptionInput).not.toHaveClass("dasti-select--sm");
+
+    rerender(
+      <AffiliationModal
+        open
+        onClose={vi.fn()}
+        onSave={vi.fn()}
+        items={[
+          {
+            id: "affiliation-1",
+            organizationName: "IEEE",
+            roleOrMembershipType: "Member",
+            notes: "Regional chapter",
+          },
+        ]}
+      />,
+    );
+
+    const organizationInput = screen.getByLabelText("Organization");
+    const affiliationNotesInput = screen.getByLabelText("Notes");
+
+    expect(organizationInput).toHaveClass("dasti-select");
+    expect(organizationInput).not.toHaveClass("dasti-select--sm");
+    expect(affiliationNotesInput).toHaveClass("dasti-select");
+    expect(affiliationNotesInput).not.toHaveClass("dasti-select--sm");
   });
 });
