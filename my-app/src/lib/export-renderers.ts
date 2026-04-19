@@ -758,13 +758,14 @@ function buildPageCss(args: {
   documentKind: "proposal" | "resume";
   mode: ExportMode;
   proposalTemplateId?: ProposalTemplateId | null;
+  resumeTemplateId?: ResumePrintSource["resumeTemplateId"] | null;
   stylePreset?: VerbatiStylePreset | null;
 }): string {
   const resumeProfile =
     args.documentKind === "resume"
       ? resolveResumeExportProfile({
           mode: args.mode,
-          layout: normalizeStylePreset(args.stylePreset).layout,
+          resumeTemplateId: args.resumeTemplateId,
           stylePreset: args.stylePreset,
         })
       : null;
@@ -1241,6 +1242,7 @@ function buildHtmlDocument(args: {
   lang?: string | null;
   mode: ExportMode;
   proposalTemplateId?: ProposalTemplateId | null;
+  resumeTemplateId?: ResumePrintSource["resumeTemplateId"] | null;
   stylePreset?: VerbatiStylePreset | null;
   title: string;
 }): string {
@@ -1253,6 +1255,7 @@ function buildHtmlDocument(args: {
       documentKind: args.documentKind,
       mode: args.mode,
       proposalTemplateId: args.proposalTemplateId,
+      resumeTemplateId: args.resumeTemplateId,
       stylePreset: args.stylePreset,
     })}</style>
   </head>
@@ -1320,7 +1323,7 @@ function renderResumeHtml(args: {
   const locale = args.data.locale;
   const profile = resolveResumeExportProfile({
     mode: args.mode,
-    layout: normalizeStylePreset(args.stylePreset).layout,
+    resumeTemplateId: args.data.resumeTemplateId,
     stylePreset: args.stylePreset,
   });
   const contactSection = renderSection({
@@ -1522,13 +1525,14 @@ function renderResumeHtml(args: {
     bodyClassName: joinClassNames([
       "resume-export",
       `resume--${args.mode}`,
-      `resume-layout--${profile.id}`,
+      `resume-layout--${normalizeStylePreset(args.stylePreset).layout}`,
       `resume-shell--${profile.shell}`,
     ]),
     bodyMarkup: baselineBodyMarkup,
     documentKind: "resume",
     lang: args.data.locale,
     mode: args.mode,
+    resumeTemplateId: args.data.resumeTemplateId,
     stylePreset: args.stylePreset,
     title: `${args.data.title} - ${args.mode === "ats" ? "ATS" : "Styled"}`,
   });
@@ -1799,7 +1803,7 @@ export async function buildResumeDocxBuffer(args: {
   const locale = args.data.locale;
   const profile = resolveResumeExportProfile({
     mode: "styled",
-    layout: resolvedStyle.layout,
+    resumeTemplateId: args.data.resumeTemplateId,
     stylePreset: args.stylePreset,
   });
   const headingFont = resolvePrimaryFontFamily(

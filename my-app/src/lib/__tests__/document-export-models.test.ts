@@ -4,6 +4,7 @@ import { resumeMock } from "../../features/verbati/resume/resume.mock";
 import { DEFAULT_VERBATI_STYLE } from "../../features/verbati/style";
 import { generateCvTemplate } from "../cv-template";
 import {
+  buildResumeExportSource,
   buildProposalPreviewPrintSource,
   buildProposalPrintDebugSnapshot,
   buildProposalPrintRoutePayload,
@@ -33,8 +34,29 @@ describe("document-export-models", () => {
           typography: "mono-signal",
         }),
         rendererVariantId: "swissminima",
+        resumeTemplateId: "swiss_resume_legacy",
       }),
     );
+  });
+
+  it("resolves the exact workshop resume template id for preview and export sources", () => {
+    const currentCv = generateCvTemplate("Workshop CV");
+    currentCv.metadata.verbatiStyle = {
+      familyId: "workshop",
+      layout: "workshop",
+      typography: "quiet-editorial",
+      palette: "sauge",
+    };
+
+    const previewSource = buildStyledResumePrintSource({
+      currentCv,
+      stylePreset: currentCv.metadata.verbatiStyle,
+    });
+    const exportSource = buildResumeExportSource({ currentCv });
+
+    expect(previewSource?.resumeTemplateId).toBe("workshop_resume_onecol_ats");
+    expect(previewSource?.rendererVariantId).toBe("swissminima");
+    expect(exportSource?.resumeTemplateId).toBe("workshop_resume_onecol_ats");
   });
 
   it("builds a preview-aligned print route payload for styled resume PDF", () => {
@@ -48,6 +70,7 @@ describe("document-export-models", () => {
         ...DEFAULT_VERBATI_STYLE,
         layout: "two-column",
       },
+      resumeTemplateId: "two_column_resume_legacy",
       rendererVariantId: "robial",
     };
 
@@ -56,6 +79,7 @@ describe("document-export-models", () => {
     expect(payload.kind).toBe("resume_print_route");
     expect(payload.resumeData).toEqual(resumeMock);
     expect(payload.stylePreset.layout).toBe("two-column");
+    expect(payload.resumeTemplateId).toBe("two_column_resume_legacy");
     expect(payload.rendererVariantId).toBe("robial");
   });
 

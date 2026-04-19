@@ -1,14 +1,12 @@
 import { type ProposalTemplateId } from "../../../convex/lib/proposals/renderTemplates";
-import type {
-  VerbatiLayoutPreset,
-  VerbatiStylePreset,
-} from "../../features/verbati/types";
+import type { VerbatiStylePreset } from "../../features/verbati/types";
 import { type CanonicalDocumentTokens } from "./documentTokens";
 import {
   normalizeProposalExportTokens,
   normalizeResumeExportTokens,
 } from "./documentTokenNormalizer";
 import { serializeExportVars } from "./documentTokenSerializers";
+import type { ResumeTemplateId } from "./resumeTemplates";
 
 type ExportLengthVars = Record<string, string>;
 
@@ -16,7 +14,7 @@ export type ResumeExportShell = "onecol" | "split";
 export type ProposalExportShell = "onecol" | "rail";
 
 export type ResumeExportProfile = {
-  id: "ats" | VerbatiLayoutPreset;
+  id: "ats" | ResumeTemplateId;
   shell: ResumeExportShell;
   vars: ExportLengthVars;
   canonical: CanonicalDocumentTokens;
@@ -32,12 +30,12 @@ export type ProposalExportProfile = {
 
 export function resolveResumeExportProfile(args: {
   mode: "ats" | "styled";
-  layout?: VerbatiLayoutPreset | null;
+  resumeTemplateId?: ResumeTemplateId | null;
   stylePreset?: VerbatiStylePreset | null;
 }): ResumeExportProfile {
   const normalized = normalizeResumeExportTokens({
     mode: args.mode,
-    layout: args.layout,
+    resumeTemplateId: args.resumeTemplateId,
     stylePreset: args.stylePreset,
   });
 
