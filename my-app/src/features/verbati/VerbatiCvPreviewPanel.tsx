@@ -48,7 +48,7 @@ export function VerbatiCvPreviewPanel({
   onLinkIntent,
   activeTarget = null,
 }: VerbatiCvPreviewPanelProps): JSX.Element {
-  const { currentCv, importCv } = useCvLibrary();
+  const { currentCv, importCv, isLibraryHydrated } = useCvLibrary();
   const persistedStylePreset = React.useMemo(
     () => getVerbatiStyleFromCv(currentCv),
     [currentCv],
@@ -70,8 +70,11 @@ export function VerbatiCvPreviewPanel({
   const lastResolvedCvIdRef = React.useRef<string | null>(
     currentCv?.id ? String(currentCv.id) : null,
   );
+  const shouldDelayResolvedPreview = !isLibraryHydrated && !hasCurrentCv;
   const previewData =
-    previewSource === "active" && hasCurrentCv && activeData
+    shouldDelayResolvedPreview
+      ? null
+      : previewSource === "active" && hasCurrentCv && activeData
       ? activeData
       : resumeMock;
   const isActivePreview =
@@ -370,7 +373,7 @@ export function VerbatiCvPreviewPanel({
         </div>
       ) : null}
 
-      {hostMode === "workspace" ? (
+      {shouldDelayResolvedPreview ? null : hostMode === "workspace" ? (
         <div className="dasti-resume-preview-panel__surface dasti-resume-preview-panel__surface--workspace">
           <VerbatiResumePreview
             data={previewData}

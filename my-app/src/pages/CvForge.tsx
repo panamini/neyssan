@@ -621,14 +621,14 @@ export function CvForge(): JSX.Element {
             "--page-shell-max-width": "100%",
             "--page-shell-gap": "var(--space-2)",
             "--page-shell-pad-top":
-              workspaceMode === "preview" ? "0px" : "var(--space-2)",
+              workspaceMode === "preview" ? "var(--space-2)" : "var(--space-2)",
             "--page-shell-pad-inline":
               "var(--space-4)",
             "--page-shell-pad-bottom": "var(--space-1)",
             "--cv-preview-toolbar-inset":
               workspaceMode === "preview" ? "0px" : undefined,
             "--page-shell-pad-top-mobile":
-              workspaceMode === "preview" ? "0px" : "var(--space-2)",
+              workspaceMode === "preview" ? "var(--space-2)" : "var(--space-2)",
             "--page-shell-pad-inline-mobile":
               "var(--space-4)",
             "--page-shell-pad-bottom-mobile": "var(--space-1)",

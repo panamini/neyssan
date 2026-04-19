@@ -628,6 +628,7 @@ export function ProfileReviewCard({
     currentCvId,
     loadCv,
     isLoading,
+    isLibraryHydrated,
     reorderSections,
     addSection,
     createNewCv,
@@ -2663,7 +2664,7 @@ export function ProfileReviewCard({
         </div>
       )}
 
-      {!isLoading && !currentCv && (
+      {!isLoading && isLibraryHydrated && !currentCv && (
         <div className="dasti-empty-state dasti-empty-state--panel">
           <div className="dasti-empty-state__icon-shell">
             <FileText size={22} strokeWidth={1.4} />
