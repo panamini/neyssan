@@ -118,9 +118,208 @@ export type WorkshopResumePagePlan = {
   sections: WorkshopPlannerSection[];
 };
 
+type WorkshopCommittedMetaItem = {
+  label: string;
+  value: string;
+};
+
+type WorkshopCommittedProfileFragment = {
+  fragmentId: string;
+  kind: "profile";
+  sectionType: "profile";
+  sectionId?: string;
+  title?: string;
+  continued: boolean;
+  profile: {
+    name: string;
+    title: string;
+  };
+  contact: WorkshopCommittedMetaItem[];
+  metadata: WorkshopCommittedMetaItem[];
+};
+
+type WorkshopCommittedSummaryFragment = {
+  fragmentId: string;
+  kind: "summary";
+  sectionType: "summary";
+  sectionId?: string;
+  title?: string;
+  continued: boolean;
+  text: string;
+};
+
+type WorkshopCommittedExperienceItem = {
+  id: string;
+  role: string;
+  company: string;
+  period: string;
+  location: string;
+  summary: string;
+  bullets: string[];
+};
+
+type WorkshopCommittedEducationItem = {
+  id: string;
+  degree: string;
+  school: string;
+  period: string;
+};
+
+type WorkshopCommittedSkillItem = {
+  id: string;
+  name: string;
+  level?: string;
+};
+
+type WorkshopCommittedProjectItem = {
+  id: string;
+  name: string;
+  meta: string;
+  description: string;
+};
+
+type WorkshopCommittedLanguageItem = {
+  id: string;
+  name: string;
+  level: string;
+};
+
+type WorkshopCommittedCertificationItem = {
+  id: string;
+  name: string;
+  issuer?: string;
+  meta?: string;
+};
+
+type WorkshopCommittedTextItem = {
+  id: string;
+  text: string;
+};
+
+type WorkshopCommittedAffiliationItem = {
+  id: string;
+  organizationName: string;
+  roleOrMembershipType?: string;
+  dateRange?: string;
+  notes?: string;
+};
+
+type WorkshopCommittedNamedItem = {
+  id: string;
+  name: string;
+};
+
+type WorkshopCommittedTextSectionItem = {
+  id: string;
+  sectionTitle: string;
+  text: string;
+};
+
+export type WorkshopResumeCommittedFragment =
+  | WorkshopCommittedProfileFragment
+  | WorkshopCommittedSummaryFragment
+  | {
+      fragmentId: string;
+      kind: "experience";
+      sectionType: "experience";
+      sectionId?: string;
+      title?: string;
+      continued: boolean;
+      items: WorkshopCommittedExperienceItem[];
+    }
+  | {
+      fragmentId: string;
+      kind: "education";
+      sectionType: "education";
+      sectionId?: string;
+      title?: string;
+      continued: boolean;
+      items: WorkshopCommittedEducationItem[];
+    }
+  | {
+      fragmentId: string;
+      kind: "skills";
+      sectionType: "skills";
+      sectionId?: string;
+      title?: string;
+      continued: boolean;
+      items: WorkshopCommittedSkillItem[];
+    }
+  | {
+      fragmentId: string;
+      kind: "selected_projects";
+      sectionType: "selected_projects";
+      sectionId?: string;
+      title?: string;
+      continued: boolean;
+      items: WorkshopCommittedProjectItem[];
+    }
+  | {
+      fragmentId: string;
+      kind: "languages";
+      sectionType: "languages";
+      sectionId?: string;
+      title?: string;
+      continued: boolean;
+      items: WorkshopCommittedLanguageItem[];
+    }
+  | {
+      fragmentId: string;
+      kind: "certifications";
+      sectionType: "certifications";
+      sectionId?: string;
+      title?: string;
+      continued: boolean;
+      items: WorkshopCommittedCertificationItem[];
+    }
+  | {
+      fragmentId: string;
+      kind: "achievements";
+      sectionType: "achievements";
+      sectionId?: string;
+      title?: string;
+      continued: boolean;
+      items: WorkshopCommittedTextItem[];
+    }
+  | {
+      fragmentId: string;
+      kind: "affiliations";
+      sectionType: "affiliations";
+      sectionId?: string;
+      title?: string;
+      continued: boolean;
+      items: WorkshopCommittedAffiliationItem[];
+    }
+  | {
+      fragmentId: string;
+      kind: "hobbies";
+      sectionType: "hobbies";
+      sectionId?: string;
+      title?: string;
+      continued: boolean;
+      items: WorkshopCommittedNamedItem[];
+    }
+  | {
+      fragmentId: string;
+      kind: "additional_information";
+      sectionType: "additional_information";
+      sectionId?: string;
+      title?: string;
+      continued: boolean;
+      items: WorkshopCommittedTextSectionItem[];
+    };
+
+export type WorkshopResumeCommittedPage = {
+  pageId: string;
+  index: number;
+  estimatedHeight: number;
+  fragments: WorkshopResumeCommittedFragment[];
+};
+
 export type WorkshopResumePlan = {
   pageCount: number;
   pages: WorkshopResumePagePlan[];
+  committedPages: WorkshopResumeCommittedPage[];
 };
 
 type PlannerSectionDefinition = {
@@ -400,6 +599,196 @@ function buildPlannerSections(data: ResumeData): PlannerSectionDefinition[] {
   return sections;
 }
 
+function buildFragmentId(
+  page: WorkshopResumePagePlan,
+  section: WorkshopPlannerSection,
+): string {
+  const firstEntryId = section.entries[0]?.id ?? section.key;
+  return `workshop-fragment-${page.index + 1}-${section.key}-${firstEntryId}`;
+}
+
+function buildCommittedFragment(args: {
+  data: ResumeData;
+  page: WorkshopResumePagePlan;
+  section: WorkshopPlannerSection;
+}): WorkshopResumeCommittedFragment {
+  const fragmentId = buildFragmentId(args.page, args.section);
+  const base = {
+    fragmentId,
+    sectionId: args.section.sectionId,
+    title: args.section.title,
+    continued: args.section.continued,
+  };
+
+  switch (args.section.kind) {
+    case "profile":
+      return {
+        ...base,
+        kind: "profile",
+        sectionType: "profile",
+        profile: {
+          name: args.data.name,
+          title: args.data.title,
+        },
+        contact: args.data.contact.map((item) => ({
+          label: item.label,
+          value: item.value,
+        })),
+        metadata: args.data.metadata.map((item) => ({
+          label: item.label,
+          value: item.value,
+        })),
+      };
+    case "summary":
+      return {
+        ...base,
+        kind: "summary",
+        sectionType: "summary",
+        text:
+          args.section.entries[0]?.kind === "summary"
+            ? args.section.entries[0].text
+            : "",
+      };
+    case "experience":
+      return {
+        ...base,
+        kind: "experience",
+        sectionType: "experience",
+        items: args.section.entries
+          .filter((entry): entry is Extract<WorkshopPlannerEntry, { kind: "experience" }> => entry.kind === "experience")
+          .map((entry) => ({
+            id: entry.item.id,
+            role: entry.item.role,
+            company: entry.item.company,
+            period: entry.item.period,
+            location: entry.item.location,
+            summary: entry.item.description ?? "",
+            bullets: [...entry.item.bullets],
+          })),
+      };
+    case "education":
+      return {
+        ...base,
+        kind: "education",
+        sectionType: "education",
+        items: args.section.entries
+          .filter((entry): entry is Extract<WorkshopPlannerEntry, { kind: "education" }> => entry.kind === "education")
+          .map((entry) => ({
+            id: entry.item.id,
+            degree: entry.item.degree,
+            school: entry.item.school,
+            period: entry.item.period,
+          })),
+      };
+    case "skills":
+      return {
+        ...base,
+        kind: "skills",
+        sectionType: "skills",
+        items: args.section.entries
+          .filter((entry): entry is Extract<WorkshopPlannerEntry, { kind: "skills" }> => entry.kind === "skills")
+          .map((entry) => ({
+            id: entry.item.id,
+            name: entry.item.name,
+            level: entry.item.level,
+          })),
+      };
+    case "selected_projects":
+      return {
+        ...base,
+        kind: "selected_projects",
+        sectionType: "selected_projects",
+        items: args.section.entries
+          .filter((entry): entry is Extract<WorkshopPlannerEntry, { kind: "selected_projects" }> => entry.kind === "selected_projects")
+          .map((entry) => ({
+            id: entry.item.id,
+            name: entry.item.name,
+            meta: entry.item.meta,
+            description: entry.item.description,
+          })),
+      };
+    case "languages":
+      return {
+        ...base,
+        kind: "languages",
+        sectionType: "languages",
+        items: args.section.entries
+          .filter((entry): entry is Extract<WorkshopPlannerEntry, { kind: "languages" }> => entry.kind === "languages")
+          .map((entry) => ({
+            id: entry.item.id,
+            name: entry.item.name,
+            level: entry.item.level,
+          })),
+      };
+    case "certifications":
+      return {
+        ...base,
+        kind: "certifications",
+        sectionType: "certifications",
+        items: args.section.entries
+          .filter((entry): entry is Extract<WorkshopPlannerEntry, { kind: "certifications" }> => entry.kind === "certifications")
+          .map((entry) => ({
+            id: entry.item.id,
+            name: entry.item.name,
+            issuer: entry.item.issuer,
+            meta: entry.item.meta,
+          })),
+      };
+    case "achievements":
+      return {
+        ...base,
+        kind: "achievements",
+        sectionType: "achievements",
+        items: args.section.entries
+          .filter((entry): entry is Extract<WorkshopPlannerEntry, { kind: "achievements" }> => entry.kind === "achievements")
+          .map((entry) => ({
+            id: entry.item.id,
+            text: entry.item.text,
+          })),
+      };
+    case "affiliations":
+      return {
+        ...base,
+        kind: "affiliations",
+        sectionType: "affiliations",
+        items: args.section.entries
+          .filter((entry): entry is Extract<WorkshopPlannerEntry, { kind: "affiliations" }> => entry.kind === "affiliations")
+          .map((entry) => ({
+            id: entry.item.id,
+            organizationName: entry.item.organizationName,
+            roleOrMembershipType: entry.item.roleOrMembershipType,
+            dateRange: entry.item.dateRange,
+            notes: entry.item.notes,
+          })),
+      };
+    case "hobbies":
+      return {
+        ...base,
+        kind: "hobbies",
+        sectionType: "hobbies",
+        items: args.section.entries
+          .filter((entry): entry is Extract<WorkshopPlannerEntry, { kind: "hobbies" }> => entry.kind === "hobbies")
+          .map((entry) => ({
+            id: entry.item.id,
+            name: entry.item.name,
+          })),
+      };
+    case "additional_information":
+      return {
+        ...base,
+        kind: "additional_information",
+        sectionType: "additional_information",
+        items: args.section.entries
+          .filter((entry): entry is Extract<WorkshopPlannerEntry, { kind: "additional_information" }> => entry.kind === "additional_information")
+          .map((entry) => ({
+            id: entry.item.id,
+            sectionTitle: entry.item.sectionTitle,
+            text: entry.item.text,
+          })),
+      };
+  }
+}
+
 export function planWorkshopResumePages(args: {
   data: ResumeData;
   template: ResumeTemplateDefinition;
@@ -465,8 +854,22 @@ export function planWorkshopResumePages(args: {
 
   commitPage();
 
+  const resolvedPages = pages.length > 0 ? pages : [currentPage];
+
   return {
-    pageCount: Math.max(1, pages.length),
-    pages: pages.length > 0 ? pages : [currentPage],
+    pageCount: Math.max(1, resolvedPages.length),
+    pages: resolvedPages,
+    committedPages: resolvedPages.map((page) => ({
+      pageId: `workshop-page-${page.index + 1}`,
+      index: page.index,
+      estimatedHeight: page.estimatedHeight,
+      fragments: page.sections.map((section) =>
+        buildCommittedFragment({
+          data: args.data,
+          page,
+          section,
+        }),
+      ),
+    })),
   };
 }
