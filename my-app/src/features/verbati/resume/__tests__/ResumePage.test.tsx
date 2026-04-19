@@ -1,10 +1,10 @@
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import ResumePage from "../ResumePage";
+import ResumePage, { paginateResumeBlocks } from "../ResumePage";
 import { resumeMock } from "../resume.mock";
-import type { ResumeLayoutVariantId } from "../resume.types";
+import type { ResumeData, ResumeLayoutVariantId } from "../resume.types";
 import {
   buildVerbatiThemeVars,
   DEFAULT_VERBATI_STYLE,
@@ -35,6 +35,14 @@ const RESUME_WITHOUT_PROJECTS = {
   projects: [],
 };
 
+type ResumeMeasureHeights = Record<
+  string,
+  {
+    pageStart: number;
+    continued?: number;
+  }
+>;
+
 function installMatchMediaStub() {
   Object.defineProperty(window, "matchMedia", {
     configurable: true,
@@ -50,6 +58,77 @@ function installMatchMediaStub() {
       dispatchEvent: vi.fn(),
     })),
   });
+}
+
+function installCanvasStub() {
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(
+    () =>
+      ({
+        font: "",
+        measureText: (sample: string) => ({ width: sample.length * 8 }),
+      }) as CanvasRenderingContext2D,
+  );
+}
+
+function buildMeasuredRect(height: number): DOMRect {
+  return {
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    bottom: height,
+    right: 100,
+    width: 100,
+    height,
+    toJSON: () => ({}),
+  } as DOMRect;
+}
+
+function getVisibleVariantPages(
+  container: HTMLElement,
+  mode: ResumeLayoutVariantId,
+): HTMLElement[] {
+  const paginatedPages = Array.from(
+    container.querySelectorAll(
+      `.resume-page--${mode}[data-resume-page-index]`,
+    ),
+  ) as HTMLElement[];
+
+  if (paginatedPages.length > 0) {
+    return paginatedPages;
+  }
+
+  const singlePage = container.querySelector(
+    `.resume-page--${mode}:not(.resume-page--measure)`,
+  ) as HTMLElement | null;
+
+  return singlePage ? [singlePage] : [];
+}
+
+function mockResumeMeasurementHeights(heights: ResumeMeasureHeights) {
+  const originalGetBoundingClientRect =
+    HTMLElement.prototype.getBoundingClientRect;
+
+  return vi
+    .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+    .mockImplementation(function mockRect(this: HTMLElement) {
+      const blockId = this.dataset.resumeMeasureId;
+      const position = this.dataset.resumeMeasurePosition;
+
+      if (blockId) {
+        const configuredHeight = heights[blockId];
+        if (configuredHeight) {
+          const measuredHeight =
+            position === "continued"
+              ? configuredHeight.continued ?? configuredHeight.pageStart
+              : configuredHeight.pageStart;
+
+          return buildMeasuredRect(measuredHeight);
+        }
+      }
+
+      return originalGetBoundingClientRect.call(this);
+    });
 }
 
 function renderVariantPreview(
@@ -79,7 +158,9 @@ function renderVariantPreview(
 
 describe("ResumePage", () => {
   beforeEach(() => {
+    vi.restoreAllMocks();
     installMatchMediaStub();
+    installCanvasStub();
   });
 
   it("renders the kept comparisonAll variants without throwing", () => {
@@ -158,6 +239,73 @@ describe("ResumePage", () => {
     expect(quietView.snapshot.fontBodyCssVar).not.toBe(
       monoView.snapshot.fontBodyCssVar,
     );
+  });
+
+  it("keeps the outer preview frame sized to one page while the stacked stage carries total stack height", async () => {
+    const longSwissData: ResumeData = {
+      ...resumeMock,
+      summary:
+        "Experienced product designer focused on systems, hiring, research, and multi-surface execution.",
+      experience: Array.from({ length: 4 }, (_, index) => ({
+        id: `exp-${index + 1}`,
+        company: `Studio ${index + 1}`,
+        role: "Principal Product Designer",
+        startDate: "2019",
+        endDate: "2024",
+        bullets: [
+          "Led multi-quarter redesigns across editor, dashboard, and onboarding surfaces.",
+          "Built design systems and review rituals with product and engineering.",
+          "Improved hiring loops, design critiques, and cross-functional planning.",
+        ],
+      })),
+    };
+
+    const measurementSpy = mockResumeMeasurementHeights({
+      header: { pageStart: 180 },
+      summary: { pageStart: 120 },
+      "experience-heading": { pageStart: 40, continued: 40 },
+      "experience-item:exp-1": { pageStart: 280, continued: 300 },
+      "experience-item:exp-2": { pageStart: 280, continued: 300 },
+      "experience-item:exp-3": { pageStart: 280, continued: 300 },
+      "experience-item:exp-4": { pageStart: 280, continued: 300 },
+      "support-row:0": { pageStart: 180, continued: 180 },
+    });
+
+    try {
+      const { container } = render(
+        <ResumePage
+          data={longSwissData}
+          mode="swissminima"
+          stylePreset={DEFAULT_VERBATI_STYLE}
+          stageLayout={FIXED_STAGE_LAYOUT}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(getVisibleVariantPages(container, "swissminima").length).toBeGreaterThan(1);
+      });
+
+      const frame = container.querySelector(".resume-page-frame") as HTMLElement | null;
+      const stage = container.querySelector(".resume-page-stage--stacked") as HTMLElement | null;
+
+      expect(frame).not.toBeNull();
+      expect(stage).not.toBeNull();
+      const framePageHeight = Number.parseFloat(
+        frame?.style.getPropertyValue("--preview-page-height") ?? "0",
+      );
+      const stagePageHeight = Number.parseFloat(
+        stage?.style.getPropertyValue("--preview-page-height") ?? "0",
+      );
+      const frameStackHeight = Number.parseFloat(
+        frame?.style.getPropertyValue("--preview-stack-height") ?? "0",
+      );
+
+      expect(framePageHeight).toBeGreaterThan(1000);
+      expect(stagePageHeight).toBeCloseTo(framePageHeight, 3);
+      expect(frameStackHeight).toBeGreaterThan(framePageHeight * 2);
+    } finally {
+      measurementSpy.mockRestore();
+    }
   });
 
   it("keeps Robial preview vars aligned with distinct typography presets", () => {
@@ -345,8 +493,11 @@ describe("ResumePage", () => {
           stageLayout={FIXED_STAGE_LAYOUT}
         />,
       );
+      const visibleText = getVisibleVariantPages(container, mode)
+        .map((page) => page.textContent ?? "")
+        .join(" ");
 
-      expect(container.textContent?.match(/ROBERT COOPER/g)?.length ?? 0).toBe(1);
+      expect(visibleText.match(/ROBERT COOPER/g)?.length ?? 0).toBe(1);
     },
   );
 
@@ -454,7 +605,7 @@ describe("ResumePage", () => {
   it("renders a preview-side delete control for optional sections and reports the canonical section target", () => {
     const onRemoveSection = vi.fn();
 
-    render(
+    const { container } = render(
       <ResumePage
         data={resumeMock}
         mode="swissminima"
@@ -474,10 +625,16 @@ describe("ResumePage", () => {
       sectionTitle: "Selected Projects",
       previewSectionType: "selected_projects",
     });
+
+    const measurementShell = container.querySelector(
+      ".resume-page-measure-shell",
+    ) as HTMLDivElement | null;
+    expect(measurementShell).toHaveAttribute("aria-hidden", "true");
+    expect(measurementShell).toHaveAttribute("inert", "");
   });
 
   it("shows LinkedIn in Swiss contact and does not duplicate the website across notes", () => {
-    render(
+    const { container } = render(
       <ResumePage
         data={resumeMock}
         mode="swissminima"
@@ -485,13 +642,18 @@ describe("ResumePage", () => {
         stageLayout={FIXED_STAGE_LAYOUT}
       />,
     );
+    const [swissPage] = getVisibleVariantPages(container, "swissminima");
 
-    expect(screen.getAllByText("elenamarlowe.design")).toHaveLength(1);
-    expect(screen.getByText("linkedin.com/in/elenamarlowe")).toBeInTheDocument();
+    expect(within(swissPage).getAllByText("elenamarlowe.design")).toHaveLength(
+      1,
+    );
+    expect(
+      within(swissPage).getByText("linkedin.com/in/elenamarlowe"),
+    ).toBeInTheDocument();
   });
 
   it("shows certification dates and credential details in Swiss support sections", () => {
-    render(
+    const { container } = render(
       <ResumePage
         data={{
           ...resumeMock,
@@ -513,10 +675,347 @@ describe("ResumePage", () => {
         stageLayout={FIXED_STAGE_LAYOUT}
       />,
     );
+    const [swissPage] = getVisibleVariantPages(container, "swissminima");
 
-    expect(screen.getByText(/Nielsen Norman Group/)).toBeInTheDocument();
+    expect(within(swissPage).getByText(/Nielsen Norman Group/)).toBeInTheDocument();
     expect(
-      screen.getByText(/2022 · Credential ID: NNG-2022/),
+      within(swissPage).getByText(/2022 · Credential ID: NNG-2022/),
     ).toBeInTheDocument();
+  });
+
+  it("keeps experience headings with the next item when a page is almost full", () => {
+    const pages = paginateResumeBlocks({
+      blocks: [
+        {
+          id: "header",
+          kind: "header",
+          pageStartHeightPx: 70,
+          continuedHeightPx: 70,
+        },
+        {
+          id: "experience-heading",
+          kind: "experience-heading",
+          pageStartHeightPx: 12,
+          continuedHeightPx: 18,
+          keepWithNext: true,
+        },
+        {
+          id: "experience-item:exp-1",
+          kind: "experience-item",
+          pageStartHeightPx: 24,
+          continuedHeightPx: 30,
+        },
+        {
+          id: "support-row:0",
+          kind: "support-row",
+          pageStartHeightPx: 18,
+          continuedHeightPx: 24,
+        },
+      ],
+      pageHeightPx: 100,
+      options: {
+        policy: "full",
+      },
+    });
+
+    expect(pages).toHaveLength(2);
+    expect(pages[0].blocks.map((block) => block.blockId)).toEqual(["header"]);
+    expect(pages[1].blocks.map((block) => block.blockId)).toEqual([
+      "experience-heading",
+      "experience-item:exp-1",
+      "support-row:0",
+    ]);
+  });
+
+  it("repeats the Swiss experience heading when later items continue on a new page", () => {
+    const pages = paginateResumeBlocks({
+      blocks: [
+        {
+          id: "header",
+          kind: "header",
+          pageStartHeightPx: 20,
+          continuedHeightPx: 20,
+        },
+        {
+          id: "summary",
+          kind: "summary",
+          pageStartHeightPx: 20,
+          continuedHeightPx: 25,
+        },
+        {
+          id: "experience-heading",
+          kind: "experience-heading",
+          pageStartHeightPx: 10,
+          continuedHeightPx: 16,
+          keepWithNext: true,
+        },
+        {
+          id: "experience-item:exp-1",
+          kind: "experience-item",
+          pageStartHeightPx: 24,
+          continuedHeightPx: 30,
+        },
+        {
+          id: "experience-item:exp-2",
+          kind: "experience-item",
+          pageStartHeightPx: 24,
+          continuedHeightPx: 30,
+          repeatOnPageStartId: "experience-heading",
+        },
+        {
+          id: "support-row:0",
+          kind: "support-row",
+          pageStartHeightPx: 18,
+          continuedHeightPx: 24,
+        },
+      ],
+      pageHeightPx: 100,
+      options: {
+        policy: "full",
+      },
+    });
+
+    expect(pages).toHaveLength(2);
+    expect(pages[0].blocks.map((block) => block.blockId)).toEqual([
+      "header",
+      "summary",
+      "experience-heading",
+      "experience-item:exp-1",
+    ]);
+    expect(
+      pages[1].blocks.map((block) => ({
+        blockId: block.blockId,
+        repeated: block.repeated ?? false,
+      })),
+    ).toEqual([
+      {
+        blockId: "experience-heading",
+        repeated: true,
+      },
+      {
+        blockId: "experience-item:exp-2",
+        repeated: false,
+      },
+      {
+        blockId: "support-row:0",
+        repeated: false,
+      },
+    ]);
+  });
+
+  it("renders Swiss Minima as multiple preview pages when long experience content exceeds the first page", async () => {
+    const longSwissData: ResumeData = {
+      ...resumeMock,
+      experience: [
+        ...resumeMock.experience,
+        {
+          id: "exp-4",
+          sectionId: "experience-1",
+          sectionType: "experience",
+          sectionTitle: "Experience",
+          sectionOrder: 2,
+          role: "Principal Product Designer",
+          company: "Studio Common",
+          period: "2013 — 2015",
+          location: "Copenhagen",
+          bullets: [
+            "Built cross-channel commerce experiences for editorial teams with dense content and high publishing cadence.",
+            "Introduced reusable narrative layout patterns that improved handoff clarity and implementation speed.",
+            "Partnered with content and product leads on multi-market launches and governance.",
+          ],
+        },
+      ],
+      projects: [],
+      achievementItems: [],
+      achievements: [],
+      hobbyItems: [],
+      hobbies: [],
+      certifications: [],
+      affiliations: [],
+      textSections: [],
+    };
+    const measurementSpy = mockResumeMeasurementHeights({
+      header: {
+        pageStart: 180,
+        continued: 180,
+      },
+      summary: {
+        pageStart: 120,
+        continued: 150,
+      },
+      "experience-heading": {
+        pageStart: 30,
+        continued: 60,
+      },
+      "experience-item:exp-1": {
+        pageStart: 220,
+        continued: 250,
+      },
+      "experience-item:exp-2": {
+        pageStart: 220,
+        continued: 250,
+      },
+      "experience-item:exp-3": {
+        pageStart: 220,
+        continued: 250,
+      },
+      "experience-item:exp-4": {
+        pageStart: 220,
+        continued: 250,
+      },
+      "support-row:0": {
+        pageStart: 180,
+        continued: 210,
+      },
+    });
+
+    try {
+      const { container } = render(
+        <ResumePage
+          data={longSwissData}
+          mode="swissminima"
+          stylePreset={DEFAULT_VERBATI_STYLE}
+          stageLayout={FIXED_STAGE_LAYOUT}
+        />,
+      );
+
+      const pages = await waitFor(() => {
+        const visiblePages = getVisibleVariantPages(container, "swissminima");
+
+        expect(visiblePages).toHaveLength(2);
+
+        return visiblePages;
+      });
+      const pageShells = Array.from(
+        container.querySelectorAll(".resume-page-stack__page-shell"),
+      );
+
+      expect(container.querySelector(".resume-page-stage--stacked")).toBeTruthy();
+      expect(pageShells).toHaveLength(2);
+
+      expect(
+        Array.from(
+          pages[0].querySelectorAll<HTMLElement>("[data-resume-block-id]"),
+        ).map((block) => block.dataset.resumeBlockId),
+      ).toEqual([
+        "header",
+        "summary",
+        "experience-heading",
+        "experience-item:exp-1",
+        "experience-item:exp-2",
+      ]);
+      expect(
+        Array.from(
+          pages[1].querySelectorAll<HTMLElement>("[data-resume-block-id]"),
+        ).map((block) => ({
+          blockId: block.dataset.resumeBlockId,
+          repeated: block.dataset.resumeBlockRepeated ?? "false",
+        })),
+      ).toEqual([
+        {
+          blockId: "experience-heading",
+          repeated: "true",
+        },
+        {
+          blockId: "experience-item:exp-3",
+          repeated: "false",
+        },
+        {
+          blockId: "experience-item:exp-4",
+          repeated: "false",
+        },
+        {
+          blockId: "support-row:0",
+          repeated: "false",
+        },
+      ]);
+      expect(
+        pages[0].querySelector('[data-resume-block-kind="support-row"]'),
+      ).toBeNull();
+      expect(
+        within(pages[1]).getByText("Principal Product Designer"),
+      ).toBeInTheDocument();
+    } finally {
+      measurementSpy.mockRestore();
+    }
+  });
+
+  it("uses the Swiss live area height when deciding whether support rows still fit on page 1", async () => {
+    const nearLimitSwissData: ResumeData = {
+      ...resumeMock,
+      experience: resumeMock.experience.slice(0, 2),
+      projects: [],
+      achievementItems: [],
+      achievements: [],
+      hobbyItems: [],
+      hobbies: [],
+      certifications: [],
+      affiliations: [],
+      textSections: [],
+    };
+    const measurementSpy = mockResumeMeasurementHeights({
+      header: {
+        pageStart: 150,
+        continued: 150,
+      },
+      summary: {
+        pageStart: 90,
+        continued: 120,
+      },
+      "experience-heading": {
+        pageStart: 30,
+        continued: 60,
+      },
+      "experience-item:exp-1": {
+        pageStart: 230,
+        continued: 250,
+      },
+      "experience-item:exp-2": {
+        pageStart: 230,
+        continued: 250,
+      },
+      "support-row:0": {
+        pageStart: 220,
+        continued: 240,
+      },
+    });
+
+    try {
+      const { container } = render(
+        <ResumePage
+          data={nearLimitSwissData}
+          mode="swissminima"
+          stylePreset={DEFAULT_VERBATI_STYLE}
+          stageLayout={FIXED_STAGE_LAYOUT}
+        />,
+      );
+
+      const pages = await waitFor(() => {
+        const visiblePages = getVisibleVariantPages(container, "swissminima");
+
+        expect(visiblePages).toHaveLength(2);
+
+        return visiblePages;
+      });
+
+      expect(
+        Array.from(
+          pages[0].querySelectorAll<HTMLElement>("[data-resume-block-id]"),
+        ).map((block) => block.dataset.resumeBlockId),
+      ).toEqual([
+        "header",
+        "summary",
+        "experience-heading",
+        "experience-item:exp-1",
+        "experience-item:exp-2",
+      ]);
+      expect(
+        Array.from(
+          pages[1].querySelectorAll<HTMLElement>("[data-resume-block-id]"),
+        ).map((block) => block.dataset.resumeBlockId),
+      ).toEqual(["support-row:0"]);
+    } finally {
+      measurementSpy.mockRestore();
+    }
   });
 });
