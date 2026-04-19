@@ -65,6 +65,8 @@ export type ResumeTemplateDefinition = {
   familyId: StyleFamilyId;
   label: string;
   shell: "legacy-preview";
+  supportsPlanner: boolean;
+  supportsLegacyComparison: boolean;
   legacyPreviewVariantId: ResumeLayoutVariantId;
   decorVariantId: ResumeLayoutVariantId;
   exportShell: "onecol" | "split";
@@ -159,6 +161,8 @@ export const RESUME_TEMPLATE_DEFINITIONS: readonly ResumeTemplateDefinition[] = 
     familyId: "swiss",
     label: "Swiss legacy preview",
     shell: "legacy-preview",
+    supportsPlanner: false,
+    supportsLegacyComparison: true,
     legacyPreviewVariantId: "swissminima",
     decorVariantId: "swissminima",
     exportShell: "split",
@@ -184,6 +188,8 @@ export const RESUME_TEMPLATE_DEFINITIONS: readonly ResumeTemplateDefinition[] = 
     familyId: "volk-register",
     label: "Volk Register legacy preview",
     shell: "legacy-preview",
+    supportsPlanner: false,
+    supportsLegacyComparison: true,
     legacyPreviewVariantId: "swissminima",
     decorVariantId: "volkregister",
     exportShell: "split",
@@ -209,6 +215,8 @@ export const RESUME_TEMPLATE_DEFINITIONS: readonly ResumeTemplateDefinition[] = 
     familyId: "two-column",
     label: "Two-column legacy preview",
     shell: "legacy-preview",
+    supportsPlanner: false,
+    supportsLegacyComparison: true,
     legacyPreviewVariantId: "robial",
     decorVariantId: "robial",
     exportShell: "split",
@@ -234,6 +242,8 @@ export const RESUME_TEMPLATE_DEFINITIONS: readonly ResumeTemplateDefinition[] = 
     familyId: "editorial",
     label: "Editorial legacy preview",
     shell: "legacy-preview",
+    supportsPlanner: false,
+    supportsLegacyComparison: true,
     legacyPreviewVariantId: "robial",
     decorVariantId: "robial",
     exportShell: "split",
@@ -259,6 +269,8 @@ export const RESUME_TEMPLATE_DEFINITIONS: readonly ResumeTemplateDefinition[] = 
     familyId: "modernist",
     label: "Modernist legacy preview",
     shell: "legacy-preview",
+    supportsPlanner: false,
+    supportsLegacyComparison: true,
     legacyPreviewVariantId: "robial",
     decorVariantId: "robial",
     exportShell: "split",
@@ -284,6 +296,8 @@ export const RESUME_TEMPLATE_DEFINITIONS: readonly ResumeTemplateDefinition[] = 
     familyId: "quire",
     label: "Quire legacy preview",
     shell: "legacy-preview",
+    supportsPlanner: false,
+    supportsLegacyComparison: true,
     legacyPreviewVariantId: "robial",
     decorVariantId: "robial",
     exportShell: "split",
@@ -309,6 +323,8 @@ export const RESUME_TEMPLATE_DEFINITIONS: readonly ResumeTemplateDefinition[] = 
     familyId: "workshop",
     label: "Workshop one-column ATS",
     shell: "legacy-preview",
+    supportsPlanner: true,
+    supportsLegacyComparison: false,
     legacyPreviewVariantId: "swissminima",
     decorVariantId: "swissminima",
     exportShell: "onecol",
