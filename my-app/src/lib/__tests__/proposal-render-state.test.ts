@@ -80,6 +80,7 @@ describe("resolveProposalRenderState", () => {
     });
 
     expect(result.stylePreset).toEqual({
+      familyId: "editorial",
       layout: "editorial",
       typography: "civic-correspondence",
       palette: "custom",
@@ -99,6 +100,36 @@ describe("resolveProposalRenderState", () => {
 
     expect(result.stylePreset.layout).toBe("volk-register");
     expect(result.stylePreset.typography).toBe("civic-correspondence");
-    expect(result.templateId).toBe("swiss_margin");
+    expect(result.templateId).toBe("volk_register");
+  });
+
+  it("falls back to the family twin when a preferred proposal template id is unresolved", () => {
+    const result = resolveProposalRenderState({
+      preferredStylePreset: {
+        familyId: "workshop",
+        typography: "quiet-editorial",
+        palette: "sauge",
+      },
+      preferredTemplateId: "not_a_real_template" as never,
+    });
+
+    expect(result.stylePreset.familyId).toBe("workshop");
+    expect(result.templateId).toBe(
+      getProposalTwinTemplateId(result.stylePreset),
+    );
+  });
+
+  it("keeps the stored explicit template ahead of the family twin when the preferred template is unresolved", () => {
+    const result = resolveProposalRenderState({
+      preferredStylePreset: {
+        layout: "modernist",
+        typography: "expert",
+        palette: "encre",
+      },
+      preferredTemplateId: "not_a_real_template" as never,
+      storedTemplateId: "quiet_margin",
+    });
+
+    expect(result.templateId).toBe("quire_margin");
   });
 });
