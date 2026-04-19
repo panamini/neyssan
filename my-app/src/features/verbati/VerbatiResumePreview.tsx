@@ -196,6 +196,8 @@ export function VerbatiResumePreview({
 }: VerbatiResumePreviewProps): JSX.Element {
   const previewRootRef = React.useRef<HTMLDivElement | null>(null);
   const resumeViewportRef = React.useRef<HTMLDivElement | null>(null);
+  const [resumeViewportNode, setResumeViewportNode] =
+    React.useState<HTMLDivElement | null>(null);
   const [stableWorkshopPageCount, setStableWorkshopPageCount] = React.useState(1);
   const dataSignature = React.useMemo(() => buildResumeDataSignature(data), [data]);
   const themeVars = React.useMemo(
@@ -321,6 +323,7 @@ export function VerbatiResumePreview({
   const attachResumeViewport = React.useCallback(
     (node: HTMLDivElement | null) => {
       resumeViewportRef.current = node;
+      setResumeViewportNode(node);
       attachViewport(node);
       attachCenterViewport(node);
     },
@@ -612,7 +615,7 @@ export function VerbatiResumePreview({
   );
 
   const handlePreviewWheel = React.useCallback(
-    (event: React.WheelEvent<HTMLDivElement>) => {
+    (event: WheelEvent) => {
       if (compareLayouts || event.ctrlKey) {
         return;
       }
@@ -662,13 +665,31 @@ export function VerbatiResumePreview({
         return;
       }
 
-      if (viewportCanScroll) {
-        applyScrollDelta(viewport);
+      if (viewportCanScroll && applyScrollDelta(viewport)) {
         event.preventDefault();
       }
     },
     [compareLayouts, isWorkspaceMode, workspaceViewMode],
   );
+
+  React.useEffect(() => {
+    if (!resumeViewportNode) {
+      return undefined;
+    }
+
+    const listener = (event: WheelEvent) => {
+      handlePreviewWheel(event);
+    };
+
+    resumeViewportNode.addEventListener("wheel", listener, {
+      capture: true,
+      passive: false,
+    });
+
+    return () => {
+      resumeViewportNode.removeEventListener("wheel", listener, true);
+    };
+  }, [handlePreviewWheel, resumeViewportNode]);
 
   const documentStage = (
     <div className="dasti-document-stage-chassis" ref={stageMeasureRef}>
@@ -694,7 +715,6 @@ export function VerbatiResumePreview({
           width: `${stageLayout.stageWidth}px`,
           height: `${stageLayout.stageHeight}px`,
         }}
-        onWheelCapture={handlePreviewWheel}
         {...viewportPanProps}
       >
         <div
