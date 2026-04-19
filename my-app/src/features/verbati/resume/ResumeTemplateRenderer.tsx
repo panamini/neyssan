@@ -67,39 +67,50 @@ export function ResumeTemplateRenderer({
   onStablePageCountChange,
 }: ResumeTemplateRendererProps) {
   const templateDefinition = getResumeTemplateDefinition(resumeTemplateId);
+  const isWorkshopTemplateRenderer =
+    resumeTemplateId === WORKSHOP_TEMPLATE_RENDERER_ID &&
+    templateDefinition.supportsPlanner;
   const plan = React.useMemo(
     () =>
-      planWorkshopResumePages({
-        data,
-        template: templateDefinition,
-      }),
-    [data, templateDefinition],
+      isWorkshopTemplateRenderer
+        ? planWorkshopResumePages({
+            data,
+            template: templateDefinition,
+          })
+        : null,
+    [data, isWorkshopTemplateRenderer, templateDefinition],
   );
   const previewVars = React.useMemo(
-    () => buildTemplatePreviewVars(resumeTemplateId, stylePreset),
-    [resumeTemplateId, stylePreset],
+    () =>
+      isWorkshopTemplateRenderer
+        ? buildTemplatePreviewVars(resumeTemplateId, stylePreset)
+        : null,
+    [isWorkshopTemplateRenderer, resumeTemplateId, stylePreset],
   );
   const pageWidthPx = stageLayout?.pageWidth ?? A4_PAGE_WIDTH_PX;
   const pageHeightPx = stageLayout?.pageHeight ?? A4_PAGE_HEIGHT_PX;
+  const lastCommittedPageCountRef = React.useRef<number | null>(null);
 
   React.useEffect(() => {
-    if (!onStablePageCountChange) {
+    if (!isWorkshopTemplateRenderer || !onStablePageCountChange || !plan) {
       return undefined;
     }
 
     const timeoutId = window.setTimeout(() => {
+      if (lastCommittedPageCountRef.current === plan.pageCount) {
+        return;
+      }
+
+      lastCommittedPageCountRef.current = plan.pageCount;
       onStablePageCountChange(plan.pageCount);
     }, 40);
 
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [onStablePageCountChange, plan.pageCount]);
+  }, [isWorkshopTemplateRenderer, onStablePageCountChange, plan]);
 
-  if (
-    resumeTemplateId !== WORKSHOP_TEMPLATE_RENDERER_ID ||
-    !templateDefinition.supportsPlanner
-  ) {
+  if (!isWorkshopTemplateRenderer || !plan || !previewVars) {
     return null;
   }
 
