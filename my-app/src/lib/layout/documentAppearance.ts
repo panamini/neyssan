@@ -316,6 +316,7 @@ function buildResumeExportDecor(
         metaLabelColor: "color-mix(in srgb, var(--accent) 56%, var(--muted))",
         entryTitleColor: "color-mix(in srgb, var(--accent) 28%, var(--ink))",
       };
+    case "workshop":
     case "swiss":
     default:
       return decor;
@@ -437,6 +438,7 @@ function buildProposalExportDecor(
         subjectShadow:
           "inset 0 -0.45mm 0 0 color-mix(in srgb, var(--accent) 32%, transparent)",
       };
+    case "workshop_proposal_margin":
     case "swiss_margin":
     default:
       return decor;

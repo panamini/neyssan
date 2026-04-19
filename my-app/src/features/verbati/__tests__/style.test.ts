@@ -73,6 +73,7 @@ describe("verbati style normalization", () => {
         accentHex: "#AA7733",
       }),
     ).toEqual({
+      familyId: "editorial",
       layout: "editorial",
       typography: "civic-correspondence",
       palette: "custom",
@@ -86,6 +87,7 @@ describe("verbati style normalization", () => {
         palette: "encre",
       }),
     ).toEqual({
+      familyId: "two-column",
       layout: "two-column",
       typography: "soft-serif",
       palette: "encre",
