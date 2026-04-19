@@ -45,7 +45,17 @@ export function ReadOnlyRichDoc({ doc, className }: ReadOnlyRichDocProps): JSX.E
   });
 
   return (
-    <div className={["rich-content cv-rich-preview [color:var(--ti)]", className].filter(Boolean).join(" ")}>
+    <div
+      className={[
+        "rich-content",
+        "cv-rich-preview",
+        "cv-reading-measure",
+        "[color:var(--ti)]",
+        className,
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
       <Remirror manager={manager} initialContent={state} editable={false}>
         <EditorComponent />
       </Remirror>

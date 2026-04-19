@@ -2161,7 +2161,7 @@
   --document-viewer-bleed-inline: 0px;
   --document-viewer-bleed-block: 0px;
   --document-rail-gap: var(--space-1);
-  --resume-preview-toolbar-gap: 0px;
+  --resume-preview-toolbar-gap: var(--document-rail-gap);
   --resume-preview-shell-padding: 0px;
   --document-viewer-frame-surface: color-mix(
     in srgb,
@@ -7268,6 +7268,7 @@ html:not(.dark) .dasti-proposal-submit {
   min-width: 0;
   display: grid;
   gap: var(--s1);
+  max-inline-size: min(100%, var(--cv-editor-reading-measure-max));
 }
 
 .cv-preview-text {
@@ -7334,6 +7335,7 @@ html:not(.dark) .dasti-proposal-submit {
   min-width: 0;
   display: grid;
   gap: 0;
+  max-inline-size: min(100%, var(--cv-editor-reading-measure-max));
 }
 
 .cv-entry-title {
@@ -7369,6 +7371,11 @@ html:not(.dark) .dasti-proposal-submit {
   font-size: var(--tx);
   line-height: var(--ls);
   color: var(--ti);
+  max-inline-size: min(100%, var(--cv-editor-reading-measure-max));
+}
+
+.cv-reading-measure {
+  max-inline-size: min(100%, var(--cv-editor-reading-measure-max));
 }
 
 .cv-entry-body--muted {
@@ -7383,6 +7390,7 @@ html:not(.dark) .dasti-proposal-submit {
   font-size: var(--tx);
   line-height: var(--ls);
   color: var(--ti);
+  max-inline-size: min(100%, var(--cv-editor-reading-measure-max));
 }
 
 .cv-entry-bullets li {
@@ -7401,6 +7409,7 @@ html:not(.dark) .dasti-proposal-submit {
   font-size: var(--tx);
   line-height: var(--ls);
   color: var(--ti);
+  max-inline-size: min(100%, var(--cv-editor-reading-measure-max));
 }
 
 .cv-rich-preview .ProseMirror {
@@ -7408,6 +7417,12 @@ html:not(.dark) .dasti-proposal-submit {
   font-size: var(--tx);
   line-height: var(--ls);
   color: var(--ti);
+  max-inline-size: min(100%, var(--cv-editor-reading-measure-max));
+}
+
+.dasti-rich--cv-reading-measure .ProseMirror,
+.rich-content--cv-reading-measure .ProseMirror {
+  max-inline-size: min(100%, var(--cv-editor-reading-measure-max));
 }
 
 .achievements-display .ProseMirror ul,

@@ -235,6 +235,43 @@ export function VerbatiResumePreview({
     [attachCenterViewport, attachViewport],
   );
 
+  React.useLayoutEffect(() => {
+    const viewport = resumeViewportRef.current;
+    if (!viewport) {
+      return;
+    }
+
+    const clampViewportScroll = () => {
+      const maxTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+      const maxLeft = Math.max(0, viewport.scrollWidth - viewport.clientWidth);
+
+      if (viewport.scrollTop > maxTop) {
+        viewport.scrollTop = maxTop;
+      }
+
+      if (viewport.scrollLeft > maxLeft) {
+        viewport.scrollLeft = maxLeft;
+      }
+    };
+
+    clampViewportScroll();
+
+    const frameId = window.requestAnimationFrame(() => {
+      clampViewportScroll();
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [
+    compareLayouts,
+    resumePreviewMetrics.pageCount,
+    resumePreviewMetrics.stackHeightPx,
+    stageLayout.pageHeight,
+    stageLayout.pageWidth,
+    stackedCanvasHeight,
+  ]);
+
   React.useEffect(() => {
     if (!usesWorkshopTemplateRenderer) {
       setStableWorkshopPageCount(1);
@@ -564,6 +601,7 @@ export function VerbatiResumePreview({
           width: `${stageLayout.stageWidth}px`,
           height: `${stageLayout.stageHeight}px`,
         }}
+        onWheelCapture={handlePreviewWheel}
         {...viewportPanProps}
       >
         <div
@@ -577,7 +615,6 @@ export function VerbatiResumePreview({
             height: `${canvasHeightPx}px`,
           }}
           onClick={onLinkIntent ? handlePreviewCanvasClick : undefined}
-          onWheelCapture={handlePreviewWheel}
         >
           {usesWorkshopTemplateRenderer ? (
             <ResumeTemplateRenderer

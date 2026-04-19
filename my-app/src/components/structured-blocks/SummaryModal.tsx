@@ -477,7 +477,7 @@ export function SummaryModal({
             </section>
           ) : null}
           <section className="dasti-zone">
-            <div className="dasti-rich">
+            <div className="dasti-rich dasti-rich--cv-reading-measure">
               <Remirror
                 manager={manager}
                 initialContent={state}
