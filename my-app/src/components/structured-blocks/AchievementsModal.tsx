@@ -86,7 +86,7 @@ export function AchievementsModal({
     Record<string, { before: string; after: string }>
   >({});
   const textareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
-  const handledInitialFocusRef = useRef<string | null>(null);
+  const handledPreviewTargetIdRef = useRef<string | null>(null);
   const activeRowIdRef = useRef<string | null>(null);
 
   const openerRef = useRef<HTMLElement | null>(null);
@@ -105,7 +105,7 @@ export function AchievementsModal({
   useEffect(() => {
     if (!open) {
       lastSeedRef.current = null;
-      handledInitialFocusRef.current = null;
+      handledPreviewTargetIdRef.current = null;
       setIsClearConfirming(false);
       setAiLoadingId(null);
       setAiDiffs({});
@@ -178,6 +178,27 @@ export function AchievementsModal({
   }, [open, rows, syncTextareaHeight]);
 
   React.useLayoutEffect(() => {
+    if (!open || !initialItemId) return;
+
+    const targetId = String(initialItemId);
+    const target = textareaRefs.current[targetId];
+    if (!target) return;
+
+    if (handledPreviewTargetIdRef.current === targetId) {
+      return;
+    }
+
+    handledPreviewTargetIdRef.current = targetId;
+    activeRowIdRef.current = targetId;
+
+    try {
+      target.focus({ preventScroll: true });
+    } catch {
+      target.focus();
+    }
+  }, [open, initialItemId, rows.length]);
+
+  React.useLayoutEffect(() => {
     if (!open) return;
 
     const activeRowId = activeRowIdRef.current;
@@ -193,7 +214,7 @@ export function AchievementsModal({
     } catch {
       target.focus();
     }
-  }, [open, rows]);
+  }, [open, rows.length]);
 
   function updateRow(
     idx: number,
@@ -429,24 +450,6 @@ export function AchievementsModal({
                     <textarea
                       ref={(node) => {
                         textareaRefs.current[rowId] = node;
-                        if (
-                          !node ||
-                          !open ||
-                          !initialItemId ||
-                          rowId !== String(initialItemId) ||
-                          handledInitialFocusRef.current === rowId
-                        ) {
-                          return;
-                        }
-
-                        window.setTimeout(() => {
-                          if (handledInitialFocusRef.current === rowId) {
-                            return;
-                          }
-
-                          handledInitialFocusRef.current = rowId;
-                          node.focus();
-                        }, 0);
                       }}
                       id={`achievement-text-${idx}`}
                       className="dasti-field dasti-achievements-modal__textarea"
