@@ -9,9 +9,7 @@ import {
 } from "../style";
 import type { ResumeData, ResumeLayoutVariantId } from "./resume.types";
 import {
-  matchesResumeActiveTarget,
   resolvePreviewSectionType,
-  resolvePreviewSurfaceType,
   type ResumeActiveTarget,
   type ResumeCanonicalSectionType,
   type ResumePreviewSectionType,
@@ -29,6 +27,11 @@ import {
   serializeResumePreviewVars,
 } from "../../../lib/layout/documentTokenSerializers";
 import type { VerbatiStylePreset } from "../types";
+import {
+  PreviewItemRegion,
+  PreviewSectionRegion,
+  buildProjectPreviewFieldId,
+} from "./resumePreviewRegions";
 
 type ResumePageMode = "comparison" | "comparisonAll" | ResumeLayoutVariantId;
 
@@ -97,8 +100,6 @@ const REMOVABLE_PREVIEW_SECTION_TYPES = new Set<ResumeCanonicalSectionType>([
   "additional_information",
   "custom",
 ]);
-
-type ProjectPreviewField = "name" | "meta" | "description";
 
 type ComparisonCardCopy = {
   typography: string;
@@ -281,106 +282,6 @@ function getRenderableIdentitySubtitle(
   return normalizeIdentityLine(name) === normalizeIdentityLine(trimmedTitle)
     ? null
     : trimmedTitle;
-}
-
-type PreviewRegionProps = React.HTMLAttributes<HTMLElement> & {
-  as?: keyof JSX.IntrinsicElements;
-  sectionType: ResumePreviewSectionType;
-  sectionId?: string;
-  sectionTitle?: string;
-  itemId?: string;
-  activeTarget?: ResumeActiveTarget | null;
-  surface: "section" | "item";
-};
-
-function buildPreviewRegionAttrs(args: {
-  sectionType: ResumePreviewSectionType;
-  sectionId?: string;
-  sectionTitle?: string;
-  itemId?: string;
-  activeTarget?: ResumeActiveTarget | null;
-  surface: "section" | "item";
-}) {
-  const canonicalSectionType = resolvePreviewSectionType(args.sectionType);
-  const previewSectionType = resolvePreviewSurfaceType(args.sectionType);
-  const isActive = canonicalSectionType
-    ? matchesResumeActiveTarget({
-        target: args.activeTarget,
-        sectionType: canonicalSectionType,
-        previewSectionType,
-        sectionId: args.sectionId,
-        itemId: args.itemId,
-      })
-    : false;
-
-  return {
-    "data-no-pan": "true",
-    "data-preview-section": args.sectionType,
-    "data-preview-section-id": args.sectionId,
-    "data-preview-section-title": args.sectionTitle,
-    "data-preview-item-id": args.itemId,
-    "data-preview-surface": args.surface,
-    "data-preview-active": isActive ? "true" : undefined,
-  };
-}
-
-function PreviewSectionRegion({
-  as = "section",
-  sectionType,
-  sectionId,
-  sectionTitle,
-  activeTarget,
-  surface,
-  ...props
-}: PreviewRegionProps) {
-  const Component = as as keyof JSX.IntrinsicElements;
-
-  return (
-    <Component
-      {...props}
-      {...buildPreviewRegionAttrs({
-        sectionType,
-        sectionId,
-        sectionTitle,
-        activeTarget,
-        surface,
-      })}
-    />
-  );
-}
-
-function PreviewItemRegion({
-  as = "div",
-  sectionType,
-  sectionId,
-  sectionTitle,
-  itemId,
-  activeTarget,
-  surface,
-  ...props
-}: PreviewRegionProps) {
-  const Component = as as keyof JSX.IntrinsicElements;
-
-  return (
-    <Component
-      {...props}
-      {...buildPreviewRegionAttrs({
-        sectionType,
-        sectionId,
-        sectionTitle,
-        itemId,
-        activeTarget,
-        surface,
-      })}
-    />
-  );
-}
-
-function buildProjectPreviewFieldId(
-  itemId: string,
-  field: ProjectPreviewField,
-): string {
-  return `${itemId}:${field}`;
 }
 
 function resolvePreviewSectionRemoval(section: {

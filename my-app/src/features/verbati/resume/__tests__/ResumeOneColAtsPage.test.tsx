@@ -11,7 +11,23 @@ describe("ResumeOneColAtsPage", () => {
   it("renders shared preview-region attributes and active state for workshop pages", () => {
     const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
     const plan = planWorkshopResumePages({
-      data: resumeMock,
+      data: {
+        ...resumeMock,
+        metadata: resumeMock.metadata.slice(0, 1),
+        contact: resumeMock.contact.slice(0, 2),
+        skillItems: resumeMock.skillItems.slice(0, 3),
+        languages: resumeMock.languages.slice(0, 1),
+        experience: resumeMock.experience.slice(0, 1),
+        projects: resumeMock.projects.slice(0, 1),
+        education: resumeMock.education.slice(0, 1),
+        achievements: [],
+        achievementItems: [],
+        certifications: [],
+        affiliations: [],
+        hobbyItems: [],
+        hobbies: [],
+        textSections: [],
+      },
       template,
     });
 

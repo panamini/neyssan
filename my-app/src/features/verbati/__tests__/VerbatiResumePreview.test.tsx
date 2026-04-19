@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { VerbatiResumePreview } from "../VerbatiResumePreview";
 import { resumeMock } from "../resume/resume.mock";
@@ -114,6 +114,15 @@ vi.mock("../resume/ResumePage", () => ({
 }));
 
 vi.mock("../resume/ResumeTemplateRenderer", () => ({
+  WORKSHOP_TEMPLATE_RENDERER_ID: "workshop_resume_onecol_ats",
+  getResumeTemplateCanvasHeight: ({
+    pageCount,
+    pageHeightPx,
+  }: {
+    pageCount: number;
+    pageHeightPx: number;
+  }) => pageCount * pageHeightPx,
+  RESUME_TEMPLATE_PAGE_GAP_PX: 24,
   default: ({
     activeTarget,
     onStablePageCountChange,
@@ -152,7 +161,7 @@ vi.mock("../resume/ResumeTemplateRenderer", () => ({
 }));
 
 describe("VerbatiResumePreview", () => {
-  it("keeps workshop on the legacy panel preview path with link intents and active highlighting intact", () => {
+  it("keeps workshop panel preview link intents and active highlighting intact on the template renderer path", () => {
     const onLinkIntent = vi.fn();
 
     render(
@@ -177,18 +186,16 @@ describe("VerbatiResumePreview", () => {
     );
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Selected project description field" }),
+      screen.getByRole("button", { name: "Workshop project description field" }),
     );
 
-    expect(screen.getByTestId("resume-page")).toHaveAttribute(
-      "data-mode",
-      "swissminima",
-    );
+    expect(screen.getByTestId("resume-template-renderer")).toBeInTheDocument();
+    expect(screen.queryByTestId("resume-page")).not.toBeInTheDocument();
     expect(
       document.querySelector(".dasti-doc-viewer-shell--resume-panel"),
     ).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: "Selected project description field" }),
+      screen.getByRole("button", { name: "Workshop project description field" }),
     ).toHaveAttribute("data-preview-active", "true");
     expect(onLinkIntent).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -215,9 +222,9 @@ describe("VerbatiResumePreview", () => {
 
     expect(screen.getByTestId("resume-template-renderer")).toBeInTheDocument();
     expect(screen.queryByTestId("resume-page")).not.toBeInTheDocument();
-    expect(await screen.findByLabelText("Page count")).toHaveTextContent(
-      "3 pages",
-    );
+    await waitFor(() => {
+      expect(screen.getByLabelText("Page count")).toHaveTextContent("3 pages");
+    });
   });
 
   it("keeps workshop compare-layout mode on the legacy comparison path without mixed rendering", () => {
