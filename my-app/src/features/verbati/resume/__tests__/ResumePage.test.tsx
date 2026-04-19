@@ -1018,4 +1018,213 @@ describe("ResumePage", () => {
       measurementSpy.mockRestore();
     }
   });
+  it("updates Swiss preview metrics when added support sections create a new page", async () => {
+    const initialSwissData: ResumeData = {
+      ...resumeMock,
+      projects: [],
+      achievementItems: [],
+      achievements: [],
+      hobbyItems: [],
+      hobbies: [],
+      certifications: [],
+      affiliations: [],
+      textSections: [],
+      skills: ["Curriculum design", "Mentoring", "Program operations"],
+      skillItems: [
+        {
+          id: "skill-1",
+          name: "Curriculum design",
+          sectionId: "skills-1",
+          sectionType: "skills",
+        },
+      ],
+      languages: [],
+    };
+    const expandedSwissData: ResumeData = {
+      ...initialSwissData,
+      projects: [
+        {
+          id: "project-1",
+          name: "Student success dashboard",
+          meta: "React · 2024",
+          description: "Built a cross-functional outcomes dashboard.",
+          sectionId: "projects-1",
+          sectionType: "projects",
+        },
+      ],
+      certifications: [
+        {
+          id: "cert-1",
+          name: "Instructional Design Certificate",
+          issuer: "Coursera",
+          meta: "2023",
+          sectionId: "certifications-1",
+          sectionType: "certifications",
+        },
+      ],
+      affiliations: [
+        {
+          id: "affiliation-1",
+          organizationName: "National Educators Guild",
+          roleOrMembershipType: "Member",
+          dateRange: "2021 - Present",
+          notes: "Regional mentorship committee",
+          sectionId: "affiliations-1",
+          sectionType: "affiliations",
+        },
+      ],
+      textSections: [
+        {
+          id: "additional-1",
+          sectionId: "additional-1",
+          sectionType: "additional_information",
+          sectionTitle: "Additional Information",
+          sectionOrder: 9,
+          text: "Available for evening workshops and curriculum audits.",
+        },
+      ],
+    };
+    const handlePreviewMetricsChange = vi.fn();
+    const measurementSpy = mockResumeMeasurementHeights({
+      header: { pageStart: 160, continued: 160 },
+      summary: { pageStart: 100, continued: 100 },
+      "experience-heading": { pageStart: 36, continued: 36 },
+      "experience-item:exp-1": { pageStart: 240, continued: 240 },
+      "experience-item:exp-2": { pageStart: 240, continued: 240 },
+      "experience-item:exp-3": { pageStart: 240, continued: 240 },
+      "support-row:0": { pageStart: 180, continued: 180 },
+      "support-row:1": { pageStart: 440, continued: 440 },
+    });
+
+    try {
+      const { rerender } = render(
+        <ResumePage
+          data={initialSwissData}
+          mode="swissminima"
+          stylePreset={DEFAULT_VERBATI_STYLE}
+          stageLayout={FIXED_STAGE_LAYOUT}
+          onPreviewMetricsChange={handlePreviewMetricsChange}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(handlePreviewMetricsChange).toHaveBeenCalledWith(
+          expect.objectContaining({
+            pageCount: 1,
+          }),
+        );
+      });
+
+      rerender(
+        <ResumePage
+          data={expandedSwissData}
+          mode="swissminima"
+          stylePreset={DEFAULT_VERBATI_STYLE}
+          stageLayout={FIXED_STAGE_LAYOUT}
+          onPreviewMetricsChange={handlePreviewMetricsChange}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(handlePreviewMetricsChange).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            pageCount: 2,
+          }),
+        );
+      });
+    } finally {
+      measurementSpy.mockRestore();
+    }
+  });
+
+  it("publishes the measured Swiss stack height instead of assuming full page-count height", async () => {
+    const longSwissData: ResumeData = {
+      ...resumeMock,
+      experience: [
+        ...resumeMock.experience,
+        {
+          id: "exp-4",
+          sectionId: "experience-1",
+          sectionType: "experience",
+          sectionTitle: "Experience",
+          sectionOrder: 2,
+          role: "Principal Product Designer",
+          company: "Studio Common",
+          period: "2013 — 2015",
+          location: "Copenhagen",
+          bullets: [
+            "Built cross-channel commerce experiences for editorial teams with dense content and high publishing cadence.",
+            "Introduced reusable narrative layout patterns that improved handoff clarity and implementation speed.",
+            "Partnered with content and product leads on multi-market launches and governance.",
+          ],
+        },
+      ],
+      projects: [],
+      achievementItems: [],
+      achievements: [],
+      hobbyItems: [],
+      hobbies: [],
+      certifications: [],
+      affiliations: [],
+      textSections: [],
+    };
+    const handlePreviewMetricsChange = vi.fn();
+    const originalGetBoundingClientRect =
+      HTMLElement.prototype.getBoundingClientRect;
+
+    const measurementSpy = vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockImplementation(function mockRect(this: HTMLElement) {
+        const blockId = this.dataset.resumeMeasureId;
+        const position = this.dataset.resumeMeasurePosition;
+        const configuredHeight: ResumeMeasureHeights[string] | undefined = blockId
+          ? {
+              header: { pageStart: 180, continued: 180 },
+              summary: { pageStart: 120, continued: 150 },
+              "experience-heading": { pageStart: 30, continued: 60 },
+              "experience-item:exp-1": { pageStart: 220, continued: 250 },
+              "experience-item:exp-2": { pageStart: 220, continued: 250 },
+              "experience-item:exp-3": { pageStart: 220, continued: 250 },
+              "experience-item:exp-4": { pageStart: 220, continued: 250 },
+              "support-row:0": { pageStart: 180, continued: 210 },
+            }[blockId]
+          : undefined;
+
+        if (configuredHeight) {
+          const measuredHeight =
+            position === "continued"
+              ? configuredHeight.continued ?? configuredHeight.pageStart
+              : configuredHeight.pageStart;
+
+          return buildMeasuredRect(measuredHeight);
+        }
+
+        if (this.classList.contains("resume-page-stack")) {
+          return buildMeasuredRect(2100);
+        }
+
+        return originalGetBoundingClientRect.call(this);
+      });
+
+    try {
+      render(
+        <ResumePage
+          data={longSwissData}
+          mode="swissminima"
+          stylePreset={DEFAULT_VERBATI_STYLE}
+          stageLayout={FIXED_STAGE_LAYOUT}
+          onPreviewMetricsChange={handlePreviewMetricsChange}
+        />,
+      );
+
+      await waitFor(() => {
+        const lastCall = handlePreviewMetricsChange.mock.lastCall?.[0];
+        expect(lastCall?.pageCount).toBe(2);
+        expect(lastCall?.stackHeightPx).toBeGreaterThan(2098);
+        expect(lastCall?.stackHeightPx).toBeLessThan(2101);
+      });
+    } finally {
+      measurementSpy.mockRestore();
+    }
+  });
 });
