@@ -15,6 +15,7 @@ import type { DocumentStageLayout } from "../../../hooks/use-document-stage-layo
 import type { ResumeActiveTarget } from "../resumeLinking";
 import type { VerbatiStylePreset } from "../types";
 import ResumeOneColAtsPage from "./ResumeOneColAtsPage";
+import type { ResumePreviewMetrics } from "./ResumePage";
 import type { ResumeData } from "./resume.types";
 
 export const WORKSHOP_TEMPLATE_RENDERER_ID = "workshop_resume_onecol_ats";
@@ -27,6 +28,7 @@ type ResumeTemplateRendererProps = {
   activeTarget?: ResumeActiveTarget | null;
   stageLayout?: DocumentStageLayout;
   onStablePageCountChange?: ((pageCount: number) => void) | undefined;
+  onPreviewMetricsChange?: ((metrics: ResumePreviewMetrics) => void) | undefined;
 };
 
 function buildTemplatePreviewVars(
@@ -65,6 +67,7 @@ export function ResumeTemplateRenderer({
   activeTarget = null,
   stageLayout,
   onStablePageCountChange,
+  onPreviewMetricsChange,
 }: ResumeTemplateRendererProps) {
   const templateDefinition = getResumeTemplateDefinition(resumeTemplateId);
   const isWorkshopTemplateRenderer =
@@ -95,6 +98,7 @@ export function ResumeTemplateRenderer({
   const shellPageWidthPx = stageLayout?.pageWidth ?? A4_PAGE_WIDTH_PX;
   const shellPageHeightPx = stageLayout?.pageHeight ?? A4_PAGE_HEIGHT_PX;
   const lastCommittedPageCountRef = React.useRef<number | null>(null);
+  const stackRef = React.useRef<HTMLDivElement | null>(null);
 
   React.useEffect(() => {
     if (!isWorkshopTemplateRenderer || !onStablePageCountChange || !plan) {
@@ -115,12 +119,64 @@ export function ResumeTemplateRenderer({
     };
   }, [isWorkshopTemplateRenderer, onStablePageCountChange, plan]);
 
+  React.useLayoutEffect(() => {
+    if (!isWorkshopTemplateRenderer || !onPreviewMetricsChange || !plan) {
+      return undefined;
+    }
+
+    const fallbackStackHeightPx =
+      A4_PAGE_HEIGHT_PX * Math.max(1, plan.pageCount) +
+      RESUME_TEMPLATE_PAGE_GAP_PX * Math.max(0, plan.pageCount - 1);
+
+    const publishMetrics = () => {
+      const measuredHeight = stackRef.current?.getBoundingClientRect().height;
+      const stackHeightPx =
+        measuredHeight && previewScale > 0
+          ? measuredHeight / previewScale
+          : fallbackStackHeightPx;
+
+      onPreviewMetricsChange({
+        pageCount: Math.max(1, plan.pageCount),
+        pageGapPx: RESUME_TEMPLATE_PAGE_GAP_PX,
+        stackHeightPx,
+      });
+    };
+
+    publishMetrics();
+
+    let frameId: number | null = window.requestAnimationFrame(() => {
+      frameId = null;
+      publishMetrics();
+    });
+
+    if (!stackRef.current || typeof ResizeObserver === "undefined") {
+      return () => {
+        if (frameId !== null) {
+          window.cancelAnimationFrame(frameId);
+        }
+      };
+    }
+
+    const resizeObserver = new ResizeObserver(() => {
+      publishMetrics();
+    });
+    resizeObserver.observe(stackRef.current);
+
+    return () => {
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
+      resizeObserver.disconnect();
+    };
+  }, [isWorkshopTemplateRenderer, onPreviewMetricsChange, plan, previewScale]);
+
   if (!isWorkshopTemplateRenderer || !plan || !previewVars) {
     return null;
   }
 
   return (
     <div
+      ref={stackRef}
       data-testid="resume-template-renderer"
       style={{
         ...previewVars,
