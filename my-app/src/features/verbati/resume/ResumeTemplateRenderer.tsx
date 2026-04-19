@@ -76,6 +76,7 @@ export function ResumeTemplateRenderer({
         ? planWorkshopResumePages({
             data,
             template: templateDefinition,
+            stylePreset,
           })
         : null,
     [data, isWorkshopTemplateRenderer, templateDefinition],
