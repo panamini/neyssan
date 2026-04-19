@@ -37,6 +37,17 @@ const resumePreviewMetricsRef: {
 } = {
   current: null,
 };
+const workshopPreviewMetricsRef: {
+  current:
+    | {
+        pageCount: number;
+        pageGapPx: number;
+        stackHeightPx: number;
+      }
+    | null;
+} = {
+  current: null,
+};
 
 vi.mock("../../../hooks/use-document-pan", () => ({
   useDocumentPan: () => ({
@@ -164,6 +175,7 @@ vi.mock("../resume/ResumeTemplateRenderer", () => ({
   default: ({
     activeTarget,
     onStablePageCountChange,
+    onPreviewMetricsChange,
   }: {
     activeTarget?: {
       sectionType?: string;
@@ -171,11 +183,15 @@ vi.mock("../resume/ResumeTemplateRenderer", () => ({
       source?: string;
     } | null;
     onStablePageCountChange?: (pageCount: number) => void;
+    onPreviewMetricsChange?: (metrics: ResumePreviewMetrics) => void;
   }) => {
     resumeTemplateRendererPropsSpy({ activeTarget });
     React.useEffect(() => {
       onStablePageCountChange?.(3);
-    }, [onStablePageCountChange]);
+      if (workshopPreviewMetricsRef.current) {
+        onPreviewMetricsChange?.(workshopPreviewMetricsRef.current);
+      }
+    }, [onPreviewMetricsChange, onStablePageCountChange]);
 
     return (
       <div data-testid="resume-template-renderer">
@@ -201,6 +217,7 @@ vi.mock("../resume/ResumeTemplateRenderer", () => ({
 describe("VerbatiResumePreview", () => {
   afterEach(() => {
     resumePreviewMetricsRef.current = null;
+    workshopPreviewMetricsRef.current = null;
     useDocumentStageLayoutMock.mockClear();
     useDocumentViewportCenteringMock.mockClear();
   });
@@ -269,6 +286,52 @@ describe("VerbatiResumePreview", () => {
     await waitFor(() => {
       expect(screen.getByLabelText("Page count")).toHaveTextContent("3 pages");
     });
+  });
+
+  it("uses measured workshop stack metrics for workspace canvas height instead of synthetic page-count sizing", async () => {
+    workshopPreviewMetricsRef.current = {
+      pageCount: 3,
+      pageGapPx: 24,
+      stackHeightPx: 4200,
+    };
+    useDocumentStageLayoutMock.mockImplementationOnce(() => ({
+      availableWidth: 794,
+      availableHeight: 1123,
+      stageWidth: 794,
+      stageHeight: 1123,
+      pageWidth: 396.85,
+      pageHeight: 561.25,
+      overflowX: false,
+      overflowY: false,
+      isFit: true,
+    }));
+
+    render(
+      <VerbatiResumePreview
+        data={resumeMock}
+        stylePreset={{
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        hostMode="workspace"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Page count")).toHaveTextContent("3 pages");
+    });
+
+    const canvas = document.querySelector(
+      "[data-document-page='true']",
+    ) as HTMLDivElement | null;
+    const expectedCanvasHeight = 4200 * (396.85 / A4_PAGE_WIDTH_PX);
+
+    expect(Number.parseFloat(canvas?.style.height ?? "0")).toBeCloseTo(
+      expectedCanvasHeight,
+      2,
+    );
   });
 
   it("keeps non-workshop families entirely on the legacy ResumePage path", () => {
