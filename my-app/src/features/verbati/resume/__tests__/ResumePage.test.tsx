@@ -198,6 +198,26 @@ describe("ResumePage", () => {
     );
   });
 
+  it("keeps workshop on the legacy swiss renderer path while using workshop template vars", () => {
+    const workshopStyle = {
+      ...DEFAULT_VERBATI_STYLE,
+      familyId: "workshop",
+      layout: "workshop",
+    } satisfies VerbatiStylePreset;
+    const { container } = renderVariantPreview(workshopStyle, "swissminima");
+
+    const page = container.querySelector(
+      ".resume-page--swissminima",
+    ) as HTMLElement | null;
+
+    expect(page).toBeTruthy();
+    expect(page?.style.getPropertyValue("--sidebar-width")).toBe("0mm");
+    expect(page?.style.getPropertyValue("--margin-left")).toBe("18mm");
+    expect(page?.style.getPropertyValue("--header-summary-width")).toBe(
+      "120mm",
+    );
+  });
+
   it.each(ACTIVE_VARIANTS)(
     "renders preview linking regions for %s with section and item targets",
     (mode) => {

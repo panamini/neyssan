@@ -8,6 +8,8 @@ import {
 } from "./authoritative-resume";
 import {
   buildVerbatiThemeVars,
+  getResumeTemplateId,
+  getVerbatiStyleFromCv,
   getVerbatiTypographyFamilies,
   resolveVerbatiStyle,
   VERBATI_LAYOUT_TO_RENDERER,
@@ -30,6 +32,7 @@ import {
   buildCanonicalResumeRenderModelFromAuthoritative,
   buildCanonicalResumeRenderModelFromCv,
 } from "./buildCanonicalResumeRenderModel";
+import type { ResumeTemplateId } from "./layout/resumeTemplates";
 
 export type ExportDocumentKind = "resume" | "proposal";
 export type ExportDocumentFormat = "pdf" | "docx";
@@ -84,6 +87,7 @@ export type ResumePrintSource = {
   education: ResumePrintEducationItem[];
   achievements: string[];
   hobbies: string[];
+  resumeTemplateId: ResumeTemplateId;
 };
 
 export type ResumePreviewPrintSource = {
@@ -93,6 +97,7 @@ export type ResumePreviewPrintSource = {
   locale: string | null;
   resumeData: ResumeData;
   stylePreset: VerbatiStylePreset;
+  resumeTemplateId: ResumeTemplateId;
   rendererVariantId: ResumeLayoutVariantId;
 };
 
@@ -102,6 +107,7 @@ export type ResumePrintRoutePayload = {
   locale: string | null;
   resumeData: ResumeData;
   stylePreset: VerbatiStylePreset;
+  resumeTemplateId: ResumeTemplateId;
   rendererVariantId: ResumeLayoutVariantId;
 };
 
@@ -242,6 +248,7 @@ function normalizeResumeItems(items: ResumeData["metadata"]): ResumePrintItem[] 
 
 function normalizeResumeData(
   data: ResumeData,
+  resumeTemplateId: ResumeTemplateId,
   exportSource: ResumePrintSource["exportSource"] = "standard",
 ): ResumePrintSource {
   return {
@@ -284,6 +291,7 @@ function normalizeResumeData(
     })),
     achievements: (data.achievements ?? []).map((item) => cleanString(item)).filter(Boolean),
     hobbies: data.hobbies.map((item) => cleanString(item)).filter(Boolean),
+    resumeTemplateId,
   };
 }
 
@@ -299,17 +307,23 @@ export function buildResumeExportSource(args: {
     args.authoritativeResume,
   );
   if (authoritativeModel) {
+    const stylePreset = getVerbatiStyleFromCv(args.currentCv);
     return {
       ...normalizeResumeData(
         buildCanonicalResumeRenderModelFromAuthoritative(authoritativeModel),
+        getResumeTemplateId(stylePreset),
         "authoritative",
       ),
       locale: normalizeExportLocale(args.currentCv.metadata.locale),
     };
   }
 
+  const stylePreset = getVerbatiStyleFromCv(args.currentCv);
   return {
-    ...normalizeResumeData(buildCanonicalResumeRenderModelFromCv(args.currentCv)),
+    ...normalizeResumeData(
+      buildCanonicalResumeRenderModelFromCv(args.currentCv),
+      getResumeTemplateId(stylePreset),
+    ),
     locale: normalizeExportLocale(args.currentCv.metadata.locale),
   };
 }
@@ -331,6 +345,7 @@ export function buildStyledResumePrintSource(args: {
     locale: normalizeExportLocale(args.currentCv.metadata.locale),
     resumeData: buildCanonicalResumeRenderModelFromCv(args.currentCv),
     stylePreset,
+    resumeTemplateId: getResumeTemplateId(stylePreset),
     rendererVariantId: VERBATI_LAYOUT_TO_RENDERER[stylePreset.layout],
   };
 }
@@ -344,6 +359,7 @@ export function buildResumePrintRoutePayload(args: {
     locale: args.data.locale,
     resumeData: args.data.resumeData,
     stylePreset: args.data.stylePreset,
+    resumeTemplateId: args.data.resumeTemplateId,
     rendererVariantId: args.data.rendererVariantId,
   };
 }
