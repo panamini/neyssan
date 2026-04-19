@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { ISkillItem, Level } from "../../types/cvDocument";
 import { X, Plus } from "@/lib/icons";
 import { LEVELS } from "../ui/levelLabels";
@@ -51,6 +51,7 @@ export function SkillsModal({
   const [rows, setRows] = useState<ISkillItem[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const inputRefs = React.useRef<Record<string, HTMLInputElement | null>>({});
+  const handledInitialFocusRef = useRef<string | null>(null);
 
   // Seed rows only when the modal opens or when the real items content changes.
   // Prevents resetting the input on each parent render (which caused single-character typing).
@@ -69,11 +70,29 @@ export function SkillsModal({
   }, [open, items]);
 
   useEffect(() => {
-    if (!open || !initialItemId) return;
+    if (!open) {
+      handledInitialFocusRef.current = null;
+      return;
+    }
 
-    window.setTimeout(() => {
-      inputRefs.current[initialItemId]?.focus();
+    if (!initialItemId) return;
+
+    const focusRequestKey = String(initialItemId);
+    if (handledInitialFocusRef.current === focusRequestKey) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      const input = inputRefs.current[initialItemId];
+      if (input) {
+        handledInitialFocusRef.current = focusRequestKey;
+        input.focus();
+      }
     }, 40);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
   }, [initialItemId, open, rows]);
 
   const canSave = useMemo(() => {
