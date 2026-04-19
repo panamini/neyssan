@@ -1361,17 +1361,14 @@
 }
 
 .dasti-proposal-sheet-frame--resume-workspace {
-  width: min(100%, var(--document-viewer-shell-inline-size));
-  max-width: min(100%, var(--document-viewer-shell-inline-size));
-  margin-inline: auto;
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
   display: flex;
   flex: 1 1 auto;
   min-height: 0;
   height: auto;
-  padding-block-start: calc(
-    var(--document-viewer-toolbar-block-size) +
-      var(--resume-preview-toolbar-gap, var(--space-1))
-  );
+  padding-block-start: 0;
 }
 
 .dasti-proposal-sheet-frame--focused {
@@ -2178,12 +2175,12 @@
   );
   position: relative;
   display: grid;
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   align-content: start;
   gap: 0;
-  width: min(100%, var(--document-viewer-shell-inline-size));
-  max-width: min(100%, var(--document-viewer-shell-inline-size));
-  margin-inline: auto;
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
   min-height: 0;
   height: var(--cv-preview-shell-block-size);
   min-height: var(--cv-preview-shell-block-size);
@@ -2191,13 +2188,12 @@
 }
 
 .dasti-document-rail--resume-workspace {
-  position: absolute;
-  inset-block-start: var(--cv-preview-toolbar-inset, 0px);
-  inset-inline-start: 0;
-  inset-inline-end: auto;
-  width: max-content;
-  max-width: none;
+  position: relative;
+  inset: auto;
+  width: 100%;
+  max-width: 100%;
   z-index: 24;
+  margin-block-end: var(--resume-preview-toolbar-gap, var(--space-1));
 }
 
 .dasti-document-rail--resume-workspace .dasti-proposal-rail-cluster {
@@ -2248,9 +2244,9 @@
 
 .dasti-doc-viewer-shell__surface--resume-workspace {
   position: relative;
-  width: min(100%, var(--document-viewer-shell-inline-size));
-  max-width: min(100%, var(--document-viewer-shell-inline-size));
-  margin-inline: auto;
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
   min-height: 0;
   height: var(--cv-preview-shell-block-size);
   min-height: var(--cv-preview-shell-block-size);
@@ -2279,17 +2275,17 @@
   min-height: 0;
   display: flex;
   align-items: stretch;
-  justify-content: center;
+  justify-content: flex-start;
   overflow: visible;
 }
 
 .dasti-resume-workspace-stage .dasti-document-stage-chassis {
-  justify-content: center;
+  justify-content: flex-start;
   align-items: flex-start;
 }
 
 .dasti-resume-workspace-stage .dasti-doc-viewport--resume {
-  margin-inline: auto;
+  margin-inline: 0;
   max-width: 100%;
 }
 
@@ -6202,11 +6198,12 @@ html:not(.dark) .dasti-proposal-submit {
   min-block-size: var(--cv-preview-shell-block-size);
   display: flex;
   align-items: stretch;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 .dasti-resume-preview-panel__surface--workspace .dasti-doc-viewer-shell {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
+  width: 100%;
   min-height: 0;
   height: var(--cv-preview-shell-block-size);
 }
@@ -10275,7 +10272,7 @@ html:not(.dark) .dasti-proposal-submit {
 .dasti-cv-preview-workbench__main {
   display: grid;
   align-content: start;
-  justify-items: center;
+  justify-items: start;
 }
 
 .dasti-forge-compose-toolbar-slot {

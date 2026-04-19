@@ -353,7 +353,7 @@ export function VerbatiCvPreviewPanel({
 
   const previewSurface = (
     <>
-      {!hasActiveResume ? (
+      {hasCurrentCv && !hasActiveResume ? (
         <div
           style={{
             borderRadius: "var(--radius-card)",
@@ -365,9 +365,8 @@ export function VerbatiCvPreviewPanel({
             lineHeight: 1.55,
           }}
         >
-          The active CV is still too sparse for a faithful render, so this panel
-          is showing the Verbati sample document until profile, summary, or
-          experience content is filled in.
+          The active CV is still too sparse for a faithful render. Add enough
+          profile, summary, or experience content to stabilize the live preview.
         </div>
       ) : null}
 
