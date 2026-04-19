@@ -29,12 +29,14 @@ vi.mock("../../components/ProfileReviewCard", () => ({
 vi.mock("convex/react", () => ({
   useQuery: vi.fn(() => ({
     preset1: {
-      fontPairId: "quiet-editorial",
-      styleChoice: "balanced",
-      paletteOverride: "pierre",
-      accentHex: null,
+      verbatiStyle: {
+        familyId: "editorial",
+        layout: "editorial",
+        typography: "quiet-editorial",
+        palette: "pierre",
+      },
       voicePreset: null,
-      name: "Stone Swiss",
+      name: "Stone Editorial",
     },
     preset2: null,
     preset3: null,
@@ -48,13 +50,16 @@ vi.mock("../../features/verbati/VerbatiCvPreviewPanel", () => ({
     hostMode,
     layoutMode,
     railLeadControl,
+    stylePreset,
   }: {
     hostMode?: "panel" | "workspace";
     layoutMode?: "rail" | "stacked";
     railLeadControl?: React.ReactNode;
+    stylePreset?: { layout?: string | null };
   }) => (
     <div>
       Preview host: {hostMode ?? "panel"} / layout: {layoutMode ?? "stacked"}
+      <div>Preview style: {stylePreset?.layout ?? "none"}</div>
       {railLeadControl}
     </div>
   ),
@@ -153,5 +158,25 @@ describe("CvForge workspace mode", () => {
     expect(
       screen.getByText("Preview host: workspace / layout: stacked"),
     ).toBeInTheDocument();
+  });
+
+  it("applies canonical saved settings styles from the selected preset slot", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("Preview style: swiss")).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "Open saved resume styles" }),
+    );
+
+    await user.click(screen.getByRole("menuitemradio", { name: /Stone Editorial/i }));
+
+    expect(screen.getByText("Preview style: editorial")).toBeInTheDocument();
   });
 });
