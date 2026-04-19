@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import { resumeMock } from "../../features/verbati/resume/resume.mock";
 import { DEFAULT_VERBATI_STYLE } from "../../features/verbati/style";
+import { buildCanonicalResumeRenderModelFromCv } from "../buildCanonicalResumeRenderModel";
 import { generateCvTemplate } from "../cv-template";
+import { getResumeTemplateDefinition } from "../layout/resumeTemplates";
+import { planWorkshopResumePages } from "../resume/resumePagination";
 import {
   buildResumeExportSource,
   buildProposalPreviewPrintSource,
@@ -59,6 +62,59 @@ describe("document-export-models", () => {
     expect(exportSource?.resumeTemplateId).toBe("workshop_resume_onecol_ats");
   });
 
+  it("serializes committed workshop planner pages into the export source", () => {
+    const currentCv = generateCvTemplate("Workshop export parity");
+    currentCv.metadata.verbatiStyle = {
+      familyId: "workshop",
+      layout: "workshop",
+      typography: "quiet-editorial",
+      palette: "sauge",
+    };
+    const experienceSection = currentCv.sections.find(
+      (section) => section.type === "experience",
+    );
+    if (experienceSection?.structuredContent && Array.isArray(experienceSection.structuredContent)) {
+      experienceSection.structuredContent = Array.from({ length: 6 }, (_, index) => ({
+        ...(experienceSection.structuredContent[0] ?? {
+          id: `exp-${index + 1}`,
+          company: "",
+          position: "",
+          startDate: "2024-01-01T00:00:00.000Z",
+          isCurrent: false,
+          currentlyWorking: false,
+          achievements: [],
+        }),
+        id: `exp-${index + 1}`,
+        company: `Northline ${index + 1}`,
+        position: `Operations Lead ${index + 1}`,
+        startDate: "2024-01-01T00:00:00.000Z",
+        isCurrent: false,
+        currentlyWorking: false,
+        responsibilities: `Committed responsibility ${index + 1}\nCommitted follow-up ${index + 1}`,
+        achievements: [],
+      }));
+    }
+
+    const exportSource = buildResumeExportSource({
+      currentCv,
+      stylePreset: currentCv.metadata.verbatiStyle,
+    });
+    const canonical = buildCanonicalResumeRenderModelFromCv(currentCv);
+    const directPlan = planWorkshopResumePages({
+      data: canonical,
+      template: getResumeTemplateDefinition("workshop_resume_onecol_ats"),
+    });
+
+    expect(exportSource?.resumeTemplateId).toBe("workshop_resume_onecol_ats");
+    expect(exportSource?.committedPages).toHaveLength(directPlan.pageCount);
+    expect(exportSource?.committedPages[0]?.fragments[0]).toEqual(
+      expect.objectContaining({
+        kind: "profile",
+        sectionType: "profile",
+      }),
+    );
+  });
+
   it("builds a preview-aligned print route payload for styled resume PDF", () => {
     const previewSource: ResumePreviewPrintSource = {
       schemaVersion: 1,
@@ -81,6 +137,7 @@ describe("document-export-models", () => {
     expect(payload.stylePreset.layout).toBe("two-column");
     expect(payload.resumeTemplateId).toBe("two_column_resume_legacy");
     expect(payload.rendererVariantId).toBe("robial");
+    expect(payload.committedPages).toBeUndefined();
   });
 
   it("derives a stable debug snapshot from the active print style inputs", () => {

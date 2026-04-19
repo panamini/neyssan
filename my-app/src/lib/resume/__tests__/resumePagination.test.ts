@@ -63,4 +63,43 @@ describe("resumePagination", () => {
       true,
     );
   });
+
+  it("emits serializable committed pages and fragments for workshop export parity", () => {
+    const result = planWorkshopResumePages({
+      data: {
+        ...resumeMock,
+        experience: Array.from({ length: 6 }, (_, index) => ({
+          ...resumeMock.experience[index % resumeMock.experience.length]!,
+          id: `exp-committed-${index + 1}`,
+          bullets: Array.from({ length: 4 }, (__, bulletIndex) =>
+            `Committed workshop bullet ${index + 1}.${bulletIndex + 1} with enough content to keep the page planner splitting consistently.`,
+          ),
+        })),
+        projects: Array.from({ length: 3 }, (_, index) => ({
+          ...resumeMock.projects[index % resumeMock.projects.length]!,
+          id: `project-committed-${index + 1}`,
+          description:
+            "Committed workshop project description repeated to force export page fragments across multiple pages.",
+        })),
+      },
+      template: workshopTemplate,
+    });
+
+    expect(result.committedPages).toHaveLength(result.pages.length);
+    expect(result.committedPages[0]?.fragments[0]).toEqual(
+      expect.objectContaining({
+        fragmentId: expect.any(String),
+        kind: "profile",
+        sectionType: "profile",
+      }),
+    );
+    expect(
+      result.committedPages.some((page) =>
+        page.fragments.some((fragment) => fragment.continued),
+      ),
+    ).toBe(true);
+    expect(JSON.parse(JSON.stringify(result.committedPages))).toEqual(
+      result.committedPages,
+    );
+  });
 });
