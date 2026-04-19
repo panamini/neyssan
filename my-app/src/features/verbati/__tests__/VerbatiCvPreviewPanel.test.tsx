@@ -409,6 +409,62 @@ describe("VerbatiCvPreviewPanel", () => {
   );
 
   it.each(["panel", "workspace"] as const)(
+    "recomputes preview data for %s mode when the active CV changes in place",
+    async (hostMode) => {
+      mockMapCvDocumentToResumeData.mockImplementation((doc) => {
+        const typedDoc = doc as typeof mockCurrentCv;
+        const projectsSection = typedDoc.sections.find(
+          (section) => String(section.type) === "projects",
+        );
+
+        return {
+          name: "Robert Cooper",
+          title:
+            Array.isArray(projectsSection?.structuredContent) &&
+            projectsSection.structuredContent.length > 1
+              ? "Expanded CV"
+              : "Protection Guard",
+          summary: "Experienced security profile.",
+          experience: [],
+          education: [],
+          skills: [],
+          languages: [],
+          projects:
+            Array.isArray(projectsSection?.structuredContent) &&
+            projectsSection.structuredContent.length > 1
+              ? [
+                  { id: "project-1" },
+                  { id: "project-2" },
+                ]
+              : [{ id: "project-1" }],
+          achievements: [],
+        };
+      });
+
+      const { rerender } = render(<VerbatiCvPreviewPanel hostMode={hostMode} />);
+
+      expect(screen.getByText("Preview title: Protection Guard")).toBeInTheDocument();
+      expect(screen.getByText("Preview projects: 1")).toBeInTheDocument();
+
+      const projectsSection = mockCurrentCv.sections.find(
+        (section) => String(section.type) === "projects",
+      );
+      expect(projectsSection).toBeTruthy();
+
+      if (projectsSection) {
+        projectsSection.structuredContent = [{ id: "project-1" }, { id: "project-2" }];
+      }
+
+      rerender(<VerbatiCvPreviewPanel hostMode={hostMode} />);
+
+      await waitFor(() => {
+        expect(screen.getByText("Preview title: Expanded CV")).toBeInTheDocument();
+      });
+      expect(screen.getByText("Preview projects: 2")).toBeInTheDocument();
+    },
+  );
+
+  it.each(["panel", "workspace"] as const)(
     "uses the active %s preview on first render even when the CV is non-renderable",
     (hostMode) => {
       mockHasRenderableResumeData.mockReturnValue(false);
