@@ -532,7 +532,7 @@ export function ResumeOneColAtsPage({
         boxSizing: "border-box",
         width: "100%",
         minHeight: "100%",
-        padding: "17mm 35mm 35mm 18mm",
+        padding: "17mm 18mm 18mm",
         background: "var(--paper)",
         color: "var(--color-text)",
         display: "grid",

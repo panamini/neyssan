@@ -97,10 +97,6 @@ vi.mock("../../lib/proposal-personalization", () => ({
   getProposalAttachedCvId: () => mockAttachedCvId,
   getProposalAttachedCvLocalDocument: () =>
     mockAttachedCvId === "cv_alpha" ? mockSourceCv : null,
-  listLocalCvPickerOptions: () =>
-    mockAttachedCvId === "cv_alpha"
-      ? [{ id: "cv_alpha", label: "Alex Martin Resume" }]
-      : [],
   PROPOSAL_ATTACHED_CV_UPDATED_EVENT: "dasti:proposal-attached-cv-updated",
   setProposalAttachedCvId: (id: string) => {
     mockAttachedCvId = id;
