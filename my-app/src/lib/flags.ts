@@ -7,7 +7,7 @@
 function readEnv(key: string): string | undefined {
   try {
     // Vite runtime
-    const vite = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
+    const vite = (import.meta as unknown as { env?: Record<string, string | undefined> })?.env;
     if (vite && typeof vite[key] !== "undefined") return vite[key];
   } catch {
     // ignore

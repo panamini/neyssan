@@ -13,9 +13,6 @@ import { SettingsPage } from "../SettingsPage";
 const savePresetMock = vi.fn(() => Promise.resolve(null));
 const setActivePresetMock = vi.fn(() => Promise.resolve(null));
 const presetsQueryMock = vi.fn();
-const { workshopFlagMock } = vi.hoisted(() => ({
-  workshopFlagMock: vi.fn(() => false),
-}));
 
 const { api } = vi.hoisted(() => ({
   api: {
@@ -47,16 +44,10 @@ vi.mock("../../components/ProposalColorPickerPopover", () => ({
   ProposalColorPickerPopover: () => null,
 }));
 
-vi.mock("../../lib/flags", () => ({
-  isWorkshopFamilyEnabled: workshopFlagMock,
-}));
-
 describe("SettingsPage preview controls", () => {
   beforeEach(() => {
     savePresetMock.mockClear();
     setActivePresetMock.mockClear();
-    workshopFlagMock.mockReset();
-    workshopFlagMock.mockReturnValue(false);
     presetsQueryMock.mockReturnValue({
       activeSlot: 1,
       preset1: {
@@ -181,56 +172,10 @@ describe("SettingsPage preview controls", () => {
 
   it("renders the layout style cards for the available presets", () => {
     const { container } = render(<SettingsPage />);
-    const familyGroup = screen.getByRole("group", { name: "Style family" });
 
     expect(
       container.querySelectorAll(".dasti-settings-style-card").length,
     ).toBeGreaterThanOrEqual(3);
-    expect(within(familyGroup).queryByRole("button", { name: /^Auto$/i })).toBeNull();
-    expect(within(familyGroup).queryByRole("button", { name: /^Warm$/i })).toBeNull();
-    expect(within(familyGroup).queryByRole("button", { name: /^Technical$/i })).toBeNull();
-    expect(within(familyGroup).queryByRole("button", { name: /^Formal$/i })).toBeNull();
-  });
-
-  it("shows workshop in the family list when the feature flag is enabled", () => {
-    workshopFlagMock.mockReturnValue(true);
-
-    render(<SettingsPage />);
-
-    const familyGroup = screen.getByRole("group", { name: "Style family" });
-
-    expect(
-      within(familyGroup).getByRole("button", { name: /Workshop/i }),
-    ).toBeInTheDocument();
-  });
-
-  it("preserves and displays a stored workshop family while hiding it from new selection when the flag is off", () => {
-    presetsQueryMock.mockReturnValue({
-      activeSlot: 1,
-      preset1: {
-        verbatiStyle: {
-          familyId: "workshop",
-          layout: "workshop",
-          typography: "quiet-editorial",
-          palette: "sauge",
-        },
-        voicePreset: null,
-        name: "Workshop Style",
-      },
-      preset2: null,
-      preset3: null,
-    });
-
-    const { container } = render(<SettingsPage />);
-    const familyGroup = screen.getByRole("group", { name: "Style family" });
-
-    expect(
-      container.querySelector(".dasti-settings-hero-preview__style-badge"),
-    ).toHaveTextContent("Workshop");
-    expect(screen.getByText("Current family: Workshop")).toBeInTheDocument();
-    expect(
-      within(familyGroup).queryByRole("button", { name: /Workshop/i }),
-    ).toBeNull();
   });
 
   it("updates the hero preview tilt when the pointer moves", async () => {

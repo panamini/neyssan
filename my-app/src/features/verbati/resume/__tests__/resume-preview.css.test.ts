@@ -33,13 +33,9 @@ describe("resume preview workspace anchoring", () => {
       /\.dasti-document-rail--resume-workspace\s*\{[^}]*\}/,
     )?.[0];
 
-    expect(workspaceRailRule).toContain("position: relative;");
-    expect(workspaceRailRule).toContain("width: 100%;");
-    expect(workspaceRailRule).toContain("max-width: 100%;");
     expect(workspaceRailRule).toContain(
-      "margin-block-end: var(--resume-preview-toolbar-gap, var(--space-1));",
+      "inset-block-start: var(--cv-preview-toolbar-inset, 0px);",
     );
-    expect(workspaceRailRule).not.toContain("inset-block-start");
   });
 
   it("clamps embedded resume frames to the viewport width outside workspace mode", () => {
@@ -71,31 +67,23 @@ describe("resume preview workspace anchoring", () => {
       /\.dasti-doc-viewer-shell--resume-workspace\s+\.dasti-proposal-sheet__body--document-viewer\s+\.dasti-document-stage-chassis\s*\{[^}]*\}/,
     )?.[0];
 
-    expect(workspaceShellRule).toContain("--document-viewer-bleed-inline: 0px;");
-    expect(workspaceShellRule).toContain("--document-viewer-bleed-block: 0px;");
     expect(workspaceShellRule).toContain(
-      "grid-template-rows: auto minmax(0, 1fr);",
+      "--document-viewer-bleed-inline: var(--space-1);",
     );
-    expect(workspaceShellRule).toContain("width: 100%;");
-    expect(workspaceShellRule).toContain("max-width: none;");
-    expect(workspaceShellRule).toContain("margin-inline: 0;");
+    expect(workspaceShellRule).toContain(
+      "--document-viewer-bleed-block: var(--space-1);",
+    );
+    expect(workspaceShellRule).toContain("grid-template-rows: minmax(0, 1fr);");
     expect(workspacePanelRule).toContain("padding: 0;");
     expect(workspacePanelRule).toContain("gap: 0;");
     expect(workspacePanelRule).toContain("border: none;");
     expect(workspaceSurfaceRule).toContain("min-block-size: 0;");
     expect(workspaceSurfaceRule).toContain("block-size: auto;");
-    expect(workspaceSurfaceRule).toContain("width: 100%;");
-    expect(workspaceSurfaceRule).toContain("max-width: none;");
-    expect(workspaceSurfaceRule).toContain("margin-inline: 0;");
     expect(workspaceSurfaceRule).not.toContain("100dvh");
-    expect(workspaceFrameRule).toContain("width: 100%;");
-    expect(workspaceFrameRule).toContain("max-width: none;");
-    expect(workspaceFrameRule).toContain("margin-inline: 0;");
-    expect(workspaceFrameRule).toContain("padding-block-start: 0;");
-    expect(workspaceFrameRule).not.toContain("var(--cv-preview-toolbar-inset");
-    expect(workspaceStagePaddingRule).toContain(
-      "padding: var(--resume-preview-shell-padding, var(--space-1));",
-    );
+    expect(workspaceFrameRule).toContain("max-width: 100%;");
+    expect(workspaceFrameRule).toContain("height: auto;");
+    expect(workspaceFrameRule).toContain("var(--cv-preview-toolbar-inset, 0px)");
+    expect(workspaceStagePaddingRule).toContain("padding: var(--space-5);");
     expect(productCss).toContain(
       ".dasti-doc-viewer-shell--resume-workspace .dasti-doc-viewport--resume {",
     );

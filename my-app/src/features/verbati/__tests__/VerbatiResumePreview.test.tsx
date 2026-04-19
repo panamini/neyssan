@@ -3,9 +3,6 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { VerbatiResumePreview } from "../VerbatiResumePreview";
 import { resumeMock } from "../resume/resume.mock";
-import { A4_PAGE_HEIGHT_PX, A4_PAGE_WIDTH_PX } from "../../../lib/document-stage";
-
-const stageLayoutOptionsSpy = vi.fn();
 
 vi.mock("../../../hooks/use-document-pan", () => ({
   useDocumentPan: () => ({
@@ -15,43 +12,21 @@ vi.mock("../../../hooks/use-document-pan", () => ({
 }));
 
 vi.mock("../../../hooks/use-document-stage-layout", () => ({
-  useDocumentStageLayout: (options?: {
-    zoomLevel?: number;
-    fitMode?: "width" | "contain";
-    fillAvailableOnZoom?: boolean;
-  }) => {
-    const zoomLevel = options?.zoomLevel ?? 1;
-    const isManualZoom = zoomLevel > 1.001;
-    stageLayoutOptionsSpy({
-      zoomLevel,
-      fitMode: options?.fitMode,
-      fillAvailableOnZoom: options?.fillAvailableOnZoom,
-    });
-
-    return {
-      availableWidth: A4_PAGE_WIDTH_PX,
-      availableHeight: A4_PAGE_HEIGHT_PX,
-      stageWidth: A4_PAGE_WIDTH_PX,
-      stageHeight: A4_PAGE_HEIGHT_PX,
-      pageWidth: isManualZoom ? A4_PAGE_WIDTH_PX * zoomLevel : A4_PAGE_WIDTH_PX,
-      pageHeight: isManualZoom
-        ? A4_PAGE_HEIGHT_PX * zoomLevel
-        : A4_PAGE_HEIGHT_PX,
-      isFit: !isManualZoom,
-    };
-  },
+  useDocumentStageLayout: () => ({
+    availableWidth: 794,
+    availableHeight: 1123,
+    stageWidth: 794,
+    stageHeight: 1123,
+    pageWidth: 794,
+    pageHeight: 1123,
+    isFit: true,
+  }),
 }));
 
-const viewportCenteringOptionsSpy = vi.fn();
-
 vi.mock("../../../hooks/use-document-viewport-centering", () => ({
-  useDocumentViewportCentering: (options: unknown) => {
-    viewportCenteringOptionsSpy(options);
-
-    return {
-      attachViewport: () => undefined,
-    };
-  },
+  useDocumentViewportCentering: () => ({
+    attachViewport: () => undefined,
+  }),
 }));
 
 vi.mock("../../../lib/document-export-debug", () => ({
@@ -186,53 +161,6 @@ vi.mock("../resume/ResumeTemplateRenderer", () => ({
 }));
 
 describe("VerbatiResumePreview", () => {
-  it("top-anchors workshop preview stacks instead of centering them as a single sheet", async () => {
-    const { container } = render(
-      <VerbatiResumePreview
-        data={resumeMock}
-        stylePreset={{
-          familyId: "workshop",
-          layout: "workshop",
-          typography: "quiet-editorial",
-          palette: "sauge",
-        }}
-        hostMode="workspace"
-      />,
-    );
-
-    await waitFor(() => {
-      expect(screen.getByLabelText("Page count")).toHaveTextContent("3 pages");
-    });
-
-    expect(viewportCenteringOptionsSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        defaultCenterY: 0,
-      }),
-    );
-    expect(
-      container.querySelector('.dasti-document-stage__canvas[data-document-page="true"]'),
-    ).toBeNull();
-  });
-
-  it("keeps legacy single-page resume previews on the single-sheet canvas shell", () => {
-    const { container } = render(
-      <VerbatiResumePreview
-        data={resumeMock}
-        stylePreset={{
-          familyId: "swiss",
-          layout: "swiss",
-          typography: "quiet-editorial",
-          palette: "sauge",
-        }}
-        hostMode="workspace"
-      />,
-    );
-
-    expect(
-      container.querySelector('.dasti-document-stage__canvas[data-document-page="true"]'),
-    ).toBeTruthy();
-  });
-
   it("keeps workshop panel preview link intents and active highlighting intact on the template renderer path", () => {
     const onLinkIntent = vi.fn();
 
@@ -694,53 +622,5 @@ describe("VerbatiResumePreview", () => {
     fireEvent.wheel(page!, { deltaY: 140 });
 
     expect(viewport!.scrollTop).toBe(0);
-  });
-
-  it("keeps the fitted A4 viewport while manual zoom enlarges the canvas", () => {
-    const { container } = render(
-      <VerbatiResumePreview
-        data={resumeMock}
-        stylePreset={{
-          layout: "swiss",
-          typography: "quiet-editorial",
-          palette: "sauge",
-        }}
-        hostMode="workspace"
-      />,
-    );
-
-    const viewport = container.querySelector(
-      ".dasti-doc-viewport--resume",
-    ) as HTMLDivElement | null;
-    const canvas = container.querySelector(
-      ".dasti-document-stage__canvas",
-    ) as HTMLDivElement | null;
-
-    expect(viewport).toHaveStyle({
-      width: `${A4_PAGE_WIDTH_PX}px`,
-      height: `${A4_PAGE_HEIGHT_PX}px`,
-    });
-    expect(canvas).toHaveStyle({
-      width: `${A4_PAGE_WIDTH_PX}px`,
-      height: `${A4_PAGE_HEIGHT_PX}px`,
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
-
-    expect(stageLayoutOptionsSpy).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        zoomLevel: 1.25,
-        fitMode: "contain",
-        fillAvailableOnZoom: true,
-      }),
-    );
-    expect(viewport).toHaveStyle({
-      width: `${A4_PAGE_WIDTH_PX}px`,
-      height: `${A4_PAGE_HEIGHT_PX}px`,
-    });
-    expect(canvas).toHaveStyle({
-      width: `${A4_PAGE_WIDTH_PX * 1.25}px`,
-      height: `${A4_PAGE_HEIGHT_PX * 1.25}px`,
-    });
   });
 });

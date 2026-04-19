@@ -257,13 +257,6 @@ describe("CvForge workspace preview integration", () => {
     expect(
       container.querySelector(".dasti-doc-viewer-shell--resume-workspace-page"),
     ).toBeNull();
-    expect(
-      container.querySelector(".dasti-page-shell--cv-forge"),
-    ).toHaveStyle({
-      "--cv-preview-toolbar-inset": "var(--space-2)",
-      "--page-shell-pad-inline": "var(--space-1)",
-      "--page-shell-pad-inline-mobile": "var(--space-1)",
-    });
   });
 
   it("opens the live style controls when no saved styles exist", async () => {

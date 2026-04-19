@@ -85,21 +85,6 @@ function normalizeStylePreset(
   return resolveVerbatiStyle(stylePreset ?? DEFAULT_VERBATI_STYLE);
 }
 
-function resolveResumeTemplateIdForExport(args: {
-  mode: ExportMode;
-  resumeTemplateId: ResumePrintSource["resumeTemplateId"];
-}): ResumePrintSource["resumeTemplateId"] {
-  if (args.mode !== "styled") {
-    return args.resumeTemplateId;
-  }
-
-  if (args.resumeTemplateId === "workshop_resume_onecol_ats") {
-    return args.resumeTemplateId;
-  }
-
-  return "two_column_resume_legacy";
-}
-
 function buildCssVarBlock(vars: Record<string, string>): string {
   return Object.entries(vars)
     .map(([name, value]) => `      ${name}: ${value};`)
@@ -1585,16 +1570,12 @@ function renderResumeHtml(args: {
   stylePreset?: VerbatiStylePreset | null;
 }): string {
   const locale = args.data.locale;
-  const resolvedResumeTemplateId = resolveResumeTemplateIdForExport({
-    mode: args.mode,
-    resumeTemplateId: args.data.resumeTemplateId,
-  });
   const profile = resolveResumeExportProfile({
     mode: args.mode,
-    resumeTemplateId: resolvedResumeTemplateId,
+    resumeTemplateId: args.data.resumeTemplateId,
     stylePreset: args.stylePreset,
   });
-  if (resolvedResumeTemplateId === "workshop_resume_onecol_ats") {
+  if (args.data.resumeTemplateId === "workshop_resume_onecol_ats") {
     const committedPages = getCommittedWorkshopPagesOrThrow(args.data);
     const workshopBodyMarkup = committedPages
       .map(
@@ -1624,7 +1605,7 @@ function renderResumeHtml(args: {
       documentKind: "resume",
       lang: args.data.locale,
       mode: args.mode,
-      resumeTemplateId: resolvedResumeTemplateId,
+      resumeTemplateId: args.data.resumeTemplateId,
       stylePreset: args.stylePreset,
       title: `${args.data.title} - ${args.mode === "ats" ? "ATS" : "Styled"}`,
     });
@@ -1835,7 +1816,7 @@ function renderResumeHtml(args: {
     documentKind: "resume",
     lang: args.data.locale,
     mode: args.mode,
-    resumeTemplateId: resolvedResumeTemplateId,
+    resumeTemplateId: args.data.resumeTemplateId,
     stylePreset: args.stylePreset,
     title: `${args.data.title} - ${args.mode === "ats" ? "ATS" : "Styled"}`,
   });
