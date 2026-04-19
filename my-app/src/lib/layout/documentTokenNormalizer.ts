@@ -11,6 +11,7 @@ import type {
 } from "../../features/verbati/types";
 import {
   DEFAULT_VERBATI_STYLE,
+  getStyleFamilyId,
   resolveVerbatiStyle,
 } from "../../features/verbati/style";
 import type { ProposalDocumentTypography } from "../proposal-document-typography";
@@ -483,10 +484,13 @@ export function normalizeResumeExportTokens(args: {
   canonical: CanonicalDocumentTokens;
 } {
   const normalizedStylePreset = normalizeStylePreset(args.stylePreset);
+  const styleFamilyId = getStyleFamilyId(normalizedStylePreset);
   const definition =
     args.mode === "ats"
       ? RESUME_EXPORT_PROFILE_DEFINITIONS.ats
-      : RESUME_EXPORT_PROFILE_DEFINITIONS["two-column"];
+      : styleFamilyId === "workshop"
+        ? RESUME_EXPORT_PROFILE_DEFINITIONS.swiss
+        : RESUME_EXPORT_PROFILE_DEFINITIONS["two-column"];
   const tokens = createEmptyCanonicalTokens();
   const topMm = definition.margins?.topMm ?? 17;
   const rightMm = definition.margins?.rightMm ?? 35;
