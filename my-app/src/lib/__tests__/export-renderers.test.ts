@@ -1,10 +1,12 @@
 import JSZip from "jszip";
 import { describe, expect, it } from "vitest";
 
+import { generateCvTemplate } from "../cv-template";
 import type {
   ProposalPrintSource,
   ResumePrintSource,
 } from "../document-export-models";
+import { buildResumeExportSource } from "../document-export-models";
 import {
   buildProposalDocxBuffer,
   buildResumeDocxBuffer,
@@ -535,6 +537,91 @@ describe("export-renderers", () => {
         "fit-content(var(--flow-proposal-meta-width))",
       );
     });
+  });
+
+  it("renders workshop exports from committed planner pages without fresh repagination", () => {
+    const currentCv = generateCvTemplate("Workshop export");
+    currentCv.metadata.verbatiStyle = {
+      familyId: "workshop",
+      layout: "workshop",
+      typography: "quiet-editorial",
+      palette: "sauge",
+    };
+    const experienceSection = currentCv.sections.find(
+      (section) => section.type === "experience",
+    );
+    if (experienceSection?.structuredContent && Array.isArray(experienceSection.structuredContent)) {
+      experienceSection.structuredContent = Array.from({ length: 7 }, (_, index) => ({
+        ...(experienceSection.structuredContent[0] ?? {
+          id: `exp-${index + 1}`,
+          company: "",
+          position: "",
+          startDate: "2023-01-01T00:00:00.000Z",
+          isCurrent: false,
+          currentlyWorking: false,
+          achievements: [],
+        }),
+        id: `exp-${index + 1}`,
+        company: `Workshop Company ${index + 1}`,
+        position: `Workshop Lead ${index + 1}`,
+        startDate: "2023-01-01T00:00:00.000Z",
+        isCurrent: false,
+        currentlyWorking: false,
+        responsibilities: Array.from({ length: 5 }, (__, bulletIndex) =>
+          `Workshop export responsibility ${index + 1}.${bulletIndex + 1} with enough copy to create multiple committed pages.`,
+        ).join("\n"),
+        achievements: [],
+      }));
+    }
+
+    const exportSource = buildResumeExportSource({
+      currentCv,
+      stylePreset: currentCv.metadata.verbatiStyle,
+    });
+    expect(exportSource?.resumeTemplateId).toBe("workshop_resume_onecol_ats");
+
+    const styledDocument = parseExportHtml(
+      renderResumeStyledExportDocument({
+        data: exportSource!,
+        stylePreset: currentCv.metadata.verbatiStyle,
+      }),
+    );
+    const atsDocument = parseExportHtml(
+      renderResumeAtsExportDocument(
+        exportSource!,
+        currentCv.metadata.verbatiStyle,
+      ),
+    );
+
+    expect(styledDocument.body.className).toContain("resume-layout--workshop");
+    expect(styledDocument.querySelectorAll(".export-page")).toHaveLength(
+      exportSource?.committedPages?.length ?? 0,
+    );
+    expect(atsDocument.querySelectorAll(".export-page")).toHaveLength(
+      exportSource?.committedPages?.length ?? 0,
+    );
+    expect(
+      styledDocument.querySelector(
+        '[data-resume-template="workshop_resume_onecol_ats"]',
+      ),
+    ).toBeTruthy();
+  });
+
+  it("fails closed when workshop export pages are missing", () => {
+    expect(() =>
+      renderResumeStyledExportDocument({
+        data: {
+          ...resumeFixture,
+          resumeTemplateId: "workshop_resume_onecol_ats",
+        },
+        stylePreset: {
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+          familyId: "workshop",
+        },
+      }),
+    ).toThrow(/committed workshop export pages/i);
   });
 
 });
