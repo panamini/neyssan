@@ -1,6 +1,6 @@
 import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import SectionEditor from "../SectionEditor";
 import { ensureRemirrorDoc } from "../remirror-editor/utils/conversion";
 import type { RemirrorJSON } from "remirror";
@@ -1478,6 +1478,53 @@ describe("SectionEditor CV AI flows", () => {
     await waitFor(() =>
       expect(screen.getByDisplayValue("CKA")).toHaveFocus(),
     );
+  });
+
+  it("keeps the targeted skills input focused while typing after a preview openRequest", async () => {
+    const skillsSection: CvSection = {
+      id: "skills-open-request",
+      title: "Skills",
+      type: "skills",
+      blocks: [],
+      structuredContent: [
+        {
+          id: "skill-1",
+          name: "React",
+          level: "Advanced",
+        },
+        {
+          id: "skill-2",
+          name: "TypeScript",
+          level: "Advanced",
+        },
+      ],
+    } as any;
+
+    renderSectionEditor(skillsSection, {
+      openRequest: {
+        requestId: "resume-link-skill-2",
+        shouldOpenModal: true,
+        itemId: "skill-2",
+        sectionType: "skills",
+        sectionId: "skills-open-request",
+      },
+    });
+
+    const dialog = await screen.findByRole("dialog", { name: "Edit skills" });
+    const targetedInput = within(dialog).getByDisplayValue("TypeScript");
+
+    expect(dialog).toBeInTheDocument();
+    await waitFor(() => {
+      expect(targetedInput).toHaveFocus();
+    });
+
+    fireEvent.change(targetedInput, {
+      target: { value: "TypeScript systems" },
+    });
+
+    await waitFor(() => {
+      expect(targetedInput).toHaveFocus();
+    });
   });
 
   it("surfaces recovery fallback notes in certifications", () => {
