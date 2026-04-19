@@ -53,43 +53,6 @@ describe("AchievementsModal CV AI", () => {
     vi.clearAllMocks();
   });
 
-  it("does not steal focus back to the initial target row while typing in another row", async () => {
-    vi.useFakeTimers();
-
-    try {
-      render(
-        <AchievementsModal
-          open
-          items={[
-            { id: "ach-1", text: "First line" },
-            { id: "ach-2", text: "Second line" },
-          ]}
-          initialItemId="ach-1"
-          onClose={vi.fn()}
-          onSave={vi.fn()}
-        />,
-      );
-
-      vi.runOnlyPendingTimers();
-
-      const [firstRow, secondRow] = screen.getAllByRole(
-        "textbox",
-      ) as HTMLTextAreaElement[];
-
-      secondRow.focus();
-      fireEvent.input(secondRow, {
-        target: { value: "Second row updated without focus jump" },
-      });
-
-      vi.runOnlyPendingTimers();
-
-      expect(firstRow).not.toHaveFocus();
-      expect(secondRow).toHaveFocus();
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
   it("applies an accepted AI achievement rewrite before save", async () => {
     mockRunCvSectionAiAction.mockResolvedValue({
       kind: "text",

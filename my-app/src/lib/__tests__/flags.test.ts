@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { isCvEditorDebugUiEnabled, isWorkshopFamilyEnabled } from "../flags";
+import { isCvEditorDebugUiEnabled } from "../flags";
 
 describe("isCvEditorDebugUiEnabled", () => {
   afterEach(() => {
@@ -27,17 +27,5 @@ describe("isCvEditorDebugUiEnabled", () => {
     vi.stubEnv("VITE_ENABLE_CV_DEBUG_UI", "true");
 
     expect(isCvEditorDebugUiEnabled()).toBe(true);
-  });
-});
-
-describe("isWorkshopFamilyEnabled", () => {
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
-  it("reads the explicit workshop family flag", () => {
-    vi.stubEnv("VITE_ENABLE_WORKSHOP_FAMILY", "true");
-
-    expect(isWorkshopFamilyEnabled()).toBe(true);
   });
 });

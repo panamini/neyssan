@@ -86,7 +86,6 @@ export function AchievementsModal({
     Record<string, { before: string; after: string }>
   >({});
   const textareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
-  const initialItemFocusAppliedRef = useRef<string | null>(null);
 
   const openerRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
@@ -104,7 +103,6 @@ export function AchievementsModal({
   useEffect(() => {
     if (!open) {
       lastSeedRef.current = null;
-      initialItemFocusAppliedRef.current = null;
       setIsClearConfirming(false);
       setAiLoadingId(null);
       setAiDiffs({});
@@ -159,24 +157,10 @@ export function AchievementsModal({
   useEffect(() => {
     if (!open || !initialItemId) return;
 
-    if (initialItemFocusAppliedRef.current === initialItemId) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      const target = textareaRefs.current[initialItemId];
-      if (!target) {
-        return;
-      }
-
-      target.focus();
-      initialItemFocusAppliedRef.current = initialItemId;
+    window.setTimeout(() => {
+      textareaRefs.current[initialItemId]?.focus();
     }, 40);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [initialItemId, open, rows.length]);
+  }, [initialItemId, open, rows]);
 
   const syncTextareaHeight = React.useCallback((rowId: string) => {
     const node = textareaRefs.current[rowId];

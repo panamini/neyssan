@@ -175,7 +175,7 @@ export function VerbatiResumePreview({
       layoutKey: `${userZoom}:${stageLayout.stageWidth}:${stageLayout.stageHeight}:${stylePreset.layout}:${rendererVariantId}:${data.name}:${data.title}`,
       recenterKey: fitRequestCount,
       defaultCenterX: isWorkspaceMode ? 0.5 : 0.5,
-      defaultCenterY: usesWorkshopTemplateRenderer ? 0 : 0.5,
+      defaultCenterY: isWorkspaceMode ? 0.5 : 0.5,
     },
   );
   const attachResumeViewport = React.useCallback(
@@ -534,19 +534,11 @@ export function VerbatiResumePreview({
       >
         <div
           className="dasti-document-stage__canvas"
-          data-document-page={usesWorkshopTemplateRenderer ? undefined : "true"}
+          data-document-page="true"
           data-interactive={onLinkIntent ? "true" : undefined}
           style={{
             width: `${stageLayout.pageWidth}px`,
             height: `${canvasHeightPx}px`,
-            alignItems: usesWorkshopTemplateRenderer ? "start" : undefined,
-            justifyItems: usesWorkshopTemplateRenderer ? "start" : undefined,
-            alignContent: usesWorkshopTemplateRenderer ? "start" : undefined,
-            justifyContent: usesWorkshopTemplateRenderer ? "start" : undefined,
-            overflow: usesWorkshopTemplateRenderer ? "visible" : undefined,
-            background: usesWorkshopTemplateRenderer ? "transparent" : undefined,
-            borderRadius: usesWorkshopTemplateRenderer ? 0 : undefined,
-            boxShadow: usesWorkshopTemplateRenderer ? "none" : undefined,
           }}
           onClick={onLinkIntent ? handlePreviewCanvasClick : undefined}
           onWheelCapture={handlePreviewWheel}
