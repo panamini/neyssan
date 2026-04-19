@@ -1362,13 +1362,11 @@
 
 .dasti-proposal-sheet-frame--resume-workspace {
   width: 100%;
-  max-width: 100%;
+  max-width: none;
   min-height: 0;
   height: auto;
-  padding-block-start: calc(
-    var(--cv-preview-toolbar-inset, 0px) +
-      var(--document-viewer-toolbar-block-size) + var(--space-2)
-  );
+  margin-inline: 0;
+  padding-block-start: 0;
 }
 
 .dasti-proposal-sheet-frame--focused {
@@ -2173,20 +2171,22 @@
   );
   position: relative;
   display: grid;
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   align-content: start;
   gap: 0;
   min-height: 0;
   height: 100%;
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
 }
 
 .dasti-document-rail--resume-workspace {
-  position: absolute;
-  inset-block-start: var(--cv-preview-toolbar-inset, 0px);
-  inset-inline-start: var(--space-3);
-  inset-inline-end: auto;
-  width: max-content;
-  max-width: none;
+  position: relative;
+  inset: auto;
+  width: 100%;
+  max-width: 100%;
+  margin-block-end: var(--resume-preview-toolbar-gap, var(--space-1));
   z-index: 24;
 }
 
@@ -6162,6 +6162,8 @@ html:not(.dark) .dasti-proposal-submit {
 .dasti-resume-preview-panel__surface--workspace {
   flex: 1 1 auto;
   width: 100%;
+  max-width: none;
+  margin-inline: 0;
   min-height: 0;
   min-block-size: 0;
   block-size: auto;
@@ -6178,7 +6180,7 @@ html:not(.dark) .dasti-proposal-submit {
 .dasti-doc-viewer-shell--resume-workspace
   .dasti-proposal-sheet__body--document-viewer
   .dasti-document-stage-chassis {
-  padding: var(--space-5);
+  padding: var(--resume-preview-shell-padding, var(--space-1));
 }
 
 .dasti-doc-viewer-shell--resume-workspace .dasti-doc-viewport--resume {
@@ -10215,7 +10217,7 @@ html:not(.dark) .dasti-proposal-submit {
 .dasti-workbench-top-left-slot--cv-toggle {
   position: absolute;
   inset-block-start: var(--space-2);
-  inset-inline-start: var(--space-4);
+  inset-inline-start: var(--space-2);
   width: auto !important;
   max-width: none !important;
   margin: 0 !important;

@@ -793,7 +793,7 @@ export function planWorkshopResumePages(args: {
   data: ResumeData;
   template: ResumeTemplateDefinition;
 }): WorkshopResumePlan {
-  const pageHeightBudget = Math.max(args.template.preview.liveHeightMm - 8, 120);
+  const pageHeightBudget = Math.max(args.template.preview.liveHeightMm, 120);
   const pages: WorkshopResumePagePlan[] = [];
   const sections = buildPlannerSections(args.data);
 

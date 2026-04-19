@@ -3,7 +3,9 @@ import {
   getProposalTwinTemplateId,
   resolveVerbatiStyle,
 } from "../features/verbati/style";
+import { sanitizePersistedVerbatiFontPairId } from "../features/verbati/fontCatalog";
 import type { VerbatiStylePreset } from "../features/verbati/types";
+import type { ProposalPaletteId } from "./proposal-style-display";
 
 export const PROPOSAL_STYLE_CHOICES = [
   "auto",
@@ -121,6 +123,58 @@ export function resolveProposalStyleChoice(value: unknown): ProposalStyleChoice 
     PROPOSAL_STYLE_CHOICES.includes(value as ProposalStyleChoice)
     ? (value as ProposalStyleChoice)
     : "auto";
+}
+
+function normalizeProposalPaletteOverride(
+  value: unknown,
+): ProposalPaletteId | null {
+  return value === "sauge" ||
+    value === "ocre" ||
+    value === "pierre" ||
+    value === "bordeaux" ||
+    value === "encre"
+    ? value
+    : null;
+}
+
+function normalizeProposalAccentHex(value: unknown): string | null {
+  return typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value)
+    ? value.toUpperCase()
+    : null;
+}
+
+export function buildVerbatiStyleFromProposalSettings(input: {
+  styleChoice?: unknown;
+  fontPairId?: unknown;
+  paletteOverride?: unknown;
+  accentHex?: unknown;
+  verbatiStyle?: Partial<VerbatiStylePreset> | null;
+}): VerbatiStylePreset {
+  if (input.verbatiStyle) {
+    return resolveVerbatiStyle(input.verbatiStyle);
+  }
+
+  const choice = resolveProposalStyleChoice(input.styleChoice);
+  const baseStyle = getProposalStyleDefinition(choice).stylePreset;
+  const typography =
+    sanitizePersistedVerbatiFontPairId(input.fontPairId) ?? baseStyle.typography;
+  const accentHex = normalizeProposalAccentHex(input.accentHex);
+  const paletteOverride = accentHex
+    ? null
+    : normalizeProposalPaletteOverride(input.paletteOverride);
+
+  return resolveVerbatiStyle({
+    ...baseStyle,
+    typography,
+    ...(accentHex
+      ? {
+          palette: "custom" as const,
+          accentHex,
+        }
+      : paletteOverride
+        ? { palette: paletteOverride }
+        : null),
+  });
 }
 
 export function inferProposalStyleChoice(input: {
