@@ -225,8 +225,6 @@ export function VerbatiResumePreview({
   >("fit-page");
   const [resumePreviewMetrics, setResumePreviewMetrics] =
     React.useState<ResumePreviewMetrics>(DEFAULT_RESUME_PREVIEW_METRICS);
-  const [workshopPreviewMetrics, setWorkshopPreviewMetrics] =
-    React.useState<ResumePreviewMetrics | null>(null);
   const stageMeasureRef = React.useRef<HTMLDivElement | null>(null);
   const isWorkspaceMode = hostMode === "workspace";
   const handlePreviewMetricsChange = React.useCallback(
@@ -288,18 +286,13 @@ export function VerbatiResumePreview({
     resolvedResumeTemplateId === WORKSHOP_TEMPLATE_RENDERER_ID &&
     resolvedTemplateDefinition.supportsPlanner;
   const visiblePageCount = usesWorkshopTemplateRenderer
-    ? workshopPreviewMetrics?.pageCount ?? stableWorkshopPageCount
+    ? stableWorkshopPageCount
     : 1;
   const canvasHeightPx = usesWorkshopTemplateRenderer
-    ? workshopPreviewMetrics
-      ? Math.max(
-          stageLayout.pageHeight,
-          roundPx(workshopPreviewMetrics.stackHeightPx * previewScale),
-        )
-      : getResumeTemplateCanvasHeight({
-          pageCount: visiblePageCount,
-          pageHeightPx: stageLayout.pageHeight,
-        })
+    ? getResumeTemplateCanvasHeight({
+        pageCount: visiblePageCount,
+        pageHeightPx: stageLayout.pageHeight,
+      })
     : stackedCanvasHeight;
   const effectivePageCount = usesWorkshopTemplateRenderer
     ? visiblePageCount
@@ -375,7 +368,6 @@ export function VerbatiResumePreview({
   React.useEffect(() => {
     if (!usesWorkshopTemplateRenderer) {
       setStableWorkshopPageCount(1);
-      setWorkshopPreviewMetrics(null);
     }
   }, [usesWorkshopTemplateRenderer]);
 
@@ -725,7 +717,6 @@ export function VerbatiResumePreview({
               stageLayout={stageLayout}
               activeTarget={activeTarget}
               onStablePageCountChange={setStableWorkshopPageCount}
-              onPreviewMetricsChange={setWorkshopPreviewMetrics}
             />
           ) : (
             <ResumePage
