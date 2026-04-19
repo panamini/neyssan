@@ -90,6 +90,47 @@ hash_file() {
   fi
 }
 
+hash_string() {
+  local value="${1:-}"
+  if command -v sha256sum >/dev/null 2>&1; then
+    printf '%s' "${value}" | sha256sum | awk '{print $1}'
+  else
+    printf '%s' "${value}" | shasum -a 256 | awk '{print $1}'
+  fi
+}
+
+env_reload_hash() {
+  local payload=""
+  local file=""
+  local env_files=(
+    "${ROOT_DIR}/.env"
+    "${ROOT_DIR}/.env.local"
+    "${ROOT_DIR}/my-app/.env"
+  )
+  for file in "${env_files[@]}"; do
+    payload+="${file}:$(hash_file "${file}")"$'\n'
+  done
+  hash_string "${payload}"
+}
+
+convex_binding_hash() {
+  local payload=""
+  local file=""
+  local line=""
+  local candidate_files=(
+    "${ROOT_DIR}/my-app/.env.local"
+    "${ROOT_DIR}/my-app/.env"
+  )
+  for file in "${candidate_files[@]}"; do
+    line=""
+    if [[ -f "${file}" ]]; then
+      line="$(grep -E '^CONVEX_DEPLOYMENT=.*# team: [^,]+, project: [^[:space:]]+' "${file}" | tail -n1 || true)"
+    fi
+    payload+="${file}:${line}"$'\n'
+  done
+  hash_string "${payload}"
+}
+
 ensure_buildx() {
   if ! docker buildx inspect >/dev/null 2>&1; then
     echo "[run] configuring docker buildx builder"
@@ -159,7 +200,33 @@ write_state() {
     printf 'CONVEX_URL=%s\n' "${4:-}"
     printf 'TUNNEL_STARTED=%s\n' "${5:-0}"
     printf 'STACK_MODE=%s\n' "${6:-}"
+    printf 'ACTIVE_ORIGIN=%s\n' "${7:-}"
+    printf 'PARSER_RUNTIME_MODE=%s\n' "${8:-}"
+    printf 'PARSER_RELOAD=%s\n' "${9:-0}"
+    printf 'PARSER_OCR=%s\n' "${10:-auto}"
+    printf 'CONVEX_MODE=%s\n' "${11:-cloud}"
+    printf 'UI_STARTED=%s\n' "${12:-0}"
+    printf 'ENV_HASH=%s\n' "${13:-}"
+    printf 'CONVEX_BINDING_HASH=%s\n' "${14:-}"
   } > "${STATE_FILE}"
+}
+
+write_current_state() {
+  write_state \
+    "${1:-}" \
+    "${2:-0}" \
+    "${3:-}" \
+    "${4:-}" \
+    "${5:-0}" \
+    "${6:-}" \
+    "${7:-}" \
+    "${8:-}" \
+    "${9:-0}" \
+    "${10:-auto}" \
+    "${11:-cloud}" \
+    "${12:-0}" \
+    "$(env_reload_hash)" \
+    "$(convex_binding_hash)"
 }
 
 read_state() {
@@ -172,6 +239,14 @@ read_state() {
       CONVEX_URL) CONVEX_URL="$v" ;;
       TUNNEL_STARTED) TUNNEL_STARTED="$v" ;;
       STACK_MODE) STACK_MODE="$v" ;;
+      ACTIVE_ORIGIN) ACTIVE_ORIGIN="$v" ;;
+      PARSER_RUNTIME_MODE) PARSER_RUNTIME_MODE="$v" ;;
+      PARSER_RELOAD) PARSER_RELOAD="$v" ;;
+      PARSER_OCR) PARSER_OCR="$v" ;;
+      CONVEX_MODE) CONVEX_MODE="$v" ;;
+      UI_STARTED) UI_STARTED="$v" ;;
+      ENV_HASH) ENV_HASH="$v" ;;
+      CONVEX_BINDING_HASH) CONVEX_BINDING_HASH="$v" ;;
     esac
   done < "${STATE_FILE}"
 }
@@ -202,6 +277,16 @@ parser_runtime_mode() {
   fi
 }
 
+parser_ocr_mode() {
+  local env_value=""
+  env_value="$(docker inspect "${PARSER_NAME}" --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | grep -E '^CV_OCR_ENGINE=' | tail -n1 | cut -d= -f2- || true)"
+  if [[ -n "${env_value}" ]]; then
+    echo "${env_value}"
+  else
+    echo "auto"
+  fi
+}
+
 parser_image_id() {
   docker inspect "${PARSER_NAME}" --format '{{.Image}}' 2>/dev/null || true
 }
@@ -217,12 +302,90 @@ Commands:
   ./run.sh tunnel          stable full workflow
   ./run.sh local-fast      fast full-app parser development
   ./run.sh parser-dev      parser-only hacking
+  ./run.sh reload-env      restart-only refresh after env changes
   ./run.sh rebuild-docker  rebuild runtime / Docker stack
   ./run.sh down            normal stop
   ./run.sh reset           stronger cleanup
   ./run.sh status          quick stack status
   ./run.sh logs            parser logs
 EOF
+}
+
+state_requests_local_convex() {
+  [[ "${CONVEX_MODE:-cloud}" == "local" ]]
+}
+
+state_requests_ui() {
+  [[ "${UI_STARTED:-0}" == "1" ]]
+}
+
+state_requests_tunnel() {
+  [[ "${TUNNEL_STARTED:-0}" == "1" ]]
+}
+
+parser_container_running() {
+  docker ps --format '{{.Names}}' | grep -qx "${PARSER_NAME}"
+}
+
+tunnel_container_running() {
+  docker ps --format '{{.Names}}' | grep -qx "${CLOUDFLARED_NAME}"
+}
+
+vite_process_running() {
+  [[ -n "${VITE_PID:-}" ]] && kill -0 "${VITE_PID}" >/dev/null 2>&1
+}
+
+convex_process_running() {
+  [[ -n "${CONVEX_PID:-}" ]] && kill -0 "${CONVEX_PID}" >/dev/null 2>&1 && [[ -n "${CONVEX_URL:-}" ]] && is_convex_ready "${CONVEX_URL}"
+}
+
+tracked_stack_is_live() {
+  if [[ "${PARSER_STARTED:-0}" == "1" ]] && ! parser_container_running; then
+    return 1
+  fi
+  if state_requests_ui && ! vite_process_running; then
+    return 1
+  fi
+  if state_requests_local_convex && ! convex_process_running; then
+    return 1
+  fi
+  if state_requests_tunnel && ! tunnel_container_running; then
+    return 1
+  fi
+  return 0
+}
+
+handle_existing_stack_request() {
+  local requested_stack_mode="${1:-}"
+  local requested_active_origin="${2:-}"
+  local requested_runtime_mode="${3:-image}"
+  local requested_parser_reload="${4:-0}"
+  local requested_parser_ocr="${5:-auto}"
+  local requested_convex_mode="${6:-cloud}"
+  local requested_ui_started="${7:-0}"
+  local requested_tunnel_started="${8:-0}"
+  local VITE_PID=""; local PARSER_STARTED="0"; local CONVEX_PID=""; local CONVEX_URL=""; local TUNNEL_STARTED="0"; local STACK_MODE=""
+  local ACTIVE_ORIGIN=""; local PARSER_RUNTIME_MODE=""; local PARSER_RELOAD="0"; local PARSER_OCR="auto"; local CONVEX_MODE="cloud"; local UI_STARTED="0"; local ENV_HASH=""; local CONVEX_BINDING_HASH=""
+
+  read_state
+  [[ -n "${STACK_MODE:-}" ]] || return 1
+  [[ "${STACK_MODE}" == "${requested_stack_mode}" ]] || return 1
+  [[ "${ACTIVE_ORIGIN:-}" == "${requested_active_origin}" ]] || return 1
+  [[ "${PARSER_RUNTIME_MODE:-}" == "${requested_runtime_mode}" ]] || return 1
+  [[ "${PARSER_RELOAD:-0}" == "${requested_parser_reload}" ]] || return 1
+  [[ "${PARSER_OCR:-auto}" == "${requested_parser_ocr}" ]] || return 1
+  [[ "${CONVEX_MODE:-cloud}" == "${requested_convex_mode}" ]] || return 1
+  [[ "${UI_STARTED:-0}" == "${requested_ui_started}" ]] || return 1
+  [[ "${TUNNEL_STARTED:-0}" == "${requested_tunnel_started}" ]] || return 1
+  tracked_stack_is_live || return 1
+
+  if [[ "${ENV_HASH:-}" != "$(env_reload_hash)" || "${CONVEX_BINDING_HASH:-}" != "$(convex_binding_hash)" ]]; then
+    echo "[run] detected env change for active ${requested_stack_mode} stack; reloading without Docker rebuild"
+    reload_env_stack
+  else
+    echo "[run] ${requested_stack_mode} already matches current env; nothing to do"
+  fi
+  return 0
 }
 
 ensure_workspace_runtime_surface() {
@@ -803,6 +966,96 @@ stop_vite() {
   kill_vite_ports
 }
 
+reload_env_stack() {
+  local VITE_PID=""; local PARSER_STARTED="0"; local CONVEX_PID=""; local CONVEX_URL=""; local TUNNEL_STARTED="0"; local STACK_MODE=""
+  local ACTIVE_ORIGIN=""; local PARSER_RUNTIME_MODE=""; local PARSER_RELOAD="0"; local PARSER_OCR="auto"; local CONVEX_MODE="cloud"; local UI_STARTED="0"; local ENV_HASH=""; local CONVEX_BINDING_HASH=""
+  local current_env_hash=""
+  local current_convex_binding_hash=""
+  local env_changed="false"
+  local binding_changed="false"
+  local local_binding_changed="false"
+  local current_open_browser="${OPEN_BROWSER:-1}"
+  local next_vite_pid=""
+  local next_convex_pid=""
+  local next_convex_url=""
+
+  read_state
+  if [[ -z "${STACK_MODE:-}" ]]; then
+    echo "[run] ERROR: no tracked stack to reload. Start one with ./run.sh up, ./run.sh local-fast, ./run.sh tunnel, or ./run.sh parser-dev." >&2
+    exit 1
+  fi
+
+  current_env_hash="$(env_reload_hash)"
+  current_convex_binding_hash="$(convex_binding_hash)"
+  [[ "${ENV_HASH:-}" != "${current_env_hash}" ]] && env_changed="true"
+  [[ "${CONVEX_BINDING_HASH:-}" != "${current_convex_binding_hash}" ]] && binding_changed="true"
+  if [[ "${binding_changed}" == "true" && "${CONVEX_MODE:-cloud}" == "local" ]]; then
+    local_binding_changed="true"
+  fi
+
+  if [[ "${env_changed}" != "true" && "${binding_changed}" != "true" ]]; then
+    echo "[run] reload-env: no env changes detected"
+    return 0
+  fi
+
+  next_vite_pid="${VITE_PID:-}"
+  next_convex_pid="${CONVEX_PID:-}"
+  next_convex_url="${CONVEX_URL:-}"
+
+  if [[ "${env_changed}" == "true" && "${PARSER_STARTED:-0}" == "1" ]]; then
+    stop_parser
+    start_parser "${PARSER_OCR:-$(parser_ocr_mode)}" "${PARSER_RUNTIME_MODE:-image}" "${PARSER_RELOAD:-0}"
+  fi
+
+  if [[ "${local_binding_changed}" == "true" ]]; then
+    stop_convex "${CONVEX_PID:-}"
+    start_convex
+    next_convex_pid="${CONVEX_PID_RESULT:-}"
+    next_convex_url="${CONVEX_URL_RESULT:-}"
+  elif [[ "${env_changed}" == "true" && "${CONVEX_MODE:-cloud}" == "local" ]]; then
+    sync_local_convex_env
+  fi
+
+  if [[ "${env_changed}" == "true" && "${TUNNEL_STARTED:-0}" == "1" ]]; then
+    stop_tunnel
+    start_tunnel
+  fi
+
+  if [[ "${UI_STARTED:-0}" == "1" && ( "${env_changed}" == "true" || "${local_binding_changed}" == "true" ) ]]; then
+    stop_vite "${VITE_PID:-}"
+    OPEN_BROWSER="0"
+    if [[ "${CONVEX_MODE:-cloud}" == "local" ]]; then
+      next_vite_pid="$(start_vite "${ACTIVE_ORIGIN}" "${next_convex_url}")"
+    else
+      next_vite_pid="$(start_vite "${ACTIVE_ORIGIN}")"
+    fi
+    OPEN_BROWSER="${current_open_browser}"
+    sleep 2
+    if ! kill -0 "${next_vite_pid}" >/dev/null 2>&1; then
+      echo "[run] ERROR: Vite failed to restart during env reload (see ${VITE_LOG})" >&2
+      exit 1
+    fi
+  fi
+
+  write_state \
+    "${next_vite_pid}" \
+    "${PARSER_STARTED:-0}" \
+    "${next_convex_pid}" \
+    "${next_convex_url}" \
+    "${TUNNEL_STARTED:-0}" \
+    "${STACK_MODE}" \
+    "${ACTIVE_ORIGIN}" \
+    "${PARSER_RUNTIME_MODE}" \
+    "${PARSER_RELOAD:-0}" \
+    "${PARSER_OCR:-auto}" \
+    "${CONVEX_MODE:-cloud}" \
+    "${UI_STARTED:-0}" \
+    "${current_env_hash}" \
+    "${current_convex_binding_hash}"
+
+  echo "[run] reload-env: refreshed ${STACK_MODE} without Docker rebuild"
+}
+
 # ===== Probes =====
 probe_edge() {
   local FILE="${1:-}"
@@ -877,6 +1130,7 @@ up() {
   local USE_LOCAL_CONVEX=0
   local RUNTIME_MODE="${PARSER_RUNTIME_MODE}"
   local PARSER_RELOAD="0"
+  local INTERNAL_TUNNEL_STACK=0
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -888,6 +1142,7 @@ up() {
       --workspace-mount) RUNTIME_MODE="workspace"; shift;;
       --image-runtime) RUNTIME_MODE="image"; shift;;
       --parser-reload) PARSER_RELOAD="1"; shift;;
+      --tunnel-stack) INTERNAL_TUNNEL_STACK=1; shift;;
       --rebuild|--force-rebuild) FORCE_REBUILD="true"; shift;;
       --ocr)          OCR="${2:-auto}"; shift 2;;
       --doctr)        OCR="doctr"; shift;;
@@ -901,6 +1156,47 @@ up() {
     echo "[run] ERROR: parser runtime mode must be image or workspace" >&2
     exit 2
   fi
+  if [[ "${USE_LOCAL_ORIGIN}" -eq 1 && "${USE_EDGE_ORIGIN}" -eq 1 ]]; then
+    echo "[run] ERROR: choose one of --local-origin or --edge-origin" >&2
+    exit 2
+  fi
+
+  local ACTIVE_ORIGIN=""
+  if [[ "${USE_LOCAL_ORIGIN}" -eq 1 ]]; then
+    ACTIVE_ORIGIN="http://127.0.0.1:8001"
+  else
+    ACTIVE_ORIGIN="$(normalize_origin "${PARSER_ORIGIN}")"
+  fi
+
+  local TARGET_STACK_MODE="parser-only"
+  if [[ "${START_UI}" -eq 1 ]]; then
+    if [[ "${INTERNAL_TUNNEL_STACK}" -eq 1 ]]; then
+      TARGET_STACK_MODE="tunnel"
+    elif [[ "${USE_LOCAL_CONVEX}" -eq 1 && "${USE_LOCAL_ORIGIN}" -eq 1 && "${RUNTIME_MODE}" == "workspace" && "${PARSER_RELOAD}" == "1" ]]; then
+      TARGET_STACK_MODE="local-fast"
+    elif [[ "${USE_LOCAL_CONVEX}" -eq 1 ]]; then
+      TARGET_STACK_MODE="local-convex"
+    elif [[ "${USE_LOCAL_ORIGIN}" -eq 1 ]]; then
+      TARGET_STACK_MODE="local"
+    else
+      TARGET_STACK_MODE="up"
+    fi
+  elif [[ "${RUNTIME_MODE}" == "workspace" && "${PARSER_RELOAD}" == "1" ]]; then
+    TARGET_STACK_MODE="parser-dev"
+  fi
+
+  if handle_existing_stack_request \
+    "${TARGET_STACK_MODE}" \
+    "${ACTIVE_ORIGIN}" \
+    "${RUNTIME_MODE}" \
+    "${PARSER_RELOAD}" \
+    "${OCR}" \
+    "$( [[ "${USE_LOCAL_CONVEX}" -eq 1 ]] && echo local || echo cloud )" \
+    "$( [[ "${START_UI}" -eq 1 ]] && echo 1 || echo 0 )" \
+    "$( [[ "${INTERNAL_TUNNEL_STACK}" -eq 1 ]] && echo 1 || echo 0 )"; then
+    return 0
+  fi
+
   if [[ "${RUNTIME_MODE}" == "image" ]]; then
     if [[ "$(to_bool "${FORCE_REBUILD}")" == "true" ]]; then
       build_runtime_image
@@ -917,17 +1213,6 @@ up() {
 
   # Start local parser (even if FE points to edge; useful for local testing)
   start_parser "${OCR}" "${RUNTIME_MODE}" "${PARSER_RELOAD}"
-
-  # Decide FE origin
-  local ACTIVE_ORIGIN
-  if [[ "${USE_LOCAL_ORIGIN}" -eq 1 && "${USE_EDGE_ORIGIN}" -eq 1 ]]; then
-    echo "[run] ERROR: choose one of --local-origin or --edge-origin" >&2; exit 2
-  fi
-  if [[ "${USE_LOCAL_ORIGIN}" -eq 1 ]]; then
-    ACTIVE_ORIGIN="http://127.0.0.1:8001"
-  else
-    ACTIVE_ORIGIN="$(normalize_origin "${PARSER_ORIGIN}")"
-  fi
 
   # Optionally start Vite
   local VPID=""
@@ -952,22 +1237,26 @@ up() {
     fi
   fi
 
-  local stack_mode="parser-only"
-  if [[ "${START_UI}" -eq 1 ]]; then
-    if [[ "${USE_LOCAL_CONVEX}" -eq 1 && "${USE_LOCAL_ORIGIN}" -eq 1 && "${RUNTIME_MODE}" == "workspace" && "${PARSER_RELOAD}" == "1" ]]; then
-      stack_mode="local-fast"
-    elif [[ "${USE_LOCAL_CONVEX}" -eq 1 ]]; then
-      stack_mode="local-convex"
-    elif [[ "${USE_LOCAL_ORIGIN}" -eq 1 ]]; then
-      stack_mode="local"
-    else
-      stack_mode="up"
-    fi
-  elif [[ "${RUNTIME_MODE}" == "workspace" && "${PARSER_RELOAD}" == "1" ]]; then
-    stack_mode="parser-dev"
+  local stack_mode="${TARGET_STACK_MODE}"
+  local tunnel_started="0"
+  if [[ "${INTERNAL_TUNNEL_STACK}" -eq 1 ]]; then
+    start_tunnel
+    tunnel_started="1"
   fi
 
-  write_state "${VPID}" "1" "${CPID}" "${CURL}" "0" "${stack_mode}"
+  write_current_state \
+    "${VPID}" \
+    "1" \
+    "${CPID}" \
+    "${CURL}" \
+    "${tunnel_started}" \
+    "${stack_mode}" \
+    "${ACTIVE_ORIGIN}" \
+    "${RUNTIME_MODE}" \
+    "${PARSER_RELOAD}" \
+    "${OCR}" \
+    "$( [[ "${USE_LOCAL_CONVEX}" -eq 1 ]] && echo local || echo cloud )" \
+    "$( [[ "${START_UI}" -eq 1 ]] && echo 1 || echo 0 )"
   echo "----------------- Dev Stack -----------------"
   echo "Mode: ${stack_mode}"
   echo "FE origin: ${ACTIVE_ORIGIN}"
@@ -980,6 +1269,9 @@ up() {
     if [[ "${USE_LOCAL_ORIGIN}" -eq 1 ]]; then
       echo "NOTE: local parser origin is set in Vite, but structured upload actions still follow the configured Convex backend/env."
     fi
+  fi
+  if [[ "${tunnel_started}" == "1" ]]; then
+    echo "Tunnel: active via ${PARSER_ORIGIN}"
   fi
   echo "Vite: http://localhost:${VITE_PORT} (log: ${VITE_LOG})"
   echo "---------------------------------------------"
@@ -1030,12 +1322,7 @@ local_fast_stack() {
 }
 
 tunnel_stack() {
-  up --ui --edge-origin --cloud-convex "$@"
-  local VITE_PID=""; local PARSER_STARTED="0"; local CONVEX_PID=""; local CONVEX_URL=""; local TUNNEL_STARTED="0"; local STACK_MODE=""
-  read_state
-  start_tunnel
-  write_state "${VITE_PID:-}" "${PARSER_STARTED:-1}" "${CONVEX_PID:-}" "${CONVEX_URL:-}" "1" "tunnel"
-  echo "[run] tunnel: cloudflared active via ${PARSER_ORIGIN}"
+  up --tunnel-stack --ui --edge-origin --cloud-convex "$@"
 }
 
 parser_dev_stack() {
@@ -1050,9 +1337,13 @@ parser_dev_stack() {
     esac
   done
 
+  if handle_existing_stack_request "parser-dev" "" "workspace" "1" "${OCR}" "cloud" "0" "0"; then
+    return 0
+  fi
+
   ensure_runtime_image_exists
   start_parser "${OCR}" "workspace" "1"
-  write_state "" "1" "" "" "0" "parser-dev"
+  write_current_state "" "1" "" "" "0" "parser-dev" "" "workspace" "1" "${OCR}" "cloud" "0"
   echo "----------------- Parser Dev ----------------"
   echo "Parser local: OK (http://127.0.0.1:8001, runtime=workspace)"
   echo "Mode: dev-only Python parser hacking with workspace mount"
@@ -1093,7 +1384,7 @@ rebuild_docker_stack() {
       ;;
     *)
       start_parser "auto" "image"
-      write_state "" "1" "" "" "0" "parser-only"
+      write_current_state "" "1" "" "" "0" "parser-only" "" "image" "0" "auto" "cloud" "0"
       ;;
   esac
 
@@ -1133,6 +1424,7 @@ usage:
   ./run.sh local-convex [--ocr auto|doctr|paddle|disabled]
   ./run.sh tunnel [--ocr auto|doctr|paddle|disabled]
   ./run.sh parser-dev [--ocr auto|doctr|paddle|disabled]
+  ./run.sh reload-env
   ./run.sh rebuild-docker
   ./run.sh down
   ./run.sh reset
@@ -1150,6 +1442,7 @@ notes:
 - local = local parser + export-capable image runtime + Vite pointed at http://127.0.0.1:8001.
 - local-convex = legacy alias for local-fast.
 - parser-dev = parser-only / advanced workspace-mounted parser with autoreload; fast Python iteration, not stable runtime validation.
+- reload-env = restart-only refresh for parser/Vite/local Convex/tunnel after env changes, without rebuilding the Docker image.
 - rebuild-docker = explicit rebuild for parser/export Docker runtime, then clean restart + readiness checks.
 - down stops only the processes/containers tracked as started by run.sh and keeps images/caches intact.
 - reset does down plus stale process/container cleanup and clears tmp/dev-stack state and stale temp logs.
@@ -1173,6 +1466,7 @@ case "${CMD}" in
   local-convex) local_convex_stack "$@";;
   tunnel) tunnel_stack "$@";;
   parser-dev) parser_dev_stack "$@";;
+  reload-env) reload_env_stack;;
   rebuild-docker) rebuild_docker_stack;;
   up) up "$@";;
   down) down;;

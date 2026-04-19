@@ -5,6 +5,7 @@
    ```bash
    ./run.sh up --ui
    ```
+   After editing `.env.local`, use `./run.sh reload-env` or rerun the same `./run.sh ...` stack command. `./run.sh rebuild-docker` is only for Dockerfile or runtime dependency changes.
 3. Probe the deployed parser:
    ```bash
    cd my-app
