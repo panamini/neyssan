@@ -1,0 +1,145 @@
+import React from "react";
+
+import { A4_PAGE_HEIGHT_PX, A4_PAGE_WIDTH_PX } from "../../../lib/document-stage";
+import { normalizeResumePreviewTokens } from "../../../lib/layout/documentTokenNormalizer";
+import {
+  getResumeTemplateDefinition,
+  type ResumeTemplateId,
+} from "../../../lib/layout/resumeTemplates";
+import {
+  serializeActiveResumePreviewDecorVars,
+  serializeResumePreviewVars,
+} from "../../../lib/layout/documentTokenSerializers";
+import { planWorkshopResumePages } from "../../../lib/resume/resumePagination";
+import type { DocumentStageLayout } from "../../../hooks/use-document-stage-layout";
+import type { ResumeActiveTarget } from "../resumeLinking";
+import type { VerbatiStylePreset } from "../types";
+import ResumeOneColAtsPage from "./ResumeOneColAtsPage";
+import type { ResumeData } from "./resume.types";
+
+export const WORKSHOP_TEMPLATE_RENDERER_ID = "workshop_resume_onecol_ats";
+export const RESUME_TEMPLATE_PAGE_GAP_PX = 24;
+
+type ResumeTemplateRendererProps = {
+  data: ResumeData;
+  stylePreset: VerbatiStylePreset;
+  resumeTemplateId: ResumeTemplateId;
+  activeTarget?: ResumeActiveTarget | null;
+  stageLayout?: DocumentStageLayout;
+  onStablePageCountChange?: ((pageCount: number) => void) | undefined;
+};
+
+function buildTemplatePreviewVars(
+  resumeTemplateId: ResumeTemplateId,
+  stylePreset: VerbatiStylePreset,
+) {
+  const templateDefinition = getResumeTemplateDefinition(resumeTemplateId);
+  const previewTokens = normalizeResumePreviewTokens({
+    resumeTemplateId,
+    stylePreset,
+  });
+
+  return {
+    ...serializeResumePreviewVars(previewTokens),
+    ...serializeActiveResumePreviewDecorVars({
+      variantId: templateDefinition.decorVariantId,
+      tokens: previewTokens,
+    }),
+  };
+}
+
+export function getResumeTemplateCanvasHeight(args: {
+  pageCount: number;
+  pageHeightPx: number;
+}) {
+  return (
+    args.pageCount * args.pageHeightPx +
+    Math.max(0, args.pageCount - 1) * RESUME_TEMPLATE_PAGE_GAP_PX
+  );
+}
+
+export function ResumeTemplateRenderer({
+  data,
+  stylePreset,
+  resumeTemplateId,
+  activeTarget = null,
+  stageLayout,
+  onStablePageCountChange,
+}: ResumeTemplateRendererProps) {
+  const templateDefinition = getResumeTemplateDefinition(resumeTemplateId);
+  const plan = React.useMemo(
+    () =>
+      planWorkshopResumePages({
+        data,
+        template: templateDefinition,
+      }),
+    [data, templateDefinition],
+  );
+  const previewVars = React.useMemo(
+    () => buildTemplatePreviewVars(resumeTemplateId, stylePreset),
+    [resumeTemplateId, stylePreset],
+  );
+  const pageWidthPx = stageLayout?.pageWidth ?? A4_PAGE_WIDTH_PX;
+  const pageHeightPx = stageLayout?.pageHeight ?? A4_PAGE_HEIGHT_PX;
+
+  React.useEffect(() => {
+    if (!onStablePageCountChange) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      onStablePageCountChange(plan.pageCount);
+    }, 40);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [onStablePageCountChange, plan.pageCount]);
+
+  if (
+    resumeTemplateId !== WORKSHOP_TEMPLATE_RENDERER_ID ||
+    !templateDefinition.supportsPlanner
+  ) {
+    return null;
+  }
+
+  return (
+    <div
+      data-testid="resume-template-renderer"
+      style={{
+        ...previewVars,
+        width: `${pageWidthPx}px`,
+        minHeight: `${getResumeTemplateCanvasHeight({
+          pageCount: plan.pageCount,
+          pageHeightPx,
+        })}px`,
+        display: "grid",
+        gap: `${RESUME_TEMPLATE_PAGE_GAP_PX}px`,
+        alignContent: "start",
+      }}
+    >
+      {plan.pages.map((page) => (
+        <div
+          key={`workshop-page-${page.index + 1}`}
+          style={{
+            width: `${pageWidthPx}px`,
+            minHeight: `${pageHeightPx}px`,
+            boxSizing: "border-box",
+            background: "var(--paper)",
+            boxShadow:
+              "0 1px 2px rgba(20, 20, 20, 0.06), 0 18px 36px rgba(20, 20, 20, 0.08)",
+          }}
+        >
+          <ResumeOneColAtsPage
+            data={data}
+            page={page}
+            template={templateDefinition}
+            activeTarget={activeTarget}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export default ResumeTemplateRenderer;
