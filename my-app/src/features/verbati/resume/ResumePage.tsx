@@ -3,6 +3,10 @@ import { X } from "@/lib/icons";
 import "./resume-preview.css";
 
 import { resumeLayoutSpec } from "./resume-layout.spec";
+import {
+  getResumeTemplateId,
+  resolveVerbatiStyle,
+} from "../style";
 import type { ResumeData, ResumeLayoutVariantId } from "./resume.types";
 import {
   matchesResumeActiveTarget,
@@ -19,6 +23,7 @@ import {
   A4_PAGE_WIDTH_PX,
 } from "../../../lib/document-stage";
 import { normalizeResumePreviewTokens } from "../../../lib/layout/documentTokenNormalizer";
+import { getResumeTemplateDefinition } from "../../../lib/layout/resumeTemplates";
 import {
   serializeActiveResumePreviewDecorVars,
   serializeResumePreviewVars,
@@ -615,11 +620,21 @@ function buildPageVars(
   variant: ResumeVariant,
   stylePreset?: VerbatiStylePreset | null,
 ): React.CSSProperties {
-  const canonical = normalizeResumePreviewTokens(variant, stylePreset);
+  const normalizedStyle = resolveVerbatiStyle(stylePreset ?? null);
+  const templateDefinition = getResumeTemplateDefinition(
+    getResumeTemplateId(normalizedStyle),
+  );
+  const canonical = normalizeResumePreviewTokens({
+    resumeTemplateId: templateDefinition.id,
+    stylePreset: normalizedStyle,
+  });
 
   return {
     ...serializeResumePreviewVars(canonical),
-    ...serializeActiveResumePreviewDecorVars(canonical, variant.id),
+    ...serializeActiveResumePreviewDecorVars(
+      canonical,
+      templateDefinition.decorVariantId,
+    ),
   } as React.CSSProperties;
 }
 
