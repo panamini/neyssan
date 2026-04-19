@@ -178,8 +178,8 @@ export function ProjectsModal({
       >
         <div className="flex items-center justify-between px-4 py-3 border-b [border-color:var(--color-border)]">
           <div>
-            <h2 className="text-lg font-semibold">Edit projects</h2>
-            <p className="text-sm [color:var(--tm2)]">
+            <h2 className="dasti-modal-title">Edit projects</h2>
+            <p className="dasti-modal-subtitle">
               Keep projects as clean titled entries instead of raw nested blocks.
             </p>
           </div>
@@ -196,7 +196,13 @@ export function ProjectsModal({
 
         <div className="p-4 space-y-4">
           <div className="flex items-center justify-between gap-3">
-            <div className="text-sm [color:var(--tm2)]">
+            <div
+              style={{
+                fontSize: "var(--ts)",
+                lineHeight: "var(--ls)",
+                color: "var(--tm2)",
+              }}
+            >
               Title, stack/date meta, and one concise project summary.
             </div>
             <Button
@@ -243,7 +249,7 @@ export function ProjectsModal({
                     <span>Project Title</span>
                     <input
                       data-project-field="title"
-                      className="dasti-select dasti-select--sm"
+                      className="dasti-select"
                       value={String(row.title ?? row.name ?? "")}
                       onChange={(event) =>
                         updateRow(idx, { title: event.currentTarget.value })
@@ -255,7 +261,7 @@ export function ProjectsModal({
                     <span>Meta</span>
                     <input
                       data-project-field="meta"
-                      className="dasti-select dasti-select--sm"
+                      className="dasti-select"
                       value={String(row.meta ?? row.subtitle ?? "")}
                       onChange={(event) =>
                         updateRow(idx, { meta: event.currentTarget.value })
@@ -268,7 +274,7 @@ export function ProjectsModal({
                   <span>Description</span>
                   <textarea
                     data-project-field="description"
-                    className="min-h-[104px] dasti-select dasti-select--sm"
+                    className="min-h-[104px] dasti-select"
                     value={String(row.description ?? row.summary ?? "")}
                     onChange={(event) =>
                       updateRow(idx, { description: event.currentTarget.value })

@@ -322,8 +322,8 @@ export function AffiliationModal({
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Edit affiliations" className="dasti-modal" onClick={(event) => event.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3 border-b [border-color:var(--color-border)]">
           <div>
-            <h2 className="text-lg font-semibold">Edit affiliations</h2>
-            <p className="text-sm [color:var(--tm2)]">Track memberships, associations, dates, and notes without turning them into job entries.</p>
+            <h2 className="dasti-modal-title">Edit affiliations</h2>
+            <p className="dasti-modal-subtitle">Track memberships, associations, dates, and notes without turning them into job entries.</p>
           </div>
           <button
             type="button"
@@ -338,7 +338,15 @@ export function AffiliationModal({
 
         <div className="p-4 space-y-4">
           <div className="flex items-center justify-between gap-3">
-            <div className="text-sm [color:var(--tm2)]">Capture organizations and membership context clearly.</div>
+            <div
+              style={{
+                fontSize: "var(--ts)",
+                lineHeight: "var(--ls)",
+                color: "var(--tm2)",
+              }}
+            >
+              Capture organizations and membership context clearly.
+            </div>
             <Button type="button" onClick={() => setRows((current) => [...current, newAffiliationItem()])} variant="ghost" size="sm" ariaLabel="Add affiliation" className="gap-1">
               <Plus className="w-4 h-4" />
               Add
@@ -357,19 +365,19 @@ export function AffiliationModal({
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="grid gap-1 text-sm [color:var(--tm2)]">
                     <span>Organization</span>
-                    <input className="dasti-select dasti-select--sm" value={row.organizationName ?? ""} onChange={(event) => updateRow(idx, { organizationName: event.currentTarget.value })} placeholder="IEEE" />
+                    <input className="dasti-select" value={row.organizationName ?? ""} onChange={(event) => updateRow(idx, { organizationName: event.currentTarget.value })} placeholder="IEEE" />
                   </label>
                   <label className="grid gap-1 text-sm [color:var(--tm2)]">
                     <span>Membership / Role</span>
-                    <input className="dasti-select dasti-select--sm" value={row.roleOrMembershipType ?? ""} onChange={(event) => updateRow(idx, { roleOrMembershipType: event.currentTarget.value })} placeholder="Member" />
+                    <input className="dasti-select" value={row.roleOrMembershipType ?? ""} onChange={(event) => updateRow(idx, { roleOrMembershipType: event.currentTarget.value })} placeholder="Member" />
                   </label>
                   <label className="grid gap-1 text-sm [color:var(--tm2)]">
                     <span>Start Date</span>
-                    <input type="date" className="dasti-select dasti-select--sm" value={toDateInputValue(row.startDate)} onChange={(event) => updateRow(idx, { startDate: fromDateInputValue(event.currentTarget.value) })} />
+                    <input type="date" className="dasti-select" value={toDateInputValue(row.startDate)} onChange={(event) => updateRow(idx, { startDate: fromDateInputValue(event.currentTarget.value) })} />
                   </label>
                   <label className="grid gap-1 text-sm [color:var(--tm2)]">
                     <span>End Date</span>
-                    <input type="date" className="dasti-select dasti-select--sm" value={toDateInputValue(row.endDate)} onChange={(event) => updateRow(idx, { endDate: fromDateInputValue(event.currentTarget.value) ?? null })} disabled={Boolean(row.isCurrent)} />
+                    <input type="date" className="dasti-select" value={toDateInputValue(row.endDate)} onChange={(event) => updateRow(idx, { endDate: fromDateInputValue(event.currentTarget.value) ?? null })} disabled={Boolean(row.isCurrent)} />
                   </label>
                 </div>
                 <label className="inline-flex items-center gap-2 text-sm [color:var(--tm2)]">
@@ -378,7 +386,7 @@ export function AffiliationModal({
                 </label>
                 <label className="grid gap-1 text-sm [color:var(--tm2)]">
                   <span>Notes</span>
-                  <textarea className="min-h-[88px] dasti-select dasti-select--sm" value={String(row.notes ?? "")} onChange={(event) => updateRow(idx, { notes: event.currentTarget.value })} placeholder="Professional membership, committee, or chapter details" />
+                  <textarea className="min-h-[88px] dasti-select" value={String(row.notes ?? "")} onChange={(event) => updateRow(idx, { notes: event.currentTarget.value })} placeholder="Professional membership, committee, or chapter details" />
                 </label>
               </div>
             ))}

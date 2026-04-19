@@ -81,6 +81,29 @@ function roundPx(value: number) {
   return Math.round(value * 100) / 100;
 }
 
+function buildResumeDataSignature(data: ResumeData) {
+  return [
+    data.name,
+    data.title,
+    data.summary,
+    data.metadata.length,
+    data.contact.length,
+    data.skills.length,
+    data.skillItems.length,
+    data.languages.length,
+    data.experience.length,
+    data.projects.length,
+    data.education.length,
+    data.achievements?.length ?? 0,
+    data.achievementItems.length,
+    data.hobbies.length,
+    data.hobbyItems.length,
+    data.certifications.length,
+    data.affiliations.length,
+    data.textSections.length,
+  ].join(":");
+}
+
 function getLayoutPresetForRenderer(
   variantId: ResumeLayoutVariantId,
 ): VerbatiLayoutPreset | null {
@@ -106,6 +129,7 @@ export function VerbatiResumePreview({
   const previewRootRef = React.useRef<HTMLDivElement | null>(null);
   const resumeViewportRef = React.useRef<HTMLDivElement | null>(null);
   const [stableWorkshopPageCount, setStableWorkshopPageCount] = React.useState(1);
+  const dataSignature = React.useMemo(() => buildResumeDataSignature(data), [data]);
   const themeVars = React.useMemo(
     () => buildVerbatiThemeVars(stylePreset),
     [stylePreset],
@@ -219,7 +243,7 @@ export function VerbatiResumePreview({
   const { attachViewport: attachCenterViewport } = useDocumentViewportCentering(
     {
       enabled: shouldCenterViewport,
-      layoutKey: `${userZoom}:${stageLayout.stageWidth}:${stageLayout.stageHeight}:${stageLayout.pageWidth}:${canvasHeightPx}:${effectivePageCount}:${stylePreset.layout}:${rendererVariantId}:${data.name}:${data.title}`,
+      layoutKey: `${userZoom}:${stageLayout.stageWidth}:${stageLayout.stageHeight}:${stageLayout.pageWidth}:${canvasHeightPx}:${effectivePageCount}:${stylePreset.layout}:${rendererVariantId}:${dataSignature}`,
       recenterKey: fitRequestCount,
       defaultCenterX: isWorkspaceMode ? 0.5 : 0.5,
       defaultCenterY:
@@ -334,13 +358,13 @@ export function VerbatiResumePreview({
     return () => {
       cancelled = true;
     };
-  }, [compareLayouts, rendererVariantId, stylePreset, themeVars]);
+  }, [compareLayouts, dataSignature, rendererVariantId, stylePreset, themeVars]);
 
   if (compareLayouts) {
     const comparisonVariantIds = comparisonLayouts.map(
       (layout) => resolveLegacyResumeRendererVariantId(layout) ?? "swissminima",
     );
-    const fitToken = `${stylePreset.layout}:${stylePreset.typography}:${accentToken}:compare:${data.name}:${data.title}:${data.summary.length}:${data.experience.length}:${data.education.length}:${data.skills.length}:${data.languages.length}:${data.projects.length}:${data.achievements?.length ?? 0}`;
+    const fitToken = `${stylePreset.layout}:${stylePreset.typography}:${accentToken}:compare:${dataSignature}`;
 
     return (
       <div
@@ -375,7 +399,7 @@ export function VerbatiResumePreview({
     );
   }
 
-  const fitToken = `${stylePreset.layout}:${stylePreset.typography}:${accentToken}:single:${data.name}:${data.title}:${data.summary.length}:${data.experience.length}:${data.education.length}:${data.skills.length}:${data.languages.length}:${data.projects.length}:${data.achievements?.length ?? 0}`;
+  const fitToken = `${stylePreset.layout}:${stylePreset.typography}:${accentToken}:single:${dataSignature}`;
 
   const workspaceZoomControls = isWorkspaceMode ? (
     <div
