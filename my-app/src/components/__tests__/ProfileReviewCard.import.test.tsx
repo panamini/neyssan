@@ -12,6 +12,7 @@ const renameCvMock = vi.fn();
 const exportCvMock = vi.fn();
 const cvLibraryState = {
   currentCv: null as Record<string, unknown> | null,
+  isLibraryHydrated: true,
 };
 
 vi.mock("../../../convex/_generated/api", () => ({
@@ -52,6 +53,7 @@ vi.mock("../../contexts/CvLibraryContext", () => ({
     currentCvId: null,
     loadCv: vi.fn(),
     isLoading: false,
+    isLibraryHydrated: cvLibraryState.isLibraryHydrated,
     isDirty: false,
     reorderSections: reorderSectionsMock,
     addSection: vi.fn(),
@@ -76,6 +78,7 @@ describe("ProfileReviewCard import", () => {
     renameCvMock.mockReset();
     exportCvMock.mockReset();
     cvLibraryState.currentCv = null;
+    cvLibraryState.isLibraryHydrated = true;
     Object.defineProperty(window, "__CV_EDITOR_DEBUG__", {
       configurable: true,
       writable: true,
@@ -153,6 +156,17 @@ describe("ProfileReviewCard import", () => {
         expect.objectContaining({ type: "summary" }),
       ]),
     );
+  });
+
+  it("does not render the empty-state shell before the library hydrates", () => {
+    cvLibraryState.currentCv = null;
+    cvLibraryState.isLibraryHydrated = false;
+
+    render(<ProfileReviewCard />);
+
+    expect(
+      screen.queryByText(/Import your existing CV or start from scratch/i),
+    ).not.toBeInTheDocument();
   });
 
   it("consumes the same resume link intent request only once", async () => {

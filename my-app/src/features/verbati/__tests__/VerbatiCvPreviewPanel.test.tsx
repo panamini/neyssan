@@ -5,6 +5,7 @@ import { VerbatiCvPreviewPanel } from "../VerbatiCvPreviewPanel";
 
 const mockImportCv = vi.fn().mockResolvedValue(undefined);
 const mockHasRenderableResumeData = vi.fn(() => true);
+let mockIsLibraryHydrated = true;
 const mockMapCvDocumentToResumeData = vi.fn(() => ({
   name: "Robert Cooper",
   title: "Protection Guard",
@@ -51,6 +52,7 @@ vi.mock("../../../contexts/CvLibraryContext", () => ({
   useCvLibrary: () => ({
     currentCv: mockCurrentCv,
     importCv: mockImportCv,
+    isLibraryHydrated: mockIsLibraryHydrated,
   }),
 }));
 
@@ -181,6 +183,7 @@ describe("VerbatiCvPreviewPanel", () => {
         },
       ],
     };
+    mockIsLibraryHydrated = true;
     resumePreviewPropsSpy.mockClear();
   });
 
@@ -294,12 +297,16 @@ describe("VerbatiCvPreviewPanel", () => {
 
   it("does not flash the sparse render warning before an active CV is loaded", () => {
     mockCurrentCv = null as never;
+    mockIsLibraryHydrated = false;
     mockHasRenderableResumeData.mockReturnValue(false);
 
     render(<VerbatiCvPreviewPanel hostMode="workspace" />);
 
     expect(
       screen.queryByText(/too sparse for a faithful render/i),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Preview title: Senior Product Designer"),
     ).not.toBeInTheDocument();
   });
 
