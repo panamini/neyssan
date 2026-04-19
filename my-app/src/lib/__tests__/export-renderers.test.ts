@@ -278,6 +278,34 @@ describe("export-renderers", () => {
     expect(swissStyledDocument.querySelector(".robial-sidebar")).toBeTruthy();
   });
 
+  it("pins styled non-workshop resume template ids onto the protected Robial split export baseline", () => {
+    const swissTemplateStyledDocument = parseExportHtml(
+      renderResumeStyledExportDocument({
+        data: {
+          ...resumeFixture,
+          resumeTemplateId: "swiss_resume_legacy",
+        },
+        stylePreset: {
+          layout: "swiss",
+          typography: "quiet-editorial",
+          palette: "pierre",
+        },
+      }),
+    );
+
+    const swissTemplateStyledCss = getInlineStyles(swissTemplateStyledDocument);
+
+    expect(swissTemplateStyledDocument.body.className).toContain(
+      "resume-layout--two-column",
+    );
+    expect(swissTemplateStyledDocument.body.className).toContain(
+      "resume-shell--split",
+    );
+    expect(swissTemplateStyledDocument.querySelector(".robial-sidebar")).toBeTruthy();
+    expect(swissTemplateStyledCss).toContain("--page-sidebar: 52mm;");
+    expect(swissTemplateStyledCss).toContain("--flow-reading-measure: 88mm;");
+  });
+
   it("renders proposal ATS as a one-column export and styled templates as Robial-safe structural variants", () => {
     const atsDocument = parseExportHtml(
       renderProposalAtsExportDocument(proposalFixture, {

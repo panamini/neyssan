@@ -102,4 +102,33 @@ describe("resumePagination", () => {
       result.committedPages,
     );
   });
+
+  it("keeps borderline A4 workshop content on the first page instead of creating an orphan tail page", () => {
+    const result = planWorkshopResumePages({
+      data: {
+        ...resumeMock,
+        metadata: resumeMock.metadata.slice(0, 1),
+        contact: resumeMock.contact.slice(0, 2),
+        experience: resumeMock.experience.slice(0, 3),
+        education: resumeMock.education.slice(0, 1),
+        skillItems: resumeMock.skillItems.slice(0, 4),
+        languages: resumeMock.languages.slice(0, 3),
+        projects: [],
+        achievements: [],
+        achievementItems: [],
+        certifications: [],
+        affiliations: [],
+        hobbyItems: [],
+        hobbies: [],
+        textSections: [],
+      },
+      template: workshopTemplate,
+    });
+
+    expect(result.pageCount).toBe(1);
+    expect(result.pages).toHaveLength(1);
+    expect(result.pages[0]?.sections.map((section) => section.key)).toEqual(
+      expect.arrayContaining(["profile", "summary", "experience", "languages"]),
+    );
+  });
 });

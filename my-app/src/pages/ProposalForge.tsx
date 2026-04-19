@@ -102,6 +102,7 @@ import { resolveProposalRenderState } from "../lib/proposal-render-state";
 import { buildProposalSourceSummary } from "../lib/proposal-source-summary";
 import { formatUiDate } from "../lib/ui-date";
 import {
+  buildVerbatiStyleFromProposalSettings,
   resolveProposalStyleChoice,
   resolveProposalStyleChoiceFromRenderState,
   resolveProposalStyleRenderState,
@@ -1234,23 +1235,36 @@ export function ProposalForge(): JSX.Element {
   const latestTraceSnapshotRef = React.useRef<Record<string, unknown> | null>(null);
   const appliedSettingsAppearanceDefaultsRef = React.useRef(false);
   const canPersistProposalState = isConvexAuthenticated && !isConvexAuthLoading;
+  const settingsVerbatiStyle = React.useMemo(
+    () =>
+      currentProposalSettings
+        ? buildVerbatiStyleFromProposalSettings({
+            verbatiStyle: currentProposalSettings.verbatiStyle ?? null,
+            styleChoice: currentProposalSettings.styleChoice,
+            fontPairId: currentProposalSettings.fontPairId,
+            paletteOverride: currentProposalSettings.paletteOverride ?? null,
+            accentHex: currentProposalSettings.accentHex ?? null,
+          })
+        : null,
+    [currentProposalSettings],
+  );
+  const settingsTemplateId = React.useMemo(
+    () =>
+      currentProposalSettings?.templateId ??
+      (settingsVerbatiStyle
+        ? getProposalTwinTemplateId(settingsVerbatiStyle)
+        : null),
+    [currentProposalSettings?.templateId, settingsVerbatiStyle],
+  );
   const settingsStyleChoice = React.useMemo(
     () =>
-      normalizeProposalSettingsStyleChoice(currentProposalSettings?.styleChoice),
-    [currentProposalSettings?.styleChoice],
-  );
-  const settingsAccentHex = React.useMemo(
-    () => normalizeProposalAccentHex(currentProposalSettings?.accentHex),
-    [currentProposalSettings?.accentHex],
-  );
-  const settingsPaletteOverride = React.useMemo(
-    () =>
-      settingsAccentHex
-        ? null
-        : isProposalPaletteId(currentProposalSettings?.paletteOverride)
-          ? currentProposalSettings.paletteOverride
-          : null,
-    [currentProposalSettings?.paletteOverride, settingsAccentHex],
+      normalizeProposalSettingsStyleChoice(
+        resolveProposalStyleChoiceFromRenderState({
+          templateId: settingsTemplateId ?? undefined,
+          stylePreset: settingsVerbatiStyle ?? undefined,
+        }) ?? currentProposalSettings?.styleChoice,
+      ),
+    [currentProposalSettings?.styleChoice, settingsTemplateId, settingsVerbatiStyle],
   );
 
   const showConvexAuthRequiredToast = React.useCallback(
@@ -1590,6 +1604,21 @@ export function ProposalForge(): JSX.Element {
 
   const resolvedProposalLocalStyle = React.useMemo(
     () => {
+      if (settingsVerbatiStyle) {
+        const settingsRenderState = resolveProposalStyleRenderState({
+          choice: settingsStyleChoice,
+          jobTitle: composePreviewValues?.jobTitle ?? proposalDocumentTitle,
+          jobDescription: composePreviewValues?.jobDescription,
+        });
+
+        return {
+          ...settingsRenderState,
+          stylePreset: settingsVerbatiStyle,
+          templateId:
+            settingsTemplateId ?? getProposalTwinTemplateId(settingsVerbatiStyle),
+        };
+      }
+
       const baseRenderState = resolveProposalStyleRenderState({
         choice: proposalStyleChoice,
         jobTitle: composePreviewValues?.jobTitle ?? proposalDocumentTitle,
@@ -1612,6 +1641,9 @@ export function ProposalForge(): JSX.Element {
       currentProposalSettings?.fontPairId,
       proposalDocumentTitle,
       proposalStyleChoice,
+      settingsStyleChoice,
+      settingsTemplateId,
+      settingsVerbatiStyle,
     ],
   );
 
@@ -1640,16 +1672,19 @@ export function ProposalForge(): JSX.Element {
       return;
     }
 
+    const nextSettingsStyle = settingsVerbatiStyle ?? resolveVerbatiStyle(undefined);
     setProposalStyleChoice(settingsStyleChoice);
-    setProposalPaletteOverride(settingsPaletteOverride);
-    setProposalCustomAccentHex(settingsAccentHex);
+    setProposalStylePreset(nextSettingsStyle);
+    setProposalTemplateId(settingsTemplateId ?? getProposalTwinTemplateId(nextSettingsStyle));
+    setProposalPaletteOverride(null);
+    setProposalCustomAccentHex(null);
     appliedSettingsAppearanceDefaultsRef.current = true;
   }, [
     activeCvProposalStylePreset,
     currentProposalSettings,
-    settingsAccentHex,
-    settingsPaletteOverride,
     settingsStyleChoice,
+    settingsTemplateId,
+    settingsVerbatiStyle,
     storedOutputDraft?.customAccentHex,
     storedOutputDraft?.paletteOverride,
     storedOutputDraft?.proposalStyleChoice,
@@ -3316,16 +3351,13 @@ export function ProposalForge(): JSX.Element {
       ? "inherit_cv"
       : "proposal_local";
     const nextStyleChoice = activeCvProposalStylePreset ? "auto" : settingsStyleChoice;
-    const nextResolvedLocalStyle = resolveProposalStyleRenderState({
-      choice: nextStyleChoice,
-    });
     const nextStylePreset = activeCvProposalStylePreset
       ? activeCvProposalStylePreset
-      : applyProposalTypographyPreference({
-          stylePreset: nextResolvedLocalStyle.stylePreset,
-          fontPairId: currentProposalSettings?.fontPairId,
-        });
-    const nextTemplateId = getProposalTwinTemplateId(nextStylePreset);
+      : settingsVerbatiStyle ?? resolveVerbatiStyle(undefined);
+    const nextTemplateId =
+      activeCvProposalStylePreset
+        ? getProposalTwinTemplateId(nextStylePreset)
+        : settingsTemplateId ?? getProposalTwinTemplateId(nextStylePreset);
 
     setProposalContent(null);
     setLoading(false);
@@ -3342,8 +3374,8 @@ export function ProposalForge(): JSX.Element {
     setProposalStylePreset(nextStylePreset);
     setHasUserEditedStyle(false);
     setProposalWorkspaceStyle(null);
-    setProposalPaletteOverride(activeCvProposalStylePreset ? null : settingsPaletteOverride);
-    setProposalCustomAccentHex(activeCvProposalStylePreset ? null : settingsAccentHex);
+    setProposalPaletteOverride(null);
+    setProposalCustomAccentHex(null);
     setProposalApplicantName(defaultPreviewApplicantHeader.name || "");
     setProposalApplicantRole(defaultPreviewApplicantHeader.role || "");
     setProposalContactLine(defaultPreviewContactLine);
@@ -3382,14 +3414,13 @@ export function ProposalForge(): JSX.Element {
   }, [
     activeCvProposalStylePreset,
     cancelPendingComposeDraftSync,
-    currentProposalSettings?.fontPairId,
     currentProposalSettings?.savedVoicePreset,
     defaultPreviewApplicantHeader.name,
     defaultPreviewApplicantHeader.role,
     defaultPreviewContactLine,
-    settingsAccentHex,
-    settingsPaletteOverride,
     settingsStyleChoice,
+    settingsTemplateId,
+    settingsVerbatiStyle,
   ]);
 
   React.useEffect(() => {

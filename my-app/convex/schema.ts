@@ -72,6 +72,7 @@ const proposalCharacterLimitModeChoice = v.union(
 );
 
 const proposalVerbatiStyleChoice = v.object({
+  familyId: v.optional(v.string()),
   layout: v.string(),
   typography: v.string(),
   palette: v.string(),
@@ -222,6 +223,7 @@ export default defineSchema({
     }),
     proposalVoicePreset: v.optional(proposalVoicePresetChoice),
     proposalTemplateId: v.optional(proposalTemplateChoice),
+    proposalVerbatiStyle: v.optional(proposalVerbatiStyleChoice),
     proposalStyleChoice: v.optional(proposalStyleChoiceChoice),
     proposalPaletteOverride: v.optional(
       v.union(
@@ -238,26 +240,29 @@ export default defineSchema({
     proposalSourceMode: v.optional(proposalStyleLinkModeChoice),
     // Style preset slots (3-slot builder)
     proposalPreset1: v.optional(v.union(v.object({
-      fontPairId: v.union(v.string(), v.null()),
-      styleChoice: proposalStyleChoiceChoice,
-      paletteOverride: v.union(v.literal("sauge"), v.literal("ocre"), v.literal("pierre"), v.literal("bordeaux"), v.literal("encre"), v.null()),
-      accentHex: v.union(v.string(), v.null()),
+      verbatiStyle: v.optional(proposalVerbatiStyleChoice),
+      fontPairId: v.optional(v.union(v.string(), v.null())),
+      styleChoice: v.optional(proposalStyleChoiceChoice),
+      paletteOverride: v.optional(v.union(v.literal("sauge"), v.literal("ocre"), v.literal("pierre"), v.literal("bordeaux"), v.literal("encre"), v.null())),
+      accentHex: v.optional(v.union(v.string(), v.null())),
       voicePreset: v.union(proposalVoicePresetChoice, v.null()),
       name: v.optional(v.string()),
     }), v.null())),
     proposalPreset2: v.optional(v.union(v.object({
-      fontPairId: v.union(v.string(), v.null()),
-      styleChoice: proposalStyleChoiceChoice,
-      paletteOverride: v.union(v.literal("sauge"), v.literal("ocre"), v.literal("pierre"), v.literal("bordeaux"), v.literal("encre"), v.null()),
-      accentHex: v.union(v.string(), v.null()),
+      verbatiStyle: v.optional(proposalVerbatiStyleChoice),
+      fontPairId: v.optional(v.union(v.string(), v.null())),
+      styleChoice: v.optional(proposalStyleChoiceChoice),
+      paletteOverride: v.optional(v.union(v.literal("sauge"), v.literal("ocre"), v.literal("pierre"), v.literal("bordeaux"), v.literal("encre"), v.null())),
+      accentHex: v.optional(v.union(v.string(), v.null())),
       voicePreset: v.union(proposalVoicePresetChoice, v.null()),
       name: v.optional(v.string()),
     }), v.null())),
     proposalPreset3: v.optional(v.union(v.object({
-      fontPairId: v.union(v.string(), v.null()),
-      styleChoice: proposalStyleChoiceChoice,
-      paletteOverride: v.union(v.literal("sauge"), v.literal("ocre"), v.literal("pierre"), v.literal("bordeaux"), v.literal("encre"), v.null()),
-      accentHex: v.union(v.string(), v.null()),
+      verbatiStyle: v.optional(proposalVerbatiStyleChoice),
+      fontPairId: v.optional(v.union(v.string(), v.null())),
+      styleChoice: v.optional(proposalStyleChoiceChoice),
+      paletteOverride: v.optional(v.union(v.literal("sauge"), v.literal("ocre"), v.literal("pierre"), v.literal("bordeaux"), v.literal("encre"), v.null())),
+      accentHex: v.optional(v.union(v.string(), v.null())),
       voicePreset: v.union(proposalVoicePresetChoice, v.null()),
       name: v.optional(v.string()),
     }), v.null())),
