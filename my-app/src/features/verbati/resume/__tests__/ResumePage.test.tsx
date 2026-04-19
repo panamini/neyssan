@@ -1136,7 +1136,6 @@ describe("ResumePage", () => {
       measurementSpy.mockRestore();
     }
   });
-
   it("publishes the measured Swiss stack height instead of assuming full page-count height", async () => {
     const longSwissData: ResumeData = {
       ...resumeMock,
