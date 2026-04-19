@@ -51,12 +51,10 @@ function buildTemplatePreviewVars(
 export function getResumeTemplateCanvasHeight(args: {
   pageCount: number;
   pageHeightPx: number;
-  pageGapPx?: number;
 }) {
   return (
     args.pageCount * args.pageHeightPx +
-    Math.max(0, args.pageCount - 1) *
-      (args.pageGapPx ?? RESUME_TEMPLATE_PAGE_GAP_PX)
+    Math.max(0, args.pageCount - 1) * RESUME_TEMPLATE_PAGE_GAP_PX
   );
 }
 
@@ -96,7 +94,6 @@ export function ResumeTemplateRenderer({
       : 1;
   const shellPageWidthPx = stageLayout?.pageWidth ?? A4_PAGE_WIDTH_PX;
   const shellPageHeightPx = stageLayout?.pageHeight ?? A4_PAGE_HEIGHT_PX;
-  const shellPageGapPx = RESUME_TEMPLATE_PAGE_GAP_PX * previewScale;
   const lastCommittedPageCountRef = React.useRef<number | null>(null);
 
   React.useEffect(() => {
@@ -131,10 +128,9 @@ export function ResumeTemplateRenderer({
         minHeight: `${getResumeTemplateCanvasHeight({
           pageCount: plan.pageCount,
           pageHeightPx: shellPageHeightPx,
-          pageGapPx: shellPageGapPx,
         })}px`,
         display: "grid",
-        gap: `${shellPageGapPx}px`,
+        gap: `${RESUME_TEMPLATE_PAGE_GAP_PX}px`,
         alignContent: "start",
       }}
     >
