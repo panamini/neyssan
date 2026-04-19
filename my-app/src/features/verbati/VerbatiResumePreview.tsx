@@ -9,7 +9,6 @@ import { useDocumentStageLayout } from "../../hooks/use-document-stage-layout";
 import { useDocumentViewportCentering } from "../../hooks/use-document-viewport-centering";
 import ResumePage from "./resume/ResumePage";
 import ResumeTemplateRenderer, {
-  RESUME_TEMPLATE_PAGE_GAP_PX,
   WORKSHOP_TEMPLATE_RENDERER_ID,
   getResumeTemplateCanvasHeight,
 } from "./resume/ResumeTemplateRenderer";
@@ -18,6 +17,7 @@ import {
   getResumeTemplateId,
   resolveLegacyResumeRendererVariantId,
   resolveVerbatiAccentHex,
+  VERBATI_LAYOUT_TO_RENDERER,
   VERBATI_LAYOUT_OPTIONS,
 } from "./style";
 import type { ResumeData, ResumeLayoutVariantId } from "./resume/resume.types";
