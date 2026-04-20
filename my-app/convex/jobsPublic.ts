@@ -239,6 +239,122 @@ export const getById = query({
   },
 });
 
+export const listForUser = query({
+  args: {},
+  returns: v.array(
+    v.object({
+      id: v.string(),
+      title: v.string(),
+      company: v.string(),
+      sourceUrl: v.string(),
+      sourceDomain: v.string(),
+      sourceType: v.string(),
+      parseStatus: v.string(),
+      reviewState: v.string(),
+      status: v.string(),
+      importedAt: v.number(),
+      updatedAt: v.number(),
+      lastOpenedAt: v.number(),
+      lastActivityAt: v.number(),
+      linkedDocumentCount: v.number(),
+    }),
+  ),
+  handler: async (ctx) => {
+    const profile = await requireUserProfile(ctx);
+
+    const jobs = await ctx.db
+      .query("jobs")
+      .withIndex("by_user_updated", (q) => q.eq("userId", profile._id))
+      .order("desc")
+      .collect();
+
+    const proposals = await ctx.db
+      .query("proposals")
+      .withIndex("by_user", (q) => q.eq("userId", profile._id))
+      .collect();
+
+    const linkedProposalStats = new Map<
+      string,
+      { count: number; latestUpdatedAt: number }
+    >();
+
+    for (const proposal of proposals) {
+      const jobId = typeof proposal.jobId === "string" ? proposal.jobId : "";
+      if (!jobId) {
+        continue;
+      }
+
+      const current = linkedProposalStats.get(jobId) ?? {
+        count: 0,
+        latestUpdatedAt: 0,
+      };
+
+      linkedProposalStats.set(jobId, {
+        count: current.count + 1,
+        latestUpdatedAt: Math.max(
+          current.latestUpdatedAt,
+          proposal.updatedAt ?? proposal.createdAt ?? 0,
+        ),
+      });
+    }
+
+    return jobs
+      .filter((job) => job.archivedAt === null || job.archivedAt === undefined)
+      .map((job) => {
+        const stats = linkedProposalStats.get(String(job._id));
+        const lastActivityAt = Math.max(
+          job.updatedAt ?? 0,
+          job.lastOpenedAt ?? 0,
+          stats?.latestUpdatedAt ?? 0,
+        );
+
+        return {
+          id: String(job._id),
+          title: job.title,
+          company: job.company,
+          sourceUrl: job.sourceUrl,
+          sourceDomain: job.sourceDomain,
+          sourceType: job.sourceType,
+          parseStatus: job.parseStatus,
+          reviewState: job.reviewState,
+          status: job.status,
+          importedAt: job.importedAt,
+          updatedAt: job.updatedAt,
+          lastOpenedAt: job.lastOpenedAt,
+          lastActivityAt,
+          linkedDocumentCount: stats?.count ?? 0,
+        };
+      });
+  },
+});
+
+export const markOpened = mutation({
+  args: {
+    jobId: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const profile = await requireUserProfile(ctx);
+    const normalizedJobId = ctx.db.normalizeId("jobs", args.jobId);
+    if (!normalizedJobId) {
+      throw new Error("Invalid jobId");
+    }
+
+    const job = await ctx.db.get(normalizedJobId);
+    if (!job || String(job.userId) !== String(profile._id)) {
+      throw new Error("Job not found");
+    }
+
+    const now = Date.now();
+    await ctx.db.patch(normalizedJobId, {
+      lastOpenedAt: now,
+      updatedAt: now,
+    });
+
+    return null;
+  },
+});
+
 export const updateField = mutation({
   args: {
     jobId: v.string(),

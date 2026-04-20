@@ -23,14 +23,14 @@ type ProposalBriefLinkedProposal = {
 type ProposalBriefCardProps = {
   documentTitle: string;
   jobDescription: string;
-  onToggleBrief: () => void;
+  onToggleBrief?: () => void;
   variant?: "card" | "compact";
   sourceUrl?: string | null;
   sourcePlatform?: string | null;
   summaryText?: string | null;
   parseStatus?: string | null;
   trustState?: string | null;
-  linkedOutputCount?: number;
+  linkedDocumentCount?: number;
   linkedProposals?: ProposalBriefLinkedProposal[];
   reviewItems?: ProposalBriefReviewItem[];
   onApproveReviewItem?: (item: ProposalBriefReviewItem) => Promise<void> | void;
@@ -89,7 +89,7 @@ export function ProposalBriefCard({
   summaryText = null,
   parseStatus = null,
   trustState = null,
-  linkedOutputCount = 0,
+  linkedDocumentCount = 0,
   linkedProposals = [],
   reviewItems = [],
   onApproveReviewItem,
@@ -143,14 +143,16 @@ export function ProposalBriefCard({
             <h2 className="dasti-brief-card__document-title">
               {documentTitle || "Untitled Proposal"}
             </h2>
-            <button
-              type="button"
-              className="dasti-brief-card__dismiss"
-              onClick={onToggleBrief}
-              aria-label="Expand"
-            >
-              <ChevronDown size={14} strokeWidth={1.7} aria-hidden="true" />
-            </button>
+            {onToggleBrief ? (
+              <button
+                type="button"
+                className="dasti-brief-card__dismiss"
+                onClick={onToggleBrief}
+                aria-label="Expand"
+              >
+                <ChevronDown size={14} strokeWidth={1.7} aria-hidden="true" />
+              </button>
+            ) : null}
           </div>
           {sourceLabel ? (
             <div className="dasti-brief-card__source-row">
@@ -171,15 +173,20 @@ export function ProposalBriefCard({
               )}
             </div>
           ) : null}
-          {trustLabel || linkedOutputCount > 0 ? (
+          {trustLabel || linkedDocumentCount > 0 ? (
             <div className="dasti-brief-card__meta-row">
               {trustLabel ? (
                 <span className="dasti-brief-card__pill">{trustLabel}</span>
               ) : null}
-              {linkedOutputCount > 0 ? (
+              {trustLabel ? (
                 <span className="dasti-brief-card__meta-copy">
-                  {linkedOutputCount} linked proposal
-                  {linkedOutputCount === 1 ? "" : "s"}
+                  Review state: {trustLabel}
+                </span>
+              ) : null}
+              {linkedDocumentCount > 0 ? (
+                <span className="dasti-brief-card__meta-copy">
+                  {linkedDocumentCount} linked document
+                  {linkedDocumentCount === 1 ? "" : "s"}
                 </span>
               ) : null}
             </div>
@@ -190,6 +197,14 @@ export function ProposalBriefCard({
         <div className="dasti-brief-card__summary">
           <div className="dasti-brief-card__workspace">
             <div className="dasti-brief-card__review-column">
+              {trustLabel ? (
+                <div className="dasti-brief-card__summary-block">
+                  <div className="dasti-brief-card__summary-label">
+                    Review state
+                  </div>
+                  <p className="dasti-brief-card__summary-copy">{trustLabel}</p>
+                </div>
+              ) : null}
               {summaryText ? (
                 <div className="dasti-brief-card__summary-block">
                   <div className="dasti-brief-card__summary-label">
@@ -198,15 +213,15 @@ export function ProposalBriefCard({
                   <p className="dasti-brief-card__summary-copy">{summaryText}</p>
                 </div>
               ) : null}
-              {linkedOutputCount > 0 ? (
+              {linkedDocumentCount > 0 ? (
                 <div className="dasti-brief-card__summary-block">
                   <div className="dasti-brief-card__summary-label">
                     Linked documents
                   </div>
                   <div className="dasti-brief-card__linked-summary">
                     <p className="dasti-brief-card__summary-copy">
-                      {linkedOutputCount} linked proposal
-                      {linkedOutputCount === 1 ? "" : "s"}
+                      {linkedDocumentCount} linked document
+                      {linkedDocumentCount === 1 ? "" : "s"}
                     </p>
                     {linkedProposals.length > 0 ? (
                       <div className="dasti-brief-card__linked-list">

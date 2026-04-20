@@ -163,6 +163,7 @@ describe("ProposalForge canonical job brief", () => {
     ).toHaveAttribute("href", "https://example.com/jobs/123");
     expect(screen.getByText("Responsibilities")).toBeInTheDocument();
     expect(screen.getByText("Linked documents")).toBeInTheDocument();
+    expect(screen.getByText("Review state")).toBeInTheDocument();
     expect(
       screen.getByRole("link", {
         name: "Open linked proposal Operations Associate cover letter",
