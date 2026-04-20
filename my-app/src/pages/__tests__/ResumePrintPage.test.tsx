@@ -7,7 +7,12 @@ import {
   DEFAULT_VERBATI_STYLE,
   getResumeTemplateId,
 } from "../../features/verbati/style";
-import type { ResumePrintRoutePayload } from "../../lib/document-export-models";
+import {
+  buildResumePrintRoutePayload,
+  buildStyledResumePrintSource,
+  type ResumePrintRoutePayload,
+} from "../../lib/document-export-models";
+import { generateCvTemplate } from "../../lib/cv-template";
 import { ResumePrintPage } from "../ResumePrintPage";
 
 function buildPayload(): ResumePrintRoutePayload {
@@ -28,6 +33,51 @@ function buildPayload(): ResumePrintRoutePayload {
     }),
     rendererVariantId: "robial",
   };
+}
+
+function buildWorkshopOverflowPayload(): ResumePrintRoutePayload {
+  const currentCv = generateCvTemplate("Workshop Overflow CV");
+  currentCv.metadata.verbatiStyle = {
+    familyId: "workshop",
+    layout: "workshop",
+    typography: "soft-serif",
+    palette: "pierre",
+  };
+  const experienceSection = currentCv.sections.find(
+    (section) => section.type === "experience",
+  );
+  if (experienceSection?.structuredContent && Array.isArray(experienceSection.structuredContent)) {
+    experienceSection.structuredContent = Array.from({ length: 10 }, (_, index) => ({
+      ...(experienceSection.structuredContent[0] ?? {
+        id: `exp-${index + 1}`,
+        company: "",
+        position: "",
+        startDate: "2024-01-01T00:00:00.000Z",
+        isCurrent: false,
+        currentlyWorking: false,
+        achievements: [],
+      }),
+      id: `exp-${index + 1}`,
+      company: `Northline ${index + 1}`,
+      position: `Operations Lead ${index + 1}`,
+      startDate: "2024-01-01T00:00:00.000Z",
+      isCurrent: false,
+      currentlyWorking: false,
+      responsibilities:
+        `Committed responsibility ${index + 1}\nCommitted follow-up ${index + 1}\nCommitted delivery ${index + 1}`,
+      achievements: [],
+    }));
+  }
+
+  const previewSource = buildStyledResumePrintSource({
+    currentCv,
+    stylePreset: currentCv.metadata.verbatiStyle,
+  });
+  if (!previewSource) {
+    throw new Error("Expected workshop preview source for overflow payload test.");
+  }
+
+  return buildResumePrintRoutePayload({ data: previewSource });
 }
 
 describe("ResumePrintPage", () => {
@@ -122,6 +172,32 @@ describe("ResumePrintPage", () => {
         inheritedBodyFontFamilyComputed: "var(--font-body-family)",
       }),
     );
+  });
+
+  it("renders the workshop template renderer on the print route for workshop payloads", async () => {
+    window.__DASTI_RESUME_PRINT_PAYLOAD__ = buildWorkshopOverflowPayload();
+
+    render(<ResumePrintPage />);
+
+    expect(screen.getAllByTestId("resume-template-page").length).toBeGreaterThan(1);
+    expect(screen.getByTestId("resume-template-renderer")).toBeInTheDocument();
+    expect(document.querySelector(".resume-page--swissminima")).toBeFalsy();
+
+    await waitFor(() => {
+      expect(window.__DASTI_RESUME_PRINT_STATUS__?.status).toBe("ready");
+    });
+
+    expect(window.__DASTI_RESUME_PRINT_STATUS__?.snapshot).toEqual(
+      expect.objectContaining({
+        layout: "workshop",
+        typography: "soft-serif",
+        rendererVariantId: "swissminima",
+      }),
+    );
+    expect(window.__DASTI_RESUME_PRINT_STATUS__?.pageCount).toBe(
+      screen.getAllByTestId("resume-template-page").length,
+    );
+    expect(window.__DASTI_RESUME_PRINT_STATUS__?.pageCount).toBeGreaterThan(1);
   });
 
   it("keeps Robial print-route vars aligned when typography changes", async () => {

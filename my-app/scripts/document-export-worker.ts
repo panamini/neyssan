@@ -2,7 +2,6 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { jsPDF } from "jspdf";
 import { chromium } from "playwright";
 
 import type {
@@ -142,100 +141,6 @@ async function writeAuditArtifact(
   await fs.writeFile(path.join(auditArtifacts.artifactDir, fileName), content);
 }
 
-async function renderPdfFromRenderedResumePages(args: {
-  page: import("playwright").Page;
-  outputPath: string;
-  auditArtifacts: ResumeTypographyAuditArtifacts | null;
-  expectedPageCount: number;
-}): Promise<void> {
-  const pageShellLocator = args.page.locator(
-    ".dasti-resume-print-route .resume-page-stack__page-shell",
-  );
-  const directPageLocator = args.page.locator(
-    ".dasti-resume-print-route .resume-page[data-resume-page-index]",
-  );
-  const pageLocator =
-    (await pageShellLocator.count()) > 0 ? pageShellLocator : directPageLocator;
-  const renderedPageCount = await pageLocator.count();
-
-  if (renderedPageCount !== args.expectedPageCount) {
-    throw new Error(
-      `Unable to rasterize the expected number of rendered resume pages: ${JSON.stringify({
-        expectedPageCount: args.expectedPageCount,
-        renderedPageCount,
-      })}`,
-    );
-  }
-
-  const pdf = new jsPDF({
-    unit: "pt",
-    format: "a4",
-    orientation: "portrait",
-    compress: true,
-  });
-  const pdfPageWidth = pdf.internal.pageSize.getWidth();
-  const pdfPageHeight = pdf.internal.pageSize.getHeight();
-
-  for (let pageIndex = 0; pageIndex < renderedPageCount; pageIndex += 1) {
-    const renderedPage = pageLocator.nth(pageIndex);
-    await renderedPage.scrollIntoViewIfNeeded();
-    const pageBox = await renderedPage.boundingBox();
-    if (!pageBox) {
-      throw new Error(
-        `Unable to read rendered resume page bounds for page ${pageIndex + 1}.`,
-      );
-    }
-
-    const screenshotWidth = Math.ceil(pageBox.x + pageBox.width + 24);
-    const screenshotHeight = Math.ceil(pageBox.y + pageBox.height + 24);
-    const currentViewport = args.page.viewportSize();
-    if (
-      !currentViewport ||
-      currentViewport.width < screenshotWidth ||
-      currentViewport.height < screenshotHeight
-    ) {
-      await args.page.setViewportSize({
-        width: Math.max(currentViewport?.width ?? 0, screenshotWidth),
-        height: Math.max(currentViewport?.height ?? 0, screenshotHeight),
-      });
-      await args.page.waitForTimeout(50);
-    }
-
-    const pagePng = await args.page.screenshot({
-      clip: {
-        x: Math.max(0, pageBox.x),
-        y: Math.max(0, pageBox.y),
-        width: Math.ceil(pageBox.width),
-        height: Math.ceil(pageBox.height),
-      },
-      type: "png",
-    });
-
-    await writeAuditArtifact(
-      args.auditArtifacts,
-      `print-route-page-${pageIndex + 1}.png`,
-      pagePng,
-    );
-
-    if (pageIndex > 0) {
-      pdf.addPage("a4", "portrait");
-    }
-
-    pdf.addImage(
-      `data:image/png;base64,${pagePng.toString("base64")}`,
-      "PNG",
-      0,
-      0,
-      pdfPageWidth,
-      pdfPageHeight,
-      undefined,
-      "FAST",
-    );
-  }
-
-  await fs.writeFile(args.outputPath, Buffer.from(pdf.output("arraybuffer")));
-}
-
 async function renderPdfToFile(html: string, outputPath: string): Promise<void> {
   const browser = await chromium.launch({
     headless: true,
@@ -259,6 +164,28 @@ async function renderPdfToFile(html: string, outputPath: string): Promise<void> 
   } finally {
     await browser.close();
   }
+}
+
+async function resolveRenderedResumePageLocator(
+  page: import("playwright").Page,
+): Promise<import("playwright").Locator> {
+  const workshopPageShellLocator = page.locator(
+    ".dasti-resume-print-route .resume-template-page-shell",
+  );
+  if ((await workshopPageShellLocator.count()) > 0) {
+    return workshopPageShellLocator;
+  }
+
+  const pageShellLocator = page.locator(
+    ".dasti-resume-print-route .resume-page-stack__page-shell",
+  );
+  if ((await pageShellLocator.count()) > 0) {
+    return pageShellLocator;
+  }
+
+  return page.locator(
+    ".dasti-resume-print-route .resume-page[data-resume-page-index]",
+  );
 }
 
 function resolveFrontendBaseUrls(): string[] {
@@ -436,9 +363,8 @@ async function renderStyledResumePdfToFile(args: {
       "print-route-status.json",
       `${JSON.stringify(status, null, 2)}\n`,
     );
-    const renderedPageCount = await page
-      .locator(".dasti-resume-print-route .resume-page[data-resume-page-index]")
-      .count();
+    const renderedPageLocator = await resolveRenderedResumePageLocator(page);
+    const renderedPageCount = await renderedPageLocator.count();
     const normalizedRenderedPageCount = Math.max(1, renderedPageCount);
     const expectedPageCount = Math.max(1, status.pageCount ?? 1);
 
@@ -452,16 +378,7 @@ async function renderStyledResumePdfToFile(args: {
     }
     if (auditArtifacts) {
       await fs.mkdir(auditArtifacts.artifactDir, { recursive: true });
-      const pageLocator = page.locator(
-        expectedPageCount > 1
-          ? ".dasti-resume-print-route .resume-page-stack"
-          : ".dasti-resume-print-route .resume-page",
-      );
-      const fallbackPageLocator = page.locator(
-        ".dasti-resume-print-route .resume-page",
-      );
-      const clipLocator =
-        (await pageLocator.count()) > 0 ? pageLocator.first() : fallbackPageLocator.first();
+      const clipLocator = renderedPageLocator.first();
       await clipLocator.scrollIntoViewIfNeeded();
       const pageBox = await clipLocator.boundingBox();
       if (!pageBox) {
@@ -494,16 +411,6 @@ async function renderStyledResumePdfToFile(args: {
           height: Math.ceil(pageBox.height),
         },
       });
-    }
-
-    if (expectedPageCount > 1) {
-      await renderPdfFromRenderedResumePages({
-        page,
-        outputPath: args.outputPath,
-        auditArtifacts,
-        expectedPageCount,
-      });
-      return;
     }
 
     await page.pdf({

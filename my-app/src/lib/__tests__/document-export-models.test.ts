@@ -59,6 +59,7 @@ describe("document-export-models", () => {
 
     expect(previewSource?.resumeTemplateId).toBe("workshop_resume_onecol_ats");
     expect(previewSource?.rendererVariantId).toBe("swissminima");
+    expect(previewSource?.committedPages).toEqual(expect.any(Array));
     expect(exportSource?.resumeTemplateId).toBe("workshop_resume_onecol_ats");
   });
 

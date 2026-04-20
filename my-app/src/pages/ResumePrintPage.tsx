@@ -2,6 +2,9 @@ import React from "react";
 
 import { buildVerbatiThemeVars } from "../features/verbati/style";
 import ResumePage from "../features/verbati/resume/ResumePage";
+import ResumeTemplateRenderer, {
+  WORKSHOP_TEMPLATE_RENDERER_ID,
+} from "../features/verbati/resume/ResumeTemplateRenderer";
 import type { DocumentStageLayout } from "../hooks/use-document-stage-layout";
 import {
   A4_PAGE_HEIGHT_PX,
@@ -31,6 +34,7 @@ declare global {
       status: ResumePrintStatus;
       payloadReadable: boolean;
       error?: string;
+      pageCount?: number;
       snapshot?: ResumeFontDebugSnapshot;
       timestamp: number;
     };
@@ -54,6 +58,7 @@ function setPrintStatus(
   status: ResumePrintStatus,
   payloadReadable: boolean,
   error?: string,
+  pageCount?: number,
   snapshot?: ResumeFontDebugSnapshot,
 ) {
   if (typeof window === "undefined") {
@@ -64,9 +69,31 @@ function setPrintStatus(
     status,
     payloadReadable,
     ...(error ? { error } : {}),
+    ...(typeof pageCount === "number" ? { pageCount } : {}),
     ...(snapshot ? { snapshot } : {}),
     timestamp: Date.now(),
   };
+}
+
+function readRenderedResumePageCount(root: ParentNode | null | undefined): number {
+  if (!root) {
+    return 1;
+  }
+
+  const workshopPages = root.querySelectorAll?.('[data-testid="resume-template-page"]')
+    ?.length;
+  if (workshopPages && workshopPages > 0) {
+    return workshopPages;
+  }
+
+  const legacyPages = root.querySelectorAll?.(
+    ".resume-page[data-resume-page-index]",
+  )?.length;
+  if (legacyPages && legacyPages > 0) {
+    return legacyPages;
+  }
+
+  return 1;
 }
 
 function isResumePrintRoutePayload(
@@ -118,6 +145,7 @@ export function ResumePrintPage(): JSX.Element {
         false,
         "Resume print payload is missing or invalid.",
         undefined,
+        undefined,
       );
       return undefined;
     }
@@ -145,12 +173,13 @@ export function ResumePrintPage(): JSX.Element {
       await nextAnimationFrame();
 
       if (!cancelled) {
+        const pageCount = readRenderedResumePageCount(routeRootRef.current);
         const snapshot = collectResumeFontDebugSnapshot({
           root: routeRootRef.current,
           stylePreset: payload.stylePreset,
           rendererVariantId: payload.rendererVariantId,
         });
-        setPrintStatus("ready", true, undefined, snapshot);
+        setPrintStatus("ready", true, undefined, pageCount, snapshot);
       }
     };
 
@@ -189,13 +218,22 @@ export function ResumePrintPage(): JSX.Element {
       data-renderer-variant={payload.rendererVariantId}
       style={themeVars}
     >
-      <ResumePage
-        data={payload.resumeData}
-        mode={payload.rendererVariantId}
-        stylePreset={payload.stylePreset}
-        stageLayout={PRINT_STAGE_LAYOUT}
-        userZoom={1}
-      />
+      {payload.resumeTemplateId === WORKSHOP_TEMPLATE_RENDERER_ID ? (
+        <ResumeTemplateRenderer
+          data={payload.resumeData}
+          stylePreset={payload.stylePreset}
+          resumeTemplateId={payload.resumeTemplateId}
+          stageLayout={PRINT_STAGE_LAYOUT}
+        />
+      ) : (
+        <ResumePage
+          data={payload.resumeData}
+          mode={payload.rendererVariantId}
+          stylePreset={payload.stylePreset}
+          stageLayout={PRINT_STAGE_LAYOUT}
+          userZoom={1}
+        />
+      )}
     </main>
   );
 }

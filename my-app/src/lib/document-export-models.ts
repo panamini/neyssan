@@ -382,16 +382,23 @@ export function buildStyledResumePrintSource(args: {
   }
 
   const stylePreset = resolveVerbatiStyle(args.stylePreset);
+  const resumeData = buildCanonicalResumeRenderModelFromCv(args.currentCv);
+  const resumeTemplateId = getResumeTemplateId(stylePreset);
 
   return {
     schemaVersion: 1,
     kind: "resume",
     renderSource: "preview",
     locale: normalizeExportLocale(args.currentCv.metadata.locale),
-    resumeData: buildCanonicalResumeRenderModelFromCv(args.currentCv),
+    resumeData,
     stylePreset,
-    resumeTemplateId: getResumeTemplateId(stylePreset),
+    resumeTemplateId,
     rendererVariantId: VERBATI_LAYOUT_TO_RENDERER[stylePreset.layout],
+    committedPages: buildCommittedWorkshopPages({
+      data: resumeData,
+      resumeTemplateId,
+      stylePreset,
+    }),
   };
 }
 
