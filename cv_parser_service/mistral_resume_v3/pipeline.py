@@ -58,7 +58,7 @@ HEADER_COMPANY_SUFFIX_RE = re.compile(
 )
 HEADER_INLINE_SEPARATOR_RE = re.compile(r"\s*(?:[|•·●▪◦]+)\s*")
 HEADER_NON_TITLE_STATE_RE = re.compile(
-    r"\b(?:available|immediately|seeking|looking|open|ready|willing)\b",
+    r"\b(?:available|seeking|open\s+to|ready\s+to|willing\s+to\s+relocate)\b",
     re.IGNORECASE,
 )
 HEADER_LOCATION_TAIL_RE = re.compile(
