@@ -218,6 +218,7 @@ interface JobData {
   title: string;
   description?: string;
   url: string;
+  jobId?: string;
   proposalType?: ExtensionProposalType;
   formalityLevel?: "informal" | "formal" | "neutral";
   creativity?: "low" | "medium" | "high";
@@ -244,6 +245,8 @@ interface ActiveCvSnapshot {
 interface Message {
   action:
     | "generateProposal"
+    | "saveJob"
+    | "getJobSaveState"
     | "saveProposal"
     | "ingestProfile"
     | "openProposalForge"
@@ -277,6 +280,12 @@ interface Message {
   switch (message.action) {
     case "generateProposal":
       generateProposalHandler(message, sendResponse);
+      return true;
+    case "saveJob":
+      saveJobHandler(message, sendResponse);
+      return true;
+    case "getJobSaveState":
+      getJobSaveStateHandler(message, sendResponse);
       return true;
     case "saveProposal":
       saveProposalHandler(message, sendResponse);
@@ -348,6 +357,9 @@ async function generateProposalHandler(
     if (message.jobData?.creativity) {
       generateArgs.creativity = message.jobData.creativity;
     }
+    if (message.jobData?.jobId) {
+      generateArgs.jobId = message.jobData.jobId;
+    }
 
     if (!message.useCurrentCvContext) {
       generateArgs.personalizationMode = "explicit_only";
@@ -401,9 +413,96 @@ async function saveProposalHandler(
   }
 }
 
+async function saveJobHandler(
+  message: Message,
+  sendResponse: (response: {
+    success: boolean;
+    jobId?: string;
+    dedupeHit?: boolean;
+    parseStatus?: string;
+    reviewState?: string;
+    error?: string;
+  }) => void,
+) {
+  try {
+    currentToken = await requireCurrentSessionToken();
+    convex.setAuth(currentToken ?? "");
+
+    const jobData = message.jobData;
+    if (!jobData?.title || !jobData?.url) {
+      throw new Error("Missing job data for canonical save");
+    }
+
+    const result = await convex.mutation(
+      (api as any).jobsPublic.createOrReuseFromSource,
+      {
+        title: jobData.title,
+        rawDescription: jobData.description || "",
+        sourceUrl: jobData.url,
+        sourceType: jobData.platform || "manual",
+        applicationUrl: jobData.url,
+      },
+    );
+
+    sendResponse({
+      success: true,
+      jobId: result.jobId,
+      dedupeHit: result.dedupeHit,
+      parseStatus: result.parseStatus,
+      reviewState: result.reviewState,
+    });
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    console.error("Save job error:", errorMessage, error);
+    sendResponse({ success: false, error: errorMessage });
+  }
+}
+
+async function getJobSaveStateHandler(
+  message: Message,
+  sendResponse: (response: {
+    success: boolean;
+    jobId?: string;
+    parseStatus?: string;
+    reviewState?: string;
+    error?: string;
+  }) => void,
+) {
+  try {
+    currentToken = await requireCurrentSessionToken();
+    convex.setAuth(currentToken ?? "");
+
+    const jobId = message.jobData?.jobId;
+    if (!jobId) {
+      throw new Error("Missing jobId for job state lookup");
+    }
+
+    const job = await convex.query((api as any).jobsPublic.getById, { jobId });
+    if (!job) {
+      throw new Error("Saved job not found");
+    }
+
+    sendResponse({
+      success: true,
+      jobId,
+      parseStatus: job.parseStatus,
+      reviewState: job.reviewState,
+    });
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    console.error("Get job save state error:", errorMessage, error);
+    sendResponse({ success: false, error: errorMessage });
+  }
+}
+
 async function openProposalForgeHandler(
   message: Message,
-  sendResponse: (response: { success: boolean; error?: string }) => void
+  sendResponse: (response: {
+    success: boolean;
+    jobId?: string;
+    dedupeHit?: boolean;
+    error?: string;
+  }) => void
 ) {
   try {
     currentToken = await requireCurrentSessionToken();
@@ -414,16 +513,26 @@ async function openProposalForgeHandler(
     }
 
     convex.setAuth(currentToken ?? "");
-    const handoff = await convex.mutation((api as any).proposalHandoffs.create, {
-      jobTitle: jobData.title,
-      jobDescription: jobData.description || "",
-      sourceUrl: jobData.url,
-      platform: jobData.platform || "manual",
-    });
+    const saveResult = jobData.jobId
+      ? {
+          jobId: jobData.jobId,
+          dedupeHit: true,
+        }
+      : await convex.mutation((api as any).jobsPublic.createOrReuseFromSource, {
+          title: jobData.title,
+          rawDescription: jobData.description || "",
+          sourceUrl: jobData.url,
+          sourceType: jobData.platform || "manual",
+          applicationUrl: jobData.url,
+        });
 
-    const url = `${buildAppUrl("/proposal", APP_BASE_URL)}?handoffId=${encodeURIComponent(handoff.handoffId)}`;
+    const url = `${buildAppUrl("/proposal", APP_BASE_URL)}?jobId=${encodeURIComponent(saveResult.jobId)}`;
     chrome.tabs.create({ url });
-    sendResponse({ success: true });
+    sendResponse({
+      success: true,
+      jobId: saveResult.jobId,
+      dedupeHit: Boolean(saveResult.dedupeHit),
+    });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     console.error("Open Proposal Forge error:", errorMessage, error);
