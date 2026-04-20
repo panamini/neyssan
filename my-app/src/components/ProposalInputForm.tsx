@@ -89,6 +89,7 @@ interface ProposalInputFormProps {
   onValuesChange?: (values: FormValues) => void;
   prefill?: {
     handoffId: string;
+    jobId?: string;
     jobTitle: string;
     jobDescription: string;
     sourceUrl?: string;
@@ -113,6 +114,7 @@ interface ProposalInputFormProps {
   onGenerateControlChange?: (control: ProposalGenerateControl | null) => void;
   sourceUrl?: string | null;
   sourcePlatform?: string | null;
+  canonicalJobId?: string | null;
 }
 
 export type ProposalGenerateControl = {
@@ -314,6 +316,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   onGenerateControlChange,
   sourceUrl: liveSourceUrl = null,
   sourcePlatform: liveSourcePlatform = null,
+  canonicalJobId = null,
 }) => {
   const navigate = useNavigate();
   const hasHeaderLabel = Boolean(headerLabel);
@@ -867,6 +870,8 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
         ...buildProposalGenerationRequest(
           normalizedValues,
           buildAppProposalPersonalizationPayload(currentActiveCvSource),
+          undefined,
+          canonicalJobId,
         ),
         clientRunId,
       };
