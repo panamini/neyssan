@@ -9,7 +9,10 @@ import {
   Sun,
   Wand2,
 } from "@/lib/icons";
-import type { ProposalStyleChoice } from "../lib/proposal-style-choice";
+import {
+  getProposalStyleDefinition,
+  type ProposalStyleChoice,
+} from "../lib/proposal-style-choice";
 import {
   PROPOSAL_PALETTE_OPTIONS,
   PROPOSAL_STYLE_PREVIEW_DEFINITIONS,
@@ -22,16 +25,30 @@ import {
   VERBATI_FONT_PAIR_OPTIONS,
   type VerbatiFontPairId,
 } from "../features/verbati/fontCatalog";
+import {
+  VERBATI_LAYOUT_OPTIONS,
+  resolveVerbatiStyle,
+  sanitizePersistedVerbatiStyle,
+} from "../features/verbati/style";
+import { getStyleFamilyDefinition } from "../lib/layout/styleFamilies";
+import type {
+  StyleFamilyId,
+  VerbatiStylePreset,
+} from "../features/verbati/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type SlotIndex = 1 | 2 | 3;
+type StoredVerbatiStyle = Omit<VerbatiStylePreset, "accentHex"> & {
+  accentHex?: string | null;
+};
 
 type PresetSlot = {
   fontPairId: VerbatiFontPairId | null;
   styleChoice: ProposalStyleChoice;
   paletteOverride: ProposalPaletteId | null;
   accentHex: string | null;
+  verbatiStyle?: StoredVerbatiStyle | null;
   voicePreset: "signature" | "expert" | "engaging" | null;
   name?: string;
 };
@@ -63,7 +80,7 @@ const TONE_OPTIONS: { id: ToneId; label: string; description: string; Icon: type
 // ─── Style options ─────────────────────────────────────────────────────────────
 
 type StyleOption = {
-  id: ProposalStyleChoice;
+  id: "auto" | "swiss" | "editorial" | "modernist" | "workshop";
   label: string;
   description: string;
   isAuto?: boolean;
@@ -71,16 +88,121 @@ type StyleOption = {
 
 const STYLE_OPTIONS: StyleOption[] = [
   { id: "auto",     label: "Auto",      description: "Matches the look to the role.",                   isAuto: true },
-  { id: "balanced", label: "Swiss",     description: "Quiet Swiss grid with a calmer serif-led rhythm." },
-  { id: "warm",     label: "Editorial", description: "Editorial pacing with a richer reading voice."    },
-  { id: "technical",label: "Mono",      description: "Tighter grid with a more technical contrast."     },
-];
+  { id: "swiss", label: "Swiss", description: "Quiet Swiss grid with a calmer serif-led rhythm." },
+  { id: "editorial", label: "Editorial", description: "Editorial pacing with a richer reading voice." },
+  { id: "modernist", label: "Mono", description: "Tighter grid with a more technical contrast." },
+  { id: "workshop", label: "Workshop", description: "Workshop ATS family with the paired margin twin." },
+].filter(
+  (option) =>
+    option.id !== "workshop" ||
+    VERBATI_LAYOUT_OPTIONS.some((layout) => layout.id === "workshop"),
+);
+
+function buildPresetSlotStylePreset(preset: PresetSlot): VerbatiStylePreset {
+  const baseStyle = preset.verbatiStyle
+    ? resolveVerbatiStyle(preset.verbatiStyle as Partial<VerbatiStylePreset>)
+    : getProposalStyleDefinition(preset.styleChoice).stylePreset;
+
+  return resolveVerbatiStyle({
+    ...baseStyle,
+    typography: preset.fontPairId ?? baseStyle.typography,
+    ...(preset.accentHex
+      ? {
+          palette: "custom" as const,
+          accentHex: preset.accentHex,
+        }
+      : preset.paletteOverride
+        ? { palette: preset.paletteOverride }
+        : null),
+  });
+}
+
+function resolvePresetLayoutSelection(
+  preset: PresetSlot,
+): StyleOption["id"] {
+  if (!preset.verbatiStyle && preset.styleChoice === "auto") {
+    return "auto";
+  }
+
+  const stylePreset = buildPresetSlotStylePreset(preset);
+  switch (stylePreset.layout) {
+    case "editorial":
+      return "editorial";
+    case "modernist":
+      return "modernist";
+    case "workshop":
+      return "workshop";
+    default:
+      return "swiss";
+  }
+}
+
+function resolveStyleChoiceForLayout(
+  layoutId: Exclude<StyleOption["id"], "auto">,
+): ProposalStyleChoice {
+  switch (layoutId) {
+    case "editorial":
+      return "warm";
+    case "modernist":
+      return "technical";
+    case "workshop":
+      return "balanced";
+    case "swiss":
+    default:
+      return "balanced";
+  }
+}
+
+function buildVerbatiStyleForLayout(args: {
+  layoutId: Exclude<StyleOption["id"], "auto">;
+  preset: PresetSlot;
+}): VerbatiStylePreset {
+  const family = getStyleFamilyDefinition(args.layoutId as StyleFamilyId);
+
+  return resolveVerbatiStyle({
+    familyId: args.layoutId as StyleFamilyId,
+    layout: args.layoutId as StyleFamilyId,
+    typography: args.preset.fontPairId ?? family.defaultTypography,
+    ...(args.preset.accentHex
+      ? {
+          palette: "custom" as const,
+          accentHex: args.preset.accentHex,
+        }
+      : args.preset.paletteOverride
+        ? { palette: args.preset.paletteOverride }
+        : { palette: family.defaultPalette }),
+  });
+}
+
+function buildPresetSavePayload(
+  preset: PresetSlot,
+): PresetSlot {
+  const layoutSelection = resolvePresetLayoutSelection(preset);
+  const nextVerbatiStyle =
+    layoutSelection === "auto"
+      ? null
+      : buildVerbatiStyleForLayout({
+          layoutId: layoutSelection,
+          preset,
+        });
+
+  return {
+    ...preset,
+    verbatiStyle:
+      nextVerbatiStyle
+        ? {
+            ...nextVerbatiStyle,
+            accentHex: nextVerbatiStyle.accentHex ?? null,
+          }
+        : null,
+  };
+}
 
 // ─── Tilt hook ────────────────────────────────────────────────────────────────
 
 // ─── Mini style preview helper ────────────────────────────────────────────────
 
-function StyleMiniPreview({ styleId }: { styleId: ProposalStyleChoice }) {
+function StyleMiniPreview({ styleId }: { styleId: StyleOption["id"] }) {
   return (
     <div
       className={`dasti-settings-style-card__mini dasti-settings-style-card__mini--${styleId}`}
@@ -157,8 +279,11 @@ function StyleTiltCard({
 function HeroPreview({ preset, slotName }: { preset: PresetSlot; slotName: string }) {
   const fontPair = VERBATI_FONT_PAIR_OPTIONS.find((f) => f.id === preset.fontPairId)
     ?? VERBATI_FONT_PAIR_OPTIONS[0];
-  const styleOption = STYLE_OPTIONS.find((s) => s.id === preset.styleChoice) ?? STYLE_OPTIONS[0];
+  const styleOption =
+    STYLE_OPTIONS.find((s) => s.id === resolvePresetLayoutSelection(preset)) ??
+    STYLE_OPTIONS[0];
   const paletteOption = PROPOSAL_PALETTE_OPTIONS.find((p) => p.id === preset.paletteOverride);
+  const stylePreset = buildPresetSlotStylePreset(preset);
 
   const accentColor =
     preset.accentHex ??
@@ -166,9 +291,17 @@ function HeroPreview({ preset, slotName }: { preset: PresetSlot; slotName: strin
     "color-mix(in srgb, var(--color-accent) 80%, white 20%)";
 
   const previewDef =
-    preset.styleChoice === "auto"
+    styleOption.id === "auto"
       ? PROPOSAL_AUTO_STYLE_PREVIEW
-      : PROPOSAL_STYLE_PREVIEW_DEFINITIONS[preset.styleChoice as keyof typeof PROPOSAL_STYLE_PREVIEW_DEFINITIONS]
+      : PROPOSAL_STYLE_PREVIEW_DEFINITIONS[
+          (
+            styleOption.id === "editorial"
+              ? "warm"
+              : styleOption.id === "modernist"
+                ? "technical"
+                : "balanced"
+          ) as keyof typeof PROPOSAL_STYLE_PREVIEW_DEFINITIONS
+        ]
           ?? PROPOSAL_STYLE_PREVIEW_DEFINITIONS.balanced;
 
   const cardRef = useRef<HTMLElement>(null);
@@ -217,12 +350,14 @@ function HeroPreview({ preset, slotName }: { preset: PresetSlot; slotName: strin
   return (
     <article
       ref={cardRef}
-      className={`dasti-settings-hero-preview dasti-settings-hero-preview--${preset.styleChoice}`}
+      className={`dasti-settings-hero-preview dasti-settings-hero-preview--${styleOption.id}`}
       style={{ "--hero-accent": accentColor } as React.CSSProperties}
     >
       <div className="dasti-settings-hero-preview__inner">
         <div className="dasti-settings-hero-preview__kicker" aria-hidden="true">
-          {previewDef.templateName.toUpperCase()}
+          {styleOption.id === "auto"
+            ? previewDef.templateName.toUpperCase()
+            : getStyleFamilyDefinition(stylePreset.familyId ?? stylePreset.layout as StyleFamilyId).label.toUpperCase()}
         </div>
         <div className="dasti-settings-hero-preview__heading-block">
           <h2
@@ -424,6 +559,9 @@ export function SettingsPage(): JSX.Element {
       styleChoice: (raw?.styleChoice as ProposalStyleChoice) ?? "auto",
       paletteOverride: (raw?.paletteOverride as ProposalPaletteId | null) ?? null,
       accentHex: raw?.accentHex ?? null,
+      verbatiStyle: sanitizePersistedVerbatiStyle(
+        raw?.verbatiStyle as Partial<VerbatiStylePreset> | null | undefined,
+      ) as StoredVerbatiStyle | null,
       voicePreset: (raw?.voicePreset as ToneId) ?? null,
       name: raw?.name,
     });
@@ -457,18 +595,25 @@ export function SettingsPage(): JSX.Element {
     (patch: Partial<PresetSlot>) => {
       setLocalPresets((prev) => {
         const next = { ...prev, [editingSlot]: { ...prev[editingSlot], ...patch } };
+        const nextSavedPreset = buildPresetSavePayload(next[editingSlot]);
         // debounce save
         if (saveDebounceRef.current !== null) clearTimeout(saveDebounceRef.current);
         saveDebounceRef.current = setTimeout(() => {
           void savePreset({
             slot: editingSlot,
             preset: {
-              ...next[editingSlot],
-              voicePreset: next[editingSlot].voicePreset ?? null,
-              styleChoice: next[editingSlot].styleChoice,
-              paletteOverride: next[editingSlot].paletteOverride ?? null,
-              accentHex: next[editingSlot].accentHex ?? null,
-              fontPairId: next[editingSlot].fontPairId ?? null,
+              ...nextSavedPreset,
+              voicePreset: nextSavedPreset.voicePreset ?? null,
+              styleChoice: nextSavedPreset.styleChoice,
+              paletteOverride: nextSavedPreset.paletteOverride ?? null,
+              accentHex: nextSavedPreset.accentHex ?? null,
+              fontPairId: nextSavedPreset.fontPairId ?? null,
+              verbatiStyle: nextSavedPreset.verbatiStyle
+                ? {
+                    ...nextSavedPreset.verbatiStyle,
+                    accentHex: nextSavedPreset.verbatiStyle.accentHex ?? null,
+                  }
+                : undefined,
             },
           }).then(() => flashSaved());
           saveDebounceRef.current = null;
@@ -571,8 +716,23 @@ export function SettingsPage(): JSX.Element {
                     <StyleTiltCard
                       key={option.id}
                       option={option}
-                      active={currentPreset.styleChoice === option.id}
-                      onSelect={() => updatePreset({ styleChoice: option.id })}
+                      active={resolvePresetLayoutSelection(currentPreset) === option.id}
+                      onSelect={() =>
+                        updatePreset(
+                          option.id === "auto"
+                            ? {
+                                styleChoice: "auto",
+                                verbatiStyle: null,
+                              }
+                            : {
+                                styleChoice: resolveStyleChoiceForLayout(option.id),
+                                verbatiStyle: buildVerbatiStyleForLayout({
+                                  layoutId: option.id,
+                                  preset: currentPreset,
+                                }),
+                              },
+                        )
+                      }
                     />
                   ))}
                 </div>

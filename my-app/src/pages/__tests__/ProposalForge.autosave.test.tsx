@@ -8,6 +8,7 @@ import { PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY } from "../../lib/proposal-output-dra
 const mockUpdateProposal = vi.fn().mockResolvedValue(undefined);
 const mockCreateProposal = vi.fn().mockResolvedValue("proposal_created");
 let mockAttachedCvId: string | null = null;
+let mockCurrentProposalSettings: Record<string, unknown> | null = null;
 
 const mockSourceCv = {
   id: "cv_alpha",
@@ -26,7 +27,12 @@ vi.mock("convex/react", () => ({
     isLoading: false,
     isAuthenticated: true,
   }),
-  useQuery: () => null,
+  useQuery: (reference: string) => {
+    if (reference === "proposalSettings.getCurrent") {
+      return mockCurrentProposalSettings;
+    }
+    return null;
+  },
   useMutation: (reference: string) => {
     if (reference === "updateProposalPublic.default") {
       return mockUpdateProposal;
@@ -80,6 +86,7 @@ vi.mock("../../lib/proposal-personalization", () => ({
   getLocalActiveCvSnapshotById: (id: string) =>
     id === "cv_alpha" ? { title: "Alex Martin Resume" } : null,
   getLocalCvDocumentById: (id: string) => (id === "cv_alpha" ? mockSourceCv : null),
+  listLocalCvPickerOptions: () => [],
   getProposalApplicantHeaderData: () => ({
     name: "Alex Martin",
     role: "Operations Associate",
@@ -195,6 +202,7 @@ describe("ProposalForge autosave", () => {
     mockCreateProposal.mockClear();
     mockUpdateProposal.mockClear();
     mockAttachedCvId = null;
+    mockCurrentProposalSettings = null;
   });
 
   afterEach(() => {
@@ -270,6 +278,81 @@ describe("ProposalForge autosave", () => {
           id: "proposal_created",
           title: "Renamed autosave title",
           content: "Second autosave draft.",
+        }),
+      );
+    });
+  });
+
+  it("strips familyId from workshop settings styles when creating proposal drafts", async () => {
+    mockCurrentProposalSettings = {
+      voicePreset: "signature",
+      savedVoicePreset: "signature",
+      templateId: "editorial_wide",
+      styleChoice: "balanced",
+      paletteOverride: null,
+      accentHex: null,
+      fontPairId: "doto-code",
+      verbatiStyle: {
+        familyId: "workshop",
+        layout: "workshop",
+        typography: "doto-code",
+        palette: "pierre",
+      },
+      sourceMode: "proposal_local",
+    };
+
+    window.localStorage.setItem(
+      PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,
+      JSON.stringify({
+        proposalContent: "Workshop autosave body.",
+        proposalType: "cover_letter",
+        proposalVoicePreset: "signature",
+        proposalTemplateId: null,
+        proposalVerbatiStyle: null,
+        proposalStyleLinkMode: "proposal_local",
+        proposalStyleChoice: "balanced",
+        proposalApplicantName: "Alex Martin",
+        proposalApplicantRole: "Operations Associate",
+        proposalDocumentTitle: "Workshop autosave title",
+        proposalDocumentMeta: "Compose output",
+        generatedProposalId: null,
+        proposalOutputMode: "preview",
+        paletteOverride: null,
+        customAccentHex: null,
+        templateBundleId: null,
+        typographyOverride: null,
+        layoutOverride: null,
+        proposalDocumentTitleManual: false,
+        characterLimitMode: null,
+        characterLimitValue: null,
+      }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit content once" }));
+
+    await waitForAutosave();
+
+    await waitFor(() => {
+      expect(mockCreateProposal).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Workshop autosave title",
+          content: "First autosave draft.",
+          status: "saved",
+          metadata: expect.objectContaining({
+            templateId: "workshop_proposal_margin",
+            styleLinkMode: "proposal_local",
+            verbatiStyle: {
+              layout: "workshop",
+              typography: "doto-code",
+              palette: "pierre",
+            },
+          }),
         }),
       );
     });
@@ -385,7 +468,7 @@ describe("ProposalForge autosave", () => {
           status: "saved",
           metadata: expect.objectContaining({
             sourceCvId: "cv_alpha",
-            templateId: "two_column_rail",
+            templateId: "editorial_wide",
             styleLinkMode: "inherit_cv",
             verbatiStyle: expect.objectContaining({
               layout: "editorial",

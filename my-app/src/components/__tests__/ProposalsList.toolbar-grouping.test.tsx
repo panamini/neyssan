@@ -152,6 +152,9 @@ describe("ProposalsList toolbar grouping", () => {
     expect(
       screen.getByRole("button", { name: "Refine saved proposal" }),
     ).not.toHaveClass("dasti-toolbar-tooltip-trigger--above");
+    expect(
+      screen.getByRole("button", { name: "Open text styles" }),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /tone of voice/i }));
 
@@ -175,19 +178,40 @@ describe("ProposalsList toolbar grouping", () => {
       );
     });
 
+    fireEvent.click(screen.getByRole("button", { name: "Open text styles" }));
     expect(
-      screen.getByRole("button", { name: /layout swiss/i }),
+      screen.getByRole("dialog", { name: "Text styles" }),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /layout swiss/i }));
-    expect(
-      screen.getByRole("dialog", { name: "Layout options" }),
-    ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /magazine/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Soft Serif" }));
 
     await waitFor(() => {
       expect(getMainProposalDisplayCall()?.stylePreset).toEqual(
         expect.objectContaining({
-          layout: "two-column",
+          typography: "soft-serif",
+        }),
+      );
+    });
+
+    expect(screen.getByRole("button", { name: /layout swiss/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /layout swiss/i }));
+    expect(
+      screen.getByRole("dialog", { name: "Layout options" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: /Workshop Family identity scaffold for the workshop paired templates\./i,
+      }),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /^Editorial Editorial split layout with a broader, calmer rhythm\.$/i,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(getMainProposalDisplayCall()?.stylePreset).toEqual(
+        expect.objectContaining({
+          layout: "editorial",
         }),
       );
     });
