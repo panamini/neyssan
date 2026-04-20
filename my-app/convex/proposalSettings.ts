@@ -51,6 +51,14 @@ const proposalSourceModeValidator = v.union(
   v.literal("proposal_local"),
 );
 
+const proposalPresetVerbatiStyleValidator = v.object({
+  familyId: v.optional(v.string()),
+  layout: v.string(),
+  typography: v.string(),
+  palette: v.string(),
+  accentHex: v.optional(v.union(v.string(), v.null())),
+});
+
 export const getCurrent = query({
   args: {},
   returns: v.object({
@@ -61,6 +69,7 @@ export const getCurrent = query({
     paletteOverride: v.optional(proposalPaletteOverrideValidator),
     accentHex: v.optional(proposalAccentHexValidator),
     fontPairId: v.optional(proposalFontPairIdValidator),
+    verbatiStyle: v.optional(proposalPresetVerbatiStyleValidator),
     sourceMode: v.optional(proposalSourceModeValidator),
   }),
   handler: async (ctx) => {
@@ -86,6 +95,11 @@ export const getCurrent = query({
       paletteOverride: user?.proposalPaletteOverride,
       accentHex: user?.proposalAccentHex,
       fontPairId: user?.proposalFontPairId,
+      verbatiStyle:
+        user?.proposalVerbatiStyle &&
+        typeof user.proposalVerbatiStyle === "object"
+          ? (user.proposalVerbatiStyle as PresetSlotData["verbatiStyle"])
+          : undefined,
       sourceMode: user?.proposalSourceMode,
     };
   },
@@ -98,6 +112,7 @@ const presetSlotValidator = v.object({
   styleChoice: proposalStyleChoiceValidator,
   paletteOverride: proposalPaletteOverrideValidator,
   accentHex: proposalAccentHexValidator,
+  verbatiStyle: v.optional(proposalPresetVerbatiStyleValidator),
   voicePreset: v.union(proposalVoicePresetChoice, v.null()),
   name: v.optional(v.string()),
 });
@@ -107,6 +122,13 @@ type PresetSlotData = {
   styleChoice: "auto" | "formal" | "warm" | "technical" | "balanced";
   paletteOverride: "sauge" | "ocre" | "pierre" | "bordeaux" | "encre" | null;
   accentHex: string | null;
+  verbatiStyle?: {
+    familyId?: string;
+    layout: string;
+    typography: string;
+    palette: string;
+    accentHex?: string | null;
+  };
   voicePreset: "signature" | "expert" | "direct" | "engaging" | "storyteller" | null;
   name?: string;
 };
@@ -236,6 +258,21 @@ export const setActivePreset = mutation({
               : null;
           nextReplacement.proposalAccentHex = nextAccentHex;
           nextReplacement.proposalFontPairId = preset.fontPairId;
+          if (preset.verbatiStyle) {
+            const nextVerbatiAccentHex =
+              typeof preset.verbatiStyle.accentHex === "string" &&
+              /^#[0-9a-fA-F]{6}$/.test(preset.verbatiStyle.accentHex)
+                ? preset.verbatiStyle.accentHex.toUpperCase()
+                : preset.verbatiStyle.accentHex === null
+                  ? null
+                  : undefined;
+            nextReplacement.proposalVerbatiStyle = {
+              ...preset.verbatiStyle,
+              accentHex: nextVerbatiAccentHex,
+            };
+          } else {
+            delete nextReplacement.proposalVerbatiStyle;
+          }
         }
 
         return ctx.db.replace(_id, nextReplacement);
