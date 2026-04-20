@@ -33,6 +33,7 @@ function renderSectionHeading(title: string, continued: boolean) {
       <h2
         style={{
           margin: 0,
+          fontFamily: "var(--heading-font, var(--font-heading-family))",
           fontSize: "calc(var(--text-title-size) - 0.95mm)",
           lineHeight: 1.1,
           textTransform: "uppercase",
@@ -92,6 +93,7 @@ function renderEntry(args: {
             <h1
               style={{
                 margin: 0,
+                fontFamily: "var(--heading-font, var(--font-heading-family))",
                 fontSize: "var(--text-display-size)",
                 lineHeight: "var(--text-display-line)",
                 fontWeight: 700,
@@ -238,6 +240,7 @@ function renderEntry(args: {
             <h3
               style={{
                 margin: 0,
+                fontFamily: "var(--heading-font, var(--font-heading-family))",
                 fontSize: "calc(var(--text-body-size) + 0.2mm)",
                 lineHeight: 1.25,
                 fontWeight: 700,
@@ -305,7 +308,14 @@ function renderEntry(args: {
           style={{ display: "grid", gap: "0.7mm" }}
           data-preview-row-id={entry.item.id}
         >
-          <h3 style={{ margin: 0, fontSize: "var(--text-body-size)", fontWeight: 700 }}>
+          <h3
+            style={{
+              margin: 0,
+              fontFamily: "var(--heading-font, var(--font-heading-family))",
+              fontSize: "var(--text-body-size)",
+              fontWeight: 700,
+            }}
+          >
             {entry.item.degree}
           </h3>
           <p
@@ -367,7 +377,12 @@ function renderEntry(args: {
             itemId={buildProjectPreviewFieldId(entry.item.id, "name")}
             activeTarget={activeTarget}
             surface="item"
-            style={{ margin: 0, fontSize: "var(--text-body-size)", fontWeight: 700 }}
+            style={{
+              margin: 0,
+              fontFamily: "var(--heading-font, var(--font-heading-family))",
+              fontSize: "var(--text-body-size)",
+              fontWeight: 700,
+            }}
           >
             {entry.item.name}
           </PreviewItemRegion>
@@ -503,7 +518,14 @@ function renderEntry(args: {
           style={{ display: "grid", gap: "1.4mm" }}
           data-preview-row-id={entry.item.id}
         >
-          <h3 style={{ margin: 0, fontSize: "var(--text-body-size)", fontWeight: 700 }}>
+          <h3
+            style={{
+              margin: 0,
+              fontFamily: "var(--heading-font, var(--font-heading-family))",
+              fontSize: "var(--text-body-size)",
+              fontWeight: 700,
+            }}
+          >
             {entry.item.sectionTitle}
           </h3>
           <p
@@ -532,6 +554,7 @@ export function ResumeOneColAtsPage({
         boxSizing: "border-box",
         width: "100%",
         minHeight: "100%",
+        fontFamily: "var(--body-font, var(--font-body-family))",
         padding:
           "var(--margin-top) var(--margin-right) var(--margin-bottom) var(--margin-left)",
         background: "var(--paper)",

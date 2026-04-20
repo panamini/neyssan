@@ -53,10 +53,9 @@ export function VerbatiCvPreviewPanel({
     () => getVerbatiStyleFromCv(currentCv),
     [currentCv],
   );
-  const activeData = React.useMemo(
-    () => (currentCv ? buildCanonicalResumeRenderModelFromCv(currentCv) : null),
-    [currentCv],
-  );
+  const activeData = currentCv
+    ? buildCanonicalResumeRenderModelFromCv(currentCv)
+    : null;
   const hasCurrentCv = Boolean(currentCv);
   const hasActiveResume = hasRenderableResumeData(activeData);
   const [previewSource, setPreviewSource] =
@@ -403,7 +402,11 @@ export function VerbatiCvPreviewPanel({
                   }}
                   onSelectLayout={(layout) =>
                     setStylePreset((current) =>
-                      resolveVerbatiStyle({ ...current, layout }),
+                      resolveVerbatiStyle({
+                        ...current,
+                        familyId: layout,
+                        layout,
+                      }),
                     )
                   }
                   onSelectTypography={(typography) =>

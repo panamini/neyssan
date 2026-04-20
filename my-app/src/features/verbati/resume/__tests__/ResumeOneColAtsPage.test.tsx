@@ -139,4 +139,44 @@ describe("ResumeOneColAtsPage", () => {
     expect(pageShell?.getAttribute("style")).toContain("align-content: start;");
     expect(pageShell?.getAttribute("style")).toContain("align-items: start;");
   });
+
+  it("applies workshop font family vars on the page shell and headings", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const plan = planWorkshopResumePages({
+      data: {
+        ...resumeMock,
+        metadata: resumeMock.metadata.slice(0, 1),
+        contact: resumeMock.contact.slice(0, 2),
+        experience: resumeMock.experience.slice(0, 1),
+        projects: [],
+        education: [],
+        certifications: [],
+        affiliations: [],
+        hobbyItems: [],
+        hobbies: [],
+        textSections: [],
+      },
+      template,
+    });
+
+    const { container } = render(
+      <ResumeOneColAtsPage
+        data={resumeMock}
+        page={plan.pages[0]!}
+        template={template}
+      />,
+    );
+
+    const pageShell = container.querySelector(
+      '[data-testid="resume-template-page"]',
+    ) as HTMLElement | null;
+    const firstHeading = container.querySelector("h1, h2, h3") as HTMLElement | null;
+
+    expect(pageShell?.getAttribute("style")).toContain(
+      "font-family: var(--body-font, var(--font-body-family));",
+    );
+    expect(firstHeading?.getAttribute("style")).toContain(
+      "font-family: var(--heading-font, var(--font-heading-family));",
+    );
+  });
 });

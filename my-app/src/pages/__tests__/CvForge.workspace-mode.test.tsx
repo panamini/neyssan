@@ -26,6 +26,42 @@ vi.mock("../../components/ProfileReviewCard", () => ({
   ),
 }));
 
+vi.mock("../../components/EmbeddedStyleInspector", () => ({
+  default: ({
+    onSelectLayout,
+    onSelectTypography,
+    onSelectPalette,
+  }: {
+    onSelectLayout?: (layout: "editorial") => void;
+    onSelectTypography?: (typography: "soft-serif") => void;
+    onSelectPalette?: (palette: "encre") => void;
+  }) => (
+    <div>
+      <button
+        type="button"
+        aria-label="Open text styles"
+        onClick={() => onSelectTypography?.("soft-serif")}
+      >
+        Text
+      </button>
+      <button
+        type="button"
+        aria-label="Open layout controls"
+        onClick={() => onSelectLayout?.("editorial")}
+      >
+        Layout
+      </button>
+      <button
+        type="button"
+        aria-label="Open palette controls"
+        onClick={() => onSelectPalette?.("encre")}
+      >
+        Color
+      </button>
+    </div>
+  ),
+}));
+
 vi.mock("convex/react", () => ({
   useQuery: vi.fn(() => ({
     preset1: {
@@ -55,11 +91,18 @@ vi.mock("../../features/verbati/VerbatiCvPreviewPanel", () => ({
     hostMode?: "panel" | "workspace";
     layoutMode?: "rail" | "stacked";
     railLeadControl?: React.ReactNode;
-    stylePreset?: { layout?: string | null };
+    stylePreset?: {
+      layout?: string | null;
+      typography?: string | null;
+      palette?: string | null;
+    };
   }) => (
     <div>
       Preview host: {hostMode ?? "panel"} / layout: {layoutMode ?? "stacked"}
-      <div>Preview style: {stylePreset?.layout ?? "none"}</div>
+      <div>
+        Preview style: {stylePreset?.layout ?? "none"}|
+        {stylePreset?.typography ?? "none"}|{stylePreset?.palette ?? "none"}
+      </div>
       {railLeadControl}
     </div>
   ),
@@ -88,6 +131,12 @@ describe("CvForge workspace mode", () => {
     expect(screen.getByText("Mock profile editor cv_123")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Open saved resume styles" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Open text styles" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Open layout controls" }),
     ).toBeInTheDocument();
     expect(
       screen.getByText(/Preview host: panel \/ layout:/),
@@ -189,7 +238,9 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("Preview style: swiss")).toBeInTheDocument();
+    expect(
+      screen.getByText("Preview style: swiss|quiet-editorial|sauge"),
+    ).toBeInTheDocument();
 
     await user.click(
       screen.getByRole("button", { name: "Open saved resume styles" }),
@@ -197,6 +248,30 @@ describe("CvForge workspace mode", () => {
 
     await user.click(screen.getByRole("menuitemradio", { name: /Stone Editorial/i }));
 
-    expect(screen.getByText("Preview style: editorial")).toBeInTheDocument();
+    expect(
+      screen.getByText("Preview style: editorial|quiet-editorial|pierre"),
+    ).toBeInTheDocument();
+  });
+
+  it("applies direct toolbar layout, font, and palette edits to the cv preview", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByText("Preview style: swiss|quiet-editorial|sauge"),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Open text styles" }));
+    await user.click(screen.getByRole("button", { name: "Open palette controls" }));
+    await user.click(screen.getByRole("button", { name: "Open layout controls" }));
+
+    expect(
+      screen.getByText("Preview style: editorial|soft-serif|encre"),
+    ).toBeInTheDocument();
   });
 });

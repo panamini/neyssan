@@ -74,7 +74,7 @@ vi.mock("../VerbatiResumePreview", () => ({
     onRemoveSection,
   }: {
     data: { title: string; projects?: Array<unknown> };
-    stylePreset: { layout: string };
+    stylePreset: { layout: string; typography?: string; palette?: string };
     railLeadControl?: React.ReactNode;
     railStartAddon?: React.ReactNode;
     onLinkIntent?: unknown;
@@ -97,6 +97,8 @@ vi.mock("../VerbatiResumePreview", () => ({
       return (
         <div>
           <div>Preview layout: {stylePreset.layout}</div>
+          <div>Preview typography: {stylePreset.typography ?? "none"}</div>
+          <div>Preview palette: {stylePreset.palette ?? "none"}</div>
           <div>Preview title: {data.title}</div>
           <div>Preview projects: {data.projects?.length ?? 0}</div>
           {railLeadControl}
@@ -274,6 +276,34 @@ describe("VerbatiCvPreviewPanel", () => {
     expect(
       screen.queryByText("Robial split layout with the accent rail sidebar."),
     ).not.toBeInTheDocument();
+  });
+
+  it("applies direct workspace text, layout, and color changes to the live preview state", () => {
+    resumePreviewPropsSpy.mockClear();
+    render(<VerbatiCvPreviewPanel hostMode="workspace" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Open text styles" }));
+    fireEvent.click(screen.getByRole("button", { name: "Soft Serif" }));
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open layout controls" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Workshop" }));
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open palette controls" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Use Ink" }));
+
+    expect(screen.getByText("Preview layout: workshop")).toBeInTheDocument();
+    expect(screen.getByText("Preview typography: soft-serif")).toBeInTheDocument();
+    expect(screen.getByText("Preview palette: encre")).toBeInTheDocument();
+
+    const lastCall =
+      resumePreviewPropsSpy.mock.calls[resumePreviewPropsSpy.mock.calls.length - 1]?.[0];
+    expect(lastCall?.stylePreset.layout).toBe("workshop");
+    expect(lastCall?.stylePreset.typography).toBe("soft-serif");
+    expect(lastCall?.stylePreset.palette).toBe("encre");
   });
 
   it("lets the workspace toolbar switch between the active CV and the sample preview", () => {
