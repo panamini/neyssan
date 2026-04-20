@@ -74,5 +74,10 @@ export function isCvEditorDebugUiEnabled(): boolean {
  * when this flag is disabled.
  */
 export function isWorkshopFamilyEnabled(): boolean {
+  // Keep a static import.meta.env access for Vite replacement.
+  const viteRaw = import.meta.env?.VITE_ENABLE_WORKSHOP_FAMILY;
+  if (typeof viteRaw !== "undefined") {
+    return toBool(viteRaw, false);
+  }
   return toBool(readEnv("VITE_ENABLE_WORKSHOP_FAMILY"), false);
 }

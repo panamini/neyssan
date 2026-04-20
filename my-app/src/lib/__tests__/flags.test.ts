@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { isCvEditorDebugUiEnabled } from "../flags";
+import { isCvEditorDebugUiEnabled, isWorkshopFamilyEnabled } from "../flags";
 
 describe("isCvEditorDebugUiEnabled", () => {
   afterEach(() => {
@@ -27,5 +27,21 @@ describe("isCvEditorDebugUiEnabled", () => {
     vi.stubEnv("VITE_ENABLE_CV_DEBUG_UI", "true");
 
     expect(isCvEditorDebugUiEnabled()).toBe(true);
+  });
+});
+
+describe("isWorkshopFamilyEnabled", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("respects explicit env enablement", () => {
+    vi.stubEnv("VITE_ENABLE_WORKSHOP_FAMILY", "true");
+    expect(isWorkshopFamilyEnabled()).toBe(true);
+  });
+
+  it("defaults to disabled when unset", () => {
+    vi.stubEnv("VITE_ENABLE_WORKSHOP_FAMILY", "");
+    expect(isWorkshopFamilyEnabled()).toBe(false);
   });
 });
