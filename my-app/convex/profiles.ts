@@ -6,6 +6,25 @@ import {
 } from "./lib/userProfileMetadata";
 import { getPrimaryProfileForClerk } from "./lib/userProfiles";
 
+export function resolvePatchProfileRow<T extends { clerkId?: string | undefined }>(
+  rows: T[],
+  clerkSubject: string | undefined,
+): T | null {
+  if (!rows.length) {
+    return null;
+  }
+
+  if (clerkSubject) {
+    const owned = rows.find((row) => row.clerkId === clerkSubject);
+    if (owned) {
+      return owned;
+    }
+  }
+
+  const unclaimed = rows.find((row) => !row.clerkId);
+  return unclaimed ?? null;
+}
+
 export const get = internalQuery({
   args: {},
   handler: async (ctx) => {
@@ -109,8 +128,8 @@ export const patch = mutation({
       const rows = await ctx.db
         .query("userProfiles")
         .withIndex("by_profileId", (q) => q.eq("profileId", args.profileId))
-        .take(1);
-      if (rows && rows.length > 0) existing = rows[0];
+        .collect();
+      existing = resolvePatchProfileRow(rows, identity?.subject);
     } else {
       if (!identity) throw new Error("Not authenticated");
       existing = await getPrimaryProfileForClerk(ctx, identity.subject);
