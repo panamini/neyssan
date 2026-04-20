@@ -86,6 +86,39 @@ function isUnauthorizedProfileAccessError(error: unknown): boolean {
   return /not authorized to access this profile/i.test(message);
 }
 
+function sanitizeBackendVerbatiStyle(
+  value: unknown,
+): {
+  layout?: string;
+  typography?: string;
+  palette?: string;
+  accentHex?: string;
+} | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  const sanitized = {
+    layout:
+      typeof candidate.layout === "string" ? candidate.layout : undefined,
+    typography:
+      typeof candidate.typography === "string"
+        ? candidate.typography
+        : undefined,
+    palette:
+      typeof candidate.palette === "string" ? candidate.palette : undefined,
+    accentHex:
+      typeof candidate.accentHex === "string"
+        ? candidate.accentHex
+        : undefined,
+  };
+
+  return Object.values(sanitized).some((entry) => typeof entry === "string")
+    ? sanitized
+    : undefined;
+}
+
 export function mapPersistedProfileToCvDocument(
   rawProfile: Record<string, unknown> | null | undefined,
   profileId: string,
@@ -137,6 +170,9 @@ export class ConvexStorageAdapter {
       delete md.version;
       delete md.importRecoverySession;
       delete md.authoritativeResume;
+      if ("verbatiStyle" in md) {
+        md.verbatiStyle = sanitizeBackendVerbatiStyle(md.verbatiStyle);
+      }
       // Keep other allowed keys (source, importedAt, confidence, filename)
       backendPayload.metadata = md;
     }

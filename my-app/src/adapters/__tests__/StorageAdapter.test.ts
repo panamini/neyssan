@@ -162,7 +162,8 @@ describe("StorageAdapter persistence", () => {
     const adapter = new ConvexStorageAdapter(patchMutation);
     const cv = generateCvTemplateV1("Styled Persistence CV");
     cv.metadata.verbatiStyle = {
-      layout: "swiss",
+      familyId: "workshop",
+      layout: "workshop",
       palette: "bordeaux",
       typography: "soft-serif",
       accentHex: "#9a2d45",
@@ -173,13 +174,14 @@ describe("StorageAdapter persistence", () => {
     expect(patchMutation).toHaveBeenCalledTimes(1);
     const payload = patchMutation.mock.calls[0][0].patch;
     expect(payload.metadata.verbatiStyle).toEqual({
-      layout: "swiss",
+      layout: "workshop",
       palette: "bordeaux",
       typography: "soft-serif",
       accentHex: "#9a2d45",
     });
     expect(payload.cvDocument.metadata.verbatiStyle).toEqual({
-      layout: "swiss",
+      familyId: "workshop",
+      layout: "workshop",
       palette: "bordeaux",
       typography: "soft-serif",
       accentHex: "#9a2d45",
@@ -211,6 +213,7 @@ describe("StorageAdapter persistence", () => {
     expect(restored).not.toBeNull();
     expect(restored?.metadata.source).toBe("legacy-import");
     expect(restored?.metadata.verbatiStyle).toEqual({
+      familyId: "two-column",
       layout: "two-column",
       palette: "bordeaux",
       typography: "soft-serif",

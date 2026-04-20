@@ -64,6 +64,18 @@ describe("userProfileMetadata", () => {
     ).toBe(true);
   });
 
+  it("accepts workshop as a stored layout", () => {
+    expect(
+      matchesValidator(userProfileMetadataValidator.json, {
+        verbatiStyle: {
+          layout: "workshop",
+          palette: "bordeaux",
+          typography: "soft-serif",
+        },
+      }),
+    ).toBe(true);
+  });
+
   it("accepts legacy aliases on read and canonicalizes them for the next write", () => {
     const legacyMetadata = {
       source: "legacy",
