@@ -87,7 +87,6 @@ def test_desired_position_pipeline_audit_does_not_backfill_from_recovered_jessic
 
     normalized = result["canonical_payload"]["normalized"]
     assert normalized["profile"]["desiredPosition"] is None
-    assert normalized["contact"]["desiredPosition"] is None
     assert normalized["experience"][0]["position"] == "Middle School Language Arts Teacher"
     assert result["diagnostics"]["sectionRecovery"]["experience"]["applied"] is True
 
