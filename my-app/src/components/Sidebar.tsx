@@ -4,6 +4,7 @@ import type { FunctionReference } from "convex/server";
 import type { Id } from "../../convex/_generated/dataModel";
 import {
   Check,
+  ClipboardText,
   FileText,
   FileUser,
   Gear,
@@ -587,6 +588,7 @@ export const Sidebar: React.FC = () => {
   const sidebarCollapsed = collapsed || forcedCollapsed;
   const isResumeRoute = matchesRoute("/cv");
   const isResumeLibraryRoute = matchesRoute("/cvs");
+  const isJobsRoute = matchesRoute("/jobs");
   const isProposalRoute = matchesRoute("/proposal");
   const isProposalLibraryRoute = matchesRoute("/proposals");
 
@@ -1071,6 +1073,14 @@ export const Sidebar: React.FC = () => {
               onClick={handleOpenProposalWorkspace}
             />
           )}
+          <SidebarRailLink
+            label="Jobs"
+            icon={
+              <ClipboardText size={16} strokeWidth={1.5} aria-hidden="true" />
+            }
+            active={isJobsRoute}
+            href="/jobs"
+          />
         </nav>
       ) : (
         <nav className="sb__nav sb__nav--stack" aria-label="Primary sidebar">
@@ -1094,6 +1104,18 @@ export const Sidebar: React.FC = () => {
               Quick Start
             </button>
           </div>
+
+          <section className="sb-section" aria-label="Jobs">
+            <Link
+              to="/jobs"
+              className={clsx(
+                "sb-section__action",
+                isJobsRoute && "sb-section__action--active",
+              )}
+            >
+              Jobs
+            </Link>
+          </section>
 
           <SidebarDocumentSection
             sectionLabel="Resumes"

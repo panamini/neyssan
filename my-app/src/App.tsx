@@ -15,6 +15,7 @@ import { ConvexStatusBanner } from "./components/ConvexStatusBanner";
 import { CvForge } from "./pages/CvForge";
 import { CvsLibrary } from "./pages/CvsLibrary";
 import { ProposalForge } from "./pages/ProposalForge";
+import { JobsPage } from "./pages/JobsPage";
 import { ProposalsLibrary } from "./pages/ProposalsLibrary";
 import { StyleForge } from "./pages/StyleForge";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -349,6 +350,8 @@ function AppShell(): JSX.Element {
                 <Route path="/cvs" element={<CvsLibrary />} />
                 <Route path="/proposal" element={<ProposalForge />} />
                 <Route path="/proposal-next" element={<Navigate to="/proposal" replace />} />
+                <Route path="/jobs" element={<JobsPage />} />
+                <Route path="/jobs/:jobId" element={<JobsPage />} />
                 <Route path="/proposals" element={<ProposalsLibrary />} />
                 <Route path="/style" element={<StyleForge />} />
                 <Route path="/settings" element={<SettingsPage />} />

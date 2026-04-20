@@ -1,10 +1,11 @@
 import React from "react";
-import { useQuery } from "convex/react";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { isQuickStartCompleted } from "../lib/onboarding-state";
 import { createQuickStartLocationState } from "../lib/quick-start-routing";
 import { Check, Eye, Palette, PenLine } from "@/lib/icons";
 import { api } from "../../convex/_generated/api";
+import { ProposalBriefCard } from "../components/ProposalBriefCard";
 import { ProfileReviewCard } from "../components/ProfileReviewCard";
 import ResumeExportControl from "../components/ResumeExportControl";
 import type { ResumeExportRequest } from "../components/ResumeExportControl";
@@ -67,6 +68,47 @@ type SavedStylePresetSlot = {
   voicePreset: "signature" | "expert" | "engaging" | null;
   name?: string;
 };
+
+type CvForgeJobReviewItem = {
+  id: string;
+  fieldKey: string;
+  label: string;
+  reviewStatus: string;
+  suggestedValue: unknown;
+  approvedValue?: unknown;
+  sourceText: string;
+};
+
+type CvForgeLinkedProposal = {
+  id: string;
+  title: string;
+  status: string;
+  updatedAt: number;
+};
+
+type CvForgeCanonicalJob = {
+  id: string;
+  title: string;
+  company: string;
+  location: string;
+  sourceUrl: string;
+  sourceDomain: string;
+  sourceType: string;
+  applicationUrl: string;
+  parseStatus: string;
+  reviewState: string;
+  summary: string;
+  rawDescription: string;
+  responsibilities: string[];
+  keywords: string[];
+  mustHaves: string[];
+  toneCues: string[];
+  contacts: string[];
+  status: string;
+  linkedProposalCount: number;
+  linkedProposals: CvForgeLinkedProposal[];
+  reviewItems: CvForgeJobReviewItem[];
+} | null;
 
 const CV_FORGE_WORKSPACE_MODE_STORAGE_KEY = "dasti:cv-forge-workspace-mode:v1";
 const DEFAULT_PRESET_SLOT_NAMES: Record<PresetSlotIndex, string> = {
@@ -155,6 +197,9 @@ export function CvForge(): JSX.Element {
   const location = useLocation();
   const { search } = location;
   const navigate = useNavigate();
+  const {
+    isAuthenticated: isConvexAuthenticated,
+  } = useConvexAuth();
   const { currentCv, importCv, cvs, isLibraryHydrated, lastLibraryFetchFailed } =
     useCvLibrary();
   const [quickStartCompleted] = React.useState(() =>
@@ -295,6 +340,30 @@ export function CvForge(): JSX.Element {
       hiddenSectionIds,
     );
   }, [currentCv?.id, hiddenSectionIds]);
+  const requestedJobId = React.useMemo(
+    () => new URLSearchParams(search).get("jobId") || undefined,
+    [search],
+  );
+  const requestedJobRecord = useQuery(
+    ((api as any).jobsPublic?.getById ?? "jobsPublic.getById") as any,
+    requestedJobId && isConvexAuthenticated ? { jobId: requestedJobId } : "skip",
+  ) as CvForgeCanonicalJob | undefined;
+  const approveJobReviewItem = useMutation(
+    ((api as any).jobsPublic?.approveReviewItem ?? "jobsPublic.approveReviewItem") as any,
+  );
+  const updateJobField = useMutation(
+    ((api as any).jobsPublic?.updateField ?? "jobsPublic.updateField") as any,
+  );
+  const [optimisticJobRecord, setOptimisticJobRecord] =
+    React.useState<CvForgeCanonicalJob>(null);
+
+  React.useEffect(() => {
+    if (requestedJobRecord !== undefined) {
+      setOptimisticJobRecord(requestedJobRecord);
+    }
+  }, [requestedJobRecord]);
+
+  const selectedJobRecord = optimisticJobRecord ?? requestedJobRecord ?? null;
   const isSplitCanvas = viewportWidth >= 1240;
   const editorGridMaxWidth =
     workspaceMode === "edit"
@@ -701,6 +770,93 @@ export function CvForge(): JSX.Element {
     "--cv-preview-shell-block-size": cvPreviewShellBlockSize,
     "--document-viewer-shell-inline-size": "100%",
   } as React.CSSProperties;
+  const showJobBriefContext = Boolean(requestedJobId);
+
+  const handleApproveJobReviewItem = React.useCallback(
+    async (item: CvForgeJobReviewItem) => {
+      if (!requestedJobId) {
+        return;
+      }
+
+      setOptimisticJobRecord((current) => {
+        if (!current) {
+          return current;
+        }
+
+        const nextReviewItems = current.reviewItems.map((reviewItem) =>
+          reviewItem.id === item.id
+            ? {
+                ...reviewItem,
+                reviewStatus: "approved",
+                approvedValue:
+                  reviewItem.approvedValue ?? reviewItem.suggestedValue,
+              }
+            : reviewItem,
+        );
+        const nextReviewState = nextReviewItems.every(
+          (reviewItem) => reviewItem.reviewStatus === "approved",
+        )
+          ? "ready"
+          : "needs_review";
+
+        return {
+          ...current,
+          [item.fieldKey]: item.approvedValue ?? item.suggestedValue,
+          reviewItems: nextReviewItems,
+          reviewState: nextReviewState,
+        } as CvForgeCanonicalJob;
+      });
+
+      await approveJobReviewItem({
+        jobId: requestedJobId,
+        reviewItemId: item.id,
+      });
+    },
+    [approveJobReviewItem, requestedJobId],
+  );
+
+  const handleSaveJobReviewItem = React.useCallback(
+    async (item: CvForgeJobReviewItem, nextValue: string | string[]) => {
+      if (!requestedJobId) {
+        return;
+      }
+
+      setOptimisticJobRecord((current) => {
+        if (!current) {
+          return current;
+        }
+
+        const nextReviewItems = current.reviewItems.map((reviewItem) =>
+          reviewItem.id === item.id
+            ? {
+                ...reviewItem,
+                reviewStatus: "approved",
+                approvedValue: nextValue,
+              }
+            : reviewItem,
+        );
+        const nextReviewState = nextReviewItems.every(
+          (reviewItem) => reviewItem.reviewStatus === "approved",
+        )
+          ? "ready"
+          : "needs_review";
+
+        return {
+          ...current,
+          [item.fieldKey]: nextValue,
+          reviewItems: nextReviewItems,
+          reviewState: nextReviewState,
+        } as CvForgeCanonicalJob;
+      });
+
+      await updateJobField({
+        jobId: requestedJobId,
+        fieldKey: item.fieldKey,
+        value: nextValue,
+      });
+    },
+    [requestedJobId, updateJobField],
+  );
 
   return (
     <div
@@ -730,6 +886,33 @@ export function CvForge(): JSX.Element {
           } as React.CSSProperties
         }
       >
+        {showJobBriefContext ? (
+          <div className="dasti-cv-job-context">
+            {requestedJobRecord === undefined ? (
+              <p className="dasti-hint">Loading saved job brief…</p>
+            ) : selectedJobRecord ? (
+              <ProposalBriefCard
+                documentTitle={selectedJobRecord.title}
+                jobDescription={selectedJobRecord.rawDescription}
+                variant="compact"
+                sourceUrl={selectedJobRecord.sourceUrl}
+                sourcePlatform={selectedJobRecord.sourceType}
+                summaryText={selectedJobRecord.summary}
+                parseStatus={selectedJobRecord.parseStatus}
+                trustState={selectedJobRecord.reviewState}
+                linkedDocumentCount={selectedJobRecord.linkedProposalCount}
+                linkedProposals={selectedJobRecord.linkedProposals}
+                reviewItems={selectedJobRecord.reviewItems}
+                onApproveReviewItem={handleApproveJobReviewItem}
+                onSaveReviewItem={handleSaveJobReviewItem}
+              />
+            ) : (
+              <p className="dasti-hint">
+                Saved job context is unavailable for this resume session.
+              </p>
+            )}
+          </div>
+        ) : null}
         {workspaceMode === "preview" ? (
           <>
             {currentCv ? (

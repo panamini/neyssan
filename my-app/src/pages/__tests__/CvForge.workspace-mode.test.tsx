@@ -63,22 +63,49 @@ vi.mock("../../components/EmbeddedStyleInspector", () => ({
 }));
 
 vi.mock("convex/react", () => ({
-  useQuery: vi.fn(() => ({
-    preset1: {
-      verbatiStyle: {
-        familyId: "editorial",
-        layout: "editorial",
-        typography: "quiet-editorial",
-        palette: "pierre",
-      },
-      voicePreset: null,
-      name: "Stone Editorial",
-    },
-    preset2: null,
-    preset3: null,
-    activeSlot: 1,
+  useConvexAuth: vi.fn(() => ({
+    isAuthenticated: true,
+    isLoading: false,
   })),
+  useMutation: vi.fn(() => vi.fn(async () => undefined)),
+  useQuery: vi.fn((reference: string, args?: unknown) => {
+    if (reference === "proposalSettings.getPresets") {
+      return {
+        preset1: {
+          fontPairId: "quiet-editorial",
+          styleChoice: "balanced",
+          paletteOverride: "pierre",
+          accentHex: null,
+          voicePreset: null,
+          name: "Stone Swiss",
+        },
+        preset2: null,
+        preset3: null,
+        activeSlot: 1,
+      };
+    }
+    if (reference === "jobsPublic.getById") {
+      if (args === "skip") {
+        return undefined;
+      }
+      return null;
+    }
+    return null;
+  }),
   useAction: vi.fn(() => undefined),
+}));
+
+vi.mock("../../../convex/_generated/api", () => ({
+  api: {
+    proposalSettings: {
+      getPresets: "proposalSettings.getPresets",
+    },
+    jobsPublic: {
+      getById: "jobsPublic.getById",
+      approveReviewItem: "jobsPublic.approveReviewItem",
+      updateField: "jobsPublic.updateField",
+    },
+  },
 }));
 
 vi.mock("../../features/verbati/VerbatiCvPreviewPanel", () => ({

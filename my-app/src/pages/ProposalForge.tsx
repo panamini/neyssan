@@ -5639,7 +5639,7 @@ export function ProposalForge(): JSX.Element {
   const briefSummaryText = canonicalJobRecord?.summary?.trim() || null;
   const briefTrustState = canonicalJobRecord?.reviewState ?? null;
   const briefReviewItems = canonicalJobRecord?.reviewItems ?? [];
-  const briefLinkedOutputCount = canonicalJobRecord?.linkedProposalCount ?? 0;
+  const briefLinkedDocumentCount = canonicalJobRecord?.linkedProposalCount ?? 0;
   const briefLinkedProposals = canonicalJobRecord?.linkedProposals ?? [];
   const hasBriefContent = Boolean(briefJobDescription);
   const showBriefCard =
@@ -6354,7 +6354,7 @@ export function ProposalForge(): JSX.Element {
                             summaryText={briefSummaryText}
                             parseStatus={canonicalJobRecord?.parseStatus ?? null}
                             trustState={briefTrustState}
-                            linkedOutputCount={briefLinkedOutputCount}
+                            linkedDocumentCount={briefLinkedDocumentCount}
                             linkedProposals={briefLinkedProposals}
                             reviewItems={briefReviewItems}
                             onApproveReviewItem={
