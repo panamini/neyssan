@@ -100,4 +100,28 @@ describe("ResumeTemplateRenderer", () => {
     expect(scaledPageInner?.getAttribute("style")).toContain("top: 0px;");
     expect(scaledPageInner?.getAttribute("style")).toContain("left: 0px;");
   });
+
+  it("injects live font and palette theme vars for workshop preview rendering", () => {
+    const { container } = render(
+      <ResumeTemplateRenderer
+        data={resumeMock}
+        stylePreset={{
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "soft-serif",
+          palette: "encre",
+        }}
+        resumeTemplateId="workshop_resume_onecol_ats"
+      />,
+    );
+
+    const renderer = container.querySelector(
+      '[data-testid="resume-template-renderer"]',
+    ) as HTMLElement | null;
+
+    expect(renderer?.style.getPropertyValue("--color-accent")).toBe("#3f5b67");
+    expect(renderer?.style.getPropertyValue("--color-text")).toBeTruthy();
+    expect(renderer?.style.getPropertyValue("--font-heading-family")).toBeTruthy();
+    expect(renderer?.style.getPropertyValue("--font-body-family")).toBeTruthy();
+  });
 });

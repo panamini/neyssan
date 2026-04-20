@@ -10,14 +10,15 @@ import ResumeExportControl from "../components/ResumeExportControl";
 import type { ResumeExportRequest } from "../components/ResumeExportControl";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import { VerbatiCvPreviewPanel } from "../features/verbati/VerbatiCvPreviewPanel";
+import EmbeddedStyleInspector from "../components/EmbeddedStyleInspector";
 import type {
   ResumeActiveTarget,
   ResumeLinkIntent,
 } from "../features/verbati/resumeLinking";
 import { useBoundVerbatiCvStyle } from "../features/verbati/useBoundVerbatiCvStyle";
 import {
-  getResumeTemplateId,
   resolveVerbatiStyle,
+  sanitizePersistedVerbatiStyle,
 } from "../features/verbati/style";
 import {
   getProposalStyleDefinition,
@@ -56,6 +57,7 @@ type SavedStylePresetSlot = {
   styleChoice: ProposalStyleChoice;
   paletteOverride: ProposalPaletteId | null;
   accentHex: string | null;
+  verbatiStyle?: Partial<VerbatiStylePreset> | null;
   voicePreset: "signature" | "expert" | "engaging" | null;
   name?: string;
 };
@@ -102,6 +104,9 @@ function normalizePresetSlot(value: unknown): SavedStylePresetSlot | null {
         ? (record.paletteOverride as ProposalPaletteId)
         : null,
     accentHex: typeof record.accentHex === "string" ? record.accentHex : null,
+    verbatiStyle: sanitizePersistedVerbatiStyle(
+      record.verbatiStyle as Partial<VerbatiStylePreset> | null | undefined,
+    ),
     voicePreset:
       record.voicePreset === "signature" ||
       record.voicePreset === "expert" ||
@@ -115,7 +120,9 @@ function normalizePresetSlot(value: unknown): SavedStylePresetSlot | null {
 function buildStylePresetFromSettingsSlot(
   preset: SavedStylePresetSlot,
 ): VerbatiStylePreset {
-  const baseStyle = getProposalStyleDefinition(preset.styleChoice).stylePreset;
+  const baseStyle = preset.verbatiStyle
+    ? resolveVerbatiStyle(preset.verbatiStyle)
+    : getProposalStyleDefinition(preset.styleChoice).stylePreset;
 
   return resolveVerbatiStyle({
     ...baseStyle,
@@ -127,7 +134,7 @@ function buildStylePresetFromSettingsSlot(
         }
       : preset.paletteOverride
         ? { palette: preset.paletteOverride }
-        : null),
+      : null),
   });
 }
 
@@ -337,21 +344,11 @@ export function CvForge(): JSX.Element {
         request.format === "pdf" ? `pdf:${request.mode}` : request.format;
       setExportingFormat(exportKey);
       try {
-        const isWorkshopStyledPdfExport =
-          request.format === "pdf" &&
-          request.mode === "styled" &&
-          getResumeTemplateId(stylePreset) === "workshop_resume_onecol_ats";
         const exported =
           request.format === "pdf" || request.format === "docx"
             ? await (async () => {
                 const source =
-                  isWorkshopStyledPdfExport
-                    ? buildResumeExportSource({
-                        currentCv,
-                        authoritativeResume,
-                        stylePreset,
-                      })
-                    : request.format === "pdf" && request.mode === "styled"
+                  request.format === "pdf" && request.mode === "styled"
                     ? buildStyledResumePrintSource({
                         currentCv,
                         stylePreset,
@@ -490,71 +487,113 @@ export function CvForge(): JSX.Element {
     : "Style controls";
   const stylePresetToolbarControl = (
     <div
-      ref={presetMenuRef}
-      className="dasti-import-dropdown dasti-cv-style-presets"
-      data-open={isStylePresetMenuOpen ? "true" : "false"}
-      style={{ flex: "0 0 auto" }}
+      className="dasti-icon-cluster"
+      style={{ alignItems: "center", gap: "var(--proposal-chrome-tight-gap)" }}
     >
-      <button
-        type="button"
-        className="dasti-icon-button"
-        aria-label={stylePresetToolbarLabel}
-        aria-expanded={
-          hasAnySavedStylePreset ? isStylePresetMenuOpen : undefined
-        }
-        aria-haspopup={hasAnySavedStylePreset ? "menu" : undefined}
-        data-toolbar-tooltip={stylePresetToolbarTooltip}
-        onClick={() => {
-          if (!hasAnySavedStylePreset) {
-            setWorkspaceMode("preview");
-            return;
-          }
-          setIsStylePresetMenuOpen((current) => !current);
-        }}
+      <div
+        ref={presetMenuRef}
+        className="dasti-import-dropdown dasti-cv-style-presets"
+        data-open={isStylePresetMenuOpen ? "true" : "false"}
+        style={{ flex: "0 0 auto" }}
       >
-        <Palette size={16} strokeWidth={1.7} aria-hidden="true" />
-      </button>
-      {isStylePresetMenuOpen ? (
-        <div
-          className="dasti-import-dropdown__menu dasti-import-dropdown__menu--compact dasti-toolbar-drawer-surface dasti-cv-style-presets__menu"
-          role="menu"
-          aria-label="Saved resume styles"
+        <button
+          type="button"
+          className="dasti-icon-button"
+          aria-label={stylePresetToolbarLabel}
+          aria-expanded={
+            hasAnySavedStylePreset ? isStylePresetMenuOpen : undefined
+          }
+          aria-haspopup={hasAnySavedStylePreset ? "menu" : undefined}
+          data-toolbar-tooltip={stylePresetToolbarTooltip}
+          onClick={() => {
+            if (!hasAnySavedStylePreset) {
+              setWorkspaceMode("preview");
+              return;
+            }
+            setIsStylePresetMenuOpen((current) => !current);
+          }}
         >
-          {stylePresetSlots.map(
-            ({ slot, label, preset, stylePreset: nextStyle, isActive }) => (
-              <button
-                key={slot}
-                type="button"
-                role="menuitemradio"
-                className="dasti-cv-style-presets__option"
-                disabled={!preset || !nextStyle}
-                aria-checked={isActive}
-                onClick={() => {
-                  if (!nextStyle) {
-                    return;
-                  }
-                  setStylePreset(nextStyle);
-                  setIsStylePresetMenuOpen(false);
-                }}
-              >
-                <span className="dasti-cv-style-presets__option-copy">
-                  <span className="dasti-cv-style-presets__option-title">
-                    {label}
+          <Palette size={16} strokeWidth={1.7} aria-hidden="true" />
+        </button>
+        {isStylePresetMenuOpen ? (
+          <div
+            className="dasti-import-dropdown__menu dasti-import-dropdown__menu--compact dasti-toolbar-drawer-surface dasti-cv-style-presets__menu"
+            role="menu"
+            aria-label="Saved resume styles"
+          >
+            {stylePresetSlots.map(
+              ({ slot, label, preset, stylePreset: nextStyle, isActive }) => (
+                <button
+                  key={slot}
+                  type="button"
+                  role="menuitemradio"
+                  className="dasti-cv-style-presets__option"
+                  disabled={!preset || !nextStyle}
+                  aria-checked={isActive}
+                  onClick={() => {
+                    if (!nextStyle) {
+                      return;
+                    }
+                    setStylePreset(nextStyle);
+                    setIsStylePresetMenuOpen(false);
+                  }}
+                >
+                  <span className="dasti-cv-style-presets__option-copy">
+                    <span className="dasti-cv-style-presets__option-title">
+                      {label}
+                    </span>
+                    <span className="dasti-cv-style-presets__option-description">
+                      {preset
+                        ? `${nextStyle ? nextStyle.layout : "swiss"} / ${preset.fontPairId ?? "default"}`
+                        : "No saved style"}
+                    </span>
                   </span>
-                  <span className="dasti-cv-style-presets__option-description">
-                    {preset
-                      ? `${nextStyle ? nextStyle.layout : "swiss"} / ${preset.fontPairId ?? "default"}`
-                      : "No saved style"}
-                  </span>
-                </span>
-                {isActive ? (
-                  <Check size={14} strokeWidth={1.8} aria-hidden="true" />
-                ) : null}
-              </button>
-            ),
-          )}
-        </div>
-      ) : null}
+                  {isActive ? (
+                    <Check size={14} strokeWidth={1.8} aria-hidden="true" />
+                  ) : null}
+                </button>
+              ),
+            )}
+          </div>
+        ) : null}
+      </div>
+
+      <EmbeddedStyleInspector
+        stylePreset={stylePreset}
+        copyMode="title-only"
+        controlMode="direct"
+        showCustomizeControl={false}
+        showPromptControl={false}
+        onSelectBundle={() => {}}
+        onSelectLayout={(layout) =>
+          setStylePreset((current) =>
+            resolveVerbatiStyle({
+              ...current,
+              familyId: layout,
+              layout,
+            }),
+          )
+        }
+        onSelectTypography={(typography) =>
+          setStylePreset((current) =>
+            resolveVerbatiStyle({ ...current, typography }),
+          )
+        }
+        onSelectPalette={(palette) =>
+          setStylePreset((current) => ({
+            ...resolveVerbatiStyle(current),
+            palette,
+            accentHex: undefined,
+          }))
+        }
+        onSelectCustomAccent={(accentHex) =>
+          setStylePreset((current) => ({
+            ...resolveVerbatiStyle(current),
+            palette: "custom",
+            accentHex,
+          }))
+        }
+      />
     </div>
   );
 
