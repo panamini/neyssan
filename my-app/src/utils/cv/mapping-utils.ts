@@ -1039,6 +1039,35 @@ function sanitizeUpstreamDesiredPosition(value: unknown): string | undefined {
   return cleaned;
 }
 
+function sanitizeProfileDesiredPosition(
+  value: unknown,
+  options: {
+    profileName?: string | null;
+  } = {},
+): string | undefined {
+  const cleaned = sanitizeUpstreamDesiredPosition(value);
+  if (!cleaned) return undefined;
+  const { profileName } = options;
+
+  const normalizedDesiredPosition = normalizeFallbackNameValue(cleaned);
+  const normalizedProfileName = normalizeFallbackNameValue(String(profileName ?? ""));
+  if (normalizedDesiredPosition && normalizedProfileName && normalizedDesiredPosition === normalizedProfileName) {
+    return undefined;
+  }
+
+  const desiredTokens = new Set(normalizedDesiredPosition.split(/\s+/).filter(Boolean));
+  const profileTokens = new Set(normalizedProfileName.split(/\s+/).filter(Boolean));
+  if (
+    desiredTokens.size >= 2 &&
+    desiredTokens.size === profileTokens.size &&
+    Array.from(desiredTokens).every((token) => profileTokens.has(token))
+  ) {
+    return undefined;
+  }
+
+  return cleaned;
+}
+
 function sanitizeUpstreamProfileLocation(value: unknown): string | undefined {
   if (typeof value !== "string" || !value.trim()) return undefined;
   const raw = String(value);
@@ -2239,9 +2268,13 @@ export function buildTypedSectionsFromNormalized(normalized: PartialNormalizedCv
       phone: findFirstValue(["phone", "phoneNumber"], profileSources),
       linkedin: findFirstValue(["linkedin", "linkedIn"], profileSources.filter(s => String((s as any).linkedin ?? (s as any).linkedIn).includes('linkedin.com'))),
       website: findFirstValue(["website", "url", "site"], profileSources.filter(s => !String((s as any).website ?? (s as any).url).includes('linkedin.com'))),
-      desiredPosition: sanitizeUpstreamDesiredPosition(findFirstValue(["desiredPosition", "title"], profileSources)),
+      desiredPosition: undefined as string | undefined,
       location: resolveMaterializedProfileLocation(normalized),
   };
+  profileItem.desiredPosition = sanitizeProfileDesiredPosition(
+    findFirstValue(["desiredPosition", "title"], profileSources),
+    { profileName: profileItem.name },
+  );
   
   // Fallback profile extraction from raw text with guards
   const rawText = getRawTextFromNormalized(normalized);
@@ -2264,7 +2297,10 @@ export function buildTypedSectionsFromNormalized(normalized: PartialNormalizedCv
       profileItem.website = extracted.website;
     }
     if (!profileItem.desiredPosition && extracted.desiredPosition) {
-      profileItem.desiredPosition = sanitizeUpstreamDesiredPosition(extracted.desiredPosition) ?? profileItem.desiredPosition;
+      profileItem.desiredPosition =
+        sanitizeProfileDesiredPosition(extracted.desiredPosition, {
+          profileName: profileItem.name,
+        }) ?? profileItem.desiredPosition;
     }
     if (!profileItem.location && extracted.location) {
       profileItem.location = sanitizeUpstreamProfileLocation(extracted.location) ?? profileItem.location;
@@ -2483,9 +2519,15 @@ export function applyStrictContactToSections(sections: CvSection[], strict?: Str
   // Desired Position: prefer longer, more specific title from strict
   if (typeof strict.desiredPosition === "string" && strict.desiredPosition.trim()) {
     const current = String(item.desiredPosition ?? "").trim();
-    const incoming = strict.desiredPosition.trim();
+    const incoming =
+      sanitizeProfileDesiredPosition(strict.desiredPosition.trim(), {
+        profileName:
+          typeof strict.name === "string" && strict.name.trim()
+            ? strict.name.trim()
+            : item.name,
+      }) ?? "";
     if (!current || incoming.length > current.length) {
-      item.desiredPosition = incoming;
+      if (incoming) item.desiredPosition = incoming;
     }
   }
 
