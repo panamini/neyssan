@@ -276,6 +276,7 @@ export default mutation({
 
     const proposalId = await ctx.db.insert("proposals", {
       userId: user._id,
+      jobId: args.metadata?.jobId,
       title: trimmedTitle,
       content: trimmedContent,
       status: args.status ?? "saved",
