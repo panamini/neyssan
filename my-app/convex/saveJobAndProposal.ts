@@ -15,12 +15,13 @@ const savedProposalType = v.optional(
 function buildProposalMetadata(args: {
   platform: string;
   url: string;
+  jobId?: string;
   description?: string;
   proposalType?: "cover_letter" | "application_message" | "freelance_proposal";
 }) {
   return {
     platform: args.platform,
-    jobId: args.url,
+    jobId: args.jobId ?? args.url,
     tags: [],
     ...(args.description ? { sourceJobDescription: args.description } : {}),
     ...(args.proposalType ? { proposalType: args.proposalType } : {}),
@@ -34,6 +35,7 @@ export const saveJobAndProposal = internalMutation({
       title: v.string(),
       description: v.optional(v.string()),
       url: v.string(),
+      jobId: v.optional(v.string()),
     }),
     proposalText: v.string(),
     proposalType: savedProposalType,
@@ -65,9 +67,11 @@ export const saveJobAndProposal = internalMutation({
       updatedAt: Date.now(),
       sections: [{ type: "text", content: args.proposalText }],
       metrics: { score: 0, confidence: 0 },
+      jobId: args.jobData.jobId,
       metadata: buildProposalMetadata({
         platform: args.jobData.platform,
         url: args.jobData.url,
+        jobId: args.jobData.jobId,
         description: args.jobData.description,
         proposalType: args.proposalType,
       }),
@@ -82,6 +86,7 @@ export default mutation({
       title: v.string(),
       description: v.optional(v.string()),
       url: v.string(),
+      jobId: v.optional(v.string()),
     }),
     proposalText: v.string(),
     proposalType: savedProposalType,
@@ -106,9 +111,11 @@ export default mutation({
       updatedAt: Date.now(),
       sections: [{ type: "text", content: args.proposalText }],
       metrics: { score: 0, confidence: 0 },
+      jobId: args.jobData.jobId,
       metadata: buildProposalMetadata({
         platform: args.jobData.platform,
         url: args.jobData.url,
+        jobId: args.jobData.jobId,
         description: args.jobData.description,
         proposalType: args.proposalType,
       }),

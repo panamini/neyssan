@@ -19,8 +19,18 @@ interface JobData {
   title: string;
   description?: string;
   url: string;
+  jobId?: string;
   proposalType?: "technical" | "creative" | "cover_letter" | "application_message" | "freelance_proposal";
 }
+
+type SavedJobState = {
+  jobId?: string;
+  dedupeHit?: boolean;
+  parseStatus: "parsing" | "parsed" | "failed";
+  reviewState?: string;
+  savedAt: number;
+  sourceTitle?: string;
+};
 
 interface ActiveCvSnapshot {
   title: string;
@@ -59,6 +69,84 @@ type ProfilePayload = {
 };
 
 const USE_CURRENT_CV_CONTEXT_STORAGE_KEY = "useCurrentCvContext";
+const SAVED_JOB_STATE_STORAGE_PREFIX = "neyssanSavedJobState:v1:";
+
+function buildSavedJobStateStorageKey(url: string): string {
+  return `${SAVED_JOB_STATE_STORAGE_PREFIX}${url}`;
+}
+
+function persistSavedJobState(url: string, state: SavedJobState) {
+  chrome.storage.local.set({
+    [buildSavedJobStateStorageKey(url)]: state,
+  });
+}
+
+function readSavedJobState(url: string): Promise<SavedJobState | null> {
+  return new Promise((resolve) => {
+    chrome.storage.local.get([buildSavedJobStateStorageKey(url)], (result) => {
+      resolve(result?.[buildSavedJobStateStorageKey(url)] ?? null);
+    });
+  });
+}
+
+function resolveSavedJobMessage(state: SavedJobState): {
+  kind: "error" | "success" | "info";
+  message: string;
+} {
+  if (state.parseStatus === "failed") {
+    return {
+      kind: "error",
+      message: "Job saved, but parsing failed. Open saved Job to review it.",
+    };
+  }
+
+  if (state.dedupeHit) {
+    return {
+      kind: "info",
+      message: "Already saved. Open saved Job to continue from the existing brief.",
+    };
+  }
+
+  if (state.reviewState === "ready") {
+    return {
+      kind: "success",
+      message: "Job saved. Ready for document generation.",
+    };
+  }
+
+  if (state.reviewState === "needs_review") {
+    return {
+      kind: "info",
+      message: "Job saved. Needs review before it becomes trusted.",
+    };
+  }
+
+  return {
+    kind: "info",
+    message: "Job saved. Parsing is still in progress.",
+  };
+}
+
+function reconcileSavedJobState(
+  currentState: SavedJobState,
+  response: {
+    jobId?: string;
+    parseStatus?: string;
+    reviewState?: string;
+  },
+): SavedJobState {
+  return {
+    ...currentState,
+    jobId: response.jobId ?? currentState.jobId,
+    parseStatus:
+      response.parseStatus === "failed"
+        ? "failed"
+        : response.parseStatus === "parsed"
+          ? "parsed"
+          : "parsing",
+    reviewState: response.reviewState ?? currentState.reviewState,
+  };
+}
 
 function Toast({ message, onClose }: { message: string | null; onClose: () => void }) {
   useEffect(() => {
@@ -146,10 +234,12 @@ export function ProposalPreview() {
   const [toast, setToast] = useState<string | null>(null);
   const [inlineStatus, setInlineStatus] = useState<{ kind: "error" | "success" | "info"; message: string } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingJob, setIsSavingJob] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isOpeningInApp, setIsOpeningInApp] = useState(false);
   const [activeCvSnapshot, setActiveCvSnapshot] = useState<ActiveCvSnapshot | null>(null);
   const [useCurrentCvContext, setUseCurrentCvContext] = useState(false);
+  const [savedJobState, setSavedJobState] = useState<SavedJobState | null>(null);
   const nextGenerateRunIdRef = useRef(0);
   const activeGenerateRunIdRef = useRef<number | null>(null);
   const isAuthSyncInFlightRef = useRef(false);
@@ -218,6 +308,79 @@ export function ProposalPreview() {
   const proposalType = jobData.proposalType || "cover_letter";
   const isLetterLikeProposal =
     proposalType === "cover_letter" || proposalType === "application_message";
+
+  useEffect(() => {
+    let isActive = true;
+    void readSavedJobState(jobData.url).then((state) => {
+      if (!isActive) {
+        return;
+      }
+
+      setSavedJobState(state);
+      if (state?.jobId) {
+        setJobData((current) =>
+          current.url === jobData.url && current.jobId !== state.jobId
+            ? { ...current, jobId: state.jobId }
+            : current,
+        );
+        chrome.runtime.sendMessage(
+          {
+            action: "getJobSaveState",
+            jobData: {
+              ...jobData,
+              jobId: state.jobId,
+            },
+          },
+          (response) => {
+            if (!isActive || chrome.runtime.lastError || !response?.success) {
+              return;
+            }
+
+            const reconciledState = reconcileSavedJobState(state, response);
+            setSavedJobState(reconciledState);
+            persistSavedJobState(jobData.url, reconciledState);
+          },
+        );
+      }
+    });
+
+    return () => {
+      isActive = false;
+    };
+  }, [jobData.url]);
+
+  useEffect(() => {
+    if (!savedJobState?.jobId || savedJobState.parseStatus !== "parsing") {
+      return;
+    }
+
+    let isActive = true;
+    const intervalId = window.setInterval(() => {
+      chrome.runtime.sendMessage(
+        {
+          action: "getJobSaveState",
+          jobData: {
+            ...jobData,
+            jobId: savedJobState.jobId,
+          },
+        },
+        (response) => {
+          if (!isActive || chrome.runtime.lastError || !response?.success) {
+            return;
+          }
+
+          const reconciledState = reconcileSavedJobState(savedJobState, response);
+          setSavedJobState(reconciledState);
+          persistSavedJobState(jobData.url, reconciledState);
+        },
+      );
+    }, 2500);
+
+    return () => {
+      isActive = false;
+      window.clearInterval(intervalId);
+    };
+  }, [jobData, savedJobState]);
 
   useEffect(() => {
     const platform = detectPlatform(window.location.href);
@@ -448,6 +611,71 @@ export function ProposalPreview() {
     });
   };
 
+  const handleSaveJob = () => {
+    if (!jobData.title.trim() || !(jobData.description || "").trim()) {
+      showToast("Add a job title and description first.");
+      showInlineStatus("error", "Save job failed: add a title and description first.");
+      return;
+    }
+
+    const optimisticState: SavedJobState = {
+      jobId: jobData.jobId,
+      parseStatus: "parsing",
+      reviewState: "pending",
+      savedAt: Date.now(),
+      sourceTitle: jobData.title,
+    };
+
+    setIsSavingJob(true);
+    setSavedJobState(optimisticState);
+    persistSavedJobState(jobData.url, optimisticState);
+    showInlineStatus("info", "Job saved · Parsing…");
+
+    chrome.runtime.sendMessage({ action: "saveJob", jobData }, (response) => {
+      setIsSavingJob(false);
+      if (chrome.runtime.lastError) {
+        const err = getRuntimeErrorMessage();
+        const failedState: SavedJobState = {
+          ...optimisticState,
+          parseStatus: "failed",
+        };
+        setSavedJobState(failedState);
+        persistSavedJobState(jobData.url, failedState);
+        showToast(`Failed to save job: ${err}`);
+        showInlineStatus("error", `Save job failed: ${err}`);
+        return;
+      }
+
+      if (response && response.success && response.jobId) {
+        const nextState: SavedJobState = {
+          jobId: response.jobId,
+          dedupeHit: Boolean(response.dedupeHit),
+          parseStatus: response.parseStatus === "failed" ? "failed" : response.parseStatus === "parsed" ? "parsed" : "parsing",
+          reviewState: response.reviewState,
+          savedAt: Date.now(),
+          sourceTitle: jobData.title,
+        };
+        setJobData((current) => ({ ...current, jobId: response.jobId }));
+        setSavedJobState(nextState);
+        persistSavedJobState(jobData.url, nextState);
+        const status = resolveSavedJobMessage(nextState);
+        showToast(nextState.dedupeHit ? "Job already saved" : "Job saved");
+        showInlineStatus(status.kind, status.message);
+        return;
+      }
+
+      const err = response?.error || "Unknown error";
+      const failedState: SavedJobState = {
+        ...optimisticState,
+        parseStatus: "failed",
+      };
+      setSavedJobState(failedState);
+      persistSavedJobState(jobData.url, failedState);
+      showToast(`Failed to save job: ${err}`);
+      showInlineStatus("error", `Save job failed: ${err}`);
+    });
+  };
+
   const handleOpenInProposalForge = () => {
     setIsOpeningInApp(true);
     setInlineStatus(null);
@@ -460,8 +688,26 @@ export function ProposalPreview() {
         return;
       }
       if (response && response.success) {
-        showToast("Opened Proposal Forge");
-        showInlineStatus("success", "Opened Proposal Forge in a new tab.");
+        if (response.jobId) {
+          const nextState: SavedJobState = {
+            jobId: response.jobId,
+            dedupeHit: Boolean(response.dedupeHit),
+            parseStatus: savedJobState?.parseStatus ?? "parsing",
+            reviewState: savedJobState?.reviewState ?? "needs_review",
+            savedAt: Date.now(),
+            sourceTitle: jobData.title,
+          };
+          setJobData((current) => ({ ...current, jobId: response.jobId }));
+          setSavedJobState(nextState);
+          persistSavedJobState(jobData.url, nextState);
+        }
+        showToast(response?.dedupeHit ? "Opened saved Job" : "Opened Proposal Forge");
+        showInlineStatus(
+          "success",
+          response?.dedupeHit
+            ? "Opened saved Job in Proposal Forge."
+            : "Opened Job Brief in Proposal Forge.",
+        );
       } else {
         const err = response?.error || "Unknown error";
         showToast(`Failed to open Proposal Forge: ${err}`);
@@ -568,9 +814,15 @@ export function ProposalPreview() {
     }
   };
 
+  const primaryOpenLabel =
+    savedJobState?.jobId || jobData.jobId ? "Open saved Job" : "Open in Proposal Forge";
+  const savedJobPill = savedJobState
+    ? resolveSavedJobMessage(savedJobState)
+    : null;
+
   return (
     <>
-      <div id="proposal-preview-root" style={{ position: "fixed", bottom: "20px", right: "20px", width: "420px", padding: "18px", background: "white", border: "1px solid #e5e7eb", borderRadius: "10px", boxShadow: "0 8px 30px rgba(2,6,23,0.2)", zIndex: 99999, fontFamily: "inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto" }}>
+      <div id="proposal-preview-root" style={{ position: "fixed", bottom: "20px", right: "20px", width: "420px", padding: "18px", background: "linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,250,252,0.98))", border: "1px solid rgba(148,163,184,0.26)", borderRadius: "14px", boxShadow: "0 18px 44px rgba(15,23,42,0.18)", zIndex: 99999, fontFamily: "'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif", backdropFilter: "blur(16px)" }}>
         <h3 style={{ margin: 0, marginBottom: 8, fontSize: 16 }}>Proposal Preview</h3>
         <div
           style={{
@@ -615,6 +867,39 @@ export function ProposalPreview() {
             </div>
           )}
         </div>
+
+        {savedJobPill ? (
+          <div
+            style={{
+              marginBottom: 12,
+              padding: "10px 12px",
+              borderRadius: 10,
+              border:
+                savedJobPill.kind === "error"
+                  ? "1px solid #fecaca"
+                  : savedJobPill.kind === "success"
+                    ? "1px solid #bbf7d0"
+                    : "1px solid #bfdbfe",
+              background:
+                savedJobPill.kind === "error"
+                  ? "#fff7f7"
+                  : savedJobPill.kind === "success"
+                    ? "#f4fff7"
+                    : "#f5f9ff",
+              color:
+                savedJobPill.kind === "error"
+                  ? "#991b1b"
+                  : savedJobPill.kind === "success"
+                    ? "#166534"
+                    : "#1d4ed8",
+            }}
+          >
+            <div style={{ fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", opacity: 0.72 }}>
+              Saved Job
+            </div>
+            <div style={{ fontSize: 12, marginTop: 4 }}>{savedJobPill.message}</div>
+          </div>
+        ) : null}
 
         <div
           style={{
@@ -680,6 +965,25 @@ export function ProposalPreview() {
           </button>
 
           <button
+            onClick={handleSaveJob}
+            disabled={isSavingJob}
+            style={{
+              padding: "10px 14px",
+              background: savedJobState?.jobId ? "#ecfccb" : "#111827",
+              color: savedJobState?.jobId ? "#365314" : "white",
+              border: savedJobState?.jobId ? "1px solid #bef264" : "none",
+              borderRadius: 8,
+              cursor: isSavingJob ? "not-allowed" : "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8
+            }}
+            title="Save this job into the canonical Job object before generating documents"
+          >
+            {isSavingJob ? <Spinner /> : savedJobState?.jobId ? "Saved job" : "Save Job"}
+          </button>
+
+          <button
             onClick={handleOpenInProposalForge}
             disabled={isOpeningInApp}
             style={{
@@ -693,9 +997,9 @@ export function ProposalPreview() {
               alignItems: "center",
               gap: 8
             }}
-            title="Open the scraped job in Proposal Forge to choose a CV and generate there"
+            title="Open this job in Proposal Forge to review the brief and generate documents"
           >
-            {isOpeningInApp ? <Spinner /> : "Open in Proposal Forge"}
+            {isOpeningInApp ? <Spinner /> : primaryOpenLabel}
           </button>
 
           <button

@@ -71,6 +71,19 @@ const proposalCharacterLimitModeChoice = v.union(
   v.literal("custom"),
 );
 
+const canonicalJobParseStatusChoice = v.union(
+  v.literal("imported"),
+  v.literal("parsing"),
+  v.literal("parsed"),
+  v.literal("failed"),
+);
+
+const canonicalJobReviewStateChoice = v.union(
+  v.literal("pending"),
+  v.literal("needs_review"),
+  v.literal("ready"),
+);
+
 const proposalVerbatiStyleChoice = v.object({
   layout: v.string(),
   typography: v.string(),
@@ -121,6 +134,7 @@ export default defineSchema({
 
   proposals: defineTable({
     userId: v.id("userProfiles"), // Changed to v.id("userProfiles") to reference userProfiles table
+    jobId: v.optional(v.string()),
     title: v.string(),
     content: v.string(),
     status: v.string(),
@@ -196,6 +210,7 @@ export default defineSchema({
     }),
   })
     .index("by_user", ["userId"])
+    .index("by_job", ["jobId"])
     .index("by_status", ["status"])
     .index("by_platform", ["metadata.platform"])
     .index("by_created", ["createdAt"])
@@ -212,6 +227,51 @@ export default defineSchema({
   })
     .index("by_handoff_id", ["handoffId"])
     .index("by_clerk_id", ["clerkId"]),
+
+  jobs: defineTable({
+    userId: v.id("userProfiles"),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    importedAt: v.number(),
+    lastOpenedAt: v.number(),
+    sourceUrl: v.string(),
+    sourceDomain: v.string(),
+    sourceType: v.string(),
+    applicationUrl: v.string(),
+    dedupeKey: v.string(),
+    parseVersion: v.string(),
+    parseStatus: canonicalJobParseStatusChoice,
+    reviewState: canonicalJobReviewStateChoice,
+    title: v.string(),
+    company: v.string(),
+    location: v.string(),
+    rawDescription: v.string(),
+    rawLanguageDetected: v.string(),
+    summary: v.string(),
+    responsibilities: v.array(v.string()),
+    keywords: v.array(v.string()),
+    mustHaves: v.array(v.string()),
+    toneCues: v.array(v.string()),
+    contacts: v.array(v.string()),
+    status: v.string(),
+    archivedAt: v.optional(v.union(v.number(), v.null())),
+    reviewItems: v.array(
+      v.object({
+        id: v.string(),
+        fieldKey: v.string(),
+        label: v.string(),
+        reviewStatus: v.union(v.literal("pending"), v.literal("approved")),
+        suggestedValue: v.any(),
+        approvedValue: v.optional(v.any()),
+        sourceText: v.string(),
+        confidence: v.number(),
+        updatedAt: v.number(),
+      }),
+    ),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_dedupe", ["userId", "dedupeKey"])
+    .index("by_user_updated", ["userId", "updatedAt"]),
 
   userProfiles: defineTable({
     // External canonical profile id (used by upsertProfile)

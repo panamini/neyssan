@@ -167,10 +167,51 @@ import {
 
 type ProposalForgePrefill = {
   handoffId: string;
+  jobId?: string;
   jobTitle: string;
   jobDescription: string;
   sourceUrl?: string;
   platform?: string;
+} | null;
+
+type ProposalForgeReviewItem = {
+  id: string;
+  fieldKey: string;
+  label: string;
+  reviewStatus: string;
+  suggestedValue: unknown;
+  approvedValue?: unknown;
+  sourceText: string;
+};
+
+type ProposalForgeLinkedProposal = {
+  id: string;
+  title: string;
+  status: string;
+  updatedAt: number;
+};
+
+type ProposalForgeCanonicalJob = {
+  id: string;
+  title: string;
+  company: string;
+  sourceUrl: string;
+  sourceDomain: string;
+  sourceType: string;
+  applicationUrl: string;
+  parseStatus: string;
+  reviewState: string;
+  summary: string;
+  rawDescription: string;
+  responsibilities: string[];
+  keywords: string[];
+  mustHaves: string[];
+  toneCues: string[];
+  contacts: string[];
+  status: string;
+  linkedProposalCount: number;
+  linkedProposals: ProposalForgeLinkedProposal[];
+  reviewItems: ProposalForgeReviewItem[];
 } | null;
 
 type ProposalForgeView = "compose" | "saved";
@@ -857,6 +898,10 @@ export function ProposalForge(): JSX.Element {
     () => new URLSearchParams(search).get("handoffId"),
     [search],
   );
+  const canonicalJobId = React.useMemo(
+    () => new URLSearchParams(search).get("jobId"),
+    [search],
+  );
   const selectedProposalId = React.useMemo(
     () => new URLSearchParams(search).get("id"),
     [search],
@@ -879,12 +924,14 @@ export function ProposalForge(): JSX.Element {
   const shouldInitializeCoverLetterStartSession =
     requestedView === "compose" &&
     proposalEntryIntent === "cover-letter-start" &&
-    !handoffId;
+    !handoffId &&
+    !canonicalJobId;
   React.useEffect(() => {
     if (
       requestedView === "compose" &&
       proposalEntryIntent === "cover-letter-start" &&
-      !handoffId
+      !handoffId &&
+      !canonicalJobId
     ) {
       setIsCoverLetterStartSessionActive(true);
       setShowExtensionHelper(false);
@@ -892,13 +939,19 @@ export function ProposalForge(): JSX.Element {
     }
 
     setShowExtensionHelper(false);
-  }, [handoffId, proposalEntryIntent, proposalWorkspaceResetToken, requestedView]);
+  }, [canonicalJobId, handoffId, proposalEntryIntent, proposalWorkspaceResetToken, requestedView]);
   const {
     isLoading: isConvexAuthLoading,
     isAuthenticated: isConvexAuthenticated,
   } = useConvexAuth();
   const generateProposalAction = useAction(api.functions.generateProposal);
   const updateProposal = useMutation(api.updateProposalPublic.default);
+  const approveJobReviewItem = useMutation(
+    (api as any).jobsPublic?.approveReviewItem ?? "jobsPublic.approveReviewItem",
+  );
+  const updateJobField = useMutation(
+    (api as any).jobsPublic?.updateField ?? "jobsPublic.updateField",
+  );
   const createProposal = useMutation(
     (api as any).createProposalPublic?.default ?? "createProposalPublic.default",
   );
@@ -1336,8 +1389,23 @@ export function ProposalForge(): JSX.Element {
     api.proposalHandoffs.get,
     handoffId && isConvexAuthenticated ? { handoffId } : "skip",
   );
+  const canonicalJobRecord = useQuery(
+    ((api as any).jobsPublic?.getById ?? "jobsPublic.getById") as any,
+    canonicalJobId && isConvexAuthenticated ? { jobId: canonicalJobId } : "skip",
+  ) as ProposalForgeCanonicalJob | undefined;
 
   const prefill = React.useMemo<ProposalForgePrefill>(() => {
+    if (canonicalJobRecord) {
+      return {
+        handoffId: `job:${canonicalJobRecord.id}`,
+        jobId: canonicalJobRecord.id,
+        jobTitle: canonicalJobRecord.title,
+        jobDescription: canonicalJobRecord.rawDescription,
+        sourceUrl: canonicalJobRecord.sourceUrl,
+        platform:
+          canonicalJobRecord.sourceDomain || canonicalJobRecord.sourceType,
+      };
+    }
     if (!handoffRecord) return null;
     return {
       handoffId: handoffRecord.handoffId,
@@ -1346,9 +1414,10 @@ export function ProposalForge(): JSX.Element {
       sourceUrl: handoffRecord.sourceUrl,
       platform: handoffRecord.platform,
     };
-  }, [handoffRecord]);
+  }, [canonicalJobRecord, handoffRecord]);
 
   const proposalHeaderSourceJobTitle =
+    canonicalJobRecord?.title?.trim() ||
     composePreviewValues?.jobTitle?.trim() ||
     outputSourceComposeDraft?.jobTitle?.trim() ||
     composeDraftInitialSeed?.jobTitle?.trim() ||
@@ -1356,6 +1425,7 @@ export function ProposalForge(): JSX.Element {
     prefill?.jobTitle?.trim() ||
     "";
   const proposalHeaderSourceDescription =
+    canonicalJobRecord?.rawDescription?.trim() ||
     composePreviewValues?.jobDescription?.trim() ||
     outputSourceComposeDraft?.jobDescription?.trim() ||
     composeDraftInitialSeed?.jobDescription?.trim() ||
@@ -5150,11 +5220,13 @@ export function ProposalForge(): JSX.Element {
   const storedComposeDraft =
     typeof window !== "undefined" ? readStoredProposalComposeDraft() : null;
   const briefJobDescription =
+    canonicalJobRecord?.rawDescription?.trim() ||
     composePreviewValues?.jobDescription?.trim() ||
     prefill?.jobDescription?.trim() ||
     storedComposeDraft?.jobDescription?.trim() ||
     "";
   const briefSourceUrl =
+    canonicalJobRecord?.sourceUrl ??
     outputSourceComposeDraft?.sourceUrl ??
     composePreviewValues?.sourceUrl ??
     composeDraftInitialSeed?.sourceUrl ??
@@ -5164,6 +5236,7 @@ export function ProposalForge(): JSX.Element {
     prefill?.sourceUrl ??
     null;
   const briefSourcePlatform =
+    canonicalJobRecord?.sourceDomain ??
     outputSourceComposeDraft?.platform ??
     composePreviewValues?.platform ??
     composeDraftInitialSeed?.platform ??
@@ -5173,7 +5246,9 @@ export function ProposalForge(): JSX.Element {
     prefill?.platform ??
     null;
   const hasMeaningfulComposeDraft = Boolean(
-    composePreviewValues?.jobTitle?.trim() ||
+    canonicalJobRecord?.title?.trim() ||
+      canonicalJobRecord?.rawDescription?.trim() ||
+      composePreviewValues?.jobTitle?.trim() ||
       composePreviewValues?.jobDescription?.trim() ||
       composeDraftInitialSeed?.jobTitle?.trim() ||
       composeDraftInitialSeed?.jobDescription?.trim() ||
@@ -5556,10 +5631,16 @@ export function ProposalForge(): JSX.Element {
     ],
   );
   const briefJobTitle =
+    canonicalJobRecord?.title?.trim() ||
     composePreviewValues?.jobTitle?.trim() ||
     prefill?.jobTitle?.trim() ||
     storedComposeDraft?.jobTitle?.trim() ||
     "";
+  const briefSummaryText = canonicalJobRecord?.summary?.trim() || null;
+  const briefTrustState = canonicalJobRecord?.reviewState ?? null;
+  const briefReviewItems = canonicalJobRecord?.reviewItems ?? [];
+  const briefLinkedOutputCount = canonicalJobRecord?.linkedProposalCount ?? 0;
+  const briefLinkedProposals = canonicalJobRecord?.linkedProposals ?? [];
   const hasBriefContent = Boolean(briefJobDescription);
   const showBriefCard =
     hasBriefContent && !isBriefExpanded && showComposePanel;
@@ -5574,14 +5655,17 @@ export function ProposalForge(): JSX.Element {
     !isCompactComposeLayout &&
     !shouldShowDesktopBriefCapsule;
   const isLoadingHandoff =
-    Boolean(handoffId) &&
+    Boolean(handoffId || canonicalJobId) &&
     (isConvexAuthLoading ||
-      (isConvexAuthenticated && handoffRecord === undefined));
+      (isConvexAuthenticated &&
+        ((handoffId && handoffRecord === undefined) ||
+          (canonicalJobId && canonicalJobRecord === undefined))));
   const shouldShowCoverLetterStartSurface =
     !isSavedView &&
     proposalEntryIntent === "cover-letter-start" &&
     isCoverLetterStartSessionActive &&
     !handoffId &&
+    !canonicalJobId &&
     !isLoadingHandoff &&
     !attachedCvId &&
     !hasMeaningfulComposeDraft &&
@@ -6267,6 +6351,33 @@ export function ProposalForge(): JSX.Element {
                               "Generated proposal"
                             }
                             jobDescription={briefJobDescription}
+                            summaryText={briefSummaryText}
+                            parseStatus={canonicalJobRecord?.parseStatus ?? null}
+                            trustState={briefTrustState}
+                            linkedOutputCount={briefLinkedOutputCount}
+                            linkedProposals={briefLinkedProposals}
+                            reviewItems={briefReviewItems}
+                            onApproveReviewItem={
+                              canonicalJobRecord
+                                ? async (item) => {
+                                    await approveJobReviewItem({
+                                      jobId: canonicalJobRecord.id,
+                                      reviewItemId: item.id,
+                                    });
+                                  }
+                                : undefined
+                            }
+                            onSaveReviewItem={
+                              canonicalJobRecord
+                                ? async (item, nextValue) => {
+                                    await updateJobField({
+                                      jobId: canonicalJobRecord.id,
+                                      fieldKey: item.fieldKey,
+                                      value: nextValue,
+                                    });
+                                  }
+                                : undefined
+                            }
                             onToggleBrief={handleOpenComposeBrief}
                             variant={shouldShowDesktopBriefCapsule ? "compact" : "card"}
                             sourceUrl={briefSourceUrl}
@@ -6285,7 +6396,7 @@ export function ProposalForge(): JSX.Element {
                       >
                         {isLoadingHandoff ? (
                           <div style={{ paddingTop: "var(--s2)" }}>
-                            <p className="dasti-hint">Loading imported job offer…</p>
+                            <p className="dasti-hint">Loading saved job brief…</p>
                           </div>
                         ) : (
                           <ProposalInputForm
@@ -6307,6 +6418,7 @@ export function ProposalForge(): JSX.Element {
                             initialComposeDraft={composeDraftInitialSeed}
                             sourceUrl={briefSourceUrl}
                             sourcePlatform={briefSourcePlatform}
+                            canonicalJobId={canonicalJobRecord?.id ?? null}
                             onGenerateControlChange={handleComposeGenerateControlChange}
                             headerAction={
                               hasBriefContent ? (
