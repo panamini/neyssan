@@ -78,6 +78,14 @@ const proposalVerbatiStyleChoice = v.object({
   accentHex: v.optional(v.string()),
 });
 
+const proposalPresetVerbatiStyleChoice = v.object({
+  familyId: v.optional(v.string()),
+  layout: v.string(),
+  typography: v.string(),
+  palette: v.string(),
+  accentHex: v.optional(v.union(v.string(), v.null())),
+});
+
 export default defineSchema({
   users: defineTable({
     clerkId: v.string(),
@@ -235,6 +243,7 @@ export default defineSchema({
     ),
     proposalAccentHex: v.optional(v.union(v.string(), v.null())),
     proposalFontPairId: v.optional(v.union(v.string(), v.null())),
+    proposalVerbatiStyle: v.optional(proposalPresetVerbatiStyleChoice),
     proposalSourceMode: v.optional(proposalStyleLinkModeChoice),
     // Style preset slots (3-slot builder)
     proposalPreset1: v.optional(v.union(v.object({
@@ -242,6 +251,7 @@ export default defineSchema({
       styleChoice: proposalStyleChoiceChoice,
       paletteOverride: v.union(v.literal("sauge"), v.literal("ocre"), v.literal("pierre"), v.literal("bordeaux"), v.literal("encre"), v.null()),
       accentHex: v.union(v.string(), v.null()),
+      verbatiStyle: v.optional(proposalPresetVerbatiStyleChoice),
       voicePreset: v.union(proposalVoicePresetChoice, v.null()),
       name: v.optional(v.string()),
     }), v.null())),
@@ -250,6 +260,7 @@ export default defineSchema({
       styleChoice: proposalStyleChoiceChoice,
       paletteOverride: v.union(v.literal("sauge"), v.literal("ocre"), v.literal("pierre"), v.literal("bordeaux"), v.literal("encre"), v.null()),
       accentHex: v.union(v.string(), v.null()),
+      verbatiStyle: v.optional(proposalPresetVerbatiStyleChoice),
       voicePreset: v.union(proposalVoicePresetChoice, v.null()),
       name: v.optional(v.string()),
     }), v.null())),
@@ -258,6 +269,7 @@ export default defineSchema({
       styleChoice: proposalStyleChoiceChoice,
       paletteOverride: v.union(v.literal("sauge"), v.literal("ocre"), v.literal("pierre"), v.literal("bordeaux"), v.literal("encre"), v.null()),
       accentHex: v.union(v.string(), v.null()),
+      verbatiStyle: v.optional(proposalPresetVerbatiStyleChoice),
       voicePreset: v.union(proposalVoicePresetChoice, v.null()),
       name: v.optional(v.string()),
     }), v.null())),
