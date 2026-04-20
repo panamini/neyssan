@@ -600,7 +600,7 @@ describe("CvForge export status", () => {
     ).not.toBeDisabled();
   });
 
-  it("routes workshop styled PDF export through the committed export-source path", async () => {
+  it("routes workshop styled PDF export through the preview print-route path", async () => {
     const user = userEvent.setup();
     useBoundVerbatiCvStyleMock.mockReturnValue({
       stylePreset: {
@@ -645,15 +645,10 @@ describe("CvForge export status", () => {
         mode: "styled",
         data: expect.objectContaining({
           kind: "resume",
-          exportSource: "standard",
+          renderSource: "preview",
           resumeTemplateId: "workshop_resume_onecol_ats",
           committedPages: expect.any(Array),
         }),
-      }),
-    );
-    expect(exportDocumentFileMock.mock.calls.at(-1)?.[0]?.data).not.toEqual(
-      expect.objectContaining({
-        renderSource: "preview",
       }),
     );
   });

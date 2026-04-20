@@ -14,6 +14,7 @@ import { planWorkshopResumePages } from "../../../lib/resume/resumePagination";
 import type { DocumentStageLayout } from "../../../hooks/use-document-stage-layout";
 import type { ResumeActiveTarget } from "../resumeLinking";
 import type { VerbatiStylePreset } from "../types";
+import { buildVerbatiThemeVars } from "../style";
 import ResumeOneColAtsPage from "./ResumeOneColAtsPage";
 import type { ResumeData } from "./resume.types";
 
@@ -40,6 +41,7 @@ function buildTemplatePreviewVars(
   });
 
   return {
+    ...buildVerbatiThemeVars(stylePreset),
     ...serializeResumePreviewVars(previewTokens),
     ...serializeActiveResumePreviewDecorVars({
       variantId: templateDefinition.decorVariantId,
@@ -122,6 +124,7 @@ export function ResumeTemplateRenderer({
   return (
     <div
       data-testid="resume-template-renderer"
+      className="resume-template-renderer"
       style={{
         ...previewVars,
         width: `${shellPageWidthPx}px`,
@@ -137,6 +140,9 @@ export function ResumeTemplateRenderer({
       {plan.pages.map((page) => (
         <div
           key={`workshop-page-${page.index + 1}`}
+          className="resume-template-page-shell"
+          data-resume-template-page-shell="true"
+          data-resume-template-page-index={page.index + 1}
           style={{
             width: `${shellPageWidthPx}px`,
             minHeight: `${shellPageHeightPx}px`,
@@ -147,6 +153,7 @@ export function ResumeTemplateRenderer({
           }}
         >
           <div
+            className="resume-template-page-canvas"
             style={{
               width: `${A4_PAGE_WIDTH_PX}px`,
               minHeight: `${A4_PAGE_HEIGHT_PX}px`,
