@@ -37,8 +37,17 @@ import {
 } from "../lib/proposal-output-draft";
 import { readStoredProposalComposeDraft } from "../lib/proposal-workspace-state";
 import { readStoredSavedProposalFixtures } from "../lib/proposal-saved-fixtures";
-import { getVerbatiStyleFromCv } from "../features/verbati/style";
-import type { VerbatiStylePreset } from "../features/verbati/types";
+import {
+  getVerbatiStyleFromCv,
+  getProposalTwinTemplateId,
+  resolveVerbatiStyle,
+  serializeVerbatiStyle,
+} from "../features/verbati/style";
+import type {
+  VerbatiLayoutPreset,
+  VerbatiStylePreset,
+  VerbatiTypographyPreset,
+} from "../features/verbati/types";
 import { resolveProposalRenderState } from "../lib/proposal-render-state";
 import { getVoicePresetDisplayLabel } from "../lib/proposal-voice-label";
 import {
@@ -46,7 +55,6 @@ import {
   type ProposalTemplateBundleId,
 } from "../lib/proposal-template-bundles";
 import type { ProposalPaletteId } from "../lib/proposal-style-display";
-import type { VerbatiLayoutPreset } from "../features/verbati/types";
 import {
   buildProposalHeaderVisibilityFromContent,
   resolveProposalHeaderVisibility,
@@ -402,6 +410,38 @@ function hasSavedProposalArtifactSnapshot(
   return Boolean(proposal?.metadata?.verbatiStyle || proposal?.metadata?.templateId);
 }
 
+function serializeSavedProposalMetadataVerbatiStyle(
+  style:
+    | ReturnType<typeof resolveVerbatiStyle>
+    | ReturnType<typeof serializeVerbatiStyle>
+    | Partial<VerbatiStylePreset>
+    | null
+    | undefined,
+): NonNullable<SavedProposalRecord["metadata"]>["verbatiStyle"] {
+  if (!style) {
+    return undefined;
+  }
+
+  const serializedStyle = serializeVerbatiStyle(resolveVerbatiStyle(style));
+
+  return {
+    layout: serializedStyle.layout,
+    typography: serializedStyle.typography,
+    palette: serializedStyle.palette,
+    ...(serializedStyle.accentHex
+      ? { accentHex: serializedStyle.accentHex }
+      : null),
+  };
+}
+
+function serializeSavedProposalLayoutOverride(
+  value: VerbatiLayoutPreset | null | undefined,
+): SavedProposalLayoutId | undefined {
+  return value === "swiss" || value === "editorial" || value === "modernist"
+    ? value
+    : undefined;
+}
+
 function getProposalDisplayText(proposal: SavedProposalRecord | null): string {
   if (!proposal) return "";
 
@@ -629,7 +669,9 @@ export default function ProposalsList({
   const [selectedCustomAccentHex, setSelectedCustomAccentHex] =
     React.useState<string | null>(null);
   const [selectedLayoutOverride, setSelectedLayoutOverride] =
-    React.useState<SavedProposalLayoutId | null>(null);
+    React.useState<VerbatiLayoutPreset | null>(null);
+  const [selectedTypographyOverride, setSelectedTypographyOverride] =
+    React.useState<VerbatiTypographyPreset | null>(null);
   const [selectedRefineVoicePreset, setSelectedRefineVoicePreset] =
     React.useState<ProposalVoicePreset | null>(DEFAULT_PROPOSAL_VOICE_PRESET);
   const [selectedZoomIndex, setSelectedZoomIndex] = React.useState(1);
@@ -850,12 +892,18 @@ export default function ProposalsList({
   ]);
   const selectedEffectiveStylePreset = React.useMemo(() => {
     if (!selectedBaseStylePreset) return null;
-    const nextStylePreset = selectedLayoutOverride
-      ? {
-          ...selectedBaseStylePreset,
-          layout: selectedLayoutOverride,
-        }
-      : selectedBaseStylePreset;
+    const nextStylePreset = {
+      ...selectedBaseStylePreset,
+      ...(selectedLayoutOverride
+        ? {
+            familyId: selectedLayoutOverride,
+            layout: selectedLayoutOverride,
+          }
+        : null),
+      ...(selectedTypographyOverride
+        ? { typography: selectedTypographyOverride }
+        : null),
+    };
     if (selectedCustomAccentHex) {
       return {
         ...nextStylePreset,
@@ -876,21 +924,15 @@ export default function ProposalsList({
     selectedCustomAccentHex,
     selectedLayoutOverride,
     selectedPaletteOverride,
+    selectedTypographyOverride,
   ]);
-  const selectedRenderState = React.useMemo(() => {
-    if (!selected) return null;
-    return resolveProposalRenderState({
-      preferredStylePreset: selectedEffectiveStylePreset ?? undefined,
-      storedStylePreset: selectedStoredRenderState?.stylePreset,
-      storedTemplateId: selectedStoredRenderState?.templateId,
-    });
-  }, [selected, selectedEffectiveStylePreset, selectedStoredRenderState]);
   const selectedHasExplicitStyleEdit = React.useMemo(
     () =>
       selectedStyleBundleId !== selectedStoredAppearance.bundleId ||
       selectedPaletteOverride !== selectedStoredAppearance.paletteOverride ||
       selectedCustomAccentHex !== selectedStoredAppearance.customAccentHex ||
-      selectedLayoutOverride !== selectedStoredAppearance.layoutOverride,
+      selectedLayoutOverride !== selectedStoredAppearance.layoutOverride ||
+      selectedTypographyOverride !== null,
     [
       selectedCustomAccentHex,
       selectedLayoutOverride,
@@ -900,8 +942,26 @@ export default function ProposalsList({
       selectedStoredAppearance.layoutOverride,
       selectedStoredAppearance.paletteOverride,
       selectedStyleBundleId,
+      selectedTypographyOverride,
     ],
   );
+  const selectedRenderState = React.useMemo(() => {
+    if (!selected) return null;
+    return resolveProposalRenderState({
+      preferredStylePreset: selectedEffectiveStylePreset ?? undefined,
+      preferredTemplateId:
+        selectedHasExplicitStyleEdit && selectedEffectiveStylePreset
+          ? getProposalTwinTemplateId(selectedEffectiveStylePreset)
+          : undefined,
+      storedStylePreset: selectedStoredRenderState?.stylePreset,
+      storedTemplateId: selectedStoredRenderState?.templateId,
+    });
+  }, [
+    selected,
+    selectedEffectiveStylePreset,
+    selectedHasExplicitStyleEdit,
+    selectedStoredRenderState,
+  ]);
   const selectedPersistMetadata = React.useMemo<
     NonNullable<SavedProposalRecord["metadata"]> | null
   >(() => {
@@ -916,7 +976,9 @@ export default function ProposalsList({
 
     if (selectedHasExplicitStyleEdit) {
       nextMetadata.templateId = selectedRenderState.templateId;
-      nextMetadata.verbatiStyle = selectedRenderState.stylePreset;
+      nextMetadata.verbatiStyle = serializeSavedProposalMetadataVerbatiStyle(
+        selectedRenderState.stylePreset,
+      );
       nextMetadata.styleLinkMode = "proposal_local";
 
       if (selectedStyleBundleId) {
@@ -924,16 +986,20 @@ export default function ProposalsList({
       } else {
         delete nextMetadata.templateBundleId;
       }
-      if (selectedLayoutOverride) {
-        nextMetadata.layoutOverride = selectedLayoutOverride;
+      const layoutOverride = serializeSavedProposalLayoutOverride(
+        selectedLayoutOverride,
+      );
+      if (layoutOverride) {
+        nextMetadata.layoutOverride = layoutOverride;
       } else {
         delete nextMetadata.layoutOverride;
       }
     } else {
       nextMetadata.templateId =
         selected.metadata?.templateId ?? selectedRenderState.templateId;
-      nextMetadata.verbatiStyle =
-        selected.metadata?.verbatiStyle ?? selectedRenderState.stylePreset;
+      nextMetadata.verbatiStyle = serializeSavedProposalMetadataVerbatiStyle(
+        selected.metadata?.verbatiStyle ?? selectedRenderState.stylePreset,
+      );
       nextMetadata.styleLinkMode =
         selected.metadata?.styleLinkMode ??
         (selectedSourceCvId ? "inherit_cv" : "proposal_local");
@@ -958,6 +1024,7 @@ export default function ProposalsList({
     selectedRenderState,
     selectedSourceCvId,
     selectedStyleBundleId,
+    selectedTypographyOverride,
   ]);
   const buildSelectedProposalSaveSnapshot = React.useCallback(() => {
     if (!selected || !selectedPersistMetadata) {
@@ -1014,6 +1081,7 @@ export default function ProposalsList({
     setSelectedPaletteOverride(selectedStoredAppearance.paletteOverride);
     setSelectedCustomAccentHex(selectedStoredAppearance.customAccentHex);
     setSelectedLayoutOverride(selectedStoredAppearance.layoutOverride);
+    setSelectedTypographyOverride(null);
     setSelectedRefineVoicePreset(
       selected
         ? getStoredRequestedVoicePreset(selected)
@@ -1386,7 +1454,9 @@ export default function ProposalsList({
         proposalType,
         requestedVoicePreset: voicePreset ?? null,
         templateId: selectedRenderState.templateId,
-        verbatiStyle: selectedRenderState.stylePreset,
+        verbatiStyle: serializeSavedProposalMetadataVerbatiStyle(
+          selectedRenderState.stylePreset,
+        ),
         requestedModelType: res.requestedModelType,
         actualModelType: res.actualModelType,
         fallbackTriggerCode: res.fallbackTriggerCode,
@@ -1403,8 +1473,11 @@ export default function ProposalsList({
       } else {
         delete nextMetadata.templateBundleId;
       }
-      if (selectedLayoutOverride) {
-        nextMetadata.layoutOverride = selectedLayoutOverride;
+      const layoutOverride = serializeSavedProposalLayoutOverride(
+        selectedLayoutOverride,
+      );
+      if (layoutOverride) {
+        nextMetadata.layoutOverride = layoutOverride;
       } else {
         delete nextMetadata.layoutOverride;
       }
@@ -1481,11 +1554,14 @@ export default function ProposalsList({
   );
   const selectedLayoutValue =
     selectedLayoutOverride ??
-    (selectedBaseStylePreset?.layout === "swiss" ||
-    selectedBaseStylePreset?.layout === "editorial" ||
-    selectedBaseStylePreset?.layout === "modernist"
-      ? selectedBaseStylePreset.layout
-      : "swiss");
+    selectedEffectiveStylePreset?.layout ??
+    selectedBaseStylePreset?.layout ??
+    "swiss";
+  const selectedTypographyValue =
+    selectedTypographyOverride ??
+    selectedEffectiveStylePreset?.typography ??
+    selectedBaseStylePreset?.typography ??
+    "quiet-editorial";
 
   const selectedSidebarHeading = selected ? (
     <div className="dasti-proposal-library-info-card dasti-proposal-library-sidebar__heading">
@@ -1567,8 +1643,14 @@ export default function ProposalsList({
       }}
       copyFeedback={copied ? "copied" : "idle"}
       isRegenerating={Boolean(isRegenerating)}
-      styleBundleId={selectedStyleBundleId}
-      onStyleBundleChange={setSelectedStyleBundleId}
+      typographyValue={selectedTypographyValue}
+      onTypographyChange={(value) => {
+        setSelectedTypographyOverride(
+          value === (selectedStoredRenderState?.stylePreset.typography ?? null)
+            ? null
+            : value,
+        );
+      }}
       paletteOverride={selectedPaletteOverride}
       onPaletteOverrideChange={(value) => {
         setSelectedCustomAccentHex(null);
@@ -1587,7 +1669,9 @@ export default function ProposalsList({
       layoutValue={selectedLayoutValue}
       onLayoutChange={(value) => {
         setSelectedLayoutOverride(
-          value === selectedBaseStylePreset?.layout ? null : value,
+          value === (selectedStoredRenderState?.stylePreset.layout ?? null)
+            ? null
+            : value,
         );
       }}
       saveStatus={selectedSaveStatus}

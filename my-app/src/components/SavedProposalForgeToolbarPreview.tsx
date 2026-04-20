@@ -28,14 +28,16 @@ import { getVoicePresetDisplayLabel } from "../lib/proposal-voice-label";
 import { DOCUMENT_ZOOM_STEPS } from "../lib/document-stage";
 import {
   PROPOSAL_PALETTE_OPTIONS,
-  PROPOSAL_STYLE_PREVIEW_DEFINITIONS,
   type ProposalPaletteId,
 } from "../lib/proposal-style-display";
+import {
+  VERBATI_LAYOUT_OPTIONS,
+  VERBATI_TYPOGRAPHY_OPTIONS,
+} from "../features/verbati/style";
 import type {
-  ProposalTemplateBundleId,
-} from "../lib/proposal-template-bundles";
-import { PROPOSAL_LAYOUT_OPTIONS } from "../lib/proposal-template-bundles";
-import type { VerbatiLayoutPreset } from "../features/verbati/types";
+  VerbatiLayoutPreset,
+  VerbatiTypographyPreset,
+} from "../features/verbati/types";
 
 type SavedProposalForgeToolbarPreviewProps = {
   mode: "preview" | "edit";
@@ -51,43 +53,19 @@ type SavedProposalForgeToolbarPreviewProps = {
   onCopy: () => void;
   copyFeedback: "idle" | "copied";
   isRegenerating: boolean;
-  styleBundleId: ProposalTemplateBundleId | null;
-  onStyleBundleChange: (bundleId: ProposalTemplateBundleId | null) => void;
+  typographyValue: VerbatiTypographyPreset | null;
+  onTypographyChange: (value: VerbatiTypographyPreset) => void;
   paletteOverride: ProposalPaletteId | null;
   onPaletteOverrideChange: (value: ProposalPaletteId | null) => void;
   customAccentHex: string | null;
   onCustomAccentHexChange: (hex: string | null) => void;
   resolvedPaletteId: ProposalPaletteId | null;
-  layoutValue: Extract<VerbatiLayoutPreset, "swiss" | "editorial" | "modernist"> | null;
-  onLayoutChange: (
-    value: Extract<VerbatiLayoutPreset, "swiss" | "editorial" | "modernist">,
-  ) => void;
+  layoutValue: VerbatiLayoutPreset | null;
+  onLayoutChange: (value: VerbatiLayoutPreset) => void;
   saveStatus?: SaveStatus;
 };
 
-type DrawerId = "zoom" | "layout" | "style" | "color" | "tone" | null;
-
-const STYLE_OPTIONS: Array<{
-  id: ProposalTemplateBundleId;
-  label: string;
-  preview: (typeof PROPOSAL_STYLE_PREVIEW_DEFINITIONS)["balanced"];
-}> = [
-  {
-    id: "swiss_serif",
-    label: "Swiss",
-    preview: PROPOSAL_STYLE_PREVIEW_DEFINITIONS.balanced,
-  },
-  {
-    id: "magazine_editorial",
-    label: "Editorial",
-    preview: PROPOSAL_STYLE_PREVIEW_DEFINITIONS.warm,
-  },
-  {
-    id: "grid_mono",
-    label: "Mono",
-    preview: PROPOSAL_STYLE_PREVIEW_DEFINITIONS.technical,
-  },
-];
+type DrawerId = "zoom" | "layout" | "typography" | "color" | "tone" | null;
 
 const TONE_OPTIONS: Array<{
   id: ProposalVoicePreset | null;
@@ -130,8 +108,8 @@ export function SavedProposalForgeToolbarPreview({
   onCopy,
   copyFeedback,
   isRegenerating,
-  styleBundleId,
-  onStyleBundleChange,
+  typographyValue,
+  onTypographyChange,
   paletteOverride,
   onPaletteOverrideChange,
   customAccentHex,
@@ -148,8 +126,9 @@ export function SavedProposalForgeToolbarPreview({
   const [isColorPickerOpen, setIsColorPickerOpen] = React.useState(false);
   const [isDeleteConfirming, setIsDeleteConfirming] = React.useState(false);
 
-  const activeStyleOption =
-    STYLE_OPTIONS.find((option) => option.id === styleBundleId) ?? STYLE_OPTIONS[0];
+  const activeTypographyOption =
+    VERBATI_TYPOGRAPHY_OPTIONS.find((option) => option.id === typographyValue) ??
+    VERBATI_TYPOGRAPHY_OPTIONS[0];
   const activePaletteId = customAccentHex ? null : paletteOverride ?? resolvedPaletteId;
   const activePaletteOption =
     customAccentHex === null
@@ -158,8 +137,8 @@ export function SavedProposalForgeToolbarPreview({
   const activeToneOption =
     TONE_OPTIONS.find((option) => option.id === toneValue) ?? TONE_OPTIONS[0];
   const activeLayoutOption =
-    PROPOSAL_LAYOUT_OPTIONS.find((option) => option.id === layoutValue) ??
-    PROPOSAL_LAYOUT_OPTIONS[0];
+    VERBATI_LAYOUT_OPTIONS.find((option) => option.id === layoutValue) ??
+    VERBATI_LAYOUT_OPTIONS[0];
   const hasOpenDrawer = openDrawer !== null || isColorPickerOpen;
 
   React.useEffect(() => {
@@ -348,9 +327,9 @@ export function SavedProposalForgeToolbarPreview({
                 aria-expanded={openDrawer === "layout"}
                 aria-haspopup="dialog"
                 onClick={() => handleToggleDrawer("layout")}
-                aria-label={`Layout ${activeLayoutOption.label}`}
+                aria-label={`Layout ${activeLayoutOption.name}`}
                 data-toolbar-tooltip={
-                  openDrawer === "layout" ? undefined : activeLayoutOption.label
+                  openDrawer === "layout" ? undefined : activeLayoutOption.name
                 }
               >
                 <Layout size={14} strokeWidth={1.8} aria-hidden="true" />
@@ -362,7 +341,7 @@ export function SavedProposalForgeToolbarPreview({
                   role="dialog"
                   aria-label="Layout options"
                 >
-                  {PROPOSAL_LAYOUT_OPTIONS.map((option) => {
+                  {VERBATI_LAYOUT_OPTIONS.map((option) => {
                     const active = option.id === activeLayoutOption.id;
                     return (
                       <button
@@ -383,11 +362,11 @@ export function SavedProposalForgeToolbarPreview({
                         <span className="dasti-proposal-chrome-option__icon" aria-hidden="true">
                           <Layout size={14} strokeWidth={1.8} />
                         </span>
-                        <span className="dasti-proposal-chrome-option__copy">
-                          <span className="dasti-proposal-chrome-option__title">
-                            {option.label}
-                          </span>
-                          <span className="dasti-proposal-chrome-option__description">
+                          <span className="dasti-proposal-chrome-option__copy">
+                              <span className="dasti-proposal-chrome-option__title">
+                            {option.name}
+                              </span>
+                              <span className="dasti-proposal-chrome-option__description">
                             {option.description}
                           </span>
                         </span>
@@ -404,38 +383,42 @@ export function SavedProposalForgeToolbarPreview({
                 className={[
                   "dasti-artifact-inspector__action",
                   "dasti-artifact-inspector__action--style-trigger",
-                  openDrawer === "style" ? "dasti-artifact-inspector__action--active" : "",
+                  openDrawer === "typography"
+                    ? "dasti-artifact-inspector__action--active"
+                    : "",
                 ]
                   .filter(Boolean)
                   .join(" ")}
-                aria-pressed={openDrawer === "style"}
-                aria-expanded={openDrawer === "style"}
+                aria-pressed={openDrawer === "typography"}
+                aria-expanded={openDrawer === "typography"}
                 aria-haspopup="dialog"
-                onClick={() => handleToggleDrawer("style")}
-                aria-label="Style"
-                data-toolbar-tooltip={openDrawer === "style" ? undefined : "Style"}
+                onClick={() => handleToggleDrawer("typography")}
+                aria-label="Open text styles"
+                data-toolbar-tooltip={
+                  openDrawer === "typography" ? undefined : "Text"
+                }
               >
                 <span
                   className="dasti-artifact-inspector__icon dasti-artifact-inspector__icon--aa"
                   aria-hidden="true"
                   style={{
-                    fontFamily: activeStyleOption.preview.headingFont,
-                    fontWeight: activeStyleOption.preview.headingWeight,
-                    fontStyle: activeStyleOption.preview.fontStyle ?? "normal",
+                    fontFamily: activeTypographyOption.headingFamily,
+                    fontWeight:
+                      activeTypographyOption.id === "expert" ? 500 : 600,
                   }}
                 >
                   Aa
                 </span>
               </button>
 
-              {openDrawer === "style" ? (
+              {openDrawer === "typography" ? (
                 <div
                   className="dasti-proposal-chrome-drawer dasti-proposal-chrome-drawer--stack dasti-saved-proposal-forge-toolbar-preview__drawer dasti-saved-proposal-forge-toolbar-preview__drawer--center dasti-saved-proposal-forge-toolbar-preview__drawer--style"
                   role="dialog"
-                  aria-label="Style options"
+                  aria-label="Text styles"
                 >
-                  {STYLE_OPTIONS.map((option) => {
-                    const active = styleBundleId === option.id;
+                  {VERBATI_TYPOGRAPHY_OPTIONS.map((option) => {
+                    const active = typographyValue === option.id;
                     return (
                       <button
                         key={option.id}
@@ -449,20 +432,19 @@ export function SavedProposalForgeToolbarPreview({
                           .join(" ")}
                         aria-pressed={active}
                         onClick={() => {
-                          onStyleBundleChange(active ? null : option.id);
+                          onTypographyChange(option.id);
                           setOpenDrawer(null);
                         }}
-                        aria-label={option.label}
-                        data-toolbar-tooltip={option.label}
+                        aria-label={option.name}
+                        data-toolbar-tooltip={option.name}
                         data-toolbar-tooltip-placement="inline-end"
                       >
                         <span
                           className="dasti-artifact-inspector__icon dasti-artifact-inspector__icon--aa"
                           aria-hidden="true"
                           style={{
-                            fontFamily: option.preview.headingFont,
-                            fontWeight: option.preview.headingWeight,
-                            fontStyle: option.preview.fontStyle ?? "normal",
+                            fontFamily: option.headingFamily,
+                            fontWeight: option.id === "expert" ? 500 : 600,
                           }}
                         >
                           Aa
