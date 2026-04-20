@@ -4444,6 +4444,7 @@ export default function SectionEditor({
     const itemId = String(item?.id ?? "");
     const name = String(item?.name ?? "");
     const desiredPosition = String(item?.desiredPosition ?? "");
+    const hasDesiredPosition = desiredPosition.trim().length > 0;
     const email = String(item?.email ?? "");
     const phone = String(item?.phone ?? "");
     const linkedin = String(item?.linkedin ?? "");
@@ -4684,8 +4685,10 @@ export default function SectionEditor({
                   <div className="cv-profile-name cv-preview-text--truncate">
                     {name || "Your name"}
                   </div>
-                  <div className="cv-profile-role cv-preview-text--truncate">
-                    {desiredPosition || "Desired position"}
+                  <div
+                    className={`cv-profile-role cv-preview-text--truncate${hasDesiredPosition ? "" : " cv-preview-placeholder"}`}
+                  >
+                    {hasDesiredPosition ? desiredPosition : "Desired position"}
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2 mt-3">
