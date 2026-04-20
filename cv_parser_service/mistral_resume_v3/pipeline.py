@@ -34,6 +34,51 @@ EXPERIENCE_DATE_FRAGMENT_RE = re.compile(
     re.IGNORECASE,
 )
 EXPERIENCE_DATE_RANGE_SEPARATOR_RE = re.compile(r"\s+(?:to|[-–—])\s+", re.IGNORECASE)
+EMAIL_FRAGMENT_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+URL_FRAGMENT_RE = re.compile(r"(https?://|www\.)", re.IGNORECASE)
+PHONE_FRAGMENT_RE = re.compile(r"(?:\+?\d[\d\s().-]{6,}\d)")
+ZIPISH_RE = re.compile(r"\b\d{5}(?:-\d{4})?\b")
+ADDRESSISH_STREET_RE = re.compile(
+    r"\b\d{1,6}\s+[A-Za-z0-9.'-]+(?:\s+[A-Za-z0-9.'-]+){0,6}\s+"
+    r"(?:street|st\.?|avenue|ave\.?|road|rd\.?|drive|dr\.?|boulevard|blvd\.?|lane|ln\.?|court|ct\.?|way)\b",
+    re.IGNORECASE,
+)
+ADDRESSISH_STREET_FRAGMENT_RE = re.compile(
+    r"\b[A-Za-z0-9.'-]+(?:\s+[A-Za-z0-9.'-]+){0,5}\s+"
+    r"(?:street|st\.?|avenue|ave\.?|road|rd\.?|drive|dr\.?|boulevard|blvd\.?|lane|ln\.?|court|ct\.?|way)\b",
+    re.IGNORECASE,
+)
+HEADER_CONTACT_LABEL_RE = re.compile(
+    r"\b(?:phone|email|mobile|telephone|tel|contact|linkedin|website|portfolio|github|address|location)\b",
+    re.IGNORECASE,
+)
+HEADER_COMPANY_SUFFIX_RE = re.compile(
+    r"\b(?:inc|llc|ltd|limited|corp|corporation|company|gmbh|plc|co)\b",
+    re.IGNORECASE,
+)
+HEADER_INLINE_SEPARATOR_RE = re.compile(r"\s*(?:[|•·●▪◦]+)\s*")
+HEADER_NON_TITLE_STATE_RE = re.compile(
+    r"\b(?:available|seeking|open\s+to|ready\s+to|willing\s+to\s+relocate)\b",
+    re.IGNORECASE,
+)
+HEADER_LOCATION_TAIL_RE = re.compile(
+    r"\b[A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+)*,\s*[A-Z]{2}\b"
+)
+HEADER_UPPER_LOCATION_TAIL_RE = re.compile(
+    r"\b[A-Z]{2,}(?:\s+[A-Z]{2,})*,\s*[A-Z]{2}\b"
+)
+HEADER_LOCATION_WITH_POSTAL_TAIL_RE = re.compile(
+    r"\b[A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+)*,\s*[A-Z]{2}(?:\s+\d{5}(?:-\d{4})?)?(?:,\s*[A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+)*)?\b"
+)
+HEADER_UPPER_LOCATION_WITH_POSTAL_TAIL_RE = re.compile(
+    r"\b[A-Z]{2,}(?:\s+[A-Z]{2,})*,\s*[A-Z]{2}(?:\s+\d{5}(?:-\d{4})?)?(?:,\s*[A-Z]{2,}(?:\s+[A-Z]{2,})*)?\b"
+)
+HEADER_TRAILING_LOCATION_WITH_POSTAL_RE = re.compile(
+    r"\s+[A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+)*,\s*[A-Z]{2}(?:\s+\d{5}(?:-\d{4})?)?(?:,\s*[A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+)*)?\s*$"
+)
+HEADER_TRAILING_UPPER_LOCATION_WITH_POSTAL_RE = re.compile(
+    r"\s+[A-Z]{2,}(?:\s+[A-Z]{2,})*,\s*[A-Z]{2}(?:\s+\d{5}(?:-\d{4})?)?(?:,\s*[A-Z]{2,}(?:\s+[A-Z]{2,})*)?\s*$"
+)
 
 
 def _normalize_lookup(value: str) -> str:
@@ -50,6 +95,12 @@ SECTION_HEADING_ALIASES: dict[str, set[str]] = {
     for family, aliases in RAW_SECTION_HEADING_ALIASES.items()
 }
 ALL_SECTION_HEADING_ALIASES = {alias for aliases in SECTION_HEADING_ALIASES.values() for alias in aliases}
+SECTION_HEADING_WORDS = {
+    word
+    for alias in ALL_SECTION_HEADING_ALIASES
+    for word in alias.split()
+    if word
+}
 GROUPED_SKILL_LABEL_ALIASES = {
     _normalize_lookup(alias)
     for alias in {
@@ -258,6 +309,200 @@ def _build_annotation_retry_metadata(
         "eligible": eligible,
         "exhausted": exhausted,
     }
+
+
+def _looks_like_identity_header_name(value: Optional[str], identity_name: Optional[str]) -> bool:
+    cleaned = _clean_inline_text(value)
+    normalized_name = _normalize_lookup(identity_name or "")
+    if not cleaned or not normalized_name:
+        return False
+    return _normalize_lookup(cleaned) == normalized_name
+
+
+def _contains_identity_name_tokens(value: Optional[str], identity_name: Optional[str]) -> bool:
+    cleaned = _clean_inline_text(value)
+    if not cleaned:
+        return False
+    candidate_tokens = {token for token in _normalize_lookup(cleaned).split() if token}
+    name_tokens = [token for token in _normalize_lookup(identity_name or "").split() if len(token) > 1]
+    if not candidate_tokens or not name_tokens:
+        return False
+    matched = sum(1 for token in name_tokens if token in candidate_tokens)
+    return matched >= min(2, len(name_tokens))
+
+
+def _looks_like_header_desired_position_candidate(value: Optional[str], *, identity_name: Optional[str]) -> bool:
+    cleaned = _clean_inline_text(value)
+    if not cleaned:
+        return False
+    if _looks_like_identity_header_name(cleaned, identity_name):
+        return False
+    if _contains_identity_name_tokens(cleaned, identity_name):
+        return False
+    normalized = _normalize_lookup(cleaned)
+    tokens = [token for token in normalized.split() if token]
+    if len(tokens) >= 2 and all(token in SECTION_HEADING_WORDS for token in tokens):
+        return False
+    if _is_heading_value(cleaned) or _classify_heading(cleaned):
+        return False
+    if HEADER_CONTACT_LABEL_RE.search(cleaned):
+        return False
+    if HEADER_COMPANY_SUFFIX_RE.search(cleaned):
+        return False
+    if EMAIL_FRAGMENT_RE.search(cleaned) or URL_FRAGMENT_RE.search(cleaned):
+        return False
+    if PHONE_FRAGMENT_RE.search(cleaned) or ZIPISH_RE.search(cleaned):
+        return False
+    if ADDRESSISH_STREET_RE.search(cleaned) or ADDRESSISH_STREET_FRAGMENT_RE.search(cleaned):
+        return False
+    if (
+        HEADER_LOCATION_WITH_POSTAL_TAIL_RE.fullmatch(cleaned)
+        or HEADER_UPPER_LOCATION_WITH_POSTAL_TAIL_RE.fullmatch(cleaned)
+        or HEADER_LOCATION_TAIL_RE.fullmatch(cleaned)
+        or HEADER_UPPER_LOCATION_TAIL_RE.fullmatch(cleaned)
+    ):
+        return False
+    if ":" in cleaned:
+        return False
+    token_count = len(cleaned.split())
+    if token_count < 2 or token_count > 8:
+        return False
+    return True
+
+
+def _looks_like_non_title_header_phrase(value: Optional[str]) -> bool:
+    cleaned = _clean_inline_text(value)
+    if not cleaned:
+        return True
+    if HEADER_NON_TITLE_STATE_RE.search(cleaned):
+        return True
+    return False
+
+
+def _strip_identity_name_from_header_line(value: Optional[str], *, identity_name: Optional[str]) -> Optional[str]:
+    cleaned = _clean_inline_text(value)
+    if not cleaned:
+        return None
+    identity_cleaned = _clean_inline_text(identity_name)
+    if not identity_cleaned:
+        return cleaned
+    pattern = re.compile(re.escape(identity_cleaned), re.IGNORECASE)
+    return _clean_inline_text(pattern.sub(" ", cleaned))
+
+
+def _strip_contact_fragments_from_header_line(value: Optional[str]) -> Optional[str]:
+    cleaned = _clean_inline_text(value)
+    if not cleaned:
+        return None
+    working = cleaned
+    for pattern in (EMAIL_FRAGMENT_RE, URL_FRAGMENT_RE, PHONE_FRAGMENT_RE, HEADER_CONTACT_LABEL_RE):
+        working = pattern.sub(" ", working)
+    return _clean_inline_text(working.strip(" -|,"))
+
+
+def _strip_location_fragments_from_header_line(value: Optional[str]) -> Optional[str]:
+    cleaned = _clean_inline_text(value)
+    if not cleaned:
+        return None
+    tokens = cleaned.split()
+    for split_index in range(2, len(tokens)):
+        prefix = _clean_inline_text(" ".join(tokens[:split_index]).strip(" -|,"))
+        suffix = _clean_inline_text(" ".join(tokens[split_index:]).strip(" -|,"))
+        if not prefix or not suffix:
+            continue
+        if (
+            HEADER_LOCATION_WITH_POSTAL_TAIL_RE.fullmatch(suffix)
+            or HEADER_UPPER_LOCATION_WITH_POSTAL_TAIL_RE.fullmatch(suffix)
+            or HEADER_LOCATION_TAIL_RE.fullmatch(suffix)
+            or HEADER_UPPER_LOCATION_TAIL_RE.fullmatch(suffix)
+        ):
+            return prefix
+    working = cleaned
+    for pattern in (
+        HEADER_TRAILING_LOCATION_WITH_POSTAL_RE,
+        HEADER_TRAILING_UPPER_LOCATION_WITH_POSTAL_RE,
+    ):
+        working = pattern.sub(" ", working)
+    return _clean_inline_text(working.strip(" -|,"))
+
+
+def _extract_desired_position_from_header_line(
+    value: Optional[str],
+    *,
+    identity_name: Optional[str],
+) -> Optional[str]:
+    cleaned = _clean_inline_text(value)
+    if not cleaned or _is_heading_value(cleaned) or _classify_heading(cleaned):
+        return None
+
+    fragments = [cleaned]
+    if HEADER_INLINE_SEPARATOR_RE.search(cleaned):
+        fragments.extend(
+            fragment
+            for fragment in (
+                _clean_inline_text(piece) for piece in HEADER_INLINE_SEPARATOR_RE.split(cleaned)
+            )
+            if fragment
+        )
+
+    for fragment in fragments:
+        working = _strip_identity_name_from_header_line(fragment, identity_name=identity_name)
+        working = _strip_contact_fragments_from_header_line(working)
+        working = _strip_location_fragments_from_header_line(working)
+        cleaned_candidate = _clean_inline_text((working or "").strip(" -|,"))
+        if _looks_like_header_desired_position_candidate(
+            cleaned_candidate,
+            identity_name=identity_name,
+        ) and not _looks_like_non_title_header_phrase(cleaned_candidate):
+            return _normalize_recovered_desired_position(cleaned_candidate)
+    return None
+
+
+def _normalize_recovered_desired_position(value: Optional[str]) -> Optional[str]:
+    cleaned = _clean_inline_text(value)
+    if not cleaned:
+        return None
+    letters_only = re.sub(r"[^A-Za-z]+", "", cleaned)
+    if not letters_only or cleaned != cleaned.upper():
+        return cleaned
+
+    tokens: list[str] = []
+    for token in cleaned.split():
+        bare = re.sub(r"[^A-Za-z]+", "", token)
+        if bare.isupper() and len(bare) <= 3:
+            tokens.append(token)
+            continue
+        tokens.append(token[:1].upper() + token[1:].lower())
+    return " ".join(tokens)
+
+
+def _recover_desired_position_from_header(
+    raw_text: str,
+    *,
+    identity_name: Optional[str],
+) -> Optional[str]:
+    header_lines: list[str] = []
+    for raw_line in str(raw_text or "").replace("\r", "").split("\n"):
+        cleaned = _clean_inline_text(raw_line)
+        if not cleaned:
+            continue
+        if _is_heading_value(cleaned) or _classify_heading(cleaned):
+            break
+        header_lines.append(cleaned)
+        if len(header_lines) >= 4:
+            break
+
+    if not header_lines:
+        return None
+
+    for line in header_lines:
+        recovered = _extract_desired_position_from_header_line(
+            line,
+            identity_name=identity_name,
+        )
+        if recovered:
+            return recovered
+    return None
 
 
 def _strip_list_prefix(value: str) -> str:
@@ -1219,6 +1464,21 @@ def _run_resume_pipeline_from_ocr_result(ocr_result: OCRAnnotationResult) -> Dic
             section_recovery=section_recovery,
             annotation_retry=_build_annotation_retry_metadata(),
         )
+
+    if not _clean_inline_text(extraction.identity.desiredPosition if extraction.identity else None):
+        recovered_desired_position = _recover_desired_position_from_header(
+            raw_text,
+            identity_name=_clean_inline_text(extraction.identity.name if extraction.identity else None),
+        )
+        if recovered_desired_position:
+            repaired_payload = _coerce_annotation_for_repair(extraction) or {}
+            identity_payload = repaired_payload.setdefault("identity", {})
+            if isinstance(identity_payload, dict):
+                identity_payload["desiredPosition"] = recovered_desired_position
+                try:
+                    extraction = parse_document_annotation(repaired_payload)
+                except AnnotationParserError:
+                    pass
 
     normalized = normalize_extraction(
         extraction,

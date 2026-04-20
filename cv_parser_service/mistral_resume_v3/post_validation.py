@@ -56,6 +56,12 @@ ADDRESSISH_STREET_FRAGMENT_RE = re.compile(
     re.IGNORECASE,
 )
 ZIPISH_RE = re.compile(r"\b\d{5}(?:-\d{4})?\b")
+LOCATION_FRAGMENT_RE = re.compile(
+    r"\b[A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+)*,\s*[A-Z]{2}(?:\s+\d{5}(?:-\d{4})?)?(?:,\s*[A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+)*)?\b"
+)
+UPPER_LOCATION_FRAGMENT_RE = re.compile(
+    r"\b[A-Z]{2,}(?:\s+[A-Z]{2,})*,\s*[A-Z]{2}(?:\s+\d{5}(?:-\d{4})?)?(?:,\s*[A-Z]{2,}(?:\s+[A-Z]{2,})*)?\b"
+)
 DEGREE_TOKEN_RE = re.compile(
     r"\b(bachelor|master|msc|bsc|mba|phd|doctorate|diploma|degree|universit|college|school|lyc[ée]e|licence|formation|bts|dut)\b",
     re.IGNORECASE,
@@ -104,6 +110,17 @@ SAFE_EXPLICIT_SUMMARY_HEADING_ALIASES = {
     "professional profile",
     "about",
 }
+HEADER_CONTACT_LABEL_RE = re.compile(
+    r"\b(phone|email|mobile|telephone|tel|contact|linkedin|website|portfolio|github|address|location)\b",
+    re.IGNORECASE,
+)
+HEADER_INLINE_SEPARATOR_RE = re.compile(r"\s*(?:[|•·●▪◦]+)\s*")
+HEADER_TRAILING_LOCATION_WITH_POSTAL_RE = re.compile(
+    r"\s+[A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+)*,\s*[A-Z]{2}(?:\s+\d{5}(?:-\d{4})?)?(?:,\s*[A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+)*)?\s*$"
+)
+HEADER_TRAILING_UPPER_LOCATION_WITH_POSTAL_RE = re.compile(
+    r"\s+[A-Z]{2,}(?:\s+[A-Z]{2,})*,\s*[A-Z]{2}(?:\s+\d{5}(?:-\d{4})?)?(?:,\s*[A-Z]{2,}(?:\s+[A-Z]{2,})*)?\s*$"
+)
 
 
 def _normalize_lookup(value: str) -> str:
@@ -367,6 +384,7 @@ def _contains_address_or_contact_header_signal(value: str) -> bool:
         or ZIPISH_RE.search(value)
         or EMAIL_FRAGMENT_RE.search(value)
         or URL_RE.search(value)
+        or HEADER_CONTACT_LABEL_RE.search(value)
         or len(digits) >= 7
     )
 
@@ -382,17 +400,130 @@ def _has_strong_header_fragment_overlap(candidate: str, container: Optional[str]
     return normalized_candidate == normalized_container or normalized_candidate in normalized_container
 
 
+def _contains_identity_name_tokens(value: Optional[str], identity_name: Optional[str]) -> bool:
+    cleaned = _clean_inline_text(value)
+    if not cleaned:
+        return False
+    candidate_tokens = {token for token in _normalize_lookup(cleaned).split() if token}
+    name_tokens = [token for token in _normalize_lookup(identity_name or "").split() if len(token) > 1]
+    if not candidate_tokens or not name_tokens:
+        return False
+    matched = sum(1 for token in name_tokens if token in candidate_tokens)
+    return matched >= min(2, len(name_tokens))
+
+
+def _normalize_header_fragment_for_desired_position(
+    value: Optional[str],
+    *,
+    identity_name: Optional[str],
+) -> Optional[str]:
+    cleaned = _clean_inline_text(value)
+    if not cleaned:
+        return None
+    working = cleaned
+    identity_cleaned = _clean_inline_text(identity_name)
+    if identity_cleaned:
+        working = re.sub(re.escape(identity_cleaned), " ", working, flags=re.IGNORECASE)
+    for pattern in (EMAIL_FRAGMENT_RE, URL_RE, HEADER_CONTACT_LABEL_RE):
+        working = pattern.sub(" ", working)
+    digits = re.sub(r"\D", "", working)
+    if len(digits) >= 7:
+        working = re.sub(r"(?:\+?\d[\d\s().-]{6,}\d)", " ", working)
+    tokens = working.split()
+    for split_index in range(2, len(tokens)):
+        prefix = _clean_inline_text(" ".join(tokens[:split_index]).strip(" -|,"))
+        suffix = _clean_inline_text(" ".join(tokens[split_index:]).strip(" -|,"))
+        if not prefix or not suffix:
+            continue
+        if (
+            LOCATION_FRAGMENT_RE.fullmatch(suffix)
+            or UPPER_LOCATION_FRAGMENT_RE.fullmatch(suffix)
+        ):
+            working = prefix
+            break
+    else:
+        for pattern in (HEADER_TRAILING_LOCATION_WITH_POSTAL_RE, HEADER_TRAILING_UPPER_LOCATION_WITH_POSTAL_RE):
+            working = pattern.sub(" ", working)
+    return _clean_inline_text(working.strip(" -|,"))
+
+
+def _matches_structural_header_desired_position(
+    candidate: str,
+    *,
+    container: Optional[str],
+    identity_name: Optional[str],
+) -> bool:
+    cleaned_container = _clean_inline_text(container)
+    if not cleaned_container:
+        return False
+    normalized_candidate = _normalize_lookup(candidate)
+    fragments = [cleaned_container]
+    if HEADER_INLINE_SEPARATOR_RE.search(cleaned_container):
+        fragments.extend(
+            fragment
+            for fragment in (
+                _clean_inline_text(piece) for piece in HEADER_INLINE_SEPARATOR_RE.split(cleaned_container)
+            )
+            if fragment
+        )
+    for fragment in fragments:
+        normalized_fragment = _normalize_lookup(
+            _normalize_header_fragment_for_desired_position(
+                fragment,
+                identity_name=identity_name,
+            )
+            or ""
+        )
+        if normalized_fragment == normalized_candidate:
+            return True
+    return False
+
+
+def _looks_like_clean_desired_position_prefix(candidate: str, container: Optional[str]) -> bool:
+    cleaned_candidate = _clean_inline_text(candidate)
+    cleaned_container = _clean_inline_text(container)
+    if not cleaned_candidate or not cleaned_container:
+        return False
+    if HEADER_CONTACT_LABEL_RE.search(cleaned_candidate):
+        return False
+    normalized_candidate = _normalize_lookup(cleaned_candidate)
+    normalized_container = _normalize_lookup(cleaned_container)
+    prefix = f"{normalized_candidate} "
+    if not normalized_container.startswith(prefix):
+        return False
+
+    remainder = cleaned_container[len(cleaned_candidate) :].strip(" -|,")
+    if not remainder:
+        return False
+    return bool(
+        _contains_address_or_contact_header_signal(remainder)
+        or LOCATION_FRAGMENT_RE.search(remainder)
+        or UPPER_LOCATION_FRAGMENT_RE.search(remainder)
+    )
+
+
 def _looks_like_desired_position_header_noise(
     value: str,
     *,
     raw_text: str,
     contact_address: Optional[str],
+    identity_name: Optional[str],
 ) -> bool:
     if _has_strong_header_fragment_overlap(value, contact_address):
+        if _looks_like_clean_desired_position_prefix(value, contact_address):
+            return False
         return True
     for raw_line in (raw_text or "")[:HEADER_SCAN_LIMIT].splitlines():
         line = _clean_inline_text(raw_line)
         if not line or not _contains_address_or_contact_header_signal(line):
+            continue
+        if _matches_structural_header_desired_position(
+            value,
+            container=line,
+            identity_name=identity_name,
+        ):
+            continue
+        if _looks_like_clean_desired_position_prefix(value, line):
             continue
         if _has_strong_header_fragment_overlap(value, line):
             return True
@@ -405,6 +536,7 @@ def _validate_desired_position(
     *,
     raw_text: str,
     contact_address: Optional[str],
+    identity_name: Optional[str],
 ) -> Optional[str]:
     cleaned = _clean_inline_text(value)
     if not cleaned:
@@ -414,6 +546,14 @@ def _validate_desired_position(
             warnings,
             "desired_position_dropped",
             "Dropped invalid desiredPosition value because it did not look like an explicit headline.",
+            "identity.desiredPosition",
+        )
+        return None
+    if _contains_identity_name_tokens(cleaned, identity_name) and HEADER_CONTACT_LABEL_RE.search(cleaned):
+        _warning(
+            warnings,
+            "desired_position_dropped",
+            "Dropped invalid desiredPosition value because it mixed the candidate with identity or contact header text.",
             "identity.desiredPosition",
         )
         return None
@@ -429,6 +569,7 @@ def _validate_desired_position(
         cleaned,
         raw_text=raw_text,
         contact_address=contact_address,
+        identity_name=identity_name,
     ):
         _warning(
             warnings,
@@ -965,6 +1106,7 @@ def normalize_extraction(
         warnings,
         raw_text=raw_text,
         contact_address=extraction.contact.address if extraction.contact else None,
+        identity_name=extraction.identity.name if extraction.identity else None,
     )
 
     identity_location = _validate_identity_location(
