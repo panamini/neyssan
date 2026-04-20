@@ -331,7 +331,9 @@ export function ProfileModal({
                 <p className="dasti-profile-modal__hero-name">
                   {form.name.trim() || "Your name"}
                 </p>
-                <p className="dasti-profile-modal__hero-role">
+                <p
+                  className={`dasti-profile-modal__hero-role${form.desiredPosition.trim() ? "" : " dasti-profile-modal__hero-role--placeholder"}`}
+                >
                   {form.desiredPosition.trim() || "Desired position"}
                 </p>
               </div>

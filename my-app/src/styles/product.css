@@ -7307,6 +7307,10 @@ html:not(.dark) .dasti-proposal-submit {
   color: var(--tg2);
 }
 
+.cv-preview-placeholder {
+  color: var(--color-text-subtle);
+}
+
 .cv-contact-links {
   display: flex;
   flex-wrap: wrap;
@@ -8991,6 +8995,10 @@ html:not(.dark) .dasti-proposal-submit {
   color: var(--tm2);
   font-size: var(--tx);
   line-height: 1.35;
+}
+
+.dasti-profile-modal__hero-role--placeholder {
+  color: var(--color-text-subtle);
 }
 
 .dasti-photo-upload-trigger__tooltip {
