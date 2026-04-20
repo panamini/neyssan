@@ -336,6 +336,7 @@ const _CvMetadataBase = z.object({
     .optional(),
   verbatiStyle: z
     .object({
+      familyId: z.string().optional(),
       layout: z.string().optional(),
       typography: z.string().optional(),
       palette: z.string().optional(),
