@@ -51,32 +51,26 @@ describe("SettingsPage preview controls", () => {
     presetsQueryMock.mockReturnValue({
       activeSlot: 1,
       preset1: {
-        verbatiStyle: {
-          familyId: "swiss",
-          layout: "swiss",
-          typography: "quiet-editorial",
-          palette: "sauge",
-        },
+        fontPairId: "quiet-editorial",
+        styleChoice: "balanced",
+        paletteOverride: null,
+        accentHex: null,
         voicePreset: null,
         name: "Style 1",
       },
       preset2: {
-        verbatiStyle: {
-          familyId: "swiss",
-          layout: "swiss",
-          typography: "quiet-editorial",
-          palette: "sauge",
-        },
+        fontPairId: "quiet-editorial",
+        styleChoice: "balanced",
+        paletteOverride: null,
+        accentHex: null,
         voicePreset: null,
         name: "Style 2",
       },
       preset3: {
-        verbatiStyle: {
-          familyId: "editorial",
-          layout: "editorial",
-          typography: "quiet-editorial",
-          palette: "sauge",
-        },
+        fontPairId: "quiet-editorial",
+        styleChoice: "warm",
+        paletteOverride: null,
+        accentHex: null,
         voicePreset: null,
         name: "Style 3",
       },
@@ -113,11 +107,8 @@ describe("SettingsPage preview controls", () => {
     expect(lastCall).toMatchObject({
       slot: 1,
       preset: expect.objectContaining({
-        verbatiStyle: expect.objectContaining({
-          familyId: "swiss",
-          layout: "swiss",
-          typography: "civic-correspondence",
-        }),
+        styleChoice: "balanced",
+        fontPairId: "civic-correspondence",
       }),
     });
     expect(
@@ -148,7 +139,7 @@ describe("SettingsPage preview controls", () => {
         element.className.includes("dasti-settings-style-card"),
       );
 
-    expect(previewBadge()).toHaveTextContent("Swiss Minima");
+    expect(previewBadge()).toHaveTextContent("Swiss");
     expect(editorialStyleButton).toBeTruthy();
 
     await user.click(editorialStyleButton!);
@@ -161,13 +152,45 @@ describe("SettingsPage preview controls", () => {
     expect(lastCall).toMatchObject({
       slot: 1,
       preset: expect.objectContaining({
-        verbatiStyle: expect.objectContaining({
-          familyId: "editorial",
-          layout: "editorial",
-        }),
+        styleChoice: "warm",
       }),
     });
     expect(previewBadge()).toHaveTextContent("Editorial");
+  });
+
+  it("saves workshop as canonical verbatiStyle on the preset slot", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<SettingsPage />);
+    const workshopStyleButton = screen
+      .getAllByRole("button", { name: /Workshop/ })
+      .find((element) =>
+        element.className.includes("dasti-settings-style-card"),
+      );
+    const previewBadge = () =>
+      container.querySelector(".dasti-settings-hero-preview__style-badge");
+
+    expect(workshopStyleButton).toBeTruthy();
+
+    await user.click(workshopStyleButton!);
+
+    await waitFor(() => {
+      expect(savePresetMock).toHaveBeenCalled();
+    });
+
+    const lastCall = savePresetMock.mock.calls.at(-1)?.[0];
+    expect(lastCall).toMatchObject({
+      slot: 1,
+      preset: expect.objectContaining({
+        styleChoice: "balanced",
+        fontPairId: "quiet-editorial",
+        verbatiStyle: expect.objectContaining({
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+        }),
+      }),
+    });
+    expect(previewBadge()).toHaveTextContent("Workshop");
   });
 
   it("renders the layout style cards for the available presets", () => {

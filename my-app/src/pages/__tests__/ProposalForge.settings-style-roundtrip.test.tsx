@@ -9,14 +9,14 @@ const mockCurrentProposalSettings = {
   voicePreset: "signature",
   savedVoicePreset: "signature",
   templateId: "editorial_wide",
-  styleChoice: "formal",
+  styleChoice: "balanced",
   paletteOverride: null,
   accentHex: null,
   fontPairId: null,
   verbatiStyle: {
-    familyId: "editorial",
-    layout: "editorial",
-    typography: "quiet-editorial",
+    familyId: "workshop",
+    layout: "workshop",
+    typography: "doto-code",
     palette: "sauge",
   },
   sourceMode: "proposal_local",
@@ -89,6 +89,7 @@ vi.mock("../../lib/proposal-personalization", () => ({
   }),
   getProposalAttachedCvId: () => null,
   getProposalAttachedCvLocalDocument: () => null,
+  listLocalCvPickerOptions: () => [],
   PROPOSAL_ATTACHED_CV_UPDATED_EVENT: "dasti:proposal-attached-cv-updated",
 }));
 
@@ -135,7 +136,7 @@ describe("ProposalForge settings style round-trip", () => {
     window.sessionStorage.clear();
   });
 
-  it("keeps formal proposal settings stable across reloads", async () => {
+  it("keeps workshop proposal settings stable across reloads", async () => {
     const { unmount } = render(
       <MemoryRouter initialEntries={["/proposal"]}>
         <ProposalForge />
@@ -144,7 +145,7 @@ describe("ProposalForge settings style round-trip", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("proposal-settings-style")).toHaveTextContent(
-        "editorial|quiet-editorial|sauge|editorial_wide",
+        "workshop|doto-code|sauge|workshop_proposal_margin",
       );
     });
 
@@ -158,7 +159,7 @@ describe("ProposalForge settings style round-trip", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("proposal-settings-style")).toHaveTextContent(
-        "editorial|quiet-editorial|sauge|editorial_wide",
+        "workshop|doto-code|sauge|workshop_proposal_margin",
       );
     });
   });
