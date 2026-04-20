@@ -142,6 +142,18 @@ import {
   setStyledProposalExportContext,
 } from "../lib/document-export-debug";
 import { exportDocumentFile } from "../lib/exportDocumentFile";
+
+type CurrentProposalSettings = {
+  voicePreset: string;
+  savedVoicePreset?: string | null;
+  templateId: ProposalTemplateId;
+  styleChoice?: ProposalStyleChoice;
+  paletteOverride?: ProposalPaletteId | null;
+  accentHex?: string | null;
+  fontPairId?: string | null;
+  verbatiStyle?: Partial<ReturnType<typeof resolveVerbatiStyle>> | null;
+  sourceMode?: ProposalStyleLinkMode;
+};
 import {
   logProposalStyleTrace,
   readProposalStyleTraceStorageSnapshots,
@@ -312,7 +324,12 @@ type ProposalDocumentMetadata = {
   formalityLevel?: FormValues["formalityLevel"];
   creativity?: FormValues["creativity"];
   templateId?: ProposalTemplateId;
-  verbatiStyle?: ReturnType<typeof serializeVerbatiStyle>;
+  verbatiStyle?: {
+    layout: string;
+    typography: string;
+    palette: string;
+    accentHex?: string;
+  };
   styleLinkMode?: ProposalStyleLinkMode;
   styleChoice?: ProposalStyleChoice;
   templateBundleId?: ProposalTemplateBundleId;
@@ -526,6 +543,29 @@ function buildProposalStyleTraceMetadataSnapshot(input: {
       typeof input.styleLinkMode === "string" && input.styleLinkMode.trim().length > 0
         ? input.styleLinkMode.trim()
         : null,
+  };
+}
+
+function serializeProposalMetadataVerbatiStyle(
+  style:
+    | ReturnType<typeof resolveVerbatiStyle>
+    | ReturnType<typeof serializeVerbatiStyle>
+    | null
+    | undefined,
+): ProposalDocumentMetadata["verbatiStyle"] {
+  if (!style) {
+    return undefined;
+  }
+
+  const serializedStyle = serializeVerbatiStyle(resolveVerbatiStyle(style));
+
+  return {
+    layout: serializedStyle.layout,
+    typography: serializedStyle.typography,
+    palette: serializedStyle.palette,
+    ...(serializedStyle.accentHex
+      ? { accentHex: serializedStyle.accentHex }
+      : null),
   };
 }
 
@@ -865,7 +905,17 @@ export function ProposalForge(): JSX.Element {
   const currentProposalSettings = useQuery(
     api.proposalSettings.getCurrent,
     isConvexAuthenticated ? {} : "skip",
-  );
+  ) as CurrentProposalSettings | undefined;
+  const initialSettingsStylePreset =
+    !storedOutputStylePreset &&
+    !activeCvProposalStylePreset &&
+    currentProposalSettings?.verbatiStyle
+      ? resolveVerbatiStyle(currentProposalSettings.verbatiStyle)
+      : null;
+  const initialSettingsTemplateId =
+    initialSettingsStylePreset
+      ? getProposalTwinTemplateId(initialSettingsStylePreset)
+      : currentProposalSettings?.templateId ?? null;
   const savedProposals = useQuery(
     api.proposalsPublic.default as any,
     isConvexAuthenticated ? {} : "skip",
@@ -900,7 +950,9 @@ export function ProposalForge(): JSX.Element {
   >(storedOutputDraft?.proposalVoicePreset ?? null);
   const [proposalTemplateId, setProposalTemplateId] =
     React.useState<ProposalTemplateId | null>(
-      storedOutputDraft?.proposalTemplateId ?? fallbackProposalTemplateId,
+      storedOutputDraft?.proposalTemplateId ??
+        initialSettingsTemplateId ??
+        fallbackProposalTemplateId,
     );
   const [proposalStyleLinkMode, setProposalStyleLinkMode] =
     React.useState<ProposalStyleLinkMode>(() =>
@@ -916,28 +968,38 @@ export function ProposalForge(): JSX.Element {
           resolveProposalStyleChoiceFromRenderState({
             templateId:
               storedOutputDraft?.proposalTemplateId ??
+              initialSettingsTemplateId ??
               fallbackProposalTemplateId,
             stylePreset:
               storedOutputDraft?.proposalVerbatiStyle ??
-              activeCvProposalStylePreset,
+              activeCvProposalStylePreset ??
+              initialSettingsStylePreset,
           }) ??
-          (activeCvProposalStylePreset ? "auto" : "balanced"),
+          (activeCvProposalStylePreset
+            ? "auto"
+            : normalizeProposalSettingsStyleChoice(
+                currentProposalSettings?.styleChoice,
+              )),
       ),
     );
   const [proposalStylePreset, setProposalStylePreset] = React.useState(
-    storedOutputStylePreset ?? activeCvProposalStylePreset,
+    storedOutputStylePreset ??
+      activeCvProposalStylePreset ??
+      initialSettingsStylePreset,
   );
   const shouldRestoreStoredCustomStyle = Boolean(
     storedOutputDraft?.proposalStyleLinkMode === "proposal_local" &&
       storedOutputStylePreset,
   );
   const [hasUserEditedStyle, setHasUserEditedStyle] = React.useState<boolean>(
-    () => shouldRestoreStoredCustomStyle,
+    () => shouldRestoreStoredCustomStyle || Boolean(initialSettingsStylePreset),
   );
   const [proposalWorkspaceStyle, setProposalWorkspaceStyle] =
     React.useState<ReturnType<typeof resolveVerbatiStyle> | null>(() =>
       shouldRestoreStoredCustomStyle && storedOutputStylePreset
         ? resolveVerbatiStyle(storedOutputStylePreset)
+        : initialSettingsStylePreset
+          ? resolveVerbatiStyle(initialSettingsStylePreset)
         : null,
     );
   const [proposalTemplateBundleId, setProposalTemplateBundleId] =
@@ -1251,6 +1313,13 @@ export function ProposalForge(): JSX.Element {
           ? currentProposalSettings.paletteOverride
           : null,
     [currentProposalSettings?.paletteOverride, settingsAccentHex],
+  );
+  const settingsStylePreset = React.useMemo(
+    () =>
+      currentProposalSettings?.verbatiStyle
+        ? resolveVerbatiStyle(currentProposalSettings.verbatiStyle)
+        : null,
+    [currentProposalSettings?.verbatiStyle],
   );
 
   const showConvexAuthRequiredToast = React.useCallback(
@@ -1640,7 +1709,20 @@ export function ProposalForge(): JSX.Element {
       return;
     }
 
-    setProposalStyleChoice(settingsStyleChoice);
+    if (settingsStylePreset) {
+      setProposalStylePreset(settingsStylePreset);
+      setProposalWorkspaceStyle(settingsStylePreset);
+      setHasUserEditedStyle(true);
+      setProposalTemplateId(getProposalTwinTemplateId(settingsStylePreset));
+      setProposalStyleChoice(
+        resolveProposalStyleChoiceFromRenderState({
+          templateId: getProposalTwinTemplateId(settingsStylePreset),
+          stylePreset: settingsStylePreset,
+        }) ?? settingsStyleChoice,
+      );
+    } else {
+      setProposalStyleChoice(settingsStyleChoice);
+    }
     setProposalPaletteOverride(settingsPaletteOverride);
     setProposalCustomAccentHex(settingsAccentHex);
     appliedSettingsAppearanceDefaultsRef.current = true;
@@ -1649,6 +1731,7 @@ export function ProposalForge(): JSX.Element {
     currentProposalSettings,
     settingsAccentHex,
     settingsPaletteOverride,
+    settingsStylePreset,
     settingsStyleChoice,
     storedOutputDraft?.customAccentHex,
     storedOutputDraft?.paletteOverride,
@@ -1673,6 +1756,23 @@ export function ProposalForge(): JSX.Element {
 
   React.useEffect(() => {
     if (hasUserEditedStyle) {
+      return;
+    }
+
+    const shouldDeferToSettingsStylePreset =
+      Boolean(settingsStylePreset) &&
+      !activeCvProposalStylePreset &&
+      !selectedProposalBundleDefinition &&
+      !(
+        storedOutputDraft?.proposalStyleChoice ||
+        storedOutputDraft?.proposalVerbatiStyle ||
+        storedOutputDraft?.proposalTemplateId ||
+        storedOutputDraft?.templateBundleId ||
+        storedOutputDraft?.customAccentHex ||
+        storedOutputDraft?.paletteOverride
+      );
+
+    if (shouldDeferToSettingsStylePreset) {
       return;
     }
 
@@ -1706,10 +1806,18 @@ export function ProposalForge(): JSX.Element {
     );
   }, [
     hasUserEditedStyle,
+    activeCvProposalStylePreset,
     resolvedProposalLocalStyle.stylePreset,
     resolvedProposalLocalStyle.templateId,
     resolvedStyleLinkMode,
     selectedProposalBundleDefinition,
+    settingsStylePreset,
+    storedOutputDraft?.customAccentHex,
+    storedOutputDraft?.paletteOverride,
+    storedOutputDraft?.proposalStyleChoice,
+    storedOutputDraft?.proposalTemplateId,
+    storedOutputDraft?.proposalVerbatiStyle,
+    storedOutputDraft?.templateBundleId,
   ]);
 
   const proposalMetadataStyle = React.useMemo(
@@ -1896,7 +2004,7 @@ export function ProposalForge(): JSX.Element {
       nextMetadata.templateId = resolvedTemplateId;
     }
 
-    nextMetadata.verbatiStyle = serializeVerbatiStyle(
+    nextMetadata.verbatiStyle = serializeProposalMetadataVerbatiStyle(
       effectiveProposalStylePresetWithPalette,
     );
     nextMetadata.styleLinkMode = resolvedRuntimeStyleLinkMode;
@@ -2687,7 +2795,9 @@ export function ProposalForge(): JSX.Element {
         undefined,
       sourceCvId: openedSavedProposalSourceCvId ?? undefined,
       templateId: effectiveSavedProposalTemplateId,
-      verbatiStyle: serializeVerbatiStyle(effectiveSavedProposalStylePreset),
+      verbatiStyle: serializeProposalMetadataVerbatiStyle(
+        effectiveSavedProposalStylePreset,
+      ),
       styleLinkMode: savedProposalStyleLinkMode,
       styleChoice:
         openedSavedProposal.metadata?.styleChoice ??
@@ -4820,7 +4930,9 @@ export function ProposalForge(): JSX.Element {
         ...(savedProposalRenderMetadata ?? openedSavedProposal.metadata ?? {}),
         sourceCvId: openedSavedProposalSourceCvId,
         templateId: getProposalTwinTemplateId(openedSavedProposalSourceCvStylePreset),
-        verbatiStyle: serializeVerbatiStyle(openedSavedProposalSourceCvStylePreset),
+        verbatiStyle: serializeProposalMetadataVerbatiStyle(
+          openedSavedProposalSourceCvStylePreset,
+        ),
         styleLinkMode: "inherit_cv",
       };
 
@@ -6343,6 +6455,7 @@ export function ProposalForge(): JSX.Element {
                             onSelectLayout={(layout) =>
                               applyProposalDirectStyle({
                                 ...effectiveProposalStylePresetWithPalette,
+                                familyId: layout,
                                 layout,
                               })
                             }

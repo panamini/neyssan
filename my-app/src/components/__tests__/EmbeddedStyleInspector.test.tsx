@@ -199,7 +199,7 @@ describe("EmbeddedStyleInspector", () => {
     });
   });
 
-  it("offers only the active resume layouts and keeps civic typography available", async () => {
+  it("offers the active workspace layout family, including workshop, and keeps civic typography available", async () => {
     const user = userEvent.setup();
 
     renderInspector();
@@ -209,10 +209,11 @@ describe("EmbeddedStyleInspector", () => {
     );
 
     expect(screen.getByRole("button", { name: "Swiss Minima" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Volk Register" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Two Column" })).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Volk Register" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Workshop" }),
+    ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Open text styles" }));
 
@@ -246,5 +247,46 @@ describe("EmbeddedStyleInspector", () => {
     await user.click(screen.getByRole("button", { name: "Two Column" }));
 
     expect(onSelectLayout).toHaveBeenCalledWith("two-column");
+  });
+
+  it("applies workshop layout, typography, and palette choices from the direct drawers", async () => {
+    const user = userEvent.setup();
+    const onSelectLayout = vi.fn();
+    const onSelectTypography = vi.fn();
+    const onSelectPalette = vi.fn();
+
+    render(
+      <EmbeddedStyleInspector
+        stylePreset={{
+          layout: "swiss",
+          typography: "signature",
+          palette: "sauge",
+        }}
+        copyMode="title-only"
+        controlMode="direct"
+        onSelectBundle={vi.fn()}
+        onSelectLayout={onSelectLayout}
+        onSelectTypography={onSelectTypography}
+        onSelectPalette={onSelectPalette}
+        onSelectCustomAccent={vi.fn()}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Open layout controls" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Workshop" }));
+
+    await user.click(screen.getByRole("button", { name: "Open text styles" }));
+    await user.click(screen.getByRole("button", { name: "Soft Serif" }));
+
+    await user.click(
+      screen.getByRole("button", { name: "Open palette controls" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Use Ink" }));
+
+    expect(onSelectLayout).toHaveBeenCalledWith("workshop");
+    expect(onSelectTypography).toHaveBeenCalledWith("soft-serif");
+    expect(onSelectPalette).toHaveBeenCalledWith("encre");
   });
 });

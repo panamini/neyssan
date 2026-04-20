@@ -21,6 +21,7 @@ const SAVED_PROPOSALS = [
         layout: "editorial",
         typography: "engaging",
         palette: "encre",
+        familyId: "editorial",
       },
     },
   },
@@ -218,11 +219,15 @@ describe("ProposalsList autosave", () => {
           styleLinkMode: "inherit_cv",
           verbatiStyle: expect.objectContaining({
             layout: "editorial",
+            typography: "soft-serif",
             palette: "encre",
           }),
         }),
       }),
     );
+    expect(
+      mockUpdateProposal.mock.calls.at(-1)?.[0]?.metadata?.verbatiStyle,
+    ).not.toHaveProperty("familyId");
 
     fireEvent.click(screen.getByRole("button", { name: "Change saved palette" }));
 
@@ -230,6 +235,10 @@ describe("ProposalsList autosave", () => {
       await vi.advanceTimersByTimeAsync(1000);
       await Promise.resolve();
     });
+
+    expect(screen.getByTestId("saved-render-style")).toHaveTextContent(
+      "editorial|bordeaux",
+    );
 
     expect(mockUpdateProposal).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -239,11 +248,16 @@ describe("ProposalsList autosave", () => {
           templateId: "editorial_wide",
           styleLinkMode: "proposal_local",
           verbatiStyle: expect.objectContaining({
+            layout: "editorial",
+            typography: "soft-serif",
             palette: "bordeaux",
           }),
         }),
       }),
     );
+    expect(
+      mockUpdateProposal.mock.calls.at(-1)?.[0]?.metadata?.verbatiStyle,
+    ).not.toHaveProperty("familyId");
     expect(screen.getByTestId("saved-save-status")).toHaveTextContent("saved");
   });
 });
