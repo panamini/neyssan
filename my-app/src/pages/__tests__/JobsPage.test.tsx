@@ -8,6 +8,7 @@ const approveReviewItemMock = vi.fn().mockResolvedValue(null);
 const markOpenedMock = vi.fn().mockResolvedValue(null);
 const updateFieldMock = vi.fn().mockResolvedValue(null);
 const windowOpenMock = vi.fn();
+let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
 const jobsList = [
   {
@@ -89,24 +90,31 @@ const selectedJob = {
 
 let listResult: typeof jobsList | undefined = jobsList;
 let selectedJobResult: typeof selectedJob | null | undefined = selectedJob;
-
-vi.mock("convex/react", () => ({
-  useConvexAuth: () => ({
-    isLoading: false,
-    isAuthenticated: true,
-  }),
-  useQuery: (reference: string, args: unknown) => {
+let listError: Error | null = null;
+const convexMock = {
+  query: async (reference: string, args?: { jobId?: string }) => {
     if (reference === "jobsPublic.listForUser") {
+      if (listError) {
+        throw listError;
+      }
       return listResult;
     }
     if (reference === "jobsPublic.getById") {
-      if (args === "skip") {
+      if (!args?.jobId) {
         return undefined;
       }
       return selectedJobResult;
     }
     return null;
   },
+};
+
+vi.mock("convex/react", () => ({
+  useConvexAuth: () => ({
+    isLoading: false,
+    isAuthenticated: true,
+  }),
+  useConvex: () => convexMock,
   useMutation: (reference: string) => {
     if (reference === "jobsPublic.approveReviewItem") {
       return approveReviewItemMock;
@@ -154,13 +162,19 @@ function LocationProbe(): JSX.Element {
 
 describe("JobsPage", () => {
   beforeEach(() => {
+    consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     approveReviewItemMock.mockClear();
     markOpenedMock.mockClear();
     updateFieldMock.mockClear();
     listResult = jobsList;
     selectedJobResult = selectedJob;
+    listError = null;
     windowOpenMock.mockReset();
     vi.stubGlobal("open", windowOpenMock);
+  });
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
   });
 
   it("renders the list-detail inbox and updates trust immediately on approve", async () => {
@@ -173,16 +187,16 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole("heading", { name: "Jobs" })).toBeInTheDocument();
-    expect(screen.getAllByText("Operations Associate").length).toBeGreaterThan(0);
-    expect(screen.getByText("Support Specialist")).toBeInTheDocument();
-    expect(screen.getAllByText("Responsibilities").length).toBeGreaterThan(0);
-    expect(screen.getByText("Run recurring workflows")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Open linked proposal Operations Associate cover letter/i })).toHaveAttribute(
+    expect(await screen.findByRole("heading", { name: "Jobs" })).toBeInTheDocument();
+    expect((await screen.findAllByText("Operations Associate")).length).toBeGreaterThan(0);
+    expect(await screen.findByText("Support Specialist")).toBeInTheDocument();
+    expect((await screen.findAllByText("Responsibilities")).length).toBeGreaterThan(0);
+    expect(await screen.findByText("Run recurring workflows")).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: /Open linked proposal Operations Associate cover letter/i })).toHaveAttribute(
       "href",
       "/proposal?view=saved&id=proposal_1",
     );
-    expect(screen.getByText("Review state")).toBeInTheDocument();
+    expect(await screen.findByText("Review state")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Approve" }));
 
@@ -196,7 +210,7 @@ describe("JobsPage", () => {
     expect(markOpenedMock).toHaveBeenCalledWith({ jobId: "job_alpha" });
   });
 
-  it("shows the guided empty state when no jobs are saved", () => {
+  it("shows the guided empty state when no jobs are saved", async () => {
     listResult = [];
     selectedJobResult = null;
 
@@ -208,12 +222,34 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("No saved jobs yet")).toBeInTheDocument();
+    expect(await screen.findByText("No saved jobs yet")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /Install TwoWeeks extension/i }),
     ).toHaveAttribute("href", "https://chromewebstore.google.com/");
     expect(
       screen.getByRole("button", { name: /Paste job manually/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("renders recovery guidance when the jobs query is missing from the local Convex runtime", async () => {
+    listError = new Error(
+      "[CONVEX Q(jobsPublic:listForUser)] Server Error Could not find public function for 'jobsPublic:listForUser'. Did you forget to run `npx convex dev`?",
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/jobs"]}>
+        <Routes>
+          <Route path="/jobs" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Jobs backend is out of sync")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Start or restart the local Convex dev server/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Copy: npm run dev:backend/i }),
     ).toBeInTheDocument();
   });
 });
