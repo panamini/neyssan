@@ -7,6 +7,7 @@ export const USER_PROFILE_VERBATI_LAYOUT_IDS = [
   "editorial",
   "modernist",
   "quire",
+  "workshop",
 ] as const;
 
 export const USER_PROFILE_VERBATI_LAYOUT_LEGACY_ALIASES = [
