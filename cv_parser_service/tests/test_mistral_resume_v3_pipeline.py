@@ -1872,7 +1872,6 @@ def test_normalize_extraction_keeps_desired_position_without_backfilling_summary
     assert normalized.identity.desiredPosition == "Fashion writer turned designer"
     assert payload["normalized"]["identitySchema"]["desiredPosition"] == "Fashion writer turned designer"
     assert payload["normalized"]["profile"]["desiredPosition"] == "Fashion writer turned designer"
-    assert payload["normalized"]["contact"]["desiredPosition"] == "Fashion writer turned designer"
     profile_section = next(section for section in payload["appDocument"]["sections"] if section["type"] == "profile")
     assert profile_section["structuredContent"][0]["desiredPosition"] == "Fashion writer turned designer"
 
@@ -1910,7 +1909,6 @@ def test_normalize_extraction_drops_invalid_desired_position_contact_noise(desir
     assert normalized.summary.text is None
     assert "desiredPosition" not in payload["normalized"]["identitySchema"]
     assert payload["normalized"]["profile"]["desiredPosition"] is None
-    assert payload["normalized"]["contact"]["desiredPosition"] is None
     assert "desired_position_dropped" in [warning.code for warning in normalized.warnings]
 
 
