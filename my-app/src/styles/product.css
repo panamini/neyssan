@@ -213,6 +213,11 @@
   background: var(--sidebar-hover-bg);
 }
 
+.sb-section__action--active {
+  background: var(--sidebar-active-bg);
+  color: var(--sidebar-active-ink);
+}
+
 .sb-section__list {
   display: grid;
   gap: 2px;
@@ -10166,6 +10171,234 @@ html:not(.dark) .dasti-proposal-submit {
   overflow: auto;
   max-block-size: 320px;
   white-space: pre-wrap;
+}
+
+.dasti-jobs-page {
+  --page-shell-max-width: 100%;
+  --page-shell-gap: var(--space-5);
+}
+
+.dasti-jobs-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.dasti-jobs-list-pane,
+.dasti-jobs-detail-pane {
+  min-width: 0;
+}
+
+.dasti-jobs-list-pane {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.dasti-jobs-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.dasti-jobs-toolbar__search,
+.dasti-jobs-toolbar__select {
+  min-width: 0;
+}
+
+.dasti-jobs-toolbar__search .dasti-select,
+.dasti-jobs-toolbar__select .dasti-select {
+  width: 100%;
+}
+
+.dasti-jobs-toolbar__count {
+  color: var(--tm2);
+  font-size: var(--ts);
+  white-space: nowrap;
+}
+
+.dasti-jobs-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.dasti-jobs-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: start;
+  padding: var(--space-3);
+  border: 1px solid var(--border-soft);
+  border-radius: calc(var(--radius-card) - 2px);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--sf1) 92%, transparent), transparent 78%),
+    color-mix(in srgb, var(--sf1) 82%, var(--bg) 18%);
+  box-shadow: var(--shadow-sm);
+}
+
+.dasti-jobs-row--active {
+  border-color: var(--border-selected);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--border-selected) 60%, transparent);
+}
+
+.dasti-jobs-row__copy {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.dasti-jobs-row__title {
+  color: var(--ti);
+  font-size: var(--tx);
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.dasti-jobs-row__company {
+  color: var(--tm2);
+  font-size: var(--ts);
+  line-height: 1.35;
+}
+
+.dasti-jobs-row__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  color: var(--tg2);
+  font-size: var(--tx);
+  line-height: 1.35;
+}
+
+.dasti-jobs-row__open {
+  justify-self: end;
+}
+
+.dasti-jobs-detail-pane {
+  display: grid;
+  min-height: 0;
+}
+
+.dasti-jobs-detail {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.dasti-jobs-detail__topline {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-3);
+  align-items: start;
+}
+
+.dasti-jobs-detail__identity {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.dasti-jobs-detail__title {
+  color: var(--ti);
+  font-size: var(--tl);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.dasti-jobs-detail__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  color: var(--tm2);
+  font-size: var(--ts);
+}
+
+.dasti-jobs-detail__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+.dasti-jobs-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.dasti-jobs-detail-section {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border-soft);
+  border-radius: calc(var(--radius-card) - 2px);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--sf1) 94%, transparent), transparent 72%),
+    color-mix(in srgb, var(--sf1) 84%, var(--bg) 16%);
+}
+
+.dasti-jobs-detail-section__label {
+  color: var(--tg2);
+  font-size: var(--tx);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.dasti-jobs-detail-section__stack {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.dasti-jobs-detail-section__item {
+  color: var(--ti);
+  font-size: var(--tx);
+  line-height: 1.45;
+}
+
+.dasti-jobs-empty-state {
+  padding-block: clamp(var(--space-6), 8vw, var(--space-8));
+}
+
+.dasti-jobs-empty-state__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: center;
+}
+
+.dasti-jobs-detail__mobile-back,
+.dasti-cv-job-context {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.dasti-cv-job-context {
+  inline-size: min(100%, var(--cv-editor-shell-max-width));
+  margin-inline: auto;
+}
+
+@media (max-width: 1080px) {
+  .dasti-jobs-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .dasti-jobs-detail-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .dasti-jobs-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .dasti-jobs-row {
+    grid-template-columns: 1fr;
+  }
+
+  .dasti-jobs-detail__actions {
+    justify-content: flex-start;
+  }
 }
 
 .dasti-brief-card__eyebrow {
