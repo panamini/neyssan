@@ -1,5 +1,5 @@
 import React from "react";
-import { useConvexAuth, useMutation, useQuery } from "convex/react";
+import { useConvex, useConvexAuth, useMutation } from "convex/react";
 import { useAuth } from "@clerk/clerk-react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
@@ -90,6 +90,93 @@ type JobsPageDetail = {
 
 type JobsSortOrder = "recent" | "oldest" | "title" | "company";
 type JobsTrustFilter = "all" | "needs_review" | "ready" | "attention";
+
+function isMissingJobsFunctionError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return (
+    message.includes("Could not find public function") &&
+    (message.includes("jobsPublic:listForUser") ||
+      message.includes("jobsPublic:getById"))
+  );
+}
+
+function JobsBackendUnavailable(): JSX.Element {
+  return (
+    <div className="dasti-page-scroll">
+      <div className="dasti-page-shell dasti-jobs-page">
+        <div className="dasti-page-header">
+          <div className="dasti-stack">
+            <h1 className="dasti-stack__title">Jobs</h1>
+            <p className="dasti-stack__subtitle dasti-jobs-page__subtitle">
+              The local Convex jobs functions are unavailable, so the Jobs
+              workspace cannot load yet.
+            </p>
+          </div>
+        </div>
+
+        <div className="dasti-empty-state dasti-jobs-empty-state">
+          <ClipboardText size={34} strokeWidth={1.25} aria-hidden="true" />
+          <div className="dasti-empty-state__title">
+            Jobs backend is out of sync
+          </div>
+          <p className="dasti-empty-state__subtitle">
+            Start or restart the local Convex dev server so
+            `jobsPublic:listForUser` and related queries are registered.
+          </p>
+          <div className="dasti-jobs-empty-state__actions">
+            <button
+              type="button"
+              className="dasti-button dasti-button--primary dasti-button--pill"
+              onClick={() => {
+                void navigator.clipboard?.writeText("npm run dev:backend").catch(
+                  () => {},
+                );
+              }}
+            >
+              Copy: npm run dev:backend
+            </button>
+            <button
+              type="button"
+              className="dasti-button dasti-button--pill"
+              onClick={() => {
+                void navigator.clipboard?.writeText("npx convex dev --local").catch(
+                  () => {},
+                );
+              }}
+            >
+              Copy: npx convex dev --local
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+class JobsPageRuntimeBoundary extends React.Component<
+  { children: React.ReactNode },
+  { error: unknown | null }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error: unknown) {
+    return { error };
+  }
+
+  render(): React.ReactNode {
+    if (this.state.error !== null) {
+      if (isMissingJobsFunctionError(this.state.error)) {
+        return <JobsBackendUnavailable />;
+      }
+      throw this.state.error;
+    }
+
+    return this.props.children;
+  }
+}
 
 function resolveJobsTrustLabel(args: {
   parseStatus?: string | null;
@@ -192,11 +279,12 @@ function JobInfoSection({
   );
 }
 
-export function JobsPage(): JSX.Element {
+function JobsPageContent(): JSX.Element {
   const navigate = useNavigate();
   const location = useLocation();
   const { jobId: selectedJobId } = useParams<JobsPageRouteParams>();
   const { cvs, currentCv } = useCvLibrary();
+  const convex = useConvex();
   const { isLoaded, isSignedIn } = useAuth();
   const {
     isAuthenticated: isConvexAuthenticated,
@@ -215,6 +303,10 @@ export function JobsPage(): JSX.Element {
     React.useState<Record<string, string>>({});
   const [optimisticSelectedJob, setOptimisticSelectedJob] =
     React.useState<JobsPageDetail>(null);
+  const [jobs, setJobs] = React.useState<JobsPageListItem[] | undefined>(undefined);
+  const [jobsRuntimeUnavailable, setJobsRuntimeUnavailable] = React.useState(false);
+  const [selectedJobRecord, setSelectedJobRecord] =
+    React.useState<JobsPageDetail | undefined>(undefined);
   const lastMarkedJobIdRef = React.useRef<string | null>(null);
 
   const jobsListReference = React.useMemo(
@@ -250,16 +342,94 @@ export function JobsPage(): JSX.Element {
     };
   }, []);
 
-  const jobs = useQuery(
+  React.useEffect(() => {
+    if (!isLoaded || !isSignedIn || !isConvexAuthenticated) {
+      setJobs(undefined);
+      setJobsRuntimeUnavailable(false);
+      return;
+    }
+
+    let cancelled = false;
+    setJobs(undefined);
+    setJobsRuntimeUnavailable(false);
+
+    void convex
+      .query(jobsListReference, {})
+      .then((result) => {
+        if (cancelled) {
+          return;
+        }
+        setJobs((result ?? []) as JobsPageListItem[]);
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+        if (isMissingJobsFunctionError(error)) {
+          setJobsRuntimeUnavailable(true);
+          setJobs([]);
+          return;
+        }
+        throw error;
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    convex,
+    isConvexAuthenticated,
+    isLoaded,
+    isSignedIn,
     jobsListReference,
-    isLoaded && isSignedIn && isConvexAuthenticated ? {} : "skip",
-  ) as JobsPageListItem[] | undefined;
-  const selectedJobRecord = useQuery(
+  ]);
+
+  React.useEffect(() => {
+    if (!selectedJobId || !isLoaded || !isSignedIn || !isConvexAuthenticated) {
+      setSelectedJobRecord(undefined);
+      return;
+    }
+
+    if (jobsRuntimeUnavailable) {
+      setSelectedJobRecord(null);
+      return;
+    }
+
+    let cancelled = false;
+    setSelectedJobRecord(undefined);
+
+    void convex
+      .query(jobByIdReference, { jobId: selectedJobId })
+      .then((result) => {
+        if (cancelled) {
+          return;
+        }
+        setSelectedJobRecord((result ?? null) as JobsPageDetail);
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+        if (isMissingJobsFunctionError(error)) {
+          setJobsRuntimeUnavailable(true);
+          setSelectedJobRecord(null);
+          return;
+        }
+        throw error;
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    convex,
+    isConvexAuthenticated,
+    isLoaded,
+    isSignedIn,
     jobByIdReference,
-    selectedJobId && isLoaded && isSignedIn && isConvexAuthenticated
-      ? { jobId: selectedJobId }
-      : "skip",
-  ) as JobsPageDetail | undefined;
+    jobsRuntimeUnavailable,
+    selectedJobId,
+  ]);
 
   React.useEffect(() => {
     if (selectedJobRecord === undefined) {
@@ -520,6 +690,10 @@ export function JobsPage(): JSX.Element {
     : !isSignedIn || !isConvexAuthenticated
       ? "Sign in to view saved jobs."
       : null;
+
+  if (jobsRuntimeUnavailable) {
+    return <JobsBackendUnavailable />;
+  }
 
   const hasJobs = (jobs?.length ?? 0) > 0;
   const selectedSourceLabel = getProposalSourceLabel(
@@ -843,5 +1017,13 @@ export function JobsPage(): JSX.Element {
         ) : null}
       </div>
     </div>
+  );
+}
+
+export function JobsPage(): JSX.Element {
+  return (
+    <JobsPageRuntimeBoundary>
+      <JobsPageContent />
+    </JobsPageRuntimeBoundary>
   );
 }
