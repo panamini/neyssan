@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { buildTypedSectionsFromNormalized, buildTypedSectionsFromReviewerSections } from "../cv/mapping-utils";
+import {
+  applyStrictContactToSections,
+  buildTypedSectionsFromNormalized,
+  buildTypedSectionsFromReviewerSections,
+} from "../cv/mapping-utils";
 
 describe("buildTypedSectionsFromNormalized direct section materialization", () => {
   it("materializes projects, certifications, hobbies, affiliations, and additional information from raw sections", () => {
@@ -185,5 +189,55 @@ describe("buildTypedSectionsFromNormalized direct section materialization", () =
         }),
       ]),
     );
+  });
+
+  it("drops profile desiredPosition when upstream metadata duplicates the name", () => {
+    const sections = buildTypedSectionsFromNormalized({
+      profile: {
+        name: "Linda Marvel",
+        desiredPosition: "Linda Marvel",
+        email: "linda@example.com",
+      },
+    });
+
+    const profileSection = sections.find((section) => section.type === "profile");
+    const profileItem = profileSection?.structuredContent?.[0] as
+      | { name?: string; desiredPosition?: string }
+      | undefined;
+
+    expect(profileItem?.name).toBe("Linda Marvel");
+    expect(profileItem?.desiredPosition).toBeUndefined();
+  });
+
+  it("does not let strict desiredPosition overwrite the profile with the candidate name", () => {
+    const sections = applyStrictContactToSections(
+      [
+        {
+          id: "sec-profile",
+          title: "Profile",
+          type: "profile",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "profile-1",
+              name: "Linda Marvel",
+              desiredPosition: "",
+              email: "linda@example.com",
+            },
+          ],
+          collapsed: false,
+        } as any,
+      ],
+      {
+        name: "Linda Marvel",
+        desiredPosition: "Linda Marvel",
+      },
+    );
+
+    const profileItem = sections[0]?.structuredContent?.[0] as
+      | { name?: string; desiredPosition?: string }
+      | undefined;
+    expect(profileItem?.name).toBe("Linda Marvel");
+    expect(profileItem?.desiredPosition).toBe("");
   });
 });

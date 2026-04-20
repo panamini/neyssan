@@ -4684,7 +4684,9 @@ export default function SectionEditor({
                   <div className="cv-profile-name cv-preview-text--truncate">
                     {name || "Your name"}
                   </div>
-                  <div className="cv-profile-role cv-preview-text--truncate">
+                  <div
+                    className={`cv-profile-role cv-preview-text--truncate${desiredPosition ? "" : " cv-preview-placeholder"}`}
+                  >
                     {desiredPosition || "Desired position"}
                   </div>
                 </div>
