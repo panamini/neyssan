@@ -27,7 +27,7 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { generateCvTemplate, generateCvTemplateV1 } from "../lib/cv-template";
-import { isCvEditorDebugUiEnabled, isV1SectionsEnabled } from "../lib/flags";
+import { isV1SectionsEnabled } from "../lib/flags";
 import StructuredUploadButton, {
   type StructuredPayload,
 } from "./StructuredUploadButton";
@@ -955,9 +955,8 @@ export function ProfileReviewCard({
   }, [sections]);
   const sensors = useSensors(useSensor(PointerSensor));
   const DEBUG_CV_EDITOR =
-    isCvEditorDebugUiEnabled() ||
-    (typeof window !== "undefined" &&
-      (window as any).__CV_EDITOR_DEBUG__ === true);
+    typeof window !== "undefined" &&
+    (window as any).__CV_EDITOR_DEBUG__ === true;
   // TEMPORARILY DISABLE DnD GLOBALLY to stabilize inspector flow. Re-enable after DnD refactor.
   const DISABLE_DND_FOR_DEBUG = true;
 
