@@ -376,8 +376,6 @@ def _looks_like_non_title_header_phrase(value: Optional[str]) -> bool:
         return True
     if HEADER_NON_TITLE_STATE_RE.search(cleaned):
         return True
-    if re.search(r"\b\w+ly\b", cleaned, re.IGNORECASE):
-        return True
     return False
 
 

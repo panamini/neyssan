@@ -771,7 +771,6 @@ def build_compatibility_normalized(resume: NormalizedResume, app_document: CvDoc
             "website": resume.contact.website,
             "github": resume.contact.github,
             "portfolio": resume.contact.portfolio,
-            "desiredPosition": resume.identity.desiredPosition,
             "addressBlock": resume.contact.address,
             "addressNormalized": resume.contact.addressNormalized,
             "location": resume.identity.location or resume.contact.addressNormalized,
