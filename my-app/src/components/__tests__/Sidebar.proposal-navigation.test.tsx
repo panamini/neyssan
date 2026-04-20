@@ -225,6 +225,24 @@ describe("Sidebar proposal navigation", () => {
     ).toBeInTheDocument();
   });
 
+  it("renders a top-level Jobs navigation entry", () => {
+    render(
+      <MemoryRouter initialEntries={["/cv"]}>
+        <Sidebar />
+        <Routes>
+          <Route path="/cv" element={<CvRoute />} />
+          <Route path="/proposal" element={<ProposalRouteProbe />} />
+          <Route path="/jobs" element={<LocationProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("link", { name: "Jobs" })).toHaveAttribute(
+      "href",
+      "/jobs",
+    );
+  });
+
   it("fully removes the sidebar from layout on very narrow mobile widths", () => {
     setViewportWidth(440);
 
