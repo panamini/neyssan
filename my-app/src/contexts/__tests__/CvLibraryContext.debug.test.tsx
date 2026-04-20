@@ -1,7 +1,6 @@
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { render, screen } from "@testing-library/react";
 
 import { CvLibraryProvider } from "../CvLibraryContext";
 
@@ -25,8 +24,6 @@ vi.mock("../../lib/convex-client", () => ({
 vi.mock("uuid", () => ({
   v4: () => "mock-uuid-1",
 }));
-
-const LOCAL_STORAGE_KEY = "cvDocuments";
 
 describe("CvLibraryContext debug controls", () => {
   beforeEach(() => {
@@ -63,18 +60,17 @@ describe("CvLibraryContext debug controls", () => {
     delete (window as Window & { __CV_EDITOR_DEBUG__?: boolean }).__CV_EDITOR_DEBUG__;
   });
 
-  it("shows the debug control in local/dev mode", async () => {
+  it("does not render legacy debug controls in local/dev mode", () => {
     render(
       <CvLibraryProvider>
         <div>child</div>
       </CvLibraryProvider>,
     );
 
-    await waitFor(() => {
-      expect(
-        screen.getByRole("button", { name: /toggle cv editor debug/i }),
-      ).toBeInTheDocument();
-    });
+    expect(
+      screen.queryByRole("button", { name: /toggle cv editor debug/i }),
+    ).toBeNull();
+    expect(screen.queryByText(/cv editor debug panel/i)).toBeNull();
   });
 
   it("keeps the debug control hidden in production unless explicitly enabled", () => {
@@ -90,10 +86,11 @@ describe("CvLibraryContext debug controls", () => {
     expect(
       screen.queryByRole("button", { name: /toggle cv editor debug/i }),
     ).toBeNull();
+    expect(screen.queryByText(/cv editor debug panel/i)).toBeNull();
   });
 
-  it("reveals the existing debug panel after enabling debug", async () => {
-    const user = userEvent.setup();
+  it("does not render the debug panel even when the runtime debug flag is on", () => {
+    (window as Window & { __CV_EDITOR_DEBUG__?: boolean }).__CV_EDITOR_DEBUG__ = true;
 
     render(
       <CvLibraryProvider>
@@ -101,58 +98,9 @@ describe("CvLibraryContext debug controls", () => {
       </CvLibraryProvider>,
     );
 
-    await user.click(
-      await screen.findByRole("button", { name: /toggle cv editor debug/i }),
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText(/cv editor debug panel/i)).toBeInTheDocument();
-    });
-  });
-
-  it("does not hide the debug control for trusted or untrusted local CVs", async () => {
-    window.localStorage.setItem(
-      LOCAL_STORAGE_KEY,
-      JSON.stringify([
-        {
-          id: "cv-trusted",
-          title: "Trusted CV",
-          metadata: {
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            version: 1,
-            authoritativeResume: {
-              source: "mistral_v3",
-              trusted: true,
-              fallbackToLegacy: false,
-              normalized: { profile: { name: "Trusted Person" } },
-            },
-          },
-          sections: [],
-        },
-        {
-          id: "cv-standard",
-          title: "Standard CV",
-          metadata: {
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            version: 1,
-          },
-          sections: [],
-        },
-      ]),
-    );
-
-    render(
-      <CvLibraryProvider>
-        <div>child</div>
-      </CvLibraryProvider>,
-    );
-
-    await waitFor(() => {
-      expect(
-        screen.getByRole("button", { name: /toggle cv editor debug/i }),
-      ).toBeInTheDocument();
-    });
+    expect(
+      screen.queryByRole("button", { name: /toggle cv editor debug/i }),
+    ).toBeNull();
+    expect(screen.queryByText(/cv editor debug panel/i)).toBeNull();
   });
 });

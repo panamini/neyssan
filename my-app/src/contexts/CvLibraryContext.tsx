@@ -14,7 +14,6 @@ import { useMutation } from "convex/react";
 import { convexClient } from "../lib/convex-client";
 import { useConvexStorageAdapter } from "../adapters/StorageAdapter";
 import { mapProfileToCvDocument } from "../adapters/profile-mapper";
-import DebugToggle from "../components/dev/debug-toggle";
 import type { CvDocument, CvSection, CvBlock } from "../types/cvDocument";
 import { safeParseCvDocument } from "../schemas/cvDocument.schema";
 import type { RemirrorJSON } from "remirror";
@@ -38,9 +37,8 @@ import {
 } from "../lib/normalize-cv";
 import { buildAuthoritativeResumeDebugSnapshot } from "../lib/authoritative-resume";
 // Toggle verbose debug logging for editor flows. Enable by setting window.__CV_EDITOR_DEBUG__ = true in the dev console.
-import { isCvEditorDebugUiEnabled, isV1SectionsEnabled } from "../lib/flags";
+import { isV1SectionsEnabled } from "../lib/flags";
 import dbg from "../lib/cv-debug";
-import DebugPanel from "../components/dev/debug-panel";
 import { api } from "../../convex/_generated/api";
 import {
   buildActiveCvSnapshotFromCvDocument,
@@ -61,22 +59,6 @@ import {
 function deepEqual(a: unknown, b: unknown): boolean {
   try {
     return JSON.stringify(a) === JSON.stringify(b);
-  } catch {
-    return false;
-  }
-}
-
-function readCvEditorDebugEnabled(): boolean {
-  if (typeof window === "undefined") {
-    return false;
-  }
-
-  try {
-    if ((window as any).__CV_EDITOR_DEBUG__ === true) {
-      return true;
-    }
-
-    return window.localStorage?.getItem("cv_editor_debug") === "true";
   } catch {
     return false;
   }
@@ -727,9 +709,6 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
   });
 
   const [currentCv, setCurrentCv] = useState<CvDocument | null>(null);
-  const [isDebugPanelVisible, setIsDebugPanelVisible] = useState<boolean>(() =>
-    readCvEditorDebugEnabled(),
-  );
   const hasHydratedActiveCvRef = useRef(false);
   const hasHydratedRemoteLibraryRef = useRef(false);
   const [isLibraryHydrated, setIsLibraryHydrated] = useState(false);
@@ -777,31 +756,6 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
   useEffect(() => {
     cvsRef.current = cvs;
   }, [cvs]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return undefined;
-    }
-
-    const syncDebugVisibility = () => {
-      setIsDebugPanelVisible(readCvEditorDebugEnabled());
-    };
-
-    syncDebugVisibility();
-    window.addEventListener(
-      "cv-debug-toggle",
-      syncDebugVisibility as EventListener,
-    );
-    window.addEventListener("storage", syncDebugVisibility);
-
-    return () => {
-      window.removeEventListener(
-        "cv-debug-toggle",
-        syncDebugVisibility as EventListener,
-      );
-      window.removeEventListener("storage", syncDebugVisibility);
-    };
-  }, []);
 
   useEffect(() => {
     if (!isSignedIn) {
@@ -3773,11 +3727,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
 
   return (
     <CvLibraryContext.Provider value={value}>
-      <>
-        {children}
-        {isCvEditorDebugUiEnabled() ? <DebugToggle /> : null}
-        {isDebugPanelVisible ? <DebugPanel /> : null}
-      </>
+      {children}
     </CvLibraryContext.Provider>
   );
 };
