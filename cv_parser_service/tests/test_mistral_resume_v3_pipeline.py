@@ -707,6 +707,342 @@ def test_run_resume_pipeline_from_ocr_result_recovers_explicit_summary_section_w
     assert result["diagnostics"]["annotationRetry"]["attempted"] is False
 
 
+def test_run_resume_pipeline_from_ocr_result_recovers_desired_position_from_helen_style_header_when_annotation_omits_it() -> None:
+    markdown = (
+        "HELEN D. KETTER\n"
+        "Fashion writer turned designer\n"
+        "instagram.com/_hellenk_\n"
+        "www.enhancv.com\n"
+    )
+    result = _run_resume_pipeline_from_ocr_result(
+        OCRAnnotationResult(
+            pages=[{"index": 0, "markdown": markdown}],
+            page_count=1,
+            diagnostics={
+                "model": "mistral-ocr-latest",
+                "page_count": 1,
+                "pages": 1,
+                "ocr_chars": len(markdown),
+                "document_name": "helenketter.jpg",
+            },
+            annotation_raw={
+                "identity": {
+                    "name": "HELEN D. KETTER",
+                },
+                "contact": {
+                    "linkedin": "instagram.com/_hellenk_",
+                    "website": "www.enhancv.com",
+                },
+            },
+            response_payload={},
+        )
+    )
+
+    normalized_payload = result["canonical_payload"]["normalized"]
+    assert normalized_payload["identitySchema"]["desiredPosition"] == "Fashion writer turned designer"
+    assert normalized_payload["profile"]["desiredPosition"] == "Fashion writer turned designer"
+
+
+def test_run_resume_pipeline_from_ocr_result_recovers_desired_position_from_robert_header_when_annotation_omits_it() -> None:
+    markdown = (
+        "ROBERT COOPER\n"
+        "SECURITY GUARD LOS ANGELES, CA 90291, UNITED STATES 3868683442\n"
+        "DETAILS PROFILE\n"
+        "1515 Pacific Ave\n"
+        "email@email.com\n\n"
+        "# EMPLOYMENT HISTORY\n\n"
+        "## Security Guard at ADT Security\n"
+        "- Protected VIP principals.\n"
+    )
+    result = _run_resume_pipeline_from_ocr_result(
+        OCRAnnotationResult(
+            pages=[{"index": 0, "markdown": markdown}],
+            page_count=1,
+            diagnostics={
+                "model": "mistral-ocr-latest",
+                "page_count": 1,
+                "pages": 1,
+                "ocr_chars": len(markdown),
+                "document_name": "sample_textpdf_resume.pdf",
+            },
+            annotation_raw={
+                "identity": {
+                    "name": "Robert Cooper",
+                },
+                "contact": {
+                    "email": "email@email.com",
+                    "phone": "3868683442",
+                    "address": "1515 Pacific Ave",
+                },
+                "experience": [
+                    {
+                        "company": "ADT Security",
+                        "position": "Security Guard",
+                        "responsibilityBullets": ["Protected VIP principals."],
+                    }
+                ],
+                "sectionOrder": [
+                    {"family": "experience", "ordinal": 0, "title": "EMPLOYMENT HISTORY"},
+                ],
+            },
+            response_payload={},
+        )
+    )
+
+    normalized_payload = result["canonical_payload"]["normalized"]
+    assert normalized_payload["identitySchema"]["desiredPosition"] == "Security Guard"
+    assert normalized_payload["profile"]["desiredPosition"] == "Security Guard"
+
+
+def test_run_resume_pipeline_from_ocr_result_does_not_backfill_desired_position_from_jessica_experience_header() -> None:
+    markdown = (
+        "JESSICA CLAIRE\n"
+        "resumeexample@example.com(555) 432-1000\n"
+        "Location: Montgomery Street, San Francisco, CA 94105\n\n"
+        "# WORK HISTORY\n\n"
+        "## Spring Education Group - Middle School Language Arts Teacher\n\n"
+        "Issaquah, WA • 08/2010 - Current\n\n"
+        "- Taught all levels of English language arts including intensive, regular, and advanced students\n"
+    )
+    result = _run_resume_pipeline_from_ocr_result(
+        OCRAnnotationResult(
+            pages=[{"index": 0, "markdown": markdown}],
+            page_count=1,
+            diagnostics={
+                "model": "mistral-ocr-latest",
+                "page_count": 1,
+                "pages": 1,
+                "ocr_chars": len(markdown),
+                "document_name": "jessicaclaire.png",
+            },
+            annotation_raw={
+                "identity": {
+                    "name": "Jessica Claire",
+                },
+                "contact": {
+                    "email": "resumeexample@example.com",
+                    "phone": "(555) 432-1000",
+                    "address": "Montgomery Street, San Francisco, CA 94105",
+                },
+                "experience": [
+                    {
+                        "company": "Spring Education Group",
+                        "position": "Middle School Language Arts Teacher",
+                        "startDate": "08/2010",
+                        "endDate": "Current",
+                        "isCurrent": True,
+                        "responsibilityBullets": [
+                            "Taught all levels of English language arts including intensive, regular, and advanced students"
+                        ],
+                    }
+                ],
+                "sectionOrder": [
+                    {"family": "experience", "ordinal": 0, "title": "WORK HISTORY"},
+                ],
+            },
+            response_payload={},
+        )
+    )
+
+    normalized_payload = result["canonical_payload"]["normalized"]
+    assert "desiredPosition" not in normalized_payload["identitySchema"]
+    assert normalized_payload["profile"]["desiredPosition"] is None
+
+
+def _run_desired_position_header_case(
+    *,
+    markdown: str,
+    annotation_raw: dict[str, Any],
+    document_name: str = "desired_position_header_case.pdf",
+) -> dict[str, Any]:
+    result = _run_resume_pipeline_from_ocr_result(
+        OCRAnnotationResult(
+            pages=[{"index": 0, "markdown": markdown}],
+            page_count=1,
+            diagnostics={
+                "model": "mistral-ocr-latest",
+                "page_count": 1,
+                "pages": 1,
+                "ocr_chars": len(markdown),
+                "document_name": document_name,
+            },
+            annotation_raw=annotation_raw,
+            response_payload={},
+        )
+    )
+    return result["canonical_payload"]["normalized"]
+
+
+@pytest.mark.parametrize(
+    ("markdown", "annotation_raw", "expected_desired_position"),
+    [
+        (
+            "JANE DOE | Product Designer | jane@example.com | +1 555 000 1234\n",
+            {
+                "identity": {"name": "Jane Doe"},
+                "contact": {"email": "jane@example.com", "phone": "+1 555 000 1234"},
+            },
+            "Product Designer",
+        ),
+        (
+            "JANE DOE\nPARIS, FR\nProduct Designer\njane@example.com\n",
+            {
+                "identity": {"name": "Jane Doe"},
+                "contact": {"email": "jane@example.com", "address": "Paris, FR"},
+            },
+            "Product Designer",
+        ),
+        (
+            "JANE DOE\nPRODUCT DESIGNER BROOKLYN, NY 11201\n+1 555 000 1234\n",
+            {
+                "identity": {"name": "Jane Doe"},
+                "contact": {"phone": "+1 555 000 1234", "address": "Brooklyn, NY 11201"},
+            },
+            "Product Designer",
+        ),
+        (
+            "JANE DOE SENIOR PRODUCT DESIGNER jane@example.com +1 555 000 1234\n",
+            {
+                "identity": {"name": "Jane Doe"},
+                "contact": {"email": "jane@example.com", "phone": "+1 555 000 1234"},
+            },
+            "Senior Product Designer",
+        ),
+        (
+            "JANE DOE\nSENIOR PRODUCT DESIGNER\nLOS ANGELES, CA 90210\n",
+            {
+                "identity": {"name": "Jane Doe"},
+                "contact": {"address": "Los Angeles, CA 90210"},
+            },
+            "Senior Product Designer",
+        ),
+        (
+            "LINDA MARVEL\nNew Teacher\n+1-270-447-1323\nIrvine, CA\nlindamarvel@gmail.com\n",
+            {
+                "identity": {"name": "Linda Marvel"},
+                "contact": {
+                    "phone": "+1-270-447-1323",
+                    "address": "Irvine, CA",
+                    "email": "lindamarvel@gmail.com",
+                },
+            },
+            "New Teacher",
+        ),
+    ],
+    ids=[
+        "name-title-contact",
+        "name-location-title",
+        "uppercase-title-with-zip-location",
+        "title-embedded-in-noisy-line",
+        "uppercase-header-variant",
+        "linda-header-title-with-address",
+    ],
+)
+def test_run_resume_pipeline_from_ocr_result_recovers_desired_position_from_structural_header_patterns(
+    markdown: str,
+    annotation_raw: dict[str, Any],
+    expected_desired_position: str,
+) -> None:
+    normalized_payload = _run_desired_position_header_case(
+        markdown=markdown,
+        annotation_raw=annotation_raw,
+    )
+
+    assert normalized_payload["identitySchema"]["desiredPosition"] == expected_desired_position
+    assert normalized_payload["profile"]["desiredPosition"] == expected_desired_position
+
+
+def test_run_resume_pipeline_from_ocr_result_keeps_linda_contact_address_while_recovering_header_title() -> None:
+    normalized_payload = _run_desired_position_header_case(
+        markdown=(
+            "LINDA MARVEL\n"
+            "New Teacher\n"
+            "+1-270-447-1323\n"
+            "Irvine, CA\n"
+            "lindamarvel@gmail.com\n"
+        ),
+        annotation_raw={
+            "identity": {"name": "Linda Marvel"},
+            "contact": {
+                "phone": "+1-270-447-1323",
+                "address": "Irvine, CA",
+                "email": "lindamarvel@gmail.com",
+            },
+        },
+        document_name="lindamarvel.png",
+    )
+
+    assert normalized_payload["identitySchema"]["desiredPosition"] == "New Teacher"
+    assert normalized_payload["contact"]["addressBlock"] == "Irvine, CA"
+    assert normalized_payload["contact"]["addressNormalized"] == "Irvine, CA"
+    assert normalized_payload["contact"]["location"] == "Irvine, CA"
+    assert normalized_payload["profile"]["location"] == "Irvine, CA"
+
+
+@pytest.mark.parametrize(
+    ("markdown", "annotation_raw"),
+    [
+        (
+            "JANE DOE\njane@example.com\n+1 555 000 1234\nBROOKLYN, NY 11201\n",
+            {
+                "identity": {"name": "Jane Doe"},
+                "contact": {
+                    "email": "jane@example.com",
+                    "phone": "+1 555 000 1234",
+                    "address": "Brooklyn, NY 11201",
+                },
+            },
+        ),
+        (
+            "JANE DOE\nDETAILS PROFILE\njane@example.com\n",
+            {
+                "identity": {"name": "Jane Doe"},
+                "contact": {"email": "jane@example.com"},
+            },
+        ),
+        (
+            "ACME CORP\nSAN FRANCISCO, CA\njane@example.com\n",
+            {
+                "identity": {"name": "Jane Doe"},
+                "contact": {"email": "jane@example.com", "address": "San Francisco, CA"},
+            },
+        ),
+        (
+            "JANICE WALTON PHONE | janice@example.com\n",
+            {
+                "identity": {"name": "Janice Walton"},
+                "contact": {"email": "janice@example.com"},
+            },
+        ),
+        (
+            "JANE DOE\nAvailable Immediately\njane@example.com\n",
+            {
+                "identity": {"name": "Jane Doe"},
+                "contact": {"email": "jane@example.com"},
+            },
+        ),
+    ],
+    ids=[
+        "no-title-in-header",
+        "section-heading-must-not-become-title",
+        "company-first-header-must-not-produce-junk",
+        "name-prefixed-noisy-header-must-not-produce-name-title",
+        "header-without-title-signal-returns-null",
+    ],
+)
+def test_run_resume_pipeline_from_ocr_result_does_not_recover_desired_position_from_invalid_header_patterns(
+    markdown: str,
+    annotation_raw: dict[str, Any],
+) -> None:
+    normalized_payload = _run_desired_position_header_case(
+        markdown=markdown,
+        annotation_raw=annotation_raw,
+    )
+
+    assert "desiredPosition" not in normalized_payload["identitySchema"]
+    assert normalized_payload["profile"]["desiredPosition"] is None
+
+
 def test_run_resume_pipeline_from_bytes_recovers_explicit_languages_and_skills_without_retry(monkeypatch) -> None:
     call_count = 0
 
@@ -1536,7 +1872,6 @@ def test_normalize_extraction_keeps_desired_position_without_backfilling_summary
     assert normalized.identity.desiredPosition == "Fashion writer turned designer"
     assert payload["normalized"]["identitySchema"]["desiredPosition"] == "Fashion writer turned designer"
     assert payload["normalized"]["profile"]["desiredPosition"] == "Fashion writer turned designer"
-    assert "desiredPosition" not in payload["normalized"]["contact"]
     profile_section = next(section for section in payload["appDocument"]["sections"] if section["type"] == "profile")
     assert profile_section["structuredContent"][0]["desiredPosition"] == "Fashion writer turned designer"
 
@@ -1574,7 +1909,6 @@ def test_normalize_extraction_drops_invalid_desired_position_contact_noise(desir
     assert normalized.summary.text is None
     assert "desiredPosition" not in payload["normalized"]["identitySchema"]
     assert payload["normalized"]["profile"]["desiredPosition"] is None
-    assert "desiredPosition" not in payload["normalized"]["contact"]
     assert "desired_position_dropped" in [warning.code for warning in normalized.warnings]
 
 

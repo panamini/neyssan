@@ -140,9 +140,17 @@ def test_mistral_ocr_parse_preserves_precomputed_v3_payload(monkeypatch):
         "rawText": "Anne Lounsberry",
         "normalized": {
             "name": "Anne Lounsberry",
-            "contact": {
+            "profile": {
                 "name": "Anne Lounsberry",
                 "desiredPosition": "Data Scientist",
+                "email": "anne.c.lounsberry@gmail.com",
+                "phone": "523-299-0012",
+                "linkedin": "linkedin.com/in/annelounsberry12",
+                "website": None,
+                "location": None,
+            },
+            "contact": {
+                "name": "Anne Lounsberry",
                 "email": "anne.c.lounsberry@gmail.com",
                 "phone": "523-299-0012",
                 "linkedinUrl": "linkedin.com/in/annelounsberry12",
@@ -233,7 +241,7 @@ def test_mistral_ocr_parse_preserves_precomputed_v3_payload(monkeypatch):
 
     payload = json.loads(response.body)
     normalized = payload["normalized"]
-    assert normalized["contact"]["desiredPosition"] == "Data Scientist"
+    assert normalized["profile"]["desiredPosition"] == "Data Scientist"
     assert normalized["summary"]["text"].startswith("Microsoft Certified Data Scientist")
     assert [item["name"] for item in normalized["skills"]] == ["Machine Learning", "Python"]
     assert len(normalized["education"]) == 1

@@ -1,0 +1,89 @@
+[
+  {
+    "id": "robert_header_role_kept",
+    "document_name": "robert.jpg",
+    "raw_text": "ROBERT COOPER\nSECURITY GUARD\nemail@email.com\n3868683442\nLOS ANGELES, CA 90291, UNITED STATES\nPROFILE\nSafety conscious, attentive Security Guard with eight years experience.\n",
+    "annotation_raw": {
+      "identity": {
+        "name": "ROBERT COOPER",
+        "desiredPosition": "Security Guard"
+      },
+      "contact": {
+        "email": "email@email.com",
+        "phone": "3868683442",
+        "address": "LOS ANGELES, CA 90291, UNITED STATES"
+      }
+    },
+    "expected_desired_position": "Security Guard",
+    "expected_warning_codes": []
+  },
+  {
+    "id": "fashion_headline_kept",
+    "document_name": "helenketter.jpg",
+    "raw_text": "HELEN D. KETTER\nFashion writer turned designer\n",
+    "annotation_raw": {
+      "identity": {
+        "name": "HELEN D. KETTER",
+        "desiredPosition": "Fashion writer turned designer"
+      }
+    },
+    "expected_desired_position": "Fashion writer turned designer",
+    "expected_warning_codes": []
+  },
+  {
+    "id": "address_noise_dropped",
+    "document_name": "janice.jpg",
+    "raw_text": "Janice Walton\n1515 Pacific Ave, Old Forge, New York, 13420\nUnited States\njanice@example.com\n",
+    "annotation_raw": {
+      "identity": {
+        "name": "Janice Walton",
+        "desiredPosition": "1515 Pacific Ave"
+      },
+      "contact": {
+        "address": "1515 Pacific Ave, Old Forge, New York, 13420, United States",
+        "email": "janice@example.com"
+      }
+    },
+    "expected_desired_position": null,
+    "expected_warning_codes": [
+      "desired_position_dropped"
+    ]
+  },
+  {
+    "id": "contact_header_overlap_dropped",
+    "document_name": "jordan_example.pdf",
+    "raw_text": "Jordan Example\nOld Forge, New York\njordan@example.com\n",
+    "annotation_raw": {
+      "identity": {
+        "name": "Jordan Example",
+        "desiredPosition": "Old Forge, New York"
+      },
+      "contact": {
+        "address": "1515 Pacific Ave, Old Forge, New York, 13420, United States",
+        "email": "jordan@example.com"
+      }
+    },
+    "expected_desired_position": null,
+    "expected_warning_codes": [
+      "desired_position_dropped"
+    ]
+  },
+  {
+    "id": "header_mashup_dropped",
+    "document_name": "janice.jpg",
+    "raw_text": "Janice Walton\nPhone\nExperience\nBoutique Facilitator\n",
+    "annotation_raw": {
+      "identity": {
+        "name": "Janice Walton",
+        "desiredPosition": "Janice Walton Phone"
+      },
+      "contact": {
+        "phone": "(555) 000-1234"
+      }
+    },
+    "expected_desired_position": null,
+    "expected_warning_codes": [
+      "desired_position_dropped"
+    ]
+  }
+]
