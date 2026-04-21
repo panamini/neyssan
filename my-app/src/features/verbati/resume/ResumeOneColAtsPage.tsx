@@ -2,12 +2,20 @@ import React from "react";
 
 import type { ResumeActiveTarget } from "../resumeLinking";
 import type { ResumeData } from "./resume.types";
-import type { ResumeTemplateDefinition } from "../../../lib/layout/resumeTemplates";
+import {
+  resolveWorkshopPreviewLayoutContract,
+  type ResumeTemplateDefinition,
+} from "../../../lib/layout/resumeTemplates";
 import type {
   WorkshopExperienceContentBlock,
   WorkshopResumeCommittedFragment,
   WorkshopResumeCommittedPage,
 } from "../../../lib/resume/resumePagination";
+import {
+  WORKSHOP_EXPERIENCE_HEADING_LINE_HEIGHT,
+  WORKSHOP_EXPERIENCE_HEADING_SIZE_ADJUST_MM,
+  WORKSHOP_SECTION_TITLE_SIZE_REDUCTION_MM,
+} from "../../../lib/resume/workshopHeadingContract";
 import {
   PreviewItemRegion,
   PreviewSectionRegion,
@@ -34,6 +42,40 @@ const workshopLabelTextStyle = {
   color: "var(--color-text-subtle)",
 };
 
+function formatMillimeters(value: number) {
+  return `${value}mm`;
+}
+
+function buildAdjustedFontSize(args: {
+  baseVar: "--text-display-size" | "--text-title-size" | "--text-body-size" | "--text-body-sm-size";
+  adjustVar:
+    | "--display-size-adjust"
+    | "--title-size-adjust"
+    | "--body-size-adjust"
+    | "--body-sm-size-adjust";
+  offsetMm?: number;
+}) {
+  const offsetMm = args.offsetMm ?? 0;
+  if (offsetMm === 0) {
+    return `calc(var(${args.baseVar}) + var(${args.adjustVar}))`;
+  }
+
+  return `calc(var(${args.baseVar}) + var(${args.adjustVar}) ${offsetMm < 0 ? "-" : "+"} ${formatMillimeters(Math.abs(offsetMm))})`;
+}
+
+const workshopDisplayFontSize = buildAdjustedFontSize({
+  baseVar: "--text-display-size",
+  adjustVar: "--display-size-adjust",
+});
+const workshopBodyFontSize = buildAdjustedFontSize({
+  baseVar: "--text-body-size",
+  adjustVar: "--body-size-adjust",
+});
+const workshopBodySmFontSize = buildAdjustedFontSize({
+  baseVar: "--text-body-sm-size",
+  adjustVar: "--body-sm-size-adjust",
+});
+
 function renderSectionHeading(title: string, continued: boolean) {
   return (
     <div
@@ -48,7 +90,11 @@ function renderSectionHeading(title: string, continued: boolean) {
         style={{
           margin: 0,
           fontFamily: "var(--heading-font, var(--font-heading-family))",
-          fontSize: "calc(var(--text-title-size) - 0.95mm)",
+          fontSize: buildAdjustedFontSize({
+            baseVar: "--text-title-size",
+            adjustVar: "--title-size-adjust",
+            offsetMm: -WORKSHOP_SECTION_TITLE_SIZE_REDUCTION_MM,
+          }),
           lineHeight: "var(--text-title-line)",
           textTransform: "uppercase",
           letterSpacing: "0.08em",
@@ -78,6 +124,7 @@ function renderSectionHeading(title: string, continued: boolean) {
 
 function renderExperienceBlocks(args: {
   blocks: WorkshopExperienceContentBlock[];
+  listGapMm: number;
 }) {
   const nodes: React.ReactNode[] = [];
   let pendingBullets: WorkshopExperienceContentBlock[] = [];
@@ -92,16 +139,16 @@ function renderExperienceBlocks(args: {
         key={`bullets-${nodes.length}`}
         style={{
           margin: 0,
-          paddingLeft: "4.5mm",
+          paddingLeft: "var(--experience-bullets-padding)",
           display: "grid",
-          gap: "1.2mm",
+          gap: formatMillimeters(args.listGapMm),
         }}
       >
         {pendingBullets.map((block) => (
           <li
             key={`${block.kind}-${block.text}`}
             style={{
-              fontSize: "var(--text-body-size)",
+              fontSize: workshopBodyFontSize,
               lineHeight: "var(--text-body-line)",
               ...experienceWrapStyle,
             }}
@@ -126,7 +173,7 @@ function renderExperienceBlocks(args: {
         key={`${block.kind}-${block.text}`}
         style={{
           margin: 0,
-          fontSize: "var(--text-body-size)",
+          fontSize: workshopBodyFontSize,
           lineHeight: "var(--text-body-line)",
           ...experienceWrapStyle,
         }}
@@ -164,7 +211,7 @@ function renderProfileFragment(args: {
           style={{
             margin: 0,
             fontFamily: "var(--heading-font, var(--font-heading-family))",
-            fontSize: "var(--text-display-size)",
+            fontSize: workshopDisplayFontSize,
             lineHeight: "var(--text-display-line)",
             fontWeight: 700,
             letterSpacing: "-0.02em",
@@ -176,7 +223,11 @@ function renderProfileFragment(args: {
           <p
             style={{
               margin: 0,
-              fontSize: "calc(var(--text-body-size) + 0.1mm)",
+              fontSize: buildAdjustedFontSize({
+                baseVar: "--text-body-size",
+                adjustVar: "--body-size-adjust",
+                offsetMm: 0.1,
+              }),
               lineHeight: "var(--text-body-line)",
               color: "var(--color-text-muted)",
             }}
@@ -270,8 +321,10 @@ function renderFragmentContent(args: {
   fragment: WorkshopResumeCommittedFragment;
   data: ResumeData;
   activeTarget?: ResumeActiveTarget | null;
+  template: ResumeTemplateDefinition;
 }) {
   const { fragment, data, activeTarget } = args;
+  const workshopLayout = resolveWorkshopPreviewLayoutContract(args.template);
 
   switch (fragment.kind) {
     case "profile":
@@ -289,7 +342,8 @@ function renderFragmentContent(args: {
           surface="item"
           style={{
             margin: 0,
-            fontSize: "var(--text-body-size)",
+            maxWidth: "var(--header-summary-width)",
+            fontSize: workshopBodyFontSize,
             lineHeight: "var(--text-body-line)",
             color: "var(--color-text)",
           }}
@@ -310,11 +364,16 @@ function renderFragmentContent(args: {
           surface="item"
           style={{
             display: "grid",
-            gap: "1.8mm",
+            gap: formatMillimeters(workshopLayout.experienceBlockGapMm),
           }}
           data-preview-row-id={item.id}
         >
-          <div style={{ display: "grid", gap: "0.6mm" }}>
+          <div
+            style={{
+              display: "grid",
+              gap: formatMillimeters(workshopLayout.experienceMetaGapMm),
+            }}
+          >
             <div
               style={{
                 display: "flex",
@@ -327,8 +386,12 @@ function renderFragmentContent(args: {
                 style={{
                   margin: 0,
                   fontFamily: "var(--heading-font, var(--font-heading-family))",
-                  fontSize: "calc(var(--text-body-size) + 0.2mm)",
-                  lineHeight: 1.25,
+                  fontSize: buildAdjustedFontSize({
+                    baseVar: "--text-body-size",
+                    adjustVar: "--body-size-adjust",
+                    offsetMm: WORKSHOP_EXPERIENCE_HEADING_SIZE_ADJUST_MM,
+                  }),
+                  lineHeight: WORKSHOP_EXPERIENCE_HEADING_LINE_HEIGHT,
                   fontWeight: 700,
                 }}
               >
@@ -354,7 +417,10 @@ function renderFragmentContent(args: {
               {[item.company, item.location, item.period].filter(Boolean).join(" · ")}
             </p>
           </div>
-          {renderExperienceBlocks({ blocks: item.blocks })}
+          {renderExperienceBlocks({
+            blocks: item.blocks,
+            listGapMm: workshopLayout.listGapMm,
+          })}
         </PreviewItemRegion>
       ));
     case "education":
@@ -368,14 +434,17 @@ function renderFragmentContent(args: {
           itemId={item.id}
           activeTarget={activeTarget}
           surface="item"
-          style={{ display: "grid", gap: "0.7mm" }}
+          style={{
+            display: "grid",
+            gap: "var(--education-gap)",
+          }}
           data-preview-row-id={item.id}
         >
           <h3
             style={{
               margin: 0,
               fontFamily: "var(--heading-font, var(--font-heading-family))",
-              fontSize: "var(--text-body-size)",
+              fontSize: workshopBodyFontSize,
               fontWeight: 700,
             }}
           >
@@ -410,7 +479,7 @@ function renderFragmentContent(args: {
             padding: "var(--skill-pad-block) var(--skill-pad-inline)",
             borderRadius: "999px",
             background: "var(--color-accent-soft)",
-            fontSize: "var(--text-body-sm-size)",
+            fontSize: workshopBodySmFontSize,
             lineHeight: "var(--text-body-sm-line)",
           }}
         >
@@ -423,7 +492,7 @@ function renderFragmentContent(args: {
           key={item.id}
           style={{
             display: "grid",
-            gap: "1.8mm",
+            gap: "var(--project-gap)",
             padding: "var(--project-padding)",
             borderRadius: "4mm",
             background: "color-mix(in srgb, var(--color-accent-soft) 72%, white 28%)",
@@ -437,13 +506,16 @@ function renderFragmentContent(args: {
             itemId={item.id}
             activeTarget={activeTarget}
             surface="item"
-            style={{ display: "grid", gap: "0.7mm" }}
+            style={{
+              display: "grid",
+              gap: formatMillimeters(workshopLayout.compactMetaGapMm),
+            }}
           >
             <h3
               style={{
                 margin: 0,
                 fontFamily: "var(--heading-font, var(--font-heading-family))",
-                fontSize: "var(--text-body-size)",
+                fontSize: workshopBodyFontSize,
                 fontWeight: 700,
               }}
             >
@@ -472,7 +544,7 @@ function renderFragmentContent(args: {
             surface="item"
             style={{
               margin: 0,
-              fontSize: "var(--text-body-size)",
+              fontSize: workshopBodyFontSize,
               lineHeight: "var(--text-body-line)",
             }}
           >
@@ -492,7 +564,7 @@ function renderFragmentContent(args: {
             activeTarget={activeTarget}
             surface="item"
             style={{
-              fontSize: "var(--text-body-size)",
+              fontSize: workshopBodyFontSize,
               lineHeight: "var(--text-body-line)",
             }}
           >
@@ -512,7 +584,7 @@ function renderFragmentContent(args: {
             activeTarget={activeTarget}
             surface="item"
             style={{
-              fontSize: "var(--text-body-size)",
+              fontSize: workshopBodyFontSize,
               lineHeight: "var(--text-body-line)",
             }}
           >
@@ -532,7 +604,7 @@ function renderFragmentContent(args: {
             activeTarget={activeTarget}
             surface="item"
             style={{
-              fontSize: "var(--text-body-size)",
+              fontSize: workshopBodyFontSize,
               lineHeight: "var(--text-body-line)",
             }}
           >
@@ -552,7 +624,7 @@ function renderFragmentContent(args: {
             activeTarget={activeTarget}
             surface="item"
             style={{
-              fontSize: "var(--text-body-size)",
+              fontSize: workshopBodyFontSize,
               lineHeight: "var(--text-body-line)",
             }}
           >
@@ -579,7 +651,7 @@ function renderFragmentContent(args: {
             activeTarget={activeTarget}
             surface="item"
             style={{
-              fontSize: "var(--text-body-size)",
+              fontSize: workshopBodyFontSize,
               lineHeight: "var(--text-body-line)",
             }}
           >
@@ -605,7 +677,7 @@ function renderFragmentContent(args: {
               style={{
                 margin: 0,
                 fontFamily: "var(--heading-font, var(--font-heading-family))",
-                fontSize: "var(--text-body-size)",
+                fontSize: workshopBodyFontSize,
                 fontWeight: 700,
               }}
             >
@@ -615,7 +687,7 @@ function renderFragmentContent(args: {
           <p
             style={{
               margin: 0,
-              fontSize: "var(--text-body-size)",
+              fontSize: workshopBodyFontSize,
               lineHeight: "var(--text-body-line)",
             }}
           >
@@ -630,10 +702,17 @@ function renderSectionFragment(args: {
   fragment: WorkshopResumeCommittedFragment;
   data: ResumeData;
   activeTarget?: ResumeActiveTarget | null;
+  template: ResumeTemplateDefinition;
 }) {
   const { fragment, data, activeTarget } = args;
+  const workshopLayout = resolveWorkshopPreviewLayoutContract(args.template);
   if (!fragment.title) {
-    return renderFragmentContent({ fragment, data, activeTarget });
+    return renderFragmentContent({
+      fragment,
+      data,
+      activeTarget,
+      template: args.template,
+    });
   }
 
   const content =
@@ -645,7 +724,12 @@ function renderSectionFragment(args: {
           gap: "var(--skill-gap)",
         }}
       >
-        {renderFragmentContent({ fragment, data, activeTarget })}
+        {renderFragmentContent({
+          fragment,
+          data,
+          activeTarget,
+          template: args.template,
+        })}
       </div>
     ) : fragment.kind === "languages" ||
       fragment.kind === "certifications" ||
@@ -655,16 +739,31 @@ function renderSectionFragment(args: {
       <ul
         style={{
           margin: 0,
-          paddingLeft: "4.5mm",
+          paddingLeft: "var(--experience-bullets-padding)",
           display: "grid",
-          gap: "1.2mm",
+          gap: formatMillimeters(workshopLayout.listGapMm),
         }}
       >
-        {renderFragmentContent({ fragment, data, activeTarget })}
+        {renderFragmentContent({
+          fragment,
+          data,
+          activeTarget,
+          template: args.template,
+        })}
       </ul>
     ) : (
-      <div style={{ display: "grid", gap: "3mm" }}>
-        {renderFragmentContent({ fragment, data, activeTarget })}
+      <div
+        style={{
+          display: "grid",
+          gap: formatMillimeters(workshopLayout.sectionContentGapMm),
+        }}
+      >
+        {renderFragmentContent({
+          fragment,
+          data,
+          activeTarget,
+          template: args.template,
+        })}
       </div>
     );
 
@@ -676,7 +775,10 @@ function renderSectionFragment(args: {
       sectionTitle={fragment.title}
       activeTarget={activeTarget}
       surface="section"
-      style={{ display: "grid", gap: "2.6mm" }}
+      style={{
+        display: "grid",
+        gap: formatMillimeters(workshopLayout.sectionShellGapMm),
+      }}
     >
       {renderSectionHeading(fragment.title, fragment.continued)}
       {content}
@@ -687,7 +789,7 @@ function renderSectionFragment(args: {
 export function ResumeOneColAtsPage({
   data,
   page,
-  template: _template,
+  template,
   activeTarget = null,
 }: ResumeOneColAtsPageProps) {
   return (
@@ -714,6 +816,7 @@ export function ResumeOneColAtsPage({
             fragment,
             data,
             activeTarget,
+            template,
           })}
         </React.Fragment>
       ))}

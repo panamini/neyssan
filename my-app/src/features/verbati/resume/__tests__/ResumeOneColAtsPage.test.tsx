@@ -5,7 +5,10 @@ import { describe, expect, it } from "vitest";
 import { ResumeOneColAtsPage } from "../ResumeOneColAtsPage";
 import { resumeMock } from "../resume.mock";
 import { planWorkshopResumePages } from "../../../../lib/resume/resumePagination";
-import { getResumeTemplateDefinition } from "../../../../lib/layout/resumeTemplates";
+import {
+  getResumeTemplateDefinition,
+  resolveWorkshopPreviewLayoutContract,
+} from "../../../../lib/layout/resumeTemplates";
 
 function repeatWords(label: string, count: number) {
   return Array.from({ length: count }, (_, index) => `${label}-${index + 1}`).join(" ");
@@ -132,6 +135,43 @@ describe("ResumeOneColAtsPage", () => {
     );
   });
 
+  it("uses the shared workshop summary-width var for the summary measure", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const plan = planWorkshopResumePages({
+      data: {
+        ...resumeMock,
+        summary: "Compact summary.",
+        metadata: resumeMock.metadata.slice(0, 1),
+        contact: resumeMock.contact.slice(0, 2),
+        experience: resumeMock.experience.slice(0, 1),
+        projects: [],
+        education: [],
+        certifications: [],
+        affiliations: [],
+        hobbyItems: [],
+        hobbies: [],
+        textSections: [],
+      },
+      template,
+    });
+
+    const { container } = render(
+      <ResumeOneColAtsPage
+        data={resumeMock}
+        page={plan.committedPages[0]!}
+        template={template}
+      />,
+    );
+
+    const summaryItem = container.querySelector(
+      '[data-preview-section="summary"][data-preview-item-id="summary"]',
+    );
+
+    expect(summaryItem?.getAttribute("style")).toContain(
+      "max-width: var(--header-summary-width);",
+    );
+  });
+
   it("pins the workshop page grid to the top instead of stretching rows across the full A4 shell", () => {
     const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
     const plan = planWorkshopResumePages({
@@ -255,6 +295,149 @@ describe("ResumeOneColAtsPage", () => {
       "padding: var(--skill-pad-block) var(--skill-pad-inline);",
     );
     expect(skillContainer?.getAttribute("style")).toContain("gap: var(--skill-gap);");
+  });
+
+  it("applies workshop density size adjustment vars to display, title, body, and body-sm roles", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const plan = planWorkshopResumePages({
+      data: {
+        ...resumeMock,
+        summary: "Compact summary.",
+        metadata: resumeMock.metadata.slice(0, 1),
+        contact: resumeMock.contact.slice(0, 2),
+        skillItems: resumeMock.skillItems.slice(0, 2),
+        experience: resumeMock.experience.slice(0, 1),
+        projects: [],
+        education: [],
+        certifications: [],
+        affiliations: [],
+        hobbyItems: [],
+        hobbies: [],
+        textSections: [],
+      },
+      template,
+    });
+
+    const { container } = render(
+      <ResumeOneColAtsPage
+        data={resumeMock}
+        page={plan.committedPages[0]!}
+        template={template}
+      />,
+    );
+
+    const profileName = container.querySelector("h1");
+    const firstSectionHeading = container.querySelector("h2");
+    const summaryItem = container.querySelector(
+      '[data-preview-section="summary"][data-preview-item-id="summary"]',
+    );
+    const skillItem = container.querySelector(
+      '[data-preview-section="skills"][data-preview-item-id]',
+    );
+
+    expect(profileName?.getAttribute("style")).toContain(
+      "font-size: calc(var(--text-display-size) + var(--display-size-adjust));",
+    );
+    expect(firstSectionHeading?.getAttribute("style")).toContain(
+      "font-size: calc(var(--text-title-size) + var(--title-size-adjust) - 0.95mm);",
+    );
+    expect(summaryItem?.getAttribute("style")).toContain(
+      "font-size: calc(var(--text-body-size) + var(--body-size-adjust));",
+    );
+    expect(skillItem?.getAttribute("style")).toContain(
+      "font-size: calc(var(--text-body-sm-size) + var(--body-sm-size-adjust));",
+    );
+  });
+
+  it("reads workshop section and item spacing from the shared template layout contract", () => {
+    const baseTemplate = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const template = {
+      ...baseTemplate,
+      preview: {
+        ...baseTemplate.preview,
+        experienceBulletsGapMm: 1.6,
+        workshopSectionShellGapMm: 4.4,
+        workshopSectionContentGapMm: 5.5,
+        workshopExperienceBlockGapMm: 2.3,
+        workshopExperienceMetaGapMm: 1.1,
+        workshopCompactMetaGapMm: 1.4,
+      },
+    };
+    const layout = resolveWorkshopPreviewLayoutContract(template);
+    const plan = planWorkshopResumePages({
+      data: {
+        ...buildRendererData(),
+        summary: "Compact summary.",
+        experience: resumeMock.experience.slice(0, 1),
+        projects: resumeMock.projects.slice(0, 1),
+        education: resumeMock.education.slice(0, 1),
+        languages: resumeMock.languages.slice(0, 1),
+        skillItems: [],
+        achievements: [],
+        achievementItems: [],
+        certifications: [],
+        affiliations: [],
+        hobbyItems: [],
+        hobbies: [],
+        textSections: [],
+      },
+      template,
+    });
+
+    const { container } = render(
+      <ResumeOneColAtsPage
+        data={resumeMock}
+        page={plan.committedPages[0]!}
+        template={template}
+      />,
+    );
+
+    const experienceItem = container.querySelector(
+      '[data-preview-section="experience"][data-preview-surface="item"]',
+    );
+    const experienceHeadingBlock = experienceItem?.firstElementChild as HTMLElement | null;
+    const experienceBulletList = experienceItem?.querySelector("ul") as HTMLElement | null;
+    const educationSection = container.querySelector(
+      '[data-preview-section="education"][data-preview-surface="section"]',
+    ) as HTMLElement | null;
+    const educationContent = educationSection?.children.item(1) as HTMLElement | null;
+    const educationItem = container.querySelector(
+      '[data-preview-section="education"][data-preview-surface="item"]',
+    );
+    const projectHeadline = container.querySelector(
+      '[data-preview-section="selected_projects"][data-preview-surface="item"]',
+    );
+    const projectCard = projectHeadline?.parentElement as HTMLElement | null;
+    const languagesList = container.querySelector(
+      '[data-preview-section="languages"][data-preview-surface="section"] ul',
+    );
+
+    expect(experienceItem?.getAttribute("style")).toContain(
+      `gap: ${layout.experienceBlockGapMm}mm;`,
+    );
+    expect(experienceHeadingBlock?.getAttribute("style")).toContain(
+      `gap: ${layout.experienceMetaGapMm}mm;`,
+    );
+    expect(experienceBulletList?.getAttribute("style")).toContain(
+      "padding-left: var(--experience-bullets-padding);",
+    );
+    expect(educationSection?.getAttribute("style")).toContain(
+      `gap: ${layout.sectionShellGapMm}mm;`,
+    );
+    expect(educationContent?.getAttribute("style")).toContain(
+      `gap: ${layout.sectionContentGapMm}mm;`,
+    );
+    expect(educationItem?.getAttribute("style")).toContain("gap: var(--education-gap);");
+    expect(projectHeadline?.getAttribute("style")).toContain(
+      `gap: ${layout.compactMetaGapMm}mm;`,
+    );
+    expect(projectCard?.getAttribute("style")).toContain("gap: var(--project-gap);");
+    expect(languagesList?.getAttribute("style")).toContain(
+      "padding-left: var(--experience-bullets-padding);",
+    );
+    expect(languagesList?.getAttribute("style")).toContain(
+      `gap: ${layout.listGapMm}mm;`,
+    );
   });
 
   it("renders continued experience fragments with repeated role, meta, and item-level continued without duplicating prior text", () => {
