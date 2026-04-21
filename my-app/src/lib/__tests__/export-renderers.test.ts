@@ -604,6 +604,8 @@ describe("export-renderers", () => {
     const workshopTemplate = getResumeTemplateDefinition("workshop_resume_onecol_ats");
     const expectedEntryMetaWidthMm =
       workshopTemplate.export.mainMm - workshopTemplate.export.readingWidthMm;
+    const expectedBulletsPaddingMm =
+      workshopTemplate.preview.experienceBulletsPaddingLeftMm;
 
     expect(styledDocument.body.className).toContain("resume-layout--workshop");
     expect(styledDocument.querySelectorAll(".export-page")).toHaveLength(
@@ -620,13 +622,21 @@ describe("export-renderers", () => {
     expect(styledCss).toContain(
       `--flow-entry-meta-width: ${expectedEntryMetaWidthMm}mm;`,
     );
+    expect(styledCss).toContain(
+      `--experience-bullets-padding: ${expectedBulletsPaddingMm}mm;`,
+    );
     expect(atsCss).toContain(
       `--flow-entry-meta-width: ${expectedEntryMetaWidthMm}mm;`,
     );
+    expect(atsCss).toContain(
+      `--experience-bullets-padding: ${expectedBulletsPaddingMm}mm;`,
+    );
     expect(styledCss).toContain(".entry-headline {");
     expect(styledCss).toContain(".entry-continuation {");
+    expect(styledCss).toContain(".bullet-list {");
     expect(atsCss).toContain(".entry-headline {");
     expect(atsCss).toContain(".entry-continuation {");
+    expect(atsCss).toContain(".bullet-list {");
     expect(styledDocument.querySelector(".entry-headline")).toBeTruthy();
     expect(atsDocument.querySelector(".entry-headline")).toBeTruthy();
     expect(styledDocument.querySelector(".workshop-export-header")).toBeNull();
