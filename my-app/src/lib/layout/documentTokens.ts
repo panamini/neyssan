@@ -100,6 +100,7 @@ export type CanonicalDocumentTokens = {
         sectionGapMm?: number;
         headingGapMm?: number;
         headingMarginBottomMm?: number;
+        sectionTitleReductionMm?: number;
       };
       experience?: {
         dateColumnWidthMm?: number;
@@ -108,6 +109,8 @@ export type CanonicalDocumentTokens = {
         orgMarginBottomMm?: number;
         bulletsPaddingLeftMm?: number;
         bulletsGapMm?: number;
+        headingSizeAdjustMm?: number;
+        headingLineHeight?: number;
       };
       project?: {
         gapMm?: number;
@@ -128,7 +131,10 @@ export type CanonicalDocumentTokens = {
         padBlockMm?: number;
       };
     };
-    pagination: Record<string, number | string | boolean>;
+    pagination: {
+      bottomFitSafetyMm?: number;
+      [key: string]: number | string | boolean | undefined;
+    };
     density: {
       displayAdjustPt?: number;
       titleAdjustPt?: number;
