@@ -153,6 +153,12 @@ export type WorkshopPlannerSection = {
   entries: WorkshopPlannerEntry[];
 };
 
+function isAtomicNonExperienceEntryKind(
+  kind: WorkshopPlannerEntry["kind"],
+): boolean {
+  return kind !== "profile" && kind !== "summary" && kind !== "experience";
+}
+
 export type WorkshopResumePagePlan = {
   index: number;
   estimatedHeight: number;
@@ -1893,6 +1899,7 @@ export function planWorkshopResumePages(args: {
   while (hasPendingEntries()) {
     let placedEntryThisPass = false;
     let blockedByPendingExperience = false;
+    let blockedByPendingAtomicSection = false;
 
     for (const state of sectionStates) {
       while (true) {
@@ -1937,6 +1944,8 @@ export function planWorkshopResumePages(args: {
         if (!entryFits && currentPage.entries.length > 0) {
           if (entry.kind === "experience") {
             blockedByPendingExperience = true;
+          } else if (isAtomicNonExperienceEntryKind(entry.kind)) {
+            blockedByPendingAtomicSection = true;
           }
           break;
         }
@@ -1950,7 +1959,7 @@ export function planWorkshopResumePages(args: {
         }
       }
 
-      if (blockedByPendingExperience) {
+      if (blockedByPendingExperience || blockedByPendingAtomicSection) {
         break;
       }
     }
