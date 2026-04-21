@@ -1139,7 +1139,7 @@ ${buildCssVarBlock(layoutProfileVars)}
       display: grid;
       gap: var(--flow-list-gap);
       margin: 0;
-      padding: 0 0 0 var(--experience-bullets-padding);
+      padding: 0 0 0 var(--flow-list-indent);
     }
 
     .bullet-list li {

@@ -139,7 +139,7 @@ function renderExperienceBlocks(args: {
         key={`bullets-${nodes.length}`}
         style={{
           margin: 0,
-          paddingLeft: "var(--experience-bullets-padding)",
+          paddingLeft: "var(--flow-list-indent)",
           display: "grid",
           gap: formatMillimeters(args.listGapMm),
         }}
@@ -739,7 +739,7 @@ function renderSectionFragment(args: {
       <ul
         style={{
           margin: 0,
-          paddingLeft: "var(--experience-bullets-padding)",
+          paddingLeft: "var(--flow-list-indent)",
           display: "grid",
           gap: formatMillimeters(workshopLayout.listGapMm),
         }}

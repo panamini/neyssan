@@ -60,6 +60,7 @@ const WORKSHOP_PREVIEW_LAYOUT_VAR_NAMES = [
   "--text-meta-line",
   "--body-row-gap",
   "--main-heading-margin",
+  "--flow-list-indent",
   "--experience-bullets-padding",
   "--skill-gap",
   "--skill-pad-inline",
