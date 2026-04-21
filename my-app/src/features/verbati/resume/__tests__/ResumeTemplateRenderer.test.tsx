@@ -48,7 +48,9 @@ const WORKSHOP_ACTIVE_PREVIEW_LAYOUT_VAR_NAMES = [
   "--skill-gap",
   "--skill-pad-inline",
   "--skill-pad-block",
+  "--project-gap",
   "--project-padding",
+  "--education-gap",
 ] as const;
 
 const WORKSHOP_ACTIVE_PREVIEW_VAR_NAMES = [

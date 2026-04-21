@@ -398,7 +398,7 @@ function renderFragmentContent(args: {
           surface="item"
           style={{
             display: "grid",
-            gap: formatMillimeters(workshopLayout.compactMetaGapMm),
+            gap: "var(--education-gap)",
           }}
           data-preview-row-id={item.id}
         >
@@ -454,7 +454,7 @@ function renderFragmentContent(args: {
           key={item.id}
           style={{
             display: "grid",
-            gap: "1.8mm",
+            gap: "var(--project-gap)",
             padding: "var(--project-padding)",
             borderRadius: "4mm",
             background: "color-mix(in srgb, var(--color-accent-soft) 72%, white 28%)",
