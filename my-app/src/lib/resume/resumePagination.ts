@@ -15,7 +15,16 @@ import type { ResumePreviewSectionType } from "../../features/verbati/resumeLink
 import type { VerbatiStylePreset } from "../../features/verbati/types";
 import { normalizeResumePreviewTokens } from "../layout/documentTokenNormalizer";
 import { ptToMm } from "../layout/documentTokens";
-import type { ResumeTemplateDefinition } from "../layout/resumeTemplates";
+import {
+  resolveWorkshopPreviewLayoutContract,
+  type ResumeTemplateDefinition,
+} from "../layout/resumeTemplates";
+import {
+  WORKSHOP_BOTTOM_FIT_SAFETY_MM,
+  WORKSHOP_EXPERIENCE_HEADING_LINE_HEIGHT,
+  WORKSHOP_EXPERIENCE_HEADING_SIZE_ADJUST_MM,
+  WORKSHOP_SECTION_TITLE_SIZE_REDUCTION_MM,
+} from "./workshopHeadingContract";
 
 type WorkshopEntryKind =
   | "profile"
@@ -38,12 +47,6 @@ const EXPERIENCE_MIN_PARTIAL_SPLIT_CHARS =
   EXPERIENCE_MIN_FRAGMENT_USEFUL_LINES * EXPERIENCE_USEFUL_CHARS_PER_LINE;
 const EXPERIENCE_DENSE_NUMERIC_CHARS_PER_LINE_MULTIPLIER = 1;
 const EXPERIENCE_DENSE_ALNUM_CHARS_PER_LINE_MULTIPLIER = 0.95;
-const WORKSHOP_RENDER_EXPERIENCE_BLOCK_GAP_MM = 1.8;
-const WORKSHOP_RENDER_EXPERIENCE_META_GAP_MM = 0.6;
-const WORKSHOP_RENDER_EXPERIENCE_HEADING_EXTRA_MM = 0.2;
-const WORKSHOP_RENDER_EXPERIENCE_HEADING_LINE_HEIGHT = 1.25;
-const WORKSHOP_RENDER_BOTTOM_FIT_SAFETY_MM = 0.5;
-const WORKSHOP_RENDER_EXPERIENCE_ENTRY_GAP_MM = 3;
 
 export type WorkshopExperienceContentBlock = {
   kind: "text" | "bullet";
@@ -152,6 +155,12 @@ export type WorkshopPlannerSection = {
   continued: boolean;
   entries: WorkshopPlannerEntry[];
 };
+
+function isAtomicNonExperienceEntryKind(
+  kind: WorkshopPlannerEntry["kind"],
+): boolean {
+  return kind !== "profile" && kind !== "summary" && kind !== "experience";
+}
 
 export type WorkshopResumePagePlan = {
   index: number;
@@ -406,11 +415,13 @@ type WorkshopPlannerMetrics = {
   headerGapMm: number;
   headerBottomPaddingMm: number;
   sectionGapMm: number;
+  sectionContentGapMm: number;
   mainHeadingMarginMm: number;
   experienceBulletGapMm: number;
   projectGapMm: number;
   projectPaddingMm: number;
   educationGapMm: number;
+  compactMetaGapMm: number;
   skillGapMm: number;
   skillPadInlineMm: number;
   skillPadBlockMm: number;
@@ -520,7 +531,7 @@ function resolveExperienceBlockCharsPerLine(text: string, baseCharsPerLine: numb
 function fitsWithinWorkshopAvailableHeight(
   estimatedHeight: number,
   availableHeight: number,
-  safetyMm = WORKSHOP_RENDER_BOTTOM_FIT_SAFETY_MM,
+  safetyMm = WORKSHOP_BOTTOM_FIT_SAFETY_MM,
 ) {
   return estimatedHeight <= Math.max(0, availableHeight - safetyMm);
 }
@@ -553,6 +564,7 @@ function buildPlannerMetrics(args: {
     resumeTemplateId: args.template.id,
     stylePreset: args.stylePreset,
   });
+  const workshopLayout = resolveWorkshopPreviewLayoutContract(args.template);
   const bodyLineHeightMm = resolveTextLineHeightMm(
     tokens.flow.type.body.sizePt,
     tokens.flow.type.body.lineHeight,
@@ -590,16 +602,16 @@ function buildPlannerMetrics(args: {
     (ptToMm(
       (tokens.flow.type.body.sizePt ?? 0) + (tokens.flow.density.bodyAdjustPt ?? 0),
     ) +
-      WORKSHOP_RENDER_EXPERIENCE_HEADING_EXTRA_MM) *
-    WORKSHOP_RENDER_EXPERIENCE_HEADING_LINE_HEIGHT;
+      WORKSHOP_EXPERIENCE_HEADING_SIZE_ADJUST_MM) *
+    WORKSHOP_EXPERIENCE_HEADING_LINE_HEIGHT;
   const sectionHeaderHeightMm = Math.max(
     6,
     Math.max(
       0,
-      titleSizeMm - WORKSHOP_RENDER_SECTION_TITLE_SIZE_REDUCTION_MM,
+      titleSizeMm - WORKSHOP_SECTION_TITLE_SIZE_REDUCTION_MM,
     ) *
       titleLineHeight +
-      WORKSHOP_RENDER_SECTION_CONTENT_GAP_MM,
+      workshopLayout.sectionShellGapMm,
   );
   const liveHeightMm =
     tokens.geometry.page.liveArea?.heightMm ?? args.template.preview.liveHeightMm;
@@ -622,8 +634,8 @@ function buildPlannerMetrics(args: {
     bodySmLineHeightMm,
     metaLineHeightMm,
     experienceHeadingLineHeightMm,
-    experienceBlockGapMm: WORKSHOP_RENDER_EXPERIENCE_BLOCK_GAP_MM,
-    experienceMetaGapMm: WORKSHOP_RENDER_EXPERIENCE_META_GAP_MM,
+    experienceBlockGapMm: workshopLayout.experienceBlockGapMm,
+    experienceMetaGapMm: workshopLayout.experienceMetaGapMm,
     sectionHeaderHeightMm,
     labelLineHeightMm,
     displayLineHeightMm,
@@ -633,12 +645,11 @@ function buildPlannerMetrics(args: {
       tokens.flow.header.bottomPaddingMm ?? args.template.preview.headerBottomPaddingMm,
     sectionGapMm:
       tokens.flow.rhythm.sectionGapMm ?? args.template.preview.bodySectionGapMm,
+    sectionContentGapMm: workshopLayout.sectionContentGapMm,
     mainHeadingMarginMm:
       tokens.flow.component.main?.headingMarginBottomMm ??
       args.template.preview.mainHeadingMarginBottomMm,
-    experienceBulletGapMm:
-      tokens.flow.component.experience?.bulletsGapMm ??
-      args.template.preview.experienceBulletsGapMm,
+    experienceBulletGapMm: workshopLayout.listGapMm,
     projectGapMm:
       tokens.flow.component.project?.gapMm ?? args.template.preview.projectGapMm,
     projectPaddingMm:
@@ -647,6 +658,7 @@ function buildPlannerMetrics(args: {
     educationGapMm:
       tokens.flow.component.education?.itemGapMm ??
       args.template.preview.educationItemGapMm,
+    compactMetaGapMm: workshopLayout.compactMetaGapMm,
     skillGapMm:
       tokens.flow.component.skill?.gapMm ?? args.template.preview.skillGapMm,
     skillPadInlineMm:
@@ -943,7 +955,7 @@ function splitExperienceBlockAtWrapBoundary(args: {
   );
   const remainingHeight = args.availableBlockHeight - usedPrefixHeight;
   const availableUsefulLines = Math.floor(
-    Math.max(0, remainingHeight - WORKSHOP_RENDER_BOTTOM_FIT_SAFETY_MM) /
+    Math.max(0, remainingHeight - WORKSHOP_BOTTOM_FIT_SAFETY_MM) /
       Math.max(args.metrics.bodyLineHeightMm, 0.0001),
   );
   if (availableUsefulLines < EXPERIENCE_MIN_FRAGMENT_USEFUL_LINES) {
@@ -1184,7 +1196,7 @@ function splitExperienceEntryToFit(args: {
   const availableBlockHeight = args.availableHeight - headerHeight;
   if (
     args.availableHeight < minimumFragmentHeight ||
-    availableBlockHeight <= WORKSHOP_RENDER_BOTTOM_FIT_SAFETY_MM
+    availableBlockHeight <= WORKSHOP_BOTTOM_FIT_SAFETY_MM
   ) {
     return null;
   }
@@ -1297,7 +1309,7 @@ function estimateProjectHeight(
       metrics.bodyLineHeightMm,
     ) +
     (item.meta
-      ? 0.7 +
+      ? metrics.compactMetaGapMm +
         estimateTextHeight(
           item.meta,
           metrics.compactCharsPerLine,
@@ -1324,7 +1336,7 @@ function estimateEducationHeight(
       metrics.compactCharsPerLine,
       metrics.bodyLineHeightMm,
     ) +
-    0.7 +
+    metrics.compactMetaGapMm +
     estimateTextHeight(
       `${item.school} ${item.period}`,
       metrics.compactCharsPerLine,
@@ -2192,7 +2204,7 @@ export function planWorkshopResumePages(args: {
   const placeEntryOnPage = (section: PlannerSectionDefinition, entry: WorkshopPlannerEntry) => {
     const pageSection = ensurePageSection(section);
     if (pageSection.entries.length > 0 && section.kind === "experience") {
-      currentPage.estimatedHeight += WORKSHOP_RENDER_EXPERIENCE_ENTRY_GAP_MM;
+      currentPage.estimatedHeight += metrics.sectionContentGapMm;
     }
     pageSection.entries.push(entry);
     currentPage.entries.push(entry);
@@ -2213,6 +2225,7 @@ export function planWorkshopResumePages(args: {
     let deferredSingleTailSection = false;
     let deferredSelectedProjectsTail = false;
     let deferredHobbiesBeforeText = false;
+    let blockedByPendingAtomicSection = false;
 
     for (let stateIndex = 0; stateIndex < sectionStates.length; stateIndex += 1) {
       const state = sectionStates[stateIndex]!;
@@ -2297,6 +2310,8 @@ export function planWorkshopResumePages(args: {
         if (!entryFits && currentPage.entries.length > 0) {
           if (entry.kind === "experience") {
             blockedByPendingExperience = true;
+          } else if (isAtomicNonExperienceEntryKind(entry.kind)) {
+            blockedByPendingAtomicSection = true;
           }
           if (state.section.kind === "selected_projects") {
             blockedByPendingSelectedProjects = true;
@@ -2313,7 +2328,7 @@ export function planWorkshopResumePages(args: {
         }
       }
 
-      if (blockedByPendingExperience) {
+      if (blockedByPendingExperience || blockedByPendingAtomicSection) {
         break;
       }
       if (blockedByPendingSelectedProjects) {
