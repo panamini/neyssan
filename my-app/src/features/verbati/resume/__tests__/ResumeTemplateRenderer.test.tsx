@@ -49,6 +49,7 @@ const WORKSHOP_ACTIVE_PREVIEW_LAYOUT_VAR_NAMES = [
   "--text-meta-line",
   "--body-row-gap",
   "--main-heading-margin",
+  "--flow-list-indent",
   "--experience-bullets-padding",
   "--skill-gap",
   "--skill-pad-inline",
@@ -501,6 +502,9 @@ describe("ResumeTemplateRenderer", () => {
     }).forEach(([name, value]) => {
       expect(renderer?.style.getPropertyValue(name)).toBe(value);
     });
+    expect(renderer?.style.getPropertyValue("--flow-list-indent")).toBe(
+      renderer?.style.getPropertyValue("--experience-bullets-padding"),
+    );
 
     WORKSHOP_LEGACY_PREVIEW_DECOR_VAR_NAMES.forEach((name) => {
       expect(renderer?.style.getPropertyValue(name)).toBe("");

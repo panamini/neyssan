@@ -419,7 +419,7 @@ describe("ResumeOneColAtsPage", () => {
       `gap: ${layout.experienceMetaGapMm}mm;`,
     );
     expect(experienceBulletList?.getAttribute("style")).toContain(
-      "padding-left: var(--experience-bullets-padding);",
+      "padding-left: var(--flow-list-indent);",
     );
     expect(educationSection?.getAttribute("style")).toContain(
       `gap: ${layout.sectionShellGapMm}mm;`,
@@ -433,7 +433,7 @@ describe("ResumeOneColAtsPage", () => {
     );
     expect(projectCard?.getAttribute("style")).toContain("gap: var(--project-gap);");
     expect(languagesList?.getAttribute("style")).toContain(
-      "padding-left: var(--experience-bullets-padding);",
+      "padding-left: var(--flow-list-indent);",
     );
     expect(languagesList?.getAttribute("style")).toContain(
       `gap: ${layout.listGapMm}mm;`,
