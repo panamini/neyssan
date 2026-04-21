@@ -623,10 +623,16 @@ describe("export-renderers", () => {
       `--flow-entry-meta-width: ${expectedEntryMetaWidthMm}mm;`,
     );
     expect(styledCss).toContain(
+      `--flow-list-indent: ${expectedBulletsPaddingMm}mm;`,
+    );
+    expect(styledCss).toContain(
       `--experience-bullets-padding: ${expectedBulletsPaddingMm}mm;`,
     );
     expect(atsCss).toContain(
       `--flow-entry-meta-width: ${expectedEntryMetaWidthMm}mm;`,
+    );
+    expect(atsCss).toContain(
+      `--flow-list-indent: ${expectedBulletsPaddingMm}mm;`,
     );
     expect(atsCss).toContain(
       `--experience-bullets-padding: ${expectedBulletsPaddingMm}mm;`,
@@ -634,9 +640,11 @@ describe("export-renderers", () => {
     expect(styledCss).toContain(".entry-headline {");
     expect(styledCss).toContain(".entry-continuation {");
     expect(styledCss).toContain(".bullet-list {");
+    expect(styledCss).toContain("padding: 0 0 0 var(--flow-list-indent);");
     expect(atsCss).toContain(".entry-headline {");
     expect(atsCss).toContain(".entry-continuation {");
     expect(atsCss).toContain(".bullet-list {");
+    expect(atsCss).toContain("padding: 0 0 0 var(--flow-list-indent);");
     expect(styledDocument.querySelector(".entry-headline")).toBeTruthy();
     expect(atsDocument.querySelector(".entry-headline")).toBeTruthy();
     expect(styledDocument.querySelector(".workshop-export-header")).toBeNull();
