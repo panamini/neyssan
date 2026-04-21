@@ -2,11 +2,26 @@ import { describe, expect, it } from "vitest";
 
 import { planWorkshopResumePages } from "../resumePagination";
 import { resumeMock } from "../../../features/verbati/resume/resume.mock";
-import { getResumeTemplateDefinition } from "../../layout/resumeTemplates";
+import {
+  getResumeTemplateDefinition,
+  resolveWorkshopPreviewLayoutContract,
+} from "../../layout/resumeTemplates";
 
 const workshopTemplate = getResumeTemplateDefinition(
   "workshop_resume_onecol_ats",
 );
+
+function buildWorkshopTemplateOverride(
+  overrides: Partial<typeof workshopTemplate.preview>,
+) {
+  return {
+    ...workshopTemplate,
+    preview: {
+      ...workshopTemplate.preview,
+      ...overrides,
+    },
+  };
+}
 
 function repeatWords(label: string, count: number) {
   return Array.from({ length: count }, (_, index) => `${label}-${index + 1}`).join(" ");
@@ -76,6 +91,101 @@ function buildWorkshopScreenshotFixture() {
 }
 
 describe("resumePagination", () => {
+  it("reads workshop section and experience spacing estimates from the shared template layout contract", () => {
+    const tunedTemplate = buildWorkshopTemplateOverride({
+      workshopSectionShellGapMm: 4.1,
+      workshopSectionContentGapMm: 5.4,
+      workshopExperienceBlockGapMm: 2.2,
+      workshopExperienceMetaGapMm: 1.1,
+    });
+    const baselineLayout = resolveWorkshopPreviewLayoutContract(workshopTemplate);
+    const tunedLayout = resolveWorkshopPreviewLayoutContract(tunedTemplate);
+    const data = {
+      ...buildPlannerData(),
+      summary: "",
+      experience: [
+        {
+          ...resumeMock.experience[0]!,
+          id: "exp-contract-1",
+          description: makeTextBlock("contract-description-a", 2),
+          bullets: [makeTextBlock("contract-bullet-a", 2)],
+        },
+        {
+          ...resumeMock.experience[1 % resumeMock.experience.length]!,
+          id: "exp-contract-2",
+          description: makeTextBlock("contract-description-b", 2),
+          bullets: [makeTextBlock("contract-bullet-b", 2)],
+        },
+      ],
+    };
+
+    const baselinePlan = planWorkshopResumePages({
+      data,
+      template: workshopTemplate,
+    });
+    const tunedPlan = planWorkshopResumePages({
+      data,
+      template: tunedTemplate,
+    });
+
+    const expectedDeltaMm =
+      (tunedLayout.sectionShellGapMm - baselineLayout.sectionShellGapMm) +
+      (tunedLayout.sectionContentGapMm - baselineLayout.sectionContentGapMm) +
+      4 * (tunedLayout.experienceBlockGapMm - baselineLayout.experienceBlockGapMm) +
+      2 * (tunedLayout.experienceMetaGapMm - baselineLayout.experienceMetaGapMm);
+
+    expect(tunedPlan.pages).toHaveLength(1);
+    expect(baselinePlan.pages).toHaveLength(1);
+    expect(tunedPlan.pages[0]?.estimatedHeight).toBeCloseTo(
+      (baselinePlan.pages[0]?.estimatedHeight ?? 0) + expectedDeltaMm,
+      6,
+    );
+  });
+
+  it("reads workshop compact meta spacing estimates from the shared template layout contract", () => {
+    const tunedTemplate = buildWorkshopTemplateOverride({
+      workshopCompactMetaGapMm: 1.35,
+    });
+    const baselineLayout = resolveWorkshopPreviewLayoutContract(workshopTemplate);
+    const tunedLayout = resolveWorkshopPreviewLayoutContract(tunedTemplate);
+    const data = {
+      ...buildPlannerData(),
+      summary: "",
+      experience: [],
+      education: [
+        {
+          ...resumeMock.education[0]!,
+          id: "edu-contract-1",
+        },
+      ],
+      projects: [
+        {
+          ...resumeMock.projects[0]!,
+          id: "project-contract-1",
+        },
+      ],
+    };
+
+    const baselinePlan = planWorkshopResumePages({
+      data,
+      template: workshopTemplate,
+    });
+    const tunedPlan = planWorkshopResumePages({
+      data,
+      template: tunedTemplate,
+    });
+
+    const expectedDeltaMm =
+      2 * (tunedLayout.compactMetaGapMm - baselineLayout.compactMetaGapMm);
+
+    expect(tunedPlan.pages).toHaveLength(1);
+    expect(baselinePlan.pages).toHaveLength(1);
+    expect(tunedPlan.pages[0]?.estimatedHeight).toBeCloseTo(
+      (baselinePlan.pages[0]?.estimatedHeight ?? 0) + expectedDeltaMm,
+      6,
+    );
+  });
+
   it("keeps a compact resume on a single page", () => {
     const result = planWorkshopResumePages({
       data: {
