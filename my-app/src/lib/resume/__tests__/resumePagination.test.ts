@@ -2,11 +2,26 @@ import { describe, expect, it } from "vitest";
 
 import { planWorkshopResumePages } from "../resumePagination";
 import { resumeMock } from "../../../features/verbati/resume/resume.mock";
-import { getResumeTemplateDefinition } from "../../layout/resumeTemplates";
+import {
+  getResumeTemplateDefinition,
+  resolveWorkshopPreviewLayoutContract,
+} from "../../layout/resumeTemplates";
 
 const workshopTemplate = getResumeTemplateDefinition(
   "workshop_resume_onecol_ats",
 );
+
+function buildWorkshopTemplateOverride(
+  overrides: Partial<typeof workshopTemplate.preview>,
+) {
+  return {
+    ...workshopTemplate,
+    preview: {
+      ...workshopTemplate.preview,
+      ...overrides,
+    },
+  };
+}
 
 function repeatWords(label: string, count: number) {
   return Array.from({ length: count }, (_, index) => `${label}-${index + 1}`).join(" ");
@@ -290,7 +305,218 @@ function buildCustomTextTailFixture() {
   };
 }
 
+function summarizeCommittedPages(
+  result: ReturnType<typeof planWorkshopResumePages>,
+) {
+  return result.committedPages.map((page) =>
+    page.fragments.map(
+      (fragment) => `${fragment.kind}${fragment.continued ? ":cont" : ""}`,
+    ),
+  );
+}
+
+function buildAchievementsAdditionalInformationFixture() {
+  return {
+    ...buildPlannerData(),
+    summary: "",
+    experience: [],
+    certifications: Array.from({ length: 6 }, (_, index) => ({
+      id: `cert-${index + 1}`,
+      sectionId: "certifications-1",
+      sectionType: "certifications" as const,
+      sectionTitle: "Certifications",
+      sectionOrder: 70,
+      name: repeatWords(`cert-name-${index + 1}`, 4),
+      issuer: repeatWords(`cert-issuer-${index + 1}`, 4),
+      meta: repeatWords(`cert-meta-${index + 1}`, 2),
+    })),
+    achievementItems: Array.from({ length: 6 }, (_, index) => ({
+      id: `ach-${index + 1}`,
+      sectionId: "achievements-1",
+      sectionType: "achievements" as const,
+      sectionTitle: "Achievements",
+      sectionOrder: 80,
+      text: repeatWords(`achievement-${index + 1}`, 48),
+    })),
+    achievements: Array.from({ length: 6 }, (_, index) =>
+      repeatWords(`achievement-${index + 1}`, 48),
+    ),
+    textSections: [
+      {
+        id: "text-1",
+        sectionId: "additional-information-1",
+        sectionType: "additional_information" as const,
+        sectionTitle: "Additional Information",
+        sectionOrder: 110,
+        text: repeatWords("additional", 18),
+      },
+      {
+        id: "text-2",
+        sectionId: "custom-1",
+        sectionType: "custom" as const,
+        sectionTitle: "Custom Section",
+        sectionOrder: 120,
+        text: repeatWords("custom", 18),
+      },
+    ],
+  };
+}
+
+function buildCertificationsAchievementsFixture() {
+  return {
+    ...buildPlannerData(),
+    summary: "",
+    experience: [],
+    certifications: Array.from({ length: 7 }, (_, index) => ({
+      id: `cert-long-${index + 1}`,
+      sectionId: "certifications-1",
+      sectionType: "certifications" as const,
+      sectionTitle: "Certifications",
+      sectionOrder: 70,
+      name: repeatWords(`cert-long-name-${index + 1}`, 40),
+      issuer: repeatWords(`cert-long-issuer-${index + 1}`, 24),
+      meta: repeatWords(`cert-long-meta-${index + 1}`, 16),
+    })),
+    achievementItems: Array.from({ length: 4 }, (_, index) => ({
+      id: `ach-short-${index + 1}`,
+      sectionId: "achievements-1",
+      sectionType: "achievements" as const,
+      sectionTitle: "Achievements",
+      sectionOrder: 80,
+      text: repeatWords(`achievement-short-${index + 1}`, 18),
+    })),
+    achievements: Array.from({ length: 4 }, (_, index) =>
+      repeatWords(`achievement-short-${index + 1}`, 18),
+    ),
+  };
+}
+
+function buildSelectedProjectsHobbiesFixture() {
+  return {
+    ...buildPlannerData(),
+    summary: "",
+    experience: [],
+    projects: Array.from({ length: 5 }, (_, index) => ({
+      ...resumeMock.projects[0]!,
+      id: `proj-${index + 1}`,
+      sectionId: "projects-1",
+      sectionType: "projects" as const,
+      sectionTitle: "Selected Projects",
+      sectionOrder: 50,
+      name: `Project ${index + 1}`,
+      description: repeatWords(`project-${index + 1}`, 70),
+      skills: ["React", "TypeScript", "Node"],
+    })),
+    hobbyItems: Array.from({ length: 6 }, (_, index) => ({
+      id: `hobby-${index + 1}`,
+      sectionId: "hobbies-1",
+      sectionType: "hobbies" as const,
+      sectionTitle: "Hobbies",
+      sectionOrder: 100,
+      name: repeatWords(`hobby-${index + 1}`, 14),
+    })),
+    hobbies: Array.from({ length: 6 }, (_, index) =>
+      repeatWords(`hobby-${index + 1}`, 14),
+    ),
+  };
+}
+
 describe("resumePagination", () => {
+  it("reads workshop section and experience spacing estimates from the shared template layout contract", () => {
+    const tunedTemplate = buildWorkshopTemplateOverride({
+      workshopSectionShellGapMm: 4.1,
+      workshopSectionContentGapMm: 5.4,
+      workshopExperienceBlockGapMm: 2.2,
+      workshopExperienceMetaGapMm: 1.1,
+    });
+    const baselineLayout = resolveWorkshopPreviewLayoutContract(workshopTemplate);
+    const tunedLayout = resolveWorkshopPreviewLayoutContract(tunedTemplate);
+    const data = {
+      ...buildPlannerData(),
+      summary: "",
+      experience: [
+        {
+          ...resumeMock.experience[0]!,
+          id: "exp-contract-1",
+          description: makeTextBlock("contract-description-a", 2),
+          bullets: [makeTextBlock("contract-bullet-a", 2)],
+        },
+        {
+          ...resumeMock.experience[1 % resumeMock.experience.length]!,
+          id: "exp-contract-2",
+          description: makeTextBlock("contract-description-b", 2),
+          bullets: [makeTextBlock("contract-bullet-b", 2)],
+        },
+      ],
+    };
+
+    const baselinePlan = planWorkshopResumePages({
+      data,
+      template: workshopTemplate,
+    });
+    const tunedPlan = planWorkshopResumePages({
+      data,
+      template: tunedTemplate,
+    });
+
+    const expectedDeltaMm =
+      (tunedLayout.sectionShellGapMm - baselineLayout.sectionShellGapMm) +
+      (tunedLayout.sectionContentGapMm - baselineLayout.sectionContentGapMm) +
+      4 * (tunedLayout.experienceBlockGapMm - baselineLayout.experienceBlockGapMm) +
+      2 * (tunedLayout.experienceMetaGapMm - baselineLayout.experienceMetaGapMm);
+
+    expect(tunedPlan.pages).toHaveLength(1);
+    expect(baselinePlan.pages).toHaveLength(1);
+    expect(tunedPlan.pages[0]?.estimatedHeight).toBeCloseTo(
+      (baselinePlan.pages[0]?.estimatedHeight ?? 0) + expectedDeltaMm,
+      6,
+    );
+  });
+
+  it("reads workshop compact meta spacing estimates from the shared template layout contract", () => {
+    const tunedTemplate = buildWorkshopTemplateOverride({
+      workshopCompactMetaGapMm: 1.35,
+    });
+    const baselineLayout = resolveWorkshopPreviewLayoutContract(workshopTemplate);
+    const tunedLayout = resolveWorkshopPreviewLayoutContract(tunedTemplate);
+    const data = {
+      ...buildPlannerData(),
+      summary: "",
+      experience: [],
+      education: [
+        {
+          ...resumeMock.education[0]!,
+          id: "edu-contract-1",
+        },
+      ],
+      projects: [
+        {
+          ...resumeMock.projects[0]!,
+          id: "project-contract-1",
+        },
+      ],
+    };
+
+    const baselinePlan = planWorkshopResumePages({
+      data,
+      template: workshopTemplate,
+    });
+    const tunedPlan = planWorkshopResumePages({
+      data,
+      template: tunedTemplate,
+    });
+
+    const expectedDeltaMm =
+      2 * (tunedLayout.compactMetaGapMm - baselineLayout.compactMetaGapMm);
+
+    expect(tunedPlan.pages).toHaveLength(1);
+    expect(baselinePlan.pages).toHaveLength(1);
+    expect(tunedPlan.pages[0]?.estimatedHeight).toBeCloseTo(
+      (baselinePlan.pages[0]?.estimatedHeight ?? 0) + expectedDeltaMm,
+      6,
+    );
+  });
+
   it("keeps a compact resume on a single page", () => {
     const result = planWorkshopResumePages({
       data: {
@@ -1069,6 +1295,46 @@ describe("resumePagination", () => {
     expect(result.pages.at(-1)?.sections.some((section) => section.key === "selected_projects")).toBe(
       true,
     );
+  });
+
+  it("does not let achievements resume after additional information has started", () => {
+    const result = planWorkshopResumePages({
+      data: buildAchievementsAdditionalInformationFixture(),
+      template: workshopTemplate,
+    });
+
+    expect(summarizeCommittedPages(result)).toEqual([
+      ["profile", "certifications", "achievements"],
+      ["achievements:cont", "additional_information"],
+      ["additional_information:cont"],
+    ]);
+  });
+
+  it("does not let certifications resume after achievements have started", () => {
+    const result = planWorkshopResumePages({
+      data: buildCertificationsAchievementsFixture(),
+      template: workshopTemplate,
+    });
+
+    expect(summarizeCommittedPages(result)).toEqual([
+      ["profile", "certifications"],
+      ["certifications:cont"],
+      ["certifications:cont"],
+      ["achievements"],
+    ]);
+  });
+
+  it("does not let selected projects resume after hobbies have started", () => {
+    const result = planWorkshopResumePages({
+      data: buildSelectedProjectsHobbiesFixture(),
+      template: workshopTemplate,
+    });
+
+    expect(summarizeCommittedPages(result)).toEqual([
+      ["profile", "selected_projects"],
+      ["selected_projects:cont", "hobbies"],
+      ["hobbies:cont"],
+    ]);
   });
 
   it("emits serializable committed pages and fragments for workshop export parity", () => {

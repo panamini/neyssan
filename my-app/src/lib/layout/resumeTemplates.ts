@@ -58,6 +58,11 @@ type ResumeTemplateLengthSet = {
   bulletGapAdjustMm: number;
   projectGapAdjustMm: number;
   projectPaddingAdjustMm: number;
+  workshopSectionShellGapMm?: number;
+  workshopSectionContentGapMm?: number;
+  workshopExperienceBlockGapMm?: number;
+  workshopExperienceMetaGapMm?: number;
+  workshopCompactMetaGapMm?: number;
 };
 
 export type ResumeTemplateDefinition = {
@@ -97,6 +102,51 @@ function defineTemplate(
   definition: ResumeTemplateDefinition,
 ): ResumeTemplateDefinition {
   return definition;
+}
+
+export type WorkshopPreviewLayoutContract = {
+  sectionShellGapMm: number;
+  sectionContentGapMm: number;
+  listGapMm: number;
+  experienceBlockGapMm: number;
+  experienceMetaGapMm: number;
+  compactMetaGapMm: number;
+};
+
+const DEFAULT_WORKSHOP_PREVIEW_LAYOUT_CONTRACT: WorkshopPreviewLayoutContract = {
+  sectionShellGapMm: 2.6,
+  sectionContentGapMm: 3,
+  listGapMm: 1.2,
+  experienceBlockGapMm: 1.8,
+  experienceMetaGapMm: 0.6,
+  compactMetaGapMm: 0.7,
+};
+
+export function resolveWorkshopPreviewLayoutContract(
+  template: ResumeTemplateDefinition,
+): WorkshopPreviewLayoutContract {
+  const preview = template.preview;
+
+  return {
+    sectionShellGapMm:
+      preview.workshopSectionShellGapMm ??
+      DEFAULT_WORKSHOP_PREVIEW_LAYOUT_CONTRACT.sectionShellGapMm,
+    sectionContentGapMm:
+      preview.workshopSectionContentGapMm ??
+      DEFAULT_WORKSHOP_PREVIEW_LAYOUT_CONTRACT.sectionContentGapMm,
+    listGapMm:
+      preview.experienceBulletsGapMm ??
+      DEFAULT_WORKSHOP_PREVIEW_LAYOUT_CONTRACT.listGapMm,
+    experienceBlockGapMm:
+      preview.workshopExperienceBlockGapMm ??
+      DEFAULT_WORKSHOP_PREVIEW_LAYOUT_CONTRACT.experienceBlockGapMm,
+    experienceMetaGapMm:
+      preview.workshopExperienceMetaGapMm ??
+      DEFAULT_WORKSHOP_PREVIEW_LAYOUT_CONTRACT.experienceMetaGapMm,
+    compactMetaGapMm:
+      preview.workshopCompactMetaGapMm ??
+      DEFAULT_WORKSHOP_PREVIEW_LAYOUT_CONTRACT.compactMetaGapMm,
+  };
 }
 
 const SWISS_EXPORT = {
@@ -341,6 +391,8 @@ export const RESUME_TEMPLATE_DEFINITIONS: readonly ResumeTemplateDefinition[] = 
       skillGapMm: 1.7, skillPaddingInlineMm: 2, skillPaddingBlockMm: 0.9,
       displaySizeAdjustMm: 0, titleSizeAdjustMm: 0, bodySizeAdjustMm: -0.05, bodySmSizeAdjustMm: -0.08,
       sectionGapAdjustMm: -0.2, headingMarginAdjustMm: 0, bulletGapAdjustMm: -0.05, projectGapAdjustMm: -0.1, projectPaddingAdjustMm: -0.1,
+      workshopSectionShellGapMm: 2.6, workshopSectionContentGapMm: 3,
+      workshopExperienceBlockGapMm: 1.8, workshopExperienceMetaGapMm: 0.6, workshopCompactMetaGapMm: 0.7,
     },
     export: ONE_COLUMN_EXPORT,
     paginationPolicy: { mode: "legacy-placeholder" },
