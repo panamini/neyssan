@@ -600,7 +600,7 @@ function renderFragmentContent(args: {
           surface="item"
           style={{ display: "grid", gap: "0.8mm" }}
         >
-          {item.sectionTitle ? (
+          {item.sectionTitle && item.sectionTitle !== fragment.title ? (
             <h3
               style={{
                 margin: 0,

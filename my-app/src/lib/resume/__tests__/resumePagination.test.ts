@@ -75,6 +75,221 @@ function buildWorkshopScreenshotFixture() {
   };
 }
 
+type CompactAtomicTailCase = {
+  kind:
+    | "education"
+    | "skills"
+    | "languages"
+    | "achievements"
+    | "certifications"
+    | "affiliations"
+    | "hobbies";
+  buildData: () => typeof resumeMock;
+  expectedItemIds: string[];
+};
+
+function listFragmentItemIds(fragment: { items: Array<{ id: string }> }) {
+  return fragment.items.map((item) => item.id);
+}
+
+function buildCompactAtomicTailCases(): CompactAtomicTailCase[] {
+  const educationItems = Array.from({ length: 4 }, (_, index) => ({
+    ...resumeMock.education[0]!,
+    id: `edu-tail-${index + 1}`,
+    degree: `Degree ${index + 1}`,
+    school: `School ${index + 1}`,
+    period: `201${index}-201${index + 1}`,
+  }));
+  const skillItems = Array.from({ length: 18 }, (_, index) => ({
+    ...resumeMock.skillItems[index % resumeMock.skillItems.length]!,
+    id: `skill-tail-${index + 1}`,
+    name: `Skill ${index + 1}`,
+  }));
+  const languageItems = Array.from({ length: 32 }, (_, index) => ({
+    ...resumeMock.languages[index % resumeMock.languages.length]!,
+    id: `language-tail-${index + 1}`,
+    name: `Language ${index + 1}`,
+    level: index % 2 === 0 ? "Native" : "Professional",
+  }));
+  const achievementItems = Array.from({ length: 5 }, (_, index) => ({
+    ...resumeMock.achievementItems[index % resumeMock.achievementItems.length]!,
+    id: `achievement-tail-${index + 1}`,
+    text: `Achievement ${index + 1}`,
+  }));
+  const certificationItems = Array.from({ length: 10 }, (_, index) => ({
+    ...resumeMock.certifications[index % resumeMock.certifications.length]!,
+    id: `cert-tail-${index + 1}`,
+    name: `Certification ${index + 1}`,
+    issuer: `Issuer ${index + 1}`,
+  }));
+  const affiliationItems = Array.from({ length: 6 }, (_, index) => ({
+    ...resumeMock.affiliations[index % resumeMock.affiliations.length]!,
+    id: `affiliation-tail-${index + 1}`,
+    organizationName: `Organization ${index + 1}`,
+    roleOrMembershipType: `Role ${index + 1}`,
+    notes: `Affiliation note ${index + 1}`,
+  }));
+  const hobbyItems = Array.from({ length: 3 }, (_, index) => ({
+    ...resumeMock.hobbyItems[index % resumeMock.hobbyItems.length]!,
+    id: `hobby-tail-${index + 1}`,
+    name: `Hobby ${index + 1}`,
+  }));
+
+  return [
+    {
+      kind: "education",
+      buildData: () => ({
+        ...resumeMock,
+        education: educationItems,
+      }),
+      expectedItemIds: educationItems.map((item) => item.id),
+    },
+    {
+      kind: "skills",
+      buildData: () => ({
+        ...resumeMock,
+        education: educationItems,
+        skillItems,
+        skills: skillItems.map((item) => item.name),
+      }),
+      expectedItemIds: skillItems.map((item) => item.id),
+    },
+    {
+      kind: "languages",
+      buildData: () => ({
+        ...resumeMock,
+        languages: languageItems,
+      }),
+      expectedItemIds: languageItems.map((item) => item.id),
+    },
+    {
+      kind: "achievements",
+      buildData: () => ({
+        ...resumeMock,
+        achievementItems,
+        achievements: achievementItems.map((item) => item.text),
+      }),
+      expectedItemIds: achievementItems.map((item) => item.id),
+    },
+    {
+      kind: "certifications",
+      buildData: () => ({
+        ...resumeMock,
+        certifications: certificationItems,
+      }),
+      expectedItemIds: certificationItems.map((item) => item.id),
+    },
+    {
+      kind: "affiliations",
+      buildData: () => ({
+        ...resumeMock,
+        affiliations: affiliationItems,
+      }),
+      expectedItemIds: affiliationItems.map((item) => item.id),
+    },
+    {
+      kind: "hobbies",
+      buildData: () => ({
+        ...resumeMock,
+        hobbyItems,
+        hobbies: hobbyItems.map((item) => item.name),
+      }),
+      expectedItemIds: hobbyItems.map((item) => item.id),
+    },
+  ];
+}
+
+function buildSelectedProjectsTailFixture(projectCount = 3) {
+  return {
+    ...resumeMock,
+    projects: Array.from({ length: projectCount }, (_, index) => ({
+      ...resumeMock.projects[index % resumeMock.projects.length]!,
+      id: `project-tail-${index + 1}`,
+      name: `Project ${index + 1}`,
+      meta: `Meta ${index + 1}`,
+      description: `Selected project ${index + 1} ${repeatWords(
+        `detail-${index + 1}`,
+        70,
+      )}`,
+    })),
+  };
+}
+
+function buildSkillsTailSelectedProjectsFixture() {
+  const education = Array.from({ length: 4 }, (_, index) => ({
+    ...resumeMock.education[0]!,
+    id: `edu-tail-${index + 1}`,
+    degree: `Degree ${index + 1}`,
+    school: `School ${index + 1}`,
+    period: `201${index}-201${index + 1}`,
+  }));
+  const skillItems = Array.from({ length: 18 }, (_, index) => ({
+    ...resumeMock.skillItems[index % resumeMock.skillItems.length]!,
+    id: `skill-tail-${index + 1}`,
+    name: `Skill ${index + 1}`,
+  }));
+
+  return {
+    ...resumeMock,
+    education,
+    skillItems,
+    skills: skillItems.map((item) => item.name),
+    projects: buildSelectedProjectsTailFixture(2).projects,
+  };
+}
+
+function buildLanguagesTailSelectedProjectsFixture() {
+  const languages = Array.from({ length: 32 }, (_, index) => ({
+    ...resumeMock.languages[index % resumeMock.languages.length]!,
+    id: `language-tail-${index + 1}`,
+    name: `Language ${index + 1}`,
+    level: index % 2 === 0 ? "Native" : "Professional",
+  }));
+
+  return {
+    ...resumeMock,
+    languages,
+    projects: buildSelectedProjectsTailFixture(2).projects,
+  };
+}
+
+function buildAchievementsTailHobbiesFixture() {
+  const achievementItems = Array.from({ length: 5 }, (_, index) => ({
+    ...resumeMock.achievementItems[index % resumeMock.achievementItems.length]!,
+    id: `achievement-tail-${index + 1}`,
+    text: `Achievement ${index + 1}`,
+  }));
+  const hobbyItems = Array.from({ length: 2 }, (_, index) => ({
+    ...resumeMock.hobbyItems[index % resumeMock.hobbyItems.length]!,
+    id: `hobby-achievement-tail-${index + 1}`,
+    name: `Hobby ${index + 1}`,
+  }));
+
+  return {
+    ...resumeMock,
+    achievementItems,
+    achievements: achievementItems.map((item) => item.text),
+    hobbyItems,
+    hobbies: hobbyItems.map((item) => item.name),
+  };
+}
+
+function buildCustomTextTailFixture() {
+  return {
+    ...resumeMock,
+    textSections: resumeMock.textSections.map((item, index) =>
+      index === 0
+        ? {
+            ...item,
+            id: "custom-tail-1",
+            sectionType: "custom" as const,
+            sectionTitle: "Custom Section",
+          }
+        : item,
+    ),
+  };
+}
+
 describe("resumePagination", () => {
   it("keeps a compact resume on a single page", () => {
     const result = planWorkshopResumePages({
@@ -102,6 +317,198 @@ describe("resumePagination", () => {
     expect(result.pages[0]?.entries.some((entry) => entry.kind === "profile")).toBe(
       true,
     );
+  });
+
+  it.each(buildCompactAtomicTailCases())(
+    "moves $kind to the next page when the current page would otherwise leave a one-item tail",
+    ({ kind, buildData, expectedItemIds }) => {
+      const result = planWorkshopResumePages({
+        data: buildData(),
+        template: workshopTemplate,
+      });
+
+      const sectionFragments = result.committedPages.flatMap((page) =>
+        page.fragments
+          .filter((fragment) => fragment.kind === kind)
+          .map((fragment) => ({ pageIndex: page.index, fragment })),
+      );
+
+      expect(sectionFragments).toHaveLength(1);
+      expect(sectionFragments[0]?.fragment.continued).toBe(false);
+      expect(sectionFragments[0]?.fragment).toHaveProperty("items");
+      expect(
+        listFragmentItemIds(
+          sectionFragments[0]?.fragment as { items: Array<{ id: string }> },
+        ),
+      ).toEqual(expectedItemIds);
+      expect(
+        result.committedPages.some((page) =>
+          page.fragments.some((fragment) => fragment.kind === kind && fragment.continued),
+        ),
+      ).toBe(false);
+    },
+  );
+
+  it("keeps selected projects contiguous so achievements does not start before the section is fully complete", () => {
+    const result = planWorkshopResumePages({
+      data: buildSelectedProjectsTailFixture(4),
+      template: workshopTemplate,
+    });
+
+    const projectFragments = result.committedPages.flatMap((page) =>
+      page.fragments
+        .filter((fragment) => fragment.kind === "selected_projects")
+        .map((fragment) => ({ pageIndex: page.index, fragment })),
+    );
+    const achievementPageIndices = result.committedPages.flatMap((page, pageIndex) =>
+      page.fragments.some((fragment) => fragment.kind === "achievements")
+        ? [pageIndex]
+        : [],
+    );
+    const firstAchievementPageIndex = achievementPageIndices[0];
+    const lastProjectPageIndex = projectFragments.at(-1)?.pageIndex;
+
+    expect(projectFragments).toHaveLength(2);
+    expect(projectFragments[0]?.pageIndex).toBe(1);
+    expect(projectFragments[1]?.pageIndex).toBe(2);
+    expect(projectFragments[0]?.fragment.continued).toBe(false);
+    expect(projectFragments[1]?.fragment.continued).toBe(true);
+    expect(
+      projectFragments[0]?.fragment.kind === "selected_projects"
+        ? projectFragments[0].fragment.items.map((item) => item.id)
+        : [],
+    ).toEqual(["project-tail-1", "project-tail-2"]);
+    expect(
+      projectFragments[1]?.fragment.kind === "selected_projects"
+        ? projectFragments[1].fragment.items.map((item) => item.id)
+        : [],
+    ).toEqual(["project-tail-3", "project-tail-4"]);
+    expect(firstAchievementPageIndex).toBe(lastProjectPageIndex);
+    expect(
+      result.committedPages[1]?.fragments.some(
+        (fragment) => fragment.kind === "achievements",
+      ),
+    ).toBe(false);
+    expect(result.committedPages[2]?.fragments.slice(0, 3).map((fragment) => fragment.kind))
+      .toEqual(["selected_projects", "achievements", "certifications"]);
+  });
+
+  it("moves a two-card selected projects section to the next page when dense skills packing would otherwise leave an isolated continued card", () => {
+    const result = planWorkshopResumePages({
+      data: buildSkillsTailSelectedProjectsFixture(),
+      template: workshopTemplate,
+    });
+
+    const projectFragments = result.committedPages.flatMap((page) =>
+      page.fragments
+        .filter((fragment) => fragment.kind === "selected_projects")
+        .map((fragment) => ({ pageIndex: page.index, fragment })),
+    );
+
+    expect(projectFragments).toHaveLength(1);
+    expect(projectFragments[0]?.pageIndex).toBe(2);
+    expect(projectFragments[0]?.fragment.continued).toBe(false);
+    expect(
+      projectFragments[0]?.fragment.kind === "selected_projects"
+        ? projectFragments[0].fragment.items.map((item) => item.id)
+        : [],
+    ).toEqual(["project-tail-1", "project-tail-2"]);
+    expect(
+      result.committedPages[1]?.fragments.some(
+        (fragment) => fragment.kind === "selected_projects",
+      ),
+    ).toBe(false);
+  });
+
+  it("moves a two-card selected projects section to the next page when dense languages packing would otherwise leave an isolated continued card", () => {
+    const result = planWorkshopResumePages({
+      data: buildLanguagesTailSelectedProjectsFixture(),
+      template: workshopTemplate,
+    });
+
+    const projectFragments = result.committedPages.flatMap((page) =>
+      page.fragments
+        .filter((fragment) => fragment.kind === "selected_projects")
+        .map((fragment) => ({ pageIndex: page.index, fragment })),
+    );
+
+    expect(projectFragments).toHaveLength(1);
+    expect(projectFragments[0]?.pageIndex).toBe(3);
+    expect(projectFragments[0]?.fragment.continued).toBe(false);
+    expect(
+      projectFragments[0]?.fragment.kind === "selected_projects"
+        ? projectFragments[0].fragment.items.map((item) => item.id)
+        : [],
+    ).toEqual(["project-tail-1", "project-tail-2"]);
+    expect(
+      result.committedPages[2]?.fragments.some(
+        (fragment) => fragment.kind === "selected_projects",
+      ),
+    ).toBe(false);
+  });
+
+  it("moves the full hobbies section to the last page when achievements packing would otherwise leave a weak continued tail before additional information", () => {
+    const result = planWorkshopResumePages({
+      data: buildAchievementsTailHobbiesFixture(),
+      template: workshopTemplate,
+    });
+
+    const hobbyFragments = result.committedPages.flatMap((page) =>
+      page.fragments
+        .filter((fragment) => fragment.kind === "hobbies")
+        .map((fragment) => ({ pageIndex: page.index, fragment })),
+    );
+
+    expect(hobbyFragments).toHaveLength(1);
+    expect(hobbyFragments[0]?.pageIndex).toBe(2);
+    expect(hobbyFragments[0]?.fragment.continued).toBe(false);
+    expect(
+      hobbyFragments[0]?.fragment.kind === "hobbies"
+        ? hobbyFragments[0].fragment.items.map((item) => item.id)
+        : [],
+    ).toEqual(["hobby-achievement-tail-1", "hobby-achievement-tail-2"]);
+    expect(
+      result.committedPages[1]?.fragments.some((fragment) => fragment.kind === "hobbies"),
+    ).toBe(false);
+    expect(result.committedPages[2]?.fragments.map((fragment) => fragment.kind)).toEqual([
+      "hobbies",
+      "additional_information",
+    ]);
+  });
+
+  it("pulls the trailing hobbies section forward when additional information would otherwise strand alone on the last page", () => {
+    const result = planWorkshopResumePages({
+      data: resumeMock,
+      template: workshopTemplate,
+    });
+
+    const lastPage = result.committedPages.at(-1);
+
+    expect(lastPage?.fragments.map((fragment) => fragment.kind)).toEqual([
+      "hobbies",
+      "additional_information",
+    ]);
+    expect(lastPage?.fragments.some((fragment) => fragment.kind === "additional_information")).toBe(
+      true,
+    );
+  });
+
+  it("applies the same last-page text-section rescue to custom sections without losing the custom title", () => {
+    const result = planWorkshopResumePages({
+      data: buildCustomTextTailFixture(),
+      template: workshopTemplate,
+    });
+
+    const lastPage = result.committedPages.at(-1);
+    const customFragment = lastPage?.fragments.find(
+      (fragment) => fragment.kind === "additional_information",
+    );
+
+    expect(lastPage?.fragments.map((fragment) => fragment.kind)).toEqual([
+      "hobbies",
+      "additional_information",
+    ]);
+    expect(customFragment?.title).toBe("Custom Section");
   });
 
   it("keeps a fitting experience entry as a single fragment with ordered content blocks", () => {
