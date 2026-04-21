@@ -593,12 +593,17 @@ describe("export-renderers", () => {
         stylePreset: currentCv.metadata.verbatiStyle,
       }),
     );
+    const styledCss = getInlineStyles(styledDocument);
     const atsDocument = parseExportHtml(
       renderResumeAtsExportDocument(
         exportSource!,
         currentCv.metadata.verbatiStyle,
       ),
     );
+    const atsCss = getInlineStyles(atsDocument);
+    const workshopTemplate = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const expectedEntryMetaWidthMm =
+      workshopTemplate.export.mainMm - workshopTemplate.export.readingWidthMm;
 
     expect(styledDocument.body.className).toContain("resume-layout--workshop");
     expect(styledDocument.querySelectorAll(".export-page")).toHaveLength(
@@ -612,6 +617,23 @@ describe("export-renderers", () => {
         '[data-resume-template="workshop_resume_onecol_ats"]',
       ),
     ).toBeTruthy();
+    expect(styledCss).toContain(
+      `--flow-entry-meta-width: ${expectedEntryMetaWidthMm}mm;`,
+    );
+    expect(atsCss).toContain(
+      `--flow-entry-meta-width: ${expectedEntryMetaWidthMm}mm;`,
+    );
+    expect(styledCss).toContain(".entry-headline {");
+    expect(styledCss).toContain(".entry-continuation {");
+    expect(atsCss).toContain(".entry-headline {");
+    expect(atsCss).toContain(".entry-continuation {");
+    expect(styledDocument.querySelector(".entry-headline")).toBeTruthy();
+    expect(atsDocument.querySelector(".entry-headline")).toBeTruthy();
+    expect(styledDocument.querySelector(".workshop-export-header")).toBeNull();
+    expect(styledDocument.querySelector(".workshop-export-header__identity")).toBeNull();
+    expect(styledDocument.querySelector(".workshop-export-header__contact")).toBeNull();
+    expect(styledDocument.querySelector(".workshop-export-header__metadata")).toBeNull();
+    expect(styledDocument.querySelector(".resume-styled-page--workshop")).toBeNull();
   });
 
   it("renders the dense first workshop experience entry intact in export output when the committed planner no longer splits it", () => {

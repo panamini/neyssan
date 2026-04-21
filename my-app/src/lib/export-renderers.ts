@@ -1081,6 +1081,25 @@ ${buildCssVarBlock(layoutProfileVars)}
       min-width: 0;
     }
 
+    .entry-headline {
+      display: flex;
+      align-items: baseline;
+      flex-wrap: wrap;
+      gap: var(--flow-entry-head-gap);
+      min-width: 0;
+    }
+
+    .entry-continuation {
+      font-family: var(--decor-meta-label-font-family, var(--heading-font));
+      font-size: var(--flow-label-size);
+      line-height: var(--flow-label-line);
+      font-weight: 700;
+      letter-spacing: var(--decor-meta-label-letter-spacing, 0.12em);
+      text-transform: var(--decor-meta-label-text-transform, uppercase);
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
     .entry-title {
       margin: 0;
       min-width: 0;
@@ -1349,8 +1368,8 @@ function renderWorkshopProfileFragment(args: {
     locale: args.locale,
   });
 
-  return `<header class="export-header workshop-export-header" data-block="header" data-export-fragment-id="${escapeHtml(args.fragment.fragmentId)}">
-    <div class="workshop-export-header__identity">
+  return `<header class="export-header" data-block="header" data-export-fragment-id="${escapeHtml(args.fragment.fragmentId)}">
+    <div>
       <h1 class="doc-name">${escapeHtml(args.fragment.profile.name)}</h1>
       ${
         args.fragment.profile.title
@@ -1360,12 +1379,12 @@ function renderWorkshopProfileFragment(args: {
     </div>
     ${
       contactMarkup
-        ? `<div class="workshop-export-header__contact">${contactMarkup}</div>`
+        ? `<div>${contactMarkup}</div>`
         : ""
     }
     ${
       metadataMarkup
-        ? `<div class="workshop-export-header__metadata">${metadataMarkup}</div>`
+        ? `<div>${metadataMarkup}</div>`
         : ""
     }
   </header>`;
@@ -1606,7 +1625,7 @@ function renderResumeHtml(args: {
     const workshopBodyMarkup = committedPages
       .map(
         (page) => `<main class="export-page" data-export-doc="resume" data-export-page-index="${page.index + 1}" data-resume-template="workshop_resume_onecol_ats">
-          <article class="resume-styled-page resume-styled-page--workshop" data-export-page-id="${escapeHtml(page.pageId)}">
+          <article class="resume-styled-page" data-export-page-id="${escapeHtml(page.pageId)}">
             ${page.fragments
               .map((fragment) =>
                 renderWorkshopFragment({
