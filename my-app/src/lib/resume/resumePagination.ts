@@ -375,6 +375,16 @@ type PlannerSectionDefinition = {
   entries: WorkshopPlannerEntry[];
 };
 
+const WORKSHOP_SINGLE_TAIL_GUARD_KINDS = new Set<WorkshopEntryKind>([
+  "education",
+  "skills",
+  "languages",
+  "achievements",
+  "certifications",
+  "affiliations",
+  "hobbies",
+]);
+
 const WORKSHOP_RENDER_SECTION_CONTENT_GAP_MM = 2.6;
 const WORKSHOP_RENDER_SECTION_TITLE_SIZE_REDUCTION_MM = 0.95;
 
@@ -1605,6 +1615,313 @@ function buildFragmentId(
   return `workshop-fragment-${page.index + 1}-${section.key}-${firstEntryId}`;
 }
 
+function estimateSectionPlacementHeight(args: {
+  currentPageHasSections: boolean;
+  section: PlannerSectionDefinition;
+  entries: WorkshopPlannerEntry[];
+  metrics: WorkshopPlannerMetrics;
+}): number {
+  const sectionGap =
+    args.currentPageHasSections && args.section.kind !== "summary"
+      ? args.metrics.sectionGapMm
+      : 0;
+  const headerHeight = args.section.title ? args.section.headerHeight : 0;
+  const entriesHeight = args.entries.reduce((sum, entry, index) => {
+    const experienceGap =
+      args.section.kind === "experience" && index > 0
+        ? WORKSHOP_RENDER_EXPERIENCE_ENTRY_GAP_MM
+        : 0;
+    return sum + experienceGap + entry.estimatedHeight;
+  }, 0);
+
+  return sectionGap + headerHeight + entriesHeight;
+}
+
+function shouldDeferSectionForSingleTail(args: {
+  currentPage: WorkshopResumePagePlan;
+  pageHeightBudget: number;
+  section: PlannerSectionDefinition;
+  state: {
+    entryIndex: number;
+    carryoverEntries: WorkshopPlannerEntry[];
+  };
+  metrics: WorkshopPlannerMetrics;
+}): boolean {
+  if (
+    !WORKSHOP_SINGLE_TAIL_GUARD_KINDS.has(args.section.kind) ||
+    args.currentPage.entries.length === 0 ||
+    args.currentPage.sections.some((section) => section.key === args.section.key) ||
+    args.state.carryoverEntries.length > 0
+  ) {
+    return false;
+  }
+
+  const remainingEntries = args.section.entries.slice(args.state.entryIndex);
+  if (remainingEntries.length <= 1) {
+    return false;
+  }
+
+  const totalRemainingHeight = estimateSectionPlacementHeight({
+    currentPageHasSections: false,
+    section: args.section,
+    entries: remainingEntries,
+    metrics: args.metrics,
+  });
+  if (!fitsWithinWorkshopAvailableHeight(totalRemainingHeight, args.pageHeightBudget)) {
+    return false;
+  }
+
+  const fittingEntryCount = countFittingSectionEntriesOnCurrentPage({
+    currentPage: args.currentPage,
+    pageHeightBudget: args.pageHeightBudget,
+    section: args.section,
+    entries: remainingEntries,
+    metrics: args.metrics,
+  });
+
+  if (!(fittingEntryCount > 0 && remainingEntries.length - fittingEntryCount === 1)) {
+    return false;
+  }
+
+  return true;
+}
+
+function countFittingSectionEntriesOnCurrentPage(args: {
+  currentPage: WorkshopResumePagePlan;
+  pageHeightBudget: number;
+  section: PlannerSectionDefinition;
+  entries: WorkshopPlannerEntry[];
+  metrics: WorkshopPlannerMetrics;
+}): number {
+  let fittingEntryCount = 0;
+
+  for (let index = 0; index < args.entries.length; index += 1) {
+    const candidateEntries = args.entries.slice(0, index + 1);
+    const candidateHeight = estimateSectionPlacementHeight({
+      currentPageHasSections: args.currentPage.sections.length > 0,
+      section: args.section,
+      entries: candidateEntries,
+      metrics: args.metrics,
+    });
+    const availableHeight = args.pageHeightBudget - args.currentPage.estimatedHeight;
+    if (!fitsWithinWorkshopAvailableHeight(candidateHeight, availableHeight)) {
+      break;
+    }
+
+    fittingEntryCount = index + 1;
+  }
+
+  return fittingEntryCount;
+}
+
+function shouldDeferSelectedProjectsForIsolatedTail(args: {
+  currentPage: WorkshopResumePagePlan;
+  pageHeightBudget: number;
+  section: PlannerSectionDefinition;
+  state: {
+    entryIndex: number;
+    carryoverEntries: WorkshopPlannerEntry[];
+  };
+  metrics: WorkshopPlannerMetrics;
+}): boolean {
+  if (
+    args.section.kind !== "selected_projects" ||
+    args.currentPage.entries.length === 0 ||
+    args.currentPage.sections.some((section) => section.key === args.section.key) ||
+    args.state.carryoverEntries.length > 0
+  ) {
+    return false;
+  }
+
+  const remainingEntries = args.section.entries.slice(args.state.entryIndex);
+  if (remainingEntries.length !== 2) {
+    return false;
+  }
+
+  const totalRemainingHeight = estimateSectionPlacementHeight({
+    currentPageHasSections: false,
+    section: args.section,
+    entries: remainingEntries,
+    metrics: args.metrics,
+  });
+  if (!fitsWithinWorkshopAvailableHeight(totalRemainingHeight, args.pageHeightBudget)) {
+    return false;
+  }
+
+  return (
+    countFittingSectionEntriesOnCurrentPage({
+      currentPage: args.currentPage,
+      pageHeightBudget: args.pageHeightBudget,
+      section: args.section,
+      entries: remainingEntries,
+      metrics: args.metrics,
+    }) === 1
+  );
+}
+
+function shouldDeferHobbiesBeforeTrailingTextSection(args: {
+  currentPage: WorkshopResumePagePlan;
+  pageHeightBudget: number;
+  section: PlannerSectionDefinition;
+  state: {
+    entryIndex: number;
+    carryoverEntries: WorkshopPlannerEntry[];
+  };
+  nextState:
+    | {
+        section: PlannerSectionDefinition;
+        entryIndex: number;
+        carryoverEntries: WorkshopPlannerEntry[];
+      }
+    | undefined;
+  metrics: WorkshopPlannerMetrics;
+}): boolean {
+  if (
+    args.section.kind !== "hobbies" ||
+    args.currentPage.entries.length === 0 ||
+    args.currentPage.sections.some((section) => section.key === args.section.key) ||
+    args.state.carryoverEntries.length > 0
+  ) {
+    return false;
+  }
+
+  const nextState = args.nextState;
+  if (
+    !nextState ||
+    nextState.section.kind !== "additional_information" ||
+    nextState.carryoverEntries.length > 0 ||
+    nextState.entryIndex > 0
+  ) {
+    return false;
+  }
+
+  const remainingEntries = args.section.entries.slice(args.state.entryIndex);
+  if (remainingEntries.length !== 2) {
+    return false;
+  }
+
+  return nextState.section.entries.slice(nextState.entryIndex).length > 0;
+}
+
+function estimatePageHeightForSections(args: {
+  sections: WorkshopPlannerSection[];
+  sectionDefinitionsByKey: Map<string, PlannerSectionDefinition>;
+  metrics: WorkshopPlannerMetrics;
+}): number {
+  return args.sections.reduce((sum, section, index) => {
+    const definition = args.sectionDefinitionsByKey.get(section.key);
+    if (!definition) {
+      return sum;
+    }
+
+    return (
+      sum +
+      estimateSectionPlacementHeight({
+        currentPageHasSections: index > 0,
+        section: definition,
+        entries: section.entries,
+        metrics: args.metrics,
+      })
+    );
+  }, 0);
+}
+
+function normalizePlannerPages(args: {
+  pages: WorkshopResumePagePlan[];
+  sectionDefinitionsByKey: Map<string, PlannerSectionDefinition>;
+  metrics: WorkshopPlannerMetrics;
+}): WorkshopResumePagePlan[] {
+  const seenSectionKeys = new Set<string>();
+
+  return args.pages
+    .filter((page) => page.sections.length > 0)
+    .map((page, index) => {
+      const sections = page.sections.map((section) => {
+        const normalizedSection = {
+          ...section,
+          continued: seenSectionKeys.has(section.key),
+        };
+        seenSectionKeys.add(section.key);
+        return normalizedSection;
+      });
+
+      return {
+        index,
+        sections,
+        entries: sections.flatMap((section) => section.entries),
+        estimatedHeight: estimatePageHeightForSections({
+          sections,
+          sectionDefinitionsByKey: args.sectionDefinitionsByKey,
+          metrics: args.metrics,
+        }),
+      };
+    });
+}
+
+function rebalanceTrailingTextSectionPage(args: {
+  pages: WorkshopResumePagePlan[];
+  pageHeightBudget: number;
+  sectionDefinitionsByKey: Map<string, PlannerSectionDefinition>;
+  metrics: WorkshopPlannerMetrics;
+}): WorkshopResumePagePlan[] {
+  if (args.pages.length < 2) {
+    return args.pages;
+  }
+
+  const pages = args.pages.map((page) => ({
+    ...page,
+    sections: page.sections.map((section) => ({
+      ...section,
+      entries: [...section.entries],
+    })),
+    entries: [...page.entries],
+  }));
+  const lastPage = pages[pages.length - 1];
+  const previousPage = pages[pages.length - 2];
+  const lastPageTextSection = lastPage?.sections[0];
+  const previousPageTrailingSection = previousPage?.sections.at(-1);
+
+  if (
+    !lastPage ||
+    !previousPage ||
+    lastPage.sections.length !== 1 ||
+    !lastPageTextSection ||
+    lastPageTextSection.kind !== "additional_information" ||
+    lastPageTextSection.continued ||
+    !previousPageTrailingSection ||
+    previousPageTrailingSection.continued ||
+    previousPageTrailingSection.kind === "profile" ||
+    previousPageTrailingSection.kind === "summary" ||
+    previousPageTrailingSection.kind === "experience" ||
+    previousPageTrailingSection.kind === "additional_information"
+  ) {
+    return args.pages;
+  }
+
+  const nextLastPageSections = [
+    previousPageTrailingSection,
+    ...lastPage.sections,
+  ];
+  const nextLastPageHeight = estimatePageHeightForSections({
+    sections: nextLastPageSections,
+    sectionDefinitionsByKey: args.sectionDefinitionsByKey,
+    metrics: args.metrics,
+  });
+
+  if (!fitsWithinWorkshopAvailableHeight(nextLastPageHeight, args.pageHeightBudget)) {
+    return args.pages;
+  }
+
+  previousPage.sections = previousPage.sections.slice(0, -1);
+  lastPage.sections = nextLastPageSections;
+
+  return normalizePlannerPages({
+    pages,
+    sectionDefinitionsByKey: args.sectionDefinitionsByKey,
+    metrics: args.metrics,
+  });
+}
+
 function buildCommittedFragment(args: {
   data: ResumeData;
   page: WorkshopResumePagePlan;
@@ -1807,6 +2124,7 @@ export function planWorkshopResumePages(args: {
   }
   const pages: WorkshopResumePagePlan[] = [];
   const sections = buildPlannerSections(args.data, metrics);
+  const sectionDefinitionsByKey = new Map(sections.map((section) => [section.key, section]));
   const sectionStates = sections.map((section) => ({
     section,
     entryIndex: 0,
@@ -1891,14 +2209,58 @@ export function planWorkshopResumePages(args: {
   while (hasPendingEntries()) {
     let placedEntryThisPass = false;
     let blockedByPendingExperience = false;
+    let blockedByPendingSelectedProjects = false;
+    let deferredSingleTailSection = false;
+    let deferredSelectedProjectsTail = false;
+    let deferredHobbiesBeforeText = false;
 
-    for (const state of sectionStates) {
+    for (let stateIndex = 0; stateIndex < sectionStates.length; stateIndex += 1) {
+      const state = sectionStates[stateIndex]!;
+      const nextState = sectionStates[stateIndex + 1];
       while (true) {
         const entry = getNextEntry(state);
         if (!entry) {
           break;
         }
+        if (
+          shouldDeferSectionForSingleTail({
+            currentPage,
+            pageHeightBudget,
+            section: state.section,
+            state,
+            metrics,
+          })
+        ) {
+          deferredSingleTailSection = true;
+          break;
+        }
 
+        if (
+          shouldDeferSelectedProjectsForIsolatedTail({
+            currentPage,
+            pageHeightBudget,
+            section: state.section,
+            state,
+            metrics,
+          })
+        ) {
+          deferredSelectedProjectsTail = true;
+          break;
+        }
+
+        if (
+          shouldDeferHobbiesBeforeTrailingTextSection({
+            currentPage,
+            pageHeightBudget,
+            section: state.section,
+            state,
+            nextState,
+            metrics,
+          })
+        ) {
+          deferredHobbiesBeforeText = true;
+          break;
+        }
         const needsHeader = Boolean(state.section.title) &&
           !currentPage.sections.some((item) => item.key === state.section.key);
         const availableHeight =
@@ -1936,6 +2298,9 @@ export function planWorkshopResumePages(args: {
           if (entry.kind === "experience") {
             blockedByPendingExperience = true;
           }
+          if (state.section.kind === "selected_projects") {
+            blockedByPendingSelectedProjects = true;
+          }
           break;
         }
 
@@ -1951,8 +2316,31 @@ export function planWorkshopResumePages(args: {
       if (blockedByPendingExperience) {
         break;
       }
+      if (blockedByPendingSelectedProjects) {
+        break;
+      }
+
+      if (deferredSingleTailSection) {
+        break;
+      }
+
+      if (deferredSelectedProjectsTail) {
+        break;
+      }
+
+      if (deferredHobbiesBeforeText) {
+        break;
+      }
     }
 
+    if (
+      deferredSingleTailSection ||
+      deferredSelectedProjectsTail ||
+      deferredHobbiesBeforeText
+    ) {
+      commitPage();
+      continue;
+    }
     if (!placedEntryThisPass) {
       break;
     }
@@ -1962,7 +2350,12 @@ export function planWorkshopResumePages(args: {
 
   commitPage();
 
-  const resolvedPages = pages.length > 0 ? pages : [currentPage];
+  const resolvedPages = rebalanceTrailingTextSectionPage({
+    pages: pages.length > 0 ? pages : [currentPage],
+    pageHeightBudget,
+    sectionDefinitionsByKey,
+    metrics,
+  });
 
   return {
     pageCount: Math.max(1, resolvedPages.length),
