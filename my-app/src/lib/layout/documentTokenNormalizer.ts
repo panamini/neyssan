@@ -563,6 +563,9 @@ export function normalizeResumeExportTokens(args: {
   tokens.flow.rhythm.headerGapMm = definition.flow.headerGapMm;
   tokens.flow.rhythm.sectionGapMm = definition.flow.sectionGapMm;
   tokens.flow.rhythm.entryGapMm = definition.flow.entryGapMm;
+  tokens.flow.component.experience = {
+    bulletsPaddingLeftMm: activeTemplate?.preview.experienceBulletsPaddingLeftMm,
+  };
   tokens.appearance = resolveResumeExportCanonicalAppearance({
     mode: args.mode,
     stylePreset: normalizedStylePreset,

@@ -939,6 +939,13 @@ export const EXPORT_VAR_DESCRIPTORS: CanonicalVarDescriptor[] = [
     resolve: (tokens) => formatMm(tokens.flow.rhythm.listGapMm),
   },
   {
+    name: "--experience-bullets-padding",
+    fieldPath: "flow.component.experience.bulletsPaddingLeftMm",
+    classification: "canonical",
+    resolve: (tokens) =>
+      formatMm(tokens.flow.component.experience?.bulletsPaddingLeftMm),
+  },
+  {
     name: "--flow-tag-gap",
     fieldPath: "flow.component.tag.gapMm",
     classification: "canonical",

@@ -45,6 +45,7 @@ const WORKSHOP_ACTIVE_PREVIEW_LAYOUT_VAR_NAMES = [
   "--text-meta-line",
   "--body-row-gap",
   "--main-heading-margin",
+  "--experience-bullets-padding",
   "--skill-gap",
   "--skill-pad-inline",
   "--skill-pad-block",
