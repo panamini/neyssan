@@ -2,7 +2,10 @@ import React from "react";
 
 import type { ResumeActiveTarget } from "../resumeLinking";
 import type { ResumeData } from "./resume.types";
-import type { ResumeTemplateDefinition } from "../../../lib/layout/resumeTemplates";
+import {
+  resolveWorkshopPreviewLayoutContract,
+  type ResumeTemplateDefinition,
+} from "../../../lib/layout/resumeTemplates";
 import type {
   WorkshopExperienceContentBlock,
   WorkshopResumeCommittedFragment,
@@ -33,6 +36,10 @@ const workshopLabelTextStyle = {
   letterSpacing: "0.08em",
   color: "var(--color-text-subtle)",
 };
+
+function formatMillimeters(value: number) {
+  return `${value}mm`;
+}
 
 function renderSectionHeading(title: string, continued: boolean) {
   return (
@@ -78,6 +85,7 @@ function renderSectionHeading(title: string, continued: boolean) {
 
 function renderExperienceBlocks(args: {
   blocks: WorkshopExperienceContentBlock[];
+  listGapMm: number;
 }) {
   const nodes: React.ReactNode[] = [];
   let pendingBullets: WorkshopExperienceContentBlock[] = [];
@@ -94,7 +102,7 @@ function renderExperienceBlocks(args: {
           margin: 0,
           paddingLeft: "4.5mm",
           display: "grid",
-          gap: "1.2mm",
+          gap: formatMillimeters(args.listGapMm),
         }}
       >
         {pendingBullets.map((block) => (
@@ -270,8 +278,10 @@ function renderFragmentContent(args: {
   fragment: WorkshopResumeCommittedFragment;
   data: ResumeData;
   activeTarget?: ResumeActiveTarget | null;
+  template: ResumeTemplateDefinition;
 }) {
   const { fragment, data, activeTarget } = args;
+  const workshopLayout = resolveWorkshopPreviewLayoutContract(args.template);
 
   switch (fragment.kind) {
     case "profile":
@@ -310,11 +320,16 @@ function renderFragmentContent(args: {
           surface="item"
           style={{
             display: "grid",
-            gap: "1.8mm",
+            gap: formatMillimeters(workshopLayout.experienceBlockGapMm),
           }}
           data-preview-row-id={item.id}
         >
-          <div style={{ display: "grid", gap: "0.6mm" }}>
+          <div
+            style={{
+              display: "grid",
+              gap: formatMillimeters(workshopLayout.experienceMetaGapMm),
+            }}
+          >
             <div
               style={{
                 display: "flex",
@@ -354,7 +369,10 @@ function renderFragmentContent(args: {
               {[item.company, item.location, item.period].filter(Boolean).join(" · ")}
             </p>
           </div>
-          {renderExperienceBlocks({ blocks: item.blocks })}
+          {renderExperienceBlocks({
+            blocks: item.blocks,
+            listGapMm: workshopLayout.listGapMm,
+          })}
         </PreviewItemRegion>
       ));
     case "education":
@@ -368,7 +386,10 @@ function renderFragmentContent(args: {
           itemId={item.id}
           activeTarget={activeTarget}
           surface="item"
-          style={{ display: "grid", gap: "0.7mm" }}
+          style={{
+            display: "grid",
+            gap: formatMillimeters(workshopLayout.compactMetaGapMm),
+          }}
           data-preview-row-id={item.id}
         >
           <h3
@@ -437,7 +458,10 @@ function renderFragmentContent(args: {
             itemId={item.id}
             activeTarget={activeTarget}
             surface="item"
-            style={{ display: "grid", gap: "0.7mm" }}
+            style={{
+              display: "grid",
+              gap: formatMillimeters(workshopLayout.compactMetaGapMm),
+            }}
           >
             <h3
               style={{
@@ -630,10 +654,17 @@ function renderSectionFragment(args: {
   fragment: WorkshopResumeCommittedFragment;
   data: ResumeData;
   activeTarget?: ResumeActiveTarget | null;
+  template: ResumeTemplateDefinition;
 }) {
   const { fragment, data, activeTarget } = args;
+  const workshopLayout = resolveWorkshopPreviewLayoutContract(args.template);
   if (!fragment.title) {
-    return renderFragmentContent({ fragment, data, activeTarget });
+    return renderFragmentContent({
+      fragment,
+      data,
+      activeTarget,
+      template: args.template,
+    });
   }
 
   const content =
@@ -645,7 +676,12 @@ function renderSectionFragment(args: {
           gap: "var(--skill-gap)",
         }}
       >
-        {renderFragmentContent({ fragment, data, activeTarget })}
+        {renderFragmentContent({
+          fragment,
+          data,
+          activeTarget,
+          template: args.template,
+        })}
       </div>
     ) : fragment.kind === "languages" ||
       fragment.kind === "certifications" ||
@@ -657,14 +693,29 @@ function renderSectionFragment(args: {
           margin: 0,
           paddingLeft: "4.5mm",
           display: "grid",
-          gap: "1.2mm",
+          gap: formatMillimeters(workshopLayout.listGapMm),
         }}
       >
-        {renderFragmentContent({ fragment, data, activeTarget })}
+        {renderFragmentContent({
+          fragment,
+          data,
+          activeTarget,
+          template: args.template,
+        })}
       </ul>
     ) : (
-      <div style={{ display: "grid", gap: "3mm" }}>
-        {renderFragmentContent({ fragment, data, activeTarget })}
+      <div
+        style={{
+          display: "grid",
+          gap: formatMillimeters(workshopLayout.sectionContentGapMm),
+        }}
+      >
+        {renderFragmentContent({
+          fragment,
+          data,
+          activeTarget,
+          template: args.template,
+        })}
       </div>
     );
 
@@ -676,7 +727,10 @@ function renderSectionFragment(args: {
       sectionTitle={fragment.title}
       activeTarget={activeTarget}
       surface="section"
-      style={{ display: "grid", gap: "2.6mm" }}
+      style={{
+        display: "grid",
+        gap: formatMillimeters(workshopLayout.sectionShellGapMm),
+      }}
     >
       {renderSectionHeading(fragment.title, fragment.continued)}
       {content}
@@ -687,7 +741,7 @@ function renderSectionFragment(args: {
 export function ResumeOneColAtsPage({
   data,
   page,
-  template: _template,
+  template,
   activeTarget = null,
 }: ResumeOneColAtsPageProps) {
   return (
@@ -714,6 +768,7 @@ export function ResumeOneColAtsPage({
             fragment,
             data,
             activeTarget,
+            template,
           })}
         </React.Fragment>
       ))}
