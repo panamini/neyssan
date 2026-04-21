@@ -223,6 +223,7 @@ export function ResumePrintPage(): JSX.Element {
           data={payload.resumeData}
           stylePreset={payload.stylePreset}
           resumeTemplateId={payload.resumeTemplateId}
+          committedPages={payload.committedPages}
           stageLayout={PRINT_STAGE_LAYOUT}
         />
       ) : (
