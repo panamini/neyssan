@@ -48,6 +48,8 @@ describe("document token system", () => {
         "--text-caption-size",
         "--text-display-line",
         "--text-display-size",
+        "--text-meta-line",
+        "--text-meta-size",
         "--text-title-line",
         "--text-title-size",
         "--body-size-adjust",
@@ -57,6 +59,7 @@ describe("document token system", () => {
         "--display-size-adjust",
         "--experience-bullets-gap",
         "--experience-bullets-padding",
+        "--flow-list-indent",
         "--experience-column-gap",
         "--experience-date-column",
         "--experience-item-gap",
@@ -91,6 +94,9 @@ describe("document token system", () => {
         "--sidebar-title-padding",
         "--sidebar-width",
         "--skill-gap",
+        "--skill-gap",
+        "--skill-pad-block",
+        "--skill-pad-inline",
         "--skill-padding-block",
         "--skill-padding-inline",
         "--title-size-adjust",
@@ -391,8 +397,16 @@ describe("document token system", () => {
     expect(previewVars["--sidebar-width"]).toBe("0mm");
     expect(previewVars["--margin-left"]).toBe("18mm");
     expect(previewVars["--header-summary-width"]).toBe("120mm");
+    expect(previewVars["--flow-list-indent"]).toBe(
+      previewVars["--experience-bullets-padding"],
+    );
     expect(exportTokens.id).toBe("workshop_resume_onecol_ats");
     expect(exportTokens.shell).toBe("onecol");
     expect(exportTokens.canonical.geometry.columns.sidebarMm).toBe(0);
     expect(exportTokens.canonical.flow.measure.resumeReadingWidthMm).toBe(120);
+    expect(
+      serializeExportVars(exportTokens.canonical)["--flow-list-indent"],
+    ).toBe(
+      serializeExportVars(exportTokens.canonical)["--experience-bullets-padding"],
+    );
   });

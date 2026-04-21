@@ -318,6 +318,13 @@ export const RESUME_PREVIEW_VAR_DESCRIPTORS: CanonicalVarDescriptor[] = [
       formatMm(tokens.flow.component.experience?.orgMarginBottomMm),
   },
   {
+    name: "--flow-list-indent",
+    fieldPath: "flow.component.experience.bulletsPaddingLeftMm",
+    classification: "canonical",
+    resolve: (tokens) =>
+      formatMm(tokens.flow.component.experience?.bulletsPaddingLeftMm),
+  },
+  {
     name: "--experience-bullets-padding",
     fieldPath: "flow.component.experience.bulletsPaddingLeftMm",
     classification: "canonical",
@@ -937,6 +944,13 @@ export const EXPORT_VAR_DESCRIPTORS: CanonicalVarDescriptor[] = [
     fieldPath: "flow.rhythm.listGapMm",
     classification: "canonical",
     resolve: (tokens) => formatMm(tokens.flow.rhythm.listGapMm),
+  },
+  {
+    name: "--flow-list-indent",
+    fieldPath: "flow.component.experience.bulletsPaddingLeftMm",
+    classification: "canonical",
+    resolve: (tokens) =>
+      formatMm(tokens.flow.component.experience?.bulletsPaddingLeftMm),
   },
   {
     name: "--experience-bullets-padding",
