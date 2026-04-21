@@ -13,6 +13,8 @@ import {
   type ResumePrintRoutePayload,
 } from "../../lib/document-export-models";
 import { generateCvTemplate } from "../../lib/cv-template";
+import { getResumeTemplateDefinition } from "../../lib/layout/resumeTemplates";
+import { planWorkshopResumePages } from "../../lib/resume/resumePagination";
 import { ResumePrintPage } from "../ResumePrintPage";
 
 function buildPayload(): ResumePrintRoutePayload {
@@ -78,6 +80,73 @@ function buildWorkshopOverflowPayload(): ResumePrintRoutePayload {
   }
 
   return buildResumePrintRoutePayload({ data: previewSource });
+}
+
+function makeDenseTokenBlock(token: string, usefulLines: number) {
+  return token.repeat(usefulLines * 70);
+}
+
+function buildDenseWorkshopCommittedPayload(): ResumePrintRoutePayload {
+  const stylePreset = {
+    familyId: "workshop",
+    layout: "workshop",
+    typography: "quiet-editorial",
+    palette: "sauge",
+  } as const;
+  const resumeData = {
+    ...resumeMock,
+    metadata: resumeMock.metadata.slice(0, 1),
+    contact: resumeMock.contact.slice(0, 2),
+    education: [],
+    certifications: [],
+    affiliations: [],
+    hobbyItems: [],
+    hobbies: [],
+    textSections: [],
+    projects: [],
+    skillItems: [],
+    languages: [],
+    summary: Array.from({ length: 30 }, (_, index) => `summary-${index + 1}`).join(" "),
+    experience: [
+      {
+        ...resumeMock.experience[0]!,
+        id: "exp-print-dense-1",
+        role: "1",
+        description: makeDenseTokenBlock("1", 40),
+        bullets: [],
+      },
+      {
+        ...resumeMock.experience[0]!,
+        id: "exp-print-dense-2",
+        role: "2",
+        description: makeDenseTokenBlock("2", 8),
+        bullets: [],
+      },
+      {
+        ...resumeMock.experience[0]!,
+        id: "exp-print-dense-3",
+        role: "3",
+        description: makeDenseTokenBlock("3", 8),
+        bullets: [],
+      },
+    ],
+  };
+  const committedPages = planWorkshopResumePages({
+    data: resumeData,
+    template: getResumeTemplateDefinition("workshop_resume_onecol_ats"),
+    stylePreset,
+  }).committedPages;
+
+  return {
+    schemaVersion: 1,
+    kind: "resume_print_route",
+    locale: "en",
+    resumeData,
+    stylePreset,
+    resumeTemplateId: "workshop_resume_onecol_ats",
+    rendererVariantId: "swissminima",
+    committedPages,
+  };
 }
 
 describe("ResumePrintPage", () => {
@@ -198,6 +267,46 @@ describe("ResumePrintPage", () => {
       screen.getAllByTestId("resume-template-page").length,
     );
     expect(window.__DASTI_RESUME_PRINT_STATUS__?.pageCount).toBeGreaterThan(1);
+  });
+
+  it("renders dense workshop continuation from committed pages before later entries on the print route", async () => {
+    window.__DASTI_RESUME_PRINT_PAYLOAD__ = buildDenseWorkshopCommittedPayload();
+
+    const { container } = render(<ResumePrintPage />);
+
+    await waitFor(() => {
+      expect(window.__DASTI_RESUME_PRINT_STATUS__?.status).toBe("ready");
+    });
+
+    const pageShells = Array.from(container.querySelectorAll('[data-testid="resume-template-page"]'));
+    const continuedPage = pageShells.find((page) => page.textContent?.includes("Continued"));
+    const continuedItems = Array.from(
+      continuedPage?.querySelectorAll('[data-preview-section="experience"][data-preview-item-id]') ??
+        [],
+    );
+
+    expect(pageShells.length).toBeGreaterThan(1);
+    expect(continuedPage?.textContent).toContain("Continued");
+    expect(continuedItems[0]?.getAttribute("data-preview-item-id")).toBe("exp-print-dense-2");
+    expect(
+      continuedItems.findIndex(
+        (node) => node.getAttribute("data-preview-item-id") === "exp-print-dense-2",
+      ),
+    ).toBe(0);
+    expect(
+      continuedItems.findIndex(
+        (node) => node.getAttribute("data-preview-item-id") === "exp-print-dense-3",
+      ),
+    ).toBeGreaterThan(
+      continuedItems.findIndex(
+        (node) => node.getAttribute("data-preview-item-id") === "exp-print-dense-2",
+      ),
+    );
+    expect(
+      continuedItems.findIndex(
+        (node) => node.getAttribute("data-preview-item-id") === "exp-print-dense-1",
+      ),
+    ).toBe(-1);
   });
 
   it("keeps Robial print-route vars aligned when typography changes", async () => {

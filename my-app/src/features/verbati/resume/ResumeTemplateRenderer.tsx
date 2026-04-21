@@ -10,7 +10,10 @@ import {
   serializeActiveResumePreviewDecorVars,
   serializeResumePreviewVars,
 } from "../../../lib/layout/documentTokenSerializers";
-import { planWorkshopResumePages } from "../../../lib/resume/resumePagination";
+import {
+  planWorkshopResumePages,
+  type WorkshopResumeCommittedPage,
+} from "../../../lib/resume/resumePagination";
 import type { DocumentStageLayout } from "../../../hooks/use-document-stage-layout";
 import type { ResumeActiveTarget } from "../resumeLinking";
 import type { VerbatiStylePreset } from "../types";
@@ -25,6 +28,7 @@ type ResumeTemplateRendererProps = {
   data: ResumeData;
   stylePreset: VerbatiStylePreset;
   resumeTemplateId: ResumeTemplateId;
+  committedPages?: WorkshopResumeCommittedPage[];
   activeTarget?: ResumeActiveTarget | null;
   stageLayout?: DocumentStageLayout;
   onStablePageCountChange?: ((pageCount: number) => void) | undefined;
@@ -64,6 +68,7 @@ export function ResumeTemplateRenderer({
   data,
   stylePreset,
   resumeTemplateId,
+  committedPages,
   activeTarget = null,
   stageLayout,
   onStablePageCountChange,
@@ -72,17 +77,25 @@ export function ResumeTemplateRenderer({
   const isWorkshopTemplateRenderer =
     resumeTemplateId === WORKSHOP_TEMPLATE_RENDERER_ID &&
     templateDefinition.supportsPlanner;
-  const plan = React.useMemo(
+  const plannedPages = React.useMemo(
     () =>
-      isWorkshopTemplateRenderer
+      isWorkshopTemplateRenderer && (!committedPages || committedPages.length === 0)
         ? planWorkshopResumePages({
             data,
             template: templateDefinition,
             stylePreset,
           })
         : null,
-    [data, isWorkshopTemplateRenderer, templateDefinition],
+    [committedPages, data, isWorkshopTemplateRenderer, stylePreset, templateDefinition],
   );
+  const resolvedCommittedPages = React.useMemo(
+    () =>
+      committedPages && committedPages.length > 0
+        ? committedPages
+        : plannedPages?.committedPages ?? null,
+    [committedPages, plannedPages],
+  );
+  const resolvedPageCount = resolvedCommittedPages?.length ?? 0;
   const previewVars = React.useMemo(
     () =>
       isWorkshopTemplateRenderer
@@ -99,25 +112,34 @@ export function ResumeTemplateRenderer({
   const lastCommittedPageCountRef = React.useRef<number | null>(null);
 
   React.useEffect(() => {
-    if (!isWorkshopTemplateRenderer || !onStablePageCountChange || !plan) {
+    if (
+      !isWorkshopTemplateRenderer ||
+      !onStablePageCountChange ||
+      !resolvedCommittedPages
+    ) {
       return undefined;
     }
 
     const timeoutId = window.setTimeout(() => {
-      if (lastCommittedPageCountRef.current === plan.pageCount) {
+      if (lastCommittedPageCountRef.current === resolvedPageCount) {
         return;
       }
 
-      lastCommittedPageCountRef.current = plan.pageCount;
-      onStablePageCountChange(plan.pageCount);
+      lastCommittedPageCountRef.current = resolvedPageCount;
+      onStablePageCountChange(resolvedPageCount);
     }, 40);
 
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [isWorkshopTemplateRenderer, onStablePageCountChange, plan]);
+  }, [
+    isWorkshopTemplateRenderer,
+    onStablePageCountChange,
+    resolvedCommittedPages,
+    resolvedPageCount,
+  ]);
 
-  if (!isWorkshopTemplateRenderer || !plan || !previewVars) {
+  if (!isWorkshopTemplateRenderer || !resolvedCommittedPages || !previewVars) {
     return null;
   }
 
@@ -129,7 +151,7 @@ export function ResumeTemplateRenderer({
         ...previewVars,
         width: `${shellPageWidthPx}px`,
         minHeight: `${getResumeTemplateCanvasHeight({
-          pageCount: plan.pageCount,
+          pageCount: resolvedPageCount,
           pageHeightPx: shellPageHeightPx,
         })}px`,
         display: "grid",
@@ -137,7 +159,7 @@ export function ResumeTemplateRenderer({
         alignContent: "start",
       }}
     >
-      {plan.pages.map((page) => (
+      {resolvedCommittedPages.map((page) => (
         <div
           key={`workshop-page-${page.index + 1}`}
           className="resume-template-page-shell"
