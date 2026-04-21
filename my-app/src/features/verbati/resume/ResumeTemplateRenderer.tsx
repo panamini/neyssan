@@ -4,6 +4,7 @@ import { A4_PAGE_HEIGHT_PX, A4_PAGE_WIDTH_PX } from "../../../lib/document-stage
 import { normalizeResumePreviewTokens } from "../../../lib/layout/documentTokenNormalizer";
 import {
   getResumeTemplateDefinition,
+  type ResumeTemplateDefinition,
   type ResumeTemplateId,
 } from "../../../lib/layout/resumeTemplates";
 import { serializeResumePreviewVars } from "../../../lib/layout/documentTokenSerializers";
@@ -60,6 +61,9 @@ const WORKSHOP_PREVIEW_LAYOUT_VAR_NAMES = [
   "--text-meta-line",
   "--body-row-gap",
   "--main-heading-margin",
+  "--workshop-section-title-reduction",
+  "--workshop-experience-heading-size-adjust",
+  "--workshop-experience-heading-line-height",
   "--flow-list-indent",
   "--experience-bullets-padding",
   "--skill-gap",
@@ -94,11 +98,12 @@ function pickCssVars(
 }
 
 function buildTemplatePreviewVars(
-  resumeTemplateId: ResumeTemplateId,
+  templateDefinition: ResumeTemplateDefinition,
   stylePreset: VerbatiStylePreset,
 ) {
   const previewTokens = normalizeResumePreviewTokens({
-    resumeTemplateId,
+    resumeTemplateId: templateDefinition.id,
+    template: templateDefinition,
     stylePreset,
   });
   const themeVars = pickCssVars(
@@ -161,9 +166,9 @@ export function ResumeTemplateRenderer({
   const previewVars = React.useMemo(
     () =>
       isWorkshopTemplateRenderer
-        ? buildTemplatePreviewVars(resumeTemplateId, stylePreset)
+        ? buildTemplatePreviewVars(templateDefinition, stylePreset)
         : null,
-    [isWorkshopTemplateRenderer, resumeTemplateId, stylePreset],
+    [isWorkshopTemplateRenderer, stylePreset, templateDefinition],
   );
   const previewScale =
     stageLayout && stageLayout.pageWidth > 0
