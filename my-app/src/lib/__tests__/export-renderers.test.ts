@@ -15,9 +15,16 @@ import {
   renderResumeAtsExportDocument,
   renderResumeStyledExportDocument,
 } from "../export-renderers";
+import { planWorkshopResumePages } from "../resume/resumePagination";
+import { getResumeTemplateDefinition } from "../layout/resumeTemplates";
+import { resumeMock } from "../../features/verbati/resume/resume.mock";
 
 function parseExportHtml(html: string): Document {
   return new DOMParser().parseFromString(html, "text/html");
+}
+
+function makeDenseTokenBlock(token: string, usefulLines: number) {
+  return token.repeat(usefulLines * 70);
 }
 
 function getDataBlockOrder(document: Document): string[] {
@@ -179,14 +186,14 @@ describe("export-renderers", () => {
     expect(atsCss).toContain("--flow-reading-measure: 112mm;");
     expect(atsCss).not.toContain("body.resume-export.resume--styled .robial-sidebar");
 
-    expect(swissStyledDocument.body.className).toContain("resume-layout--two-column");
+    expect(swissStyledDocument.body.className).toContain("resume-layout--swiss");
     expect(swissStyledDocument.body.className).toContain("resume-shell--split");
     expect(swissStyledDocument.querySelector(".robial-sidebar")).toBeTruthy();
-    expect(swissCss).toContain("--page-sidebar: 52mm;");
+    expect(swissCss).toContain("--page-sidebar: 35mm;");
     expect(swissCss).toContain("--page-gutter: 18mm;");
 
     expect(normalizedStyledDocument.body.className).toContain(
-      "resume-layout--two-column",
+      "resume-layout--editorial",
     );
     expect(normalizedStyledDocument.body.className).toContain(
       "resume-shell--split",
@@ -196,8 +203,8 @@ describe("export-renderers", () => {
     expect(
       normalizedStyledDocument.querySelector(".resume-styled-page"),
     ).toBeNull();
-    expect(normalizedStyledCss).toContain("--flow-reading-measure: 88mm;");
-    expect(normalizedStyledCss).toContain("--page-sidebar: 52mm;");
+    expect(normalizedStyledCss).toContain("--flow-reading-measure: 105mm;");
+    expect(normalizedStyledCss).toContain("--page-sidebar: 35mm;");
     expect(normalizedStyledCss).toContain("--page-gutter: 18mm;");
   });
 
@@ -255,7 +262,7 @@ describe("export-renderers", () => {
     expect(atsDocument.querySelector(".export-header")).toBeTruthy();
 
     expect(modernistStyledDocument.body.className).toContain("resume-shell--split");
-    expect(modernistStyledDocument.body.className).toContain("resume-layout--two-column");
+    expect(modernistStyledDocument.body.className).toContain("resume-layout--modernist");
     expect(modernistStyledDocument.querySelector(".resume-styled-page")).toBeNull();
     expect(modernistStyledDocument.querySelector(".robial-sidebar")).toBeTruthy();
     expect(
@@ -263,13 +270,13 @@ describe("export-renderers", () => {
     ).toBeTruthy();
 
     expect(quireStyledDocument.body.className).toContain("resume-shell--split");
-    expect(quireStyledDocument.body.className).toContain("resume-layout--two-column");
+    expect(quireStyledDocument.body.className).toContain("resume-layout--quire");
     expect(quireStyledDocument.querySelector(".resume-styled-page")).toBeNull();
     expect(quireStyledDocument.querySelector(".robial-sidebar")).toBeTruthy();
     expect(quireStyledDocument.querySelector(".resume-main-stack")).toBeTruthy();
 
     expect(editorialStyledDocument.body.className).toContain("resume-shell--split");
-    expect(editorialStyledDocument.body.className).toContain("resume-layout--two-column");
+    expect(editorialStyledDocument.body.className).toContain("resume-layout--editorial");
     expect(editorialStyledDocument.querySelector(".resume-styled-page")).toBeNull();
     expect(editorialStyledDocument.querySelector(".robial-sidebar")).toBeTruthy();
 
@@ -605,6 +612,113 @@ describe("export-renderers", () => {
         '[data-resume-template="workshop_resume_onecol_ats"]',
       ),
     ).toBeTruthy();
+  });
+
+  it("renders the dense first workshop experience entry intact in export output when the committed planner no longer splits it", () => {
+    const workshopStyle = {
+      familyId: "workshop",
+      layout: "workshop",
+      typography: "quiet-editorial",
+      palette: "sauge",
+    } as const;
+    const plannerData = {
+      ...resumeMock,
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      skillItems: [],
+      languages: [],
+      education: [],
+      achievements: [],
+      achievementItems: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      projects: [],
+      textSections: [],
+      summary: Array.from({ length: 30 }, (_, index) => `summary-${index + 1}`).join(" "),
+      experience: [
+        {
+          ...resumeMock.experience[0]!,
+          id: "exp-dense-1",
+          role: "1",
+          description: makeDenseTokenBlock("1", 40),
+          bullets: [],
+        },
+        {
+          ...resumeMock.experience[0]!,
+          id: "exp-dense-2",
+          role: "2",
+          description: makeDenseTokenBlock("2", 8),
+          bullets: [],
+        },
+        {
+          ...resumeMock.experience[0]!,
+          id: "exp-dense-3",
+          role: "3",
+          description: makeDenseTokenBlock("3", 8),
+          bullets: [],
+        },
+      ],
+    };
+    const planner = planWorkshopResumePages({
+      data: plannerData,
+      template: getResumeTemplateDefinition("workshop_resume_onecol_ats"),
+      stylePreset: workshopStyle,
+    });
+    const exportSource: ResumePrintSource = {
+      ...resumeFixture,
+      title: plannerData.name,
+      profile: {
+        name: plannerData.name,
+        title: plannerData.title,
+        summary: plannerData.summary,
+      },
+      contact: plannerData.contact.map((item) => ({
+        label: item.label,
+        value: item.value,
+      })),
+      metadata: plannerData.metadata.map((item) => ({
+        label: item.label,
+        value: item.value,
+      })),
+      skills: [],
+      languages: [],
+      experience: [],
+      projects: [],
+      education: [],
+      achievements: [],
+      hobbies: [],
+      resumeTemplateId: "workshop_resume_onecol_ats",
+      committedPages: planner.committedPages,
+    };
+    const atsDocument = parseExportHtml(
+      renderResumeAtsExportDocument(
+        exportSource!,
+        workshopStyle,
+      ),
+    );
+
+    expect(
+      exportSource?.committedPages
+        ?.flatMap((page) => page.fragments)
+        .filter((fragment) => fragment.kind === "experience")
+        .flatMap((fragment) => fragment.items)
+        .filter((item) => item.id === "exp-dense-1").length,
+    ).toBe(1);
+    expect(
+      atsDocument.querySelectorAll('[data-export-item-id="exp-dense-1"]').length,
+    ).toBe(1);
+    expect(
+      atsDocument.querySelector('[data-export-item-id="exp-dense-1"] .entry-continuation'),
+    ).toBeNull();
+    expect(
+      atsDocument.querySelector('[data-export-item-id="exp-dense-1"] .entry-title')?.textContent,
+    ).toBe("1");
+    expect(
+      atsDocument.querySelectorAll('[data-export-item-id="exp-dense-2"]').length,
+    ).toBeGreaterThanOrEqual(1);
+    expect(atsDocument.body.textContent).toContain("2");
   });
 
   it("fails closed when workshop export pages are missing", () => {

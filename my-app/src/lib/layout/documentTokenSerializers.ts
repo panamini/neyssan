@@ -194,6 +194,21 @@ export const RESUME_PREVIEW_VAR_DESCRIPTORS: CanonicalVarDescriptor[] = [
     resolve: (tokens) => formatUnitless(tokens.flow.type.label.lineHeight),
   },
   {
+    name: "--text-meta-size",
+    fieldPath: "flow.type.meta.sizePt",
+    classification: "canonical",
+    resolve: (tokens) =>
+      tokens.flow.type.meta.sizePt === undefined
+        ? undefined
+        : formatMm(ptToMm(tokens.flow.type.meta.sizePt)),
+  },
+  {
+    name: "--text-meta-line",
+    fieldPath: "flow.type.meta.lineHeight",
+    classification: "canonical",
+    resolve: (tokens) => formatUnitless(tokens.flow.type.meta.lineHeight),
+  },
+  {
     name: "--body-row-gap",
     fieldPath: "flow.rhythm.sectionGapMm",
     classification: "canonical",
@@ -256,6 +271,24 @@ export const RESUME_PREVIEW_VAR_DESCRIPTORS: CanonicalVarDescriptor[] = [
     classification: "canonical",
     resolve: (tokens) =>
       formatMm(tokens.flow.component.main?.headingMarginBottomMm),
+  },
+  {
+    name: "--skill-gap",
+    fieldPath: "flow.component.skill.gapMm",
+    classification: "canonical",
+    resolve: (tokens) => formatMm(tokens.flow.component.skill?.gapMm),
+  },
+  {
+    name: "--skill-pad-inline",
+    fieldPath: "flow.component.skill.padInlineMm",
+    classification: "canonical",
+    resolve: (tokens) => formatMm(tokens.flow.component.skill?.padInlineMm),
+  },
+  {
+    name: "--skill-pad-block",
+    fieldPath: "flow.component.skill.padBlockMm",
+    classification: "canonical",
+    resolve: (tokens) => formatMm(tokens.flow.component.skill?.padBlockMm),
   },
   {
     name: "--experience-date-column",
