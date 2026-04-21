@@ -19,12 +19,7 @@ import {
   resolveWorkshopPreviewLayoutContract,
   type ResumeTemplateDefinition,
 } from "../layout/resumeTemplates";
-import {
-  WORKSHOP_BOTTOM_FIT_SAFETY_MM,
-  WORKSHOP_EXPERIENCE_HEADING_LINE_HEIGHT,
-  WORKSHOP_EXPERIENCE_HEADING_SIZE_ADJUST_MM,
-  WORKSHOP_SECTION_TITLE_SIZE_REDUCTION_MM,
-} from "./workshopHeadingContract";
+import { resolveWorkshopHeadingFitContract } from "./workshopHeadingContract";
 
 type WorkshopEntryKind =
   | "profile"
@@ -395,7 +390,6 @@ const WORKSHOP_SINGLE_TAIL_GUARD_KINDS = new Set<WorkshopEntryKind>([
 ]);
 
 const WORKSHOP_RENDER_SECTION_CONTENT_GAP_MM = 2.6;
-const WORKSHOP_RENDER_SECTION_TITLE_SIZE_REDUCTION_MM = 0.95;
 
 type WorkshopPlannerMetrics = {
   pageHeightBudgetMm: number;
@@ -425,6 +419,7 @@ type WorkshopPlannerMetrics = {
   skillGapMm: number;
   skillPadInlineMm: number;
   skillPadBlockMm: number;
+  bottomFitSafetyMm: number;
 };
 
 type WorkshopSplitCandidateRejectionReason =
@@ -531,7 +526,7 @@ function resolveExperienceBlockCharsPerLine(text: string, baseCharsPerLine: numb
 function fitsWithinWorkshopAvailableHeight(
   estimatedHeight: number,
   availableHeight: number,
-  safetyMm = WORKSHOP_BOTTOM_FIT_SAFETY_MM,
+  safetyMm: number,
 ) {
   return estimatedHeight <= Math.max(0, availableHeight - safetyMm);
 }
@@ -562,8 +557,10 @@ function buildPlannerMetrics(args: {
 }): WorkshopPlannerMetrics {
   const tokens = normalizeResumePreviewTokens({
     resumeTemplateId: args.template.id,
+    template: args.template,
     stylePreset: args.stylePreset,
   });
+  const headingContract = resolveWorkshopHeadingFitContract(tokens);
   const workshopLayout = resolveWorkshopPreviewLayoutContract(args.template);
   const bodyLineHeightMm = resolveTextLineHeightMm(
     tokens.flow.type.body.sizePt,
@@ -602,13 +599,13 @@ function buildPlannerMetrics(args: {
     (ptToMm(
       (tokens.flow.type.body.sizePt ?? 0) + (tokens.flow.density.bodyAdjustPt ?? 0),
     ) +
-      WORKSHOP_EXPERIENCE_HEADING_SIZE_ADJUST_MM) *
-    WORKSHOP_EXPERIENCE_HEADING_LINE_HEIGHT;
+      headingContract.experienceHeadingSizeAdjustMm) *
+    headingContract.experienceHeadingLineHeight;
   const sectionHeaderHeightMm = Math.max(
     6,
     Math.max(
       0,
-      titleSizeMm - WORKSHOP_SECTION_TITLE_SIZE_REDUCTION_MM,
+      titleSizeMm - headingContract.sectionTitleReductionMm,
     ) *
       titleLineHeight +
       workshopLayout.sectionShellGapMm,
@@ -667,6 +664,7 @@ function buildPlannerMetrics(args: {
     skillPadBlockMm:
       tokens.flow.component.skill?.padBlockMm ??
       args.template.preview.skillPaddingBlockMm,
+    bottomFitSafetyMm: headingContract.bottomFitSafetyMm,
   };
 }
 
@@ -955,7 +953,7 @@ function splitExperienceBlockAtWrapBoundary(args: {
   );
   const remainingHeight = args.availableBlockHeight - usedPrefixHeight;
   const availableUsefulLines = Math.floor(
-    Math.max(0, remainingHeight - WORKSHOP_BOTTOM_FIT_SAFETY_MM) /
+    Math.max(0, remainingHeight - args.metrics.bottomFitSafetyMm) /
       Math.max(args.metrics.bodyLineHeightMm, 0.0001),
   );
   if (availableUsefulLines < EXPERIENCE_MIN_FRAGMENT_USEFUL_LINES) {
@@ -1027,6 +1025,7 @@ function splitExperienceBlockAtWrapBoundary(args: {
       !fitsWithinWorkshopAvailableHeight(
         headEstimatedHeight,
         args.availableBlockHeight,
+        args.metrics.bottomFitSafetyMm,
       )
     ) {
       candidateEvaluations.push({
@@ -1196,7 +1195,7 @@ function splitExperienceEntryToFit(args: {
   const availableBlockHeight = args.availableHeight - headerHeight;
   if (
     args.availableHeight < minimumFragmentHeight ||
-    availableBlockHeight <= WORKSHOP_BOTTOM_FIT_SAFETY_MM
+    availableBlockHeight <= args.metrics.bottomFitSafetyMm
   ) {
     return null;
   }
@@ -1218,6 +1217,7 @@ function splitExperienceEntryToFit(args: {
       fitsWithinWorkshopAvailableHeight(
         estimateExperienceBlocksHeight(nextPlacedBlocks, args.metrics),
         availableBlockHeight,
+        args.metrics.bottomFitSafetyMm,
       )
     ) {
       placedBlocks.push(block);
@@ -1234,6 +1234,7 @@ function splitExperienceEntryToFit(args: {
       fitsWithinWorkshopAvailableHeight(
         estimateExperienceBlocksHeight(placedBlocks, args.metrics),
         availableBlockHeight,
+        args.metrics.bottomFitSafetyMm,
       )
     ) {
       return {
@@ -1679,7 +1680,11 @@ function shouldDeferSectionForSingleTail(args: {
     entries: remainingEntries,
     metrics: args.metrics,
   });
-  if (!fitsWithinWorkshopAvailableHeight(totalRemainingHeight, args.pageHeightBudget)) {
+  if (!fitsWithinWorkshopAvailableHeight(
+    totalRemainingHeight,
+    args.pageHeightBudget,
+    args.metrics.bottomFitSafetyMm,
+  )) {
     return false;
   }
 
@@ -1716,7 +1721,11 @@ function countFittingSectionEntriesOnCurrentPage(args: {
       metrics: args.metrics,
     });
     const availableHeight = args.pageHeightBudget - args.currentPage.estimatedHeight;
-    if (!fitsWithinWorkshopAvailableHeight(candidateHeight, availableHeight)) {
+    if (!fitsWithinWorkshopAvailableHeight(
+      candidateHeight,
+      availableHeight,
+      args.metrics.bottomFitSafetyMm,
+    )) {
       break;
     }
 
@@ -1756,7 +1765,11 @@ function shouldDeferSelectedProjectsForIsolatedTail(args: {
     entries: remainingEntries,
     metrics: args.metrics,
   });
-  if (!fitsWithinWorkshopAvailableHeight(totalRemainingHeight, args.pageHeightBudget)) {
+  if (!fitsWithinWorkshopAvailableHeight(
+    totalRemainingHeight,
+    args.pageHeightBudget,
+    args.metrics.bottomFitSafetyMm,
+  )) {
     return false;
   }
 
@@ -1920,7 +1933,11 @@ function rebalanceTrailingTextSectionPage(args: {
     metrics: args.metrics,
   });
 
-  if (!fitsWithinWorkshopAvailableHeight(nextLastPageHeight, args.pageHeightBudget)) {
+  if (!fitsWithinWorkshopAvailableHeight(
+    nextLastPageHeight,
+    args.pageHeightBudget,
+    args.metrics.bottomFitSafetyMm,
+  )) {
     return args.pages;
   }
 
@@ -2283,6 +2300,7 @@ export function planWorkshopResumePages(args: {
         const entryFits = fitsWithinWorkshopAvailableHeight(
           entry.estimatedHeight,
           availableHeight,
+          metrics.bottomFitSafetyMm,
         );
 
         if (!entryFits && entry.kind === "experience") {

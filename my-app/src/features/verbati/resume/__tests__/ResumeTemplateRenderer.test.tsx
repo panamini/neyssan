@@ -49,6 +49,9 @@ const WORKSHOP_ACTIVE_PREVIEW_LAYOUT_VAR_NAMES = [
   "--text-meta-line",
   "--body-row-gap",
   "--main-heading-margin",
+  "--workshop-section-title-reduction",
+  "--workshop-experience-heading-size-adjust",
+  "--workshop-experience-heading-line-height",
   "--flow-list-indent",
   "--experience-bullets-padding",
   "--skill-gap",
@@ -505,6 +508,15 @@ describe("ResumeTemplateRenderer", () => {
     expect(renderer?.style.getPropertyValue("--flow-list-indent")).toBe(
       renderer?.style.getPropertyValue("--experience-bullets-padding"),
     );
+    expect(renderer?.style.getPropertyValue("--workshop-section-title-reduction")).toBe(
+      "0.95mm",
+    );
+    expect(
+      renderer?.style.getPropertyValue("--workshop-experience-heading-size-adjust"),
+    ).toBe("0.2mm");
+    expect(
+      renderer?.style.getPropertyValue("--workshop-experience-heading-line-height"),
+    ).toBe("1.25");
 
     WORKSHOP_LEGACY_PREVIEW_DECOR_VAR_NAMES.forEach((name) => {
       expect(renderer?.style.getPropertyValue(name)).toBe("");

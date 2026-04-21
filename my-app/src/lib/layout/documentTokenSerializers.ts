@@ -273,6 +273,13 @@ export const RESUME_PREVIEW_VAR_DESCRIPTORS: CanonicalVarDescriptor[] = [
       formatMm(tokens.flow.component.main?.headingMarginBottomMm),
   },
   {
+    name: "--workshop-section-title-reduction",
+    fieldPath: "flow.component.main.sectionTitleReductionMm",
+    classification: "canonical",
+    resolve: (tokens) =>
+      formatMm(tokens.flow.component.main?.sectionTitleReductionMm),
+  },
+  {
     name: "--skill-gap",
     fieldPath: "flow.component.skill.gapMm",
     classification: "canonical",
@@ -337,6 +344,20 @@ export const RESUME_PREVIEW_VAR_DESCRIPTORS: CanonicalVarDescriptor[] = [
     classification: "canonical",
     resolve: (tokens) =>
       formatMm(tokens.flow.component.experience?.bulletsGapMm),
+  },
+  {
+    name: "--workshop-experience-heading-size-adjust",
+    fieldPath: "flow.component.experience.headingSizeAdjustMm",
+    classification: "canonical",
+    resolve: (tokens) =>
+      formatMm(tokens.flow.component.experience?.headingSizeAdjustMm),
+  },
+  {
+    name: "--workshop-experience-heading-line-height",
+    fieldPath: "flow.component.experience.headingLineHeight",
+    classification: "canonical",
+    resolve: (tokens) =>
+      formatUnitless(tokens.flow.component.experience?.headingLineHeight),
   },
   {
     name: "--project-gap",
