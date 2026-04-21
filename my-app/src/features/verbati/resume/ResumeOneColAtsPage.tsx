@@ -12,6 +12,11 @@ import type {
   WorkshopResumeCommittedPage,
 } from "../../../lib/resume/resumePagination";
 import {
+  WORKSHOP_EXPERIENCE_HEADING_LINE_HEIGHT,
+  WORKSHOP_EXPERIENCE_HEADING_SIZE_ADJUST_MM,
+  WORKSHOP_SECTION_TITLE_SIZE_REDUCTION_MM,
+} from "../../../lib/resume/workshopHeadingContract";
+import {
   PreviewItemRegion,
   PreviewSectionRegion,
   buildProjectPreviewFieldId,
@@ -55,7 +60,9 @@ function renderSectionHeading(title: string, continued: boolean) {
         style={{
           margin: 0,
           fontFamily: "var(--heading-font, var(--font-heading-family))",
-          fontSize: "calc(var(--text-title-size) - 0.95mm)",
+          fontSize: `calc(var(--text-title-size) - ${formatMillimeters(
+            WORKSHOP_SECTION_TITLE_SIZE_REDUCTION_MM,
+          )})`,
           lineHeight: "var(--text-title-line)",
           textTransform: "uppercase",
           letterSpacing: "0.08em",
@@ -299,6 +306,7 @@ function renderFragmentContent(args: {
           surface="item"
           style={{
             margin: 0,
+            maxWidth: "var(--header-summary-width)",
             fontSize: "var(--text-body-size)",
             lineHeight: "var(--text-body-line)",
             color: "var(--color-text)",
@@ -342,8 +350,10 @@ function renderFragmentContent(args: {
                 style={{
                   margin: 0,
                   fontFamily: "var(--heading-font, var(--font-heading-family))",
-                  fontSize: "calc(var(--text-body-size) + 0.2mm)",
-                  lineHeight: 1.25,
+                  fontSize: `calc(var(--text-body-size) + ${formatMillimeters(
+                    WORKSHOP_EXPERIENCE_HEADING_SIZE_ADJUST_MM,
+                  )})`,
+                  lineHeight: WORKSHOP_EXPERIENCE_HEADING_LINE_HEIGHT,
                   fontWeight: 700,
                 }}
               >
