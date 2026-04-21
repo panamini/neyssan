@@ -344,6 +344,7 @@ describe("ResumeOneColAtsPage", () => {
       '[data-preview-section="experience"][data-preview-surface="item"]',
     );
     const experienceHeadingBlock = experienceItem?.firstElementChild as HTMLElement | null;
+    const experienceBulletList = experienceItem?.querySelector("ul") as HTMLElement | null;
     const educationSection = container.querySelector(
       '[data-preview-section="education"][data-preview-surface="section"]',
     ) as HTMLElement | null;
@@ -365,6 +366,9 @@ describe("ResumeOneColAtsPage", () => {
     expect(experienceHeadingBlock?.getAttribute("style")).toContain(
       `gap: ${layout.experienceMetaGapMm}mm;`,
     );
+    expect(experienceBulletList?.getAttribute("style")).toContain(
+      "padding-left: var(--experience-bullets-padding);",
+    );
     expect(educationSection?.getAttribute("style")).toContain(
       `gap: ${layout.sectionShellGapMm}mm;`,
     );
@@ -376,6 +380,9 @@ describe("ResumeOneColAtsPage", () => {
       `gap: ${layout.compactMetaGapMm}mm;`,
     );
     expect(projectCard?.getAttribute("style")).toContain("gap: var(--project-gap);");
+    expect(languagesList?.getAttribute("style")).toContain(
+      "padding-left: var(--experience-bullets-padding);",
+    );
     expect(languagesList?.getAttribute("style")).toContain(
       `gap: ${layout.listGapMm}mm;`,
     );
