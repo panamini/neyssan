@@ -4,6 +4,58 @@ import { describe, expect, it, vi } from "vitest";
 
 import ResumeTemplateRenderer from "../ResumeTemplateRenderer";
 import { resumeMock } from "../resume.mock";
+import { planWorkshopResumePages } from "../../../../lib/resume/resumePagination";
+import { getResumeTemplateDefinition } from "../../../../lib/layout/resumeTemplates";
+
+function makeDenseTokenBlock(token: string, usefulLines: number) {
+  return token.repeat(usefulLines * 70);
+}
+
+function buildWorkshopScreenshotFixture() {
+  return {
+    ...resumeMock,
+    metadata: resumeMock.metadata.slice(0, 1),
+    contact: resumeMock.contact.slice(0, 2),
+    skillItems: [],
+    languages: [],
+    certifications: [],
+    affiliations: [],
+    hobbyItems: [],
+    hobbies: [],
+    projects: [],
+    textSections: [],
+    achievements: [],
+    achievementItems: [],
+    summary: Array.from({ length: 30 }, (_, index) => `summary-${index + 1}`).join(" "),
+    experience: [
+      {
+        ...resumeMock.experience[0]!,
+        id: "exp-screenshot-1",
+        role: "1",
+        company: "Company 1",
+        description: makeDenseTokenBlock("1", 40),
+        bullets: [],
+      },
+      {
+        ...resumeMock.experience[0]!,
+        id: "exp-screenshot-2",
+        role: "2",
+        company: "Company 2",
+        description: makeDenseTokenBlock("2", 20),
+        bullets: [],
+      },
+    ],
+    education: [
+      {
+        ...resumeMock.education[0]!,
+        id: "edu-screenshot-1",
+        degree: "Degree",
+        school: "School",
+        period: "2019-2021",
+      },
+    ],
+  };
+}
 
 describe("ResumeTemplateRenderer", () => {
   it("renders the workshop one-column ATS page set and reports stable page counts", async () => {
@@ -123,5 +175,66 @@ describe("ResumeTemplateRenderer", () => {
     expect(renderer?.style.getPropertyValue("--color-text")).toBeTruthy();
     expect(renderer?.style.getPropertyValue("--font-heading-family")).toBeTruthy();
     expect(renderer?.style.getPropertyValue("--font-body-family")).toBeTruthy();
+    expect(renderer?.style.getPropertyValue("--text-meta-size")).toBeTruthy();
+    expect(renderer?.style.getPropertyValue("--text-meta-line")).toBeTruthy();
+    expect(renderer?.style.getPropertyValue("--skill-gap")).toBeTruthy();
+    expect(renderer?.style.getPropertyValue("--skill-pad-inline")).toBeTruthy();
+    expect(renderer?.style.getPropertyValue("--skill-pad-block")).toBeTruthy();
+  });
+
+  it("renders the same committed workshop fragment boundaries that the live planner chooses for the screenshot fixture", () => {
+    const data = buildWorkshopScreenshotFixture();
+    const stylePreset = {
+      familyId: "workshop",
+      layout: "workshop",
+      typography: "quiet-editorial",
+      palette: "sauge",
+    } as const;
+    const plan = planWorkshopResumePages({
+      data,
+      template: getResumeTemplateDefinition("workshop_resume_onecol_ats"),
+      stylePreset,
+    });
+    const firstPageHead =
+      plan.committedPages[0]?.fragments.find((fragment) => fragment.kind === "experience")
+        ?.kind === "experience"
+        ? plan.committedPages[0]?.fragments.find((fragment) => fragment.kind === "experience")
+            ?.items[0]?.blocks[0]?.text ?? ""
+        : "";
+    const secondPageTail =
+      plan.committedPages[1]?.fragments.find((fragment) => fragment.kind === "experience")
+        ?.kind === "experience"
+        ? plan.committedPages[1]?.fragments.find((fragment) => fragment.kind === "experience")
+            ?.items[0]?.blocks[0]?.text ?? ""
+        : "";
+
+    render(
+      <ResumeTemplateRenderer
+        data={data}
+        stylePreset={stylePreset}
+        resumeTemplateId="workshop_resume_onecol_ats"
+      />,
+    );
+
+    const pages = screen.getAllByTestId("resume-template-page");
+    const firstPageExp1Article =
+      pages[0]?.querySelector('[data-preview-row-id="exp-screenshot-1"]') ?? null;
+    const firstPageExp2Article = pages[0]?.querySelector('[data-preview-row-id="exp-screenshot-2"]');
+    const secondPageExp2Article =
+      pages[1]?.querySelector('[data-preview-row-id="exp-screenshot-2"]') ?? null;
+    const firstPageExp1Body =
+      firstPageExp1Article?.querySelector(":scope > p:last-of-type") ?? null;
+    const secondPageExp2Body =
+      secondPageExp2Article?.querySelector(":scope > p:last-of-type") ?? null;
+    const secondPageText = pages[1]?.textContent ?? "";
+
+    expect(pages).toHaveLength(2);
+    expect((firstPageExp1Body?.textContent ?? "").length).toBe(firstPageHead.length);
+    expect(firstPageExp2Article).toBeNull();
+    expect((secondPageExp2Body?.textContent ?? "").length).toBe(secondPageTail.length);
+    expect(pages[1]?.querySelector('[data-preview-row-id="exp-screenshot-1"]')).toBeNull();
+    expect(secondPageText).not.toContain("Company 1");
+    expect(secondPageText).toContain("Company 2");
+    expect(secondPageText).toContain("Degree");
   });
 });
