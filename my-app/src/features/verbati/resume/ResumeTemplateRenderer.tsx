@@ -6,10 +6,7 @@ import {
   getResumeTemplateDefinition,
   type ResumeTemplateId,
 } from "../../../lib/layout/resumeTemplates";
-import {
-  serializeActiveResumePreviewDecorVars,
-  serializeResumePreviewVars,
-} from "../../../lib/layout/documentTokenSerializers";
+import { serializeResumePreviewVars } from "../../../lib/layout/documentTokenSerializers";
 import {
   planWorkshopResumePages,
   type WorkshopResumeCommittedPage,
@@ -24,6 +21,46 @@ import type { ResumeData } from "./resume.types";
 export const WORKSHOP_TEMPLATE_RENDERER_ID = "workshop_resume_onecol_ats";
 export const RESUME_TEMPLATE_PAGE_GAP_PX = 24;
 
+const WORKSHOP_PREVIEW_THEME_VAR_NAMES = [
+  "--font-heading-family",
+  "--font-body-family",
+  "--color-text",
+  "--color-text-muted",
+  "--color-text-subtle",
+  "--color-border-strong",
+  "--color-accent-soft",
+  "--paper",
+] as const;
+
+const WORKSHOP_PREVIEW_LAYOUT_VAR_NAMES = [
+  "--page-width",
+  "--page-height",
+  "--margin-top",
+  "--margin-right",
+  "--margin-bottom",
+  "--margin-left",
+  "--header-row-gap",
+  "--header-bottom-padding",
+  "--text-display-size",
+  "--text-display-line",
+  "--text-title-size",
+  "--text-title-line",
+  "--text-body-size",
+  "--text-body-line",
+  "--text-body-sm-size",
+  "--text-body-sm-line",
+  "--text-caption-size",
+  "--text-caption-line",
+  "--text-meta-size",
+  "--text-meta-line",
+  "--body-row-gap",
+  "--main-heading-margin",
+  "--skill-gap",
+  "--skill-pad-inline",
+  "--skill-pad-block",
+  "--project-padding",
+] as const;
+
 type ResumeTemplateRendererProps = {
   data: ResumeData;
   stylePreset: VerbatiStylePreset;
@@ -34,23 +71,39 @@ type ResumeTemplateRendererProps = {
   onStablePageCountChange?: ((pageCount: number) => void) | undefined;
 };
 
+function pickCssVars(
+  source: Record<string, string | undefined>,
+  names: readonly string[],
+): Record<string, string> {
+  return names.reduce<Record<string, string>>((result, name) => {
+    const value = source[name];
+    if (typeof value === "string" && value.length > 0) {
+      result[name] = value;
+    }
+    return result;
+  }, {});
+}
+
 function buildTemplatePreviewVars(
   resumeTemplateId: ResumeTemplateId,
   stylePreset: VerbatiStylePreset,
 ) {
-  const templateDefinition = getResumeTemplateDefinition(resumeTemplateId);
   const previewTokens = normalizeResumePreviewTokens({
     resumeTemplateId,
     stylePreset,
   });
+  const themeVars = pickCssVars(
+    buildVerbatiThemeVars(stylePreset) as Record<string, string | undefined>,
+    WORKSHOP_PREVIEW_THEME_VAR_NAMES,
+  );
+  const layoutVars = pickCssVars(
+    serializeResumePreviewVars(previewTokens),
+    WORKSHOP_PREVIEW_LAYOUT_VAR_NAMES,
+  );
 
   return {
-    ...buildVerbatiThemeVars(stylePreset),
-    ...serializeResumePreviewVars(previewTokens),
-    ...serializeActiveResumePreviewDecorVars({
-      variantId: templateDefinition.decorVariantId,
-      tokens: previewTokens,
-    }),
+    ...themeVars,
+    ...layoutVars,
   };
 }
 

@@ -144,6 +144,19 @@ function deriveLiveArea(args: {
   };
 }
 
+function resolveResumeEntryMetaWidthMm(args: {
+  mainMm: number;
+  readingWidthMm: number;
+  entryMetaWidthMm?: number;
+}): number | undefined {
+  if (args.entryMetaWidthMm !== undefined) {
+    return args.entryMetaWidthMm;
+  }
+
+  const derivedWidthMm = args.mainMm - args.readingWidthMm;
+  return derivedWidthMm > 0 ? derivedWidthMm : undefined;
+}
+
 function resolvePercentMm(
   totalMm: number,
   percentValue: string | undefined,
@@ -450,9 +463,26 @@ export function normalizeResumeExportTokens(args: {
   canonical: CanonicalDocumentTokens;
 } {
   const normalizedStylePreset = normalizeStylePreset(args.stylePreset);
+  const activeTemplate = args.resumeTemplateId
+    ? getResumeTemplateDefinition(args.resumeTemplateId)
+    : null;
+  const derivedOneColumnEntryMetaWidthMm =
+    activeTemplate?.exportShell === "onecol"
+      ? resolveResumeEntryMetaWidthMm({
+          mainMm: activeTemplate.export.mainMm,
+          readingWidthMm: activeTemplate.export.readingWidthMm,
+          entryMetaWidthMm: activeTemplate.export.entryMetaWidthMm,
+        })
+      : undefined;
   const definition =
     args.mode === "ats"
-      ? RESUME_EXPORT_PROFILE_DEFINITIONS.ats
+      ? {
+          ...RESUME_EXPORT_PROFILE_DEFINITIONS.ats,
+          flow: {
+            ...RESUME_EXPORT_PROFILE_DEFINITIONS.ats.flow,
+            entryMetaWidthMm: derivedOneColumnEntryMetaWidthMm,
+          },
+        }
       : (() => {
           const template = getResumeTemplateDefinition(args.resumeTemplateId);
           return {
@@ -474,7 +504,11 @@ export function normalizeResumeExportTokens(args: {
             flow: {
               summaryWidthMm: template.export.summaryWidthMm,
               readingWidthMm: template.export.readingWidthMm,
-              entryMetaWidthMm: template.export.entryMetaWidthMm,
+              entryMetaWidthMm: resolveResumeEntryMetaWidthMm({
+                mainMm: template.export.mainMm,
+                readingWidthMm: template.export.readingWidthMm,
+                entryMetaWidthMm: template.export.entryMetaWidthMm,
+              }),
               titleSizePt: template.export.titleSizePt,
               titleLineHeight: template.export.titleLineHeight,
               headerGapMm: template.export.headerGapMm,
