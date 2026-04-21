@@ -1125,6 +1125,8 @@ ${buildCssVarBlock(layoutProfileVars)}
 
     .bullet-list li {
       line-height: var(--flow-body-line);
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .proposal-topline {
@@ -1390,26 +1392,50 @@ function renderWorkshopFragment(args: {
         block: "experience",
         content: fragment.items
           .map(
-            (item) => `<article class="entry entry--experience" data-export-item-id="${escapeHtml(item.id)}">
+            (item) => {
+              const blockMarkup: string[] = [];
+              let bulletBuffer: string[] = [];
+              const flushBullets = () => {
+                if (bulletBuffer.length === 0) {
+                  return;
+                }
+
+                blockMarkup.push(
+                  `<ul class="bullet-list">${bulletBuffer
+                    .map((bullet) => `<li>${escapeHtml(bullet)}</li>`)
+                    .join("")}</ul>`,
+                );
+                bulletBuffer = [];
+              };
+
+              item.blocks.forEach((block) => {
+                if (block.kind === "bullet") {
+                  bulletBuffer.push(block.text);
+                  return;
+                }
+
+                flushBullets();
+                blockMarkup.push(
+                  `<p class="entry-summary">${escapeHtml(block.text)}</p>`,
+                );
+              });
+              flushBullets();
+
+              return `<article class="entry entry--experience" data-export-item-id="${escapeHtml(item.id)}">
               <div class="entry-lead">
                 <div class="entry-head">
-                  <h3 class="entry-title">${escapeHtml(
-                    [item.role, item.company].filter(Boolean).join(" · "),
-                  )}</h3>
+                  <div class="entry-headline">
+                    <h3 class="entry-title">${escapeHtml(item.role)}</h3>
+                    ${item.continued ? '<span class="entry-continuation">Continued</span>' : ""}
+                  </div>
                   <p class="entry-meta">${escapeHtml(
-                    [item.period, item.location].filter(Boolean).join("\n"),
+                    [item.company, item.location, item.period].filter(Boolean).join(" · "),
                   )}</p>
                 </div>
-                ${item.summary ? `<p class="entry-summary">${escapeHtml(item.summary)}</p>` : ""}
               </div>
-              ${
-                item.bullets.length > 0
-                  ? `<ul class="bullet-list">${item.bullets
-                      .map((bullet) => `<li>${escapeHtml(bullet)}</li>`)
-                      .join("")}</ul>`
-                  : ""
-              }
-            </article>`,
+              ${blockMarkup.join("")}
+            </article>`;
+            },
           )
           .join(""),
         locale,

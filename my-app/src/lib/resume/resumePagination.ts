@@ -31,6 +31,50 @@ type WorkshopEntryKind =
   | "hobbies"
   | "additional_information";
 
+const EXPERIENCE_USEFUL_CHARS_PER_LINE = 70;
+const EXPERIENCE_MIN_FRAGMENT_USEFUL_LINES = 3;
+const EXPERIENCE_MIN_PARTIAL_SPLIT_USEFUL_LINES = 6;
+const EXPERIENCE_MIN_PARTIAL_SPLIT_CHARS =
+  EXPERIENCE_MIN_FRAGMENT_USEFUL_LINES * EXPERIENCE_USEFUL_CHARS_PER_LINE;
+const EXPERIENCE_DENSE_NUMERIC_CHARS_PER_LINE_MULTIPLIER = 1;
+const EXPERIENCE_DENSE_ALNUM_CHARS_PER_LINE_MULTIPLIER = 0.95;
+const WORKSHOP_RENDER_EXPERIENCE_BLOCK_GAP_MM = 1.8;
+const WORKSHOP_RENDER_EXPERIENCE_META_GAP_MM = 0.6;
+const WORKSHOP_RENDER_EXPERIENCE_HEADING_EXTRA_MM = 0.2;
+const WORKSHOP_RENDER_EXPERIENCE_HEADING_LINE_HEIGHT = 1.25;
+const WORKSHOP_RENDER_BOTTOM_FIT_SAFETY_MM = 0.5;
+const WORKSHOP_RENDER_EXPERIENCE_ENTRY_GAP_MM = 3;
+
+export type WorkshopExperienceContentBlock = {
+  kind: "text" | "bullet";
+  text: string;
+  partial?: boolean;
+};
+
+type WorkshopPlannerExperienceContentBlock = WorkshopExperienceContentBlock & {
+  charsPerLine: number;
+  usefulLines: number;
+  estimatedHeight: number;
+};
+
+type WorkshopPlannerExperienceEntry = {
+  id: string;
+  kind: "experience";
+  sourceEntryId: string;
+  fragmentIndex: number;
+  continued: boolean;
+  estimatedHeight: number;
+  role: string;
+  company: string;
+  period: string;
+  location: string;
+  sectionId: string;
+  sectionType: ResumePreviewSectionType;
+  sectionTitle?: string;
+  sectionOrder?: number;
+  blocks: WorkshopPlannerExperienceContentBlock[];
+};
+
 export type WorkshopPlannerEntry =
   | {
       id: "profile";
@@ -43,12 +87,7 @@ export type WorkshopPlannerEntry =
       estimatedHeight: number;
       text: string;
     }
-  | {
-      id: string;
-      kind: "experience";
-      estimatedHeight: number;
-      item: ResumeExperienceItem;
-    }
+  | WorkshopPlannerExperienceEntry
   | {
       id: string;
       kind: "education";
@@ -153,12 +192,12 @@ type WorkshopCommittedSummaryFragment = {
 
 type WorkshopCommittedExperienceItem = {
   id: string;
+  continued: boolean;
   role: string;
   company: string;
   period: string;
   location: string;
-  summary: string;
-  bullets: string[];
+  blocks: WorkshopExperienceContentBlock[];
 };
 
 type WorkshopCommittedEducationItem = {
@@ -336,7 +375,8 @@ type PlannerSectionDefinition = {
   entries: WorkshopPlannerEntry[];
 };
 
-const BASE_SECTION_HEADER_HEIGHT = 8.5;
+const WORKSHOP_RENDER_SECTION_CONTENT_GAP_MM = 2.6;
+const WORKSHOP_RENDER_SECTION_TITLE_SIZE_REDUCTION_MM = 0.95;
 
 type WorkshopPlannerMetrics = {
   pageHeightBudgetMm: number;
@@ -345,6 +385,11 @@ type WorkshopPlannerMetrics = {
   compactCharsPerLine: number;
   bodyLineHeightMm: number;
   bodySmLineHeightMm: number;
+  metaLineHeightMm: number;
+  experienceHeadingLineHeightMm: number;
+  experienceBlockGapMm: number;
+  experienceMetaGapMm: number;
+  sectionHeaderHeightMm: number;
   labelLineHeightMm: number;
   displayLineHeightMm: number;
   titleLineHeightMm: number;
@@ -352,14 +397,60 @@ type WorkshopPlannerMetrics = {
   headerBottomPaddingMm: number;
   sectionGapMm: number;
   mainHeadingMarginMm: number;
-  experienceItemGapMm: number;
-  experienceOrgMarginMm: number;
   experienceBulletGapMm: number;
   projectGapMm: number;
   projectPaddingMm: number;
   educationGapMm: number;
   skillGapMm: number;
+  skillPadInlineMm: number;
   skillPadBlockMm: number;
+};
+
+type WorkshopSplitCandidateRejectionReason =
+  | "head_below_210_chars"
+  | "tail_below_210_chars"
+  | "head_below_3_lines"
+  | "tail_below_3_lines"
+  | "head_does_not_fit"
+  | "not_wrap_boundary";
+
+type WorkshopSplitCandidateTrace = {
+  splitIndex: number;
+  accepted: boolean;
+  rejectionReason?: WorkshopSplitCandidateRejectionReason;
+  headTextLength: number;
+  tailTextLength: number;
+  headUsefulLines?: number;
+  tailUsefulLines?: number;
+  headEstimatedHeight?: number;
+  tailEstimatedHeight?: number;
+};
+
+export type WorkshopPaginationSplitDecisionTrace = {
+  entryId: string;
+  fragmentIndex: number;
+  blockIndex: number;
+  blockKind: WorkshopExperienceContentBlock["kind"];
+  blockEstimatedHeight: number;
+  pageHeightBudgetMm: number;
+  currentPageEstimatedHeightBeforeSplit: number;
+  pendingSectionHeaderHeight: number;
+  availableHeight: number;
+  availableBlockHeight: number;
+  availableUsefulLines: number;
+  charsPerLine: number;
+  candidateStrategy: "whitespace" | "dense-anywhere";
+  candidateSplitIndices: number[];
+  candidateEvaluations: WorkshopSplitCandidateTrace[];
+  deeperRejectedCandidates: WorkshopSplitCandidateTrace[];
+  chosenSplitIndex: number | null;
+  finalHeadHeight?: number;
+  finalTailHeight?: number;
+};
+
+export type WorkshopPaginationDebugTrace = {
+  pageHeightBudgetMm?: number;
+  splitDecisions: WorkshopPaginationSplitDecisionTrace[];
 };
 
 function estimateTextHeight(text: string, lineLength: number, lineHeight: number) {
@@ -369,6 +460,59 @@ function estimateTextHeight(text: string, lineLength: number, lineHeight: number
   }
 
   return Math.ceil(normalized.length / lineLength) * lineHeight;
+}
+
+function estimateUsefulLines(text: string, charsPerLine: number) {
+  const normalized = text.trim();
+  if (!normalized) {
+    return 0;
+  }
+
+  return Math.ceil(normalized.length / Math.max(1, charsPerLine));
+}
+
+function resolveExperienceBlockCharsPerLine(text: string, baseCharsPerLine: number) {
+  const normalized = text.trim();
+  if (
+    normalized.length < EXPERIENCE_USEFUL_CHARS_PER_LINE ||
+    /\s/.test(normalized)
+  ) {
+    return baseCharsPerLine;
+  }
+
+  const digitCount = (normalized.match(/[0-9]/g) ?? []).length;
+  const alphaNumericCount = (normalized.match(/[A-Za-z0-9]/g) ?? []).length;
+  const digitRatio = digitCount / Math.max(1, normalized.length);
+  const alphaNumericRatio = alphaNumericCount / Math.max(1, normalized.length);
+
+  if (digitRatio >= 0.9) {
+    return Math.max(
+      baseCharsPerLine,
+      Math.floor(
+        baseCharsPerLine *
+          EXPERIENCE_DENSE_NUMERIC_CHARS_PER_LINE_MULTIPLIER,
+      ),
+    );
+  }
+
+  if (alphaNumericRatio >= 0.9) {
+    return Math.max(
+      1,
+      Math.floor(
+        baseCharsPerLine * EXPERIENCE_DENSE_ALNUM_CHARS_PER_LINE_MULTIPLIER,
+      ),
+    );
+  }
+
+  return baseCharsPerLine;
+}
+
+function fitsWithinWorkshopAvailableHeight(
+  estimatedHeight: number,
+  availableHeight: number,
+  safetyMm = WORKSHOP_RENDER_BOTTOM_FIT_SAFETY_MM,
+) {
+  return estimatedHeight <= Math.max(0, availableHeight - safetyMm);
 }
 
 function resolveTextLineHeightMm(
@@ -413,6 +557,10 @@ function buildPlannerMetrics(args: {
     tokens.flow.type.label.sizePt,
     tokens.flow.type.label.lineHeight,
   );
+  const metaLineHeightMm = resolveTextLineHeightMm(
+    tokens.flow.type.meta.sizePt,
+    tokens.flow.type.meta.lineHeight,
+  );
   const displayLineHeightMm = resolveTextLineHeightMm(
     tokens.flow.type.display.sizePt,
     tokens.flow.type.display.lineHeight,
@@ -422,6 +570,26 @@ function buildPlannerMetrics(args: {
     tokens.flow.type.title.sizePt,
     tokens.flow.type.title.lineHeight,
     tokens.flow.density.titleAdjustPt,
+  );
+  const titleLineHeight =
+    tokens.flow.type.title.lineHeight ?? args.template.preview.bodyLineHeight;
+  const titleSizeMm = ptToMm(
+    (tokens.flow.type.title.sizePt ?? 0) + (tokens.flow.density.titleAdjustPt ?? 0),
+  );
+  const experienceHeadingLineHeightMm =
+    (ptToMm(
+      (tokens.flow.type.body.sizePt ?? 0) + (tokens.flow.density.bodyAdjustPt ?? 0),
+    ) +
+      WORKSHOP_RENDER_EXPERIENCE_HEADING_EXTRA_MM) *
+    WORKSHOP_RENDER_EXPERIENCE_HEADING_LINE_HEIGHT;
+  const sectionHeaderHeightMm = Math.max(
+    6,
+    Math.max(
+      0,
+      titleSizeMm - WORKSHOP_RENDER_SECTION_TITLE_SIZE_REDUCTION_MM,
+    ) *
+      titleLineHeight +
+      WORKSHOP_RENDER_SECTION_CONTENT_GAP_MM,
   );
   const liveHeightMm =
     tokens.geometry.page.liveArea?.heightMm ?? args.template.preview.liveHeightMm;
@@ -442,6 +610,11 @@ function buildPlannerMetrics(args: {
     ),
     bodyLineHeightMm,
     bodySmLineHeightMm,
+    metaLineHeightMm,
+    experienceHeadingLineHeightMm,
+    experienceBlockGapMm: WORKSHOP_RENDER_EXPERIENCE_BLOCK_GAP_MM,
+    experienceMetaGapMm: WORKSHOP_RENDER_EXPERIENCE_META_GAP_MM,
+    sectionHeaderHeightMm,
     labelLineHeightMm,
     displayLineHeightMm,
     titleLineHeightMm,
@@ -453,12 +626,6 @@ function buildPlannerMetrics(args: {
     mainHeadingMarginMm:
       tokens.flow.component.main?.headingMarginBottomMm ??
       args.template.preview.mainHeadingMarginBottomMm,
-    experienceItemGapMm:
-      tokens.flow.component.experience?.itemGapMm ??
-      args.template.preview.experienceItemGapMm,
-    experienceOrgMarginMm:
-      tokens.flow.component.experience?.orgMarginBottomMm ??
-      args.template.preview.experienceOrgMarginBottomMm,
     experienceBulletGapMm:
       tokens.flow.component.experience?.bulletsGapMm ??
       args.template.preview.experienceBulletsGapMm,
@@ -472,43 +639,640 @@ function buildPlannerMetrics(args: {
       args.template.preview.educationItemGapMm,
     skillGapMm:
       tokens.flow.component.skill?.gapMm ?? args.template.preview.skillGapMm,
+    skillPadInlineMm:
+      tokens.flow.component.skill?.padInlineMm ??
+      args.template.preview.skillPaddingInlineMm,
     skillPadBlockMm:
       tokens.flow.component.skill?.padBlockMm ??
       args.template.preview.skillPaddingBlockMm,
   };
 }
 
+function normalizeExperienceTextSegments(text: string | undefined) {
+  return String(text ?? "")
+    .replace(/\r/g, "\n")
+    .split(/\n+/)
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+}
+
+function buildPlannerExperienceBlock(args: {
+  kind: WorkshopExperienceContentBlock["kind"];
+  text: string;
+  metrics: WorkshopPlannerMetrics;
+  partial?: boolean;
+}): WorkshopPlannerExperienceContentBlock {
+  const charsPerLine = resolveExperienceBlockCharsPerLine(
+    args.text,
+    args.metrics.readingCharsPerLine,
+  );
+  const usefulLines = estimateUsefulLines(
+    args.text,
+    charsPerLine,
+  );
+
+  return {
+    kind: args.kind,
+    text: args.text.trim(),
+    ...(args.partial ? { partial: true } : {}),
+    charsPerLine,
+    usefulLines,
+    estimatedHeight: usefulLines * args.metrics.bodyLineHeightMm,
+  };
+}
+
+function estimateExperienceHeaderHeight(args: {
+  role: string;
+  company: string;
+  location: string;
+  period: string;
+  continued: boolean;
+  metrics: WorkshopPlannerMetrics;
+}) {
+  const headingText = args.continued ? `${args.role} Continued` : args.role;
+  const metaText = [args.company, args.location, args.period]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    estimateTextHeight(
+      headingText,
+      args.metrics.compactCharsPerLine,
+      args.metrics.experienceHeadingLineHeightMm,
+    ) +
+    args.metrics.experienceMetaGapMm +
+    args.metrics.experienceBlockGapMm +
+    estimateTextHeight(
+      metaText,
+      args.metrics.compactCharsPerLine,
+      args.metrics.metaLineHeightMm,
+    )
+  );
+}
+
+function estimateExperienceBlocksHeight(
+  blocks: WorkshopPlannerExperienceContentBlock[],
+  metrics: WorkshopPlannerMetrics,
+) {
+  if (blocks.length === 0) {
+    return 0;
+  }
+
+  let totalHeight = 0;
+  let groupCount = 0;
+  let bulletCount = 0;
+  let bulletLineCount = 0;
+
+  const flushBulletGroup = () => {
+    if (bulletCount === 0) {
+      return;
+    }
+
+    totalHeight +=
+      bulletLineCount * metrics.bodyLineHeightMm +
+      Math.max(0, bulletCount - 1) * metrics.experienceBulletGapMm;
+    groupCount += 1;
+    bulletCount = 0;
+    bulletLineCount = 0;
+  };
+
+  for (const block of blocks) {
+    if (block.kind === "bullet") {
+      bulletCount += 1;
+      bulletLineCount += block.usefulLines;
+      continue;
+    }
+
+    flushBulletGroup();
+    totalHeight += block.estimatedHeight;
+    groupCount += 1;
+  }
+
+  flushBulletGroup();
+
+  return totalHeight + Math.max(0, groupCount - 1) * metrics.experienceBlockGapMm;
+}
+
+function countExperienceUsefulLines(
+  blocks: WorkshopPlannerExperienceContentBlock[],
+) {
+  return blocks.reduce((sum, block) => sum + block.usefulLines, 0);
+}
+
+function computeMinimumViableExperienceFragmentHeight(
+  headerHeight: number,
+  metrics: WorkshopPlannerMetrics,
+) {
+  return (
+    headerHeight +
+    EXPERIENCE_MIN_FRAGMENT_USEFUL_LINES * metrics.bodyLineHeightMm
+  );
+}
+
+function buildPlannerExperienceEntry(
+  item: ResumeExperienceItem,
+  metrics: WorkshopPlannerMetrics,
+  fragmentIndex = 0,
+  continued = false,
+  blocks?: WorkshopPlannerExperienceContentBlock[],
+): WorkshopPlannerExperienceEntry {
+  const normalizedBlocks =
+    blocks ??
+    [
+      ...normalizeExperienceTextSegments(item.description).map((text) =>
+        buildPlannerExperienceBlock({
+          kind: "text",
+          text,
+          metrics,
+        }),
+      ),
+      ...item.bullets
+        .map((bullet) => bullet.trim())
+        .filter(Boolean)
+        .map((text) =>
+          buildPlannerExperienceBlock({
+            kind: "bullet",
+            text,
+            metrics,
+          }),
+        ),
+    ];
+  const headerHeight = estimateExperienceHeaderHeight({
+    role: item.role,
+    company: item.company,
+    location: item.location,
+    period: item.period,
+    continued,
+    metrics,
+  });
+
+  return {
+    id: fragmentIndex === 0 ? item.id : `${item.id}__fragment_${fragmentIndex + 1}`,
+    kind: "experience",
+    sourceEntryId: item.id,
+    fragmentIndex,
+    continued,
+    role: item.role,
+    company: item.company,
+    period: item.period,
+    location: item.location,
+    sectionId: item.sectionId,
+    sectionType: item.sectionType as ResumePreviewSectionType,
+    sectionTitle: item.sectionTitle,
+    sectionOrder: item.sectionOrder,
+    blocks: normalizedBlocks,
+    estimatedHeight:
+      headerHeight + estimateExperienceBlocksHeight(normalizedBlocks, metrics),
+  };
+}
+
+function clonePlannerExperienceEntry(args: {
+  entry: WorkshopPlannerExperienceEntry;
+  blocks: WorkshopPlannerExperienceContentBlock[];
+  fragmentIndex: number;
+  continued: boolean;
+  metrics: WorkshopPlannerMetrics;
+}): WorkshopPlannerExperienceEntry {
+  return buildPlannerExperienceEntry(
+    {
+      id: args.entry.sourceEntryId,
+      sectionId: args.entry.sectionId,
+      sectionType: "experience",
+      sectionTitle: args.entry.sectionTitle,
+      sectionOrder: args.entry.sectionOrder,
+      role: args.entry.role,
+      company: args.entry.company,
+      period: args.entry.period,
+      location: args.entry.location,
+      description: undefined,
+      bullets: [],
+    },
+    args.metrics,
+    args.fragmentIndex,
+    args.continued,
+    args.blocks,
+  );
+}
+
+function resolveExperienceSplitCandidates(
+  text: string,
+  maxChars: number,
+  charsPerLine: number,
+  stepChars = charsPerLine,
+) {
+  const maxTailSafeSplitIndex = text.length - EXPERIENCE_MIN_PARTIAL_SPLIT_CHARS;
+  const cappedMax = Math.min(
+    maxChars,
+    maxTailSafeSplitIndex,
+  );
+  if (cappedMax < EXPERIENCE_MIN_PARTIAL_SPLIT_CHARS) {
+    return {
+      strategy: "whitespace" as const,
+      candidateIndices: [],
+      maxFeasibleSplitIndex: cappedMax,
+      maxTailSafeSplitIndex,
+    };
+  }
+
+  const indices: number[] = [];
+  for (let index = cappedMax; index >= EXPERIENCE_MIN_PARTIAL_SPLIT_CHARS; index -= 1) {
+    if (/\s/.test(text[index] ?? "")) {
+      indices.push(index);
+    }
+  }
+
+  if (indices.length > 0) {
+    return {
+      strategy: "whitespace" as const,
+      candidateIndices: indices,
+      maxFeasibleSplitIndex: cappedMax,
+      maxTailSafeSplitIndex,
+    };
+  }
+
+  return {
+    strategy: "dense-anywhere" as const,
+    candidateIndices: Array.from(
+      new Set(
+        Array.from(
+          { length: Math.max(1, Math.floor(cappedMax / Math.max(1, stepChars))) },
+          (_, index) => cappedMax - index * Math.max(1, stepChars),
+        ).filter((candidateIndex) => candidateIndex >= EXPERIENCE_MIN_PARTIAL_SPLIT_CHARS),
+      ),
+    ),
+    maxFeasibleSplitIndex: cappedMax,
+    maxTailSafeSplitIndex,
+  };
+}
+
+function splitExperienceBlockAtWrapBoundary(args: {
+  entry: WorkshopPlannerExperienceEntry;
+  blockIndex: number;
+  block: WorkshopPlannerExperienceContentBlock;
+  prefixBlocks: WorkshopPlannerExperienceContentBlock[];
+  suffixBlocks: WorkshopPlannerExperienceContentBlock[];
+  pageHeightBudgetMm: number;
+  currentPageEstimatedHeightBeforeSplit: number;
+  pendingSectionHeaderHeight: number;
+  availableBlockHeight: number;
+  metrics: WorkshopPlannerMetrics;
+  debugTrace?: WorkshopPaginationDebugTrace;
+}):
+  | {
+      headBlocks: WorkshopPlannerExperienceContentBlock[];
+      tailBlocks: WorkshopPlannerExperienceContentBlock[];
+    }
+  | null {
+  if (args.block.usefulLines < EXPERIENCE_MIN_PARTIAL_SPLIT_USEFUL_LINES) {
+    return null;
+  }
+
+  const usedPrefixHeight = estimateExperienceBlocksHeight(
+    args.prefixBlocks,
+    args.metrics,
+  );
+  const remainingHeight = args.availableBlockHeight - usedPrefixHeight;
+  const availableUsefulLines = Math.floor(
+    Math.max(0, remainingHeight - WORKSHOP_RENDER_BOTTOM_FIT_SAFETY_MM) /
+      Math.max(args.metrics.bodyLineHeightMm, 0.0001),
+  );
+  if (availableUsefulLines < EXPERIENCE_MIN_FRAGMENT_USEFUL_LINES) {
+    return null;
+  }
+
+  const splitCandidates = resolveExperienceSplitCandidates(
+    args.block.text,
+    availableUsefulLines * args.block.charsPerLine,
+    args.block.charsPerLine,
+  );
+  if (splitCandidates.candidateIndices.length === 0) {
+    return null;
+  }
+
+  const candidateEvaluations: WorkshopSplitCandidateTrace[] = [];
+  let chosenSplit:
+    | {
+        splitIndex: number;
+        headBlocks: WorkshopPlannerExperienceContentBlock[];
+        tailBlocks: WorkshopPlannerExperienceContentBlock[];
+        headEstimatedHeight: number;
+        tailEstimatedHeight: number;
+      }
+    | null = null;
+
+  for (const splitIndex of splitCandidates.candidateIndices) {
+    const headText = args.block.text.slice(0, splitIndex).trim();
+    const tailText = args.block.text.slice(splitIndex).trim();
+    if (
+      headText.length < EXPERIENCE_MIN_PARTIAL_SPLIT_CHARS ||
+      tailText.length < EXPERIENCE_MIN_PARTIAL_SPLIT_CHARS
+    ) {
+      candidateEvaluations.push({
+        splitIndex,
+        accepted: false,
+        rejectionReason:
+          headText.length < EXPERIENCE_MIN_PARTIAL_SPLIT_CHARS
+            ? "head_below_210_chars"
+            : "tail_below_210_chars",
+        headTextLength: headText.length,
+        tailTextLength: tailText.length,
+      });
+      continue;
+    }
+
+    const headBlock = buildPlannerExperienceBlock({
+      kind: args.block.kind,
+      text: headText,
+      metrics: args.metrics,
+      partial: true,
+    });
+    const tailBlock = buildPlannerExperienceBlock({
+      kind: args.block.kind,
+      text: tailText,
+      metrics: args.metrics,
+      partial: true,
+    });
+    const headBlocks = [...args.prefixBlocks, headBlock];
+    const tailBlocks = [tailBlock, ...args.suffixBlocks];
+    const headUsefulLines = countExperienceUsefulLines(headBlocks);
+    const tailUsefulLines = countExperienceUsefulLines(tailBlocks);
+    const headEstimatedHeight = estimateExperienceBlocksHeight(headBlocks, args.metrics);
+    const tailEstimatedHeight = estimateExperienceBlocksHeight(tailBlocks, args.metrics);
+
+    if (
+      headUsefulLines < EXPERIENCE_MIN_FRAGMENT_USEFUL_LINES ||
+      tailUsefulLines < EXPERIENCE_MIN_FRAGMENT_USEFUL_LINES ||
+      !fitsWithinWorkshopAvailableHeight(
+        headEstimatedHeight,
+        args.availableBlockHeight,
+      )
+    ) {
+      candidateEvaluations.push({
+        splitIndex,
+        accepted: false,
+        rejectionReason:
+          headUsefulLines < EXPERIENCE_MIN_FRAGMENT_USEFUL_LINES
+            ? "head_below_3_lines"
+            : tailUsefulLines < EXPERIENCE_MIN_FRAGMENT_USEFUL_LINES
+              ? "tail_below_3_lines"
+              : "head_does_not_fit",
+        headTextLength: headText.length,
+        tailTextLength: tailText.length,
+        headUsefulLines,
+        tailUsefulLines,
+        headEstimatedHeight,
+        tailEstimatedHeight,
+      });
+      continue;
+    }
+
+    candidateEvaluations.push({
+      splitIndex,
+      accepted: true,
+      headTextLength: headText.length,
+      tailTextLength: tailText.length,
+      headUsefulLines,
+      tailUsefulLines,
+      headEstimatedHeight,
+      tailEstimatedHeight,
+    });
+
+    chosenSplit ??= {
+      splitIndex,
+      headBlocks,
+      tailBlocks,
+      headEstimatedHeight,
+      tailEstimatedHeight,
+    };
+  }
+
+  if (chosenSplit) {
+    if (args.debugTrace) {
+      const deeperRejectedCandidates: WorkshopSplitCandidateTrace[] = [];
+      for (
+        let deeperIndex = splitCandidates.maxTailSafeSplitIndex;
+        deeperIndex > chosenSplit.splitIndex;
+        deeperIndex -= 1
+      ) {
+        if (
+          splitCandidates.strategy === "whitespace" &&
+          /\s/.test(args.block.text[deeperIndex] ?? "")
+        ) {
+          continue;
+        }
+
+        deeperRejectedCandidates.push({
+          splitIndex: deeperIndex,
+          accepted: false,
+          rejectionReason:
+            deeperIndex > splitCandidates.maxFeasibleSplitIndex
+              ? "head_does_not_fit"
+              : "not_wrap_boundary",
+          headTextLength: deeperIndex,
+          tailTextLength: args.block.text.length - deeperIndex,
+        });
+      }
+
+      args.debugTrace.splitDecisions.push({
+        entryId: args.entry.sourceEntryId,
+        fragmentIndex: args.entry.fragmentIndex,
+        blockIndex: args.blockIndex,
+        blockKind: args.block.kind,
+        blockEstimatedHeight: args.block.estimatedHeight,
+        pageHeightBudgetMm: args.pageHeightBudgetMm,
+        currentPageEstimatedHeightBeforeSplit:
+          args.currentPageEstimatedHeightBeforeSplit,
+        pendingSectionHeaderHeight: args.pendingSectionHeaderHeight,
+        availableHeight:
+          args.pageHeightBudgetMm -
+          args.currentPageEstimatedHeightBeforeSplit -
+          args.pendingSectionHeaderHeight,
+        availableBlockHeight: args.availableBlockHeight,
+        availableUsefulLines,
+        charsPerLine: args.block.charsPerLine,
+        candidateStrategy: splitCandidates.strategy,
+        candidateSplitIndices: splitCandidates.candidateIndices,
+        candidateEvaluations,
+        deeperRejectedCandidates,
+        chosenSplitIndex: chosenSplit.splitIndex,
+        finalHeadHeight: chosenSplit.headEstimatedHeight,
+        finalTailHeight: chosenSplit.tailEstimatedHeight,
+      });
+    }
+
+    return {
+      headBlocks: chosenSplit.headBlocks,
+      tailBlocks: chosenSplit.tailBlocks,
+    };
+  }
+
+  if (args.debugTrace) {
+    args.debugTrace.splitDecisions.push({
+      entryId: args.entry.sourceEntryId,
+      fragmentIndex: args.entry.fragmentIndex,
+      blockIndex: args.blockIndex,
+      blockKind: args.block.kind,
+      blockEstimatedHeight: args.block.estimatedHeight,
+      pageHeightBudgetMm: args.pageHeightBudgetMm,
+      currentPageEstimatedHeightBeforeSplit: args.currentPageEstimatedHeightBeforeSplit,
+      pendingSectionHeaderHeight: args.pendingSectionHeaderHeight,
+      availableHeight:
+        args.pageHeightBudgetMm -
+        args.currentPageEstimatedHeightBeforeSplit -
+        args.pendingSectionHeaderHeight,
+      availableBlockHeight: args.availableBlockHeight,
+      availableUsefulLines,
+      charsPerLine: args.block.charsPerLine,
+      candidateStrategy: splitCandidates.strategy,
+      candidateSplitIndices: splitCandidates.candidateIndices,
+      candidateEvaluations,
+      deeperRejectedCandidates: [],
+      chosenSplitIndex: null,
+    });
+  }
+
+  return null;
+}
+
+function splitExperienceEntryToFit(args: {
+  entry: WorkshopPlannerExperienceEntry;
+  availableHeight: number;
+  currentPageEstimatedHeightBeforeSplit: number;
+  continuationSectionHeaderHeight: number;
+  metrics: WorkshopPlannerMetrics;
+  debugTrace?: WorkshopPaginationDebugTrace;
+}):
+  | {
+      head: WorkshopPlannerExperienceEntry;
+      tail: WorkshopPlannerExperienceEntry;
+    }
+  | null {
+  const headerHeight = estimateExperienceHeaderHeight({
+    role: args.entry.role,
+    company: args.entry.company,
+    location: args.entry.location,
+    period: args.entry.period,
+    continued: args.entry.continued,
+    metrics: args.metrics,
+  });
+  const continuationHeaderHeight = estimateExperienceHeaderHeight({
+    role: args.entry.role,
+    company: args.entry.company,
+    location: args.entry.location,
+    period: args.entry.period,
+    continued: true,
+    metrics: args.metrics,
+  });
+  const minimumFragmentHeight = computeMinimumViableExperienceFragmentHeight(
+    headerHeight,
+    args.metrics,
+  );
+  const continuationMinimumFragmentHeight = computeMinimumViableExperienceFragmentHeight(
+    continuationHeaderHeight,
+    args.metrics,
+  );
+  const availableBlockHeight = args.availableHeight - headerHeight;
+  if (
+    args.availableHeight < minimumFragmentHeight ||
+    availableBlockHeight <= WORKSHOP_RENDER_BOTTOM_FIT_SAFETY_MM
+  ) {
+    return null;
+  }
+
+  const pageBudgetSupportsContinuation =
+    args.metrics.pageHeightBudgetMm -
+      args.continuationSectionHeaderHeight >=
+    continuationMinimumFragmentHeight;
+  if (!pageBudgetSupportsContinuation) {
+    return null;
+  }
+
+  const placedBlocks: WorkshopPlannerExperienceContentBlock[] = [];
+
+  for (let index = 0; index < args.entry.blocks.length; index += 1) {
+    const block = args.entry.blocks[index]!;
+    const nextPlacedBlocks = [...placedBlocks, block];
+    if (
+      fitsWithinWorkshopAvailableHeight(
+        estimateExperienceBlocksHeight(nextPlacedBlocks, args.metrics),
+        availableBlockHeight,
+      )
+    ) {
+      placedBlocks.push(block);
+      continue;
+    }
+
+    const suffixBlocks = args.entry.blocks.slice(index);
+    if (
+      placedBlocks.length > 0 &&
+      countExperienceUsefulLines(placedBlocks) >=
+        EXPERIENCE_MIN_FRAGMENT_USEFUL_LINES &&
+      countExperienceUsefulLines(suffixBlocks) >=
+        EXPERIENCE_MIN_FRAGMENT_USEFUL_LINES &&
+      fitsWithinWorkshopAvailableHeight(
+        estimateExperienceBlocksHeight(placedBlocks, args.metrics),
+        availableBlockHeight,
+      )
+    ) {
+      return {
+        head: clonePlannerExperienceEntry({
+          entry: args.entry,
+          blocks: placedBlocks,
+          fragmentIndex: args.entry.fragmentIndex,
+          continued: args.entry.continued,
+          metrics: args.metrics,
+        }),
+        tail: clonePlannerExperienceEntry({
+          entry: args.entry,
+          blocks: suffixBlocks,
+          fragmentIndex: args.entry.fragmentIndex + 1,
+          continued: true,
+          metrics: args.metrics,
+        }),
+      };
+    }
+
+    const intraLineSplit = splitExperienceBlockAtWrapBoundary({
+      entry: args.entry,
+      blockIndex: index,
+      block,
+      prefixBlocks: placedBlocks,
+      suffixBlocks: args.entry.blocks.slice(index + 1),
+      pageHeightBudgetMm: args.metrics.pageHeightBudgetMm,
+      currentPageEstimatedHeightBeforeSplit: args.currentPageEstimatedHeightBeforeSplit,
+      pendingSectionHeaderHeight: args.continuationSectionHeaderHeight,
+      availableBlockHeight,
+      metrics: args.metrics,
+      debugTrace: args.debugTrace,
+    });
+    if (intraLineSplit) {
+      return {
+        head: clonePlannerExperienceEntry({
+          entry: args.entry,
+          blocks: intraLineSplit.headBlocks,
+          fragmentIndex: args.entry.fragmentIndex,
+          continued: args.entry.continued,
+          metrics: args.metrics,
+        }),
+        tail: clonePlannerExperienceEntry({
+          entry: args.entry,
+          blocks: intraLineSplit.tailBlocks,
+          fragmentIndex: args.entry.fragmentIndex + 1,
+          continued: true,
+          metrics: args.metrics,
+        }),
+      };
+    }
+  }
+
+  return null;
+}
+
 function estimateExperienceHeight(
   item: ResumeExperienceItem,
   metrics: WorkshopPlannerMetrics,
 ) {
-  return (
-    metrics.experienceItemGapMm +
-    estimateTextHeight(
-      `${item.role} ${item.company} ${item.location}`,
-      metrics.compactCharsPerLine,
-      metrics.bodySmLineHeightMm,
-    ) +
-    metrics.experienceOrgMarginMm +
-    (item.description
-      ? estimateTextHeight(
-          item.description,
-          metrics.readingCharsPerLine,
-          metrics.bodyLineHeightMm,
-        )
-      : 0) +
-    item.bullets.reduce(
-      (sum, bullet) =>
-        sum +
-        metrics.experienceBulletGapMm +
-        estimateTextHeight(
-          bullet,
-          Math.max(18, metrics.readingCharsPerLine - 4),
-          metrics.bodyLineHeightMm,
-        ),
-      0,
-    )
-  );
+  return buildPlannerExperienceEntry(item, metrics).estimatedHeight;
 }
 
 function estimateProjectHeight(
@@ -518,10 +1282,18 @@ function estimateProjectHeight(
   return (
     metrics.projectPaddingMm * 2 +
     estimateTextHeight(
-      `${item.name} ${item.meta}`,
+      item.name,
       metrics.compactCharsPerLine,
-      metrics.bodySmLineHeightMm,
+      metrics.bodyLineHeightMm,
     ) +
+    (item.meta
+      ? 0.7 +
+        estimateTextHeight(
+          item.meta,
+          metrics.compactCharsPerLine,
+          metrics.metaLineHeightMm,
+        )
+      : 0) +
     metrics.projectGapMm +
     estimateTextHeight(
       item.description,
@@ -538,9 +1310,15 @@ function estimateEducationHeight(
   return (
     metrics.educationGapMm +
     estimateTextHeight(
-      `${item.degree} ${item.school} ${item.period}`,
+      item.degree,
       metrics.compactCharsPerLine,
-      metrics.bodySmLineHeightMm,
+      metrics.bodyLineHeightMm,
+    ) +
+    0.7 +
+    estimateTextHeight(
+      `${item.school} ${item.period}`,
+      metrics.compactCharsPerLine,
+      metrics.metaLineHeightMm,
     )
   );
 }
@@ -594,9 +1372,9 @@ function buildPlannerSections(
           metrics.displayLineHeightMm +
           (data.title.trim() ? metrics.titleLineHeightMm : 0) +
           metrics.headerGapMm +
-          data.contact.length * metrics.bodySmLineHeightMm +
+          data.contact.length * metrics.metaLineHeightMm +
           data.metadata.length *
-            (metrics.labelLineHeightMm + metrics.bodySmLineHeightMm) +
+            (metrics.labelLineHeightMm + metrics.metaLineHeightMm) +
           metrics.headerBottomPaddingMm,
       },
     ],
@@ -636,13 +1414,8 @@ function buildPlannerSections(
       sectionId: data.sectionIdsByType?.experience?.[0] ?? data.experience[0]?.sectionId,
       title: "Experience",
       order: data.experience[0]?.sectionOrder ?? 20,
-      headerHeight: BASE_SECTION_HEADER_HEIGHT,
-      entries: data.experience.map((item) => ({
-        id: item.id,
-        kind: "experience",
-        estimatedHeight: estimateExperienceHeight(item, metrics),
-        item,
-      })),
+      headerHeight: metrics.sectionHeaderHeightMm,
+      entries: data.experience.map((item) => buildPlannerExperienceEntry(item, metrics)),
     },
     {
       key: "education",
@@ -651,7 +1424,7 @@ function buildPlannerSections(
       sectionId: data.sectionIdsByType?.education?.[0] ?? data.education[0]?.sectionId,
       title: "Education",
       order: data.education[0]?.sectionOrder ?? 30,
-      headerHeight: BASE_SECTION_HEADER_HEIGHT,
+      headerHeight: metrics.sectionHeaderHeightMm,
       entries: data.education.map((item) => ({
         id: item.id,
         kind: "education",
@@ -666,7 +1439,7 @@ function buildPlannerSections(
       sectionId: data.sectionIdsByType?.skills?.[0] ?? data.skillItems[0]?.sectionId,
       title: "Skills",
       order: data.skillItems[0]?.sectionOrder ?? 40,
-      headerHeight: BASE_SECTION_HEADER_HEIGHT,
+      headerHeight: metrics.sectionHeaderHeightMm,
       entries: data.skillItems.map((item) => ({
         id: item.id,
         kind: "skills",
@@ -687,7 +1460,7 @@ function buildPlannerSections(
       sectionId: data.sectionIdsByType?.projects?.[0] ?? data.projects[0]?.sectionId,
       title: "Selected projects",
       order: data.projects[0]?.sectionOrder ?? 50,
-      headerHeight: BASE_SECTION_HEADER_HEIGHT,
+      headerHeight: metrics.sectionHeaderHeightMm,
       entries: data.projects.map((item) => ({
         id: item.id,
         kind: "selected_projects",
@@ -702,7 +1475,7 @@ function buildPlannerSections(
       sectionId: data.sectionIdsByType?.languages?.[0] ?? data.languages[0]?.sectionId,
       title: "Languages",
       order: data.languages[0]?.sectionOrder ?? 60,
-      headerHeight: BASE_SECTION_HEADER_HEIGHT,
+      headerHeight: metrics.sectionHeaderHeightMm,
       entries: data.languages.map((item) => ({
         id: item.id,
         kind: "languages",
@@ -724,7 +1497,7 @@ function buildPlannerSections(
         data.sectionIdsByType?.certifications?.[0] ?? data.certifications[0]?.sectionId,
       title: "Certifications",
       order: data.certifications[0]?.sectionOrder ?? 70,
-      headerHeight: BASE_SECTION_HEADER_HEIGHT,
+      headerHeight: metrics.sectionHeaderHeightMm,
       entries: data.certifications.map((item) => ({
         id: item.id,
         kind: "certifications",
@@ -740,7 +1513,7 @@ function buildPlannerSections(
         data.sectionIdsByType?.achievements?.[0] ?? data.achievementItems[0]?.sectionId,
       title: "Achievements",
       order: data.achievementItems[0]?.sectionOrder ?? 80,
-      headerHeight: BASE_SECTION_HEADER_HEIGHT,
+      headerHeight: metrics.sectionHeaderHeightMm,
       entries: data.achievementItems.map((item) => ({
         id: item.id,
         kind: "achievements",
@@ -762,7 +1535,7 @@ function buildPlannerSections(
         data.sectionIdsByType?.affiliations?.[0] ?? data.affiliations[0]?.sectionId,
       title: "Affiliations",
       order: data.affiliations[0]?.sectionOrder ?? 90,
-      headerHeight: BASE_SECTION_HEADER_HEIGHT,
+      headerHeight: metrics.sectionHeaderHeightMm,
       entries: data.affiliations.map((item) => ({
         id: item.id,
         kind: "affiliations",
@@ -777,7 +1550,7 @@ function buildPlannerSections(
       sectionId: data.sectionIdsByType?.hobbies?.[0] ?? data.hobbyItems[0]?.sectionId,
       title: "Hobbies",
       order: data.hobbyItems[0]?.sectionOrder ?? 100,
-      headerHeight: BASE_SECTION_HEADER_HEIGHT,
+      headerHeight: metrics.sectionHeaderHeightMm,
       entries: data.hobbyItems.map((item) => ({
         id: item.id,
         kind: "hobbies",
@@ -798,7 +1571,7 @@ function buildPlannerSections(
       sectionId: data.textSections[0]?.sectionId,
       title: data.textSections[0]?.sectionTitle ?? "Additional information",
       order: data.textSections[0]?.sectionOrder ?? 110,
-      headerHeight: BASE_SECTION_HEADER_HEIGHT,
+      headerHeight: metrics.sectionHeaderHeightMm,
       entries: data.textSections.map((item) => ({
         id: item.id,
         kind:
@@ -882,13 +1655,17 @@ function buildCommittedFragment(args: {
         items: args.section.entries
           .filter((entry): entry is Extract<WorkshopPlannerEntry, { kind: "experience" }> => entry.kind === "experience")
           .map((entry) => ({
-            id: entry.item.id,
-            role: entry.item.role,
-            company: entry.item.company,
-            period: entry.item.period,
-            location: entry.item.location,
-            summary: entry.item.description ?? "",
-            bullets: [...entry.item.bullets],
+            id: entry.sourceEntryId,
+            continued: entry.continued,
+            role: entry.role,
+            company: entry.company,
+            period: entry.period,
+            location: entry.location,
+            blocks: entry.blocks.map((block) => ({
+              kind: block.kind,
+              text: block.text,
+              ...(block.partial ? { partial: true } : {}),
+            })),
           })),
       };
     case "education":
@@ -1018,14 +1795,23 @@ export function planWorkshopResumePages(args: {
   data: ResumeData;
   template: ResumeTemplateDefinition;
   stylePreset?: VerbatiStylePreset | null;
+  debugTrace?: WorkshopPaginationDebugTrace;
 }): WorkshopResumePlan {
   const metrics = buildPlannerMetrics({
     template: args.template,
     stylePreset: args.stylePreset,
   });
   const pageHeightBudget = metrics.pageHeightBudgetMm;
+  if (args.debugTrace) {
+    args.debugTrace.pageHeightBudgetMm = pageHeightBudget;
+  }
   const pages: WorkshopResumePagePlan[] = [];
   const sections = buildPlannerSections(args.data, metrics);
+  const sectionStates = sections.map((section) => ({
+    section,
+    entryIndex: 0,
+    carryoverEntries: [] as WorkshopPlannerEntry[],
+  }));
 
   let currentPage: WorkshopResumePagePlan = {
     index: 0,
@@ -1048,39 +1834,131 @@ export function planWorkshopResumePages(args: {
     };
   };
 
-  sections.forEach((section) => {
-    section.entries.forEach((entry, entryIndex) => {
-      const isContinuation = entryIndex > 0;
-      const needsHeader = section.title ? !currentPage.sections.some((item) => item.key === section.key) : false;
-      const nextHeight =
-        currentPage.estimatedHeight +
-        (needsHeader ? section.headerHeight : 0) +
-        entry.estimatedHeight;
+  const getNextEntry = (state: (typeof sectionStates)[number]) =>
+    state.carryoverEntries[0] ?? state.section.entries[state.entryIndex] ?? null;
 
-      if (currentPage.entries.length > 0 && nextHeight > pageHeightBudget) {
-        commitPage();
+  const consumeNextEntry = (state: (typeof sectionStates)[number]) => {
+    if (state.carryoverEntries.length > 0) {
+      state.carryoverEntries.shift();
+      return;
+    }
+
+    state.entryIndex += 1;
+  };
+
+  const ensurePageSection = (section: PlannerSectionDefinition) => {
+    let pageSection = currentPage.sections.find((item) => item.key === section.key);
+    if (pageSection) {
+      return pageSection;
+    }
+
+    pageSection = {
+      key: section.key,
+      kind: section.kind,
+      sectionType: section.sectionType,
+      sectionId: section.sectionId,
+      title: section.title,
+      continued: pages.some((page) =>
+        page.sections.some((pageSectionItem) => pageSectionItem.key === section.key),
+      ),
+      entries: [],
+    };
+    if (currentPage.sections.length > 0 && section.kind !== "summary") {
+      currentPage.estimatedHeight += metrics.sectionGapMm;
+    }
+    currentPage.sections.push(pageSection);
+    currentPage.estimatedHeight += section.title ? section.headerHeight : 0;
+    return pageSection;
+  };
+
+  const placeEntryOnPage = (section: PlannerSectionDefinition, entry: WorkshopPlannerEntry) => {
+    const pageSection = ensurePageSection(section);
+    if (pageSection.entries.length > 0 && section.kind === "experience") {
+      currentPage.estimatedHeight += WORKSHOP_RENDER_EXPERIENCE_ENTRY_GAP_MM;
+    }
+    pageSection.entries.push(entry);
+    currentPage.entries.push(entry);
+    currentPage.estimatedHeight += entry.estimatedHeight;
+  };
+
+  const hasPendingEntries = () =>
+    sectionStates.some(
+      (state) =>
+        state.carryoverEntries.length > 0 ||
+        state.entryIndex < state.section.entries.length,
+    );
+
+  while (hasPendingEntries()) {
+    let placedEntryThisPass = false;
+    let blockedByPendingExperience = false;
+
+    for (const state of sectionStates) {
+      while (true) {
+        const entry = getNextEntry(state);
+        if (!entry) {
+          break;
+        }
+
+        const needsHeader = Boolean(state.section.title) &&
+          !currentPage.sections.some((item) => item.key === state.section.key);
+        const availableHeight =
+          pageHeightBudget -
+          currentPage.estimatedHeight -
+          (needsHeader ? state.section.headerHeight : 0);
+        const entryFits = fitsWithinWorkshopAvailableHeight(
+          entry.estimatedHeight,
+          availableHeight,
+        );
+
+        if (!entryFits && entry.kind === "experience") {
+          const splitEntry = splitExperienceEntryToFit({
+            entry,
+            availableHeight,
+            currentPageEstimatedHeightBeforeSplit: currentPage.estimatedHeight,
+            continuationSectionHeaderHeight: state.section.title
+              ? state.section.headerHeight
+              : 0,
+            metrics,
+            debugTrace: args.debugTrace,
+          });
+
+          if (splitEntry) {
+            placeEntryOnPage(state.section, splitEntry.head);
+            consumeNextEntry(state);
+            state.carryoverEntries.unshift(splitEntry.tail);
+            placedEntryThisPass = true;
+            blockedByPendingExperience = true;
+            break;
+          }
+        }
+
+        if (!entryFits && currentPage.entries.length > 0) {
+          if (entry.kind === "experience") {
+            blockedByPendingExperience = true;
+          }
+          break;
+        }
+
+        placeEntryOnPage(state.section, entry);
+        consumeNextEntry(state);
+        placedEntryThisPass = true;
+
+        if (currentPage.estimatedHeight >= pageHeightBudget) {
+          break;
+        }
       }
 
-      let pageSection = currentPage.sections.find((item) => item.key === section.key);
-      if (!pageSection) {
-        pageSection = {
-          key: section.key,
-          kind: section.kind,
-          sectionType: section.sectionType,
-          sectionId: section.sectionId,
-          title: section.title,
-          continued: isContinuation,
-          entries: [],
-        };
-        currentPage.sections.push(pageSection);
-        currentPage.estimatedHeight += section.title ? section.headerHeight : 0;
+      if (blockedByPendingExperience) {
+        break;
       }
+    }
 
-      pageSection.entries.push(entry);
-      currentPage.entries.push(entry);
-      currentPage.estimatedHeight += entry.estimatedHeight;
-    });
-  });
+    if (!placedEntryThisPass) {
+      break;
+    }
+
+    commitPage();
+  }
 
   commitPage();
 

@@ -138,7 +138,7 @@ const SPLIT_EXPORT = {
 const ONE_COLUMN_EXPORT = {
   topMm: 17,
   rightMm: 35,
-  bottomMm: 35,
+  bottomMm: 18,
   leftMm: 18,
   sidebarMm: 0,
   gutterMm: 0,
@@ -329,8 +329,8 @@ export const RESUME_TEMPLATE_DEFINITIONS: readonly ResumeTemplateDefinition[] = 
     decorVariantId: "swissminima",
     exportShell: "onecol",
     preview: {
-      topMm: 17, rightMm: 35, bottomMm: 35, leftMm: 18,
-      liveWidthMm: 157, liveHeightMm: 245,
+      topMm: 17, rightMm: 35, bottomMm: 18, leftMm: 18,
+      liveWidthMm: 157, liveHeightMm: 262,
       sidebarMm: 0, gutterMm: 0, mainMm: 157,
       headerGapMm: 4, headerBottomPaddingMm: 5, headerSummaryWidthMm: 120, headerTitleMarginTopMm: 2,
       bodySectionGapMm: 8, sidebarRightPaddingMm: 0, mainLeftPaddingMm: 0,
