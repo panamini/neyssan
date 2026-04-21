@@ -59,7 +59,9 @@ const WORKSHOP_PREVIEW_LAYOUT_VAR_NAMES = [
   "--skill-gap",
   "--skill-pad-inline",
   "--skill-pad-block",
+  "--project-gap",
   "--project-padding",
+  "--education-gap",
 ] as const;
 
 type ResumeTemplateRendererProps = {
