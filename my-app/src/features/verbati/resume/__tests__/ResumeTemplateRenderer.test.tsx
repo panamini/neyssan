@@ -29,6 +29,7 @@ const WORKSHOP_ACTIVE_PREVIEW_LAYOUT_VAR_NAMES = [
   "--margin-bottom",
   "--margin-left",
   "--header-row-gap",
+  "--header-summary-width",
   "--header-bottom-padding",
   "--text-display-size",
   "--text-display-line",

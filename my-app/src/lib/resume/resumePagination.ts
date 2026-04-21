@@ -19,6 +19,12 @@ import {
   resolveWorkshopPreviewLayoutContract,
   type ResumeTemplateDefinition,
 } from "../layout/resumeTemplates";
+import {
+  WORKSHOP_BOTTOM_FIT_SAFETY_MM,
+  WORKSHOP_EXPERIENCE_HEADING_LINE_HEIGHT,
+  WORKSHOP_EXPERIENCE_HEADING_SIZE_ADJUST_MM,
+  WORKSHOP_SECTION_TITLE_SIZE_REDUCTION_MM,
+} from "./workshopHeadingContract";
 
 type WorkshopEntryKind =
   | "profile"
@@ -41,9 +47,6 @@ const EXPERIENCE_MIN_PARTIAL_SPLIT_CHARS =
   EXPERIENCE_MIN_FRAGMENT_USEFUL_LINES * EXPERIENCE_USEFUL_CHARS_PER_LINE;
 const EXPERIENCE_DENSE_NUMERIC_CHARS_PER_LINE_MULTIPLIER = 1;
 const EXPERIENCE_DENSE_ALNUM_CHARS_PER_LINE_MULTIPLIER = 0.95;
-const WORKSHOP_RENDER_EXPERIENCE_HEADING_EXTRA_MM = 0.2;
-const WORKSHOP_RENDER_EXPERIENCE_HEADING_LINE_HEIGHT = 1.25;
-const WORKSHOP_RENDER_BOTTOM_FIT_SAFETY_MM = 0.5;
 
 export type WorkshopExperienceContentBlock = {
   kind: "text" | "bullet";
@@ -381,8 +384,6 @@ type PlannerSectionDefinition = {
   entries: WorkshopPlannerEntry[];
 };
 
-const WORKSHOP_RENDER_SECTION_TITLE_SIZE_REDUCTION_MM = 0.95;
-
 type WorkshopPlannerMetrics = {
   pageHeightBudgetMm: number;
   summaryCharsPerLine: number;
@@ -517,7 +518,7 @@ function resolveExperienceBlockCharsPerLine(text: string, baseCharsPerLine: numb
 function fitsWithinWorkshopAvailableHeight(
   estimatedHeight: number,
   availableHeight: number,
-  safetyMm = WORKSHOP_RENDER_BOTTOM_FIT_SAFETY_MM,
+  safetyMm = WORKSHOP_BOTTOM_FIT_SAFETY_MM,
 ) {
   return estimatedHeight <= Math.max(0, availableHeight - safetyMm);
 }
@@ -588,13 +589,13 @@ function buildPlannerMetrics(args: {
     (ptToMm(
       (tokens.flow.type.body.sizePt ?? 0) + (tokens.flow.density.bodyAdjustPt ?? 0),
     ) +
-      WORKSHOP_RENDER_EXPERIENCE_HEADING_EXTRA_MM) *
-    WORKSHOP_RENDER_EXPERIENCE_HEADING_LINE_HEIGHT;
+      WORKSHOP_EXPERIENCE_HEADING_SIZE_ADJUST_MM) *
+    WORKSHOP_EXPERIENCE_HEADING_LINE_HEIGHT;
   const sectionHeaderHeightMm = Math.max(
     6,
     Math.max(
       0,
-      titleSizeMm - WORKSHOP_RENDER_SECTION_TITLE_SIZE_REDUCTION_MM,
+      titleSizeMm - WORKSHOP_SECTION_TITLE_SIZE_REDUCTION_MM,
     ) *
       titleLineHeight +
       workshopLayout.sectionShellGapMm,
@@ -941,7 +942,7 @@ function splitExperienceBlockAtWrapBoundary(args: {
   );
   const remainingHeight = args.availableBlockHeight - usedPrefixHeight;
   const availableUsefulLines = Math.floor(
-    Math.max(0, remainingHeight - WORKSHOP_RENDER_BOTTOM_FIT_SAFETY_MM) /
+    Math.max(0, remainingHeight - WORKSHOP_BOTTOM_FIT_SAFETY_MM) /
       Math.max(args.metrics.bodyLineHeightMm, 0.0001),
   );
   if (availableUsefulLines < EXPERIENCE_MIN_FRAGMENT_USEFUL_LINES) {
@@ -1182,7 +1183,7 @@ function splitExperienceEntryToFit(args: {
   const availableBlockHeight = args.availableHeight - headerHeight;
   if (
     args.availableHeight < minimumFragmentHeight ||
-    availableBlockHeight <= WORKSHOP_RENDER_BOTTOM_FIT_SAFETY_MM
+    availableBlockHeight <= WORKSHOP_BOTTOM_FIT_SAFETY_MM
   ) {
     return null;
   }
