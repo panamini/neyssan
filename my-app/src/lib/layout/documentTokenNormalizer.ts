@@ -33,6 +33,8 @@ import {
 } from "./documentTokens";
 import {
   getResumeTemplateDefinition,
+  resolveWorkshopPreviewHeadingContract,
+  type ResumeTemplateDefinition,
   type ResumeTemplateId,
 } from "./resumeTemplates";
 
@@ -300,10 +302,11 @@ function baseExportFlowTokens(): CanonicalDocumentTokens["flow"] {
 
 export function normalizeResumePreviewTokens(args: {
   resumeTemplateId: ResumeTemplateId;
+  template?: ResumeTemplateDefinition | null;
   stylePreset?: VerbatiStylePreset | null;
 }): CanonicalDocumentTokens {
   const tokens = createEmptyCanonicalTokens();
-  const template = getResumeTemplateDefinition(args.resumeTemplateId);
+  const template = args.template ?? getResumeTemplateDefinition(args.resumeTemplateId);
   const preview = template.preview;
   tokens.appearance = resolvePreviewCanonicalAppearance(
     normalizeStylePreset(args.stylePreset),
@@ -438,6 +441,19 @@ export function normalizeResumePreviewTokens(args: {
     padInlineMm: preview.skillPaddingInlineMm,
     padBlockMm: preview.skillPaddingBlockMm,
   };
+  if (template.id === "workshop_resume_onecol_ats") {
+    const workshopHeading = resolveWorkshopPreviewHeadingContract(template);
+    tokens.flow.component.main = {
+      ...tokens.flow.component.main,
+      sectionTitleReductionMm: workshopHeading.sectionTitleReductionMm,
+    };
+    tokens.flow.component.experience = {
+      ...tokens.flow.component.experience,
+      headingSizeAdjustMm: workshopHeading.experienceHeadingSizeAdjustMm,
+      headingLineHeight: workshopHeading.experienceHeadingLineHeight,
+    };
+    tokens.flow.pagination.bottomFitSafetyMm = workshopHeading.bottomFitSafetyMm;
+  }
   tokens.flow.density = {
     displayAdjustPt: mmToPt(preview.displaySizeAdjustMm),
     titleAdjustPt: mmToPt(preview.titleSizeAdjustMm),

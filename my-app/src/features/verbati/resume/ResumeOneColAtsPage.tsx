@@ -12,11 +12,6 @@ import type {
   WorkshopResumeCommittedPage,
 } from "../../../lib/resume/resumePagination";
 import {
-  WORKSHOP_EXPERIENCE_HEADING_LINE_HEIGHT,
-  WORKSHOP_EXPERIENCE_HEADING_SIZE_ADJUST_MM,
-  WORKSHOP_SECTION_TITLE_SIZE_REDUCTION_MM,
-} from "../../../lib/resume/workshopHeadingContract";
-import {
   PreviewItemRegion,
   PreviewSectionRegion,
   buildProjectPreviewFieldId,
@@ -54,7 +49,15 @@ function buildAdjustedFontSize(args: {
     | "--body-size-adjust"
     | "--body-sm-size-adjust";
   offsetMm?: number;
+  offsetVar?:
+    | "--workshop-section-title-reduction"
+    | "--workshop-experience-heading-size-adjust";
+  offsetOperator?: "+" | "-";
 }) {
+  if (args.offsetVar) {
+    return `calc(var(${args.baseVar}) + var(${args.adjustVar}) ${args.offsetOperator ?? "+"} var(${args.offsetVar}))`;
+  }
+
   const offsetMm = args.offsetMm ?? 0;
   if (offsetMm === 0) {
     return `calc(var(${args.baseVar}) + var(${args.adjustVar}))`;
@@ -93,7 +96,8 @@ function renderSectionHeading(title: string, continued: boolean) {
           fontSize: buildAdjustedFontSize({
             baseVar: "--text-title-size",
             adjustVar: "--title-size-adjust",
-            offsetMm: -WORKSHOP_SECTION_TITLE_SIZE_REDUCTION_MM,
+            offsetVar: "--workshop-section-title-reduction",
+            offsetOperator: "-",
           }),
           lineHeight: "var(--text-title-line)",
           textTransform: "uppercase",
@@ -389,9 +393,9 @@ function renderFragmentContent(args: {
                   fontSize: buildAdjustedFontSize({
                     baseVar: "--text-body-size",
                     adjustVar: "--body-size-adjust",
-                    offsetMm: WORKSHOP_EXPERIENCE_HEADING_SIZE_ADJUST_MM,
+                    offsetVar: "--workshop-experience-heading-size-adjust",
                   }),
-                  lineHeight: WORKSHOP_EXPERIENCE_HEADING_LINE_HEIGHT,
+                  lineHeight: "var(--workshop-experience-heading-line-height)",
                   fontWeight: 700,
                 }}
               >

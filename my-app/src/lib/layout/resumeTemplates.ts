@@ -63,6 +63,10 @@ type ResumeTemplateLengthSet = {
   workshopExperienceBlockGapMm?: number;
   workshopExperienceMetaGapMm?: number;
   workshopCompactMetaGapMm?: number;
+  workshopSectionTitleReductionMm?: number;
+  workshopExperienceHeadingSizeAdjustMm?: number;
+  workshopExperienceHeadingLineHeight?: number;
+  workshopBottomFitSafetyMm?: number;
 };
 
 export type ResumeTemplateDefinition = {
@@ -113,6 +117,13 @@ export type WorkshopPreviewLayoutContract = {
   compactMetaGapMm: number;
 };
 
+export type WorkshopPreviewHeadingContract = {
+  sectionTitleReductionMm: number;
+  experienceHeadingSizeAdjustMm: number;
+  experienceHeadingLineHeight: number;
+  bottomFitSafetyMm: number;
+};
+
 const DEFAULT_WORKSHOP_PREVIEW_LAYOUT_CONTRACT: WorkshopPreviewLayoutContract = {
   sectionShellGapMm: 2.6,
   sectionContentGapMm: 3,
@@ -120,6 +131,13 @@ const DEFAULT_WORKSHOP_PREVIEW_LAYOUT_CONTRACT: WorkshopPreviewLayoutContract = 
   experienceBlockGapMm: 1.8,
   experienceMetaGapMm: 0.6,
   compactMetaGapMm: 0.7,
+};
+
+const DEFAULT_WORKSHOP_PREVIEW_HEADING_CONTRACT: WorkshopPreviewHeadingContract = {
+  sectionTitleReductionMm: 0.95,
+  experienceHeadingSizeAdjustMm: 0.2,
+  experienceHeadingLineHeight: 1.25,
+  bottomFitSafetyMm: 0.5,
 };
 
 export function resolveWorkshopPreviewLayoutContract(
@@ -146,6 +164,27 @@ export function resolveWorkshopPreviewLayoutContract(
     compactMetaGapMm:
       preview.workshopCompactMetaGapMm ??
       DEFAULT_WORKSHOP_PREVIEW_LAYOUT_CONTRACT.compactMetaGapMm,
+  };
+}
+
+export function resolveWorkshopPreviewHeadingContract(
+  template: ResumeTemplateDefinition,
+): WorkshopPreviewHeadingContract {
+  const preview = template.preview;
+
+  return {
+    sectionTitleReductionMm:
+      preview.workshopSectionTitleReductionMm ??
+      DEFAULT_WORKSHOP_PREVIEW_HEADING_CONTRACT.sectionTitleReductionMm,
+    experienceHeadingSizeAdjustMm:
+      preview.workshopExperienceHeadingSizeAdjustMm ??
+      DEFAULT_WORKSHOP_PREVIEW_HEADING_CONTRACT.experienceHeadingSizeAdjustMm,
+    experienceHeadingLineHeight:
+      preview.workshopExperienceHeadingLineHeight ??
+      DEFAULT_WORKSHOP_PREVIEW_HEADING_CONTRACT.experienceHeadingLineHeight,
+    bottomFitSafetyMm:
+      preview.workshopBottomFitSafetyMm ??
+      DEFAULT_WORKSHOP_PREVIEW_HEADING_CONTRACT.bottomFitSafetyMm,
   };
 }
 
@@ -393,6 +432,10 @@ export const RESUME_TEMPLATE_DEFINITIONS: readonly ResumeTemplateDefinition[] = 
       sectionGapAdjustMm: -0.2, headingMarginAdjustMm: 0, bulletGapAdjustMm: -0.05, projectGapAdjustMm: -0.1, projectPaddingAdjustMm: -0.1,
       workshopSectionShellGapMm: 2.6, workshopSectionContentGapMm: 3,
       workshopExperienceBlockGapMm: 1.8, workshopExperienceMetaGapMm: 0.6, workshopCompactMetaGapMm: 0.7,
+      workshopSectionTitleReductionMm: 0.95,
+      workshopExperienceHeadingSizeAdjustMm: 0.2,
+      workshopExperienceHeadingLineHeight: 1.25,
+      workshopBottomFitSafetyMm: 0.5,
     },
     export: ONE_COLUMN_EXPORT,
     paginationPolicy: { mode: "legacy-placeholder" },
