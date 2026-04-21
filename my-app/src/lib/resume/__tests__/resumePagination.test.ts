@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 
+import { normalizeResumePreviewTokens } from "../../layout/documentTokenNormalizer";
+import { ptToMm } from "../../layout/documentTokens";
 import { planWorkshopResumePages } from "../resumePagination";
 import { resumeMock } from "../../../features/verbati/resume/resume.mock";
 import {
   getResumeTemplateDefinition,
   resolveWorkshopPreviewLayoutContract,
 } from "../../layout/resumeTemplates";
+import { resolveWorkshopHeadingFitContract } from "../workshopHeadingContract";
 
 const workshopTemplate = getResumeTemplateDefinition(
   "workshop_resume_onecol_ats",
@@ -515,6 +518,156 @@ describe("resumePagination", () => {
       (baselinePlan.pages[0]?.estimatedHeight ?? 0) + expectedDeltaMm,
       6,
     );
+  });
+
+  it("reads workshop heading-fit estimates from the canonical preview token contract", () => {
+    const tunedTemplate = buildWorkshopTemplateOverride({
+      workshopSectionTitleReductionMm: 1.4,
+      workshopExperienceHeadingSizeAdjustMm: 0.35,
+      workshopExperienceHeadingLineHeight: 1.4,
+    });
+    const baselineTokens = normalizeResumePreviewTokens({
+      resumeTemplateId: workshopTemplate.id,
+      template: workshopTemplate,
+    });
+    const tunedTokens = normalizeResumePreviewTokens({
+      resumeTemplateId: tunedTemplate.id,
+      template: tunedTemplate,
+    });
+    const baselineHeading = resolveWorkshopHeadingFitContract(baselineTokens);
+    const tunedHeading = resolveWorkshopHeadingFitContract(tunedTokens);
+    const layout = resolveWorkshopPreviewLayoutContract(workshopTemplate);
+    const titleLineHeight = baselineTokens.flow.type.title.lineHeight ?? 1.1;
+    const titleSizeMm = ptToMm(
+      (baselineTokens.flow.type.title.sizePt ?? 0) +
+        (baselineTokens.flow.density.titleAdjustPt ?? 0),
+    );
+    const bodySizeMm = ptToMm(
+      (baselineTokens.flow.type.body.sizePt ?? 0) +
+        (baselineTokens.flow.density.bodyAdjustPt ?? 0),
+    );
+    const baselineSectionHeaderHeight = Math.max(
+      6,
+      Math.max(0, titleSizeMm - baselineHeading.sectionTitleReductionMm) *
+        titleLineHeight +
+        layout.sectionShellGapMm,
+    );
+    const tunedSectionHeaderHeight = Math.max(
+      6,
+      Math.max(0, titleSizeMm - tunedHeading.sectionTitleReductionMm) *
+        titleLineHeight +
+        layout.sectionShellGapMm,
+    );
+    const baselineExperienceHeadingLineHeightMm =
+      (bodySizeMm + baselineHeading.experienceHeadingSizeAdjustMm) *
+      baselineHeading.experienceHeadingLineHeight;
+    const tunedExperienceHeadingLineHeightMm =
+      (bodySizeMm + tunedHeading.experienceHeadingSizeAdjustMm) *
+      tunedHeading.experienceHeadingLineHeight;
+    const data = {
+      ...buildPlannerData(),
+      summary: "",
+      experience: [
+        {
+          ...resumeMock.experience[0]!,
+          id: "exp-heading-contract-1",
+          role: "R",
+          company: "C",
+          location: "L",
+          period: "P",
+          description: "Short description.",
+          bullets: [],
+        },
+      ],
+      education: [
+        {
+          ...resumeMock.education[0]!,
+          id: "edu-heading-contract-1",
+          degree: "D",
+          school: "S",
+          period: "P",
+        },
+      ],
+    };
+
+    const baselinePlan = planWorkshopResumePages({
+      data,
+      template: workshopTemplate,
+    });
+    const tunedPlan = planWorkshopResumePages({
+      data,
+      template: tunedTemplate,
+    });
+
+    expect(baselineHeading).toEqual({
+      sectionTitleReductionMm: 0.95,
+      experienceHeadingSizeAdjustMm: 0.2,
+      experienceHeadingLineHeight: 1.25,
+      bottomFitSafetyMm: 0.5,
+    });
+    expect(tunedHeading).toEqual({
+      sectionTitleReductionMm: 1.4,
+      experienceHeadingSizeAdjustMm: 0.35,
+      experienceHeadingLineHeight: 1.4,
+      bottomFitSafetyMm: 0.5,
+    });
+    expect(tunedPlan.pages[0]?.estimatedHeight).toBeCloseTo(
+      (baselinePlan.pages[0]?.estimatedHeight ?? 0) +
+        2 * (tunedSectionHeaderHeight - baselineSectionHeaderHeight) +
+        (tunedExperienceHeadingLineHeightMm -
+          baselineExperienceHeadingLineHeightMm),
+      6,
+    );
+  });
+
+  it("reads workshop bottom-fit safety from the canonical preview token contract", () => {
+    const tunedTemplate = buildWorkshopTemplateOverride({
+      workshopBottomFitSafetyMm: 4,
+    });
+    const baselineTokens = normalizeResumePreviewTokens({
+      resumeTemplateId: workshopTemplate.id,
+      template: workshopTemplate,
+    });
+    const tunedTokens = normalizeResumePreviewTokens({
+      resumeTemplateId: tunedTemplate.id,
+      template: tunedTemplate,
+    });
+    const baselineDebugTrace = { splitDecisions: [] };
+    const tunedDebugTrace = { splitDecisions: [] };
+    const data = {
+      ...buildPlannerData(),
+      summary: makeTextBlock("bottom-fit-summary", 30),
+      experience: [
+        {
+          ...resumeMock.experience[0]!,
+          id: "exp-bottom-fit-1",
+          role: "1",
+          description: makeDenseTokenBlock("1", 80),
+          bullets: [],
+        },
+      ],
+    };
+
+    planWorkshopResumePages({
+      data,
+      template: workshopTemplate,
+      debugTrace: baselineDebugTrace,
+    });
+    planWorkshopResumePages({
+      data,
+      template: tunedTemplate,
+      debugTrace: tunedDebugTrace,
+    });
+
+    expect(resolveWorkshopHeadingFitContract(baselineTokens).bottomFitSafetyMm).toBe(
+      0.5,
+    );
+    expect(resolveWorkshopHeadingFitContract(tunedTokens).bottomFitSafetyMm).toBe(4);
+    expect(baselineDebugTrace.splitDecisions.length).toBeGreaterThan(0);
+    expect(tunedDebugTrace.splitDecisions.length).toBeGreaterThan(0);
+    expect(
+      tunedDebugTrace.splitDecisions[0]?.availableUsefulLines,
+    ).toBeLessThan(baselineDebugTrace.splitDecisions[0]?.availableUsefulLines ?? 0);
   });
 
   it("keeps a compact resume on a single page", () => {

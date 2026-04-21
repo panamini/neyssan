@@ -339,7 +339,7 @@ describe("ResumeOneColAtsPage", () => {
       "font-size: calc(var(--text-display-size) + var(--display-size-adjust));",
     );
     expect(firstSectionHeading?.getAttribute("style")).toContain(
-      "font-size: calc(var(--text-title-size) + var(--title-size-adjust) - 0.95mm);",
+      "font-size: calc(var(--text-title-size) + var(--title-size-adjust) - var(--workshop-section-title-reduction));",
     );
     expect(summaryItem?.getAttribute("style")).toContain(
       "font-size: calc(var(--text-body-size) + var(--body-size-adjust));",
@@ -396,10 +396,12 @@ describe("ResumeOneColAtsPage", () => {
       '[data-preview-section="experience"][data-preview-surface="item"]',
     );
     const experienceHeadingBlock = experienceItem?.firstElementChild as HTMLElement | null;
+    const experienceRoleHeading = experienceHeadingBlock?.querySelector("h3") as HTMLElement | null;
     const experienceBulletList = experienceItem?.querySelector("ul") as HTMLElement | null;
     const educationSection = container.querySelector(
       '[data-preview-section="education"][data-preview-surface="section"]',
     ) as HTMLElement | null;
+    const educationHeading = educationSection?.querySelector("h2") as HTMLElement | null;
     const educationContent = educationSection?.children.item(1) as HTMLElement | null;
     const educationItem = container.querySelector(
       '[data-preview-section="education"][data-preview-surface="item"]',
@@ -418,11 +420,20 @@ describe("ResumeOneColAtsPage", () => {
     expect(experienceHeadingBlock?.getAttribute("style")).toContain(
       `gap: ${layout.experienceMetaGapMm}mm;`,
     );
+    expect(experienceRoleHeading?.getAttribute("style")).toContain(
+      "font-size: calc(var(--text-body-size) + var(--body-size-adjust) + var(--workshop-experience-heading-size-adjust));",
+    );
+    expect(experienceRoleHeading?.getAttribute("style")).toContain(
+      "line-height: var(--workshop-experience-heading-line-height);",
+    );
     expect(experienceBulletList?.getAttribute("style")).toContain(
       "padding-left: var(--flow-list-indent);",
     );
     expect(educationSection?.getAttribute("style")).toContain(
       `gap: ${layout.sectionShellGapMm}mm;`,
+    );
+    expect(educationHeading?.getAttribute("style")).toContain(
+      "font-size: calc(var(--text-title-size) + var(--title-size-adjust) - var(--workshop-section-title-reduction));",
     );
     expect(educationContent?.getAttribute("style")).toContain(
       `gap: ${layout.sectionContentGapMm}mm;`,

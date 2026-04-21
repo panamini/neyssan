@@ -60,6 +60,8 @@ describe("document token system", () => {
         "--experience-bullets-gap",
         "--experience-bullets-padding",
         "--flow-list-indent",
+        "--workshop-experience-heading-line-height",
+        "--workshop-experience-heading-size-adjust",
         "--experience-column-gap",
         "--experience-date-column",
         "--experience-item-gap",
@@ -99,6 +101,7 @@ describe("document token system", () => {
         "--skill-pad-inline",
         "--skill-padding-block",
         "--skill-padding-inline",
+        "--workshop-section-title-reduction",
         "--title-size-adjust",
         "--volk-grid-body-top",
         "--volk-grid-body-width",
@@ -394,9 +397,16 @@ describe("document token system", () => {
     expect(resumeTemplateId).toBe("workshop_resume_onecol_ats");
     expect(previewTokens.geometry.columns.sidebarMm).toBe(0);
     expect(previewTokens.flow.measure.summaryWidthMm).toBe(120);
+    expect(previewTokens.flow.component.main?.sectionTitleReductionMm).toBe(0.95);
+    expect(previewTokens.flow.component.experience?.headingSizeAdjustMm).toBe(0.2);
+    expect(previewTokens.flow.component.experience?.headingLineHeight).toBe(1.25);
+    expect(previewTokens.flow.pagination.bottomFitSafetyMm).toBe(0.5);
     expect(previewVars["--sidebar-width"]).toBe("0mm");
     expect(previewVars["--margin-left"]).toBe("18mm");
     expect(previewVars["--header-summary-width"]).toBe("120mm");
+    expect(previewVars["--workshop-section-title-reduction"]).toBe("0.95mm");
+    expect(previewVars["--workshop-experience-heading-size-adjust"]).toBe("0.2mm");
+    expect(previewVars["--workshop-experience-heading-line-height"]).toBe("1.25");
     expect(previewVars["--flow-list-indent"]).toBe(
       previewVars["--experience-bullets-padding"],
     );
