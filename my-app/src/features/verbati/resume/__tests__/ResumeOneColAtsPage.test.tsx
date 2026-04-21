@@ -297,6 +297,58 @@ describe("ResumeOneColAtsPage", () => {
     expect(skillContainer?.getAttribute("style")).toContain("gap: var(--skill-gap);");
   });
 
+  it("applies workshop density size adjustment vars to display, title, body, and body-sm roles", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const plan = planWorkshopResumePages({
+      data: {
+        ...resumeMock,
+        summary: "Compact summary.",
+        metadata: resumeMock.metadata.slice(0, 1),
+        contact: resumeMock.contact.slice(0, 2),
+        skillItems: resumeMock.skillItems.slice(0, 2),
+        experience: resumeMock.experience.slice(0, 1),
+        projects: [],
+        education: [],
+        certifications: [],
+        affiliations: [],
+        hobbyItems: [],
+        hobbies: [],
+        textSections: [],
+      },
+      template,
+    });
+
+    const { container } = render(
+      <ResumeOneColAtsPage
+        data={resumeMock}
+        page={plan.committedPages[0]!}
+        template={template}
+      />,
+    );
+
+    const profileName = container.querySelector("h1");
+    const firstSectionHeading = container.querySelector("h2");
+    const summaryItem = container.querySelector(
+      '[data-preview-section="summary"][data-preview-item-id="summary"]',
+    );
+    const skillItem = container.querySelector(
+      '[data-preview-section="skills"][data-preview-item-id]',
+    );
+
+    expect(profileName?.getAttribute("style")).toContain(
+      "font-size: calc(var(--text-display-size) + var(--display-size-adjust));",
+    );
+    expect(firstSectionHeading?.getAttribute("style")).toContain(
+      "font-size: calc(var(--text-title-size) + var(--title-size-adjust) - 0.95mm);",
+    );
+    expect(summaryItem?.getAttribute("style")).toContain(
+      "font-size: calc(var(--text-body-size) + var(--body-size-adjust));",
+    );
+    expect(skillItem?.getAttribute("style")).toContain(
+      "font-size: calc(var(--text-body-sm-size) + var(--body-sm-size-adjust));",
+    );
+  });
+
   it("reads workshop section and item spacing from the shared template layout contract", () => {
     const baseTemplate = getResumeTemplateDefinition("workshop_resume_onecol_ats");
     const template = {

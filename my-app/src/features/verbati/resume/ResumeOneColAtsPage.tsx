@@ -46,6 +46,36 @@ function formatMillimeters(value: number) {
   return `${value}mm`;
 }
 
+function buildAdjustedFontSize(args: {
+  baseVar: "--text-display-size" | "--text-title-size" | "--text-body-size" | "--text-body-sm-size";
+  adjustVar:
+    | "--display-size-adjust"
+    | "--title-size-adjust"
+    | "--body-size-adjust"
+    | "--body-sm-size-adjust";
+  offsetMm?: number;
+}) {
+  const offsetMm = args.offsetMm ?? 0;
+  if (offsetMm === 0) {
+    return `calc(var(${args.baseVar}) + var(${args.adjustVar}))`;
+  }
+
+  return `calc(var(${args.baseVar}) + var(${args.adjustVar}) ${offsetMm < 0 ? "-" : "+"} ${formatMillimeters(Math.abs(offsetMm))})`;
+}
+
+const workshopDisplayFontSize = buildAdjustedFontSize({
+  baseVar: "--text-display-size",
+  adjustVar: "--display-size-adjust",
+});
+const workshopBodyFontSize = buildAdjustedFontSize({
+  baseVar: "--text-body-size",
+  adjustVar: "--body-size-adjust",
+});
+const workshopBodySmFontSize = buildAdjustedFontSize({
+  baseVar: "--text-body-sm-size",
+  adjustVar: "--body-sm-size-adjust",
+});
+
 function renderSectionHeading(title: string, continued: boolean) {
   return (
     <div
@@ -60,9 +90,11 @@ function renderSectionHeading(title: string, continued: boolean) {
         style={{
           margin: 0,
           fontFamily: "var(--heading-font, var(--font-heading-family))",
-          fontSize: `calc(var(--text-title-size) - ${formatMillimeters(
-            WORKSHOP_SECTION_TITLE_SIZE_REDUCTION_MM,
-          )})`,
+          fontSize: buildAdjustedFontSize({
+            baseVar: "--text-title-size",
+            adjustVar: "--title-size-adjust",
+            offsetMm: -WORKSHOP_SECTION_TITLE_SIZE_REDUCTION_MM,
+          }),
           lineHeight: "var(--text-title-line)",
           textTransform: "uppercase",
           letterSpacing: "0.08em",
@@ -116,7 +148,7 @@ function renderExperienceBlocks(args: {
           <li
             key={`${block.kind}-${block.text}`}
             style={{
-              fontSize: "var(--text-body-size)",
+              fontSize: workshopBodyFontSize,
               lineHeight: "var(--text-body-line)",
               ...experienceWrapStyle,
             }}
@@ -141,7 +173,7 @@ function renderExperienceBlocks(args: {
         key={`${block.kind}-${block.text}`}
         style={{
           margin: 0,
-          fontSize: "var(--text-body-size)",
+          fontSize: workshopBodyFontSize,
           lineHeight: "var(--text-body-line)",
           ...experienceWrapStyle,
         }}
@@ -179,7 +211,7 @@ function renderProfileFragment(args: {
           style={{
             margin: 0,
             fontFamily: "var(--heading-font, var(--font-heading-family))",
-            fontSize: "var(--text-display-size)",
+            fontSize: workshopDisplayFontSize,
             lineHeight: "var(--text-display-line)",
             fontWeight: 700,
             letterSpacing: "-0.02em",
@@ -191,7 +223,11 @@ function renderProfileFragment(args: {
           <p
             style={{
               margin: 0,
-              fontSize: "calc(var(--text-body-size) + 0.1mm)",
+              fontSize: buildAdjustedFontSize({
+                baseVar: "--text-body-size",
+                adjustVar: "--body-size-adjust",
+                offsetMm: 0.1,
+              }),
               lineHeight: "var(--text-body-line)",
               color: "var(--color-text-muted)",
             }}
@@ -307,7 +343,7 @@ function renderFragmentContent(args: {
           style={{
             margin: 0,
             maxWidth: "var(--header-summary-width)",
-            fontSize: "var(--text-body-size)",
+            fontSize: workshopBodyFontSize,
             lineHeight: "var(--text-body-line)",
             color: "var(--color-text)",
           }}
@@ -350,9 +386,11 @@ function renderFragmentContent(args: {
                 style={{
                   margin: 0,
                   fontFamily: "var(--heading-font, var(--font-heading-family))",
-                  fontSize: `calc(var(--text-body-size) + ${formatMillimeters(
-                    WORKSHOP_EXPERIENCE_HEADING_SIZE_ADJUST_MM,
-                  )})`,
+                  fontSize: buildAdjustedFontSize({
+                    baseVar: "--text-body-size",
+                    adjustVar: "--body-size-adjust",
+                    offsetMm: WORKSHOP_EXPERIENCE_HEADING_SIZE_ADJUST_MM,
+                  }),
                   lineHeight: WORKSHOP_EXPERIENCE_HEADING_LINE_HEIGHT,
                   fontWeight: 700,
                 }}
@@ -406,7 +444,7 @@ function renderFragmentContent(args: {
             style={{
               margin: 0,
               fontFamily: "var(--heading-font, var(--font-heading-family))",
-              fontSize: "var(--text-body-size)",
+              fontSize: workshopBodyFontSize,
               fontWeight: 700,
             }}
           >
@@ -441,7 +479,7 @@ function renderFragmentContent(args: {
             padding: "var(--skill-pad-block) var(--skill-pad-inline)",
             borderRadius: "999px",
             background: "var(--color-accent-soft)",
-            fontSize: "var(--text-body-sm-size)",
+            fontSize: workshopBodySmFontSize,
             lineHeight: "var(--text-body-sm-line)",
           }}
         >
@@ -477,7 +515,7 @@ function renderFragmentContent(args: {
               style={{
                 margin: 0,
                 fontFamily: "var(--heading-font, var(--font-heading-family))",
-                fontSize: "var(--text-body-size)",
+                fontSize: workshopBodyFontSize,
                 fontWeight: 700,
               }}
             >
@@ -506,7 +544,7 @@ function renderFragmentContent(args: {
             surface="item"
             style={{
               margin: 0,
-              fontSize: "var(--text-body-size)",
+              fontSize: workshopBodyFontSize,
               lineHeight: "var(--text-body-line)",
             }}
           >
@@ -526,7 +564,7 @@ function renderFragmentContent(args: {
             activeTarget={activeTarget}
             surface="item"
             style={{
-              fontSize: "var(--text-body-size)",
+              fontSize: workshopBodyFontSize,
               lineHeight: "var(--text-body-line)",
             }}
           >
@@ -546,7 +584,7 @@ function renderFragmentContent(args: {
             activeTarget={activeTarget}
             surface="item"
             style={{
-              fontSize: "var(--text-body-size)",
+              fontSize: workshopBodyFontSize,
               lineHeight: "var(--text-body-line)",
             }}
           >
@@ -566,7 +604,7 @@ function renderFragmentContent(args: {
             activeTarget={activeTarget}
             surface="item"
             style={{
-              fontSize: "var(--text-body-size)",
+              fontSize: workshopBodyFontSize,
               lineHeight: "var(--text-body-line)",
             }}
           >
@@ -586,7 +624,7 @@ function renderFragmentContent(args: {
             activeTarget={activeTarget}
             surface="item"
             style={{
-              fontSize: "var(--text-body-size)",
+              fontSize: workshopBodyFontSize,
               lineHeight: "var(--text-body-line)",
             }}
           >
@@ -613,7 +651,7 @@ function renderFragmentContent(args: {
             activeTarget={activeTarget}
             surface="item"
             style={{
-              fontSize: "var(--text-body-size)",
+              fontSize: workshopBodyFontSize,
               lineHeight: "var(--text-body-line)",
             }}
           >
@@ -639,7 +677,7 @@ function renderFragmentContent(args: {
               style={{
                 margin: 0,
                 fontFamily: "var(--heading-font, var(--font-heading-family))",
-                fontSize: "var(--text-body-size)",
+                fontSize: workshopBodyFontSize,
                 fontWeight: 700,
               }}
             >
@@ -649,7 +687,7 @@ function renderFragmentContent(args: {
           <p
             style={{
               margin: 0,
-              fontSize: "var(--text-body-size)",
+              fontSize: workshopBodyFontSize,
               lineHeight: "var(--text-body-line)",
             }}
           >
