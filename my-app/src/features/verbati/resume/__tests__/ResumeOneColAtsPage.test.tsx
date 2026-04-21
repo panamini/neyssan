@@ -135,6 +135,43 @@ describe("ResumeOneColAtsPage", () => {
     );
   });
 
+  it("uses the shared workshop summary-width var for the summary measure", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const plan = planWorkshopResumePages({
+      data: {
+        ...resumeMock,
+        summary: "Compact summary.",
+        metadata: resumeMock.metadata.slice(0, 1),
+        contact: resumeMock.contact.slice(0, 2),
+        experience: resumeMock.experience.slice(0, 1),
+        projects: [],
+        education: [],
+        certifications: [],
+        affiliations: [],
+        hobbyItems: [],
+        hobbies: [],
+        textSections: [],
+      },
+      template,
+    });
+
+    const { container } = render(
+      <ResumeOneColAtsPage
+        data={resumeMock}
+        page={plan.committedPages[0]!}
+        template={template}
+      />,
+    );
+
+    const summaryItem = container.querySelector(
+      '[data-preview-section="summary"][data-preview-item-id="summary"]',
+    );
+
+    expect(summaryItem?.getAttribute("style")).toContain(
+      "max-width: var(--header-summary-width);",
+    );
+  });
+
   it("pins the workshop page grid to the top instead of stretching rows across the full A4 shell", () => {
     const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
     const plan = planWorkshopResumePages({
