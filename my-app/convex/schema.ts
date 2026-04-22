@@ -218,6 +218,7 @@ export default defineSchema({
 
   proposalHandoffs: defineTable({
     handoffId: v.string(),
+    handoffToken: v.string(),
     clerkId: v.string(),
     jobTitle: v.string(),
     jobDescription: v.string(),

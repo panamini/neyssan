@@ -526,7 +526,22 @@ async function openProposalForgeHandler(
           applicationUrl: jobData.url,
         });
 
-    const url = `${buildAppUrl("/proposal", APP_BASE_URL)}?jobId=${encodeURIComponent(saveResult.jobId)}`;
+    const handoffResult = await convex.mutation(
+      ((api as any).proposalHandoffs?.create ?? "proposalHandoffs.create") as any,
+      {
+        jobTitle: jobData.title,
+        jobDescription: jobData.description || "",
+        sourceUrl: jobData.url,
+        platform: jobData.platform || "manual",
+      },
+    );
+
+    const params = new URLSearchParams({
+      jobId: saveResult.jobId,
+      handoffId: handoffResult.handoffId,
+      handoffToken: handoffResult.handoffToken,
+    });
+    const url = `${buildAppUrl("/proposal", APP_BASE_URL)}?${params.toString()}`;
     chrome.tabs.create({ url });
     sendResponse({
       success: true,
