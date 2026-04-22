@@ -82,6 +82,51 @@ function buildWorkshopOverflowPayload(): ResumePrintRoutePayload {
   return buildResumePrintRoutePayload({ data: previewSource });
 }
 
+function buildWorkshopEducationPayload(): ResumePrintRoutePayload {
+  const currentCv = generateCvTemplate("Workshop Education CV");
+  currentCv.metadata.verbatiStyle = {
+    familyId: "workshop",
+    layout: "workshop",
+    typography: "quiet-editorial",
+    palette: "sauge",
+  };
+  const educationSection = currentCv.sections.find(
+    (section) => section.type === "education",
+  );
+  if (educationSection?.structuredContent && Array.isArray(educationSection.structuredContent)) {
+    educationSection.structuredContent = [
+      {
+        ...(educationSection.structuredContent[0] ?? {
+          id: "edu-print-1",
+          institution: "",
+          degree: "",
+          isCurrent: false,
+        }),
+        id: "edu-print-1",
+        institution: "Northbridge University",
+        degree: "Bachelor of Science",
+        fieldOfStudy: "Computer Science",
+        grade: "3.9 GPA",
+        startDate: "2016-01-01T00:00:00.000Z",
+        endDate: "2020-01-01T00:00:00.000Z",
+        startDatePrecision: "year",
+        endDatePrecision: "year",
+        isCurrent: false,
+      },
+    ];
+  }
+
+  const previewSource = buildStyledResumePrintSource({
+    currentCv,
+    stylePreset: currentCv.metadata.verbatiStyle,
+  });
+  if (!previewSource) {
+    throw new Error("Expected workshop preview source for education payload test.");
+  }
+
+  return buildResumePrintRoutePayload({ data: previewSource });
+}
+
 function makeDenseTokenBlock(token: string, usefulLines: number) {
   return token.repeat(usefulLines * 70);
 }
@@ -267,6 +312,23 @@ describe("ResumePrintPage", () => {
       screen.getAllByTestId("resume-template-page").length,
     );
     expect(window.__DASTI_RESUME_PRINT_STATUS__?.pageCount).toBeGreaterThan(1);
+  });
+
+  it("renders composed education metadata on the workshop print route", async () => {
+    window.__DASTI_RESUME_PRINT_PAYLOAD__ = buildWorkshopEducationPayload();
+
+    render(<ResumePrintPage />);
+
+    expect(
+      screen.getByText("Bachelor of Science, Computer Science"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Northbridge University · Grade: 3.9 GPA · 2016 — 2020"),
+    ).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(window.__DASTI_RESUME_PRINT_STATUS__?.status).toBe("ready");
+    });
   });
 
   it("renders dense workshop continuation from committed pages before later entries on the print route", async () => {

@@ -16,6 +16,35 @@ export type ResumeLinkedItemBase = {
   sectionOrder?: number;
 };
 
+export type WorkshopResponsibilityTextRun = {
+  text: string;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+};
+
+export type WorkshopResponsibilityParagraphBlock = {
+  kind: "paragraph";
+  runs: WorkshopResponsibilityTextRun[];
+};
+
+export type WorkshopResponsibilityBulletListItem = {
+  runs: WorkshopResponsibilityTextRun[];
+};
+
+export type WorkshopResponsibilityBulletListBlock = {
+  kind: "bullet_list";
+  items: WorkshopResponsibilityBulletListItem[];
+};
+
+export type WorkshopResponsibilityRichBlock =
+  | WorkshopResponsibilityParagraphBlock
+  | WorkshopResponsibilityBulletListBlock;
+
+export type WorkshopResponsibilitiesRichContent = {
+  blocks: WorkshopResponsibilityRichBlock[];
+};
+
 export type ResumeSkillItem = ResumeLinkedItemBase & {
   name: string;
   level?: string;
@@ -43,6 +72,7 @@ export type ResumeExperienceItem = {
   location: string;
   description?: string;
   bullets: string[];
+  responsibilitiesRich?: WorkshopResponsibilitiesRichContent;
 };
 
 export type ResumeProjectItem = {
@@ -63,6 +93,8 @@ export type ResumeEducationItem = {
   sectionTitle?: string;
   sectionOrder?: number;
   degree: string;
+  fieldOfStudy?: string;
+  grade?: string;
   school: string;
   period: string;
 };

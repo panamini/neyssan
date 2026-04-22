@@ -1,5 +1,8 @@
 import { formatByPrecision, formatRangeFromItem } from "../../lib/date-utils";
-import { deriveResponsibilityBullets } from "../../lib/resumeResponsibilityAuthority";
+import {
+  deriveResponsibilityBullets,
+  projectResponsibilitiesForWorkshop,
+} from "../../lib/resumeResponsibilityAuthority";
 import { remirrorJsonToString } from "../../lib/utils";
 import type { RemirrorJSON } from "remirror";
 import type {
@@ -273,15 +276,28 @@ function mapExperience(
 
   const structuredExperience = readStructured<IExperienceItem>(experienceContext.section)
     .map((item, index) => {
-      const bullets = deriveResponsibilityBullets({
-        responsibilities: item.responsibilities,
-        hasResponsibilitiesField: Object.prototype.hasOwnProperty.call(
-          item,
-          "responsibilities",
-        ),
-        responsibilityBullets: item.responsibilityBullets,
-      });
-      const description = toPlainText(item.description);
+      const hasResponsibilitiesField = Object.prototype.hasOwnProperty.call(
+        item,
+        "responsibilities",
+      );
+      const responsibilitiesProjection = hasResponsibilitiesField
+        ? projectResponsibilitiesForWorkshop(item.responsibilities)
+        : {
+            prose: "",
+            bullets: deriveResponsibilityBullets({
+              responsibilities: item.responsibilities,
+              hasResponsibilitiesField: false,
+              responsibilityBullets: item.responsibilityBullets,
+            }),
+            rich: { blocks: [] },
+          };
+      const bullets = responsibilitiesProjection.bullets;
+      const description = [
+        toPlainText(item.description),
+        responsibilitiesProjection.prose,
+      ]
+        .filter(Boolean)
+        .join("\n\n");
       const role = String(item.position ?? "").trim();
       const company = String(item.company ?? "").trim();
       const location = String(item.location ?? "").trim();
@@ -307,6 +323,9 @@ function mapExperience(
         location: location || "Location not set",
         ...(description ? { description } : {}),
         bullets,
+        ...(responsibilitiesProjection.rich.blocks.length > 0
+          ? { responsibilitiesRich: responsibilitiesProjection.rich }
+          : {}),
       };
     })
     .filter((item): item is ResumeExperienceItem => item !== null);
@@ -430,6 +449,7 @@ function mapEducation(
     .map((item, index) => {
       const degree = String(item.degree ?? "").trim();
       const field = String(item.fieldOfStudy ?? "").trim();
+      const grade = String(item.grade ?? "").trim();
       const school = String(item.institution ?? "").trim();
       const period = formatRangeFromItem(item);
 
@@ -447,8 +467,10 @@ function mapEducation(
             index,
           }),
         ),
-        degree: degree || field || school || "Education",
-        school: school || field || degree || "Institution",
+        degree,
+        ...(field ? { fieldOfStudy: field } : {}),
+        ...(grade ? { grade } : {}),
+        school,
         period: period || "Dates not set",
       };
     })

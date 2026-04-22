@@ -11,6 +11,7 @@ import type {
   ResumeTextListItem,
   ResumeTextSection,
 } from "../../features/verbati/resume/resume.types";
+import { buildResumeEducationDisplay } from "../../features/verbati/resume/resumeEducation";
 import type { ResumePreviewSectionType } from "../../features/verbati/resumeLinking";
 import type { VerbatiStylePreset } from "../../features/verbati/types";
 import { normalizeResumePreviewTokens } from "../layout/documentTokenNormalizer";
@@ -207,6 +208,8 @@ type WorkshopCommittedExperienceItem = {
 type WorkshopCommittedEducationItem = {
   id: string;
   degree: string;
+  fieldOfStudy?: string;
+  grade?: string;
   school: string;
   period: string;
 };
@@ -1332,16 +1335,17 @@ function estimateEducationHeight(
   item: ResumeEducationItem,
   metrics: WorkshopPlannerMetrics,
 ) {
+  const educationDisplay = buildResumeEducationDisplay(item);
   return (
     metrics.educationGapMm +
     estimateTextHeight(
-      item.degree,
+      educationDisplay.title,
       metrics.compactCharsPerLine,
       metrics.bodyLineHeightMm,
     ) +
     metrics.compactMetaGapMm +
     estimateTextHeight(
-      `${item.school} ${item.period}`,
+      educationDisplay.previewMeta,
       metrics.compactCharsPerLine,
       metrics.metaLineHeightMm,
     )
@@ -2081,6 +2085,8 @@ function buildCommittedFragment(args: {
           .map((entry) => ({
             id: entry.item.id,
             degree: entry.item.degree,
+            fieldOfStudy: entry.item.fieldOfStudy,
+            grade: entry.item.grade,
             school: entry.item.school,
             period: entry.item.period,
           })),
