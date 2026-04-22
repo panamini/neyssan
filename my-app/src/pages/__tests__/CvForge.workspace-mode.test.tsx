@@ -273,10 +273,10 @@ describe("CvForge workspace mode", () => {
       screen.getByRole("button", { name: "Open saved resume styles" }),
     );
 
-    await user.click(screen.getByRole("menuitemradio", { name: /Stone Editorial/i }));
+    await user.click(screen.getByRole("menuitemradio", { name: /Stone Swiss/i }));
 
     expect(
-      screen.getByText("Preview style: editorial|quiet-editorial|pierre"),
+      screen.getByText("Preview style: swiss|quiet-editorial|pierre"),
     ).toBeInTheDocument();
   });
 
