@@ -13,6 +13,7 @@ import {
   resolveVerbatiStyle,
 } from "../features/verbati/style";
 import type { VerbatiStylePreset } from "../features/verbati/types";
+import { buildResumeEducationDisplay } from "../features/verbati/resume/resumeEducation";
 import {
   type ProposalTemplateId,
 } from "../../convex/lib/proposals/renderTemplates";
@@ -1493,17 +1494,18 @@ function renderWorkshopFragment(args: {
       return renderSection({
         block: "education",
         content: fragment.items
-          .map(
-            (item) => `<article class="entry entry--education" data-export-item-id="${escapeHtml(item.id)}">
+          .map((item) => {
+            const educationDisplay = buildResumeEducationDisplay(item);
+            return `<article class="entry entry--education" data-export-item-id="${escapeHtml(item.id)}">
               <div class="entry-lead">
                 <div class="entry-head">
-                  <h3 class="entry-title">${escapeHtml(item.degree)}</h3>
-                  <p class="entry-meta">${escapeHtml(item.period)}</p>
+                  <h3 class="entry-title">${escapeHtml(educationDisplay.title)}</h3>
+                  <p class="entry-meta">${escapeHtml(educationDisplay.period)}</p>
                 </div>
-                <p class="entry-summary">${escapeHtml(item.school)}</p>
+                <p class="entry-summary">${escapeHtml(educationDisplay.subtitle)}</p>
               </div>
-            </article>`,
-          )
+            </article>`;
+          })
           .join(""),
         locale,
         titleKey: "education",
@@ -1772,17 +1774,18 @@ function renderResumeHtml(args: {
     .join("");
 
   const educationContent = args.data.education
-    .map(
-      (item) => `<article class="entry entry--education">
+    .map((item) => {
+      const educationDisplay = buildResumeEducationDisplay(item);
+      return `<article class="entry entry--education">
         <div class="entry-lead">
           <div class="entry-head">
-            <h3 class="entry-title">${escapeHtml(item.degree)}</h3>
-            <p class="entry-meta">${escapeHtml(item.period)}</p>
+            <h3 class="entry-title">${escapeHtml(educationDisplay.title)}</h3>
+            <p class="entry-meta">${escapeHtml(educationDisplay.period)}</p>
           </div>
-          <p class="entry-summary">${escapeHtml(item.school)}</p>
+          <p class="entry-summary">${escapeHtml(educationDisplay.subtitle)}</p>
         </div>
-      </article>`,
-    )
+      </article>`;
+    })
     .join("");
 
   const experienceSection = renderSection({

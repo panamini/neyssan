@@ -1,5 +1,5 @@
 import React from "react";
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { ResumeOneColAtsPage } from "../ResumeOneColAtsPage";
@@ -750,5 +750,52 @@ describe("ResumeOneColAtsPage", () => {
     expect(container.textContent).toContain("Continued");
     expect(container.textContent).not.toContain(makeDenseTokenBlock("1", 40).slice(2552));
     expect(container.textContent).toContain(makeDenseTokenBlock("2", 20));
+  });
+
+  it("renders degree, field of study, grade, school, and period together on workshop education rows", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const educationData = {
+      ...buildRendererData(),
+      experience: [],
+      projects: [],
+      skillItems: [],
+      languages: [],
+      education: [
+        {
+          ...resumeMock.education[0]!,
+          id: "edu-render-fields",
+          degree: "Bachelor of Science",
+          fieldOfStudy: "Computer Science",
+          grade: "3.9 GPA",
+          school: "Northbridge University",
+          period: "2016 — 2020",
+        },
+      ],
+    };
+    const plan = planWorkshopResumePages({
+      data: educationData,
+      template,
+      stylePreset: {
+        familyId: "workshop",
+        layout: "workshop",
+        typography: "quiet-editorial",
+        palette: "sauge",
+      },
+    });
+
+    render(
+      <ResumeOneColAtsPage
+        data={educationData}
+        page={plan.committedPages[0]!}
+        template={template}
+      />,
+    );
+
+    expect(
+      screen.getByText("Bachelor of Science, Computer Science"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Northbridge University · Grade: 3.9 GPA · 2016 — 2020"),
+    ).toBeInTheDocument();
   });
 });
