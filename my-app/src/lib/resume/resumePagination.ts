@@ -1834,7 +1834,54 @@ function shouldDeferHobbiesBeforeTrailingTextSection(args: {
     return false;
   }
 
-  return nextState.section.entries.slice(nextState.entryIndex).length > 0;
+  if (nextState.section.entries.slice(nextState.entryIndex).length === 0) {
+    return false;
+  }
+
+  const availableHeight = args.pageHeightBudget - args.currentPage.estimatedHeight;
+  const fullCurrentPageHeight = estimateSectionPlacementHeight({
+    currentPageHasSections: args.currentPage.sections.length > 0,
+    section: args.section,
+    entries: remainingEntries,
+    metrics: args.metrics,
+  });
+  if (fitsWithinWorkshopAvailableHeight(
+    fullCurrentPageHeight,
+    availableHeight,
+    args.metrics.bottomFitSafetyMm,
+  )) {
+    return false;
+  }
+
+  const firstEntryCurrentPageHeight = estimateSectionPlacementHeight({
+    currentPageHasSections: args.currentPage.sections.length > 0,
+    section: args.section,
+    entries: remainingEntries.slice(0, 1),
+    metrics: args.metrics,
+  });
+  if (!fitsWithinWorkshopAvailableHeight(
+    firstEntryCurrentPageHeight,
+    availableHeight,
+    args.metrics.bottomFitSafetyMm,
+  )) {
+    return false;
+  }
+
+  const fullFreshPageHeight = estimateSectionPlacementHeight({
+    currentPageHasSections: false,
+    section: args.section,
+    entries: remainingEntries,
+    metrics: args.metrics,
+  });
+  if (!fitsWithinWorkshopAvailableHeight(
+    fullFreshPageHeight,
+    args.pageHeightBudget,
+    args.metrics.bottomFitSafetyMm,
+  )) {
+    return false;
+  }
+
+  return true;
 }
 
 function estimatePageHeightForSections(args: {
@@ -1927,6 +1974,7 @@ function rebalanceTrailingTextSectionPage(args: {
     previousPageTrailingSection.kind === "profile" ||
     previousPageTrailingSection.kind === "summary" ||
     previousPageTrailingSection.kind === "experience" ||
+    previousPageTrailingSection.kind === "hobbies" ||
     previousPageTrailingSection.kind === "additional_information"
   ) {
     return args.pages;
