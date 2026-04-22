@@ -37,6 +37,11 @@ const workshopLabelTextStyle = {
   color: "var(--color-text-subtle)",
 };
 
+const workshopVisibleListStyle = {
+  listStyleType: "disc" as const,
+  listStylePosition: "outside" as const,
+};
+
 function formatMillimeters(value: number) {
   return `${value}mm`;
 }
@@ -148,6 +153,7 @@ function renderExperienceBlocks(args: {
         style={{
           margin: 0,
           paddingLeft: "var(--flow-list-indent)",
+          ...workshopVisibleListStyle,
           display: "grid",
           gap: formatMillimeters(args.listGapMm),
         }}
@@ -742,6 +748,7 @@ function renderSectionFragment(args: {
         style={{
           margin: 0,
           paddingLeft: "var(--flow-list-indent)",
+          ...workshopVisibleListStyle,
           display: "grid",
           gap: formatMillimeters(workshopLayout.listGapMm),
         }}
