@@ -1059,6 +1059,20 @@ ${buildCssVarBlock(layoutProfileVars)}
       text-align: left;
     }
 
+    .compact-list {
+      display: grid;
+      gap: var(--flow-list-gap);
+      margin: 0;
+      padding: 0 0 0 var(--flow-list-indent);
+    }
+
+    .compact-list li {
+      font-size: var(--flow-body-sm-size);
+      line-height: var(--flow-body-sm-line);
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
     .entry {
       margin-bottom: var(--flow-entry-gap);
     }
@@ -1314,6 +1328,21 @@ function renderResumeTagList(values: string[]): string {
     .join("")}</ul>`;
 }
 
+function renderResumeCompactList(args: {
+  items: Array<{ text: string; id?: string }>;
+}): string {
+  if (args.items.length === 0) {
+    return "";
+  }
+
+  return `<ul class="compact-list">${args.items
+    .map(
+      (item) =>
+        `<li${item.id ? ` data-export-item-id="${escapeHtml(item.id)}"` : ""}>${escapeHtml(item.text)}</li>`,
+    )
+    .join("")}</ul>`;
+}
+
 function renderSection(args: {
   block: string;
   content: string;
@@ -1514,13 +1543,16 @@ function renderWorkshopFragment(args: {
     case "languages":
       return renderSection({
         block: "languages",
-        content: renderResumeItems({
+        content: renderResumeCompactList({
           items: fragment.items.map((item) => ({
-            label: item.name,
-            value:
+            id: item.id,
+            text: [
+              item.name,
               item.level || localizeStructuredLabel("Working proficiency", locale),
+            ]
+              .filter(Boolean)
+              .join(" · "),
           })),
-          locale,
         }),
         keep: true,
         locale,
@@ -1580,10 +1612,15 @@ function renderWorkshopFragment(args: {
     case "hobbies":
       return renderSection({
         block: "interests",
-        content: `<p class="entry-summary">${escapeHtml(
-          fragment.items.map((item) => item.name).join(" · "),
-        )}</p>`,
+        content: renderResumeCompactList({
+          items: fragment.items.map((item) => ({
+            id: item.id,
+            text: item.name,
+          })),
+        }),
+        keep: true,
         locale,
+        ruled: true,
         titleKey: "interests",
       });
     case "additional_information":
