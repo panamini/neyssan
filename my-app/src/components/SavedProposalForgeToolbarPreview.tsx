@@ -13,7 +13,7 @@ import {
   Plus,
   PenNib,
   RotateCcw,
-  Sunglasses,
+  Stamp,
   Trash,
   Wand2,
   X,
@@ -90,7 +90,7 @@ const TONE_OPTIONS: Array<{
   {
     id: "engaging",
     label: getVoicePresetDisplayLabel("engaging"),
-    Icon: Sunglasses,
+    Icon: Stamp,
   },
 ];
 
