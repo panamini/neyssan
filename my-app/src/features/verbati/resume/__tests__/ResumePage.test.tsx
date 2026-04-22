@@ -183,6 +183,40 @@ describe("ResumePage", () => {
     expect(screen.getAllByText("Education").length).toBeGreaterThan(0);
   });
 
+  it("renders full Swiss summary text in preview mode without line clamping", () => {
+    const longSummary = Array.from(
+      { length: 48 },
+      (_, index) => `full-summary-${index + 1}`,
+    ).join(" ");
+
+    const { container } = render(
+      <ResumePage
+        data={{
+          ...resumeMock,
+          summary: longSummary,
+        }}
+        mode="swissminima"
+        stylePreset={{
+          ...DEFAULT_VERBATI_STYLE,
+          layout: "swiss",
+        }}
+        stageLayout={FIXED_STAGE_LAYOUT}
+      />,
+    );
+
+    const summaryParagraph = container.querySelector(
+      '[data-preview-section="summary"] p[data-font-probe="body"]',
+    ) as HTMLElement | null;
+    const summaryStyle = summaryParagraph?.style;
+
+    expect(summaryParagraph?.textContent).toBe(longSummary);
+    expect(summaryParagraph).toHaveClass("summary");
+    expect(summaryStyle?.display).not.toBe("-webkit-box");
+    expect(summaryStyle?.getPropertyValue("-webkit-line-clamp")).toBe("");
+    expect(summaryStyle?.overflow).not.toBe("hidden");
+    expect(summaryStyle?.textTransform).not.toBe("uppercase");
+  });
+
   it("keeps Swiss body content on the shared body font while headings stay on the heading font", () => {
     const quietSwiss = {
       ...DEFAULT_VERBATI_STYLE,

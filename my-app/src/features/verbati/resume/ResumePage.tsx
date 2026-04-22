@@ -2947,20 +2947,11 @@ function SwissMinimaPage({
         <div>
           <p
             data-font-probe="body"
+            className="summary"
             style={{
               margin: 0,
-              maxWidth: "var(--header-summary-width)",
               fontFamily: "var(--font-body-family)",
-              fontSize: "calc(var(--text-title-size) + 0.9mm)",
-              lineHeight: 1.08,
-              letterSpacing: "0.03em",
-              fontWeight: 800,
-              textTransform: "uppercase",
               color: "var(--color-text)",
-              display: "-webkit-box",
-              WebkitLineClamp: 5,
-              WebkitBoxOrient: "vertical",
-              overflow: "hidden",
             }}
           >
             {data.summary}

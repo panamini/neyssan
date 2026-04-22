@@ -1,5 +1,6 @@
 import React from "react";
 import { isV1SectionsEnabled } from "../lib/flags";
+import { ADDITIONAL_INFORMATION_SECTION_TITLE } from "../lib/cv-section-organization";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import { useCloseOnEscape } from "../hooks/use-close-on-escape";
 import { BodyPortal } from "@/components/ui/body-portal";
@@ -119,7 +120,7 @@ export function AddSectionBottomSheet({
           },
           {
             type: "additional_information",
-            title: "Additional Information",
+            title: ADDITIONAL_INFORMATION_SECTION_TITLE,
             desc: "Extra details and references",
             fullSpan: true,
           },

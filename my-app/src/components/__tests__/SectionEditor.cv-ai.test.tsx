@@ -923,21 +923,21 @@ describe("SectionEditor CV AI flows", () => {
 
     renderSectionEditor(additionalInformationSection);
 
-    expect(screen.getByText("Additional Information")).toBeInTheDocument();
+    expect(screen.getByText("Additional information")).toBeInTheDocument();
     expect(
       screen.getByText("Available for travel and relocation"),
     ).toBeInTheDocument();
     expect(screen.queryByTestId("block-renderer")).toBeNull();
     expect(
-      screen.getAllByRole("button", { name: "Edit Additional Information" }),
+      screen.getAllByRole("button", { name: "Edit Additional information" }),
     ).toHaveLength(1);
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Edit Additional Information" }),
+      screen.getByRole("button", { name: "Edit Additional information" }),
     );
 
     expect(
-      screen.getByRole("dialog", { name: "Edit Additional Information" }),
+      screen.getByRole("dialog", { name: "Edit Additional information" }),
     ).toBeInTheDocument();
   });
 
@@ -1646,7 +1646,7 @@ describe("SectionEditor CV AI flows", () => {
     fireEvent.click(screen.getByText("Add supporting details, references, or availability notes."));
 
     expect(
-      screen.getByRole("dialog", { name: "Edit Additional Information" }),
+      screen.getByRole("dialog", { name: "Edit Additional information" }),
     ).toBeInTheDocument();
 
     fireEvent.click(
@@ -1699,7 +1699,7 @@ describe("SectionEditor CV AI flows", () => {
 
     await waitFor(() =>
       expect(
-        screen.getByRole("dialog", { name: "Edit Additional Information" }),
+        screen.getByRole("dialog", { name: "Edit Additional information" }),
       ).toBeInTheDocument(),
     );
   });
@@ -1735,7 +1735,7 @@ describe("SectionEditor CV AI flows", () => {
 
     await waitFor(() =>
       expect(
-        screen.getByRole("dialog", { name: "Edit Additional Information" }),
+        screen.getByRole("dialog", { name: "Edit Additional information" }),
       ).toBeInTheDocument(),
     );
 
