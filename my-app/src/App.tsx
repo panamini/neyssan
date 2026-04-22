@@ -146,41 +146,46 @@ function useBrowserTitle(topbarDocumentTitle: string | null): void {
 
   React.useEffect(() => {
     const pathname = location.pathname;
-    let pageTitle = "dasti";
+    let pageTitle = "two weeks";
 
     if (pathname === "/cv") {
-      pageTitle = topbarDocumentTitle ? `${topbarDocumentTitle} · Resume · dasti` : "Resume · dasti";
+      pageTitle = topbarDocumentTitle ? `${topbarDocumentTitle} · Resume · two weeks` : "Resume · two weeks";
     } else if (pathname === "/cvs") {
       pageTitle = topbarDocumentTitle
-        ? `${topbarDocumentTitle} · dasti`
-        : "All resumes · dasti";
+        ? `${topbarDocumentTitle} · two weeks`
+        : "All resumes · two weeks";
     } else if (pathname === "/proposal") {
       pageTitle = topbarDocumentTitle
-        ? `${topbarDocumentTitle} · Cover letter · dasti`
-        : "Cover letter · dasti";
+        ? `${topbarDocumentTitle} · Cover letter · two weeks`
+        : "Cover letter · two weeks";
     } else if (pathname === "/proposals") {
       pageTitle = topbarDocumentTitle
-        ? `${topbarDocumentTitle} · dasti`
-        : "All cover letters · dasti";
+        ? `${topbarDocumentTitle} · two weeks`
+        : "All cover letters · two weeks";
     } else if (pathname === "/settings") {
       pageTitle = topbarDocumentTitle
-        ? `${topbarDocumentTitle} · dasti`
-        : "Proposal defaults · dasti";
+        ? `${topbarDocumentTitle} · two weeks`
+        : "Proposal defaults · two weeks";
     } else if (pathname === "/style") {
-      pageTitle = topbarDocumentTitle ? `${topbarDocumentTitle} · Style Forge · dasti` : "Style Forge · dasti";
+      pageTitle = topbarDocumentTitle ? `${topbarDocumentTitle} · Style Forge · two weeks` : "Style Forge · two weeks";
     }
 
     document.title = pageTitle;
   }, [location.pathname, topbarDocumentTitle]);
 }
 
+const SHOW_TOPBAR = false;
+
+function TopbarTitleSync(): null {
+  const topbarDocumentTitle = useTopbarDocumentTitle();
+  useBrowserTitle(topbarDocumentTitle);
+  return null;
+}
+
 /**
  * Topbar — h:54px (--hdr), wordmark only.
  */
 function Topbar() {
-  const topbarDocumentTitle = useTopbarDocumentTitle();
-  useBrowserTitle(topbarDocumentTitle);
-
   return (
     <header
       style={{
@@ -216,7 +221,7 @@ function Topbar() {
             flexShrink: 0,
           }}
         >
-          dasti
+          two weeks
         </span>
         {topbarDocumentTitle ? (
           <>
@@ -333,7 +338,8 @@ function AppShell(): JSX.Element {
           }}
         >
           <ConvexStatusBanner />
-          <Topbar />
+          <TopbarTitleSync />
+          {SHOW_TOPBAR ? <Topbar /> : null}
 
           {/* .pscroll — flex:1 overflow:hidden, chaque page gère son propre scroll */}
           <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
