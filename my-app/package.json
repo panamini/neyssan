@@ -15,6 +15,9 @@
     "test": "vitest --run --exclude pdf-ingest/*",
     "test:watch": "vitest",
     "test:golden": "vitest --run -t \"Golden set NER fusion\"",
+    "pw:version": "playwright --version",
+    "pw:install": "playwright install chromium",
+    "pw:test": "playwright test",
     "extract:strict": "tsx scripts/run-extract-profile-strict.ts",
     "frontend": "node ./scripts/ensure-parser-and-run-frontend.mjs"
   },
@@ -77,6 +80,7 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "@testing-library/jest-dom": "^6.8.0",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",
