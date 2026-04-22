@@ -216,6 +216,20 @@ describe("resumeExportParity", () => {
           kind: block.kind,
           text: block.text,
         })),
+        responsibilitiesRich:
+          item.responsibilitiesRich?.blocks.map((block) =>
+            block.kind === "paragraph"
+              ? {
+                  kind: block.kind,
+                  runs: block.runs.map((run) => ({ ...run })),
+                }
+              : {
+                  kind: block.kind,
+                  items: block.items.map((richItem) => ({
+                    runs: richItem.runs.map((run) => ({ ...run })),
+                  })),
+                },
+          ) ?? [],
       }));
     const plannerExperienceItems = directPlan.committedPages
       .flatMap((page) => page.fragments)
@@ -228,6 +242,20 @@ describe("resumeExportParity", () => {
           kind: block.kind,
           text: block.text,
         })),
+        responsibilitiesRich:
+          item.responsibilitiesRich?.blocks.map((block) =>
+            block.kind === "paragraph"
+              ? {
+                  kind: block.kind,
+                  runs: block.runs.map((run) => ({ ...run })),
+                }
+              : {
+                  kind: block.kind,
+                  items: block.items.map((richItem) => ({
+                    runs: richItem.runs.map((run) => ({ ...run })),
+                  })),
+                },
+          ) ?? [],
       }));
 
     expect(exportExperienceItems).toEqual(plannerExperienceItems);
@@ -342,6 +370,153 @@ describe("resumeExportParity", () => {
     ).toBeGreaterThan(
       plannerDenseItems?.findLastIndex((item) => item.id === "exp-dense-1") ?? -1,
     );
+  });
+
+  it("keeps workshop rich responsibilities committed shape aligned between planner and export", () => {
+    const currentCv = generateCvTemplate("Workshop rich parity");
+    currentCv.metadata.verbatiStyle = {
+      familyId: "workshop",
+      layout: "workshop",
+      typography: "quiet-editorial",
+      palette: "sauge",
+    };
+
+    const experienceSection = currentCv.sections.find(
+      (section) => section.type === "experience",
+    );
+    if (experienceSection?.structuredContent && Array.isArray(experienceSection.structuredContent)) {
+      experienceSection.structuredContent = [
+        {
+          ...(experienceSection.structuredContent[0] ?? {
+            id: "exp-rich-parity",
+            company: "",
+            position: "",
+            startDate: "2023-01-01T00:00:00.000Z",
+            isCurrent: false,
+            currentlyWorking: false,
+            achievements: [],
+          }),
+          id: "exp-rich-parity",
+          company: "Parity Studio",
+          position: "Platform Lead",
+          startDate: "2023-01-01T00:00:00.000Z",
+          isCurrent: false,
+          currentlyWorking: false,
+          responsibilities: {
+            type: "doc",
+            content: [
+              {
+                type: "paragraph",
+                content: [
+                  { type: "text", text: "Directed the " },
+                  {
+                    type: "text",
+                    text: "migration roadmap",
+                    marks: [{ type: "bold" }],
+                  },
+                  { type: "text", text: " across three squads." },
+                ],
+              },
+              {
+                type: "bulletList",
+                content: [
+                  {
+                    type: "listItem",
+                    content: [
+                      {
+                        type: "paragraph",
+                        content: [
+                          { type: "text", text: "Reduced " },
+                          {
+                            type: "text",
+                            text: "rollback incidents",
+                            marks: [{ type: "italic" }],
+                          },
+                          { type: "text", text: " by 38%." },
+                        ],
+                      },
+                    ],
+                  },
+                  {
+                    type: "listItem",
+                    content: [
+                      {
+                        type: "paragraph",
+                        content: [
+                          { type: "text", text: "Formalized " },
+                          {
+                            type: "text",
+                            text: "launch checklists",
+                            marks: [{ type: "underline" }],
+                          },
+                          { type: "text", text: " across squads." },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+          achievements: [],
+        },
+      ];
+    }
+
+    const canonical = buildCanonicalResumeRenderModelFromCv(currentCv);
+    const directPlan = planWorkshopResumePages({
+      data: canonical,
+      template: getResumeTemplateDefinition("workshop_resume_onecol_ats"),
+    });
+    const exportSource = buildResumeExportSource({
+      currentCv,
+      stylePreset: currentCv.metadata.verbatiStyle,
+    });
+
+    const plannerRichItems = directPlan.committedPages
+      .flatMap((page) => page.fragments)
+      .filter((fragment) => fragment.kind === "experience")
+      .flatMap((fragment) => fragment.items)
+      .map((item) => ({
+        id: item.id,
+        responsibilitiesRich:
+          item.responsibilitiesRich?.blocks.map((block) =>
+            block.kind === "paragraph"
+              ? {
+                  kind: block.kind,
+                  runs: block.runs.map((run) => ({ ...run })),
+                }
+              : {
+                  kind: block.kind,
+                  items: block.items.map((richItem) => ({
+                    runs: richItem.runs.map((run) => ({ ...run })),
+                  })),
+                },
+          ) ?? [],
+      }));
+    const exportRichItems = exportSource?.committedPages
+      ?.flatMap((page) => page.fragments)
+      .filter((fragment) => fragment.kind === "experience")
+      .flatMap((fragment) => fragment.items)
+      .map((item) => ({
+        id: item.id,
+        responsibilitiesRich:
+          item.responsibilitiesRich?.blocks.map((block) =>
+            block.kind === "paragraph"
+              ? {
+                  kind: block.kind,
+                  runs: block.runs.map((run) => ({ ...run })),
+                }
+              : {
+                  kind: block.kind,
+                  items: block.items.map((richItem) => ({
+                    runs: richItem.runs.map((run) => ({ ...run })),
+                  })),
+                },
+          ) ?? [],
+      }));
+
+    expect(exportRichItems).toEqual(plannerRichItems);
   });
 
   it("keeps compact atomic workshop fragments aligned between planner and export", () => {

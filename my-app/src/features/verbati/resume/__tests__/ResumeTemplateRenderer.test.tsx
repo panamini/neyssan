@@ -392,6 +392,239 @@ describe("ResumeTemplateRenderer", () => {
     });
   });
 
+  it("renders committed workshop experience rich content from committedPages with fallback-safe source data", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const sourceData = {
+      ...resumeMock,
+      summary: makeTextBlock("template-continued-summary", 16),
+      skillItems: [],
+      languages: [],
+      projects: [],
+      achievements: [],
+      achievementItems: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+      experience: [
+        {
+          ...resumeMock.experience[0]!,
+          id: "exp-template-rich",
+          description: "Led platform migration planning.",
+          bullets: [
+            "Cut release rollback rate by 38%.",
+            "Formalized launch checklists across squads.",
+          ],
+          responsibilitiesRich: {
+            blocks: [
+              {
+                kind: "paragraph" as const,
+                runs: [
+                  { text: "Led " },
+                  { text: "platform migration", bold: true },
+                  { text: " planning." },
+                ],
+              },
+              {
+                kind: "bullet_list" as const,
+                items: [
+                  {
+                    runs: [
+                      { text: "Cut " },
+                      { text: "release rollback rate", italic: true },
+                      { text: " by 38%." },
+                    ],
+                  },
+                  {
+                    runs: [
+                      { text: "Formalized " },
+                      { text: "launch checklists", underline: true },
+                      { text: " across squads." },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      ],
+    };
+    const committedPages = planWorkshopResumePages({
+      data: sourceData,
+      template,
+    }).committedPages;
+    const fallbackOnlyData = {
+      ...sourceData,
+      experience: sourceData.experience.map((item) => ({
+        ...item,
+        responsibilitiesRich: undefined,
+        description: "Fallback description that should not render.",
+        bullets: ["Fallback bullet that should not render."],
+      })),
+    };
+
+    const { container } = render(
+      <ResumeTemplateRenderer
+        data={fallbackOnlyData}
+        committedPages={committedPages}
+        stylePreset={{
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        resumeTemplateId="workshop_resume_onecol_ats"
+      />,
+    );
+
+    const experienceItem = container.querySelector(
+      '[data-preview-section="experience"][data-preview-item-id="exp-template-rich"]',
+    ) as HTMLElement | null;
+
+    expect(experienceItem?.textContent).toContain("Led platform migration planning.");
+    expect(experienceItem?.querySelector("strong")?.textContent).toBe(
+      "platform migration",
+    );
+    expect(experienceItem?.querySelector("em")?.textContent).toBe(
+      "release rollback rate",
+    );
+    expect(experienceItem?.querySelector("u")?.textContent).toBe(
+      "launch checklists",
+    );
+    expect(experienceItem?.textContent).not.toContain(
+      "Fallback description that should not render.",
+    );
+    expect(experienceItem?.textContent).not.toContain(
+      "Fallback bullet that should not render.",
+    );
+  });
+
+  it("renders committed continued experience rich content in preserved bullet-list then paragraph order", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const firstParagraph = makeTextBlock("template-continued-prelude", 1);
+    const continuedBullets = Array.from({ length: 4 }, (_, index) =>
+      makeTextBlock(`template-continued-bullet-${index + 1}`, 7),
+    );
+    const trailingParagraph = makeTextBlock("template-continued-tail", 1);
+    const sourceData = {
+      ...resumeMock,
+      summary: "",
+      skillItems: [],
+      languages: [],
+      projects: [],
+      achievements: [],
+      achievementItems: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+      education: [resumeMock.education[0]!],
+      experience: [
+        {
+          ...resumeMock.experience[0]!,
+          id: "exp-template-continued-rich",
+          description: firstParagraph,
+          bullets: continuedBullets,
+          responsibilitiesRich: {
+            blocks: [
+              {
+                kind: "paragraph" as const,
+                runs: [{ text: firstParagraph }],
+              },
+              {
+                kind: "bullet_list" as const,
+                items: continuedBullets.map((bullet, index) => ({
+                  runs:
+                    index === continuedBullets.length - 1
+                      ? [{ text: bullet, italic: true }]
+                      : [{ text: bullet }],
+                })),
+              },
+              {
+                kind: "paragraph" as const,
+                runs: [{ text: trailingParagraph, underline: true }],
+              },
+            ],
+          },
+        },
+      ],
+    };
+    const committedPages = planWorkshopResumePages({
+      data: sourceData,
+      template,
+    }).committedPages;
+    const fallbackOnlyData = {
+      ...sourceData,
+      experience: sourceData.experience.map((item) => ({
+        ...item,
+        responsibilitiesRich: undefined,
+        description: "Fallback description that should not render.",
+        bullets: ["Fallback bullet that should not render."],
+      })),
+    };
+
+    const { container } = render(
+      <ResumeTemplateRenderer
+        data={fallbackOnlyData}
+        committedPages={committedPages}
+        stylePreset={{
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        resumeTemplateId="workshop_resume_onecol_ats"
+      />,
+    );
+
+    const pages = screen.getAllByTestId("resume-template-page");
+    const continuedPage =
+      committedPages
+        .map((committedPage, index) => ({
+          committedPage,
+          renderedPage: pages[index] ?? null,
+        }))
+        .find(({ committedPage }) =>
+          committedPage.fragments.some(
+            (fragment) =>
+              fragment.kind === "experience" &&
+              fragment.items.some(
+                (item) =>
+                  item.id === "exp-template-continued-rich" &&
+                  item.continued &&
+                  item.responsibilitiesRich?.blocks.some((block) => block.kind === "paragraph"),
+              ),
+          ),
+        )?.renderedPage ?? null;
+    const experienceItem = continuedPage?.querySelector(
+      '[data-preview-section="experience"][data-preview-item-id="exp-template-continued-rich"]',
+    ) as HTMLElement | null;
+    const directParagraphs = Array.from(experienceItem?.querySelectorAll(":scope > p") ?? []).map(
+      (node) => node.textContent,
+    );
+    const listItems = Array.from(experienceItem?.querySelectorAll(":scope > ul > li") ?? []).map(
+      (node) => node.textContent,
+    );
+
+    expect(continuedPage?.textContent).not.toContain(firstParagraph);
+    expect(continuedPage?.textContent).not.toContain(continuedBullets[0]!);
+    expect(continuedPage?.textContent).not.toContain(continuedBullets[1]!);
+    expect(continuedPage?.textContent).not.toContain(continuedBullets[2]!);
+    expect(listItems).toEqual([continuedBullets[3]]);
+    expect(directParagraphs).toEqual([trailingParagraph]);
+    expect(experienceItem?.querySelector("em")?.textContent).toBe(continuedBullets[3]);
+    expect(experienceItem?.querySelector("u")?.textContent).toBe(trailingParagraph);
+    expect(experienceItem?.innerHTML.indexOf("</ul><p")).toBeGreaterThan(-1);
+    expect(experienceItem?.textContent).not.toContain(
+      "Fallback description that should not render.",
+    );
+    expect(experienceItem?.textContent).not.toContain(
+      "Fallback bullet that should not render.",
+    );
+  });
+
   it("stays inert for non-workshop template ids", async () => {
     const onStablePageCountChange = vi.fn();
 
@@ -758,7 +991,7 @@ describe("ResumeTemplateRenderer", () => {
       page.fragments.some((fragment) => fragment.kind === "selected_projects"),
     );
 
-    expect(projectPageIndex).toBe(3);
+    expect(projectPageIndex).toBe(2);
     expect(
       Array.from(
         pages[projectPageIndex]?.querySelectorAll(
@@ -774,7 +1007,7 @@ describe("ResumeTemplateRenderer", () => {
     ).toBeFalsy();
   });
 
-  it("renders both hobbies together on the last page before additional information after dense achievements packing", () => {
+  it("renders the fitting hobby on the current page and continues the remainder before additional information after dense achievements packing", () => {
     const data = buildAchievementsTailHobbiesRendererFixture();
     const stylePreset = {
       familyId: "workshop",
@@ -797,26 +1030,48 @@ describe("ResumeTemplateRenderer", () => {
     );
 
     const pages = screen.getAllByTestId("resume-template-page");
-    const hobbyPageIndex = plan.committedPages.findIndex((page) =>
-      page.fragments.some((fragment) => fragment.kind === "hobbies"),
+    const firstHobbyPageIndex = plan.committedPages.findIndex((page) =>
+      page.fragments.some(
+        (fragment) =>
+          fragment.kind === "hobbies" &&
+          fragment.kind === "hobbies" &&
+          fragment.items.some((item) => item.id === "hobby-render-achievement-tail-1"),
+      ),
+    );
+    const continuedHobbyPageIndex = plan.committedPages.findIndex((page) =>
+      page.fragments.some(
+        (fragment) =>
+          fragment.kind === "hobbies" &&
+          fragment.kind === "hobbies" &&
+          fragment.items.some((item) => item.id === "hobby-render-achievement-tail-2"),
+      ),
     );
 
-    expect(hobbyPageIndex).toBe(2);
+    expect(firstHobbyPageIndex).toBe(1);
+    expect(continuedHobbyPageIndex).toBe(2);
     expect(
       Array.from(
-        pages[hobbyPageIndex]?.querySelectorAll(
+        pages[firstHobbyPageIndex]?.querySelectorAll(
           '[data-preview-section="hobbies"][data-preview-item-id]',
         ) ?? [],
         (node) => node.getAttribute("data-preview-item-id"),
       ).filter((value): value is string => Boolean(value)),
-    ).toEqual(["hobby-render-achievement-tail-1", "hobby-render-achievement-tail-2"]);
+    ).toEqual(["hobby-render-achievement-tail-1"]);
     expect(
-      pages[hobbyPageIndex - 1]?.querySelector(
+      Array.from(
+        pages[continuedHobbyPageIndex]?.querySelectorAll(
+          '[data-preview-section="hobbies"][data-preview-item-id]',
+        ) ?? [],
+        (node) => node.getAttribute("data-preview-item-id"),
+      ).filter((value): value is string => Boolean(value)),
+    ).toEqual(["hobby-render-achievement-tail-2"]);
+    expect(
+      pages[firstHobbyPageIndex - 1]?.querySelector(
         '[data-preview-section="hobbies"][data-preview-item-id]',
       ),
     ).toBeFalsy();
     expect(
-      pages[hobbyPageIndex]?.querySelector(
+      pages[continuedHobbyPageIndex]?.querySelector(
         '[data-preview-section="additional_information"][data-preview-item-id]',
       ),
     ).toBeTruthy();
@@ -852,7 +1107,7 @@ describe("ResumeTemplateRenderer", () => {
     expect(headings).toEqual(["Additional Information"]);
   });
 
-  it("renders custom text sections on the same rescued last page as hobbies and preserves the custom title", () => {
+  it("renders custom text sections on the following page without pulling hobbies off the current page", () => {
     const data = buildCustomTextTailRendererFixture();
     const stylePreset = {
       familyId: "workshop",
@@ -879,14 +1134,14 @@ describe("ResumeTemplateRenderer", () => {
     const lastPage = pages[lastPageIndex]!;
 
     expect(plan.committedPages[lastPageIndex]?.fragments.map((fragment) => fragment.kind)).toEqual([
-      "hobbies",
       "additional_information",
     ]);
+    expect(plan.committedPages[lastPageIndex - 1]?.fragments.at(-1)?.kind).toBe("hobbies");
     expect(
       Array.from(
         lastPage.querySelectorAll('[data-preview-section="hobbies"][data-preview-item-id]'),
       ).length,
-    ).toBeGreaterThan(0);
+    ).toBe(0);
     expect(
       lastPage.querySelector('[data-preview-section="additional_information"][data-preview-item-id="custom-tail-1"]'),
     ).toBeTruthy();

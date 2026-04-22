@@ -148,17 +148,17 @@ const TONE_OPTIONS: Array<{
   {
     id: "signature",
     uiLabel: getVoicePresetDisplayLabel("signature"),
-    description: "Balanced, natural, and credible.",
+    description: "Warm and approachable.",
   },
   {
     id: "expert",
     uiLabel: getVoicePresetDisplayLabel("expert"),
-    description: "More precise, structured, and authoritative.",
+    description: "Natural and credible.",
   },
   {
     id: "engaging",
     uiLabel: getVoicePresetDisplayLabel("engaging"),
-    description: "Warmer, more lively, and still professional.",
+    description: "Formal and composed.",
   },
 ];
 
