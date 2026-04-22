@@ -153,9 +153,10 @@ export function ProfileModal({
 
     setIsSaving(true);
     try {
+      const desiredPosition = form.desiredPosition.trim();
       const patch: Partial<IProfileItem> = {
         name: form.name.trim(),
-        desiredPosition: form.desiredPosition.trim(),
+        desiredPosition: desiredPosition.length > 0 ? desiredPosition : undefined,
         email: form.email.trim(),
         phone: form.phone.trim(),
         linkedin: form.linkedin.trim(),
@@ -166,6 +167,9 @@ export function ProfileModal({
 
       Object.keys(patch).forEach((key) => {
         const typedKey = key as keyof IProfileItem;
+        if (typedKey === "desiredPosition") {
+          return;
+        }
         if (
           typeof patch[typedKey] === "string" &&
           String(patch[typedKey]).trim() === ""
