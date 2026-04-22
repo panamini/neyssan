@@ -496,22 +496,42 @@ describe("ResumeOneColAtsPage", () => {
     const firstSegment = makeTextBlock("continued-fragment-a", 4);
     const secondSegment = makeTextBlock("continued-fragment-b", 16);
     const continuedBullet = makeTextBlock("continued-fragment-bullet", 4);
-    const plan = planWorkshopResumePages({
-      data: {
-        ...buildRendererData(),
-        summary: makeTextBlock("continued-renderer-summary", 26),
-        skillItems: [],
-        languages: [],
-        experience: [
-          {
-            ...resumeMock.experience[0]!,
-            id: "exp-render-continued",
-            description: `${firstSegment}\n\n${secondSegment}`,
-            bullets: [continuedBullet],
+    const data = {
+      ...buildRendererData(),
+      summary: makeTextBlock("continued-renderer-summary", 26),
+      skillItems: [],
+      languages: [],
+      experience: [
+        {
+          ...resumeMock.experience[0]!,
+          id: "exp-render-continued",
+          description: `${firstSegment}\n\n${secondSegment}`,
+          bullets: [continuedBullet],
+          responsibilitiesRich: {
+            blocks: [
+              {
+                kind: "paragraph" as const,
+                runs: [
+                  { text: `${firstSegment} ` },
+                  { text: secondSegment, bold: true },
+                ],
+              },
+              {
+                kind: "bullet_list" as const,
+                items: [
+                  {
+                    runs: [{ text: continuedBullet, italic: true }],
+                  },
+                ],
+              },
+            ],
           },
-        ],
-        projects: [],
-      },
+        },
+      ],
+      projects: [],
+    };
+    const plan = planWorkshopResumePages({
+      data,
       template,
     });
     const continuedPage = plan.committedPages.find((page) =>
@@ -524,7 +544,7 @@ describe("ResumeOneColAtsPage", () => {
 
     const { container } = render(
       <ResumeOneColAtsPage
-        data={resumeMock}
+        data={data}
         page={continuedPage!}
         template={template}
       />,
@@ -546,12 +566,109 @@ describe("ResumeOneColAtsPage", () => {
     expect(container.textContent).toContain(secondSegment);
     expect(container.textContent).not.toContain(firstSegment);
     expect(container.textContent).not.toContain(continuedBullet);
+    expect(container.querySelector('[data-preview-section="experience"] strong')).toBeNull();
+    expect(container.querySelector('[data-preview-section="experience"] em')).toBeNull();
     expect(
       experienceParagraphs.some((node) =>
         node.getAttribute("style")?.includes("overflow-wrap: anywhere;"),
       ),
     ).toBe(true);
     expect(container.querySelector('[data-preview-section="experience"] li')).toBeNull();
+  });
+
+  it("renders responsibilitiesRich for full non-continued experience items", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...buildRendererData(),
+      summary: "Compact summary.",
+      skillItems: [],
+      languages: [],
+      experience: [
+        {
+          ...resumeMock.experience[0]!,
+          id: "exp-rich-preview",
+          description: "Led platform migration planning.",
+          bullets: [
+            "Cut release rollback rate by 38%.",
+            "Formalized launch checklists across squads.",
+          ],
+          responsibilitiesRich: {
+            blocks: [
+              {
+                kind: "paragraph" as const,
+                runs: [
+                  { text: "Led " },
+                  { text: "platform migration", bold: true },
+                  { text: " planning." },
+                ],
+              },
+              {
+                kind: "bullet_list" as const,
+                items: [
+                  {
+                    runs: [
+                      { text: "Cut " },
+                      { text: "release rollback rate", italic: true },
+                      { text: " by 38%." },
+                    ],
+                  },
+                  {
+                    runs: [
+                      { text: "Formalized " },
+                      { text: "launch checklists", underline: true },
+                      { text: " across squads." },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      ],
+      projects: [],
+    };
+    const plan = planWorkshopResumePages({
+      data,
+      template,
+    });
+
+    const { container } = render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+      />,
+    );
+
+    const experienceItem = container.querySelector(
+      '[data-preview-section="experience"][data-preview-item-id="exp-rich-preview"]',
+    ) as HTMLElement | null;
+    const paragraphNode = Array.from(experienceItem?.querySelectorAll("p") ?? []).find(
+      (node) => node.textContent === "Led platform migration planning.",
+    );
+    const bulletTexts = Array.from(experienceItem?.querySelectorAll("li") ?? []).map(
+      (node) => node.textContent,
+    );
+    const richList = experienceItem?.querySelector("ul") as HTMLUListElement | null;
+
+    expect(paragraphNode).toBeTruthy();
+    expect(experienceItem?.querySelector("strong")?.textContent).toBe(
+      "platform migration",
+    );
+    expect(experienceItem?.querySelector("em")?.textContent).toBe(
+      "release rollback rate",
+    );
+    expect(experienceItem?.querySelector("u")?.textContent).toBe(
+      "launch checklists",
+    );
+    expect(bulletTexts).toEqual([
+      "Cut release rollback rate by 38%.",
+      "Formalized launch checklists across squads.",
+    ]);
+    expect(richList?.style.listStyleType).toBe("disc");
+    expect(richList?.style.listStylePosition).toBe("outside");
+    expect(richList?.style.paddingLeft).toBe("var(--flow-list-indent)");
+    expect(richList?.style.gap).toBe("1.2mm");
   });
 
   it("keeps non-fragmented experience rendering unchanged on committed workshop pages", () => {
