@@ -86,6 +86,7 @@ import {
   isPrimaryPointerPressed,
 } from "../lib/editor-ai-selection";
 import { useToast } from "./ui/toast";
+import { formatSectionDisplayTitle } from "../lib/cv-section-organization";
 import {
   getCanonicalSectionType,
   type ResumeActiveTarget,
@@ -4235,6 +4236,9 @@ export default function SectionEditor({
     const canonicalTextSectionType = getCanonicalSectionType(section) ?? "custom";
     const blocks = Array.isArray(section.blocks) ? section.blocks : [];
     const isCustomTextSection = canonicalTextSectionType === "custom";
+    const displaySectionTitle = formatSectionDisplayTitle(section, {
+      fallback: "Untitled section",
+    });
     const previewText = blocks
       .map((block) => plainTextFromBlockValue(block))
       .filter(Boolean)
@@ -4326,7 +4330,7 @@ export default function SectionEditor({
             className="cv-section-heading cursor-pointer"
             onClick={() => openTextSectionModal()}
           >
-            {section.title}
+            {displaySectionTitle}
           </h3>
           <div className="flex items-center gap-1">
             <button
@@ -4336,8 +4340,8 @@ export default function SectionEditor({
                 openTextSectionModal();
               }}
               className="dasti-icon-button cv-section-edit-trigger"
-              aria-label={`Edit ${section.title}`}
-              title={`Edit ${section.title}`}
+              aria-label={`Edit ${displaySectionTitle}`}
+              title={`Edit ${displaySectionTitle}`}
             >
               <Pencil className="w-4 h-4" strokeWidth={1.5} aria-hidden />
             </button>
@@ -4365,7 +4369,9 @@ export default function SectionEditor({
           }
           role={isCustomTextSection ? "button" : undefined}
           tabIndex={isCustomTextSection ? 0 : undefined}
-          aria-label={isCustomTextSection ? `Edit ${section.title}` : undefined}
+          aria-label={
+            isCustomTextSection ? `Edit ${displaySectionTitle}` : undefined
+          }
           onClick={() => openTextSectionModal()}
           onKeyDown={(event) => {
             if (!isCustomTextSection) {
@@ -4394,7 +4400,7 @@ export default function SectionEditor({
 
         <TextSectionModal
           open={isModalOpen}
-          title={section.title}
+          title={displaySectionTitle}
           description={
             isCustomTextSection
               ? "Capture this custom section in one rich text block."

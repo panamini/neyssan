@@ -7241,19 +7241,23 @@ html:not(.dark) .dasti-proposal-submit {
   color: var(--ti);
 }
 
+.cv-section-title,
 .cv-section-title-input {
-  flex: 1 1 auto;
-  min-width: 0;
   margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
   font-family: "Fraunces", serif;
   font-size: var(--tm);
   line-height: var(--ls);
   font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--ti);
+}
+
+.cv-section-title-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 .cv-section-title-input:focus {
@@ -7697,11 +7701,141 @@ html:not(.dark) .dasti-proposal-submit {
 .section-container-header {
   position: relative;
   z-index: 1;
+  min-block-size: var(--section-header-block-size);
   background: var(--section-header-surface);
   border-bottom: 1px solid var(--color-border);
   border-top-left-radius: var(--radius-card);
   border-top-right-radius: var(--radius-card);
   padding: var(--space-4);
+}
+
+.cv-organize-sections-region {
+  display: block;
+  position: relative;
+}
+
+.cv-organize-sections__list {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.cv-organize-section-item {
+  position: relative;
+  overflow: visible;
+  z-index: 0;
+  isolation: isolate;
+}
+
+.cv-organize-section-item[data-section-dragging="true"] {
+  z-index: 6;
+}
+
+.cv-organize-section-row {
+  --cv-organize-action-rail-width: calc((var(--hs) * 4) + (var(--s1) * 3));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(
+      var(--cv-organize-action-rail-width),
+      auto
+    );
+  align-items: center;
+  gap: var(--space-3);
+  min-block-size: var(--section-header-block-size);
+  border-bottom: none;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  box-shadow: none;
+  overflow: visible;
+  z-index: 1;
+}
+
+.cv-organize-section-row[data-section-drop-target="true"] {
+  border-color: var(--color-border-strong);
+  box-shadow: inset 0 0 0 1px var(--color-border-strong);
+}
+
+.cv-organize-section-row[data-section-hidden="true"] {
+  opacity: 0.72;
+}
+
+.cv-organize-section-row[data-section-dragging="true"] {
+  border-color: var(--color-border-strong);
+  box-shadow: inset 0 0 0 1px var(--color-border-strong);
+  z-index: 2;
+}
+
+.cv-organize-section-row[data-section-active="true"] {
+  border-color: var(--color-border-strong);
+  box-shadow: inset 0 0 0 1px var(--color-border-strong);
+}
+
+.cv-organize-section-row:focus-visible {
+  outline: none;
+  border-color: var(--color-border-strong);
+  box-shadow: inset 0 0 0 1px var(--color-border-strong);
+}
+
+.cv-organize-section-row__primary {
+  min-width: 0;
+}
+
+.cv-organize-section-row__title {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cv-organize-section-row__meta {
+  min-width: 0;
+  min-height: var(--pill-height-sm);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  justify-self: end;
+  overflow: hidden;
+}
+
+.cv-organize-section-row[data-section-hidden="true"]
+  .cv-organize-section-row__title {
+  color: var(--text-ghost);
+}
+
+.cv-organize-section-row[data-section-hidden="true"]
+  .cv-organize-section-row__meta,
+.cv-organize-section-row[data-section-hidden="true"]
+  .cv-organize-section-row__rail {
+  color: var(--color-text-subtle);
+}
+
+.cv-organize-section-row__rail {
+  min-inline-size: var(--cv-organize-action-rail-width);
+  display: inline-flex;
+  align-items: center;
+  justify-content: end;
+  gap: var(--s1);
+  flex-wrap: nowrap;
+}
+
+.cv-organize-section-row__pill--hidden {
+  border-color: color-mix(in srgb, var(--color-border) 52%, transparent);
+  background: color-mix(in srgb, var(--color-surface-muted) 42%, transparent);
+  color: var(--text-ghost);
+}
+
+.cv-organize-section-row__action--delete {
+  color: var(--color-text-muted);
+}
+
+.cv-organize-section-row__action--delete:hover {
+  color: var(--color-text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cv-organize-section-item {
+    transition: none;
+  }
 }
 
 .cv-section-edit-trigger {
