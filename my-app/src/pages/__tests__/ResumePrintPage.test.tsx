@@ -194,6 +194,96 @@ function buildDenseWorkshopCommittedPayload(): ResumePrintRoutePayload {
   };
 }
 
+function buildRichWorkshopCommittedPayload(): ResumePrintRoutePayload {
+  const stylePreset = {
+    familyId: "workshop",
+    layout: "workshop",
+    typography: "quiet-editorial",
+    palette: "sauge",
+  } as const;
+  const sourceResumeData = {
+    ...resumeMock,
+    metadata: resumeMock.metadata.slice(0, 1),
+    contact: resumeMock.contact.slice(0, 2),
+    education: [],
+    certifications: [],
+    affiliations: [],
+    hobbyItems: [],
+    hobbies: [],
+    textSections: [],
+    projects: [],
+    skillItems: [],
+    languages: [],
+    achievements: [],
+    achievementItems: [],
+    summary: "Compact summary.",
+    experience: [
+      {
+        ...resumeMock.experience[0]!,
+        id: "exp-print-rich",
+        description: "",
+        bullets: [],
+        responsibilitiesRich: {
+          blocks: [
+            {
+              kind: "paragraph" as const,
+              runs: [
+                { text: "Directed the " },
+                { text: "migration roadmap", bold: true },
+                { text: " across three squads." },
+              ],
+            },
+            {
+              kind: "bullet_list" as const,
+              items: [
+                {
+                  runs: [
+                    { text: "Reduced " },
+                    { text: "rollback incidents", italic: true },
+                    { text: " by 38%." },
+                  ],
+                },
+                {
+                  runs: [
+                    { text: "Formalized " },
+                    { text: "launch checklists", underline: true },
+                    { text: " across squads." },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    ],
+  };
+  const committedPages = planWorkshopResumePages({
+    data: sourceResumeData,
+    template: getResumeTemplateDefinition("workshop_resume_onecol_ats"),
+    stylePreset,
+  }).committedPages;
+  const fallbackResumeData = {
+    ...sourceResumeData,
+    experience: sourceResumeData.experience.map((item) => ({
+      ...item,
+      responsibilitiesRich: undefined,
+      description: "Fallback description should not render.",
+      bullets: ["Fallback bullet should not render."],
+    })),
+  };
+
+  return {
+    schemaVersion: 1,
+    kind: "resume_print_route",
+    locale: "en",
+    resumeData: fallbackResumeData,
+    stylePreset,
+    resumeTemplateId: "workshop_resume_onecol_ats",
+    rendererVariantId: "swissminima",
+    committedPages,
+  };
+}
+
 describe("ResumePrintPage", () => {
   beforeEach(() => {
     Object.defineProperty(document, "fonts", {
@@ -312,6 +402,40 @@ describe("ResumePrintPage", () => {
       screen.getAllByTestId("resume-template-page").length,
     );
     expect(window.__DASTI_RESUME_PRINT_STATUS__?.pageCount).toBeGreaterThan(1);
+  });
+
+  it("renders workshop committed rich responsibilities on the print route", async () => {
+    window.__DASTI_RESUME_PRINT_PAYLOAD__ = buildRichWorkshopCommittedPayload();
+
+    const { container } = render(<ResumePrintPage />);
+
+    await waitFor(() => {
+      expect(window.__DASTI_RESUME_PRINT_STATUS__?.status).toBe("ready");
+    });
+
+    const experienceItem = container.querySelector(
+      '[data-preview-section="experience"][data-preview-item-id="exp-print-rich"]',
+    ) as HTMLElement | null;
+
+    expect(experienceItem?.textContent).toContain(
+      "Directed the migration roadmap across three squads.",
+    );
+    expect(experienceItem?.querySelector("strong")?.textContent).toBe(
+      "migration roadmap",
+    );
+    expect(experienceItem?.querySelector("em")?.textContent).toBe(
+      "rollback incidents",
+    );
+    expect(experienceItem?.querySelector("u")?.textContent).toBe(
+      "launch checklists",
+    );
+    expect(experienceItem?.querySelectorAll("li")).toHaveLength(2);
+    expect(experienceItem?.textContent).not.toContain(
+      "Fallback description should not render.",
+    );
+    expect(experienceItem?.textContent).not.toContain(
+      "Fallback bullet should not render.",
+    );
   });
 
   it("renders composed education metadata on the workshop print route", async () => {
