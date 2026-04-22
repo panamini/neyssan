@@ -1,5 +1,5 @@
 import React from "react";
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { ResumeOneColAtsPage } from "../ResumeOneColAtsPage";
@@ -306,13 +306,14 @@ describe("ResumeOneColAtsPage", () => {
         metadata: resumeMock.metadata.slice(0, 1),
         contact: resumeMock.contact.slice(0, 2),
         skillItems: resumeMock.skillItems.slice(0, 2),
+        languages: resumeMock.languages.slice(0, 1),
         experience: resumeMock.experience.slice(0, 1),
         projects: [],
         education: [],
         certifications: [],
         affiliations: [],
-        hobbyItems: [],
-        hobbies: [],
+        hobbyItems: resumeMock.hobbyItems.slice(0, 1),
+        hobbies: resumeMock.hobbies.slice(0, 1),
         textSections: [],
       },
       template,
@@ -334,6 +335,12 @@ describe("ResumeOneColAtsPage", () => {
     const skillItem = container.querySelector(
       '[data-preview-section="skills"][data-preview-item-id]',
     );
+    const languageItem = container.querySelector(
+      '[data-preview-section="languages"][data-preview-item-id]',
+    );
+    const hobbyItem = container.querySelector(
+      '[data-preview-section="hobbies"][data-preview-item-id]',
+    );
 
     expect(profileName?.getAttribute("style")).toContain(
       "font-size: calc(var(--text-display-size) + var(--display-size-adjust));",
@@ -346,6 +353,18 @@ describe("ResumeOneColAtsPage", () => {
     );
     expect(skillItem?.getAttribute("style")).toContain(
       "font-size: calc(var(--text-body-sm-size) + var(--body-sm-size-adjust));",
+    );
+    expect(languageItem?.getAttribute("style")).toContain(
+      "font-size: calc(var(--text-body-sm-size) + var(--body-sm-size-adjust));",
+    );
+    expect(languageItem?.getAttribute("style")).toContain(
+      "line-height: var(--text-body-sm-line);",
+    );
+    expect(hobbyItem?.getAttribute("style")).toContain(
+      "font-size: calc(var(--text-body-sm-size) + var(--body-sm-size-adjust));",
+    );
+    expect(hobbyItem?.getAttribute("style")).toContain(
+      "line-height: var(--text-body-sm-line);",
     );
   });
 
@@ -377,8 +396,8 @@ describe("ResumeOneColAtsPage", () => {
         achievementItems: [],
         certifications: [],
         affiliations: [],
-        hobbyItems: [],
-        hobbies: [],
+        hobbyItems: resumeMock.hobbyItems.slice(0, 1),
+        hobbies: resumeMock.hobbies.slice(0, 1),
         textSections: [],
       },
       template,
@@ -412,6 +431,15 @@ describe("ResumeOneColAtsPage", () => {
     const projectCard = projectHeadline?.parentElement as HTMLElement | null;
     const languagesList = container.querySelector(
       '[data-preview-section="languages"][data-preview-surface="section"] ul',
+    );
+    const hobbiesList = container.querySelector(
+      '[data-preview-section="hobbies"][data-preview-surface="section"] ul',
+    );
+    const languageItem = container.querySelector(
+      '[data-preview-section="languages"][data-preview-item-id]',
+    );
+    const hobbyItem = container.querySelector(
+      '[data-preview-section="hobbies"][data-preview-item-id]',
     );
 
     expect(experienceItem?.getAttribute("style")).toContain(
@@ -449,42 +477,99 @@ describe("ResumeOneColAtsPage", () => {
     expect(languagesList?.getAttribute("style")).toContain(
       `gap: ${layout.listGapMm}mm;`,
     );
+    expect(hobbiesList?.getAttribute("style")).toContain(
+      "padding-left: var(--flow-list-indent);",
+    );
+    expect(hobbiesList?.getAttribute("style")).toContain(
+      `gap: ${layout.listGapMm}mm;`,
+    );
+    expect(languageItem?.getAttribute("style")).toContain(
+      "font-size: calc(var(--text-body-sm-size) + var(--body-sm-size-adjust));",
+    );
+    expect(hobbyItem?.getAttribute("style")).toContain(
+      "font-size: calc(var(--text-body-sm-size) + var(--body-sm-size-adjust));",
+    );
   });
 
   it("renders continued experience fragments with repeated role, meta, and item-level continued without duplicating prior text", () => {
     const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
-    const firstSegment = makeTextBlock("continued-fragment-a", 4);
-    const secondSegment = makeTextBlock("continued-fragment-b", 16);
-    const continuedBullet = makeTextBlock("continued-fragment-bullet", 4);
-    const plan = planWorkshopResumePages({
-      data: {
-        ...buildRendererData(),
-        summary: makeTextBlock("continued-renderer-summary", 26),
-        skillItems: [],
-        languages: [],
-        experience: [
-          {
-            ...resumeMock.experience[0]!,
-            id: "exp-render-continued",
-            description: `${firstSegment}\n\n${secondSegment}`,
-            bullets: [continuedBullet],
+    const firstSegment = makeTextBlock("continued-fragment-prelude", 1);
+    const continuedBullets = Array.from({ length: 4 }, (_, index) =>
+      makeTextBlock(`continued-fragment-bullet-${index + 1}`, 7),
+    );
+    const trailingParagraph = makeTextBlock("continued-fragment-tail", 1);
+    const data = {
+      ...buildRendererData(),
+      summary: "",
+      skillItems: [],
+      languages: [],
+      education: [resumeMock.education[0]!],
+      experience: [
+        {
+          ...resumeMock.experience[0]!,
+          id: "exp-render-continued",
+          description: firstSegment,
+          bullets: continuedBullets,
+          responsibilitiesRich: {
+            blocks: [
+              {
+                kind: "paragraph" as const,
+                runs: [{ text: firstSegment }],
+              },
+              {
+                kind: "bullet_list" as const,
+                items: continuedBullets.map((bullet, index) => ({
+                  runs:
+                    index === continuedBullets.length - 1
+                      ? [{ text: bullet, italic: true }]
+                      : [{ text: bullet }],
+                })),
+              },
+              {
+                kind: "paragraph" as const,
+                runs: [{ text: trailingParagraph, underline: true }],
+              },
+            ],
           },
-        ],
-        projects: [],
-      },
+        },
+      ],
+      projects: [],
+    };
+    const plan = planWorkshopResumePages({
+      data,
       template,
     });
     const continuedPage = plan.committedPages.find((page) =>
       page.fragments.some(
         (fragment) =>
           fragment.kind === "experience" &&
-          fragment.items.some((item) => item.continued),
+          fragment.items.some(
+            (item) =>
+              item.continued &&
+              item.responsibilitiesRich?.blocks.some((block) => block.kind === "paragraph"),
+          ),
       ),
     );
+    const continuedItem = continuedPage?.fragments
+      .filter((fragment) => fragment.kind === "experience")
+      .flatMap((fragment) => fragment.items)
+      .find(
+        (item) =>
+          item.id === "exp-render-continued" &&
+          item.continued &&
+          item.responsibilitiesRich?.blocks.some((block) => block.kind === "paragraph"),
+      );
+    const fallbackOnlyData = {
+      ...data,
+      experience: data.experience.map((item) => ({
+        ...item,
+        responsibilitiesRich: undefined,
+      })),
+    };
 
     const { container } = render(
       <ResumeOneColAtsPage
-        data={resumeMock}
+        data={fallbackOnlyData}
         page={continuedPage!}
         template={template}
       />,
@@ -492,6 +577,17 @@ describe("ResumeOneColAtsPage", () => {
     const experienceParagraphs = Array.from(
       container.querySelectorAll('[data-preview-section="experience"] p'),
     );
+    const experienceItem = container.querySelector(
+      '[data-preview-section="experience"][data-preview-item-id="exp-render-continued"]',
+    ) as HTMLElement | null;
+    const lists = Array.from(experienceItem?.querySelectorAll(":scope > ul") ?? []);
+    const continuedListItems = Array.from(lists[0]?.querySelectorAll(":scope > li") ?? []).map(
+      (node) => node.textContent,
+    );
+    const directParagraphs = Array.from(experienceItem?.querySelectorAll(":scope > p") ?? []).map(
+      (node) => node.textContent,
+    );
+
     expect(container.textContent).toContain(resumeMock.experience[0]?.role ?? "");
     expect(container.textContent).toContain(
       [
@@ -503,15 +599,146 @@ describe("ResumeOneColAtsPage", () => {
         .join(" · "),
     );
     expect(container.textContent).toContain("Continued");
-    expect(container.textContent).toContain(secondSegment);
+    continuedItem?.blocks.forEach((block) => {
+      expect(container.textContent).toContain(block.text);
+    });
     expect(container.textContent).not.toContain(firstSegment);
-    expect(container.textContent).not.toContain(continuedBullet);
+    expect(container.textContent).not.toContain(continuedBullets[0]!);
+    expect(container.textContent).not.toContain(continuedBullets[1]!);
+    expect(container.textContent).not.toContain(continuedBullets[2]!);
+    expect(container.querySelector('[data-preview-section="experience"] strong')).toBeNull();
+    expect(container.querySelector('[data-preview-section="experience"] em')?.textContent).toBe(
+      continuedBullets[3],
+    );
+    expect(container.querySelector('[data-preview-section="experience"] u')?.textContent).toBe(
+      trailingParagraph,
+    );
     expect(
       experienceParagraphs.some((node) =>
         node.getAttribute("style")?.includes("overflow-wrap: anywhere;"),
       ),
     ).toBe(true);
-    expect(container.querySelector('[data-preview-section="experience"] li')).toBeNull();
+    expect(lists).toHaveLength(1);
+    expect(continuedListItems).toEqual([continuedBullets[3]]);
+    expect(directParagraphs).toEqual([trailingParagraph]);
+    expect(experienceItem?.innerHTML.indexOf("</ul><p")).toBeGreaterThan(-1);
+  });
+
+  it("renders responsibilitiesRich for full non-continued experience items", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...buildRendererData(),
+      summary: "Compact summary.",
+      skillItems: [],
+      languages: [],
+      experience: [
+        {
+          ...resumeMock.experience[0]!,
+          id: "exp-rich-preview",
+          description: "Led platform migration planning.",
+          bullets: [
+            "Cut release rollback rate by 38%.",
+            "Formalized launch checklists across squads.",
+          ],
+          responsibilitiesRich: {
+            blocks: [
+              {
+                kind: "paragraph" as const,
+                runs: [
+                  { text: "Led " },
+                  { text: "platform migration", bold: true },
+                  { text: " planning." },
+                ],
+              },
+              {
+                kind: "bullet_list" as const,
+                items: [
+                  {
+                    runs: [
+                      { text: "Cut " },
+                      { text: "release rollback rate", italic: true },
+                      { text: " by 38%." },
+                    ],
+                  },
+                  {
+                    runs: [
+                      { text: "Formalized " },
+                      { text: "launch checklists", underline: true },
+                      { text: " across squads." },
+                    ],
+                  },
+                ],
+              },
+              {
+                kind: "paragraph" as const,
+                runs: [{ text: "Partnered closely with design and QA." }],
+              },
+            ],
+          },
+        },
+      ],
+      projects: [],
+    };
+    const plan = planWorkshopResumePages({
+      data,
+      template,
+    });
+    const fallbackOnlyData = {
+      ...data,
+      experience: data.experience.map((item) => ({
+        ...item,
+        responsibilitiesRich: undefined,
+        description: "Fallback description that should not render.",
+        bullets: ["Fallback bullet that should not render."],
+      })),
+    };
+
+    const { container } = render(
+      <ResumeOneColAtsPage
+        data={fallbackOnlyData}
+        page={plan.committedPages[0]!}
+        template={template}
+      />,
+    );
+
+    const experienceItem = container.querySelector(
+      '[data-preview-section="experience"][data-preview-item-id="exp-rich-preview"]',
+    ) as HTMLElement | null;
+    const paragraphNode = Array.from(experienceItem?.querySelectorAll("p") ?? []).find(
+      (node) => node.textContent === "Led platform migration planning.",
+    );
+    const bulletTexts = Array.from(experienceItem?.querySelectorAll("li") ?? []).map(
+      (node) => node.textContent,
+    );
+    const richList = experienceItem?.querySelector("ul") as HTMLUListElement | null;
+    const directParagraphs = Array.from(experienceItem?.querySelectorAll(":scope > p") ?? []).map(
+      (node) => node.textContent,
+    );
+
+    expect(paragraphNode).toBeTruthy();
+    expect(directParagraphs).toEqual([
+      "Led platform migration planning.",
+      "Partnered closely with design and QA.",
+    ]);
+    expect(experienceItem?.querySelector("strong")?.textContent).toBe(
+      "platform migration",
+    );
+    expect(experienceItem?.querySelector("em")?.textContent).toBe(
+      "release rollback rate",
+    );
+    expect(experienceItem?.querySelector("u")?.textContent).toBe(
+      "launch checklists",
+    );
+    expect(bulletTexts).toEqual([
+      "Cut release rollback rate by 38%.",
+      "Formalized launch checklists across squads.",
+    ]);
+    expect(experienceItem?.innerHTML.indexOf("</p><ul")).toBeGreaterThan(-1);
+    expect(experienceItem?.innerHTML.indexOf("</ul><p")).toBeGreaterThan(-1);
+    expect(richList?.style.listStyleType).toBe("disc");
+    expect(richList?.style.listStylePosition).toBe("outside");
+    expect(richList?.style.paddingLeft).toBe("var(--flow-list-indent)");
+    expect(richList?.style.gap).toBe("1.2mm");
   });
 
   it("keeps non-fragmented experience rendering unchanged on committed workshop pages", () => {
@@ -548,6 +775,94 @@ describe("ResumeOneColAtsPage", () => {
     expect(container.textContent).toContain(description);
     expect(container.textContent).toContain(bullet);
     expect(container.textContent).not.toContain("Continued");
+  });
+
+  it("restores explicit list marker styling for workshop experience bullet groups", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const bullet = makeTextBlock("styled-experience-bullet", 2);
+    const plan = planWorkshopResumePages({
+      data: {
+        ...buildRendererData(),
+        summary: "Compact summary.",
+        skillItems: [],
+        languages: [],
+        experience: [
+          {
+            ...resumeMock.experience[0]!,
+            id: "exp-render-styled-list",
+            description: "",
+            bullets: [bullet],
+          },
+        ],
+        projects: [],
+      },
+      template,
+    });
+
+    const { container } = render(
+      <ResumeOneColAtsPage
+        data={resumeMock}
+        page={plan.committedPages[0]!}
+        template={template}
+      />,
+    );
+
+    const experienceList = container.querySelector(
+      '[data-preview-section="experience"][data-preview-surface="item"] ul',
+    ) as HTMLUListElement | null;
+
+    expect(experienceList).toBeTruthy();
+    expect(experienceList?.style.listStyleType).toBe("disc");
+    expect(experienceList?.style.listStylePosition).toBe("outside");
+    expect(experienceList?.style.paddingLeft).toBe("var(--flow-list-indent)");
+    expect(experienceList?.style.gap).toBe("1.2mm");
+  });
+
+  it("restores explicit list marker styling for workshop achievements lists", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const achievementItems = [
+      {
+        ...resumeMock.achievementItems[0]!,
+        id: "achievement-render-styled-1",
+        text: "Delivered workshop renderer parity.",
+      },
+      {
+        ...resumeMock.achievementItems[0]!,
+        id: "achievement-render-styled-2",
+        text: "Stabilized browser preview evidence.",
+      },
+    ];
+    const plan = planWorkshopResumePages({
+      data: {
+        ...buildRendererData(),
+        experience: [],
+        projects: [],
+        education: [],
+        skillItems: [],
+        languages: [],
+        achievements: achievementItems.map((item) => item.text),
+        achievementItems,
+      },
+      template,
+    });
+
+    const { container } = render(
+      <ResumeOneColAtsPage
+        data={resumeMock}
+        page={plan.committedPages[0]!}
+        template={template}
+      />,
+    );
+
+    const achievementsList = container.querySelector(
+      '[data-preview-section="achievements"][data-preview-surface="section"] ul',
+    ) as HTMLUListElement | null;
+
+    expect(achievementsList).toBeTruthy();
+    expect(achievementsList?.style.listStyleType).toBe("disc");
+    expect(achievementsList?.style.listStylePosition).toBe("outside");
+    expect(achievementsList?.style.paddingLeft).toBe("var(--flow-list-indent)");
+    expect(achievementsList?.style.gap).toBe("1.2mm");
   });
 
   it("renders the dense workshop screenshot second page with the intact second entry before education", () => {
@@ -622,5 +937,52 @@ describe("ResumeOneColAtsPage", () => {
     expect(container.textContent).toContain("Continued");
     expect(container.textContent).not.toContain(makeDenseTokenBlock("1", 40).slice(2552));
     expect(container.textContent).toContain(makeDenseTokenBlock("2", 20));
+  });
+
+  it("renders degree, field of study, grade, school, and period together on workshop education rows", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const educationData = {
+      ...buildRendererData(),
+      experience: [],
+      projects: [],
+      skillItems: [],
+      languages: [],
+      education: [
+        {
+          ...resumeMock.education[0]!,
+          id: "edu-render-fields",
+          degree: "Bachelor of Science",
+          fieldOfStudy: "Computer Science",
+          grade: "3.9 GPA",
+          school: "Northbridge University",
+          period: "2016 — 2020",
+        },
+      ],
+    };
+    const plan = planWorkshopResumePages({
+      data: educationData,
+      template,
+      stylePreset: {
+        familyId: "workshop",
+        layout: "workshop",
+        typography: "quiet-editorial",
+        palette: "sauge",
+      },
+    });
+
+    render(
+      <ResumeOneColAtsPage
+        data={educationData}
+        page={plan.committedPages[0]!}
+        template={template}
+      />,
+    );
+
+    expect(
+      screen.getByText("Bachelor of Science, Computer Science"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Northbridge University · Grade: 3.9 GPA · 2016 — 2020"),
+    ).toBeInTheDocument();
   });
 });

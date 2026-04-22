@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ensureRemirrorDoc } from "../../../components/remirror-editor/utils/conversion";
 import type { CvDocument } from "../../../types/cvDocument";
 import { mapCvDocumentToResumeData, hasRenderableResumeData } from "../cvDocumentToResumeData";
 
@@ -374,6 +375,219 @@ describe("mapCvDocumentToResumeData", () => {
     ]);
   });
 
+  it("leaves the preview title empty when desired position is absent instead of falling back to the document title or name", () => {
+    const doc: CvDocument = {
+      id: "cv-no-desired-position",
+      title: "Elena Marlowe",
+      metadata: {
+        createdAt: "2026-03-25T00:00:00.000Z",
+        updatedAt: "2026-03-25T00:00:00.000Z",
+        version: 1,
+      },
+      sections: [
+        {
+          id: "profile",
+          title: "Profile",
+          type: "profile",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "profile-1",
+              name: "Elena Marlowe",
+              email: "elena@example.com",
+              desiredPosition: "",
+            },
+          ],
+        },
+        {
+          id: "summary",
+          title: "Summary",
+          type: "summary",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "summary-1",
+              summary: "Operator focused on clear systems and reliable delivery.",
+            },
+          ],
+        },
+      ],
+    };
+
+    const mapped = mapCvDocumentToResumeData(doc);
+
+    expect(mapped.name).toBe("Elena Marlowe");
+    expect(mapped.title).toBe("");
+    expect(mapped.title).not.toBe(doc.title);
+    expect(mapped.title).not.toBe(mapped.name);
+  });
+
+  it("projects remirror responsibilities into separate prose and bullet channels", () => {
+    const doc: CvDocument = {
+      id: "cv-3",
+      title: "Platform Lead",
+      metadata: {
+        createdAt: "2026-03-25T00:00:00.000Z",
+        updatedAt: "2026-03-25T00:00:00.000Z",
+        version: 1,
+      },
+      sections: [
+        {
+          id: "experience",
+          title: "Experience",
+          type: "experience",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "exp-3",
+              company: "Northline",
+              position: "Platform Lead",
+              location: "Paris",
+              startDate: "2022-01-01T00:00:00.000Z",
+              startDatePrecision: "year",
+              isCurrent: true,
+              responsibilities: {
+                type: "doc",
+                content: [
+                  {
+                    type: "paragraph",
+                    content: [{ type: "text", text: "Directed the migration roadmap." }],
+                  },
+                  {
+                    type: "bulletList",
+                    content: [
+                      {
+                        type: "listItem",
+                        content: [
+                          {
+                            type: "paragraph",
+                            content: [{ type: "text", text: "Reduced rollback incidents by 38%." }],
+                          },
+                        ],
+                      },
+                      {
+                        type: "listItem",
+                        content: [
+                          {
+                            type: "paragraph",
+                            content: [{ type: "text", text: "Defined launch checklists for every squad." }],
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const mapped = mapCvDocumentToResumeData(doc);
+
+    expect(mapped.experience).toEqual([
+      {
+        id: "exp-3",
+        sectionId: "experience",
+        sectionType: "experience",
+        sectionTitle: "Experience",
+        sectionOrder: 0,
+        role: "Platform Lead",
+        company: "Northline",
+        period: "2022 — Present",
+        location: "Paris",
+        description: "Directed the migration roadmap.",
+        bullets: [
+          "Reduced rollback incidents by 38%.",
+          "Defined launch checklists for every squad.",
+        ],
+        responsibilitiesRich: {
+          blocks: [
+            {
+              kind: "paragraph",
+              runs: [{ text: "Directed the migration roadmap." }],
+            },
+            {
+              kind: "bullet_list",
+              items: [
+                {
+                  runs: [{ text: "Reduced rollback incidents by 38%." }],
+                },
+                {
+                  runs: [{ text: "Defined launch checklists for every squad." }],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    ]);
+  });
+
+  it("keeps paragraph-backed remirror responsibilities in the prose channel", () => {
+    const doc: CvDocument = {
+      id: "cv-4",
+      title: "Operations Lead",
+      metadata: {
+        createdAt: "2026-03-25T00:00:00.000Z",
+        updatedAt: "2026-03-25T00:00:00.000Z",
+        version: 1,
+      },
+      sections: [
+        {
+          id: "experience",
+          title: "Experience",
+          type: "experience",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "exp-4",
+              company: "Northline",
+              position: "Operations Lead",
+              startDate: "2023-01-01T00:00:00.000Z",
+              startDatePrecision: "year",
+              isCurrent: true,
+              responsibilities: ensureRemirrorDoc(
+                "Led cross-functional delivery rituals.\nReduced export QA churn by 42%.",
+              ),
+            },
+          ],
+        },
+      ],
+    };
+
+    const mapped = mapCvDocumentToResumeData(doc);
+
+    expect(mapped.experience).toEqual([
+      {
+        id: "exp-4",
+        sectionId: "experience",
+        sectionType: "experience",
+        sectionTitle: "Experience",
+        sectionOrder: 0,
+        role: "Operations Lead",
+        company: "Northline",
+        period: "2023 — Present",
+        location: "Location not set",
+        description: "Led cross-functional delivery rituals. Reduced export QA churn by 42%.",
+        bullets: [],
+        responsibilitiesRich: {
+          blocks: [
+            {
+              kind: "paragraph",
+              runs: [
+                {
+                  text: "Led cross-functional delivery rituals. Reduced export QA churn by 42%.",
+                },
+              ],
+            },
+          ],
+        },
+      },
+    ]);
+  });
+
   it("falls back to block-backed certifications and affiliations when structured content is absent", () => {
     const doc: CvDocument = {
       id: "cv-fallbacks",
@@ -437,6 +651,116 @@ describe("mapCvDocumentToResumeData", () => {
         sectionType: "affiliations",
         sectionTitle: "Affiliations",
         sectionOrder: 1,
+      },
+    ]);
+  });
+
+  it("preserves degree, field of study, grade, school, and period as distinct education fields", () => {
+    const doc: CvDocument = {
+      id: "cv-education-fields",
+      title: "Education fields",
+      metadata: {
+        createdAt: "2026-03-25T00:00:00.000Z",
+        updatedAt: "2026-03-25T00:00:00.000Z",
+        version: 1,
+      },
+      sections: [
+        {
+          id: "education",
+          title: "Education",
+          type: "education",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "edu-degree-only",
+              institution: "Northbridge University",
+              degree: "Bachelor of Science",
+              startDate: "2016-01-01T00:00:00.000Z",
+              endDate: "2020-01-01T00:00:00.000Z",
+              startDatePrecision: "year",
+              endDatePrecision: "year",
+            },
+            {
+              id: "edu-field-only",
+              institution: "Ecole Atelier",
+              fieldOfStudy: "Industrial Design",
+              startDate: "2018-01-01T00:00:00.000Z",
+              endDate: "2021-01-01T00:00:00.000Z",
+              startDatePrecision: "year",
+              endDatePrecision: "year",
+            },
+            {
+              id: "edu-degree-and-field",
+              institution: "Sorrel Institute",
+              degree: "Master of Science",
+              fieldOfStudy: "Human Computer Interaction",
+              startDate: "2021-01-01T00:00:00.000Z",
+              endDate: "2023-01-01T00:00:00.000Z",
+              startDatePrecision: "year",
+              endDatePrecision: "year",
+            },
+            {
+              id: "edu-grade",
+              institution: "Lakeside College",
+              degree: "Bachelor of Arts",
+              fieldOfStudy: "Visual Communication",
+              grade: "First Class Honours",
+              startDate: "2012-01-01T00:00:00.000Z",
+              endDate: "2015-01-01T00:00:00.000Z",
+              startDatePrecision: "year",
+              endDatePrecision: "year",
+            },
+          ],
+        },
+      ],
+    };
+
+    const mapped = mapCvDocumentToResumeData(doc);
+
+    expect(mapped.education).toEqual([
+      {
+        id: "edu-degree-only",
+        sectionId: "education",
+        sectionType: "education",
+        sectionTitle: "Education",
+        sectionOrder: 0,
+        degree: "Bachelor of Science",
+        school: "Northbridge University",
+        period: "2016 — 2020",
+      },
+      {
+        id: "edu-field-only",
+        sectionId: "education",
+        sectionType: "education",
+        sectionTitle: "Education",
+        sectionOrder: 0,
+        degree: "",
+        fieldOfStudy: "Industrial Design",
+        school: "Ecole Atelier",
+        period: "2018 — 2021",
+      },
+      {
+        id: "edu-degree-and-field",
+        sectionId: "education",
+        sectionType: "education",
+        sectionTitle: "Education",
+        sectionOrder: 0,
+        degree: "Master of Science",
+        fieldOfStudy: "Human Computer Interaction",
+        school: "Sorrel Institute",
+        period: "2021 — 2023",
+      },
+      {
+        id: "edu-grade",
+        sectionId: "education",
+        sectionType: "education",
+        sectionTitle: "Education",
+        sectionOrder: 0,
+        degree: "Bachelor of Arts",
+        fieldOfStudy: "Visual Communication",
+        grade: "First Class Honours",
+        school: "Lakeside College",
+        period: "2012 — 2015",
       },
     ]);
   });

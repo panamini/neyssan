@@ -92,10 +92,22 @@ describe("buildCanonicalResumeRenderModel", () => {
     });
 
     expect(previewSource.resumeData).toEqual(canonical);
-    expect(canonical.experience[0]?.bullets).toEqual([
-      "Led cross-functional delivery rituals",
-      "Reduced export QA churn by 42%",
-    ]);
+    expect(canonical.experience[0]?.description).toBe(
+      "Led cross-functional delivery rituals. Reduced export QA churn by 42%.",
+    );
+    expect(canonical.experience[0]?.bullets).toEqual([]);
+    expect(canonical.experience[0]?.responsibilitiesRich).toEqual({
+      blocks: [
+        {
+          kind: "paragraph",
+          runs: [
+            {
+              text: "Led cross-functional delivery rituals. Reduced export QA churn by 42%.",
+            },
+          ],
+        },
+      ],
+    });
     expect(exportSource).toEqual(
       expect.objectContaining({
         profile: expect.objectContaining({
