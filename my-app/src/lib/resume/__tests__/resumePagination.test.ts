@@ -1027,6 +1027,329 @@ describe("resumePagination", () => {
     );
   });
 
+  it("preserves paragraph-only responsibilitiesRich in planner and committed experience fragments", () => {
+    const result = planWorkshopResumePages({
+      data: {
+        ...buildPlannerData(),
+        summary: "Compact summary.",
+        experience: [
+          {
+            ...resumeMock.experience[0]!,
+            id: "exp-rich-paragraph-only",
+            description: "",
+            bullets: [],
+            responsibilitiesRich: {
+              blocks: [
+                {
+                  kind: "paragraph",
+                  runs: [
+                    { text: "Led " },
+                    { text: "platform migration", bold: true },
+                    { text: " planning." },
+                  ],
+                },
+              ],
+            },
+          },
+        ],
+      },
+      template: workshopTemplate,
+    });
+
+    const plannerItem = result.pages[0]?.entries.find(
+      (entry) => entry.kind === "experience" && entry.sourceEntryId === "exp-rich-paragraph-only",
+    );
+    const committedItem = result.committedPages
+      .flatMap((page) => page.fragments)
+      .filter((fragment) => fragment.kind === "experience")
+      .flatMap((fragment) => fragment.items)
+      .find((item) => item.id === "exp-rich-paragraph-only");
+
+    expect(plannerItem?.kind).toBe("experience");
+    if (plannerItem?.kind !== "experience") {
+      throw new Error("Expected experience planner item");
+    }
+
+    expect(plannerItem.blocks.map((block) => block.text)).toEqual([
+      "Led platform migration planning.",
+    ]);
+    expect(plannerItem.responsibilitiesRich).toEqual({
+      blocks: [
+        {
+          kind: "paragraph",
+          sourceBlockIndex: 0,
+          runs: [
+            { text: "Led " },
+            { text: "platform migration", bold: true },
+            { text: " planning." },
+          ],
+        },
+      ],
+    });
+    expect(committedItem?.responsibilitiesRich).toEqual(
+      plannerItem.responsibilitiesRich,
+    );
+  });
+
+  it("preserves bullet-only responsibilitiesRich order in planner and committed fragments", () => {
+    const result = planWorkshopResumePages({
+      data: {
+        ...buildPlannerData(),
+        summary: "Compact summary.",
+        experience: [
+          {
+            ...resumeMock.experience[0]!,
+            id: "exp-rich-bullets-only",
+            description: "",
+            bullets: [],
+            responsibilitiesRich: {
+              blocks: [
+                {
+                  kind: "bullet_list",
+                  items: [
+                    { runs: [{ text: "Reduced rollback incidents by 38%." }] },
+                    { runs: [{ text: "Defined launch checklists for every squad." }] },
+                  ],
+                },
+              ],
+            },
+          },
+        ],
+      },
+      template: workshopTemplate,
+    });
+
+    const plannerItem = result.pages[0]?.entries.find(
+      (entry) => entry.kind === "experience" && entry.sourceEntryId === "exp-rich-bullets-only",
+    );
+    const committedItem = result.committedPages
+      .flatMap((page) => page.fragments)
+      .filter((fragment) => fragment.kind === "experience")
+      .flatMap((fragment) => fragment.items)
+      .find((item) => item.id === "exp-rich-bullets-only");
+
+    expect(plannerItem?.kind).toBe("experience");
+    if (plannerItem?.kind !== "experience") {
+      throw new Error("Expected experience planner item");
+    }
+
+    expect(plannerItem.blocks.map((block) => block.kind)).toEqual(["bullet", "bullet"]);
+    expect(plannerItem.blocks.map((block) => block.text)).toEqual([
+      "Reduced rollback incidents by 38%.",
+      "Defined launch checklists for every squad.",
+    ]);
+    expect(committedItem?.responsibilitiesRich).toEqual({
+      blocks: [
+        {
+          kind: "bullet_list",
+          sourceBlockIndex: 0,
+          items: [
+            {
+              runs: [{ text: "Reduced rollback incidents by 38%." }],
+              sourceBlockIndex: 0,
+              sourceItemIndex: 0,
+            },
+            {
+              runs: [{ text: "Defined launch checklists for every squad." }],
+              sourceBlockIndex: 0,
+              sourceItemIndex: 1,
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  it("preserves mixed responsibilitiesRich block order and inline marks in committed fragments", () => {
+    const result = planWorkshopResumePages({
+      data: {
+        ...buildPlannerData(),
+        summary: "Compact summary.",
+        experience: [
+          {
+            ...resumeMock.experience[0]!,
+            id: "exp-rich-mixed",
+            description: "",
+            bullets: [],
+            responsibilitiesRich: {
+              blocks: [
+                {
+                  kind: "paragraph",
+                  runs: [
+                    { text: "Directed the " },
+                    { text: "migration roadmap", bold: true },
+                    { text: " across three squads." },
+                  ],
+                },
+                {
+                  kind: "bullet_list",
+                  items: [
+                    {
+                      runs: [
+                        { text: "Reduced " },
+                        { text: "rollback incidents", italic: true },
+                        { text: " by 38%." },
+                      ],
+                    },
+                    {
+                      runs: [
+                        { text: "Formalized " },
+                        { text: "launch checklists", underline: true },
+                        { text: " across squads." },
+                      ],
+                    },
+                  ],
+                },
+                {
+                  kind: "paragraph",
+                  runs: [{ text: "Partnered closely with design and QA." }],
+                },
+              ],
+            },
+          },
+        ],
+      },
+      template: workshopTemplate,
+    });
+
+    const committedItem = result.committedPages
+      .flatMap((page) => page.fragments)
+      .filter((fragment) => fragment.kind === "experience")
+      .flatMap((fragment) => fragment.items)
+      .find((item) => item.id === "exp-rich-mixed");
+
+    expect(committedItem?.blocks.map((block) => `${block.kind}:${block.text}`)).toEqual([
+      "text:Directed the migration roadmap across three squads.",
+      "bullet:Reduced rollback incidents by 38%.",
+      "bullet:Formalized launch checklists across squads.",
+      "text:Partnered closely with design and QA.",
+    ]);
+    expect(committedItem?.responsibilitiesRich).toEqual({
+      blocks: [
+        {
+          kind: "paragraph",
+          sourceBlockIndex: 0,
+          runs: [
+            { text: "Directed the " },
+            { text: "migration roadmap", bold: true },
+            { text: " across three squads." },
+          ],
+        },
+        {
+          kind: "bullet_list",
+          sourceBlockIndex: 1,
+          items: [
+            {
+              runs: [
+                { text: "Reduced " },
+                { text: "rollback incidents", italic: true },
+                { text: " by 38%." },
+              ],
+              sourceBlockIndex: 1,
+              sourceItemIndex: 0,
+            },
+            {
+              runs: [
+                { text: "Formalized " },
+                { text: "launch checklists", underline: true },
+                { text: " across squads." },
+              ],
+              sourceBlockIndex: 1,
+              sourceItemIndex: 1,
+            },
+          ],
+        },
+        {
+          kind: "paragraph",
+          sourceBlockIndex: 2,
+          runs: [{ text: "Partnered closely with design and QA." }],
+        },
+      ],
+    });
+  });
+
+  it("preserves bullet-list then paragraph order in continued committed rich fragments", () => {
+    const result = planWorkshopResumePages({
+      data: {
+        ...buildPlannerData(),
+        summary: "",
+        education: [resumeMock.education[0]!],
+        experience: [
+          {
+            ...resumeMock.experience[0]!,
+            id: "exp-rich-continued-order",
+            description: "",
+            bullets: [],
+            responsibilitiesRich: {
+              blocks: [
+                {
+                  kind: "paragraph",
+                  runs: [{ text: makeTextBlock("continued-rich-prelude", 1) }],
+                },
+                {
+                  kind: "bullet_list",
+                  items: Array.from({ length: 4 }, (_, index) => ({
+                    runs: [{ text: makeTextBlock(`continued-rich-bullet-${index + 1}`, 7) }],
+                  })),
+                },
+                {
+                  kind: "paragraph",
+                  runs: [{ text: makeTextBlock("continued-rich-tail", 1) }],
+                },
+              ],
+            },
+          },
+        ],
+      },
+      template: workshopTemplate,
+    });
+
+    const fullCommittedItem = result.committedPages
+      .flatMap((page) => page.fragments)
+      .filter((fragment) => fragment.kind === "experience")
+      .flatMap((fragment) => fragment.items)
+      .find((item) => item.id === "exp-rich-continued-order" && !item.continued);
+    const continuedCommittedItem = result.committedPages
+      .flatMap((page) => page.fragments)
+      .filter((fragment) => fragment.kind === "experience")
+      .flatMap((fragment) => fragment.items)
+      .find(
+        (item) =>
+          item.id === "exp-rich-continued-order" &&
+          item.continued &&
+          item.responsibilitiesRich?.blocks.some((block) => block.kind === "paragraph"),
+      );
+
+    expect(fullCommittedItem?.responsibilitiesRich?.blocks.map((block) => block.kind)).toEqual([
+      "paragraph",
+      "bullet_list",
+    ]);
+    expect(continuedCommittedItem?.responsibilitiesRich?.blocks.map((block) => block.kind)).toEqual([
+      "bullet_list",
+      "paragraph",
+    ]);
+    expect(continuedCommittedItem?.responsibilitiesRich).toEqual({
+      blocks: [
+        {
+          kind: "bullet_list",
+          sourceBlockIndex: 1,
+          items: [
+            {
+              runs: [{ text: makeTextBlock("continued-rich-bullet-4", 7) }],
+              sourceBlockIndex: 1,
+              sourceItemIndex: 3,
+            },
+          ],
+        },
+        {
+          kind: "paragraph",
+          sourceBlockIndex: 2,
+          runs: [{ text: makeTextBlock("continued-rich-tail", 1) }],
+        },
+      ],
+    });
+  });
+
   it("splits a slight experience overflow between text sub-blocks instead of pushing the whole entry", () => {
     const result = planWorkshopResumePages({
       data: {
@@ -1190,6 +1513,11 @@ describe("resumePagination", () => {
     expect(experienceItems.length).toBeGreaterThan(1);
     expect(experienceItems[0]?.continued).toBe(false);
     expect(experienceItems.slice(1).every((item) => item.continued)).toBe(true);
+    expect(
+      experienceItems.every(
+        (item) => item.responsibilitiesRich && item.responsibilitiesRich.blocks.length > 0,
+      ),
+    ).toBe(true);
     expect(experienceItems.map((item) => item.blocks.map((block) => block.text))).toEqual(
       expect.arrayContaining([
         expect.arrayContaining([descriptionSegments[0]!]),

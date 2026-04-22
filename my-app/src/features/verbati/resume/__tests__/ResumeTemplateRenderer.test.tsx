@@ -392,6 +392,239 @@ describe("ResumeTemplateRenderer", () => {
     });
   });
 
+  it("renders committed workshop experience rich content from committedPages with fallback-safe source data", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const sourceData = {
+      ...resumeMock,
+      summary: makeTextBlock("template-continued-summary", 16),
+      skillItems: [],
+      languages: [],
+      projects: [],
+      achievements: [],
+      achievementItems: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+      experience: [
+        {
+          ...resumeMock.experience[0]!,
+          id: "exp-template-rich",
+          description: "Led platform migration planning.",
+          bullets: [
+            "Cut release rollback rate by 38%.",
+            "Formalized launch checklists across squads.",
+          ],
+          responsibilitiesRich: {
+            blocks: [
+              {
+                kind: "paragraph" as const,
+                runs: [
+                  { text: "Led " },
+                  { text: "platform migration", bold: true },
+                  { text: " planning." },
+                ],
+              },
+              {
+                kind: "bullet_list" as const,
+                items: [
+                  {
+                    runs: [
+                      { text: "Cut " },
+                      { text: "release rollback rate", italic: true },
+                      { text: " by 38%." },
+                    ],
+                  },
+                  {
+                    runs: [
+                      { text: "Formalized " },
+                      { text: "launch checklists", underline: true },
+                      { text: " across squads." },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      ],
+    };
+    const committedPages = planWorkshopResumePages({
+      data: sourceData,
+      template,
+    }).committedPages;
+    const fallbackOnlyData = {
+      ...sourceData,
+      experience: sourceData.experience.map((item) => ({
+        ...item,
+        responsibilitiesRich: undefined,
+        description: "Fallback description that should not render.",
+        bullets: ["Fallback bullet that should not render."],
+      })),
+    };
+
+    const { container } = render(
+      <ResumeTemplateRenderer
+        data={fallbackOnlyData}
+        committedPages={committedPages}
+        stylePreset={{
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        resumeTemplateId="workshop_resume_onecol_ats"
+      />,
+    );
+
+    const experienceItem = container.querySelector(
+      '[data-preview-section="experience"][data-preview-item-id="exp-template-rich"]',
+    ) as HTMLElement | null;
+
+    expect(experienceItem?.textContent).toContain("Led platform migration planning.");
+    expect(experienceItem?.querySelector("strong")?.textContent).toBe(
+      "platform migration",
+    );
+    expect(experienceItem?.querySelector("em")?.textContent).toBe(
+      "release rollback rate",
+    );
+    expect(experienceItem?.querySelector("u")?.textContent).toBe(
+      "launch checklists",
+    );
+    expect(experienceItem?.textContent).not.toContain(
+      "Fallback description that should not render.",
+    );
+    expect(experienceItem?.textContent).not.toContain(
+      "Fallback bullet that should not render.",
+    );
+  });
+
+  it("renders committed continued experience rich content in preserved bullet-list then paragraph order", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const firstParagraph = makeTextBlock("template-continued-prelude", 1);
+    const continuedBullets = Array.from({ length: 4 }, (_, index) =>
+      makeTextBlock(`template-continued-bullet-${index + 1}`, 7),
+    );
+    const trailingParagraph = makeTextBlock("template-continued-tail", 1);
+    const sourceData = {
+      ...resumeMock,
+      summary: "",
+      skillItems: [],
+      languages: [],
+      projects: [],
+      achievements: [],
+      achievementItems: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+      education: [resumeMock.education[0]!],
+      experience: [
+        {
+          ...resumeMock.experience[0]!,
+          id: "exp-template-continued-rich",
+          description: firstParagraph,
+          bullets: continuedBullets,
+          responsibilitiesRich: {
+            blocks: [
+              {
+                kind: "paragraph" as const,
+                runs: [{ text: firstParagraph }],
+              },
+              {
+                kind: "bullet_list" as const,
+                items: continuedBullets.map((bullet, index) => ({
+                  runs:
+                    index === continuedBullets.length - 1
+                      ? [{ text: bullet, italic: true }]
+                      : [{ text: bullet }],
+                })),
+              },
+              {
+                kind: "paragraph" as const,
+                runs: [{ text: trailingParagraph, underline: true }],
+              },
+            ],
+          },
+        },
+      ],
+    };
+    const committedPages = planWorkshopResumePages({
+      data: sourceData,
+      template,
+    }).committedPages;
+    const fallbackOnlyData = {
+      ...sourceData,
+      experience: sourceData.experience.map((item) => ({
+        ...item,
+        responsibilitiesRich: undefined,
+        description: "Fallback description that should not render.",
+        bullets: ["Fallback bullet that should not render."],
+      })),
+    };
+
+    const { container } = render(
+      <ResumeTemplateRenderer
+        data={fallbackOnlyData}
+        committedPages={committedPages}
+        stylePreset={{
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        resumeTemplateId="workshop_resume_onecol_ats"
+      />,
+    );
+
+    const pages = screen.getAllByTestId("resume-template-page");
+    const continuedPage =
+      committedPages
+        .map((committedPage, index) => ({
+          committedPage,
+          renderedPage: pages[index] ?? null,
+        }))
+        .find(({ committedPage }) =>
+          committedPage.fragments.some(
+            (fragment) =>
+              fragment.kind === "experience" &&
+              fragment.items.some(
+                (item) =>
+                  item.id === "exp-template-continued-rich" &&
+                  item.continued &&
+                  item.responsibilitiesRich?.blocks.some((block) => block.kind === "paragraph"),
+              ),
+          ),
+        )?.renderedPage ?? null;
+    const experienceItem = continuedPage?.querySelector(
+      '[data-preview-section="experience"][data-preview-item-id="exp-template-continued-rich"]',
+    ) as HTMLElement | null;
+    const directParagraphs = Array.from(experienceItem?.querySelectorAll(":scope > p") ?? []).map(
+      (node) => node.textContent,
+    );
+    const listItems = Array.from(experienceItem?.querySelectorAll(":scope > ul > li") ?? []).map(
+      (node) => node.textContent,
+    );
+
+    expect(continuedPage?.textContent).not.toContain(firstParagraph);
+    expect(continuedPage?.textContent).not.toContain(continuedBullets[0]!);
+    expect(continuedPage?.textContent).not.toContain(continuedBullets[1]!);
+    expect(continuedPage?.textContent).not.toContain(continuedBullets[2]!);
+    expect(listItems).toEqual([continuedBullets[3]]);
+    expect(directParagraphs).toEqual([trailingParagraph]);
+    expect(experienceItem?.querySelector("em")?.textContent).toBe(continuedBullets[3]);
+    expect(experienceItem?.querySelector("u")?.textContent).toBe(trailingParagraph);
+    expect(experienceItem?.innerHTML.indexOf("</ul><p")).toBeGreaterThan(-1);
+    expect(experienceItem?.textContent).not.toContain(
+      "Fallback description that should not render.",
+    );
+    expect(experienceItem?.textContent).not.toContain(
+      "Fallback bullet that should not render.",
+    );
+  });
+
   it("stays inert for non-workshop template ids", async () => {
     const onStablePageCountChange = vi.fn();
 
