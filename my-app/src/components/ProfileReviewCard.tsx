@@ -34,6 +34,7 @@ import StructuredUploadButton, {
 import ImportWarningBanner from "./ImportWarningBanner";
 import CvRenameDialog from "./CvRenameDialog";
 import ImportRecoveryPanel from "./ImportRecoveryPanel";
+import OrganizeSectionsList from "./cv-editor/OrganizeSectionsList";
 import ResumeExportControl, {
   type ResumeExportRequest,
 } from "./ResumeExportControl";
@@ -78,6 +79,12 @@ import {
   type ResumeLinkIntent,
   type SectionOpenRequest,
 } from "../features/verbati/resumeLinking";
+import {
+  ADDITIONAL_INFORMATION_SECTION_TITLE,
+  compareSectionsByRecommendedOrder,
+  insertSectionByCanonicalOrder,
+  sanitizeHiddenSectionIds,
+} from "../lib/cv-section-organization";
 
 /**
  * Props for ProfileReviewCard
@@ -96,6 +103,8 @@ interface Props {
   onResumeLinkIntentHandled?: (requestId: string) => void;
   activeTarget?: ResumeActiveTarget | null;
   onActiveTargetChange?: (target: ResumeActiveTarget | null) => void;
+  hiddenSectionIds?: string[];
+  onHiddenSectionIdsChange?: (hiddenSectionIds: string[]) => void;
 }
 
 type ManualSectionOption = {
@@ -205,6 +214,23 @@ function shouldPromptForImportedTitleRename(
   );
 
   return hasGenericTitleSignal && !hasTemplateSkeletonSignal;
+}
+
+function buildRecommendedSectionOrder(sections: CvSection[]) {
+  return sections
+    .map((section, index) => ({ section, index }))
+    .sort((left, right) => {
+      const orderDelta = compareSectionsByRecommendedOrder(
+        left.section,
+        right.section,
+      );
+      if (orderDelta !== 0) {
+        return orderDelta;
+      }
+
+      return left.index - right.index;
+    })
+    .map(({ section }) => section);
 }
 
 function getFlaggedSectionTypes(signals: CvImportSignal[]): Set<string> {
@@ -621,6 +647,8 @@ export function ProfileReviewCard({
   onResumeLinkIntentHandled,
   activeTarget = null,
   onActiveTargetChange,
+  hiddenSectionIds = [],
+  onHiddenSectionIdsChange,
 }: Props) {
   const navigate = useNavigate();
   const {
@@ -824,10 +852,10 @@ export function ProfileReviewCard({
       ...typedOptions,
       {
         value: "additional_information",
-        label: "Additional Information",
+        label: ADDITIONAL_INFORMATION_SECTION_TITLE,
         description: "Extra details and references",
         sectionType: "text",
-        sectionTitle: "Additional Information",
+        sectionTitle: ADDITIONAL_INFORMATION_SECTION_TITLE,
         removable: true,
       },
       {
@@ -854,7 +882,18 @@ export function ProfileReviewCard({
         isCustom: true,
         removable: true,
       },
-    ];
+    ].sort((left, right) =>
+      compareSectionsByRecommendedOrder(
+        {
+          type: left.sectionType,
+          title: left.sectionTitle ?? left.label,
+        } as CvSection,
+        {
+          type: right.sectionType,
+          title: right.sectionTitle ?? right.label,
+        } as CvSection,
+      ),
+    );
   }, [v1Enabled]);
   const addableSectionOptions = useMemo(() => {
     const existingTypes = new Set(
@@ -962,6 +1001,8 @@ export function ProfileReviewCard({
 
   const [recentlyAddedSectionType, setRecentlyAddedSectionType] =
     useState<string>("");
+  const [isOrganizeSectionsMode, setIsOrganizeSectionsMode] =
+    useState<boolean>(false);
   const [isManageSectionsMenuOpen, setIsManageSectionsMenuOpen] =
     useState<boolean>(false);
   const [isImportWarningDismissed, setIsImportWarningDismissed] =
@@ -1063,6 +1104,9 @@ export function ProfileReviewCard({
     Boolean(persistedMetadataRecoverySession);
   const hasImportReviewEntryPoint =
     importSignals.length > 0 || hasPendingRecoveryEntryPoint;
+  const handleResetOrganizeSectionsOrder = useCallback(() => {
+    reorderSections(buildRecommendedSectionOrder(sections) as any);
+  }, [reorderSections, sections]);
   const reviewChecksLabel = isImportReviewAcknowledged
     ? "Review flagged fields again"
     : "Review flagged fields";
@@ -1095,6 +1139,21 @@ export function ProfileReviewCard({
       pendingRecoveryImport.items.map(normalizeRecoveryItemTargets),
     );
   }, [pendingRecoveryImport]);
+  const sanitizedHiddenSectionIds = useMemo(
+    () => sanitizeHiddenSectionIds(sections, hiddenSectionIds),
+    [hiddenSectionIds, sections],
+  );
+  const hiddenSectionIdSet = useMemo(
+    () => new Set(sanitizedHiddenSectionIds),
+    [sanitizedHiddenSectionIds],
+  );
+  const visibleSections = useMemo(
+    () =>
+      sections.filter(
+        (section) => !hiddenSectionIdSet.has(String(section.id ?? "")),
+      ),
+    [hiddenSectionIdSet, sections],
+  );
 
   const copyStructuredPayload = React.useCallback(
     async (kind: "normalized" | "parser" | "rawText") => {
@@ -2039,6 +2098,24 @@ export function ProfileReviewCard({
     };
   }, [isManageSectionsMenuOpen]);
 
+  React.useEffect(() => {
+    if (!onHiddenSectionIdsChange) {
+      return;
+    }
+
+    if (
+      sanitizedHiddenSectionIds.join("|") === hiddenSectionIds.join("|")
+    ) {
+      return;
+    }
+
+    onHiddenSectionIdsChange(sanitizedHiddenSectionIds);
+  }, [
+    hiddenSectionIds,
+    onHiddenSectionIdsChange,
+    sanitizedHiddenSectionIds,
+  ]);
+
   /**
    * Replace an updated section into the current document via context.
    * Uses reorderSections to persist changes.
@@ -2267,43 +2344,11 @@ export function ProfileReviewCard({
         }
       }
 
-      const preferredSectionOrder = [
-        "profile",
-        "summary",
-        "experience",
-        "achievements",
-        "education",
-        "skills",
-        "languages",
-        "projects",
-        "certifications",
-        "text",
-      ] as const;
-      const preferredOrderIndex = new Map<string, number>(
-        preferredSectionOrder.map((sectionType, index): [string, number] => [
-          sectionType,
-          index,
-        ]),
-      );
-
       const existingSections = (currentCv?.sections ?? sections) as CvSection[];
       if (existingSections.length > 0) {
-        const nextSections = [...existingSections, newSection];
-        const orderedSections = nextSections
-          .map((section, index) => ({ section, index }))
-          .sort((a, b) => {
-            const aType = String(a.section.type ?? "");
-            const bType = String(b.section.type ?? "");
-            const aRank =
-              preferredOrderIndex.get(aType) ?? Number.MAX_SAFE_INTEGER;
-            const bRank =
-              preferredOrderIndex.get(bType) ?? Number.MAX_SAFE_INTEGER;
-            if (aRank !== bRank) return aRank - bRank;
-            return a.index - b.index;
-          })
-          .map(({ section }) => section);
-
-        reorderSections(orderedSections as any);
+        reorderSections(
+          insertSectionByCanonicalOrder(existingSections, newSection) as any,
+        );
       } else {
         addSection(newSection);
       }
@@ -2751,6 +2796,29 @@ export function ProfileReviewCard({
             ) : null}
             <div className="dasti-cv-edit-toolbar__group dasti-cv-edit-toolbar__group--primary">
               {toolbarPrimaryControl}
+              <button
+                type="button"
+                className="dasti-button dasti-button--secondary dasti-button--pill dasti-button--sm"
+                aria-label="Organize sections"
+                aria-pressed={isOrganizeSectionsMode}
+                data-toolbar-tooltip={
+                  isOrganizeSectionsMode ? "MOVE. HIDE." : undefined
+                }
+                onClick={() =>
+                  setIsOrganizeSectionsMode((current) => !current)
+                }
+              >
+                Organize sections
+              </button>
+              {isOrganizeSectionsMode ? (
+                <button
+                  type="button"
+                  className="dasti-button dasti-button--secondary dasti-button--pill dasti-button--sm"
+                  onClick={handleResetOrganizeSectionsOrder}
+                >
+                  Reset to recommended/default order
+                </button>
+              ) : null}
               {addableSectionOptions.length > 0 ||
               removableAddedSections.length > 0 ? (
                 <div
@@ -3002,6 +3070,45 @@ export function ProfileReviewCard({
                   No sections yet — add one below
                 </span>
               </div>
+            ) : isOrganizeSectionsMode ? (
+              <OrganizeSectionsList
+                sections={sections}
+                hiddenSectionIds={sanitizedHiddenSectionIds}
+                onHiddenSectionIdsChange={(nextHiddenSectionIds) => {
+                  onHiddenSectionIdsChange?.(nextHiddenSectionIds);
+                }}
+                onReorderSections={(nextSections) => {
+                  reorderSections(nextSections as any);
+                }}
+                onDeleteSection={handleRemoveAddedSection}
+                onExitOrganizeMode={() => {
+                  setIsOrganizeSectionsMode(false);
+                }}
+              />
+            ) : visibleSections.length === 0 ? (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: "var(--s3)",
+                  padding: "var(--s7) var(--s5)",
+                  borderRadius: "var(--radius-card)",
+                  border: "1px solid var(--color-border)",
+                  background: "var(--sfr)",
+                  boxShadow: "var(--sha)",
+                  textAlign: "center",
+                  color: "var(--tg2)",
+                }}
+              >
+                <FileText size={24} strokeWidth={1.3} />
+                <span style={{ fontSize: "var(--ts)", fontWeight: 500 }}>
+                  All editable sections are hidden from the live preview.
+                </span>
+                <span style={{ fontSize: "var(--text-body-sm-size)" }}>
+                  Open Organize sections to show them again.
+                </span>
+              </div>
             ) : DISABLE_DND_FOR_DEBUG ? (
               <>
                 {/* Debug: render without DnD to avoid mount/unmount churn and isolate click issues */}
@@ -3009,7 +3116,7 @@ export function ProfileReviewCard({
                   console.debug(
                     "[ProfileReviewCard] DnD disabled in debug mode",
                   )}
-                {sections.map((section, idx) => (
+                {visibleSections.map((section, idx) => (
                   <div
                     key={String(section.id ?? "")}
                     className={[
@@ -3058,7 +3165,7 @@ export function ProfileReviewCard({
                       }}
                     />
                   </div>
-                ))}
+                  ))}
               </>
             ) : (
               <DndContext
@@ -3067,10 +3174,10 @@ export function ProfileReviewCard({
                 onDragEnd={handleDragEnd}
               >
                 <SortableContext
-                  items={sections.map((s) => String(s.id ?? ""))}
+                  items={visibleSections.map((s) => String(s.id ?? ""))}
                   strategy={verticalListSortingStrategy}
                 >
-                  {sections.map((section, idx) => (
+                  {visibleSections.map((section, idx) => (
                     <SortableSection
                       key={String(section.id ?? "")}
                       section={section}

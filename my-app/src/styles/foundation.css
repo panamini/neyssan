@@ -389,6 +389,7 @@
     transparent
   );
   --section-header-surface: var(--sf1);
+  --section-header-block-size: calc((var(--space-4) * 2) + var(--ls));
   --section-dismiss-surface: var(--section-header-surface);
   --section-dismiss-border: color-mix(
     in srgb,
