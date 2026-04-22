@@ -375,6 +375,53 @@ describe("mapCvDocumentToResumeData", () => {
     ]);
   });
 
+  it("leaves the preview title empty when desired position is absent instead of falling back to the document title or name", () => {
+    const doc: CvDocument = {
+      id: "cv-no-desired-position",
+      title: "Elena Marlowe",
+      metadata: {
+        createdAt: "2026-03-25T00:00:00.000Z",
+        updatedAt: "2026-03-25T00:00:00.000Z",
+        version: 1,
+      },
+      sections: [
+        {
+          id: "profile",
+          title: "Profile",
+          type: "profile",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "profile-1",
+              name: "Elena Marlowe",
+              email: "elena@example.com",
+              desiredPosition: "",
+            },
+          ],
+        },
+        {
+          id: "summary",
+          title: "Summary",
+          type: "summary",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "summary-1",
+              summary: "Operator focused on clear systems and reliable delivery.",
+            },
+          ],
+        },
+      ],
+    };
+
+    const mapped = mapCvDocumentToResumeData(doc);
+
+    expect(mapped.name).toBe("Elena Marlowe");
+    expect(mapped.title).toBe("");
+    expect(mapped.title).not.toBe(doc.title);
+    expect(mapped.title).not.toBe(mapped.name);
+  });
+
   it("projects remirror responsibilities into separate prose and bullet channels", () => {
     const doc: CvDocument = {
       id: "cv-3",
