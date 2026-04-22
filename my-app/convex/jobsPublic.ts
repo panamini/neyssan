@@ -2,7 +2,11 @@ import { internalMutation, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 
-import { getPrimaryProfileForClerk, listProfilesForClerk } from "./lib/userProfiles";
+import {
+  ensureCanonicalProfileForClerk,
+  getPrimaryProfileForClerk,
+  listProfilesForClerk,
+} from "./lib/userProfiles";
 import {
   buildCanonicalJobDraftFromSource,
   resolveCanonicalJobReviewState,
@@ -69,6 +73,47 @@ async function requireUserProfile(ctx: any) {
   return profile;
 }
 
+async function requireCanonicalUserProfile(ctx: any) {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) {
+    throw new Error("Not authenticated");
+  }
+
+  const profile = await ensureCanonicalProfileForClerk({
+    ctx,
+    clerkId: identity.subject,
+    fallbackEmail: identity.email,
+    fallbackName: identity.name,
+  });
+
+  return {
+    _id: profile.id,
+    clerkId: profile.clerkId,
+    email: profile.email,
+    name: profile.name,
+  };
+}
+
+export const ensureCanonicalProfile = mutation({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    await ensureCanonicalProfileForClerk({
+      ctx,
+      clerkId: identity.subject,
+      fallbackEmail: identity.email,
+      fallbackName: identity.name,
+    });
+
+    return null;
+  },
+});
+
 export const createOrReuseFromSource = mutation({
   args: {
     title: v.string(),
@@ -85,7 +130,7 @@ export const createOrReuseFromSource = mutation({
     reviewState: v.string(),
   }),
   handler: async (ctx, args) => {
-    const profile = await requireUserProfile(ctx);
+    const profile = await requireCanonicalUserProfile(ctx);
     const draft = buildCanonicalJobDraftFromSource(args);
 
     const existing = await ctx.db
@@ -334,7 +379,7 @@ export const markOpened = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const profile = await requireUserProfile(ctx);
+    const profile = await requireCanonicalUserProfile(ctx);
     const normalizedJobId = ctx.db.normalizeId("jobs", args.jobId);
     if (!normalizedJobId) {
       throw new Error("Invalid jobId");
@@ -363,7 +408,7 @@ export const updateField = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const profile = await requireUserProfile(ctx);
+    const profile = await requireCanonicalUserProfile(ctx);
     const normalizedJobId = ctx.db.normalizeId("jobs", args.jobId);
     if (!normalizedJobId) {
       throw new Error("Invalid jobId");
@@ -400,7 +445,7 @@ export const approveReviewItem = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const profile = await requireUserProfile(ctx);
+    const profile = await requireCanonicalUserProfile(ctx);
     const normalizedJobId = ctx.db.normalizeId("jobs", args.jobId);
     if (!normalizedJobId) {
       throw new Error("Invalid jobId");

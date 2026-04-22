@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { JobsPage } from "../JobsPage";
 
 const approveReviewItemMock = vi.fn().mockResolvedValue(null);
+const ensureCanonicalProfileMock = vi.fn().mockResolvedValue(null);
 const markOpenedMock = vi.fn().mockResolvedValue(null);
 const updateFieldMock = vi.fn().mockResolvedValue(null);
 const windowOpenMock = vi.fn();
@@ -119,6 +120,9 @@ vi.mock("convex/react", () => ({
     if (reference === "jobsPublic.approveReviewItem") {
       return approveReviewItemMock;
     }
+    if (reference === "jobsPublic.ensureCanonicalProfile") {
+      return ensureCanonicalProfileMock;
+    }
     if (reference === "jobsPublic.markOpened") {
       return markOpenedMock;
     }
@@ -142,6 +146,7 @@ vi.mock("../../../convex/_generated/api", () => ({
       listForUser: "jobsPublic.listForUser",
       getById: "jobsPublic.getById",
       approveReviewItem: "jobsPublic.approveReviewItem",
+      ensureCanonicalProfile: "jobsPublic.ensureCanonicalProfile",
       markOpened: "jobsPublic.markOpened",
       updateField: "jobsPublic.updateField",
     },
@@ -164,6 +169,7 @@ describe("JobsPage", () => {
   beforeEach(() => {
     consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     approveReviewItemMock.mockClear();
+    ensureCanonicalProfileMock.mockClear();
     markOpenedMock.mockClear();
     updateFieldMock.mockClear();
     listResult = jobsList;
