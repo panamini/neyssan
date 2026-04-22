@@ -861,7 +861,7 @@ describe("resumePagination", () => {
     ).toBe(false);
   });
 
-  it("moves the full hobbies section to the last page when achievements packing would otherwise leave a weak continued tail before additional information", () => {
+  it("keeps the first fitting hobby on the current page and continues the remainder before additional information after dense achievements packing", () => {
     const result = planWorkshopResumePages({
       data: buildAchievementsTailHobbiesFixture(),
       template: workshopTemplate,
@@ -873,41 +873,50 @@ describe("resumePagination", () => {
         .map((fragment) => ({ pageIndex: page.index, fragment })),
     );
 
-    expect(hobbyFragments).toHaveLength(1);
-    expect(hobbyFragments[0]?.pageIndex).toBe(2);
+    expect(hobbyFragments).toHaveLength(2);
+    expect(hobbyFragments[0]?.pageIndex).toBe(1);
     expect(hobbyFragments[0]?.fragment.continued).toBe(false);
     expect(
       hobbyFragments[0]?.fragment.kind === "hobbies"
         ? hobbyFragments[0].fragment.items.map((item) => item.id)
         : [],
-    ).toEqual(["hobby-achievement-tail-1", "hobby-achievement-tail-2"]);
+    ).toEqual(["hobby-achievement-tail-1"]);
     expect(
-      result.committedPages[1]?.fragments.some((fragment) => fragment.kind === "hobbies"),
-    ).toBe(false);
+      hobbyFragments[1]?.pageIndex,
+    ).toBe(2);
+    expect(hobbyFragments[1]?.fragment.continued).toBe(true);
+    expect(
+      hobbyFragments[1]?.fragment.kind === "hobbies"
+        ? hobbyFragments[1].fragment.items.map((item) => item.id)
+        : [],
+    ).toEqual(["hobby-achievement-tail-2"]);
     expect(result.committedPages[2]?.fragments.map((fragment) => fragment.kind)).toEqual([
       "hobbies",
       "additional_information",
     ]);
   });
 
-  it("pulls the trailing hobbies section forward when additional information would otherwise strand alone on the last page", () => {
+  it("keeps hobbies on the current page when the full hobbies block fits before trailing additional information", () => {
     const result = planWorkshopResumePages({
       data: resumeMock,
       template: workshopTemplate,
     });
 
-    const lastPage = result.committedPages.at(-1);
-
-    expect(lastPage?.fragments.map((fragment) => fragment.kind)).toEqual([
+    expect(result.committedPages[1]?.fragments.map((fragment) => fragment.kind)).toEqual([
+      "skills",
+      "languages",
+      "selected_projects",
+      "achievements",
+      "certifications",
+      "affiliations",
       "hobbies",
+    ]);
+    expect(result.committedPages[2]?.fragments.map((fragment) => fragment.kind)).toEqual([
       "additional_information",
     ]);
-    expect(lastPage?.fragments.some((fragment) => fragment.kind === "additional_information")).toBe(
-      true,
-    );
   });
 
-  it("applies the same last-page text-section rescue to custom sections without losing the custom title", () => {
+  it("lets custom text sections continue on the next page without re-pulling hobbies off the current page", () => {
     const result = planWorkshopResumePages({
       data: buildCustomTextTailFixture(),
       template: workshopTemplate,
@@ -918,8 +927,8 @@ describe("resumePagination", () => {
       (fragment) => fragment.kind === "additional_information",
     );
 
+    expect(result.committedPages[1]?.fragments.at(-1)?.kind).toBe("hobbies");
     expect(lastPage?.fragments.map((fragment) => fragment.kind)).toEqual([
-      "hobbies",
       "additional_information",
     ]);
     expect(customFragment?.title).toBe("Custom Section");
