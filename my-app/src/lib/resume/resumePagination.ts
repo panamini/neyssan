@@ -10,6 +10,8 @@ import type {
   ResumeSkillItem,
   ResumeTextListItem,
   ResumeTextSection,
+  WorkshopResponsibilitiesRichContent,
+  WorkshopResponsibilityTextRun,
 } from "../../features/verbati/resume/resume.types";
 import { buildResumeEducationDisplay } from "../../features/verbati/resume/resumeEducation";
 import type { ResumePreviewSectionType } from "../../features/verbati/resumeLinking";
@@ -50,10 +52,39 @@ export type WorkshopExperienceContentBlock = {
   partial?: boolean;
 };
 
+type WorkshopCommittedResponsibilityParagraphBlock = {
+  kind: "paragraph";
+  runs: WorkshopResponsibilityTextRun[];
+  partial?: boolean;
+  sourceBlockIndex: number;
+};
+
+type WorkshopCommittedResponsibilityBulletListItem = {
+  runs: WorkshopResponsibilityTextRun[];
+  partial?: boolean;
+  sourceBlockIndex: number;
+  sourceItemIndex: number;
+};
+
+type WorkshopCommittedResponsibilityBulletListBlock = {
+  kind: "bullet_list";
+  items: WorkshopCommittedResponsibilityBulletListItem[];
+  sourceBlockIndex: number;
+};
+
+type WorkshopCommittedResponsibilityRichBlock =
+  | WorkshopCommittedResponsibilityParagraphBlock
+  | WorkshopCommittedResponsibilityBulletListBlock;
+
+export type WorkshopCommittedResponsibilitiesRichContent = {
+  blocks: WorkshopCommittedResponsibilityRichBlock[];
+};
+
 type WorkshopPlannerExperienceContentBlock = WorkshopExperienceContentBlock & {
   charsPerLine: number;
   usefulLines: number;
   estimatedHeight: number;
+  richFragment?: WorkshopCommittedResponsibilityRichBlock;
 };
 
 type WorkshopPlannerExperienceEntry = {
@@ -72,6 +103,7 @@ type WorkshopPlannerExperienceEntry = {
   sectionTitle?: string;
   sectionOrder?: number;
   blocks: WorkshopPlannerExperienceContentBlock[];
+  responsibilitiesRich?: WorkshopCommittedResponsibilitiesRichContent;
 };
 
 export type WorkshopPlannerEntry =
@@ -203,6 +235,7 @@ type WorkshopCommittedExperienceItem = {
   period: string;
   location: string;
   blocks: WorkshopExperienceContentBlock[];
+  responsibilitiesRich?: WorkshopCommittedResponsibilitiesRichContent;
 };
 
 type WorkshopCommittedEducationItem = {
@@ -681,11 +714,166 @@ function normalizeExperienceTextSegments(text: string | undefined) {
     .filter(Boolean);
 }
 
+function cloneResponsibilityRun(
+  run: WorkshopResponsibilityTextRun,
+): WorkshopResponsibilityTextRun {
+  return { ...run };
+}
+
+function cloneResponsibilityRuns(
+  runs: WorkshopResponsibilityTextRun[],
+): WorkshopResponsibilityTextRun[] {
+  return runs.map((run) => cloneResponsibilityRun(run));
+}
+
+function appendResponsibilityRun(
+  target: WorkshopResponsibilityTextRun[],
+  run: WorkshopResponsibilityTextRun,
+) {
+  if (!run.text) {
+    return;
+  }
+
+  const previous = target[target.length - 1];
+  if (
+    previous &&
+    previous.bold === run.bold &&
+    previous.italic === run.italic &&
+    previous.underline === run.underline
+  ) {
+    previous.text += run.text;
+    return;
+  }
+
+  target.push(cloneResponsibilityRun(run));
+}
+
+function trimResponsibilityRuns(
+  runs: WorkshopResponsibilityTextRun[],
+): WorkshopResponsibilityTextRun[] {
+  const next = cloneResponsibilityRuns(runs);
+
+  while (next.length > 0) {
+    const first = next[0]!;
+    const trimmed = first.text.replace(/^\s+/, "");
+    if (!trimmed) {
+      next.shift();
+      continue;
+    }
+    if (trimmed !== first.text) {
+      next[0] = { ...first, text: trimmed };
+    }
+    break;
+  }
+
+  while (next.length > 0) {
+    const lastIndex = next.length - 1;
+    const last = next[lastIndex]!;
+    const trimmed = last.text.replace(/\s+$/, "");
+    if (!trimmed) {
+      next.pop();
+      continue;
+    }
+    if (trimmed !== last.text) {
+      next[lastIndex] = { ...last, text: trimmed };
+    }
+    break;
+  }
+
+  return next;
+}
+
+function responsibilityRunsToPlainText(runs: WorkshopResponsibilityTextRun[]) {
+  return runs.map((run) => run.text).join("");
+}
+
+function sliceResponsibilityRuns(args: {
+  runs: WorkshopResponsibilityTextRun[];
+  start: number;
+  end: number;
+}): WorkshopResponsibilityTextRun[] {
+  const next: WorkshopResponsibilityTextRun[] = [];
+  let cursor = 0;
+
+  for (const run of args.runs) {
+    const runStart = cursor;
+    const runEnd = cursor + run.text.length;
+    cursor = runEnd;
+
+    if (args.end <= runStart || args.start >= runEnd) {
+      continue;
+    }
+
+    const sliceStart = Math.max(args.start, runStart) - runStart;
+    const sliceEnd = Math.min(args.end, runEnd) - runStart;
+    const text = run.text.slice(sliceStart, sliceEnd);
+    if (!text) {
+      continue;
+    }
+
+    appendResponsibilityRun(next, {
+      text,
+      ...(run.bold ? { bold: true } : {}),
+      ...(run.italic ? { italic: true } : {}),
+      ...(run.underline ? { underline: true } : {}),
+    });
+  }
+
+  return next;
+}
+
+function segmentResponsibilityRunsByParagraphBreaks(
+  runs: WorkshopResponsibilityTextRun[],
+): WorkshopResponsibilityTextRun[][] {
+  const text = responsibilityRunsToPlainText(runs);
+  const segments: WorkshopResponsibilityTextRun[][] = [];
+  let start = 0;
+  let index = 0;
+
+  while (index < text.length) {
+    const character = text[index];
+    if (character !== "\n" && character !== "\r") {
+      index += 1;
+      continue;
+    }
+
+    const trimmedSegment = trimResponsibilityRuns(
+      sliceResponsibilityRuns({
+        runs,
+        start,
+        end: index,
+      }),
+    );
+    if (trimmedSegment.length > 0) {
+      segments.push(trimmedSegment);
+    }
+
+    while (index < text.length && (text[index] === "\n" || text[index] === "\r")) {
+      index += 1;
+    }
+    start = index;
+  }
+
+  const trailingSegment = trimResponsibilityRuns(
+    sliceResponsibilityRuns({
+      runs,
+      start,
+      end: text.length,
+    }),
+  );
+  if (trailingSegment.length > 0) {
+    segments.push(trailingSegment);
+  }
+
+  return segments;
+}
+
 function buildPlannerExperienceBlock(args: {
   kind: WorkshopExperienceContentBlock["kind"];
   text: string;
   metrics: WorkshopPlannerMetrics;
   partial?: boolean;
+  richFragment?: WorkshopCommittedResponsibilityRichBlock;
 }): WorkshopPlannerExperienceContentBlock {
   const charsPerLine = resolveExperienceBlockCharsPerLine(
     args.text,
@@ -700,10 +888,172 @@ function buildPlannerExperienceBlock(args: {
     kind: args.kind,
     text: args.text.trim(),
     ...(args.partial ? { partial: true } : {}),
+    ...(args.richFragment ? { richFragment: args.richFragment } : {}),
     charsPerLine,
     usefulLines,
     estimatedHeight: usefulLines * args.metrics.bodyLineHeightMm,
   };
+}
+
+function projectExperienceRichContentToPlannerBlocks(args: {
+  rich: WorkshopResponsibilitiesRichContent;
+  metrics: WorkshopPlannerMetrics;
+}): WorkshopPlannerExperienceContentBlock[] {
+  const blocks: WorkshopPlannerExperienceContentBlock[] = [];
+
+  args.rich.blocks.forEach((block, sourceBlockIndex) => {
+    if (block.kind === "paragraph") {
+      segmentResponsibilityRunsByParagraphBreaks(block.runs).forEach((runs) => {
+        const text = responsibilityRunsToPlainText(runs).trim();
+        if (!text) {
+          return;
+        }
+
+        blocks.push(
+          buildPlannerExperienceBlock({
+            kind: "text",
+            text,
+            metrics: args.metrics,
+            richFragment: {
+              kind: "paragraph",
+              runs,
+              sourceBlockIndex,
+            },
+          }),
+        );
+      });
+      return;
+    }
+
+    block.items.forEach((item, sourceItemIndex) => {
+      const runs = trimResponsibilityRuns(item.runs);
+      const text = responsibilityRunsToPlainText(runs).trim();
+      if (!text) {
+        return;
+      }
+
+      blocks.push(
+        buildPlannerExperienceBlock({
+          kind: "bullet",
+          text,
+          metrics: args.metrics,
+          richFragment: {
+            kind: "bullet_list",
+            sourceBlockIndex,
+            items: [
+              {
+                runs,
+                sourceBlockIndex,
+                sourceItemIndex,
+              },
+            ],
+          },
+        }),
+      );
+    });
+  });
+
+  return blocks;
+}
+
+function buildFallbackResponsibilitiesRichContent(
+  item: ResumeExperienceItem,
+): WorkshopResponsibilitiesRichContent | undefined {
+  const blocks: WorkshopResponsibilitiesRichContent["blocks"] = [
+    ...normalizeExperienceTextSegments(item.description).map((text) => ({
+      kind: "paragraph" as const,
+      runs: [{ text }],
+    })),
+  ];
+
+  const bulletItems = item.bullets
+    .map((bullet) => bullet.trim())
+    .filter(Boolean)
+    .map((text) => ({
+      runs: [{ text }],
+    }));
+
+  if (bulletItems.length > 0) {
+    blocks.push({
+      kind: "bullet_list",
+      items: bulletItems,
+    });
+  }
+
+  return blocks.length > 0 ? { blocks } : undefined;
+}
+
+function buildCommittedResponsibilitiesRichFromPlannerBlocks(
+  blocks: WorkshopPlannerExperienceContentBlock[],
+): WorkshopCommittedResponsibilitiesRichContent | undefined {
+  const richBlocks: WorkshopCommittedResponsibilityRichBlock[] = [];
+  let pendingBulletList: WorkshopCommittedResponsibilityBulletListBlock | null = null;
+
+  const flushPendingBulletList = () => {
+    if (!pendingBulletList || pendingBulletList.items.length === 0) {
+      pendingBulletList = null;
+      return;
+    }
+
+    richBlocks.push({
+      kind: "bullet_list",
+      sourceBlockIndex: pendingBulletList.sourceBlockIndex,
+      items: pendingBulletList.items.map((item) => ({
+        runs: cloneResponsibilityRuns(item.runs),
+        sourceBlockIndex: item.sourceBlockIndex,
+        sourceItemIndex: item.sourceItemIndex,
+        ...(item.partial ? { partial: true } : {}),
+      })),
+    });
+    pendingBulletList = null;
+  };
+
+  for (const block of blocks) {
+    if (!block.richFragment) {
+      flushPendingBulletList();
+      continue;
+    }
+
+    if (block.richFragment.kind === "paragraph") {
+      flushPendingBulletList();
+      richBlocks.push({
+        kind: "paragraph",
+        sourceBlockIndex: block.richFragment.sourceBlockIndex,
+        runs: cloneResponsibilityRuns(block.richFragment.runs),
+        ...(block.richFragment.partial ? { partial: true } : {}),
+      });
+      continue;
+    }
+
+    const richBulletBlock = block.richFragment;
+    const bulletItem = richBulletBlock.items[0];
+    if (!bulletItem) {
+      continue;
+    }
+
+    if (
+      !pendingBulletList ||
+      pendingBulletList.sourceBlockIndex !== richBulletBlock.sourceBlockIndex
+    ) {
+      flushPendingBulletList();
+      pendingBulletList = {
+        kind: "bullet_list",
+        sourceBlockIndex: richBulletBlock.sourceBlockIndex,
+        items: [],
+      };
+    }
+
+    pendingBulletList.items.push({
+      runs: cloneResponsibilityRuns(bulletItem.runs),
+      sourceBlockIndex: bulletItem.sourceBlockIndex,
+      sourceItemIndex: bulletItem.sourceItemIndex,
+      ...(bulletItem.partial ? { partial: true } : {}),
+    });
+  }
+
+  flushPendingBulletList();
+
+  return richBlocks.length > 0 ? { blocks: richBlocks } : undefined;
 }
 
 function estimateExperienceHeaderHeight(args: {
@@ -794,34 +1144,44 @@ function computeMinimumViableExperienceFragmentHeight(
   );
 }
 
+function buildPlannerExperienceContent(
+  item: ResumeExperienceItem,
+  metrics: WorkshopPlannerMetrics,
+): {
+  blocks: WorkshopPlannerExperienceContentBlock[];
+  responsibilitiesRich?: WorkshopCommittedResponsibilitiesRichContent;
+} {
+  const sourceRich =
+    item.responsibilitiesRich && item.responsibilitiesRich.blocks.length > 0
+      ? item.responsibilitiesRich
+      : buildFallbackResponsibilitiesRichContent(item);
+  if (!sourceRich || sourceRich.blocks.length === 0) {
+    return { blocks: [] };
+  }
+
+  const blocks = projectExperienceRichContentToPlannerBlocks({
+    rich: sourceRich,
+    metrics,
+  });
+
+  return {
+    blocks,
+    responsibilitiesRich: buildCommittedResponsibilitiesRichFromPlannerBlocks(blocks),
+  };
+}
+
 function buildPlannerExperienceEntry(
   item: ResumeExperienceItem,
   metrics: WorkshopPlannerMetrics,
   fragmentIndex = 0,
   continued = false,
-  blocks?: WorkshopPlannerExperienceContentBlock[],
+  content?: {
+    blocks: WorkshopPlannerExperienceContentBlock[];
+    responsibilitiesRich?: WorkshopCommittedResponsibilitiesRichContent;
+  },
 ): WorkshopPlannerExperienceEntry {
-  const normalizedBlocks =
-    blocks ??
-    [
-      ...normalizeExperienceTextSegments(item.description).map((text) =>
-        buildPlannerExperienceBlock({
-          kind: "text",
-          text,
-          metrics,
-        }),
-      ),
-      ...item.bullets
-        .map((bullet) => bullet.trim())
-        .filter(Boolean)
-        .map((text) =>
-          buildPlannerExperienceBlock({
-            kind: "bullet",
-            text,
-            metrics,
-          }),
-        ),
-    ];
+  const normalizedContent = content ?? buildPlannerExperienceContent(item, metrics);
+  const normalizedBlocks = normalizedContent.blocks;
   const headerHeight = estimateExperienceHeaderHeight({
     role: item.role,
     company: item.company,
@@ -846,6 +1206,7 @@ function buildPlannerExperienceEntry(
     sectionTitle: item.sectionTitle,
     sectionOrder: item.sectionOrder,
     blocks: normalizedBlocks,
+    responsibilitiesRich: normalizedContent.responsibilitiesRich,
     estimatedHeight:
       headerHeight + estimateExperienceBlocksHeight(normalizedBlocks, metrics),
   };
@@ -875,7 +1236,12 @@ function clonePlannerExperienceEntry(args: {
     args.metrics,
     args.fragmentIndex,
     args.continued,
-    args.blocks,
+    {
+      blocks: args.blocks,
+      responsibilitiesRich: buildCommittedResponsibilitiesRichFromPlannerBlocks(
+        args.blocks,
+      ),
+    },
   );
 }
 
@@ -927,6 +1293,105 @@ function resolveExperienceSplitCandidates(
     ),
     maxFeasibleSplitIndex: cappedMax,
     maxTailSafeSplitIndex,
+  };
+}
+
+function splitResponsibilityRichFragmentAtTextIndex(args: {
+  fragment: WorkshopCommittedResponsibilityRichBlock;
+  splitIndex: number;
+}):
+  | {
+      head: WorkshopCommittedResponsibilityRichBlock;
+      tail: WorkshopCommittedResponsibilityRichBlock;
+    }
+  | null {
+  if (args.fragment.kind === "paragraph") {
+    const fullText = responsibilityRunsToPlainText(args.fragment.runs);
+    const headRuns = trimResponsibilityRuns(
+      sliceResponsibilityRuns({
+        runs: args.fragment.runs,
+        start: 0,
+        end: Math.min(args.splitIndex, fullText.length),
+      }),
+    );
+    const tailRuns = trimResponsibilityRuns(
+      sliceResponsibilityRuns({
+        runs: args.fragment.runs,
+        start: Math.min(args.splitIndex, fullText.length),
+        end: fullText.length,
+      }),
+    );
+
+    if (headRuns.length === 0 || tailRuns.length === 0) {
+      return null;
+    }
+
+    return {
+      head: {
+        kind: "paragraph",
+        sourceBlockIndex: args.fragment.sourceBlockIndex,
+        runs: headRuns,
+        partial: true,
+      },
+      tail: {
+        kind: "paragraph",
+        sourceBlockIndex: args.fragment.sourceBlockIndex,
+        runs: tailRuns,
+        partial: true,
+      },
+    };
+  }
+
+  const bulletItem = args.fragment.items[0];
+  if (!bulletItem) {
+    return null;
+  }
+
+  const fullText = responsibilityRunsToPlainText(bulletItem.runs);
+  const headRuns = trimResponsibilityRuns(
+    sliceResponsibilityRuns({
+      runs: bulletItem.runs,
+      start: 0,
+      end: Math.min(args.splitIndex, fullText.length),
+    }),
+  );
+  const tailRuns = trimResponsibilityRuns(
+    sliceResponsibilityRuns({
+      runs: bulletItem.runs,
+      start: Math.min(args.splitIndex, fullText.length),
+      end: fullText.length,
+    }),
+  );
+
+  if (headRuns.length === 0 || tailRuns.length === 0) {
+    return null;
+  }
+
+  return {
+    head: {
+      kind: "bullet_list",
+      sourceBlockIndex: args.fragment.sourceBlockIndex,
+      items: [
+        {
+          runs: headRuns,
+          sourceBlockIndex: bulletItem.sourceBlockIndex,
+          sourceItemIndex: bulletItem.sourceItemIndex,
+          partial: true,
+        },
+      ],
+    },
+    tail: {
+      kind: "bullet_list",
+      sourceBlockIndex: args.fragment.sourceBlockIndex,
+      items: [
+        {
+          runs: tailRuns,
+          sourceBlockIndex: bulletItem.sourceBlockIndex,
+          sourceItemIndex: bulletItem.sourceItemIndex,
+          partial: true,
+        },
+      ],
+    },
   };
 }
 
@@ -1005,17 +1470,25 @@ function splitExperienceBlockAtWrapBoundary(args: {
       continue;
     }
 
+    const splitRichFragment = args.block.richFragment
+      ? splitResponsibilityRichFragmentAtTextIndex({
+          fragment: args.block.richFragment,
+          splitIndex,
+        })
+      : null;
     const headBlock = buildPlannerExperienceBlock({
       kind: args.block.kind,
       text: headText,
       metrics: args.metrics,
       partial: true,
+      richFragment: splitRichFragment?.head,
     });
     const tailBlock = buildPlannerExperienceBlock({
       kind: args.block.kind,
       text: tailText,
       metrics: args.metrics,
       partial: true,
+      richFragment: splitRichFragment?.tail,
     });
     const headBlocks = [...args.prefixBlocks, headBlock];
     const tailBlocks = [tailBlock, ...args.suffixBlocks];
@@ -2073,6 +2546,9 @@ function buildCommittedFragment(args: {
               text: block.text,
               ...(block.partial ? { partial: true } : {}),
             })),
+            ...(entry.responsibilitiesRich
+              ? { responsibilitiesRich: entry.responsibilitiesRich }
+              : {}),
           })),
       };
     case "education":
