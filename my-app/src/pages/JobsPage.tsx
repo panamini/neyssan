@@ -320,6 +320,10 @@ function JobsPageContent(): JSX.Element {
   const approveReviewItem = useMutation(
     ((api as any).jobsPublic?.approveReviewItem ?? "jobsPublic.approveReviewItem") as any,
   );
+  const ensureCanonicalProfile = useMutation(
+    ((api as any).jobsPublic?.ensureCanonicalProfile ??
+      "jobsPublic.ensureCanonicalProfile") as any,
+  );
   const markJobOpened = useMutation(
     ((api as any).jobsPublic?.markOpened ?? "jobsPublic.markOpened") as any,
   );
@@ -353,8 +357,15 @@ function JobsPageContent(): JSX.Element {
     setJobs(undefined);
     setJobsRuntimeUnavailable(false);
 
-    void convex
-      .query(jobsListReference, {})
+    void Promise.resolve(ensureCanonicalProfile({}))
+      .catch((error) => {
+        if (cancelled) {
+          return undefined;
+        }
+        console.warn("[JobsPage] canonical profile ensure failed", error);
+        return undefined;
+      })
+      .then(() => convex.query(jobsListReference, {}))
       .then((result) => {
         if (cancelled) {
           return;
@@ -378,6 +389,7 @@ function JobsPageContent(): JSX.Element {
     };
   }, [
     convex,
+    ensureCanonicalProfile,
     isConvexAuthenticated,
     isLoaded,
     isSignedIn,

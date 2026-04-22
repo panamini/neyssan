@@ -4,7 +4,10 @@ import {
   canonicalizeUserProfileMetadata,
   userProfileMetadataValidator,
 } from "./lib/userProfileMetadata";
-import { getPrimaryProfileForClerk } from "./lib/userProfiles";
+import {
+  getPrimaryProfileForClerk,
+  resolveCanonicalProfileKeywordsForWrite,
+} from "./lib/userProfiles";
 
 export function resolvePatchProfileRow<T extends { clerkId?: string | undefined }>(
   rows: T[],
@@ -30,10 +33,7 @@ export const get = internalQuery({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
-    return await ctx.db
-      .query("userProfiles")
-      .filter((q) => q.eq(q.field("clerkId"), identity.subject))
-      .first();
+    return await getPrimaryProfileForClerk(ctx, identity.subject);
   },
 });
 
@@ -50,10 +50,7 @@ export const upsert = internalMutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
 
-    const existing = await ctx.db
-      .query("userProfiles")
-      .filter((q) => q.eq(q.field("clerkId"), identity.subject))
-      .first();
+    const existing = await getPrimaryProfileForClerk(ctx, identity.subject);
 
     if (existing) {
       return ctx.db.patch(existing._id, {
@@ -86,6 +83,7 @@ export const patch = mutation({
         raw_text: v.optional(v.string()),
         linkedIn: v.optional(v.string()),
         skills: v.optional(v.array(v.string())),
+        keywords: v.optional(v.array(v.string())),
         experience: v.optional(
           v.array(
             v.object({
@@ -150,6 +148,7 @@ export const patch = mutation({
         email: incoming.email ?? identity?.email ?? "",
         achievements: incoming.achievements ?? [],
         skills: incoming.skills ?? [],
+        keywords: incoming.keywords ?? [],
         languages: incoming.languages ?? [],
         experience: incoming.experience ?? [],
         education: incoming.education ?? [],
@@ -209,6 +208,7 @@ export const patch = mutation({
 
       if (args.profile.summary !== undefined) updates.summary = args.profile.summary;
       if (args.profile.skills !== undefined) updates.skills = args.profile.skills;
+      if (args.profile.keywords !== undefined) updates.keywords = args.profile.keywords;
       if (args.profile.experience !== undefined) updates.experience = args.profile.experience;
       if (args.profile.education !== undefined) updates.education = args.profile.education;
       if (args.profile.name !== undefined) updates.name = args.profile.name;
@@ -227,6 +227,14 @@ export const patch = mutation({
         updates.metadata = md;
       }
 
+      updates.keywords = resolveCanonicalProfileKeywordsForWrite({
+        nextKeywords: args.profile.keywords,
+        summary: updates.summary ?? existing.summary,
+        skills: updates.skills ?? existing.skills,
+        experience: updates.experience ?? existing.experience,
+        rawText: updates.raw_text ?? existing.raw_text,
+      });
+
       return ctx.db.patch(existing._id, updates);
     }
 
@@ -240,6 +248,7 @@ export const patch = mutation({
         "rawText",
         "email",
         "skills",
+        "keywords",
         "languages",
         "contact",
         "experience",
@@ -294,6 +303,16 @@ export const patch = mutation({
         updates.metadata = md;
       }
 
+      updates.keywords = resolveCanonicalProfileKeywordsForWrite({
+        nextKeywords: Array.isArray(args.patch.keywords)
+          ? args.patch.keywords
+          : undefined,
+        summary: updates.summary ?? existing.summary,
+        skills: updates.skills ?? existing.skills,
+        experience: updates.experience ?? existing.experience,
+        rawText: updates.raw_text ?? existing.raw_text,
+      });
+
       return ctx.db.patch(existing._id, updates);
     }
 
@@ -337,6 +356,7 @@ export const saveProfile = mutation({
       email: incoming.email ?? "",
       summary: incoming.summary ?? undefined,
       skills: dedupeStrings(incoming.skills),
+      keywords: dedupeStrings(incoming.keywords),
       languages: dedupeStrings(incoming.languages),
       contact: incoming.contact ?? undefined,
       experience: incoming.experience ?? [],
@@ -366,6 +386,22 @@ export const saveProfile = mutation({
         languages: (normalizedProfile.languages && normalizedProfile.languages.length > 0) ? normalizedProfile.languages : (existing.languages ?? []),
         contact: normalizedProfile.contact ?? existing.contact ?? undefined,
         skills: (normalizedProfile.skills && normalizedProfile.skills.length > 0) ? normalizedProfile.skills : (existing.skills ?? []),
+        keywords: resolveCanonicalProfileKeywordsForWrite({
+          nextKeywords:
+            normalizedProfile.keywords && normalizedProfile.keywords.length > 0
+              ? normalizedProfile.keywords
+              : undefined,
+          summary: normalizedProfile.summary ?? existing.summary,
+          skills:
+            (normalizedProfile.skills && normalizedProfile.skills.length > 0)
+              ? normalizedProfile.skills
+              : (existing.skills ?? []),
+          experience:
+            (normalizedProfile.experience && normalizedProfile.experience.length > 0)
+              ? normalizedProfile.experience
+              : (existing.experience ?? []),
+          rawText: existing.raw_text,
+        }),
         experience: (normalizedProfile.experience && normalizedProfile.experience.length > 0) ? normalizedProfile.experience : (existing.experience ?? []),
         education: (normalizedProfile.education && normalizedProfile.education.length > 0) ? normalizedProfile.education : (existing.education ?? []),
         achievements: (normalizedProfile.achievements && normalizedProfile.achievements.length > 0) ? normalizedProfile.achievements : (existing.achievements ?? []),
@@ -391,6 +427,15 @@ export const saveProfile = mutation({
         ...(normalizedProfile.languages !== undefined && { languages: normalizedProfile.languages }),
         ...(normalizedProfile.contact !== undefined && { contact: normalizedProfile.contact }),
         skills: normalizedProfile.skills,
+        keywords: resolveCanonicalProfileKeywordsForWrite({
+          nextKeywords:
+            normalizedProfile.keywords.length > 0
+              ? normalizedProfile.keywords
+              : undefined,
+          summary: normalizedProfile.summary,
+          skills: normalizedProfile.skills,
+          experience: normalizedProfile.experience,
+        }),
         experience: normalizedProfile.experience,
         education: normalizedProfile.education,
         achievements: normalizedProfile.achievements,
