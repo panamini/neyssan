@@ -19,6 +19,7 @@ import {
   hasRenderableResumeData,
 } from "./cvDocumentToResumeData";
 import { buildCanonicalResumeRenderModelFromCv } from "../../lib/buildCanonicalResumeRenderModel";
+import type { CvDocument } from "../../types/cvDocument";
 import type {
   ResumeActiveTarget,
   ResumeLinkIntent,
@@ -34,6 +35,7 @@ type VerbatiCvPreviewPanelProps = {
   onStylePresetChange?: React.Dispatch<
     React.SetStateAction<ReturnType<typeof getVerbatiStyleFromCv>>
   >;
+  cvDocumentOverride?: CvDocument | null;
   onLinkIntent?: (intent: ResumeLinkIntent) => void;
   activeTarget?: ResumeActiveTarget | null;
 };
@@ -45,16 +47,18 @@ export function VerbatiCvPreviewPanel({
   railTrailingControl = null,
   stylePreset: controlledStylePreset,
   onStylePresetChange,
+  cvDocumentOverride = null,
   onLinkIntent,
   activeTarget = null,
 }: VerbatiCvPreviewPanelProps): JSX.Element {
   const { currentCv, importCv, isLibraryHydrated } = useCvLibrary();
+  const previewCvDocument = cvDocumentOverride ?? currentCv;
   const persistedStylePreset = React.useMemo(
     () => getVerbatiStyleFromCv(currentCv),
     [currentCv],
   );
   const activeData = currentCv
-    ? buildCanonicalResumeRenderModelFromCv(currentCv)
+    ? buildCanonicalResumeRenderModelFromCv(previewCvDocument ?? currentCv)
     : null;
   const hasCurrentCv = Boolean(currentCv);
   const hasActiveResume = hasRenderableResumeData(activeData);

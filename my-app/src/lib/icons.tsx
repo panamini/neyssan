@@ -19,6 +19,7 @@ import {
   DotsSixVertical as PhDotsSixVertical,
   Eye as PhEye,
   EyeClosed as PhEyeClosed,
+  EyeSlash as PhEyeSlash,
   Eyedropper as PhEyedropper,
   Feather as PhFeather,
   FileImage as PhFileImage,
@@ -141,6 +142,7 @@ export const CornersIn = withCompat(PhCornersIn);
 export const DotsThree = withCompat(PhDotsThree);
 export const Eye = withCompat(PhEye);
 export const EyeClosed = withCompat(PhEyeClosed);
+export const EyeSlash = withCompat(PhEyeSlash);
 export const EyeDropper = withCompat(PhEyedropper);
 export const Feather = withCompat(PhFeather);
 export const FileImage = withCompat(PhFileImage);

@@ -137,10 +137,13 @@ describe("ResumeOneColAtsPage", () => {
 
   it("uses the shared workshop summary-width var for the summary measure", () => {
     const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...resumeMock,
+      summary: "Compact summary.",
+    };
     const plan = planWorkshopResumePages({
       data: {
-        ...resumeMock,
-        summary: "Compact summary.",
+        ...data,
         metadata: resumeMock.metadata.slice(0, 1),
         contact: resumeMock.contact.slice(0, 2),
         experience: resumeMock.experience.slice(0, 1),
@@ -157,7 +160,7 @@ describe("ResumeOneColAtsPage", () => {
 
     const { container } = render(
       <ResumeOneColAtsPage
-        data={resumeMock}
+        data={data}
         page={plan.committedPages[0]!}
         template={template}
       />,
@@ -170,6 +173,47 @@ describe("ResumeOneColAtsPage", () => {
     expect(summaryItem?.getAttribute("style")).toContain(
       "max-width: var(--header-summary-width);",
     );
+  });
+
+  it("renders full workshop summary text in preview mode without clamp or ellipsis styles", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const longSummary = repeatWords("full-summary", 60);
+    const data = {
+      ...resumeMock,
+      summary: longSummary,
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      experience: resumeMock.experience.slice(0, 1),
+      projects: [],
+      education: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+    };
+    const plan = planWorkshopResumePages({
+      data,
+      template,
+    });
+
+    const { container } = render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+      />,
+    );
+
+    const summaryItem = container.querySelector(
+      '[data-preview-section="summary"][data-preview-item-id="summary"]',
+    );
+    const summaryStyle = summaryItem?.getAttribute("style") ?? "";
+
+    expect(summaryItem).toHaveTextContent(longSummary);
+    expect(summaryStyle).not.toContain("-webkit-line-clamp");
+    expect(summaryStyle).not.toContain("overflow: hidden");
+    expect(summaryStyle).not.toContain("text-overflow: ellipsis");
   });
 
   it("pins the workshop page grid to the top instead of stretching rows across the full A4 shell", () => {
