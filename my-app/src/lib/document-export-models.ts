@@ -61,6 +61,8 @@ export type ResumePrintExperienceItem = {
 
 export type ResumePrintEducationItem = {
   degree: string;
+  fieldOfStudy?: string;
+  grade?: string;
   school: string;
   period: string;
 };
@@ -297,6 +299,10 @@ function normalizeResumeData(
     })),
     education: data.education.map((item) => ({
       degree: cleanString(item.degree) || "Education",
+      ...(cleanString(item.fieldOfStudy)
+        ? { fieldOfStudy: cleanString(item.fieldOfStudy) }
+        : {}),
+      ...(cleanString(item.grade) ? { grade: cleanString(item.grade) } : {}),
       school: cleanString(item.school),
       period: cleanString(item.period),
     })),

@@ -1,12 +1,18 @@
 import React from "react";
 
 import type { ResumeActiveTarget } from "../resumeLinking";
-import type { ResumeData } from "./resume.types";
+import { buildResumeEducationDisplay } from "./resumeEducation";
+import type {
+  ResumeData,
+  WorkshopResponsibilitiesRichContent,
+  WorkshopResponsibilityTextRun,
+} from "./resume.types";
 import {
   resolveWorkshopPreviewLayoutContract,
   type ResumeTemplateDefinition,
 } from "../../../lib/layout/resumeTemplates";
 import type {
+  WorkshopCommittedResponsibilitiesRichContent,
   WorkshopExperienceContentBlock,
   WorkshopResumeCommittedFragment,
   WorkshopResumeCommittedPage,
@@ -35,6 +41,11 @@ const workshopLabelTextStyle = {
   textTransform: "uppercase" as const,
   letterSpacing: "0.08em",
   color: "var(--color-text-subtle)",
+};
+
+const workshopVisibleListStyle = {
+  listStyleType: "disc" as const,
+  listStylePosition: "outside" as const,
 };
 
 function formatMillimeters(value: number) {
@@ -78,6 +89,10 @@ const workshopBodySmFontSize = buildAdjustedFontSize({
   baseVar: "--text-body-sm-size",
   adjustVar: "--body-sm-size-adjust",
 });
+const workshopCompactRowTextStyle = {
+  fontSize: workshopBodySmFontSize,
+  lineHeight: "var(--text-body-sm-line)",
+};
 
 function renderSectionHeading(title: string, continued: boolean) {
   return (
@@ -144,6 +159,7 @@ function renderExperienceBlocks(args: {
         style={{
           margin: 0,
           paddingLeft: "var(--flow-list-indent)",
+          ...workshopVisibleListStyle,
           display: "grid",
           gap: formatMillimeters(args.listGapMm),
         }}
@@ -190,6 +206,130 @@ function renderExperienceBlocks(args: {
   flushBullets();
 
   return nodes;
+}
+
+function renderResponsibilityRun(
+  run: WorkshopResponsibilityTextRun,
+  key: string,
+) {
+  let content: React.ReactNode = run.text;
+
+  if (run.underline) {
+    content = <u>{content}</u>;
+  }
+
+  if (run.italic) {
+    content = <em>{content}</em>;
+  }
+
+  if (run.bold) {
+    content = <strong>{content}</strong>;
+  }
+
+  return <React.Fragment key={key}>{content}</React.Fragment>;
+}
+
+function renderResponsibilitiesRich(args: {
+  rich:
+    | WorkshopResponsibilitiesRichContent
+    | WorkshopCommittedResponsibilitiesRichContent;
+  listGapMm: number;
+}) {
+  return args.rich.blocks.map((block, blockIndex) => {
+    if (block.kind === "paragraph") {
+      return (
+        <p
+          key={`paragraph-${blockIndex}`}
+          style={{
+            margin: 0,
+            fontSize: workshopBodyFontSize,
+            lineHeight: "var(--text-body-line)",
+            ...experienceWrapStyle,
+          }}
+        >
+          {block.runs.map((run, runIndex) =>
+            renderResponsibilityRun(run, `paragraph-${blockIndex}-run-${runIndex}`),
+          )}
+        </p>
+      );
+    }
+
+    return (
+      <ul
+        key={`bullet-list-${blockIndex}`}
+        style={{
+          margin: 0,
+          paddingLeft: "var(--flow-list-indent)",
+          ...workshopVisibleListStyle,
+          display: "grid",
+          gap: formatMillimeters(args.listGapMm),
+        }}
+      >
+        {block.items.map((item, itemIndex) => (
+          <li
+            key={`bullet-list-${blockIndex}-item-${itemIndex}`}
+            style={{
+              fontSize: workshopBodyFontSize,
+              lineHeight: "var(--text-body-line)",
+              ...experienceWrapStyle,
+            }}
+          >
+            {item.runs.map((run, runIndex) =>
+              renderResponsibilityRun(
+                run,
+                `bullet-list-${blockIndex}-item-${itemIndex}-run-${runIndex}`,
+              ),
+            )}
+          </li>
+        ))}
+      </ul>
+    );
+  });
+}
+
+function responsibilitiesRichHasPartialContent(
+  rich:
+    | WorkshopResponsibilitiesRichContent
+    | WorkshopCommittedResponsibilitiesRichContent,
+) {
+  return rich.blocks.some((block) => {
+    if (block.kind === "paragraph") {
+      return "partial" in block && block.partial === true;
+    }
+
+    return block.items.some((item) => "partial" in item && item.partial === true);
+  });
+}
+
+function renderExperienceContent(args: {
+  item: {
+    blocks: WorkshopExperienceContentBlock[];
+    responsibilitiesRich?: WorkshopCommittedResponsibilitiesRichContent;
+  };
+  listGapMm: number;
+}) {
+  const rich = args.item.responsibilitiesRich;
+  if (!rich || rich.blocks.length === 0) {
+    return renderExperienceBlocks({
+      blocks: args.item.blocks,
+      listGapMm: args.listGapMm,
+    });
+  }
+
+  if (
+    args.item.blocks.some((block) => block.partial === true) ||
+    responsibilitiesRichHasPartialContent(rich)
+  ) {
+    return renderExperienceBlocks({
+      blocks: args.item.blocks,
+      listGapMm: args.listGapMm,
+    });
+  }
+
+  return renderResponsibilitiesRich({
+    rich,
+    listGapMm: args.listGapMm,
+  });
 }
 
 function renderProfileFragment(args: {
@@ -356,116 +496,121 @@ function renderFragmentContent(args: {
         </PreviewItemRegion>
       );
     case "experience":
-      return fragment.items.map((item) => (
-        <PreviewItemRegion
-          as="article"
-          key={`${fragment.fragmentId}:${item.id}:${item.continued ? "continued" : "initial"}`}
-          sectionType="experience"
-          sectionId={fragment.sectionId}
-          sectionTitle={fragment.title ?? "Experience"}
-          itemId={item.id}
-          activeTarget={activeTarget}
-          surface="item"
-          style={{
-            display: "grid",
-            gap: formatMillimeters(workshopLayout.experienceBlockGapMm),
-          }}
-          data-preview-row-id={item.id}
-        >
-          <div
+      return fragment.items.map((item) => {
+        return (
+          <PreviewItemRegion
+            as="article"
+            key={`${fragment.fragmentId}:${item.id}:${item.continued ? "continued" : "initial"}`}
+            sectionType="experience"
+            sectionId={fragment.sectionId}
+            sectionTitle={fragment.title ?? "Experience"}
+            itemId={item.id}
+            activeTarget={activeTarget}
+            surface="item"
             style={{
               display: "grid",
-              gap: formatMillimeters(workshopLayout.experienceMetaGapMm),
+              gap: formatMillimeters(workshopLayout.experienceBlockGapMm),
             }}
+            data-preview-row-id={item.id}
           >
             <div
               style={{
-                display: "flex",
-                alignItems: "baseline",
-                gap: "1.2mm",
-                flexWrap: "wrap",
+                display: "grid",
+                gap: formatMillimeters(workshopLayout.experienceMetaGapMm),
               }}
             >
-              <h3
+              <div
                 style={{
-                  margin: 0,
-                  fontFamily: "var(--heading-font, var(--font-heading-family))",
-                  fontSize: buildAdjustedFontSize({
-                    baseVar: "--text-body-size",
-                    adjustVar: "--body-size-adjust",
-                    offsetVar: "--workshop-experience-heading-size-adjust",
-                  }),
-                  lineHeight: "var(--workshop-experience-heading-line-height)",
-                  fontWeight: 700,
+                  display: "flex",
+                  alignItems: "baseline",
+                  gap: "1.2mm",
+                  flexWrap: "wrap",
                 }}
               >
-                {item.role}
-              </h3>
-              {item.continued ? (
-                <span
-                  style={workshopLabelTextStyle}
+                <h3
+                  style={{
+                    margin: 0,
+                    fontFamily: "var(--heading-font, var(--font-heading-family))",
+                    fontSize: buildAdjustedFontSize({
+                      baseVar: "--text-body-size",
+                      adjustVar: "--body-size-adjust",
+                      offsetVar: "--workshop-experience-heading-size-adjust",
+                    }),
+                    lineHeight: "var(--workshop-experience-heading-line-height)",
+                    fontWeight: 700,
+                  }}
                 >
-                  Continued
-                </span>
-              ) : null}
+                  {item.role}
+                </h3>
+                {item.continued ? (
+                  <span
+                    style={workshopLabelTextStyle}
+                  >
+                    Continued
+                  </span>
+                ) : null}
+              </div>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: "var(--text-meta-size)",
+                  lineHeight: "var(--text-meta-line)",
+                  color: "var(--color-text-muted)",
+                  ...experienceWrapStyle,
+                }}
+              >
+                {[item.company, item.location, item.period].filter(Boolean).join(" · ")}
+              </p>
             </div>
+            {renderExperienceContent({
+              item,
+              listGapMm: workshopLayout.listGapMm,
+            })}
+          </PreviewItemRegion>
+        );
+      });
+    case "education":
+      return fragment.items.map((item) => {
+        const educationDisplay = buildResumeEducationDisplay(item);
+        return (
+          <PreviewItemRegion
+            as="article"
+            key={item.id}
+            sectionType="education"
+            sectionId={fragment.sectionId}
+            sectionTitle={fragment.title ?? "Education"}
+            itemId={item.id}
+            activeTarget={activeTarget}
+            surface="item"
+            style={{
+              display: "grid",
+              gap: "var(--education-gap)",
+            }}
+            data-preview-row-id={item.id}
+          >
+            <h3
+              style={{
+                margin: 0,
+                fontFamily: "var(--heading-font, var(--font-heading-family))",
+                fontSize: workshopBodyFontSize,
+                fontWeight: 700,
+              }}
+            >
+              {educationDisplay.title}
+            </h3>
             <p
               style={{
                 margin: 0,
                 fontSize: "var(--text-meta-size)",
                 lineHeight: "var(--text-meta-line)",
                 color: "var(--color-text-muted)",
-                ...experienceWrapStyle,
               }}
             >
-              {[item.company, item.location, item.period].filter(Boolean).join(" · ")}
+              {educationDisplay.previewMeta}
             </p>
-          </div>
-          {renderExperienceBlocks({
-            blocks: item.blocks,
-            listGapMm: workshopLayout.listGapMm,
-          })}
-        </PreviewItemRegion>
-      ));
-    case "education":
-      return fragment.items.map((item) => (
-        <PreviewItemRegion
-          as="article"
-          key={item.id}
-          sectionType="education"
-          sectionId={fragment.sectionId}
-          sectionTitle={fragment.title ?? "Education"}
-          itemId={item.id}
-          activeTarget={activeTarget}
-          surface="item"
-          style={{
-            display: "grid",
-            gap: "var(--education-gap)",
-          }}
-          data-preview-row-id={item.id}
-        >
-          <h3
-            style={{
-              margin: 0,
-              fontFamily: "var(--heading-font, var(--font-heading-family))",
-              fontSize: workshopBodyFontSize,
-              fontWeight: 700,
-            }}
-          >
-            {item.degree}
-          </h3>
-          <p
-            style={{
-              margin: 0,
-              fontSize: "var(--text-meta-size)",
-              lineHeight: "var(--text-meta-line)",
-              color: "var(--color-text-muted)",
-            }}
-          >
-            {[item.school, item.period].filter(Boolean).join(" · ")}
-          </p>
-        </PreviewItemRegion>
-      ));
+          </PreviewItemRegion>
+        );
+      });
     case "skills":
       return fragment.items.map((item) => (
         <PreviewItemRegion
@@ -564,16 +709,13 @@ function renderFragmentContent(args: {
             sectionType="languages"
             sectionId={fragment.sectionId}
             sectionTitle={fragment.title ?? "Languages"}
-            itemId={item.id}
-            activeTarget={activeTarget}
-            surface="item"
-            style={{
-              fontSize: workshopBodyFontSize,
-              lineHeight: "var(--text-body-line)",
-            }}
-          >
-            {[item.name, item.level].filter(Boolean).join(" · ")}
-          </PreviewItemRegion>
+          itemId={item.id}
+          activeTarget={activeTarget}
+          surface="item"
+          style={workshopCompactRowTextStyle}
+        >
+          {[item.name, item.level].filter(Boolean).join(" · ")}
+        </PreviewItemRegion>
         </li>
       ));
     case "certifications":
@@ -651,16 +793,13 @@ function renderFragmentContent(args: {
             sectionType="hobbies"
             sectionId={fragment.sectionId}
             sectionTitle={fragment.title ?? "Hobbies"}
-            itemId={item.id}
-            activeTarget={activeTarget}
-            surface="item"
-            style={{
-              fontSize: workshopBodyFontSize,
-              lineHeight: "var(--text-body-line)",
-            }}
-          >
-            {item.name}
-          </PreviewItemRegion>
+          itemId={item.id}
+          activeTarget={activeTarget}
+          surface="item"
+          style={workshopCompactRowTextStyle}
+        >
+          {item.name}
+        </PreviewItemRegion>
         </li>
       ));
     case "additional_information":
@@ -744,6 +883,7 @@ function renderSectionFragment(args: {
         style={{
           margin: 0,
           paddingLeft: "var(--flow-list-indent)",
+          ...workshopVisibleListStyle,
           display: "grid",
           gap: formatMillimeters(workshopLayout.listGapMm),
         }}
