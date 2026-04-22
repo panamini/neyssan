@@ -761,6 +761,93 @@ describe("export-renderers", () => {
     expect(atsDocument.body.textContent).toContain("2");
   });
 
+  it("renders workshop languages and hobbies as the same compact list family while keeping skills as tags", () => {
+    const workshopStyle = {
+      familyId: "workshop",
+      layout: "workshop",
+      typography: "quiet-editorial",
+      palette: "sauge",
+    } as const;
+    const plannerData = {
+      ...resumeMock,
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      experience: [],
+      projects: [],
+      education: [],
+      achievements: [],
+      achievementItems: [],
+      certifications: [],
+      affiliations: [],
+      textSections: [],
+      skillItems: resumeMock.skillItems.slice(0, 2),
+      skills: resumeMock.skills.slice(0, 2),
+      languages: resumeMock.languages.slice(0, 2),
+      hobbyItems: resumeMock.hobbyItems.slice(0, 2),
+      hobbies: resumeMock.hobbies.slice(0, 2),
+    };
+    const planner = planWorkshopResumePages({
+      data: plannerData,
+      template: getResumeTemplateDefinition("workshop_resume_onecol_ats"),
+      stylePreset: workshopStyle,
+    });
+    const exportSource: ResumePrintSource = {
+      ...resumeFixture,
+      title: plannerData.name,
+      profile: {
+        name: plannerData.name,
+        title: plannerData.title,
+        summary: plannerData.summary,
+      },
+      contact: plannerData.contact.map((item) => ({
+        label: item.label,
+        value: item.value,
+      })),
+      metadata: plannerData.metadata.map((item) => ({
+        label: item.label,
+        value: item.value,
+      })),
+      skills: plannerData.skills,
+      languages: plannerData.languages.map((item) => ({
+        name: item.name,
+        level: item.level,
+      })),
+      experience: [],
+      projects: [],
+      education: [],
+      achievements: [],
+      hobbies: plannerData.hobbies,
+      resumeTemplateId: "workshop_resume_onecol_ats",
+      committedPages: planner.committedPages,
+    };
+    const atsDocument = parseExportHtml(
+      renderResumeAtsExportDocument(exportSource, workshopStyle),
+    );
+    const atsCss = getInlineStyles(atsDocument);
+
+    expect(atsCss).toContain(".compact-list {");
+    expect(atsCss).toContain(".compact-list li {");
+    expect(atsCss).toContain("font-size: var(--flow-body-sm-size);");
+    expect(
+      atsDocument.querySelectorAll(".section--skills .tag-list .tag"),
+    ).toHaveLength(2);
+    expect(
+      atsDocument.querySelector(".section--skills .compact-list"),
+    ).toBeNull();
+    expect(
+      atsDocument.querySelectorAll(".section--languages .compact-list li"),
+    ).toHaveLength(2);
+    expect(
+      atsDocument.querySelector(".section--languages .tag-list"),
+    ).toBeNull();
+    expect(
+      atsDocument.querySelectorAll(".section--interests .compact-list li"),
+    ).toHaveLength(2);
+    expect(
+      atsDocument.querySelector(".section--interests .tag-list"),
+    ).toBeNull();
+  });
+
   it("fails closed when workshop export pages are missing", () => {
     expect(() =>
       renderResumeStyledExportDocument({

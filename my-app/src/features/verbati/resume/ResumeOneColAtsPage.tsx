@@ -78,6 +78,10 @@ const workshopBodySmFontSize = buildAdjustedFontSize({
   baseVar: "--text-body-sm-size",
   adjustVar: "--body-sm-size-adjust",
 });
+const workshopCompactRowTextStyle = {
+  fontSize: workshopBodySmFontSize,
+  lineHeight: "var(--text-body-sm-line)",
+};
 
 function renderSectionHeading(title: string, continued: boolean) {
   return (
@@ -564,16 +568,13 @@ function renderFragmentContent(args: {
             sectionType="languages"
             sectionId={fragment.sectionId}
             sectionTitle={fragment.title ?? "Languages"}
-            itemId={item.id}
-            activeTarget={activeTarget}
-            surface="item"
-            style={{
-              fontSize: workshopBodyFontSize,
-              lineHeight: "var(--text-body-line)",
-            }}
-          >
-            {[item.name, item.level].filter(Boolean).join(" · ")}
-          </PreviewItemRegion>
+          itemId={item.id}
+          activeTarget={activeTarget}
+          surface="item"
+          style={workshopCompactRowTextStyle}
+        >
+          {[item.name, item.level].filter(Boolean).join(" · ")}
+        </PreviewItemRegion>
         </li>
       ));
     case "certifications":
@@ -651,16 +652,13 @@ function renderFragmentContent(args: {
             sectionType="hobbies"
             sectionId={fragment.sectionId}
             sectionTitle={fragment.title ?? "Hobbies"}
-            itemId={item.id}
-            activeTarget={activeTarget}
-            surface="item"
-            style={{
-              fontSize: workshopBodyFontSize,
-              lineHeight: "var(--text-body-line)",
-            }}
-          >
-            {item.name}
-          </PreviewItemRegion>
+          itemId={item.id}
+          activeTarget={activeTarget}
+          surface="item"
+          style={workshopCompactRowTextStyle}
+        >
+          {item.name}
+        </PreviewItemRegion>
         </li>
       ));
     case "additional_information":
