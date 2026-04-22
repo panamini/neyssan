@@ -422,6 +422,54 @@ describe("mapCvDocumentToResumeData", () => {
     expect(mapped.title).not.toBe(mapped.name);
   });
 
+  it("returns no synthetic preview summary when the summary section is absent", () => {
+    const doc: CvDocument = {
+      id: "cv-no-summary",
+      title: "Elena Marlowe",
+      metadata: {
+        createdAt: "2026-03-25T00:00:00.000Z",
+        updatedAt: "2026-03-25T00:00:00.000Z",
+        version: 1,
+      },
+      sections: [
+        {
+          id: "profile",
+          title: "Profile",
+          type: "profile",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "profile-1",
+              name: "Elena Marlowe",
+              desiredPosition: "Senior Product Designer",
+            },
+          ],
+        },
+        {
+          id: "experience",
+          title: "Experience",
+          type: "experience",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "exp-1",
+              company: "Northline Studio",
+              position: "Operations Lead",
+              location: "Paris",
+              responsibilities:
+                "Owned the operating cadence and delivery rhythm across the team.",
+            },
+          ],
+        },
+      ],
+    };
+
+    const mapped = mapCvDocumentToResumeData(doc);
+
+    expect(mapped.summary).toBe("");
+    expect(mapped.summarySectionId).toBeUndefined();
+  });
+
   it("projects remirror responsibilities into separate prose and bullet channels", () => {
     const doc: CvDocument = {
       id: "cv-3",

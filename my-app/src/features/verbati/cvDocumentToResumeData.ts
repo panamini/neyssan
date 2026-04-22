@@ -959,9 +959,7 @@ export function mapCvDocumentToResumeData(doc: CvDocument): ResumeData {
   return {
     name: String(profile?.name ?? "").trim() || doc.title || "Candidate name",
     title: String(profile?.desiredPosition ?? "").trim(),
-    summary:
-      summary ||
-      "Add a summary in CvForge to replace this placeholder and feed the live renderer.",
+    summary,
     photoUrl: String(profile?.photoUrl ?? "").trim() || undefined,
     metadata,
     contact,
