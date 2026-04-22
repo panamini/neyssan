@@ -774,7 +774,7 @@ describe("ResumeTemplateRenderer", () => {
     ).toBeFalsy();
   });
 
-  it("renders both hobbies together on the last page before additional information after dense achievements packing", () => {
+  it("renders the fitting hobby on the current page and continues the remainder before additional information after dense achievements packing", () => {
     const data = buildAchievementsTailHobbiesRendererFixture();
     const stylePreset = {
       familyId: "workshop",
@@ -797,26 +797,48 @@ describe("ResumeTemplateRenderer", () => {
     );
 
     const pages = screen.getAllByTestId("resume-template-page");
-    const hobbyPageIndex = plan.committedPages.findIndex((page) =>
-      page.fragments.some((fragment) => fragment.kind === "hobbies"),
+    const firstHobbyPageIndex = plan.committedPages.findIndex((page) =>
+      page.fragments.some(
+        (fragment) =>
+          fragment.kind === "hobbies" &&
+          fragment.kind === "hobbies" &&
+          fragment.items.some((item) => item.id === "hobby-render-achievement-tail-1"),
+      ),
+    );
+    const continuedHobbyPageIndex = plan.committedPages.findIndex((page) =>
+      page.fragments.some(
+        (fragment) =>
+          fragment.kind === "hobbies" &&
+          fragment.kind === "hobbies" &&
+          fragment.items.some((item) => item.id === "hobby-render-achievement-tail-2"),
+      ),
     );
 
-    expect(hobbyPageIndex).toBe(2);
+    expect(firstHobbyPageIndex).toBe(1);
+    expect(continuedHobbyPageIndex).toBe(2);
     expect(
       Array.from(
-        pages[hobbyPageIndex]?.querySelectorAll(
+        pages[firstHobbyPageIndex]?.querySelectorAll(
           '[data-preview-section="hobbies"][data-preview-item-id]',
         ) ?? [],
         (node) => node.getAttribute("data-preview-item-id"),
       ).filter((value): value is string => Boolean(value)),
-    ).toEqual(["hobby-render-achievement-tail-1", "hobby-render-achievement-tail-2"]);
+    ).toEqual(["hobby-render-achievement-tail-1"]);
     expect(
-      pages[hobbyPageIndex - 1]?.querySelector(
+      Array.from(
+        pages[continuedHobbyPageIndex]?.querySelectorAll(
+          '[data-preview-section="hobbies"][data-preview-item-id]',
+        ) ?? [],
+        (node) => node.getAttribute("data-preview-item-id"),
+      ).filter((value): value is string => Boolean(value)),
+    ).toEqual(["hobby-render-achievement-tail-2"]);
+    expect(
+      pages[firstHobbyPageIndex - 1]?.querySelector(
         '[data-preview-section="hobbies"][data-preview-item-id]',
       ),
     ).toBeFalsy();
     expect(
-      pages[hobbyPageIndex]?.querySelector(
+      pages[continuedHobbyPageIndex]?.querySelector(
         '[data-preview-section="additional_information"][data-preview-item-id]',
       ),
     ).toBeTruthy();
@@ -852,7 +874,7 @@ describe("ResumeTemplateRenderer", () => {
     expect(headings).toEqual(["Additional Information"]);
   });
 
-  it("renders custom text sections on the same rescued last page as hobbies and preserves the custom title", () => {
+  it("renders custom text sections on the following page without pulling hobbies off the current page", () => {
     const data = buildCustomTextTailRendererFixture();
     const stylePreset = {
       familyId: "workshop",
@@ -879,14 +901,14 @@ describe("ResumeTemplateRenderer", () => {
     const lastPage = pages[lastPageIndex]!;
 
     expect(plan.committedPages[lastPageIndex]?.fragments.map((fragment) => fragment.kind)).toEqual([
-      "hobbies",
       "additional_information",
     ]);
+    expect(plan.committedPages[lastPageIndex - 1]?.fragments.at(-1)?.kind).toBe("hobbies");
     expect(
       Array.from(
         lastPage.querySelectorAll('[data-preview-section="hobbies"][data-preview-item-id]'),
       ).length,
-    ).toBeGreaterThan(0);
+    ).toBe(0);
     expect(
       lastPage.querySelector('[data-preview-section="additional_information"][data-preview-item-id="custom-tail-1"]'),
     ).toBeTruthy();
