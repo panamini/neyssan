@@ -91,6 +91,48 @@ function joinSignatureParts(parts: ReadonlyArray<string>) {
   return parts.map((part) => normalizeSignatureValue(part)).join("|");
 }
 
+function buildResponsibilitiesRichSignature(
+  responsibilitiesRich: ResumeData["experience"][number]["responsibilitiesRich"],
+) {
+  if (!responsibilitiesRich) {
+    return "";
+  }
+
+  return responsibilitiesRich.blocks
+    .map((block) => {
+      if (block.kind === "paragraph") {
+        return joinSignatureParts([
+          "paragraph",
+          ...block.runs.map((run) =>
+            joinSignatureParts([
+              run.text,
+              run.bold ? "b" : "",
+              run.italic ? "i" : "",
+              run.underline ? "u" : "",
+            ]),
+          ),
+        ]);
+      }
+
+      return joinSignatureParts([
+        "bullet_list",
+        ...block.items.map((item) =>
+          joinSignatureParts(
+            item.runs.map((run) =>
+              joinSignatureParts([
+                run.text,
+                run.bold ? "b" : "",
+                run.italic ? "i" : "",
+                run.underline ? "u" : "",
+              ]),
+            ),
+          ),
+        ),
+      ]);
+    })
+    .join("||");
+}
+
 function buildResumeDataSignature(data: ResumeData) {
   return [
     joinSignatureParts([data.name, data.title, data.summary]),
@@ -116,6 +158,7 @@ function buildResumeDataSignature(data: ResumeData) {
           item.period,
           item.location,
           item.description,
+          buildResponsibilitiesRichSignature(item.responsibilitiesRich),
           ...item.bullets,
         ]),
       )
