@@ -590,6 +590,94 @@ describe("ResumeOneColAtsPage", () => {
     expect(container.textContent).not.toContain("Continued");
   });
 
+  it("restores explicit list marker styling for workshop experience bullet groups", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const bullet = makeTextBlock("styled-experience-bullet", 2);
+    const plan = planWorkshopResumePages({
+      data: {
+        ...buildRendererData(),
+        summary: "Compact summary.",
+        skillItems: [],
+        languages: [],
+        experience: [
+          {
+            ...resumeMock.experience[0]!,
+            id: "exp-render-styled-list",
+            description: "",
+            bullets: [bullet],
+          },
+        ],
+        projects: [],
+      },
+      template,
+    });
+
+    const { container } = render(
+      <ResumeOneColAtsPage
+        data={resumeMock}
+        page={plan.committedPages[0]!}
+        template={template}
+      />,
+    );
+
+    const experienceList = container.querySelector(
+      '[data-preview-section="experience"][data-preview-surface="item"] ul',
+    ) as HTMLUListElement | null;
+
+    expect(experienceList).toBeTruthy();
+    expect(experienceList?.style.listStyleType).toBe("disc");
+    expect(experienceList?.style.listStylePosition).toBe("outside");
+    expect(experienceList?.style.paddingLeft).toBe("var(--flow-list-indent)");
+    expect(experienceList?.style.gap).toBe("1.2mm");
+  });
+
+  it("restores explicit list marker styling for workshop achievements lists", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const achievementItems = [
+      {
+        ...resumeMock.achievementItems[0]!,
+        id: "achievement-render-styled-1",
+        text: "Delivered workshop renderer parity.",
+      },
+      {
+        ...resumeMock.achievementItems[0]!,
+        id: "achievement-render-styled-2",
+        text: "Stabilized browser preview evidence.",
+      },
+    ];
+    const plan = planWorkshopResumePages({
+      data: {
+        ...buildRendererData(),
+        experience: [],
+        projects: [],
+        education: [],
+        skillItems: [],
+        languages: [],
+        achievements: achievementItems.map((item) => item.text),
+        achievementItems,
+      },
+      template,
+    });
+
+    const { container } = render(
+      <ResumeOneColAtsPage
+        data={resumeMock}
+        page={plan.committedPages[0]!}
+        template={template}
+      />,
+    );
+
+    const achievementsList = container.querySelector(
+      '[data-preview-section="achievements"][data-preview-surface="section"] ul',
+    ) as HTMLUListElement | null;
+
+    expect(achievementsList).toBeTruthy();
+    expect(achievementsList?.style.listStyleType).toBe("disc");
+    expect(achievementsList?.style.listStylePosition).toBe("outside");
+    expect(achievementsList?.style.paddingLeft).toBe("var(--flow-list-indent)");
+    expect(achievementsList?.style.gap).toBe("1.2mm");
+  });
+
   it("renders the dense workshop screenshot second page with the intact second entry before education", () => {
     const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
     const plan = planWorkshopResumePages({
