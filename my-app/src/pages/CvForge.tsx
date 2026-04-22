@@ -44,6 +44,12 @@ import {
   buildStyledResumePrintSource,
 } from "../lib/document-export-models";
 import {
+  applyHiddenSectionsToCvDocument,
+  readStoredHiddenSectionIds,
+  sanitizeHiddenSectionIds,
+  writeStoredHiddenSectionIds,
+} from "../lib/cv-section-organization";
+import {
   buildResumeTypographyAuditMetadata,
   readResumePreviewDebugCapture,
   setStyledResumeExportContext,
@@ -205,6 +211,7 @@ export function CvForge(): JSX.Element {
     React.useState<ResumeLinkIntent | null>(null);
   const [resumeActiveTarget, setResumeActiveTarget] =
     React.useState<ResumeActiveTarget | null>(null);
+  const [hiddenSectionIds, setHiddenSectionIds] = React.useState<string[]>([]);
 
   const handleResumeLinkIntent = React.useCallback(
     (intent: ResumeLinkIntent) => {
@@ -237,6 +244,14 @@ export function CvForge(): JSX.Element {
     debounceMs: 700,
     logPrefix: "[CvForge]",
   });
+  const filteredPreviewCv = React.useMemo(
+    () => applyHiddenSectionsToCvDocument(currentCv, hiddenSectionIds),
+    [currentCv, hiddenSectionIds],
+  );
+  const sanitizedHiddenSectionIds = React.useMemo(
+    () => sanitizeHiddenSectionIds(currentCv?.sections ?? [], hiddenSectionIds),
+    [currentCv?.sections, hiddenSectionIds],
+  );
   const savedStylePresets = useQuery(api.proposalSettings.getPresets);
   const [isStylePresetMenuOpen, setIsStylePresetMenuOpen] =
     React.useState(false);
@@ -248,6 +263,38 @@ export function CvForge(): JSX.Element {
     () => new URLSearchParams(search).get("id") || undefined,
     [search],
   );
+
+  React.useEffect(() => {
+    const nextCvId = currentCv?.id ? String(currentCv.id) : null;
+    if (!nextCvId) {
+      setHiddenSectionIds([]);
+      return;
+    }
+
+    setHiddenSectionIds(
+      sanitizeHiddenSectionIds(
+        currentCv?.sections ?? [],
+        readStoredHiddenSectionIds(nextCvId),
+      ),
+    );
+  }, [currentCv?.id]);
+
+  React.useEffect(() => {
+    if (
+      sanitizedHiddenSectionIds.join("|") === hiddenSectionIds.join("|")
+    ) {
+      return;
+    }
+
+    setHiddenSectionIds(sanitizedHiddenSectionIds);
+  }, [hiddenSectionIds, sanitizedHiddenSectionIds]);
+
+  React.useEffect(() => {
+    writeStoredHiddenSectionIds(
+      currentCv?.id ? String(currentCv.id) : null,
+      hiddenSectionIds,
+    );
+  }, [currentCv?.id, hiddenSectionIds]);
   const isSplitCanvas = viewportWidth >= 1240;
   const editorGridMaxWidth =
     workspaceMode === "edit"
@@ -340,6 +387,8 @@ export function CvForge(): JSX.Element {
         return;
       }
 
+      const exportCurrentCv = filteredPreviewCv ?? currentCv;
+
       const exportKey =
         request.format === "pdf" ? `pdf:${request.mode}` : request.format;
       setExportingFormat(exportKey);
@@ -350,11 +399,11 @@ export function CvForge(): JSX.Element {
                 const source =
                   request.format === "pdf" && request.mode === "styled"
                     ? buildStyledResumePrintSource({
-                        currentCv,
+                        currentCv: exportCurrentCv,
                         stylePreset,
                       })
                     : buildResumeExportSource({
-                        currentCv,
+                        currentCv: exportCurrentCv,
                         authoritativeResume,
                         stylePreset,
                       });
@@ -433,7 +482,7 @@ export function CvForge(): JSX.Element {
                   format: request.format,
                 })
               : await downloadStandardResumeExport({
-                  document: currentCv,
+                  document: exportCurrentCv,
                   format: request.format,
                 });
         showToast(`Exported ${exported.filename}`, { variant: "success" });
@@ -444,7 +493,14 @@ export function CvForge(): JSX.Element {
         setExportingFormat(null);
       }
     },
-    [authoritativeResume, currentCv, hasTrustedExport, showToast, stylePreset],
+    [
+      authoritativeResume,
+      currentCv,
+      filteredPreviewCv,
+      hasTrustedExport,
+      showToast,
+      stylePreset,
+    ],
   );
 
   const stylePresetSlots = React.useMemo(
@@ -691,6 +747,8 @@ export function CvForge(): JSX.Element {
                   onResumeLinkIntentHandled={handleResumeLinkIntentHandled}
                   activeTarget={resumeActiveTarget}
                   onActiveTargetChange={setResumeActiveTarget}
+                  hiddenSectionIds={hiddenSectionIds}
+                  onHiddenSectionIdsChange={setHiddenSectionIds}
                 />
               </div>
             ) : null}
@@ -702,6 +760,7 @@ export function CvForge(): JSX.Element {
                 <VerbatiCvPreviewPanel
                   layoutMode="stacked"
                   hostMode="workspace"
+                  cvDocumentOverride={filteredPreviewCv}
                   railLeadControl={previewModeLeadControl}
                   railTrailingControl={resumeExportControl}
                   stylePreset={stylePreset}
@@ -743,6 +802,8 @@ export function CvForge(): JSX.Element {
                   onResumeLinkIntentHandled={handleResumeLinkIntentHandled}
                   activeTarget={resumeActiveTarget}
                   onActiveTargetChange={setResumeActiveTarget}
+                  hiddenSectionIds={hiddenSectionIds}
+                  onHiddenSectionIdsChange={setHiddenSectionIds}
                 />
                 <div
                   className={
@@ -754,6 +815,7 @@ export function CvForge(): JSX.Element {
                   <VerbatiCvPreviewPanel
                     layoutMode={isSplitCanvas ? "rail" : "stacked"}
                     hostMode="panel"
+                    cvDocumentOverride={filteredPreviewCv}
                     stylePreset={stylePreset}
                     onStylePresetChange={setStylePreset}
                     onLinkIntent={handleResumeLinkIntent}

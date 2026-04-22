@@ -44,6 +44,8 @@ vi.mock("../../components/ProfileReviewCard", () => ({
     toolbarLeadControl,
     toolbarPrimaryControl,
     onRequestExport,
+    hiddenSectionIds,
+    onHiddenSectionIdsChange,
   }: {
     cvId?: string;
     exportingFormat?: string | null;
@@ -52,8 +54,12 @@ vi.mock("../../components/ProfileReviewCard", () => ({
     toolbarLeadControl?: React.ReactNode;
     toolbarPrimaryControl?: React.ReactNode;
     onRequestExport?: (request: ResumeExportRequest) => void;
+    hiddenSectionIds?: string[];
+    onHiddenSectionIdsChange?: (hiddenSectionIds: string[]) => void;
   }) => {
     const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+    const languagesHidden = hiddenSectionIds?.includes("languages-section");
+    const summaryHidden = hiddenSectionIds?.includes("summary-section");
 
     return (
       <div>
@@ -61,6 +67,26 @@ vi.mock("../../components/ProfileReviewCard", () => ({
           <div className="dasti-cv-workbench-toggle">{toolbarLeadControl}</div>
         </div>
         <div>Mock profile editor {cvId ?? "none"}</div>
+        <button
+          type="button"
+          onClick={() =>
+            onHiddenSectionIdsChange?.(
+              languagesHidden ? [] : ["languages-section"],
+            )
+          }
+        >
+          {languagesHidden ? "Show Languages" : "Hide Languages"}
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            onHiddenSectionIdsChange?.(
+              summaryHidden ? [] : ["summary-section"],
+            )
+          }
+        >
+          {summaryHidden ? "Show Summary" : "Hide Summary"}
+        </button>
         {toolbarPrimaryControl}
         {onRequestExport ? (
           <div>
@@ -136,12 +162,21 @@ vi.mock("../../features/verbati/VerbatiCvPreviewPanel", () => ({
   VerbatiCvPreviewPanel: ({
     hostMode,
     railTrailingControl,
+    cvDocumentOverride,
   }: {
     hostMode?: "panel" | "workspace";
     railTrailingControl?: React.ReactNode;
+    cvDocumentOverride?: {
+      sections?: Array<{ title?: string }>;
+    } | null;
   }) => (
     <div>
       Preview host: {hostMode ?? "panel"}
+      <div data-testid={`preview-sections-${hostMode ?? "panel"}`}>
+        {(cvDocumentOverride?.sections ?? [])
+          .map((section) => section.title ?? "Untitled")
+          .join(" > ")}
+      </div>
       {railTrailingControl}
     </div>
   ),
@@ -282,6 +317,163 @@ describe("CvForge export status", () => {
     );
     expect(downloadAuthoritativeResumeExportMock).not.toHaveBeenCalled();
     expect(downloadStandardResumeExportMock).not.toHaveBeenCalled();
+  });
+
+  it("filters hidden sections out of the live preview feed and styled export source", async () => {
+    const user = userEvent.setup();
+    useCvLibraryMock.mockReturnValue({
+      currentCv: {
+        id: "cv-organize-export",
+        title: "Organize export CV",
+        metadata: {
+          createdAt: "2026-04-22T09:00:00.000Z",
+          updatedAt: "2026-04-22T09:00:00.000Z",
+          version: 1,
+        },
+        sections: [
+          {
+            id: "profile-section",
+            title: "Profile",
+            type: "profile",
+            blocks: [],
+            structuredContent: [
+              {
+                id: "profile-item",
+                name: "Jane Doe",
+              },
+            ],
+          },
+          {
+            id: "languages-section",
+            title: "Languages",
+            type: "languages",
+            blocks: [],
+            structuredContent: [
+              {
+                id: "language-item",
+                name: "French",
+                level: "Fluent",
+              },
+            ],
+          },
+        ],
+      },
+      importCv: importCvMock,
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv-organize-export"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId("preview-sections-panel")).toHaveTextContent(
+      "Profile > Languages",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Hide Languages" }));
+
+    expect(screen.getByTestId("preview-sections-panel")).toHaveTextContent(
+      "Profile",
+    );
+    expect(screen.getByTestId("preview-sections-panel")).not.toHaveTextContent(
+      "Languages",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Export Styled PDF" }));
+
+    expect(exportDocumentFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          renderSource: "preview",
+          resumeData: expect.objectContaining({
+            languages: [],
+          }),
+        }),
+      }),
+    );
+  });
+
+  it("removes summary from the live preview feed when summary is hidden", async () => {
+    const user = userEvent.setup();
+    useCvLibraryMock.mockReturnValue({
+      currentCv: {
+        id: "cv-summary-preview",
+        title: "Summary preview CV",
+        metadata: {
+          createdAt: "2026-04-22T09:00:00.000Z",
+          updatedAt: "2026-04-22T09:00:00.000Z",
+          version: 1,
+        },
+        sections: [
+          {
+            id: "profile-section",
+            title: "Profile",
+            type: "profile",
+            blocks: [],
+            structuredContent: [
+              {
+                id: "profile-item",
+                name: "Jane Doe",
+              },
+            ],
+          },
+          {
+            id: "summary-section",
+            title: "Summary",
+            type: "summary",
+            blocks: [],
+            structuredContent: [
+              {
+                id: "summary-item",
+                summary: {
+                  type: "doc",
+                  content: [
+                    {
+                      type: "paragraph",
+                      content: [{ type: "text", text: "Full summary text" }],
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+          {
+            id: "languages-section",
+            title: "Languages",
+            type: "languages",
+            blocks: [],
+            structuredContent: [
+              {
+                id: "language-item",
+                name: "French",
+                level: "Fluent",
+              },
+            ],
+          },
+        ],
+      },
+      importCv: importCvMock,
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv-summary-preview"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId("preview-sections-panel")).toHaveTextContent(
+      "Profile > Summary > Languages",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Hide Summary" }));
+
+    expect(screen.getByTestId("preview-sections-panel")).toHaveTextContent(
+      "Profile > Languages",
+    );
+    expect(screen.getByTestId("preview-sections-panel")).not.toHaveTextContent(
+      "Summary",
+    );
   });
 
   it("keeps export enabled as standard export for untrusted CVs", async () => {
