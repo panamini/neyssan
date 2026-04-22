@@ -6,7 +6,7 @@ import {
   PanelLeftDashed,
   PenNib,
   RotateCcw,
-  Sunglasses,
+  Stamp,
   Wand2,
   X,
 } from "@/lib/icons";
@@ -68,20 +68,20 @@ const TONE_OPTIONS: ToneOption[] = [
   {
     id: "signature",
     label: getVoicePresetDisplayLabel("signature"),
-    description: "Calm and direct.",
+    description: "Warm and approachable.",
     Icon: Feather,
   },
   {
     id: "expert",
     label: getVoicePresetDisplayLabel("expert"),
-    description: "Precise and authoritative.",
+    description: "Natural and credible.",
     Icon: PenNib,
   },
   {
     id: "engaging",
     label: getVoicePresetDisplayLabel("engaging"),
-    description: "Friendly and more human.",
-    Icon: Sunglasses,
+    description: "Formal and composed.",
+    Icon: Stamp,
   },
 ];
 

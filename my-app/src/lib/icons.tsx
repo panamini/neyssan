@@ -62,6 +62,7 @@ import {
   Star as PhStar,
   Sun as PhSun,
   Sunglasses as PhSunglasses,
+  Stamp as PhStamp,
   TextB as PhTextB,
   TextItalic as PhTextItalic,
   TextUnderline as PhTextUnderline,
@@ -189,6 +190,7 @@ export const Stop = withCompat(PhStop);
 export const Sun = withCompat(PhSun);
 export const SunMedium = withCompat(PhSun);
 export const Sunglasses = withCompat(PhSunglasses);
+export const Stamp = withCompat(PhStamp);
 export const Trash = withCompat(PhTrash);
 export const Underline = withCompat(PhTextUnderline);
 export const Upload = withCompat(PhUpload);
