@@ -848,6 +848,67 @@ describe("export-renderers", () => {
     ).toBeNull();
   });
 
+  it("renders degree, field of study, grade, school, and period in workshop education export output", () => {
+    const currentCv = generateCvTemplate("Workshop education export");
+    currentCv.metadata.verbatiStyle = {
+      familyId: "workshop",
+      layout: "workshop",
+      typography: "quiet-editorial",
+      palette: "sauge",
+    };
+    const educationSection = currentCv.sections.find(
+      (section) => section.type === "education",
+    );
+    if (educationSection?.structuredContent && Array.isArray(educationSection.structuredContent)) {
+      educationSection.structuredContent = [
+        {
+          ...(educationSection.structuredContent[0] ?? {
+            id: "edu-export-1",
+            institution: "",
+            degree: "",
+            isCurrent: false,
+          }),
+          id: "edu-export-1",
+          institution: "Northbridge University",
+          degree: "Bachelor of Science",
+          fieldOfStudy: "Computer Science",
+          grade: "3.9 GPA",
+          startDate: "2016-01-01T00:00:00.000Z",
+          endDate: "2020-01-01T00:00:00.000Z",
+          startDatePrecision: "year",
+          endDatePrecision: "year",
+          isCurrent: false,
+        },
+      ];
+    }
+
+    const exportSource = buildResumeExportSource({
+      currentCv,
+      stylePreset: currentCv.metadata.verbatiStyle,
+    });
+
+    expect(exportSource?.education[0]).toEqual({
+      degree: "Bachelor of Science",
+      fieldOfStudy: "Computer Science",
+      grade: "3.9 GPA",
+      school: "Northbridge University",
+      period: "2016 — 2020",
+    });
+
+    const atsDocument = parseExportHtml(
+      renderResumeAtsExportDocument(exportSource!, currentCv.metadata.verbatiStyle!),
+    );
+    const educationEntry = atsDocument.querySelector(".section--education .entry--education");
+
+    expect(educationEntry?.querySelector(".entry-title")?.textContent).toBe(
+      "Bachelor of Science, Computer Science",
+    );
+    expect(educationEntry?.querySelector(".entry-summary")?.textContent).toBe(
+      "Northbridge University · Grade: 3.9 GPA",
+    );
+    expect(educationEntry?.querySelector(".entry-meta")?.textContent).toBe("2016 — 2020");
+  });
+
   it("fails closed when workshop export pages are missing", () => {
     expect(() =>
       renderResumeStyledExportDocument({

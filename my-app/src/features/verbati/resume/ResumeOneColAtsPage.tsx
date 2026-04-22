@@ -1,6 +1,7 @@
 import React from "react";
 
 import type { ResumeActiveTarget } from "../resumeLinking";
+import { buildResumeEducationDisplay } from "./resumeEducation";
 import type { ResumeData } from "./resume.types";
 import {
   resolveWorkshopPreviewLayoutContract,
@@ -438,44 +439,47 @@ function renderFragmentContent(args: {
         </PreviewItemRegion>
       ));
     case "education":
-      return fragment.items.map((item) => (
-        <PreviewItemRegion
-          as="article"
-          key={item.id}
-          sectionType="education"
-          sectionId={fragment.sectionId}
-          sectionTitle={fragment.title ?? "Education"}
-          itemId={item.id}
-          activeTarget={activeTarget}
-          surface="item"
-          style={{
-            display: "grid",
-            gap: "var(--education-gap)",
-          }}
-          data-preview-row-id={item.id}
-        >
-          <h3
+      return fragment.items.map((item) => {
+        const educationDisplay = buildResumeEducationDisplay(item);
+        return (
+          <PreviewItemRegion
+            as="article"
+            key={item.id}
+            sectionType="education"
+            sectionId={fragment.sectionId}
+            sectionTitle={fragment.title ?? "Education"}
+            itemId={item.id}
+            activeTarget={activeTarget}
+            surface="item"
             style={{
-              margin: 0,
-              fontFamily: "var(--heading-font, var(--font-heading-family))",
-              fontSize: workshopBodyFontSize,
-              fontWeight: 700,
+              display: "grid",
+              gap: "var(--education-gap)",
             }}
+            data-preview-row-id={item.id}
           >
-            {item.degree}
-          </h3>
-          <p
-            style={{
-              margin: 0,
-              fontSize: "var(--text-meta-size)",
-              lineHeight: "var(--text-meta-line)",
-              color: "var(--color-text-muted)",
-            }}
-          >
-            {[item.school, item.period].filter(Boolean).join(" · ")}
-          </p>
-        </PreviewItemRegion>
-      ));
+            <h3
+              style={{
+                margin: 0,
+                fontFamily: "var(--heading-font, var(--font-heading-family))",
+                fontSize: workshopBodyFontSize,
+                fontWeight: 700,
+              }}
+            >
+              {educationDisplay.title}
+            </h3>
+            <p
+              style={{
+                margin: 0,
+                fontSize: "var(--text-meta-size)",
+                lineHeight: "var(--text-meta-line)",
+                color: "var(--color-text-muted)",
+              }}
+            >
+              {educationDisplay.previewMeta}
+            </p>
+          </PreviewItemRegion>
+        );
+      });
     case "skills":
       return fragment.items.map((item) => (
         <PreviewItemRegion
