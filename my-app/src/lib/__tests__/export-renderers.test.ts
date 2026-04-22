@@ -761,6 +761,279 @@ describe("export-renderers", () => {
     expect(atsDocument.body.textContent).toContain("2");
   });
 
+  it("renders workshop experience rich responsibilities from committedPages for paragraph, bullet, and mixed cases", () => {
+    const workshopStyle = {
+      familyId: "workshop",
+      layout: "workshop",
+      typography: "quiet-editorial",
+      palette: "sauge",
+    } as const;
+    const plannerData = {
+      ...resumeMock,
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      skillItems: [],
+      languages: [],
+      education: [],
+      achievements: [],
+      achievementItems: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      projects: [],
+      textSections: [],
+      summary: "Compact summary.",
+      experience: [
+        {
+          ...resumeMock.experience[0]!,
+          id: "exp-export-rich-paragraph",
+          description: "",
+          bullets: [],
+          responsibilitiesRich: {
+            blocks: [
+              {
+                kind: "paragraph" as const,
+                runs: [
+                  { text: "Directed the " },
+                  { text: "migration roadmap", bold: true },
+                  { text: " across three squads." },
+                ],
+              },
+            ],
+          },
+        },
+        {
+          ...resumeMock.experience[0]!,
+          id: "exp-export-rich-bullets",
+          description: "",
+          bullets: [],
+          responsibilitiesRich: {
+            blocks: [
+              {
+                kind: "bullet_list" as const,
+                items: [
+                  {
+                    runs: [
+                      { text: "Reduced " },
+                      { text: "rollback incidents", italic: true },
+                      { text: " by 38%." },
+                    ],
+                  },
+                  {
+                    runs: [
+                      { text: "Formalized " },
+                      { text: "launch checklists", underline: true },
+                      { text: " across squads." },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+        {
+          ...resumeMock.experience[0]!,
+          id: "exp-export-rich-mixed",
+          description: "",
+          bullets: [],
+          responsibilitiesRich: {
+            blocks: [
+              {
+                kind: "paragraph" as const,
+                runs: [{ text: "Led the release migration." }],
+              },
+              {
+                kind: "bullet_list" as const,
+                items: [
+                  {
+                    runs: [
+                      { text: "Coordinated " },
+                      { text: "cross-team launch", bold: true },
+                      { text: " execution." },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      ],
+    };
+    const committedPages = planWorkshopResumePages({
+      data: plannerData,
+      template: getResumeTemplateDefinition("workshop_resume_onecol_ats"),
+      stylePreset: workshopStyle,
+    }).committedPages;
+    const exportSource: ResumePrintSource = {
+      ...resumeFixture,
+      title: plannerData.name,
+      profile: {
+        name: plannerData.name,
+        title: plannerData.title,
+        summary: plannerData.summary,
+      },
+      contact: plannerData.contact.map((item) => ({
+        label: item.label,
+        value: item.value,
+      })),
+      metadata: plannerData.metadata.map((item) => ({
+        label: item.label,
+        value: item.value,
+      })),
+      skills: [],
+      languages: [],
+      experience: [
+        {
+          role: "Fallback",
+          company: "Should Not Render",
+          period: "",
+          location: "",
+          summary: "Fallback summary should not render.",
+          bullets: ["Fallback bullet should not render."],
+        },
+      ],
+      projects: [],
+      education: [],
+      achievements: [],
+      hobbies: [],
+      resumeTemplateId: "workshop_resume_onecol_ats",
+      committedPages,
+    };
+    const atsDocument = parseExportHtml(
+      renderResumeAtsExportDocument(exportSource, workshopStyle),
+    );
+
+    const paragraphItem = atsDocument.querySelector(
+      '[data-export-item-id="exp-export-rich-paragraph"]',
+    );
+    const bulletItem = atsDocument.querySelector(
+      '[data-export-item-id="exp-export-rich-bullets"]',
+    );
+    const mixedItem = atsDocument.querySelector(
+      '[data-export-item-id="exp-export-rich-mixed"]',
+    );
+
+    expect(paragraphItem?.querySelector("p.entry-summary")?.textContent).toBe(
+      "Directed the migration roadmap across three squads.",
+    );
+    expect(paragraphItem?.querySelector("strong")?.textContent).toBe(
+      "migration roadmap",
+    );
+    expect(bulletItem?.querySelectorAll("li")).toHaveLength(2);
+    expect(bulletItem?.querySelector("em")?.textContent).toBe("rollback incidents");
+    expect(bulletItem?.querySelector("u")?.textContent).toBe("launch checklists");
+    expect(mixedItem?.querySelectorAll("p.entry-summary")).toHaveLength(1);
+    expect(mixedItem?.querySelectorAll("li")).toHaveLength(1);
+    expect(mixedItem?.querySelector("strong")?.textContent).toBe("cross-team launch");
+    expect(atsDocument.body.textContent).not.toContain("Fallback summary should not render.");
+    expect(atsDocument.body.textContent).not.toContain("Fallback bullet should not render.");
+  });
+
+  it("falls back to committed flat experience blocks for continued workshop fragments", () => {
+    const workshopStyle = {
+      familyId: "workshop",
+      layout: "workshop",
+      typography: "quiet-editorial",
+      palette: "sauge",
+    } as const;
+    const secondSegment = Array.from(
+      { length: 160 },
+      (_, index) => `continued-export-${index + 1}`,
+    ).join(" ");
+    const continuedBullet = Array.from(
+      { length: 40 },
+      (_, index) => `continued-bullet-${index + 1}`,
+    ).join(" ");
+    const plannerData = {
+      ...resumeMock,
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      skillItems: [],
+      languages: [],
+      education: [],
+      achievements: [],
+      achievementItems: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      projects: [],
+      textSections: [],
+      summary: Array.from({ length: 26 }, (_, index) => `summary-${index + 1}`).join(" "),
+      experience: [
+        {
+          ...resumeMock.experience[0]!,
+          id: "exp-export-continued",
+          description: `intro intro intro intro\n\n${secondSegment}`,
+          bullets: [continuedBullet],
+          responsibilitiesRich: {
+            blocks: [
+              {
+                kind: "paragraph" as const,
+                runs: [
+                  { text: "intro intro intro intro " },
+                  { text: secondSegment, bold: true },
+                ],
+              },
+              {
+                kind: "bullet_list" as const,
+                items: [
+                  {
+                    runs: [{ text: continuedBullet, italic: true }],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      ],
+    };
+    const committedPages = planWorkshopResumePages({
+      data: plannerData,
+      template: getResumeTemplateDefinition("workshop_resume_onecol_ats"),
+      stylePreset: workshopStyle,
+    }).committedPages;
+    const exportSource: ResumePrintSource = {
+      ...resumeFixture,
+      title: plannerData.name,
+      profile: {
+        name: plannerData.name,
+        title: plannerData.title,
+        summary: plannerData.summary,
+      },
+      contact: plannerData.contact.map((item) => ({
+        label: item.label,
+        value: item.value,
+      })),
+      metadata: plannerData.metadata.map((item) => ({
+        label: item.label,
+        value: item.value,
+      })),
+      skills: [],
+      languages: [],
+      experience: [],
+      projects: [],
+      education: [],
+      achievements: [],
+      hobbies: [],
+      resumeTemplateId: "workshop_resume_onecol_ats",
+      committedPages,
+    };
+    const atsDocument = parseExportHtml(
+      renderResumeAtsExportDocument(exportSource, workshopStyle),
+    );
+    const continuedItem = Array.from(
+      atsDocument.querySelectorAll('[data-export-item-id="exp-export-continued"]'),
+    ).find((node) => node.querySelector(".entry-continuation"));
+
+    expect(continuedItem).toBeTruthy();
+    expect(continuedItem?.querySelector("strong")).toBeNull();
+    expect(continuedItem?.querySelector("em")).toBeNull();
+    expect(continuedItem?.textContent).toContain("continued-bullet-1");
+    expect(continuedItem?.querySelector("li")).toBeTruthy();
+  });
+
   it("renders workshop languages and hobbies as the same compact list family while keeping skills as tags", () => {
     const workshopStyle = {
       familyId: "workshop",
