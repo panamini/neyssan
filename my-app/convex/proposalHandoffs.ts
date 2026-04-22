@@ -12,6 +12,11 @@ export const create = mutation({
     sourceUrl: v.optional(v.string()),
     platform: v.optional(v.string()),
   },
+  returns: v.object({
+    handoffId: v.string(),
+    handoffToken: v.string(),
+    createdAt: v.number(),
+  }),
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
@@ -19,10 +24,12 @@ export const create = mutation({
     }
 
     const handoffId = crypto.randomUUID();
+    const handoffToken = crypto.randomUUID();
     const createdAt = Date.now();
 
     await ctx.db.insert("proposalHandoffs", {
       handoffId,
+      handoffToken,
       clerkId: identity.subject,
       jobTitle: args.jobTitle,
       jobDescription: args.jobDescription,
@@ -31,7 +38,7 @@ export const create = mutation({
       createdAt,
     });
 
-    return { handoffId, createdAt };
+    return { handoffId, handoffToken, createdAt };
   },
 });
 
@@ -69,6 +76,49 @@ export const get = query({
       sourceUrl: handoff.sourceUrl,
       platform: handoff.platform,
       createdAt: handoff.createdAt,
+    };
+  },
+});
+
+export const getPublic = query({
+  args: {
+    handoffId: v.string(),
+    handoffToken: v.string(),
+  },
+  returns: v.union(
+    v.null(),
+    v.object({
+      handoffId: v.string(),
+      jobTitle: v.string(),
+      jobDescription: v.string(),
+      sourceUrl: v.optional(v.string()),
+      platform: v.optional(v.string()),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const handoff = await ctx.db
+      .query("proposalHandoffs")
+      .withIndex("by_handoff_id", (q) => q.eq("handoffId", args.handoffId))
+      .unique();
+
+    if (!handoff) {
+      return null;
+    }
+
+    if (handoff.handoffToken !== args.handoffToken) {
+      return null;
+    }
+
+    if (Date.now() - handoff.createdAt > HANDOFF_TTL_MS) {
+      return null;
+    }
+
+    return {
+      handoffId: handoff.handoffId,
+      jobTitle: handoff.jobTitle,
+      jobDescription: handoff.jobDescription,
+      sourceUrl: handoff.sourceUrl,
+      platform: handoff.platform,
     };
   },
 });

@@ -174,6 +174,15 @@ type ProposalForgePrefill = {
   platform?: string;
 } | null;
 
+type ProposalForgeHandoffRecord = {
+  handoffId: string;
+  jobTitle: string;
+  jobDescription: string;
+  sourceUrl?: string;
+  platform?: string;
+  createdAt?: number;
+} | null;
+
 type ProposalForgeReviewItem = {
   id: string;
   fieldKey: string;
@@ -898,6 +907,10 @@ export function ProposalForge(): JSX.Element {
     () => new URLSearchParams(search).get("handoffId"),
     [search],
   );
+  const handoffToken = React.useMemo(
+    () => new URLSearchParams(search).get("handoffToken"),
+    [search],
+  );
   const canonicalJobId = React.useMemo(
     () => new URLSearchParams(search).get("jobId"),
     [search],
@@ -1385,36 +1398,133 @@ export function ProposalForge(): JSX.Element {
     [showToast],
   );
 
+  const publicHandoffRecord = useQuery(
+    ((api as any).proposalHandoffs?.getPublic ??
+      "proposalHandoffs.getPublic") as any,
+    handoffId && handoffToken ? { handoffId, handoffToken } : "skip",
+  ) as ProposalForgeHandoffRecord | undefined;
   const handoffRecord = useQuery(
     api.proposalHandoffs.get,
-    handoffId && isConvexAuthenticated ? { handoffId } : "skip",
-  );
+    handoffId && !handoffToken && isConvexAuthenticated ? { handoffId } : "skip",
+  ) as ProposalForgeHandoffRecord | undefined;
   const canonicalJobRecord = useQuery(
     ((api as any).jobsPublic?.getById ?? "jobsPublic.getById") as any,
     canonicalJobId && isConvexAuthenticated ? { jobId: canonicalJobId } : "skip",
   ) as ProposalForgeCanonicalJob | undefined;
 
+  const canonicalPrefill = React.useMemo<ProposalForgePrefill>(() => {
+    if (!canonicalJobRecord) {
+      return null;
+    }
+
+    return {
+      handoffId: `job:${canonicalJobRecord.id}`,
+      jobId: canonicalJobRecord.id,
+      jobTitle: canonicalJobRecord.title,
+      jobDescription: canonicalJobRecord.rawDescription,
+      sourceUrl: canonicalJobRecord.sourceUrl,
+      platform:
+        canonicalJobRecord.sourceDomain || canonicalJobRecord.sourceType,
+    };
+  }, [canonicalJobRecord]);
+  const handoffPrefill = React.useMemo<ProposalForgePrefill>(() => {
+    const resolvedHandoffRecord = publicHandoffRecord ?? handoffRecord;
+    if (!resolvedHandoffRecord || !handoffId) {
+      return null;
+    }
+
+    return {
+      handoffId,
+      ...(canonicalJobId ? { jobId: canonicalJobId } : null),
+      jobTitle: resolvedHandoffRecord.jobTitle,
+      jobDescription: resolvedHandoffRecord.jobDescription,
+      sourceUrl: resolvedHandoffRecord.sourceUrl,
+      platform: resolvedHandoffRecord.platform,
+    };
+  }, [canonicalJobId, handoffId, handoffRecord, publicHandoffRecord]);
+  const publicHandoffSeedKey = React.useMemo(
+    () => (handoffId && handoffToken ? `${handoffId}:${handoffToken}` : null),
+    [handoffId, handoffToken],
+  );
+  const [lockedPublicHandoffPrefill, setLockedPublicHandoffPrefill] =
+    React.useState<ProposalForgePrefill>(null);
+
+  React.useEffect(() => {
+    if (!publicHandoffSeedKey || !handoffPrefill) {
+      return;
+    }
+
+    if (
+      lockedPublicHandoffPrefill?.handoffId === handoffPrefill.handoffId &&
+      lockedPublicHandoffPrefill?.jobId === handoffPrefill.jobId &&
+      lockedPublicHandoffPrefill?.jobTitle === handoffPrefill.jobTitle &&
+      lockedPublicHandoffPrefill?.jobDescription === handoffPrefill.jobDescription &&
+      lockedPublicHandoffPrefill?.sourceUrl === handoffPrefill.sourceUrl &&
+      lockedPublicHandoffPrefill?.platform === handoffPrefill.platform
+    ) {
+      return;
+    }
+
+    setLockedPublicHandoffPrefill(handoffPrefill);
+  }, [
+    handoffPrefill,
+    lockedPublicHandoffPrefill?.handoffId,
+    lockedPublicHandoffPrefill?.jobId,
+    lockedPublicHandoffPrefill?.jobDescription,
+    lockedPublicHandoffPrefill?.jobTitle,
+    lockedPublicHandoffPrefill?.platform,
+    lockedPublicHandoffPrefill?.sourceUrl,
+    publicHandoffSeedKey,
+  ]);
+
+  React.useEffect(() => {
+    if (publicHandoffSeedKey) {
+      return;
+    }
+
+    if (
+      lockedPublicHandoffPrefill?.jobId &&
+      canonicalJobId &&
+      canonicalJobId !== lockedPublicHandoffPrefill.jobId
+    ) {
+      setLockedPublicHandoffPrefill(null);
+    }
+  }, [
+    canonicalJobId,
+    lockedPublicHandoffPrefill?.jobId,
+    publicHandoffSeedKey,
+  ]);
+
+  const activeLockedPublicHandoffPrefill = React.useMemo<ProposalForgePrefill>(() => {
+    if (!lockedPublicHandoffPrefill) {
+      return null;
+    }
+
+    if (
+      canonicalJobId &&
+      lockedPublicHandoffPrefill.jobId &&
+      canonicalJobId !== lockedPublicHandoffPrefill.jobId
+    ) {
+      return null;
+    }
+
+    return lockedPublicHandoffPrefill;
+  }, [canonicalJobId, lockedPublicHandoffPrefill]);
+
   const prefill = React.useMemo<ProposalForgePrefill>(() => {
-    if (canonicalJobRecord) {
+    if (activeLockedPublicHandoffPrefill) {
+      return activeLockedPublicHandoffPrefill;
+    }
+    if (handoffPrefill) {
+      return handoffPrefill;
+    }
+    if (canonicalPrefill) {
       return {
-        handoffId: `job:${canonicalJobRecord.id}`,
-        jobId: canonicalJobRecord.id,
-        jobTitle: canonicalJobRecord.title,
-        jobDescription: canonicalJobRecord.rawDescription,
-        sourceUrl: canonicalJobRecord.sourceUrl,
-        platform:
-          canonicalJobRecord.sourceDomain || canonicalJobRecord.sourceType,
+        ...canonicalPrefill,
       };
     }
-    if (!handoffRecord) return null;
-    return {
-      handoffId: handoffRecord.handoffId,
-      jobTitle: handoffRecord.jobTitle,
-      jobDescription: handoffRecord.jobDescription,
-      sourceUrl: handoffRecord.sourceUrl,
-      platform: handoffRecord.platform,
-    };
-  }, [canonicalJobRecord, handoffRecord]);
+    return null;
+  }, [activeLockedPublicHandoffPrefill, canonicalPrefill, handoffPrefill]);
 
   const proposalHeaderSourceJobTitle =
     canonicalJobRecord?.title?.trim() ||
@@ -1667,6 +1777,7 @@ export function ProposalForge(): JSX.Element {
 
     consumedHandoffIdRef.current = prefill.handoffId;
     params.delete("handoffId");
+    params.delete("handoffToken");
     const nextSearch = params.toString();
     void navigate(nextSearch ? `/proposal?${nextSearch}` : "/proposal", {
       replace: true,
@@ -5655,11 +5766,14 @@ export function ProposalForge(): JSX.Element {
     !isCompactComposeLayout &&
     !shouldShowDesktopBriefCapsule;
   const isLoadingHandoff =
-    Boolean(handoffId || canonicalJobId) &&
-    (isConvexAuthLoading ||
-      (isConvexAuthenticated &&
-        ((handoffId && handoffRecord === undefined) ||
-          (canonicalJobId && canonicalJobRecord === undefined))));
+    !prefill?.handoffId &&
+    ((Boolean(handoffId && handoffToken) && publicHandoffRecord === undefined) ||
+      (Boolean(handoffId && !handoffToken) &&
+        (isConvexAuthLoading ||
+          (isConvexAuthenticated && handoffRecord === undefined))) ||
+      (Boolean(canonicalJobId) &&
+        (isConvexAuthLoading ||
+          (isConvexAuthenticated && canonicalJobRecord === undefined))));
   const shouldShowCoverLetterStartSurface =
     !isSavedView &&
     proposalEntryIntent === "cover-letter-start" &&
