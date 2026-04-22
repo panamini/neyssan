@@ -493,36 +493,41 @@ describe("ResumeOneColAtsPage", () => {
 
   it("renders continued experience fragments with repeated role, meta, and item-level continued without duplicating prior text", () => {
     const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
-    const firstSegment = makeTextBlock("continued-fragment-a", 4);
-    const secondSegment = makeTextBlock("continued-fragment-b", 16);
-    const continuedBullet = makeTextBlock("continued-fragment-bullet", 4);
+    const firstSegment = makeTextBlock("continued-fragment-prelude", 1);
+    const continuedBullets = Array.from({ length: 4 }, (_, index) =>
+      makeTextBlock(`continued-fragment-bullet-${index + 1}`, 7),
+    );
+    const trailingParagraph = makeTextBlock("continued-fragment-tail", 1);
     const data = {
       ...buildRendererData(),
-      summary: makeTextBlock("continued-renderer-summary", 26),
+      summary: "",
       skillItems: [],
       languages: [],
+      education: [resumeMock.education[0]!],
       experience: [
         {
           ...resumeMock.experience[0]!,
           id: "exp-render-continued",
-          description: `${firstSegment}\n\n${secondSegment}`,
-          bullets: [continuedBullet],
+          description: firstSegment,
+          bullets: continuedBullets,
           responsibilitiesRich: {
             blocks: [
               {
                 kind: "paragraph" as const,
-                runs: [
-                  { text: `${firstSegment} ` },
-                  { text: secondSegment, bold: true },
-                ],
+                runs: [{ text: firstSegment }],
               },
               {
                 kind: "bullet_list" as const,
-                items: [
-                  {
-                    runs: [{ text: continuedBullet, italic: true }],
-                  },
-                ],
+                items: continuedBullets.map((bullet, index) => ({
+                  runs:
+                    index === continuedBullets.length - 1
+                      ? [{ text: bullet, italic: true }]
+                      : [{ text: bullet }],
+                })),
+              },
+              {
+                kind: "paragraph" as const,
+                runs: [{ text: trailingParagraph, underline: true }],
               },
             ],
           },
@@ -538,13 +543,33 @@ describe("ResumeOneColAtsPage", () => {
       page.fragments.some(
         (fragment) =>
           fragment.kind === "experience" &&
-          fragment.items.some((item) => item.continued),
+          fragment.items.some(
+            (item) =>
+              item.continued &&
+              item.responsibilitiesRich?.blocks.some((block) => block.kind === "paragraph"),
+          ),
       ),
     );
+    const continuedItem = continuedPage?.fragments
+      .filter((fragment) => fragment.kind === "experience")
+      .flatMap((fragment) => fragment.items)
+      .find(
+        (item) =>
+          item.id === "exp-render-continued" &&
+          item.continued &&
+          item.responsibilitiesRich?.blocks.some((block) => block.kind === "paragraph"),
+      );
+    const fallbackOnlyData = {
+      ...data,
+      experience: data.experience.map((item) => ({
+        ...item,
+        responsibilitiesRich: undefined,
+      })),
+    };
 
     const { container } = render(
       <ResumeOneColAtsPage
-        data={data}
+        data={fallbackOnlyData}
         page={continuedPage!}
         template={template}
       />,
@@ -552,6 +577,17 @@ describe("ResumeOneColAtsPage", () => {
     const experienceParagraphs = Array.from(
       container.querySelectorAll('[data-preview-section="experience"] p'),
     );
+    const experienceItem = container.querySelector(
+      '[data-preview-section="experience"][data-preview-item-id="exp-render-continued"]',
+    ) as HTMLElement | null;
+    const lists = Array.from(experienceItem?.querySelectorAll(":scope > ul") ?? []);
+    const continuedListItems = Array.from(lists[0]?.querySelectorAll(":scope > li") ?? []).map(
+      (node) => node.textContent,
+    );
+    const directParagraphs = Array.from(experienceItem?.querySelectorAll(":scope > p") ?? []).map(
+      (node) => node.textContent,
+    );
+
     expect(container.textContent).toContain(resumeMock.experience[0]?.role ?? "");
     expect(container.textContent).toContain(
       [
@@ -563,17 +599,29 @@ describe("ResumeOneColAtsPage", () => {
         .join(" · "),
     );
     expect(container.textContent).toContain("Continued");
-    expect(container.textContent).toContain(secondSegment);
+    continuedItem?.blocks.forEach((block) => {
+      expect(container.textContent).toContain(block.text);
+    });
     expect(container.textContent).not.toContain(firstSegment);
-    expect(container.textContent).not.toContain(continuedBullet);
+    expect(container.textContent).not.toContain(continuedBullets[0]!);
+    expect(container.textContent).not.toContain(continuedBullets[1]!);
+    expect(container.textContent).not.toContain(continuedBullets[2]!);
     expect(container.querySelector('[data-preview-section="experience"] strong')).toBeNull();
-    expect(container.querySelector('[data-preview-section="experience"] em')).toBeNull();
+    expect(container.querySelector('[data-preview-section="experience"] em')?.textContent).toBe(
+      continuedBullets[3],
+    );
+    expect(container.querySelector('[data-preview-section="experience"] u')?.textContent).toBe(
+      trailingParagraph,
+    );
     expect(
       experienceParagraphs.some((node) =>
         node.getAttribute("style")?.includes("overflow-wrap: anywhere;"),
       ),
     ).toBe(true);
-    expect(container.querySelector('[data-preview-section="experience"] li')).toBeNull();
+    expect(lists).toHaveLength(1);
+    expect(continuedListItems).toEqual([continuedBullets[3]]);
+    expect(directParagraphs).toEqual([trailingParagraph]);
+    expect(experienceItem?.innerHTML.indexOf("</ul><p")).toBeGreaterThan(-1);
   });
 
   it("renders responsibilitiesRich for full non-continued experience items", () => {
@@ -621,6 +669,10 @@ describe("ResumeOneColAtsPage", () => {
                   },
                 ],
               },
+              {
+                kind: "paragraph" as const,
+                runs: [{ text: "Partnered closely with design and QA." }],
+              },
             ],
           },
         },
@@ -631,10 +683,19 @@ describe("ResumeOneColAtsPage", () => {
       data,
       template,
     });
+    const fallbackOnlyData = {
+      ...data,
+      experience: data.experience.map((item) => ({
+        ...item,
+        responsibilitiesRich: undefined,
+        description: "Fallback description that should not render.",
+        bullets: ["Fallback bullet that should not render."],
+      })),
+    };
 
     const { container } = render(
       <ResumeOneColAtsPage
-        data={data}
+        data={fallbackOnlyData}
         page={plan.committedPages[0]!}
         template={template}
       />,
@@ -650,8 +711,15 @@ describe("ResumeOneColAtsPage", () => {
       (node) => node.textContent,
     );
     const richList = experienceItem?.querySelector("ul") as HTMLUListElement | null;
+    const directParagraphs = Array.from(experienceItem?.querySelectorAll(":scope > p") ?? []).map(
+      (node) => node.textContent,
+    );
 
     expect(paragraphNode).toBeTruthy();
+    expect(directParagraphs).toEqual([
+      "Led platform migration planning.",
+      "Partnered closely with design and QA.",
+    ]);
     expect(experienceItem?.querySelector("strong")?.textContent).toBe(
       "platform migration",
     );
@@ -665,6 +733,8 @@ describe("ResumeOneColAtsPage", () => {
       "Cut release rollback rate by 38%.",
       "Formalized launch checklists across squads.",
     ]);
+    expect(experienceItem?.innerHTML.indexOf("</p><ul")).toBeGreaterThan(-1);
+    expect(experienceItem?.innerHTML.indexOf("</ul><p")).toBeGreaterThan(-1);
     expect(richList?.style.listStyleType).toBe("disc");
     expect(richList?.style.listStylePosition).toBe("outside");
     expect(richList?.style.paddingLeft).toBe("var(--flow-list-indent)");

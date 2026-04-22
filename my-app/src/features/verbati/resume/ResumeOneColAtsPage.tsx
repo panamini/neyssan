@@ -4,7 +4,6 @@ import type { ResumeActiveTarget } from "../resumeLinking";
 import { buildResumeEducationDisplay } from "./resumeEducation";
 import type {
   ResumeData,
-  ResumeExperienceItem,
   WorkshopResponsibilitiesRichContent,
   WorkshopResponsibilityTextRun,
 } from "./resume.types";
@@ -13,6 +12,7 @@ import {
   type ResumeTemplateDefinition,
 } from "../../../lib/layout/resumeTemplates";
 import type {
+  WorkshopCommittedResponsibilitiesRichContent,
   WorkshopExperienceContentBlock,
   WorkshopResumeCommittedFragment,
   WorkshopResumeCommittedPage,
@@ -230,7 +230,9 @@ function renderResponsibilityRun(
 }
 
 function renderResponsibilitiesRich(args: {
-  rich: WorkshopResponsibilitiesRichContent;
+  rich:
+    | WorkshopResponsibilitiesRichContent
+    | WorkshopCommittedResponsibilitiesRichContent;
   listGapMm: number;
 }) {
   return args.rich.blocks.map((block, blockIndex) => {
@@ -285,45 +287,28 @@ function renderResponsibilitiesRich(args: {
   });
 }
 
-function runsToPlainText(runs: WorkshopResponsibilityTextRun[]) {
-  return runs.map((run) => run.text).join("");
-}
-
-function flattenResponsibilitiesRich(
-  rich: WorkshopResponsibilitiesRichContent,
-): WorkshopExperienceContentBlock[] {
-  return rich.blocks.flatMap((block) => {
+function responsibilitiesRichHasPartialContent(
+  rich:
+    | WorkshopResponsibilitiesRichContent
+    | WorkshopCommittedResponsibilitiesRichContent,
+) {
+  return rich.blocks.some((block) => {
     if (block.kind === "paragraph") {
-      return runsToPlainText(block.runs)
-        .replace(/\r/g, "\n")
-        .split(/\n+/)
-        .map((segment) => segment.trim())
-        .filter(Boolean)
-        .map((text) => ({
-          kind: "text" as const,
-          text,
-        }));
+      return "partial" in block && block.partial === true;
     }
 
-    return block.items
-      .map((item) => runsToPlainText(item.runs).trim())
-      .filter(Boolean)
-      .map((text) => ({
-        kind: "bullet" as const,
-        text,
-      }));
+    return block.items.some((item) => "partial" in item && item.partial === true);
   });
 }
 
 function renderExperienceContent(args: {
   item: {
-    continued?: boolean;
     blocks: WorkshopExperienceContentBlock[];
+    responsibilitiesRich?: WorkshopCommittedResponsibilitiesRichContent;
   };
-  sourceItem?: ResumeExperienceItem;
   listGapMm: number;
 }) {
-  const rich = args.sourceItem?.responsibilitiesRich;
+  const rich = args.item.responsibilitiesRich;
   if (!rich || rich.blocks.length === 0) {
     return renderExperienceBlocks({
       blocks: args.item.blocks,
@@ -332,27 +317,9 @@ function renderExperienceContent(args: {
   }
 
   if (
-    args.item.continued === true ||
-    args.item.blocks.some((block) => block.partial === true)
+    args.item.blocks.some((block) => block.partial === true) ||
+    responsibilitiesRichHasPartialContent(rich)
   ) {
-    return renderExperienceBlocks({
-      blocks: args.item.blocks,
-      listGapMm: args.listGapMm,
-    });
-  }
-
-  const flattenedRich = flattenResponsibilitiesRich(rich);
-  const matchesCommittedBlocks =
-    flattenedRich.length === args.item.blocks.length &&
-    flattenedRich.every((block, index) => {
-      const committedBlock = args.item.blocks[index];
-      return (
-        committedBlock?.kind === block.kind &&
-        committedBlock?.text.trim() === block.text.trim()
-      );
-    });
-
-  if (!matchesCommittedBlocks) {
     return renderExperienceBlocks({
       blocks: args.item.blocks,
       listGapMm: args.listGapMm,
@@ -530,10 +497,6 @@ function renderFragmentContent(args: {
       );
     case "experience":
       return fragment.items.map((item) => {
-        const sourceItem = data.experience.find(
-          (experienceItem) => experienceItem.id === item.id,
-        );
-
         return (
           <PreviewItemRegion
             as="article"
@@ -601,7 +564,6 @@ function renderFragmentContent(args: {
             </div>
             {renderExperienceContent({
               item,
-              sourceItem,
               listGapMm: workshopLayout.listGapMm,
             })}
           </PreviewItemRegion>
