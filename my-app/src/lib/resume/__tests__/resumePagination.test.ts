@@ -520,6 +520,41 @@ describe("resumePagination", () => {
     );
   });
 
+  it("reads workshop compact list spacing estimates from the shared template layout contract for languages and hobbies", () => {
+    const tunedTemplate = buildWorkshopTemplateOverride({
+      experienceBulletsGapMm: 2.1,
+    });
+    const baselineLayout = resolveWorkshopPreviewLayoutContract(workshopTemplate);
+    const tunedLayout = resolveWorkshopPreviewLayoutContract(tunedTemplate);
+    const data = {
+      ...buildPlannerData(),
+      summary: "",
+      experience: [],
+      languages: resumeMock.languages.slice(0, 2),
+      hobbyItems: resumeMock.hobbyItems.slice(0, 2),
+      hobbies: resumeMock.hobbies.slice(0, 2),
+    };
+
+    const baselinePlan = planWorkshopResumePages({
+      data,
+      template: workshopTemplate,
+    });
+    const tunedPlan = planWorkshopResumePages({
+      data,
+      template: tunedTemplate,
+    });
+
+    const expectedDeltaMm =
+      2 * (tunedLayout.listGapMm - baselineLayout.listGapMm);
+
+    expect(tunedPlan.pages).toHaveLength(1);
+    expect(baselinePlan.pages).toHaveLength(1);
+    expect(tunedPlan.pages[0]?.estimatedHeight).toBeCloseTo(
+      (baselinePlan.pages[0]?.estimatedHeight ?? 0) + expectedDeltaMm,
+      6,
+    );
+  });
+
   it("reads workshop heading-fit estimates from the canonical preview token contract", () => {
     const tunedTemplate = buildWorkshopTemplateOverride({
       workshopSectionTitleReductionMm: 1.4,
@@ -812,7 +847,7 @@ describe("resumePagination", () => {
     );
 
     expect(projectFragments).toHaveLength(1);
-    expect(projectFragments[0]?.pageIndex).toBe(3);
+    expect(projectFragments[0]?.pageIndex).toBe(2);
     expect(projectFragments[0]?.fragment.continued).toBe(false);
     expect(
       projectFragments[0]?.fragment.kind === "selected_projects"
@@ -820,7 +855,7 @@ describe("resumePagination", () => {
         : [],
     ).toEqual(["project-tail-1", "project-tail-2"]);
     expect(
-      result.committedPages[2]?.fragments.some(
+      result.committedPages[1]?.fragments.some(
         (fragment) => fragment.kind === "selected_projects",
       ),
     ).toBe(false);

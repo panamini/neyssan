@@ -412,6 +412,7 @@ type WorkshopPlannerMetrics = {
   sectionContentGapMm: number;
   mainHeadingMarginMm: number;
   experienceBulletGapMm: number;
+  listGapMm: number;
   projectGapMm: number;
   projectPaddingMm: number;
   educationGapMm: number;
@@ -647,6 +648,7 @@ function buildPlannerMetrics(args: {
       tokens.flow.component.main?.headingMarginBottomMm ??
       args.template.preview.mainHeadingMarginBottomMm,
     experienceBulletGapMm: workshopLayout.listGapMm,
+    listGapMm: workshopLayout.listGapMm,
     projectGapMm:
       tokens.flow.component.project?.gapMm ?? args.template.preview.projectGapMm,
     projectPaddingMm:
@@ -1360,6 +1362,17 @@ function estimateCertificationHeight(
   );
 }
 
+function estimateCompactListRowHeight(
+  text: string,
+  metrics: WorkshopPlannerMetrics,
+) {
+  return estimateTextHeight(
+    text,
+    metrics.compactCharsPerLine,
+    metrics.bodySmLineHeightMm,
+  );
+}
+
 function estimateAffiliationHeight(
   item: ResumeAffiliationItem,
   metrics: WorkshopPlannerMetrics,
@@ -1502,13 +1515,10 @@ function buildPlannerSections(
       entries: data.languages.map((item) => ({
         id: item.id,
         kind: "languages",
-        estimatedHeight:
-          metrics.educationGapMm +
-          estimateTextHeight(
-            `${item.name} ${item.level}`,
-            metrics.compactCharsPerLine,
-            metrics.bodySmLineHeightMm,
-          ),
+        estimatedHeight: estimateCompactListRowHeight(
+          `${item.name} ${item.level}`,
+          metrics,
+        ),
         item,
       })),
     },
@@ -1577,13 +1587,7 @@ function buildPlannerSections(
       entries: data.hobbyItems.map((item) => ({
         id: item.id,
         kind: "hobbies",
-        estimatedHeight:
-          metrics.educationGapMm +
-          estimateTextHeight(
-            item.name,
-            metrics.compactCharsPerLine,
-            metrics.bodySmLineHeightMm,
-          ),
+        estimatedHeight: estimateCompactListRowHeight(item.name, metrics),
         item,
       })),
     },
@@ -1642,9 +1646,14 @@ function estimateSectionPlacementHeight(args: {
   const entriesHeight = args.entries.reduce((sum, entry, index) => {
     const experienceGap =
       args.section.kind === "experience" && index > 0
-        ? WORKSHOP_RENDER_EXPERIENCE_ENTRY_GAP_MM
+        ? args.metrics.sectionContentGapMm
         : 0;
-    return sum + experienceGap + entry.estimatedHeight;
+    const compactListGap =
+      (args.section.kind === "languages" || args.section.kind === "hobbies") &&
+      index > 0
+        ? args.metrics.listGapMm
+        : 0;
+    return sum + experienceGap + compactListGap + entry.estimatedHeight;
   }, 0);
 
   return sectionGap + headerHeight + entriesHeight;
@@ -2222,6 +2231,12 @@ export function planWorkshopResumePages(args: {
     const pageSection = ensurePageSection(section);
     if (pageSection.entries.length > 0 && section.kind === "experience") {
       currentPage.estimatedHeight += metrics.sectionContentGapMm;
+    }
+    if (
+      pageSection.entries.length > 0 &&
+      (section.kind === "languages" || section.kind === "hobbies")
+    ) {
+      currentPage.estimatedHeight += metrics.listGapMm;
     }
     pageSection.entries.push(entry);
     currentPage.entries.push(entry);

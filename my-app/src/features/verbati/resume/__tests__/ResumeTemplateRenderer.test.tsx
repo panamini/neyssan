@@ -758,7 +758,7 @@ describe("ResumeTemplateRenderer", () => {
       page.fragments.some((fragment) => fragment.kind === "selected_projects"),
     );
 
-    expect(projectPageIndex).toBe(3);
+    expect(projectPageIndex).toBe(2);
     expect(
       Array.from(
         pages[projectPageIndex]?.querySelectorAll(
