@@ -13,6 +13,8 @@ import {
   resolveVerbatiStyle,
 } from "../features/verbati/style";
 import type { VerbatiStylePreset } from "../features/verbati/types";
+import { buildResumeEducationDisplay } from "../features/verbati/resume/resumeEducation";
+import type { WorkshopResponsibilityTextRun } from "../features/verbati/resume/resume.types";
 import {
   type ProposalTemplateId,
 } from "../../convex/lib/proposals/renderTemplates";
@@ -1059,6 +1061,20 @@ ${buildCssVarBlock(layoutProfileVars)}
       text-align: left;
     }
 
+    .compact-list {
+      display: grid;
+      gap: var(--flow-list-gap);
+      margin: 0;
+      padding: 0 0 0 var(--flow-list-indent);
+    }
+
+    .compact-list li {
+      font-size: var(--flow-body-sm-size);
+      line-height: var(--flow-body-sm-line);
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
     .entry {
       margin-bottom: var(--flow-entry-gap);
     }
@@ -1314,6 +1330,21 @@ function renderResumeTagList(values: string[]): string {
     .join("")}</ul>`;
 }
 
+function renderResumeCompactList(args: {
+  items: Array<{ text: string; id?: string }>;
+}): string {
+  if (args.items.length === 0) {
+    return "";
+  }
+
+  return `<ul class="compact-list">${args.items
+    .map(
+      (item) =>
+        `<li${item.id ? ` data-export-item-id="${escapeHtml(item.id)}"` : ""}>${escapeHtml(item.text)}</li>`,
+    )
+    .join("")}</ul>`;
+}
+
 function renderSection(args: {
   block: string;
   content: string;
@@ -1390,6 +1421,121 @@ function renderWorkshopProfileFragment(args: {
   </header>`;
 }
 
+type WorkshopCommittedExperienceFragment = Extract<
+  NonNullable<ResumePrintSource["committedPages"]>[number]["fragments"][number],
+  { kind: "experience" }
+>;
+
+type WorkshopCommittedExperienceItem =
+  WorkshopCommittedExperienceFragment["items"][number];
+
+function renderWorkshopResponsibilityRun(
+  run: WorkshopResponsibilityTextRun,
+): string {
+  let content = escapeHtml(run.text);
+
+  if (run.underline) {
+    content = `<u>${content}</u>`;
+  }
+
+  if (run.italic) {
+    content = `<em>${content}</em>`;
+  }
+
+  if (run.bold) {
+    content = `<strong>${content}</strong>`;
+  }
+
+  return content;
+}
+
+function workshopResponsibilitiesRichHasPartialContent(
+  rich: NonNullable<WorkshopCommittedExperienceItem["responsibilitiesRich"]>,
+): boolean {
+  return rich.blocks.some((block) => {
+    if (block.kind === "paragraph") {
+      return block.partial === true;
+    }
+
+    return block.items.some((item) => item.partial === true);
+  });
+}
+
+function renderWorkshopExperienceBlocksFallback(
+  blocks: WorkshopCommittedExperienceItem["blocks"],
+): string {
+  const blockMarkup: string[] = [];
+  let bulletBuffer: string[] = [];
+
+  const flushBullets = () => {
+    if (bulletBuffer.length === 0) {
+      return;
+    }
+
+    blockMarkup.push(
+      `<ul class="bullet-list">${bulletBuffer
+        .map((bullet) => `<li>${escapeHtml(bullet)}</li>`)
+        .join("")}</ul>`,
+    );
+    bulletBuffer = [];
+  };
+
+  blocks.forEach((block) => {
+    if (block.kind === "bullet") {
+      bulletBuffer.push(block.text);
+      return;
+    }
+
+    flushBullets();
+    blockMarkup.push(
+      `<p class="entry-summary">${escapeHtml(block.text)}</p>`,
+    );
+  });
+  flushBullets();
+
+  return blockMarkup.join("");
+}
+
+function renderWorkshopExperienceRichContent(
+  rich: NonNullable<WorkshopCommittedExperienceItem["responsibilitiesRich"]>,
+): string {
+  return rich.blocks
+    .map((block) => {
+      if (block.kind === "paragraph") {
+        return `<p class="entry-summary">${block.runs
+          .map((run) => renderWorkshopResponsibilityRun(run))
+          .join("")}</p>`;
+      }
+
+      return `<ul class="bullet-list">${block.items
+        .map(
+          (item) =>
+            `<li>${item.runs
+              .map((run) => renderWorkshopResponsibilityRun(run))
+              .join("")}</li>`,
+        )
+        .join("")}</ul>`;
+    })
+    .join("");
+}
+
+function renderWorkshopExperienceContent(
+  item: WorkshopCommittedExperienceItem,
+): string {
+  const rich = item.responsibilitiesRich;
+  if (
+    !rich ||
+    rich.blocks.length === 0 ||
+    item.continued ||
+    item.blocks.some((block) => block.partial === true) ||
+    workshopResponsibilitiesRichHasPartialContent(rich)
+  ) {
+    return renderWorkshopExperienceBlocksFallback(item.blocks);
+  }
+
+  return renderWorkshopExperienceRichContent(rich);
+}
+
 function renderWorkshopFragment(args: {
   fragment: NonNullable<ResumePrintSource["committedPages"]>[number]["fragments"][number];
   locale?: string | null;
@@ -1412,34 +1558,6 @@ function renderWorkshopFragment(args: {
         content: fragment.items
           .map(
             (item) => {
-              const blockMarkup: string[] = [];
-              let bulletBuffer: string[] = [];
-              const flushBullets = () => {
-                if (bulletBuffer.length === 0) {
-                  return;
-                }
-
-                blockMarkup.push(
-                  `<ul class="bullet-list">${bulletBuffer
-                    .map((bullet) => `<li>${escapeHtml(bullet)}</li>`)
-                    .join("")}</ul>`,
-                );
-                bulletBuffer = [];
-              };
-
-              item.blocks.forEach((block) => {
-                if (block.kind === "bullet") {
-                  bulletBuffer.push(block.text);
-                  return;
-                }
-
-                flushBullets();
-                blockMarkup.push(
-                  `<p class="entry-summary">${escapeHtml(block.text)}</p>`,
-                );
-              });
-              flushBullets();
-
               return `<article class="entry entry--experience" data-export-item-id="${escapeHtml(item.id)}">
               <div class="entry-lead">
                 <div class="entry-head">
@@ -1452,7 +1570,7 @@ function renderWorkshopFragment(args: {
                   )}</p>
                 </div>
               </div>
-              ${blockMarkup.join("")}
+              ${renderWorkshopExperienceContent(item)}
             </article>`;
             },
           )
@@ -1464,17 +1582,18 @@ function renderWorkshopFragment(args: {
       return renderSection({
         block: "education",
         content: fragment.items
-          .map(
-            (item) => `<article class="entry entry--education" data-export-item-id="${escapeHtml(item.id)}">
+          .map((item) => {
+            const educationDisplay = buildResumeEducationDisplay(item);
+            return `<article class="entry entry--education" data-export-item-id="${escapeHtml(item.id)}">
               <div class="entry-lead">
                 <div class="entry-head">
-                  <h3 class="entry-title">${escapeHtml(item.degree)}</h3>
-                  <p class="entry-meta">${escapeHtml(item.period)}</p>
+                  <h3 class="entry-title">${escapeHtml(educationDisplay.title)}</h3>
+                  <p class="entry-meta">${escapeHtml(educationDisplay.period)}</p>
                 </div>
-                <p class="entry-summary">${escapeHtml(item.school)}</p>
+                <p class="entry-summary">${escapeHtml(educationDisplay.subtitle)}</p>
               </div>
-            </article>`,
-          )
+            </article>`;
+          })
           .join(""),
         locale,
         titleKey: "education",
@@ -1514,13 +1633,16 @@ function renderWorkshopFragment(args: {
     case "languages":
       return renderSection({
         block: "languages",
-        content: renderResumeItems({
+        content: renderResumeCompactList({
           items: fragment.items.map((item) => ({
-            label: item.name,
-            value:
+            id: item.id,
+            text: [
+              item.name,
               item.level || localizeStructuredLabel("Working proficiency", locale),
+            ]
+              .filter(Boolean)
+              .join(" · "),
           })),
-          locale,
         }),
         keep: true,
         locale,
@@ -1580,10 +1702,15 @@ function renderWorkshopFragment(args: {
     case "hobbies":
       return renderSection({
         block: "interests",
-        content: `<p class="entry-summary">${escapeHtml(
-          fragment.items.map((item) => item.name).join(" · "),
-        )}</p>`,
+        content: renderResumeCompactList({
+          items: fragment.items.map((item) => ({
+            id: item.id,
+            text: item.name,
+          })),
+        }),
+        keep: true,
         locale,
+        ruled: true,
         titleKey: "interests",
       });
     case "additional_information":
@@ -1735,17 +1862,18 @@ function renderResumeHtml(args: {
     .join("");
 
   const educationContent = args.data.education
-    .map(
-      (item) => `<article class="entry entry--education">
+    .map((item) => {
+      const educationDisplay = buildResumeEducationDisplay(item);
+      return `<article class="entry entry--education">
         <div class="entry-lead">
           <div class="entry-head">
-            <h3 class="entry-title">${escapeHtml(item.degree)}</h3>
-            <p class="entry-meta">${escapeHtml(item.period)}</p>
+            <h3 class="entry-title">${escapeHtml(educationDisplay.title)}</h3>
+            <p class="entry-meta">${escapeHtml(educationDisplay.period)}</p>
           </div>
-          <p class="entry-summary">${escapeHtml(item.school)}</p>
+          <p class="entry-summary">${escapeHtml(educationDisplay.subtitle)}</p>
         </div>
-      </article>`,
-    )
+      </article>`;
+    })
     .join("");
 
   const experienceSection = renderSection({
