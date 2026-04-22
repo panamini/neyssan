@@ -306,13 +306,14 @@ describe("ResumeOneColAtsPage", () => {
         metadata: resumeMock.metadata.slice(0, 1),
         contact: resumeMock.contact.slice(0, 2),
         skillItems: resumeMock.skillItems.slice(0, 2),
+        languages: resumeMock.languages.slice(0, 1),
         experience: resumeMock.experience.slice(0, 1),
         projects: [],
         education: [],
         certifications: [],
         affiliations: [],
-        hobbyItems: [],
-        hobbies: [],
+        hobbyItems: resumeMock.hobbyItems.slice(0, 1),
+        hobbies: resumeMock.hobbies.slice(0, 1),
         textSections: [],
       },
       template,
@@ -334,6 +335,12 @@ describe("ResumeOneColAtsPage", () => {
     const skillItem = container.querySelector(
       '[data-preview-section="skills"][data-preview-item-id]',
     );
+    const languageItem = container.querySelector(
+      '[data-preview-section="languages"][data-preview-item-id]',
+    );
+    const hobbyItem = container.querySelector(
+      '[data-preview-section="hobbies"][data-preview-item-id]',
+    );
 
     expect(profileName?.getAttribute("style")).toContain(
       "font-size: calc(var(--text-display-size) + var(--display-size-adjust));",
@@ -346,6 +353,18 @@ describe("ResumeOneColAtsPage", () => {
     );
     expect(skillItem?.getAttribute("style")).toContain(
       "font-size: calc(var(--text-body-sm-size) + var(--body-sm-size-adjust));",
+    );
+    expect(languageItem?.getAttribute("style")).toContain(
+      "font-size: calc(var(--text-body-sm-size) + var(--body-sm-size-adjust));",
+    );
+    expect(languageItem?.getAttribute("style")).toContain(
+      "line-height: var(--text-body-sm-line);",
+    );
+    expect(hobbyItem?.getAttribute("style")).toContain(
+      "font-size: calc(var(--text-body-sm-size) + var(--body-sm-size-adjust));",
+    );
+    expect(hobbyItem?.getAttribute("style")).toContain(
+      "line-height: var(--text-body-sm-line);",
     );
   });
 
@@ -377,8 +396,8 @@ describe("ResumeOneColAtsPage", () => {
         achievementItems: [],
         certifications: [],
         affiliations: [],
-        hobbyItems: [],
-        hobbies: [],
+        hobbyItems: resumeMock.hobbyItems.slice(0, 1),
+        hobbies: resumeMock.hobbies.slice(0, 1),
         textSections: [],
       },
       template,
@@ -412,6 +431,15 @@ describe("ResumeOneColAtsPage", () => {
     const projectCard = projectHeadline?.parentElement as HTMLElement | null;
     const languagesList = container.querySelector(
       '[data-preview-section="languages"][data-preview-surface="section"] ul',
+    );
+    const hobbiesList = container.querySelector(
+      '[data-preview-section="hobbies"][data-preview-surface="section"] ul',
+    );
+    const languageItem = container.querySelector(
+      '[data-preview-section="languages"][data-preview-item-id]',
+    );
+    const hobbyItem = container.querySelector(
+      '[data-preview-section="hobbies"][data-preview-item-id]',
     );
 
     expect(experienceItem?.getAttribute("style")).toContain(
@@ -448,6 +476,18 @@ describe("ResumeOneColAtsPage", () => {
     );
     expect(languagesList?.getAttribute("style")).toContain(
       `gap: ${layout.listGapMm}mm;`,
+    );
+    expect(hobbiesList?.getAttribute("style")).toContain(
+      "padding-left: var(--flow-list-indent);",
+    );
+    expect(hobbiesList?.getAttribute("style")).toContain(
+      `gap: ${layout.listGapMm}mm;`,
+    );
+    expect(languageItem?.getAttribute("style")).toContain(
+      "font-size: calc(var(--text-body-sm-size) + var(--body-sm-size-adjust));",
+    );
+    expect(hobbyItem?.getAttribute("style")).toContain(
+      "font-size: calc(var(--text-body-sm-size) + var(--body-sm-size-adjust));",
     );
   });
 
