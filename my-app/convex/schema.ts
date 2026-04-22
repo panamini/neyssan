@@ -338,6 +338,7 @@ export default defineSchema({
     // New optional profile fields for ingestion
     summary: v.optional(v.string()),
     skills: v.optional(v.array(v.string())),
+    keywords: v.optional(v.array(v.string())),
     experience: v.optional(
       v.array(
         v.object({
