@@ -95,7 +95,8 @@ function isMissingJobsFunctionError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error ?? "");
   return (
     message.includes("Could not find public function") &&
-    (message.includes("jobsPublic:listForUser") ||
+    (message.includes("jobsPublic:loadForUser") ||
+      message.includes("jobsPublic:listForUser") ||
       message.includes("jobsPublic:getById"))
   );
 }
@@ -116,12 +117,12 @@ function JobsBackendUnavailable(): JSX.Element {
 
         <div className="dasti-empty-state dasti-jobs-empty-state">
           <ClipboardText size={34} strokeWidth={1.25} aria-hidden="true" />
-          <div className="dasti-empty-state__title">
+            <div className="dasti-empty-state__title">
             Jobs backend is out of sync
           </div>
           <p className="dasti-empty-state__subtitle">
             Start or restart the local Convex dev server so
-            `jobsPublic:listForUser` and related queries are registered.
+            `jobsPublic:loadForUser` and related jobs functions are registered.
           </p>
           <div className="dasti-jobs-empty-state__actions">
             <button
@@ -182,14 +183,14 @@ function resolveJobsTrustLabel(args: {
   parseStatus?: string | null;
   reviewState?: string | null;
 }): string {
+  if (args.parseStatus === "failed") {
+    return "Needs attention";
+  }
   if (args.reviewState === "ready") {
     return "Ready";
   }
   if (args.reviewState === "needs_review") {
     return "Needs review";
-  }
-  if (args.parseStatus === "failed") {
-    return "Needs attention";
   }
   if (args.parseStatus === "parsed") {
     return "Parsed";
@@ -309,20 +310,17 @@ function JobsPageContent(): JSX.Element {
     React.useState<JobsPageDetail | undefined>(undefined);
   const lastMarkedJobIdRef = React.useRef<string | null>(null);
 
-  const jobsListReference = React.useMemo(
-    () => ((api as any).jobsPublic?.listForUser ?? "jobsPublic.listForUser") as any,
+  const jobsLoadReference = React.useMemo(
+    () => ((api as any).jobsPublic?.loadForUser ?? "jobsPublic.loadForUser") as any,
     [],
   );
   const jobByIdReference = React.useMemo(
     () => ((api as any).jobsPublic?.getById ?? "jobsPublic.getById") as any,
     [],
   );
+  const loadJobsForUser = useMutation(jobsLoadReference);
   const approveReviewItem = useMutation(
     ((api as any).jobsPublic?.approveReviewItem ?? "jobsPublic.approveReviewItem") as any,
-  );
-  const ensureCanonicalProfile = useMutation(
-    ((api as any).jobsPublic?.ensureCanonicalProfile ??
-      "jobsPublic.ensureCanonicalProfile") as any,
   );
   const markJobOpened = useMutation(
     ((api as any).jobsPublic?.markOpened ?? "jobsPublic.markOpened") as any,
@@ -357,15 +355,7 @@ function JobsPageContent(): JSX.Element {
     setJobs(undefined);
     setJobsRuntimeUnavailable(false);
 
-    void Promise.resolve(ensureCanonicalProfile({}))
-      .catch((error) => {
-        if (cancelled) {
-          return undefined;
-        }
-        console.warn("[JobsPage] canonical profile ensure failed", error);
-        return undefined;
-      })
-      .then(() => convex.query(jobsListReference, {}))
+    void Promise.resolve(loadJobsForUser({}))
       .then((result) => {
         if (cancelled) {
           return;
@@ -388,12 +378,10 @@ function JobsPageContent(): JSX.Element {
       cancelled = true;
     };
   }, [
-    convex,
-    ensureCanonicalProfile,
     isConvexAuthenticated,
     isLoaded,
     isSignedIn,
-    jobsListReference,
+    loadJobsForUser,
   ]);
 
   React.useEffect(() => {
