@@ -1450,6 +1450,95 @@ export const approveReviewItem = mutation({
   },
 });
 
+export const archiveJob = mutation({
+  args: {
+    jobId: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const profile = await requireCanonicalUserProfile(ctx);
+    const normalizedJobId = ctx.db.normalizeId("jobs", args.jobId);
+    if (!normalizedJobId) {
+      throw new Error("Invalid jobId");
+    }
+
+    const job = await ctx.db.get(normalizedJobId);
+    if (!job || String(job.userId) !== String(profile._id)) {
+      throw new Error("Job not found");
+    }
+
+    const now = Date.now();
+    await ctx.db.patch(normalizedJobId, {
+      archivedAt: now,
+      updatedAt: now,
+    });
+
+    return null;
+  },
+});
+
+export const duplicateJob = mutation({
+  args: {
+    jobId: v.string(),
+  },
+  returns: v.object({
+    jobId: v.string(),
+  }),
+  handler: async (ctx, args) => {
+    const profile = await requireCanonicalUserProfile(ctx);
+    const normalizedJobId = ctx.db.normalizeId("jobs", args.jobId);
+    if (!normalizedJobId) {
+      throw new Error("Invalid jobId");
+    }
+
+    const job = await ctx.db.get(normalizedJobId);
+    if (!job || String(job.userId) !== String(profile._id)) {
+      throw new Error("Job not found");
+    }
+
+    const now = Date.now();
+    const duplicatedJobId = await ctx.db.insert("jobs", {
+      userId: job.userId,
+      createdAt: now,
+      updatedAt: now,
+      importedAt: now,
+      lastOpenedAt: now,
+      sourceUrl: job.sourceUrl,
+      sourceDomain: job.sourceDomain,
+      sourceType: job.sourceType,
+      applicationUrl: job.applicationUrl,
+      dedupeKey: `${job.dedupeKey}-copy-${now}`,
+      parseVersion: job.parseVersion,
+      parseStatus: job.parseStatus,
+      reviewState: job.reviewState,
+      title: job.title,
+      company: job.company,
+      location: job.location,
+      rawDescription: job.rawDescription,
+      rawLanguageDetected: job.rawLanguageDetected,
+      summary: job.summary,
+      ...(job.summaryExtraction ? { summaryExtraction: job.summaryExtraction } : {}),
+      responsibilities: job.responsibilities ?? [],
+      ...(job.responsibilitiesExtraction
+        ? { responsibilitiesExtraction: job.responsibilitiesExtraction }
+        : {}),
+      keywords: job.keywords ?? [],
+      ...(job.keywordsExtraction ? { keywordsExtraction: job.keywordsExtraction } : {}),
+      mustHaves: job.mustHaves ?? [],
+      ...(job.mustHavesExtraction ? { mustHavesExtraction: job.mustHavesExtraction } : {}),
+      toneCues: job.toneCues ?? [],
+      ...(job.toneCuesExtraction ? { toneCuesExtraction: job.toneCuesExtraction } : {}),
+      contacts: job.contacts ?? [],
+      isSample: false,
+      status: job.status,
+      archivedAt: null,
+      reviewItems: job.reviewItems ?? [],
+    });
+
+    return { jobId: String(duplicatedJobId) };
+  },
+});
+
 export const parseCreatedJob = internalMutation({
   args: {
     jobId: v.string(),
