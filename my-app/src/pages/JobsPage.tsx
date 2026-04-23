@@ -80,6 +80,14 @@ type JobsPageDetail = {
   parseStatus: string;
   reviewState: string;
   summary: string;
+  summaryExtraction?: {
+    value: string;
+    confidence: number;
+    sourceSpan: {
+      start: number;
+      end: number;
+    } | null;
+  };
   rawDescription: string;
   responsibilities: string[];
   keywords: string[];
@@ -306,6 +314,11 @@ function JobsPageContent(): JSX.Element {
   const [isSeedingSample, setIsSeedingSample] = React.useState(false);
   const [firstRunError, setFirstRunError] = React.useState<string | null>(null);
   const lastMarkedJobIdRef = React.useRef<string | null>(null);
+  const jobDecisionSessionRef = React.useRef<{
+    jobId: string;
+    openedAt: number;
+    decisionRecorded: boolean;
+  } | null>(null);
   const rowMenuRef = React.useRef<HTMLDivElement | null>(null);
   const [openRowMenuJobId, setOpenRowMenuJobId] = React.useState<string | null>(null);
 
@@ -323,6 +336,9 @@ function JobsPageContent(): JSX.Element {
   );
   const seedSampleJob = useMutation(
     ((api as any).jobsPublic?.seedSampleJob ?? "jobsPublic.seedSampleJob") as any,
+  );
+  const trackJobsEvent = useMutation(
+    ((api as any).jobsPublic?.trackEvent ?? "jobsPublic.trackEvent") as any,
   );
   const markJobOpened = useMutation(
     ((api as any).jobsPublic?.markOpened ?? "jobsPublic.markOpened") as any,
@@ -580,8 +596,61 @@ function JobsPageContent(): JSX.Element {
     optimisticSelectedJob === null;
   const hasResumeWorkspace = cvs.length > 0 || Boolean(currentCv);
 
+  const recordJobDecision = React.useCallback(
+    (outcome: "cover_letter" | "resume" | "bounce", jobId: string) => {
+      const session = jobDecisionSessionRef.current;
+      if (!session || session.jobId !== jobId || session.decisionRecorded) {
+        return;
+      }
+
+      session.decisionRecorded = true;
+      void trackJobsEvent({
+        event: "job_decision_made",
+        jobId,
+        outcome,
+        timeToDecisionMs: Math.max(0, Date.now() - session.openedAt),
+      }).catch(() => {});
+    },
+    [trackJobsEvent],
+  );
+
+  React.useEffect(() => {
+    if (!selectedJob?.id) {
+      return undefined;
+    }
+
+    const openedAt = Date.now();
+    jobDecisionSessionRef.current = {
+      jobId: selectedJob.id,
+      openedAt,
+      decisionRecorded: false,
+    };
+    void trackJobsEvent({
+      event: "job_opened",
+      jobId: selectedJob.id,
+      hasMatchRead: Boolean(selectedJob.matchRead),
+      reviewState: selectedJob.reviewState,
+    }).catch(() => {});
+
+    return () => {
+      const session = jobDecisionSessionRef.current;
+      if (!session || session.jobId !== selectedJob.id || session.decisionRecorded) {
+        return;
+      }
+
+      session.decisionRecorded = true;
+      void trackJobsEvent({
+        event: "job_decision_made",
+        jobId: selectedJob.id,
+        outcome: "bounce",
+        timeToDecisionMs: Math.max(0, Date.now() - session.openedAt),
+      }).catch(() => {});
+    };
+  }, [selectedJob?.id, trackJobsEvent]);
+
   const handleCreateProposal = React.useCallback(
     (jobId: string) => {
+      recordJobDecision("cover_letter", jobId);
       clearActiveLocalCvId();
       startFreshProposalWorkspace();
       void navigate(buildProposalRoute(jobId), {
@@ -590,7 +659,7 @@ function JobsPageContent(): JSX.Element {
         }),
       });
     },
-    [navigate],
+    [navigate, recordJobDecision],
   );
 
   const handleImportFirstJob = React.useCallback(() => {
@@ -623,6 +692,7 @@ function JobsPageContent(): JSX.Element {
 
   const handleOpenResumeWithJob = React.useCallback(
     (jobId: string) => {
+      recordJobDecision("resume", jobId);
       const target = buildResumeRoute(jobId);
       if (hasResumeWorkspace) {
         void navigate(target);
@@ -636,7 +706,7 @@ function JobsPageContent(): JSX.Element {
         }),
       });
     },
-    [hasResumeWorkspace, location.state, navigate],
+    [hasResumeWorkspace, location.state, navigate, recordJobDecision],
   );
 
   const handleApproveReviewItem = React.useCallback(
@@ -682,8 +752,13 @@ function JobsPageContent(): JSX.Element {
       }
 
       await approveReviewItem({ jobId: selectedJobId, reviewItemId: item.id });
+      void trackJobsEvent({
+        event: "import_accepted",
+        jobId: selectedJobId,
+        fieldKey: item.fieldKey,
+      }).catch(() => {});
     },
-    [approveReviewItem, selectedJobId],
+    [approveReviewItem, selectedJobId, trackJobsEvent],
   );
 
   const handleSaveReviewItem = React.useCallback(
@@ -732,8 +807,19 @@ function JobsPageContent(): JSX.Element {
         fieldKey: item.fieldKey,
         value: nextValue,
       });
+      void trackJobsEvent({
+        event: "field_corrected",
+        jobId: selectedJobId,
+        fieldKey: item.fieldKey,
+        beforeConfidence: item.confidence,
+      }).catch(() => {});
+      void trackJobsEvent({
+        event: "import_rejected",
+        jobId: selectedJobId,
+        fieldKey: item.fieldKey,
+      }).catch(() => {});
     },
-    [selectedJobId, updateJobField],
+    [selectedJobId, trackJobsEvent, updateJobField],
   );
 
   const handleSaveField = React.useCallback(
@@ -758,8 +844,17 @@ function JobsPageContent(): JSX.Element {
         fieldKey,
         value: nextValue,
       });
+      void trackJobsEvent({
+        event: "field_corrected",
+        jobId: selectedJobId,
+        fieldKey,
+        beforeConfidence:
+          fieldKey === "summary"
+            ? Number(selectedJob?.summaryExtraction?.confidence ?? 0.35)
+            : 0,
+      }).catch(() => {});
     },
-    [selectedJobId, updateJobField],
+    [selectedJob, selectedJobId, trackJobsEvent, updateJobField],
   );
 
   const handleOpenJobSource = React.useCallback((sourceUrl: string) => {

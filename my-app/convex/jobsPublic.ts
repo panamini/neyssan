@@ -18,8 +18,7 @@ import {
   resolveReviewItemsAfterFieldUpdate,
 } from "./lib/jobs/canonicalJobs";
 import { computeMatchRead } from "./lib/jobs/matchRead";
-
-const FIRST_RUN_PATH_METRIC = "jobs-v2:first_run_path";
+import { buildJobsMetricArgs } from "./lib/jobs/telemetry";
 
 function buildSampleJobDraft(now: number) {
   const rawDescription = [
@@ -199,18 +198,14 @@ async function scheduleFirstRunPathMetric(
   ctx: any,
   path: "import" | "sample" | "bounce",
 ) {
-  await ctx.scheduler.runAfter(0, internal.metrics.recordMetric, {
-    name: FIRST_RUN_PATH_METRIC,
-    value: 1,
-    metadata: {
-      namespace: "jobs-v2",
+  await ctx.scheduler.runAfter(
+    0,
+    internal.metrics.recordMetric,
+    buildJobsMetricArgs({
+      event: "first_run_path",
       path,
-    },
-    labels: {
-      namespace: "jobs-v2",
-      path,
-    },
-  });
+    }),
+  );
 }
 
 function getLegacyFieldConfidence(
@@ -851,6 +846,42 @@ export const recordFirstRunPath = mutation({
     }
 
     await scheduleFirstRunPathMetric(ctx, args.path);
+    return null;
+  },
+});
+
+export const trackEvent = mutation({
+  args: {
+    event: v.union(
+      v.literal("job_opened"),
+      v.literal("job_decision_made"),
+      v.literal("match_read_computed"),
+      v.literal("field_corrected"),
+      v.literal("first_run_path"),
+      v.literal("import_accepted"),
+      v.literal("import_rejected"),
+    ),
+    jobId: v.optional(v.string()),
+    path: v.optional(v.union(v.literal("import"), v.literal("sample"), v.literal("bounce"))),
+    outcome: v.optional(v.union(v.literal("cover_letter"), v.literal("resume"), v.literal("bounce"))),
+    timeToDecisionMs: v.optional(v.number()),
+    fieldKey: v.optional(v.string()),
+    beforeConfidence: v.optional(v.number()),
+    hasMatchRead: v.optional(v.boolean()),
+    reviewState: v.optional(v.string()),
+    tier: v.optional(v.string()),
+    confidence: v.optional(v.string()),
+    method: v.optional(v.string()),
+    fallback: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    await ctx.scheduler.runAfter(0, internal.metrics.recordMetric, buildJobsMetricArgs(args));
     return null;
   },
 });

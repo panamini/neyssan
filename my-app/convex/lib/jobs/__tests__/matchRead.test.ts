@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { computeMatchRead } from "../matchRead";
+import { buildMatchReadTelemetryArgs } from "../telemetry";
 
 describe("matchRead", () => {
   it("returns a strong match for high-overlap profile signals", () => {
@@ -123,5 +124,48 @@ describe("matchRead", () => {
     expect(result.score).toBe(50);
     expect(result.confidence).toBe("low");
     expect(result.scoreVisible).toBe(false);
+  });
+
+  it("builds a jobs-v2 metric payload for computed match reads", () => {
+    const result = computeMatchRead({
+      now: 1234,
+      profile: {
+        id: "profile_1",
+        skills: ["Airtable"],
+        keywords: ["vendor operations"],
+      },
+      job: {
+        id: "job_1",
+        parseStatus: "parsed",
+        mustHavesExtraction: [
+          { value: "Airtable", confidence: 0.9, sourceSpan: null },
+        ],
+        keywordsExtraction: [
+          { value: "Vendor operations", confidence: 0.82, sourceSpan: null },
+        ],
+      },
+    });
+
+    expect(buildMatchReadTelemetryArgs(result)).toEqual({
+      name: "jobs-v2:match_read_computed",
+      value: 1,
+      metadata: {
+        namespace: "jobs-v2",
+        event: "match_read_computed",
+        jobId: "job_1",
+        tier: "strong",
+        confidence: "medium",
+        method: "keyword-overlap",
+        fallback: "none",
+      },
+      labels: {
+        namespace: "jobs-v2",
+        event: "match_read_computed",
+        tier: "strong",
+        confidence: "medium",
+        method: "keyword-overlap",
+        fallback: "none",
+      },
+    });
   });
 });
