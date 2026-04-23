@@ -5,7 +5,6 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { JobsPage } from "../JobsPage";
 
 const approveReviewItemMock = vi.fn().mockResolvedValue(null);
-const loadForUserMock = vi.fn();
 const markOpenedMock = vi.fn().mockResolvedValue(null);
 const recordFirstRunPathMock = vi.fn().mockResolvedValue(null);
 const seedSampleJobMock = vi.fn().mockResolvedValue({ jobId: "job_sample" });
@@ -128,28 +127,28 @@ const selectedJob = {
 let listResult: typeof jobsList | undefined = jobsList;
 let selectedJobResult: typeof selectedJob | null | undefined = selectedJob;
 let listError: Error | null = null;
-const convexMock = {
-  query: async (reference: string, args?: { jobId?: string }) => {
-    if (reference === "jobsPublic.getById") {
-      if (!args?.jobId) {
-        return undefined;
-      }
-      return selectedJobResult;
-    }
-    return null;
-  },
-};
 
 vi.mock("convex/react", () => ({
   useConvexAuth: () => ({
     isLoading: false,
     isAuthenticated: true,
   }),
-  useConvex: () => convexMock,
-  useMutation: (reference: string) => {
-    if (reference === "jobsPublic.loadForUser") {
-      return loadForUserMock;
+  useQuery: (reference: string, args?: { jobId?: string } | "skip") => {
+    if (reference === "jobsPublic.listForUser") {
+      if (listError) {
+        throw listError;
+      }
+      return listResult;
     }
+    if (reference === "jobsPublic.getById") {
+      if (args === "skip" || !args?.jobId) {
+        return undefined;
+      }
+      return selectedJobResult;
+    }
+    return undefined;
+  },
+  useMutation: (reference: string) => {
     if (reference === "jobsPublic.approveReviewItem") {
       return approveReviewItemMock;
     }
@@ -182,7 +181,7 @@ vi.mock("@clerk/clerk-react", () => ({
 vi.mock("../../../convex/_generated/api", () => ({
   api: {
     jobsPublic: {
-      loadForUser: "jobsPublic.loadForUser",
+      listForUser: "jobsPublic.listForUser",
       getById: "jobsPublic.getById",
       approveReviewItem: "jobsPublic.approveReviewItem",
       recordFirstRunPath: "jobsPublic.recordFirstRunPath",
@@ -210,13 +209,6 @@ describe("JobsPage", () => {
   beforeEach(() => {
     consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     approveReviewItemMock.mockClear();
-    loadForUserMock.mockReset();
-    loadForUserMock.mockImplementation(async () => {
-      if (listError) {
-        throw listError;
-      }
-      return listResult;
-    });
     markOpenedMock.mockClear();
     recordFirstRunPathMock.mockClear();
     seedSampleJobMock.mockReset();
@@ -487,30 +479,26 @@ describe("JobsPage", () => {
   it("seeds a sample job, refreshes the list, and marks the sample visibly", async () => {
     listResult = [];
     selectedJobResult = null;
-    loadForUserMock
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([
-        {
-          id: "job_sample",
-          title: "Content Operations Coordinator",
-          company: "TwoWeeks Studio",
-          location: "Remote",
-          isSample: true,
-          sourceUrl: "https://twoweeks.app/sample-job",
-          sourceDomain: "twoweeks.app",
-          sourceType: "sample",
-          parseStatus: "parsed",
-          reviewState: "ready",
-          matchTier: "unknown",
-          status: "active",
-          importedAt: 1712000000000,
-          updatedAt: 1712000000000,
-          lastOpenedAt: 1712000000000,
-          lastActivityAt: 1712000000000,
-          linkedDocumentCount: 0,
-        },
-      ]);
-    selectedJobResult = {
+    const sampleJobListItem = {
+      id: "job_sample",
+      title: "Content Operations Coordinator",
+      company: "TwoWeeks Studio",
+      location: "Remote",
+      isSample: true,
+      sourceUrl: "https://twoweeks.app/sample-job",
+      sourceDomain: "twoweeks.app",
+      sourceType: "sample",
+      parseStatus: "parsed",
+      reviewState: "ready",
+      matchTier: "unknown",
+      status: "active",
+      importedAt: 1712000000000,
+      updatedAt: 1712000000000,
+      lastOpenedAt: 1712000000000,
+      lastActivityAt: 1712000000000,
+      linkedDocumentCount: 0,
+    };
+    const sampleJobDetail = {
       ...selectedJob,
       id: "job_sample",
       title: "Content Operations Coordinator",
@@ -527,6 +515,11 @@ describe("JobsPage", () => {
       linkedProposals: [],
       reviewItems: [],
     };
+    seedSampleJobMock.mockImplementation(async () => {
+      listResult = [sampleJobListItem];
+      selectedJobResult = sampleJobDetail;
+      return { jobId: "job_sample" };
+    });
 
     render(
       <MemoryRouter initialEntries={["/jobs"]}>
