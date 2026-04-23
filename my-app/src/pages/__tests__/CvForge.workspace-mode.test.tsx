@@ -88,7 +88,11 @@ vi.mock("convex/react", () => ({
       if (args === "skip") {
         return undefined;
       }
-      return null;
+      return {
+        id: "job_123",
+        title: "Senior Product Designer",
+        company: "Acme",
+      };
     }
     return null;
   }),
@@ -300,5 +304,36 @@ describe("CvForge workspace mode", () => {
     expect(
       screen.getByText("Preview style: editorial|soft-serif|encre"),
     ).toBeInTheDocument();
+  });
+
+  it("shows a compact job-context chip instead of an embedded brief card and can clear it", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123&jobId=job_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByRole("button", {
+        name: "For: Senior Product Designer @ Acme",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Loading saved job brief…"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Saved job context is unavailable for this resume session."),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Clear job context" }));
+
+    expect(
+      screen.queryByRole("button", {
+        name: "For: Senior Product Designer @ Acme",
+      }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Mock profile editor cv_123")).toBeInTheDocument();
   });
 });
