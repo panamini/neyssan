@@ -13,6 +13,7 @@ import {
   buildCanonicalJobDraftFromSource,
   flattenExtractionValues,
   type CanonicalJobExtraction,
+  resolveReparsedCompany,
   resolveReparsedLocation,
   resolveCanonicalJobReviewState,
   resolveReviewItemsAfterApprove,
@@ -702,6 +703,8 @@ export const createOrReuseFromSource = mutation({
   args: {
     title: v.string(),
     rawDescription: v.string(),
+    company: v.optional(v.string()),
+    location: v.optional(v.string()),
     sourceUrl: v.optional(v.string()),
     sourceDomain: v.optional(v.string()),
     sourceType: v.optional(v.string()),
@@ -754,8 +757,8 @@ export const createOrReuseFromSource = mutation({
       parseStatus: "parsing",
       reviewState: "pending",
       title: draft.title,
-      company: "",
-      location: "",
+      company: draft.company,
+      location: draft.location,
       rawDescription: draft.rawDescription,
       rawLanguageDetected: draft.rawLanguageDetected,
       summary: "",
@@ -1474,7 +1477,10 @@ export const parseCreatedJob = internalMutation({
       });
 
       await ctx.db.patch(normalizedJobId, {
-        company: draft.company,
+        company: resolveReparsedCompany({
+          existingCompany: job.company,
+          parsedCompany: draft.company,
+        }),
         location: resolveReparsedLocation({
           existingLocation: job.location,
           parsedLocation: draft.location,

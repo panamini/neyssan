@@ -216,6 +216,8 @@ setInterval(async () => {
 interface JobData {
   platform: string;
   title: string;
+  company?: string;
+  location?: string;
   description?: string;
   url: string;
   jobId?: string;
@@ -437,6 +439,8 @@ async function saveJobHandler(
       (api as any).jobsPublic.createOrReuseFromSource,
       {
         title: jobData.title,
+        company: jobData.company || "",
+        location: jobData.location || "",
         rawDescription: jobData.description || "",
         sourceUrl: jobData.url,
         sourceType: jobData.platform || "manual",
@@ -520,6 +524,8 @@ async function openProposalForgeHandler(
         }
       : await convex.mutation((api as any).jobsPublic.createOrReuseFromSource, {
           title: jobData.title,
+          company: jobData.company || "",
+          location: jobData.location || "",
           rawDescription: jobData.description || "",
           sourceUrl: jobData.url,
           sourceType: jobData.platform || "manual",
