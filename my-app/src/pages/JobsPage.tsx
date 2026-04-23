@@ -842,7 +842,12 @@ function JobsPageContent(): JSX.Element {
     : !isSignedIn || !isConvexAuthenticated
       ? "Sign in to view saved jobs."
       : null;
-
+  const isJobsListLoading =
+    !authStatusMessage &&
+    isLoaded &&
+    isSignedIn &&
+    isConvexAuthenticated &&
+    jobs === undefined;
   const hasJobs = (jobs?.length ?? 0) > 0;
   const selectedSourceLabel = getProposalSourceLabel(
     selectedJob?.sourceType ?? selectedJobSummary?.sourceType,
@@ -870,7 +875,13 @@ function JobsPageContent(): JSX.Element {
           </div>
         ) : null}
 
-        {!authStatusMessage && !hasJobs ? (
+        {isJobsListLoading ? (
+          <div className="dasti-hint" style={{ padding: "var(--space-5) 0" }}>
+            Loading jobs…
+          </div>
+        ) : null}
+
+        {!authStatusMessage && !isJobsListLoading && !hasJobs ? (
           <FirstRunPanel
             onImportFirstJob={handleImportFirstJob}
             onTrySampleJob={handleTrySampleJob}
@@ -879,7 +890,7 @@ function JobsPageContent(): JSX.Element {
           />
         ) : null}
 
-        {!authStatusMessage && hasJobs ? (
+        {!authStatusMessage && !isJobsListLoading && hasJobs ? (
           <div
             className={[
               "dasti-jobs-layout",
