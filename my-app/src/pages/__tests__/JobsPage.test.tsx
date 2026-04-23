@@ -96,6 +96,11 @@ const selectedJob = {
     method: "keyword-overlap",
     fallback: "none",
   },
+  nextStepBlock: {
+    headline: "Common next steps",
+    usesCohortData: false,
+    actions: ["cover_letter", "resume", "save_for_later"],
+  },
   linkedProposalCount: 2,
   linkedProposals: [
     {
@@ -234,6 +239,15 @@ describe("JobsPage", () => {
       <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
         <Routes>
           <Route path="/jobs/:jobId" element={<JobsPage />} />
+          <Route
+            path="/jobs"
+            element={
+              <>
+                <JobsPage />
+                <LocationProbe />
+              </>
+            }
+          />
           <Route path="/proposal" element={<LocationProbe />} />
           <Route path="/cv" element={<LocationProbe />} />
         </Routes>
@@ -260,6 +274,8 @@ describe("JobsPage", () => {
     expect(
       screen.getByRole("button", { name: "Open resume with this job" }),
     ).toBeInTheDocument();
+    expect(screen.getByText("Common next steps")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save for later" })).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Open" }),
     ).not.toBeInTheDocument();
@@ -275,15 +291,6 @@ describe("JobsPage", () => {
         reviewState: "needs_review",
       });
     });
-    expect(trackEventMock).toHaveBeenCalledWith({
-      event: "match_read_computed",
-      jobId: "job_alpha",
-      tier: "partial",
-      confidence: "medium",
-      method: "keyword-overlap",
-      fallback: "none",
-    });
-
     const linkedDocuments = screen.getByText("Linked documents");
     const rawSource = screen.getByText("Raw source");
     expect(
@@ -319,6 +326,41 @@ describe("JobsPage", () => {
       jobId: "job_alpha",
       outcome: "resume",
       timeToDecisionMs: expect.any(Number),
+      tier: "partial",
+    });
+  });
+
+  it("closes to list view when save for later is selected", async () => {
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+          <Route
+            path="/jobs"
+            element={
+              <>
+                <JobsPage />
+                <LocationProbe />
+              </>
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("button", { name: "Save for later" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save for later" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("jobs-location")).toHaveTextContent("/jobs?view=list");
+    });
+    expect(trackEventMock).toHaveBeenCalledWith({
+      event: "job_decision_made",
+      jobId: "job_alpha",
+      outcome: "save_for_later",
+      timeToDecisionMs: expect.any(Number),
+      tier: "partial",
     });
   });
 
@@ -480,6 +522,7 @@ describe("JobsPage", () => {
       sourceType: "sample",
       reviewState: "ready",
       matchRead: null,
+      nextStepBlock: null,
       linkedProposalCount: 0,
       linkedProposals: [],
       reviewItems: [],

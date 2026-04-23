@@ -12,6 +12,7 @@ import { api } from "../../convex/_generated/api";
 import { ProposalBriefCard } from "../components/ProposalBriefCard";
 import { FirstRunPanel } from "../components/jobs/FirstRunPanel";
 import { MatchReadBlock } from "../components/jobs/MatchReadBlock";
+import { NextStepBlock } from "../components/jobs/NextStepBlock";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import {
   getProposalSourceLabel,
@@ -114,6 +115,11 @@ type JobsPageDetail = {
       | "profile_missing"
       | "parse_failed"
       | "requirements_missing";
+  } | null;
+  nextStepBlock: {
+    headline: string;
+    usesCohortData: boolean;
+    actions: Array<"cover_letter" | "resume" | "save_for_later">;
   } | null;
   linkedProposalCount: number;
   linkedProposals: JobsPageLinkedProposal[];
@@ -292,6 +298,10 @@ function JobsPageContent(): JSX.Element {
     isAuthenticated: isConvexAuthenticated,
     isLoading: isConvexAuthLoading,
   } = useConvexAuth();
+  const holdListViewOpen = React.useMemo(
+    () => new URLSearchParams(location.search).get("view") === "list",
+    [location.search],
+  );
   const [viewportWidth, setViewportWidth] = React.useState(() =>
     typeof window === "undefined" ? 1440 : window.innerWidth,
   );
@@ -553,10 +563,15 @@ function JobsPageContent(): JSX.Element {
   const isMobileJobsLayout = viewportWidth < 760;
 
   React.useEffect(() => {
-    if (!selectedJobId && filteredJobs.length > 0 && !isMobileJobsLayout) {
+    if (
+      !selectedJobId &&
+      filteredJobs.length > 0 &&
+      !isMobileJobsLayout &&
+      !holdListViewOpen
+    ) {
       void navigate(buildJobsRoute(filteredJobs[0].id), { replace: true });
     }
-  }, [filteredJobs, isMobileJobsLayout, navigate, selectedJobId]);
+  }, [filteredJobs, holdListViewOpen, isMobileJobsLayout, navigate, selectedJobId]);
 
   React.useEffect(() => {
     if (!selectedJobId || !isLoaded || !isSignedIn || !isConvexAuthenticated) {
@@ -597,7 +612,10 @@ function JobsPageContent(): JSX.Element {
   const hasResumeWorkspace = cvs.length > 0 || Boolean(currentCv);
 
   const recordJobDecision = React.useCallback(
-    (outcome: "cover_letter" | "resume" | "bounce", jobId: string) => {
+    (
+      outcome: "cover_letter" | "resume" | "save_for_later" | "bounce",
+      jobId: string,
+    ) => {
       const session = jobDecisionSessionRef.current;
       if (!session || session.jobId !== jobId || session.decisionRecorded) {
         return;
@@ -609,9 +627,10 @@ function JobsPageContent(): JSX.Element {
         jobId,
         outcome,
         timeToDecisionMs: Math.max(0, Date.now() - session.openedAt),
+        tier: selectedJob?.matchRead?.tier ?? "unknown",
       }).catch(() => {});
     },
-    [trackJobsEvent],
+    [selectedJob?.matchRead?.tier, trackJobsEvent],
   );
 
   React.useEffect(() => {
@@ -644,9 +663,10 @@ function JobsPageContent(): JSX.Element {
         jobId: selectedJob.id,
         outcome: "bounce",
         timeToDecisionMs: Math.max(0, Date.now() - session.openedAt),
+        tier: selectedJob.matchRead?.tier ?? "unknown",
       }).catch(() => {});
     };
-  }, [selectedJob?.id, trackJobsEvent]);
+  }, [selectedJob?.id, selectedJob?.matchRead?.tier, trackJobsEvent]);
 
   const handleCreateProposal = React.useCallback(
     (jobId: string) => {
@@ -707,6 +727,14 @@ function JobsPageContent(): JSX.Element {
       });
     },
     [hasResumeWorkspace, location.state, navigate, recordJobDecision],
+  );
+
+  const handleSaveForLater = React.useCallback(
+    (jobId: string) => {
+      recordJobDecision("save_for_later", jobId);
+      void navigate("/jobs?view=list");
+    },
+    [navigate, recordJobDecision],
   );
 
   const handleApproveReviewItem = React.useCallback(
@@ -1220,26 +1248,37 @@ function JobsPageContent(): JSX.Element {
                         ) : null}
                       </div>
                     </div>
-                    <div className="dasti-jobs-detail__actions">
-                      <button
-                        type="button"
-                        className="dasti-button dasti-button--primary dasti-button--pill"
-                        onClick={() => handleCreateProposal(selectedJob.id)}
-                      >
-                        Generate cover letter
-                      </button>
-                      <button
-                        type="button"
-                        className="dasti-button dasti-button--pill"
-                        onClick={() => handleOpenResumeWithJob(selectedJob.id)}
-                      >
-                        Open resume with this job
-                      </button>
-                    </div>
                   </div>
 
                   {selectedJob.matchRead ? (
                     <MatchReadBlock matchRead={selectedJob.matchRead} />
+                  ) : null}
+
+                  {selectedJob.nextStepBlock ? (
+                    <NextStepBlock
+                      headline={selectedJob.nextStepBlock.headline}
+                      usesCohortData={selectedJob.nextStepBlock.usesCohortData}
+                      actions={selectedJob.nextStepBlock.actions.map((action) => ({
+                        id: action,
+                        label:
+                          action === "cover_letter"
+                            ? "Generate cover letter"
+                            : action === "resume"
+                              ? "Open resume with this job"
+                              : "Save for later",
+                      }))}
+                      onSelectAction={(actionId) => {
+                        if (actionId === "cover_letter") {
+                          handleCreateProposal(selectedJob.id);
+                          return;
+                        }
+                        if (actionId === "resume") {
+                          handleOpenResumeWithJob(selectedJob.id);
+                          return;
+                        }
+                        handleSaveForLater(selectedJob.id);
+                      }}
+                    />
                   ) : null}
 
                   <ProposalBriefCard
