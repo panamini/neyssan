@@ -6535,6 +6535,14 @@ html:not(.dark) .dasti-proposal-submit {
   gap: var(--proposal-chrome-group-gap, var(--space-2));
 }
 
+.dasti-cv-edit-toolbar__style-controls {
+  order: 0;
+}
+
+.dasti-cv-edit-toolbar__group--primary > button:last-child {
+  order: 1;
+}
+
 .dasti-cv-style-presets__menu {
   min-inline-size: 220px;
 }
@@ -10627,6 +10635,13 @@ html:not(.dark) .dasti-proposal-submit {
 .dasti-cv-job-context {
   inline-size: min(100%, var(--cv-editor-shell-max-width));
   margin-inline: auto;
+}
+
+.dasti-cv-workbench-trailing-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--proposal-chrome-group-gap, var(--space-2));
+  min-width: 0;
 }
 
 @media (max-width: 1080px) {
