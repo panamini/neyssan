@@ -109,7 +109,7 @@ type JobsPageDetail = {
       jobId: string;
     };
     computedAt: number;
-    method: "keyword-overlap";
+    method: "keyword-overlap" | "llm";
     fallback:
       | "none"
       | "profile_missing"
@@ -324,6 +324,7 @@ function JobsPageContent(): JSX.Element {
   const [isSeedingSample, setIsSeedingSample] = React.useState(false);
   const [firstRunError, setFirstRunError] = React.useState<string | null>(null);
   const lastMarkedJobIdRef = React.useRef<string | null>(null);
+  const llmRefreshAttemptedByJobIdRef = React.useRef<Record<string, boolean>>({});
   const jobDecisionSessionRef = React.useRef<{
     jobId: string;
     openedAt: number;
@@ -498,6 +499,31 @@ function JobsPageContent(): JSX.Element {
       }));
     }
   }, [selectedJobRecord]);
+
+  React.useEffect(() => {
+    if (
+      !selectedJobRecord?.id ||
+      selectedJobRecord.matchRead?.method !== "keyword-overlap" ||
+      selectedJobRecord.matchRead?.fallback !== "none" ||
+      llmRefreshAttemptedByJobIdRef.current[selectedJobRecord.id]
+    ) {
+      return undefined;
+    }
+
+    llmRefreshAttemptedByJobIdRef.current[selectedJobRecord.id] = true;
+    const timeoutId = window.setTimeout(() => {
+      void convex
+        .query(jobByIdReference, { jobId: selectedJobRecord.id })
+        .then((result) => {
+          setSelectedJobRecord((result ?? null) as JobsPageDetail);
+        })
+        .catch(() => {});
+    }, 900);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [convex, jobByIdReference, selectedJobRecord]);
 
   const filteredJobs = React.useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
