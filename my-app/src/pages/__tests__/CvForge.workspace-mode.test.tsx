@@ -21,11 +21,15 @@ vi.mock("../../components/ProfileReviewCard", () => ({
     toolbarPrimaryControl?: React.ReactNode;
   }) => (
     <div>
-      <div className="dasti-workbench-top-left-slot--cv">
-        <div className="dasti-cv-workbench-toggle">{toolbarLeadControl}</div>
+      <div className="dasti-cv-edit-toolbar">
+        <div className="dasti-workbench-top-left-slot--cv">
+          <div className="dasti-cv-workbench-toggle">{toolbarLeadControl}</div>
+        </div>
+        <div className="dasti-workbench-top-right-slot--cv">
+          {toolbarPrimaryControl}
+        </div>
       </div>
       <div>Mock profile editor {cvId ?? "none"}</div>
-      {toolbarPrimaryControl}
     </div>
   ),
 }));
@@ -121,11 +125,13 @@ vi.mock("../../features/verbati/VerbatiCvPreviewPanel", () => ({
     hostMode,
     layoutMode,
     railLeadControl,
+    railTrailingControl,
     stylePreset,
   }: {
     hostMode?: "panel" | "workspace";
     layoutMode?: "rail" | "stacked";
     railLeadControl?: React.ReactNode;
+    railTrailingControl?: React.ReactNode;
     stylePreset?: {
       layout?: string | null;
       typography?: string | null;
@@ -138,7 +144,12 @@ vi.mock("../../features/verbati/VerbatiCvPreviewPanel", () => ({
         Preview style: {stylePreset?.layout ?? "none"}|
         {stylePreset?.typography ?? "none"}|{stylePreset?.palette ?? "none"}
       </div>
-      {railLeadControl}
+      <div className="dasti-preview-toolbar">
+        <div className="dasti-preview-toolbar__lead">{railLeadControl}</div>
+        <div className="dasti-preview-toolbar__trailing">
+          {railTrailingControl}
+        </div>
+      </div>
     </div>
   ),
 }));
@@ -225,6 +236,13 @@ describe("CvForge workspace mode", () => {
     expect(
       screen.getByRole("button", { name: "Open saved resume styles" }),
     ).toBeInTheDocument();
+    expect(screen.queryByText("Loaded")).not.toBeInTheDocument();
+    expect(container.querySelector(".dasti-cv-active-toolbar-pill")).toBeNull();
+    expect(
+      screen.queryByRole("button", {
+        name: /Switch CV\. Active CV:/i,
+      }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Open text styles" }),
     ).toBeInTheDocument();
@@ -249,6 +267,8 @@ describe("CvForge workspace mode", () => {
     expect(
       screen.getByText("Preview host: workspace / layout: stacked"),
     ).toBeInTheDocument();
+    expect(screen.queryByText("Loaded")).not.toBeInTheDocument();
+    expect(container.querySelector(".dasti-cv-active-toolbar-pill")).toBeNull();
     expect(
       container.querySelector(".dasti-cv-preview-workbench"),
     ).toBeTruthy();
@@ -380,7 +400,12 @@ describe("CvForge workspace mode", () => {
     expect(
       screen.getByText("For: Senior Product Designer @ Acme"),
     ).toBeInTheDocument();
-    expect(screen.queryByText(/CV:/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Loaded")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", {
+        name: /Switch CV\. Active CV:/i,
+      }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Back to job" })).not.toBeInTheDocument();
     expect(
       screen.queryByText("Loading saved job brief…"),
@@ -395,5 +420,49 @@ describe("CvForge workspace mode", () => {
       screen.queryByText("For: Senior Product Designer @ Acme"),
     ).not.toBeInTheDocument();
     expect(screen.getByText("Mock profile editor cv_123")).toBeInTheDocument();
+  });
+
+  it("shows only the saved cv library when the picker is loaded", () => {
+    useCvLibraryMock.mockReturnValue(
+      buildCvLibraryState({
+        currentCv: null,
+        currentCvId: null,
+      }),
+    );
+
+    const { container } = render(
+      <MemoryRouter initialEntries={["/cv"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("Choose your CV")).toBeInTheDocument();
+    expect(screen.getByText("Open a saved CV.")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Open a saved CV, import a new one, or start from scratch."),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Import new" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Start from scratch" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Open selected CV" }),
+    ).toBeInTheDocument();
+    expect(
+      container.querySelector(".dasti-doc-card--chooser.dasti-doc-card--selected"),
+    ).toBeTruthy();
+  });
+
+  it("opens the loaded workspace cv instead of reopening the picker when no id param is present", () => {
+    render(
+      <MemoryRouter initialEntries={["/cv"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("Mock profile editor cv_123")).toBeInTheDocument();
+    expect(screen.queryByText("Choose your CV")).not.toBeInTheDocument();
   });
 });

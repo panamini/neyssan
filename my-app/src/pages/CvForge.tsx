@@ -312,6 +312,9 @@ export function CvForge(): JSX.Element {
   const { showToast } = useToast();
   const [isCreatingEntryCv, setIsCreatingEntryCv] = React.useState(false);
   const [isImportingEntryCv, setIsImportingEntryCv] = React.useState(false);
+  const [pendingEntryCvId, setPendingEntryCvId] = React.useState<string | null>(
+    null,
+  );
   const [entryPickerTransitionCvId, setEntryPickerTransitionCvId] =
     React.useState<string | null>(null);
   const [pendingFreshEntryBaseCvId, setPendingFreshEntryBaseCvId] =
@@ -336,13 +339,42 @@ export function CvForge(): JSX.Element {
     (entryPickerTransitionCvId === ENTRY_PICKER_PENDING_ROUTE_ID
       ? undefined
       : entryPickerTransitionCvId ?? currentCvId ?? undefined);
+  const hasSavedCvOptions = cvPickerOptions.length > 0;
   // Keep the picker hidden while a local CV selection is in flight and the
   // URL `id` param is catching up to the chosen document.
   const shouldShowEntryPicker =
     isLibraryHydrated &&
     !lastLibraryFetchFailed &&
     !requestedCvId &&
-    !entryPickerTransitionCvId;
+    !entryPickerTransitionCvId &&
+    !currentCvId;
+  const entryPickerDefaultCvId = React.useMemo(() => {
+    if (cvPickerOptions.length === 1) {
+      return cvPickerOptions[0].id;
+    }
+    if (
+      currentCvId &&
+      cvPickerOptions.some((option) => option.id === currentCvId)
+    ) {
+      return currentCvId;
+    }
+    return cvPickerOptions[0]?.id ?? null;
+  }, [currentCvId, cvPickerOptions]);
+
+  React.useEffect(() => {
+    if (!shouldShowEntryPicker) {
+      setPendingEntryCvId(null);
+      return;
+    }
+
+    setPendingEntryCvId((current) => {
+      if (current && cvPickerOptions.some((option) => option.id === current)) {
+        return current;
+      }
+
+      return entryPickerDefaultCvId;
+    });
+  }, [cvPickerOptions, entryPickerDefaultCvId, shouldShowEntryPicker]);
 
   React.useEffect(() => {
     if (
@@ -826,31 +858,6 @@ export function CvForge(): JSX.Element {
     </div>
   );
 
-  const editModeToggle = (
-    <button
-      type="button"
-      className="dasti-icon-button"
-      aria-label="Open resume preview"
-      onClick={() => setWorkspaceMode("preview")}
-      data-toolbar-tooltip="Switch to preview"
-      data-no-pan="true"
-    >
-      <Eye size={15} strokeWidth={1.7} aria-hidden="true" />
-    </button>
-  );
-
-  const previewModeLeadControl = (
-    <button
-      type="button"
-      className="dasti-cv-workbench-toggle__button"
-      aria-label="Back to resume editing"
-      onClick={() => setWorkspaceMode("edit")}
-      data-toolbar-tooltip="Back to edit"
-      data-no-pan="true"
-    >
-      <PenLine size={15} strokeWidth={1.9} aria-hidden="true" />
-    </button>
-  );
   const resumeExportControl = (
     <ResumeExportControl
       exportingFormat={exportingFormat}
@@ -886,6 +893,47 @@ export function CvForge(): JSX.Element {
       search: nextSearch ? `?${nextSearch}` : "",
     });
   }, [location.pathname, navigate, search]);
+
+  const editModeLeadControl = (
+    <button
+      type="button"
+      className="dasti-icon-button"
+      aria-label="Open resume preview"
+      onClick={() => setWorkspaceMode("preview")}
+      data-toolbar-tooltip="Switch to preview"
+      data-no-pan="true"
+    >
+      <Eye size={15} strokeWidth={1.7} aria-hidden="true" />
+    </button>
+  );
+
+  const editModePrimaryControl = (
+    <>
+      <div className="dasti-cv-edit-toolbar__style-controls">
+        {stylePresetToolbarControl}
+      </div>
+    </>
+  );
+
+  const previewModeLeadControl = (
+    <button
+      type="button"
+      className="dasti-cv-workbench-toggle__button"
+      aria-label="Back to resume editing"
+      onClick={() => setWorkspaceMode("edit")}
+      data-toolbar-tooltip="Back to edit"
+      data-no-pan="true"
+    >
+      <PenLine size={15} strokeWidth={1.9} aria-hidden="true" />
+    </button>
+  );
+
+  const previewModeTrailingControl = (
+    <div className="dasti-cv-workbench-trailing-controls">
+      {resumeExportControl}
+    </div>
+  );
+
 
   const handleOpenCvById = React.useCallback(
     async (cvId: string) => {
@@ -930,6 +978,14 @@ export function CvForge(): JSX.Element {
       showToast,
     ],
   );
+
+  const handleOpenSelectedCv = React.useCallback(() => {
+    if (!pendingEntryCvId) {
+      return;
+    }
+
+    void handleOpenCvById(pendingEntryCvId);
+  }, [handleOpenCvById, pendingEntryCvId]);
 
   const handleImportEntryCv = React.useCallback(() => {
     if (isEntryPickerBusy) {
@@ -1123,7 +1179,9 @@ export function CvForge(): JSX.Element {
                   Choose your CV
                 </p>
                 <h1 className="dasti-proposal-title-input">
-                  Open a saved CV, import a new one, or start from scratch.
+                  {hasSavedCvOptions
+                    ? "Open a saved CV."
+                    : "Open a saved CV, import a new one, or start from scratch."}
                 </h1>
               </div>
             </div>
@@ -1150,9 +1208,9 @@ export function CvForge(): JSX.Element {
                   {cvPickerOptions.map((option) => (
                     <CvPickerCard
                       key={option.id}
-                      actionLabel="Use this CV"
-                      onAction={handleOpenCvById}
                       option={option}
+                      selected={pendingEntryCvId === option.id}
+                      onSelect={setPendingEntryCvId}
                     />
                   ))}
                 </div>
@@ -1168,26 +1226,40 @@ export function CvForge(): JSX.Element {
                 } as React.CSSProperties
               }
             >
-              <button
-                type="button"
-                className="dasti-button dasti-button--secondary dasti-button--sm"
-                onClick={handleImportEntryCv}
-                disabled={isEntryPickerBusy}
-              >
-                <span>{isImportingEntryCv ? "Importing..." : "Import new"}</span>
-              </button>
-              <button
-                type="button"
-                className="dasti-button dasti-button--secondary dasti-button--sm"
-                onClick={() => {
-                  void handleStartFreshEntryCv();
-                }}
-                disabled={isEntryPickerBusy}
-              >
-                <span>
-                  {isCreatingEntryCv ? "Creating..." : "Start from scratch"}
-                </span>
-              </button>
+              {!hasSavedCvOptions ? (
+                <>
+                  <button
+                    type="button"
+                    className="dasti-button dasti-button--secondary dasti-button--sm"
+                    onClick={handleImportEntryCv}
+                    disabled={isEntryPickerBusy}
+                  >
+                    <span>{isImportingEntryCv ? "Importing..." : "Import new"}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="dasti-button dasti-button--secondary dasti-button--sm"
+                    onClick={() => {
+                      void handleStartFreshEntryCv();
+                    }}
+                    disabled={isEntryPickerBusy}
+                  >
+                    <span>
+                      {isCreatingEntryCv ? "Creating..." : "Start from scratch"}
+                    </span>
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="dasti-button dasti-button--accent dasti-button--sm"
+                  onClick={handleOpenSelectedCv}
+                  disabled={!pendingEntryCvId || isEntryPickerBusy}
+                >
+                  <Check size={16} strokeWidth={1.9} aria-hidden="true" />
+                  <span>Open selected CV</span>
+                </button>
+              )}
             </div>
             <input
               ref={cvImportInputRef}
@@ -1229,7 +1301,7 @@ export function CvForge(): JSX.Element {
                   hostMode="workspace"
                   cvDocumentOverride={filteredPreviewCv}
                   railLeadControl={previewModeLeadControl}
-                  railTrailingControl={resumeExportControl}
+                  railTrailingControl={previewModeTrailingControl}
                   stylePreset={stylePreset}
                   onStylePresetChange={setStylePreset}
                   onLinkIntent={handleResumeLinkIntent}
@@ -1262,8 +1334,8 @@ export function CvForge(): JSX.Element {
                   exportStatusDescription={exportStatusDescription}
                   exportStatusLabel={exportStatusLabel}
                   exportStatusTone={hasTrustedExport ? "trusted" : "standard"}
-                  toolbarLeadControl={editModeToggle}
-                  toolbarPrimaryControl={stylePresetToolbarControl}
+                  toolbarLeadControl={editModeLeadControl}
+                  toolbarPrimaryControl={editModePrimaryControl}
                   onRequestExport={handleResumeExport}
                   resumeLinkIntent={resumeLinkIntent}
                   onResumeLinkIntentHandled={handleResumeLinkIntentHandled}
