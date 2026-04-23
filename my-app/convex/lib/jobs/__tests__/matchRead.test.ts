@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { computeMatchRead } from "../matchRead";
-import { buildMatchReadTelemetryArgs } from "../telemetry";
+import { buildMatchReadTelemetryArgs, computeMatchRead } from "../matchRead";
 
 describe("matchRead", () => {
   it("returns a strong match for high-overlap profile signals", () => {

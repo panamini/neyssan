@@ -17,8 +17,21 @@ import {
   resolveReviewItemsAfterApprove,
   resolveReviewItemsAfterFieldUpdate,
 } from "./lib/jobs/canonicalJobs";
-import { computeMatchRead } from "./lib/jobs/matchRead";
+import {
+  buildMatchReadTelemetryArgs,
+  computeMatchRead,
+  type MatchRead,
+  type MatchReadTier,
+} from "./lib/jobs/matchRead";
 import { buildJobsMetricArgs } from "./lib/jobs/telemetry";
+
+const COHORT_MIN_TOTAL_DECISIONS = 500;
+const COHORT_MIN_TIER_DECISIONS = 10;
+const NEXT_STEP_FALLBACK_ACTION_ORDER = [
+  "cover_letter",
+  "resume",
+  "save_for_later",
+] as const;
 
 function buildSampleJobDraft(now: number) {
   const rawDescription = [
@@ -208,6 +221,87 @@ async function scheduleFirstRunPathMetric(
   );
 }
 
+async function scheduleMatchReadComputedMetric(ctx: any, matchRead: MatchRead) {
+  await ctx.scheduler.runAfter(
+    0,
+    internal.metrics.recordMetric,
+    buildMatchReadTelemetryArgs(matchRead),
+  );
+}
+
+function normalizeDecisionOutcome(
+  value: string | undefined,
+): "cover_letter" | "resume" | "save_for_later" | null {
+  if (value === "cover_letter" || value === "resume" || value === "save_for_later") {
+    return value;
+  }
+  if (value === "bounce") {
+    return "save_for_later";
+  }
+  return null;
+}
+
+function buildNextStepHeadline(
+  tier: MatchReadTier,
+  outcome: "cover_letter" | "resume" | "save_for_later",
+): string {
+  const tierLabel = tier === "unknown" ? "unknown" : tier;
+
+  if (outcome === "resume") {
+    return `Most users with a ${tierLabel} match opened the resume with this job.`;
+  }
+  if (outcome === "save_for_later") {
+    return `Most users with a ${tierLabel} match saved the job for later.`;
+  }
+  return `Most users with a ${tierLabel} match generated a cover letter first.`;
+}
+
+async function resolveNextStepBlock(ctx: any, tier: MatchReadTier) {
+  const metrics = await ctx.db
+    .query("metrics")
+    .withIndex("by_name_time", (q: any) => q.eq("name", "jobs-v2:job_decision_made"))
+    .collect();
+
+  const normalizedOutcomes = metrics
+    .map((metric: any) => ({
+      tier: String(metric?.labels?.tier ?? ""),
+      outcome: normalizeDecisionOutcome(String(metric?.labels?.outcome ?? "")),
+    }))
+    .filter((entry) => entry.outcome !== null);
+
+  const hasEnoughTotalData = normalizedOutcomes.length >= COHORT_MIN_TOTAL_DECISIONS;
+  const tierMetrics = normalizedOutcomes.filter((entry) => entry.tier === tier);
+  const hasEnoughTierData = tierMetrics.length >= COHORT_MIN_TIER_DECISIONS;
+  const actionOrder = [...NEXT_STEP_FALLBACK_ACTION_ORDER];
+
+  if (!hasEnoughTotalData || !hasEnoughTierData) {
+    return {
+      headline: "Common next steps",
+      usesCohortData: false,
+      actions: actionOrder,
+    };
+  }
+
+  const counts = new Map<string, number>();
+  for (const entry of tierMetrics) {
+    counts.set(entry.outcome!, (counts.get(entry.outcome!) ?? 0) + 1);
+  }
+
+  const orderedActions = [...actionOrder].sort((left, right) => {
+    const countDiff = (counts.get(right) ?? 0) - (counts.get(left) ?? 0);
+    if (countDiff !== 0) {
+      return countDiff;
+    }
+    return actionOrder.indexOf(left) - actionOrder.indexOf(right);
+  });
+
+  return {
+    headline: buildNextStepHeadline(tier, orderedActions[0]),
+    usesCohortData: true,
+    actions: orderedActions,
+  };
+}
+
 function getLegacyFieldConfidence(
   job: any,
   fieldKey: string,
@@ -264,6 +358,11 @@ function buildExtractionProjection(args: {
 function buildJobProjection(
   job: any,
   matchRead: ReturnType<typeof computeMatchRead> | null = null,
+  nextStepBlock: {
+    headline: string;
+    usesCohortData: boolean;
+    actions: readonly ("cover_letter" | "resume" | "save_for_later")[];
+  } | null = null,
   linkedProposalCount = 0,
   linkedProposals: Array<{
     id: string;
@@ -348,6 +447,7 @@ function buildJobProjection(
     isSample: Boolean(job.isSample),
     status: job.status,
     matchRead,
+    nextStepBlock,
     linkedProposalCount,
     linkedProposals,
     reviewItems: (job.reviewItems ?? []).map((item: any) => ({
@@ -392,7 +492,7 @@ async function listProjectedJobsForProfile(ctx: any, profile: {
   id?: string | CanonicalUserProfile["id"];
   skills?: string[];
   keywords?: string[];
-}) {
+}, options?: { trackMatchRead?: boolean }) {
   const profileId = String(profile._id ?? profile.id ?? "");
   const jobs = await listJobsForProfileId(ctx, profileId);
 
@@ -426,9 +526,11 @@ async function listProjectedJobsForProfile(ctx: any, profile: {
     });
   }
 
-  return jobs
-    .filter((job: any) => job.archivedAt === null || job.archivedAt === undefined)
-    .map((job: any) => {
+  const visibleJobs = jobs.filter(
+    (job: any) => job.archivedAt === null || job.archivedAt === undefined,
+  );
+
+  const projections = visibleJobs.map((job: any) => {
       const stats = linkedProposalStats.get(String(job._id));
       const lastActivityAt = Math.max(
         job.updatedAt ?? 0,
@@ -471,6 +573,31 @@ async function listProjectedJobsForProfile(ctx: any, profile: {
         linkedDocumentCount: stats?.count ?? 0,
       };
     });
+
+  if (options?.trackMatchRead) {
+    await Promise.all(
+      visibleJobs.map((job: any) => {
+        const matchRead = computeMatchRead({
+          job: {
+            id: String(job._id),
+            parseStatus: job.parseStatus,
+            mustHaves: job.mustHaves ?? [],
+            keywords: job.keywords ?? [],
+            mustHavesExtraction: job.mustHavesExtraction ?? [],
+            keywordsExtraction: job.keywordsExtraction ?? [],
+          },
+          profile: {
+            id: profileId,
+            skills: profile.skills ?? [],
+            keywords: profile.keywords ?? [],
+          },
+        });
+        return scheduleMatchReadComputedMetric(ctx, matchRead);
+      }),
+    );
+  }
+
+  return projections;
 }
 
 export const createOrReuseFromSource = mutation({
@@ -668,6 +795,20 @@ export const getById = query({
           fallback: v.string(),
         }),
       ),
+      nextStepBlock: v.union(
+        v.null(),
+        v.object({
+          headline: v.string(),
+          usesCohortData: v.boolean(),
+          actions: v.array(
+            v.union(
+              v.literal("cover_letter"),
+              v.literal("resume"),
+              v.literal("save_for_later"),
+            ),
+          ),
+        }),
+      ),
       linkedProposalCount: v.number(),
       linkedProposals: v.array(
         v.object({
@@ -747,10 +888,12 @@ export const getById = query({
           }
         : null,
     });
+    const nextStepBlock = await resolveNextStepBlock(ctx, matchRead.tier);
 
     return buildJobProjection(
       job,
       matchRead,
+      nextStepBlock,
       linkedProposals.length,
       projectedLinkedProposals,
     );
@@ -830,7 +973,7 @@ export const loadForUser = mutation({
   ),
   handler: async (ctx) => {
     const profile = await requireCanonicalUserProfile(ctx);
-    return listProjectedJobsForProfile(ctx, profile);
+    return listProjectedJobsForProfile(ctx, profile, { trackMatchRead: true });
   },
 });
 
@@ -863,7 +1006,14 @@ export const trackEvent = mutation({
     ),
     jobId: v.optional(v.string()),
     path: v.optional(v.union(v.literal("import"), v.literal("sample"), v.literal("bounce"))),
-    outcome: v.optional(v.union(v.literal("cover_letter"), v.literal("resume"), v.literal("bounce"))),
+    outcome: v.optional(
+      v.union(
+        v.literal("cover_letter"),
+        v.literal("resume"),
+        v.literal("save_for_later"),
+        v.literal("bounce"),
+      ),
+    ),
     timeToDecisionMs: v.optional(v.number()),
     fieldKey: v.optional(v.string()),
     beforeConfidence: v.optional(v.number()),
