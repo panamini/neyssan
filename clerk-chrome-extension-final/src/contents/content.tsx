@@ -17,6 +17,8 @@ export const config: PlasmoContentScript = {
 interface JobData {
   platform: string;
   title: string;
+  company?: string;
+  location?: string;
   description?: string;
   url: string;
   jobId?: string;
@@ -1302,6 +1304,40 @@ function normalizeScrapedText(value: string | null | undefined): string | undefi
   return normalized || undefined;
 }
 
+function clampScrapedField(value: string | undefined, maxLength = 120): string | undefined {
+  const normalized = normalizeScrapedText(value);
+  if (!normalized) return undefined;
+  return normalized.slice(0, maxLength).trim() || undefined;
+}
+
+function sanitizeScrapedCompany(value: string | undefined): string | undefined {
+  const normalized = clampScrapedField(value, 120);
+  if (!normalized) return undefined;
+
+  const cleaned = normalized
+    .split("\n")[0]
+    .replace(/\s*[·•]\s*\d+(?:st|nd|rd|th)\+?\s*$/i, "")
+    .replace(/\s*[·•]\s*(?:followers?|follower)\b.*$/i, "")
+    .replace(/\s*[·•]\s*(?:reposted|easy apply|actively hiring|new)\b.*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return clampScrapedField(cleaned, 120);
+}
+
+function sanitizeScrapedLocation(value: string | undefined): string | undefined {
+  const normalized = clampScrapedField(value, 120);
+  if (!normalized) return undefined;
+
+  const cleaned = normalized
+    .split("\n")[0]
+    .replace(/\s*[·•]\s*(?:reposted|easy apply|actively hiring|new)\b.*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return clampScrapedField(cleaned, 120);
+}
+
 function textFromNode(node: Element | null): string | undefined {
   if (!node) return undefined;
   if (node instanceof HTMLMetaElement) {
@@ -1477,6 +1513,49 @@ function findJobPostingJsonLdRecord(): Record<string, unknown> | undefined {
   }
 
   return undefined;
+}
+
+function extractCompanyFromJobPosting(record: Record<string, unknown> | undefined): string | undefined {
+  if (!record) return undefined;
+  const hiringOrganization = record.hiringOrganization;
+  if (!hiringOrganization || typeof hiringOrganization !== "object") return undefined;
+  return sanitizeScrapedCompany(
+    typeof (hiringOrganization as Record<string, unknown>).name === "string"
+      ? ((hiringOrganization as Record<string, unknown>).name as string)
+      : undefined
+  );
+}
+
+function extractLocationFromJobPosting(record: Record<string, unknown> | undefined): string | undefined {
+  if (!record) return undefined;
+
+  const locationEntries = Array.isArray(record.jobLocation)
+    ? record.jobLocation
+    : record.jobLocation
+      ? [record.jobLocation]
+      : [];
+  const candidates: string[] = [];
+
+  for (const entry of locationEntries) {
+    if (!entry || typeof entry !== "object") continue;
+    const address =
+      typeof (entry as Record<string, unknown>).address === "object"
+        ? ((entry as Record<string, unknown>).address as Record<string, unknown>)
+        : (entry as Record<string, unknown>);
+    const formatted = [
+      typeof address.addressLocality === "string" ? address.addressLocality : undefined,
+      typeof address.addressRegion === "string" ? address.addressRegion : undefined,
+      typeof address.addressCountry === "string" ? address.addressCountry : undefined,
+    ]
+      .filter((part): part is string => Boolean(part))
+      .join(", ");
+    const location = sanitizeScrapedLocation(formatted);
+    if (location) {
+      candidates.push(location);
+    }
+  }
+
+  return candidates[0];
 }
 
 function isLikelySerializedAppStateText(text: string): boolean {
@@ -1726,6 +1805,7 @@ function pickBestIndeedDescriptionFallback(): string | undefined {
 }
 
 function scrapeIndeedJobData(): JobData {
+  const jobPosting = findJobPostingJsonLdRecord();
   const rawTitle =
     queryFirstMeaningfulText([
       'h1[data-testid="jobsearch-JobInfoHeader-title"]',
@@ -1750,10 +1830,29 @@ function scrapeIndeedJobData(): JobData {
     ], 120) ||
     findJobPostingJsonLdField("description") ||
     pickBestIndeedDescriptionFallback();
+  const company =
+    sanitizeScrapedCompany(
+      queryFirstMeaningfulText([
+        '[data-testid="inlineHeader-companyName"]',
+        '[data-testid="jobsearch-JobInfoHeader-companyName"]',
+        '[data-company-name="true"]',
+        '.jobsearch-InlineCompanyRating div:first-child',
+      ], 2),
+    ) || extractCompanyFromJobPosting(jobPosting);
+  const location =
+    sanitizeScrapedLocation(
+      queryFirstMeaningfulText([
+        '[data-testid="jobsearch-JobInfoHeader-companyLocation"]',
+        '[data-testid="inlineHeader-companyLocation"]',
+        '.jobsearch-JobInfoHeader-subtitle div',
+      ], 2),
+    ) || extractLocationFromJobPosting(jobPosting);
 
   return {
     platform: "indeed",
     title,
+    company,
+    location,
     description,
     url: window.location.href
   };
@@ -1818,6 +1917,7 @@ function pickBestLinkedInDescriptionFallback(): string | undefined {
 }
 
 function scrapeLinkedInJobData(): JobData {
+  const jobPosting = findJobPostingJsonLdRecord();
   const isRejected = (text: string) => isLikelyLinkedInShellText(text) || isLikelySerializedAppStateText(text);
   const title =
     queryFirstMeaningfulText([
@@ -1858,10 +1958,30 @@ function scrapeLinkedInJobData(): JobData {
     findContentNearHeading(["about the job", "job details"], 80, isRejected) ||
     findJobPostingJsonLdField("description") ||
     pickBestLinkedInDescriptionFallback();
+  const company =
+    sanitizeScrapedCompany(
+      queryFirstMeaningfulText([
+        ".job-details-jobs-unified-top-card__company-name a",
+        ".job-details-jobs-unified-top-card__company-name",
+        ".jobs-unified-top-card__company-name a",
+        ".jobs-unified-top-card__company-name",
+      ], 2),
+    ) || extractCompanyFromJobPosting(jobPosting);
+  const location =
+    sanitizeScrapedLocation(
+      queryFirstMeaningfulText([
+        ".job-details-jobs-unified-top-card__primary-description-container",
+        ".job-details-jobs-unified-top-card__primary-description",
+        ".jobs-unified-top-card__primary-description-container",
+        ".jobs-unified-top-card__subtitle-primary-grouping",
+      ], 2),
+    ) || extractLocationFromJobPosting(jobPosting);
 
   return {
     platform: "linkedin",
     title,
+    company,
+    location,
     description,
     url: window.location.href
   };
@@ -2981,6 +3101,8 @@ function mergeJobData(current: JobData, next: JobData): JobData {
       next.title && next.title !== "Untitled"
         ? next.title
         : current.title,
+    company: sanitizeScrapedCompany(next.company) || sanitizeScrapedCompany(current.company),
+    location: sanitizeScrapedLocation(next.location) || sanitizeScrapedLocation(current.location),
     description:
       nextDescriptionScore >= currentDescriptionScore
         ? normalizeScrapedText(next.description) || current.description
