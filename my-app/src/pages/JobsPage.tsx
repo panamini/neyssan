@@ -11,6 +11,7 @@ import {
 } from "@/lib/icons";
 import { api } from "../../convex/_generated/api";
 import { ProposalBriefCard } from "../components/ProposalBriefCard";
+import { MatchReadBlock } from "../components/jobs/MatchReadBlock";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import {
   PROPOSAL_EXTENSION_INSTALL_LINK,
@@ -83,6 +84,26 @@ type JobsPageDetail = {
   toneCues: string[];
   contacts: string[];
   status: string;
+  matchRead: {
+    tier: "strong" | "partial" | "weak" | "unknown";
+    score: number | null;
+    scoreVisible: boolean;
+    confidence: "high" | "medium" | "low";
+    matched: string[];
+    missing: string[];
+    basedOn: {
+      profileId: string;
+      profileLabel: string;
+      jobId: string;
+    };
+    computedAt: number;
+    method: "keyword-overlap";
+    fallback:
+      | "none"
+      | "profile_missing"
+      | "parse_failed"
+      | "requirements_missing";
+  } | null;
   linkedProposalCount: number;
   linkedProposals: JobsPageLinkedProposal[];
   reviewItems: JobsPageReviewItem[];
@@ -977,6 +998,10 @@ function JobsPageContent(): JSX.Element {
                       </button>
                     </div>
                   </div>
+
+                  {selectedJob.matchRead ? (
+                    <MatchReadBlock matchRead={selectedJob.matchRead} />
+                  ) : null}
 
                   <ProposalBriefCard
                     documentTitle={selectedJob.title}
