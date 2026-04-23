@@ -25,6 +25,30 @@ export type MatchRead = {
   fallback: MatchReadFallback;
 };
 
+export function buildMatchReadTelemetryArgs(matchRead: MatchRead) {
+  return {
+    name: "jobs-v2:match_read_computed",
+    value: 1,
+    metadata: {
+      namespace: "jobs-v2",
+      event: "match_read_computed",
+      jobId: matchRead.basedOn.jobId,
+      tier: matchRead.tier,
+      confidence: matchRead.confidence,
+      method: matchRead.method,
+      fallback: matchRead.fallback,
+    },
+    labels: {
+      namespace: "jobs-v2",
+      event: "match_read_computed",
+      tier: matchRead.tier,
+      confidence: matchRead.confidence,
+      method: matchRead.method,
+      fallback: matchRead.fallback,
+    },
+  };
+}
+
 type MatchReadProfile = {
   id?: string;
   skills?: string[];
