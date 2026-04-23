@@ -5,7 +5,7 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { JobsPage } from "../JobsPage";
 
 const approveReviewItemMock = vi.fn().mockResolvedValue(null);
-const ensureCanonicalProfileMock = vi.fn().mockResolvedValue(null);
+const loadForUserMock = vi.fn();
 const markOpenedMock = vi.fn().mockResolvedValue(null);
 const updateFieldMock = vi.fn().mockResolvedValue(null);
 const windowOpenMock = vi.fn();
@@ -94,12 +94,6 @@ let selectedJobResult: typeof selectedJob | null | undefined = selectedJob;
 let listError: Error | null = null;
 const convexMock = {
   query: async (reference: string, args?: { jobId?: string }) => {
-    if (reference === "jobsPublic.listForUser") {
-      if (listError) {
-        throw listError;
-      }
-      return listResult;
-    }
     if (reference === "jobsPublic.getById") {
       if (!args?.jobId) {
         return undefined;
@@ -117,11 +111,11 @@ vi.mock("convex/react", () => ({
   }),
   useConvex: () => convexMock,
   useMutation: (reference: string) => {
+    if (reference === "jobsPublic.loadForUser") {
+      return loadForUserMock;
+    }
     if (reference === "jobsPublic.approveReviewItem") {
       return approveReviewItemMock;
-    }
-    if (reference === "jobsPublic.ensureCanonicalProfile") {
-      return ensureCanonicalProfileMock;
     }
     if (reference === "jobsPublic.markOpened") {
       return markOpenedMock;
@@ -143,10 +137,9 @@ vi.mock("@clerk/clerk-react", () => ({
 vi.mock("../../../convex/_generated/api", () => ({
   api: {
     jobsPublic: {
-      listForUser: "jobsPublic.listForUser",
+      loadForUser: "jobsPublic.loadForUser",
       getById: "jobsPublic.getById",
       approveReviewItem: "jobsPublic.approveReviewItem",
-      ensureCanonicalProfile: "jobsPublic.ensureCanonicalProfile",
       markOpened: "jobsPublic.markOpened",
       updateField: "jobsPublic.updateField",
     },
@@ -169,7 +162,13 @@ describe("JobsPage", () => {
   beforeEach(() => {
     consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     approveReviewItemMock.mockClear();
-    ensureCanonicalProfileMock.mockClear();
+    loadForUserMock.mockReset();
+    loadForUserMock.mockImplementation(async () => {
+      if (listError) {
+        throw listError;
+      }
+      return listResult;
+    });
     markOpenedMock.mockClear();
     updateFieldMock.mockClear();
     listResult = jobsList;

@@ -3,16 +3,72 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 
 import {
+  type CanonicalUserProfile,
   ensureCanonicalProfileForClerk,
   getPrimaryProfileForClerk,
   listProfilesForClerk,
 } from "./lib/userProfiles";
 import {
   buildCanonicalJobDraftFromSource,
+  flattenExtractionValues,
+  type CanonicalJobExtraction,
   resolveCanonicalJobReviewState,
   resolveReviewItemsAfterApprove,
   resolveReviewItemsAfterFieldUpdate,
 } from "./lib/jobs/canonicalJobs";
+
+function getLegacyFieldConfidence(
+  job: any,
+  fieldKey: string,
+  fallbackConfidence: number,
+) {
+  const reviewItem = (job.reviewItems ?? []).find(
+    (item: any) => item.fieldKey === fieldKey,
+  );
+
+  if (typeof reviewItem?.confidence === "number") {
+    return reviewItem.confidence;
+  }
+
+  return fallbackConfidence;
+}
+
+function buildExtractionProjection(args: {
+  job: any;
+  fieldKey: string;
+  extractionKey: string;
+  fallbackValues: string[];
+  fallbackConfidence: number;
+}): CanonicalJobExtraction[] {
+  const structuredValues = args.job[args.extractionKey];
+  if (Array.isArray(structuredValues) && structuredValues.length > 0) {
+    return structuredValues.map((item: any) => ({
+      value: String(item?.value ?? "").trim(),
+      confidence: Number(item?.confidence ?? args.fallbackConfidence),
+      sourceSpan:
+        item?.sourceSpan &&
+        typeof item.sourceSpan.start === "number" &&
+        typeof item.sourceSpan.end === "number"
+          ? {
+              start: item.sourceSpan.start,
+              end: item.sourceSpan.end,
+            }
+          : null,
+    }));
+  }
+
+  const confidence = getLegacyFieldConfidence(
+    args.job,
+    args.fieldKey,
+    args.fallbackConfidence,
+  );
+
+  return args.fallbackValues.map((value) => ({
+    value,
+    confidence,
+    sourceSpan: null,
+  }));
+}
 
 function buildJobProjection(
   job: any,
@@ -24,6 +80,55 @@ function buildJobProjection(
     updatedAt: number;
   }> = [],
 ) {
+  const responsibilitiesExtraction = buildExtractionProjection({
+    job,
+    fieldKey: "responsibilities",
+    extractionKey: "responsibilitiesExtraction",
+    fallbackValues: job.responsibilities ?? [],
+    fallbackConfidence: 0.52,
+  });
+  const keywordsExtraction = buildExtractionProjection({
+    job,
+    fieldKey: "keywords",
+    extractionKey: "keywordsExtraction",
+    fallbackValues: job.keywords ?? [],
+    fallbackConfidence: 0.42,
+  });
+  const mustHavesExtraction = buildExtractionProjection({
+    job,
+    fieldKey: "mustHaves",
+    extractionKey: "mustHavesExtraction",
+    fallbackValues: job.mustHaves ?? [],
+    fallbackConfidence: 0.48,
+  });
+  const toneCuesExtraction = buildExtractionProjection({
+    job,
+    fieldKey: "toneCues",
+    extractionKey: "toneCuesExtraction",
+    fallbackValues: job.toneCues ?? [],
+    fallbackConfidence: 0.46,
+  });
+  const summaryExtraction =
+    job.summaryExtraction && typeof job.summaryExtraction.value === "string"
+      ? {
+          value: job.summaryExtraction.value,
+          confidence: Number(job.summaryExtraction.confidence ?? 0.35),
+          sourceSpan:
+            job.summaryExtraction.sourceSpan &&
+            typeof job.summaryExtraction.sourceSpan.start === "number" &&
+            typeof job.summaryExtraction.sourceSpan.end === "number"
+              ? {
+                  start: job.summaryExtraction.sourceSpan.start,
+                  end: job.summaryExtraction.sourceSpan.end,
+                }
+              : null,
+        }
+      : {
+          value: String(job.summary ?? ""),
+          confidence: 0.35,
+          sourceSpan: null,
+        };
+
   return {
     id: String(job._id),
     title: job.title,
@@ -35,12 +140,17 @@ function buildJobProjection(
     applicationUrl: job.applicationUrl,
     parseStatus: job.parseStatus,
     reviewState: job.reviewState,
-    summary: job.summary,
+    summary: summaryExtraction.value,
+    summaryExtraction,
     rawDescription: job.rawDescription,
-    responsibilities: job.responsibilities ?? [],
-    keywords: job.keywords ?? [],
-    mustHaves: job.mustHaves ?? [],
-    toneCues: job.toneCues ?? [],
+    responsibilities: flattenExtractionValues(responsibilitiesExtraction),
+    responsibilitiesExtraction,
+    keywords: flattenExtractionValues(keywordsExtraction),
+    keywordsExtraction,
+    mustHaves: flattenExtractionValues(mustHavesExtraction),
+    mustHavesExtraction,
+    toneCues: flattenExtractionValues(toneCuesExtraction),
+    toneCuesExtraction,
     contacts: job.contacts ?? [],
     status: job.status,
     linkedProposalCount,
@@ -57,20 +167,6 @@ function buildJobProjection(
       updatedAt: item.updatedAt,
     })),
   };
-}
-
-async function requireUserProfile(ctx: any) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) {
-    throw new Error("Not authenticated");
-  }
-
-  const profile = await getPrimaryProfileForClerk(ctx, identity.subject);
-  if (!profile) {
-    throw new Error("User profile not found");
-  }
-
-  return profile;
 }
 
 async function requireCanonicalUserProfile(ctx: any) {
@@ -94,25 +190,73 @@ async function requireCanonicalUserProfile(ctx: any) {
   };
 }
 
-export const ensureCanonicalProfile = mutation({
-  args: {},
-  returns: v.null(),
-  handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Not authenticated");
+async function listProjectedJobsForProfile(ctx: any, profile: {
+  _id: string | CanonicalUserProfile["id"];
+}) {
+  const jobs = await ctx.db
+    .query("jobs")
+    .withIndex("by_user_updated", (q: any) => q.eq("userId", profile._id))
+    .order("desc")
+    .collect();
+
+  const proposals = await ctx.db
+    .query("proposals")
+    .withIndex("by_user", (q: any) => q.eq("userId", profile._id))
+    .collect();
+
+  const linkedProposalStats = new Map<
+    string,
+    { count: number; latestUpdatedAt: number }
+  >();
+
+  for (const proposal of proposals) {
+    const jobId = typeof proposal.jobId === "string" ? proposal.jobId : "";
+    if (!jobId) {
+      continue;
     }
 
-    await ensureCanonicalProfileForClerk({
-      ctx,
-      clerkId: identity.subject,
-      fallbackEmail: identity.email,
-      fallbackName: identity.name,
-    });
+    const current = linkedProposalStats.get(jobId) ?? {
+      count: 0,
+      latestUpdatedAt: 0,
+    };
 
-    return null;
-  },
-});
+    linkedProposalStats.set(jobId, {
+      count: current.count + 1,
+      latestUpdatedAt: Math.max(
+        current.latestUpdatedAt,
+        proposal.updatedAt ?? proposal.createdAt ?? 0,
+      ),
+    });
+  }
+
+  return jobs
+    .filter((job: any) => job.archivedAt === null || job.archivedAt === undefined)
+    .map((job: any) => {
+      const stats = linkedProposalStats.get(String(job._id));
+      const lastActivityAt = Math.max(
+        job.updatedAt ?? 0,
+        job.lastOpenedAt ?? 0,
+        stats?.latestUpdatedAt ?? 0,
+      );
+
+      return {
+        id: String(job._id),
+        title: job.title,
+        company: job.company,
+        sourceUrl: job.sourceUrl,
+        sourceDomain: job.sourceDomain,
+        sourceType: job.sourceType,
+        parseStatus: job.parseStatus,
+        reviewState: job.reviewState,
+        status: job.status,
+        importedAt: job.importedAt,
+        updatedAt: job.updatedAt,
+        lastOpenedAt: job.lastOpenedAt,
+        lastActivityAt,
+        linkedDocumentCount: stats?.count ?? 0,
+      };
+    });
+}
 
 export const createOrReuseFromSource = mutation({
   args: {
@@ -216,11 +360,74 @@ export const getById = query({
       parseStatus: v.string(),
       reviewState: v.string(),
       summary: v.string(),
+      summaryExtraction: v.object({
+        value: v.string(),
+        confidence: v.number(),
+        sourceSpan: v.union(
+          v.object({
+            start: v.number(),
+            end: v.number(),
+          }),
+          v.null(),
+        ),
+      }),
       rawDescription: v.string(),
       responsibilities: v.array(v.string()),
+      responsibilitiesExtraction: v.array(
+        v.object({
+          value: v.string(),
+          confidence: v.number(),
+          sourceSpan: v.union(
+            v.object({
+              start: v.number(),
+              end: v.number(),
+            }),
+            v.null(),
+          ),
+        }),
+      ),
       keywords: v.array(v.string()),
+      keywordsExtraction: v.array(
+        v.object({
+          value: v.string(),
+          confidence: v.number(),
+          sourceSpan: v.union(
+            v.object({
+              start: v.number(),
+              end: v.number(),
+            }),
+            v.null(),
+          ),
+        }),
+      ),
       mustHaves: v.array(v.string()),
+      mustHavesExtraction: v.array(
+        v.object({
+          value: v.string(),
+          confidence: v.number(),
+          sourceSpan: v.union(
+            v.object({
+              start: v.number(),
+              end: v.number(),
+            }),
+            v.null(),
+          ),
+        }),
+      ),
       toneCues: v.array(v.string()),
+      toneCuesExtraction: v.array(
+        v.object({
+          value: v.string(),
+          confidence: v.number(),
+          sourceSpan: v.union(
+            v.object({
+              start: v.number(),
+              end: v.number(),
+            }),
+            v.null(),
+          ),
+        }),
+      ),
       contacts: v.array(v.string()),
       status: v.string(),
       linkedProposalCount: v.number(),
@@ -305,71 +512,43 @@ export const listForUser = query({
     }),
   ),
   handler: async (ctx) => {
-    const profile = await requireUserProfile(ctx);
-
-    const jobs = await ctx.db
-      .query("jobs")
-      .withIndex("by_user_updated", (q) => q.eq("userId", profile._id))
-      .order("desc")
-      .collect();
-
-    const proposals = await ctx.db
-      .query("proposals")
-      .withIndex("by_user", (q) => q.eq("userId", profile._id))
-      .collect();
-
-    const linkedProposalStats = new Map<
-      string,
-      { count: number; latestUpdatedAt: number }
-    >();
-
-    for (const proposal of proposals) {
-      const jobId = typeof proposal.jobId === "string" ? proposal.jobId : "";
-      if (!jobId) {
-        continue;
-      }
-
-      const current = linkedProposalStats.get(jobId) ?? {
-        count: 0,
-        latestUpdatedAt: 0,
-      };
-
-      linkedProposalStats.set(jobId, {
-        count: current.count + 1,
-        latestUpdatedAt: Math.max(
-          current.latestUpdatedAt,
-          proposal.updatedAt ?? proposal.createdAt ?? 0,
-        ),
-      });
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
     }
 
-    return jobs
-      .filter((job) => job.archivedAt === null || job.archivedAt === undefined)
-      .map((job) => {
-        const stats = linkedProposalStats.get(String(job._id));
-        const lastActivityAt = Math.max(
-          job.updatedAt ?? 0,
-          job.lastOpenedAt ?? 0,
-          stats?.latestUpdatedAt ?? 0,
-        );
+    const profile = await getPrimaryProfileForClerk(ctx, identity.subject);
+    if (!profile) {
+      return [];
+    }
 
-        return {
-          id: String(job._id),
-          title: job.title,
-          company: job.company,
-          sourceUrl: job.sourceUrl,
-          sourceDomain: job.sourceDomain,
-          sourceType: job.sourceType,
-          parseStatus: job.parseStatus,
-          reviewState: job.reviewState,
-          status: job.status,
-          importedAt: job.importedAt,
-          updatedAt: job.updatedAt,
-          lastOpenedAt: job.lastOpenedAt,
-          lastActivityAt,
-          linkedDocumentCount: stats?.count ?? 0,
-        };
-      });
+    return listProjectedJobsForProfile(ctx, profile);
+  },
+});
+
+export const loadForUser = mutation({
+  args: {},
+  returns: v.array(
+    v.object({
+      id: v.string(),
+      title: v.string(),
+      company: v.string(),
+      sourceUrl: v.string(),
+      sourceDomain: v.string(),
+      sourceType: v.string(),
+      parseStatus: v.string(),
+      reviewState: v.string(),
+      status: v.string(),
+      importedAt: v.number(),
+      updatedAt: v.number(),
+      lastOpenedAt: v.number(),
+      lastActivityAt: v.number(),
+      linkedDocumentCount: v.number(),
+    }),
+  ),
+  handler: async (ctx) => {
+    const profile = await requireCanonicalUserProfile(ctx);
+    return listProjectedJobsForProfile(ctx, profile);
   },
 });
 
@@ -511,11 +690,17 @@ export const parseCreatedJob = internalMutation({
         location: draft.location,
         rawLanguageDetected: draft.rawLanguageDetected,
         summary: draft.summary,
+        summaryExtraction: draft.summaryExtraction,
         responsibilities: draft.responsibilities,
+        responsibilitiesExtraction: draft.responsibilitiesExtraction,
         keywords: draft.keywords,
+        keywordsExtraction: draft.keywordsExtraction,
         mustHaves: draft.mustHaves,
+        mustHavesExtraction: draft.mustHavesExtraction,
         toneCues: draft.toneCues,
+        toneCuesExtraction: draft.toneCuesExtraction,
         contacts: draft.contacts,
+        parseVersion: draft.parseVersion,
         parseStatus: "parsed",
         reviewState: draft.reviewState,
         reviewItems: draft.reviewItems,
