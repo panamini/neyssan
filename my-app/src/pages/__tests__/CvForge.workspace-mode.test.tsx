@@ -6,6 +6,10 @@ import { describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { CvForge } from "../CvForge";
 
+const { useCvLibraryMock } = vi.hoisted(() => ({
+  useCvLibraryMock: vi.fn(),
+}));
+
 vi.mock("../../components/ProfileReviewCard", () => ({
   ProfileReviewCard: ({
     cvId,
@@ -139,10 +143,68 @@ vi.mock("../../features/verbati/VerbatiCvPreviewPanel", () => ({
   ),
 }));
 
+vi.mock("../../components/useStructuredMistralImport", () => ({
+  TRUSTED_MISTRAL_FILE_INPUT_ACCEPT: ".pdf",
+  useStructuredMistralImport: () => ({
+    importFile: vi.fn(),
+  }),
+}));
+
+vi.mock("../../contexts/CvLibraryContext", () => ({
+  useCvLibrary: () => useCvLibraryMock(),
+}));
+
+function buildCvLibraryState(overrides: Record<string, unknown> = {}) {
+  const now = "2026-04-17T12:00:00.000Z";
+  const currentCv = {
+    id: "cv_123",
+    title: "Untitled CV",
+    metadata: {
+      createdAt: now,
+      updatedAt: now,
+      version: 1,
+      verbatiStyle: {
+        layout: "swiss",
+        typography: "quiet-editorial",
+        palette: "sauge",
+      },
+    },
+    sections: [
+      {
+        id: "profile-cv_123",
+        type: "profile",
+        title: "Profile",
+        blocks: [],
+        structuredContent: [
+          {
+            id: "profile-item-cv_123",
+            name: "Ada Lovelace",
+            desiredPosition: "Product Designer",
+          },
+        ],
+      },
+    ],
+  };
+
+  return {
+    currentCv,
+    currentCvId: "cv_123",
+    createNewCv: vi.fn(async () => undefined),
+    importCv: vi.fn(async () => undefined),
+    cvs: [currentCv],
+    isLibraryHydrated: true,
+    lastLibraryFetchFailed: false,
+    loadCv: vi.fn(() => true),
+    ...overrides,
+  };
+}
+
 describe("CvForge workspace mode", () => {
   beforeEach(() => {
     window.localStorage.removeItem("dasti:cv-forge-workspace-mode:v1");
     window.localStorage.setItem("twoweeks:quick-start-completed", "1");
+    useCvLibraryMock.mockReset();
+    useCvLibraryMock.mockReturnValue(buildCvLibraryState());
   });
 
   it("switches between edit and preview workbench modes and persists the choice", async () => {
@@ -185,14 +247,14 @@ describe("CvForge workspace mode", () => {
     );
 
     expect(
-      screen.queryByText("Mock profile editor cv_123"),
-    ).not.toBeInTheDocument();
-    expect(
       screen.getByText("Preview host: workspace / layout: stacked"),
     ).toBeInTheDocument();
     expect(
       container.querySelector(".dasti-cv-preview-workbench"),
     ).toBeTruthy();
+    expect(
+      container.querySelector(".dasti-cv-edit-workbench-shell"),
+    ).toBeFalsy();
     expect(
       container.querySelector(".dasti-workbench-top-left-slot--cv-preview"),
     ).toBeFalsy();
