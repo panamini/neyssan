@@ -16,6 +16,7 @@ import {
   resolveReviewItemsAfterApprove,
   resolveReviewItemsAfterFieldUpdate,
 } from "./lib/jobs/canonicalJobs";
+import { computeMatchRead } from "./lib/jobs/matchRead";
 
 function getLegacyFieldConfidence(
   job: any,
@@ -72,6 +73,7 @@ function buildExtractionProjection(args: {
 
 function buildJobProjection(
   job: any,
+  matchRead: ReturnType<typeof computeMatchRead> | null = null,
   linkedProposalCount = 0,
   linkedProposals: Array<{
     id: string;
@@ -153,6 +155,7 @@ function buildJobProjection(
     toneCuesExtraction,
     contacts: job.contacts ?? [],
     status: job.status,
+    matchRead,
     linkedProposalCount,
     linkedProposals,
     reviewItems: (job.reviewItems ?? []).map((item: any) => ({
@@ -430,6 +433,25 @@ export const getById = query({
       ),
       contacts: v.array(v.string()),
       status: v.string(),
+      matchRead: v.union(
+        v.null(),
+        v.object({
+          tier: v.string(),
+          score: v.union(v.number(), v.null()),
+          scoreVisible: v.boolean(),
+          confidence: v.string(),
+          matched: v.array(v.string()),
+          missing: v.array(v.string()),
+          basedOn: v.object({
+            profileId: v.string(),
+            profileLabel: v.string(),
+            jobId: v.string(),
+          }),
+          computedAt: v.number(),
+          method: v.string(),
+          fallback: v.string(),
+        }),
+      ),
       linkedProposalCount: v.number(),
       linkedProposals: v.array(
         v.object({
@@ -487,7 +509,31 @@ export const getById = query({
       }))
       .sort((left, right) => right.updatedAt - left.updatedAt);
 
-    return buildJobProjection(job, linkedProposals.length, projectedLinkedProposals);
+    const profile = await ctx.db.get(job.userId);
+    const matchRead = computeMatchRead({
+      job: {
+        id: String(job._id),
+        parseStatus: job.parseStatus,
+        mustHaves: job.mustHaves ?? [],
+        keywords: job.keywords ?? [],
+        mustHavesExtraction: job.mustHavesExtraction ?? [],
+        keywordsExtraction: job.keywordsExtraction ?? [],
+      },
+      profile: profile
+        ? {
+            id: String(profile._id),
+            skills: profile.skills ?? [],
+            keywords: profile.keywords ?? [],
+          }
+        : null,
+    });
+
+    return buildJobProjection(
+      job,
+      matchRead,
+      linkedProposals.length,
+      projectedLinkedProposals,
+    );
   },
 });
 

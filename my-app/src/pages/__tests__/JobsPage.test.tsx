@@ -65,6 +65,22 @@ const selectedJob = {
   toneCues: ["clear", "dependable"],
   contacts: ["Hiring Manager"],
   status: "active",
+  matchRead: {
+    tier: "partial",
+    score: 50,
+    scoreVisible: true,
+    confidence: "medium",
+    matched: ["operations"],
+    missing: ["Cross-functional communication"],
+    basedOn: {
+      profileId: "profile_alpha",
+      profileLabel: "Your profile",
+      jobId: "job_alpha",
+    },
+    computedAt: 1711003000000,
+    method: "keyword-overlap",
+    fallback: "none",
+  },
   linkedProposalCount: 2,
   linkedProposals: [
     {
@@ -195,6 +211,11 @@ describe("JobsPage", () => {
     expect(await screen.findByRole("heading", { name: "Jobs" })).toBeInTheDocument();
     expect((await screen.findAllByText("Operations Associate")).length).toBeGreaterThan(0);
     expect(await screen.findByText("Support Specialist")).toBeInTheDocument();
+    expect(await screen.findByText("Match")).toBeInTheDocument();
+    expect(await screen.findByText("Partial · 50%")).toBeInTheDocument();
+    expect(
+      (await screen.findAllByText("Cross-functional communication")).length,
+    ).toBeGreaterThan(0);
     expect((await screen.findAllByText("Responsibilities")).length).toBeGreaterThan(0);
     expect(await screen.findByText("Run recurring workflows")).toBeInTheDocument();
     expect(await screen.findByRole("link", { name: /Open linked proposal Operations Associate cover letter/i })).toHaveAttribute(
