@@ -188,6 +188,7 @@ function buildSampleJobDraft(now: number) {
     ],
     contacts: [],
     isSample: true,
+    isFavorite: false,
     status: "active",
     archivedAt: null,
     reviewItems: [],
@@ -538,6 +539,7 @@ function buildJobProjection(
     company: job.company,
     location: job.location,
     isSample: Boolean(job.isSample),
+    isFavorite: Boolean(job.isFavorite),
     sourceUrl: job.sourceUrl,
     sourceDomain: job.sourceDomain,
     sourceType: job.sourceType,
@@ -734,6 +736,7 @@ async function listProjectedJobsForProfiles(
         company: job.company,
         location: job.location,
         isSample: Boolean(job.isSample),
+        isFavorite: Boolean(job.isFavorite),
         sourceUrl: job.sourceUrl,
         sourceDomain: job.sourceDomain,
         sourceType: job.sourceType,
@@ -855,6 +858,7 @@ export const createOrReuseFromSource = mutation({
       toneCues: [],
       contacts: [],
       isSample: false,
+      isFavorite: false,
       status: draft.status,
       archivedAt: draft.archivedAt,
       reviewItems: [],
@@ -887,6 +891,7 @@ export const getById = query({
       company: v.string(),
       location: v.string(),
       isSample: v.boolean(),
+      isFavorite: v.boolean(),
       sourceUrl: v.string(),
       sourceDomain: v.string(),
       sourceType: v.string(),
@@ -1121,6 +1126,7 @@ export const listForUser = query({
       company: v.string(),
       location: v.string(),
       isSample: v.boolean(),
+      isFavorite: v.boolean(),
       sourceUrl: v.string(),
       sourceDomain: v.string(),
       sourceType: v.string(),
@@ -1164,6 +1170,7 @@ export const loadForUser = mutation({
       company: v.string(),
       location: v.string(),
       isSample: v.boolean(),
+      isFavorite: v.boolean(),
       sourceUrl: v.string(),
       sourceDomain: v.string(),
       sourceType: v.string(),
@@ -1230,6 +1237,45 @@ export const setResumeForJob = mutation({
     await ctx.db.patch(normalizedJobId, {
       lastResumeId: args.resumeId ?? null,
       lastResumeName: args.resumeName ?? null,
+      updatedAt: Date.now(),
+    });
+
+    return null;
+  },
+});
+
+export const setJobFavorite = mutation({
+  args: {
+    jobId: v.string(),
+    isFavorite: v.boolean(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    const profiles = await listProfilesForClerk(ctx, identity.subject);
+    if (profiles.length === 0) {
+      throw new Error("User profile not found");
+    }
+
+    const normalizedJobId = ctx.db.normalizeId("jobs", args.jobId);
+    if (!normalizedJobId) {
+      throw new Error("Invalid jobId");
+    }
+
+    const job = await ctx.db.get(normalizedJobId);
+    if (
+      !job ||
+      !profiles.some((profile) => String(profile._id) === String(job.userId))
+    ) {
+      throw new Error("Job not found");
+    }
+
+    await ctx.db.patch(normalizedJobId, {
+      isFavorite: args.isFavorite,
       updatedAt: Date.now(),
     });
 
@@ -1717,6 +1763,7 @@ export const duplicateJob = mutation({
       ...(job.toneCuesExtraction ? { toneCuesExtraction: job.toneCuesExtraction } : {}),
       contacts: job.contacts ?? [],
       isSample: false,
+      isFavorite: Boolean(job.isFavorite),
       status: job.status,
       archivedAt: null,
       reviewItems: job.reviewItems ?? [],
