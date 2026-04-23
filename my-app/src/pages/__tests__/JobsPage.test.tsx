@@ -1,20 +1,29 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { JobsPage } from "../JobsPage";
 
 const approveReviewItemMock = vi.fn().mockResolvedValue(null);
 const archiveJobMock = vi.fn().mockResolvedValue(null);
+const deleteArchivedJobMock = vi.fn().mockResolvedValue(null);
 const duplicateJobMock = vi.fn().mockResolvedValue({ jobId: "job_duplicate" });
 const markOpenedMock = vi.fn().mockResolvedValue(null);
 const recordFirstRunPathMock = vi.fn().mockResolvedValue(null);
+const restoreArchivedJobMock = vi.fn().mockResolvedValue(null);
 const seedSampleJobMock = vi.fn().mockResolvedValue({ jobId: "job_sample" });
 const setJobFavoriteMock = vi.fn().mockResolvedValue(null);
 const setJobResumeMock = vi.fn().mockResolvedValue(null);
 const trackEventMock = vi.fn().mockResolvedValue(null);
 const updateFieldMock = vi.fn().mockResolvedValue(null);
 const windowOpenMock = vi.fn();
+const showToastMock = vi.fn();
 let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
 const jobsList = [
@@ -57,6 +66,15 @@ const jobsList = [
     lastOpenedAt: 1710002000000,
     lastActivityAt: 1710002000000,
     linkedDocumentCount: 0,
+  },
+];
+
+const archivedJobsList = [
+  {
+    ...jobsList[0],
+    status: "active",
+    updatedAt: 1711004000000,
+    lastActivityAt: 1711004000000,
   },
 ];
 
@@ -135,6 +153,7 @@ const selectedJob = {
 };
 
 let listResult: typeof jobsList | undefined = jobsList;
+let archivedListResult: typeof archivedJobsList | undefined = [];
 let selectedJobResult: typeof selectedJob | null | undefined = selectedJob;
 let listError: Error | null = null;
 vi.mock("convex/react", () => ({
@@ -148,6 +167,9 @@ vi.mock("convex/react", () => ({
         throw listError;
       }
       return listResult;
+    }
+    if (reference === "jobsPublic.listArchivedForUser") {
+      return archivedListResult;
     }
     if (reference === "jobsPublic.getById") {
       if (args === "skip" || !args?.jobId) {
@@ -164,11 +186,17 @@ vi.mock("convex/react", () => ({
     if (reference === "jobsPublic.archiveJob") {
       return archiveJobMock;
     }
+    if (reference === "jobsPublic.deleteArchivedJob") {
+      return deleteArchivedJobMock;
+    }
     if (reference === "jobsPublic.duplicateJob") {
       return duplicateJobMock;
     }
     if (reference === "jobsPublic.recordFirstRunPath") {
       return recordFirstRunPathMock;
+    }
+    if (reference === "jobsPublic.restoreArchivedJob") {
+      return restoreArchivedJobMock;
     }
     if (reference === "jobsPublic.seedSampleJob") {
       return seedSampleJobMock;
@@ -206,9 +234,12 @@ vi.mock("../../../convex/_generated/api", () => ({
       getById: "jobsPublic.getById",
       approveReviewItem: "jobsPublic.approveReviewItem",
       archiveJob: "jobsPublic.archiveJob",
+      deleteArchivedJob: "jobsPublic.deleteArchivedJob",
       duplicateJob: "jobsPublic.duplicateJob",
       recordFirstRunPath: "jobsPublic.recordFirstRunPath",
+      restoreArchivedJob: "jobsPublic.restoreArchivedJob",
       seedSampleJob: "jobsPublic.seedSampleJob",
+      listArchivedForUser: "jobsPublic.listArchivedForUser",
       trackEvent: "jobsPublic.trackEvent",
       markOpened: "jobsPublic.markOpened",
       setResumeForJob: "jobsPublic.setResumeForJob",
@@ -220,7 +251,7 @@ vi.mock("../../../convex/_generated/api", () => ({
 
 vi.mock("../../components/ui/toast", () => ({
   useToast: () => ({
-    showToast: vi.fn(),
+    showToast: showToastMock,
   }),
 }));
 
@@ -243,23 +274,37 @@ function LocationProbe(): JSX.Element {
   );
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((nextResolve, nextReject) => {
+    resolve = nextResolve;
+    reject = nextReject;
+  });
+  return { promise, resolve, reject };
+}
+
 describe("JobsPage", () => {
   beforeEach(() => {
     consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     approveReviewItemMock.mockClear();
     archiveJobMock.mockClear();
+    deleteArchivedJobMock.mockClear();
     duplicateJobMock.mockClear();
     markOpenedMock.mockClear();
     recordFirstRunPathMock.mockClear();
+    restoreArchivedJobMock.mockClear();
     seedSampleJobMock.mockReset();
     seedSampleJobMock.mockResolvedValue({ jobId: "job_sample" });
     setJobFavoriteMock.mockClear();
     setJobResumeMock.mockClear();
+    showToastMock.mockClear();
     trackEventMock.mockClear();
     updateFieldMock.mockClear();
     windowOpenMock.mockReset();
     vi.stubGlobal("open", windowOpenMock);
     listResult = jobsList;
+    archivedListResult = [];
     selectedJobResult = {
       ...selectedJob,
       resumeId: undefined,
@@ -302,22 +347,31 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole("heading", { name: "Jobs" })).toBeInTheDocument();
-    expect((await screen.findAllByText("Operations Associate")).length).toBeGreaterThan(0);
+    expect(
+      await screen.findByRole("heading", { name: "Jobs" }),
+    ).toBeInTheDocument();
+    expect(
+      (await screen.findAllByText("Operations Associate")).length,
+    ).toBeGreaterThan(0);
     expect(await screen.findByText("Support Specialist")).toBeInTheDocument();
     expect(await screen.findByText("Acme · Paris")).toBeInTheDocument();
-    expect(await screen.findByText("Northwind · Location unavailable")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Northwind · Location unavailable"),
+    ).toBeInTheDocument();
     expect(await screen.findByText("Match")).toBeInTheDocument();
     expect(await screen.findByText("Partial · 50%")).toBeInTheDocument();
     expect(await screen.findByText("Weak")).toBeInTheDocument();
     expect(
       (await screen.findAllByText("Cross-functional communication")).length,
     ).toBeGreaterThan(0);
-    expect((await screen.findAllByText("Responsibilities")).length).toBeGreaterThan(0);
-    expect(await screen.findByRole("link", { name: /Open linked proposal Operations Associate cover letter/i })).toHaveAttribute(
-      "href",
-      "/proposal?view=saved&id=proposal_1",
-    );
+    expect(
+      (await screen.findAllByText("Responsibilities")).length,
+    ).toBeGreaterThan(0);
+    expect(
+      await screen.findByRole("link", {
+        name: /Open linked proposal Operations Associate cover letter/i,
+      }),
+    ).toHaveAttribute("href", "/proposal?view=saved&id=proposal_1");
     expect(await screen.findByText("Review state")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Open resume with this job" }),
@@ -326,7 +380,9 @@ describe("JobsPage", () => {
     expect(
       screen.getByRole("button", { name: "Attach a resume" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Add to favorites" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Add to favorites" }),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Open" }),
     ).not.toBeInTheDocument();
@@ -365,7 +421,9 @@ describe("JobsPage", () => {
     });
     expect(markOpenedMock).toHaveBeenCalledWith({ jobId: "job_alpha" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Open resume with this job" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open resume with this job" }),
+    );
 
     await waitFor(() => {
       expect(screen.getByTestId("jobs-location")).toHaveTextContent(
@@ -398,7 +456,9 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(await screen.findByRole("button", { name: "Attach a resume" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Attach a resume" }),
+    );
 
     expect(
       screen.getByRole("dialog", { name: "Attach a resume" }),
@@ -460,8 +520,12 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(await screen.findByRole("button", { name: "Attach a resume" }));
-    fireEvent.click(screen.getByRole("button", { name: "Attach Primary resume" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Attach a resume" }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Attach Primary resume" }),
+    );
 
     await waitFor(() => {
       expect(setJobResumeMock).toHaveBeenCalledWith({
@@ -492,9 +556,13 @@ describe("JobsPage", () => {
     );
 
     fireEvent.click(
-      await screen.findByRole("button", { name: "Attached resume: Primary resume" }),
+      await screen.findByRole("button", {
+        name: "Attached resume: Primary resume",
+      }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Remove attached resume" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Remove attached resume" }),
+    );
 
     await waitFor(() => {
       expect(setJobResumeMock).toHaveBeenCalledWith({
@@ -503,7 +571,9 @@ describe("JobsPage", () => {
         resumeName: null,
       });
     });
-    expect(screen.getByRole("button", { name: "Attach a resume" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Attach a resume" }),
+    ).toBeInTheDocument();
   });
 
   it("marks a job as favorite from the next-step action without navigating away", async () => {
@@ -532,7 +602,9 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole("button", { name: "Add to favorites" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "Add to favorites" }),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Add to favorites" }));
 
@@ -542,7 +614,9 @@ describe("JobsPage", () => {
         isFavorite: true,
       });
     });
-    expect(screen.getByTestId("jobs-location")).toHaveTextContent("/jobs/job_alpha");
+    expect(screen.getByTestId("jobs-location")).toHaveTextContent(
+      "/jobs/job_alpha",
+    );
     expect(screen.getAllByText("Favorite").length).toBeGreaterThan(0);
   });
 
@@ -592,7 +666,9 @@ describe("JobsPage", () => {
       });
     });
     expect(
-      screen.getByRole("button", { name: "Mark Support Specialist as favorite" }),
+      screen.getByRole("button", {
+        name: "Mark Support Specialist as favorite",
+      }),
     ).toHaveAttribute("aria-pressed", "false");
   });
 
@@ -632,7 +708,9 @@ describe("JobsPage", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Support Specialist")).toBeInTheDocument();
-      expect(screen.queryByText("Operations Associate")).not.toBeInTheDocument();
+      expect(
+        screen.queryByText("Operations Associate"),
+      ).not.toBeInTheDocument();
     });
   });
 
@@ -687,7 +765,9 @@ describe("JobsPage", () => {
     );
 
     expect(
-      await screen.findByRole("button", { name: "Attached resume: Primary resume" }),
+      await screen.findByRole("button", {
+        name: "Attached resume: Primary resume",
+      }),
     ).toBeInTheDocument();
   });
 
@@ -724,22 +804,34 @@ describe("JobsPage", () => {
     );
 
     const jobsListElement = await screen.findByRole("list");
-    expect(within(jobsListElement).getByText("Operations Associate")).toBeInTheDocument();
-    expect(within(jobsListElement).getByText("Support Specialist")).toBeInTheDocument();
     expect(
-      within(jobsListElement).getAllByRole("button", { name: /More actions for/i }),
+      within(jobsListElement).getByText("Operations Associate"),
+    ).toBeInTheDocument();
+    expect(
+      within(jobsListElement).getByText("Support Specialist"),
+    ).toBeInTheDocument();
+    expect(
+      within(jobsListElement).getAllByRole("button", {
+        name: /More actions for/i,
+      }),
     ).toHaveLength(2);
 
     fireEvent.click(screen.getByRole("button", { name: "Match Weak" }));
 
     await waitFor(() => {
-      expect(within(jobsListElement).getByText("Support Specialist")).toBeInTheDocument();
-      expect(within(jobsListElement).queryByText("Operations Associate")).not.toBeInTheDocument();
+      expect(
+        within(jobsListElement).getByText("Support Specialist"),
+      ).toBeInTheDocument();
+      expect(
+        within(jobsListElement).queryByText("Operations Associate"),
+      ).not.toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Has docs" }));
 
-    expect(await screen.findByText("No jobs match this search")).toBeInTheDocument();
+    expect(
+      await screen.findByText("No jobs match this search"),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Match Weak" }));
     fireEvent.click(screen.getByRole("button", { name: "All tiers" }));
@@ -747,8 +839,12 @@ describe("JobsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Needs review" }));
 
     await waitFor(() => {
-      expect(within(jobsListElement).getByText("Operations Associate")).toBeInTheDocument();
-      expect(within(jobsListElement).queryByText("Support Specialist")).not.toBeInTheDocument();
+      expect(
+        within(jobsListElement).getByText("Operations Associate"),
+      ).toBeInTheDocument();
+      expect(
+        within(jobsListElement).queryByText("Support Specialist"),
+      ).not.toBeInTheDocument();
     });
   });
 
@@ -779,7 +875,9 @@ describe("JobsPage", () => {
 
   it("archives a job from the row overflow menu and closes the selected detail view", async () => {
     archiveJobMock.mockImplementation(async ({ jobId }: { jobId: string }) => {
+      const archivedJob = jobsList.find((job) => job.id === jobId);
       listResult = jobsList.filter((job) => job.id !== jobId);
+      archivedListResult = archivedJob ? [archivedJob] : [];
       if (selectedJobResult?.id === jobId) {
         selectedJobResult = null;
       }
@@ -822,32 +920,210 @@ describe("JobsPage", () => {
 
     await waitFor(() => {
       expect(archiveJobMock).toHaveBeenCalledWith({ jobId: "job_alpha" });
-      expect(screen.getByTestId("jobs-location")).toHaveTextContent("/jobs?view=list");
+      expect(screen.getByTestId("jobs-location")).toHaveTextContent(
+        "/jobs?view=list",
+      );
+    });
+
+    expect(screen.queryByText("Operations Associate")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Archived" }));
+
+    expect(await screen.findByText("Operations Associate")).toBeInTheDocument();
+  });
+
+  it("renders archived jobs in a dedicated Archived view", async () => {
+    listResult = [jobsList[1]];
+    archivedListResult = archivedJobsList;
+    selectedJobResult = null;
+
+    render(
+      <MemoryRouter initialEntries={["/jobs?view=archived"]}>
+        <Routes>
+          <Route path="/jobs" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByRole("button", { name: "Archived" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("Operations Associate")).toBeInTheDocument();
+    expect(screen.queryByText("Support Specialist")).not.toBeInTheDocument();
+  });
+
+  it("restores an archived job back to the active list", async () => {
+    listResult = [jobsList[1]];
+    archivedListResult = archivedJobsList;
+    selectedJobResult = null;
+    restoreArchivedJobMock.mockImplementation(
+      async ({ jobId }: { jobId: string }) => {
+        const restoredJob = archivedListResult?.find((job) => job.id === jobId);
+        archivedListResult = (archivedListResult ?? []).filter(
+          (job) => job.id !== jobId,
+        );
+        listResult = restoredJob
+          ? [restoredJob, ...(listResult ?? [])]
+          : listResult;
+        return null;
+      },
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/jobs?view=archived"]}>
+        <Routes>
+          <Route
+            path="/jobs"
+            element={
+              <>
+                <JobsPage />
+                <LocationProbe />
+              </>
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const jobsListElement = await screen.findByRole("list");
+    fireEvent.click(
+      within(jobsListElement).getByRole("button", {
+        name: "More actions for Operations Associate",
+      }),
+    );
+    fireEvent.click(screen.getByRole("menuitem", { name: "Restore" }));
+
+    await waitFor(() => {
+      expect(restoreArchivedJobMock).toHaveBeenCalledWith({
+        jobId: "job_alpha",
+      });
+      expect(screen.getByTestId("jobs-location")).toHaveTextContent(
+        "/jobs?view=list",
+      );
+    });
+    expect(await screen.findByText("Operations Associate")).toBeInTheDocument();
+  });
+
+  it("permanently deletes an archived job only after confirmation", async () => {
+    listResult = [jobsList[1]];
+    archivedListResult = archivedJobsList;
+    selectedJobResult = null;
+    deleteArchivedJobMock.mockImplementation(
+      async ({ jobId }: { jobId: string }) => {
+        archivedListResult = (archivedListResult ?? []).filter(
+          (job) => job.id !== jobId,
+        );
+        return null;
+      },
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/jobs?view=archived"]}>
+        <Routes>
+          <Route path="/jobs" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const jobsListElement = await screen.findByRole("list");
+    fireEvent.click(
+      within(jobsListElement).getByRole("button", {
+        name: "More actions for Operations Associate",
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole("menuitem", { name: "Delete permanently" }),
+    );
+    fireEvent.click(screen.getByRole("menuitem", { name: "Confirm delete" }));
+
+    await waitFor(() => {
+      expect(deleteArchivedJobMock).toHaveBeenCalledWith({
+        jobId: "job_alpha",
+      });
+      expect(
+        screen.queryByText("Operations Associate"),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  it("does not expose permanent delete in the active jobs view", async () => {
+    render(
+      <MemoryRouter initialEntries={["/jobs?view=list"]}>
+        <Routes>
+          <Route path="/jobs" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const jobsListElement = await screen.findByRole("list");
+    fireEvent.click(
+      within(jobsListElement).getByRole("button", {
+        name: "More actions for Operations Associate",
+      }),
+    );
+
+    expect(
+      screen.getByRole("menuitem", { name: "Archive" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", { name: "Duplicate" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("menuitem", { name: "Delete permanently" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("surfaces row action mutation failures instead of swallowing them", async () => {
+    archiveJobMock.mockRejectedValueOnce(new Error("Job not found"));
+
+    render(
+      <MemoryRouter initialEntries={["/jobs?view=list"]}>
+        <Routes>
+          <Route path="/jobs" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const jobsListElement = await screen.findByRole("list");
+    fireEvent.click(
+      within(jobsListElement).getByRole("button", {
+        name: "More actions for Operations Associate",
+      }),
+    );
+    fireEvent.click(screen.getByRole("menuitem", { name: "Archive" }));
+
+    await waitFor(() => {
+      expect(showToastMock).toHaveBeenCalledWith("Archive failed", {
+        variant: "error",
+        description: "Job not found",
+      });
     });
   });
 
   it("duplicates a job from the row overflow menu and navigates to the duplicate", async () => {
-    duplicateJobMock.mockImplementation(async ({ jobId }: { jobId: string }) => {
-      const sourceJob = jobsList.find((job) => job.id === jobId)!;
-      listResult = [
-        {
-          ...sourceJob,
+    duplicateJobMock.mockImplementation(
+      async ({ jobId }: { jobId: string }) => {
+        const sourceJob = jobsList.find((job) => job.id === jobId)!;
+        listResult = [
+          {
+            ...sourceJob,
+            id: "job_duplicate",
+            title: `${sourceJob.title} Copy`,
+            importedAt: sourceJob.importedAt + 1,
+            updatedAt: sourceJob.updatedAt + 1,
+            lastOpenedAt: sourceJob.lastOpenedAt + 1,
+            lastActivityAt: sourceJob.lastActivityAt + 1,
+          },
+          ...jobsList,
+        ];
+        selectedJobResult = {
+          ...selectedJob,
           id: "job_duplicate",
-          title: `${sourceJob.title} Copy`,
-          importedAt: sourceJob.importedAt + 1,
-          updatedAt: sourceJob.updatedAt + 1,
-          lastOpenedAt: sourceJob.lastOpenedAt + 1,
-          lastActivityAt: sourceJob.lastActivityAt + 1,
-        },
-        ...jobsList,
-      ];
-      selectedJobResult = {
-        ...selectedJob,
-        id: "job_duplicate",
-        title: "Operations Associate Copy",
-      };
-      return { jobId: "job_duplicate" };
-    });
+          title: "Operations Associate Copy",
+        };
+        return { jobId: "job_duplicate" };
+      },
+    );
 
     render(
       <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
@@ -885,7 +1161,86 @@ describe("JobsPage", () => {
 
     await waitFor(() => {
       expect(duplicateJobMock).toHaveBeenCalledWith({ jobId: "job_alpha" });
-      expect(screen.getByTestId("jobs-location")).toHaveTextContent("/jobs/job_duplicate");
+      expect(screen.getByTestId("jobs-location")).toHaveTextContent(
+        "/jobs/job_duplicate",
+      );
+    });
+  });
+
+  it("does not render the duplicate row before duplicate navigation completes", async () => {
+    const duplicateDeferred = createDeferred<{ jobId: string }>();
+    duplicateJobMock.mockImplementation(
+      async ({ jobId }: { jobId: string }) => {
+        const sourceJob = jobsList.find((job) => job.id === jobId)!;
+        listResult = [
+          {
+            ...sourceJob,
+            id: "job_duplicate",
+            title: `${sourceJob.title} Copy`,
+            importedAt: sourceJob.importedAt + 1,
+            updatedAt: sourceJob.updatedAt + 1,
+            lastOpenedAt: sourceJob.lastOpenedAt + 1,
+            lastActivityAt: sourceJob.lastActivityAt + 1,
+          },
+          ...jobsList,
+        ];
+        return duplicateDeferred.promise;
+      },
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <Routes>
+          <Route
+            path="/jobs/:jobId"
+            element={
+              <>
+                <JobsPage />
+                <LocationProbe />
+              </>
+            }
+          />
+          <Route
+            path="/jobs"
+            element={
+              <>
+                <JobsPage />
+                <LocationProbe />
+              </>
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const jobsListElement = await screen.findByRole("list");
+    fireEvent.click(
+      within(jobsListElement).getByRole("button", {
+        name: "More actions for Operations Associate",
+      }),
+    );
+    fireEvent.click(screen.getByRole("menuitem", { name: "Duplicate" }));
+
+    await waitFor(() => {
+      expect(duplicateJobMock).toHaveBeenCalledWith({ jobId: "job_alpha" });
+    });
+
+    expect(screen.getByTestId("jobs-location")).toHaveTextContent(
+      "/jobs/job_alpha",
+    );
+    expect(
+      within(jobsListElement).queryAllByText("Operations Associate Copy"),
+    ).toHaveLength(0);
+
+    duplicateDeferred.resolve({ jobId: "job_duplicate" });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("jobs-location")).toHaveTextContent(
+        "/jobs/job_duplicate",
+      );
+      expect(
+        within(screen.getByRole("list")).getByText("Operations Associate Copy"),
+      ).toBeInTheDocument();
     });
   });
 
@@ -902,12 +1257,18 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText("Start with one job decision")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Start with one job decision"),
+    ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Import your first job" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Import your first job" }),
+    );
 
     await waitFor(() => {
-      expect(screen.getByTestId("jobs-location")).toHaveTextContent("/proposal");
+      expect(screen.getByTestId("jobs-location")).toHaveTextContent(
+        "/proposal",
+      );
     });
     const locationState = JSON.parse(
       screen.getByTestId("jobs-location").dataset.state ?? "null",
@@ -918,7 +1279,9 @@ describe("JobsPage", () => {
         jobImportFocus: "supported-sites",
       }),
     );
-    expect(locationState.proposalWorkspaceResetToken).toEqual(expect.any(String));
+    expect(locationState.proposalWorkspaceResetToken).toEqual(
+      expect.any(String),
+    );
     expect(recordFirstRunPathMock).toHaveBeenCalledWith({ path: "import" });
   });
 
@@ -994,7 +1357,9 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText("Start with one job decision")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Start with one job decision"),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Try a sample job" }));
 
@@ -1015,7 +1380,9 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText("Jobs backend is out of sync")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Jobs backend is out of sync"),
+    ).toBeInTheDocument();
     expect(
       screen.getByText(/Start or restart the local Convex dev server/i),
     ).toBeInTheDocument();
