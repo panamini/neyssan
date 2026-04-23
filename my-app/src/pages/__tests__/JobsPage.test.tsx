@@ -233,7 +233,14 @@ vi.mock("../../contexts/CvLibraryContext", () => ({
 
 function LocationProbe(): JSX.Element {
   const location = useLocation();
-  return <div data-testid="jobs-location">{`${location.pathname}${location.search}`}</div>;
+  return (
+    <div
+      data-testid="jobs-location"
+      data-state={JSON.stringify(location.state ?? null)}
+    >
+      {`${location.pathname}${location.search}`}
+    </div>
+  );
 }
 
 describe("JobsPage", () => {
@@ -882,7 +889,7 @@ describe("JobsPage", () => {
     });
   });
 
-  it("shows the first-run panel and routes import clicks into the existing parse flow", async () => {
+  it("shows the first-run panel and routes import clicks directly to Capture the role", async () => {
     listResult = [];
     selectedJobResult = null;
 
@@ -902,6 +909,16 @@ describe("JobsPage", () => {
     await waitFor(() => {
       expect(screen.getByTestId("jobs-location")).toHaveTextContent("/proposal");
     });
+    const locationState = JSON.parse(
+      screen.getByTestId("jobs-location").dataset.state ?? "null",
+    );
+    expect(locationState).toEqual(
+      expect.objectContaining({
+        proposalEntryIntent: "cover-letter-start",
+        jobImportFocus: "supported-sites",
+      }),
+    );
+    expect(locationState.proposalWorkspaceResetToken).toEqual(expect.any(String));
     expect(recordFirstRunPathMock).toHaveBeenCalledWith({ path: "import" });
   });
 
