@@ -6,6 +6,7 @@ import {
   ArrowSquareOut,
   ArrowLeft,
   ClipboardText,
+  DotsThree,
   FileText,
   Plus,
 } from "@/lib/icons";
@@ -298,6 +299,8 @@ function JobsPageContent(): JSX.Element {
   const [selectedJobRecord, setSelectedJobRecord] =
     React.useState<JobsPageDetail | undefined>(undefined);
   const lastMarkedJobIdRef = React.useRef<string | null>(null);
+  const rowMenuRef = React.useRef<HTMLDivElement | null>(null);
+  const [openRowMenuJobId, setOpenRowMenuJobId] = React.useState<string | null>(null);
 
   const jobsLoadReference = React.useMemo(
     () => ((api as any).jobsPublic?.loadForUser ?? "jobsPublic.loadForUser") as any,
@@ -332,6 +335,33 @@ function JobsPageContent(): JSX.Element {
       window.removeEventListener("resize", handleResize);
     };
   }, []);
+
+  React.useEffect(() => {
+    if (!openRowMenuJobId) {
+      return undefined;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (target && !rowMenuRef.current?.contains(target)) {
+        setOpenRowMenuJobId(null);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpenRowMenuJobId(null);
+      }
+    };
+
+    window.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("keydown", handleEscape);
+
+    return () => {
+      window.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [openRowMenuJobId]);
 
   React.useEffect(() => {
     if (!isLoaded || !isSignedIn || !isConvexAuthenticated) {
@@ -694,6 +724,19 @@ function JobsPageContent(): JSX.Element {
     [selectedJobId, updateJobField],
   );
 
+  const handleOpenJobSource = React.useCallback((sourceUrl: string) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const nextUrl = String(sourceUrl ?? "").trim();
+    if (!nextUrl) {
+      return;
+    }
+
+    window.open(nextUrl, "_blank", "noopener");
+  }, []);
+
   const authStatusMessage = !isLoaded || isConvexAuthLoading
     ? "Loading…"
     : !isSignedIn || !isConvexAuthenticated
@@ -896,6 +939,7 @@ function JobsPageContent(): JSX.Element {
                     const reviewState =
                       optimisticReviewStateById[job.id] ?? job.reviewState;
                     const matchLabel = resolveMatchTierLabel(job.matchTier);
+                    const isRowMenuOpen = openRowMenuJobId === job.id;
 
                     return (
                       <article
@@ -933,17 +977,82 @@ function JobsPageContent(): JSX.Element {
                             ) : null}
                           </div>
                         </div>
-                        <button
-                          type="button"
-                          className="dasti-button dasti-button--pill dasti-button--sm dasti-jobs-row__open"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void navigate(buildJobsRoute(job.id));
-                          }}
-                          aria-current={isActive ? "page" : undefined}
+                        <div
+                          ref={isRowMenuOpen ? rowMenuRef : null}
+                          className="dasti-import-dropdown dasti-jobs-row__menu"
+                          data-open={isRowMenuOpen ? "true" : "false"}
                         >
-                          Open
-                        </button>
+                          <button
+                            type="button"
+                            className="dasti-icon-button dasti-jobs-row__menu-trigger"
+                            aria-label={`More actions for ${title}`}
+                            aria-expanded={isRowMenuOpen}
+                            aria-haspopup="menu"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setOpenRowMenuJobId((current) =>
+                                current === job.id ? null : job.id,
+                              );
+                            }}
+                          >
+                            <DotsThree size={16} strokeWidth={1.7} aria-hidden="true" />
+                          </button>
+                          {isRowMenuOpen ? (
+                            <div
+                              className="dasti-import-dropdown__menu dasti-import-dropdown__menu--compact dasti-toolbar-drawer-surface dasti-jobs-row__menu-surface"
+                              role="menu"
+                              aria-label={`Actions for ${title}`}
+                            >
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="dasti-cv-style-presets__option"
+                                disabled={!job.sourceUrl}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setOpenRowMenuJobId(null);
+                                  handleOpenJobSource(job.sourceUrl);
+                                }}
+                              >
+                                <span className="dasti-cv-style-presets__option-copy">
+                                  <span className="dasti-cv-style-presets__option-title">
+                                    Open source
+                                  </span>
+                                </span>
+                              </button>
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="dasti-cv-style-presets__option"
+                                disabled
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                }}
+                              >
+                                <span className="dasti-cv-style-presets__option-copy">
+                                  <span className="dasti-cv-style-presets__option-title">
+                                    Archive
+                                  </span>
+                                </span>
+                              </button>
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="dasti-cv-style-presets__option"
+                                disabled
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                }}
+                              >
+                                <span className="dasti-cv-style-presets__option-copy">
+                                  <span className="dasti-cv-style-presets__option-title">
+                                    Duplicate
+                                  </span>
+                                </span>
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
                       </article>
                     );
                   })}

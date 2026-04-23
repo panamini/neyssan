@@ -8,6 +8,7 @@ const approveReviewItemMock = vi.fn().mockResolvedValue(null);
 const loadForUserMock = vi.fn();
 const markOpenedMock = vi.fn().mockResolvedValue(null);
 const updateFieldMock = vi.fn().mockResolvedValue(null);
+const windowOpenMock = vi.fn();
 let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
 const jobsList = [
@@ -190,6 +191,8 @@ describe("JobsPage", () => {
     });
     markOpenedMock.mockClear();
     updateFieldMock.mockClear();
+    windowOpenMock.mockReset();
+    vi.stubGlobal("open", windowOpenMock);
     listResult = jobsList;
     selectedJobResult = selectedJob;
     listError = null;
@@ -230,6 +233,9 @@ describe("JobsPage", () => {
     expect(
       screen.getByRole("button", { name: "Open resume with this job" }),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Open" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Do both" }),
     ).not.toBeInTheDocument();
@@ -301,6 +307,9 @@ describe("JobsPage", () => {
     const jobsListElement = await screen.findByRole("list");
     expect(within(jobsListElement).getByText("Operations Associate")).toBeInTheDocument();
     expect(within(jobsListElement).getByText("Support Specialist")).toBeInTheDocument();
+    expect(
+      within(jobsListElement).getAllByRole("button", { name: /More actions for/i }),
+    ).toHaveLength(2);
 
     fireEvent.click(screen.getByRole("button", { name: "Match Weak" }));
 
@@ -322,6 +331,31 @@ describe("JobsPage", () => {
       expect(within(jobsListElement).getByText("Operations Associate")).toBeInTheDocument();
       expect(within(jobsListElement).queryByText("Support Specialist")).not.toBeInTheDocument();
     });
+  });
+
+  it("opens the source URL from the row overflow menu", async () => {
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const jobsListElement = await screen.findByRole("list");
+    fireEvent.click(
+      within(jobsListElement).getByRole("button", {
+        name: "More actions for Operations Associate",
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("menuitem", { name: "Open source" }));
+
+    expect(windowOpenMock).toHaveBeenCalledWith(
+      "https://www.linkedin.com/jobs/view/alpha",
+      "_blank",
+      "noopener",
+    );
   });
 
   it("shows the guided empty state when no jobs are saved", async () => {
