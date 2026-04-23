@@ -10,6 +10,7 @@ const duplicateJobMock = vi.fn().mockResolvedValue({ jobId: "job_duplicate" });
 const markOpenedMock = vi.fn().mockResolvedValue(null);
 const recordFirstRunPathMock = vi.fn().mockResolvedValue(null);
 const seedSampleJobMock = vi.fn().mockResolvedValue({ jobId: "job_sample" });
+const setJobFavoriteMock = vi.fn().mockResolvedValue(null);
 const setJobResumeMock = vi.fn().mockResolvedValue(null);
 const trackEventMock = vi.fn().mockResolvedValue(null);
 const updateFieldMock = vi.fn().mockResolvedValue(null);
@@ -23,6 +24,7 @@ const jobsList = [
     company: "Acme",
     location: "Paris",
     isSample: false,
+    isFavorite: false,
     sourceUrl: "https://www.linkedin.com/jobs/view/alpha",
     sourceDomain: "linkedin.com",
     sourceType: "linkedin",
@@ -42,6 +44,7 @@ const jobsList = [
     company: "Northwind",
     location: "",
     isSample: false,
+    isFavorite: true,
     sourceUrl: "https://www.indeed.com/viewjob?jk=beta",
     sourceDomain: "indeed.com",
     sourceType: "indeed",
@@ -63,6 +66,7 @@ const selectedJob = {
   company: "Acme",
   location: "Paris",
   isSample: false,
+  isFavorite: false,
   sourceUrl: "https://www.linkedin.com/jobs/view/alpha",
   sourceDomain: "linkedin.com",
   sourceType: "linkedin",
@@ -178,6 +182,9 @@ vi.mock("convex/react", () => ({
     if (reference === "jobsPublic.setResumeForJob") {
       return setJobResumeMock;
     }
+    if (reference === "jobsPublic.setJobFavorite") {
+      return setJobFavoriteMock;
+    }
     if (reference === "jobsPublic.updateField") {
       return updateFieldMock;
     }
@@ -205,6 +212,7 @@ vi.mock("../../../convex/_generated/api", () => ({
       trackEvent: "jobsPublic.trackEvent",
       markOpened: "jobsPublic.markOpened",
       setResumeForJob: "jobsPublic.setResumeForJob",
+      setJobFavorite: "jobsPublic.setJobFavorite",
       updateField: "jobsPublic.updateField",
     },
   },
@@ -238,6 +246,7 @@ describe("JobsPage", () => {
     recordFirstRunPathMock.mockClear();
     seedSampleJobMock.mockReset();
     seedSampleJobMock.mockResolvedValue({ jobId: "job_sample" });
+    setJobFavoriteMock.mockClear();
     setJobResumeMock.mockClear();
     trackEventMock.mockClear();
     updateFieldMock.mockClear();
@@ -249,6 +258,7 @@ describe("JobsPage", () => {
       resumeId: undefined,
       resumeName: undefined,
       resumeSource: undefined,
+      isFavorite: false,
     };
     listError = null;
   });
@@ -309,7 +319,7 @@ describe("JobsPage", () => {
     expect(
       screen.getByRole("button", { name: "Attach a resume" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Save for later" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add to favorites" })).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Open" }),
     ).not.toBeInTheDocument();
@@ -489,7 +499,7 @@ describe("JobsPage", () => {
     expect(screen.getByRole("button", { name: "Attach a resume" })).toBeInTheDocument();
   });
 
-  it("closes to list view when save for later is selected", async () => {
+  it("marks a job as favorite from the next-step action without navigating away", async () => {
     render(
       <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
         <Routes>
@@ -515,19 +525,107 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole("button", { name: "Save for later" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Add to favorites" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Save for later" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to favorites" }));
 
     await waitFor(() => {
-      expect(screen.getByTestId("jobs-location")).toHaveTextContent("/jobs?view=list");
+      expect(setJobFavoriteMock).toHaveBeenCalledWith({
+        jobId: "job_alpha",
+        isFavorite: true,
+      });
     });
-    expect(trackEventMock).toHaveBeenCalledWith({
-      event: "job_decision_made",
-      jobId: "job_alpha",
-      outcome: "save_for_later",
-      timeToDecisionMs: expect.any(Number),
-      tier: "partial",
+    expect(screen.getByTestId("jobs-location")).toHaveTextContent("/jobs/job_alpha");
+    expect(screen.getAllByText("Favorite").length).toBeGreaterThan(0);
+  });
+
+  it("toggles favorite on from the jobs list row", async () => {
+    render(
+      <MemoryRouter initialEntries={["/jobs?view=list"]}>
+        <Routes>
+          <Route path="/jobs" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Mark Operations Associate as favorite",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(setJobFavoriteMock).toHaveBeenCalledWith({
+        jobId: "job_alpha",
+        isFavorite: true,
+      });
+    });
+    expect(screen.getAllByText("Favorite").length).toBeGreaterThan(0);
+  });
+
+  it("toggles favorite off from the jobs list row", async () => {
+    render(
+      <MemoryRouter initialEntries={["/jobs?view=list"]}>
+        <Routes>
+          <Route path="/jobs" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Remove Support Specialist from favorites",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(setJobFavoriteMock).toHaveBeenCalledWith({
+        jobId: "job_beta",
+        isFavorite: false,
+      });
+    });
+    expect(
+      screen.getByRole("button", { name: "Mark Support Specialist as favorite" }),
+    ).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("rehydrates favorite state from JobsPage query results", async () => {
+    listResult = jobsList.map((job) =>
+      job.id === "job_alpha" ? { ...job, isFavorite: true } : job,
+    );
+    selectedJobResult = {
+      ...selectedJob,
+      isFavorite: true,
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByRole("button", { name: "Remove job from favorites" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getAllByText("Favorite").length).toBeGreaterThan(0);
+  });
+
+  it("filters favorites to favorited jobs only", async () => {
+    render(
+      <MemoryRouter initialEntries={["/jobs?view=list"]}>
+        <Routes>
+          <Route path="/jobs" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Favorites" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Support Specialist")).toBeInTheDocument();
+      expect(screen.queryByText("Operations Associate")).not.toBeInTheDocument();
     });
   });
 
