@@ -388,6 +388,7 @@ export function ProposalPreview() {
     const platform = detectPlatform(window.location.href);
     let urlPollId: number | null = null;
     let scrapeRetryIds: number[] = [];
+    let authRetryIds: number[] = [];
     let mutationObserver: MutationObserver | null = null;
     let observerTimeoutId: number | null = null;
     let observerDebounceId: number | null = null;
@@ -461,6 +462,14 @@ export function ProposalPreview() {
       refreshActiveCvSnapshot();
     });
     syncAuthFromBackgroundSilently("content-mount");
+    authRetryIds = [300, 1000, 2500].map((delay) =>
+      window.setTimeout(() => {
+        void applyStoredAuthSnapshot().then(() => {
+          refreshActiveCvSnapshot();
+          syncAuthFromBackgroundSilently(`content-auth-retry-${delay}`);
+        });
+      }, delay),
+    );
 
     chrome.storage.local.get([USE_CURRENT_CV_CONTEXT_STORAGE_KEY], (result) => {
       setUseCurrentCvContext(Boolean(result?.[USE_CURRENT_CV_CONTEXT_STORAGE_KEY]));
@@ -515,6 +524,7 @@ export function ProposalPreview() {
       chrome.storage.onChanged.removeListener(updateAuth);
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      authRetryIds.forEach((id) => window.clearTimeout(id));
       scrapeRetryIds.forEach((id) => window.clearTimeout(id));
       mutationObserver?.disconnect();
       if (observerTimeoutId !== null) {
