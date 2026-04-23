@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildCanonicalJobDraftFromSource,
   flattenExtractionValues,
+  resolveReparsedLocation,
   resolveReviewItemsAfterFieldUpdate,
 } from "../canonicalJobs";
 
@@ -96,5 +97,77 @@ describe("canonicalJobs", () => {
     expect(draft.summary).toContain("Coordinator");
     expect(draft.summaryExtraction.confidence).toBeLessThan(0.5);
     expect(Array.isArray(draft.reviewItems)).toBe(true);
+  });
+
+  it("extracts office-based locations across supported languages", () => {
+    const examples = [
+      {
+        title: "Operations Associate",
+        rawDescription:
+          "Studio North is hiring an Operations Associate in Paris. Coordinate recurring launches.",
+        expectedLocation: "Paris",
+      },
+      {
+        title: "Diseñador/A Gráfico",
+        rawDescription:
+          "Buscamos incorporar una persona creativa para liderar la identidad visual. Oficina en Las Rozas de Madrid. Requisitos adicionales incorporación inmediata.",
+        expectedLocation: "Las Rozas de Madrid",
+      },
+      {
+        title: "Chef de Projet",
+        rawDescription:
+          "Poste basé à Lyon avec coordination des équipes produit et opérations.",
+        expectedLocation: "Lyon",
+      },
+      {
+        title: "Projektmanager",
+        rawDescription:
+          "Standort in Berlin mit Verantwortung für operative Abläufe und Lieferanten.",
+        expectedLocation: "Berlin",
+      },
+      {
+        title: "Responsabile Operativo",
+        rawDescription:
+          "Ruolo con sede a Milano per coordinare i flussi interni e la documentazione.",
+        expectedLocation: "Milano",
+      },
+      {
+        title: "Coordenador de Operações",
+        rawDescription:
+          "Vaga com escritório em Lisboa para apoiar processos, documentação e equipas.",
+        expectedLocation: "Lisboa",
+      },
+    ] as const;
+
+    for (const example of examples) {
+      const draft = buildCanonicalJobDraftFromSource({
+        title: example.title,
+        rawDescription: example.rawDescription,
+      });
+
+      expect(draft.location).toBe(example.expectedLocation);
+    }
+  });
+
+  it("preserves a stored location when re-parse no longer finds a location cue", () => {
+    const originalDraft = buildCanonicalJobDraftFromSource({
+      title: "Operations Associate",
+      rawDescription:
+        "Studio North is hiring an Operations Associate in Paris. Coordinate recurring launches.",
+    });
+    const reparsedDraft = buildCanonicalJobDraftFromSource({
+      title: "Operations Associate",
+      rawDescription:
+        "Studio North is hiring an Operations Associate. Coordinate recurring launches.",
+    });
+
+    expect(originalDraft.location).toBe("Paris");
+    expect(reparsedDraft.location).toBe("");
+    expect(
+      resolveReparsedLocation({
+        existingLocation: originalDraft.location,
+        parsedLocation: reparsedDraft.location,
+      }),
+    ).toBe("Paris");
   });
 });
