@@ -33,11 +33,13 @@ type JobsPageListItem = {
   id: string;
   title: string;
   company: string;
+  location: string;
   sourceUrl: string;
   sourceDomain: string;
   sourceType: string;
   parseStatus: string;
   reviewState: string;
+  matchTier: "strong" | "partial" | "weak" | "unknown";
   status: string;
   importedAt: number;
   updatedAt: number;
@@ -110,7 +112,7 @@ type JobsPageDetail = {
 } | null;
 
 type JobsSortOrder = "recent" | "oldest" | "title" | "company";
-type JobsTrustFilter = "all" | "needs_review" | "ready" | "attention";
+type JobsMatchFilter = "all" | "strong" | "partial" | "weak" | "unknown";
 
 function isMissingJobsFunctionError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error ?? "");
@@ -200,41 +202,34 @@ class JobsPageRuntimeBoundary extends React.Component<
   }
 }
 
-function resolveJobsTrustLabel(args: {
-  parseStatus?: string | null;
-  reviewState?: string | null;
-}): string {
-  if (args.parseStatus === "failed") {
-    return "Needs attention";
-  }
-  if (args.reviewState === "ready") {
-    return "Ready";
-  }
-  if (args.reviewState === "needs_review") {
-    return "Needs review";
-  }
-  if (args.parseStatus === "parsed") {
-    return "Parsed";
-  }
-  return "Imported";
-}
-
-function matchesTrustFilter(
+function matchesListFilters(
   job: JobsPageListItem,
-  filter: JobsTrustFilter,
+  matchFilter: JobsMatchFilter,
+  hasDocsOnly: boolean,
+  needsReviewOnly: boolean,
   optimisticReviewState?: string,
 ): boolean {
   const reviewState = optimisticReviewState ?? job.reviewState;
-  if (filter === "all") {
-    return true;
+  if (matchFilter !== "all" && job.matchTier !== matchFilter) {
+    return false;
   }
-  if (filter === "needs_review") {
-    return reviewState === "needs_review";
+  if (hasDocsOnly && job.linkedDocumentCount === 0) {
+    return false;
   }
-  if (filter === "ready") {
-    return reviewState === "ready";
+  if (needsReviewOnly && reviewState !== "needs_review") {
+    return false;
   }
-  return job.parseStatus === "failed";
+  return true;
+}
+
+function resolveMatchTierLabel(
+  tier: JobsPageListItem["matchTier"],
+): string {
+  if (tier === "unknown") {
+    return "—";
+  }
+
+  return tier.charAt(0).toUpperCase() + tier.slice(1);
 }
 
 function resolveOptimisticReviewState(
@@ -287,8 +282,10 @@ function JobsPageContent(): JSX.Element {
     typeof window === "undefined" ? 1440 : window.innerWidth,
   );
   const [searchQuery, setSearchQuery] = React.useState("");
-  const [trustFilter, setTrustFilter] =
-    React.useState<JobsTrustFilter>("all");
+  const [matchFilter, setMatchFilter] =
+    React.useState<JobsMatchFilter>("all");
+  const [hasDocsOnly, setHasDocsOnly] = React.useState(false);
+  const [needsReviewOnly, setNeedsReviewOnly] = React.useState(false);
   const [sortOrder, setSortOrder] = React.useState<JobsSortOrder>("recent");
   const [optimisticActivityById, setOptimisticActivityById] =
     React.useState<Record<string, number>>({});
@@ -440,9 +437,11 @@ function JobsPageContent(): JSX.Element {
     const normalizedQuery = searchQuery.trim().toLowerCase();
     const baseList = [...(jobs ?? [])]
       .filter((job) =>
-        matchesTrustFilter(
+        matchesListFilters(
           job,
-          trustFilter,
+          matchFilter,
+          hasDocsOnly,
+          needsReviewOnly,
           optimisticReviewStateById[job.id],
         ),
       )
@@ -488,9 +487,11 @@ function JobsPageContent(): JSX.Element {
     jobs,
     optimisticActivityById,
     optimisticReviewStateById,
+    hasDocsOnly,
+    matchFilter,
+    needsReviewOnly,
     searchQuery,
     sortOrder,
-    trustFilter,
   ]);
 
   const isMobileJobsLayout = viewportWidth < 760;
@@ -794,22 +795,6 @@ function JobsPageContent(): JSX.Element {
                   />
                 </label>
                 <label className="dasti-jobs-toolbar__select">
-                  <span className="sr-only">Filter jobs by trust</span>
-                  <select
-                    value={trustFilter}
-                    onChange={(event) =>
-                      setTrustFilter(event.target.value as JobsTrustFilter)
-                    }
-                    aria-label="Filter jobs by trust"
-                    className="dasti-select dasti-select--sm"
-                  >
-                    <option value="all">All trust states</option>
-                    <option value="needs_review">Needs review</option>
-                    <option value="ready">Ready</option>
-                    <option value="attention">Needs attention</option>
-                  </select>
-                </label>
-                <label className="dasti-jobs-toolbar__select">
                   <span className="sr-only">Sort jobs</span>
                   <select
                     value={sortOrder}
@@ -831,6 +816,61 @@ function JobsPageContent(): JSX.Element {
                     : `${filteredJobs.length} of ${jobs?.length ?? 0}`}
                 </span>
               </div>
+              <div className="dasti-jobs-filter-chips" aria-label="Job filters">
+                <button
+                  type="button"
+                  className={[
+                    "dasti-jobs-filter-chip",
+                    matchFilter === "all" ? "dasti-jobs-filter-chip--active" : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  onClick={() => setMatchFilter("all")}
+                >
+                  All tiers
+                </button>
+                {(["strong", "partial", "weak", "unknown"] as const).map((tier) => (
+                  <button
+                    key={tier}
+                    type="button"
+                    className={[
+                      "dasti-jobs-filter-chip",
+                      matchFilter === tier ? "dasti-jobs-filter-chip--active" : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    onClick={() => setMatchFilter(tier)}
+                  >
+                    {tier === "unknown"
+                      ? "Match —"
+                      : `Match ${resolveMatchTierLabel(tier)}`}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className={[
+                    "dasti-jobs-filter-chip",
+                    hasDocsOnly ? "dasti-jobs-filter-chip--active" : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  onClick={() => setHasDocsOnly((current) => !current)}
+                >
+                  Has docs
+                </button>
+                <button
+                  type="button"
+                  className={[
+                    "dasti-jobs-filter-chip",
+                    needsReviewOnly ? "dasti-jobs-filter-chip--active" : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  onClick={() => setNeedsReviewOnly((current) => !current)}
+                >
+                  Needs review
+                </button>
+              </div>
 
               {filteredJobs.length === 0 ? (
                 <div className="dasti-empty-state dasti-empty-state--panel">
@@ -845,21 +885,17 @@ function JobsPageContent(): JSX.Element {
               ) : (
                 <div className="dasti-jobs-list" role="list">
                   {filteredJobs.map((job) => {
-                    const trustLabel = resolveJobsTrustLabel({
-                      parseStatus: job.parseStatus,
-                      reviewState: optimisticReviewStateById[job.id] ?? job.reviewState,
-                    });
-                    const sourceLabel =
-                      getProposalSourceLabel(job.sourceType, job.sourceUrl) ??
-                      job.sourceDomain ??
-                      "Imported source";
                     const isActive = job.id === selectedJobId;
                     const title = job.title.trim() || "Untitled job";
                     const company = job.company.trim() || "Unknown company";
+                    const location = job.location.trim();
                     const lastActivityLabel =
                       formatUiDate(
                         optimisticActivityById[job.id] ?? job.lastActivityAt,
                       ) ?? "Recent";
+                    const reviewState =
+                      optimisticReviewStateById[job.id] ?? job.reviewState;
+                    const matchLabel = resolveMatchTierLabel(job.matchTier);
 
                     return (
                       <article
@@ -871,28 +907,39 @@ function JobsPageContent(): JSX.Element {
                           .filter(Boolean)
                           .join(" ")}
                         role="listitem"
+                        onClick={() => void navigate(buildJobsRoute(job.id))}
                       >
                         <div className="dasti-jobs-row__copy">
                           <div className="dasti-jobs-row__title">{title}</div>
-                          <div className="dasti-jobs-row__company">{company}</div>
-                          <div className="dasti-jobs-row__meta">
-                            <span>{sourceLabel}</span>
-                            <span>·</span>
-                            <span>{trustLabel}</span>
+                          <div className="dasti-jobs-row__company">
+                            {company}
+                            {location ? ` · ${location}` : ""}
                           </div>
                           <div className="dasti-jobs-row__meta">
-                            <span>Last activity {lastActivityLabel}</span>
-                            <span>·</span>
-                            <span>
-                              {job.linkedDocumentCount} linked document
-                              {job.linkedDocumentCount === 1 ? "" : "s"}
+                            <span className="dasti-jobs-match-chip">
+                              {matchLabel}
                             </span>
+                            <span className="dasti-jobs-row__meta-pill">
+                              <FileText size={12} strokeWidth={1.7} aria-hidden="true" />
+                              <span>{job.linkedDocumentCount}</span>
+                            </span>
+                            <span>Last activity {lastActivityLabel}</span>
+                            {reviewState === "needs_review" ? (
+                              <span
+                                className="dasti-jobs-review-dot"
+                                aria-label="Needs review"
+                                title="Needs review"
+                              />
+                            ) : null}
                           </div>
                         </div>
                         <button
                           type="button"
                           className="dasti-button dasti-button--pill dasti-button--sm dasti-jobs-row__open"
-                          onClick={() => void navigate(buildJobsRoute(job.id))}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void navigate(buildJobsRoute(job.id));
+                          }}
                           aria-current={isActive ? "page" : undefined}
                         >
                           Open
