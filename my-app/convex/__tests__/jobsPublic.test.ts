@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { listForUser, setJobFavorite } from "../jobsPublic";
+import {
+  archiveJob,
+  deleteArchivedJob,
+  duplicateJob,
+  getById,
+  listArchivedForUser,
+  listForUser,
+  restoreArchivedJob,
+  setJobFavorite,
+} from "../jobsPublic";
 
 describe("jobsPublic.listForUser", () => {
   it("returns jobs across linked profiles without reading active CV state", async () => {
@@ -82,7 +91,9 @@ describe("jobsPublic.listForUser", () => {
                   const clerkId = buildIndex(scope);
                   return {
                     collect: async () =>
-                      linkedProfiles.filter((profile) => profile.clerkId === clerkId),
+                      linkedProfiles.filter(
+                        (profile) => profile.clerkId === clerkId,
+                      ),
                   };
                 },
               };
@@ -105,7 +116,8 @@ describe("jobsPublic.listForUser", () => {
                       expect(direction).toBe("desc");
                       return this;
                     },
-                    collect: async () => jobsByProfileId.get(scope.values[0]) ?? [],
+                    collect: async () =>
+                      jobsByProfileId.get(scope.values[0]) ?? [],
                   };
                 },
               };
@@ -267,7 +279,9 @@ describe("jobsPublic.listForUser", () => {
                   const clerkId = buildIndex(scope);
                   return {
                     collect: async () =>
-                      linkedProfiles.filter((profile) => profile.clerkId === clerkId),
+                      linkedProfiles.filter(
+                        (profile) => profile.clerkId === clerkId,
+                      ),
                   };
                 },
               };
@@ -288,7 +302,8 @@ describe("jobsPublic.listForUser", () => {
                     order() {
                       return this;
                     },
-                    collect: async () => jobsByProfileId.get(scope.values[0]) ?? [],
+                    collect: async () =>
+                      jobsByProfileId.get(scope.values[0]) ?? [],
                   };
                 },
               };
@@ -332,6 +347,674 @@ describe("jobsPublic.listForUser", () => {
   });
 });
 
+describe("jobsPublic.getById", () => {
+  it("does not fall back to owner profile scoring when the attached resume cannot be resolved", async () => {
+    const linkedProfiles = [
+      {
+        _id: "profile_primary",
+        _creationTime: 100,
+        profileId: "cv_primary",
+        clerkId: "clerk_123",
+        updatedAt: 100,
+        createdAt: 100,
+        version: 1,
+        skills: ["Airtable"],
+        keywords: ["Program management"],
+        email: "primary@example.com",
+      },
+    ];
+    const job = {
+      _id: "job_unresolved_resume",
+      _creationTime: 100,
+      userId: "profile_primary",
+      title: "Operations job",
+      company: "Acme",
+      location: "Remote",
+      isSample: false,
+      isFavorite: false,
+      sourceUrl: "https://example.com/job",
+      sourceDomain: "example.com",
+      sourceType: "manual",
+      applicationUrl: "",
+      parseStatus: "parsed",
+      parseVersion: "v1b",
+      reviewState: "ready",
+      status: "active",
+      importedAt: 100,
+      updatedAt: 100,
+      lastOpenedAt: 100,
+      archivedAt: null,
+      lastResumeId: "cv_missing",
+      lastResumeName: "Deleted resume",
+      rawDescription: "Requires Airtable and program management.",
+      rawLanguageDetected: "en",
+      summary: "Operations role",
+      responsibilities: [],
+      keywords: [],
+      mustHaves: [],
+      toneCues: [],
+      contacts: [],
+      mustHavesExtraction: [
+        { value: "Airtable", confidence: 0.9, sourceSpan: null },
+      ],
+      keywordsExtraction: [
+        { value: "Program management", confidence: 0.8, sourceSpan: null },
+      ],
+      reviewItems: [],
+    };
+
+    const result = await getById._handler(
+      {
+        auth: {
+          getUserIdentity: async () => ({ subject: "clerk_123" }),
+        },
+        db: {
+          normalizeId(table: string, id: string) {
+            expect(table).toBe("jobs");
+            return id;
+          },
+          get: async (id: string) => (id === job._id ? job : null),
+          query(table: string) {
+            if (table === "userProfiles") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, value: string) {
+                      return value;
+                    },
+                  };
+                  const clerkId = buildIndex(scope);
+                  return {
+                    collect: async () =>
+                      linkedProfiles.filter(
+                        (profile) => profile.clerkId === clerkId,
+                      ),
+                  };
+                },
+              };
+            }
+
+            if (table === "proposals") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, _value: string) {
+                      return this;
+                    },
+                  };
+                  buildIndex(scope);
+                  return {
+                    collect: async () => [],
+                  };
+                },
+              };
+            }
+
+            if (table === "metrics") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, _value: string) {
+                      return this;
+                    },
+                  };
+                  buildIndex(scope);
+                  return {
+                    collect: async () => [],
+                  };
+                },
+              };
+            }
+
+            throw new Error(`Unexpected table: ${table}`);
+          },
+        },
+      } as any,
+      { jobId: job._id },
+    );
+
+    expect(result?.resumeId).toBe("cv_missing");
+    expect(result?.matchRead).toMatchObject({
+      fallback: "profile_missing",
+      tier: "unknown",
+      score: null,
+      matched: [],
+      missing: ["Airtable", "Program management"],
+    });
+  });
+});
+
+describe("jobsPublic.listArchivedForUser", () => {
+  it("returns only archived jobs across linked profiles", async () => {
+    const linkedProfiles = [
+      {
+        _id: "profile_primary",
+        _creationTime: 100,
+        clerkId: "clerk_123",
+        updatedAt: 100,
+        createdAt: 100,
+        version: 1,
+        skills: ["react"],
+        keywords: ["react"],
+        email: "primary@example.com",
+      },
+    ];
+    const jobsByProfileId = new Map([
+      [
+        "profile_primary",
+        [
+          {
+            _id: "job_active",
+            _creationTime: 100,
+            userId: "profile_primary",
+            title: "Active job",
+            company: "Acme",
+            location: "Remote",
+            isSample: false,
+            sourceUrl: "https://example.com/active",
+            sourceDomain: "example.com",
+            sourceType: "manual",
+            parseStatus: "parsed",
+            reviewState: "ready",
+            status: "active",
+            importedAt: 100,
+            updatedAt: 100,
+            lastOpenedAt: 100,
+            archivedAt: null,
+            mustHaves: ["React"],
+            keywords: ["React"],
+            mustHavesExtraction: [],
+            keywordsExtraction: [],
+          },
+          {
+            _id: "job_archived",
+            _creationTime: 200,
+            userId: "profile_primary",
+            title: "Archived job",
+            company: "Northwind",
+            location: "Paris",
+            isSample: false,
+            sourceUrl: "https://example.com/archived",
+            sourceDomain: "example.com",
+            sourceType: "manual",
+            parseStatus: "parsed",
+            reviewState: "ready",
+            status: "active",
+            importedAt: 200,
+            updatedAt: 250,
+            lastOpenedAt: 200,
+            archivedAt: 300,
+            mustHaves: ["React"],
+            keywords: ["React"],
+            mustHavesExtraction: [],
+            keywordsExtraction: [],
+          },
+        ],
+      ],
+    ]);
+
+    const result = await (listArchivedForUser as any)._handler(
+      {
+        auth: {
+          getUserIdentity: async () => ({ subject: "clerk_123" }),
+        },
+        db: {
+          query(table: string) {
+            if (table === "activeCvSnapshots") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, value: string) {
+                      return value;
+                    },
+                  };
+                  buildIndex(scope);
+                  return {
+                    unique: async () => null,
+                  };
+                },
+              };
+            }
+            if (table === "userProfiles") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, value: string) {
+                      return value;
+                    },
+                  };
+                  const clerkId = buildIndex(scope);
+                  return {
+                    collect: async () =>
+                      linkedProfiles.filter(
+                        (profile) => profile.clerkId === clerkId,
+                      ),
+                  };
+                },
+              };
+            }
+
+            if (table === "jobs") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    values: [] as string[],
+                    eq(_field: string, value: string) {
+                      this.values.push(value);
+                      return this;
+                    },
+                  };
+                  buildIndex(scope);
+                  return {
+                    order() {
+                      return this;
+                    },
+                    collect: async () =>
+                      jobsByProfileId.get(scope.values[0]) ?? [],
+                  };
+                },
+              };
+            }
+
+            if (table === "proposals") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, _value: string) {
+                      return this;
+                    },
+                  };
+                  buildIndex(scope);
+                  return {
+                    collect: async () => [],
+                  };
+                },
+              };
+            }
+
+            throw new Error(`Unexpected table: ${table}`);
+          },
+        },
+      } as any,
+      {},
+    );
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        id: "job_archived",
+        title: "Archived job",
+      }),
+    ]);
+  });
+});
+
+describe("jobsPublic archive recovery mutations", () => {
+  it("archives a visible job owned by a linked profile", async () => {
+    const linkedProfiles = [
+      {
+        _id: "profile_primary",
+        _creationTime: 200,
+        clerkId: "clerk_123",
+        updatedAt: 200,
+        createdAt: 200,
+        version: 2,
+        email: "primary@example.com",
+      },
+      {
+        _id: "profile_legacy",
+        _creationTime: 100,
+        clerkId: "clerk_123",
+        updatedAt: 100,
+        createdAt: 100,
+        version: 1,
+        email: "legacy@example.com",
+      },
+    ];
+    const job = {
+      _id: "job_legacy",
+      userId: "profile_legacy",
+      archivedAt: null,
+      updatedAt: 300,
+    };
+    const patchCalls: Array<{ id: string; patch: Record<string, unknown> }> =
+      [];
+
+    const result = await (archiveJob as any)._handler(
+      {
+        auth: {
+          getUserIdentity: async () => ({ subject: "clerk_123" }),
+        },
+        db: {
+          normalizeId: (_table: string, id: string) => id,
+          get: async (id: string) => (id === job._id ? job : null),
+          patch: async (id: string, patch: Record<string, unknown>) => {
+            patchCalls.push({ id, patch });
+            Object.assign(job, patch);
+          },
+          query(table: string) {
+            if (table === "userProfiles") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, value: string) {
+                      return value;
+                    },
+                  };
+                  const clerkId = buildIndex(scope);
+                  return {
+                    collect: async () =>
+                      linkedProfiles.filter(
+                        (profile) => profile.clerkId === clerkId,
+                      ),
+                  };
+                },
+              };
+            }
+            throw new Error(`Unexpected table: ${table}`);
+          },
+        },
+      } as any,
+      { jobId: "job_legacy" },
+    );
+
+    expect(result).toBeNull();
+    expect(patchCalls).toEqual([
+      {
+        id: "job_legacy",
+        patch: {
+          archivedAt: expect.any(Number),
+          updatedAt: expect.any(Number),
+        },
+      },
+    ]);
+    expect(job.archivedAt).toEqual(expect.any(Number));
+  });
+
+  it("restores an archived job by clearing archivedAt", async () => {
+    const linkedProfiles = [
+      {
+        _id: "profile_primary",
+        _creationTime: 200,
+        clerkId: "clerk_123",
+        updatedAt: 200,
+        createdAt: 200,
+        version: 2,
+        email: "primary@example.com",
+      },
+      {
+        _id: "profile_legacy",
+        _creationTime: 100,
+        clerkId: "clerk_123",
+        updatedAt: 100,
+        createdAt: 100,
+        version: 1,
+        email: "legacy@example.com",
+      },
+    ];
+    const job = {
+      _id: "job_archived",
+      userId: "profile_legacy",
+      archivedAt: 300,
+      updatedAt: 300,
+    };
+    const patchCalls: Array<{ id: string; patch: Record<string, unknown> }> =
+      [];
+
+    const result = await (restoreArchivedJob as any)._handler(
+      {
+        auth: {
+          getUserIdentity: async () => ({ subject: "clerk_123" }),
+        },
+        db: {
+          normalizeId: (_table: string, id: string) => id,
+          get: async (id: string) => (id === job._id ? job : null),
+          patch: async (id: string, patch: Record<string, unknown>) => {
+            patchCalls.push({ id, patch });
+            Object.assign(job, patch);
+          },
+          query(table: string) {
+            if (table === "activeCvSnapshots") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, value: string) {
+                      return value;
+                    },
+                  };
+                  buildIndex(scope);
+                  return {
+                    unique: async () => null,
+                  };
+                },
+              };
+            }
+            if (table === "userProfiles") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, value: string) {
+                      return value;
+                    },
+                  };
+                  const clerkId = buildIndex(scope);
+                  return {
+                    collect: async () =>
+                      linkedProfiles.filter(
+                        (profile) => profile.clerkId === clerkId,
+                      ),
+                  };
+                },
+              };
+            }
+            throw new Error(`Unexpected table: ${table}`);
+          },
+        },
+      } as any,
+      { jobId: "job_archived" },
+    );
+
+    expect(result).toBeNull();
+    expect(patchCalls).toEqual([
+      {
+        id: "job_archived",
+        patch: {
+          archivedAt: null,
+          updatedAt: expect.any(Number),
+        },
+      },
+    ]);
+  });
+
+  it("permanently deletes only an archived job", async () => {
+    const linkedProfiles = [
+      {
+        _id: "profile_primary",
+        _creationTime: 200,
+        clerkId: "clerk_123",
+        updatedAt: 200,
+        createdAt: 200,
+        version: 2,
+        email: "primary@example.com",
+      },
+      {
+        _id: "profile_legacy",
+        _creationTime: 100,
+        clerkId: "clerk_123",
+        updatedAt: 100,
+        createdAt: 100,
+        version: 1,
+        email: "legacy@example.com",
+      },
+    ];
+    const job = {
+      _id: "job_archived",
+      userId: "profile_legacy",
+      archivedAt: 300,
+      updatedAt: 300,
+    };
+    const deleteCalls: string[] = [];
+
+    const result = await (deleteArchivedJob as any)._handler(
+      {
+        auth: {
+          getUserIdentity: async () => ({ subject: "clerk_123" }),
+        },
+        db: {
+          normalizeId: (_table: string, id: string) => id,
+          get: async (id: string) => (id === job._id ? job : null),
+          delete: async (id: string) => {
+            deleteCalls.push(id);
+          },
+          query(table: string) {
+            if (table === "activeCvSnapshots") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, value: string) {
+                      return value;
+                    },
+                  };
+                  buildIndex(scope);
+                  return {
+                    unique: async () => null,
+                  };
+                },
+              };
+            }
+            if (table === "userProfiles") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, value: string) {
+                      return value;
+                    },
+                  };
+                  const clerkId = buildIndex(scope);
+                  return {
+                    collect: async () =>
+                      linkedProfiles.filter(
+                        (profile) => profile.clerkId === clerkId,
+                      ),
+                  };
+                },
+              };
+            }
+            throw new Error(`Unexpected table: ${table}`);
+          },
+        },
+      } as any,
+      { jobId: "job_archived" },
+    );
+
+    expect(result).toBeNull();
+    expect(deleteCalls).toEqual(["job_archived"]);
+  });
+
+  it("duplicates a visible job owned by a linked profile", async () => {
+    const linkedProfiles = [
+      {
+        _id: "profile_primary",
+        _creationTime: 200,
+        clerkId: "clerk_123",
+        updatedAt: 200,
+        createdAt: 200,
+        version: 2,
+        email: "primary@example.com",
+      },
+      {
+        _id: "profile_legacy",
+        _creationTime: 100,
+        clerkId: "clerk_123",
+        updatedAt: 100,
+        createdAt: 100,
+        version: 1,
+        email: "legacy@example.com",
+      },
+    ];
+    const job = {
+      _id: "job_legacy",
+      userId: "profile_legacy",
+      sourceUrl: "https://example.com/job",
+      sourceDomain: "example.com",
+      sourceType: "manual",
+      applicationUrl: "https://example.com/apply",
+      dedupeKey: "example:job",
+      parseVersion: "v1b",
+      parseStatus: "parsed",
+      reviewState: "ready",
+      title: "Legacy job",
+      company: "Acme",
+      location: "Remote",
+      rawDescription: "Build internal tools.",
+      rawLanguageDetected: "en",
+      summary: "Build internal tools.",
+      responsibilities: ["Build"],
+      keywords: ["tools"],
+      mustHaves: ["TypeScript"],
+      toneCues: [],
+      contacts: [],
+      isSample: false,
+      isFavorite: true,
+      status: "active",
+      archivedAt: null,
+      reviewItems: [],
+    };
+    const insertCalls: Array<{ table: string; value: Record<string, unknown> }> =
+      [];
+
+    const result = await (duplicateJob as any)._handler(
+      {
+        auth: {
+          getUserIdentity: async () => ({ subject: "clerk_123" }),
+        },
+        db: {
+          normalizeId: (_table: string, id: string) => id,
+          get: async (id: string) => (id === job._id ? job : null),
+          insert: async (table: string, value: Record<string, unknown>) => {
+            insertCalls.push({ table, value });
+            return "job_copy";
+          },
+          query(table: string) {
+            if (table === "userProfiles") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, value: string) {
+                      return value;
+                    },
+                  };
+                  const clerkId = buildIndex(scope);
+                  return {
+                    collect: async () =>
+                      linkedProfiles.filter(
+                        (profile) => profile.clerkId === clerkId,
+                      ),
+                  };
+                },
+              };
+            }
+            throw new Error(`Unexpected table: ${table}`);
+          },
+        },
+      } as any,
+      { jobId: "job_legacy" },
+    );
+
+    expect(result).toEqual({ jobId: "job_copy" });
+    expect(insertCalls).toHaveLength(1);
+    expect(insertCalls[0]).toEqual({
+      table: "jobs",
+      value: expect.objectContaining({
+        userId: "profile_legacy",
+        title: "Legacy job",
+        archivedAt: null,
+        isSample: false,
+        isFavorite: true,
+      }),
+    });
+  });
+});
+
 describe("jobsPublic.setJobFavorite", () => {
   it("persists favorite state on the job record", async () => {
     const linkedProfiles = [
@@ -351,7 +1034,8 @@ describe("jobsPublic.setJobFavorite", () => {
       isFavorite: false,
       updatedAt: 100,
     };
-    const patchCalls: Array<{ id: string; patch: Record<string, unknown> }> = [];
+    const patchCalls: Array<{ id: string; patch: Record<string, unknown> }> =
+      [];
 
     const result = await setJobFavorite._handler(
       {
@@ -380,7 +1064,9 @@ describe("jobsPublic.setJobFavorite", () => {
                   const clerkId = buildIndex(scope);
                   return {
                     collect: async () =>
-                      linkedProfiles.filter((profile) => profile.clerkId === clerkId),
+                      linkedProfiles.filter(
+                        (profile) => profile.clerkId === clerkId,
+                      ),
                   };
                 },
               };
