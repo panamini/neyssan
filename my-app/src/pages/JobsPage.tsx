@@ -144,6 +144,7 @@ type JobsPageDetail = {
 
 type JobsSortOrder = "recent" | "oldest" | "title" | "company";
 type JobsMatchFilter = "all" | "strong" | "partial" | "weak" | "unknown";
+type JobsViewMode = "active" | "archived";
 
 function isMissingJobsFunctionError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error ?? "");
@@ -151,6 +152,7 @@ function isMissingJobsFunctionError(error: unknown): boolean {
     message.includes("Could not find public function") &&
     (message.includes("jobsPublic:loadForUser") ||
       message.includes("jobsPublic:listForUser") ||
+      message.includes("jobsPublic:listArchivedForUser") ||
       message.includes("jobsPublic:getById"))
   );
 }
@@ -171,7 +173,7 @@ function JobsBackendUnavailable(): JSX.Element {
 
         <div className="dasti-empty-state dasti-jobs-empty-state">
           <ClipboardText size={34} strokeWidth={1.25} aria-hidden="true" />
-            <div className="dasti-empty-state__title">
+          <div className="dasti-empty-state__title">
             Jobs backend is out of sync
           </div>
           <p className="dasti-empty-state__subtitle">
@@ -183,9 +185,9 @@ function JobsBackendUnavailable(): JSX.Element {
               type="button"
               className="dasti-button dasti-button--primary dasti-button--pill"
               onClick={() => {
-                void navigator.clipboard?.writeText("npm run dev:backend").catch(
-                  () => {},
-                );
+                void navigator.clipboard
+                  ?.writeText("npm run dev:backend")
+                  .catch(() => {});
               }}
             >
               Copy: npm run dev:backend
@@ -194,9 +196,9 @@ function JobsBackendUnavailable(): JSX.Element {
               type="button"
               className="dasti-button dasti-button--pill"
               onClick={() => {
-                void navigator.clipboard?.writeText("npx convex dev --local").catch(
-                  () => {},
-                );
+                void navigator.clipboard
+                  ?.writeText("npx convex dev --local")
+                  .catch(() => {});
               }}
             >
               Copy: npx convex dev --local
@@ -259,9 +261,7 @@ function matchesListFilters(
   return true;
 }
 
-function resolveMatchTierLabel(
-  tier: JobsPageListItem["matchTier"],
-): string {
+function resolveMatchTierLabel(tier: JobsPageListItem["matchTier"]): string {
   if (tier === "unknown") {
     return "—";
   }
@@ -307,6 +307,18 @@ function buildResumeRoute(jobId: string): string {
 
 function buildJobsRoute(jobId: string): string {
   return `/jobs/${encodeURIComponent(jobId)}`;
+}
+
+function buildJobsListRoute(view: JobsViewMode): string {
+  return view === "archived" ? "/jobs?view=archived" : "/jobs?view=list";
+}
+
+function formatJobsActionError(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+  const message = String(error ?? "").trim();
+  return message || fallback;
 }
 
 function readCvPickerProfilePreview(
@@ -396,7 +408,9 @@ function buildJobResumePickerOption(cv: CvDocument): JobResumePickerOption {
       location: readCvPickerString(profilePreview?.location),
     }),
     dateLabel:
-      relativeAge && exactDate ? `${relativeAge} · ${exactDate}` : relativeAge ?? exactDate ?? null,
+      relativeAge && exactDate
+        ? `${relativeAge} · ${exactDate}`
+        : relativeAge ?? exactDate ?? null,
     dateSortValue: toResumePickerTimestamp(dateSource),
   };
 }
@@ -416,22 +430,30 @@ function JobsPageContent(): JSX.Element {
     () => new URLSearchParams(location.search).get("view") === "list",
     [location.search],
   );
+  const jobsView = React.useMemo<JobsViewMode>(
+    () =>
+      new URLSearchParams(location.search).get("view") === "archived"
+        ? "archived"
+        : "active",
+    [location.search],
+  );
   const [viewportWidth, setViewportWidth] = React.useState(() =>
     typeof window === "undefined" ? 1440 : window.innerWidth,
   );
   const [searchQuery, setSearchQuery] = React.useState("");
-  const [matchFilter, setMatchFilter] =
-    React.useState<JobsMatchFilter>("all");
+  const [matchFilter, setMatchFilter] = React.useState<JobsMatchFilter>("all");
   const [hasDocsOnly, setHasDocsOnly] = React.useState(false);
   const [needsReviewOnly, setNeedsReviewOnly] = React.useState(false);
   const [favoritesOnly, setFavoritesOnly] = React.useState(false);
   const [sortOrder, setSortOrder] = React.useState<JobsSortOrder>("recent");
-  const [optimisticActivityById, setOptimisticActivityById] =
-    React.useState<Record<string, number>>({});
+  const [optimisticActivityById, setOptimisticActivityById] = React.useState<
+    Record<string, number>
+  >({});
   const [optimisticReviewStateById, setOptimisticReviewStateById] =
     React.useState<Record<string, string>>({});
-  const [optimisticFavoriteById, setOptimisticFavoriteById] =
-    React.useState<Record<string, boolean>>({});
+  const [optimisticFavoriteById, setOptimisticFavoriteById] = React.useState<
+    Record<string, boolean>
+  >({});
   const [optimisticSelectedJob, setOptimisticSelectedJob] =
     React.useState<JobsPageDetail>(null);
   const [isSeedingSample, setIsSeedingSample] = React.useState(false);
@@ -444,11 +466,26 @@ function JobsPageContent(): JSX.Element {
   } | null>(null);
   const rowMenuRef = React.useRef<HTMLDivElement | null>(null);
   const resumePickerRef = React.useRef<HTMLDivElement | null>(null);
-  const [openRowMenuJobId, setOpenRowMenuJobId] = React.useState<string | null>(null);
+  const [openRowMenuJobId, setOpenRowMenuJobId] = React.useState<string | null>(
+    null,
+  );
   const [isResumePickerOpen, setIsResumePickerOpen] = React.useState(false);
+  const [confirmingPermanentDeleteJobId, setConfirmingPermanentDeleteJobId] =
+    React.useState<string | null>(null);
+  const [duplicateTransition, setDuplicateTransition] = React.useState<{
+    sourceJobId: string;
+    activeJobIds: Set<string>;
+  } | null>(null);
 
   const jobsListReference = React.useMemo(
-    () => ((api as any).jobsPublic?.listForUser ?? "jobsPublic.listForUser") as any,
+    () =>
+      ((api as any).jobsPublic?.listForUser ?? "jobsPublic.listForUser") as any,
+    [],
+  );
+  const archivedJobsListReference = React.useMemo(
+    () =>
+      ((api as any).jobsPublic?.listArchivedForUser ??
+        "jobsPublic.listArchivedForUser") as any,
     [],
   );
   const jobByIdReference = React.useMemo(
@@ -456,10 +493,12 @@ function JobsPageContent(): JSX.Element {
     [],
   );
   const approveReviewItem = useMutation(
-    ((api as any).jobsPublic?.approveReviewItem ?? "jobsPublic.approveReviewItem") as any,
+    ((api as any).jobsPublic?.approveReviewItem ??
+      "jobsPublic.approveReviewItem") as any,
   );
   const seedSampleJob = useMutation(
-    ((api as any).jobsPublic?.seedSampleJob ?? "jobsPublic.seedSampleJob") as any,
+    ((api as any).jobsPublic?.seedSampleJob ??
+      "jobsPublic.seedSampleJob") as any,
   );
   const trackJobsEvent = useMutation(
     ((api as any).jobsPublic?.trackEvent ?? "jobsPublic.trackEvent") as any,
@@ -470,6 +509,14 @@ function JobsPageContent(): JSX.Element {
   const archiveJob = useMutation(
     ((api as any).jobsPublic?.archiveJob ?? "jobsPublic.archiveJob") as any,
   );
+  const restoreArchivedJob = useMutation(
+    ((api as any).jobsPublic?.restoreArchivedJob ??
+      "jobsPublic.restoreArchivedJob") as any,
+  );
+  const deleteArchivedJob = useMutation(
+    ((api as any).jobsPublic?.deleteArchivedJob ??
+      "jobsPublic.deleteArchivedJob") as any,
+  );
   const duplicateJob = useMutation(
     ((api as any).jobsPublic?.duplicateJob ?? "jobsPublic.duplicateJob") as any,
   );
@@ -477,13 +524,19 @@ function JobsPageContent(): JSX.Element {
     ((api as any).jobsPublic?.updateField ?? "jobsPublic.updateField") as any,
   );
   const setJobResume = useMutation(
-    ((api as any).jobsPublic?.setResumeForJob ?? "jobsPublic.setResumeForJob") as any,
+    ((api as any).jobsPublic?.setResumeForJob ??
+      "jobsPublic.setResumeForJob") as any,
   );
   const setJobFavorite = useMutation(
-    ((api as any).jobsPublic?.setJobFavorite ?? "jobsPublic.setJobFavorite") as any,
+    ((api as any).jobsPublic?.setJobFavorite ??
+      "jobsPublic.setJobFavorite") as any,
   );
   const jobs = useQuery(
     jobsListReference,
+    isLoaded && isSignedIn && isConvexAuthenticated ? {} : "skip",
+  ) as JobsPageListItem[] | undefined;
+  const archivedJobs = useQuery(
+    archivedJobsListReference,
     isLoaded && isSignedIn && isConvexAuthenticated ? {} : "skip",
   ) as JobsPageListItem[] | undefined;
   const selectedJobRecord = useQuery(
@@ -517,12 +570,14 @@ function JobsPageContent(): JSX.Element {
       const target = event.target as Node | null;
       if (target && !rowMenuRef.current?.contains(target)) {
         setOpenRowMenuJobId(null);
+        setConfirmingPermanentDeleteJobId(null);
       }
     };
 
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setOpenRowMenuJobId(null);
+        setConfirmingPermanentDeleteJobId(null);
       }
     };
 
@@ -534,6 +589,11 @@ function JobsPageContent(): JSX.Element {
       window.removeEventListener("keydown", handleEscape);
     };
   }, [openRowMenuJobId]);
+
+  React.useEffect(() => {
+    setOpenRowMenuJobId(null);
+    setConfirmingPermanentDeleteJobId(null);
+  }, [jobsView]);
 
   React.useEffect(() => {
     if (!isResumePickerOpen) {
@@ -579,11 +639,38 @@ function JobsPageContent(): JSX.Element {
     }
   }, [selectedJobRecord]);
 
+  const displayedJobs = React.useMemo(() => {
+    if (jobsView === "archived") {
+      return archivedJobs;
+    }
+
+    if (duplicateTransition && duplicateTransition.sourceJobId === selectedJobId) {
+      return (jobs ?? []).filter((job) =>
+        duplicateTransition.activeJobIds.has(job.id),
+      );
+    }
+
+    return jobs;
+  }, [archivedJobs, duplicateTransition, jobs, jobsView, selectedJobId]);
+
+  React.useEffect(() => {
+    if (
+      duplicateTransition &&
+      selectedJobId &&
+      selectedJobId !== duplicateTransition.sourceJobId
+    ) {
+      setDuplicateTransition(null);
+    }
+  }, [duplicateTransition, selectedJobId]);
+
   const filteredJobs = React.useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
-    const baseList = [...(jobs ?? [])]
-      .filter((job) =>
-        matchesListFilters(
+    const baseList = [...(displayedJobs ?? [])]
+      .filter((job) => {
+        if (jobsView === "archived") {
+          return true;
+        }
+        return matchesListFilters(
           job,
           matchFilter,
           hasDocsOnly,
@@ -591,8 +678,8 @@ function JobsPageContent(): JSX.Element {
           favoritesOnly,
           optimisticReviewStateById[job.id],
           optimisticFavoriteById[job.id],
-        ),
-      )
+        );
+      })
       .filter((job) => {
         if (!normalizedQuery) {
           return true;
@@ -632,7 +719,8 @@ function JobsPageContent(): JSX.Element {
 
     return baseList;
   }, [
-    jobs,
+    displayedJobs,
+    jobsView,
     optimisticActivityById,
     optimisticFavoriteById,
     optimisticReviewStateById,
@@ -649,13 +737,21 @@ function JobsPageContent(): JSX.Element {
   React.useEffect(() => {
     if (
       !selectedJobId &&
+      jobsView === "active" &&
       filteredJobs.length > 0 &&
       !isMobileJobsLayout &&
       !holdListViewOpen
     ) {
       void navigate(buildJobsRoute(filteredJobs[0].id), { replace: true });
     }
-  }, [filteredJobs, holdListViewOpen, isMobileJobsLayout, navigate, selectedJobId]);
+  }, [
+    filteredJobs,
+    holdListViewOpen,
+    isMobileJobsLayout,
+    jobsView,
+    navigate,
+    selectedJobId,
+  ]);
 
   React.useEffect(() => {
     if (!selectedJobId || !isLoaded || !isSignedIn || !isConvexAuthenticated) {
@@ -703,10 +799,7 @@ function JobsPageContent(): JSX.Element {
   );
 
   const recordJobDecision = React.useCallback(
-    (
-      outcome: "cover_letter" | "resume" | "bounce",
-      jobId: string,
-    ) => {
+    (outcome: "cover_letter" | "resume" | "bounce", jobId: string) => {
       const session = jobDecisionSessionRef.current;
       if (!session || session.jobId !== jobId || session.decisionRecorded) {
         return;
@@ -744,7 +837,11 @@ function JobsPageContent(): JSX.Element {
 
     return () => {
       const session = jobDecisionSessionRef.current;
-      if (!session || session.jobId !== selectedJob.id || session.decisionRecorded) {
+      if (
+        !session ||
+        session.jobId !== selectedJob.id ||
+        session.decisionRecorded
+      ) {
         return;
       }
 
@@ -793,7 +890,9 @@ function JobsPageContent(): JSX.Element {
       await navigate(buildJobsRoute(result.jobId));
     } catch (error) {
       setFirstRunError(
-        error instanceof Error ? error.message : "Sample job could not be created.",
+        error instanceof Error
+          ? error.message
+          : "Sample job could not be created.",
       );
     } finally {
       setIsSeedingSample(false);
@@ -1103,40 +1202,100 @@ function JobsPageContent(): JSX.Element {
 
   const handleArchiveJob = React.useCallback(
     async (jobId: string) => {
-      await archiveJob({ jobId });
-      if (selectedJobId === jobId) {
-        await navigate("/jobs?view=list");
+      try {
+        await archiveJob({ jobId });
+        if (selectedJobId === jobId) {
+          await navigate(buildJobsListRoute("active"));
+        }
+      } catch (error) {
+        showToast("Archive failed", {
+          variant: "error",
+          description: formatJobsActionError(error, "Could not archive this job."),
+        });
       }
     },
-    [archiveJob, navigate, selectedJobId],
+    [archiveJob, navigate, selectedJobId, showToast],
+  );
+
+  const handleRestoreArchivedJob = React.useCallback(
+    async (jobId: string) => {
+      try {
+        await restoreArchivedJob({ jobId });
+        setOpenRowMenuJobId(null);
+        setConfirmingPermanentDeleteJobId(null);
+        await navigate(buildJobsListRoute("active"));
+      } catch (error) {
+        showToast("Restore failed", {
+          variant: "error",
+          description: formatJobsActionError(error, "Could not restore this job."),
+        });
+      }
+    },
+    [navigate, restoreArchivedJob, showToast],
+  );
+
+  const handleDeleteArchivedJob = React.useCallback(
+    async (jobId: string) => {
+      try {
+        await deleteArchivedJob({ jobId });
+        setOpenRowMenuJobId(null);
+        setConfirmingPermanentDeleteJobId(null);
+      } catch (error) {
+        showToast("Delete failed", {
+          variant: "error",
+          description: formatJobsActionError(error, "Could not delete this job."),
+        });
+      }
+    },
+    [deleteArchivedJob, showToast],
   );
 
   const handleDuplicateJob = React.useCallback(
     async (jobId: string) => {
-      const result = await duplicateJob({ jobId });
-      await navigate(buildJobsRoute(result.jobId));
+      setOpenRowMenuJobId(null);
+      setConfirmingPermanentDeleteJobId(null);
+      setDuplicateTransition({
+        sourceJobId: jobId,
+        activeJobIds: new Set((jobs ?? []).map((job) => job.id)),
+      });
+
+      try {
+        const result = await duplicateJob({ jobId });
+        await navigate(buildJobsRoute(result.jobId));
+      } catch (error) {
+        setDuplicateTransition(null);
+        showToast("Duplicate failed", {
+          variant: "error",
+          description: formatJobsActionError(error, "Could not duplicate this job."),
+        });
+      }
     },
-    [duplicateJob, navigate],
+    [duplicateJob, jobs, navigate, showToast],
   );
 
-  const authStatusMessage = !isLoaded || isConvexAuthLoading
-    ? "Loading…"
-    : !isSignedIn || !isConvexAuthenticated
-      ? "Sign in to view jobs."
-      : null;
+  const authStatusMessage =
+    !isLoaded || isConvexAuthLoading
+      ? "Loading…"
+      : !isSignedIn || !isConvexAuthenticated
+        ? "Sign in to view jobs."
+        : null;
   const isJobsListLoading =
     !authStatusMessage &&
     isLoaded &&
     isSignedIn &&
     isConvexAuthenticated &&
-    jobs === undefined;
-  const hasJobs = (jobs?.length ?? 0) > 0;
+    (jobs === undefined || archivedJobs === undefined);
+  const hasActiveJobs = (jobs?.length ?? 0) > 0;
+  const hasArchivedJobs = (archivedJobs?.length ?? 0) > 0;
+  const hasJobs = hasActiveJobs || hasArchivedJobs;
   const selectedSourceLabel = getProposalSourceLabel(
     selectedJob?.sourceType ?? selectedJobSummary?.sourceType,
     selectedJob?.sourceUrl ?? selectedJobSummary?.sourceUrl,
   );
-  const shouldShowListPane = !isMobileJobsLayout || !selectedJobId;
-  const shouldShowDetailPane = !isMobileJobsLayout || Boolean(selectedJobId);
+  const shouldShowListPane =
+    jobsView === "archived" || !isMobileJobsLayout || !selectedJobId;
+  const shouldShowDetailPane =
+    jobsView === "active" && (!isMobileJobsLayout || Boolean(selectedJobId));
 
   return (
     <div className="dasti-page-scroll">
@@ -1184,539 +1343,732 @@ function JobsPageContent(): JSX.Element {
               .join(" ")}
           >
             {shouldShowListPane ? (
-            <section className="dasti-jobs-list-pane" aria-label="Jobs list">
-              <div className="dasti-jobs-toolbar">
-                <label className="dasti-jobs-toolbar__search">
-                  <span className="sr-only">Search jobs</span>
-                  <input
-                    type="search"
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                    placeholder="Search jobs"
-                    aria-label="Search jobs"
-                    className="dasti-select dasti-select--sm"
-                  />
-                </label>
-                <label className="dasti-jobs-toolbar__select">
-                  <span className="sr-only">Sort jobs</span>
-                  <select
-                    value={sortOrder}
-                    onChange={(event) =>
-                      setSortOrder(event.target.value as JobsSortOrder)
-                    }
-                    aria-label="Sort jobs"
-                    className="dasti-select dasti-select--sm"
-                  >
-                    <option value="recent">Recent activity</option>
-                    <option value="oldest">Oldest first</option>
-                    <option value="title">Title</option>
-                    <option value="company">Company</option>
-                  </select>
-                </label>
-                <span className="dasti-jobs-toolbar__count">
-                  {filteredJobs.length === (jobs?.length ?? 0)
-                    ? `${jobs?.length ?? 0} jobs`
-                    : `${filteredJobs.length} of ${jobs?.length ?? 0}`}
-                </span>
-              </div>
-              <div className="dasti-jobs-filter-chips" aria-label="Job filters">
-                <button
-                  type="button"
-                  className={[
-                    "dasti-jobs-filter-chip",
-                    matchFilter === "all" ? "dasti-jobs-filter-chip--active" : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                  onClick={() => setMatchFilter("all")}
-                >
-                  All tiers
-                </button>
-                {(["strong", "partial", "weak", "unknown"] as const).map((tier) => (
+              <section className="dasti-jobs-list-pane" aria-label="Jobs list">
+                <div className="dasti-jobs-toolbar">
+                  <label className="dasti-jobs-toolbar__search">
+                    <span className="sr-only">Search jobs</span>
+                    <input
+                      type="search"
+                      value={searchQuery}
+                      onChange={(event) => setSearchQuery(event.target.value)}
+                      placeholder="Search jobs"
+                      aria-label="Search jobs"
+                      className="dasti-select dasti-select--sm"
+                    />
+                  </label>
+                  <label className="dasti-jobs-toolbar__select">
+                    <span className="sr-only">Sort jobs</span>
+                    <select
+                      value={sortOrder}
+                      onChange={(event) =>
+                        setSortOrder(event.target.value as JobsSortOrder)
+                      }
+                      aria-label="Sort jobs"
+                      className="dasti-select dasti-select--sm"
+                    >
+                      <option value="recent">Recent activity</option>
+                      <option value="oldest">Oldest first</option>
+                      <option value="title">Title</option>
+                      <option value="company">Company</option>
+                    </select>
+                  </label>
+                  <span className="dasti-jobs-toolbar__count">
+                    {filteredJobs.length === (displayedJobs?.length ?? 0)
+                      ? `${displayedJobs?.length ?? 0} jobs`
+                      : `${filteredJobs.length} of ${displayedJobs?.length ?? 0}`}
+                  </span>
+                </div>
+                <div className="dasti-jobs-filter-chips" aria-label="Job views">
                   <button
-                    key={tier}
                     type="button"
                     className={[
                       "dasti-jobs-filter-chip",
-                      matchFilter === tier ? "dasti-jobs-filter-chip--active" : null,
+                      jobsView === "active"
+                        ? "dasti-jobs-filter-chip--active"
+                        : null,
                     ]
                       .filter(Boolean)
                       .join(" ")}
-                    onClick={() => setMatchFilter(tier)}
+                    aria-pressed={jobsView === "active"}
+                    onClick={() => void navigate(buildJobsListRoute("active"))}
                   >
-                    {tier === "unknown"
-                      ? "Match —"
-                      : `Match ${resolveMatchTierLabel(tier)}`}
+                    Active
                   </button>
-                ))}
-                <button
-                  type="button"
-                  className={[
-                    "dasti-jobs-filter-chip",
-                    hasDocsOnly ? "dasti-jobs-filter-chip--active" : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                  onClick={() => setHasDocsOnly((current) => !current)}
-                >
-                  Has docs
-                </button>
-                <button
-                  type="button"
-                  className={[
-                    "dasti-jobs-filter-chip",
-                    needsReviewOnly ? "dasti-jobs-filter-chip--active" : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                  onClick={() => setNeedsReviewOnly((current) => !current)}
-                >
-                  Needs review
-                </button>
-                <button
-                  type="button"
-                  className={[
-                    "dasti-jobs-filter-chip",
-                    favoritesOnly ? "dasti-jobs-filter-chip--active" : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                  onClick={() => setFavoritesOnly((current) => !current)}
-                >
-                  Favorites
-                </button>
-              </div>
-
-              {filteredJobs.length === 0 ? (
-                <div className="dasti-empty-state dasti-empty-state--panel">
-                  <FileText size={28} strokeWidth={1.2} aria-hidden="true" />
-                  <div className="dasti-empty-state__title">
-                    No jobs match this search
-                  </div>
-                  <p className="dasti-empty-state__subtitle">
-                    Try a broader query or reset the trust filter.
-                  </p>
+                  <button
+                    type="button"
+                    className={[
+                      "dasti-jobs-filter-chip",
+                      jobsView === "archived"
+                        ? "dasti-jobs-filter-chip--active"
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    aria-pressed={jobsView === "archived"}
+                    onClick={() =>
+                      void navigate(buildJobsListRoute("archived"))
+                    }
+                  >
+                    Archived
+                  </button>
                 </div>
-              ) : (
-                <div className="dasti-jobs-list" role="list">
-                  {filteredJobs.map((job) => {
-                    const isActive = job.id === selectedJobId;
-                    const title = job.title.trim() || "Untitled job";
-                    const company = job.company.trim() || "Unknown company";
-                    const locationLabel = resolveLocationModeLabel(job.location);
-                    const lastActivityLabel =
-                      formatUiDate(
-                        optimisticActivityById[job.id] ?? job.lastActivityAt,
-                      ) ?? "Recent";
-                    const reviewState =
-                      optimisticReviewStateById[job.id] ?? job.reviewState;
-                    const isFavorite =
-                      optimisticFavoriteById[job.id] ?? job.isFavorite;
-                    const matchLabel = resolveMatchTierLabel(job.matchTier);
-                    const isRowMenuOpen = openRowMenuJobId === job.id;
+                {jobsView === "active" ? (
+                  <div
+                    className="dasti-jobs-filter-chips"
+                    aria-label="Job filters"
+                  >
+                    <button
+                      type="button"
+                      className={[
+                        "dasti-jobs-filter-chip",
+                        matchFilter === "all"
+                          ? "dasti-jobs-filter-chip--active"
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                      onClick={() => setMatchFilter("all")}
+                    >
+                      All tiers
+                    </button>
+                    {(["strong", "partial", "weak", "unknown"] as const).map(
+                      (tier) => (
+                        <button
+                          key={tier}
+                          type="button"
+                          className={[
+                            "dasti-jobs-filter-chip",
+                            matchFilter === tier
+                              ? "dasti-jobs-filter-chip--active"
+                              : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
+                          onClick={() => setMatchFilter(tier)}
+                        >
+                          {tier === "unknown"
+                            ? "Match —"
+                            : `Match ${resolveMatchTierLabel(tier)}`}
+                        </button>
+                      ),
+                    )}
+                    <button
+                      type="button"
+                      className={[
+                        "dasti-jobs-filter-chip",
+                        hasDocsOnly ? "dasti-jobs-filter-chip--active" : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                      onClick={() => setHasDocsOnly((current) => !current)}
+                    >
+                      Has docs
+                    </button>
+                    <button
+                      type="button"
+                      className={[
+                        "dasti-jobs-filter-chip",
+                        needsReviewOnly
+                          ? "dasti-jobs-filter-chip--active"
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                      onClick={() => setNeedsReviewOnly((current) => !current)}
+                    >
+                      Needs review
+                    </button>
+                    <button
+                      type="button"
+                      className={[
+                        "dasti-jobs-filter-chip",
+                        favoritesOnly ? "dasti-jobs-filter-chip--active" : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                      onClick={() => setFavoritesOnly((current) => !current)}
+                    >
+                      Favorites
+                    </button>
+                  </div>
+                ) : null}
 
-                    return (
-                      <article
-                        key={job.id}
-                        className={[
-                          "dasti-jobs-row",
-                          isActive ? "dasti-jobs-row--active" : null,
-                        ]
-                          .filter(Boolean)
-                          .join(" ")}
-                        role="listitem"
-                        onClick={() => void navigate(buildJobsRoute(job.id))}
-                      >
-                        <div className="dasti-jobs-row__copy">
-                          <div className="dasti-jobs-row__title">
-                            <span>{title}</span>
-                            {job.isSample ? (
-                              <span className="dasti-jobs-sample-badge">Sample</span>
-                            ) : null}
-                            {isFavorite ? (
-                              <span className="dasti-jobs-sample-badge">Favorite</span>
-                            ) : null}
-                          </div>
-                          <div className="dasti-jobs-row__company">
-                            {company}
-                            {` · ${locationLabel}`}
-                          </div>
-                          <div className="dasti-jobs-row__meta">
-                            <span className="dasti-jobs-match-chip">
-                              {matchLabel}
-                            </span>
-                            <span className="dasti-jobs-row__meta-pill">
-                              <FileText size={12} strokeWidth={1.7} aria-hidden="true" />
-                              <span>{job.linkedDocumentCount}</span>
-                            </span>
-                            <span>Last activity {lastActivityLabel}</span>
-                            {reviewState === "needs_review" ? (
-                              <span
-                                className="dasti-jobs-review-dot"
-                                aria-label="Needs review"
-                                title="Needs review"
-                              />
-                            ) : null}
-                          </div>
-                        </div>
-                        <div className="dasti-jobs-row__controls">
-                          <button
-                            type="button"
-                            className="dasti-icon-button dasti-jobs-row__favorite"
-                            aria-pressed={isFavorite}
-                            aria-label={
-                              isFavorite
-                                ? `Remove ${title} from favorites`
-                                : `Mark ${title} as favorite`
+                {filteredJobs.length === 0 ? (
+                  <div className="dasti-empty-state dasti-empty-state--panel">
+                    <FileText size={28} strokeWidth={1.2} aria-hidden="true" />
+                    <div className="dasti-empty-state__title">
+                      {jobsView === "archived"
+                        ? "No archived jobs"
+                        : "No jobs match this search"}
+                    </div>
+                    <p className="dasti-empty-state__subtitle">
+                      {jobsView === "archived"
+                        ? "Archived jobs will appear here after you archive them."
+                        : "Try a broader query or reset the trust filter."}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="dasti-jobs-list" role="list">
+                    {filteredJobs.map((job) => {
+                      const isActive = job.id === selectedJobId;
+                      const title = job.title.trim() || "Untitled job";
+                      const company = job.company.trim() || "Unknown company";
+                      const locationLabel = resolveLocationModeLabel(
+                        job.location,
+                      );
+                      const lastActivityLabel =
+                        formatUiDate(
+                          optimisticActivityById[job.id] ?? job.lastActivityAt,
+                        ) ?? "Recent";
+                      const reviewState =
+                        optimisticReviewStateById[job.id] ?? job.reviewState;
+                      const isFavorite =
+                        optimisticFavoriteById[job.id] ?? job.isFavorite;
+                      const matchLabel = resolveMatchTierLabel(job.matchTier);
+                      const isRowMenuOpen = openRowMenuJobId === job.id;
+
+                      return (
+                        <article
+                          key={job.id}
+                          className={[
+                            "dasti-jobs-row",
+                            isActive ? "dasti-jobs-row--active" : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
+                          role="listitem"
+                          onClick={() => {
+                            if (jobsView === "active") {
+                              void navigate(buildJobsRoute(job.id));
                             }
-                            title={isFavorite ? "Remove from favorites" : "Mark favorite"}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              void handleSetJobFavorite(job.id, !isFavorite);
-                            }}
-                          >
-                            <Star
-                              size={16}
-                              strokeWidth={1.8}
-                              weight={isFavorite ? "fill" : "regular"}
-                              aria-hidden="true"
-                            />
-                          </button>
-                          {isActive ? (
-                            <div
-                              ref={resumePickerRef}
-                              className="dasti-jobs-detail__resume-picker dasti-jobs-row__resume-picker"
-                            >
-                              <div
-                                className={
-                                  selectedJob?.resumeName
-                                    ? "styleforge-active-cv-control styleforge-active-cv-control--loaded dasti-jobs-row__cv-control"
-                                    : "styleforge-active-cv-control styleforge-active-cv-control--ghost dasti-jobs-row__cv-control"
-                                }
-                              >
+                          }}
+                        >
+                          <div className="dasti-jobs-row__copy">
+                            <div className="dasti-jobs-row__title">
+                              <span>{title}</span>
+                              {job.isSample ? (
+                                <span className="dasti-jobs-sample-badge">
+                                  Sample
+                                </span>
+                              ) : null}
+                              {isFavorite ? (
+                                <span className="dasti-jobs-sample-badge">
+                                  Favorite
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className="dasti-jobs-row__company">
+                              {company}
+                              {` · ${locationLabel}`}
+                            </div>
+                            <div className="dasti-jobs-row__meta">
+                              <span className="dasti-jobs-match-chip">
+                                {matchLabel}
+                              </span>
+                              <span className="dasti-jobs-row__meta-pill">
+                                <FileText
+                                  size={12}
+                                  strokeWidth={1.7}
+                                  aria-hidden="true"
+                                />
+                                <span>{job.linkedDocumentCount}</span>
+                              </span>
+                              <span>Last activity {lastActivityLabel}</span>
+                              {reviewState === "needs_review" ? (
+                                <span
+                                  className="dasti-jobs-review-dot"
+                                  aria-label="Needs review"
+                                  title="Needs review"
+                                />
+                              ) : null}
+                            </div>
+                          </div>
+                          <div className="dasti-jobs-row__controls">
+                            {jobsView === "active" ? (
+                              <>
                                 <button
                                   type="button"
-                                  className="styleforge-active-cv-control__icon-button"
+                                  className="dasti-icon-button dasti-jobs-row__favorite"
+                                  aria-pressed={isFavorite}
                                   aria-label={
-                                    selectedJob?.resumeName
-                                      ? "Remove attached resume"
-                                      : "Open resume picker"
+                                    isFavorite
+                                      ? `Remove ${title} from favorites`
+                                      : `Mark ${title} as favorite`
+                                  }
+                                  title={
+                                    isFavorite
+                                      ? "Remove from favorites"
+                                      : "Mark favorite"
                                   }
                                   onClick={(event) => {
                                     event.stopPropagation();
-                                    if (selectedJob?.resumeName) {
-                                      void handleDetachResumeFromJob();
-                                      return;
-                                    }
-                                    setIsResumePickerOpen((current) => !current);
+                                    void handleSetJobFavorite(
+                                      job.id,
+                                      !isFavorite,
+                                    );
                                   }}
                                 >
-                                  <span
-                                    className="styleforge-active-cv-control__icon styleforge-active-cv-control__icon--base"
-                                    aria-hidden
+                                  <Star
+                                    size={16}
+                                    strokeWidth={1.8}
+                                    weight={isFavorite ? "fill" : "regular"}
+                                    aria-hidden="true"
+                                  />
+                                </button>
+                                {isActive ? (
+                                  <div
+                                    ref={resumePickerRef}
+                                    className="dasti-jobs-detail__resume-picker dasti-jobs-row__resume-picker"
                                   >
-                                    <Paperclip size={15} strokeWidth={1.8} />
-                                  </span>
-                                  {selectedJob?.resumeName ? (
-                                    <span
-                                      className="styleforge-active-cv-control__icon styleforge-active-cv-control__icon--hover"
-                                      aria-hidden
+                                    <div
+                                      className={
+                                        selectedJob?.resumeName
+                                          ? "styleforge-active-cv-control styleforge-active-cv-control--loaded dasti-jobs-row__cv-control"
+                                          : "styleforge-active-cv-control styleforge-active-cv-control--ghost dasti-jobs-row__cv-control"
+                                      }
                                     >
-                                      <X size={15} strokeWidth={1.8} />
-                                    </span>
-                                  ) : null}
-                                </button>
-                                <button
-                                  type="button"
-                                  className="styleforge-active-cv-control__body"
-                                  aria-controls={`job-resume-picker-${job.id}`}
-                                  aria-expanded={isResumePickerOpen}
-                                  aria-haspopup="dialog"
-                                  aria-label={
-                                    selectedJob?.resumeName
-                                      ? `Attached resume: ${selectedJob.resumeName}`
-                                      : "Attach a resume"
-                                  }
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    setIsResumePickerOpen((current) => !current);
-                                  }}
-                                >
-                                  <span className="dasti-proposal-chip__label dasti-proposal-chip__label--resume">
-                                    {selectedJob?.resumeName ?? "Attach CV"}
-                                  </span>
-                                </button>
-                              </div>
-                              {isResumePickerOpen ? (
-                                <div
-                                  id={`job-resume-picker-${job.id}`}
-                                  role="dialog"
-                                  aria-label="Attach a resume"
-                                  className="dasti-jobs-detail__resume-popover dasti-toolbar-drawer-surface"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                  }}
-                                >
-                                  {resumePickerOptions.length === 0 ? (
-                                    <div className="dasti-jobs-detail__resume-empty">
-                                      No local resumes found yet. Create or import one in
-                                      CvForge.
+                                      <button
+                                        type="button"
+                                        className="styleforge-active-cv-control__icon-button"
+                                        aria-label={
+                                          selectedJob?.resumeName
+                                            ? "Remove attached resume"
+                                            : "Open resume picker"
+                                        }
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          if (selectedJob?.resumeName) {
+                                            void handleDetachResumeFromJob();
+                                            return;
+                                          }
+                                          setIsResumePickerOpen(
+                                            (current) => !current,
+                                          );
+                                        }}
+                                      >
+                                        <span
+                                          className="styleforge-active-cv-control__icon styleforge-active-cv-control__icon--base"
+                                          aria-hidden
+                                        >
+                                          <Paperclip
+                                            size={15}
+                                            strokeWidth={1.8}
+                                          />
+                                        </span>
+                                        {selectedJob?.resumeName ? (
+                                          <span
+                                            className="styleforge-active-cv-control__icon styleforge-active-cv-control__icon--hover"
+                                            aria-hidden
+                                          >
+                                            <X size={15} strokeWidth={1.8} />
+                                          </span>
+                                        ) : null}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="styleforge-active-cv-control__body"
+                                        aria-controls={`job-resume-picker-${job.id}`}
+                                        aria-expanded={isResumePickerOpen}
+                                        aria-haspopup="dialog"
+                                        aria-label={
+                                          selectedJob?.resumeName
+                                            ? `Attached resume: ${selectedJob.resumeName}`
+                                            : "Attach a resume"
+                                        }
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          setIsResumePickerOpen(
+                                            (current) => !current,
+                                          );
+                                        }}
+                                      >
+                                        <span className="dasti-proposal-chip__label dasti-proposal-chip__label--resume">
+                                          {selectedJob?.resumeName ??
+                                            "Attach CV"}
+                                        </span>
+                                      </button>
                                     </div>
+                                    {isResumePickerOpen ? (
+                                      <div
+                                        id={`job-resume-picker-${job.id}`}
+                                        role="dialog"
+                                        aria-label="Attach a resume"
+                                        className="dasti-jobs-detail__resume-popover dasti-toolbar-drawer-surface"
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                        }}
+                                      >
+                                        {resumePickerOptions.length === 0 ? (
+                                          <div className="dasti-jobs-detail__resume-empty">
+                                            No local resumes found yet. Create
+                                            or import one in CvForge.
+                                          </div>
+                                        ) : (
+                                          <div className="dasti-jobs-detail__resume-popover-list">
+                                            {resumePickerOptions.map(
+                                              (option) => (
+                                                <button
+                                                  key={option.id}
+                                                  type="button"
+                                                  className={[
+                                                    "dasti-jobs-detail__resume-option",
+                                                    option.id ===
+                                                    selectedJob?.resumeId
+                                                      ? "dasti-jobs-detail__resume-option--active"
+                                                      : "",
+                                                  ]
+                                                    .filter(Boolean)
+                                                    .join(" ")}
+                                                  aria-label={`Attach ${option.title}`}
+                                                  onClick={() => {
+                                                    void handleAttachResumeToJob(
+                                                      option.id,
+                                                    );
+                                                  }}
+                                                >
+                                                  <span className="dasti-jobs-detail__resume-option-title">
+                                                    {option.title}
+                                                  </span>
+                                                  {option.dateLabel ? (
+                                                    <span className="dasti-jobs-detail__resume-option-meta">
+                                                      {option.dateLabel}
+                                                    </span>
+                                                  ) : null}
+                                                </button>
+                                              ),
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                ) : null}
+                              </>
+                            ) : null}
+                            <div
+                              ref={isRowMenuOpen ? rowMenuRef : null}
+                              className="dasti-import-dropdown dasti-jobs-row__menu"
+                              data-open={isRowMenuOpen ? "true" : "false"}
+                            >
+                              <button
+                                type="button"
+                                className="dasti-icon-button dasti-jobs-row__menu-trigger"
+                                aria-label={`More actions for ${title}`}
+                                aria-expanded={isRowMenuOpen}
+                                aria-haspopup="menu"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setOpenRowMenuJobId((current) =>
+                                    current === job.id ? null : job.id,
+                                  );
+                                }}
+                              >
+                                <DotsThree
+                                  size={16}
+                                  strokeWidth={1.7}
+                                  aria-hidden="true"
+                                />
+                              </button>
+                              {isRowMenuOpen ? (
+                                <div
+                                  className="dasti-import-dropdown__menu dasti-import-dropdown__menu--compact dasti-toolbar-drawer-surface dasti-jobs-row__menu-surface"
+                                  role="menu"
+                                  aria-label={`Actions for ${title}`}
+                                >
+                                  {jobsView === "active" ? (
+                                    <>
+                                      <button
+                                        type="button"
+                                        role="menuitem"
+                                        className="dasti-cv-style-presets__option"
+                                        disabled={!job.sourceUrl}
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          setOpenRowMenuJobId(null);
+                                          handleOpenJobSource(job.sourceUrl);
+                                        }}
+                                      >
+                                        <span className="dasti-cv-style-presets__option-copy">
+                                          <span className="dasti-cv-style-presets__option-title">
+                                            Open source
+                                          </span>
+                                        </span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        role="menuitem"
+                                        className="dasti-cv-style-presets__option"
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          setOpenRowMenuJobId(null);
+                                          void handleArchiveJob(job.id);
+                                        }}
+                                      >
+                                        <span className="dasti-cv-style-presets__option-copy">
+                                          <span className="dasti-cv-style-presets__option-title">
+                                            Archive
+                                          </span>
+                                        </span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        role="menuitem"
+                                        className="dasti-cv-style-presets__option"
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          setOpenRowMenuJobId(null);
+                                          void handleDuplicateJob(job.id);
+                                        }}
+                                      >
+                                        <span className="dasti-cv-style-presets__option-copy">
+                                          <span className="dasti-cv-style-presets__option-title">
+                                            Duplicate
+                                          </span>
+                                        </span>
+                                      </button>
+                                    </>
                                   ) : (
-                                    <div className="dasti-jobs-detail__resume-popover-list">
-                                      {resumePickerOptions.map((option) => (
+                                    <>
+                                      <button
+                                        type="button"
+                                        role="menuitem"
+                                        className="dasti-cv-style-presets__option"
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          void handleRestoreArchivedJob(job.id);
+                                        }}
+                                      >
+                                        <span className="dasti-cv-style-presets__option-copy">
+                                          <span className="dasti-cv-style-presets__option-title">
+                                            Restore
+                                          </span>
+                                        </span>
+                                      </button>
+                                      {confirmingPermanentDeleteJobId ===
+                                      job.id ? (
+                                        <>
+                                          <button
+                                            type="button"
+                                            role="menuitem"
+                                            className="dasti-cv-style-presets__option"
+                                            onClick={(event) => {
+                                              event.stopPropagation();
+                                              void handleDeleteArchivedJob(
+                                                job.id,
+                                              );
+                                            }}
+                                          >
+                                            <span className="dasti-cv-style-presets__option-copy">
+                                              <span className="dasti-cv-style-presets__option-title">
+                                                Confirm delete
+                                              </span>
+                                            </span>
+                                          </button>
+                                          <button
+                                            type="button"
+                                            role="menuitem"
+                                            className="dasti-cv-style-presets__option"
+                                            onClick={(event) => {
+                                              event.stopPropagation();
+                                              setConfirmingPermanentDeleteJobId(
+                                                null,
+                                              );
+                                            }}
+                                          >
+                                            <span className="dasti-cv-style-presets__option-copy">
+                                              <span className="dasti-cv-style-presets__option-title">
+                                                Cancel
+                                              </span>
+                                            </span>
+                                          </button>
+                                        </>
+                                      ) : (
                                         <button
-                                          key={option.id}
                                           type="button"
-                                          className={[
-                                            "dasti-jobs-detail__resume-option",
-                                            option.id === selectedJob?.resumeId
-                                              ? "dasti-jobs-detail__resume-option--active"
-                                              : "",
-                                          ]
-                                            .filter(Boolean)
-                                            .join(" ")}
-                                          aria-label={`Attach ${option.title}`}
-                                          onClick={() => {
-                                            void handleAttachResumeToJob(option.id);
+                                          role="menuitem"
+                                          className="dasti-cv-style-presets__option"
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                            setConfirmingPermanentDeleteJobId(
+                                              job.id,
+                                            );
                                           }}
                                         >
-                                          <span className="dasti-jobs-detail__resume-option-title">
-                                            {option.title}
-                                          </span>
-                                          {option.dateLabel ? (
-                                            <span className="dasti-jobs-detail__resume-option-meta">
-                                              {option.dateLabel}
+                                          <span className="dasti-cv-style-presets__option-copy">
+                                            <span className="dasti-cv-style-presets__option-title">
+                                              Delete permanently
                                             </span>
-                                          ) : null}
+                                          </span>
                                         </button>
-                                      ))}
-                                    </div>
+                                      )}
+                                    </>
                                   )}
                                 </div>
                               ) : null}
                             </div>
-                          ) : null}
-                          <div
-                            ref={isRowMenuOpen ? rowMenuRef : null}
-                            className="dasti-import-dropdown dasti-jobs-row__menu"
-                            data-open={isRowMenuOpen ? "true" : "false"}
-                          >
-                          <button
-                            type="button"
-                            className="dasti-icon-button dasti-jobs-row__menu-trigger"
-                            aria-label={`More actions for ${title}`}
-                            aria-expanded={isRowMenuOpen}
-                            aria-haspopup="menu"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setOpenRowMenuJobId((current) =>
-                                current === job.id ? null : job.id,
-                              );
-                            }}
-                          >
-                            <DotsThree size={16} strokeWidth={1.7} aria-hidden="true" />
-                          </button>
-                          {isRowMenuOpen ? (
-                            <div
-                              className="dasti-import-dropdown__menu dasti-import-dropdown__menu--compact dasti-toolbar-drawer-surface dasti-jobs-row__menu-surface"
-                              role="menu"
-                              aria-label={`Actions for ${title}`}
-                            >
-                              <button
-                                type="button"
-                                role="menuitem"
-                                className="dasti-cv-style-presets__option"
-                                disabled={!job.sourceUrl}
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  setOpenRowMenuJobId(null);
-                                  handleOpenJobSource(job.sourceUrl);
-                                }}
-                              >
-                                <span className="dasti-cv-style-presets__option-copy">
-                                  <span className="dasti-cv-style-presets__option-title">
-                                    Open source
-                                  </span>
-                                </span>
-                              </button>
-                              <button
-                                type="button"
-                                role="menuitem"
-                                className="dasti-cv-style-presets__option"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  setOpenRowMenuJobId(null);
-                                  void handleArchiveJob(job.id);
-                                }}
-                              >
-                                <span className="dasti-cv-style-presets__option-copy">
-                                  <span className="dasti-cv-style-presets__option-title">
-                                    Archive
-                                  </span>
-                                </span>
-                              </button>
-                              <button
-                                type="button"
-                                role="menuitem"
-                                className="dasti-cv-style-presets__option"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  setOpenRowMenuJobId(null);
-                                  void handleDuplicateJob(job.id);
-                                }}
-                              >
-                                <span className="dasti-cv-style-presets__option-copy">
-                                  <span className="dasti-cv-style-presets__option-title">
-                                    Duplicate
-                                  </span>
-                                </span>
-                              </button>
-                            </div>
-                          ) : null}
-                        </div>
-                        </div>
-                      </article>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
             ) : null}
 
             {shouldShowDetailPane ? (
-            <section className="dasti-jobs-detail-pane" aria-label="Job detail">
-              {!selectedJobId ? null : selectedJobIsLoading ? (
-                <div className="dasti-empty-state dasti-empty-state--panel">
-                  <div className="dasti-empty-state__title">Loading job…</div>
-                </div>
-              ) : !selectedJob ? (
-                <div className="dasti-empty-state dasti-empty-state--panel">
-                  <div className="dasti-empty-state__title">Job unavailable</div>
-                  <p className="dasti-empty-state__subtitle">
-                    This job could not be loaded. Open another job from the
-                    list to continue.
-                  </p>
-                </div>
-              ) : (
-                <div className="dasti-jobs-detail">
-                  {isMobileJobsLayout ? (
-                    <div className="dasti-jobs-detail__mobile-back">
-                      <button
-                        type="button"
-                        className="dasti-button dasti-button--pill dasti-button--sm"
-                        onClick={() => void navigate("/jobs")}
-                      >
-                        <ArrowLeft size={14} strokeWidth={1.7} aria-hidden="true" />
-                        Back to jobs
-                      </button>
+              <section
+                className="dasti-jobs-detail-pane"
+                aria-label="Job detail"
+              >
+                {!selectedJobId ? null : selectedJobIsLoading ? (
+                  <div className="dasti-empty-state dasti-empty-state--panel">
+                    <div className="dasti-empty-state__title">Loading job…</div>
+                  </div>
+                ) : !selectedJob ? (
+                  <div className="dasti-empty-state dasti-empty-state--panel">
+                    <div className="dasti-empty-state__title">
+                      Job unavailable
                     </div>
-                  ) : null}
-                  <div className="dasti-jobs-detail__topline">
-                    <div className="dasti-jobs-detail__identity">
-                      <div className="dasti-jobs-detail__title">
-                        <span>{selectedJob.title || "Untitled job"}</span>
-                        {selectedJob.isSample ? (
-                          <span className="dasti-jobs-sample-badge">Sample</span>
-                        ) : null}
-                        {selectedJob.isFavorite ? (
-                          <span className="dasti-jobs-sample-badge">Favorite</span>
-                        ) : null}
+                    <p className="dasti-empty-state__subtitle">
+                      This job could not be loaded. Open another job from the
+                      list to continue.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="dasti-jobs-detail">
+                    {isMobileJobsLayout ? (
+                      <div className="dasti-jobs-detail__mobile-back">
+                        <button
+                          type="button"
+                          className="dasti-button dasti-button--pill dasti-button--sm"
+                          onClick={() => void navigate("/jobs")}
+                        >
+                          <ArrowLeft
+                            size={14}
+                            strokeWidth={1.7}
+                            aria-hidden="true"
+                          />
+                          Back to jobs
+                        </button>
                       </div>
-                      <div className="dasti-jobs-detail__meta">
-                        <span>{selectedJob.company || "Unknown company"}</span>
-                        <>
-                          <span>·</span>
-                          <span>{resolveLocationModeLabel(selectedJob.location)}</span>
-                        </>
-                        {selectedSourceLabel ? (
+                    ) : null}
+                    <div className="dasti-jobs-detail__topline">
+                      <div className="dasti-jobs-detail__identity">
+                        <div className="dasti-jobs-detail__title">
+                          <span>{selectedJob.title || "Untitled job"}</span>
+                          {selectedJob.isSample ? (
+                            <span className="dasti-jobs-sample-badge">
+                              Sample
+                            </span>
+                          ) : null}
+                          {selectedJob.isFavorite ? (
+                            <span className="dasti-jobs-sample-badge">
+                              Favorite
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="dasti-jobs-detail__meta">
+                          <span>
+                            {selectedJob.company || "Unknown company"}
+                          </span>
                           <>
                             <span>·</span>
-                            <span>{selectedSourceLabel}</span>
+                            <span>
+                              {resolveLocationModeLabel(selectedJob.location)}
+                            </span>
                           </>
-                        ) : null}
+                          {selectedSourceLabel ? (
+                            <>
+                              <span>·</span>
+                              <span>{selectedSourceLabel}</span>
+                            </>
+                          ) : null}
+                        </div>
                       </div>
+                      <button
+                        type="button"
+                        className="dasti-icon-button"
+                        aria-pressed={selectedJob.isFavorite}
+                        aria-label={
+                          selectedJob.isFavorite
+                            ? "Remove job from favorites"
+                            : "Mark job as favorite"
+                        }
+                        title={
+                          selectedJob.isFavorite
+                            ? "Remove from favorites"
+                            : "Mark favorite"
+                        }
+                        onClick={() => {
+                          void handleSetJobFavorite(
+                            selectedJob.id,
+                            !selectedJob.isFavorite,
+                          );
+                        }}
+                      >
+                        <Star
+                          size={17}
+                          strokeWidth={1.8}
+                          weight={selectedJob.isFavorite ? "fill" : "regular"}
+                          aria-hidden="true"
+                        />
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      className="dasti-icon-button"
-                      aria-pressed={selectedJob.isFavorite}
-                      aria-label={
-                        selectedJob.isFavorite
-                          ? "Remove job from favorites"
-                          : "Mark job as favorite"
-                      }
-                      title={
-                        selectedJob.isFavorite
-                          ? "Remove from favorites"
-                          : "Mark favorite"
-                      }
-                      onClick={() => {
-                        void handleSetJobFavorite(
-                          selectedJob.id,
-                          !selectedJob.isFavorite,
-                        );
-                      }}
-                    >
-                      <Star
-                        size={17}
-                        strokeWidth={1.8}
-                        weight={selectedJob.isFavorite ? "fill" : "regular"}
-                        aria-hidden="true"
+
+                    {selectedJob.matchRead ? (
+                      <MatchReadBlock matchRead={selectedJob.matchRead} />
+                    ) : null}
+
+                    {selectedJob.nextStepBlock ? (
+                      <NextStepBlock
+                        headline={selectedJob.nextStepBlock.headline}
+                        usesCohortData={
+                          selectedJob.nextStepBlock.usesCohortData
+                        }
+                        actions={selectedJob.nextStepBlock.actions.map(
+                          (action) => ({
+                            id: action,
+                            label:
+                              action === "cover_letter"
+                                ? "Generate cover letter"
+                                : action === "resume"
+                                  ? "Open resume with this job"
+                                  : "Add to favorites",
+                          }),
+                        )}
+                        onSelectAction={(actionId) => {
+                          if (actionId === "cover_letter") {
+                            handleCreateProposal(selectedJob.id);
+                            return;
+                          }
+                          if (actionId === "resume") {
+                            handleOpenResumeWithJob(selectedJob.id);
+                            return;
+                          }
+                          void handleSetJobFavorite(selectedJob.id, true);
+                        }}
                       />
-                    </button>
-                  </div>
+                    ) : null}
 
-                  {selectedJob.matchRead ? (
-                    <MatchReadBlock matchRead={selectedJob.matchRead} />
-                  ) : null}
-
-                  {selectedJob.nextStepBlock ? (
-                    <NextStepBlock
-                      headline={selectedJob.nextStepBlock.headline}
-                      usesCohortData={selectedJob.nextStepBlock.usesCohortData}
-                      actions={selectedJob.nextStepBlock.actions.map((action) => ({
-                        id: action,
-                        label:
-                          action === "cover_letter"
-                            ? "Generate cover letter"
-                            : action === "resume"
-                              ? "Open resume with this job"
-                              : "Add to favorites",
-                      }))}
-                      onSelectAction={(actionId) => {
-                        if (actionId === "cover_letter") {
-                          handleCreateProposal(selectedJob.id);
-                          return;
-                        }
-                        if (actionId === "resume") {
-                          handleOpenResumeWithJob(selectedJob.id);
-                          return;
-                        }
-                        void handleSetJobFavorite(selectedJob.id, true);
-                      }}
+                    <ProposalBriefCard
+                      sourceJobTitle={selectedJob.title}
+                      outputDocumentTitle={null}
+                      jobDescription={selectedJob.rawDescription}
+                      sourceUrl={selectedJob.sourceUrl}
+                      sourcePlatform={selectedJob.sourceType}
+                      summaryText={selectedJob.summary}
+                      parseStatus={selectedJob.parseStatus}
+                      trustState={selectedJob.reviewState}
+                      linkedDocumentCount={selectedJob.linkedProposalCount}
+                      linkedProposals={selectedJob.linkedProposals}
+                      reviewItems={selectedJob.reviewItems}
+                      onSaveField={handleSaveField}
+                      onApproveReviewItem={handleApproveReviewItem}
+                      onSaveReviewItem={handleSaveReviewItem}
                     />
-                  ) : null}
-
-                  <ProposalBriefCard
-                    sourceJobTitle={selectedJob.title}
-                    outputDocumentTitle={null}
-                    jobDescription={selectedJob.rawDescription}
-                    sourceUrl={selectedJob.sourceUrl}
-                    sourcePlatform={selectedJob.sourceType}
-                    summaryText={selectedJob.summary}
-                    parseStatus={selectedJob.parseStatus}
-                    trustState={selectedJob.reviewState}
-                    linkedDocumentCount={selectedJob.linkedProposalCount}
-                    linkedProposals={selectedJob.linkedProposals}
-                    reviewItems={selectedJob.reviewItems}
-                    onSaveField={handleSaveField}
-                    onApproveReviewItem={handleApproveReviewItem}
-                    onSaveReviewItem={handleSaveReviewItem}
-                  />
-                </div>
-              )}
-            </section>
+                  </div>
+                )}
+              </section>
             ) : null}
           </div>
         ) : null}
