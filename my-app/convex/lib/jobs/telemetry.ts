@@ -1,5 +1,3 @@
-import type { MatchRead } from "./matchRead";
-
 export type JobsTelemetryEvent =
   | "job_opened"
   | "job_decision_made"
@@ -87,15 +85,4 @@ export function buildJobsMetricArgs(args: JobsTelemetryMetricArgs) {
     metadata,
     labels,
   };
-}
-
-export function buildMatchReadTelemetryArgs(matchRead: MatchRead) {
-  return buildJobsMetricArgs({
-    event: "match_read_computed",
-    jobId: matchRead.basedOn.jobId,
-    tier: matchRead.tier,
-    confidence: matchRead.confidence,
-    method: matchRead.method,
-    fallback: matchRead.fallback,
-  });
 }
