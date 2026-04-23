@@ -52,6 +52,10 @@ function resolveTrustLabel(args: {
   parseStatus?: string | null;
   trustState?: string | null;
 }): string | null {
+  if (args.parseStatus === "failed") {
+    return "Needs attention";
+  }
+
   if (args.trustState === "ready") {
     return "Ready";
   }
@@ -62,10 +66,6 @@ function resolveTrustLabel(args: {
 
   if (args.parseStatus === "parsed") {
     return "Parsed";
-  }
-
-  if (args.parseStatus === "failed") {
-    return "Needs attention";
   }
 
   if (args.parseStatus === "parsing" || args.trustState === "pending") {

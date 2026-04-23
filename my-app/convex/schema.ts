@@ -84,6 +84,17 @@ const canonicalJobReviewStateChoice = v.union(
   v.literal("ready"),
 );
 
+const canonicalJobSourceSpanChoice = v.object({
+  start: v.number(),
+  end: v.number(),
+});
+
+const canonicalJobExtractionChoice = v.object({
+  value: v.string(),
+  confidence: v.number(),
+  sourceSpan: v.union(canonicalJobSourceSpanChoice, v.null()),
+});
+
 const proposalVerbatiStyleChoice = v.object({
   layout: v.string(),
   typography: v.string(),
@@ -249,10 +260,15 @@ export default defineSchema({
     rawDescription: v.string(),
     rawLanguageDetected: v.string(),
     summary: v.string(),
+    summaryExtraction: v.optional(canonicalJobExtractionChoice),
     responsibilities: v.array(v.string()),
+    responsibilitiesExtraction: v.optional(v.array(canonicalJobExtractionChoice)),
     keywords: v.array(v.string()),
+    keywordsExtraction: v.optional(v.array(canonicalJobExtractionChoice)),
     mustHaves: v.array(v.string()),
+    mustHavesExtraction: v.optional(v.array(canonicalJobExtractionChoice)),
     toneCues: v.array(v.string()),
+    toneCuesExtraction: v.optional(v.array(canonicalJobExtractionChoice)),
     contacts: v.array(v.string()),
     status: v.string(),
     archivedAt: v.optional(v.union(v.number(), v.null())),
