@@ -10283,10 +10283,30 @@ html:not(.dark) .dasti-proposal-submit {
 }
 
 .dasti-jobs-row__title {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
   color: var(--ti);
   font-size: var(--tx);
   font-weight: 600;
   line-height: 1.35;
+}
+
+.dasti-jobs-sample-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  border: 1px solid color-mix(in srgb, var(--color-border-selected) 72%, transparent);
+  background: color-mix(in srgb, var(--color-accent-pale) 22%, var(--color-surface-raised) 78%);
+  color: var(--ti);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .dasti-jobs-row__company {
@@ -10376,6 +10396,10 @@ html:not(.dark) .dasti-proposal-submit {
 }
 
 .dasti-jobs-detail__title {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
   color: var(--ti);
   font-size: var(--tl);
   font-weight: 600;

@@ -7,6 +7,8 @@ import { JobsPage } from "../JobsPage";
 const approveReviewItemMock = vi.fn().mockResolvedValue(null);
 const loadForUserMock = vi.fn();
 const markOpenedMock = vi.fn().mockResolvedValue(null);
+const recordFirstRunPathMock = vi.fn().mockResolvedValue(null);
+const seedSampleJobMock = vi.fn().mockResolvedValue({ jobId: "job_sample" });
 const updateFieldMock = vi.fn().mockResolvedValue(null);
 const windowOpenMock = vi.fn();
 let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
@@ -17,6 +19,7 @@ const jobsList = [
     title: "Operations Associate",
     company: "Acme",
     location: "Paris",
+    isSample: false,
     sourceUrl: "https://www.linkedin.com/jobs/view/alpha",
     sourceDomain: "linkedin.com",
     sourceType: "linkedin",
@@ -35,6 +38,7 @@ const jobsList = [
     title: "Support Specialist",
     company: "Northwind",
     location: "",
+    isSample: false,
     sourceUrl: "https://www.indeed.com/viewjob?jk=beta",
     sourceDomain: "indeed.com",
     sourceType: "indeed",
@@ -55,6 +59,7 @@ const selectedJob = {
   title: "Operations Associate",
   company: "Acme",
   location: "Paris",
+  isSample: false,
   sourceUrl: "https://www.linkedin.com/jobs/view/alpha",
   sourceDomain: "linkedin.com",
   sourceType: "linkedin",
@@ -137,6 +142,12 @@ vi.mock("convex/react", () => ({
     if (reference === "jobsPublic.approveReviewItem") {
       return approveReviewItemMock;
     }
+    if (reference === "jobsPublic.recordFirstRunPath") {
+      return recordFirstRunPathMock;
+    }
+    if (reference === "jobsPublic.seedSampleJob") {
+      return seedSampleJobMock;
+    }
     if (reference === "jobsPublic.markOpened") {
       return markOpenedMock;
     }
@@ -160,6 +171,8 @@ vi.mock("../../../convex/_generated/api", () => ({
       loadForUser: "jobsPublic.loadForUser",
       getById: "jobsPublic.getById",
       approveReviewItem: "jobsPublic.approveReviewItem",
+      recordFirstRunPath: "jobsPublic.recordFirstRunPath",
+      seedSampleJob: "jobsPublic.seedSampleJob",
       markOpened: "jobsPublic.markOpened",
       updateField: "jobsPublic.updateField",
     },
@@ -190,6 +203,9 @@ describe("JobsPage", () => {
       return listResult;
     });
     markOpenedMock.mockClear();
+    recordFirstRunPathMock.mockClear();
+    seedSampleJobMock.mockReset();
+    seedSampleJobMock.mockResolvedValue({ jobId: "job_sample" });
     updateFieldMock.mockClear();
     windowOpenMock.mockReset();
     vi.stubGlobal("open", windowOpenMock);
@@ -358,7 +374,7 @@ describe("JobsPage", () => {
     );
   });
 
-  it("shows the guided empty state when no jobs are saved", async () => {
+  it("shows the first-run panel and routes import clicks into the existing parse flow", async () => {
     listResult = [];
     selectedJobResult = null;
 
@@ -366,17 +382,79 @@ describe("JobsPage", () => {
       <MemoryRouter initialEntries={["/jobs"]}>
         <Routes>
           <Route path="/jobs" element={<JobsPage />} />
+          <Route path="/proposal" element={<LocationProbe />} />
         </Routes>
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText("No saved jobs yet")).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: /Install TwoWeeks extension/i }),
-    ).toHaveAttribute("href", "https://chromewebstore.google.com/");
-    expect(
-      screen.getByRole("button", { name: /Paste job manually/i }),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Start with one job decision")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Import your first job" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("jobs-location")).toHaveTextContent("/proposal");
+    });
+    expect(recordFirstRunPathMock).toHaveBeenCalledWith({ path: "import" });
+  });
+
+  it("seeds a sample job, refreshes the list, and marks the sample visibly", async () => {
+    listResult = [];
+    selectedJobResult = null;
+    loadForUserMock
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          id: "job_sample",
+          title: "Content Operations Coordinator",
+          company: "TwoWeeks Studio",
+          location: "Remote",
+          isSample: true,
+          sourceUrl: "https://twoweeks.app/sample-job",
+          sourceDomain: "twoweeks.app",
+          sourceType: "sample",
+          parseStatus: "parsed",
+          reviewState: "ready",
+          matchTier: "unknown",
+          status: "active",
+          importedAt: 1712000000000,
+          updatedAt: 1712000000000,
+          lastOpenedAt: 1712000000000,
+          lastActivityAt: 1712000000000,
+          linkedDocumentCount: 0,
+        },
+      ]);
+    selectedJobResult = {
+      ...selectedJob,
+      id: "job_sample",
+      title: "Content Operations Coordinator",
+      company: "TwoWeeks Studio",
+      location: "Remote",
+      isSample: true,
+      sourceUrl: "https://twoweeks.app/sample-job",
+      sourceDomain: "twoweeks.app",
+      sourceType: "sample",
+      reviewState: "ready",
+      matchRead: null,
+      linkedProposalCount: 0,
+      linkedProposals: [],
+      reviewItems: [],
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/jobs"]}>
+        <Routes>
+          <Route path="/jobs" element={<JobsPage />} />
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Start with one job decision")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Try a sample job" }));
+
+    expect(await screen.findAllByText("Sample")).not.toHaveLength(0);
+    expect(seedSampleJobMock).toHaveBeenCalledWith({});
   });
 
   it("renders recovery guidance when the jobs query is missing from the local Convex runtime", async () => {

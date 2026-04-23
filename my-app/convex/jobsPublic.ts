@@ -19,6 +19,200 @@ import {
 } from "./lib/jobs/canonicalJobs";
 import { computeMatchRead } from "./lib/jobs/matchRead";
 
+const FIRST_RUN_PATH_METRIC = "jobs-v2:first_run_path";
+
+function buildSampleJobDraft(now: number) {
+  const rawDescription = [
+    "TwoWeeks sample role: Content Operations Coordinator.",
+    "Own the weekly publishing calendar for proposal and resume assets across the workspace.",
+    "Coordinate with design, writing, and operations partners to keep deliverables on track.",
+    "Required: strong project coordination, clear written communication, and comfort working in Notion and Google Workspace.",
+    "Experience with content operations, editorial planning, or workflow management is preferred.",
+    "This sample is pre-parsed so first-time users can review a complete job brief immediately.",
+  ].join(" ");
+
+  return {
+    createdAt: now,
+    updatedAt: now,
+    importedAt: now,
+    lastOpenedAt: now,
+    sourceUrl: "https://twoweeks.app/sample-job",
+    sourceDomain: "twoweeks.app",
+    sourceType: "sample",
+    applicationUrl: "",
+    dedupeKey: "sample:content-operations-coordinator",
+    parseVersion: "sample-v1",
+    parseStatus: "parsed" as const,
+    reviewState: "ready" as const,
+    title: "Content Operations Coordinator",
+    company: "TwoWeeks Studio",
+    location: "Remote",
+    rawDescription,
+    rawLanguageDetected: "en",
+    summary:
+      "Own the publishing calendar and coordinate cross-functional document delivery across the workspace.",
+    summaryExtraction: {
+      value:
+        "Own the publishing calendar and coordinate cross-functional document delivery across the workspace.",
+      confidence: 0.96,
+      sourceSpan: { start: 41, end: 123 },
+    },
+    responsibilities: [
+      "Own the weekly publishing calendar for proposal and resume assets across the workspace",
+      "Coordinate with design, writing, and operations partners to keep deliverables on track",
+      "Keep document production moving across cross-functional stakeholders",
+    ],
+    responsibilitiesExtraction: [
+      {
+        value:
+          "Own the weekly publishing calendar for proposal and resume assets across the workspace",
+        confidence: 0.94,
+        sourceSpan: { start: 41, end: 123 },
+      },
+      {
+        value:
+          "Coordinate with design, writing, and operations partners to keep deliverables on track",
+        confidence: 0.93,
+        sourceSpan: { start: 125, end: 211 },
+      },
+      {
+        value:
+          "Keep document production moving across cross-functional stakeholders",
+        confidence: 0.9,
+        sourceSpan: null,
+      },
+    ],
+    keywords: [
+      "content operations",
+      "editorial planning",
+      "project coordination",
+      "notion",
+      "google workspace",
+    ],
+    keywordsExtraction: [
+      {
+        value: "content operations",
+        confidence: 0.94,
+        sourceSpan: { start: 286, end: 304 },
+      },
+      {
+        value: "editorial planning",
+        confidence: 0.9,
+        sourceSpan: { start: 308, end: 326 },
+      },
+      {
+        value: "project coordination",
+        confidence: 0.95,
+        sourceSpan: { start: 223, end: 243 },
+      },
+      {
+        value: "notion",
+        confidence: 0.9,
+        sourceSpan: { start: 301, end: 307 },
+      },
+      {
+        value: "google workspace",
+        confidence: 0.9,
+        sourceSpan: { start: 312, end: 328 },
+      },
+    ],
+    mustHaves: [
+      "Strong project coordination",
+      "Clear written communication",
+      "Comfort working in Notion and Google Workspace",
+    ],
+    mustHavesExtraction: [
+      {
+        value: "Strong project coordination",
+        confidence: 0.95,
+        sourceSpan: { start: 223, end: 250 },
+      },
+      {
+        value: "Clear written communication",
+        confidence: 0.95,
+        sourceSpan: { start: 252, end: 279 },
+      },
+      {
+        value: "Comfort working in Notion and Google Workspace",
+        confidence: 0.95,
+        sourceSpan: { start: 285, end: 330 },
+      },
+    ],
+    toneCues: ["clear", "structured", "collaborative"],
+    toneCuesExtraction: [
+      {
+        value: "clear",
+        confidence: 0.88,
+        sourceSpan: { start: 252, end: 257 },
+      },
+      {
+        value: "structured",
+        confidence: 0.86,
+        sourceSpan: null,
+      },
+      {
+        value: "collaborative",
+        confidence: 0.86,
+        sourceSpan: { start: 125, end: 136 },
+      },
+    ],
+    contacts: [],
+    isSample: true,
+    status: "active",
+    archivedAt: null,
+    reviewItems: [],
+  };
+}
+
+async function listJobsForProfileId(ctx: any, profileId: string) {
+  return ctx.db
+    .query("jobs")
+    .withIndex("by_user_updated", (q: any) => q.eq("userId", profileId))
+    .order("desc")
+    .collect();
+}
+
+async function archiveActiveSampleJobsForProfile(ctx: any, profileId: string) {
+  const jobs = await listJobsForProfileId(ctx, profileId);
+  const activeSampleJobs = jobs.filter(
+    (job: any) =>
+      Boolean(job.isSample) &&
+      (job.archivedAt === null || job.archivedAt === undefined),
+  );
+
+  if (activeSampleJobs.length === 0) {
+    return;
+  }
+
+  const now = Date.now();
+  await Promise.all(
+    activeSampleJobs.map((job: any) =>
+      ctx.db.patch(job._id, {
+        archivedAt: now,
+        updatedAt: now,
+      }),
+    ),
+  );
+}
+
+async function scheduleFirstRunPathMetric(
+  ctx: any,
+  path: "import" | "sample" | "bounce",
+) {
+  await ctx.scheduler.runAfter(0, internal.metrics.recordMetric, {
+    name: FIRST_RUN_PATH_METRIC,
+    value: 1,
+    metadata: {
+      namespace: "jobs-v2",
+      path,
+    },
+    labels: {
+      namespace: "jobs-v2",
+      path,
+    },
+  });
+}
+
 function getLegacyFieldConfidence(
   job: any,
   fieldKey: string,
@@ -137,6 +331,7 @@ function buildJobProjection(
     title: job.title,
     company: job.company,
     location: job.location,
+    isSample: Boolean(job.isSample),
     sourceUrl: job.sourceUrl,
     sourceDomain: job.sourceDomain,
     sourceType: job.sourceType,
@@ -155,6 +350,7 @@ function buildJobProjection(
     toneCues: flattenExtractionValues(toneCuesExtraction),
     toneCuesExtraction,
     contacts: job.contacts ?? [],
+    isSample: Boolean(job.isSample),
     status: job.status,
     matchRead,
     linkedProposalCount,
@@ -203,11 +399,7 @@ async function listProjectedJobsForProfile(ctx: any, profile: {
   keywords?: string[];
 }) {
   const profileId = String(profile._id ?? profile.id ?? "");
-  const jobs = await ctx.db
-    .query("jobs")
-    .withIndex("by_user_updated", (q: any) => q.eq("userId", profileId))
-    .order("desc")
-    .collect();
+  const jobs = await listJobsForProfileId(ctx, profileId);
 
   const proposals = await ctx.db
     .query("proposals")
@@ -269,6 +461,7 @@ async function listProjectedJobsForProfile(ctx: any, profile: {
         title: job.title,
         company: job.company,
         location: job.location,
+        isSample: Boolean(job.isSample),
         sourceUrl: job.sourceUrl,
         sourceDomain: job.sourceDomain,
         sourceType: job.sourceType,
@@ -303,6 +496,8 @@ export const createOrReuseFromSource = mutation({
   handler: async (ctx, args) => {
     const profile = await requireCanonicalUserProfile(ctx);
     const draft = buildCanonicalJobDraftFromSource(args);
+
+    await archiveActiveSampleJobsForProfile(ctx, String(profile._id));
 
     const existing = await ctx.db
       .query("jobs")
@@ -349,6 +544,7 @@ export const createOrReuseFromSource = mutation({
       mustHaves: [],
       toneCues: [],
       contacts: [],
+      isSample: false,
       status: draft.status,
       archivedAt: draft.archivedAt,
       reviewItems: [],
@@ -380,6 +576,7 @@ export const getById = query({
       title: v.string(),
       company: v.string(),
       location: v.string(),
+      isSample: v.boolean(),
       sourceUrl: v.string(),
       sourceDomain: v.string(),
       sourceType: v.string(),
@@ -515,7 +712,11 @@ export const getById = query({
     }
 
     const job = await ctx.db.get(normalizedJobId);
-    if (!job || !profiles.some((profile) => String(profile._id) === String(job.userId))) {
+    if (
+      !job ||
+      !profiles.some((profile) => String(profile._id) === String(job.userId)) ||
+      (job.archivedAt !== null && job.archivedAt !== undefined)
+    ) {
       return null;
     }
 
@@ -569,6 +770,7 @@ export const listForUser = query({
       title: v.string(),
       company: v.string(),
       location: v.string(),
+      isSample: v.boolean(),
       sourceUrl: v.string(),
       sourceDomain: v.string(),
       sourceType: v.string(),
@@ -611,6 +813,7 @@ export const loadForUser = mutation({
       title: v.string(),
       company: v.string(),
       location: v.string(),
+      isSample: v.boolean(),
       sourceUrl: v.string(),
       sourceDomain: v.string(),
       sourceType: v.string(),
@@ -633,6 +836,76 @@ export const loadForUser = mutation({
   handler: async (ctx) => {
     const profile = await requireCanonicalUserProfile(ctx);
     return listProjectedJobsForProfile(ctx, profile);
+  },
+});
+
+export const recordFirstRunPath = mutation({
+  args: {
+    path: v.union(v.literal("import"), v.literal("sample"), v.literal("bounce")),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    await scheduleFirstRunPathMetric(ctx, args.path);
+    return null;
+  },
+});
+
+export const seedSampleJob = mutation({
+  args: {},
+  returns: v.object({
+    jobId: v.string(),
+  }),
+  handler: async (ctx) => {
+    const profile = await requireCanonicalUserProfile(ctx);
+    const jobs = await listJobsForProfileId(ctx, String(profile._id));
+
+    const activeSampleJob = jobs.find(
+      (job: any) =>
+        Boolean(job.isSample) &&
+        (job.archivedAt === null || job.archivedAt === undefined),
+    );
+
+    if (activeSampleJob) {
+      const now = Date.now();
+      await ctx.db.patch(activeSampleJob._id, {
+        lastOpenedAt: now,
+        updatedAt: now,
+      });
+      await scheduleFirstRunPathMetric(ctx, "sample");
+      return { jobId: String(activeSampleJob._id) };
+    }
+
+    const archivedSampleJob = jobs.find(
+      (job: any) =>
+        Boolean(job.isSample) &&
+        job.archivedAt !== null &&
+        job.archivedAt !== undefined,
+    );
+
+    if (archivedSampleJob) {
+      const now = Date.now();
+      await ctx.db.patch(archivedSampleJob._id, {
+        archivedAt: null,
+        lastOpenedAt: now,
+        updatedAt: now,
+      });
+      await scheduleFirstRunPathMetric(ctx, "sample");
+      return { jobId: String(archivedSampleJob._id) };
+    }
+
+    const now = Date.now();
+    const sampleJob = buildSampleJobDraft(now);
+    const jobId = await ctx.db.insert("jobs", {
+      userId: profile._id,
+      ...sampleJob,
+    });
+    await scheduleFirstRunPathMetric(ctx, "sample");
+    return { jobId: String(jobId) };
   },
 });
 
