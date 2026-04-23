@@ -616,6 +616,24 @@ describe("JobsPage", () => {
     expect(recordFirstRunPathMock).toHaveBeenCalledWith({ path: "import" });
   });
 
+  it("holds the first-run panel until the jobs query resolves", () => {
+    listResult = undefined;
+    selectedJobResult = null;
+
+    render(
+      <MemoryRouter initialEntries={["/jobs"]}>
+        <Routes>
+          <Route path="/jobs" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("Loading jobs…")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Start with one job decision"),
+    ).not.toBeInTheDocument();
+  });
+
   it("seeds a sample job, refreshes the list, and marks the sample visibly", async () => {
     listResult = [];
     selectedJobResult = null;
