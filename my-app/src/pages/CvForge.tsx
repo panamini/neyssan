@@ -858,6 +858,32 @@ export function CvForge(): JSX.Element {
     [requestedJobId, updateJobField],
   );
 
+  const handleSaveJobField = React.useCallback(
+    async (fieldKey: string, nextValue: string | string[]) => {
+      if (!requestedJobId) {
+        return;
+      }
+
+      setOptimisticJobRecord((current) => {
+        if (!current) {
+          return current;
+        }
+
+        return {
+          ...current,
+          [fieldKey]: nextValue,
+        } as CvForgeCanonicalJob;
+      });
+
+      await updateJobField({
+        jobId: requestedJobId,
+        fieldKey,
+        value: nextValue,
+      });
+    },
+    [requestedJobId, updateJobField],
+  );
+
   return (
     <div
       className="dasti-page-scroll"
@@ -903,6 +929,7 @@ export function CvForge(): JSX.Element {
                 linkedDocumentCount={selectedJobRecord.linkedProposalCount}
                 linkedProposals={selectedJobRecord.linkedProposals}
                 reviewItems={selectedJobRecord.reviewItems}
+                onSaveField={handleSaveJobField}
                 onApproveReviewItem={handleApproveJobReviewItem}
                 onSaveReviewItem={handleSaveJobReviewItem}
               />

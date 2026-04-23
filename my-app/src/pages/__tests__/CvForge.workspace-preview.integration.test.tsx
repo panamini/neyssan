@@ -6,13 +6,28 @@ import { MemoryRouter } from "react-router-dom";
 import { CvForge } from "../CvForge";
 import { DEFAULT_VERBATI_STYLE } from "../../features/verbati/style";
 
+const { mutationMock } = vi.hoisted(() => ({
+  mutationMock: vi.fn(async () => undefined),
+}));
+
 vi.mock("convex/react", () => ({
-  useQuery: vi.fn(() => ({
-    preset1: null,
-    preset2: null,
-    preset3: null,
-    activeSlot: null,
+  useConvexAuth: vi.fn(() => ({
+    isAuthenticated: true,
+    isLoading: false,
   })),
+  useMutation: vi.fn(() => mutationMock),
+  useQuery: vi.fn((reference: string, args?: unknown) => {
+    if (args === "skip") {
+      return undefined;
+    }
+
+    return {
+      preset1: null,
+      preset2: null,
+      preset3: null,
+      activeSlot: null,
+    };
+  }),
   useAction: vi.fn(() => undefined),
 }));
 
