@@ -294,6 +294,7 @@ export default defineSchema({
     lastResumeName: v.optional(v.union(v.string(), v.null())),
     matchReadSynthesis: v.optional(matchReadSynthesisChoice),
     isSample: v.optional(v.boolean()),
+    isFavorite: v.optional(v.boolean()),
     status: v.string(),
     archivedAt: v.optional(v.union(v.number(), v.null())),
     reviewItems: v.array(

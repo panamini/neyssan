@@ -734,6 +734,7 @@ export function buildCanonicalJobDraftFromSource(args: {
     toneCues: flattenExtractionValues(toneCuesExtraction),
     toneCuesExtraction,
     contacts: [] as string[],
+    isFavorite: false,
     status: "active",
     archivedAt: null as number | null,
     reviewItems,
