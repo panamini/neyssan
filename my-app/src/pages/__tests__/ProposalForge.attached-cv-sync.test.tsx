@@ -93,12 +93,26 @@ vi.mock("../../lib/proposal-personalization", () => ({
   getProposalAttachedCvId: () => mockActiveCvId,
   getLocalActiveCvSnapshotById: (id: string) =>
     mockCvSnapshots[id] ? { title: mockCvSnapshots[id] } : null,
+  getLocalCvDocumentById: (id: string | null) =>
+    id && mockCvSnapshots[id]
+      ? { ...mockAttachedCv, id, title: mockCvSnapshots[id] }
+      : null,
   getProposalAttachedCvLocalDocument: () =>
     mockActiveCvId === "cv_alpha" ? mockAttachedCv : null,
   getActiveLocalPersonalizationSource: () => ({
     title: mockActiveCvId === "cv_alpha" ? "Operations Associate — Alex Martin" : null,
     personalizationContext:
       mockActiveCvId === "cv_alpha"
+        ? {
+            name: "Alex Martin",
+            desiredPosition: "Operations Associate",
+          }
+        : null,
+  }),
+  getLocalPersonalizationSourceByCvId: (id: string | null) => ({
+    title: id === "cv_alpha" ? "Operations Associate — Alex Martin" : null,
+    personalizationContext:
+      id === "cv_alpha"
         ? {
             name: "Alex Martin",
             desiredPosition: "Operations Associate",
@@ -268,11 +282,20 @@ function LocationProbe(): JSX.Element {
   return <div data-testid="location">{`${location.pathname}${location.search}`}</div>;
 }
 
-function buildCoverLetterStartEntry() {
+function buildCoverLetterStartEntry(options?: {
+  jobImportFocus?: "supported-sites";
+  resetToken?: string;
+}) {
   return {
     pathname: "/proposal",
     state: {
       proposalEntryIntent: "cover-letter-start",
+      ...(options?.resetToken
+        ? { proposalWorkspaceResetToken: options.resetToken }
+        : {}),
+      ...(options?.jobImportFocus
+        ? { jobImportFocus: options.jobImportFocus }
+        : {}),
     },
   };
 }
@@ -337,6 +360,38 @@ describe("ProposalForge attached CV sync", () => {
     expect(container.querySelector(".dasti-proposal-output-shell")).toBeNull();
     expect(container.querySelector(".dasti-workbench-top-left-slot--proposal")).toBeNull();
     expect(container.querySelector(".dasti-grid-split")).toBeNull();
+  });
+
+  it("opens the supported-sites helper when job import focus is requested", () => {
+    render(
+      <MemoryRouter
+        initialEntries={[
+          buildCoverLetterStartEntry({
+            jobImportFocus: "supported-sites",
+            resetToken: "jobs-empty-state-import",
+          }),
+        ]}
+      >
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId("cover-letter-start-surface")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Bring in the job." }),
+    ).toBeInTheDocument();
+    const captureRole = screen.getByRole("button", {
+      name: /^Capture the role\b/i,
+    });
+    expect(captureRole).toHaveAttribute("aria-pressed", "true");
+    expect(
+      screen.getByRole("link", { name: /Install TwoWeeks extension/i }),
+    ).toHaveAttribute("href", PROPOSAL_EXTENSION_INSTALL_LINK.href);
+    expect(screen.getByRole("link", { name: /LinkedIn/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Paste job offer\b/i })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /^Bring in the job\b/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows one decision level at a time and navigates between parent and child states", () => {
@@ -601,7 +656,9 @@ describe("ProposalForge attached CV sync", () => {
       expect(screen.queryByTestId("cover-letter-start-surface")).not.toBeInTheDocument();
       expect(document.getElementById("jobDescription")).toHaveFocus();
     });
-    expect(mockActiveCvId).toBe(mockImportCv.mock.calls[0][0].id);
+    expect(
+      screen.getByRole("button", { name: /^CV: Taylor Case\b/i }),
+    ).toBeInTheDocument();
     expect(screen.getByTestId("location")).toHaveTextContent("/proposal");
   });
 
