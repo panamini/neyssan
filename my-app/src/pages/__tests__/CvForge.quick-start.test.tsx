@@ -317,7 +317,10 @@ describe("CvForge entry picker", () => {
     );
 
     expect(
-      screen.getByRole("button", { name: /For: Senior Product Designer @ Acme/i }),
+      screen.getByRole("button", { name: /Job: Senior Product Designer @ Acme/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Back to job" }),
     ).toBeInTheDocument();
 
     await user.click(
@@ -327,5 +330,29 @@ describe("CvForge entry picker", () => {
 
     expect(loadCv).toHaveBeenCalledWith("cv_secondary");
     expect(screen.getByTestId("location")).toHaveTextContent("/cv?jobId=job_123&id=cv_secondary");
+  });
+
+  it("lets the picker close back to the job page before a cv is opened", async () => {
+    const user = userEvent.setup();
+    const primaryCv = buildProfileCv("cv_primary", "Ada Lovelace", "Product Designer");
+
+    useCvLibraryMock.mockReturnValue(
+      buildCvLibraryState({
+        currentCv: primaryCv,
+        currentCvId: "cv_primary",
+        cvs: [primaryCv],
+      }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/cv?jobId=job_123"]}>
+        <CvForge />
+        <LocationProbe />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Back to job" }));
+
+    expect(screen.getByTestId("location")).toHaveTextContent("/jobs/job_123");
   });
 });

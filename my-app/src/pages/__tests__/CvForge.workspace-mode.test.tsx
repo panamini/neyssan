@@ -379,8 +379,11 @@ describe("CvForge workspace mode", () => {
 
     expect(
       screen.getByRole("button", {
-        name: "For: Senior Product Designer @ Acme",
+        name: "Job: Senior Product Designer @ Acme",
       }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("CV: Product Designer — Ada Lovelace"),
     ).toBeInTheDocument();
     expect(
       screen.queryByText("Loading saved job brief…"),
@@ -393,7 +396,7 @@ describe("CvForge workspace mode", () => {
 
     expect(
       screen.queryByRole("button", {
-        name: "For: Senior Product Designer @ Acme",
+        name: "Job: Senior Product Designer @ Acme",
       }),
     ).not.toBeInTheDocument();
     expect(screen.getByText("Mock profile editor cv_123")).toBeInTheDocument();
