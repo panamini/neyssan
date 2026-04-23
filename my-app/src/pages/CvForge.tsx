@@ -2,7 +2,7 @@ import React from "react";
 import { useConvexAuth, useQuery } from "convex/react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { v4 as uuidv4 } from "uuid";
-import { Check, Eye, Palette, PenLine } from "@/lib/icons";
+import { Check, Eye, Palette, PenLine, X } from "@/lib/icons";
 import { api } from "../../convex/_generated/api";
 import { ProfileReviewCard } from "../components/ProfileReviewCard";
 import ResumeExportControl from "../components/ResumeExportControl";
@@ -87,6 +87,7 @@ type CvForgeCanonicalJob = {
 } | null;
 
 const CV_FORGE_WORKSPACE_MODE_STORAGE_KEY = "dasti:cv-forge-workspace-mode:v1";
+const ENTRY_PICKER_PENDING_ROUTE_ID = "__entry-picker-pending-route__";
 const DEFAULT_PRESET_SLOT_NAMES: Record<PresetSlotIndex, string> = {
   1: "Style 1",
   2: "Style 2",
@@ -307,9 +308,8 @@ export function CvForge(): JSX.Element {
   const { showToast } = useToast();
   const [isCreatingEntryCv, setIsCreatingEntryCv] = React.useState(false);
   const [isImportingEntryCv, setIsImportingEntryCv] = React.useState(false);
-  const [pendingEntryCvId, setPendingEntryCvId] = React.useState<string | null>(
-    null,
-  );
+  const [entryPickerTransitionCvId, setEntryPickerTransitionCvId] =
+    React.useState<string | null>(null);
   const [pendingFreshEntryBaseCvId, setPendingFreshEntryBaseCvId] =
     React.useState<string | null>(null);
   const requestedCvId = React.useMemo(
@@ -320,39 +320,31 @@ export function CvForge(): JSX.Element {
     () => cvs.map((cv) => buildCvForgePickerOption(cv)),
     [cvs],
   );
-  const activeCvContext = React.useMemo(
-    () => (currentCv ? buildCvForgePickerOption(currentCv) : null),
-    [currentCv],
-  );
+  const activeWorkspaceCvId =
+    requestedCvId ||
+    (entryPickerTransitionCvId === ENTRY_PICKER_PENDING_ROUTE_ID
+      ? undefined
+      : entryPickerTransitionCvId ?? currentCvId ?? undefined);
+  // Keep the picker hidden while a local CV selection is in flight and the
+  // URL `id` param is catching up to the chosen document.
   const shouldShowEntryPicker =
-    isLibraryHydrated && !lastLibraryFetchFailed && !requestedCvId;
-  const entryPickerDefaultCvId = React.useMemo(() => {
-    if (cvPickerOptions.length === 1) {
-      return cvPickerOptions[0].id;
-    }
-    if (
-      currentCvId &&
-      cvPickerOptions.some((option) => option.id === currentCvId)
-    ) {
-      return currentCvId;
-    }
-    return cvPickerOptions[0]?.id ?? null;
-  }, [currentCvId, cvPickerOptions]);
+    isLibraryHydrated &&
+    !lastLibraryFetchFailed &&
+    !requestedCvId &&
+    !entryPickerTransitionCvId;
 
   React.useEffect(() => {
-    if (!shouldShowEntryPicker) {
-      setPendingEntryCvId(null);
+    if (
+      !entryPickerTransitionCvId ||
+      entryPickerTransitionCvId === ENTRY_PICKER_PENDING_ROUTE_ID
+    ) {
       return;
     }
 
-    setPendingEntryCvId((current) => {
-      if (current && cvPickerOptions.some((option) => option.id === current)) {
-        return current;
-      }
-
-      return entryPickerDefaultCvId;
-    });
-  }, [cvPickerOptions, entryPickerDefaultCvId, shouldShowEntryPicker]);
+    if (requestedCvId === entryPickerTransitionCvId) {
+      setEntryPickerTransitionCvId(null);
+    }
+  }, [entryPickerTransitionCvId, requestedCvId]);
 
   const navigateToSelectedCv = React.useCallback(
     (cvId: string) => {
@@ -382,6 +374,7 @@ export function CvForge(): JSX.Element {
     }
 
     setPendingFreshEntryBaseCvId(null);
+    setEntryPickerTransitionCvId(currentCvId);
     navigateToSelectedCv(currentCvId);
   }, [currentCvId, navigateToSelectedCv, pendingFreshEntryBaseCvId]);
 
@@ -834,13 +827,6 @@ export function CvForge(): JSX.Element {
   const showJobBriefContext = Boolean(requestedJobId);
   const isEntryPickerBusy = isCreatingEntryCv || isImportingEntryCv;
 
-  const handleReturnToJob = React.useCallback(() => {
-    if (!requestedJobId) {
-      return;
-    }
-    void navigate(`/jobs/${encodeURIComponent(requestedJobId)}`);
-  }, [navigate, requestedJobId]);
-
   const handleClearJobContext = React.useCallback(() => {
     const nextParams = new URLSearchParams(search);
     nextParams.delete("jobId");
@@ -851,14 +837,14 @@ export function CvForge(): JSX.Element {
     });
   }, [location.pathname, navigate, search]);
 
-  const handleOpenSelectedCv = React.useCallback(() => {
-    if (!pendingEntryCvId) {
-      return;
-    }
-
-    loadCv(pendingEntryCvId);
-    navigateToSelectedCv(pendingEntryCvId);
-  }, [loadCv, navigateToSelectedCv, pendingEntryCvId]);
+  const handleOpenCvById = React.useCallback(
+    (cvId: string) => {
+      setEntryPickerTransitionCvId(cvId);
+      loadCv(cvId);
+      navigateToSelectedCv(cvId);
+    },
+    [loadCv, navigateToSelectedCv],
+  );
 
   const handleImportEntryCv = React.useCallback(() => {
     if (isEntryPickerBusy) {
@@ -913,9 +899,11 @@ export function CvForge(): JSX.Element {
           },
           sections: outcome.sections as any,
         });
+        setEntryPickerTransitionCvId(nextCvId);
         loadCv(nextCvId);
         navigateToSelectedCv(nextCvId);
       } catch (error) {
+        setEntryPickerTransitionCvId(null);
         showToast(
           error instanceof Error ? error.message : "Resume import failed.",
           { variant: "error" },
@@ -943,10 +931,12 @@ export function CvForge(): JSX.Element {
     }
 
     setIsCreatingEntryCv(true);
+    setEntryPickerTransitionCvId(ENTRY_PICKER_PENDING_ROUTE_ID);
     setPendingFreshEntryBaseCvId(currentCvId ?? "__none__");
     try {
       await createNewCv(undefined, { forceV1: true });
     } catch (error) {
+      setEntryPickerTransitionCvId(null);
       setPendingFreshEntryBaseCvId(null);
       showToast(
         error instanceof Error ? error.message : "Could not create a new CV.",
@@ -985,79 +975,36 @@ export function CvForge(): JSX.Element {
           } as React.CSSProperties
         }
       >
-        {showJobBriefContext || (!shouldShowEntryPicker && activeCvContext) ? (
+        {showJobBriefContext ? (
           <div className="dasti-cv-job-context">
-            {!showJobBriefContext ? null : requestedJobRecord === undefined ? (
-              <div className="dasti-proposal-context-row dasti-proposal-context-row--below">
-                <p className="dasti-hint">Loading job context…</p>
-                {shouldShowEntryPicker ? (
-                  <button
-                    type="button"
-                    className="dasti-button dasti-button--secondary dasti-button--sm"
-                    onClick={handleReturnToJob}
-                  >
-                    <span>Back to job</span>
-                  </button>
-                ) : null}
-              </div>
+            {requestedJobRecord === undefined ? (
+              <p className="dasti-hint">Loading job context…</p>
             ) : selectedJobRecord ? (
               <div className="dasti-proposal-context-row dasti-proposal-context-row--below">
-                <button
-                  type="button"
-                  className="dasti-proposal-context-chip"
-                  onClick={handleReturnToJob}
-                >
-                  <span className="dasti-proposal-context-row__text">
-                    {`Job: ${selectedJobRecord.title} @ ${selectedJobRecord.company || "Unknown company"}`}
-                  </span>
-                </button>
-                {shouldShowEntryPicker ? (
-                  <button
-                    type="button"
-                    className="dasti-button dasti-button--secondary dasti-button--sm"
-                    onClick={handleReturnToJob}
-                  >
-                    <span>Back to job</span>
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="dasti-button dasti-button--secondary dasti-button--sm"
-                    onClick={handleClearJobContext}
-                  >
-                    <span>Clear job context</span>
-                  </button>
-                )}
-              </div>
-            ) : (
-              <div className="dasti-proposal-context-row dasti-proposal-context-row--below">
-                <p className="dasti-hint">
-                  Saved job context is unavailable for this resume session.
-                </p>
-                {shouldShowEntryPicker ? (
-                  <button
-                    type="button"
-                    className="dasti-button dasti-button--secondary dasti-button--sm"
-                    onClick={handleReturnToJob}
-                  >
-                    <span>Back to job</span>
-                  </button>
-                ) : null}
-              </div>
-            )}
-            {!shouldShowEntryPicker && activeCvContext ? (
-              <div
-                className="dasti-proposal-context-row dasti-proposal-context-row--below"
-                role="status"
-                aria-live="polite"
-              >
                 <div className="dasti-proposal-context-chip">
                   <span className="dasti-proposal-context-row__text">
-                    {`CV: ${activeCvContext.title}`}
+                    {`For: ${selectedJobRecord.title} @ ${selectedJobRecord.company || "Unknown company"}`}
                   </span>
+                  <button
+                    type="button"
+                    className="dasti-proposal-context-chip__lead dasti-icon-button"
+                    aria-label="Clear job context"
+                    onClick={handleClearJobContext}
+                  >
+                    <span className="dasti-proposal-context-chip__glyph dasti-proposal-context-chip__glyph--base">
+                      <X size={12} strokeWidth={1.9} aria-hidden="true" />
+                    </span>
+                    <span className="dasti-proposal-context-chip__glyph dasti-proposal-context-chip__glyph--hover">
+                      <X size={12} strokeWidth={1.9} aria-hidden="true" />
+                    </span>
+                  </button>
                 </div>
               </div>
-            ) : null}
+            ) : (
+              <p className="dasti-hint">
+                Saved job context is unavailable for this resume session.
+              </p>
+            )}
           </div>
         ) : null}
         {shouldShowEntryPicker ? (
@@ -1102,9 +1049,9 @@ export function CvForge(): JSX.Element {
                   {cvPickerOptions.map((option) => (
                     <CvPickerCard
                       key={option.id}
+                      actionLabel="Use this CV"
+                      onAction={handleOpenCvById}
                       option={option}
-                      selected={pendingEntryCvId === option.id}
-                      onSelect={setPendingEntryCvId}
                     />
                   ))}
                 </div>
@@ -1140,15 +1087,6 @@ export function CvForge(): JSX.Element {
                   {isCreatingEntryCv ? "Creating..." : "Start from scratch"}
                 </span>
               </button>
-              <button
-                type="button"
-                className="dasti-button dasti-button--accent dasti-button--sm"
-                onClick={handleOpenSelectedCv}
-                disabled={!pendingEntryCvId || isEntryPickerBusy}
-              >
-                <Check size={16} strokeWidth={1.9} aria-hidden="true" />
-                <span>Open selected CV</span>
-              </button>
             </div>
             <input
               ref={cvImportInputRef}
@@ -1163,7 +1101,7 @@ export function CvForge(): JSX.Element {
             {currentCv ? (
               <div style={{ display: "none" }} aria-hidden="true">
                 <ProfileReviewCard
-                  cvId={requestedCvId}
+                  cvId={activeWorkspaceCvId}
                   exportingFormat={exportingFormat}
                   exportStatusDescription={exportStatusDescription}
                   exportStatusLabel={exportStatusLabel}
@@ -1218,7 +1156,7 @@ export function CvForge(): JSX.Element {
                 }
               >
                 <ProfileReviewCard
-                  cvId={requestedCvId}
+                  cvId={activeWorkspaceCvId}
                   exportingFormat={exportingFormat}
                   exportStatusDescription={exportStatusDescription}
                   exportStatusLabel={exportStatusLabel}
