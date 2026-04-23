@@ -2325,12 +2325,6 @@ function scrapeZipRecruiterJobData(): JobData {
 
   const company = extractZipRecruiterCompanyFromJobPosting(jobPosting) || headerMeta.company;
   const location = extractZipRecruiterLocationFromJobPosting(jobPosting) || headerMeta.location;
-  const salary = extractZipRecruiterSalaryFromJobPosting(jobPosting) || headerMeta.salary;
-  const metadataLines = [
-    company ? `Company: ${company}` : undefined,
-    location ? `Location: ${location}` : undefined,
-    salary ? `Salary: ${salary}` : undefined
-  ].filter((value): value is string => Boolean(value));
 
   const body =
     queryFirstFilteredDescriptionText([
@@ -2351,15 +2345,13 @@ function scrapeZipRecruiterJobData(): JobData {
     cleanZipRecruiterDescriptionText(findJobPostingJsonLdField("description")) ||
     pickBestZipRecruiterDescriptionFallback();
 
-  const description = normalizeScrapedText(
-    [metadataLines.length ? metadataLines.join("\n") : undefined, cleanZipRecruiterDescriptionText(body)]
-      .filter((value): value is string => Boolean(value))
-      .join("\n\n")
-  ) || undefined;
+  const description = cleanZipRecruiterDescriptionText(body) || undefined;
 
   return {
     platform: "ziprecruiter",
     title,
+    company: sanitizeScrapedCompany(company),
+    location: sanitizeScrapedLocation(location),
     description,
     url: window.location.href
   };
@@ -2593,26 +2585,6 @@ function scrapeHelloWorkJobData(): JobData {
           }`
         )
       : undefined);
-  const contractType =
-    headerMeta.contractType ||
-    (typeof agentOffer?.ContractType === "string" ? normalizeScrapedText(agentOffer.ContractType) : undefined);
-  const salary =
-    headerMeta.salary ||
-    (typeof (((jobPosting?.baseSalary as Record<string, unknown> | undefined)?.value as Record<string, unknown> | undefined)?.value) === "string"
-      ? normalizeScrapedText(
-          `${(((jobPosting?.baseSalary as Record<string, unknown>).value as Record<string, unknown>).value as string)} ${
-            typeof (jobPosting?.salaryCurrency) === "string" ? (jobPosting.salaryCurrency as string) : ""
-          }`.trim()
-        )
-      : undefined);
-
-  const metadataLines = [
-    company ? `Entreprise: ${company}` : undefined,
-    location ? `Lieu: ${location}` : undefined,
-    contractType ? `Contrat: ${contractType}` : undefined,
-    salary ? `Salaire: ${salary}` : undefined
-  ].filter((value): value is string => Boolean(value));
-
   const scriptSections = [
     typeof agentOffer?.Description === "string"
       ? normalizeScrapedText(`Les missions du poste\n${agentOffer.Description}`)
@@ -2624,21 +2596,18 @@ function scrapeHelloWorkJobData(): JobData {
 
   const description =
     normalizeScrapedText(
-      [
-        metadataLines.length ? metadataLines.join("\n") : undefined,
-        domSections ||
-          (scriptSections.length ? scriptSections.join("\n\n") : undefined) ||
-          cleanHelloWorkDescriptionText(
-            typeof jobPosting?.description === "string" ? htmlToStructuredText(jobPosting.description) : undefined
-          )
-      ]
-        .filter((value): value is string => Boolean(value))
-        .join("\n\n")
+      domSections ||
+        (scriptSections.length ? scriptSections.join("\n\n") : undefined) ||
+        cleanHelloWorkDescriptionText(
+          typeof jobPosting?.description === "string" ? htmlToStructuredText(jobPosting.description) : undefined
+        )
     ) || undefined;
 
   return {
     platform: "hellowork",
     title,
+    company: sanitizeScrapedCompany(company),
+    location: sanitizeScrapedLocation(location),
     description,
     url: window.location.href
   };
