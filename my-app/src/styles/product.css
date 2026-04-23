@@ -7205,10 +7205,18 @@ html:not(.dark) .dasti-proposal-submit {
   margin-top: auto;
 }
 
+.dasti-doc-card__footer--chooser-action {
+  justify-content: space-between;
+}
+
 .dasti-doc-card__actions {
   display: inline-flex;
   align-items: center;
   gap: var(--s2);
+}
+
+.dasti-doc-card__action-arrow {
+  margin-left: auto;
 }
 
 .dasti-icon-button--chooser-selected {
