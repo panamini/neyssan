@@ -511,12 +511,16 @@ export function buildCanonicalJobDraftFromSource(args: {
   sourceDomain?: string;
   sourceType?: string;
   applicationUrl?: string;
+  company?: string;
+  location?: string;
 }) {
   const now = Date.now();
   const rawDescription = String(args.rawDescription ?? "").trim();
   const title = compactWhitespace(args.title);
   const sourceUrl = compactWhitespace(args.sourceUrl ?? "");
   const sourceDomain = compactWhitespace(args.sourceDomain ?? "") || extractDomain(sourceUrl);
+  const structuredCompany = compactWhitespace(args.company ?? "");
+  const structuredLocation = compactWhitespace(args.location ?? "");
   const responsibilitiesExtraction = extractResponsibilities(rawDescription);
   const mustHavesExtraction = extractMustHaves(rawDescription);
   const keywordsExtraction = extractKeywords({
@@ -556,8 +560,8 @@ export function buildCanonicalJobDraftFromSource(args: {
     parseStatus: "parsed" as CanonicalJobParseStatus,
     reviewState: resolveCanonicalJobReviewState(reviewItems),
     title,
-    company: extractCompany(rawDescription),
-    location: extractLocation(rawDescription),
+    company: structuredCompany || extractCompany(rawDescription),
+    location: structuredLocation || extractLocation(rawDescription),
     rawDescription,
     rawLanguageDetected: "en",
     summary: summaryExtraction.value || title,
@@ -575,6 +579,18 @@ export function buildCanonicalJobDraftFromSource(args: {
     archivedAt: null as number | null,
     reviewItems,
   };
+}
+
+export function resolveReparsedCompany(args: {
+  existingCompany?: string | null;
+  parsedCompany?: string | null;
+}): string {
+  const parsedCompany = compactWhitespace(args.parsedCompany ?? "");
+  if (parsedCompany) {
+    return parsedCompany;
+  }
+
+  return compactWhitespace(args.existingCompany ?? "");
 }
 
 export function resolveCanonicalJobReviewState(

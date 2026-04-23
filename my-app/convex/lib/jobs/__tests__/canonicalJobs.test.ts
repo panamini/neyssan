@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildCanonicalJobDraftFromSource,
   flattenExtractionValues,
+  resolveReparsedCompany,
   resolveReparsedLocation,
   resolveReviewItemsAfterFieldUpdate,
 } from "../canonicalJobs";
@@ -149,6 +150,21 @@ describe("canonicalJobs", () => {
     }
   });
 
+  it("prefers structured company and location metadata when provided by the scraper", () => {
+    const draft = buildCanonicalJobDraftFromSource({
+      title: "Product Designer",
+      company: "Acme Studio",
+      location: "Paris, France",
+      rawDescription:
+        "Create polished product experiences and collaborate with engineering.",
+      sourceUrl: "https://www.linkedin.com/jobs/view/product-designer",
+      sourceType: "linkedin",
+    });
+
+    expect(draft.company).toBe("Acme Studio");
+    expect(draft.location).toBe("Paris, France");
+  });
+
   it("preserves a stored location when re-parse no longer finds a location cue", () => {
     const originalDraft = buildCanonicalJobDraftFromSource({
       title: "Operations Associate",
@@ -169,5 +185,28 @@ describe("canonicalJobs", () => {
         parsedLocation: reparsedDraft.location,
       }),
     ).toBe("Paris");
+  });
+
+  it("preserves a stored company when re-parse no longer finds a company cue", () => {
+    const originalDraft = buildCanonicalJobDraftFromSource({
+      title: "Operations Associate",
+      company: "Studio North",
+      rawDescription:
+        "Coordinate recurring launches and keep handoffs clear.",
+    });
+    const reparsedDraft = buildCanonicalJobDraftFromSource({
+      title: "Operations Associate",
+      rawDescription:
+        "Coordinate recurring launches and keep handoffs clear.",
+    });
+
+    expect(originalDraft.company).toBe("Studio North");
+    expect(reparsedDraft.company).toBe("");
+    expect(
+      resolveReparsedCompany({
+        existingCompany: originalDraft.company,
+        parsedCompany: reparsedDraft.company,
+      }),
+    ).toBe("Studio North");
   });
 });
