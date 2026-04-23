@@ -327,27 +327,21 @@ async function scheduleMatchReadSynthesisWarm(args: {
 
 function normalizeDecisionOutcome(
   value: string | undefined,
-): "cover_letter" | "resume" | "save_for_later" | null {
-  if (value === "cover_letter" || value === "resume" || value === "save_for_later") {
+): "cover_letter" | "resume" | null {
+  if (value === "cover_letter" || value === "resume") {
     return value;
-  }
-  if (value === "bounce") {
-    return "save_for_later";
   }
   return null;
 }
 
 function buildNextStepHeadline(
   tier: MatchReadTier,
-  outcome: "cover_letter" | "resume" | "save_for_later",
+  outcome: "cover_letter" | "resume",
 ): string {
   const tierLabel = tier === "unknown" ? "unknown" : tier;
 
   if (outcome === "resume") {
     return `Most users with a ${tierLabel} match opened the resume with this job.`;
-  }
-  if (outcome === "save_for_later") {
-    return `Most users with a ${tierLabel} match saved the job for later.`;
   }
   return `Most users with a ${tierLabel} match generated a cover letter first.`;
 }
@@ -398,9 +392,14 @@ async function resolveNextStepBlock(ctx: any, tier: MatchReadTier) {
     }
     return actionOrder.indexOf(left) - actionOrder.indexOf(right);
   });
+  const headlineAction =
+    orderedActions.find(
+      (action): action is "cover_letter" | "resume" =>
+        action === "cover_letter" || action === "resume",
+    ) ?? "cover_letter";
 
   return {
-    headline: buildNextStepHeadline(tier, orderedActions[0]),
+    headline: buildNextStepHeadline(tier, headlineAction),
     usesCohortData: true,
     actions: orderedActions,
   };
@@ -1486,7 +1485,6 @@ export const trackEvent = mutation({
       v.union(
         v.literal("cover_letter"),
         v.literal("resume"),
-        v.literal("save_for_later"),
         v.literal("bounce"),
       ),
     ),
