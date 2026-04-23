@@ -347,6 +347,12 @@ function JobsPageContent(): JSX.Element {
   const markJobOpened = useMutation(
     ((api as any).jobsPublic?.markOpened ?? "jobsPublic.markOpened") as any,
   );
+  const archiveJob = useMutation(
+    ((api as any).jobsPublic?.archiveJob ?? "jobsPublic.archiveJob") as any,
+  );
+  const duplicateJob = useMutation(
+    ((api as any).jobsPublic?.duplicateJob ?? "jobsPublic.duplicateJob") as any,
+  );
   const updateJobField = useMutation(
     ((api as any).jobsPublic?.updateField ?? "jobsPublic.updateField") as any,
   );
@@ -813,6 +819,24 @@ function JobsPageContent(): JSX.Element {
     window.open(nextUrl, "_blank", "noopener");
   }, []);
 
+  const handleArchiveJob = React.useCallback(
+    async (jobId: string) => {
+      await archiveJob({ jobId });
+      if (selectedJobId === jobId) {
+        await navigate("/jobs?view=list");
+      }
+    },
+    [archiveJob, navigate, selectedJobId],
+  );
+
+  const handleDuplicateJob = React.useCallback(
+    async (jobId: string) => {
+      const result = await duplicateJob({ jobId });
+      await navigate(buildJobsRoute(result.jobId));
+    },
+    [duplicateJob, navigate],
+  );
+
   const authStatusMessage = !isLoaded || isConvexAuthLoading
     ? "Loading…"
     : !isSignedIn || !isConvexAuthenticated
@@ -1072,9 +1096,10 @@ function JobsPageContent(): JSX.Element {
                                 type="button"
                                 role="menuitem"
                                 className="dasti-cv-style-presets__option"
-                                disabled
                                 onClick={(event) => {
                                   event.stopPropagation();
+                                  setOpenRowMenuJobId(null);
+                                  void handleArchiveJob(job.id);
                                 }}
                               >
                                 <span className="dasti-cv-style-presets__option-copy">
@@ -1087,9 +1112,10 @@ function JobsPageContent(): JSX.Element {
                                 type="button"
                                 role="menuitem"
                                 className="dasti-cv-style-presets__option"
-                                disabled
                                 onClick={(event) => {
                                   event.stopPropagation();
+                                  setOpenRowMenuJobId(null);
+                                  void handleDuplicateJob(job.id);
                                 }}
                               >
                                 <span className="dasti-cv-style-presets__option-copy">
