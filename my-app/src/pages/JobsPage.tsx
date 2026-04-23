@@ -704,7 +704,7 @@ function JobsPageContent(): JSX.Element {
 
   const recordJobDecision = React.useCallback(
     (
-      outcome: "cover_letter" | "resume" | "save_for_later" | "bounce",
+      outcome: "cover_letter" | "resume" | "bounce",
       jobId: string,
     ) => {
       const session = jobDecisionSessionRef.current;

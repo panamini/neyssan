@@ -11,7 +11,7 @@ type JobsTelemetryMetricArgs = {
   event: JobsTelemetryEvent;
   jobId?: string | null;
   path?: "import" | "sample" | "bounce";
-  outcome?: "cover_letter" | "resume" | "save_for_later" | "bounce";
+  outcome?: "cover_letter" | "resume" | "bounce";
   timeToDecisionMs?: number | null;
   fieldKey?: string | null;
   beforeConfidence?: number | null;
