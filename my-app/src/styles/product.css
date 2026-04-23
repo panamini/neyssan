@@ -10335,6 +10335,23 @@ html:not(.dark) .dasti-proposal-submit {
   justify-self: end;
 }
 
+.dasti-jobs-row__menu {
+  position: relative;
+  justify-self: end;
+}
+
+.dasti-jobs-row__menu-trigger {
+  justify-self: end;
+}
+
+.dasti-jobs-row__menu-surface {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 180px;
+  z-index: 3;
+}
+
 .dasti-jobs-detail-pane {
   display: grid;
   min-height: 0;
