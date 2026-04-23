@@ -3,19 +3,17 @@ import { useConvex, useConvexAuth, useMutation } from "convex/react";
 import { useAuth } from "@clerk/clerk-react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
-  ArrowSquareOut,
   ArrowLeft,
   ClipboardText,
   DotsThree,
   FileText,
-  Plus,
 } from "@/lib/icons";
 import { api } from "../../convex/_generated/api";
 import { ProposalBriefCard } from "../components/ProposalBriefCard";
+import { FirstRunPanel } from "../components/jobs/FirstRunPanel";
 import { MatchReadBlock } from "../components/jobs/MatchReadBlock";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import {
-  PROPOSAL_EXTENSION_INSTALL_LINK,
   getProposalSourceLabel,
 } from "../lib/proposal-source-platforms";
 import { clearActiveLocalCvId } from "../lib/proposal-personalization";
@@ -35,6 +33,7 @@ type JobsPageListItem = {
   title: string;
   company: string;
   location: string;
+  isSample: boolean;
   sourceUrl: string;
   sourceDomain: string;
   sourceType: string;
@@ -73,6 +72,7 @@ type JobsPageDetail = {
   title: string;
   company: string;
   location: string;
+  isSample: boolean;
   sourceUrl: string;
   sourceDomain: string;
   sourceType: string;
@@ -303,6 +303,8 @@ function JobsPageContent(): JSX.Element {
   const [jobsRuntimeUnavailable, setJobsRuntimeUnavailable] = React.useState(false);
   const [selectedJobRecord, setSelectedJobRecord] =
     React.useState<JobsPageDetail | undefined>(undefined);
+  const [isSeedingSample, setIsSeedingSample] = React.useState(false);
+  const [firstRunError, setFirstRunError] = React.useState<string | null>(null);
   const lastMarkedJobIdRef = React.useRef<string | null>(null);
   const rowMenuRef = React.useRef<HTMLDivElement | null>(null);
   const [openRowMenuJobId, setOpenRowMenuJobId] = React.useState<string | null>(null);
@@ -318,6 +320,9 @@ function JobsPageContent(): JSX.Element {
   const loadJobsForUser = useMutation(jobsLoadReference);
   const approveReviewItem = useMutation(
     ((api as any).jobsPublic?.approveReviewItem ?? "jobsPublic.approveReviewItem") as any,
+  );
+  const seedSampleJob = useMutation(
+    ((api as any).jobsPublic?.seedSampleJob ?? "jobsPublic.seedSampleJob") as any,
   );
   const markJobOpened = useMutation(
     ((api as any).jobsPublic?.markOpened ?? "jobsPublic.markOpened") as any,
@@ -588,6 +593,34 @@ function JobsPageContent(): JSX.Element {
     [navigate],
   );
 
+  const handleImportFirstJob = React.useCallback(() => {
+    clearActiveLocalCvId();
+    startFreshProposalWorkspace();
+    void navigate("/proposal", {
+      state: createProposalWorkspaceResetState({
+        entryIntent: "cover-letter-start",
+      }),
+    });
+  }, [navigate]);
+
+  const handleTrySampleJob = React.useCallback(async () => {
+    setIsSeedingSample(true);
+    setFirstRunError(null);
+
+    try {
+      const result = await seedSampleJob({});
+      const refreshedJobs = await loadJobsForUser({});
+      setJobs((refreshedJobs ?? []) as JobsPageListItem[]);
+      await navigate(buildJobsRoute(result.jobId));
+    } catch (error) {
+      setFirstRunError(
+        error instanceof Error ? error.message : "Sample job could not be created.",
+      );
+    } finally {
+      setIsSeedingSample(false);
+    }
+  }, [loadJobsForUser, navigate, seedSampleJob]);
+
   const handleOpenResumeWithJob = React.useCallback(
     (jobId: string) => {
       const target = buildResumeRoute(jobId);
@@ -780,41 +813,12 @@ function JobsPageContent(): JSX.Element {
         ) : null}
 
         {!authStatusMessage && !hasJobs ? (
-          <div className="dasti-empty-state dasti-jobs-empty-state">
-            <ClipboardText size={34} strokeWidth={1.25} aria-hidden="true" />
-            <div className="dasti-empty-state__title">No saved jobs yet</div>
-            <p className="dasti-empty-state__subtitle">
-              Save a role from the extension or paste a job description into the
-              app to create your first Job Brief.
-            </p>
-            <div className="dasti-jobs-empty-state__actions">
-              <a
-                href={PROPOSAL_EXTENSION_INSTALL_LINK.href}
-                target="_blank"
-                rel="noreferrer"
-                className="dasti-button dasti-button--primary dasti-button--pill"
-              >
-                <ArrowSquareOut size={14} strokeWidth={1.7} aria-hidden="true" />
-                {PROPOSAL_EXTENSION_INSTALL_LINK.label}
-              </a>
-              <button
-                type="button"
-                className="dasti-button dasti-button--pill"
-                onClick={() => {
-                  clearActiveLocalCvId();
-                  startFreshProposalWorkspace();
-                  void navigate("/proposal", {
-                    state: createProposalWorkspaceResetState({
-                      entryIntent: "cover-letter-start",
-                    }),
-                  });
-                }}
-              >
-                <Plus size={14} strokeWidth={1.7} aria-hidden="true" />
-                Paste job manually
-              </button>
-            </div>
-          </div>
+          <FirstRunPanel
+            onImportFirstJob={handleImportFirstJob}
+            onTrySampleJob={handleTrySampleJob}
+            isSeedingSample={isSeedingSample}
+            errorMessage={firstRunError}
+          />
         ) : null}
 
         {!authStatusMessage && hasJobs ? (
@@ -959,7 +963,12 @@ function JobsPageContent(): JSX.Element {
                         onClick={() => void navigate(buildJobsRoute(job.id))}
                       >
                         <div className="dasti-jobs-row__copy">
-                          <div className="dasti-jobs-row__title">{title}</div>
+                          <div className="dasti-jobs-row__title">
+                            <span>{title}</span>
+                            {job.isSample ? (
+                              <span className="dasti-jobs-sample-badge">Sample</span>
+                            ) : null}
+                          </div>
                           <div className="dasti-jobs-row__company">
                             {company}
                             {` · ${locationLabel}`}
@@ -1097,7 +1106,10 @@ function JobsPageContent(): JSX.Element {
                   <div className="dasti-jobs-detail__topline">
                     <div className="dasti-jobs-detail__identity">
                       <div className="dasti-jobs-detail__title">
-                        {selectedJob.title || "Untitled job"}
+                        <span>{selectedJob.title || "Untitled job"}</span>
+                        {selectedJob.isSample ? (
+                          <span className="dasti-jobs-sample-badge">Sample</span>
+                        ) : null}
                       </div>
                       <div className="dasti-jobs-detail__meta">
                         <span>{selectedJob.company || "Unknown company"}</span>
