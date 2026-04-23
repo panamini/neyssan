@@ -28,7 +28,6 @@ import {
 import {
   buildAppProposalPersonalizationPayload,
   clearActiveLocalCvId,
-  formatCvDisplaySubtitle,
   getActiveLocalPersonalizationSource,
   getLocalActiveCvSnapshotById,
   listLocalCvPickerOptions,
@@ -44,7 +43,6 @@ import {
   type ProposalGenerationRequestPayload,
 } from "../lib/proposal-generation-request";
 import { getProposalDocumentTypography } from "../lib/proposal-document-typography";
-import { formatUiDate } from "../lib/ui-date";
 import { useScrollEdgeFades } from "../hooks/use-scroll-edge-fades";
 import { getVoicePresetDisplayLabel } from "../lib/proposal-voice-label";
 import { getProposalSourceLabel } from "../lib/proposal-source-platforms";
@@ -70,6 +68,7 @@ import {
   type ProposalGenerateButtonVisualState,
 } from "./ProposalGenerateGlyph";
 import { buildProposalSourceSummary } from "../lib/proposal-source-summary";
+import { CvPickerCard } from "./cv/CvPickerCard";
 
 interface ProposalInputFormProps {
   onSubmit: (
@@ -1370,48 +1369,13 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                 const isSelected =
                   pendingCvId === option.id ||
                   (pendingCvId === null && option.isActive);
-                const chooserDateSource =
-                  option.updatedAt ?? option.createdAt ?? null;
-                const chooserDate = formatUiDate(chooserDateSource);
                 return (
-                  <button
+                  <CvPickerCard
                     key={option.id}
-                    type="button"
-                    className={clsx(
-                      "dasti-doc-card dasti-doc-card--library dasti-doc-card--chooser dasti-doc-card--cv-library",
-                      isSelected && "dasti-doc-card--selected",
-                    )}
-                    aria-pressed={isSelected}
-                    onClick={() => setPendingCvId(option.id)}
-                  >
-                    <div className="dasti-doc-card__stack">
-                      <div className="dasti-doc-card__header">
-                        <div className="dasti-doc-card__title-frame">
-                          <h3 className="dasti-doc-card__title">
-                            {option.title}
-                          </h3>
-                        </div>
-                      </div>
-
-                      <div className="dasti-doc-card__meta">
-                        {formatCvDisplaySubtitle({
-                          title: option.title,
-                          profileName: option.profileName,
-                          desiredPosition: option.desiredPosition,
-                          email: option.email,
-                          linkedin: option.linkedin,
-                          website: option.website,
-                          phone: option.phone,
-                        }) || "Draft resume"}
-                      </div>
-
-                      <div className="dasti-doc-card__footer dasti-doc-card__footer--chooser dasti-doc-card__footer--stamp-only">
-                        <div className="dasti-doc-card__stamp">
-                          {chooserDate ?? ""}
-                        </div>
-                      </div>
-                    </div>
-                  </button>
+                    option={option}
+                    selected={isSelected}
+                    onSelect={setPendingCvId}
+                  />
                 );
               })}
             </div>
