@@ -190,21 +190,27 @@ async function requireCanonicalUserProfile(ctx: any) {
     clerkId: profile.clerkId,
     email: profile.email,
     name: profile.name,
+    skills: profile.skills,
+    keywords: profile.keywords,
   };
 }
 
 async function listProjectedJobsForProfile(ctx: any, profile: {
-  _id: string | CanonicalUserProfile["id"];
+  _id?: string | CanonicalUserProfile["id"];
+  id?: string | CanonicalUserProfile["id"];
+  skills?: string[];
+  keywords?: string[];
 }) {
+  const profileId = String(profile._id ?? profile.id ?? "");
   const jobs = await ctx.db
     .query("jobs")
-    .withIndex("by_user_updated", (q: any) => q.eq("userId", profile._id))
+    .withIndex("by_user_updated", (q: any) => q.eq("userId", profileId))
     .order("desc")
     .collect();
 
   const proposals = await ctx.db
     .query("proposals")
-    .withIndex("by_user", (q: any) => q.eq("userId", profile._id))
+    .withIndex("by_user", (q: any) => q.eq("userId", profileId))
     .collect();
 
   const linkedProposalStats = new Map<
@@ -241,16 +247,33 @@ async function listProjectedJobsForProfile(ctx: any, profile: {
         job.lastOpenedAt ?? 0,
         stats?.latestUpdatedAt ?? 0,
       );
+      const matchRead = computeMatchRead({
+        job: {
+          id: String(job._id),
+          parseStatus: job.parseStatus,
+          mustHaves: job.mustHaves ?? [],
+          keywords: job.keywords ?? [],
+          mustHavesExtraction: job.mustHavesExtraction ?? [],
+          keywordsExtraction: job.keywordsExtraction ?? [],
+        },
+        profile: {
+          id: profileId,
+          skills: profile.skills ?? [],
+          keywords: profile.keywords ?? [],
+        },
+      });
 
       return {
         id: String(job._id),
         title: job.title,
         company: job.company,
+        location: job.location,
         sourceUrl: job.sourceUrl,
         sourceDomain: job.sourceDomain,
         sourceType: job.sourceType,
         parseStatus: job.parseStatus,
         reviewState: job.reviewState,
+        matchTier: matchRead.tier,
         status: job.status,
         importedAt: job.importedAt,
         updatedAt: job.updatedAt,
@@ -544,11 +567,18 @@ export const listForUser = query({
       id: v.string(),
       title: v.string(),
       company: v.string(),
+      location: v.string(),
       sourceUrl: v.string(),
       sourceDomain: v.string(),
       sourceType: v.string(),
       parseStatus: v.string(),
       reviewState: v.string(),
+      matchTier: v.union(
+        v.literal("strong"),
+        v.literal("partial"),
+        v.literal("weak"),
+        v.literal("unknown"),
+      ),
       status: v.string(),
       importedAt: v.number(),
       updatedAt: v.number(),
@@ -579,11 +609,18 @@ export const loadForUser = mutation({
       id: v.string(),
       title: v.string(),
       company: v.string(),
+      location: v.string(),
       sourceUrl: v.string(),
       sourceDomain: v.string(),
       sourceType: v.string(),
       parseStatus: v.string(),
       reviewState: v.string(),
+      matchTier: v.union(
+        v.literal("strong"),
+        v.literal("partial"),
+        v.literal("weak"),
+        v.literal("unknown"),
+      ),
       status: v.string(),
       importedAt: v.number(),
       updatedAt: v.number(),

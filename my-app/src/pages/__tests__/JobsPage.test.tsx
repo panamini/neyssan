@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { JobsPage } from "../JobsPage";
@@ -15,11 +15,13 @@ const jobsList = [
     id: "job_alpha",
     title: "Operations Associate",
     company: "Acme",
+    location: "Paris",
     sourceUrl: "https://www.linkedin.com/jobs/view/alpha",
     sourceDomain: "linkedin.com",
     sourceType: "linkedin",
     parseStatus: "parsed",
     reviewState: "needs_review",
+    matchTier: "partial",
     status: "active",
     importedAt: 1711000000000,
     updatedAt: 1711001000000,
@@ -31,17 +33,19 @@ const jobsList = [
     id: "job_beta",
     title: "Support Specialist",
     company: "Northwind",
+    location: "Remote",
     sourceUrl: "https://www.indeed.com/viewjob?jk=beta",
     sourceDomain: "indeed.com",
     sourceType: "indeed",
     parseStatus: "parsed",
     reviewState: "ready",
+    matchTier: "weak",
     status: "active",
     importedAt: 1710000000000,
     updatedAt: 1710001000000,
     lastOpenedAt: 1710002000000,
     lastActivityAt: 1710002000000,
-    linkedDocumentCount: 1,
+    linkedDocumentCount: 0,
   },
 ];
 
@@ -209,8 +213,11 @@ describe("JobsPage", () => {
     expect(await screen.findByRole("heading", { name: "Jobs" })).toBeInTheDocument();
     expect((await screen.findAllByText("Operations Associate")).length).toBeGreaterThan(0);
     expect(await screen.findByText("Support Specialist")).toBeInTheDocument();
+    expect(await screen.findByText("Acme · Paris")).toBeInTheDocument();
+    expect(await screen.findByText("Northwind · Remote")).toBeInTheDocument();
     expect(await screen.findByText("Match")).toBeInTheDocument();
     expect(await screen.findByText("Partial · 50%")).toBeInTheDocument();
+    expect(await screen.findByText("Weak")).toBeInTheDocument();
     expect(
       (await screen.findAllByText("Cross-functional communication")).length,
     ).toBeGreaterThan(0);
@@ -279,6 +286,41 @@ describe("JobsPage", () => {
         fieldKey: "summary",
         value: "Updated summary for the saved job brief.",
       });
+    });
+  });
+
+  it("composes the library chips for match tier, docs, and needs review", async () => {
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const jobsListElement = await screen.findByRole("list");
+    expect(within(jobsListElement).getByText("Operations Associate")).toBeInTheDocument();
+    expect(within(jobsListElement).getByText("Support Specialist")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Match Weak" }));
+
+    await waitFor(() => {
+      expect(within(jobsListElement).getByText("Support Specialist")).toBeInTheDocument();
+      expect(within(jobsListElement).queryByText("Operations Associate")).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Has docs" }));
+
+    expect(await screen.findByText("No jobs match this search")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Match Weak" }));
+    fireEvent.click(screen.getByRole("button", { name: "All tiers" }));
+    fireEvent.click(screen.getByRole("button", { name: "Has docs" }));
+    fireEvent.click(screen.getByRole("button", { name: "Needs review" }));
+
+    await waitFor(() => {
+      expect(within(jobsListElement).getByText("Operations Associate")).toBeInTheDocument();
+      expect(within(jobsListElement).queryByText("Support Specialist")).not.toBeInTheDocument();
     });
   });
 
