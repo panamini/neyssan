@@ -68,7 +68,7 @@ function readProfileContact(cv: CvDocument): {
 export function CvsLibrary(): JSX.Element {
   const location = useLocation();
   const navigate = useNavigate();
-  const { cvs, loadCv, createNewCv, deleteCv } = useCvLibrary();
+  const { cvs, currentCvId, loadCv, createNewCv, deleteCv } = useCvLibrary();
   const [confirmingId, setConfirmingId] = React.useState<string | null>(null);
   const [searchQuery, setSearchQuery] = React.useState("");
   const [sortOrder, setSortOrder] = React.useState<
@@ -77,6 +77,8 @@ export function CvsLibrary(): JSX.Element {
   const [visibleCvCount, setVisibleCvCount] =
     React.useState(CV_LIBRARY_PAGE_SIZE);
   const loadMoreSentinelRef = React.useRef<HTMLDivElement | null>(null);
+  const pendingCreateNavigationRef = React.useRef(false);
+  const pendingOpenNavigationRef = React.useRef<string | null>(null);
 
   const sorted = React.useMemo(
     () => {
@@ -166,9 +168,32 @@ export function CvsLibrary(): JSX.Element {
     return () => observer.disconnect();
   }, [hasMoreCvs, sorted.length]);
 
+  React.useEffect(() => {
+    if (!pendingCreateNavigationRef.current || !currentCvId) {
+      return;
+    }
+
+    pendingCreateNavigationRef.current = false;
+    void navigate(`/cv?id=${encodeURIComponent(currentCvId)}`);
+  }, [currentCvId, navigate]);
+
+  React.useEffect(() => {
+    const pendingCvId = pendingOpenNavigationRef.current;
+    if (!pendingCvId || currentCvId !== pendingCvId) {
+      return;
+    }
+
+    pendingOpenNavigationRef.current = null;
+    void navigate(`/cv?id=${encodeURIComponent(pendingCvId)}`);
+  }, [currentCvId, navigate]);
+
   function handleOpen(id: string) {
-    loadCv(id);
-    void navigate("/cv");
+    pendingOpenNavigationRef.current = id;
+    const loadedImmediately = loadCv(id);
+    if (loadedImmediately || currentCvId === id) {
+      pendingOpenNavigationRef.current = null;
+      void navigate(`/cv?id=${encodeURIComponent(id)}`);
+    }
   }
 
   function handleDelete(id: string) {
@@ -194,8 +219,8 @@ export function CvsLibrary(): JSX.Element {
           <div className="dasti-page-actions">
             <button
               onClick={() => {
-                createNewCv();
-                void navigate("/cv");
+                pendingCreateNavigationRef.current = true;
+                void createNewCv();
               }}
               className="dasti-icon-button dasti-library-create-button"
               aria-label="Create new resume"
@@ -423,8 +448,8 @@ export function CvsLibrary(): JSX.Element {
             >
               <button
                 onClick={() => {
-                  createNewCv();
-                  void navigate("/cv");
+                  pendingCreateNavigationRef.current = true;
+                  void createNewCv();
                 }}
                 className="dasti-button dasti-button--primary dasti-button--pill"
               >
