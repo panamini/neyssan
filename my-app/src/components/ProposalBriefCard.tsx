@@ -33,12 +33,18 @@ type ProposalBriefCardProps = {
   linkedDocumentCount?: number;
   linkedProposals?: ProposalBriefLinkedProposal[];
   reviewItems?: ProposalBriefReviewItem[];
+  onSaveField?: (
+    fieldKey: string,
+    nextValue: string | string[],
+  ) => Promise<void> | void;
   onApproveReviewItem?: (item: ProposalBriefReviewItem) => Promise<void> | void;
   onSaveReviewItem?: (
     item: ProposalBriefReviewItem,
     nextValue: string | string[],
   ) => Promise<void> | void;
 };
+
+const SUMMARY_EDITOR_ID = "__summary__";
 
 function formatReviewValue(value: unknown): string {
   if (Array.isArray(value)) {
@@ -92,6 +98,7 @@ export function ProposalBriefCard({
   linkedDocumentCount = 0,
   linkedProposals = [],
   reviewItems = [],
+  onSaveField,
   onApproveReviewItem,
   onSaveReviewItem,
 }: ProposalBriefCardProps): JSX.Element {
@@ -111,19 +118,23 @@ export function ProposalBriefCard({
     setEditingItemId(null);
     setDraftValues({});
     setResolvedItems({});
-  }, [reviewItems]);
+  }, [reviewItems, summaryText]);
 
   const visibleReviewItems = reviewItems.map((item) => ({
     ...item,
     reviewStatus: resolvedItems[item.id]?.reviewStatus ?? item.reviewStatus,
     approvedValue: resolvedItems[item.id]?.approvedValue ?? item.approvedValue,
   }));
+  const summaryValue = String(summaryText ?? "").trim();
+  const isSummaryEditing = editingItemId === SUMMARY_EDITOR_ID;
+  const summaryDraft = draftValues[SUMMARY_EDITOR_ID] ?? summaryValue;
 
   return (
     <div
       className={[
         "dasti-proposal-sheet",
         "dasti-brief-card",
+        isCompact ? null : "dasti-brief-card--card",
         isCompact ? "dasti-brief-card--compact" : null,
       ]
         .filter(Boolean)
@@ -206,48 +217,63 @@ export function ProposalBriefCard({
                 </div>
               ) : null}
               {summaryText ? (
-                <div className="dasti-brief-card__summary-block">
-                  <div className="dasti-brief-card__summary-label">
-                    Extracted summary
-                  </div>
-                  <p className="dasti-brief-card__summary-copy">{summaryText}</p>
-                </div>
-              ) : null}
-              {linkedDocumentCount > 0 ? (
-                <div className="dasti-brief-card__summary-block">
-                  <div className="dasti-brief-card__summary-label">
-                    Linked documents
-                  </div>
-                  <div className="dasti-brief-card__linked-summary">
-                    <p className="dasti-brief-card__summary-copy">
-                      {linkedDocumentCount} linked document
-                      {linkedDocumentCount === 1 ? "" : "s"}
-                    </p>
-                    {linkedProposals.length > 0 ? (
-                      <div className="dasti-brief-card__linked-list">
-                        {linkedProposals.map((proposal) => (
-                          <Link
-                            key={proposal.id}
-                            to={resolveLinkedProposalHref(proposal.id)}
-                            className="dasti-brief-card__linked-item"
-                            aria-label={`Open linked proposal ${proposal.title}`}
-                          >
-                            <span className="dasti-brief-card__linked-copy">
-                              <span className="dasti-brief-card__linked-title">
-                                {proposal.title}
-                              </span>
-                              <span className="dasti-brief-card__linked-meta">
-                                {proposal.status}
-                              </span>
-                            </span>
-                            <span className="dasti-brief-card__linked-open">
-                              Open
-                            </span>
-                          </Link>
-                        ))}
+                <div className="dasti-brief-card__review-item">
+                  <div className="dasti-brief-card__review-head">
+                    <div>
+                      <div className="dasti-brief-card__review-label">
+                        Extracted summary
+                      </div>
+                    </div>
+                    {onSaveField ? (
+                      <div className="dasti-brief-card__review-actions">
+                        <button
+                          type="button"
+                          className="dasti-brief-card__action dasti-brief-card__action--secondary"
+                          aria-label={isSummaryEditing ? "Close summary editor" : "Edit summary"}
+                          onClick={() => {
+                            setEditingItemId((current) =>
+                              current === SUMMARY_EDITOR_ID ? null : SUMMARY_EDITOR_ID,
+                            );
+                            setDraftValues((current) => ({
+                              ...current,
+                              [SUMMARY_EDITOR_ID]:
+                                current[SUMMARY_EDITOR_ID] ?? summaryValue,
+                            }));
+                          }}
+                        >
+                          {isSummaryEditing ? "Close" : "Edit"}
+                        </button>
                       </div>
                     ) : null}
                   </div>
+                  {isSummaryEditing ? (
+                    <div className="dasti-brief-card__editor">
+                      <textarea
+                        className="dasti-brief-card__textarea"
+                        value={summaryDraft}
+                        onChange={(event) =>
+                          setDraftValues((current) => ({
+                            ...current,
+                            [SUMMARY_EDITOR_ID]: event.target.value,
+                          }))
+                        }
+                      />
+                      <button
+                        type="button"
+                        className="dasti-brief-card__action"
+                        aria-label="Save summary"
+                        onClick={() => {
+                          const nextValue = summaryDraft.trim();
+                          setEditingItemId(null);
+                          void onSaveField("summary", nextValue);
+                        }}
+                      >
+                        Save
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="dasti-brief-card__summary-copy">{summaryText}</p>
+                  )}
                 </div>
               ) : null}
               {visibleReviewItems.length > 0 ? (
@@ -291,13 +317,16 @@ export function ProposalBriefCard({
                                 Approve
                               </button>
                             ) : null}
-                            <button
-                              type="button"
-                              className="dasti-brief-card__action dasti-brief-card__action--secondary"
-                              onClick={() => {
-                                setEditingItemId((current) =>
-                                  current === item.id ? null : item.id,
-                                );
+                              <button
+                                type="button"
+                                className="dasti-brief-card__action dasti-brief-card__action--secondary"
+                                aria-label={
+                                  isEditing ? `Close ${item.label} editor` : `Edit ${item.label}`
+                                }
+                                onClick={() => {
+                                  setEditingItemId((current) =>
+                                    current === item.id ? null : item.id,
+                                  );
                                 setDraftValues((current) => ({
                                   ...current,
                                   [item.id]: current[item.id] ?? currentValue,
@@ -323,6 +352,7 @@ export function ProposalBriefCard({
                             <button
                               type="button"
                               className="dasti-brief-card__action"
+                              aria-label={`Save ${item.label}`}
                               onClick={() => {
                                 const nextValue = Array.isArray(item.suggestedValue)
                                   ? draftValue
@@ -351,6 +381,43 @@ export function ProposalBriefCard({
                       </div>
                     );
                   })}
+                </div>
+              ) : null}
+              {linkedDocumentCount > 0 ? (
+                <div className="dasti-brief-card__summary-block">
+                  <div className="dasti-brief-card__summary-label">
+                    Linked documents
+                  </div>
+                  <div className="dasti-brief-card__linked-summary">
+                    <p className="dasti-brief-card__summary-copy">
+                      {linkedDocumentCount} linked document
+                      {linkedDocumentCount === 1 ? "" : "s"}
+                    </p>
+                    {linkedProposals.length > 0 ? (
+                      <div className="dasti-brief-card__linked-list">
+                        {linkedProposals.map((proposal) => (
+                          <Link
+                            key={proposal.id}
+                            to={resolveLinkedProposalHref(proposal.id)}
+                            className="dasti-brief-card__linked-item"
+                            aria-label={`Open linked proposal ${proposal.title}`}
+                          >
+                            <span className="dasti-brief-card__linked-copy">
+                              <span className="dasti-brief-card__linked-title">
+                                {proposal.title}
+                              </span>
+                              <span className="dasti-brief-card__linked-meta">
+                                {proposal.status}
+                              </span>
+                            </span>
+                            <span className="dasti-brief-card__linked-open">
+                              Open
+                            </span>
+                          </Link>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
               ) : null}
             </div>

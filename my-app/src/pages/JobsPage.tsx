@@ -249,10 +249,6 @@ function resolveOptimisticReviewState(
     : "needs_review";
 }
 
-function formatCollection(value: string[]): string[] {
-  return value.map((entry) => entry.trim()).filter(Boolean);
-}
-
 function applyApprovedValueToJob(
   current: JobsPageDetail,
   item: JobsPageReviewItem,
@@ -274,31 +270,6 @@ function buildResumeRoute(jobId: string): string {
 
 function buildJobsRoute(jobId: string): string {
   return `/jobs/${encodeURIComponent(jobId)}`;
-}
-
-function JobInfoSection({
-  title,
-  items,
-}: {
-  title: string;
-  items: string[];
-}): JSX.Element | null {
-  if (items.length === 0) {
-    return null;
-  }
-
-  return (
-    <section className="dasti-jobs-detail-section">
-      <div className="dasti-jobs-detail-section__label">{title}</div>
-      <div className="dasti-jobs-detail-section__stack">
-        {items.map((item, index) => (
-          <div key={`${title}-${index}`} className="dasti-jobs-detail-section__item">
-            {item}
-          </div>
-        ))}
-      </div>
-    </section>
-  );
 }
 
 function JobsPageContent(): JSX.Element {
@@ -581,7 +552,7 @@ function JobsPageContent(): JSX.Element {
     [navigate],
   );
 
-  const handleTailorResume = React.useCallback(
+  const handleOpenResumeWithJob = React.useCallback(
     (jobId: string) => {
       const target = buildResumeRoute(jobId);
       if (hasResumeWorkspace) {
@@ -597,16 +568,6 @@ function JobsPageContent(): JSX.Element {
       });
     },
     [hasResumeWorkspace, location.state, navigate],
-  );
-
-  const handleDoBoth = React.useCallback(
-    (jobId: string) => {
-      if (typeof window !== "undefined") {
-        window.open(buildResumeRoute(jobId), "_blank", "noopener");
-      }
-      handleCreateProposal(jobId);
-    },
-    [handleCreateProposal],
   );
 
   const handleApproveReviewItem = React.useCallback(
@@ -706,6 +667,32 @@ function JobsPageContent(): JSX.Element {
     [selectedJobId, updateJobField],
   );
 
+  const handleSaveField = React.useCallback(
+    async (fieldKey: string, nextValue: string | string[]) => {
+      setOptimisticSelectedJob((current) => {
+        if (!current) {
+          return current;
+        }
+
+        return {
+          ...current,
+          [fieldKey]: nextValue,
+        } as JobsPageDetail;
+      });
+
+      if (!selectedJobId) {
+        return;
+      }
+
+      await updateJobField({
+        jobId: selectedJobId,
+        fieldKey,
+        value: nextValue,
+      });
+    },
+    [selectedJobId, updateJobField],
+  );
+
   const authStatusMessage = !isLoaded || isConvexAuthLoading
     ? "Loading…"
     : !isSignedIn || !isConvexAuthenticated
@@ -721,13 +708,6 @@ function JobsPageContent(): JSX.Element {
     selectedJob?.sourceType ?? selectedJobSummary?.sourceType,
     selectedJob?.sourceUrl ?? selectedJobSummary?.sourceUrl,
   );
-  const selectedKeywords = formatCollection(selectedJob?.keywords ?? []);
-  const selectedMustHaves = formatCollection(selectedJob?.mustHaves ?? []);
-  const selectedToneCues = formatCollection(selectedJob?.toneCues ?? []);
-  const selectedResponsibilities = formatCollection(
-    selectedJob?.responsibilities ?? [],
-  );
-  const selectedContacts = formatCollection(selectedJob?.contacts ?? []);
   const shouldShowListPane = !isMobileJobsLayout || !selectedJobId;
   const shouldShowDetailPane = !isMobileJobsLayout || Boolean(selectedJobId);
 
@@ -985,16 +965,9 @@ function JobsPageContent(): JSX.Element {
                       <button
                         type="button"
                         className="dasti-button dasti-button--pill"
-                        onClick={() => handleTailorResume(selectedJob.id)}
+                        onClick={() => handleOpenResumeWithJob(selectedJob.id)}
                       >
-                        Tailor resume
-                      </button>
-                      <button
-                        type="button"
-                        className="dasti-button dasti-button--pill"
-                        onClick={() => handleDoBoth(selectedJob.id)}
-                      >
-                        Do both
+                        Open resume with this job
                       </button>
                     </div>
                   </div>
@@ -1014,26 +987,10 @@ function JobsPageContent(): JSX.Element {
                     linkedDocumentCount={selectedJob.linkedProposalCount}
                     linkedProposals={selectedJob.linkedProposals}
                     reviewItems={selectedJob.reviewItems}
+                    onSaveField={handleSaveField}
                     onApproveReviewItem={handleApproveReviewItem}
                     onSaveReviewItem={handleSaveReviewItem}
                   />
-
-                  <div className="dasti-jobs-detail-grid">
-                    <JobInfoSection
-                      title="Responsibilities"
-                      items={selectedResponsibilities}
-                    />
-                    <JobInfoSection
-                      title="Keywords"
-                      items={selectedKeywords}
-                    />
-                    <JobInfoSection
-                      title="Must-haves"
-                      items={selectedMustHaves}
-                    />
-                    <JobInfoSection title="Tone cues" items={selectedToneCues} />
-                    <JobInfoSection title="Contacts" items={selectedContacts} />
-                  </div>
                 </div>
               )}
             </section>
