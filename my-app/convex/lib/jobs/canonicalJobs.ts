@@ -43,31 +43,157 @@ const STRONG_REQUIREMENT_CUE_RE =
 const BOILERPLATE_SENTENCE_RE =
   /\b(is hiring|about the role|about us|join our team|we are looking for|this role)\b/i;
 const KEYWORD_STOP_WORDS = new Set([
+  "a",
+  "an",
+  "and",
   "about",
+  "above",
   "after",
   "again",
+  "all",
   "along",
+  "also",
+  "am",
+  "are",
+  "as",
+  "at",
+  "be",
+  "been",
+  "before",
   "among",
+  "any",
   "being",
+  "by",
   "clear",
+  "can",
+  "de",
+  "des",
+  "du",
+  "el",
+  "en",
+  "es",
+  "et",
+  "for",
   "from",
   "have",
   "hiring",
+  "in",
   "into",
+  "is",
+  "it",
+  "job",
   "jobs",
+  "la",
+  "las",
+  "le",
+  "les",
+  "los",
   "maintain",
   "must",
   "need",
+  "of",
+  "on",
+  "or",
+  "our",
+  "over",
+  "para",
+  "por",
   "role",
+  "the",
+  "to",
   "that",
   "their",
   "there",
   "these",
   "this",
   "those",
+  "un",
+  "una",
+  "und",
+  "une",
   "will",
   "with",
+  "wir",
   "your",
+  "zu",
+  "zur",
+  // French function words
+  "au",
+  "aux",
+  "avec",
+  "ce",
+  "ces",
+  "dans",
+  "dela",
+  "elle",
+  "est",
+  "ils",
+  "nous",
+  "ou",
+  "plus",
+  "pour",
+  "que",
+  "qui",
+  "sur",
+  "vous",
+  // Spanish function words
+  "al",
+  "con",
+  "del",
+  "esta",
+  "este",
+  "los",
+  "mas",
+  "más",
+  "que",
+  "se",
+  "sin",
+  "sus",
+  "y",
+  // German function words
+  "auf",
+  "das",
+  "der",
+  "die",
+  "ein",
+  "eine",
+  "für",
+  "im",
+  "ist",
+  "mit",
+  "oder",
+  "sich",
+  "von",
+  // Italian function words
+  "che",
+  "con",
+  "dei",
+  "del",
+  "della",
+  "di",
+  "e",
+  "gli",
+  "il",
+  "in",
+  "lo",
+  "per",
+  "un",
+  "una",
+  // Portuguese function words
+  "aos",
+  "com",
+  "da",
+  "das",
+  "do",
+  "dos",
+  "em",
+  "na",
+  "no",
+  "nos",
+  "os",
+  "ou",
+  "um",
+  "uma",
 ]);
 const TONE_CUE_RULES = [
   { label: "structured", regex: /\bstructured\b/i },
@@ -229,6 +355,41 @@ function normalizeKeywordToken(value: string): string {
     .replace(/^[^a-z0-9+#./-]+|[^a-z0-9+#./-]+$/g, "");
 }
 
+function buildTitleKeywordTokens(title: string): Set<string> {
+  const tokens = new Set<string>();
+
+  for (const match of title.match(/[A-Za-z0-9+#./-]+/g) ?? []) {
+    const normalized = normalizeKeywordToken(match);
+    if (!normalized) {
+      continue;
+    }
+
+    tokens.add(normalized);
+    for (const part of normalized.split(/[-/]+/)) {
+      if (part) {
+        tokens.add(part);
+      }
+    }
+  }
+
+  return tokens;
+}
+
+function isTitleKeywordToken(
+  normalizedValue: string,
+  titleKeywordTokens: Set<string>,
+): boolean {
+  if (titleKeywordTokens.has(normalizedValue)) {
+    return true;
+  }
+
+  const hyphenParts = normalizedValue.split(/[-/]+/).filter(Boolean);
+  return (
+    hyphenParts.length > 1 &&
+    hyphenParts.every((part) => titleKeywordTokens.has(part))
+  );
+}
+
 function collectKeywordCandidates(args: {
   title: string;
   rawDescription: string;
@@ -243,6 +404,7 @@ function collectKeywordCandidates(args: {
   const responsibilitySpans = args.responsibilities
     .map((item) => item.sourceSpan)
     .filter(Boolean);
+  const titleKeywordTokens = buildTitleKeywordTokens(args.title);
 
   const pushCandidate = (
     rawValue: string,
@@ -253,6 +415,7 @@ function collectKeywordCandidates(args: {
     if (
       normalizedValue.length < 3 ||
       KEYWORD_STOP_WORDS.has(normalizedValue) ||
+      isTitleKeywordToken(normalizedValue, titleKeywordTokens) ||
       /^\d+$/.test(normalizedValue)
     ) {
       return;
@@ -275,10 +438,6 @@ function collectKeywordCandidates(args: {
       existing.sourceSpan = sourceSpan;
     }
   };
-
-  for (const match of args.title.match(/[A-Za-z][A-Za-z+#./-]{2,}/g) ?? []) {
-    pushCandidate(match, 0.82, null);
-  }
 
   for (const match of args.rawDescription.matchAll(/[A-Za-z][A-Za-z+#./-]{2,}/g)) {
     const token = match[0] ?? "";
