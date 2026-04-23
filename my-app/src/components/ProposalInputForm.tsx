@@ -29,6 +29,7 @@ import {
   buildAppProposalPersonalizationPayload,
   clearActiveLocalCvId,
   getActiveLocalPersonalizationSource,
+  getLocalPersonalizationSourceByCvId,
   getLocalActiveCvSnapshotById,
   listLocalCvPickerOptions,
   setActiveLocalCvId,
@@ -106,6 +107,7 @@ interface ProposalInputFormProps {
   /** Optional external tone source used by workspace-level toolbars. */
   externalVoicePreset?: FormValues["voicePreset"] | null;
   onActiveCvChange?: (cvId: string | null) => void;
+  activeCvId?: string | null;
   headerLabel?: string | null;
   headerAction?: React.ReactNode;
   jobDescriptionPlaceholder?: string;
@@ -308,6 +310,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   suppressToneControls = false,
   externalVoicePreset,
   onActiveCvChange,
+  activeCvId,
   headerLabel = null,
   headerAction = null,
   jobDescriptionPlaceholder = "Paste or write the job offer here…",
@@ -346,13 +349,16 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   const [isGenerating, setIsGenerating] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [, setVoicePresetSaveError] = React.useState<string | null>(null);
+  const hasControlledActiveCvId = activeCvId !== undefined;
   const [activeCvSource, setActiveCvSource] = React.useState(() =>
-    getActiveLocalPersonalizationSource(),
+    hasControlledActiveCvId
+      ? getLocalPersonalizationSourceByCvId(activeCvId)
+      : getActiveLocalPersonalizationSource(),
   );
   const [isCvPickerOpen, setIsCvPickerOpen] = React.useState(false);
   const [pendingCvId, setPendingCvId] = React.useState<string | null>(null);
   const [cvOptions, setCvOptions] = React.useState<LocalCvPickerOption[]>(() =>
-    listLocalCvPickerOptions(),
+    listLocalCvPickerOptions(hasControlledActiveCvId ? activeCvId : undefined),
   );
   const { loadCv } = useCvLibrary();
   const {
@@ -400,9 +406,15 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   );
 
   const refreshActiveCvState = React.useCallback(() => {
-    setActiveCvSource(getActiveLocalPersonalizationSource());
-    setCvOptions(listLocalCvPickerOptions());
-  }, []);
+    setActiveCvSource(
+      hasControlledActiveCvId
+        ? getLocalPersonalizationSourceByCvId(activeCvId)
+        : getActiveLocalPersonalizationSource(),
+    );
+    setCvOptions(
+      listLocalCvPickerOptions(hasControlledActiveCvId ? activeCvId : undefined),
+    );
+  }, [activeCvId, hasControlledActiveCvId]);
 
   const clearGenerateButtonTimers = React.useCallback(() => {
     for (const timerId of generateButtonTimersRef.current) {
@@ -850,7 +862,9 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
     activeGenerationClientRunIdRef.current = clientRunId;
     stopRequestedRunIdRef.current = null;
 
-    const currentActiveCvSource = getActiveLocalPersonalizationSource();
+    const currentActiveCvSource = hasControlledActiveCvId
+      ? getLocalPersonalizationSourceByCvId(activeCvId)
+      : getActiveLocalPersonalizationSource();
     const hasCandidateContext = Boolean(
       currentActiveCvSource.personalizationContext,
     );
@@ -974,10 +988,20 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   }
 
   function handleOpenCvPicker() {
-    const nextOptions = listLocalCvPickerOptions();
-    setActiveCvSource(getActiveLocalPersonalizationSource());
+    const nextOptions = listLocalCvPickerOptions(
+      hasControlledActiveCvId ? activeCvId : undefined,
+    );
+    setActiveCvSource(
+      hasControlledActiveCvId
+        ? getLocalPersonalizationSourceByCvId(activeCvId)
+        : getActiveLocalPersonalizationSource(),
+    );
     setCvOptions(nextOptions);
-    setPendingCvId(nextOptions.find((option) => option.isActive)?.id ?? null);
+    setPendingCvId(
+      activeCvId ??
+        nextOptions.find((option) => option.isActive)?.id ??
+        null,
+    );
     setCvPickerOpen(true);
   }
 
@@ -1020,7 +1044,9 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   );
 
   function handleSelectCv(id: string) {
-    setActiveLocalCvId(id);
+    if (!hasControlledActiveCvId) {
+      setActiveLocalCvId(id);
+    }
     refreshActiveCvState();
     setPendingCvId(id);
     setCvPickerOpen(false);
@@ -1029,11 +1055,17 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   }
 
   function handleClearCv() {
-    clearActiveLocalCvId();
+    if (!hasControlledActiveCvId) {
+      clearActiveLocalCvId();
+    }
     setCvPickerOpen(false);
     setPendingCvId(null);
     setActiveCvSource({ title: null, personalizationContext: null });
-    setCvOptions(listLocalCvPickerOptions());
+    setCvOptions(
+      listLocalCvPickerOptions(
+        hasControlledActiveCvId ? null : undefined,
+      ),
+    );
     lastSharedSnapshotSyncStateRef.current = "none";
     if (!canPersistProposalWorkspaceState) {
       onActiveCvChange?.(null);
@@ -1049,7 +1081,9 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   }
 
   function handleOpenCvInForge(id: string) {
-    setActiveLocalCvId(id);
+    if (!hasControlledActiveCvId) {
+      setActiveLocalCvId(id);
+    }
     loadCv(id);
     refreshActiveCvState();
     setPendingCvId(id);

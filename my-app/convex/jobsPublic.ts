@@ -19,10 +19,15 @@ import {
   resolveReviewItemsAfterFieldUpdate,
 } from "./lib/jobs/canonicalJobs";
 import {
+  buildMatchReadProfile,
   buildMatchReadTelemetryArgs,
   buildMatchReadSynthesisCacheKey,
   computeMatchRead,
+  resolveMatchReadSourceProfile,
+  resolveResumeProfileById,
+  resolveStoredResumeSelection,
   type MatchRead,
+  type MatchReadResumeProfile,
   type MatchReadTier,
 } from "./lib/jobs/matchRead";
 import { buildJobsMetricArgs } from "./lib/jobs/telemetry";
@@ -456,6 +461,15 @@ function buildExtractionProjection(args: {
 function buildJobProjection(
   job: any,
   matchRead: ReturnType<typeof computeMatchRead> | null = null,
+  storedResume: {
+    resumeId?: string;
+    resumeName?: string;
+    source: "job" | "default" | null;
+  } = {
+    resumeId: undefined,
+    resumeName: undefined,
+    source: null,
+  },
   nextStepBlock: {
     headline: string;
     usesCohortData: boolean;
@@ -542,8 +556,10 @@ function buildJobProjection(
     toneCues: flattenExtractionValues(toneCuesExtraction),
     toneCuesExtraction,
     contacts: job.contacts ?? [],
-    isSample: Boolean(job.isSample),
     status: job.status,
+    ...(storedResume.resumeId ? { resumeId: storedResume.resumeId } : {}),
+    ...(storedResume.resumeName ? { resumeName: storedResume.resumeName } : {}),
+    ...(storedResume.source ? { resumeSource: storedResume.source } : {}),
     matchRead,
     nextStepBlock,
     linkedProposalCount,
@@ -589,10 +605,13 @@ async function requireCanonicalUserProfile(ctx: any) {
 type JobsProjectionProfile = {
   _id?: string | CanonicalUserProfile["id"];
   id?: string | CanonicalUserProfile["id"];
+  profileId?: string;
+  defaultResumeId?: string | null;
+  defaultResumeName?: string | null;
   version?: number;
   skills?: string[];
   keywords?: string[];
-};
+} & MatchReadResumeProfile;
 
 function normalizeProjectionProfiles(
   profiles: JobsProjectionProfile[],
@@ -613,31 +632,6 @@ function normalizeProjectionProfiles(
   return normalizedProfiles;
 }
 
-function buildMatchReadProfile(
-  profile: JobsProjectionProfile | null,
-): {
-  id: string;
-  version?: number;
-  skills: string[];
-  keywords: string[];
-} | null {
-  if (!profile) {
-    return null;
-  }
-
-  const profileId = String(profile._id ?? profile.id ?? "");
-  if (!profileId) {
-    return null;
-  }
-
-  return {
-    id: profileId,
-    ...(profile.version !== undefined ? { version: profile.version } : {}),
-    skills: profile.skills ?? [],
-    keywords: profile.keywords ?? [],
-  };
-}
-
 async function listProjectedJobsForProfiles(
   ctx: any,
   profiles: JobsProjectionProfile[],
@@ -654,6 +648,7 @@ async function listProjectedJobsForProfiles(
       profile,
     ]),
   );
+  const primaryProfile = normalizedProfiles[0] ?? null;
 
   const jobGroups = await Promise.all(
     normalizedProfiles.map((profile) =>
@@ -706,12 +701,21 @@ async function listProjectedJobsForProfiles(
   const projections = visibleJobs.map((job: any) => {
       const ownerProfile =
         profileById.get(String(job.userId)) ?? normalizedProfiles[0] ?? null;
+      const storedResume = resolveStoredResumeSelection({
+        job,
+        primaryProfile,
+      });
       const stats = linkedProposalStats.get(String(job._id));
       const lastActivityAt = Math.max(
         job.updatedAt ?? 0,
         job.lastOpenedAt ?? 0,
         stats?.latestUpdatedAt ?? 0,
       );
+      const matchReadProfile = resolveMatchReadSourceProfile({
+        job,
+        primaryProfile,
+        profiles: normalizedProfiles,
+      });
       const matchRead = computeMatchRead({
         job: {
           id: String(job._id),
@@ -721,11 +725,11 @@ async function listProjectedJobsForProfiles(
           mustHavesExtraction: job.mustHavesExtraction ?? [],
           keywordsExtraction: job.keywordsExtraction ?? [],
         },
-        profile: buildMatchReadProfile(ownerProfile),
+        profile: buildMatchReadProfile(matchReadProfile ?? ownerProfile),
       });
 
-      return {
-        id: String(job._id),
+        return {
+          id: String(job._id),
         title: job.title,
         company: job.company,
         location: job.location,
@@ -738,11 +742,11 @@ async function listProjectedJobsForProfiles(
         matchTier: matchRead.tier,
         status: job.status,
         importedAt: job.importedAt,
-        updatedAt: job.updatedAt,
-        lastOpenedAt: job.lastOpenedAt,
-        lastActivityAt,
-        linkedDocumentCount: stats?.count ?? 0,
-      };
+          updatedAt: job.updatedAt,
+          lastOpenedAt: job.lastOpenedAt,
+          lastActivityAt,
+          linkedDocumentCount: stats?.count ?? 0,
+        };
     });
 
   if (options?.trackMatchRead) {
@@ -750,6 +754,11 @@ async function listProjectedJobsForProfiles(
       visibleJobs.map((job: any) => {
         const ownerProfile =
           profileById.get(String(job.userId)) ?? normalizedProfiles[0] ?? null;
+        const matchReadProfile = resolveMatchReadSourceProfile({
+          job,
+          primaryProfile,
+          profiles: normalizedProfiles,
+        });
         const matchRead = computeMatchRead({
           job: {
             id: String(job._id),
@@ -759,7 +768,7 @@ async function listProjectedJobsForProfiles(
             mustHavesExtraction: job.mustHavesExtraction ?? [],
             keywordsExtraction: job.keywordsExtraction ?? [],
           },
-          profile: buildMatchReadProfile(ownerProfile),
+          profile: buildMatchReadProfile(matchReadProfile ?? ownerProfile),
         });
         return scheduleMatchReadComputedMetric(ctx, matchRead);
       }),
@@ -955,6 +964,11 @@ export const getById = query({
       ),
       contacts: v.array(v.string()),
       status: v.string(),
+      resumeId: v.optional(v.string()),
+      resumeName: v.optional(v.string()),
+      resumeSource: v.optional(
+        v.union(v.literal("job"), v.literal("default")),
+      ),
       matchRead: v.union(
         v.null(),
         v.object({
@@ -1049,7 +1063,17 @@ export const getById = query({
       }))
       .sort((left, right) => right.updatedAt - left.updatedAt);
 
-    const profile = await ctx.db.get(job.userId);
+    const primaryProfile = profiles[0] ?? null;
+    const ownerProfile = await ctx.db.get(job.userId);
+    const storedResume = resolveStoredResumeSelection({
+      job,
+      primaryProfile,
+    });
+    const matchReadProfile = resolveMatchReadSourceProfile({
+      job,
+      primaryProfile,
+      profiles,
+    });
     const matchRead = computeMatchRead({
       job: {
         id: String(job._id),
@@ -1061,14 +1085,18 @@ export const getById = query({
         mustHavesExtraction: job.mustHavesExtraction ?? [],
         keywordsExtraction: job.keywordsExtraction ?? [],
       },
-      profile: profile
-        ? {
-            id: String(profile._id),
-            version: profile.version,
-            skills: profile.skills ?? [],
-            keywords: profile.keywords ?? [],
-          }
-        : null,
+      profile: buildMatchReadProfile(
+        matchReadProfile ??
+          (ownerProfile
+            ? {
+                _id: String(ownerProfile._id),
+                profileId: ownerProfile.profileId ?? undefined,
+                version: ownerProfile.version,
+                skills: ownerProfile.skills ?? [],
+                keywords: ownerProfile.keywords ?? [],
+              }
+            : null),
+      ),
       synthesis: job.matchReadSynthesis ?? null,
     });
     const nextStepBlock = await resolveNextStepBlock(ctx, matchRead.tier);
@@ -1076,6 +1104,7 @@ export const getById = query({
     return buildJobProjection(
       job,
       matchRead,
+      storedResume,
       nextStepBlock,
       linkedProposals.length,
       projectedLinkedProposals,
@@ -1157,6 +1186,90 @@ export const loadForUser = mutation({
   handler: async (ctx) => {
     const profile = await requireCanonicalUserProfile(ctx);
     return listProjectedJobsForProfile(ctx, profile, { trackMatchRead: true });
+  },
+});
+
+export const setResumeForJob = mutation({
+  args: {
+    jobId: v.string(),
+    resumeId: v.union(v.string(), v.null()),
+    resumeName: v.union(v.string(), v.null()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    const profiles = await listProfilesForClerk(ctx, identity.subject);
+    if (profiles.length === 0) {
+      throw new Error("User profile not found");
+    }
+
+    const normalizedJobId = ctx.db.normalizeId("jobs", args.jobId);
+    if (!normalizedJobId) {
+      throw new Error("Invalid jobId");
+    }
+
+    const job = await ctx.db.get(normalizedJobId);
+    if (
+      !job ||
+      !profiles.some((profile) => String(profile._id) === String(job.userId))
+    ) {
+      throw new Error("Job not found");
+    }
+
+    if (args.resumeId) {
+      const resumeProfile = resolveResumeProfileById(profiles, args.resumeId);
+      if (!resumeProfile) {
+        throw new Error("Resume not found");
+      }
+    }
+
+    await ctx.db.patch(normalizedJobId, {
+      lastResumeId: args.resumeId ?? null,
+      lastResumeName: args.resumeName ?? null,
+      updatedAt: Date.now(),
+    });
+
+    return null;
+  },
+});
+
+export const setDefaultResume = mutation({
+  args: {
+    resumeId: v.union(v.string(), v.null()),
+    resumeName: v.union(v.string(), v.null()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    const profiles = await listProfilesForClerk(ctx, identity.subject);
+    const primaryProfile = profiles[0] ?? null;
+    if (!primaryProfile) {
+      throw new Error("User profile not found");
+    }
+
+    if (args.resumeId) {
+      const resumeProfile = resolveResumeProfileById(profiles, args.resumeId);
+      if (!resumeProfile) {
+        throw new Error("Resume not found");
+      }
+    }
+
+    await ctx.db.patch(primaryProfile._id, {
+      defaultResumeId: args.resumeId ?? null,
+      defaultResumeName: args.resumeName ?? null,
+      updatedAt: Date.now(),
+      version: (primaryProfile.version ?? 1) + 1,
+    });
+
+    return null;
   },
 });
 

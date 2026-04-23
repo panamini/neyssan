@@ -140,8 +140,193 @@ describe("jobsPublic.listForUser", () => {
         id: "job_old",
         title: "Legacy job",
         company: "Acme",
-        matchTier: "strong",
+        matchTier: "weak",
       }),
     ]);
+  });
+
+  it("prefers a job resume override over the user default resume when computing match tier", async () => {
+    const linkedProfiles = [
+      {
+        _id: "profile_primary",
+        _creationTime: 300,
+        profileId: "cv_primary",
+        clerkId: "clerk_123",
+        updatedAt: 300,
+        createdAt: 300,
+        version: 3,
+        skills: ["design"],
+        keywords: ["design"],
+        defaultResumeId: "cv_default",
+        defaultResumeName: "Default Resume",
+        email: "primary@example.com",
+      },
+      {
+        _id: "profile_default",
+        _creationTime: 200,
+        profileId: "cv_default",
+        clerkId: "clerk_123",
+        updatedAt: 200,
+        createdAt: 200,
+        version: 2,
+        skills: ["typescript"],
+        keywords: ["typescript"],
+        email: "default@example.com",
+      },
+      {
+        _id: "profile_override",
+        _creationTime: 100,
+        profileId: "cv_override",
+        clerkId: "clerk_123",
+        updatedAt: 100,
+        createdAt: 100,
+        version: 1,
+        skills: ["react"],
+        keywords: ["react"],
+        email: "override@example.com",
+      },
+    ];
+    const jobsByProfileId = new Map([
+      [
+        "profile_primary",
+        [
+          {
+            _id: "job_default",
+            _creationTime: 100,
+            userId: "profile_primary",
+            title: "Default-backed job",
+            company: "Acme",
+            location: "Remote",
+            isSample: false,
+            sourceUrl: "https://example.com/job-default",
+            sourceDomain: "example.com",
+            sourceType: "manual",
+            parseStatus: "parsed",
+            reviewState: "ready",
+            status: "active",
+            importedAt: 100,
+            updatedAt: 100,
+            lastOpenedAt: 100,
+            archivedAt: null,
+            mustHaves: ["TypeScript"],
+            keywords: ["TypeScript"],
+            mustHavesExtraction: [],
+            keywordsExtraction: [],
+          },
+          {
+            _id: "job_override",
+            _creationTime: 120,
+            userId: "profile_primary",
+            title: "Override-backed job",
+            company: "Acme",
+            location: "Remote",
+            isSample: false,
+            sourceUrl: "https://example.com/job-override",
+            sourceDomain: "example.com",
+            sourceType: "manual",
+            parseStatus: "parsed",
+            reviewState: "ready",
+            status: "active",
+            importedAt: 120,
+            updatedAt: 120,
+            lastOpenedAt: 120,
+            archivedAt: null,
+            lastResumeId: "cv_override",
+            lastResumeName: "Override Resume",
+            mustHaves: ["React"],
+            keywords: ["React"],
+            mustHavesExtraction: [],
+            keywordsExtraction: [],
+          },
+        ],
+      ],
+      ["profile_default", []],
+      ["profile_override", []],
+    ]);
+
+    const result = await listForUser._handler(
+      {
+        auth: {
+          getUserIdentity: async () => ({ subject: "clerk_123" }),
+        },
+        db: {
+          query(table: string) {
+            if (table === "activeCvSnapshots") {
+              throw new Error("listForUser should not read active CV state");
+            }
+
+            if (table === "userProfiles") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, value: string) {
+                      return value;
+                    },
+                  };
+                  const clerkId = buildIndex(scope);
+                  return {
+                    collect: async () =>
+                      linkedProfiles.filter((profile) => profile.clerkId === clerkId),
+                  };
+                },
+              };
+            }
+
+            if (table === "jobs") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    values: [] as string[],
+                    eq(_field: string, value: string) {
+                      this.values.push(value);
+                      return this;
+                    },
+                  };
+                  buildIndex(scope);
+                  return {
+                    order() {
+                      return this;
+                    },
+                    collect: async () => jobsByProfileId.get(scope.values[0]) ?? [],
+                  };
+                },
+              };
+            }
+
+            if (table === "proposals") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, _value: string) {
+                      return this;
+                    },
+                  };
+                  buildIndex(scope);
+                  return {
+                    collect: async () => [],
+                  };
+                },
+              };
+            }
+
+            throw new Error(`Unexpected table: ${table}`);
+          },
+        },
+      } as any,
+      {},
+    );
+
+    expect(result).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "job_default",
+          matchTier: "strong",
+        }),
+        expect.objectContaining({
+          id: "job_override",
+          matchTier: "strong",
+        }),
+      ]),
+    );
   });
 });

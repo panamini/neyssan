@@ -58,6 +58,28 @@ type MatchReadProfile = {
   keywords?: string[];
 };
 
+export type MatchReadResumeProfile = {
+  _id?: string;
+  id?: string;
+  profileId?: string;
+  defaultResumeId?: string | null;
+  defaultResumeName?: string | null;
+  version?: number;
+  skills?: string[];
+  keywords?: string[];
+};
+
+export type MatchReadResumeSelection = {
+  resumeId?: string;
+  resumeName?: string;
+  source: "job" | "default" | null;
+};
+
+type MatchReadResumeJob = {
+  lastResumeId?: string | null;
+  lastResumeName?: string | null;
+};
+
 type MatchReadJob = {
   id: string;
   updatedAt?: number;
@@ -262,6 +284,106 @@ function resolveConfidence(args: {
   }
 
   return "low";
+}
+
+export function buildMatchReadProfile(
+  profile: MatchReadResumeProfile | null,
+): MatchReadProfile | null {
+  if (!profile) {
+    return null;
+  }
+
+  const profileId = String(profile.profileId ?? profile._id ?? profile.id ?? "");
+  if (!profileId) {
+    return null;
+  }
+
+  return {
+    id: profileId,
+    ...(profile.version !== undefined ? { version: profile.version } : {}),
+    skills: profile.skills ?? [],
+    keywords: profile.keywords ?? [],
+  };
+}
+
+export function getResumeProfileKey(
+  profile: MatchReadResumeProfile | null,
+): string {
+  return String(profile?.profileId ?? profile?._id ?? profile?.id ?? "");
+}
+
+export function resolveResumeProfileById(
+  profiles: MatchReadResumeProfile[],
+  resumeId: string | undefined,
+): MatchReadResumeProfile | null {
+  if (!resumeId) {
+    return null;
+  }
+
+  return (
+    profiles.find((profile) => getResumeProfileKey(profile) === resumeId) ?? null
+  );
+}
+
+export function resolveStoredResumeSelection(args: {
+  job: MatchReadResumeJob;
+  primaryProfile: MatchReadResumeProfile | null;
+}): MatchReadResumeSelection {
+  if (
+    typeof args.job.lastResumeId === "string" &&
+    args.job.lastResumeId.trim().length > 0
+  ) {
+    return {
+      resumeId: args.job.lastResumeId,
+      resumeName:
+        typeof args.job.lastResumeName === "string" &&
+        args.job.lastResumeName.trim().length > 0
+          ? args.job.lastResumeName.trim()
+          : undefined,
+      source: "job",
+    };
+  }
+
+  if (
+    typeof args.primaryProfile?.defaultResumeId === "string" &&
+    args.primaryProfile.defaultResumeId.trim().length > 0
+  ) {
+    return {
+      resumeId: args.primaryProfile.defaultResumeId,
+      resumeName:
+        typeof args.primaryProfile.defaultResumeName === "string" &&
+        args.primaryProfile.defaultResumeName.trim().length > 0
+          ? args.primaryProfile.defaultResumeName.trim()
+          : undefined,
+      source: "default",
+    };
+  }
+
+  return {
+    resumeId: undefined,
+    resumeName: undefined,
+    source: null,
+  };
+}
+
+export function resolveMatchReadSourceProfile(args: {
+  job: MatchReadResumeJob;
+  primaryProfile: MatchReadResumeProfile | null;
+  profiles: MatchReadResumeProfile[];
+}): MatchReadResumeProfile | null {
+  const storedResume = resolveStoredResumeSelection({
+    job: args.job,
+    primaryProfile: args.primaryProfile,
+  });
+  const explicitProfile = resolveResumeProfileById(
+    args.profiles,
+    storedResume.resumeId,
+  );
+  if (explicitProfile) {
+    return explicitProfile;
+  }
+
+  return args.profiles[0] ?? args.primaryProfile ?? null;
 }
 
 export function buildMatchReadSynthesisCacheKey(args: {

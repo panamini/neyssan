@@ -21,10 +21,14 @@ type ProposalBriefLinkedProposal = {
 };
 
 type ProposalBriefCardProps = {
-  documentTitle: string;
+  sourceJobTitle?: string | null;
+  outputDocumentTitle?: string | null;
+  jobId?: string | null;
   jobDescription: string;
   onToggleBrief?: () => void;
   variant?: "card" | "compact";
+  hideRawSource?: boolean;
+  focusMode?: boolean;
   sourceUrl?: string | null;
   sourcePlatform?: string | null;
   summaryText?: string | null;
@@ -85,11 +89,30 @@ function resolveLinkedProposalHref(proposalId: string): string {
   return `/proposal?view=saved&id=${encodeURIComponent(proposalId)}`;
 }
 
+function resolveJobHref(jobId: string): string {
+  return `/jobs/${encodeURIComponent(jobId)}`;
+}
+
+export function resolveProposalBriefCardTitle(args: {
+  sourceJobTitle?: string | null;
+  outputDocumentTitle?: string | null;
+}): string {
+  return (
+    args.outputDocumentTitle?.trim() ||
+    args.sourceJobTitle?.trim() ||
+    "Untitled Proposal"
+  );
+}
+
 export function ProposalBriefCard({
-  documentTitle,
+  sourceJobTitle = null,
+  outputDocumentTitle = null,
+  jobId = null,
   jobDescription,
   onToggleBrief,
   variant = "card",
+  hideRawSource = false,
+  focusMode = false,
   sourceUrl = null,
   sourcePlatform = null,
   summaryText = null,
@@ -125,9 +148,56 @@ export function ProposalBriefCard({
     reviewStatus: resolvedItems[item.id]?.reviewStatus ?? item.reviewStatus,
     approvedValue: resolvedItems[item.id]?.approvedValue ?? item.approvedValue,
   }));
+  const shouldRenderRawSourceDock =
+    !hideRawSource && Boolean(jobDescription);
+  const resolvedCardTitle = resolveProposalBriefCardTitle({
+    sourceJobTitle,
+    outputDocumentTitle,
+  });
   const summaryValue = String(summaryText ?? "").trim();
   const isSummaryEditing = editingItemId === SUMMARY_EDITOR_ID;
   const summaryDraft = draftValues[SUMMARY_EDITOR_ID] ?? summaryValue;
+
+  if (focusMode) {
+    return (
+      <div
+        className="dasti-brief-focus-strip"
+        data-testid="proposal-brief-focus-strip"
+      >
+        {jobId ? (
+          <Link
+            to={resolveJobHref(jobId)}
+            className="dasti-brief-focus-strip__action"
+            aria-label="Open job"
+          >
+            Open job
+          </Link>
+        ) : null}
+        {sourceLabel && sourceUrl ? (
+          <a
+            href={sourceUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="dasti-brief-focus-strip__action"
+            aria-label={`Open original job offer on ${sourceLabel}`}
+          >
+            <span className="dasti-brief-focus-strip__label">{sourceLabel}</span>
+            <ArrowSquareOut size={12} strokeWidth={1.8} aria-hidden="true" />
+          </a>
+        ) : null}
+        {onToggleBrief ? (
+          <button
+            type="button"
+            className="dasti-brief-focus-strip__expand"
+            onClick={onToggleBrief}
+            aria-label="Expand"
+          >
+            <ChevronDown size={14} strokeWidth={1.7} aria-hidden="true" />
+          </button>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -152,7 +222,7 @@ export function ProposalBriefCard({
         <div className="dasti-proposal-sheet__heading dasti-proposal-sheet__heading--full">
           <div className="dasti-proposal-compose-shell__header-row">
             <h2 className="dasti-brief-card__document-title">
-              {documentTitle || "Untitled Proposal"}
+              {resolvedCardTitle}
             </h2>
             {onToggleBrief ? (
               <button
@@ -421,7 +491,7 @@ export function ProposalBriefCard({
                 </div>
               ) : null}
             </div>
-            {jobDescription ? (
+            {shouldRenderRawSourceDock ? (
               <aside className="dasti-brief-card__source-dock">
                 <div className="dasti-brief-card__summary-label">Raw source</div>
                 <p className="dasti-brief-card__description">{jobDescription}</p>

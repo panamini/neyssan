@@ -107,8 +107,8 @@ describe("ProposalForge brief card", () => {
     mockHandoffRecord = null;
   });
 
-  it("shows the brief summary above compose and routes the edit action back to the compose brief fields", async () => {
-    render(
+  it("keeps the collapsed brief as a minimal action strip and routes expand back to compose", async () => {
+    const { container } = render(
       <MemoryRouter initialEntries={["/proposal"]}>
         <ProposalForge />
       </MemoryRouter>,
@@ -117,15 +117,24 @@ describe("ProposalForge brief card", () => {
     fireEvent.click(screen.getByRole("button", { name: "Generate proposal" }));
 
     expect(
-      screen.getByRole("heading", {
-        name: "Application for the Operations Associate role",
-      }),
+      await screen.findByTestId("proposal-brief-focus-strip"),
     ).toBeInTheDocument();
     expect(
-      screen.getAllByText(
-        "Support recurring processes and coordinate communication.",
-      ).length,
-    ).toBeGreaterThan(0);
+      screen.queryByRole("heading", {
+        name: "Application for the position of Operations Associate",
+      }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Needs review")).not.toBeInTheDocument();
+    expect(screen.queryByText("Review state")).not.toBeInTheDocument();
+    expect(screen.queryByText("Extracted summary")).not.toBeInTheDocument();
+    expect(screen.queryByText("Linked documents")).not.toBeInTheDocument();
+    expect(screen.queryByText("Raw source")).not.toBeInTheDocument();
+    expect(
+      container.querySelector(".dasti-brief-card__summary"),
+    ).not.toBeInTheDocument();
+    expect(
+      container.querySelector(".dasti-brief-focus-strip"),
+    ).toBeInTheDocument();
 
     const expandButton = screen.getByRole("button", { name: "Expand" });
     expect(expandButton).not.toHaveAttribute("data-toolbar-tooltip");

@@ -70,14 +70,38 @@ vi.mock("../../contexts/CvLibraryContext", () => ({
 }));
 
 vi.mock("../../lib/proposal-personalization", () => ({
-  buildAppProposalPersonalizationPayload: () => ({}),
+  buildAppProposalPersonalizationPayload: (source: {
+    personalizationContext?: Record<string, unknown> | null;
+    richness?: string | null;
+  }) => ({
+    personalizationMode: "explicit_only",
+    ...(source?.personalizationContext
+      ? { personalizationContext: source.personalizationContext }
+      : {}),
+    ...(source?.richness ? { personalizationRichness: source.richness } : {}),
+  }),
   clearActiveLocalCvId: vi.fn(),
-  formatCvDisplaySubtitle: () => "",
   getActiveLocalPersonalizationSource: () => ({
     title: null,
     personalizationContext: null,
     richness: "none",
   }),
+  getLocalPersonalizationSourceByCvId: (id: string | null | undefined) =>
+    id === "cv_job_alpha"
+      ? {
+          title: "Operations Resume",
+          personalizationContext: {
+            name: "Alex Martin",
+            desiredPosition: "Operations Associate",
+            topSkills: ["Operations"],
+          },
+          richness: "rich",
+        }
+      : {
+          title: null,
+          personalizationContext: null,
+          richness: "none",
+        },
   getLocalActiveCvSnapshotById: () => null,
   listLocalCvPickerOptions: () => [],
   setActiveLocalCvId: vi.fn(),
@@ -146,5 +170,41 @@ describe("ProposalInputForm auto tone submit", () => {
       }),
       "proposal_auto",
     );
+  });
+
+  it("uses the controlled job-scoped CV when building the generation request", async () => {
+    render(
+      <ProposalInputForm
+        onSubmit={vi.fn()}
+        canonicalJobId="job_alpha"
+        activeCvId="cv_job_alpha"
+      />,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText("Enter Job Title"), {
+      target: { value: "Operations Associate" },
+    });
+    fireEvent.change(
+      screen.getByPlaceholderText("Paste or write the job offer here…"),
+      {
+        target: {
+          value:
+            "Support recurring processes, update internal records, and coordinate communication across teams.",
+        },
+      },
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+
+    await waitFor(() => {
+      expect(mockGenerateProposalAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          jobId: "job_alpha",
+          personalizationContext: expect.objectContaining({
+            desiredPosition: "Operations Associate",
+          }),
+        }),
+      );
+    });
   });
 });
